@@ -49,6 +49,8 @@ class DetailPanel extends Component
             'rezept' => $rezept,
             // Nachtrag 13_REFERENZ: EK je Zeile — dieselbe T3-Kaskade wie der Recompute (eine Regel-Stelle)
             'zeilenEk' => $rezept !== null ? app(RecipeRecomputeService::class)->zeilenKosten($rezept) : [],
+            // M4-10: ↑-Navigation („Verwendet in")
+            'eltern' => $rezept !== null ? $recipes->getParents($team, $rezept->id) : collect(),
         ]);
     }
 }

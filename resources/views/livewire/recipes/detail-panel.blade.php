@@ -68,6 +68,21 @@
             </div>
         </div>
 
+        {{-- M4-10: ↑-Navigation — Rezepte, die dieses als Sub-Rezept nutzen --}}
+        @if($eltern->isNotEmpty())
+            <div data-eltern>
+                <p class="{{ $dt }} mb-1">Verwendet in ({{ $eltern->count() }})</p>
+                <div class="space-y-0.5">
+                    @foreach($eltern as $parent)
+                        <button type="button" wire:key="el-{{ $parent->id }}" wire:click="zeige({{ $parent->id }})"
+                                class="block w-full text-left text-xs text-sky-600 dark:text-sky-400 hover:underline truncate" data-eltern-link>
+                            ↑ {{ $parent->name }}
+                        </button>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
         {{-- Diät & Spezifikation (Nachtrag 13_REFERENZ: ✓-Liste aus spec_*) --}}
         <div data-diaet>
             <p class="{{ $dt }} mb-1">Diät & Spezifikation</p>

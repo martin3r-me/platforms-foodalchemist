@@ -228,6 +228,78 @@ class RecipeService
         return $recipe->refresh();
     }
 
+    // ── M4-10: Sub-Rezept-Hierarchie (D-5 §3.1, Regelwerk BR §4) ────────
+
+    /**
+     * Stub-Anlage (F4.1): idempotent per Token-Set-Namensgleichheit (wie der
+     * GL-04-Alias-Resolver) — existiert das Rezept, kommt es zurück (neu=false).
+     * Neue Stubs: status=stub, last_modified_by=generator_stub; ein Eltern-Rezept
+     * im Stub-Status wird auf draft gehoben (es hat jetzt echten Inhalt).
+     *
+     * @return array{recipe: FoodAlchemistRecipe, neu: bool}
+     */
+    public function createSubRecipeStub(Team $team, string $name, ?int $parentId = null): array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            throw new \RuntimeException('Stub-Name ist Pflicht.');
+        }
+
+        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
+        $zielTokens = $engine->tokenize($name);
+        sort($zielTokens);
+        foreach (FoodAlchemistRecipe::visibleToTeam($team)->basis()->orderBy('id')->cursor() as $r) {
+            $tokens = $engine->tokenize($r->name);
+            sort($tokens);
+            if ($tokens === $zielTokens) {
+                return ['recipe' => $r, 'neu' => false];           // idempotent (Dedupe by name)
+            }
+        }
+
+        $stub = $this->create($team, ['name' => $name]);
+        $stub->update(['status' => 'stub', 'last_modified_by' => 'generator_stub']);
+
+        if ($parentId !== null) {
+            $parent = FoodAlchemistRecipe::visibleToTeam($team)->find($parentId);
+            if ($parent !== null && $parent->status->value === 'stub') {
+                $parent->update(['status' => 'draft']);            // Eltern → draft (hat jetzt Inhalt)
+            }
+        }
+
+        return ['recipe' => $stub->refresh(), 'neu' => true];
+    }
+
+    /**
+     * Guard-Löschung (F4.1): NUR stub + generator-markiert + 0 Zutaten + 0 Referenzen.
+     */
+    public function deleteGeneratorStub(Team $team, int $id): void
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
+        if ($recipe->status->value !== 'stub') {
+            throw new \RuntimeException('Kein Stub — normales Löschen verwenden (delete()).');
+        }
+        if ($recipe->last_modified_by !== 'generator_stub') {
+            throw new \RuntimeException('Stub ist nicht generator-markiert — manuell prüfen.');
+        }
+        if ($recipe->ingredients()->whereNull('deleted_at')->exists()) {
+            throw new \RuntimeException('Stub hat bereits Zutaten — kein automatisches Löschen.');
+        }
+        if ($recipe->parentIngredients()->whereNull('deleted_at')->exists()) {
+            throw new \RuntimeException('Stub wird referenziert — erst bei den Eltern lösen.');
+        }
+        $recipe->delete();
+    }
+
+    /** ↑-Navigation: Rezepte, die dieses als Sub referenzieren (fürs Panel „Verwendet in"). */
+    public function getParents(Team $team, int $id): Collection
+    {
+        return FoodAlchemistRecipe::visibleToTeam($team)
+            ->whereIn('id', \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::where('referenced_recipe_id', $id)
+                ->whereNull('deleted_at')->distinct()->pluck('recipe_id'))
+            ->orderBy('name')
+            ->get(['id', 'name', 'status', 'team_id']);
+    }
+
     // ── M4-07/08: Zutaten-Editor (P-8) ──────────────────────────────────
 
     /**
