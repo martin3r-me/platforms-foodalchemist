@@ -4,6 +4,8 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
+use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\PriceCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
@@ -31,7 +33,7 @@ class PriceService
     {
         return $this->scopeAktiv(FoodAlchemistPrice::query())
             ->where('supplier_item_id', $supplierItemId)
-            ->orderByRaw('valid_to IS NULL ASC') // NULL-valid_to (unbefristet alt) hinter datierten — engine-agnostisch (07 §7)
+            ->orderByRaw('valid_to IS NULL DESC') // NULL = unbefristet = AKTUELL gültig, rankt VOR datierten (Append-only: alte Zeile wird gestempelt) — engine-agnostisch (07 §7); Realdaten: 108.310/111.543 aktive Zeilen sind NULL
             ->orderByDesc('valid_to')
             ->orderByDesc('id')
             ->first();
@@ -43,7 +45,7 @@ class PriceService
         return $this->scopeAktiv(FoodAlchemistPrice::query())
             ->select('price')
             ->whereColumn('foodalchemist_prices.supplier_item_id', 'foodalchemist_supplier_items.id')
-            ->orderByRaw('valid_to IS NULL ASC')
+            ->orderByRaw('valid_to IS NULL DESC')
             ->orderByDesc('valid_to')
             ->orderByDesc('id')
             ->limit(1);
@@ -54,7 +56,7 @@ class PriceService
     {
         return FoodAlchemistPrice::query()
             ->where('supplier_item_id', $supplierItemId)
-            ->orderByRaw('valid_to IS NULL ASC')
+            ->orderByRaw('valid_to IS NULL DESC')
             ->orderByDesc('valid_to')
             ->orderByDesc('id')
             ->get()
@@ -62,6 +64,47 @@ class PriceService
                 'kategorie',
                 PriceCategory::fuer($p->price !== null ? (float) $p->price : null, $p->status),
             ));
+    }
+
+    /**
+     * M2-08 / P-6: „+ Neuer Preis schließt Vorgänger" — Append-only (GL-11 §3.3 Historie):
+     * der bisher aktive Preis bekommt valid_to = jetzt, die neue Zeile ist unbefristet (NULL)
+     * und damit sofort aktiv. Nur Besitzer-Team des LA (D1).
+     */
+    public function createFor(Team $team, FoodAlchemistSupplierItem $item, float $preis, string $status = '0'): FoodAlchemistPrice
+    {
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Artikel — Preispflege nur durch das Besitzer-Team (D1).');
+        }
+        if ($preis < 0) {
+            throw new \RuntimeException('Negative Preise sind Service-Zuschläge — keine manuelle Anlage (GL-11 I5).');
+        }
+        if (! in_array($status, ['0', '2'], true)) {
+            throw new \RuntimeException('Status muss 0 (Standard-EK) oder 2 (Aktion) sein.');
+        }
+
+        return DB::transaction(function () use ($team, $item, $preis, $status) {
+            $this->activeFor($item->id)?->update(['valid_to' => now()]); // schließt Vorgänger
+
+            return FoodAlchemistPrice::create([
+                'team_id' => $team->id,
+                'supplier_item_id' => $item->id,
+                'price' => $preis,
+                'status' => $status,
+                'valid_to' => null,
+                'is_blocked' => false,
+                'creation_date' => now(),
+            ]);
+        });
+    }
+
+    /** M2-08: Preiszeile löschen — nur Besitzer-Team des LA. */
+    public function deleteFor(Team $team, FoodAlchemistSupplierItem $item, int $priceId): void
+    {
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Artikel — Preispflege nur durch das Besitzer-Team (D1).');
+        }
+        FoodAlchemistPrice::where('supplier_item_id', $item->id)->whereKey($priceId)->firstOrFail()->delete();
     }
 
     /**

@@ -75,7 +75,10 @@
                                 <td class="{{ $td }} text-gray-500">{{ $item->supplier?->name ?? '—' }}</td>
                             @endif
                             <td class="{{ $td }} font-mono text-xs text-gray-500">{{ $item->article_number ?? '—' }}</td>
-                            <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100 max-w-md truncate" title="{{ $item->designation }}">{{ $item->designation }}</td>
+                            <td class="{{ $td }} font-medium max-w-md truncate" title="{{ $item->designation }}">
+                                <button type="button" wire:click="$dispatch('item-modal.oeffnen', { id: {{ $item->id }} })"
+                                        class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150 truncate max-w-full text-left">{{ $item->designation }}</button>
+                            </td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">
                                 {{ $item->qty !== null ? rtrim(rtrim((string) $item->qty, '0'), '.') : '—' }} {{ $item->unit_code ?? $item->ordering_unit }}
                                 @if($item->qty === null)<span class="ml-1 {{ $pill }} {{ $variantPill['warning'] }}" title="Gebinde-Menge fehlt (GL-03 A-2)">qty?</span>@endif
@@ -108,5 +111,7 @@
                 <div class="px-5 py-3 border-t border-black/5 dark:border-white/10">{{ $artikel->links() }}</div>
             @endif
         </div>
+        {{-- LA-Editor-Modal (M2-06/07/08) — innerhalb x-ui-page (Template-Regel) --}}
+        <livewire:foodalchemist.suppliers.item-modal />
     </x-ui-page-container>
 </x-ui-page>
