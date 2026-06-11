@@ -47,10 +47,20 @@ Referenz: GP-Browser + Basisrezept-Browser der Ist-App.
   1.407 Rezepte` → ein gecachter KPI-Service-Call, Anzeige in der Actionbar.
 - **Platzierungs-Entscheid (Dominique, 2026-06-11, M0-07-Review):** Standard für Browser-Screens =
   Baum/Filter in der **linken Page-Sidebar** (bestätigt Spec oben) und Detail-Panel in der
-  **rechten Page-Sidebar** (`x-ui-page-sidebar side="right"`, Breite je Screen, `storeKey`-Persistenz
+  **rechten Page-Sidebar** (`x-ui-page-sidebar side="right"`, `storeKey`-Persistenz
   gratis — belegt dort den Aktivitäten-Slot). Der Baustein `<x-foodalchemist::master-detail>`
   (M0-07) bleibt für Tabellen-Zone + Fälle, in denen die Shell-Sidebars nicht verfügbar sind;
   tree-/panel-Slots sind dafür optional. Gilt ab M3-01/M3-03.
+- **Panel = Arbeitsfläche (Dominique, 2026-06-11):** Das Detail-Panel **so groß wie möglich**
+  dimensionieren — darin wird gearbeitet, nicht nur gelesen. Breite je Screen großzügig wählen
+  (finale Breite beim ersten echten Screen festlegen, M3-03).
+- **Kontext-Erhalt-Gebot (Dominique, 2026-06-11 — VERBINDLICH für alle Browser/Editoren):**
+  Speichern + Schließen (Panel ODER Modal) bringt den User **exakt dorthin zurück, wo er war** —
+  Auswahl, Filter, Scroll-Position und Pagination bleiben erhalten, nie „von vorne klicken".
+  Konkret: Zeilen-Klick = Event ohne Seitenwechsel (s. oben), Modals overlayen ohne Navigation,
+  Save aktualisiert Liste/Panel in place (kein Full-Reload, kein `redirect()`), Auswahl im
+  URL-Sync (`?gp=` M3-01) — überlebt damit auch Browser-Reload. Eigene Detail-ROUTEN
+  (`/gps/{id}`-Muster des Slice) sind das Anti-Muster dazu → Abbau in M3-12.
 
 ## P-2 Modal-Editor („Fenster auf und zu")
 

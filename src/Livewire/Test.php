@@ -33,6 +33,53 @@ class Test extends Component
     public $testBoolean = true;
 
     /**
+     * M0-09-Demo: GL-07-Lebenszyklus für den ki-header-Baustein —
+     * deterministischer Fake-Vorschlag (echter Gateway kommt mit M0-14).
+     */
+    public ?string $kiDemoWert = null;
+    public ?string $kiDemoQuelle = null;
+    public ?float $kiDemoConfidence = null;
+    public ?array $kiDemoProposal = null;
+
+    public function ai_kiDemo(): void
+    {
+        // Propose: persistiert NICHTS (GL-07 I3), liefert nur das Vorschlags-DTO
+        $this->kiDemoProposal = [
+            'wert' => 'fruchtig-herb',
+            'confidence' => 0.87,
+            'begruendung' => 'Fake-Vorschlag (Demo): dominante Zutaten Limette + Wacholder.',
+        ];
+    }
+
+    public function accept_kiDemo(): void
+    {
+        if ($this->kiDemoQuelle === 'manual' || !$this->kiDemoProposal) {
+            return; // Override-First: KI überschreibt nie manual (GL-07 I2)
+        }
+        $this->kiDemoWert = $this->kiDemoProposal['wert'];
+        $this->kiDemoQuelle = 'ki';
+        $this->kiDemoConfidence = min(1.0, max(0.0, $this->kiDemoProposal['confidence'])); // Clamp (GL-07 I5)
+        $this->kiDemoProposal = null;
+    }
+
+    public function clear_kiDemo(): void
+    {
+        // Wert + komplette Lineage → NULL (GL-07 clear)
+        $this->kiDemoWert = null;
+        $this->kiDemoQuelle = null;
+        $this->kiDemoConfidence = null;
+        $this->kiDemoProposal = null;
+    }
+
+    public function manual_kiDemo(): void
+    {
+        $this->kiDemoWert = 'herzhaft (von Hand gepflegt)';
+        $this->kiDemoQuelle = 'manual';
+        $this->kiDemoConfidence = null;
+        $this->kiDemoProposal = null;
+    }
+
+    /**
      * Render-Methode
      */
     public function render()

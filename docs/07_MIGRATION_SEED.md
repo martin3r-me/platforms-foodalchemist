@@ -146,3 +146,35 @@ Gates laufen in P0 als read-only Audit; Ergebnis → `_seed_gate_report.md`. **B
 - **Prod: idempotenter Re-Run** über die ID-Map (Upsert by source_id) — ein zweiter Lauf darf keine Dubletten erzeugen und ist die Wiederholbarkeits-Garantie.
 - **Quell-Backup vor jedem Eingriff:** Staging-Drop (G6) nur gegen `wawi_1494.sqlite.PRE_SEED.bak`; die Original-Quelle bleibt unberührt read-only.
 - **Reproduzierbarkeit:** Gate-Report, Lead-LA-Diff-Report und Row-Count-Matrix werden je Lauf mit Zeitstempel archiviert — der Seed ist damit auditierbar nachvollziehbar.
+
+## 7. Plattform-DB-Kompatibilität (Martin-Info 2026-06-11 — VERBINDLICH für jede Migration)
+
+**Kontext:** Alle Module migrieren in **eine gemeinsame Plattform-DB** (Produktion: MySQL).
+Migrations-Dateinamen (eine `migrations`-Tabelle!) und Index-Namen teilen sich den Namensraum
+mit Core + allen Fremdmodulen. Die Core-Lektionen dazu sind real (s. `_SANDBOX_NOTES.md`:
+Index-Kollision `organization_time_planned_context_index`, Dateinamens-Kollision
+`0001_01_01_000000_create_users_table`).
+
+**Regeln für jede `foodalchemist`-Migration:**
+
+1. **Dateiname enthält `foodalchemist`** → kollisionsfrei in der gemeinsamen migrations-Tabelle.
+2. **Tabellen-Prefix `foodalchemist_`** (Plattform-Konvention, CLAUDE.md).
+3. **Index-Namen IMMER auto-generieren lassen** (Laravel prefixt mit Tabellennamen) —
+   nie von Hand kurz benennen. Bezeichner ≤ 64 Zeichen (MySQL-Limit) — bei langen
+   Tabellen+Spalten-Kombis vorher nachrechnen.
+4. **Nur Schema-Builder, kein Raw-SQL** — kein `information_schema`, `SHOW INDEX`,
+   `UPDATE … INNER JOIN`, `DATABASE()` (die MySQL-only-Fallen der Core-Module);
+   umgekehrt auch nichts SQLite-/Postgres-spezifisches: muss auf MySQL (Prod),
+   SQLite (Sandbox/Tests) und Postgres laufen.
+5. **Engine-agnostische NULL-Sortierung in Queries:** MySQL sortiert NULLs bei ASC ZUERST,
+   Postgres ZULETZT — GL-03 „NULLS LAST" daher immer explizit
+   (`ORDER BY col IS NULL, col`-Muster), nie der Engine überlassen.
+
+**Audit 2026-06-11 (alle 10 Bestands-Migrationen):** kein Raw-SQL · keine `enum()`-Spalten ·
+kein fullText · Dateinamen ✅ · Bezeichner max. 38 Zeichen ✅ · 1 Befund behoben
+(manuell benannter Index `fa_gp_team_override_unique` → Auto-Name, Migration 000010 +
+Sandbox-DB nachgezogen).
+
+**Offen (Martin):** Testkatalog §1 verlangt Feature-Tests gegen **Postgres** (NULL-Ordnung),
+Produktion ist aber **MySQL** — klären, gegen welche Engine die Paritäts-Suite final läuft;
+bis dahin Sortier-Logik strikt engine-agnostisch implementieren (Regel 5).

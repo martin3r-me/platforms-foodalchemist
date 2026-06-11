@@ -34,7 +34,9 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->unique(['team_id', 'gp_id'], 'fa_gp_team_override_unique');
+            // Auto-Name (voller Tabellen-Prefix) — Index-Namen sind in der gemeinsamen
+            // Plattform-DB datenbankweit kollisionsgefährdet, nie von Hand kurz benennen (07 §8)
+            $table->unique(['team_id', 'gp_id']);
         });
     }
 

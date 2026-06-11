@@ -325,6 +325,46 @@
                 </x-foodalchemist::modal>
             </div>
 
+            {{-- Section: Baustein ki-header (M0-09 / P-3) — GL-07-Lebenszyklus sichtbar --}}
+            <div>
+                <div class="mb-3">
+                    <h2 class="text-sm font-medium tracking-tight text-gray-900 dark:text-gray-100">Baustein: ki-header (P-3)</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">GL-07-Quadrupel live: ✨ Autopilot schlägt vor (Fake) · Übernehmen schreibt · Reset löscht Lineage · Manuell gewinnt immer</p>
+                </div>
+
+                {{-- interaktiv (Fake-Roundtrip auf Test.php) --}}
+                <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 p-5 space-y-4">
+                    <x-foodalchemist::ki-header label="Geschmacksrichtung" field="kiDemo"
+                        :quelle="$this->kiDemoQuelle" :confidence="$this->kiDemoConfidence"
+                        :has-proposal="$this->kiDemoProposal !== null">
+                        <div class="text-sm text-gray-900 dark:text-gray-100">
+                            {{ $this->kiDemoWert ?? '—' }}
+                        </div>
+                        @if($this->kiDemoProposal)
+                            <div class="mt-2 p-3 rounded-lg bg-violet-500/5 text-xs text-gray-500">
+                                <span class="font-medium text-violet-600 dark:text-violet-400">✨ Vorschlag:</span>
+                                {{ $this->kiDemoProposal['wert'] }} · {{ round($this->kiDemoProposal['confidence'] * 100) }}%
+                                — {{ $this->kiDemoProposal['begruendung'] }}
+                            </div>
+                        @endif
+                    </x-foodalchemist::ki-header>
+                </div>
+
+                {{-- die 3 Quellen-Zustände statisch nebeneinander (DoD M0-09) --}}
+                <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 p-4">
+                        <x-foodalchemist::ki-header label="Tags" field="demoLeer" />
+                    </div>
+                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 p-4">
+                        <x-foodalchemist::ki-header label="Tags" field="demoKi" quelle="ki" :confidence="0.92"
+                            begruendung="Aus 14 LAs aggregiert, eindeutige Datenlage." />
+                    </div>
+                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 p-4">
+                        <x-foodalchemist::ki-header label="Tags" field="demoManual" quelle="manual" />
+                    </div>
+                </div>
+            </div>
+
         </div>
     </x-ui-page-container>
 
