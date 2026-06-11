@@ -40,7 +40,7 @@ it('zählt je Team-Kette und stimmt mit SQL-Counts überein', function () {
     expect($kpis['lieferanten'])->toBe($sql('foodalchemist_suppliers'))->toBe(1)
         ->and($kpis['gps'])->toBe($sql('foodalchemist_gps'))->toBe(3)
         ->and($kpis['las'])->toBe($sql('foodalchemist_supplier_item_structures'))->toBe(2)
-        ->and($kpis['rezepte'])->toBeNull(); // Tabelle existiert erst ab M4-01
+        ->and($kpis['rezepte'])->toBe(0); // Rezept-Welt existiert seit M4-01 (team-eigen, hier leer)
 });
 
 it('sieht als Geschwister-Team nur den Eltern-Katalog (kein Leak in den Zahlen)', function () {

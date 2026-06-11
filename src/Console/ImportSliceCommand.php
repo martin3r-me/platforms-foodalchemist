@@ -268,6 +268,9 @@ class ImportSliceCommand extends Command
         // zwei Quell-Tabellen auf EIN Ziel, daher ohne importBulk/id_map (Gate = Count-Vergleich)
         $stats['stamm_lieferanten'] = $this->importStammLieferanten($pdo, $dryRun);
 
+        // ── M4-02: Rezepte (D-5) — 1.407 + 9.590 Zutaten + Equipment + Eignungen ──
+        $stats = [...$stats, ...$this->importRecipes($pdo, $dryRun)];
+
         $this->table(
             ['Phase', 'Quelle', 'importiert', 'übersprungen (id_map)'],
             collect($stats)->map(fn ($s, $k) => [$k, $s['source'] ?? '—', $s['imported'] ?? '—', $s['skipped'] ?? '—'])->all()
@@ -275,7 +278,7 @@ class ImportSliceCommand extends Command
 
         // Row-Count-Verifikation (07 §5): Quelle == id_map je Quell-Tabelle
         if (! $dryRun) {
-            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional'] as $sourceTable) {
+            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional', 'recipes', 'recipe_ingredients', 'vocab_kochequipment', 'recipe_niveau_eignung', 'recipe_sektor_eignung'] as $sourceTable) {
                 $sourceCount = (int) $pdo->query("SELECT COUNT(*) FROM {$sourceTable}")->fetchColumn();
                 $mapCount = DB::table('foodalchemist_legacy_id_map')->where('source_table', $sourceTable)->count();
                 $flag = $sourceCount === $mapCount ? '✅' : '❌ BLOCKER';
@@ -284,6 +287,258 @@ class ImportSliceCommand extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * M4-02: Rezept-Welt (D-5) — recipes (1.407, inkl. VK-Block), Self-Refs,
+     * recipe_ingredients (9.590, Lineage über raw_text/match_method),
+     * Equipment-Vokabular (40) + M:N (836), Eignungs-Satelliten (637/1.644).
+     * Tote Spalten (GL-02 A-6) bewusst NICHT migriert.
+     */
+    private function importRecipes(PDO $pdo, bool $dryRun): array
+    {
+        $stats = [];
+        $katMap = $this->targetMap('foodalchemist_recipe_categories');
+        $einheitMap = $this->targetMap('foodalchemist_vocab_einheiten', 'vocab_einheit');
+
+        $allergene = [
+            'glutenhaltiges_getreide', 'krebstiere', 'eier', 'fisch', 'erdnuesse', 'soja', 'milch',
+            'schalenfruechte', 'sellerie', 'senf', 'sesam', 'schwefeldioxid', 'lupinen', 'weichtiere',
+        ];
+        $zusatzstoffe = [
+            'with_dye', 'with_preservative', 'with_antioxidant', 'with_flavour_enhancer',
+            'sulphurated', 'blackened', 'waxed', 'with_phosphate', 'with_sweetener',
+            'contains_phenylalanine', 'excessive_consumption_laxative', 'packaged_modified_atmosphere',
+            'caffeinated', 'contains_milk_protein', 'contains_quinine', 'taurine_containing',
+            'can_impair_attention_children', 'with_type_sugar_sweetener',
+        ];
+
+        $stats['recipes'] = $this->importBulk($pdo, $dryRun, 'recipes', 'foodalchemist_recipes', 'recipe_id',
+            function (array $r) use ($katMap, $einheitMap, $allergene, $zusatzstoffe) {
+                $row = [
+                    'legacy_id' => $r['recipe_id'],
+                    'recipe_key' => $r['recipe_key'],
+                    'name' => $r['name'],
+                    'herkunft' => self::nullIfBlank($r['herkunft'] ?? null),
+                    'kategorie_id' => $katMap[(int) ($r['kategorie_id'] ?? 0)] ?? null,
+                    'kat_v2_legacy_id' => $r['kat_v2_id'] ?? null,
+                    'klasse_v2_legacy_id' => $r['klasse_v2_id'] ?? null,
+                    'ist_verkaufsrezept' => (int) ($r['ist_verkaufsrezept'] ?? 0),
+                    'status' => $r['status'],
+                    'yield_kg' => $r['yield_kg'],
+                    'arbeitszeit_min' => $r['arbeitszeit_min'],
+                    'beschreibung' => self::nullIfBlank($r['ki_beschreibung'] ?? null),
+                    'temperatur' => self::nullIfBlank($r['temperatur'] ?? null),
+                    'funktion' => self::nullIfBlank($r['funktion'] ?? null),
+                    'zubereitung' => self::nullIfBlank($r['zubereitung'] ?? null),
+                    'notizen' => self::nullIfBlank($r['notizen'] ?? null),
+                    'notizen_manual' => self::nullIfBlank($r['notizen_manual'] ?? null),
+                    'geschmacksrichtung' => $r['geschmacksrichtung'] ?? null,
+                    'geschmacksrichtung_quelle' => self::mapQuelle($r['geschmacksrichtung_quelle'] ?? null),
+                    'geschmacksrichtung_ai_confidence' => $r['geschmacksrichtung_ai_confidence'] ?? null,
+                    'fertigungstiefe' => $r['fertigungstiefe'] ?? null,
+                    'sub_rezept_typ_legacy_id' => $r['sub_rezept_typ_id'] ?? null,
+                    'sub_rezept_typ_quelle' => self::mapQuelle($r['sub_rezept_typ_quelle'] ?? null),
+                    'sub_rezept_typ_ai_confidence' => $r['sub_rezept_typ_ai_confidence'] ?? null,
+                    'sub_rezept_typ_ai_begruendung' => self::nullIfBlank($r['sub_rezept_typ_ai_begruendung'] ?? null),
+                    'context_hooks_json' => $r['context_hooks_json'] ?? null,
+                    'allergene_konfidenz' => $r['allergene_konfidenz'] ?? 'unknown',
+                    'allergene_aggregiert_am' => self::utcOrNull($r['allergene_aggregiert_am'] ?? null),
+                    'zusatz_aggregiert_am' => self::utcOrNull($r['zusatz_aggregiert_am'] ?? null),
+                    'n_zutaten_total' => (int) ($r['n_zutaten_total'] ?? 0),
+                    'n_zutaten_ungemappt' => (int) ($r['n_zutaten_ungemappt'] ?? 0),
+                    'version' => (int) ($r['version'] ?? 1),
+                    'last_modified_by' => self::nullIfBlank($r['last_modified_by'] ?? null),
+                    'ek_total_eur' => $r['ek_total_eur'] ?? null,
+                    'ek_per_kg_eur' => $r['ek_per_kg_eur'] ?? null,
+                    'ek_n_ingredients_priced' => $r['ek_n_ingredients_priced'] ?? null,
+                    'ek_n_ingredients_total' => $r['ek_n_ingredients_total'] ?? null,
+                    'nutri_kcal_per_100g' => $r['nutri_kcal_per_100g'] ?? null,
+                    'nutri_protein_g_per_100g' => $r['nutri_protein_g_per_100g'] ?? null,
+                    'nutri_fat_g_per_100g' => $r['nutri_fat_g_per_100g'] ?? null,
+                    'nutri_carbs_g_per_100g' => $r['nutri_carbs_g_per_100g'] ?? null,
+                    'nutri_salt_g_per_100g' => $r['nutri_salt_g_per_100g'] ?? null,
+                    'nutri_konfidenz' => $r['nutri_konfidenz'] ?? null,
+                    'nutri_n_ingredients_mapped' => $r['nutri_n_ingredients_mapped'] ?? null,
+                    'nutri_n_ingredients_total' => $r['nutri_n_ingredients_total'] ?? null,
+                    'nutri_aggregiert_am' => self::utcOrNull($r['nutri_aggregiert_am'] ?? null),
+                    'spec_bio_pct' => $r['spec_bio_pct'] ?? null,
+                    'spec_regional_de_pct' => $r['spec_regional_de_pct'] ?? null,
+                    'spec_is_vegan' => $r['spec_is_vegan'] ?? null,
+                    'spec_is_vegetarian' => $r['spec_is_vegetarian'] ?? null,
+                    'spec_is_halal' => $r['spec_is_halal'] ?? null,
+                    'spec_contains_pork' => $r['spec_contains_pork'] ?? null,
+                    'spec_contains_beef' => $r['spec_contains_beef'] ?? null,
+                    'spec_is_gluten_free' => $r['spec_is_gluten_free'] ?? null,
+                    'spec_is_lactose_free' => $r['spec_is_lactose_free'] ?? null,
+                    'spec_konfidenz' => $r['spec_konfidenz'] ?? null,
+                    'spec_n_mapped' => $r['spec_n_mapped'] ?? null,
+                    'spec_n_total' => $r['spec_n_total'] ?? null,
+                    'spec_aggregiert_am' => self::utcOrNull($r['spec_aggregiert_am'] ?? null),
+                    'ai_confidence' => $r['ai_confidence'] ?? null,
+                    'ai_begruendung' => self::nullIfBlank($r['ai_begruendung'] ?? null),
+                    'aufschlagsklasse_legacy_id' => $r['aufschlagsklasse_id'] ?? null,
+                    'speisen_klasse_legacy_id' => $r['speisen_klasse_id'] ?? null,
+                    'vk_netto' => $r['vk_netto'] ?? null,
+                    'vk_brutto' => $r['vk_brutto'] ?? null,
+                    'mwst_satz' => $r['mwst_satz'] ?? null,
+                    'regeneration_temp_c' => $r['regeneration_temp_c'] ?? null,
+                    'regeneration_dauer_min' => $r['regeneration_dauer_min'] ?? null,
+                    'regeneration_kerntemp_c' => $r['regeneration_kerntemp_c'] ?? null,
+                    'vk_einheit_vocab_id' => $einheitMap[(int) ($r['vk_einheit_vocab_id'] ?? 0)] ?? null,
+                    'vk_menge_pro_einheit_g' => $r['vk_menge_pro_einheit_g'] ?? null,
+                    'vk_anzahl_einheiten' => $r['vk_anzahl_einheiten'] ?? null,
+                    'behaelter_warm_legacy_id' => $r['behaelter_warm_vocab_id'] ?? null,
+                    'behaelter_kalt_legacy_id' => $r['behaelter_kalt_vocab_id'] ?? null,
+                    'regeneration_geraet_legacy_id' => $r['regeneration_geraet_vocab_id'] ?? null,
+                    'servier_vehikel_legacy_id' => $r['servier_vehikel_vocab_id'] ?? null,
+                    'marketing_text' => self::nullIfBlank($r['marketing_text'] ?? null),
+                    'marketing_text_quelle' => self::mapQuelle($r['marketing_text_quelle'] ?? null),
+                    'marketing_text_ai_confidence' => $r['marketing_text_ai_confidence'] ?? null,
+                    'vk_wording_standard' => self::nullIfBlank($r['vk_wording_standard'] ?? null),
+                    'is_template' => (int) ($r['is_template'] ?? 0),
+                    'excel_source_row' => $r['excel_source_row'] ?? null,
+                    'excel_raw_zutaten' => $r['excel_raw_zutaten'] ?? null,
+                    'excel_raw_zubereitung' => $r['excel_raw_zubereitung'] ?? null,
+                    'pdf_page' => $r['pdf_page'] ?? null,
+                    'pdf_raw_text' => $r['pdf_raw_text'] ?? null,
+                    'is_split_result' => (int) ($r['is_split_result'] ?? 0),
+                    'is_user_stub' => (int) ($r['is_user_stub'] ?? 0),
+                ];
+                foreach ($allergene as $a) {
+                    $row["allergen_{$a}"] = $r["allergen_{$a}"] ?? 'unbekannt';
+                }
+                foreach ($zusatzstoffe as $z) {
+                    $row["zusatz_{$z}"] = $r["zusatz_{$z}"] ?? null;
+                }
+
+                return $row;
+            });
+
+        $recipeMap = $this->targetMap('foodalchemist_recipes');
+
+        // Self-Refs (instantiated_from_recipe_id) nachverdrahten — analog gps_self_refs
+        $stats['recipe_self_refs'] = $this->wireRecipeSelfRefs($pdo, $dryRun, $recipeMap);
+
+        $gpMap = $this->targetMap('foodalchemist_gps', 'wawi_gp_v2');
+        $stats['recipe_ingredients'] = $this->importBulk($pdo, $dryRun, 'recipe_ingredients', 'foodalchemist_recipe_ingredients', 'recipe_ingredient_id',
+            fn (array $r) => [
+                'legacy_id' => $r['recipe_ingredient_id'],
+                'recipe_id' => $recipeMap[(int) $r['recipe_id']],
+                'position' => (int) $r['sort_order'],
+                'gp_id' => $gpMap[(int) ($r['gp_v2_id'] ?? 0)] ?? null,
+                'referenced_recipe_id' => $recipeMap[(int) ($r['referenced_recipe_id'] ?? 0)] ?? null,
+                'raw_text' => $r['raw_text'],
+                'menge' => $r['menge'],
+                'menge_max' => $r['menge_max'] ?? null,
+                'einheit_vocab_id' => $einheitMap[(int) $r['einheit_vocab_id']],
+                'putzverlust_pct' => $r['putzverlust_pct'] ?? null,
+                'garverlust_pct' => $r['garverlust_pct'] ?? null,
+                'is_optional' => (int) ($r['is_optional'] ?? 0),
+                'klammer_note' => self::nullIfBlank($r['klammer_note'] ?? null),
+                'note' => self::nullIfBlank($r['note'] ?? null),
+                'match_method' => $r['match_method'] ?? null,
+                'match_confidence' => $r['match_confidence'] ?? null,
+                'rolle' => $r['rolle'] ?? null,
+                'ist_wertgebend' => (int) ($r['ist_wertgebend'] ?? 0),
+                'rechen_modus' => $r['rechen_modus'] ?? 'voll',
+                // GL-02 A-6: prozent_garverlust / prozent_in_produkt / menge_in_g_computed bewusst NICHT migriert
+            ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']])
+                || ! isset($einheitMap[(int) $r['einheit_vocab_id']]));
+
+        // Nachtrag 13_REFERENZ: Equipment-Vokabular (40) + M:N (836)
+        $stats['vocab_kochequipment'] = $this->importBulk($pdo, $dryRun, 'vocab_kochequipment', 'foodalchemist_vocab_kochequipment', 'vocab_id',
+            fn (array $r) => [
+                'legacy_id' => $r['vocab_id'],
+                'slug' => $r['slug'],
+                'name' => $r['name'],
+                'gruppe' => self::nullIfBlank($r['gruppe'] ?? null),
+                'sort_order' => (int) ($r['sort_order'] ?? 100),
+                'is_inactive' => (int) ($r['is_inactive'] ?? 0),
+            ]);
+        $stats['recipe_equipment'] = $this->importRecipeEquipment($pdo, $dryRun, $recipeMap);
+
+        // Eignungs-Satelliten (Niveau 637 / Sektor 1.644)
+        foreach ([
+            'recipe_niveau_eignung' => ['foodalchemist_recipe_niveau_eignung', 'niveau_slug'],
+            'recipe_sektor_eignung' => ['foodalchemist_recipe_sektor_eignung', 'sektor_slug'],
+        ] as $quelle => [$ziel, $slugSpalte]) {
+            $stats[$quelle] = $this->importBulk($pdo, $dryRun, $quelle, $ziel, 'eignung_id',
+                fn (array $r) => [
+                    'legacy_id' => $r['eignung_id'],
+                    'recipe_id' => $recipeMap[(int) $r['recipe_id']],
+                    $slugSpalte => $r[$slugSpalte],
+                    'quelle' => $r['quelle'] ?? 'ai_inferred',
+                    'ai_confidence' => $r['ai_confidence'] ?? null,
+                    'ai_begruendung' => self::nullIfBlank($r['ai_begruendung'] ?? null),
+                ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]));
+        }
+
+        return $stats;
+    }
+
+    /** instantiated_from_recipe_id (Templates) über die id-Map nachziehen. */
+    private function wireRecipeSelfRefs(PDO $pdo, bool $dryRun, array $recipeMap): array
+    {
+        $rows = $pdo->query('SELECT recipe_id, instantiated_from_recipe_id FROM recipes WHERE instantiated_from_recipe_id IS NOT NULL')
+            ->fetchAll(PDO::FETCH_ASSOC);
+        if ($dryRun) {
+            return ['source' => count($rows), 'imported' => 0, 'skipped' => 0];
+        }
+        $done = 0;
+        foreach ($rows as $r) {
+            $ziel = $recipeMap[(int) $r['recipe_id']] ?? null;
+            $von = $recipeMap[(int) $r['instantiated_from_recipe_id']] ?? null;
+            if ($ziel !== null && $von !== null) {
+                $done += DB::table('foodalchemist_recipes')->where('id', $ziel)
+                    ->whereNull('instantiated_from_recipe_id')->update(['instantiated_from_recipe_id' => $von]);
+            }
+        }
+
+        return ['source' => count($rows), 'imported' => $done, 'skipped' => count($rows) - $done];
+    }
+
+    /** M:N ohne eigenen Quell-PK — dediziert (Gate = Count-Vergleich, idempotent). */
+    private function importRecipeEquipment(PDO $pdo, bool $dryRun, array $recipeMap): array
+    {
+        $rows = $pdo->query('SELECT recipe_id, vocab_id, note FROM recipe_equipment ORDER BY recipe_id, vocab_id')
+            ->fetchAll(PDO::FETCH_ASSOC);
+        if ($dryRun) {
+            return ['source' => count($rows), 'imported' => 0, 'skipped' => 0];
+        }
+        if (DB::table('foodalchemist_recipe_equipment')->exists()) {
+            return ['source' => count($rows), 'imported' => 0, 'skipped' => count($rows)];
+        }
+        $equipMap = $this->targetMap('foodalchemist_vocab_kochequipment');
+        $now = now()->toDateTimeString();
+        $chunk = [];
+        $done = 0;
+        $skipped = 0;
+        foreach ($rows as $r) {
+            $rezept = $recipeMap[(int) $r['recipe_id']] ?? null;
+            $geraet = $equipMap[(int) $r['vocab_id']] ?? null;
+            if ($rezept === null || $geraet === null) {
+                $skipped++;
+
+                continue;
+            }
+            $chunk[] = [
+                'recipe_id' => $rezept, 'equipment_id' => $geraet,
+                'note' => self::nullIfBlank($r['note'] ?? null),
+                'created_at' => $now, 'updated_at' => $now,
+            ];
+            if (count($chunk) >= self::CHUNK) {
+                DB::table('foodalchemist_recipe_equipment')->insert($chunk);
+                $done += count($chunk);
+                $chunk = [];
+            }
+        }
+        if ($chunk !== []) {
+            DB::table('foodalchemist_recipe_equipment')->insert($chunk);
+            $done += count($chunk);
+        }
+
+        return ['source' => count($rows), 'imported' => $done, 'skipped' => $skipped];
     }
 
     /**
@@ -450,6 +705,14 @@ class ImportSliceCommand extends Command
         DB::table('foodalchemist_gps')->update([
             'merged_into_id' => null, 'derivat_von_gp_id' => null, 'lead_la_supplier_item_id' => null,
         ]);
+        // M4-02: Rezept-Welt zuerst (FKs auf gps/einheiten/kategorien)
+        DB::table('foodalchemist_recipe_sektor_eignung')->delete();
+        DB::table('foodalchemist_recipe_niveau_eignung')->delete();
+        DB::table('foodalchemist_recipe_equipment')->delete();
+        DB::table('foodalchemist_vocab_kochequipment')->delete();
+        DB::table('foodalchemist_recipe_ingredients')->delete();
+        DB::table('foodalchemist_recipes')->update(['instantiated_from_recipe_id' => null]);
+        DB::table('foodalchemist_recipes')->delete();
         DB::table('foodalchemist_item_nutritionals')->delete();
         DB::table('foodalchemist_item_declarations')->delete();
         DB::table('foodalchemist_item_allergens')->delete();
@@ -468,6 +731,8 @@ class ImportSliceCommand extends Command
                 'lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2',
                 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured',
                 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional',
+                'recipes', 'recipe_ingredients', 'vocab_kochequipment',
+                'recipe_niveau_eignung', 'recipe_sektor_eignung',
             ])
             ->delete();
     }
@@ -692,6 +957,7 @@ class ImportSliceCommand extends Command
         $imported = $skippedRows = 0;
         $chunk = [];
         $now = now()->toDateTimeString();
+        $maxRows = self::CHUNK; // wird nach der ersten Zeile spaltenabhängig gekappt
 
         $flush = function () use (&$chunk, $targetTable, &$imported) {
             if ($chunk === []) {
@@ -715,7 +981,12 @@ class ImportSliceCommand extends Command
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
-            if (count($chunk) >= self::CHUNK) {
+            if (count($chunk) === 1) {
+                // SQLite-Limit: 999 Bind-Variablen pro Statement — breite Tabellen (recipes ~120
+                // Spalten) brauchen kleinere Chunks (07 §7: engine-agnostisch bleiben)
+                $maxRows = max(1, min(self::CHUNK, intdiv(900, count($chunk[0]))));
+            }
+            if (count($chunk) >= $maxRows) {
                 $flush();
             }
         }
