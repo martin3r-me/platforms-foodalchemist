@@ -33,7 +33,7 @@ status: E1–E5 abgeschlossen — Spec-Korpus VOLLSTÄNDIG; nächster Schritt = 
 | 07_MIGRATION_SEED (9 Phasen, Hygiene-Gates, 7 Risiken) | ✅ | E5 (2026-06-11) |
 | 09_TESTKATALOG (Paritäts-Abnahme: 206 GL-Cases + 60 Szenarien) | ✅ | E5 |
 | 11_UI_PATTERNS (P-1…P-8, aus 5 Ist-App-Referenz-Screens; gewinnt bei Widerspruch ggü. D-Spec-§4-UI) | ✅ | Post-Slice (2026-06-11) |
-| **12_ROADMAP (fein-granulare Arbeits-Pakete M0–M8, Einstellungen bis KI-Engine — DER Abarbeitungs-Fahrplan)** | ✅ lebt (Status-Spalten pflegen!) | Post-Slice (2026-06-11) |
+| **12_ROADMAP (fein-granulare Arbeits-Pakete M0–M8, Einstellungen bis KI-Engine — DER Abarbeitungs-Fahrplan)** | ✅ lebt (Status-Spalten pflegen!) — **M0 KOMPLETT ☑ (2026-06-11)**: Tenancy+Tests (M0-01…06), UI-Bausteine master-detail/modal/ki-header/tri-state/chips + Dichte-Maps (M0-07…12), KPI-Leiste (M0-13), KI-Gateway-Basis (M0-14). Nächster Block: M1 (Einstellungen & Vokabulare) | Post-Slice (2026-06-11) |
 
 **Stand der offenen Punkte (aktualisiert 2026-06-11 nach Code-Eingang):**
 1. ~~⚠D3 KI-Konvention~~ → **✅ aus platforms-core beantwortet**: zentraler `LLMProviderContract` + `core.semantic_layer` existieren; Gateway = Fassade, Hüllen-Hybrid (08/D3, GL-06 §6). **Restfragen an Martin:** Embedding-Support (kritisch für Matching-RAG!), Vision, Team-Rate-Limits.

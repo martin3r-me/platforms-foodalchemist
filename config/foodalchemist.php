@@ -93,4 +93,28 @@ return [
             ],
         ],
     ],
+
+    /**
+     * KI-Anbindung (M0-14, D3-Entscheid hybrid)
+     *
+     * 'provider': 'core' = Plattform-LLM via LLMProviderContract (Default)
+     *             'fake' = deterministischer FakeAiProvider (Sandbox/Tests ohne Key)
+     */
+    'ai' => [
+        'provider' => env('FOODALCHEMIST_AI_PROVIDER', 'core'),
+    ],
+
+    /**
+     * TASK_PROMPT-Registry — Skeleton (M0-14).
+     * Der volle Umzug der 42 Prompts aus 06_KI_SPEZIFIKATION kommt mit M7-04
+     * (inkl. Tier-Zuordnung A–D, V-01). Format je Key:
+     *   'tier' (A–D) · 'task' (User-Task) · optional 'system' (Feld-Hülle) · 'temperature'
+     */
+    'prompts' => [
+        'demo.echo' => [
+            'tier' => 'D',
+            'task' => 'Gib die übergebenen Kontext-Felder unverändert als JSON-Objekt '
+                . '{"werte": …, "confidence": 0-1, "begruendung": "…"} zurück (Smoke-Test).',
+        ],
+    ],
 ];
