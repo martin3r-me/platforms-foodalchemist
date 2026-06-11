@@ -186,3 +186,94 @@ Zusatzstoffe 18 (−/✓), GP-Mapping-Sektion („— kein GP zugeordnet —", �
    Score/Label/Begründung/Re-Run) + **„Was hebt den Teller?"** als KI-Features → M6-Nachtrag.
 6. **M4:** Diät-&-Spezifikations-Aggregation (Rezept-Ebene aus GP-Tags, MIN) als
    sichtbare Panel-Sektion → M4-03/05-Nachtrag.
+
+## Nachlieferung 3 (2026-06-11): VK-Editor komplett · Generator-Modals
+
+### VK-Editor-Modal (D-6 — M6-04-Abgleich-Basis)
+- **Kopf-KI:** ✨ Name putzen · ✨ Klassifizieren · ✨ Marketing; „✨ KI-Überarbeiten"-
+  Tooltip: „Freie Anweisung — KI überarbeitet Zutaten, Mengen, Zubereitung &
+  Beschreibung (Vorschau + Übernehmen)".
+- Name* (Komponenten-Syntax §1.2) · Herkunft/Quelle ·
+  **VK-WORDING (STANDARD)**: kanonischer Marketing-Name, Stil-neutral ohne
+  Brand-Voice („Rinderfilet · Rotwein-Jus · Kartoffelgratin · Brokkoli ·
+  Schalotten-Konfit") + „✨ Wording"; Hint: „Schreibstile (Foodbook) transformieren
+  später diesen Standard in Brand-Voice-Varianten."
+- Checkbox VERKAUFSREZEPT · Speisen-Hauptgruppe-Select „[HG] Hauptgang" ·
+  Kategorie „Fleisch · Hauptgang Fleisch".
+- **VERKAUFSEINHEIT:** Select (Stück | kg/l/g/ml …) — „Bei kg/l/g/ml übernimmt das
+  System die Anzahl direkt aus dem Yield — bei Stück/Portion gibst du die Anzahl pro
+  Rezept ein" + ANZAHL STÜCK PRO REZEPT* → „Ergibt 420 g pro Stück (computed aus
+  Yield 0.42 kg ÷ Anzahl)".
+- **ZUTATEN:** Kopf 🧑‍🍳 Copilot · ✨ KI-Überarbeiten · 🎭 Rollen verteilen.
+  Tabelle MIT **ROLLE-SPALTE** (Select je Zeile: Aroma-Treiber | Komponente |
+  Beilage | …) zwischen Verknüpfung und Hinweis. Sub-Rezept-Zutaten mit ↗-Link
+  (Glace de Viande). Add-Zeile wie Basisrezept (Grundprodukt|Sub-Rezept-Toggle).
+- **Kalkulation:** KPI-Zeile (Yield · EK gesamt · EK/kg · mit Preis n/m ·
+  Allergen-Konf.) · AUFSCHLAGSKLASSE*-Select („ALC · A la Carte (Aufschl. 420%)") ·
+  MWST-SATZ (%) · VK NETTO MANUELL (€) · KPI-Karten: EK · VK netto · **VK BRUTTO** ·
+  **MARGE €/% (23.60 € / 94.4%)** · WARENEINSATZ % · Reihe 2: Anzahl Stück ·
+  VK netto/Stück · VK brutto/Stück · Formel-Klartext.
+- **Nährwerte (Rezept-Ebene, GL-08):** „LMIV-Kernwerte, computed aus Zutaten-LAs
+  (BLS-Daten). Live-Aktualisierung bei jeder Zutat-Änderung — bei Sub-Rezepten
+  topologisch propagiert." Spalten **pro 100 g + pro Stück (≈ 420 g)**:
+  Brennwert/Eiweiß/Fett/KH/Salz. **KONFIDENZ: LOW — „2/4 Zutaten mit Nährwert-Daten.
+  Lückenhafte Datenlage — Werte nur indikativ." + zuletzt aggregiert.** Hinweis:
+  „Garverlust/Putzverlust werden NICHT auf Nährwerte angewendet (BLS-Werte sind
+  roh). Stück-Zutaten ohne g/ml-Basis tragen nichts bei — drücken die Konfidenz."
+- **SPEZIFIKATION:** **BIO-ANTEIL %** (aus Zutaten!) · REGIONAL (DE) · Diät-Pills
+  mit × (VEGAN×/VEGETARISCH×/… rot = verletzt) + „ENTHÄLT RIND" (gelb).
+- Eigenschaften (Arbeitszeit/Temperatur „62 °C Kerntemperatur"/Funktion/
+  Geschmacksrichtung/Fertigungstiefe) · KI-Beschreibung ·
+  **PLATING & SERVICE** (eigener Markdown-Block „Teller-Aufbau, Mengenverteilung,
+  Service — KEINE Produktion" + „✨ Plating"; referenziert Sub-Rezepte) · Notizen ·
+  **VERWENDUNGSNACHWEISE** („Kunden × Marketing-Name. Foodbook-Spalte folgt in
+  Phase 3") + **KUNDEN-BEZEICHNUNGEN (0)**.
+- **Panel-Allergen-Darstellung:** Zähler-Pills „8 enthalten / 6 nicht enthalten"
+  bzw. „2 enthalten / 11 nicht enthalten / 5 unbekannt" + Legende enthalten(rot)/
+  Spuren(gelb)/nicht enthalten(grau)/unbekannt = keine LA-Daten (gestrichelt).
+
+### „Was hebt den Teller?" + Aroma-Nachbarn (VK-Panel, KI)
+- **Kulinarische Kohärenz:** Score % + Badge („KLASSISCHER TELLER") + Begründung +
+  Datum/Modell + „Erneut prüfen".
+- **Was hebt den Teller? (KI-Vorschlag):** Fließtext-Empfehlung + Kategorie-Pills
+  **Kontrast n | Ergänzung n | Veredelung n** + konkrete Vorschläge mit Score
+  („82 % Gepökelte, knusprig frittierte Kapern — Säure" + Begründung) +
+  „Erneut vorschlagen".
+- **AROMA-NACHBARN** (Foodpairing-Discovery · geteilte Aromastoffe — „Inspiration,
+  kein Teller-Urteil"): Modus-Pills **Klassiker | Signature** · Liste „% anker
+  (Allrounder) — verbindet n/m: Komponenten…" · Fußnote „% = Ø-Stärke der Kanten zu
+  den getroffenen Komponenten · Anker, die in BEIDEN Modi oben stehen, sind die
+  robusteste Wahl."
+
+### Generator-Modals (Basisrezept + VK — „✨ KI-Rezept")
+- Beide Browser (Basisrezepte UND Verkaufsrezepte) haben „✨ KI-Rezept"-Kopf-Button →
+  Modal „<Typ> aus Beschreibung generieren".
+- **Richtung (optional):** Convenience (egal/From Scratch/Teil-/Voll-Convenience) ·
+  Niveau (egal/Haute Cuisine/Gehoben/Klassisch) · **Bestand-Nutzung: Hybrid
+  (Default — „Bestand zuerst reusen, Neues nur für echte Lücken (agentischer
+  Resolver entscheidet)") | Nur Bestand | Komplett neu** · Kompositions-Stil (nur VK:
+  neutral/Klassisch/Kreativ/Modern/Gewagt/Avantgarde — „KI nutzt klassische +
+  moderne + Kontrast-Pairings frei") · Bio-Präferenz (Konventionell Default „KEIN
+  Bio in den Treffern"/Bio/Egal) · Aroma-Richtung (Frei-Select) · Anlass (VK) ·
+  Serviceform (VK) · Sektor (Verpflegungskontext) · **Diät-Constraints (Multi-Select,
+  HART erzwungen):** Vegan/Vegetarisch/Glutenfrei/Laktosefrei/Halal/Low Carb.
+- Eingabe: „✍️ Aus Beschreibung" | „📸 **Aus Foto / PDF / Text**" (Multimodal —
+  hängt an Martin-Vision-Frage!) + Beschreibung-Textarea + „Vorschlag generieren".
+- Basisrezept-Browser-Subtitle: „Produktion / Halbfabrikate (Saucen, Fonds, Pürees,
+  Komponenten). Entspricht Necta ‚Lieferprodukt' intern." + Fertigung-Spalte
+  (Scratch/Teilfertig) + „Aus Template" + „Bulk anreichern".
+
+## Nachträge aus Nachlieferung 3
+
+7. **M4-14 NEU: Basisrezept-Generator** („✨ KI-Rezept" im Basisrezept-Browser mit
+   Richtungs-Parametern + Bestand-Hybrid-Resolver) — M4 hatte nur Feld-Anreicherung
+   (M4-11), keinen Generator!
+8. **M6-04:** VK-Wording-Feld (+✨), Verkaufseinheit-Logik (Stück↔Yield-Ableitung),
+   Rolle-Spalte im Zutaten-Editor, Plating&Service-Block, Spezifikation
+   (Bio-Anteil %/Regional/Diät-Verletzungs-Pills), Kunden-Bezeichnungen (Phase 3).
+9. **M6-06:** Generator-Richtungs-Parameter komplett (s. o.) + „Aus Foto/PDF/Text"
+   (blockiert: Martin-Vision-Frage).
+10. **M5/M6:** Aroma-Nachbarn-Sektion (Klassiker/Signature, Kantenstärke-%) am
+    VK-Panel (GL-10-Queries).
+11. **M4/M6:** Nährwert-Sektion mit Konfidenz-Anzeige + pro-Stück-Spalte +
+    BLS-roh-Disclaimer (GL-08 GT-Verhalten sichtbar gemacht).
