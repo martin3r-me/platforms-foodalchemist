@@ -59,11 +59,72 @@
                 <label class="flex items-center gap-2 {{ $label }} cursor-pointer">
                     <input type="checkbox" wire:model.live="onlyActive" class="rounded border-gray-300" /> Nur aktive
                 </label>
-                <button type="button" disabled title="Kommt mit M3-11 (Bulk-Match je Lieferant)" class="{{ $btnGhostXs }} opacity-40 cursor-not-allowed">Bulk-Match</button>
+                <button type="button" wire:click="bulkMatchStarten" wire:loading.attr="disabled"
+                        class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-bulk-match-btn
+                        title="GL-04 v1: exact (EAN/Artikelnr.) + fuzzy über alle ungemappten Artikel — Vorschläge landen in der Review-Queue">Bulk-Match</button>
+                @if($offeneVorschlaege > 0)
+                    <button type="button" wire:click="$toggle('reviewOffen')" class="{{ $btnGhostXs }}" data-review-btn>
+                        {{ $offeneVorschlaege }} Vorschläge
+                    </button>
+                @endif
                 <button type="button" wire:click="anomalienAnzeigen" wire:loading.attr="disabled" class="{{ $btnGhostXs }}" data-anomalien-btn>Preis-Anomalien</button>
                 <button type="button" @click="$dispatch('modal.open', { name: 'artikel-neu' })" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-neuer-artikel-btn>+ Neuer Artikel</button>
             </div>
         </div>
+
+        {{-- M3-11: Review-Liste der Bulk-Match-Vorschläge --}}
+        @if($reviewOffen)
+            <div class="relative overflow-hidden {{ $card }}" data-review-liste>
+                <div class="{{ $cardAccent }}"></div>
+                <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">
+                        Match-Vorschläge
+                        @if($bulkStats !== null)
+                            <span class="text-gray-400 font-normal text-sm">— Lauf: {{ $bulkStats['geprueft'] }} geprüft · {{ $bulkStats['exact'] }} exact · {{ $bulkStats['fuzzy'] }} fuzzy · {{ $bulkStats['ohne_treffer'] }} ohne Treffer · {{ $bulkStats['uebersprungen'] }} übersprungen</span>
+                        @endif
+                    </h3>
+                    <button type="button" wire:click="$set('reviewOffen', false)" class="{{ $btnGhostXs }}">Schließen</button>
+                </div>
+                <div class="px-5 pb-4 space-y-1">
+                    @forelse($vorschlaege as $v)
+                        <div wire:key="mp-{{ $v->id }}" class="flex items-center gap-2 py-1 border-b border-black/5 dark:border-white/5 last:border-0" data-vorschlag="{{ $v->id }}">
+                            <span class="{{ $pill }} shrink-0 {{ ['exact' => $variantPill['success'], 'fuzzy_high' => $variantPill['info'], 'fuzzy_low' => $variantPill['warning']][$v->band] ?? $variantPill['secondary'] }}"
+                                  title="{{ $v->methode }}">{{ number_format((float) $v->score, 2, ',', '.') }}</span>
+                            <span class="text-xs text-gray-900 dark:text-gray-100 truncate flex-1" title="{{ $v->item?->designation }}">{{ $v->item?->designation }}</span>
+                            <span class="text-xs text-gray-400 shrink-0">→</span>
+                            <span class="text-xs text-violet-600 dark:text-violet-400 truncate flex-1" title="{{ $v->gp?->name }}">{{ $v->gp?->name }}</span>
+                            <button type="button" wire:click="vorschlagUebernehmen({{ $v->id }})" class="{{ $btnGhostXs }} shrink-0">Übernehmen</button>
+                            <button type="button" wire:click="vorschlagVerwerfen({{ $v->id }})" class="{{ $btnGhostXs }} shrink-0 text-rose-500">Verwerfen</button>
+                        </div>
+                    @empty
+                        <p class="text-sm text-gray-400 py-3">Keine offenen Vorschläge — Bulk-Match starten oder alles entschieden.</p>
+                    @endforelse
+                </div>
+            </div>
+        @endif
+
+        {{-- M3-11-Nachtrag: Bulk-Leiste (D-2 §4) — erscheint bei Auswahl --}}
+        @if(count(array_filter($auswahl)) > 0)
+            <div class="relative overflow-hidden {{ $card }} px-5 py-3 flex items-center gap-2 flex-wrap" data-bulk-leiste>
+                <span class="text-sm text-gray-900 dark:text-gray-100 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt</span>
+                <span class="relative">
+                    <input type="search" wire:model.live.debounce.300ms="bulkGpSuche" placeholder="GP zuweisen — suchen …" class="{{ $input }} !w-56" data-bulk-gp-suche />
+                    @if($bulkGpKandidaten->isNotEmpty())
+                        <span class="absolute left-0 top-full mt-1 z-20 w-80 rounded-lg bg-white dark:bg-gray-900 border border-black/10 dark:border-white/10 shadow-xl overflow-hidden">
+                            @foreach($bulkGpKandidaten as $kandidat)
+                                <button type="button" wire:key="bgk-{{ $kandidat->id }}" wire:click="bulkGpZuweisen({{ $kandidat->id }})"
+                                        class="block w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150">{{ $kandidat->name }}</button>
+                            @endforeach
+                        </span>
+                    @endif
+                </span>
+                <button type="button" wire:click="bulkMappingEntfernen" class="{{ $btnGhostXs }}">Mapping entfernen</button>
+                <button type="button" wire:click="bulkEinstellen(true)" class="{{ $btnGhostXs }}">Einstellen</button>
+                <button type="button" wire:click="bulkEinstellen(false)" class="{{ $btnGhostXs }}">Reaktivieren</button>
+                <button type="button" wire:click="bulkLoeschen" wire:confirm="{{ count(array_filter($auswahl)) }} Artikel wirklich löschen (soft delete)?" class="{{ $btnGhostXs }} text-rose-500">Löschen</button>
+                <button type="button" wire:click="$set('auswahl', [])" class="{{ $btnGhostXs }} ml-auto">Auswahl aufheben</button>
+            </div>
+        @endif
 
         {{-- Artikel-Tabelle (M2-02) --}}
         <div class="relative overflow-hidden {{ $card }}" data-artikel-tabelle>
@@ -80,6 +141,7 @@
             <table class="{{ $table }}">
                 <thead>
                     <tr class="text-left">
+                        <th class="{{ $th }} !pr-0 w-8"></th>
                         @if($globaleSuche)<th class="{{ $th }}">Lieferant</th>@endif
                         @foreach(['ArtNr', 'Bezeichnung', 'Gebinde', 'Status', 'EK', 'Vergleichspreis', 'Grundprodukt'] as $head)
                             <th class="{{ $th }}">{{ $head }}</th>
@@ -89,6 +151,10 @@
                 <tbody>
                     @forelse($artikel ?? [] as $item)
                         <tr wire:key="item-{{ $item->id }}" class="{{ $tr }}">
+                            <td class="{{ $td }} !pr-0">
+                                <input type="checkbox" wire:model.live="auswahl.{{ $item->id }}"
+                                       class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-artikel-checkbox="{{ $item->id }}" />
+                            </td>
                             @if($globaleSuche)
                                 <td class="{{ $td }} text-gray-500">{{ $item->supplier?->name ?? '—' }}</td>
                             @endif
@@ -125,7 +191,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="px-5 py-10 text-center text-gray-400">Keine Artikel gefunden.</td></tr>
+                        <tr><td colspan="9" class="px-5 py-10 text-center text-gray-400">Keine Artikel gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>

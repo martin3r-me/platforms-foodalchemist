@@ -54,6 +54,16 @@ class Index extends Component
     /** M2-12: Anomalien-Report (lazy beim Öffnen) */
     public ?array $anomalien = null;
 
+    /** M3-11: Bulk-Match-Lauf-Statistik + Review-Sichtbarkeit */
+    public ?array $bulkStats = null;
+
+    public bool $reviewOffen = false;
+
+    /** M3-11-Nachtrag: Checkbox-Selektion für die Bulk-Leiste (D-2 §4) */
+    public array $auswahl = [];
+
+    public string $bulkGpSuche = '';
+
     public function waehleLieferant(int $id): void
     {
         $this->supplierId = $id;
@@ -153,6 +163,96 @@ class Index extends Component
         $this->dispatch('modal.open', name: 'preis-anomalien');
     }
 
+    // ── M3-11: Bulk-Match + Review-Queue ────────────────────────────────
+
+    public function bulkMatchStarten(): void
+    {
+        $this->fehler = null;
+        if ($this->supplierId === null) {
+            return;
+        }
+        $team = Auth::user()?->currentTeamRelation;
+        $this->bulkStats = app(\Platform\FoodAlchemist\Services\MatchService::class)
+            ->bulkFuerLieferant($team, $this->supplierId);
+        $this->reviewOffen = true;
+    }
+
+    public function vorschlagUebernehmen(int $proposalId): void
+    {
+        $this->fehler = null;
+        try {
+            app(\Platform\FoodAlchemist\Services\MatchService::class)
+                ->uebernehmeVorschlag(Auth::user()->currentTeamRelation, $proposalId);
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function vorschlagVerwerfen(int $proposalId): void
+    {
+        app(\Platform\FoodAlchemist\Services\MatchService::class)->verwerfeVorschlag($proposalId);
+    }
+
+    // ── M3-11-Nachtrag: Bulk-Leiste (D-2 §4) ────────────────────────────
+
+    public function bulkEinstellen(bool $discontinued): void
+    {
+        $this->bulkArtikelAktion(function ($items, $team, $id) use ($discontinued) {
+            $item = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)->findOrFail($id);
+            $items->setDiscontinued($team, $item, $discontinued);
+        });
+    }
+
+    public function bulkLoeschen(): void
+    {
+        $this->bulkArtikelAktion(function ($items, $team, $id) {
+            \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)->findOrFail($id)->delete();
+        });
+    }
+
+    public function bulkMappingEntfernen(): void
+    {
+        $this->bulkArtikelAktion(function ($items, $team, $id) {
+            $struktur = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_item_structures')
+                ->where('supplier_item_id', $id)->whereNull('deleted_at')->first();
+            if ($struktur?->gp_id !== null) {
+                $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::find($struktur->gp_id);
+                if ($gp !== null) {
+                    app(\Platform\FoodAlchemist\Services\LeadLaService::class)->entknuepfen($team, $gp, $id);
+                }
+            }
+        });
+    }
+
+    public function bulkGpZuweisen(int $gpId): void
+    {
+        $this->bulkGpSuche = '';
+        $this->bulkArtikelAktion(function ($items, $team, $id) use ($gpId) {
+            $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+            $struktur = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_item_structures')
+                ->where('supplier_item_id', $id)->whereNull('deleted_at')->first();
+            if ($struktur === null || $struktur->gp_id !== null) {
+                return;                                              // gemappte überspringen (erst lösen, GL-05)
+            }
+            app(\Platform\FoodAlchemist\Services\LeadLaService::class)->verknuepfen($team, $gp, $id);
+        });
+    }
+
+    private function bulkArtikelAktion(\Closure $aktion): void
+    {
+        $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        $items = app(SupplierItemService::class);
+        try {
+            foreach (array_keys(array_filter($this->auswahl)) as $id) {
+                $aktion($items, $team, (int) $id);
+            }
+            $this->auswahl = [];
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function render(SupplierService $suppliers, SupplierItemService $items, PriceService $preise)
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
@@ -183,6 +283,21 @@ class Index extends Component
             'globaleSuche' => $globaleSuche,
             'aktiverLieferant' => $globaleSuche ? null : $liste->firstWhere('id', $this->supplierId),
             'darfLieferantEdit' => ! $globaleSuche && Curate::canCurate(Auth::user(), $liste->firstWhere('id', $this->supplierId)),
+            // M3-11: offene Match-Vorschläge des Lieferanten (Review-Liste)
+            'vorschlaege' => $this->reviewOffen && $this->supplierId !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::with(['item:id,designation', 'gp:id,name'])
+                    ->whereHas('item', fn ($q) => $q->where('supplier_id', $this->supplierId))
+                    ->where('status', 'offen')->orderByDesc('score')->limit(100)->get()
+                : collect(),
+            'offeneVorschlaege' => $this->supplierId !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::whereHas('item', fn ($q) => $q->where('supplier_id', $this->supplierId))
+                    ->where('status', 'offen')->count()
+                : 0,
+            'bulkGpKandidaten' => $this->bulkGpSuche !== ''
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)
+                    ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($this->bulkGpSuche) . '%'])
+                    ->orderBy('name')->limit(6)->get()
+                : collect(),
         ])->layout('platform::layouts.app');
     }
 }

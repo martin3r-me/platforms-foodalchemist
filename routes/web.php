@@ -43,11 +43,12 @@ Route::get('/test', Test::class)->name('foodalchemist.test');
 Route::get('/gps', \Platform\FoodAlchemist\Livewire\Gps\Browser::class)
     ->name('foodalchemist.gps.index');
 
-/** Alte Slice-Liste — bleibt bis M3-12 (Aufräumen) erreichbar, dann Redirect. */
-Route::get('/gps/liste', \Platform\FoodAlchemist\Livewire\Gps\Index::class)
+/** M3-12: Alt-Routen der Vertical-Slice-Ära → Redirect in den Browser (Kontext via ?gp=). */
+Route::get('/gps/liste', fn () => redirect()->route('foodalchemist.gps.index'))
     ->name('foodalchemist.gps.liste');
 
-Route::get('/gps/{foodAlchemistGp}', \Platform\FoodAlchemist\Livewire\Gps\Show::class)
+Route::get('/gps/{foodAlchemistGp}', fn (\Platform\FoodAlchemist\Models\FoodAlchemistGp $foodAlchemistGp) => redirect()
+    ->route('foodalchemist.gps.index', ['gp' => $foodAlchemistGp->id]))
     ->name('foodalchemist.gps.show');
 
 
