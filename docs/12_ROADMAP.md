@@ -90,7 +90,7 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | M2-01 | Browser-Gerüst | `Suppliers/Browser`: master-detail-Baustein, Lieferanten-Liste links („n Artikel · m gemapped" grün), Suche, Inaktive-Toggle | P-7; D-2 §4 | Liste mit echten Counts (SQL-verifiziert) | ☐ |
 | M2-02 | Artikel-Tabelle | Mitte: ArtNr · Bezeichnung · Gebinde · Status · EK · GP-Mapping-Link; Pagination; „Nur aktive" | P-7 | 17.879 BOS-Artikel flüssig blätterbar | ☐ |
 | M2-03 | Übergreifende Suche | Artikel-Suche über alle Lieferanten (Feld oben links, Ist-App), Treffer-Liste mit Lieferant-Spalte | P-7 | Suche „Limettensaft" findet die GT-1-LAs | ☐ |
-| M2-04 | PriceService | Aktiv-Preis-Regel aus `GpService::lasForGp()` extrahieren (eine Stelle!), Historie-Query, „neuer Preis schließt alten" | GL-03/GL-11 | Pest: Aktiv-Preis-Golden (GT-1 47,50 € status 2) | ☐ |
+| M2-04 | PriceService | Aktiv-Preis-Regel aus `GpService::lasForGp()` extrahieren (eine Stelle!), Historie-Query, „neuer Preis schließt alten" | GL-03/GL-11 | Pest: Aktiv-Preis-Golden (GT-1 47,50 € status 2) | ☑ 2026-06-11 (PriceCategory-Enum [§3.1, price<0 vor status], PriceService: scopeAktiv index-fähig, activeFor [§3.3 neueste aktive, NULL-valid_to engine-agnostisch ans Ende], Subquery für Listen, historyFor; GpService umgestellt. GT-1 real bestätigt: 47,50 € status 2. „Schließt alten" folgt in M2-08 [createFor]) |
 | M2-05 | Vergleichspreis | Normalisierung €/kg-€/l-€/Stk aus qty+Einheit; Spalte in Tabelle + Modal-Kopf | D-2 §3 | Stichproben gegen Ist-App-Werte (0.81 €/kg Golden Delicious) | ☐ |
 | M2-06 | ItemModal lesend | modal-Baustein: Sektionen Stammdaten/Verpackung/Eigenschaften/Preise — erst read-only komplett | P-2/P-6 | GT-1-Artikel zeigt alle Felder + Preis-Historie | ☐ |
 | M2-07 | ItemModal Edit | Edit Stammdaten+Verpackung+Eigenschaften (nur Besitzer-Team), Validierung, LogsActivity | P-2; M1-08 | Edit-Roundtrip; Kind-Team read-only | ☐ |
@@ -175,7 +175,7 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | M7-07 | Küchen-Profil | Küchen-Kontext (commands.rs:12590-Pendant) als Team-Einstellung in Prompts | D-5 §4.3 | Profil ändert Generator-Output | ☐ |
 | M7-08 | KI-Settings | Settings-Sektion: Provider-Status, Tier-Zuordnung, Budget-Anzeige, Kill-Switch | M1-01 | Kill-Switch stoppt Autopilot-Buttons | ☐ |
 | M7-09 | Embeddings/RAG | GL-04-RAG + V-24 — **wartet auf Martin** (Embedding-Support Plattform-LLM) | GL-04; D3-Rest | blockiert markieren | ☐ blockiert |
-| M7-10 | Voice-Interface | Sprachbedienung als zweiter Bedienweg (UI bleibt parallel): Mikro-Aufnahme → STT → agentischer Tool-Loop (`callWithTools`, Tier D) über M8-01-Tools; Schreibaktionen NUR via GL-07-Proposal-Flow (sprechen → Proposal → bestätigen); nach: M7-04 + erste M8-01-Tools | Dev-Modul Discussion #1; 06_KI §1; GL-07; M8-01 | 3 Sprachbefehle end-to-end (Suche, Detail öffnen, Schreib-Proposal mit Accept); Befehls-Latenz gemessen + dokumentiert | ☐ blockiert (Martin: STT/Audio, `whisper`-Modul) |
+| M7-10 | Voice-Interface | Sprachbedienung als zweiter Bedienweg (UI bleibt parallel): Mikro-Aufnahme (MediaRecorder, Opus mono — Vorbild `platforms-whisper`) → **eigener sync Kurz-Audio-STT** (`SttServiceContract` + `AssemblyAiSttService`, **D8**: kein Fremdmodul-Require, kein Core-Eingriff) → agentischer Tool-Loop (`callWithTools`, Tier D) über M8-01-Tools; Schreibaktionen NUR via GL-07-Proposal-Flow (sprechen → Proposal → bestätigen); nach: M7-04 + erste M8-01-Tools | **D8 in 08**; Dev-Modul Discussion #1; 06_KI §1; GL-07; M8-01; martin3r-me/platforms-whisper | 3 Sprachbefehle end-to-end (Suche, Detail öffnen, Schreib-Proposal mit Accept); Befehls-Latenz gemessen + dokumentiert | ☐ (Deploy braucht `ASSEMBLYAI_API_KEY` — Martin; Sandbox-Bau frei) |
 
 ## M8 — Querschnitt (laufend)
 
@@ -199,7 +199,7 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | Push/Repo-Sichtbarkeit (public + Kern-IP in docs/) | Dominique/Martin | jeden Commit |
 | x-ui-modal im Content erlaubt? | Martin | M0-08 (bis dahin Custom-Modal) |
 | Embedding-Support Plattform-LLM, Vision, Team-Rate-Limits | Martin | M7-09 |
-| STT/Audio-Support Plattform-Provider + Zweck des `whisper`-Moduls (Plattform, Team-denied) | Martin | M7-10 (Voice-Interface) |
+| `ASSEMBLYAI_API_KEY` auf office/demo vorhanden/teilbar? + Heads-up: foodalchemist bindet AssemblyAI direkt an (STT-Weg selbst entschieden: **D8** = eigener sync Kurz-Audio-Pfad im Modul, Präzedenz `platforms-whisper`) | Martin | nur M7-10-**Deploy** (Sandbox-Bau frei) |
 | Dark-Mode-Strategie Shell (`.dark`-Klasse) | Martin | kosmetisch |
 | Core-Fixes (undeklarierte Deps, MySQL-only-Migrationen, Index-Kollision) | Martin | Sandbox-Komfort |
 | Paritäts-Suite-Engine: Testkatalog §1 sagt Postgres, Prod-DB ist MySQL (gemeinsame Plattform-DB, Martin-Info 2026-06-11 → 07 §7) | Martin | GL-03-Tests (M3-06); bis dahin NULL-Sortierung engine-agnostisch |

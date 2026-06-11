@@ -74,11 +74,8 @@ class GpService
             ->get()
             ->map(function ($structure) {
                 $item = $structure->item;
-                $price = $item?->prices()
-                    ->where('is_blocked', false)
-                    ->orderByDesc('valid_to')
-                    ->orderByDesc('id')
-                    ->first();
+                // M2-04: Aktiv-Preis-Regel zentral im PriceService (GL-11 §3.3 — eine Stelle!)
+                $price = $item !== null ? app(PriceService::class)->activeFor($item->id) : null;
 
                 return (object) [
                     'structure' => $structure,

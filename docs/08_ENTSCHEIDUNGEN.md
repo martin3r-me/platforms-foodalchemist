@@ -86,6 +86,17 @@ status: D1–D5 mit Arbeits-Annahmen — finale Entscheide ausstehend
 | **Arbeits-Annahme** | Multiplikativ (Ist-Verhalten, mathematisch sauberer), Verlust-Faktoren auf Zutat-Ebene mit GP-Default-Fallback; Regelwerk F6.2 bei nächster Regelwerk-Revision angleichen. |
 | **Anker in** | GL-02 §6, `05_DOMAENEN/D-5` |
 
+## D8 — STT-Weg für Voice-Interface (M7-10) — ✅ ENTSCHIEDEN (Dominique, 2026-06-11)
+
+| | |
+|---|---|
+| **Befund** | Plattform-Modul **`platforms-whisper`** (public, `martin3r-me/platforms-whisper`) liefert Browser-Recorder (MediaRecorder, Opus mono → Blob-POST) + `AssemblyAiTranscriptionService` (upload→submit→poll, `language_code=de`, Diarization). Pipeline ist **async** (Queue + 3-s-Polling, für Meetings gebaut; Echtzeit-Streaming explizit out-of-scope) — ungeeignet für Befehls-Latenz. Kein STT-Contract im Core. |
+| **Optionen** | (a) `platforms-whisper` als Modul-Abhängigkeit · (b) eigener schlanker **sync Kurz-Audio-Pfad** im foodalchemist-Modul nach gleichem Muster · (c) STT-Contract in den Core (analog `LLMProviderContract`) |
+| **Entscheid (Dominique)** | **(b).** Keine Fremdmodul-Abhängigkeit (Goldene Regeln), keine Core-Änderung nötig; whisper-Pipeline passt fachlich nicht (Meeting- statt Befehls-Profil). Präzedenz: `platforms-whisper` ruft AssemblyAI selbst direkt via HTTP — die D3-Regel „kein eigener HTTP-Client" betrifft den **LLM**-Transport (`LLMProviderContract`), STT ist dort nicht abgedeckt. |
+| **Umsetzung** | Eigener `SttServiceContract` + `AssemblyAiSttService` im Modul: synchroner Kurz-Audio-Call (wenige Sekunden Audio; kurzes Poll-Intervall ≪3 s oder Streaming-API, ohne Diarization, `language_code=de`). **Hinter Interface**, damit ein späterer Core-STT-Contract (Option c) per Binding-Tausch übernehmen kann — gleiche Fassaden-Logik wie D3. Recorder-Frontend nach whisper-Vorbild (MediaRecorder, Opus mono). |
+| **Rest (Deployment, Martin)** | `ASSEMBLYAI_API_KEY` auf office/demo vorhanden/teilbar? Blockiert nur den Deploy, nicht den Bau (Sandbox: eigener Key). Courtesy-Heads-up an Martin, dass foodalchemist AssemblyAI direkt anbindet. |
+| **Anker in** | `12_ROADMAP.md` (M7-10, Offene Entscheide), Dev-Modul Discussion #1; `06_KI_SPEZIFIKATION.md` ergänzen, sobald M7-10 gebaut wird |
+
 ## Entscheidungs-Log
 
 | Datum | Weiche | Entscheid | Von |
@@ -96,5 +107,6 @@ status: D1–D5 mit Arbeits-Annahmen — finale Entscheide ausstehend
 | 2026-06-11 | **D4** | Modul-Tabellen + Drei-Klassen-Modell + Einbahn-Import mit Pairing-Parser-Kopplung; Niveau→Hüllen | Dominique |
 | 2026-06-11 | **Lead-LA (Produkt-Anforderung)** | Strategie-Einstellung (Stamm vs. günstigster Preis) + Ausweich-Kette + Sperr-/Pin-Workflow für Einkäufer, team-scoped Overlay → **V-27** | Dominique |
 | 2026-06-11 | **D5-Präzisierung** | Rezept-gebundene Pairing-Features = MVP (Produktvision); D-7 nur als Exploration Phase 2 | Dominique |
+| 2026-06-11 | **D8** | Voice-STT (M7-10) = eigener sync Kurz-Audio-Pfad im Modul hinter `SttServiceContract` (Option b); kein Fremdmodul-Require, kein Core-Eingriff; Rest: API-Key-Deployment (Martin) | Dominique |
 | 2026-06-10 | D5 (Arbeits-Annahme) | MVP = D-1…D-6 | Dominique |
 | — | D1–D3, D6, D7 | offen, Arbeits-Annahmen aktiv | — |

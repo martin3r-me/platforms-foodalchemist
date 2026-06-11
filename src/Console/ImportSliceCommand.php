@@ -186,6 +186,9 @@ class ImportSliceCommand extends Command
                 'legacy_category_id' => $r['legacy_category_id'],
             ], skipRow: fn (array $r) => ! isset($hgMap[(int) $r['hauptgruppe_id']]));
 
+        // M2-04/05: unit_code-Backfill (GL-11 Kalkulationseinheit kg|l|Stk)
+        $stats['unit_codes'] = $this->backfillUnitCodes($pdo, $dryRun);
+
         // M1-06: Stamm-Lieferanten-Matrix (Vault-Skript 212) — dedizierte Phase:
         // zwei Quell-Tabellen auf EIN Ziel, daher ohne importBulk/id_map (Gate = Count-Vergleich)
         $stats['stamm_lieferanten'] = $this->importStammLieferanten($pdo, $dryRun);
@@ -206,6 +209,37 @@ class ImportSliceCommand extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * M2-04/05: supplier_items.unit_id → lookup_unit.code als unit_code an die Ziel-LAs.
+     * Idempotent: läuft nur, wenn noch kein unit_code gesetzt ist. Gruppiert je Code
+     * (3 Codes), chunked UPDATE über die legacy_id-Map.
+     */
+    private function backfillUnitCodes(PDO $pdo, bool $dryRun): array
+    {
+        $total = (int) $pdo->query('SELECT COUNT(*) FROM supplier_items WHERE unit_id IS NOT NULL')->fetchColumn();
+        if ($dryRun) {
+            return ['source' => $total, 'imported' => 0, 'skipped' => 0];
+        }
+        if (DB::table('foodalchemist_supplier_items')->whereNotNull('unit_code')->exists()) {
+            return ['source' => $total, 'imported' => 0, 'skipped' => $total];
+        }
+
+        $itemMap = $this->targetMap('foodalchemist_supplier_items');
+        $updated = 0;
+        foreach ($pdo->query('SELECT u.code, i.id FROM supplier_items i JOIN lookup_unit u ON u.id = i.unit_id') as $r) {
+            $gruppen[$r['code']][] = $itemMap[(int) $r['id']] ?? null;
+        }
+        foreach ($gruppen ?? [] as $code => $ids) {
+            foreach (array_chunk(array_filter($ids), 1000) as $chunk) {
+                $updated += DB::table('foodalchemist_supplier_items')->whereIn('id', $chunk)->update(['unit_code' => $code]);
+            }
+        }
+        $ziel = DB::table('foodalchemist_supplier_items')->whereNotNull('unit_code')->count();
+        $this->line(($ziel === $total ? '✅' : '❌ BLOCKER') . " unit_codes: Quelle {$total} ↔ Ziel {$ziel}");
+
+        return ['source' => $total, 'imported' => $updated, 'skipped' => $total - $updated];
     }
 
     /**
