@@ -278,7 +278,7 @@ class ImportSliceCommand extends Command
 
         // Row-Count-Verifikation (07 §5): Quelle == id_map je Quell-Tabelle
         if (! $dryRun) {
-            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional', 'recipes', 'recipe_ingredients', 'vocab_kochequipment', 'recipe_niveau_eignung', 'recipe_sektor_eignung', 'wawi_gp_count_unit_defaults', 'vocab_pairing_anker', 'pairing_anker_edges', 'gp_anker_mapping', 'recipe_anker_mapping', 'recipe_pairings'] as $sourceTable) {
+            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional', 'recipes', 'recipe_ingredients', 'vocab_kochequipment', 'recipe_niveau_eignung', 'recipe_sektor_eignung', 'wawi_gp_count_unit_defaults', 'vocab_pairing_anker', 'pairing_anker_edges', 'gp_anker_mapping', 'recipe_anker_mapping', 'recipe_pairings', 'recipe_prozess_anker'] as $sourceTable) {
                 $sourceCount = (int) $pdo->query("SELECT COUNT(*) FROM {$sourceTable}")->fetchColumn();
                 $mapCount = DB::table('foodalchemist_legacy_id_map')->where('source_table', $sourceTable)->count();
                 $flag = $sourceCount === $mapCount ? '✅' : '❌ BLOCKER';
@@ -550,6 +550,16 @@ class ImportSliceCommand extends Command
                 'created_via' => $r['created_via'] ?? null,
             ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]) || ! isset($ankerMap[(int) $r['pairing_anker_vocab_id']]));
 
+        $stats['recipe_prozess_anker'] = $this->importBulk($pdo, $dryRun, 'recipe_prozess_anker', 'foodalchemist_recipe_prozess_anker', 'mapping_id',
+            fn (array $r) => [
+                'legacy_id' => $r['mapping_id'],
+                'recipe_id' => $recipeMap[(int) $r['recipe_id']],
+                'anker_id' => $ankerMap[(int) $r['anker_vocab_id']],
+                'quelle' => self::mapQuelle($r['quelle'] ?? null),
+                'ai_confidence' => $r['ai_confidence'] ?? null,
+                'ai_begruendung' => self::nullIfBlank($r['ai_begruendung'] ?? null),
+            ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]) || ! isset($ankerMap[(int) $r['anker_vocab_id']]));
+
         // V-23: Kanten-Symmetrie herstellen (GL-10 Inv. 4 — die Abfragen setzen sie voraus;
         // die Quelle selbst trägt Asymmetrien). Fehlende Gegenkanten deterministisch ergänzen.
         if (! $dryRun) {
@@ -814,6 +824,7 @@ class ImportSliceCommand extends Command
             'merged_into_id' => null, 'derivat_von_gp_id' => null, 'lead_la_supplier_item_id' => null,
         ]);
         // M5-03: Pairing-Graph zuerst (FKs auf gps/recipes/anker)
+        DB::table('foodalchemist_recipe_prozess_anker')->delete();
         DB::table('foodalchemist_recipe_pairings')->delete();
         DB::table('foodalchemist_recipe_anker_mappings')->delete();
         DB::table('foodalchemist_gp_anker_mappings')->delete();
@@ -849,7 +860,7 @@ class ImportSliceCommand extends Command
                 'recipes', 'recipe_ingredients', 'vocab_kochequipment',
                 'recipe_niveau_eignung', 'recipe_sektor_eignung', 'wawi_gp_count_unit_defaults',
                 'vocab_pairing_anker', 'pairing_anker_edges', 'gp_anker_mapping',
-                'recipe_anker_mapping', 'recipe_pairings',
+                'recipe_anker_mapping', 'recipe_pairings', 'recipe_prozess_anker',
             ])
             ->delete();
     }
