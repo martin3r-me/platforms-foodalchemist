@@ -164,6 +164,28 @@ class ImportSliceCommand extends Command
             $stats['lead_la_wire'] = $this->wireLeadLas();
         }
 
+        // M1-04: Produktions-Taxonomie (Skript-204-Stand: 30 HG / 186 Kategorien)
+        $stats['recipe_main_groups'] = $this->importBulk($pdo, $dryRun, 'recipe_hauptgruppen', 'foodalchemist_recipe_main_groups', 'hauptgruppe_id',
+            fn (array $r) => [
+                'legacy_id' => $r['hauptgruppe_id'],
+                'code' => $r['code'],
+                'bezeichnung' => $r['bezeichnung'],
+                'bereich' => self::nullIfBlank($r['beschreibung'] ?? null),
+                'sort_order' => (int) ($r['sort_nr'] ?? 0),
+            ]);
+        $hgMap = $this->targetMap('foodalchemist_recipe_main_groups');
+        $stats['recipe_categories'] = $this->importBulk($pdo, $dryRun, 'recipe_kategorien', 'foodalchemist_recipe_categories', 'kategorie_id',
+            fn (array $r) => [
+                'legacy_id' => $r['kategorie_id'],
+                'main_group_id' => $hgMap[(int) $r['hauptgruppe_id']] ?? null,
+                'code' => $r['code'],
+                'bezeichnung' => $r['bezeichnung'],
+                'technik' => self::nullIfBlank($r['technik'] ?? null),
+                'sort_order' => (int) ($r['sort_nr'] ?? 0),
+                'legacy_excel_kat' => self::nullIfBlank($r['legacy_excel_kat'] ?? null),
+                'legacy_category_id' => $r['legacy_category_id'],
+            ], skipRow: fn (array $r) => ! isset($hgMap[(int) $r['hauptgruppe_id']]));
+
         $this->table(
             ['Phase', 'Quelle', 'importiert', 'übersprungen (id_map)'],
             collect($stats)->map(fn ($s, $k) => [$k, $s['source'] ?? '—', $s['imported'] ?? '—', $s['skipped'] ?? '—'])->all()
@@ -171,7 +193,7 @@ class ImportSliceCommand extends Command
 
         // Row-Count-Verifikation (07 §5): Quelle == id_map je Quell-Tabelle
         if (! $dryRun) {
-            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured'] as $sourceTable) {
+            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien'] as $sourceTable) {
                 $sourceCount = (int) $pdo->query("SELECT COUNT(*) FROM {$sourceTable}")->fetchColumn();
                 $mapCount = DB::table('foodalchemist_legacy_id_map')->where('source_table', $sourceTable)->count();
                 $flag = $sourceCount === $mapCount ? '✅' : '❌ BLOCKER';
@@ -188,6 +210,8 @@ class ImportSliceCommand extends Command
         DB::table('foodalchemist_gps')->update([
             'merged_into_id' => null, 'derivat_von_gp_id' => null, 'lead_la_supplier_item_id' => null,
         ]);
+        DB::table('foodalchemist_recipe_categories')->delete();
+        DB::table('foodalchemist_recipe_main_groups')->delete();
         DB::table('foodalchemist_supplier_item_structures')->delete();
         DB::table('foodalchemist_prices')->delete();
         DB::table('foodalchemist_supplier_items')->delete();
@@ -199,6 +223,7 @@ class ImportSliceCommand extends Command
             ->whereIn('source_table', [
                 'lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2',
                 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured',
+                'recipe_hauptgruppen', 'recipe_kategorien',
             ])
             ->delete();
     }

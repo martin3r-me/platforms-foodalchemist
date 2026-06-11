@@ -7,6 +7,8 @@ use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistLookupWarengruppe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use RuntimeException;
 
@@ -173,6 +175,98 @@ class VocabularyService
     public function clearSubCategory(Team $team, string $warengruppeCode, string $wert): int
     {
         return app(GpService::class)->clearSubKategorie($team, $warengruppeCode, $wert);
+    }
+
+    // ── Produktions-Taxonomie (M1-04, D-1) — von M4-Browser-Bäumen gelesen ──
+
+    /** Hauptgruppen mit Kategorie-Zählern, sortiert (M4-Baum-Quelle). */
+    public function listMainGroups(Team $team): Collection
+    {
+        $counts = FoodAlchemistRecipeCategory::visibleToTeam($team)
+            ->selectRaw('main_group_id, COUNT(*) AS n')
+            ->groupBy('main_group_id')
+            ->pluck('n', 'main_group_id');
+
+        return FoodAlchemistRecipeMainGroup::visibleToTeam($team)
+            ->orderBy('sort_order')->orderBy('code')
+            ->get()
+            ->each(fn ($hg) => $hg->setAttribute('kategorie_count', (int) ($counts[$hg->id] ?? 0)));
+    }
+
+    public function listRecipeCategories(Team $team, ?int $mainGroupId = null): Collection
+    {
+        return FoodAlchemistRecipeCategory::visibleToTeam($team)
+            ->when($mainGroupId, fn ($q) => $q->where('main_group_id', $mainGroupId))
+            ->orderBy('sort_order')->orderBy('bezeichnung')
+            ->get()
+            ->each(fn ($kat) => $kat->setAttribute('recipe_count', $this->recipeCount($kat->id)));
+    }
+
+    public function createRecipeCategory(Team $team, int $mainGroupId, array $input): FoodAlchemistRecipeCategory
+    {
+        $hg = FoodAlchemistRecipeMainGroup::visibleToTeam($team)->findOrFail($mainGroupId);
+        $bezeichnung = trim($input['bezeichnung'] ?? '');
+        if ($bezeichnung === '') {
+            throw new RuntimeException('Kategorie braucht eine Bezeichnung.');
+        }
+
+        return FoodAlchemistRecipeCategory::create([
+            'team_id' => $team->id,
+            'main_group_id' => $hg->id,
+            'code' => Str::slug($bezeichnung, '_'),
+            'bezeichnung' => $bezeichnung,
+            'technik' => ($input['technik'] ?? '') ?: null,
+            'sort_order' => (int) ($input['sort_order'] ?? 999),
+        ]);
+    }
+
+    public function updateRecipeCategory(Team $team, int $id, array $input): FoodAlchemistRecipeCategory
+    {
+        $kat = FoodAlchemistRecipeCategory::visibleToTeam($team)->findOrFail($id);
+        if (! $kat->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Kategorie — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        $kat->update([
+            'bezeichnung' => ($input['bezeichnung'] ?? '') ?: $kat->bezeichnung,
+            'technik' => ($input['technik'] ?? '') ?: null,
+            'sort_order' => (int) ($input['sort_order'] ?? $kat->sort_order),
+        ]);
+
+        return $kat;
+    }
+
+    /** Delete-Guard AT-D1-02: blockt bei recipe_count > 0 (sobald M4-01 die Tabelle bringt). */
+    public function deleteRecipeCategory(Team $team, int $id): void
+    {
+        $kat = FoodAlchemistRecipeCategory::visibleToTeam($team)->findOrFail($id);
+        if (! $kat->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Kategorie — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        $n = $this->recipeCount($kat->id);
+        if ($n > 0) {
+            throw new RuntimeException("Kategorie hat {$n} Rezept(e) — erst mergen/umhängen (AT-D1-02).");
+        }
+        $kat->delete();
+    }
+
+    public function updateMainGroupSort(Team $team, int $id, int $sortOrder): void
+    {
+        $hg = FoodAlchemistRecipeMainGroup::visibleToTeam($team)->findOrFail($id);
+        if (! $hg->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Hauptgruppe — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        $hg->update(['sort_order' => $sortOrder]);
+    }
+
+    /** Abgeleitet — echte Zählung sobald foodalchemist_recipes existiert (M4-01). */
+    private function recipeCount(int $kategorieId): int
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_recipes')) {
+            return 0;
+        }
+
+        return (int) \Illuminate\Support\Facades\DB::table('foodalchemist_recipes')
+            ->where('recipe_category_id', $kategorieId)->whereNull('deleted_at')->count();
     }
 
     private static function dezimalOrNull(mixed $wert): ?float
