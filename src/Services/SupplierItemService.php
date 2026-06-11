@@ -6,6 +6,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 
 /**
@@ -82,5 +83,40 @@ class SupplierItemService
             ['supplier_item_id' => $item->id],
             [...$attribute, 'team_id' => $item->team_id, 'quelle' => 'manual'],
         );
+    }
+
+    // ── Artikel-CRUD (M2-11, D-2 §4 + D1) ───────────────────────────────
+
+    /**
+     * „+ Neuer Artikel": Minimal-Pflichtfelder, gehört IMMER dem anlegenden Team —
+     * Kind-Teams ergänzen Eigenes am geerbten Lieferanten (D1; Eltern sehen es nicht).
+     */
+    public function create(Team $team, int $supplierId, array $input): FoodAlchemistSupplierItem
+    {
+        if (! FoodAlchemistSupplier::visibleToTeam($team)->whereKey($supplierId)->exists()) {
+            throw new \RuntimeException('Lieferant nicht in der Team-Kette sichtbar.');
+        }
+        $designation = trim($input['designation'] ?? '');
+        if ($designation === '') {
+            throw new \RuntimeException('Bezeichnung ist Pflicht.');
+        }
+
+        return FoodAlchemistSupplierItem::create([
+            'team_id' => $team->id,
+            'supplier_id' => $supplierId,
+            'designation' => $designation,
+            'article_number' => ($input['article_number'] ?? '') ?: null,
+            'qty' => ($input['qty'] ?? '') !== '' ? (float) str_replace(',', '.', (string) $input['qty']) : null,
+            'unit_code' => in_array($input['unit_code'] ?? '', ['kg', 'l', 'Stk'], true) ? $input['unit_code'] : null,
+        ]);
+    }
+
+    /** Deaktivieren = soft (is_discontinued), nie löschen — nur Besitzer-Team (D1). */
+    public function setDiscontinued(Team $team, FoodAlchemistSupplierItem $item, bool $discontinued): void
+    {
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Artikel — nur das Besitzer-Team darf (de)aktivieren (D1).');
+        }
+        $item->update(['is_discontinued' => $discontinued]);
     }
 }

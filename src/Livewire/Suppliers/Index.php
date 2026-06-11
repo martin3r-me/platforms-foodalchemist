@@ -9,6 +9,7 @@ use Livewire\WithPagination;
 use Platform\FoodAlchemist\Services\PriceService;
 use Platform\FoodAlchemist\Services\SupplierItemService;
 use Platform\FoodAlchemist\Services\SupplierService;
+use RuntimeException;
 
 /**
  * M2-01/02/03 / P-7: Lieferanten-Browser — Liste links (n Artikel · m gemapped),
@@ -31,6 +32,14 @@ class Index extends Component
 
     public bool $onlyActive = true;
 
+    /** M2-11: „+ Neuer Artikel" */
+    public array $neuArtikel = ['designation' => '', 'article_number' => '', 'qty' => '', 'unit_code' => ''];
+
+    public ?string $fehler = null;
+
+    /** M2-12: Anomalien-Report (lazy beim Öffnen) */
+    public ?array $anomalien = null;
+
     public function waehleLieferant(int $id): void
     {
         $this->supplierId = $id;
@@ -46,6 +55,35 @@ class Index extends Component
     public function updatedOnlyActive(): void
     {
         $this->resetPage();
+    }
+
+    public function artikelAnlegen(): void
+    {
+        try {
+            $item = app(SupplierItemService::class)->create(
+                Auth::user()->currentTeamRelation,
+                (int) $this->supplierId,
+                $this->neuArtikel,
+            );
+            $this->reset('neuArtikel', 'fehler');
+            $this->dispatch('modal.close', name: 'artikel-neu');
+            $this->dispatch('item-modal.oeffnen', id: $item->id);
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function anomalienAnzeigen(): void
+    {
+        $ergebnis = app(PriceService::class)->detectAnomalies(Auth::user()->currentTeamRelation);
+        $this->anomalien = [
+            'spruenge' => $ergebnis['spruenge']->take(50)->all(),
+            'ausreisser' => $ergebnis['ausreisser']->take(50)
+                ->map(fn ($a) => ['bezeichnung' => $a->bezeichnung, 'lieferant' => $a->lieferant,
+                    'wg' => $a->wg, 'wert' => $a->wert, 'median' => $a->median, 'faktor' => $a->faktor, 'einheit' => $a->einheit])
+                ->all(),
+        ];
+        $this->dispatch('modal.open', name: 'preis-anomalien');
     }
 
     public function render(SupplierService $suppliers, SupplierItemService $items, PriceService $preise)

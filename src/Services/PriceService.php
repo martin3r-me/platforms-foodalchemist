@@ -39,12 +39,12 @@ class PriceService
             ->first();
     }
 
-    /** Subquery für Listen-Spalten (EK je Artikel) — gleiche Regel wie activeFor(). */
-    public function activePriceSubquery(): Builder
+    /** Subquery für Listen-Spalten (EK je Artikel) — gleiche Regel wie activeFor(). $outerColumn = Spalte der äußeren Query (bei Alias z. B. 'i.id'). */
+    public function activePriceSubquery(string $outerColumn = 'foodalchemist_supplier_items.id'): Builder
     {
         return $this->scopeAktiv(FoodAlchemistPrice::query())
             ->select('price')
-            ->whereColumn('foodalchemist_prices.supplier_item_id', 'foodalchemist_supplier_items.id')
+            ->whereColumn('foodalchemist_prices.supplier_item_id', $outerColumn)
             ->orderByRaw('valid_to IS NULL DESC')
             ->orderByDesc('valid_to')
             ->orderByDesc('id')
@@ -108,12 +108,92 @@ class PriceService
     }
 
     /**
+     * M2-12 / V-Register: Preis-Anomalien — (a) Sprünge > x % zwischen aufeinander-
+     * folgenden Preis-Generationen eines LA, (b) Vergleichspreis-Ausreißer je
+     * Warengruppe (Faktor ≥ x vom WG-Median, gleiche Einheit). PHP-seitige
+     * Median-Rechnung = engine-agnostisch (07 §7).
+     *
+     * @return array{spruenge: \Illuminate\Support\Collection, ausreisser: \Illuminate\Support\Collection}
+     */
+    public function detectAnomalies(Team $team, float $sprungPct = 30.0, float $ausreisserFaktor = 4.0): array
+    {
+        // (a) Generationen-Sprünge: LAs mit >1 Preiszeile
+        $mehrfach = FoodAlchemistPrice::query()
+            ->whereIn('supplier_item_id', FoodAlchemistSupplierItem::visibleToTeam($team)->select('id'))
+            ->selectRaw('supplier_item_id, COUNT(*) AS n')
+            ->groupBy('supplier_item_id')->having('n', '>', 1)
+            ->pluck('supplier_item_id');
+
+        $spruenge = collect();
+        foreach ($mehrfach as $itemId) {
+            $zeilen = $this->historyFor($itemId)->filter(fn ($p) => $p->price !== null && (float) $p->price > 0)->values();
+            for ($i = 0; $i < $zeilen->count() - 1; $i++) {
+                $neu = (float) $zeilen[$i]->price;
+                $alt = (float) $zeilen[$i + 1]->price;
+                $pct = abs($neu - $alt) / $alt * 100;
+                if ($pct > $sprungPct) {
+                    $spruenge->push((object) ['supplier_item_id' => $itemId, 'von' => $alt, 'nach' => $neu, 'sprung_pct' => round($pct, 1)]);
+                }
+            }
+        }
+
+        // (b) WG-Ausreißer: flache Join-Query ohne Eloquent-Modelle (Memory + Tempo)
+        $kandidaten = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items AS i')
+            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'i.id')
+            ->join('foodalchemist_gps AS g', 'g.id', '=', 's.gp_id')
+            ->join('foodalchemist_suppliers AS sup', 'sup.id', '=', 'i.supplier_id')
+            ->whereIn('i.team_id', FoodAlchemistSupplierItem::teamAncestryIds($team))
+            ->whereNull('i.deleted_at')->whereNull('s.deleted_at')
+            ->whereNotNull('i.qty')->where('i.qty', '>', 0)->whereNotNull('i.unit_code')
+            ->select(['i.id', 'i.designation', 'i.qty', 'i.unit_code', 'sup.name AS lieferant', 'g.warengruppe_code AS wg'])
+            ->selectSub($this->activePriceSubquery('i.id')->toBase(), 'aktiver_preis')
+            ->get()
+            ->filter(fn ($i) => $i->aktiver_preis !== null && (float) $i->aktiver_preis > 0)
+            ->map(function ($i) {
+                $v = $this->vergleichspreis($i, (float) $i->aktiver_preis);
+
+                return $v === null ? null : (object) [
+                    'id' => $i->id,
+                    'bezeichnung' => $i->designation,
+                    'lieferant' => $i->lieferant,
+                    'wg' => $i->wg ?? '–',
+                    'einheit' => $v['einheit'],
+                    'wert' => $v['wert'],
+                ];
+            })
+            ->filter();
+
+        $ausreisser = collect();
+        foreach ($kandidaten->groupBy(fn ($k) => $k->wg . '|' . $k->einheit) as $gruppe) {
+            if ($gruppe->count() < 4) {
+                continue; // zu wenig Daten für einen belastbaren Median
+            }
+            $median = $gruppe->pluck('wert')->sort()->values()->get((int) floor($gruppe->count() / 2));
+            foreach ($gruppe as $k) {
+                $faktor = $median > 0 ? max($k->wert / $median, $median / max($k->wert, 1e-9)) : 0;
+                if ($faktor >= $ausreisserFaktor) {
+                    $ausreisser->push((object) [
+                        'id' => $k->id, 'bezeichnung' => $k->bezeichnung, 'lieferant' => $k->lieferant,
+                        'wg' => $k->wg, 'einheit' => $k->einheit,
+                        'wert' => round($k->wert, 2), 'median' => round($median, 2), 'faktor' => round($faktor, 1),
+                    ]);
+                }
+            }
+        }
+
+        return [
+            'spruenge' => $spruenge->sortByDesc('sprung_pct')->values(),
+            'ausreisser' => $ausreisser->sortByDesc('faktor')->values(),
+        ];
+    }
+
+    /**
      * §3.2 Vergleichspreis: Gebindepreis → €/kg | €/l | €/Stk (Anzeige-Normalisierung).
      * qty NULL/0 ⇒ NULL (I4, nie Division), price < 0 ⇒ NULL (I5), unbekannte Einheit ⇒ NULL.
      *
      * @return array{wert: float, einheit: string}|null
      */
-    public function vergleichspreis(FoodAlchemistSupplierItem $item, ?float $preis): ?array
+    public function vergleichspreis(object $item, ?float $preis): ?array
     {
         if ($preis === null || $preis < 0) {
             return null;
@@ -132,7 +212,7 @@ class PriceService
     }
 
     /** §3.2 GL-02-Sicht: €/g (kg+l über Dichte 1.0; Stk nur via Stückgewichts-Brücke). */
-    public function preisProGramm(FoodAlchemistSupplierItem $item, ?float $preis): ?float
+    public function preisProGramm(object $item, ?float $preis): ?float
     {
         $v = $this->vergleichspreis($item, $preis);
 

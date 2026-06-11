@@ -47,8 +47,8 @@
                     <input type="checkbox" wire:model.live="onlyActive" class="rounded border-gray-300" /> Nur aktive
                 </label>
                 <button type="button" disabled title="Kommt mit M3-11 (Bulk-Match je Lieferant)" class="{{ $btnGhostXs }} opacity-40 cursor-not-allowed">Bulk-Match</button>
-                <button type="button" disabled title="Kommt mit M2-12" class="{{ $btnGhostXs }} opacity-40 cursor-not-allowed" data-anomalien-btn>Preis-Anomalien</button>
-                <button type="button" disabled title="Kommt mit M2-11" class="{{ $btnGhostXs }} opacity-40 cursor-not-allowed" data-neuer-artikel-btn>+ Neuer Artikel</button>
+                <button type="button" wire:click="anomalienAnzeigen" wire:loading.attr="disabled" class="{{ $btnGhostXs }}" data-anomalien-btn>Preis-Anomalien</button>
+                <button type="button" @click="$dispatch('modal.open', { name: 'artikel-neu' })" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-neuer-artikel-btn>+ Neuer Artikel</button>
             </div>
         </div>
 
@@ -113,5 +113,66 @@
         </div>
         {{-- LA-Editor-Modal (M2-06/07/08) — innerhalb x-ui-page (Template-Regel) --}}
         <livewire:foodalchemist.suppliers.item-modal />
+
+        {{-- M2-11: Neuer Artikel (Minimal-Pflichtfelder, gehört dem anlegenden Team — D1) --}}
+        <x-foodalchemist::modal name="artikel-neu" title="Neuer Artikel" size="max-w-2xl">
+            @if($fehler)<p class="text-sm text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
+            <x-foodalchemist::modal-section title="Stammdaten">
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="col-span-2"><label class="block {{ $label }} mb-1">Bezeichnung *</label>
+                        <input type="text" wire:model="neuArtikel.designation" wire:keydown.enter="artikelAnlegen" class="{{ $input }}" data-neu-bezeichnung /></div>
+                    <div><label class="block {{ $label }} mb-1">Artikel-Nr.</label>
+                        <input type="text" wire:model="neuArtikel.article_number" class="{{ $input }}" /></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block {{ $label }} mb-1">Gebinde-Menge</label>
+                            <input type="text" wire:model="neuArtikel.qty" class="{{ $input }}" /></div>
+                        <div><label class="block {{ $label }} mb-1">Einheit</label>
+                            <select wire:model="neuArtikel.unit_code" class="{{ $input }}">
+                                <option value="">—</option>
+                                @foreach(['kg', 'l', 'Stk'] as $u)<option value="{{ $u }}">{{ $u }}</option>@endforeach
+                            </select></div>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">Wird für <strong>{{ $aktiverLieferant?->name ?? '—' }}</strong> angelegt und gehört deinem Team — Eltern-/Geschwister-Teams sehen ihn nicht (D1).</p>
+            </x-foodalchemist::modal-section>
+            <x-slot:footer>
+                <button type="button" @click="$dispatch('modal.close', { name: 'artikel-neu' })" class="{{ $btnGhost }}">Abbrechen</button>
+                <button type="button" wire:click="artikelAnlegen" class="{{ $btnPrimary }}">Anlegen</button>
+            </x-slot:footer>
+        </x-foodalchemist::modal>
+
+        {{-- M2-12: Preis-Anomalien-Report --}}
+        <x-foodalchemist::modal name="preis-anomalien" title="Preis-Anomalien" size="max-w-5xl">
+            @if($anomalien === null)
+                <p class="text-sm text-gray-500">Wird berechnet …</p>
+            @else
+                <x-foodalchemist::modal-section title="Vergleichspreis-Ausreißer je Warengruppe (Faktor ≥ 4 vom Median)">
+                    <table class="{{ $table }}" data-ausreisser>
+                        <thead><tr class="text-left">@foreach(['Artikel', 'Lieferant', 'WG', 'Vergleichspreis', 'WG-Median', 'Faktor'] as $h)<th class="{{ $th }} !px-2">{{ $h }}</th>@endforeach</tr></thead>
+                        <tbody>
+                            @forelse($anomalien['ausreisser'] as $a)
+                                <tr class="{{ $tr }}">
+                                    <td class="{{ $td }} !px-2 max-w-sm truncate">{{ $a['bezeichnung'] }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-500">{{ $a['lieferant'] }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-500">{{ $a['wg'] }}</td>
+                                    <td class="{{ $td }} !px-2">{{ number_format($a['wert'], 2, ',', '.') }} {{ $a['einheit'] }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-500">{{ number_format($a['median'], 2, ',', '.') }} {{ $a['einheit'] }}</td>
+                                    <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $variantPill['warning'] }}">×{{ $a['faktor'] }}</span></td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="6" class="px-2 py-6 text-center text-gray-400">Keine Ausreißer.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </x-foodalchemist::modal-section>
+                <x-foodalchemist::modal-section title="Sprünge > 30 % zwischen Preis-Generationen">
+                    @forelse($anomalien['spruenge'] as $sp)
+                        <p class="text-sm text-gray-700 dark:text-gray-300 py-1">LA #{{ $sp->supplier_item_id }}: {{ number_format($sp->von, 2, ',', '.') }} € → {{ number_format($sp->nach, 2, ',', '.') }} € <span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $sp->sprung_pct }} %</span></p>
+                    @empty
+                        <p class="text-sm text-gray-400">Keine Generationen-Sprünge (Bestand ist Single-Snapshot — Historie wächst ab jetzt, GL-11 §3.3).</p>
+                    @endforelse
+                </x-foodalchemist::modal-section>
+            @endif
+        </x-foodalchemist::modal>
     </x-ui-page-container>
 </x-ui-page>
