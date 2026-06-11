@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Services\GpService;
+use Platform\FoodAlchemist\Services\KpiService;
 
 /**
  * GP-Browser (Vertical Slice, D-3-Teil): Suche + Warengruppen-/Status-Filter + Pagination.
@@ -41,7 +42,7 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function render(GpService $gps)
+    public function render(GpService $gps, KpiService $kpis)
     {
         $team = Auth::user()?->currentTeamRelation;
 
@@ -53,6 +54,7 @@ class Index extends Component
             ], $team),
             'warengruppen' => $gps->warengruppenOptions($team),
             'statusCounts' => $gps->statusCounts($team),
+            'kpis' => $kpis->forTeam($team),
         ])->layout('platform::layouts.app');
     }
 }

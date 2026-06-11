@@ -9,6 +9,11 @@
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-5">
 
+        {{-- KPI-Leiste (M0-13, P-1-Header) — Platzierung Actionbar/Navbar offen bei Martin --}}
+        <div class="flex justify-end -mb-2">
+            <x-foodalchemist::kpi-bar :kpis="$kpis" />
+        </div>
+
         {{-- Filter-Card --}}
         <div class="{{ $card }} p-5">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
