@@ -110,3 +110,11 @@ status: D1–D5 mit Arbeits-Annahmen — finale Entscheide ausstehend
 | 2026-06-11 | **D8** | Voice-STT (M7-10) = eigener sync Kurz-Audio-Pfad im Modul hinter `SttServiceContract` (Option b); kein Fremdmodul-Require, kein Core-Eingriff; Rest: API-Key-Deployment (Martin) | Dominique |
 | 2026-06-10 | D5 (Arbeits-Annahme) | MVP = D-1…D-6 | Dominique |
 | — | D1–D3, D6, D7 | offen, Arbeits-Annahmen aktiv | — |
+
+## E-2026-06-12 — GL-02 A-1: Verlust-Formel multiplikativ (Empfehlung umgesetzt, Bestätigung offen)
+
+Regelwerk §6 F6.2 formuliert additiv `(1 − putz − gar)`; Ist + GT-1/GT-2 (DB-verifiziert)
+rechnen **multiplikativ** `(1−putz)×(1−gar)` aus den Zutat-Feldern. Umgesetzt: multiplikativ
+(robust, nie < 0) — GL-02-Spec-Empfehlung. GT-5 entsprechend fixiert (1000 g · 20 %/10 % ⇒ 720 g).
+**Offen:** Bestätigung Fachseite (Dominique/Martin); bei Veto: eine Zeile im Service + GT-5 drehen.
+Verlust-Quelle bleibt Zutat-Feld (GP-Default-Override = GL-02-Folgearbeit, V-Kandidat).

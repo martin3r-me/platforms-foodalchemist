@@ -278,7 +278,7 @@ class ImportSliceCommand extends Command
 
         // Row-Count-Verifikation (07 §5): Quelle == id_map je Quell-Tabelle
         if (! $dryRun) {
-            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional', 'recipes', 'recipe_ingredients', 'vocab_kochequipment', 'recipe_niveau_eignung', 'recipe_sektor_eignung'] as $sourceTable) {
+            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional', 'recipes', 'recipe_ingredients', 'vocab_kochequipment', 'recipe_niveau_eignung', 'recipe_sektor_eignung', 'wawi_gp_count_unit_defaults'] as $sourceTable) {
                 $sourceCount = (int) $pdo->query("SELECT COUNT(*) FROM {$sourceTable}")->fetchColumn();
                 $mapCount = DB::table('foodalchemist_legacy_id_map')->where('source_table', $sourceTable)->count();
                 $flag = $sourceCount === $mapCount ? '✅' : '❌ BLOCKER';
@@ -457,6 +457,19 @@ class ImportSliceCommand extends Command
                 'is_inactive' => (int) ($r['is_inactive'] ?? 0),
             ]);
         $stats['recipe_equipment'] = $this->importRecipeEquipment($pdo, $dryRun, $recipeMap);
+
+        // M4-03 / GL-02 T1: Stückgewichte je GP×Einheit (19)
+        $stats['gp_count_unit_defaults'] = $this->importBulk($pdo, $dryRun, 'wawi_gp_count_unit_defaults', 'foodalchemist_gp_count_unit_defaults', 'id',
+            fn (array $r) => [
+                'legacy_id' => $r['id'],
+                'gp_id' => $gpMap[(int) $r['gp_v2_id']],
+                'einheit_vocab_id' => $einheitMap[(int) $r['einheit_vocab_id']],
+                'default_g' => $r['default_g'],
+                'is_primary' => (int) ($r['is_primary'] ?? 0),
+                'sort_order' => (int) ($r['sort_order'] ?? 0),
+                'quelle' => $r['quelle'] ?? null,
+                'ai_confidence' => $r['ai_confidence'] ?? null,
+            ], skipRow: fn (array $r) => ! isset($gpMap[(int) $r['gp_v2_id']]) || ! isset($einheitMap[(int) $r['einheit_vocab_id']]));
 
         // Eignungs-Satelliten (Niveau 637 / Sektor 1.644)
         foreach ([
@@ -711,6 +724,7 @@ class ImportSliceCommand extends Command
         DB::table('foodalchemist_recipe_equipment')->delete();
         DB::table('foodalchemist_vocab_kochequipment')->delete();
         DB::table('foodalchemist_recipe_ingredients')->delete();
+        DB::table('foodalchemist_gp_count_unit_defaults')->delete();
         DB::table('foodalchemist_recipes')->update(['instantiated_from_recipe_id' => null]);
         DB::table('foodalchemist_recipes')->delete();
         DB::table('foodalchemist_item_nutritionals')->delete();
@@ -732,7 +746,7 @@ class ImportSliceCommand extends Command
                 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured',
                 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional',
                 'recipes', 'recipe_ingredients', 'vocab_kochequipment',
-                'recipe_niveau_eignung', 'recipe_sektor_eignung',
+                'recipe_niveau_eignung', 'recipe_sektor_eignung', 'wawi_gp_count_unit_defaults',
             ])
             ->delete();
     }
