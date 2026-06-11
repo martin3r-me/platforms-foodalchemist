@@ -30,9 +30,20 @@ trait SeedsTeamHierarchy
         $core = base_path('vendor/martin3r/platform-core/database/migrations');
         $module = \dirname(__DIR__, 2) . '/database/migrations';
 
+        // Stub: die AI-User-Migration hängt einen FK auf core_ai_models an users —
+        // SQLite validiert ALLE Tabellen-FKs beim Insert, also muss die Tabelle existieren.
+        if (! \Illuminate\Support\Facades\Schema::hasTable('core_ai_models')) {
+            \Illuminate\Support\Facades\Schema::create('core_ai_models', function ($table) {
+                $table->id();
+                $table->timestamps();
+            });
+        }
+
         $this->artisan('migrate', [
             '--realpath' => true,
             '--path' => [
+                $core . '/0001_01_01_000000_create_users_table.php', // Cores Version (current_team_id)
+                $core . '/2026_01_11_160000_add_ai_user_fields_to_users_table.php', // type/team_id (User-Model-Hooks erwarten sie)
                 $core . '/0001_01_01_000005_create_teams_table.php',
                 $core . '/2025_11_08_150000_add_parent_team_id_to_teams_table.php',
                 $module,
@@ -46,6 +57,17 @@ trait SeedsTeamHierarchy
         // Stale Ketten aus früheren Tests desselben Prozesses verwerfen.
         // Weitere Models mit BelongsToTeamHierarchy hier ergänzen, sobald getestet.
         FoodAlchemistGp::flushTeamAncestryCache();
+    }
+
+    /** User mit current_team_id im gegebenen Team (für UI-/Curate-Gating-Tests, M1-08). */
+    protected function makeUser(Team $team, string $name = 'Tester'): \Platform\Core\Models\User
+    {
+        return \Platform\Core\Models\User::forceCreate([
+            'name' => $name,
+            'email' => strtolower(str_replace(' ', '.', $name)) . '+' . $team->id . '@test.local',
+            'password' => bcrypt('secret'),
+            'current_team_id' => $team->id,
+        ]);
     }
 
     protected function makeGp(Team $owner, string $name): FoodAlchemistGp

@@ -81,7 +81,7 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | M1-05 | **Lead-LA-Strategie** | Team-Einstellung: `guenstigster_preis` \| `stamm_lieferant` \| Prioritäts-Kette; + „Ausweich-Kette anzeigen"-Toggle. Speist LeadLaService (M3-06) | V-27; D1-Overlay | Einstellung ändert Lead-Wahl nachweisbar (Test) | ☑ 2026-06-11 (`LeadLaStrategieResolver.sortiere()` = M3-06-Vorstufe [Strategie-Stufe → NULLS-LAST-Preis → supplier_item_id-Tiebreaker, PHP-seitig = engine-agnostisch 07 §7]; Einkauf-Sektion mit Radio+Prioritäts-Ketten-Editor+Toggle; 5 Tests inkl. DoD-Beweis: 3 Strategien ⇒ 3 verschiedene Leads; Stamm-IDs kommen als Parameter aus M1-06) |
 | M1-06 | Stamm-Lieferanten-Matrix | Import `stamm_lieferant`/`stamm_lieferant_wg` (Vault-Skript 212) + Pflege-UI (Lieferant×WG-Grid) | GL-03/V-27 | Matrix editierbar, von M3-06 gelesen | ☑ 2026-06-11 (Tabelle+Model [NULL-WG = global], dedizierte Import-Phase [21 global + 113 WG, Gates ✅], StammLieferantService mit Lese-Vertrag `stammSupplierIdsFor(team, wg)` = WG+global für M3-06/Resolver; Matrix-UI in Einkauf-Sektion [134 Chips, geerbte fixiert]; 4 Tests inkl. D1-Vererbung+Geschwister-Trennung) |
 | M1-07 | Kalkulations-Defaults | Garverlust-Defaults je GP-Klasse, MwSt-Defaults, Rundungsregeln — eine Settings-Sektion | GL-02 | Defaults greifen im Rezept-Editor (M4) | ☐ |
-| M1-08 | Katalog-Pflege-Gate | Policy-Helper `canCurate(User,Team)` (Owner-Team-Mitglied), zentral genutzt von allen Edit-UIs | D1 | Leak-Test: Kind-User sieht keine Edit-Buttons | ☐ |
+| M1-08 | Katalog-Pflege-Gate | Policy-Helper `canCurate(User,Team)` (Owner-Team-Mitglied), zentral genutzt von allen Edit-UIs | D1 | Leak-Test: Kind-User sieht keine Edit-Buttons | ☑ 2026-06-11 (`Support/Curate::canCurate` [seit M1-01 einzige Edit-Gating-Quelle: Einheiten/WG/Taxonomie-Zeilen, Stamm-Chips]; Harness um `makeUser()` erweitert [Core users+ai_user_fields-Migrationen, core_ai_models-Stub wegen SQLite-FK-Validierung]; UI-Leak-Test: Kind-User ⇒ readonly+geerbt-Pill, Besitzer ⇒ Edit-Buttons; 3+2 Tests) |
 
 ## M2 — Lieferanten (D-2)
 
@@ -175,12 +175,13 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | M7-07 | Küchen-Profil | Küchen-Kontext (commands.rs:12590-Pendant) als Team-Einstellung in Prompts | D-5 §4.3 | Profil ändert Generator-Output | ☐ |
 | M7-08 | KI-Settings | Settings-Sektion: Provider-Status, Tier-Zuordnung, Budget-Anzeige, Kill-Switch | M1-01 | Kill-Switch stoppt Autopilot-Buttons | ☐ |
 | M7-09 | Embeddings/RAG | GL-04-RAG + V-24 — **wartet auf Martin** (Embedding-Support Plattform-LLM) | GL-04; D3-Rest | blockiert markieren | ☐ blockiert |
+| M7-10 | Voice-Interface | Sprachbedienung als zweiter Bedienweg (UI bleibt parallel): Mikro-Aufnahme → STT → agentischer Tool-Loop (`callWithTools`, Tier D) über M8-01-Tools; Schreibaktionen NUR via GL-07-Proposal-Flow (sprechen → Proposal → bestätigen); nach: M7-04 + erste M8-01-Tools | Dev-Modul Discussion #1; 06_KI §1; GL-07; M8-01 | 3 Sprachbefehle end-to-end (Suche, Detail öffnen, Schreib-Proposal mit Accept); Befehls-Latenz gemessen + dokumentiert | ☐ blockiert (Martin: STT/Audio, `whisper`-Modul) |
 
 ## M8 — Querschnitt (laufend)
 
 | ID | Paket | Inhalt | Ref | DoD | Status |
 |---|---|---|---|---|---|
-| M8-01 | MCP-Tools | `foodalchemist.gps.GET/SEARCH`, `recipes.GET` … (ToolContract, REST-Verben, Tools→Services) | 01 §Tools | Tools im Registry, Smoke via MCP | ☐ |
+| M8-01 | MCP-Tools | `foodalchemist.gps.GET/SEARCH`, `recipes.GET` … (ToolContract, REST-Verben, Tools→Services); **auch Schreib-Tools** (POST/PUT nur via GL-07-Proposal-Flow, nie Direkt-Write); je Meilenstein mitziehen (nach M2/M3/M4/M6), nicht gesammelt am Ende — Vorleistung für M7-10 Voice | 01 §Tools; GL-07 | Tools im Registry, Smoke via MCP; nach jedem abgeschlossenen Modul sind dessen Tools vorhanden | ☐ |
 | M8-02 | Policies + ActivityLog | Policies je Model (curate-Gate M1-08), LogsActivity-Abdeckung prüfen | Plattform-Muster | Policy-Tests grün | ☐ |
 | M8-03 | Leak-Suite | Geschwister-Test je Sektion (M2/M3/M4/M6) in CI-Lauf bündeln | D1-Risiko | alle grün | ☐ |
 | M8-04 | Performance-Pass | Indizes (gps name/status/WG; items designation; prices item+valid_to), Lazy-Audit, N+1-Check | 02 | Browser-Seiten < 300 ms Server-Zeit (Sandbox) | ☐ |
@@ -198,6 +199,7 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | Push/Repo-Sichtbarkeit (public + Kern-IP in docs/) | Dominique/Martin | jeden Commit |
 | x-ui-modal im Content erlaubt? | Martin | M0-08 (bis dahin Custom-Modal) |
 | Embedding-Support Plattform-LLM, Vision, Team-Rate-Limits | Martin | M7-09 |
+| STT/Audio-Support Plattform-Provider + Zweck des `whisper`-Moduls (Plattform, Team-denied) | Martin | M7-10 (Voice-Interface) |
 | Dark-Mode-Strategie Shell (`.dark`-Klasse) | Martin | kosmetisch |
 | Core-Fixes (undeklarierte Deps, MySQL-only-Migrationen, Index-Kollision) | Martin | Sandbox-Komfort |
 | Paritäts-Suite-Engine: Testkatalog §1 sagt Postgres, Prod-DB ist MySQL (gemeinsame Plattform-DB, Martin-Info 2026-06-11 → 07 §7) | Martin | GL-03-Tests (M3-06); bis dahin NULL-Sortierung engine-agnostisch |
