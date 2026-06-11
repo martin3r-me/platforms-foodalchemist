@@ -108,4 +108,27 @@ class GpService
             ->pluck('n', 'status')
             ->all();
     }
+
+    /**
+     * M1-03 / D-1 AT-D1-03: Sub-Kategorie auf den GPs umbenennen — NUR eigene Zeilen
+     * (D1: geerbte Katalog-GPs bleiben unangetastet). Transaktional, gibt affected zurück.
+     */
+    public function renameSubKategorie(Team $team, string $warengruppeCode, string $alt, string $neu): int
+    {
+        return \Illuminate\Support\Facades\DB::transaction(fn () => FoodAlchemistGp::query()
+            ->where('team_id', $team->id)
+            ->where('warengruppe_code', $warengruppeCode)
+            ->where('sub_kategorie', $alt)
+            ->update(['sub_kategorie' => $neu]));
+    }
+
+    /** M1-03: Sub-Kategorie-Wert auf NULL setzen (Housekeeping) — nur eigene Zeilen. */
+    public function clearSubKategorie(Team $team, string $warengruppeCode, string $wert): int
+    {
+        return FoodAlchemistGp::query()
+            ->where('team_id', $team->id)
+            ->where('warengruppe_code', $warengruppeCode)
+            ->where('sub_kategorie', $wert)
+            ->update(['sub_kategorie' => null]);
+    }
 }

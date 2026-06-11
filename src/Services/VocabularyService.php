@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistLookupWarengruppe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use RuntimeException;
 
@@ -93,6 +94,85 @@ class VocabularyService
         }
 
         $einheit->delete();
+    }
+
+    // ── Warengruppen & Sub-Kategorien (M1-03, Regelwerk GP §3) ─────────
+
+    /** Die 15 fachlichen §3-Warengruppen — Codes sind FIX, nie löschbar. */
+    public const PARAGRAF3_CODES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15'];
+
+    /** WG-Liste mit GP-Zählern je Team-Kette (read-mostly). */
+    public function listWarengruppen(Team $team): Collection
+    {
+        $counts = FoodAlchemistGp::visibleToTeam($team)
+            ->selectRaw('warengruppe_code, COUNT(*) AS n')
+            ->groupBy('warengruppe_code')
+            ->pluck('n', 'warengruppe_code');
+
+        return FoodAlchemistLookupWarengruppe::visibleToTeam($team)
+            ->orderBy('sort_order')->orderBy('code')
+            ->get()
+            ->each(fn ($wg) => $wg->setAttribute('gp_count', (int) ($counts[$wg->code] ?? 0)));
+    }
+
+    /** Name pflegen (read-MOSTLY) — der §3-Code selbst ist unantastbar. */
+    public function updateWarengruppeName(Team $team, int $id, string $name): FoodAlchemistLookupWarengruppe
+    {
+        $wg = FoodAlchemistLookupWarengruppe::visibleToTeam($team)->findOrFail($id);
+        if (! $wg->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Warengruppe — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        if (trim($name) === '') {
+            throw new RuntimeException('Warengruppen-Name darf nicht leer sein.');
+        }
+        $wg->update(['name' => trim($name)]);
+
+        return $wg;
+    }
+
+    /** §3-Codes sind fix: Löschen wird IMMER verweigert (Regelwerk GP §3). */
+    public function deleteWarengruppe(Team $team, int $id): void
+    {
+        $wg = FoodAlchemistLookupWarengruppe::visibleToTeam($team)->findOrFail($id);
+        if (in_array($wg->code, self::PARAGRAF3_CODES, true)) {
+            throw new RuntimeException("Warengruppe {$wg->code} ist ein fixer §3-Code — nicht löschbar (Regelwerk GP §3).");
+        }
+        if (! $wg->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Warengruppe — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        if (FoodAlchemistGp::where('warengruppe_code', $wg->code)->exists()) {
+            throw new RuntimeException('Warengruppe wird von GPs referenziert — nicht löschbar.'); // V-06
+        }
+        $wg->delete();
+    }
+
+    /** Sub-Kategorie-Übersicht: distinct Werte + GP-Zähler je Team-Kette (D-1 §1). */
+    public function listSubCategories(Team $team, ?string $warengruppeCode = null): Collection
+    {
+        return FoodAlchemistGp::visibleToTeam($team)
+            ->whereNotNull('sub_kategorie')
+            ->when($warengruppeCode, fn ($q) => $q->where('warengruppe_code', $warengruppeCode))
+            ->selectRaw('warengruppe_code, sub_kategorie, COUNT(*) AS n')
+            ->groupBy('warengruppe_code', 'sub_kategorie')
+            ->orderBy('warengruppe_code')->orderBy('sub_kategorie')
+            ->get();
+    }
+
+    /** Rename propagiert auf die GPs (AT-D1-03) — via D-3-Service, nur eigene Zeilen. */
+    public function renameSubCategory(Team $team, string $warengruppeCode, string $alt, string $neu): int
+    {
+        $neu = trim($neu);
+        if ($neu === '') {
+            throw new RuntimeException('Neuer Sub-Kategorie-Name darf nicht leer sein.');
+        }
+
+        return app(GpService::class)->renameSubKategorie($team, $warengruppeCode, $alt, $neu);
+    }
+
+    /** Wert auf NULL setzen (Housekeeping) — via D-3-Service, nur eigene Zeilen. */
+    public function clearSubCategory(Team $team, string $warengruppeCode, string $wert): int
+    {
+        return app(GpService::class)->clearSubKategorie($team, $warengruppeCode, $wert);
     }
 
     private static function dezimalOrNull(mixed $wert): ?float
