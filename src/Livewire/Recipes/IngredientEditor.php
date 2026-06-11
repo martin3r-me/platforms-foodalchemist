@@ -53,6 +53,27 @@ class IngredientEditor extends Component
         }
     }
 
+    /**
+     * M4-11: Garverlust-Vorschläge via Gateway (GL-07: nichts persistiert —
+     * Alpine merged in die rows, geschrieben wird beim Save mit quelle=ki).
+     *
+     * @param array<int, string> $zutaten [index => raw_text]
+     * @return array{verluste: array<int, float>, confidence: float}
+     */
+    public function garverlustVorschlag(array $zutaten): array
+    {
+        $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)
+            ->propose('recipe.garverlust', ['zutaten' => $zutaten, 'verluste' => new \stdClass]);
+        $verluste = [];
+        foreach (($vorschlag->werte['verluste'] ?? []) as $idx => $pct) {
+            if (is_numeric($pct)) {
+                $verluste[(int) $idx] = max(0.0, min(60.0, (float) $pct));  // Clamp lt. Prompt-Spez
+            }
+        }
+
+        return ['verluste' => $verluste, 'confidence' => max(0.0, min(1.0, $vorschlag->confidence))];
+    }
+
     /** GP-/Sub-Picker (M4-08): liefert Auto-Fill-Daten inkl. ek_pro_g. */
     public function sucheZiel(string $suche): array
     {

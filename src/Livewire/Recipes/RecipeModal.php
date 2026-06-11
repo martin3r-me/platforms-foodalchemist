@@ -83,6 +83,136 @@ class RecipeModal extends Component
         }
     }
 
+    /** @var array<string, array{werte: array, confidence: float, begruendung: ?string}> transiente GL-07-Vorschläge */
+    public array $kiVorschlag = [];
+
+    // ── M4-11: GL-07-Lebenszyklus beschreibung ──────────────────────────
+
+    public function ai_beschreibung(AiGatewayService $ki): void
+    {
+        $r = $this->rezept();
+        $vorschlag = $ki->propose('recipe.beschreibung', [
+            'name' => $r?->name ?? $this->form['name'],
+            'beschreibung' => $this->form['beschreibung'] ?: null,
+            'zutaten' => $r?->ingredients?->pluck('raw_text')->take(20)->all() ?? [],
+        ]);
+        $this->kiVorschlag['beschreibung'] = [
+            'werte' => $vorschlag->werte,
+            'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
+            'begruendung' => $vorschlag->begruendung,
+        ];
+    }
+
+    public function accept_beschreibung(): void
+    {
+        $r = $this->rezept();
+        $vorschlag = $this->kiVorschlag['beschreibung'] ?? null;
+        if ($r === null || $vorschlag === null) {
+            return;
+        }
+        if ($r->beschreibung_quelle === 'manual') {                          // GL-07 Override-First
+            $this->fehler = 'Beschreibung ist manuell gepflegt — erst Reset, dann KI übernehmen.';
+
+            return;
+        }
+        $wert = $vorschlag['werte']['beschreibung'] ?? null;
+        if (! is_string($wert) || trim($wert) === '') {
+            $this->fehler = 'KI-Vorschlag enthält keine Beschreibung.';
+
+            return;
+        }
+        $r->update(['beschreibung' => $wert, 'beschreibung_quelle' => 'ki', 'beschreibung_ai_confidence' => $vorschlag['confidence']]);
+        $this->form['beschreibung'] = $wert;
+        unset($this->kiVorschlag['beschreibung']);
+    }
+
+    public function clear_beschreibung(): void
+    {
+        $this->rezept()?->update(['beschreibung' => null, 'beschreibung_quelle' => null, 'beschreibung_ai_confidence' => null]);
+        $this->form['beschreibung'] = '';
+        unset($this->kiVorschlag['beschreibung']);
+    }
+
+    public function manual_beschreibung(): void
+    {
+        if (trim($this->form['beschreibung']) !== '') {
+            $this->rezept()?->update(['beschreibung' => $this->form['beschreibung'], 'beschreibung_quelle' => 'manual', 'beschreibung_ai_confidence' => null]);
+        }
+    }
+
+    // ── M4-11: GL-07-Lebenszyklus kategorie ─────────────────────────────
+
+    public function ai_kategorie(AiGatewayService $ki, RecipeService $recipes): void
+    {
+        $r = $this->rezept();
+        $team = Auth::user()?->currentTeamRelation;
+        $vorschlag = $ki->propose('recipe.kategorie', [
+            'name' => $r?->name ?? $this->form['name'],
+            'kategorie_id' => $this->form['kategorie_id'],
+            'kategorien' => $team !== null
+                ? FoodAlchemistRecipeCategory::orderBy('id')->limit(200)->pluck('bezeichnung', 'id')->all()
+                : [],
+        ]);
+        $this->kiVorschlag['kategorie'] = [
+            'werte' => $vorschlag->werte,
+            'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
+            'begruendung' => $vorschlag->begruendung,
+        ];
+    }
+
+    public function accept_kategorie(): void
+    {
+        $r = $this->rezept();
+        $vorschlag = $this->kiVorschlag['kategorie'] ?? null;
+        if ($r === null || $vorschlag === null) {
+            return;
+        }
+        if ($r->kategorie_quelle === 'manual') {
+            $this->fehler = 'Kategorie ist manuell gepflegt — erst Reset, dann KI übernehmen.';
+
+            return;
+        }
+        $katId = $vorschlag['werte']['kategorie_id'] ?? null;
+        $kategorie = $katId !== null ? FoodAlchemistRecipeCategory::find((int) $katId) : null;
+        if ($kategorie === null) {
+            $this->fehler = 'KI-Vorschlag enthält keine gültige Kategorie.';
+
+            return;
+        }
+        $r->update([
+            'kategorie_id' => $kategorie->id, 'kategorie_quelle' => 'ki',
+            'kategorie_ai_confidence' => $vorschlag['confidence'],
+            'kategorie_ai_begruendung' => $vorschlag['begruendung'],
+        ]);
+        $this->form['kategorie_id'] = $kategorie->id;
+        $this->form['hauptgruppe_id'] = $kategorie->main_group_id;
+        unset($this->kiVorschlag['kategorie']);
+    }
+
+    public function clear_kategorie(): void
+    {
+        $this->rezept()?->update(['kategorie_id' => null, 'kategorie_quelle' => null, 'kategorie_ai_confidence' => null, 'kategorie_ai_begruendung' => null]);
+        $this->form['kategorie_id'] = null;
+        unset($this->kiVorschlag['kategorie']);
+    }
+
+    public function manual_kategorie(): void
+    {
+        if ($this->form['kategorie_id'] !== null) {
+            $this->rezept()?->update(['kategorie_id' => $this->form['kategorie_id'], 'kategorie_quelle' => 'manual', 'kategorie_ai_confidence' => null, 'kategorie_ai_begruendung' => null]);
+        }
+    }
+
+    private function rezept(): ?FoodAlchemistRecipe
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($this->recipeId === null || $team === null) {
+            return null;
+        }
+
+        return FoodAlchemistRecipe::visibleToTeam($team)->with('ingredients:id,recipe_id,raw_text')->find($this->recipeId);
+    }
+
     /** „Name putzen": §1-Syntax via KI-Gateway (GL-07: Vorschlag direkt ins Feld, nichts persistiert). */
     public function namePutzen(AiGatewayService $ki): void
     {

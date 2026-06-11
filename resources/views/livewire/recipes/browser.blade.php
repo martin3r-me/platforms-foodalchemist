@@ -87,6 +87,14 @@
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between -mb-2">
             <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
+            @if(count(array_filter($auswahl)) > 0)
+                <div class="flex items-center gap-1.5" data-bulk-status>
+                    <span class="text-sm text-gray-900 dark:text-gray-100 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt:</span>
+                    @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
+                        <button type="button" wire:click="bulkStatus('{{ $wert }}')" class="{{ $btnGhostXs }}" data-bulk-status-btn="{{ $wert }}">→ {{ $lbl }}</button>
+                    @endforeach
+                </div>
+            @endif
         </div>
         <div class="relative overflow-hidden {{ $card }}" data-rezept-tabelle>
             <div class="{{ $cardAccent }}"></div>
@@ -101,6 +109,7 @@
             </div>
             <table class="{{ $table }}">
                 <thead><tr class="text-left">
+                    <th class="{{ $th }} !pr-0 w-8"></th>
                     @foreach(['Name', 'Kategorie', 'Geschmack', 'Fertigung', 'Status', 'Zutaten', 'Yield', 'Allergen-Konf.'] as $head)
                         <th class="{{ $th }}">{{ $head }}</th>
                     @endforeach
@@ -110,6 +119,9 @@
                         <tr wire:key="r-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
                             class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                             data-rezept-zeile="{{ $r->id }}">
+                            <td class="{{ $td }} !pr-0" wire:click.stop>
+                                <input type="checkbox" wire:model.live="auswahl.{{ $r->id }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-rezept-checkbox="{{ $r->id }}" />
+                            </td>
                             <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100 max-w-sm truncate" title="{{ $r->name }}">{{ $r->name }}</td>
                             <td class="{{ $td }} text-gray-500 truncate max-w-[12rem]">{{ $r->kategorie?->bezeichnung ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500">{{ $r->geschmacksrichtung ?? '—' }}</td>
@@ -125,7 +137,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="px-5 py-10 text-center text-gray-400">Keine Rezepte gefunden.</td></tr>
+                        <tr><td colspan="9" class="px-5 py-10 text-center text-gray-400">Keine Rezepte gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>

@@ -217,6 +217,31 @@ class RecipeService
         });
     }
 
+    /** M4-12: Template-Flag togglen (Vorlagen für Instanziierung — D-5 §1). */
+    public function setTemplate(Team $team, int $id, ?bool $istTemplate = null): FoodAlchemistRecipe
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
+        if ((int) $recipe->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Geerbtes Rezept — Pflege nur durchs Besitzer-Team (D1).');
+        }
+        $recipe->update(['is_template' => $istTemplate ?? ! $recipe->is_template]);
+
+        return $recipe->refresh();
+    }
+
+    /** M4-12: Bulk-Status (Browser-Leiste). @param array<int> $ids */
+    public function bulkStatus(Team $team, array $ids, string $status): int
+    {
+        if (\Platform\FoodAlchemist\Enums\RecipeStatus::tryFrom($status) === null) {
+            throw new \RuntimeException("Unbekannter Status [{$status}].");
+        }
+
+        return FoodAlchemistRecipe::visibleToTeam($team)
+            ->where('team_id', $team->id)                          // D1: nur eigene
+            ->whereIn('id', $ids)
+            ->update(['status' => $status, 'last_modified_by' => 'editor']);
+    }
+
     public function setStatus(Team $team, int $id, string $status): FoodAlchemistRecipe
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
@@ -350,6 +375,7 @@ class RecipeService
                     'menge_max' => ($z['menge_max'] ?? '') !== '' && $z['menge_max'] !== null ? (float) str_replace(',', '.', (string) $z['menge_max']) : null,
                     'einheit_vocab_id' => (int) $z['einheit_vocab_id'],
                     'garverlust_pct' => ($z['garverlust_pct'] ?? '') !== '' && $z['garverlust_pct'] !== null ? (float) str_replace(',', '.', (string) $z['garverlust_pct']) : null,
+                    'garverlust_quelle' => ($z['garverlust_quelle'] ?? null) ?: null,   // M4-11: ki|manual (GL-07)
                     'putzverlust_pct' => ($z['putzverlust_pct'] ?? '') !== '' && ($z['putzverlust_pct'] ?? null) !== null ? (float) str_replace(',', '.', (string) $z['putzverlust_pct']) : null,
                     'is_optional' => (bool) ($z['is_optional'] ?? false),
                     'note' => ($z['note'] ?? '') ?: null,

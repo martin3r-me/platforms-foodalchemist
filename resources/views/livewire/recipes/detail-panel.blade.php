@@ -124,6 +124,19 @@
             </div>
         @endif
 
+        {{-- M4-12: Workflow-Aktionen --}}
+        <div class="flex flex-wrap items-center gap-1.5 border-t border-black/5 dark:border-white/10 pt-2" data-workflow>
+            @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
+                @if($rezept->status->value !== $wert)
+                    <button type="button" wire:click="statusSetzen('{{ $wert }}')" class="{{ $btnGhostXs }}" data-status-btn="{{ $wert }}">→ {{ $lbl }}</button>
+                @endif
+            @endforeach
+            <button type="button" wire:click="duplizieren" class="{{ $btnGhostXs }}" data-duplizieren-btn>Duplizieren</button>
+            <button type="button" wire:click="templateToggle" class="{{ $btnGhostXs }} {{ $rezept->is_template ? 'text-violet-600 dark:text-violet-400' : '' }}" data-template-btn>
+                {{ $rezept->is_template ? '★ Template' : 'Als Template' }}
+            </button>
+        </div>
+
         <p class="text-[11px] text-gray-400 border-t border-black/5 dark:border-white/10 pt-2">
             Nährwerte {{ $rezept->nutri_kcal_per_100g !== null ? number_format((float) $rezept->nutri_kcal_per_100g, 0, ',', '.') . ' kcal/100 g (' . $rezept->nutri_konfidenz . ')' : '—' }}
             · v{{ $rezept->version }}{{ $rezept->arbeitszeit_min ? ' · ' . $rezept->arbeitszeit_min . ' min' : '' }}

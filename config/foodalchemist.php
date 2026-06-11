@@ -155,6 +155,21 @@ return [
             'task' => 'Bestimme den §9-Zustand (frisch|TK|trocken|konserviert) des Grundprodukts '
                 . 'aus Name und Lieferantenartikeln: werte = {zustand}.',
         ],
+        'recipe.beschreibung' => [
+            'tier' => 'C',
+            'task' => 'Schreibe die Rezept-Beschreibung im §8-Stil (sachlich-appetitlich, 2-4 Sätze, '
+                . 'Textur + Einsatzkontext, keine Marketing-Floskeln): werte = {beschreibung}.',
+        ],
+        'recipe.kategorie' => [
+            'tier' => 'D',
+            'task' => 'Ordne das Rezept der passenden Produktions-Kategorie zu (aus der mitgegebenen '
+                . 'Kategorie-Liste): werte = {kategorie_id, kategorie_name}.',
+        ],
+        'recipe.garverlust' => [
+            'tier' => 'C',
+            'task' => 'Schätze je Zutat den Garverlust in Prozent (0-60, küchenübliche Werte; '
+                . 'Flüssigkeiten beim Reduzieren hoch, Trockenwaren 0): werte = {verluste: {<zutat_id>: pct}}.',
+        ],
         'recipe.name_putzen' => [
             'tier' => 'D',
             'task' => 'Normalisiere den Rezept-Namen auf die §1-Syntax «<Typ>: <Bezeichnung>[, Zusatz]» '

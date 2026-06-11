@@ -38,6 +38,44 @@ class DetailPanel extends Component
         }
     }
 
+    // ── M4-12: Workflow-Aktionen ─────────────────────────────────────────
+
+    public function statusSetzen(string $status): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        app(RecipeService::class)->setStatus($team, $this->recipeId, $status);
+        $this->dispatch('recipe-gespeichert');
+    }
+
+    public function duplizieren(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $original = app(RecipeService::class)->detail($team, $this->recipeId);
+        if ($original === null) {
+            return;
+        }
+        $kopie = app(RecipeService::class)->duplicate($team, $this->recipeId, $original->name . ' (Kopie)');
+        $this->recipeId = $kopie->id;
+        $this->dispatch('recipe-gespeichert');
+        $this->dispatch('recipe-selected', id: $kopie->id);
+    }
+
+    public function templateToggle(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        app(RecipeService::class)->setTemplate($team, $this->recipeId);
+        $this->dispatch('recipe-gespeichert');
+    }
+
     public function render(RecipeService $recipes)
     {
         $team = Auth::user()?->currentTeamRelation;

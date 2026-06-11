@@ -94,6 +94,22 @@ class Browser extends Component
         // Edit/Recompute → Tabelle + Baum-Counts neu rendern (Kontext bleibt)
     }
 
+    // ── M4-12: Bulk-Status (Checkbox-Auswahl) ───────────────────────────
+
+    /** @var array<int, bool> */
+    public array $auswahl = [];
+
+    public function bulkStatus(string $status): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $ids = array_map('intval', array_keys(array_filter($this->auswahl)));
+        if ($team === null || $ids === []) {
+            return;
+        }
+        app(RecipeService::class)->bulkStatus($team, $ids, $status);
+        $this->auswahl = [];
+    }
+
     public function mount(): void
     {
         if ($this->recipeId !== null) {

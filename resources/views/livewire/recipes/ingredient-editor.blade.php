@@ -86,6 +86,8 @@
                 </label>
             </div>
             <p class="text-[10px] text-gray-400 mt-1">Syntax §1.2: Menge · Einheit · Verknüpfung — Hinweis/Verarbeitung in die Hinweis-Spalte (Regelwerk §2)</p>
+            <button type="button" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 mt-1" @click="garverluste()" data-garverlust-ki
+                    title="M4-11: KI-Schätzung je Zutat (GL-07 — geschrieben erst beim Speichern, quelle=ki)">✨ Garverluste vorschlagen</button>
         </div>
     </div>
 
@@ -108,7 +110,7 @@
             init() {
                 // Speichern-Button (Footer liegt außerhalb des x-data-Scopes) → Window-Event
                 window.addEventListener('zutaten-speichern', () => {
-                    this.$wire.speichern(this.rows.map(({ _key, ziel_name, lineage, ek_pro_g, ...rest }) => rest));
+                    this.$wire.speichern(this.rows.map(({ _key, ziel_name, lineage, ek_pro_g, _garverlust_ki, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined })));
                 });
             },
             zahl(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; },
@@ -132,6 +134,14 @@
             },
             hoch(i) { if (i > 0) this.rows.splice(i - 1, 0, this.rows.splice(i, 1)[0]); },
             runter(i) { if (i < this.rows.length - 1) this.rows.splice(i + 1, 0, this.rows.splice(i, 1)[0]); },
+            async garverluste() {  // M4-11: Vorschläge in die Client-rows mergen (Save schreibt quelle=ki)
+                const zutaten = {};
+                this.rows.forEach((z, i) => { zutaten[i] = z.raw_text; });
+                const v = await this.$wire.garverlustVorschlag(zutaten);
+                for (const [i, pct] of Object.entries(v.verluste ?? {})) {
+                    if (this.rows[i] !== undefined) { this.rows[i].garverlust_pct = pct; this.rows[i]._garverlust_ki = true; }
+                }
+            },
             async suchen() {
                 this.pickerErgebnisse = this.pickerSuche.trim() === '' ? [] : await this.$wire.sucheZiel(this.pickerSuche);
             },

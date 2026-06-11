@@ -75,6 +75,29 @@
         </div>
     </x-foodalchemist::modal-section>
 
+    {{-- M4-11: KI-Felder (GL-07) — brauchen ein persistiertes Rezept --}}
+    @if(!$neu)
+        <x-foodalchemist::modal-section title="KI-Felder (GL-07)">
+            @php($r = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::find($recipeId))
+            <div class="space-y-4">
+                <x-foodalchemist::ki-header label="Beschreibung (§8-Stil)" field="beschreibung"
+                    :quelle="$r?->beschreibung_quelle" :confidence="$r?->beschreibung_ai_confidence !== null ? (float) $r->beschreibung_ai_confidence : null"
+                    :hasProposal="isset($kiVorschlag['beschreibung'])">
+                    @if(isset($kiVorschlag['beschreibung']))
+                        <p class="text-xs text-violet-600 dark:text-violet-400 italic" data-beschreibung-vorschlag>{{ $kiVorschlag['beschreibung']['werte']['beschreibung'] ?? '—' }}</p>
+                    @endif
+                </x-foodalchemist::ki-header>
+                <x-foodalchemist::ki-header label="Kategorie" field="kategorie"
+                    :quelle="$r?->kategorie_quelle" :confidence="$r?->kategorie_ai_confidence !== null ? (float) $r->kategorie_ai_confidence : null"
+                    :begruendung="$r?->kategorie_ai_begruendung" :hasProposal="isset($kiVorschlag['kategorie'])">
+                    @if(isset($kiVorschlag['kategorie']))
+                        <span class="{{ $pill }} {{ $variantPill['primary'] }}" data-kategorie-vorschlag>Vorschlag: {{ $kiVorschlag['kategorie']['werte']['kategorie_name'] ?? $kiVorschlag['kategorie']['werte']['kategorie_id'] ?? '—' }}</span>
+                    @endif
+                </x-foodalchemist::ki-header>
+            </div>
+        </x-foodalchemist::modal-section>
+    @endif
+
     <x-slot:footer>
         <button type="button" wire:click="$dispatch('modal.close', { name: 'recipe-modal' })" class="{{ $btnGhost }}">Abbrechen</button>
         <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
