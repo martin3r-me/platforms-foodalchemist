@@ -87,6 +87,9 @@ class Test extends Component
         'senf' => 'unbekannt',
     ];
 
+    /** M0-11-Demo: chips-Baustein — Kern-Anker mit ★ (P-5), Sync deferred. */
+    public array $chipsDemo = ['apfel', 'basilikum'];
+
     /**
      * Render-Methode
      */

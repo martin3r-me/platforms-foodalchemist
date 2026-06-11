@@ -392,6 +392,25 @@
                 </div>
             </div>
 
+            {{-- Section: Baustein chips (M0-11 / P-5) — Kern-Anker mit ★, Combobox gegen Vokabular --}}
+            <div>
+                <div class="mb-3">
+                    <h2 class="text-sm font-medium tracking-tight text-gray-900 dark:text-gray-100">Baustein: chips (P-5)</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">× entfernt · „+ manuell…" mit Vokabular-Vorschlägen (Enter fügt hinzu) · ★ = Kern-Anker · rechts read-only</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 p-4">
+                        <div class="text-xs font-medium uppercase tracking-wider text-gray-400 mb-2">Kern-Anker (editierbar)</div>
+                        <x-foodalchemist::chips model="chipsDemo" star
+                            :vocabular="['apfel', 'balsamico', 'basilikum', 'erdbeere', 'limette', 'wacholder', 'zitrone']" />
+                    </div>
+                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 p-4">
+                        <div class="text-xs font-medium uppercase tracking-wider text-gray-400 mb-2">Pairing-Chips (read-only)</div>
+                        <x-foodalchemist::chips readonly :values="['erdbeere', 'balsamico', 'pfeffer']" />
+                    </div>
+                </div>
+            </div>
+
         </div>
     </x-ui-page-container>
 
