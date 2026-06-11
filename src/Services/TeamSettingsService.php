@@ -34,7 +34,7 @@ class TeamSettingsService
 
     public function leadLaStrategie(Team $team): LeadLaStrategie
     {
-        return $this->for($team)->lead_la_strategie ?? LeadLaStrategie::GuenstigsterPreis;
+        return $this->for($team)->lead_la_strategie ?? LeadLaStrategie::StammLieferant; // V-27-Default = Ist-Verhalten (GL-03 §6)
     }
 
     /** @return array<int> geordnete supplier_ids (nur Strategie prioritaets_kette) */

@@ -118,6 +118,50 @@ it('DetailPanel M3-05: Sektionen laden lazy — Allergen-Werte erst nach toggleS
         ->assertSet('offen.allergene', true);
 });
 
+it('DetailPanel M3-07 (DoD): LA A sperren ⇒ B wird effektiver Lead — im Panel beweisbar', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
+
+    $supplier = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);
+    $mkLa = function (string $bez, float $preis) use ($supplier) {
+        $la = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::create([
+            'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
+            'designation' => $bez, 'qty' => 1.0, 'unit_code' => 'kg',
+        ]);
+        \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure::create([
+            'team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => $this->zander->id,
+        ]);
+        \Platform\FoodAlchemist\Models\FoodAlchemistPrice::create([
+            'team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'price' => $preis, 'status' => '0',
+        ]);
+
+        return $la;
+    };
+    $a = $mkLa('LA A billig', 2.00);
+    $b = $mkLa('LA B teurer', 4.00);
+
+    $panel = Livewire::test(DetailPanel::class, ['gpId' => $this->zander->id])
+        ->call('toggleSektion', 'las')
+        ->assertSee('LA A billig')
+        ->assertSee('LA B teurer');
+
+    $leads = app(\Platform\FoodAlchemist\Services\LeadLaService::class);
+    expect($leads->effektiverLead($this->zander, $this->rootTeam)->id)->toBe($a->id);
+
+    $panel->call('sperreToggle', $a->id, true)->assertHasNoErrors();
+    expect($leads->effektiverLead($this->zander, $this->rootTeam)->id)->toBe($b->id);   // B rückt nach
+
+    // Pin auf A trotz Sperre? Sperre gewinnt — Pin auf B fixiert B explizit
+    $panel->call('pinToggle', $b->id, true);
+    expect($leads->effektiverLead($this->zander, $this->rootTeam)->id)->toBe($b->id);
+
+    // Kind-Team ohne Kurations-Recht: globale Aktion blockt mit D1-Hinweis
+    $this->actingAs($this->makeUser($this->childA, 'Kind User'));
+    Livewire::test(DetailPanel::class, ['gpId' => $this->zander->id])
+        ->call('toggleSektion', 'las')
+        ->call('leadSetzen', $b->id)
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Kurations-Team'));
+});
+
 it('DetailPanel: zeigt Stammdaten nach gp-selected und respektiert D1-Sichtbarkeit (DoD M3-03)', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
 

@@ -23,7 +23,7 @@ return new class extends Migration
             $table->foreignId('team_id')->unique()->constrained('teams')->cascadeOnDelete();
 
             // ── M1-05: Lead-LA-Wahl (V-27)
-            $table->string('lead_la_strategie', 32)->default('guenstigster_preis');
+            $table->string('lead_la_strategie', 32)->default('stamm_lieferant'); // V-27: Default = Ist-Verhalten (GL-03 §6)
             $table->json('lead_la_prioritaeten')->nullable()->comment('geordnete supplier_ids für Strategie prioritaets_kette');
             $table->boolean('ausweich_kette_anzeigen')->default(false);
 

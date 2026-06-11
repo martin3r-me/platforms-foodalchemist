@@ -92,6 +92,73 @@
                 @endif
             </div>
 
+            {{-- LAs (M3-07: GL-03-Kette mit Lead-★, V-27-Sperre/Pin, Aktionen) --}}
+            <div data-sektion="las">
+                <button type="button" wire:click="toggleSektion('las')"
+                        class="w-full flex items-center justify-between py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150">
+                    <span>Lieferantenartikel <span class="font-normal text-gray-400">({{ $gp->n_las_total }})</span></span>
+                    <span class="text-gray-400 text-xs">{{ ($offen['las'] ?? false) ? '▾' : '▸' }}</span>
+                </button>
+                @if($kette !== null)
+                    <div class="pb-2 space-y-1">
+                        @if($fehler !== null)
+                            <p class="text-xs text-rose-600 dark:text-rose-400" data-la-fehler>{{ $fehler }}</p>
+                        @endif
+                        @forelse($kette as $rang => $la)
+                            <div wire:key="la-{{ $la->id }}" class="group rounded-lg px-2 py-1.5 -mx-2 hover:bg-black/[0.03] dark:hover:bg-white/5 {{ $la->gesperrt ? 'opacity-50' : '' }}" data-la-zeile="{{ $la->id }}">
+                                <div class="flex items-start gap-1.5">
+                                    <span class="shrink-0 text-sm leading-5 {{ $la->id === $effektiverLeadId ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600' }}"
+                                          title="{{ $la->id === $effektiverLeadId ? 'Effektiver Lead (Team-Sicht)' : 'Rang ' . ($rang + 1) }}">★</span>
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-xs text-gray-900 dark:text-gray-100 truncate" title="{{ $la->designation }}">{{ $la->designation }}</p>
+                                        <p class="text-[11px] text-gray-400 truncate">
+                                            {{ $la->supplier_name ?? '—' }}
+                                            @if($gp->lead_la_supplier_item_id === $la->id) · <span title="globaler Default-Lead (GL-03)">global ★</span>@endif
+                                            {{ $la->ist_stamm ? '· Stamm' : '' }}
+                                            @if($la->is_discontinued) · <span class="text-rose-400">ausgelistet</span>@endif
+                                            @if($la->gepinnt) · <span class="text-violet-500">gepinnt</span>@endif
+                                            @if($la->gesperrt) · <span class="text-rose-500">gesperrt</span>@endif
+                                        </p>
+                                    </div>
+                                    <span class="shrink-0 text-xs tabular-nums {{ $la->vergleichspreis !== null ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400' }}" data-la-preis>
+                                        @if($la->vergleichspreis !== null)
+                                            {{ number_format($la->vergleichspreis['wert'], 2, ',', '.') }} {{ $la->vergleichspreis['einheit'] }}
+                                        @elseif($la->aktiver_preis !== null)
+                                            <span title="Gebinde-Preis — kein Vergleichspreis, qty fehlt (GL-03 A-2: sortiert ans Ende)">{{ number_format((float) $la->aktiver_preis, 2, ',', '.') }} € ⚠</span>
+                                        @else
+                                            —
+                                        @endif
+                                    </span>
+                                </div>
+                                <div class="hidden group-hover:flex items-center gap-1 mt-1 ml-5" data-la-aktionen>
+                                    <button type="button" wire:click="pinToggle({{ $la->id }}, {{ $la->gepinnt ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $la->gepinnt ? 'Pin lösen' : 'Pinnen' }}</button>
+                                    <button type="button" wire:click="sperreToggle({{ $la->id }}, {{ $la->gesperrt ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $la->gesperrt ? 'Entsperren' : 'Sperren' }}</button>
+                                    @if($kannKuratieren)
+                                        <button type="button" wire:click="leadSetzen({{ $la->id }})" class="{{ $btnGhostXs }}" title="globalen Default-Lead setzen (GL-03 I2)">Lead setzen</button>
+                                        <button type="button" wire:click="loesen({{ $la->id }})" wire:confirm="LA vom GP lösen? War er Lead, wird sofort neu gewählt (GL-03 I4)." class="{{ $btnGhostXs }} text-rose-500">Lösen</button>
+                                    @endif
+                                </div>
+                            </div>
+                        @empty
+                            <p class="text-xs text-gray-400">Keine LAs verknüpft{{ !$gp->requires_la ? ' — bewusst LA-frei' : '' }}.</p>
+                        @endforelse
+
+                        @if($kannKuratieren)
+                            <div class="pt-1" data-la-verknuepfen>
+                                <input type="search" wire:model.live.debounce.300ms="laSuche"
+                                       placeholder="LA verknüpfen — Bezeichnung suchen …" class="{{ $input }}" />
+                                @foreach($verknuepfbare as $kandidat)
+                                    <button type="button" wire:key="vk-{{ $kandidat->id }}" wire:click="verknuepfe({{ $kandidat->id }})"
+                                            class="w-full text-left px-2 py-1 rounded text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150">
+                                        {{ $kandidat->designation }} <span class="text-gray-400">· {{ $kandidat->supplier_name ?? '—' }}</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                @endif
+            </div>
+
             {{-- Nährwerte (GL-08 GP-Pfad: Ø je 100 g über aktive LAs) --}}
             <div data-sektion="naehrwerte">
                 <button type="button" wire:click="toggleSektion('naehrwerte')"

@@ -70,10 +70,11 @@ it('DoD: dieselben Kandidaten, drei Strategien, drei verschiedene Leads', functi
 });
 
 it('Einstellungen persistieren je Team — Geschwister bleiben beim Default', function () {
-    $this->settings->update($this->childA, ['lead_la_strategie' => LeadLaStrategie::StammLieferant, 'ausweich_kette_anzeigen' => true]);
+    $this->settings->update($this->childA, ['lead_la_strategie' => LeadLaStrategie::GuenstigsterPreis, 'ausweich_kette_anzeigen' => true]);
 
-    expect($this->settings->leadLaStrategie($this->childA))->toBe(LeadLaStrategie::StammLieferant)
+    expect($this->settings->leadLaStrategie($this->childA))->toBe(LeadLaStrategie::GuenstigsterPreis)
         ->and($this->settings->ausweichKetteAnzeigen($this->childA))->toBeTrue()
-        ->and($this->settings->leadLaStrategie($this->childB))->toBe(LeadLaStrategie::GuenstigsterPreis)
+        // V-27-Default = stamm_lieferant (Ist-Verhalten, GL-03 §6 — seit M3-06)
+        ->and($this->settings->leadLaStrategie($this->childB))->toBe(LeadLaStrategie::StammLieferant)
         ->and($this->settings->ausweichKetteAnzeigen($this->childB))->toBeFalse();
 });

@@ -49,7 +49,7 @@ class SupplierItemService
     private function baseQuery(Team $team, array $filters): Builder
     {
         return FoodAlchemistSupplierItem::visibleToTeam($team)
-            ->with(['structure.gp:id,name'])
+            ->with(['structure.gp:id,name,lead_la_supplier_item_id'])
             ->when($filters['onlyActive'] ?? true, fn ($q) => $q->where('is_discontinued', false))
             ->addSelect([
                 '*',

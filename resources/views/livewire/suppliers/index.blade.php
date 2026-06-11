@@ -114,7 +114,10 @@
                             </td>
                             <td class="{{ $td }}">
                                 @if($item->structure?->gp)
-                                    <a href="{{ route('foodalchemist.gps.show', $item->structure->gp_id) }}"
+                                    @if((int) $item->structure->gp->lead_la_supplier_item_id === (int) $item->id)
+                                        <span class="text-amber-500" title="Lead-LA dieses GP (GL-03)" data-lead-stern>★</span>
+                                    @endif
+                                    <a href="{{ route('foodalchemist.gps.index', ['gp' => $item->structure->gp_id]) }}"
                                        class="text-violet-600 dark:text-violet-400 hover:underline">{{ $item->structure->gp->name }}</a>
                                 @else
                                     <span class="text-gray-400">— nicht gemappt —</span>
