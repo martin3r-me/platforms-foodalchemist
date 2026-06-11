@@ -74,6 +74,12 @@ class Browser extends Component
         $this->resetPage();
     }
 
+    #[\Livewire\Attributes\On('gp-gespeichert')]
+    public function aktualisiere(): void
+    {
+        // M3-09: Neuanlage/Edit → Tabelle + Baum-Counts neu rendern (Kontext bleibt)
+    }
+
     public function mount(): void
     {
         if ($this->gpId !== null) {

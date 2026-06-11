@@ -131,5 +131,25 @@ return [
             'task' => 'Gib die übergebenen Kontext-Felder unverändert als JSON-Objekt '
                 . '{"werte": …, "confidence": 0-1, "begruendung": "…"} zurück (Smoke-Test).',
         ],
+        // M3-09/10: GP-Modal (Naming-Builder + KI-Felder). Antwort-Schema immer
+        // {"werte": {…}, "confidence": 0-1, "begruendung": "…"} (GL-07).
+        'gp.suggest' => [
+            'tier' => 'C',
+            'task' => 'Leite aus der Roh-Bezeichnung eines Lebensmittels die strukturierten '
+                . 'GP-Naming-Felder nach Regelwerk §6 ab: werte = {hauptzutat, zustand '
+                . '(frisch|TK|trocken|konserviert), verarbeitung, form, pflichtangabe}. '
+                . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1), Marke nur nach §5-Tiebreaker.',
+        ],
+        'gp.zustand' => [
+            'tier' => 'D',
+            'task' => 'Bestimme den §9-Zustand (frisch|TK|trocken|konserviert) des Grundprodukts '
+                . 'aus Name und Lieferantenartikeln: werte = {zustand}.',
+        ],
+        'gp.tags' => [
+            'tier' => 'C',
+            'task' => 'Bewerte die Eigenschafts-Tags des Grundprodukts (vegan, vegetarisch, halal, '
+                . 'contains_pork, contains_beef, organic, regional, grundnahrungsmittel, convenience, '
+                . 'lactose_free, gluten_free) als true/false; unbewertbare Tags weglassen: werte = {is_vegan: bool, …}.',
+        ],
     ],
 ];

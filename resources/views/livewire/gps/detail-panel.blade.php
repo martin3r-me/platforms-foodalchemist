@@ -11,7 +11,12 @@
         <div>
             <div class="flex items-start justify-between gap-2">
                 <h3 class="font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-snug">{{ $gp->name }}</h3>
-                <span class="{{ $pill }} font-medium shrink-0 {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
+                <div class="flex items-center gap-1.5 shrink-0">
+                    @if($kannKuratieren)
+                        <button type="button" wire:click="$dispatch('gp-modal.oeffnen', { id: {{ $gp->id }} })" class="{{ $btnGhostXs }}" data-gp-bearbeiten>Bearbeiten</button>
+                    @endif
+                    <span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
+                </div>
             </div>
             <p class="text-xs text-gray-400 mt-0.5">{{ $gp->hauptzutat_slug ?? '—' }}</p>
         </div>

@@ -65,8 +65,14 @@
         </x-ui-page-sidebar>
     </x-slot>
 
+    {{-- M3-09: GP-Modal (P-2: Modals immer innerhalb von x-ui-page) --}}
+    <livewire:foodalchemist.gps.gp-modal />
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="flex justify-end -mb-2"><x-foodalchemist::kpi-bar :kpis="$kpis" /></div>
+        <div class="flex items-center justify-between -mb-2">
+            <button type="button" wire:click="$dispatch('gp-modal.oeffnen')" class="{{ $btnPrimary }}" data-gp-anlegen>+ Neues Grundprodukt</button>
+            <x-foodalchemist::kpi-bar :kpis="$kpis" />
+        </div>
 
         <div class="relative overflow-hidden {{ $card }}" data-gp-tabelle>
             <div class="{{ $cardAccent }}"></div>
