@@ -54,4 +54,39 @@
 
         <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
     </div>
+
+    {{-- M1-06: Stamm-Lieferanten-Matrix (Lieferant × Warengruppe) --}}
+    <div class="{{ $card }} p-5 space-y-1" data-stamm-matrix>
+        <div class="mb-3">
+            <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Stamm-Lieferanten-Matrix</h3>
+            <p class="text-xs text-gray-400 mt-0.5">Je Warengruppe (+ global) — gewinnt bei Strategie „Stamm-Lieferant zuerst" (GL-03/V-27). Geerbte Einträge des Eltern-Teams sind fixiert.</p>
+        </div>
+        @if($fehler)
+            <p class="text-sm text-red-600 dark:text-red-400 pb-2">{{ $fehler }}</p>
+        @endif
+
+        @foreach(collect([['', 'Global (alle Warengruppen)']])->concat($warengruppen->map(fn ($wg) => [$wg->code, $wg->code . ' ' . $wg->name])) as [$code, $titel])
+            <div wire:key="stamm-zeile-{{ $code ?: 'global' }}" class="flex items-center gap-3 py-2 border-t border-black/5 dark:border-white/5 first:border-t-0">
+                <span class="w-72 shrink-0 text-sm {{ $code === '' ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300' }}">{{ $titel }}</span>
+                <div class="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
+                    @foreach($matrix->get($code, collect()) as $eintrag)
+                        @php($eigen = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $eintrag))
+                        <span wire:key="stamm-{{ $eintrag->id }}" class="inline-flex items-center gap-1 pl-2.5 {{ $eigen ? 'pr-1' : 'pr-2.5' }} py-0.5 rounded-full text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300"
+                              @unless($eigen) title="Geerbt vom Eltern-Team (D1)" @endunless>
+                            {{ $eintrag->supplier?->name ?? ('#' . $eintrag->supplier_id) }}
+                            @if($eigen)
+                                <button type="button" wire:click="stammEntfernen({{ $eintrag->supplier_id }}, '{{ $code }}')"
+                                        class="w-4 h-4 inline-flex items-center justify-center rounded-full text-violet-400 hover:text-red-500 hover:bg-red-500/10 transition-colors duration-150">×</button>
+                            @endif
+                        </span>
+                    @endforeach
+                    <select wire:model="stammNeu.{{ $code ?: '' }}" wire:change="stammSetzen('{{ $code }}')"
+                            class="{{ $input }} !w-44 !py-0.5 !text-xs">
+                        <option value="">+ Stamm…</option>
+                        @foreach($lieferanten as $l)<option value="{{ $l->id }}">{{ $l->name }}</option>@endforeach
+                    </select>
+                </div>
+            </div>
+        @endforeach
+    </div>
 </div>

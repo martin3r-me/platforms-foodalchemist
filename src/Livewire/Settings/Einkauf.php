@@ -6,7 +6,10 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
+use Platform\FoodAlchemist\Services\StammLieferantService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
+use Platform\FoodAlchemist\Services\VocabularyService;
+use RuntimeException;
 
 /**
  * M1-05 / V-27: Einkauf — Lead-LA-Strategie des Teams (+ Ausweich-Kette-Toggle).
@@ -25,6 +28,11 @@ class Einkauf extends Component
     public string $neuerPrioLieferant = '';
 
     public ?string $meldung = null;
+
+    public ?string $fehler = null;
+
+    /** M1-06: Add-Selects der Matrix, key = WG-Code ('' = global) */
+    public array $stammNeu = [];
 
     public function mount(): void
     {
@@ -66,17 +74,49 @@ class Einkauf extends Component
         }
     }
 
+    // ── M1-06: Stamm-Lieferanten-Matrix ─────────────────────────────────
+
+    public function stammSetzen(string $wgCode): void
+    {
+        $supplierId = (int) ($this->stammNeu[$wgCode] ?? 0);
+        if ($supplierId <= 0) {
+            return;
+        }
+        try {
+            app(StammLieferantService::class)->setStamm($this->team(), $supplierId, $wgCode === '' ? null : $wgCode);
+            $this->stammNeu[$wgCode] = '';
+            $this->fehler = null;
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function stammEntfernen(int $supplierId, string $wgCode): void
+    {
+        try {
+            app(StammLieferantService::class)->unsetStamm($this->team(), $supplierId, $wgCode === '' ? null : $wgCode);
+            $this->fehler = null;
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function render()
     {
         $team = $this->team();
         $lieferanten = FoodAlchemistSupplier::visibleToTeam($team)
             ->where('is_inactive', false)->orderBy('name')->get(['id', 'name', 'team_id']);
 
+        $matrix = app(StammLieferantService::class)->matrixFor($team)
+            ->groupBy(fn ($z) => $z->warengruppe_code ?? '');
+
         return view('foodalchemist::livewire.settings.einkauf', [
             'team' => $team,
             'strategien' => LeadLaStrategie::cases(),
             'lieferanten' => $lieferanten,
             'lieferantenNamen' => $lieferanten->pluck('name', 'id'),
+            'matrix' => $matrix,
+            'warengruppen' => app(VocabularyService::class)->listWarengruppen($team),
         ]);
     }
 

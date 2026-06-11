@@ -186,6 +186,10 @@ class ImportSliceCommand extends Command
                 'legacy_category_id' => $r['legacy_category_id'],
             ], skipRow: fn (array $r) => ! isset($hgMap[(int) $r['hauptgruppe_id']]));
 
+        // M1-06: Stamm-Lieferanten-Matrix (Vault-Skript 212) — dedizierte Phase:
+        // zwei Quell-Tabellen auf EIN Ziel, daher ohne importBulk/id_map (Gate = Count-Vergleich)
+        $stats['stamm_lieferanten'] = $this->importStammLieferanten($pdo, $dryRun);
+
         $this->table(
             ['Phase', 'Quelle', 'importiert', 'übersprungen (id_map)'],
             collect($stats)->map(fn ($s, $k) => [$k, $s['source'] ?? '—', $s['imported'] ?? '—', $s['skipped'] ?? '—'])->all()
@@ -204,12 +208,70 @@ class ImportSliceCommand extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * M1-06: stamm_lieferant (global, warengruppe_code NULL) + stamm_lieferant_wg
+     * ("14 Vegane Ersatzprodukte" → Code = führende Ziffern). Idempotent: Phase läuft
+     * nur auf leerer Ziel-Tabelle des Teams. Row-Gate: Quelle == Ziel je Typ.
+     */
+    private function importStammLieferanten(PDO $pdo, bool $dryRun): array
+    {
+        $totalGlobal = (int) $pdo->query('SELECT COUNT(*) FROM stamm_lieferant')->fetchColumn();
+        $totalWg = (int) $pdo->query('SELECT COUNT(*) FROM stamm_lieferant_wg')->fetchColumn();
+        if ($dryRun) {
+            return ['source' => $totalGlobal + $totalWg, 'imported' => 0, 'skipped' => 0];
+        }
+        if (DB::table('foodalchemist_stamm_lieferanten')->where('team_id', $this->teamId)->exists()) {
+            return ['source' => $totalGlobal + $totalWg, 'imported' => 0, 'skipped' => $totalGlobal + $totalWg];
+        }
+
+        $supplierMap = $this->targetMap('foodalchemist_suppliers');
+        $now = now()->toDateTimeString();
+        $rows = [];
+        $skipped = 0;
+
+        foreach ($pdo->query('SELECT supplier_id FROM stamm_lieferant ORDER BY supplier_id') as $r) {
+            if (! isset($supplierMap[(int) $r['supplier_id']])) {
+                $skipped++;
+
+                continue;
+            }
+            $rows[] = ['supplier_id' => $supplierMap[(int) $r['supplier_id']], 'warengruppe_code' => null];
+        }
+        foreach ($pdo->query('SELECT supplier_id, warengruppe FROM stamm_lieferant_wg ORDER BY supplier_id, warengruppe') as $r) {
+            $code = preg_match('/^(\d{2})/', (string) $r['warengruppe'], $m) ? $m[1] : null;
+            if ($code === null || ! isset($supplierMap[(int) $r['supplier_id']])) {
+                $skipped++;
+
+                continue;
+            }
+            $rows[] = ['supplier_id' => $supplierMap[(int) $r['supplier_id']], 'warengruppe_code' => $code];
+        }
+
+        DB::transaction(fn () => DB::table('foodalchemist_stamm_lieferanten')->insert(
+            array_map(fn (array $r) => [
+                'uuid' => (string) UuidV7::generate(),
+                'team_id' => $this->teamId,
+                ...$r,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ], $rows)
+        ));
+
+        $zielGlobal = DB::table('foodalchemist_stamm_lieferanten')->where('team_id', $this->teamId)->whereNull('warengruppe_code')->count();
+        $zielWg = DB::table('foodalchemist_stamm_lieferanten')->where('team_id', $this->teamId)->whereNotNull('warengruppe_code')->count();
+        $this->line(($zielGlobal === $totalGlobal ? '✅' : '❌ BLOCKER') . " stamm_lieferant: Quelle {$totalGlobal} ↔ Ziel {$zielGlobal}");
+        $this->line(($zielWg === $totalWg ? '✅' : '❌ BLOCKER') . " stamm_lieferant_wg: Quelle {$totalWg} ↔ Ziel {$zielWg}");
+
+        return ['source' => $totalGlobal + $totalWg, 'imported' => count($rows), 'skipped' => $skipped];
+    }
+
     private function freshen(): void
     {
         $this->warn('--fresh: leere Slice-Tabellen …');
         DB::table('foodalchemist_gps')->update([
             'merged_into_id' => null, 'derivat_von_gp_id' => null, 'lead_la_supplier_item_id' => null,
         ]);
+        DB::table('foodalchemist_stamm_lieferanten')->delete();
         DB::table('foodalchemist_recipe_categories')->delete();
         DB::table('foodalchemist_recipe_main_groups')->delete();
         DB::table('foodalchemist_supplier_item_structures')->delete();
