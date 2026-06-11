@@ -131,7 +131,7 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | M4-02 | Import Rezepte | Phasen recipes+ingredients+Taxonomie (1.407/9.590; Lineage!), Row-Gates. **+Nachtrag (13_REFERENZ):** vocab_kochequipment (40) + recipe_equipment (836) mitimportieren — Equipment-Chip-Sektion ist Teil des Editors (M4-05/06) | 07 §3 | Gates grün; Stichprobe BBQ-Sauce vollständig | ☐ |
 | M4-03 | RecomputeService | GL-02 (Yield-Auto-Sum mit Verlust-Faktor, EK-Kaskade) + GL-01-Vererbung, topologisch (Sub-Rezepte), Trigger-Konzept | **GL-02**; Skript 206 als Referenz | **Pest-Golden: BBQ Eastern Texas 5,61 €/kg · 0,387 kg** u. w. | ☐ |
 | M4-04 | Browser-Gerüst | Hauptgruppen-Baum (M1-04-Daten), Tabelle (Name·Hauptgruppe·Kategorie·Geschmack·Fertigung·Status·Zutaten·Yield·Allergen-Konf) | P-1; Screen 4 | 1.407 Rezepte, Filter funktionieren | ☐ |
-| M4-05 | DetailPanel | KPI-Karte (EK/kg·EK·Yield·Konfidenz), Beschreibung, Zutaten read-only mit GP-Links, Eignungs-Chips | P-1 | Werte == Recompute-Output | ☐ |
+| M4-05 | DetailPanel | KPI-Karte (EK/kg·EK·Yield·Konfidenz), Beschreibung, Zutaten read-only mit GP-Links, Eignungs-Chips. **+Nachtrag (13_REFERENZ):** Diät-&-Spezifikations-Sektion (✓-Liste aus GP-Tag-MIN-Aggregation), Zutaten-Zeilen mit Lineage kursiv + EK je Zeile, Verwandte-Rezepte mit Kohäsions-Score (Daten ab M5) | P-1 | Werte == Recompute-Output | ☐ |
 | M4-06 | Modal: Stammdaten | Name (§1.2-Syntax-Hint, „Name putzen"-KI), Herkunft, Hauptgruppe/Kategorie, Basisrezept-Flag | P-2; Regelwerk BR §1 | Edit-Roundtrip + Recompute-Trigger | ☐ |
 | M4-07 | Zutaten-Editor Kern | P-8: Alpine-first-Tabelle (Menge/Einheit/Hinweis/Garv.%), Zeilen-EK + Summen client-seitig, Sync bei Save | **P-8** | Tippen ohne Server-Roundtrip (Network-Tab-Beweis) | ☐ |
 | M4-08 | Zutaten-Editor Komfort | Drag-Sort (sortablejs), Add-Zeile mit GP-Picker + Auto-Fill, optional-Flag, Lineage-Hinweis kursiv | P-8 | Reorder persistiert; Picker findet GPs der Team-Kette | ☐ |
@@ -151,17 +151,18 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | M5-04 | Kern-Anker am Rezept | Chips-Sektion (★, Autopilot via Anker-Extraktion), Verknüpfen-Flow | GL-10; Screen 4 | BBQ-Sauce zeigt 5 Anker wie Ist-App | ☐ |
 | M5-05 | Pairing-Sektion | Pairing-Chips (27 bei BBQ-Sauce), Kohäsions-Anzeige, „verwandte Rezepte" | GL-10; D-6 §5.x | Werte gegen Ist-App-CLI (`232_query_pairing`) verprobt | ☐ |
 | M5-06 | Generator-Grounding | GL-13-Wissenskontext in Prompts (7 Always-Load, Budgets 4000/6000) | **GL-13** | Kontext-Assembly-Test: Budget eingehalten | ☐ |
+| M5-07 | Aroma-Netz-Graph | Interaktive Graph-Visualisierung: Quell-Rezept zentral, Anker-Ring, verwandte Rezepte außen; Brücken-Typen klassisch/modern/kontrast (GL-10); Hover = Anker-Brücken, Klick = Rezept öffnen; Toggle Alle-Aroma-Brücken + Vorschlags-Modus je Anker | 13_REFERENZ Nachlieferung 2; GL-10 | Netz für BBQ-Sauce rendert mit echten Kanten | ☐ |
 
 ## M6 — VK-Rezepte (D-6)
 
 | ID | Paket | Inhalt | Ref | DoD | Status |
 |---|---|---|---|---|---|
 | M6-00 | **GATE: D6+D7** | Deckungsbeitrags-Formel + Verlust-Formel mit Dominique entscheiden, in 08 dokumentieren | 08 D6/D7 | Entscheide schriftlich | ☐ |
-| M6-01 | Verkaufslayer-Migrations | VK-Spalten (Skript-200-Schema), `speisen_klassen`, `recipe_regenerations` (V-19) | D-6 §2 | migrate grün | ☐ |
+| M6-01 | Verkaufslayer-Migrations | VK-Spalten (Skript-200-Schema), `speisen_klassen`, `recipe_regenerations` (V-19). **+Nachtrag (13_REFERENZ):** VK-Hauptgruppen-Taxonomie mit 16 Codes [APE]…[GET] + Kategorien je HG | D-6 §2 | migrate grün | ☐ |
 | M6-02 | MargeService | VK-Mathematik Single-Source (D6-Formel, Aufschlagsklassen, Portionsfaktoren, MwSt) | D-6 §3.2 | Pest-Kalkulations-Golden | ☐ |
-| M6-03 | VK-Browser | VK-Scope-Liste (Marge-Spalten, Klasse, Status) auf master-detail | D-6 §4.1 | Liste + Panel mit Marge-KPIs | ☐ |
+| M6-03 | VK-Browser | VK-Scope-Liste (Marge-Spalten, Klasse, Status) auf master-detail. **+Nachtrag (13_REFERENZ):** Geschmacks-Filter-Pills; Panel mit VERKAUFT-ALS-Box (Stück · g/Stück · Yield), KPI-Karten inkl. WARENEINSATZ % + VK-BRUTTO mit Formel-Klartext | D-6 §4.1 | Liste + Panel mit Marge-KPIs | ☐ |
 | M6-04 | VK-Editor | VK-Stammdaten/Klassifikation/Regeneration/Behälter im Modal; Zutaten im Komponenten-Modus (Basisrezepte) | D-6 §4.2-4.3 | VK anlegen aus Basisrezept manuell | ☐ |
-| M6-05 | Rollen-Verteilung | `ai_verteile_rollen` (Komponenten-Rollen Hauptkomponente/Beilage/Sauce…) mit Proposal-UI | D-6; GL-07 | Fake-Roundtrip + Accept | ☐ |
+| M6-05 | Rollen-Verteilung | `ai_verteile_rollen` (Komponenten-Rollen Hauptkomponente/Beilage/Sauce…) mit Proposal-UI. **+Nachtrag (13_REFERENZ):** Kulinarische-Kohärenz-Check (Score % + Label + Begründung + Modell/Datum + Erneut-prüfen) und Was-hebt-den-Teller-Vorschlag als VK-KI-Features | D-6; GL-07 | Fake-Roundtrip + Accept | ☐ |
 | M6-06 | **VK-Generator v1** | Der Pain-Point: Basisrezept→VK automatisiert (Matching + Hüllen + GL-07-Proposal-Flow mit Accept/Reject) | §0 Produktvision; GL-04/06/07 | 3 echte Rezepte end-to-end generiert | ☐ |
 | M6-07 | VK-Generator v2 | Matching-Reuse-at-Generation, Pool-Normalisierung, Decompounding (Audit-Hebel 2–4) | V-Register | messbare Quote-Verbesserung vs. v1 | ☐ |
 | M6-08 | **Abnahme M6** | Kalkulations-Suite, Generator-Review, Leak-Test, Screenshots | 09 | Dominique-Review ✅ | ☐ |
