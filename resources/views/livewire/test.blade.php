@@ -365,6 +365,33 @@
                 </div>
             </div>
 
+            {{-- Section: Baustein tri-state (M0-10 / P-4) — −/≈/✓ + unbekannt, ein Array-Binding --}}
+            <div>
+                <div class="mb-3">
+                    <h2 class="text-sm font-medium tracking-tight text-gray-900 dark:text-gray-100">Baustein: tri-state (P-4)</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">−/≈/✓ togglen (aktiver Button nochmal = unbekannt) · rein clientseitig, ein wire:model aufs Array · rechts die read-only-Variante</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 p-4">
+                        <div class="text-xs font-medium uppercase tracking-wider text-gray-400 mb-2">Editierbar (Besitzer-Team)</div>
+                        <x-foodalchemist::tri-state model="triDemo" :items="[
+                            'glutenhaltiges_getreide' => 'Glutenhaltiges Getreide',
+                            'eier' => 'Eier',
+                            'milch' => 'Milch',
+                            'senf' => 'Senf',
+                        ]" />
+                    </div>
+                    <div class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 p-4">
+                        <div class="text-xs font-medium uppercase tracking-wider text-gray-400 mb-2">Read-only (Kind-Team / Snapshot)</div>
+                        <x-foodalchemist::tri-state readonly :values="['glutenhaltiges_getreide' => 'enthalten', 'eier' => 'spuren']" :items="[
+                            'glutenhaltiges_getreide' => 'Glutenhaltiges Getreide',
+                            'eier' => 'Eier',
+                            'milch' => 'Milch',
+                        ]" />
+                    </div>
+                </div>
+            </div>
+
         </div>
     </x-ui-page-container>
 

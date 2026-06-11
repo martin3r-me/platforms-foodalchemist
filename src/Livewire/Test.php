@@ -79,6 +79,14 @@ class Test extends Component
         $this->kiDemoProposal = null;
     }
 
+    /** M0-10-Demo: tri-state-Baustein — ein Array-Binding (P-4), Sync deferred. */
+    public array $triDemo = [
+        'glutenhaltiges_getreide' => 'enthalten',
+        'eier' => 'spuren',
+        'milch' => 'nicht_enthalten',
+        'senf' => 'unbekannt',
+    ];
+
     /**
      * Render-Methode
      */
