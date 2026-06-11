@@ -170,13 +170,34 @@ class GpService
 
         $preise = app(PriceService::class);
         $rezepteAktiv = \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_recipes');
-        $seite->getCollection()->each(function ($gp) use ($preise, $rezepteAktiv) {
+
+        // Effektive Allergen-Badges (GL-01, seit M3-04): Override > Mutter (Derivat) > LA-MAX — Bulk in 1 Query
+        $zeilen = $seite->getCollection();
+        $mutterIds = $zeilen->filter(fn ($gp) => $gp->is_derivat && $gp->derivat_von_gp_id !== null)->pluck('derivat_von_gp_id');
+        $raenge = app(GpAggregateService::class)->laMaxRaengeBulk($zeilen->pluck('id')->merge($mutterIds)->unique()->values()->all());
+        $muetter = $mutterIds->isNotEmpty() ? FoodAlchemistGp::whereIn('id', $mutterIds)->get()->keyBy('id') : collect();
+
+        $zeilen->each(function ($gp) use ($preise, $rezepteAktiv, $raenge, $muetter) {
             $gp->setAttribute('lead_vergleichspreis', $gp->lead_preis !== null
                 ? $preise->vergleichspreis((object) ['qty' => $gp->lead_qty, 'unit_code' => $gp->lead_unit_code], (float) $gp->lead_preis)
                 : null);
             $gp->setAttribute('rezepte_count', $rezepteAktiv
                 ? (int) \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients')->where('gp_id', $gp->id)->whereNull('deleted_at')->count()
                 : null);
+
+            $mutter = $gp->is_derivat ? $muetter->get($gp->derivat_von_gp_id) : null;
+            $badges = [];
+            foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
+                $effektiv = $gp->getAttribute("allergen_{$feld}")                     // Prio 1: Override
+                    ?? ($mutter !== null
+                        ? ($mutter->getAttribute("allergen_{$feld}")                  // Prio 2: Derivat → Mutter (Override > LA-MAX)
+                            ?? ((($raenge[$mutter->id][$feld] ?? 0) === 3) ? 'enthalten' : null))
+                        : ((($raenge[$gp->id][$feld] ?? 0) === 3) ? 'enthalten' : null)); // Prio 3: LA-MAX
+                if ($effektiv === 'enthalten') {
+                    $badges[] = $feld;
+                }
+            }
+            $gp->setAttribute('allergen_badges', $badges);
         });
 
         return $seite;

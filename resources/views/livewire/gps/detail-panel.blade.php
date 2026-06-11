@@ -34,18 +34,101 @@
             </div>
         @endif
 
-        {{-- Override-Layer als Vorschau (GL-01) — Effektiv-Ansicht + Sektionen kommen mit M3-04/05 --}}
-        @if(count($gp->allergenOverrides()) > 0)
-            <div data-allergen-overrides>
-                <p class="{{ $dt }} mb-1">Allergen-Overrides</p>
-                <div class="flex flex-wrap gap-1">
-                    @foreach($gp->allergenOverrides() as $feld => $wert)
-                        <span class="{{ $pill }} {{ $wert->value === 'enthalten' ? $variantPill['danger'] : ($wert->value === 'spuren' ? $variantPill['warning'] : $variantPill['secondary']) }}"
-                              title="{{ $wert->value }}">{{ ucfirst(explode('_', $feld)[0]) }}</span>
-                    @endforeach
-                </div>
+        {{-- M3-05: Lazy-Sektionen — erst beim Aufklappen gerechnet (GpAggregateService) --}}
+        <div class="border-t border-black/5 dark:border-white/10 -mx-4 px-4 pt-2 space-y-1" data-panel-sektionen>
+
+            {{-- Allergene (GL-01: Override > Mutter > LA-MAX) --}}
+            <div data-sektion="allergene">
+                <button type="button" wire:click="toggleSektion('allergene')"
+                        class="w-full flex items-center justify-between py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150">
+                    <span>Allergene <span class="font-normal text-gray-400">(effektiv)</span></span>
+                    <span class="text-gray-400 text-xs">{{ ($offen['allergene'] ?? false) ? '▾' : '▸' }}</span>
+                </button>
+                @if($allergene !== null)
+                    <div class="pb-2 space-y-1.5">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'none' => $variantPill['secondary']][$allergenKonfidenz['konfidenz']] }}">Konfidenz {{ strtoupper($allergenKonfidenz['konfidenz']) }}</span>
+                            <span class="text-[11px] text-gray-400">aggregiert aus {{ $allergenKonfidenz['n_las_mit_daten'] }}/{{ $gp->n_las_total }} LAs</span>
+                            @if($allergenKonfidenz['needs_review'])
+                                <span class="{{ $pill }} {{ $variantPill['danger'] }}" title="enthalten ↔ nicht_enthalten ohne spuren-Mittelweg: {{ implode(', ', $allergenKonfidenz['konflikt_felder']) }}">Review nötig</span>
+                            @endif
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                            @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $feld => $label)
+                                <div class="flex items-center justify-between gap-1 min-w-0">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400 truncate" title="{{ $label }}{{ $allergene[$feld]['quelle'] === 'override' ? ' — manueller Override' : ($allergene[$feld]['quelle'] === 'mutter' ? ' — live vom Mutter-GP' : '') }}">
+                                        {{ $label }}@if($allergene[$feld]['quelle'] === 'override')<span class="text-violet-500"> ✎</span>@elseif($allergene[$feld]['quelle'] === 'mutter')<span class="text-sky-500"> ↑</span>@endif
+                                    </span>
+                                    <span class="{{ $pill }} shrink-0 {{ ['enthalten' => $variantPill['danger'], 'spuren' => $variantPill['warning'], 'nicht_enthalten' => $variantPill['success'], 'unbekannt' => $variantPill['secondary']][$allergene[$feld]['wert']->value] }}">{{ $allergene[$feld]['wert']->label() }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             </div>
-        @endif
+
+            {{-- Zusatzstoffe (GL-09: LMIV-Pills, Roh-Domäne 3=ja/1=nein/0=k.A./NULL) --}}
+            <div data-sektion="zusatzstoffe">
+                <button type="button" wire:click="toggleSektion('zusatzstoffe')"
+                        class="w-full flex items-center justify-between py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150">
+                    <span>Zusatzstoffe <span class="font-normal text-gray-400">(LMIV)</span></span>
+                    <span class="text-gray-400 text-xs">{{ ($offen['zusatzstoffe'] ?? false) ? '▾' : '▸' }}</span>
+                </button>
+                @if($zusatzstoffe !== null)
+                    <div class="pb-2">
+                        @php($ja = collect($zusatzstoffe)->filter(fn ($v) => $v === 3))
+                        @if($ja->isNotEmpty())
+                            <div class="flex flex-wrap gap-1 mb-1.5">
+                                @foreach($ja as $stoff => $v)
+                                    <span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE[$stoff] }}</span>
+                                @endforeach
+                            </div>
+                        @endif
+                        <p class="text-[11px] text-gray-400">
+                            {{ $ja->count() }}× ja · {{ collect($zusatzstoffe)->filter(fn ($v) => $v === 1)->count() }}× explizit ohne ·
+                            {{ collect($zusatzstoffe)->filter(fn ($v) => $v === 0 || $v === null)->count() }}× keine Angabe
+                        </p>
+                    </div>
+                @endif
+            </div>
+
+            {{-- Nährwerte (GL-08 GP-Pfad: Ø je 100 g über aktive LAs) --}}
+            <div data-sektion="naehrwerte">
+                <button type="button" wire:click="toggleSektion('naehrwerte')"
+                        class="w-full flex items-center justify-between py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150">
+                    <span>Nährwerte <span class="font-normal text-gray-400">(Ø je 100 g)</span></span>
+                    <span class="text-gray-400 text-xs">{{ ($offen['naehrwerte'] ?? false) ? '▾' : '▸' }}</span>
+                </button>
+                @if($naehrwerte !== null)
+                    <div class="pb-2">
+                        <dl class="space-y-0.5">
+                            @foreach([
+                                ['energy_kcal', 'Energie', 'kcal', 1],
+                                ['protein', 'Eiweiß', 'g', 2],
+                                ['fat', 'Fett', 'g', 2],
+                                ['carbs_absorbable', 'Kohlenhydrate', 'g', 2],
+                                ['salt_g', 'Salz', 'g', 3],
+                            ] as [$key, $label, $einheit, $stellen])
+                                <div class="flex items-baseline justify-between">
+                                    <dt class="text-xs text-gray-500 dark:text-gray-400">{{ $label }}</dt>
+                                    <dd class="text-xs text-gray-900 dark:text-gray-100 tabular-nums">
+                                        @if($naehrwerte[$key]['avg'] !== null)
+                                            {{ number_format($naehrwerte[$key]['avg'], $stellen, ',', '.') }} {{ $einheit }}
+                                            <span class="text-gray-400">({{ $naehrwerte[$key]['n'] }} LA{{ $naehrwerte[$key]['n'] === 1 ? '' : 's' }})</span>
+                                        @else
+                                            <span class="text-gray-400">—</span>
+                                        @endif
+                                    </dd>
+                                </div>
+                            @endforeach
+                        </dl>
+                        @if($naehrwerte['salt_g']['avg'] !== null)
+                            <p class="text-[11px] text-gray-400 mt-1">Salz = Natrium × 2,5 (GL-08)</p>
+                        @endif
+                    </div>
+                @endif
+            </div>
+        </div>
 
         @if(count($gp->setTags()) > 0)
             <div data-tags>

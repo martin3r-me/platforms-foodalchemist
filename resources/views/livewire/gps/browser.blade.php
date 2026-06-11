@@ -115,14 +115,14 @@
                             </td>
                             <td class="{{ $td }} text-gray-500">{{ $gp->rezepte_count ?? '—' }}</td>
                             <td class="{{ $td }}" data-allergen-badges>
-                                {{-- GL-01: vorerst Override-Layer; Effektivwerte (LA-MAX) kommen mit M3-04 --}}
-                                @php($badges = collect(\Platform\FoodAlchemist\Models\FoodAlchemistGp::ALLERGEN_FIELDS)
-                                    ->filter(fn ($f) => $gp->getAttribute("allergen_{$f}") === 'enthalten')->take(5))
-                                @forelse($badges as $feld)
-                                    <span class="{{ $pill }} {{ $variantPill['danger'] }} mr-1" title="{{ $feld }}">{{ ucfirst(explode('_', $feld)[0]) }}</span>
+                                {{-- GL-01-Effektivwerte (Override > Mutter > LA-MAX), Bulk aus paginateBrowser --}}
+                                @forelse(array_slice($gp->allergen_badges, 0, 5) as $feld)
+                                    <span class="{{ $pill }} {{ $variantPill['danger'] }} mr-1"
+                                          title="{{ \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$feld] ?? $feld }}">{{ ucfirst(explode('_', $feld)[0]) }}</span>
                                 @empty
                                     <span class="text-gray-400">—</span>
                                 @endforelse
+                                @if(count($gp->allergen_badges) > 5)<span class="text-xs text-gray-400">+{{ count($gp->allergen_badges) - 5 }}</span>@endif
                             </td>
                         </tr>
                     @empty

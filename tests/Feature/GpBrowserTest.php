@@ -92,6 +92,32 @@ it('Browser: mount mit ?gp= aus der URL befüllt das Panel sofort (Kontext-Erhal
         ->assertDispatched('gp-selected', id: $this->zander->id);
 });
 
+it('DetailPanel M3-05: Sektionen laden lazy — Allergen-Werte erst nach toggleSektion', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
+
+    $supplier = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);
+    $item = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id, 'designation' => 'Zander TK',
+    ]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure::create([
+        'team_id' => $this->rootTeam->id, 'supplier_item_id' => $item->id, 'gp_id' => $this->zander->id,
+    ]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::create([
+        'team_id' => $this->rootTeam->id, 'supplier_item_id' => $item->id, 'allergen_fisch' => 'enthalten',
+    ]);
+
+    Livewire::test(DetailPanel::class, ['gpId' => $this->zander->id])
+        ->assertDontSee('Konfidenz')                       // lazy: zu ist zu
+        ->call('toggleSektion', 'allergene')
+        ->assertSee('Konfidenz HIGH')
+        ->assertSee('aggregiert aus 1/')
+        ->call('toggleSektion', 'naehrwerte')
+        ->assertSee('Nährwerte')
+        // Kontext-Erhalt: GP-Wechsel lässt die Sektionen offen
+        ->dispatch('gp-selected', id: $this->zander->id)
+        ->assertSet('offen.allergene', true);
+});
+
 it('DetailPanel: zeigt Stammdaten nach gp-selected und respektiert D1-Sichtbarkeit (DoD M3-03)', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
 
