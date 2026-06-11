@@ -332,6 +332,26 @@ class RecipeRecomputeService
 
     // ── 4. Kosten (§3.2, T3) ────────────────────────────────────────────
 
+    /**
+     * Zeilen-Kosten je Zutat (Panel M4-05 „EK je Zeile") — exakt dieselbe
+     * T3-Kaskade wie der Recompute, eine Regel-Stelle.
+     *
+     * @return array<int, ?float> [ingredient_id => Kosten € | null (unpriced/gefiltert)]
+     */
+    public function zeilenKosten(FoodAlchemistRecipe $recipe): array
+    {
+        $this->laCache = [];
+        $zutaten = $recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored);
+
+        $out = [];
+        foreach ($this->aggregationsZutaten($zutaten) as $z) {
+            [$kosten, $priced] = $this->zutatKosten($z);
+            $out[$z->id] = $priced ? round($kosten, 2) : null;
+        }
+
+        return $out;
+    }
+
     private function kosten(FoodAlchemistRecipe $recipe, Collection $zutaten): void
     {
         $ekTotal = 0.0;
@@ -340,35 +360,7 @@ class RecipeRecomputeService
 
         foreach ($this->aggregationsZutaten($zutaten) as $z) {
             $nKosten++;
-            $mengeAvg = $this->mengeAvg($z);
-            $mengeG = $mengeAvg * $this->grammFaktor($z);
-
-            $gp = $z->gp;
-            $pG = $gp !== null ? $this->preisProGrammFuer($gp) : null;
-            $pStk = $gp !== null ? $this->preisProStueckFuer($gp) : null;
-            $pSub = $z->referencedRecipe?->ek_per_kg_eur !== null
-                ? ((float) $z->referencedRecipe->ek_per_kg_eur) / 1000 : null;
-
-            $kosten = 0.0;
-            $priced = false;
-            if ($z->einheit?->dimension === 'count') {             // T3 Zeile count
-                if ($pStk !== null) {
-                    $kosten = $mengeAvg * $pStk;
-                    $priced = true;
-                } elseif ($mengeG > 0 && $pG !== null) {           // count→mass-Brücke
-                    $kosten = $mengeG * $pG;
-                    $priced = true;
-                }
-            } else {                                               // mass/volume/pinch/piece
-                $stkDefaultG = $gp?->stk_default_g !== null ? (float) $gp->stk_default_g : null;
-                $quelle = $pG
-                    ?? ($pStk !== null && $stkDefaultG > 0 ? $pStk / $stkDefaultG : null)  // Stk→g-Brücke
-                    ?? $pSub;
-                if ($quelle !== null && $mengeG > 0) {             // T2: qs (Faktor 0) bleibt unpriced
-                    $kosten = $mengeG * $quelle;
-                    $priced = true;
-                }
-            }
+            [$kosten, $priced] = $this->zutatKosten($z);
             if ($priced) {
                 $nPriced++;
             }
@@ -457,6 +449,41 @@ class RecipeRecomputeService
             default => 'low',
         };
         $recipe->nutri_aggregiert_am = now();
+    }
+
+    /** T3-Kaskade für EINE Zutat: [kosten €, priced?]. */
+    private function zutatKosten(FoodAlchemistRecipeIngredient $z): array
+    {
+        $mengeAvg = $this->mengeAvg($z);
+        $mengeG = $mengeAvg * $this->grammFaktor($z);
+
+        $gp = $z->gp;
+        $pG = $gp !== null ? $this->preisProGrammFuer($gp) : null;
+        $pStk = $gp !== null ? $this->preisProStueckFuer($gp) : null;
+        $pSub = $z->referencedRecipe?->ek_per_kg_eur !== null
+            ? ((float) $z->referencedRecipe->ek_per_kg_eur) / 1000 : null;
+
+        if ($z->einheit?->dimension === 'count') {                 // T3 Zeile count
+            if ($pStk !== null) {
+                return [$mengeAvg * $pStk, true];
+            }
+            if ($mengeG > 0 && $pG !== null) {                     // count→mass-Brücke
+                return [$mengeG * $pG, true];
+            }
+
+            return [0.0, false];
+        }
+
+        // mass/volume/pinch/piece
+        $stkDefaultG = $gp?->stk_default_g !== null ? (float) $gp->stk_default_g : null;
+        $quelle = $pG
+            ?? ($pStk !== null && $stkDefaultG > 0 ? $pStk / $stkDefaultG : null)  // Stk→g-Brücke
+            ?? $pSub;
+        if ($quelle !== null && $mengeG > 0) {                     // T2: qs (Faktor 0) bleibt unpriced
+            return [$mengeG * $quelle, true];
+        }
+
+        return [0.0, false];
     }
 
     // ── intern ───────────────────────────────────────────────────────────

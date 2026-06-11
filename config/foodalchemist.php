@@ -98,6 +98,16 @@ return [
             ],
         ],
         [
+            'group' => 'Rezepte',
+            'items' => [
+                [
+                    'label' => 'Basisrezepte',
+                    'route' => 'foodalchemist.recipes.index',
+                    'icon'  => 'heroicon-o-book-open',
+                ],
+            ],
+        ],
+        [
             'group' => 'Einstellungen',
             'items' => [
                 [

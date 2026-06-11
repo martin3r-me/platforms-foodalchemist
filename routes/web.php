@@ -53,6 +53,12 @@ Route::get('/gps/{foodAlchemistGp}', fn (\Platform\FoodAlchemist\Models\FoodAlch
 
 
 /**
+ * Basisrezepte (M4-04, P-1) — Auswahl/Filter in der URL (Kontext-Erhalt).
+ */
+Route::get('/rezepte', \Platform\FoodAlchemist\Livewire\Recipes\Browser::class)
+    ->name('foodalchemist.recipes.index');
+
+/**
  * Lieferanten-Browser (M2-01, P-7) — Auswahl + Suche in der URL (V-17/Kontext-Erhalt).
  */
 Route::get('/lieferanten', \Platform\FoodAlchemist\Livewire\Suppliers\Index::class)
