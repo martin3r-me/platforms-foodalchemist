@@ -7,6 +7,7 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
 use Platform\FoodAlchemist\Services\PriceService;
 use Platform\FoodAlchemist\Services\SupplierItemService;
 use Platform\FoodAlchemist\Support\Curate;
@@ -32,6 +33,9 @@ class ItemModal extends Component
     /** M2-10: 14 EU-Allergene (tri-state-Binding, GL-01) */
     public array $allergene = [];
 
+    /** M2-15: 18 LMIV-Deklarationen (ja|nein|unbekannt, GL-09) */
+    public array $deklarationen = [];
+
     public ?string $fehler = null;
 
     #[On('item-modal.oeffnen')]
@@ -44,6 +48,7 @@ class ItemModal extends Component
         $this->verpackung = $item->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging']);
         $this->eigenschaften = $item->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol']);
         $this->allergene = app(SupplierItemService::class)->getAllergens($item);
+        $this->deklarationen = app(SupplierItemService::class)->getDeclarations($item);
         $this->dispatch('modal.open', name: 'item-modal');
     }
 
@@ -91,6 +96,17 @@ class ItemModal extends Component
         }
     }
 
+    public function deklarationenSpeichern(): void
+    {
+        try {
+            app(SupplierItemService::class)->setDeclarations($this->team(), $this->item($this->itemId), $this->deklarationen);
+            $this->fehler = null;
+            $this->dispatch('item-gespeichert');
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function preisAnlegen(): void
     {
         try {
@@ -122,6 +138,8 @@ class ItemModal extends Component
             'darfEdit' => $item !== null && Curate::canCurate(Auth::user(), $item),
             'historie' => $item !== null ? $preise->historyFor($item->id) : collect(),
             'allergenLabels' => FoodAlchemistItemAllergen::ALLERGENE,
+            'deklarationLabels' => FoodAlchemistItemDeclaration::STOFFE,
+            'deklarationQuelle' => $item?->declarations?->quelle,
             'allergenQuelle' => $item?->allergens?->quelle,
             'aktiverPreis' => $aktiv,
             'vergleichspreis' => $item !== null && $aktiv !== null

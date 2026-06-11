@@ -6,6 +6,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 
@@ -86,6 +87,46 @@ class SupplierItemService
         }
 
         return FoodAlchemistItemAllergen::updateOrCreate(
+            ['supplier_item_id' => $item->id],
+            [...$attribute, 'team_id' => $item->team_id, 'quelle' => 'manual'],
+        );
+    }
+
+    // ── LA-Deklarationen (M2-15, GL-09) ─────────────────────────────────
+
+    /** 18 LMIV-Werte des LA als UI-Form: 'ja'|'nein'|'unbekannt' (Quelle 3|1|0/NULL). */
+    public function getDeclarations(FoodAlchemistSupplierItem $item): array
+    {
+        $zeile = $item->declarations;
+
+        return collect(FoodAlchemistItemDeclaration::STOFFE)->keys()
+            ->mapWithKeys(fn (string $k) => [$k => match ((int) ($zeile?->{$k} ?? 0)) {
+                3 => 'ja',
+                1 => 'nein',
+                default => 'unbekannt',
+            }])
+            ->all();
+    }
+
+    /** Edit nur Besitzer-Team; manuelle Pflege stempelt quelle=manual. Schreibt ROHE Domäne (GL-09 A1). */
+    public function setDeclarations(Team $team, FoodAlchemistSupplierItem $item, array $werte): FoodAlchemistItemDeclaration
+    {
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Artikel — Deklarations-Pflege nur durch das Besitzer-Team (D1).');
+        }
+
+        $attribute = [];
+        foreach (array_keys(FoodAlchemistItemDeclaration::STOFFE) as $k) {
+            $wert = $werte[$k] ?? 'unbekannt';
+            $attribute[$k] = match ($wert) {
+                'ja' => 3,
+                'nein' => 1,
+                'unbekannt' => 0,
+                default => throw new \RuntimeException("Ungültiger Deklarations-Wert [{$wert}] für {$k}."),
+            };
+        }
+
+        return FoodAlchemistItemDeclaration::updateOrCreate(
             ['supplier_item_id' => $item->id],
             [...$attribute, 'team_id' => $item->team_id, 'quelle' => 'manual'],
         );

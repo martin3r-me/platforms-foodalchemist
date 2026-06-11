@@ -85,6 +85,35 @@
                 </div>
             </x-foodalchemist::modal-section>
 
+            <x-foodalchemist::modal-section title="Zusatzstoffe (18 deklarationspflichtige Stoffe, LMIV)">
+                <div class="flex items-center justify-between mb-2" data-deklaration-kopf>
+                    <p class="text-xs text-gray-400">− nein · ✓ ja · ungesetzt = keine Angabe (GL-09). Quelle:
+                        <span class="{{ $pill }} {{ $deklarationQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $deklarationQuelle ?? 'Import' }}</span>
+                    </p>
+                    @if($darfEdit)
+                        <button type="button" wire:click="deklarationenSpeichern" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">Zusatzstoffe speichern</button>
+                    @endif
+                </div>
+                <div x-data="{ dekl: $wire.entangle('deklarationen') }" class="divide-y divide-black/5 dark:divide-white/5" data-deklarationen>
+                    @foreach($deklarationLabels as $stoff => $lbl)
+                        <div class="flex items-center justify-between gap-3 py-1.5" data-dekl-row="{{ $stoff }}">
+                            <span class="text-sm text-gray-700 dark:text-gray-300 min-w-0 truncate">{{ $lbl }}</span>
+                            <div class="flex items-center gap-1 shrink-0">
+                                @foreach([['nein', '−', 'bg-gray-500/20 text-gray-700 dark:bg-white/15 dark:text-gray-200 border-gray-500/30'], ['ja', '✓', 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30']] as [$wert, $zeichen, $aktiv])
+                                    <button type="button" title="{{ $wert }}"
+                                            @if($darfEdit)
+                                                @click="dekl['{{ $stoff }}'] = dekl['{{ $stoff }}'] === '{{ $wert }}' ? 'unbekannt' : '{{ $wert }}'"
+                                            @else disabled @endif
+                                            :class="dekl['{{ $stoff }}'] === '{{ $wert }}' ? @js($aktiv) : 'border-black/5 dark:border-white/10 text-gray-300 dark:text-gray-600 {{ $darfEdit ? 'hover:text-gray-500 hover:bg-black/5 dark:hover:bg-white/10' : 'opacity-60' }}'"
+                                            class="w-7 h-7 inline-flex items-center justify-center text-xs font-medium rounded-md border transition-all duration-150"
+                                            data-dekl-btn="{{ $wert }}">{{ $zeichen }}</button>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </x-foodalchemist::modal-section>
+
             <x-foodalchemist::modal-section title="Preise">
                 @if($darfEdit)
                     <div class="flex items-end gap-2 mb-3" data-preis-neu>

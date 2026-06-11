@@ -209,6 +209,23 @@ class ImportSliceCommand extends Command
                 return $row;
             }, skipRow: fn (array $r) => ! isset($itemMap[(int) $r['supplier_item_id']]));
 
+        // M2-15: LA-Deklarationen (GL-09-Blocker) — rohe Necta-Integer {0,1,3,NULL}
+        $deklStoffe = array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE);
+        $stats['item_declarations'] = $this->importBulk($pdo, $dryRun, 'declarations', 'foodalchemist_item_declarations', 'supplier_item_id',
+            function (array $r) use ($itemMap, $deklStoffe) {
+                $row = ['legacy_id' => $r['supplier_item_id'], 'supplier_item_id' => $itemMap[(int) $r['supplier_item_id']] ?? null];
+                foreach ($deklStoffe as $stoff) {
+                    $row[$stoff] = $r[$stoff] !== null ? (int) $r[$stoff] : null;
+                }
+                $details = array_filter([
+                    'table_sweetener_basis' => $r['table_sweetener_basis'] ?? null,
+                    'basis_tafe_sweetness' => $r['basis_tafe_sweetness'] ?? null,
+                ], fn ($v) => $v !== null && $v !== '');
+                $row['details'] = $details === [] ? null : json_encode($details);
+
+                return $row;
+            }, skipRow: fn (array $r) => ! isset($itemMap[(int) $r['supplier_item_id']]));
+
         // M2-04/05: unit_code-Backfill (GL-11 Kalkulationseinheit kg|l|Stk)
         $stats['unit_codes'] = $this->backfillUnitCodes($pdo, $dryRun);
 
@@ -223,7 +240,7 @@ class ImportSliceCommand extends Command
 
         // Row-Count-Verifikation (07 §5): Quelle == id_map je Quell-Tabelle
         if (! $dryRun) {
-            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens'] as $sourceTable) {
+            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations'] as $sourceTable) {
                 $sourceCount = (int) $pdo->query("SELECT COUNT(*) FROM {$sourceTable}")->fetchColumn();
                 $mapCount = DB::table('foodalchemist_legacy_id_map')->where('source_table', $sourceTable)->count();
                 $flag = $sourceCount === $mapCount ? '✅' : '❌ BLOCKER';
@@ -328,6 +345,7 @@ class ImportSliceCommand extends Command
         DB::table('foodalchemist_gps')->update([
             'merged_into_id' => null, 'derivat_von_gp_id' => null, 'lead_la_supplier_item_id' => null,
         ]);
+        DB::table('foodalchemist_item_declarations')->delete();
         DB::table('foodalchemist_item_allergens')->delete();
         DB::table('foodalchemist_stamm_lieferanten')->delete();
         DB::table('foodalchemist_recipe_categories')->delete();
@@ -343,7 +361,7 @@ class ImportSliceCommand extends Command
             ->whereIn('source_table', [
                 'lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2',
                 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured',
-                'recipe_hauptgruppen', 'recipe_kategorien', 'allergens',
+                'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations',
             ])
             ->delete();
     }
