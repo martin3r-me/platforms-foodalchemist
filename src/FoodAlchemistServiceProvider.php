@@ -57,16 +57,13 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/foodalchemist.php', 'foodalchemist');
         
         /**
-         * Commands registrieren (optional)
-         * 
-         * Falls dein Modul Artisan Commands hat:
-         * 
-         * if ($this->app->runningInConsole()) {
-         *     $this->commands([
-         *         \Platform\FoodAlchemist\Console\Commands\YourCommand::class,
-         *     ]);
-         * }
+         * Commands registrieren
          */
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \Platform\FoodAlchemist\Console\ImportSliceCommand::class,
+            ]);
+        }
     }
 
     /**

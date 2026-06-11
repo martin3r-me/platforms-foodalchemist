@@ -32,6 +32,14 @@
         </x-ui-sidebar-item>
     </x-ui-sidebar-list>
 
+    {{-- Abschnitt: Stammdaten (Vertical Slice D-3) --}}
+    <x-ui-sidebar-list label="Stammdaten">
+        <x-ui-sidebar-item :href="route('foodalchemist.gps.index')">
+            @svg('heroicon-o-cube', 'w-4 h-4 text-[var(--ui-secondary)]')
+            <span class="ml-2 text-sm">Grundprodukte</span>
+        </x-ui-sidebar-item>
+    </x-ui-sidebar-list>
+
     {{-- Collapsed: Icons-only --}}
     <div x-show="collapsed" class="px-2 py-2 border-b border-[var(--ui-border)]">
         <div class="flex flex-col gap-2">
@@ -40,6 +48,9 @@
             </a>
             <a href="{{ route('foodalchemist.test') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
                 @svg('heroicon-o-beaker', 'w-5 h-5')
+            </a>
+            <a href="{{ route('foodalchemist.gps.index') }}" wire:navigate class="flex items-center justify-center p-2 rounded-md text-[var(--ui-secondary)] hover:bg-[var(--ui-muted-5)]">
+                @svg('heroicon-o-cube', 'w-5 h-5')
             </a>
         </div>
     </div>

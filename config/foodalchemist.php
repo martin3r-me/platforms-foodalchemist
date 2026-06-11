@@ -82,5 +82,15 @@ return [
                 ],
             ],
         ],
+        [
+            'group' => 'Stammdaten',
+            'items' => [
+                [
+                    'label' => 'Grundprodukte',
+                    'route' => 'foodalchemist.gps.index',
+                    'icon'  => 'heroicon-o-cube',
+                ],
+            ],
+        ],
     ],
 ];
