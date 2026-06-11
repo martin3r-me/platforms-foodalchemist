@@ -1,0 +1,90 @@
+{{-- M4-14: ✨ Basisrezept-Generator — Richtungs-Parameter + Bestand-Hybrid --}}
+@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+
+<x-foodalchemist::modal name="generator-modal" title="✨ Basisrezept generieren" size="max-w-2xl">
+    @if($fehler !== null)
+        <p class="text-sm text-rose-600 dark:text-rose-400 mb-3" data-generator-fehler>{{ $fehler }}</p>
+    @endif
+
+    @if($ergebnis === null)
+        <x-foodalchemist::modal-section title="Beschreibung">
+            <textarea wire:model="beschreibung" rows="3" class="{{ $input }}" data-generator-beschreibung
+                      placeholder="z. B. Dunkle Rotwein-Schalotten-Reduktion als Saucenbasis für Schmorgerichte …"></textarea>
+            <p class="text-[10px] text-gray-400 mt-1">Aus Foto/PDF: blockiert auf die Vision-Frage bei Martin (Offene Entscheide) — bis dahin Text.</p>
+        </x-foodalchemist::modal-section>
+
+        <x-foodalchemist::modal-section title="Richtungs-Parameter">
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3" data-generator-parameter>
+                <div>
+                    <label class="block {{ $label }} mb-1">Convenience</label>
+                    <select wire:model="parameter.convenience" class="{{ $input }}">
+                        <option value="from_scratch">from scratch</option>
+                        <option value="teil_convenience">Teil-Convenience</option>
+                        <option value="standard">Standard</option>
+                        <option value="voll_convenience">Voll-Convenience</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Frische-Hook</label>
+                    <select wire:model="parameter.frische" class="{{ $input }}">
+                        <option value="frisch">frisch</option><option value="tk">alles aus TK</option><option value="konserve">Konserve/haltbar</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Diät (hart)</label>
+                    <select wire:model="parameter.diaet_hart" class="{{ $input }}">
+                        <option value="">—</option>
+                        <option value="vegan">vegan</option><option value="vegetarisch">vegetarisch</option>
+                        <option value="glutenfrei">glutenfrei</option><option value="laktosefrei">laktosefrei</option><option value="halal">halal</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Niveau</label>
+                    <input type="text" wire:model="parameter.niveau" placeholder="z. B. fine_dining" class="{{ $input }}" />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Sektor</label>
+                    <input type="text" wire:model="parameter.sektor" placeholder="z. B. catering" class="{{ $input }}" />
+                </div>
+                <div class="flex items-end pb-2 gap-3">
+                    <label class="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
+                        <input type="checkbox" wire:model="parameter.bio" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" /> Bio
+                    </label>
+                </div>
+                <div class="col-span-2 md:col-span-3">
+                    <label class="block {{ $label }} mb-1">Aroma-Richtung</label>
+                    <input type="text" wire:model="parameter.aroma" placeholder="z. B. rauchig-karamellig, mediterran …" class="{{ $input }}" />
+                </div>
+            </div>
+        </x-foodalchemist::modal-section>
+    @else
+        <x-foodalchemist::modal-section title="Ergebnis">
+            <p class="text-sm text-gray-900 dark:text-gray-100 font-medium" data-generator-ergebnis>{{ $ergebnis['name'] }}</p>
+            <div class="flex flex-wrap gap-1.5 mt-2">
+                <span class="{{ $pill }} {{ $variantPill['success'] }}">{{ $ergebnis['statistik']['bestand_gp'] }} GP aus Bestand</span>
+                <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $ergebnis['statistik']['bestand_sub'] }} Sub-Rezepte</span>
+                <span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $ergebnis['statistik']['stub_neu'] }} Stubs neu</span>
+                <span class="{{ $pill }} {{ $ergebnis['statistik']['offen'] > 0 ? $variantPill['danger'] : $variantPill['secondary'] }}">{{ $ergebnis['statistik']['offen'] }} offen</span>
+            </div>
+            @if(count($ergebnis['offene']) > 0)
+                <div class="mt-3 space-y-1" data-generator-offene>
+                    <p class="{{ $label }}">Hard-Stops (Bestand-Lücken ohne Halbfabrikat-Marker):</p>
+                    @foreach($ergebnis['offene'] as $offen)
+                        <p class="text-xs text-gray-600 dark:text-gray-300">
+                            🔴 {{ $offen['text'] }} —
+                            <span class="text-violet-600 dark:text-violet-400">{{ $offen['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}</span>
+                            @if(count($offen['shortlist']) > 0)<span class="text-gray-400">· {{ count($offen['shortlist']) }} Shortlist-Kandidaten</span>@endif
+                        </p>
+                    @endforeach
+                </div>
+            @endif
+        </x-foodalchemist::modal-section>
+    @endif
+
+    <x-slot:footer>
+        <button type="button" wire:click="$dispatch('modal.close', { name: 'generator-modal' })" class="{{ $btnGhost }}">{{ $ergebnis === null ? 'Abbrechen' : 'Schließen' }}</button>
+        @if($ergebnis === null)
+            <button type="button" wire:click="generieren" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-generator-start>✨ Generieren</button>
+        @endif
+    </x-slot:footer>
+</x-foodalchemist::modal>

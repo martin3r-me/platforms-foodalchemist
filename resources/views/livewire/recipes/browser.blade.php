@@ -84,9 +84,15 @@
     {{-- M4-07/08: Zutaten-Editor (P-8) --}}
     <livewire:foodalchemist.recipes.ingredient-editor />
 
+    {{-- M4-14: Generator --}}
+    <livewire:foodalchemist.recipes.generator-modal />
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between -mb-2">
-            <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
+            <div class="flex items-center gap-2">
+                <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
+                <button type="button" wire:click="$dispatch('generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-generator-oeffnen>✨ KI-Rezept</button>
+            </div>
             @if(count(array_filter($auswahl)) > 0)
                 <div class="flex items-center gap-1.5" data-bulk-status>
                     <span class="text-sm text-gray-900 dark:text-gray-100 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt:</span>

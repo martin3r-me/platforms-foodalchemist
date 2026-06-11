@@ -155,6 +155,14 @@ return [
             'task' => 'Bestimme den §9-Zustand (frisch|TK|trocken|konserviert) des Grundprodukts '
                 . 'aus Name und Lieferantenartikeln: werte = {zustand}.',
         ],
+        'recipe.generator' => [
+            'tier' => 'B',
+            'task' => 'Erzeuge ein Basisrezept aus der Beschreibung unter Beachtung der Richtungs-'
+                . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, aroma): werte = '
+                . '{name (§1-Syntax <Typ>: <Bezeichnung>), beschreibung (§8-Stil), geschmacksrichtung, '
+                . 'zubereitung (Markdown-Schritte), zutaten: [{text, menge, einheit (g|ml|kg|l|el|tl|stk), '
+                . 'slug (hauptzutat), note}]}. Diät-harte Vorgaben sind VERBINDLICH.',
+        ],
         'recipe.beschreibung' => [
             'tier' => 'C',
             'task' => 'Schreibe die Rezept-Beschreibung im §8-Stil (sachlich-appetitlich, 2-4 Sätze, '

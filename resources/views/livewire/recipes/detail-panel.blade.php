@@ -22,12 +22,13 @@
         </div>
 
         {{-- KPI-Karte (EK/kg · EK · Yield · Konfidenz) --}}
-        <div class="grid grid-cols-4 gap-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-kpi-karte>
+        <div class="grid grid-cols-5 gap-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-kpi-karte>
             @foreach([
                 ['EK/kg', $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €' : '—'],
                 ['EK', $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—'],
                 ['Yield', $rezept->yield_kg !== null ? number_format((float) ($rezept->yield_kg_manual ?? $rezept->yield_kg), 3, ',', '.') . ' kg' : '—'],
                 ['Konfidenz', $rezept->allergene_konfidenz],
+                ['mit Preis', ($rezept->ek_n_ingredients_priced ?? '—') . '/' . ($rezept->ek_n_ingredients_total ?? '—')],
             ] as [$lbl, $wert])
                 <div class="text-center">
                     <p class="text-[10px] uppercase tracking-wider text-gray-400">{{ $lbl }}</p>
@@ -67,6 +68,29 @@
                 @endforeach
             </div>
         </div>
+
+        {{-- Screen-5: 14 EU-Allergene + 18 LMIV-Zusatzstoffe (Aggregat-Spalten, GL-01/09) --}}
+        <div data-rezept-allergene>
+            <p class="{{ $dt }} mb-1">Allergene <span class="normal-case">({{ $rezept->allergene_konfidenz }})</span></p>
+            <div class="flex flex-wrap gap-1">
+                @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $feld => $lbl)
+                    @php($wert = $rezept->{"allergen_{$feld}"})
+                    <span class="{{ $pill }} {{ ['enthalten' => $variantPill['danger'], 'spuren' => $variantPill['warning'], 'nicht_enthalten' => $variantPill['secondary']][$wert] ?? $variantPill['secondary'] . ' opacity-40 italic' }}"
+                          title="{{ $wert }}">{{ explode(' ', $lbl)[0] }}</span>
+                @endforeach
+            </div>
+        </div>
+        @php($zusatzJa = collect(array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE))->filter(fn ($st) => (int) ($rezept->{"zusatz_{$st}"} ?? 0) === 3))
+        @if($zusatzJa->isNotEmpty())
+            <div data-rezept-zusatzstoffe>
+                <p class="{{ $dt }} mb-1">Zusatzstoffe (LMIV)</p>
+                <div class="flex flex-wrap gap-1">
+                    @foreach($zusatzJa as $stoff)
+                        <span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE[$stoff] }}</span>
+                    @endforeach
+                </div>
+            </div>
+        @endif
 
         {{-- M4-10: ↑-Navigation — Rezepte, die dieses als Sub-Rezept nutzen --}}
         @if($eltern->isNotEmpty())
