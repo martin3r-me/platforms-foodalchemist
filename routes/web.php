@@ -46,6 +46,13 @@ Route::get('/gps', \Platform\FoodAlchemist\Livewire\Gps\Index::class)
 Route::get('/gps/{foodAlchemistGp}', \Platform\FoodAlchemist\Livewire\Gps\Show::class)
     ->name('foodalchemist.gps.show');
 
+
+/**
+ * Lieferanten-Browser (M2-01, P-7) — Auswahl + Suche in der URL (V-17/Kontext-Erhalt).
+ */
+Route::get('/lieferanten', \Platform\FoodAlchemist\Livewire\Suppliers\Index::class)
+    ->name('foodalchemist.suppliers.index');
+
 /**
  * Einstellungen (M1-01, D-1 §4) — Sektion in der URL (V-17: kein Tab-State-Verlust).
  */

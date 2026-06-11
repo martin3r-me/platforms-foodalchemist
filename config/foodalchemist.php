@@ -90,6 +90,11 @@ return [
                     'route' => 'foodalchemist.gps.index',
                     'icon'  => 'heroicon-o-cube',
                 ],
+                [
+                    'label' => 'Lieferanten',
+                    'route' => 'foodalchemist.suppliers.index',
+                    'icon'  => 'heroicon-o-truck',
+                ],
             ],
         ],
         [
