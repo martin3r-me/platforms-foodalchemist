@@ -78,6 +78,160 @@ class RecipeService
             ->selectRaw('status, COUNT(*) AS n')->groupBy('status')->pluck('n', 'status')->all();
     }
 
+    // ── M4-06: CRUD (D-5 §3.1) ──────────────────────────────────────────
+
+    /** Regelwerk §1.7: slug(name) — ä→ae/ö→oe/ü→ue/ß→ss, Sonderzeichen→_, kollabiert. */
+    public function rezeptKey(string $name): string
+    {
+        $s = mb_strtolower(trim($name));
+        $s = strtr($s, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+        $s = preg_replace('/[^\p{L}\p{N}]+/u', '_', $s);
+
+        return trim(preg_replace('/_+/', '_', $s), '_');
+    }
+
+    /**
+     * Anlage (status draft, key nach §1.7 + §1.8-Diskriminator: bei Kollision
+     * +_slug(kategorie), dann _2/_3 …). Läuft die Pipeline einmal an (leere Aggregate).
+     */
+    public function create(Team $team, array $in): FoodAlchemistRecipe
+    {
+        $name = trim($in['name'] ?? '');
+        if ($name === '') {
+            throw new \RuntimeException('Rezept-Name ist Pflicht (§1).');
+        }
+        $kategorieId = $in['kategorie_id'] ?? null;
+
+        $key = $this->rezeptKey($name);
+        if ($this->keyVergeben($team, $key)) {                     // §1.8: Kategorie als Diskriminator
+            $kategorie = $kategorieId !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::find($kategorieId)?->bezeichnung
+                : null;
+            if ($kategorie !== null) {
+                $key = $this->rezeptKey($name) . '_' . $this->rezeptKey($kategorie);
+            }
+            $basis = $key;
+            for ($n = 2; $this->keyVergeben($team, $key); $n++) {  // identische Duplikate: _2-Suffix
+                $key = "{$basis}_{$n}";
+            }
+        }
+
+        $recipe = FoodAlchemistRecipe::create([
+            'team_id' => $team->id,
+            'recipe_key' => $key,
+            'name' => $name,
+            'herkunft' => ($in['herkunft'] ?? '') ?: null,
+            'kategorie_id' => $kategorieId,
+            'ist_verkaufsrezept' => (bool) ($in['ist_verkaufsrezept'] ?? false),
+            'status' => 'draft',
+            'geschmacksrichtung' => ($in['geschmacksrichtung'] ?? '') ?: null,
+            'fertigungstiefe' => ($in['fertigungstiefe'] ?? '') ?: null,
+            'arbeitszeit_min' => $in['arbeitszeit_min'] ?? null,
+            'yield_kg_manual' => $in['yield_kg_manual'] ?? null,
+            'beschreibung' => ($in['beschreibung'] ?? '') ?: null,
+            'last_modified_by' => 'editor',
+        ]);
+        app(RecipeRecomputeService::class)->recomputePipeline($recipe->id);
+
+        return $recipe->refresh();
+    }
+
+    /** Edit: recipe_key bleibt STABIL (Referenzen/Slugs); Recompute bei kalkulations-relevanten Feldern. */
+    public function update(Team $team, int $id, array $in): FoodAlchemistRecipe
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
+        if ((int) $recipe->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Geerbtes Rezept — Pflege nur durchs Besitzer-Team (D1).');
+        }
+        $name = trim($in['name'] ?? $recipe->name);
+        if ($name === '') {
+            throw new \RuntimeException('Rezept-Name ist Pflicht (§1).');
+        }
+
+        $altManual = $recipe->yield_kg_manual;
+        $recipe->update([
+            'name' => $name,
+            'herkunft' => array_key_exists('herkunft', $in) ? (($in['herkunft'] ?? '') ?: null) : $recipe->herkunft,
+            'kategorie_id' => $in['kategorie_id'] ?? $recipe->kategorie_id,
+            'geschmacksrichtung' => array_key_exists('geschmacksrichtung', $in) ? (($in['geschmacksrichtung'] ?? '') ?: null) : $recipe->geschmacksrichtung,
+            'fertigungstiefe' => array_key_exists('fertigungstiefe', $in) ? (($in['fertigungstiefe'] ?? '') ?: null) : $recipe->fertigungstiefe,
+            'arbeitszeit_min' => array_key_exists('arbeitszeit_min', $in) ? $in['arbeitszeit_min'] : $recipe->arbeitszeit_min,
+            'yield_kg_manual' => array_key_exists('yield_kg_manual', $in) ? $in['yield_kg_manual'] : $recipe->yield_kg_manual,
+            'beschreibung' => array_key_exists('beschreibung', $in) ? (($in['beschreibung'] ?? '') ?: null) : $recipe->beschreibung,
+            'version' => $recipe->version + 1,
+            'last_modified_by' => 'editor',
+        ]);
+        if (array_key_exists('yield_kg_manual', $in) && $in['yield_kg_manual'] !== $altManual) {
+            app(RecipeRecomputeService::class)->recomputeAndPropagate($recipe->id); // ek/kg-Nenner (A-3)
+        }
+
+        return $recipe->refresh();
+    }
+
+    /** Kopie inkl. Zutaten, status draft (D-5 §3.1). */
+    public function duplicate(Team $team, int $id, string $neuerName): FoodAlchemistRecipe
+    {
+        $original = FoodAlchemistRecipe::visibleToTeam($team)->with('ingredients')->findOrFail($id);
+
+        return DB::transaction(function () use ($team, $original, $neuerName) {
+            $kopie = $this->create($team, [
+                'name' => $neuerName,
+                'kategorie_id' => $original->kategorie_id,
+                'herkunft' => $original->herkunft,
+                'geschmacksrichtung' => $original->geschmacksrichtung,
+                'fertigungstiefe' => $original->fertigungstiefe,
+                'ist_verkaufsrezept' => $original->ist_verkaufsrezept,
+                'beschreibung' => $original->beschreibung,
+            ]);
+            foreach ($original->ingredients as $z) {
+                $kopie->ingredients()->create([
+                    ...$z->only(['position', 'gp_id', 'referenced_recipe_id', 'raw_text', 'display_name',
+                        'menge', 'menge_max', 'einheit_vocab_id', 'putzverlust_pct', 'garverlust_pct',
+                        'is_optional', 'klammer_note', 'note', 'match_method', 'match_confidence',
+                        'rolle', 'ist_wertgebend', 'rechen_modus']),
+                    'team_id' => $team->id,
+                ]);
+            }
+            app(RecipeRecomputeService::class)->recomputePipeline($kopie->id);
+
+            return $kopie->refresh();
+        });
+    }
+
+    /** Löschen blockt, wenn Eltern dieses Rezept als Sub referenzieren (typisierte Exception, V-06). */
+    public function delete(Team $team, int $id): void
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
+        if ((int) $recipe->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Geerbtes Rezept — Löschen nur durchs Besitzer-Team (D1).');
+        }
+        $eltern = $recipe->parentIngredients()->whereNull('deleted_at')->with('recipe:id,name')->get();
+        if ($eltern->isNotEmpty()) {
+            throw new \RuntimeException('Rezept wird als Sub-Rezept referenziert von: '
+                . $eltern->pluck('recipe.name')->unique()->implode(', ') . ' — erst dort lösen.');
+        }
+        DB::transaction(function () use ($recipe) {
+            $recipe->ingredients()->delete();
+            $recipe->delete();
+        });
+    }
+
+    public function setStatus(Team $team, int $id, string $status): FoodAlchemistRecipe
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
+        if (\Platform\FoodAlchemist\Enums\RecipeStatus::tryFrom($status) === null) {
+            throw new \RuntimeException("Unbekannter Status [{$status}].");
+        }
+        $recipe->update(['status' => $status, 'last_modified_by' => 'editor']);
+
+        return $recipe->refresh();
+    }
+
+    private function keyVergeben(Team $team, string $key): bool
+    {
+        return FoodAlchemistRecipe::where('team_id', $team->id)->where('recipe_key', $key)->exists();
+    }
+
     private function browserQuery(Team $team, array $filters): Builder
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->basis()

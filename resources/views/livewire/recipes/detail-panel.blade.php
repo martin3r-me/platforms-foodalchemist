@@ -12,6 +12,7 @@
             <div class="flex items-start justify-between gap-2">
                 <h3 class="font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-snug">{{ $rezept->name }}</h3>
                 <div class="flex items-center gap-1.5 shrink-0">
+                    <button type="button" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-rezept-bearbeiten>Bearbeiten</button>
                     <button type="button" wire:click="neuBerechnen" class="{{ $btnGhostXs }}" title="GL-02-Pipeline + Eltern-Propagation" data-recompute-btn>↻</button>
                     <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
                 </div>

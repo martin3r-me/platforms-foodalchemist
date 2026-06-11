@@ -155,6 +155,11 @@ return [
             'task' => 'Bestimme den §9-Zustand (frisch|TK|trocken|konserviert) des Grundprodukts '
                 . 'aus Name und Lieferantenartikeln: werte = {zustand}.',
         ],
+        'recipe.name_putzen' => [
+            'tier' => 'D',
+            'task' => 'Normalisiere den Rezept-Namen auf die §1-Syntax «<Typ>: <Bezeichnung>[, Zusatz]» '
+                . '(Typ aus dem §1.2-Vokabular, Singular, keine Abkürzungen): werte = {name}.',
+        ],
         'gp.tags' => [
             'tier' => 'C',
             'task' => 'Bewerte die Eigenschafts-Tags des Grundprodukts (vegan, vegetarisch, halal, '
