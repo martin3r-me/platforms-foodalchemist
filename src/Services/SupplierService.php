@@ -42,4 +42,36 @@ class SupplierService
                 $supplier->setAttribute('mapped_count', (int) ($mappedCounts[$supplier->id] ?? 0));
             });
     }
+
+    // ── Anlage & Lebenszyklus (Dominique-Feedback 2026-06-11, D-2 §1) ───
+
+    /** „+ Neuer Lieferant": gehört dem anlegenden Team (D1 — Kind-eigene möglich). */
+    public function create(Team $team, array $input): FoodAlchemistSupplier
+    {
+        $name = trim($input['name'] ?? '');
+        if ($name === '') {
+            throw new \RuntimeException('Lieferanten-Name ist Pflicht.');
+        }
+        if (FoodAlchemistSupplier::visibleToTeam($team)->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->exists()) {
+            throw new \RuntimeException("Lieferant [{$name}] existiert bereits in der Team-Kette."); // V-06
+        }
+
+        return FoodAlchemistSupplier::create([
+            'team_id' => $team->id,
+            'name' => $name,
+            'city' => ($input['city'] ?? '') ?: null,
+            'email_order' => ($input['email_order'] ?? '') ?: null,
+            'homepage' => ($input['homepage'] ?? '') ?: null,
+        ]);
+    }
+
+    /** Inaktiv = soft (Liste blendet aus), nur Besitzer-Team (D1). */
+    public function setInactive(Team $team, int $id, bool $inactive): void
+    {
+        $supplier = FoodAlchemistSupplier::visibleToTeam($team)->findOrFail($id);
+        if (! $supplier->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Lieferant — nur das Besitzer-Team darf (de)aktivieren (D1).');
+        }
+        $supplier->update(['is_inactive' => $inactive]);
+    }
 }

@@ -32,6 +32,12 @@ class Index extends Component
 
     public bool $onlyActive = true;
 
+    #[Url(as: 'zeilen')]
+    public int $perPage = 100;
+
+    /** Feedback 2026-06-11: „+ Neuer Lieferant" */
+    public array $neuLieferant = ['name' => '', 'city' => '', 'email_order' => ''];
+
     /** M2-11: „+ Neuer Artikel" */
     public array $neuArtikel = ['designation' => '', 'article_number' => '', 'qty' => '', 'unit_code' => ''];
 
@@ -55,6 +61,24 @@ class Index extends Component
     public function updatedOnlyActive(): void
     {
         $this->resetPage();
+    }
+
+    public function updatedPerPage(): void
+    {
+        $this->perPage = in_array((int) $this->perPage, [25, 50, 100, 250, 500], true) ? (int) $this->perPage : 100;
+        $this->resetPage();
+    }
+
+    public function lieferantAnlegen(): void
+    {
+        try {
+            $supplier = app(SupplierService::class)->create(Auth::user()->currentTeamRelation, $this->neuLieferant);
+            $this->reset('neuLieferant', 'fehler');
+            $this->dispatch('modal.close', name: 'lieferant-neu');
+            $this->waehleLieferant($supplier->id);
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     public function artikelAnlegen(): void
@@ -98,8 +122,8 @@ class Index extends Component
         }
 
         $artikel = match (true) {
-            $globaleSuche => $items->searchGlobal($team, trim($this->q), ['onlyActive' => $this->onlyActive]),
-            $this->supplierId !== null => $items->paginateForSupplier($team, $this->supplierId, ['onlyActive' => $this->onlyActive]),
+            $globaleSuche => $items->searchGlobal($team, trim($this->q), ['onlyActive' => $this->onlyActive], $this->perPage),
+            $this->supplierId !== null => $items->paginateForSupplier($team, $this->supplierId, ['onlyActive' => $this->onlyActive], $this->perPage),
             default => null,
         };
 

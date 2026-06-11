@@ -14,9 +14,13 @@
                        placeholder="Artikel-Suche über ALLE Lieferanten …" class="{{ $input }}" data-global-suche />
                 <input type="search" wire:model.live.debounce.300ms="supplierSuche"
                        placeholder="Lieferant filtern …" class="{{ $input }}" />
-                <label class="flex items-center gap-2 {{ $label }} cursor-pointer px-1">
-                    <input type="checkbox" wire:model.live="includeInactive" class="rounded border-gray-300" /> Inaktive zeigen
-                </label>
+                <div class="flex items-center justify-between px-1">
+                    <label class="flex items-center gap-2 {{ $label }} cursor-pointer">
+                        <input type="checkbox" wire:model.live="includeInactive" class="rounded border-gray-300" /> Inaktive zeigen
+                    </label>
+                    <button type="button" @click="$dispatch('modal.open', { name: 'lieferant-neu' })"
+                            class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-neuer-lieferant-btn>+ Lieferant</button>
+                </div>
                 <div class="space-y-0.5 -mx-1">
                     @foreach($lieferanten as $l)
                         <button type="button" wire:key="sup-{{ $l->id }}" wire:click="waehleLieferant({{ $l->id }})"
@@ -57,7 +61,12 @@
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                 <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Artikel</h3>
-                <span class="{{ $label }}">{{ $artikel ? number_format($artikel->total(), 0, ',', '.') : 0 }} Treffer</span>
+                <span class="{{ $label }} flex items-center gap-2">
+                    {{ $artikel ? number_format($artikel->total(), 0, ',', '.') : 0 }} Treffer ·
+                    <select wire:model.live="perPage" class="bg-transparent border-0 text-xs uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
+                        @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
+                    </select>
+                </span>
             </div>
             <table class="{{ $table }}">
                 <thead>
@@ -113,6 +122,26 @@
         </div>
         {{-- LA-Editor-Modal (M2-06/07/08) — innerhalb x-ui-page (Template-Regel) --}}
         <livewire:foodalchemist.suppliers.item-modal />
+
+        {{-- Feedback 2026-06-11: Neuer Lieferant (gehört dem anlegenden Team — D1) --}}
+        <x-foodalchemist::modal name="lieferant-neu" title="Neuer Lieferant" size="max-w-2xl">
+            @if($fehler)<p class="text-sm text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
+            <x-foodalchemist::modal-section title="Stammdaten">
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="col-span-2"><label class="block {{ $label }} mb-1">Name *</label>
+                        <input type="text" wire:model="neuLieferant.name" wire:keydown.enter="lieferantAnlegen" class="{{ $input }}" data-neu-lieferant-name /></div>
+                    <div><label class="block {{ $label }} mb-1">Ort</label>
+                        <input type="text" wire:model="neuLieferant.city" class="{{ $input }}" /></div>
+                    <div><label class="block {{ $label }} mb-1">Bestell-E-Mail</label>
+                        <input type="text" wire:model="neuLieferant.email_order" class="{{ $input }}" /></div>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">Gehört deinem Team (D1). Artikel danach über „+ Neuer Artikel".</p>
+            </x-foodalchemist::modal-section>
+            <x-slot:footer>
+                <button type="button" @click="$dispatch('modal.close', { name: 'lieferant-neu' })" class="{{ $btnGhost }}">Abbrechen</button>
+                <button type="button" wire:click="lieferantAnlegen" class="{{ $btnPrimary }}">Anlegen</button>
+            </x-slot:footer>
+        </x-foodalchemist::modal>
 
         {{-- M2-11: Neuer Artikel (Minimal-Pflichtfelder, gehört dem anlegenden Team — D1) --}}
         <x-foodalchemist::modal name="artikel-neu" title="Neuer Artikel" size="max-w-2xl">

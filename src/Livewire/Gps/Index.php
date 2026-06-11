@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Gps;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Livewire\Attributes\Url;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Services\GpService;
 use Platform\FoodAlchemist\Services\KpiService;
@@ -15,6 +16,9 @@ use Platform\FoodAlchemist\Services\KpiService;
 class Index extends Component
 {
     use WithPagination;
+
+    #[Url(as: 'zeilen')]
+    public int $perPage = 100;
 
     public string $search = '';
     public string $warengruppe = '';
@@ -51,7 +55,7 @@ class Index extends Component
                 'search' => $this->search,
                 'warengruppe' => $this->warengruppe,
                 'status' => $this->status,
-            ], $team),
+            ], $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100),
             'warengruppen' => $gps->warengruppenOptions($team),
             'statusCounts' => $gps->statusCounts($team),
             'kpis' => $kpis->forTeam($team),

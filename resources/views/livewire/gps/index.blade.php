@@ -48,7 +48,12 @@
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                 <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Grundprodukte</h3>
-                <span class="{{ $label }}">{{ number_format($gps->total(), 0, ',', '.') }} Treffer</span>
+                <span class="{{ $label }} flex items-center gap-2">
+                    {{ number_format($gps->total(), 0, ',', '.') }} Treffer ·
+                    <select wire:model.live="perPage" class="bg-transparent border-0 text-xs uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
+                        @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
+                    </select>
+                </span>
             </div>
             <table class="{{ $table }}">
                 <thead>
