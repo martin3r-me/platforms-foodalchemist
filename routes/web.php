@@ -40,8 +40,12 @@ Route::get('/test', Test::class)->name('foodalchemist.test');
  * Grundprodukte (Vertical Slice, D-3-Teil) — Model-Binding-Parameter = Modelname in camelCase
  * (Planner-Konvention).
  */
-Route::get('/gps', \Platform\FoodAlchemist\Livewire\Gps\Index::class)
+Route::get('/gps', \Platform\FoodAlchemist\Livewire\Gps\Browser::class)
     ->name('foodalchemist.gps.index');
+
+/** Alte Slice-Liste — bleibt bis M3-12 (Aufräumen) erreichbar, dann Redirect. */
+Route::get('/gps/liste', \Platform\FoodAlchemist\Livewire\Gps\Index::class)
+    ->name('foodalchemist.gps.liste');
 
 Route::get('/gps/{foodAlchemistGp}', \Platform\FoodAlchemist\Livewire\Gps\Show::class)
     ->name('foodalchemist.gps.show');
