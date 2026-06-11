@@ -6,7 +6,9 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Services\PriceService;
+use Platform\FoodAlchemist\Services\SupplierItemService;
 use Platform\FoodAlchemist\Support\Curate;
 use RuntimeException;
 
@@ -27,6 +29,9 @@ class ItemModal extends Component
 
     public array $preisNeu = ['preis' => '', 'status' => '0'];
 
+    /** M2-10: 14 EU-Allergene (tri-state-Binding, GL-01) */
+    public array $allergene = [];
+
     public ?string $fehler = null;
 
     #[On('item-modal.oeffnen')]
@@ -38,6 +43,7 @@ class ItemModal extends Component
         $this->stammdaten = $item->only(['designation', 'article_number', 'brand', 'manufacturer', 'origin', 'marketing_name']);
         $this->verpackung = $item->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging']);
         $this->eigenschaften = $item->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol']);
+        $this->allergene = app(SupplierItemService::class)->getAllergens($item);
         $this->dispatch('modal.open', name: 'item-modal');
     }
 
@@ -67,6 +73,17 @@ class ItemModal extends Component
                     ->map(fn ($v) => $v === '' ? null : $v)->all(),
                 ...collect($this->eigenschaften)->map(fn ($v) => $v === '' || $v === null ? null : (bool) (int) $v)->all(),
             ]);
+            $this->fehler = null;
+            $this->dispatch('item-gespeichert');
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function allergeneSpeichern(): void
+    {
+        try {
+            app(SupplierItemService::class)->setAllergens($this->team(), $this->item($this->itemId), $this->allergene);
             $this->fehler = null;
             $this->dispatch('item-gespeichert');
         } catch (RuntimeException $e) {
@@ -104,6 +121,8 @@ class ItemModal extends Component
             'item' => $item,
             'darfEdit' => $item !== null && Curate::canCurate(Auth::user(), $item),
             'historie' => $item !== null ? $preise->historyFor($item->id) : collect(),
+            'allergenLabels' => FoodAlchemistItemAllergen::ALLERGENE,
+            'allergenQuelle' => $item?->allergens?->quelle,
             'aktiverPreis' => $aktiv,
             'vergleichspreis' => $item !== null && $aktiv !== null
                 ? $preise->vergleichspreis($item, (float) $aktiv->price)

@@ -68,6 +68,23 @@
                 </div>
             </x-foodalchemist::modal-section>
 
+            <x-foodalchemist::modal-section title="Allergene (14 EU-Pflichtangaben)">
+                <div class="flex items-center justify-between mb-2" data-allergen-kopf>
+                    <p class="text-xs text-gray-400">− nicht enthalten · ≈ Spuren · ✓ enthalten · ungesetzt = unbekannt (GL-01). Quelle:
+                        <span class="{{ $pill }} {{ $allergenQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $allergenQuelle ?? 'Import' }}</span>
+                    </p>
+                    @if($darfEdit)
+                        <button type="button" wire:click="allergeneSpeichern" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">Allergene speichern</button>
+                    @endif
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                    <x-foodalchemist::tri-state model="allergene" :readonly="! $darfEdit"
+                        :items="collect($allergenLabels)->take(7)->all()" />
+                    <x-foodalchemist::tri-state model="allergene" :readonly="! $darfEdit"
+                        :items="collect($allergenLabels)->skip(7)->all()" />
+                </div>
+            </x-foodalchemist::modal-section>
+
             <x-foodalchemist::modal-section title="Preise">
                 @if($darfEdit)
                     <div class="flex items-end gap-2 mb-3" data-preis-neu>

@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 
 /**
@@ -46,5 +47,40 @@ class SupplierItemService
                 '*',
                 'aktiver_preis' => app(PriceService::class)->activePriceSubquery(),
             ]);
+    }
+
+    // ── LA-Allergene (M2-10, GL-01) ─────────────────────────────────────
+
+    /** 14 EU-Werte des LA (NULL ⇒ 'unbekannt' — GL-01 4-Wert-Modell, nie Lücken). */
+    public function getAllergens(FoodAlchemistSupplierItem $item): array
+    {
+        $zeile = $item->allergens;
+
+        return collect(FoodAlchemistItemAllergen::ALLERGENE)->keys()
+            ->mapWithKeys(fn (string $k) => [$k => $zeile?->{"allergen_{$k}"} ?? 'unbekannt'])
+            ->all();
+    }
+
+    /** Edit nur Besitzer-Team (D1); manuelle Pflege setzt quelle='manual' (GL-07-Lineage). */
+    public function setAllergens(Team $team, FoodAlchemistSupplierItem $item, array $werte): FoodAlchemistItemAllergen
+    {
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Artikel — Allergen-Pflege nur durch das Besitzer-Team (D1).');
+        }
+
+        $erlaubt = ['enthalten', 'spuren', 'nicht_enthalten', 'unbekannt'];
+        $attribute = [];
+        foreach (array_keys(FoodAlchemistItemAllergen::ALLERGENE) as $k) {
+            $wert = $werte[$k] ?? 'unbekannt';
+            if (! in_array($wert, $erlaubt, true)) {
+                throw new \RuntimeException("Ungültiger Allergen-Wert [{$wert}] für {$k}.");
+            }
+            $attribute["allergen_{$k}"] = $wert === 'unbekannt' ? null : $wert;
+        }
+
+        return FoodAlchemistItemAllergen::updateOrCreate(
+            ['supplier_item_id' => $item->id],
+            [...$attribute, 'team_id' => $item->team_id, 'quelle' => 'manual'],
+        );
     }
 }

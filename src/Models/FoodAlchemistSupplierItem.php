@@ -44,6 +44,11 @@ class FoodAlchemistSupplierItem extends Model
         return $this->hasOne(FoodAlchemistSupplierItemStructure::class, 'supplier_item_id');
     }
 
+    public function allergens(): HasOne
+    {
+        return $this->hasOne(FoodAlchemistItemAllergen::class, 'supplier_item_id');
+    }
+
     public function prices(): HasMany
     {
         return $this->hasMany(FoodAlchemistPrice::class, 'supplier_item_id');

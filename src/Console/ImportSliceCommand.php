@@ -186,6 +186,29 @@ class ImportSliceCommand extends Command
                 'legacy_category_id' => $r['legacy_category_id'],
             ], skipRow: fn (array $r) => ! isset($hgMap[(int) $r['hauptgruppe_id']]));
 
+        // M2-09: LA-Allergene (GL-01-Blocker) — 0-3-Kodierung -> 4-Wert-Strings, Unterarten als JSON
+        $alWert = fn ($v) => match ((int) ($v ?? 0)) { 1 => 'nicht_enthalten', 2 => 'spuren', 3 => 'enthalten', default => null };
+        $alHaupt = ['gluten' => 'glutenhaltiges_getreide', 'crustaceans' => 'krebstiere', 'egg' => 'eier', 'fish' => 'fisch',
+            'peanut' => 'erdnuesse', 'soy' => 'soja', 'milk' => 'milch', 'nuts' => 'schalenfruechte', 'celery' => 'sellerie',
+            'mustard' => 'senf', 'sesame' => 'sesam', 'sulfites' => 'schwefeldioxid', 'lupin' => 'lupinen', 'molluscs' => 'weichtiere'];
+        $alSub = ['wheat', 'rye', 'barley', 'oats', 'spelt', 'kamut', 'almond', 'hazelnut', 'walnut', 'cashew', 'pecan', 'brazil', 'pistachio', 'macadamia', 'queensland'];
+        $stats['item_allergens'] = $this->importBulk($pdo, $dryRun, 'allergens', 'foodalchemist_item_allergens', 'supplier_item_id',
+            function (array $r) use ($itemMap, $alWert, $alHaupt, $alSub) {
+                $row = ['legacy_id' => $r['supplier_item_id'], 'supplier_item_id' => $itemMap[(int) $r['supplier_item_id']] ?? null];
+                foreach ($alHaupt as $quelle => $ziel) {
+                    $row["allergen_{$ziel}"] = $alWert($r[$quelle] ?? null);
+                }
+                $details = [];
+                foreach ($alSub as $sub) {
+                    if (($w = $alWert($r[$sub] ?? null)) !== null) {
+                        $details[$sub] = $w;
+                    }
+                }
+                $row['details'] = $details === [] ? null : json_encode($details);
+
+                return $row;
+            }, skipRow: fn (array $r) => ! isset($itemMap[(int) $r['supplier_item_id']]));
+
         // M2-04/05: unit_code-Backfill (GL-11 Kalkulationseinheit kg|l|Stk)
         $stats['unit_codes'] = $this->backfillUnitCodes($pdo, $dryRun);
 
@@ -200,7 +223,7 @@ class ImportSliceCommand extends Command
 
         // Row-Count-Verifikation (07 §5): Quelle == id_map je Quell-Tabelle
         if (! $dryRun) {
-            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien'] as $sourceTable) {
+            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens'] as $sourceTable) {
                 $sourceCount = (int) $pdo->query("SELECT COUNT(*) FROM {$sourceTable}")->fetchColumn();
                 $mapCount = DB::table('foodalchemist_legacy_id_map')->where('source_table', $sourceTable)->count();
                 $flag = $sourceCount === $mapCount ? '✅' : '❌ BLOCKER';
@@ -305,6 +328,7 @@ class ImportSliceCommand extends Command
         DB::table('foodalchemist_gps')->update([
             'merged_into_id' => null, 'derivat_von_gp_id' => null, 'lead_la_supplier_item_id' => null,
         ]);
+        DB::table('foodalchemist_item_allergens')->delete();
         DB::table('foodalchemist_stamm_lieferanten')->delete();
         DB::table('foodalchemist_recipe_categories')->delete();
         DB::table('foodalchemist_recipe_main_groups')->delete();
@@ -319,7 +343,7 @@ class ImportSliceCommand extends Command
             ->whereIn('source_table', [
                 'lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2',
                 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured',
-                'recipe_hauptgruppen', 'recipe_kategorien',
+                'recipe_hauptgruppen', 'recipe_kategorien', 'allergens',
             ])
             ->delete();
     }
