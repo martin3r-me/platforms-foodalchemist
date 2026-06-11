@@ -1,0 +1,26 @@
+/vendor/
+/node_modules/
+/.idea/
+/.vscode/
+*.log
+*.cache
+.DS_Store
+Thumbs.db
+
+# Laravel specific
+/bootstrap/compiled.php
+/app/storage/
+.env
+.env.backup
+.phpunit.result.cache
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
