@@ -123,3 +123,66 @@ Zusatzstoffe 18 (−/✓), GP-Mapping-Sektion („— kein GP zugeordnet —", �
    Lead-Preis-Spalte mit Einheiten-Mix €/kg|€/Stk|€/l (M3-02-Detail).
 3. **M4:** Equipment-Welt (vocab_kochequipment 40 + recipe_equipment 836 + Chip-Sektion
    + ✨) als Nachtrag an M4-01/02/05; Workflow-Buttons/Reviewer-Notiz an M4-12 bestätigt.
+
+## Nachlieferung 2 (2026-06-11): Basisrezept-Panel-Details · Aroma-Netz · VK-Browser
+
+### Basisrezept-Browser — rechtes Panel (Fortsetzung) + Tabelle
+- Listen-Ebene: „✨ Bulk anreichern"-Button; Tabellen-Spalten u. a. Zutaten · Yield (kg,
+  3 Nachkommastellen) · Allergen-Konf. (MEDIUM-Badge).
+- **VERWANDTE REZEPTE (10)** + „🕸 Aroma-Netz"-Button: Liste mit Kohäsions-Score
+  (20/15/14/13/12) · Rezeptname · rechts „/27, /32, …" (Anker-Gesamtzahl des Rezepts).
+- **ZUTATEN (n)** read-only: Menge + Einheit (grau) · GP-Link · Lineage kursiv
+  („[via per_instance_proposed]", „[phase11 tentative GP]") · EK € je Zeile
+  (Leitungswasser 0.00 €, preislos „—").
+- **ZUBEREITUNG** gerendert: nummerierte Schritte, H2-Überschriften farbig
+  („Zubereitung", „Finish"), Temperatur-/Zeitangaben im Fließtext.
+- **DIÄT & SPEZIFIKATION:** grüne ✓-Liste (VEGAN/VEGETARISCH/HALAL/GLUTENFREI/
+  LAKTOSEFREI) — Rezept-Ebene = Spec-Aggregation aus GP-Tags (MIN-Logik)!
+- **ALLERGENE MEDIUM:** 14 Worte, aktive rot hinterlegt (Sellerie). Danach
+  ZUSATZSTOFFE (LMIV) analog.
+
+### Aroma-Netz-Modal (D-7 — Graph-Visualisierung!)
+- Titel „AROMA-NETZ: <REZEPT>"; Kopf: Checkbox „Alle Aroma-Brücken (88)" ·
+  Select „Pairing-Vorschläge pro Anker: aus (0)" · Hint „Hover über Anker = dessen
+  Brücken · Klick auf Rezept = öffnen".
+- Layout: Quell-Rezept ZENTRAL (orange, groß) · Ring aus Pairing-Ankern (rosa:
+  zitrone, ahornsirup, banane, zimt, butter, weizen, ei, walnuss, ingwer, vanille,
+  kaffee, tonkabohne, karamell, schokolade, kokos, salz, muskatnuss, rum-dunkel,
+  rohrzucker, pekannuss) · äußerer Ring verwandte Rezepte (grün = Basisrezept,
+  blau = VK-Rezept) mit Kanten zu gemeinsamen Ankern.
+- Legende: Quell-Rezept · VK-Rezept · Basisrezept · Pairing-Anker · Vorschlag über
+  Anker | Aroma-Brücken: **klassisch** (durchgezogen magenta) · **modern**
+  (gepunktet) · **kontrast** (gepunktet cyan) — GL-10-Kanten-Typen!
+
+### VK-Browser (D-6, Screen „Verkaufsrezepte")
+- Links: VK-Suche · Geschmacks-Pills (Süß/Herzhaft/Neutral) · „Alle Hauptgruppen" ·
+  **VK-HAUPTGRUPPEN mit Codes** (16): [APE] Apéro & Welcome · [AMU] Amuse-Bouche ·
+  [FIN] Fingerfood · [VOR] Vorspeise · [SUP] Suppe & Eintopf · [ZWG] Zwischengang ·
+  [HG] Hauptgang · [BEI] Beilage · [DES] Dessert · [KAE] Käse · [ALC] À la carte ·
+  [BVK] Barverkauf · [SNK] Konferenz-Snack · [BRO] Brot & Backwaren ·
+  [ALL] Allergiker-Essen · [GET] Getränke — je mit Count + Kategorie-Spalte daneben.
+- Kopf: „✨ KI-Rezept" (= VK-Generator M6-06!) · „+ Neues Verkaufsrezept". Subtitle:
+  „Speisen mit VK-Preis. Zutaten = Grundprodukte und/oder Basisrezepte. Live-Marge
+  aus EK × Aufschlagsklasse."
+- Tabelle: Name (Komponenten-Syntax „HG: Rinderfilet | Rotwein-Jus | Kartoffelgratin
+  | Brokkoli") · Hauptgruppe · Kategorie · Geschm.-Pill · Status (DRAFT) · VK netto ·
+  Zutaten · Allergen-Konf. (HIGH).
+- **DetailPanel:** Titel + kursive Komponentenliste · DRAFT + HG + Fleisch ·
+  „✨ Klassifizieren" · **VERKAUFT ALS 1.0 Stück · ≈ 420 g pro Stück · Yield 0.42 kg**
+  (Orange-Box) · KPI-Karten: EK GESAMT · VK NETTO (MANUELL) · **VK BRUTTO**
+  (Highlight) · **WARENEINSATZ %** · Reihe 2: VK NETTO/STÜCK · VK BRUTTO/STÜCK ·
+  Formel-Klartext: „ALC · À la Carte · VK = EK × (1 + 420%) · brutto × (1 + 19% MwSt)" ·
+  BESCHREIBUNG (✨) · MARKETING (✨) ·
+  **KULINARISCHE KOHÄRENZ 95 % + Badge „KLASSISCHER TELLER" (KI-URTEIL)** mit
+  Begründung, Datum + Modell, „Erneut prüfen" · darunter „WAS HEBT DEN TELLER?
+  KI-VORSCHLAG".
+
+## Nachträge aus Nachlieferung 2
+
+4. **M5:** Aroma-Netz-GRAPH (interaktive Visualisierung mit Brücken-Typen
+   klassisch/modern/kontrast, Hover/Klick, Vorschlags-Modus) fehlte als Paket → M5-07 neu.
+5. **M6:** VK-Hauptgruppen-Taxonomie (16 Codes [APE]…[GET]) explizit in M6-01;
+   Geschmacks-Filter-Pills in M6-03; **Kulinarische-Kohärenz-Check** (KI-Urteil mit
+   Score/Label/Begründung/Re-Run) + **„Was hebt den Teller?"** als KI-Features → M6-Nachtrag.
+6. **M4:** Diät-&-Spezifikations-Aggregation (Rezept-Ebene aus GP-Tags, MIN) als
+   sichtbare Panel-Sektion → M4-03/05-Nachtrag.
