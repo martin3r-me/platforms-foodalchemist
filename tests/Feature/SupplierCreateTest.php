@@ -43,3 +43,27 @@ it('setInactive: soft, nur Besitzer-Team', function () {
     expect(fn () => $this->svc->setInactive($this->childA, $bos->id, false))
         ->toThrow(RuntimeException::class, 'Besitzer-Team');
 });
+
+it('M2-14: update pflegt Stammdaten — nur Besitzer-Team', function () {
+    $bos = $this->svc->create($this->rootTeam, ['name' => 'BOS Food']);
+
+    $this->svc->update($this->rootTeam, $bos->id, ['name' => 'BOS Food GmbH', 'city' => 'Meerbusch']);
+    expect($bos->fresh()->name)->toBe('BOS Food GmbH')
+        ->and($bos->fresh()->city)->toBe('Meerbusch');
+
+    expect(fn () => $this->svc->update($this->childA, $bos->id, ['name' => 'Gekapert']))
+        ->toThrow(RuntimeException::class, 'Besitzer-Team');
+});
+
+it('M2-14: lokale Artikel-Suche filtert nur den gewählten Lieferanten', function () {
+    $bos = $this->svc->create($this->rootTeam, ['name' => 'BOS Food']);
+    $edna = $this->svc->create($this->rootTeam, ['name' => 'Edna']);
+    $items = app(\Platform\FoodAlchemist\Services\SupplierItemService::class);
+    $items->create($this->rootTeam, $bos->id, ['designation' => 'Limettensaft 1l']);
+    $items->create($this->rootTeam, $bos->id, ['designation' => 'Zander TK']);
+    $items->create($this->rootTeam, $edna->id, ['designation' => 'Limettensaft Edna']);
+
+    $treffer = $items->paginateForSupplier($this->rootTeam, $bos->id, ['q' => 'limette']);
+    expect($treffer->total())->toBe(1)
+        ->and($treffer->getCollection()->first()->designation)->toBe('Limettensaft 1l');
+});

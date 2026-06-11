@@ -65,6 +65,30 @@ class SupplierService
         ]);
     }
 
+    /** „Bearbeiten": Stammdaten-Pflege, nur Besitzer-Team (D1). */
+    public function update(Team $team, int $id, array $input): FoodAlchemistSupplier
+    {
+        $supplier = FoodAlchemistSupplier::visibleToTeam($team)->findOrFail($id);
+        if (! $supplier->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Lieferant — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        $name = trim($input['name'] ?? '');
+        if ($name === '') {
+            throw new \RuntimeException('Lieferanten-Name ist Pflicht.');
+        }
+
+        $supplier->update([
+            'name' => $name,
+            'city' => ($input['city'] ?? '') ?: null,
+            'address' => ($input['address'] ?? '') ?: null,
+            'postal_code' => ($input['postal_code'] ?? '') ?: null,
+            'email_order' => ($input['email_order'] ?? '') ?: null,
+            'homepage' => ($input['homepage'] ?? '') ?: null,
+        ]);
+
+        return $supplier;
+    }
+
     /** Inaktiv = soft (Liste blendet aus), nur Besitzer-Team (D1). */
     public function setInactive(Team $team, int $id, bool $inactive): void
     {

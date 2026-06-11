@@ -19,8 +19,14 @@ class SupplierItemService
 {
     public function paginateForSupplier(Team $team, int $supplierId, array $filters = [], int $perPage = 25): LengthAwarePaginator
     {
+        $q = trim($filters['q'] ?? '');
+
         return $this->baseQuery($team, $filters)
             ->where('supplier_id', $supplierId)
+            // M2-14: Suche INNERHALB des Lieferanten (Ist-App-Screen 2)
+            ->when($q !== '', fn (Builder $w) => $w->where(fn (Builder $x) => $x
+                ->whereRaw('LOWER(designation) LIKE ?', ['%' . mb_strtolower($q) . '%'])
+                ->orWhere('article_number', 'like', $q . '%')))
             ->orderBy('designation')
             ->paginate($perPage)
             ->withQueryString();

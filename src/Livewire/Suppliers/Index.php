@@ -9,6 +9,7 @@ use Livewire\WithPagination;
 use Platform\FoodAlchemist\Services\PriceService;
 use Platform\FoodAlchemist\Services\SupplierItemService;
 use Platform\FoodAlchemist\Services\SupplierService;
+use Platform\FoodAlchemist\Support\Curate;
 use RuntimeException;
 
 /**
@@ -27,6 +28,13 @@ class Index extends Component
     public string $q = '';
 
     public string $supplierSuche = '';
+
+    /** M2-14: Suche INNERHALB des gewählten Lieferanten */
+    #[Url(as: 'aq')]
+    public string $artikelSuche = '';
+
+    /** M2-14: Bearbeiten-Modal */
+    public array $editLieferant = [];
 
     public bool $includeInactive = false;
 
@@ -58,6 +66,11 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function updatedArtikelSuche(): void
+    {
+        $this->resetPage();
+    }
+
     public function updatedOnlyActive(): void
     {
         $this->resetPage();
@@ -67,6 +80,36 @@ class Index extends Component
     {
         $this->perPage = in_array((int) $this->perPage, [25, 50, 100, 250, 500], true) ? (int) $this->perPage : 100;
         $this->resetPage();
+    }
+
+    public function lieferantBearbeiten(): void
+    {
+        $aktiv = app(SupplierService::class)->listWithCounts(Auth::user()->currentTeamRelation, true)->firstWhere('id', $this->supplierId);
+        if ($aktiv === null) {
+            return;
+        }
+        $this->editLieferant = $aktiv->only(['name', 'city', 'address', 'postal_code', 'email_order', 'homepage']);
+        $this->fehler = null;
+        $this->dispatch('modal.open', name: 'lieferant-edit');
+    }
+
+    public function lieferantSpeichern(): void
+    {
+        try {
+            app(SupplierService::class)->update(Auth::user()->currentTeamRelation, (int) $this->supplierId, $this->editLieferant);
+            $this->dispatch('modal.close', name: 'lieferant-edit');
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function lieferantDeaktivieren(bool $inactive): void
+    {
+        try {
+            app(SupplierService::class)->setInactive(Auth::user()->currentTeamRelation, (int) $this->supplierId, $inactive);
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     public function lieferantAnlegen(): void
@@ -123,7 +166,7 @@ class Index extends Component
 
         $artikel = match (true) {
             $globaleSuche => $items->searchGlobal($team, trim($this->q), ['onlyActive' => $this->onlyActive], $this->perPage),
-            $this->supplierId !== null => $items->paginateForSupplier($team, $this->supplierId, ['onlyActive' => $this->onlyActive], $this->perPage),
+            $this->supplierId !== null => $items->paginateForSupplier($team, $this->supplierId, ['onlyActive' => $this->onlyActive, 'q' => $this->artikelSuche], $this->perPage),
             default => null,
         };
 
@@ -139,6 +182,7 @@ class Index extends Component
             'artikel' => $artikel,
             'globaleSuche' => $globaleSuche,
             'aktiverLieferant' => $globaleSuche ? null : $liste->firstWhere('id', $this->supplierId),
+            'darfLieferantEdit' => ! $globaleSuche && Curate::canCurate(Auth::user(), $liste->firstWhere('id', $this->supplierId)),
         ])->layout('platform::layouts.app');
     }
 }

@@ -47,6 +47,15 @@
                 @endif
             </h3>
             <div class="flex items-center gap-2 shrink-0">
+                @if(!$globaleSuche && $aktiverLieferant)
+                    <input type="search" wire:model.live.debounce.300ms="artikelSuche"
+                           placeholder="Artikel dieses Lieferanten …" class="{{ $input }} !w-56 !py-1.5" data-lokale-suche />
+                    @if($darfLieferantEdit)
+                        <button type="button" wire:click="lieferantBearbeiten" class="{{ $btnGhostXs }}" data-lieferant-edit-btn>Bearbeiten</button>
+                        <button type="button" wire:click="lieferantDeaktivieren({{ $aktiverLieferant->is_inactive ? 'false' : 'true' }})"
+                                class="{{ $btnGhostXs }} {{ $aktiverLieferant->is_inactive ? '' : 'text-red-500' }}">{{ $aktiverLieferant->is_inactive ? 'Aktivieren' : 'Deaktivieren' }}</button>
+                    @endif
+                @endif
                 <label class="flex items-center gap-2 {{ $label }} cursor-pointer">
                     <input type="checkbox" wire:model.live="onlyActive" class="rounded border-gray-300" /> Nur aktive
                 </label>
@@ -140,6 +149,33 @@
             <x-slot:footer>
                 <button type="button" @click="$dispatch('modal.close', { name: 'lieferant-neu' })" class="{{ $btnGhost }}">Abbrechen</button>
                 <button type="button" wire:click="lieferantAnlegen" class="{{ $btnPrimary }}">Anlegen</button>
+            </x-slot:footer>
+        </x-foodalchemist::modal>
+
+        {{-- M2-14: Lieferant bearbeiten (nur Besitzer-Team) --}}
+        <x-foodalchemist::modal name="lieferant-edit" title="Lieferant bearbeiten" size="max-w-2xl">
+            @if($fehler)<p class="text-sm text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
+            <x-foodalchemist::modal-section title="Stammdaten">
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="col-span-2"><label class="block {{ $label }} mb-1">Name *</label>
+                        <input type="text" wire:model="editLieferant.name" class="{{ $input }}" /></div>
+                    <div><label class="block {{ $label }} mb-1">Straße</label>
+                        <input type="text" wire:model="editLieferant.address" class="{{ $input }}" /></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block {{ $label }} mb-1">PLZ</label>
+                            <input type="text" wire:model="editLieferant.postal_code" class="{{ $input }}" /></div>
+                        <div><label class="block {{ $label }} mb-1">Ort</label>
+                            <input type="text" wire:model="editLieferant.city" class="{{ $input }}" /></div>
+                    </div>
+                    <div><label class="block {{ $label }} mb-1">Bestell-E-Mail</label>
+                        <input type="text" wire:model="editLieferant.email_order" class="{{ $input }}" /></div>
+                    <div><label class="block {{ $label }} mb-1">Homepage</label>
+                        <input type="text" wire:model="editLieferant.homepage" class="{{ $input }}" /></div>
+                </div>
+            </x-foodalchemist::modal-section>
+            <x-slot:footer>
+                <button type="button" @click="$dispatch('modal.close', { name: 'lieferant-edit' })" class="{{ $btnGhost }}">Abbrechen</button>
+                <button type="button" wire:click="lieferantSpeichern" class="{{ $btnPrimary }}">Speichern</button>
             </x-slot:footer>
         </x-foodalchemist::modal>
 
