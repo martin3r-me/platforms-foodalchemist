@@ -45,6 +45,12 @@ Referenz: GP-Browser + Basisrezept-Browser der Ist-App.
   Sektion B nicht re-rendern.
 - **Header-KPI-Leiste** (Ist-App oben rechts): `120 Lieferanten · 6.930 GPs · 9.803 LAs ·
   1.407 Rezepte` → ein gecachter KPI-Service-Call, Anzeige in der Actionbar.
+- **Platzierungs-Entscheid (Dominique, 2026-06-11, M0-07-Review):** Standard für Browser-Screens =
+  Baum/Filter in der **linken Page-Sidebar** (bestätigt Spec oben) und Detail-Panel in der
+  **rechten Page-Sidebar** (`x-ui-page-sidebar side="right"`, Breite je Screen, `storeKey`-Persistenz
+  gratis — belegt dort den Aktivitäten-Slot). Der Baustein `<x-foodalchemist::master-detail>`
+  (M0-07) bleibt für Tabellen-Zone + Fälle, in denen die Shell-Sidebars nicht verfügbar sind;
+  tree-/panel-Slots sind dafür optional. Gilt ab M3-01/M3-03.
 
 ## P-2 Modal-Editor („Fenster auf und zu")
 
@@ -56,6 +62,12 @@ Referenz: „LA bearbeiten"- und „Rezept bearbeiten"-Modals der Ist-App.
 - Aktionen oben links fix: Speichern (primary) · Löschen · KI-Aktionen (P-3).
 - Livewire: ein Modal = eine Komponente, geöffnet via Event (`modal.open`,
   Planner-Konvention). Schließen ohne Speichern = kein State-Leak (`resetExcept`).
+- **Baustein (M0-08):** `<x-foodalchemist::modal name="…">` + `<x-foodalchemist::modal-section>` —
+  Fassade, Innenleben bei Martin-Entscheid austauschbar. Schließen feuert IMMER `modal.closed`
+  `{ name }` → Besitzer-Komponente resettet darauf ihren Form-State.
+  ⚠ **Alpine-Falle:** Event-Namen mit Punkt (`modal.open`) beim LAUSCHEN als
+  `@modal-open.dot.window` schreiben — Punkte gelten sonst als Modifier und der Listener
+  bindet still aufs falsche Event (gilt für alle kommenden Bausteine, z. B. P-3-Events).
 - ⚠️ **Offen mit Martin:** DESIGN.md erlaubt im Content keine x-ui-Komponenten;
   `x-ui-modal` ist aber Shell-nah und im Planner Standard. Klären: x-ui-modal nutzen
   (empfohlen, Konsistenz) oder DESIGN.md-konformes Frosted-Modal als Modul-Partial.

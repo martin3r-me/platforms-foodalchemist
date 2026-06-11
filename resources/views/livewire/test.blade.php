@@ -283,6 +283,48 @@
                 </x-foodalchemist::master-detail>
             </div>
 
+            {{-- Section: Baustein modal (M0-08 / P-2) — Sektions-Modal, modal.open-Event, State-Leak-Probe --}}
+            <div x-data="{ demoNote: '' }"
+                 @modal-closed.dot.window="if ($event.detail.name === 'demo-modal') demoNote = ''">
+                <div class="mb-3">
+                    <h2 class="text-sm font-medium tracking-tight text-gray-900 dark:text-gray-100">Baustein: modal (P-2)</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Großes Sektions-Modal · öffnet via <code>modal.open</code> · Schließen setzt den Demo-State zurück (kein Leak)</p>
+                </div>
+                <button type="button" @click="$dispatch('modal.open', { name: 'demo-modal' })"
+                        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-lg shadow-sm shadow-violet-500/25 hover:shadow-md hover:shadow-violet-500/30 transition-all duration-150">
+                    Demo-Modal öffnen
+                </button>
+
+                <x-foodalchemist::modal name="demo-modal" title="Demo: Sektions-Modal (P-2)">
+                    <x-slot:actions>
+                        <button type="button" class="inline-flex items-center gap-2 px-4 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-lg shadow-sm shadow-violet-500/25 hover:shadow-md transition-all duration-150">Speichern</button>
+                        <button type="button" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-red-500 hover:bg-red-500/5 rounded-lg transition-all duration-150">Löschen</button>
+                        <button type="button" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg hover:bg-white/80 dark:hover:bg-white/10 transition-all duration-150">✨ Autopilot</button>
+                    </x-slot:actions>
+
+                    <x-foodalchemist::modal-section title="Stammdaten">
+                        <label class="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1.5">Notiz (State-Leak-Probe)</label>
+                        <input type="text" x-model="demoNote"
+                               placeholder="Tippen, schließen, wieder öffnen → Feld ist leer"
+                               class="w-full px-3 py-2 text-sm bg-black/[0.03] dark:bg-white/5 rounded-lg border-0 placeholder-gray-400 focus:ring-2 focus:ring-violet-500/20 focus:bg-white dark:focus:bg-white/10 transition-all duration-150" />
+                    </x-foodalchemist::modal-section>
+
+                    <x-foodalchemist::modal-section title="Verpackung & Mengen">
+                        <p class="text-sm text-gray-500">Sektionen liegen auf einer Fläche (kein Wizard). Lange Inhalte scrollen innerhalb des Modal-Körpers, Kopf-Aktionen und Footer bleiben fix.</p>
+                    </x-foodalchemist::modal-section>
+
+                    <x-foodalchemist::modal-section title="Eigenschaften">
+                        <p class="text-sm text-gray-500">Ab M2-06 rendern hier die echten Editor-Sektionen (LA-Modal), ab M3-09 das GP-Modal — gleiche Fassade, gleiche Events.</p>
+                    </x-foodalchemist::modal-section>
+
+                    <x-slot:footer>
+                        <button type="button" @click="$dispatch('modal.close', { name: 'demo-modal' })"
+                                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg hover:bg-white/80 dark:hover:bg-white/10 transition-all duration-150">Abbrechen</button>
+                        <button type="button" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-lg shadow-sm shadow-violet-500/25 hover:shadow-md transition-all duration-150">Speichern</button>
+                    </x-slot:footer>
+                </x-foodalchemist::modal>
+            </div>
+
         </div>
     </x-ui-page-container>
 
