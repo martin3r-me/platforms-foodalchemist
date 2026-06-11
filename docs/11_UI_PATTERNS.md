@@ -78,6 +78,11 @@ Referenz: „LA bearbeiten"- und „Rezept bearbeiten"-Modals der Ist-App.
   ⚠ **Alpine-Falle:** Event-Namen mit Punkt (`modal.open`) beim LAUSCHEN als
   `@modal-open.dot.window` schreiben — Punkte gelten sonst als Modifier und der Listener
   bindet still aufs falsche Event (gilt für alle kommenden Bausteine, z. B. P-3-Events).
+- ⚠ **Blade-php-Block-Falle (M1-02-Fund):** Blades Block-Regex matcht lazy vom ERSTEN
+  `(at)php` bis zum ERSTEN `(at)endphp` — **auch innerhalb von Blade-Kommentaren!** Regeln:
+  (1) In Dateien mit `(at)php … (at)endphp`-Blöcken nie zusätzlich die Inline-Form `(at)php(…)`
+  verwenden; (2) das Wort nie in Blade-Kommentare schreiben. Symptom: „syntax error, unexpected
+  token" weit hinter der eigentlichen Stelle, halbes Template wird als PHP geparst.
 - ⚠️ **Offen mit Martin:** DESIGN.md erlaubt im Content keine x-ui-Komponenten;
   `x-ui-modal` ist aber Shell-nah und im Planner Standard. Klären: x-ui-modal nutzen
   (empfohlen, Konsistenz) oder DESIGN.md-konformes Frosted-Modal als Modul-Partial.

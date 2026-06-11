@@ -43,8 +43,8 @@ class VocabularyService
         return FoodAlchemistVocabEinheit::create([
             'team_id' => $team->id,
             'slug' => $slug,
-            'display_de' => $input['display_de'] ?: $slug,
-            'dimension' => $input['dimension'] ?: null,
+            'display_de' => ($input['display_de'] ?? '') ?: $slug,
+            'dimension' => ($input['dimension'] ?? '') ?: null,
             'default_in_g' => self::dezimalOrNull($input['default_in_g'] ?? null),
             'default_in_ml' => self::dezimalOrNull($input['default_in_ml'] ?? null),
             'is_approximate' => (bool) ($input['is_approximate'] ?? false),
@@ -60,8 +60,8 @@ class VocabularyService
         }
 
         $einheit->update([
-            'display_de' => $input['display_de'] ?: $einheit->display_de,
-            'dimension' => $input['dimension'] ?: null,
+            'display_de' => ($input['display_de'] ?? '') ?: $einheit->display_de,
+            'dimension' => ($input['dimension'] ?? '') ?: null,
             'default_in_g' => self::dezimalOrNull($input['default_in_g'] ?? null),
             'default_in_ml' => self::dezimalOrNull($input['default_in_ml'] ?? null),
             'is_approximate' => (bool) ($input['is_approximate'] ?? false),

@@ -1,6 +1,6 @@
 {{-- GP-Detail — Content custom nach DESIGN.md (Linear/Raycast), Shell-Komponenten bleiben x-ui --}}
 {{-- M0-12: alle Dichte-/Klassen-Maps zentral aus Ui::maps() (keine Insellösungen) --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+@php extract(\Platform\FoodAlchemist\Support\Ui::maps()); @endphp {{-- Block-Form noetig: Datei enthaelt weitere php-Bloecke (Blade-Regex frisst sonst bis zum naechsten endphp) --}}
 
 <x-ui-page>
     <x-slot:navbar>
