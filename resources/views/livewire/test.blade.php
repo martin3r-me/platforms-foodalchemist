@@ -235,6 +235,54 @@
                 </div>
             </div>
 
+            {{-- Section: Baustein master-detail (M0-07 / P-1) — Demo der 3 Zonen --}}
+            <div>
+                <div class="mb-3">
+                    <h2 class="text-sm font-medium tracking-tight text-gray-900 dark:text-gray-100">Baustein: master-detail (P-1)</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">3 Zonen — Baum · Tabelle · kollabierbares Detail-Panel</p>
+                </div>
+                <x-foodalchemist::master-detail height="h-96">
+                    <x-slot:tree>
+                        <div class="p-4 space-y-2">
+                            <div class="text-xs font-medium uppercase tracking-wider text-gray-400">Warengruppen</div>
+                            @foreach([['01 Gemüse', 412], ['02 Obst', 188], ['03 Fisch', 96]] as [$label, $count])
+                                <div class="flex items-center justify-between px-2 py-1.5 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-violet-500/5 cursor-default">
+                                    <span>{{ $label }}</span>
+                                    <span class="text-xs text-gray-400">{{ $count }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </x-slot:tree>
+
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left">
+                                @foreach(['Name', 'Status', 'LAs'] as $head)
+                                    <th class="px-5 py-2 text-xs font-medium uppercase tracking-wider text-gray-400">{{ $head }}</th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach([['Zanderfilet', 'Freigegeben', 4], ['Limettensaft, konserviert', 'Freigegeben', 14], ['Rote Bete', 'Vorläufig', 2]] as [$name, $status, $las])
+                                <tr class="border-t border-black/5 dark:border-white/10 hover:bg-gradient-to-r hover:from-violet-500/5 hover:to-indigo-500/5 transition-all duration-150">
+                                    <td class="px-5 py-2.5 font-medium text-gray-900 dark:text-gray-100">{{ $name }}</td>
+                                    <td class="px-5 py-2.5"><span class="inline-flex px-2 py-0.5 rounded-full text-xs {{ $status === 'Freigegeben' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400' }}">{{ $status }}</span></td>
+                                    <td class="px-5 py-2.5 text-gray-500">{{ $las }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+
+                    <x-slot:panel>
+                        <div class="px-4 pb-4 space-y-3">
+                            <div class="text-xs font-medium uppercase tracking-wider text-gray-400">Detail-Panel</div>
+                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Limettensaft, konserviert</div>
+                            <p class="text-xs text-gray-400">Hier rendert ab M3-03 die DetailPanel-Livewire-Komponente (Sektionen lazy). Einklappen über den Pfeil oben rechts.</p>
+                        </div>
+                    </x-slot:panel>
+                </x-foodalchemist::master-detail>
+            </div>
+
         </div>
     </x-ui-page-container>
 
