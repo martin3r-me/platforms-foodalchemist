@@ -26,9 +26,7 @@
     'height' => 'h-full min-h-96',
 ])
 
-@php
-    $card = 'rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5';
-@endphp
+@php($card = \Platform\FoodAlchemist\Support\Ui::maps()['card']) {{-- M0-12: zentrale Map --}}
 
 <div {{ $attributes->merge(['class' => "flex gap-4 {$height}"]) }}
      x-data="{ panelOpen: {{ $panelOpen ? 'true' : 'false' }} }">

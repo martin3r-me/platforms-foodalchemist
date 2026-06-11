@@ -25,20 +25,21 @@
 ])
 
 @php
+    $ui = \Platform\FoodAlchemist\Support\Ui::maps(); // M0-12: zentrale Maps
     $badge = match ($quelle) {
-        'ki' => ['KI', 'bg-violet-500/10 text-violet-600 dark:text-violet-400'],
-        'auto' => ['Auto', 'bg-sky-500/10 text-sky-600 dark:text-sky-400'],
-        'manual' => ['Manuell', 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'],
-        default => ['unbefüllt', 'bg-black/5 dark:bg-white/10 text-gray-500 dark:text-gray-400'],
+        'ki' => ['KI', $ui['variantPill']['primary']],
+        'auto' => ['Auto', $ui['variantPill']['info']],
+        'manual' => ['Manuell', $ui['variantPill']['success']],
+        default => ['unbefüllt', $ui['variantPill']['secondary']],
     };
-    $ghostBtn = 'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-md hover:bg-white/80 dark:hover:bg-white/10 transition-all duration-150';
+    $ghostBtn = $ui['btnGhostXs'];
 @endphp
 
 <div {{ $attributes->merge(['class' => 'space-y-2']) }} data-ki-header="{{ $field }}" data-quelle="{{ $quelle ?? 'leer' }}">
     <div class="flex items-center justify-between gap-3">
         <div class="flex items-baseline gap-2 min-w-0">
-            <span class="text-xs font-medium uppercase tracking-wider text-gray-400">{{ $label }}</span>
-            <span class="inline-flex px-2 py-0.5 rounded-full text-xs {{ $badge[1] }}"
+            <span class="{{ $ui['label'] }}">{{ $label }}</span>
+            <span class="{{ $ui['pill'] }} {{ $badge[1] }}"
                   @if($begruendung) title="{{ $begruendung }}" @endif>{{ $badge[0] }}</span>
             @if($quelle === 'ki' && $confidence !== null)
                 <span class="text-xs text-gray-400" data-ki-confidence>{{ round($confidence * 100) }}%</span>
