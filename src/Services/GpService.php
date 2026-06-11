@@ -128,4 +128,72 @@ class GpService
             ->where('sub_kategorie', $wert)
             ->update(['sub_kategorie' => null]);
     }
+
+    // ── M3-01/02: Browser-Neubau ────────────────────────────────────────
+
+    /** WG-Baum-Zähler in EINER GROUP-BY-Query (P-1), optional unter aktuellem Filter. */
+    public function wgCounts(?Team $team, array $filters = []): array
+    {
+        return $this->browserQuery($team, array_diff_key($filters, ['warengruppe' => 1]))
+            ->selectRaw('warengruppe_code, COUNT(*) AS n')
+            ->groupBy('warengruppe_code')
+            ->pluck('n', 'warengruppe_code')
+            ->all();
+    }
+
+    /** Sub-Kategorie-Zähler der gewählten WG (Screen 1: zweite Baum-Spalte). */
+    public function subKategorieCounts(?Team $team, string $warengruppeCode): array
+    {
+        return $this->browserQuery($team, ['warengruppe' => $warengruppeCode])
+            ->whereNotNull('sub_kategorie')
+            ->selectRaw('sub_kategorie, COUNT(*) AS n')
+            ->groupBy('sub_kategorie')
+            ->orderBy('sub_kategorie')
+            ->pluck('n', 'sub_kategorie')
+            ->all();
+    }
+
+    /**
+     * M3-02: GP-Tabelle mit Lead-Preis-Spalte (Join auf Lead-LA + Aktiv-Preis-Subquery,
+     * eine Regel-Stelle: PriceService) — Rezepte-Zähler folgt mit M4 (hasTable-Guard).
+     */
+    public function paginateBrowser(array $filters, ?Team $team, int $perPage = 100): LengthAwarePaginator
+    {
+        $q = $this->browserQuery($team, $filters)
+            ->leftJoin('foodalchemist_supplier_items AS lead', 'lead.id', '=', 'foodalchemist_gps.lead_la_supplier_item_id')
+            ->select('foodalchemist_gps.*', 'lead.qty AS lead_qty', 'lead.unit_code AS lead_unit_code')
+            ->selectSub(app(PriceService::class)->activePriceSubquery('lead.id')->toBase(), 'lead_preis')
+            ->with('warengruppe')
+            ->orderBy('foodalchemist_gps.name');
+
+        $seite = $q->paginate($perPage)->withQueryString();
+
+        $preise = app(PriceService::class);
+        $rezepteAktiv = \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_recipes');
+        $seite->getCollection()->each(function ($gp) use ($preise, $rezepteAktiv) {
+            $gp->setAttribute('lead_vergleichspreis', $gp->lead_preis !== null
+                ? $preise->vergleichspreis((object) ['qty' => $gp->lead_qty, 'unit_code' => $gp->lead_unit_code], (float) $gp->lead_preis)
+                : null);
+            $gp->setAttribute('rezepte_count', $rezepteAktiv
+                ? (int) \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients')->where('gp_id', $gp->id)->whereNull('deleted_at')->count()
+                : null);
+        });
+
+        return $seite;
+    }
+
+    /** Gemeinsame Browser-Filter (Suche/WG/Sub-Kategorie/Status), team-gescoped. */
+    private function browserQuery(?Team $team, array $filters): Builder
+    {
+        return $this->scoped(FoodAlchemistGp::query(), $team)
+            ->when(($filters['search'] ?? '') !== '', function (Builder $q) use ($filters) {
+                $such = mb_strtolower(trim($filters['search']));
+                $q->where(fn (Builder $w) => $w
+                    ->whereRaw('LOWER(name) LIKE ?', ['%' . $such . '%'])
+                    ->orWhereRaw('LOWER(hauptzutat_slug) LIKE ?', ['%' . $such . '%']));
+            })
+            ->when(($filters['warengruppe'] ?? '') !== '', fn (Builder $q) => $q->where('warengruppe_code', $filters['warengruppe']))
+            ->when(($filters['sub_kategorie'] ?? '') !== '', fn (Builder $q) => $q->where('sub_kategorie', $filters['sub_kategorie']))
+            ->when(($filters['status'] ?? '') !== '', fn (Builder $q) => $q->where('status', $filters['status']));
+    }
 }

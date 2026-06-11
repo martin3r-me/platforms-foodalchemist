@@ -226,6 +226,24 @@ class ImportSliceCommand extends Command
         // M2-16: Detail-Felder-Backfill (Bestand; künftige fresh-Imports füllen via Map oben)
         $stats['item_details'] = $this->backfillItemDetails($pdo, $dryRun, $countryMap);
 
+        // M2-17: LA-Naehrwerte (GL-08-Quelle) — BLS-Werte je 100 g Rohmasse, 1:1-Spalten
+        $nutriFelder = ['bls_key', 'energy_kcal', 'energy_kj', 'water', 'protein', 'fat', 'carbs_absorbable',
+            'roughage', 'minerals_crude_ash', 'organic_acids', 'alcohol', 'sodium', 'potassium', 'calcium',
+            'magnesium', 'phosphorus', 'sulfur', 'chlorine', 'iron', 'zinc', 'copper', 'manganese', 'fluorine',
+            'iodine', 'fructose', 'glucose', 'galactose', 'sucrose', 'maltose', 'lactose', 'starch', 'cellulose',
+            'isoleucine', 'leucine', 'lysine', 'methionine', 'cysteine', 'phenylalanine', 'tyrosine', 'threonine',
+            'tryptophan', 'valine', 'arginine', 'histidine'];
+        $stats['item_nutritionals'] = $this->importBulk($pdo, $dryRun, 'nutritional', 'foodalchemist_item_nutritionals', 'supplier_item_id',
+            function (array $r) use ($itemMap, $nutriFelder) {
+                $row = ['legacy_id' => $r['supplier_item_id'], 'supplier_item_id' => $itemMap[(int) $r['supplier_item_id']] ?? null];
+                foreach ($nutriFelder as $f) {
+                    $row[$f] = $r[$f] ?? null;
+                }
+                $row['raw_json'] = self::nullIfBlank($r['raw_json'] ?? null);
+
+                return $row;
+            }, skipRow: fn (array $r) => ! isset($itemMap[(int) $r['supplier_item_id']]));
+
         // M2-15: LA-Deklarationen (GL-09-Blocker) — rohe Necta-Integer {0,1,3,NULL}
         $deklStoffe = array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE);
         $stats['item_declarations'] = $this->importBulk($pdo, $dryRun, 'declarations', 'foodalchemist_item_declarations', 'supplier_item_id',
@@ -257,7 +275,7 @@ class ImportSliceCommand extends Command
 
         // Row-Count-Verifikation (07 §5): Quelle == id_map je Quell-Tabelle
         if (! $dryRun) {
-            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations'] as $sourceTable) {
+            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional'] as $sourceTable) {
                 $sourceCount = (int) $pdo->query("SELECT COUNT(*) FROM {$sourceTable}")->fetchColumn();
                 $mapCount = DB::table('foodalchemist_legacy_id_map')->where('source_table', $sourceTable)->count();
                 $flag = $sourceCount === $mapCount ? '✅' : '❌ BLOCKER';
@@ -432,6 +450,7 @@ class ImportSliceCommand extends Command
         DB::table('foodalchemist_gps')->update([
             'merged_into_id' => null, 'derivat_von_gp_id' => null, 'lead_la_supplier_item_id' => null,
         ]);
+        DB::table('foodalchemist_item_nutritionals')->delete();
         DB::table('foodalchemist_item_declarations')->delete();
         DB::table('foodalchemist_item_allergens')->delete();
         DB::table('foodalchemist_stamm_lieferanten')->delete();
@@ -448,7 +467,7 @@ class ImportSliceCommand extends Command
             ->whereIn('source_table', [
                 'lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2',
                 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured',
-                'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations',
+                'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional',
             ])
             ->delete();
     }
