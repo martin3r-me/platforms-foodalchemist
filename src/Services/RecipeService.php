@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup;
 
@@ -225,6 +226,118 @@ class RecipeService
         $recipe->update(['status' => $status, 'last_modified_by' => 'editor']);
 
         return $recipe->refresh();
+    }
+
+    // ── M4-07/08: Zutaten-Editor (P-8) ──────────────────────────────────
+
+    /**
+     * Voll-Sync der Zutatenliste (eine Transaktion, V-07): Reihenfolge = Array-
+     * Reihenfolge, fehlende Zeilen werden gelöscht, id-lose angelegt. Danach
+     * GENAU EIN recomputeAndPropagate. XOR gp/sub wird hier erzwungen (D-5 §2.2).
+     *
+     * @param array<int, array> $zeilen
+     */
+    public function syncIngredients(Team $team, int $recipeId, array $zeilen): FoodAlchemistRecipe
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        if ((int) $recipe->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Geerbtes Rezept — Zutaten-Pflege nur durchs Besitzer-Team (D1).');
+        }
+
+        DB::transaction(function () use ($team, $recipe, $zeilen) {
+            $vorhanden = $recipe->ingredients()->get()->keyBy('id');
+            $behalten = [];
+
+            foreach (array_values($zeilen) as $i => $z) {
+                $gpId = ($z['gp_id'] ?? null) !== null && $z['gp_id'] !== '' ? (int) $z['gp_id'] : null;
+                $subId = ($z['referenced_recipe_id'] ?? null) !== null && $z['referenced_recipe_id'] !== '' ? (int) $z['referenced_recipe_id'] : null;
+                if ($gpId !== null && $subId !== null) {
+                    throw new \RuntimeException('Zutat darf nicht GP UND Sub-Rezept zugleich sein (XOR, D-5 §2.2).');
+                }
+                if ($subId !== null) {
+                    if ($subId === $recipe->id) {
+                        throw new \RuntimeException('Selbstreferenz — ein Rezept kann sich nicht selbst enthalten (GL-02 §3.5).');
+                    }
+                    $pruefung = app(RecipeRecomputeService::class)->pruefeVerknuepfung($recipe->id, $subId);
+                    if (! $pruefung['erlaubt']) {
+                        throw new \RuntimeException("Sub-Rezept-Verknüpfung abgelehnt: {$pruefung['grund']}.");
+                    }
+                }
+                $menge = (float) str_replace(',', '.', (string) ($z['menge'] ?? 0));
+                if ($menge <= 0) {
+                    throw new \RuntimeException('Menge muss > 0 sein (Zeile ' . ($i + 1) . ').');
+                }
+
+                $attrs = [
+                    'position' => $i + 1,                              // Reorder = Array-Reihenfolge
+                    'gp_id' => $gpId,
+                    'referenced_recipe_id' => $subId,
+                    'raw_text' => trim((string) ($z['raw_text'] ?? '')) ?: ($z['display_name'] ?? 'Zutat'),
+                    'display_name' => ($z['display_name'] ?? '') ?: null,
+                    'menge' => $menge,
+                    'menge_max' => ($z['menge_max'] ?? '') !== '' && $z['menge_max'] !== null ? (float) str_replace(',', '.', (string) $z['menge_max']) : null,
+                    'einheit_vocab_id' => (int) $z['einheit_vocab_id'],
+                    'garverlust_pct' => ($z['garverlust_pct'] ?? '') !== '' && $z['garverlust_pct'] !== null ? (float) str_replace(',', '.', (string) $z['garverlust_pct']) : null,
+                    'putzverlust_pct' => ($z['putzverlust_pct'] ?? '') !== '' && ($z['putzverlust_pct'] ?? null) !== null ? (float) str_replace(',', '.', (string) $z['putzverlust_pct']) : null,
+                    'is_optional' => (bool) ($z['is_optional'] ?? false),
+                    'note' => ($z['note'] ?? '') ?: null,
+                    'rolle' => ($z['rolle'] ?? '') ?: null,            // V-21
+                    'ist_wertgebend' => (bool) ($z['ist_wertgebend'] ?? false),
+                ];
+
+                $id = ($z['id'] ?? null) !== null && $vorhanden->has((int) $z['id']) ? (int) $z['id'] : null;
+                if ($id !== null) {
+                    $vorhanden[$id]->update($attrs);
+                    $behalten[] = $id;
+                } else {
+                    $neu = $recipe->ingredients()->create([...$attrs,
+                        'team_id' => $team->id,
+                        'match_method' => $subId !== null ? 'recipe_ref' : ($gpId !== null ? 'manual' : 'unmatched'),
+                    ]);
+                    $behalten[] = $neu->id;
+                }
+            }
+
+            $recipe->ingredients()->whereNotIn('id', $behalten)->delete();
+        });
+
+        app(RecipeRecomputeService::class)->recomputeAndPropagate($recipe->id);
+
+        return $recipe->refresh();
+    }
+
+    /**
+     * P-8-Picker: GPs der Team-Kette + Basisrezepte (ohne das Rezept selbst) — Auto-Fill-Daten
+     * (ek_pro_g für die Client-Live-Summe) inklusive.
+     */
+    public function sucheZutatenZiel(Team $team, string $suche, int $ohneRecipeId, int $limit = 8): array
+    {
+        if (trim($suche) === '') {
+            return [];
+        }
+        $q = '%' . mb_strtolower(trim($suche)) . '%';
+        $recompute = app(RecipeRecomputeService::class);
+
+        $gps = FoodAlchemistGp::visibleToTeam($team)
+            ->whereRaw('LOWER(name) LIKE ?', [$q])
+            ->orderBy('name')->limit($limit)
+            ->get(['id', 'name', 'lead_la_supplier_item_id', 'stk_default_g', 'team_id'])
+            ->map(fn ($gp) => [
+                'typ' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
+                'ek_pro_g' => $recompute->preisProGrammPublic($gp),
+            ]);
+
+        $subs = FoodAlchemistRecipe::visibleToTeam($team)->basis()
+            ->where('id', '!=', $ohneRecipeId)
+            ->whereRaw('LOWER(name) LIKE ?', [$q])
+            ->orderBy('name')->limit($limit)
+            ->get(['id', 'name', 'ek_per_kg_eur'])
+            ->map(fn ($r) => [
+                'typ' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
+                'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
+            ]);
+
+        return $gps->concat($subs)->take($limit)->values()->all();
     }
 
     private function keyVergeben(Team $team, string $key): bool

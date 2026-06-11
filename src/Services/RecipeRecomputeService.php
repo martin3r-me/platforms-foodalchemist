@@ -541,6 +541,12 @@ class RecipeRecomputeService
         return 0.0;                                                // T1 Zeile 5: kein Beitrag
     }
 
+    /** P-8-Picker (M4-08): €/g fürs Client-Live-Rechnen — dieselbe T3-Quelle. */
+    public function preisProGrammPublic(FoodAlchemistGp $gp): ?float
+    {
+        return $this->preisProGrammFuer($gp);
+    }
+
     /** T3: Lead-€/g, sonst AVG-€/g über aktive kg/l-LAs (GL-11-Normalisierung). */
     private function preisProGrammFuer(FoodAlchemistGp $gp): ?float
     {

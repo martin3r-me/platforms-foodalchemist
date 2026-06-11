@@ -81,6 +81,9 @@
     {{-- M4-06: Stammdaten-Modal (P-2: innerhalb x-ui-page) --}}
     <livewire:foodalchemist.recipes.recipe-modal />
 
+    {{-- M4-07/08: Zutaten-Editor (P-8) --}}
+    <livewire:foodalchemist.recipes.ingredient-editor />
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between -mb-2">
             <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
