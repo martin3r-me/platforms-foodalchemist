@@ -35,9 +35,13 @@ die das Modul installiert hat.
 1. Sandbox-Test-DB ist SQLite `:memory:` — Pflicht-Regel 2 (§1: Feature-Tests gegen
    **PostgreSQL** wegen NULL-Sortierung) ist damit noch nicht erfüllt. Postgres-Test-Connection
    spätestens mit den GL-03-Tests (M3-06) nachrüsten.
-2. `RefreshDatabase` gegen den vollen Migrations-Satz scheitert an den MySQL-only-Core-Migrationen
-   (s. `_SANDBOX_NOTES.md` Befund 2) — DB-gestützte Feature-Tests brauchen das Seed-Konzept aus
-   **M0-06** (Leak-Test-Harness), z. B. selektive Migration nur der `foodalchemist_*`- + Core-Kern-Tabellen.
+2. ~~`RefreshDatabase` gegen den vollen Migrations-Satz scheitert an den MySQL-only-Core-Migrationen~~
+   → **gelöst durch M0-06** (2026-06-11): `tests/Support/SeedsTeamHierarchy` migriert **selektiv**
+   (Cores 2 teams-Migrationen per `--realpath`-Dateipfad + komplettes Modul-Migrations-Verzeichnis)
+   in die `:memory:`-DB und seedet Root + 2 Geschwister-Kinder. Kein `RefreshDatabase` nötig —
+   jeder Feature-Test bekommt ohnehin eine frische `:memory:`-Connection. Muster für weitere
+   DB-Fixtures: gleiche selektive `--path`-Liste erweitern. Achtung: setzt No-op-`LogsActivity`
+   voraus (Sandbox-Stub); mit echtem Activity-Log dessen Migration ergänzen.
 
 ## 1. Test-Strategie — drei Ebenen
 

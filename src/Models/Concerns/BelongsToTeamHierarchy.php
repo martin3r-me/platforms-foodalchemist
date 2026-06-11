@@ -20,6 +20,13 @@ use Platform\Core\Models\Team;
  */
 trait BelongsToTeamHierarchy
 {
+    /**
+     * Ancestry-Cache, je Request (HTTP) bzw. je Prozess (Tests/CLI) — pro Model-Klasse.
+     *
+     * @var array<int, array<int>>
+     */
+    protected static array $teamAncestryCache = [];
+
     public function scopeVisibleToTeam(Builder $query, Team $team): Builder
     {
         return $query->whereIn($query->getModel()->getTable() . '.team_id', self::teamAncestryIds($team));
@@ -31,15 +38,13 @@ trait BelongsToTeamHierarchy
     }
 
     /**
-     * Team-Kette aufwärts (eigenes Team zuerst, Root zuletzt), je Request gecacht.
+     * Team-Kette aufwärts (eigenes Team zuerst, Root zuletzt), gecacht.
      *
      * @return array<int>
      */
     public static function teamAncestryIds(Team $team): array
     {
-        static $cache = [];
-
-        if (!isset($cache[$team->id])) {
+        if (!isset(static::$teamAncestryCache[$team->id])) {
             $ids = [];
             $current = $team;
             $guard = 0;
@@ -48,9 +53,18 @@ trait BelongsToTeamHierarchy
                 $current = $current->parent_team_id ? $current->parentTeam : null;
                 $guard++;
             }
-            $cache[$team->id] = $ids;
+            static::$teamAncestryCache[$team->id] = $ids;
         }
 
-        return $cache[$team->id];
+        return static::$teamAncestryCache[$team->id];
+    }
+
+    /**
+     * Cache leeren — Pflicht in Test-Setups, die Teams neu seeden (M0-06-Harness):
+     * im selben Prozess wiederverwendete Team-IDs würden sonst stale Ketten liefern.
+     */
+    public static function flushTeamAncestryCache(): void
+    {
+        static::$teamAncestryCache = [];
     }
 }
