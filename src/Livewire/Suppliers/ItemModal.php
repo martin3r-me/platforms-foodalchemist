@@ -44,9 +44,9 @@ class ItemModal extends Component
         $item = $this->item($id);
         $this->itemId = $item->id;
         $this->fehler = null;
-        $this->stammdaten = $item->only(['designation', 'article_number', 'brand', 'manufacturer', 'origin', 'marketing_name']);
-        $this->verpackung = $item->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging']);
-        $this->eigenschaften = $item->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol']);
+        $this->stammdaten = $item->only(['designation', 'article_number', 'brand', 'manufacturer', 'origin', 'marketing_name', 'zusatztext']);
+        $this->verpackung = $item->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering']);
+        $this->eigenschaften = $item->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder', 'vat', 'origin_country', 'organic_control_number', 'preorder_days', 'ingredients_lieferant']);
         $this->allergene = app(SupplierItemService::class)->getAllergens($item);
         $this->deklarationen = app(SupplierItemService::class)->getDeclarations($item);
         $this->dispatch('modal.open', name: 'item-modal');
@@ -76,7 +76,12 @@ class ItemModal extends Component
                 ...collect($this->stammdaten)->map(fn ($v) => $v === '' ? null : $v)->all(),
                 ...collect($this->verpackung)->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging'])
                     ->map(fn ($v) => $v === '' ? null : $v)->all(),
-                ...collect($this->eigenschaften)->map(fn ($v) => $v === '' || $v === null ? null : (bool) (int) $v)->all(),
+                ...collect($this->eigenschaften)->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder'])
+                    ->map(fn ($v) => $v === '' || $v === null ? null : (bool) (int) $v)->all(),
+                ...collect($this->eigenschaften)->only(['origin_country', 'organic_control_number', 'ingredients_lieferant'])
+                    ->map(fn ($v) => $v === '' ? null : $v)->all(),
+                'vat' => ($this->eigenschaften['vat'] ?? '') !== '' ? (float) str_replace(',', '.', (string) $this->eigenschaften['vat']) : null,
+                'preorder_days' => ($this->eigenschaften['preorder_days'] ?? '') !== '' ? (int) $this->eigenschaften['preorder_days'] : null,
             ]);
             $this->fehler = null;
             $this->dispatch('item-gespeichert');

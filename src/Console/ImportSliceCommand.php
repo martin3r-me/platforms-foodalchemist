@@ -89,6 +89,10 @@ class ImportSliceCommand extends Command
                 'is_inactive' => (bool) ($r['is_inactive'] ?? 0),
             ]);
         $supplierMap = $this->targetMap('foodalchemist_suppliers');
+        $countryMap = [];
+        foreach ($pdo->query('SELECT id, name_de FROM lookup_country') as $c) {
+            $countryMap[(int) $c['id']] = $c['name_de'];
+        }
         $stats['supplier_items'] = $this->importBulk($pdo, $dryRun, 'supplier_items', 'foodalchemist_supplier_items', 'id',
             fn (array $r) => [
                 'legacy_id' => $r['id'],
@@ -106,6 +110,15 @@ class ImportSliceCommand extends Command
                 'qty' => $r['qty'],
                 'ean_packaging' => self::nullIfBlank($r['ean_packaging'] ?? null),
                 'ean_ordering' => self::nullIfBlank($r['ean_ordering'] ?? null),
+                'zusatztext' => self::nullIfBlank($r['text'] ?? null),
+                'vat' => $r['vat'] ?? null,
+                'organic_control_number' => self::nullIfBlank($r['organic_control_number'] ?? null),
+                'is_halal' => self::triState($r['is_halal'] ?? null),
+                'is_gmo_free' => self::triState($r['is_gmo_free'] ?? null),
+                'is_preorder' => self::triState($r['is_preorder'] ?? null),
+                'preorder_days' => $r['preorder_days'] ?? null,
+                'ingredients_lieferant' => self::nullIfBlank($r['ingredients'] ?? null),
+                'origin_country' => $countryMap[(int) ($r['origin_country_id'] ?? 0)] ?? null,
                 'is_organic' => self::triState($r['is_organic'] ?? null),
                 'is_vegan' => self::triState($r['is_vegan'] ?? null),
                 'is_vegetarian' => self::triState($r['is_vegetarian'] ?? null),
@@ -120,6 +133,7 @@ class ImportSliceCommand extends Command
                 'status' => self::nullIfBlank($r['status'] ?? null),
                 'price' => $r['price'],
                 'price_partial' => $r['price_partial'],
+                'note' => self::nullIfBlank($r['note'] ?? null),
                 'valid_to' => self::utcOrNull($r['valid_to'] ?? null),
                 'status_valid_from' => self::utcOrNull($r['status_valid_from'] ?? null),
                 'is_blocked' => (bool) ($r['is_blocked'] ?? 0),
@@ -209,6 +223,9 @@ class ImportSliceCommand extends Command
                 return $row;
             }, skipRow: fn (array $r) => ! isset($itemMap[(int) $r['supplier_item_id']]));
 
+        // M2-16: Detail-Felder-Backfill (Bestand; künftige fresh-Imports füllen via Map oben)
+        $stats['item_details'] = $this->backfillItemDetails($pdo, $dryRun, $countryMap);
+
         // M2-15: LA-Deklarationen (GL-09-Blocker) — rohe Necta-Integer {0,1,3,NULL}
         $deklStoffe = array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE);
         $stats['item_declarations'] = $this->importBulk($pdo, $dryRun, 'declarations', 'foodalchemist_item_declarations', 'supplier_item_id',
@@ -278,6 +295,76 @@ class ImportSliceCommand extends Command
         }
         $ziel = DB::table('foodalchemist_supplier_items')->whereNotNull('unit_code')->count();
         $this->line(($ziel === $total ? '✅' : '❌ BLOCKER') . " unit_codes: Quelle {$total} ↔ Ziel {$ziel}");
+
+        return ['source' => $total, 'imported' => $updated, 'skipped' => $total - $updated];
+    }
+
+    /**
+     * M2-16: Detail-Felder (text/vat/origin_country/…/is_preorder/preorder_days/ingredients
+     * + prices.note) auf den BESTAND nachziehen. Idempotent: nur wenn noch leer.
+     */
+    private function backfillItemDetails(PDO $pdo, bool $dryRun, array $countryMap): array
+    {
+        $total = (int) $pdo->query('SELECT COUNT(*) FROM supplier_items')->fetchColumn();
+        if ($dryRun) {
+            return ['source' => $total, 'imported' => 0, 'skipped' => 0];
+        }
+        if (DB::table('foodalchemist_supplier_items')->whereNotNull('vat')->exists()) {
+            return ['source' => $total, 'imported' => 0, 'skipped' => $total];
+        }
+
+        $itemMap = $this->targetMap('foodalchemist_supplier_items');
+        $stmt = $pdo->query('SELECT id, text, vat, origin_country_id, organic_control_number,
+            is_halal, is_gmo_free, is_preorder, preorder_days, ingredients FROM supplier_items ORDER BY id');
+        $updated = 0;
+        $batch = [];
+        $flush = function () use (&$batch, &$updated) {
+            if ($batch === []) {
+                return;
+            }
+            DB::transaction(function () use ($batch) {
+                foreach ($batch as [$id, $attrs]) {
+                    DB::table('foodalchemist_supplier_items')->where('id', $id)->update($attrs);
+                }
+            });
+            $updated += count($batch);
+            $batch = [];
+        };
+        while (($r = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+            $zielId = $itemMap[(int) $r['id']] ?? null;
+            if ($zielId === null) {
+                continue;
+            }
+            $attrs = array_filter([
+                'zusatztext' => self::nullIfBlank($r['text']),
+                'vat' => $r['vat'],
+                'origin_country' => $countryMap[(int) ($r['origin_country_id'] ?? 0)] ?? null,
+                'organic_control_number' => self::nullIfBlank($r['organic_control_number']),
+                'is_halal' => self::triState($r['is_halal']),
+                'is_gmo_free' => self::triState($r['is_gmo_free']),
+                'is_preorder' => self::triState($r['is_preorder']),
+                'preorder_days' => $r['preorder_days'],
+                'ingredients_lieferant' => self::nullIfBlank($r['ingredients']),
+            ], fn ($v) => $v !== null);
+            if ($attrs !== []) {
+                $batch[] = [$zielId, $attrs];
+            }
+            if (count($batch) >= 1000) {
+                $flush();
+            }
+        }
+        $flush();
+
+        // prices.note (62 Zeilen real)
+        $priceMap = $this->targetMap('foodalchemist_prices');
+        $noteN = 0;
+        foreach ($pdo->query("SELECT id, note FROM prices WHERE note IS NOT NULL AND note != ''") as $r) {
+            $zielId = $priceMap[(int) $r['id']] ?? null;
+            if ($zielId !== null) {
+                $noteN += DB::table('foodalchemist_prices')->where('id', $zielId)->update(['note' => $r['note']]);
+            }
+        }
+        $this->line("✅ item_details: {$updated} Artikel aktualisiert · {$noteN} Preis-Notizen");
 
         return ['source' => $total, 'imported' => $updated, 'skipped' => $total - $updated];
     }

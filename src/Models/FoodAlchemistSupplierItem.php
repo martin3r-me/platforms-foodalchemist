@@ -32,6 +32,12 @@ class FoodAlchemistSupplierItem extends Model
         'is_vegetarian' => 'boolean',
         'is_alcohol' => 'boolean',
         'is_discontinued' => 'boolean',
+        // M2-16: nachgezogene Detail-Felder
+        'is_halal' => 'boolean',
+        'is_gmo_free' => 'boolean',
+        'is_preorder' => 'boolean',
+        'preorder_days' => 'integer',
+        'vat' => 'decimal:2',
     ];
 
     public function supplier(): BelongsTo

@@ -104,6 +104,7 @@
                             <td class="{{ $td }}">
                                 @if($item->is_discontinued)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">ausgelistet</span>
                                 @else<span class="{{ $pill }} {{ $variantPill['success'] }}">aktiv</span>@endif
+                                @if($item->is_preorder)<span class="ml-1 {{ $pill }} {{ $variantPill['info'] }}" title="Vorbestell-Artikel (V-29){{ $item->preorder_days ? ' — ' . $item->preorder_days . ' Tage Vorlauf' : '' }}" data-vorbestell-pill>Vorbestellung{{ $item->preorder_days ? ' · ' . $item->preorder_days . ' T' : '' }}</span>@endif
                             </td>
                             <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap">
                                 {{ $item->aktiver_preis !== null ? number_format((float) $item->aktiver_preis, 2, ',', '.') . ' €' : '—' }}

@@ -37,6 +37,8 @@
                         </div>
                     @endforeach
                 </div>
+                <div class="mt-3"><label class="block {{ $label }} mb-1">Zusatztext</label>
+                    <textarea wire:model="stammdaten.zusatztext" rows="2" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60"></textarea></div>
             </x-foodalchemist::modal-section>
 
             <x-foodalchemist::modal-section title="Verpackung & Mengen">
@@ -52,12 +54,18 @@
                         <input type="text" wire:model="verpackung.packaging_unit" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
                     <div><label class="block {{ $label }} mb-1">Bestelleinheit</label>
                         <input type="text" wire:model="verpackung.ordering_unit" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
+                    <div><label class="block {{ $label }} mb-1">VPE pro Bestelleinheit</label>
+                        <input type="text" wire:model="verpackung.qty_ordering_per_packaging" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
+                    <div><label class="block {{ $label }} mb-1">EAN VPE</label>
+                        <input type="text" wire:model="verpackung.ean_packaging" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
+                    <div><label class="block {{ $label }} mb-1">EAN Bestelleinheit</label>
+                        <input type="text" wire:model="verpackung.ean_ordering" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
                 </div>
             </x-foodalchemist::modal-section>
 
             <x-foodalchemist::modal-section title="Eigenschaften">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    @foreach([['is_organic', 'Bio'], ['is_vegan', 'Vegan'], ['is_vegetarian', 'Vegetarisch'], ['is_alcohol', 'Alkohol']] as [$feld, $lbl])
+                    @foreach([['is_organic', 'Bio'], ['is_vegan', 'Vegan'], ['is_vegetarian', 'Vegetarisch'], ['is_alcohol', 'Alkohol'], ['is_halal', 'Halal'], ['is_gmo_free', 'GVO-frei']] as [$feld, $lbl])
                         <div><label class="block {{ $label }} mb-1">{{ $lbl }}</label>
                             <select wire:model="eigenschaften.{{ $feld }}" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60">
                                 <option value="">unbekannt</option>
@@ -66,6 +74,23 @@
                             </select></div>
                     @endforeach
                 </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                    <div><label class="block {{ $label }} mb-1">MwSt %</label>
+                        <input type="text" wire:model="eigenschaften.vat" placeholder="7 oder 19" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
+                    <div><label class="block {{ $label }} mb-1">Ursprungsland</label>
+                        <input type="text" wire:model="eigenschaften.origin_country" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
+                    <div><label class="block {{ $label }} mb-1">Bio-Kontrollnummer</label>
+                        <input type="text" wire:model="eigenschaften.organic_control_number" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
+                    <div data-vorbestellung><label class="block {{ $label }} mb-1">Vorbestellung (V-29)</label>
+                        <div class="flex gap-2">
+                            <select wire:model="eigenschaften.is_preorder" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60 !w-24">
+                                <option value="">—</option><option value="1">ja</option><option value="0">nein</option>
+                            </select>
+                            <input type="number" wire:model="eigenschaften.preorder_days" placeholder="Tage" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60 !w-20" />
+                        </div></div>
+                </div>
+                <div class="mt-3"><label class="block {{ $label }} mb-1">Zutatenliste (vom Lieferanten)</label>
+                    <textarea wire:model="eigenschaften.ingredients_lieferant" rows="3" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60"></textarea></div>
             </x-foodalchemist::modal-section>
 
             <x-foodalchemist::modal-section title="Allergene (14 EU-Pflichtangaben)">
