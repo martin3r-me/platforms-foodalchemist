@@ -1,0 +1,72 @@
+<?php
+
+namespace Platform\FoodAlchemist\Services;
+
+use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\LeadLaStrategie;
+use Platform\FoodAlchemist\Models\FoodAlchemistTeamSetting;
+
+/**
+ * M1-05 + M1-07: Typisierter Zugriff auf die Team-Einstellungen.
+ *
+ * Fehlende Zeile/Felder ⇒ Code-Defaults (kein Pflicht-Seeding). Konsumenten:
+ * LeadLaService (M3-06) liest leadLaStrategie()/leadLaPrioritaeten(),
+ * RecomputeService (M4-03) liest garverlustDefault()/mwst()/rundung().
+ */
+class TeamSettingsService
+{
+    public const MWST_DEFAULTS = ['regulaer' => 19.0, 'ermaessigt' => 7.0, 'default_satz' => 'ermaessigt'];
+
+    public const RUNDUNG_DEFAULTS = ['nachkommastellen' => 2, 'modus' => 'kaufmaennisch'];
+
+    public function for(Team $team): FoodAlchemistTeamSetting
+    {
+        return FoodAlchemistTeamSetting::firstOrNew(['team_id' => $team->id]);
+    }
+
+    public function update(Team $team, array $attributes): FoodAlchemistTeamSetting
+    {
+        $settings = $this->for($team);
+        $settings->fill($attributes)->save();
+
+        return $settings;
+    }
+
+    public function leadLaStrategie(Team $team): LeadLaStrategie
+    {
+        return $this->for($team)->lead_la_strategie ?? LeadLaStrategie::GuenstigsterPreis;
+    }
+
+    /** @return array<int> geordnete supplier_ids (nur Strategie prioritaets_kette) */
+    public function leadLaPrioritaeten(Team $team): array
+    {
+        return $this->for($team)->lead_la_prioritaeten ?? [];
+    }
+
+    public function ausweichKetteAnzeigen(Team $team): bool
+    {
+        return $this->for($team)->ausweich_kette_anzeigen ?? false;
+    }
+
+    /** Garverlust-Default in % je GP-Klasse (Warengruppen-Code), '*' = global. */
+    public function garverlustDefault(Team $team, ?string $warengruppeCode = null): ?float
+    {
+        $defaults = $this->for($team)->garverlust_defaults ?? [];
+
+        $wert = $defaults[$warengruppeCode] ?? $defaults['*'] ?? null;
+
+        return $wert === null ? null : (float) $wert;
+    }
+
+    /** @return array{regulaer: float, ermaessigt: float, default_satz: string} */
+    public function mwst(Team $team): array
+    {
+        return array_replace(self::MWST_DEFAULTS, $this->for($team)->mwst_defaults ?? []);
+    }
+
+    /** @return array{nachkommastellen: int, modus: string} */
+    public function rundung(Team $team): array
+    {
+        return array_replace(self::RUNDUNG_DEFAULTS, $this->for($team)->rundungsregeln ?? []);
+    }
+}

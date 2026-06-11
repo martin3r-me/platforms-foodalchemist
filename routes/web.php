@@ -45,3 +45,9 @@ Route::get('/gps', \Platform\FoodAlchemist\Livewire\Gps\Index::class)
 
 Route::get('/gps/{foodAlchemistGp}', \Platform\FoodAlchemist\Livewire\Gps\Show::class)
     ->name('foodalchemist.gps.show');
+
+/**
+ * Einstellungen (M1-01, D-1 §4) — Sektion in der URL (V-17: kein Tab-State-Verlust).
+ */
+Route::get('/einstellungen/{sektion?}', \Platform\FoodAlchemist\Livewire\Settings\Index::class)
+    ->name('foodalchemist.einstellungen');

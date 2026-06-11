@@ -251,8 +251,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 continue;
             }
 
-            // Alias generieren (z.B. Entity\Index -> entity.index)
-            $aliasPath = str_replace(['\\', '/'], '.', Str::kebab(str_replace('.php', '', $relativePath)));
+            // Alias generieren (z.B. Settings/Einheiten -> settings.einheiten).
+            // WICHTIG: jedes Pfad-Segment einzeln kebab-en — Str::kebab über den ganzen
+            // Pfad macht aus "Settings/Einheiten" sonst "settings/-einheiten" (M1-01-Fund).
+            $aliasPath = collect(explode(DIRECTORY_SEPARATOR, str_replace('.php', '', $relativePath)))
+                ->map(fn (string $segment) => Str::kebab($segment))
+                ->implode('.');
             $alias = $prefix . '.' . $aliasPath;
 
             // Livewire-Komponente registrieren

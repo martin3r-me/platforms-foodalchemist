@@ -92,6 +92,16 @@ return [
                 ],
             ],
         ],
+        [
+            'group' => 'Einstellungen',
+            'items' => [
+                [
+                    'label' => 'Einstellungen',
+                    'route' => 'foodalchemist.einstellungen',
+                    'icon'  => 'heroicon-o-cog-6-tooth',
+                ],
+            ],
+        ],
     ],
 
     /**
