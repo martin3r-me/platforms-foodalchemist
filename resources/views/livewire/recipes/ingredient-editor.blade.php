@@ -16,18 +16,67 @@
     @endif
 
     <script>
-    window.zutatenEditor = function (zeilen, standalone, einheiten) {
+    window.zutatenEditor = function (zeilen, standalone, einheiten, vokabular) {
         return {
             rows: zeilen.map((z, i) => ({ ...z, _key: 'z' + i })),
             einheiten,
             neu: { menge: '', einheit_vocab_id: Object.keys(einheiten)[0] ? parseInt(Object.keys(einheiten)[0]) : null, is_optional: false },
-            pickerSuche: '',
-            pickerErgebnisse: [],
-            pickerTyp: 'alle',                                       // R5: Typ-Filter (alle | gp | sub)
             _n: zeilen.length,
 
-            gefilterte() {
-                return this.pickerTyp === 'alle' ? this.pickerErgebnisse : this.pickerErgebnisse.filter(z => z.typ === this.pickerTyp);
+            // ── R18: Drei-Spalten-Browser — Filter-States + Listen (serverseitig gefiltert) ──
+            vokabular,
+            gpFilter: { wg: '', sub: '', zustand: '', bio: false, regional: false, mehr: false },
+            rezFilter: { hg: '', kat: '', niveau: '', mehr: false },
+            browseQ: '',                                             // zentrales Suchfeld → filtert BEIDE Listen
+            gpListe: [], gpTotal: 0, rezListe: [], rezTotal: 0,
+            geparkt: null,                                           // [+]-Klick parkt das Ziel in der Anzeigezeile
+
+            async browse() {
+                const r = await this.$wire.browseKatalog(
+                    { wg: this.gpFilter.wg, sub: this.gpFilter.sub, zustand: this.gpFilter.zustand, bio: this.gpFilter.bio, regional: this.gpFilter.regional },
+                    { hg: this.rezFilter.hg, kat: this.rezFilter.kat, niveau: this.rezFilter.niveau },
+                    this.browseQ
+                );
+                this.gpListe = r.gps.items; this.gpTotal = r.gps.total;
+                this.rezListe = r.rezepte.items; this.rezTotal = r.rezepte.total;
+            },
+            subKategorienFuerWg() {
+                return (this.vokabular?.subKategorien ?? []).filter(s => this.gpFilter.wg === '' || s.warengruppe_code === this.gpFilter.wg);
+            },
+            kategorienFuerHg() {
+                return (this.vokabular?.kategorien ?? []).filter(k => this.rezFilter.hg === '' || String(k.main_group_id) === String(this.rezFilter.hg));
+            },
+            einheitIdFuerSlug(slug) {
+                for (const [id, e] of Object.entries(this.einheiten)) { if (e.slug === slug) return parseInt(id); }
+                return this.neu.einheit_vocab_id;
+            },
+            niveauFarbe(n) {
+                return { haute_cuisine: 'bg-violet-500', gehoben: 'bg-amber-500', klassisch: 'bg-sky-400' }[n] ?? 'bg-gray-300';
+            },
+            // Spec-Flow: [+] parkt das Ziel, Einheit kommt vom Produkt, Cursor springt in die Menge
+            parke(ziel) {
+                this.geparkt = ziel;
+                this.neu.menge = '';
+                this.neu.einheit_vocab_id = this.einheitIdFuerSlug(ziel.einheit_slug ?? 'g');
+                this.$nextTick(() => this.$root.querySelector('[data-park-menge]')?.focus());
+                // Listen tragen nur den Bulk-Ø — präzisen Lead-€/g (T3) leise nachladen
+                this.$wire.ekFuerZiel(ziel.typ, ziel.id).then(ek => { if (ek !== null && this.geparkt === ziel) ziel.ek_pro_g = ek; });
+            },
+            verwerfen() { this.geparkt = null; this.neu.menge = ''; },
+            // Menge tippen + Enter → Zutat wandert in die Liste und blinkt kurz auf
+            einfuegen() {
+                if (this.geparkt === null || this.zahl(this.neu.menge) === null) return;
+                this.hinzufuegen(this.geparkt);
+                const z = this.rows[this.rows.length - 1];
+                z._flash = true;
+                setTimeout(() => { z._flash = false; }, 1600);
+                this.geparkt = null;
+                this.$nextTick(() => this.$root.querySelector('[data-browse-suche]')?.focus());
+            },
+            // Spec-Annahme: tippt der Nutzer bei geparktem Produkt im Suchfeld, wird verworfen
+            sucheGetippt() {
+                if (this.geparkt !== null) this.geparkt = null;
+                this.browse();
             },
 
             dragIdx: null,
@@ -48,7 +97,7 @@
                 zeile._peek = await this.$wire.gpArtikel(zeile.gp_id);
             },
             payload() {
-                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, _garverlust_ki, _peek, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
+                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
             },
             init() {
                 // Modal-Footer liegt außerhalb des x-data-Scopes → Window-Event;
@@ -56,6 +105,7 @@
                 if (standalone) {
                     window.addEventListener('zutaten-speichern', () => this.$wire.speichern(this.payload()));
                 }
+                this.browse();                                       // R18: Seitenspalten initial füllen
             },
             zahl(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; },
             mengeAvg(z) {
@@ -86,10 +136,7 @@
                     if (this.rows[i] !== undefined) { this.rows[i].garverlust_pct = pct; this.rows[i]._garverlust_ki = true; }
                 }
             },
-            async suchen() {
-                this.pickerErgebnisse = this.pickerSuche.trim() === '' ? [] : await this.$wire.sucheZiel(this.pickerSuche);
-            },
-            hinzufuegen(ziel) {  // Auto-Fill aus Picker (M4-08)
+            hinzufuegen(ziel) {  // Auto-Fill (M4-08) — R18: interner Schritt des Park-Flows
                 this.rows.push({
                     _key: 'n' + (++this._n),
                     id: null,
@@ -108,7 +155,7 @@
                     lineage: ziel.typ === 'sub' ? 'recipe_ref' : 'manual',
                     ek_pro_g: ziel.ek_pro_g,
                 });
-                this.pickerSuche = ''; this.pickerErgebnisse = []; this.neu.menge = ''; this.neu.is_optional = false;
+                this.neu.menge = ''; this.neu.is_optional = false;
             },
         };
     };

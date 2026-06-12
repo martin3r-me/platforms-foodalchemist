@@ -191,6 +191,28 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > gray-300 auf **gray-500/dark:gray-400** (waren kaum sichtbar). Live verifiziert
 > (max-w-7xl am Fenster, Pfeil-Farbe = gray-500, Screenshot). Suite: **394/394 (1.668 Assertions)**.
 
+> **Status R18/Drei-Spalten-Editor (2026-06-12, Dominiques Spec «rechtes/linkes Panel»):**
+> Zutaten-Editor (Basis + VK, geteilter Kern) jetzt als **Drei-Spalten-Layout**: links
+> **Produkte** (Filter: Warengruppe → Sub-Kategorie, «Mehr Filter»: Zustand/Bio/Regional),
+> Mitte der Editor (Tabelle scrollt intern), rechts **Basisrezepte** (Hauptgruppe →
+> Kategorie → Niveau mit Farbpunkten: haute=violett/gehoben=amber/klassisch=blau).
+> **Filter statt Baum** — flache Listen (Top 30 + «… n weitere»), serverseitig gefiltert
+> (`browseKatalog`, EIN Roundtrip für beide Spalten). **Park-Flow nach Spec:** [+] parkt
+> das Ziel in der kombinierten Such-/Anzeigezeile, Einheit kommt vom Produkt (fluessig→ml,
+> sonst g; überschreibbar), Cursor springt in die Menge, Enter fügt ein + Zeile blinkt
+> grün, Feld wird wieder Suchfeld; Tippen bei geparktem Ziel verwirft (Spec-Annahme).
+> Reihenfolge umgedreht: erst Produkt, dann Menge — keine geratene Standardmenge.
+> Das zentrale Suchfeld filtert BEIDE Listen. Altes Dropdown entfernt.
+> **Performance:** Listen-Preise als EINE Bulk-Ø-Query statt 30× preisProGrammPublic;
+> präziser Lead-€/g wird beim Parken nachgeladen (`ekFuerZiel`); Daten-Methoden
+> `#[Renderless]` (render() rechnete sonst bei jedem Tipper alle Zeilen-EKs neu).
+> Serverseitig 67 ms gefiltert / ~360 ms initial — Rest ist Sandbox-Boot ohne OPcache.
+> Offen lt. Spec (nicht blockierend): «enthält GP X»-Beziehungs-Filter (Graph),
+> datengestützte Mengen-Vorbelegung, GP-Mehrfach-Einheiten. Seitenspalten blenden
+> unter xl (1280 px) aus. 3 neue Tests (BrowseKatalogTest). Live verifiziert (kompletter
+> Park-Flow, Filter-Kaskade WG→Sub, Niveau-Filter + Punkte, Layout ohne Überlappung).
+> Suite: **397/397 (1.684 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).

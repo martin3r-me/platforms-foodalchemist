@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
@@ -93,6 +94,7 @@ class IngredientEditor extends Component
      * Lieferant · Art.-Nr · Bezeichnung · Marke · VPE · Preis · Vergleichspreis
      * · Match, ★ = Lead-LA. Ohne Editor-Verlust (Alpine klappt auf).
      */
+    #[Renderless]
     public function gpArtikel(int $gpId): array
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -148,6 +150,7 @@ class IngredientEditor extends Component
     }
 
     /** GP-/Sub-Picker (M4-08): liefert Auto-Fill-Daten inkl. ek_pro_g. */
+    #[Renderless]
     public function sucheZiel(string $suche): array
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -156,6 +159,101 @@ class IngredientEditor extends Component
         }
 
         return app(RecipeService::class)->sucheZutatenZiel($team, $suche, $this->recipeId);
+    }
+
+    /**
+     * R18 (Drei-Spalten-Browser): GPs + Basisrezepte als FLACHE, serverseitig
+     * gefilterte Listen — stapelbare Filter statt Baum, das zentrale Suchfeld
+     * wirkt als Textfilter auf BEIDE Listen. Ein Roundtrip für beide Spalten.
+     */
+    #[Renderless]
+    public function browseKatalog(array $gpFilter = [], array $rezFilter = [], string $q = ''): array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $leer = ['items' => [], 'total' => 0];
+        if ($team === null) {
+            return ['gps' => $leer, 'rezepte' => $leer];
+        }
+        $recompute = app(RecipeRecomputeService::class);
+        $suche = mb_strtolower(trim($q));
+
+        $gpQuery = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)
+            ->when($suche !== '', fn ($w) => $w->whereRaw('LOWER(name) LIKE ?', ['%' . $suche . '%']))
+            ->when(($gpFilter['wg'] ?? '') !== '', fn ($w) => $w->where('warengruppe_code', $gpFilter['wg']))
+            ->when(($gpFilter['sub'] ?? '') !== '', fn ($w) => $w->where('sub_kategorie', $gpFilter['sub']))
+            ->when(($gpFilter['zustand'] ?? '') !== '', fn ($w) => $w->where('zustand', $gpFilter['zustand']))
+            ->when((bool) ($gpFilter['bio'] ?? false), fn ($w) => $w->where('is_organic', true))
+            ->when((bool) ($gpFilter['regional'] ?? false), fn ($w) => $w->where('is_regional', true));
+        $gpTotal = (clone $gpQuery)->count();
+        $gpModels = $gpQuery->orderBy('name')->limit(30)
+            ->get(['id', 'name', 'zustand', 'lead_la_supplier_item_id', 'stk_default_g', 'team_id']);
+        // Performance: 30× preisProGrammPublic wären ~60 Queries je Tipper — stattdessen EINE
+        // Bulk-Query (Ø €/g über aktive kg/l-LAs). Der präzise Lead-Wert kommt beim Parken nach.
+        $aktiverPreis = app(\Platform\FoodAlchemist\Services\PriceService::class)->activePriceSubquery()->toBase();
+        $ekJeGp = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items')
+            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->whereIn('s.gp_id', $gpModels->pluck('id'))->whereNull('s.deleted_at')
+            ->whereIn('foodalchemist_supplier_items.unit_code', ['kg', 'l'])
+            ->where('foodalchemist_supplier_items.qty', '>', 0)
+            ->where('foodalchemist_supplier_items.is_discontinued', false)
+            ->select('s.gp_id', 'foodalchemist_supplier_items.qty')
+            ->selectSub($aktiverPreis, 'aktiver_preis')
+            ->get()
+            ->filter(fn ($r) => $r->aktiver_preis !== null)
+            ->groupBy('gp_id')
+            ->map(fn ($g) => $g->avg(fn ($r) => ((float) $r->aktiver_preis) / (((float) $r->qty) * 1000)));
+        $gps = $gpModels
+            ->map(function ($gp) use ($ekJeGp) {
+                $ek = $ekJeGp[$gp->id] ?? null;
+
+                return [
+                    'typ' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
+                    'ek_pro_g' => $ek,
+                    'preis_label' => $ek !== null ? number_format($ek * 1000, 2, ',', '.') . ' €/kg' : null,
+                    // Spec: Einheit hängt am Produkt (Chilipulver→g, Bier→ml) — Override im Dropdown
+                    'einheit_slug' => str_contains(mb_strtolower($gp->name . ' ' . ($gp->zustand ?? '')), 'fluessig') ? 'ml' : 'g',
+                ];
+            })->values()->all();
+
+        $rezQuery = FoodAlchemistRecipe::visibleToTeam($team)->basis()
+            ->where('id', '!=', (int) $this->recipeId)
+            ->when($suche !== '', fn ($w) => $w->whereRaw('LOWER(foodalchemist_recipes.name) LIKE ?', ['%' . $suche . '%']))
+            ->when(($rezFilter['hg'] ?? '') !== '', fn ($w) => $w->whereHas('kategorie', fn ($k) => $k->where('main_group_id', (int) $rezFilter['hg'])))
+            ->when(($rezFilter['kat'] ?? '') !== '', fn ($w) => $w->where('kategorie_id', (int) $rezFilter['kat']))
+            ->when(($rezFilter['niveau'] ?? '') !== '', fn ($w) => $w->whereHas('niveauEignungen', fn ($n) => $n->where('niveau_slug', $rezFilter['niveau'])));
+        $rezTotal = (clone $rezQuery)->count();
+        $rezepte = $rezQuery->with('niveauEignungen:id,recipe_id,niveau_slug')->orderBy('name')->limit(30)
+            ->get(['id', 'name', 'ek_per_kg_eur'])
+            ->map(fn ($r) => [
+                'typ' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
+                'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
+                'preis_label' => $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : null,
+                'einheit_slug' => 'g',
+                'niveaus' => $r->niveauEignungen->pluck('niveau_slug')->values()->all(),
+            ])->values()->all();
+
+        return [
+            'gps' => ['items' => $gps, 'total' => $gpTotal],
+            'rezepte' => ['items' => $rezepte, 'total' => $rezTotal],
+        ];
+    }
+
+    /** R18: präziser Lead-€/g fürs geparkte Ziel (T3-Logik) — die Listen tragen nur den Bulk-Ø. */
+    #[Renderless]
+    public function ekFuerZiel(string $typ, int $id): ?float
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return null;
+        }
+        if ($typ === 'gp') {
+            $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($id);
+
+            return $gp !== null ? app(RecipeRecomputeService::class)->preisProGrammPublic($gp) : null;
+        }
+        $r = FoodAlchemistRecipe::visibleToTeam($team)->find($id);
+
+        return $r?->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null;
     }
 
     public function render(RecipeRecomputeService $recompute)
@@ -210,12 +308,29 @@ class IngredientEditor extends Component
                 ->orderBy('sort_order')->get(['id', 'slug', 'display_de', 'dimension', 'default_in_g', 'default_in_ml'])
             : collect();
 
+        // R18: Filter-Vokabulare für die Seitenspalten (klein genug für einmaliges Mitgeben;
+        // der Client verengt Kategorien nach gewählter Hauptgruppe selbst)
+        $db = \Illuminate\Support\Facades\DB::table('foodalchemist_lookup_warengruppen');
+
         return view('foodalchemist::livewire.recipes.ingredient-editor', [
             'rezept' => $rezept,
             'zeilenJson' => $zeilen,
             'einheiten' => $einheiten,
             // M9-01a: VK-Kontext zeigt die Rollen-Spalte (V-21 — Gesamt-Gericht-Sicht)
             'vkKontext' => (bool) ($rezept?->ist_verkaufsrezept ?? false),
+            'browserVokabular' => $team === null ? null : [
+                'warengruppen' => $db->whereNull('deleted_at')->orderBy('sort_order')->get(['code', 'name'])->all(),
+                'subKategorien' => \Illuminate\Support\Facades\DB::table('foodalchemist_gps')
+                    ->whereNull('deleted_at')->whereNotNull('sub_kategorie')
+                    ->distinct()->orderBy('sub_kategorie')
+                    ->get(['warengruppe_code', 'sub_kategorie'])->all(),
+                'zustande' => ['frisch', 'TK', 'trocken', 'konserviert'],
+                'hauptgruppen' => \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_main_groups')
+                    ->whereNull('deleted_at')->orderBy('sort_order')->get(['id', 'bezeichnung'])->all(),
+                'kategorien' => \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_categories')
+                    ->whereNull('deleted_at')->orderBy('bezeichnung')->get(['id', 'bezeichnung', 'main_group_id'])->all(),
+                'niveaus' => [['slug' => 'haute_cuisine', 'label' => 'Haute'], ['slug' => 'gehoben', 'label' => 'Gehoben'], ['slug' => 'klassisch', 'label' => 'Klassisch']],
+            ],
         ]);
     }
 }

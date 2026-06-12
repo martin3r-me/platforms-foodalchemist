@@ -5,8 +5,59 @@
 
     {{-- wire:key: Alpine wertet x-data bei morphdom NICHT neu aus — Rezept-Wechsel muss das Element ersetzen --}}
     <div wire:key="zutaten-editor-{{ $rezept?->id ?? 0 }}"
-         x-data="zutatenEditor(@js($zeilenJson), @js(! $eingebettet), @js($einheiten->keyBy('id')->map(fn ($e) => ['slug' => $e->slug, 'g' => $e->default_in_g !== null ? (float) $e->default_in_g : ($e->default_in_ml !== null ? (float) $e->default_in_ml : null)])->all()))"
+         x-data="zutatenEditor(@js($zeilenJson), @js(! $eingebettet), @js($einheiten->keyBy('id')->map(fn ($e) => ['slug' => $e->slug, 'g' => $e->default_in_g !== null ? (float) $e->default_in_g : ($e->default_in_ml !== null ? (float) $e->default_in_ml : null)])->all()), @js($browserVokabular ?? null))"
          data-zutaten-editor>
+        {{-- R18: Drei-Spalten-Layout — Browsen (links GPs, rechts Basisrezepte) und Editieren
+             (Mitte) konkurrieren nicht mehr um denselben Platz; Spalten scrollen intern. --}}
+        <div class="flex gap-3 items-start">
+        <aside class="w-56 shrink-0 hidden xl:block" data-browser-gps>
+            <p class="{{ $dt }} mb-1">Produkte (<span x-text="gpTotal"></span>)</p>
+            <div class="space-y-1 mb-1.5">
+                <select x-model="gpFilter.wg" @change="gpFilter.sub = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-gp-filter-wg>
+                    <option value="">Alle Warengruppen</option>
+                    <template x-for="w in (vokabular?.warengruppen ?? [])" :key="w.code">
+                        <option :value="w.code" x-text="w.name"></option>
+                    </template>
+                </select>
+                <select x-model="gpFilter.sub" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-gp-filter-sub>
+                    <option value="">Alle Kategorien</option>
+                    <template x-for="su in subKategorienFuerWg()" :key="su.warengruppe_code + su.sub_kategorie">
+                        <option :value="su.sub_kategorie" x-text="su.sub_kategorie"></option>
+                    </template>
+                </select>
+                <button type="button" @click="gpFilter.mehr = !gpFilter.mehr"
+                        class="text-[10px] text-gray-400 hover:text-violet-500" data-gp-mehr-filter
+                        x-text="gpFilter.mehr ? '− Weniger Filter' : '+ Mehr Filter'"></button>
+                <div x-show="gpFilter.mehr" x-cloak class="space-y-1">
+                    <select x-model="gpFilter.zustand" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]">
+                        <option value="">Jeder Zustand</option>
+                        <template x-for="z in (vokabular?.zustande ?? [])" :key="z"><option :value="z" x-text="z"></option></template>
+                    </select>
+                    <label class="flex items-center gap-1.5 text-[11px] text-gray-500">
+                        <input type="checkbox" x-model="gpFilter.bio" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> Bio
+                    </label>
+                    <label class="flex items-center gap-1.5 text-[11px] text-gray-500">
+                        <input type="checkbox" x-model="gpFilter.regional" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> Regional
+                    </label>
+                </div>
+            </div>
+            <div class="space-y-px max-h-[46vh] overflow-y-auto -mx-1 px-1" data-gp-liste>
+                <template x-for="ziel in gpListe" :key="'bg' + ziel.id">
+                    <div class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px]">
+                        <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider bg-violet-500/10 text-violet-600 dark:text-violet-300">GP</span>
+                        <span class="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-200" x-text="ziel.name" :title="ziel.name"></span>
+                        <span class="shrink-0 text-[10px] text-gray-400 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
+                        <button type="button" @click="parke(ziel)" data-parke
+                                class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none"
+                                title="übernehmen → Menge eingeben">+</button>
+                    </div>
+                </template>
+                <p x-show="gpListe.length === 0" class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
+                <p x-show="gpTotal > 30" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (gpTotal - 30) + ' weitere — Filter verengen'"></p>
+            </div>
+        </aside>
+        <div class="flex-1 min-w-0">
+        <div class="overflow-x-auto">{{-- R18: Mitte scrollt intern statt unter die Seitenspalten zu laufen --}}
         <table class="{{ $table }} border-collapse">
             {{-- R5: BIS-Spalte raus (Dominique) — menge_max bleibt in den Daten erhalten; 3 EK-Sichten statt einer --}}
             <thead><tr class="text-left">
@@ -21,7 +72,7 @@
                 <template x-for="(zeile, i) in rows" :key="zeile._key">
                     <tbody @dragover.prevent @dragenter.prevent @drop.prevent="dropAuf(i)"
                            :class="dragIdx === i ? 'opacity-40' : ''" data-editor-zeile>
-                    <tr class="{{ $tr }} !border-b-0" :class="zeile.is_optional ? 'opacity-60' : ''">
+                    <tr class="{{ $tr }} !border-b-0 transition-colors duration-500" :class="(zeile.is_optional ? 'opacity-60 ' : '') + (zeile._flash ? 'bg-emerald-500/15' : '')">
                         <td class="{{ $td }} !px-1.5 !py-0.5 whitespace-nowrap">
                             {{-- R4: setData ist PFLICHT, sonst startet Safari den Drag gar nicht --}}
                             <span class="inline-block cursor-grab active:cursor-grabbing text-gray-500 dark:text-gray-400 hover:text-violet-500 select-none" draggable="true"
@@ -142,52 +193,34 @@
                 </tr>
             </tfoot>
         </table>
+        </div>
 
-        {{-- Add-Zeile (M4-08): GP-/Sub-Picker mit Auto-Fill --}}
+        {{-- R18: Kombinierte Such-/Anzeigezeile — EIN Feld, zwei Eingangswege (Spec):
+             tippen = Textfilter auf BEIDE Seitenspalten · per [+] befüllt = Mengen-Eingabe
+             fürs geparkte Ziel (Einheit kommt vom Produkt, Enter fügt ein). --}}
         <div class="mt-3 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-add-zeile>
-            {{-- R17 (Dominique): Menge + Einheit ÜBER dem Suchfeld, exakt an dessen linker Kante —
-                 Grid teilt die Spaltenkante (Spalte 1 = Typ-Filter, Spalte 2 = Suchfeld-Bereich),
-                 nach dem Treffer-Klick ist die Maus direkt unter der Mengen-Eingabe --}}
-            <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1.5 items-center">
-                <div></div>
-                <div class="flex items-center gap-2">
-                    <input type="text" x-model="neu.menge" placeholder="Menge" class="{{ $input }} !w-20 !py-1 text-right" data-neu-menge />
-                    <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
-                        @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
-                    </select>
-                </div>
-                {{-- R5: Typ-Filter (Alle/GP/Rezept) — smarte Suche bleibt, Treffer tragen Typ-Badges --}}
-                <div class="flex items-center gap-1" data-picker-typ-filter>
-                    <template x-for="t in [['alle', 'Alle'], ['gp', 'GPs'], ['sub', 'Rezepte']]" :key="t[0]">
-                        <button type="button" @click="pickerTyp = t[0]"
-                                class="px-2 py-0.5 rounded-full text-[11px] border transition-colors"
-                                :class="pickerTyp === t[0] ? 'border-violet-500 text-violet-700 dark:text-violet-300 font-medium' : 'border-black/10 dark:border-white/15 text-gray-400'"
-                                x-text="t[1]"></button>
-                    </template>
-                </div>
-                <div class="flex items-center gap-2">
-                <div class="relative flex-1">
-                    <input type="search" x-model="pickerSuche" @input.debounce.300ms="suchen()"
-                           placeholder="GP oder Basisrezept suchen … (Auto-Fill)" class="{{ $input }} !py-1" data-picker-suche />
-                    <div x-show="gefilterte().length > 0" x-cloak
-                         class="absolute left-0 top-full mt-1 z-20 w-full rounded-lg bg-white dark:bg-gray-900 border border-black/10 dark:border-white/10 shadow-xl overflow-hidden">
-                        <template x-for="ziel in gefilterte()" :key="ziel.typ + '-' + ziel.id">
-                            <button type="button" class="flex items-center gap-2 w-full text-left px-3 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10"
-                                    @click="hinzufuegen(ziel)" data-picker-treffer>
-                                <span class="shrink-0 px-1.5 rounded text-[9px] font-medium uppercase tracking-wider"
-                                      :class="ziel.typ === 'gp' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'"
-                                      x-text="ziel.typ === 'gp' ? 'GP' : 'Rezept'"></span>
-                                <span x-text="ziel.name"></span>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-                <label class="inline-flex items-center gap-1 text-[11px] text-gray-400">
+            <div x-show="geparkt === null" class="flex items-center gap-2">
+                <input type="search" x-model="browseQ" @input.debounce.300ms="sucheGetippt()"
+                       placeholder="Suchen — filtert Produkte UND Rezepte … (Übernehmen per [+] in den Spalten)"
+                       class="{{ $input }} !py-1 flex-1" data-browse-suche />
+            </div>
+            <div x-show="geparkt !== null" x-cloak class="flex items-center gap-2" data-park-zeile>
+                <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider"
+                      :class="geparkt?.typ === 'gp' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'"
+                      x-text="geparkt?.typ === 'gp' ? 'GP' : 'Rezept'"></span>
+                <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-900 dark:text-gray-100" x-text="geparkt?.name" data-park-name></span>
+                <input type="text" x-model="neu.menge" @keydown.enter.prevent="einfuegen()" placeholder="Menge"
+                       class="{{ $input }} !w-20 !py-1 text-right" data-park-menge />
+                <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]" data-park-einheit>
+                    @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
+                </select>
+                <label class="inline-flex items-center gap-1 text-[11px] text-gray-400 shrink-0">
                     <input type="checkbox" x-model="neu.is_optional" class="rounded border-gray-300" /> optional
                 </label>
-                </div>
+                <button type="button" @click="einfuegen()" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-park-einfuegen>Einfügen ⏎</button>
+                <button type="button" @click="verwerfen()" class="{{ $btnGhostXs }} shrink-0" title="Verwerfen" data-park-verwerfen>✕</button>
             </div>
-            <p class="text-[10px] text-gray-400 mt-1">Syntax §1.2: Menge · Einheit · Verknüpfung — Hinweis/Verarbeitung in die Hinweis-Spalte (Regelwerk §2)</p>
+            <p class="text-[10px] text-gray-400 mt-1">Erst Produkt/Rezept per [+] wählen — Einheit kommt automatisch mit, dann Menge + Enter (§1.2)</p>
             <button type="button" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 mt-1" @click="garverluste()" data-garverlust-ki
                     title="M4-11: KI-Schätzung je Zutat (GL-07 — geschrieben erst beim Speichern, quelle=ki)">✨ Garverluste vorschlagen</button>
         </div>
@@ -199,4 +232,46 @@
                 <button type="button" @click="$wire.speichern(payload())" class="{{ $btnPrimary }}" data-zutaten-speichern-inline>Zutaten speichern</button>
             </div>
         @endif
+        </div>{{-- /Mitte --}}
+        <aside class="w-56 shrink-0 hidden xl:block" data-browser-rezepte>
+            <p class="{{ $dt }} mb-1">Basisrezepte (<span x-text="rezTotal"></span>)</p>
+            <div class="space-y-1 mb-1.5">
+                <select x-model="rezFilter.hg" @change="rezFilter.kat = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-hg>
+                    <option value="">Alle Hauptgruppen</option>
+                    <template x-for="h in (vokabular?.hauptgruppen ?? [])" :key="h.id">
+                        <option :value="h.id" x-text="h.bezeichnung"></option>
+                    </template>
+                </select>
+                <select x-model="rezFilter.kat" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-kat>
+                    <option value="">Alle Kategorien</option>
+                    <template x-for="k in kategorienFuerHg()" :key="k.id">
+                        <option :value="k.id" x-text="k.bezeichnung"></option>
+                    </template>
+                </select>
+                <select x-model="rezFilter.niveau" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-niveau>
+                    <option value="">Jedes Niveau</option>
+                    <template x-for="n in (vokabular?.niveaus ?? [])" :key="n.slug">
+                        <option :value="n.slug" x-text="n.label"></option>
+                    </template>
+                </select>
+            </div>
+            <div class="space-y-px max-h-[46vh] overflow-y-auto -mx-1 px-1" data-rez-liste>
+                <template x-for="ziel in rezListe" :key="'br' + ziel.id">
+                    <div class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-emerald-500/5 text-[11px]">
+                        <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">REZ</span>
+                        {{-- Niveau-Farbpunkt (haute=violett · gehoben=amber · klassisch=blau) --}}
+                        <span class="shrink-0 w-1.5 h-1.5 rounded-full" x-show="(ziel.niveaus ?? []).length > 0"
+                              :class="niveauFarbe(ziel.niveaus?.[0])" :title="(ziel.niveaus ?? []).join(' · ')"></span>
+                        <span class="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-200" x-text="ziel.name.replace('↳ ', '')" :title="ziel.name"></span>
+                        <span class="shrink-0 text-[10px] text-gray-400 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
+                        <button type="button" @click="parke(ziel)" data-parke
+                                class="shrink-0 px-1 rounded font-medium text-emerald-500 hover:bg-emerald-500/15 leading-none"
+                                title="übernehmen → Menge eingeben">+</button>
+                    </div>
+                </template>
+                <p x-show="rezListe.length === 0" class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
+                <p x-show="rezTotal > 30" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (rezTotal - 30) + ' weitere — Filter verengen'"></p>
+            </div>
+        </aside>
+        </div>{{-- /Drei-Spalten-Flex --}}
     </div>
