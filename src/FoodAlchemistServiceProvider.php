@@ -192,6 +192,21 @@ class FoodAlchemistServiceProvider extends ServiceProvider
          */
         $this->registerLivewireComponents();
 
+        // M8-02: generische Modul-Policy für die Kern-Models (view = Team-Kette,
+        // update/delete = Curate-Gate M1-08 — dieselben Regel-Stellen wie die Services)
+        foreach ([
+            \Platform\FoodAlchemist\Models\FoodAlchemistGp::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCustomerName::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistRecipeRegeneration::class,
+        ] as $modelClass) {
+            \Illuminate\Support\Facades\Gate::policy($modelClass, \Platform\FoodAlchemist\Policies\FoodAlchemistPolicy::class);
+        }
+
         // M8-01: Modul-Tools (ToolContract) — idempotent in die Core-Registry;
         // afterResolving, damit die Registrierung auch greift, wenn der MCP-
         // Server die Registry erst später aufbaut (Auto-Discovery-Pfad variiert)
