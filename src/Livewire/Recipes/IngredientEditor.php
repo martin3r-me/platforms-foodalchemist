@@ -95,10 +95,10 @@ class IngredientEditor extends Component
      * · Match, ★ = Lead-LA. Ohne Editor-Verlust (Alpine klappt auf).
      */
     #[Renderless]
-    public function gpArtikel(int $gpId): array
+    public function gpArtikel(?int $gpId): array
     {
         $team = Auth::user()?->currentTeamRelation;
-        $gp = $team !== null ? app(\Platform\FoodAlchemist\Services\GpService::class)->find($gpId, $team) : null;
+        $gp = $team !== null && $gpId !== null ? app(\Platform\FoodAlchemist\Services\GpService::class)->find($gpId, $team) : null;
         if ($gp === null) {
             return [];
         }

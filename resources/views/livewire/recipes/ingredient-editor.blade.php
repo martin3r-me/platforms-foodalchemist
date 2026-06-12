@@ -5,7 +5,7 @@
     @if($eingebettet)
         @include('foodalchemist::livewire.recipes.partials.zutaten-kern')
     @else
-        <x-foodalchemist::modal name="zutaten-editor" :title="'Zutaten bearbeiten' . ($rezept ? ' — ' . $rezept->name : '')" size="max-w-5xl">
+        <x-foodalchemist::modal name="zutaten-editor" :title="'Zutaten bearbeiten' . ($rezept ? ' — ' . $rezept->name : '')" size="max-w-[100rem]">
             @include('foodalchemist::livewire.recipes.partials.zutaten-kern')
 
             <x-slot:footer>
@@ -93,6 +93,7 @@
                 this.dragIdx = null;
             },
             async peek(zeile) {  // D-5 §4.2.3: LA-Tabelle hinter dem GP, lazy vom Server
+                if (!zeile.gp_id) return;                            // R21: Zeile ohne GP — nichts zu peeken
                 if (zeile._peek) { zeile._peek = null; return; }
                 zeile._peek = await this.$wire.gpArtikel(zeile.gp_id);
             },

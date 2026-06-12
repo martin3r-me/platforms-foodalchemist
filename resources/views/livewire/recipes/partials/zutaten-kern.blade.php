@@ -12,7 +12,7 @@
         <div class="flex gap-3 items-start">
         {{-- R19 (Dominique): Seitenspalten als ECHTE Panels — farblich abgehoben, stehen fest
              (sticky), nur die Mitte scrollt; die Trefferlisten scrollen intern. --}}
-        <aside class="w-56 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] dark:bg-white/[0.05] border border-black/5 dark:border-white/10 p-2.5 sticky top-0 self-start max-h-[70vh]" data-browser-gps>
+        <aside class="w-72 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] dark:bg-white/[0.05] border border-black/5 dark:border-white/10 p-2.5 sticky top-0 self-start max-h-[70vh]" data-browser-gps>
             <p class="{{ $dt }} mb-1">Produkte (<span x-text="gpTotal"></span>)</p>
             <div class="space-y-1 mb-1.5">
                 <select x-model="gpFilter.wg" @change="gpFilter.sub = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-gp-filter-wg>
@@ -145,8 +145,8 @@
                     </tr>
                     {{-- GP-Peek (D-5 §4.2.3, Ist-App): LA-Tabelle hinter dem GP, ★ = Lead --}}
                     <tr x-show="zeile._peek" x-cloak>
-                        <td colspan="{{ $vkKontext ? 10 : 9 }}" class="!px-3 !py-2 bg-black/[0.02] dark:bg-white/[0.03]">
-                            <div class="rounded-lg border-l-2 border-orange-400 bg-white dark:bg-gray-900 px-3 py-2" data-gp-peek-tabelle>
+                        <td colspan="{{ $vkKontext ? 10 : 9 }}" class="!px-3 !py-1.5 bg-black/[0.02] dark:bg-white/[0.03]">
+                            <div class="rounded-lg border-l-2 border-orange-400 bg-white dark:bg-gray-900 px-3 py-1.5" data-gp-peek-tabelle>
                                 <p class="text-[11px] font-medium text-gray-900 dark:text-gray-100 mb-1">
                                     📦 <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
                                 </p>
@@ -159,15 +159,15 @@
                                     <tbody>
                                         <template x-for="(la, j) in (zeile._peek ?? [])" :key="j">
                                             <tr class="border-t border-black/5 dark:border-white/5" :class="la.lead ? 'bg-orange-500/10' : ''">
-                                                <td class="px-1.5 py-1"><span x-show="la.lead" class="text-orange-500" title="Lead-LA (GL-03)">★</span></td>
-                                                <td class="px-1.5 py-1 text-gray-600 dark:text-gray-300" x-text="la.lieferant"></td>
-                                                <td class="px-1.5 py-1 font-mono text-gray-500" x-text="la.artikelnr"></td>
-                                                <td class="px-1.5 py-1 text-gray-900 dark:text-gray-100" x-text="la.bezeichnung"></td>
-                                                <td class="px-1.5 py-1 text-gray-500" x-text="la.marke ?? '—'"></td>
-                                                <td class="px-1.5 py-1 text-gray-500 italic" x-text="la.vpe ?? '—'"></td>
-                                                <td class="px-1.5 py-1 text-right tabular-nums" x-text="la.preis ?? '—'"></td>
-                                                <td class="px-1.5 py-1 text-right tabular-nums text-gray-500" x-text="la.vergleichspreis ?? '—'"></td>
-                                                <td class="px-1.5 py-1 text-right text-gray-500" x-text="la.match ?? '—'"></td>
+                                                <td class="px-1.5 py-0.5"><span x-show="la.lead" class="text-orange-500" title="Lead-LA (GL-03)">★</span></td>
+                                                <td class="px-1.5 py-0.5 text-gray-600 dark:text-gray-300" x-text="la.lieferant"></td>
+                                                <td class="px-1.5 py-0.5 font-mono text-gray-500" x-text="la.artikelnr"></td>
+                                                <td class="px-1.5 py-0.5 text-gray-900 dark:text-gray-100" x-text="la.bezeichnung"></td>
+                                                <td class="px-1.5 py-0.5 text-gray-500" x-text="la.marke ?? '—'"></td>
+                                                <td class="px-1.5 py-0.5 text-gray-500 italic" x-text="la.vpe ?? '—'"></td>
+                                                <td class="px-1.5 py-0.5 text-right tabular-nums" x-text="la.preis ?? '—'"></td>
+                                                <td class="px-1.5 py-0.5 text-right tabular-nums text-gray-500" x-text="la.vergleichspreis ?? '—'"></td>
+                                                <td class="px-1.5 py-0.5 text-right text-gray-500" x-text="la.match ?? '—'"></td>
                                             </tr>
                                         </template>
                                     </tbody>
@@ -235,7 +235,7 @@
             </div>
         @endif
         </div>{{-- /Mitte --}}
-        <aside class="w-56 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] dark:bg-white/[0.05] border border-black/5 dark:border-white/10 p-2.5 sticky top-0 self-start max-h-[70vh]" data-browser-rezepte>
+        <aside class="w-72 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] dark:bg-white/[0.05] border border-black/5 dark:border-white/10 p-2.5 sticky top-0 self-start max-h-[70vh]" data-browser-rezepte>
             <p class="{{ $dt }} mb-1">Basisrezepte (<span x-text="rezTotal"></span>)</p>
             <div class="space-y-1 mb-1.5">
                 <select x-model="rezFilter.hg" @change="rezFilter.kat = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-hg>

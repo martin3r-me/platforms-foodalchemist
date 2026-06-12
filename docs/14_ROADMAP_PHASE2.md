@@ -232,6 +232,15 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > echter Builder-Pflege bleibt sie scharf. Live verifiziert (Zusatzstoffe 2-spaltig,
 > Buttons 20 px, «Add on Ente»-GP ohne Drift-Meldung). Suite: **397/397 (1.684 Assertions)**.
 
+> **Status R21/Editor-Breite (2026-06-13, Dominique: «kann keine Rezepte/GPs lesen — 3er
+> Container, dadurch automatisch in die Breite»):** Editor-Modals (Basis/VK/Standalone-
+> Zutaten) von max-w-7xl auf **max-w-[100rem]** (1600 px) — die drei Container (Panel ·
+> Editor · Panel) bekommen echte Breite; **Seitenpanels w-56 → w-72** (288 px), Namen
+> lesbar. **GP-Peek-Tabelle** aufs R14-Dichte-Niveau nachgezogen (py-0.5-Zellen, war
+> noch alt). Robustheit: peek() ohne gp_id = No-op + `gpArtikel(?int)` mit Guard
+> (versteckter Button war programmatisch klickbar → 500er). Live verifiziert.
+> Suite: **397/397 (1.684 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).
