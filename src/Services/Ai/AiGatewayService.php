@@ -68,19 +68,35 @@ class AiGatewayService
             $options['model'] = $tierModell;
         }
 
+        // M7-03 §3.3: Structural-Retry-Gate — valides JSON, aber fachlich
+        // unbrauchbar (z. B. leeres Pflicht-Array) → Re-Roll
+        $isUsable = $options['structural_retry'] ?? null;
+        unset($options['structural_retry']);
+
         // ── 06_KI §5 Pflicht 1+2: VOR Rückgabe loggen, auch im Fehlerpfad ──
+        // M7-03 §3.1–3.3: Backoff-Treppe (transiente Provider-Fehler) +
+        // einmaliger Modell-Fallback + Degenerations-Re-Roll (Temp 0.3→0.5→0.7)
         $start = hrtime(true);
         $antwort = null;
         $fehler = null;
         $parsed = null;
-        try {
-            $antwort = $this->provider()->chat($messages, $options + ['temperature' => $prompt['temperature'] ?? 0.1]);
-            $parsed = json_decode($antwort['content'] ?? '', true);
-            if (!is_array($parsed)) {
-                throw new RuntimeException("KI-Antwort für [{$promptKey}] ist kein valides JSON (Fence-Stripping kommt mit M7-03).");
+        $tempTreppe = [(float) ($prompt['temperature'] ?? 0.1), 0.5, 0.7];   // §3.3
+        foreach ($tempTreppe as $versuch => $temperature) {
+            $fehler = null;
+            try {
+                $antwort = $this->chatMitBackoff($messages, $options + ['temperature' => $temperature]);
+                $parsed = json_decode($this->stripJsonFence((string) ($antwort['content'] ?? '')), true);
+                if (!is_array($parsed)) {
+                    throw new RuntimeException("KI-Antwort für [{$promptKey}] ist kein valides JSON (nach Fence-Stripping, Versuch " . ($versuch + 1) . ').');
+                }
+                if (is_callable($isUsable) && ! $isUsable($parsed)) {
+                    throw new RuntimeException("KI-Antwort für [{$promptKey}] ist strukturell unbrauchbar (Versuch " . ($versuch + 1) . ').');
+                }
+                break;                                               // erste valide + brauchbare gewinnt
+            } catch (\Throwable $e) {
+                $fehler = $e;
+                $parsed = null;
             }
-        } catch (\Throwable $e) {
-            $fehler = $e;
         }
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
 
@@ -146,6 +162,89 @@ class AiGatewayService
         } catch (\Throwable) {
             return null;                                             // Audit darf den Fach-Call nie reißen (graceful)
         }
+    }
+
+    /**
+     * M7-03 §3.1/3.2: Backoff-Treppe (Default 1s/3s/10s, Tests: ai.backoff=[])
+     * für transiente Provider-Fehler; danach EINMALIGER Wechsel aufs
+     * Fallback-Modell (ai.fallback_model) mit frischer Treppe — nur wenn
+     * nicht schon darauf gestartet. model trägt immer das tatsächliche Modell.
+     */
+    private function chatMitBackoff(array $messages, array $options): array
+    {
+        $treppe = config('foodalchemist.ai.backoff', [1, 3, 10]);
+        $fallback = config('foodalchemist.ai.fallback_model');
+
+        $letzter = null;
+        foreach ([null, $fallback] as $stufe => $modellWechsel) {
+            if ($stufe === 1 && ($modellWechsel === null || ($options['model'] ?? null) === $modellWechsel)) {
+                break;                                               // kein Fallback konfiguriert / schon drauf
+            }
+            $opts = $modellWechsel !== null && $stufe === 1 ? ['model' => $modellWechsel] + $options : $options;
+            foreach ([0, ...$treppe] as $warte) {
+                if ($warte > 0) {
+                    sleep((int) $warte);
+                }
+                try {
+                    return $this->provider()->chat($messages, $opts);
+                } catch (\Throwable $e) {
+                    $letzter = $e;
+                }
+            }
+        }
+
+        throw $letzter ?? new RuntimeException('Provider nicht erreichbar.');
+    }
+
+    /**
+     * M7-03 §3.4.2 (Ist: gemini.rs:748-786): Fences/Prosa um das JSON entfernen —
+     * ab erstem {/[ mit Tiefen-Zähler scannen (String-Literale + Escapes
+     * respektiert), am ERSTEN vollständigen Wert abschneiden. Unbalanciert
+     * (echte Truncation) → Rest ab Start zurückgeben, Parse-Fehler bleibt ehrlich.
+     */
+    public function stripJsonFence(string $raw): string
+    {
+        $start = null;
+        $len = strlen($raw);
+        for ($i = 0; $i < $len; $i++) {
+            if ($raw[$i] === '{' || $raw[$i] === '[') {
+                $start = $i;
+                break;
+            }
+        }
+        if ($start === null) {
+            return $raw;
+        }
+
+        $tiefe = 0;
+        $inString = false;
+        $escaped = false;
+        for ($i = $start; $i < $len; $i++) {
+            $c = $raw[$i];
+            if ($inString) {
+                if ($escaped) {
+                    $escaped = false;
+                } elseif ($c === '\\') {
+                    $escaped = true;
+                } elseif ($c === '"') {
+                    $inString = false;
+                }
+
+                continue;
+            }
+            if ($c === '"') {
+                $inString = true;
+            } elseif ($c === '{' || $c === '[') {
+                $tiefe++;
+            } elseif ($c === '}' || $c === ']') {
+                $tiefe--;
+                if ($tiefe === 0) {
+                    return substr($raw, $start, $i - $start + 1);    // erster vollständiger Wert
+                }
+            }
+        }
+
+        return substr($raw, $start);                                 // unbalanciert → ehrlich
     }
 
     public function provider(): LLMProviderContract

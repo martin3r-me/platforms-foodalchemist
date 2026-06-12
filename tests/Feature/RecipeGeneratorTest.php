@@ -111,6 +111,8 @@ it('§4-Alias greift im Generator: Rinderbrühe nutzt den BESTAND statt einen St
 });
 
 it('Fake-Provider ohne Override degradiert mit klarer Fehlermeldung (Echo kann kein Rezept erfinden)', function () {
+    // Seit M7-03 fängt der Gateway-Structural-Retry (§3.3) das leere Echo
+    // schon VOR dem Service-Guard — gleiche Semantik, frühere klare Meldung.
     expect(fn () => $this->svc->generiere($this->rootTeam, 'Irgendwas Feines'))
-        ->toThrow(RuntimeException::class, 'kein verwertbares Rezept');
+        ->toThrow(RuntimeException::class, 'strukturell unbrauchbar');
 });

@@ -77,6 +77,9 @@ class RecipeGeneratorService
             $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [
                 'knowledge' => $wissen['block'],
                 'knowledge_used' => $wissen['files_used'],            // M7-01: GL-13-§6-Audit-Lücke geschlossen
+                // M7-03 §3.3 (Ist: commands.rs:20766-20780): valides JSON ohne
+                // name/zutaten ist strukturell unbrauchbar → Gateway re-rollt
+                'structural_retry' => fn (array $parsed) => ! empty($parsed['werte']['name']) && ! empty($parsed['werte']['zutaten']),
             ]);
             $kiRezept = $vorschlag->werte;
         }
