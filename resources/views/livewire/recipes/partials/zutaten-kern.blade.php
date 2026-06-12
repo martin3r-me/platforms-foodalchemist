@@ -145,11 +145,15 @@
 
         {{-- Add-Zeile (M4-08): GP-/Sub-Picker mit Auto-Fill --}}
         <div class="mt-3 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-add-zeile>
-            <div class="flex items-center gap-2">
+            {{-- R17 (Dominique): Menge + Einheit ÜBER dem Suchfeld — nach dem Treffer-Klick ist die
+                 Maus direkt darunter, der Weg zur Mengen-Eingabe wird minimal --}}
+            <div class="flex items-center gap-2 mb-1.5">
                 <input type="text" x-model="neu.menge" placeholder="Menge" class="{{ $input }} !w-20 !py-1 text-right" data-neu-menge />
                 <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
                     @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                 </select>
+            </div>
+            <div class="flex items-center gap-2">
                 {{-- R5: Typ-Filter (Alle/GP/Rezept) — smarte Suche bleibt, Treffer tragen Typ-Badges --}}
                 <div class="flex items-center gap-1" data-picker-typ-filter>
                     <template x-for="t in [['alle', 'Alle'], ['gp', 'GPs'], ['sub', 'Rezepte']]" :key="t[0]">
