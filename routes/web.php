@@ -69,3 +69,10 @@ Route::get('/lieferanten', \Platform\FoodAlchemist\Livewire\Suppliers\Index::cla
  */
 Route::get('/einstellungen/{sektion?}', \Platform\FoodAlchemist\Livewire\Settings\Index::class)
     ->name('foodalchemist.einstellungen');
+
+/**
+ * Verkaufsrezepte (M6-03, D-6 §4.1) — VK-Sicht aufs geteilte Rezept-Modell,
+ * Auswahl/Filter in der URL (V-17/Kontext-Erhalt).
+ */
+Route::get('/verkaufsrezepte', \Platform\FoodAlchemist\Livewire\Verkauf\Browser::class)
+    ->name('foodalchemist.verkauf.index');

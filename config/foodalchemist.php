@@ -105,6 +105,11 @@ return [
                     'route' => 'foodalchemist.recipes.index',
                     'icon'  => 'heroicon-o-book-open',
                 ],
+                [
+                    'label' => 'Verkaufsrezepte',
+                    'route' => 'foodalchemist.verkauf.index',
+                    'icon'  => 'heroicon-o-banknotes',
+                ],
             ],
         ],
         [

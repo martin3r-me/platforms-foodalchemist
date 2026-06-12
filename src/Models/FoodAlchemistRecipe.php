@@ -100,4 +100,31 @@ class FoodAlchemistRecipe extends Model
     {
         return $this->hasMany(FoodAlchemistRecipeSektorEignung::class, 'recipe_id');
     }
+
+    // ── M6-03: Verkaufslayer (D-6) ───────────────────────────────────────
+
+    public function speisenKlasse(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistDishClass::class, 'speisen_klasse_id');
+    }
+
+    public function aufschlagsklasse(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'aufschlagsklasse_id');
+    }
+
+    public function vkEinheit(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'vk_einheit_vocab_id');
+    }
+
+    public function customerNames(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistRecipeCustomerName::class, 'recipe_id');
+    }
+
+    public function regenerations(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistRecipeRegeneration::class, 'recipe_id')->orderBy('sort_order');
+    }
 }
