@@ -7,7 +7,8 @@
 > **M11+ (Domänen-Platzhalter)** von Doc 14 — sie waren bewusst „Zuschnitt mit Dominique
 > abstimmen“ / reine Brainstorming-Zeilen. Hier wird daraus eine sequenzierte, baubare
 > Landkarte mit Abhängigkeiten, Entscheidungs-Gates und „jetzt vs. später“.
-> **Stand:** 2026-06-13 · **Status:** Entwurf zur Abstimmung mit Dominique.
+> **Stand:** 2026-06-13 · **Status:** Entscheidungs-Gates (§5) von Dominique **entschieden** —
+> M10-Schema baubereit.
 
 > **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Baustein heißt bei uns
 > **„Baustein“** — im Konzeptpapier „Modul“, aber die Plattform reserviert „Modul“ für ganze
@@ -150,20 +151,31 @@ Output; Vorlage und Freiform als **eine** Mechanik.
 
 | Tabelle | Zweck |
 |---|---|
-| `foodalchemist_concepts` | die Mappe: Name, Anlass-Tag, Niveau-Tag, Status, `is_vorlage` (Vorlage = gespeichertes Slot-Gerüst) |
-| `foodalchemist_concept_slots` | Rolle/Position je Concept; `rolle_id` (→ Rollen-Vokabular), `position`, `pflicht`/`optional` |
-| `foodalchemist_concept_slot_items` | Slot-Inhalt: **entweder** `baustein_id` (Referenz) **oder** `vk_recipe_id` (fest gesetztes Gericht) + `menge`/`einheit` |
-| `foodalchemist_bausteine` | austauschbarer Baustein: `rolle_id`, Referenz auf Inhalt (VK-Rezept/Bündel — siehe D-CON-1), Preis-/Austauschbarkeits-Metadaten |
-| `foodalchemist_vocab_rollen` | Rollen-Vokabular (Grill-Hauptgang, Vorspeise …) — team-erweiterbar |
+| `foodalchemist_concepts` | die Mappe (z. B. „Grill-Buffet"): Name, Anlass-Tag, Niveau-Tag, Status, `is_vorlage` |
+| `foodalchemist_concept_slots` | Rolle/Position je Concept; `rolle_id` (→ **freies** Rollen-Vokabular), `position`, `pflicht`/`optional` |
+| `foodalchemist_concept_slot_items` | Slot-Inhalt: **entweder** `baustein_id` (Referenz auf ein Bündel) **oder** `vk_recipe_id` (fest gesetztes Einzel-Gericht) |
+| `foodalchemist_bausteine` | **Baustein = bepreistes Bündel mehrerer Gerichte** (Baukasten-Einheit): `rolle_id`, `preis_pro_person`, `ek_pro_person`, `wareneinsatz_prozent`, `preis_modus` (auto aus den Gerichten / manuell). **Der Preis ist gespeichert**, damit ein Tausch im Concept nicht die ganze Kaskade neu rechnet |
+| `foodalchemist_baustein_gerichte` | die Gerichte IM Baustein: `baustein_id`, `vk_recipe_id`, `position` (z. B. „Salad Wall" = Green Power · Sunny Kick · Fresh Toskana · Crunchy · Topping) |
+| `foodalchemist_vocab_rollen` | **freies** Rollen-Vokabular (Vorspeise · Grill-Hauptgang · Dessert …) — team-erweiterbar |
+
+> **Konkretes Beispiel (DOEC-Foodbook-Seite „Connecting Fire & Flavour"):** Das Concept
+> **„Grill-Buffet"** = drei rollen-besetzte Slots, jeder mit einem **Baustein**: Vorspeise →
+> Baustein **„Salad Wall"** (4,50 €/P · EK 1,41 € · W 31,3 % — Green Power · Sunny Kick · Fresh
+> Toskana · Crunchy · Topping) · Hauptgang → Baustein **„Grill-Station"** (34,50 €/P — Smoke/
+> Pastrami · Hot&Fire · Grill Garden · Sides · Dips …) · Dessert → Baustein **„Cool Down"**
+> (5,50 €/P · EK 1,53 € · W 27,8 %). **Concept-Preis = Σ der gespeicherten Baustein-Preise.**
+> Tauscht der Verkäufer „Salad Wall" gegen die Vorspeisen aus Grill-Buffet 2 (eigener Preis),
+> ändert sich der Buffet-Preis nur um die **Differenz** — kein Neuberechnen der ganzen Kaskade.
+> Das ist der Baukasten-Sinn der Baustein-Ebene (verkäufer-orientiert).
 
 **Pakete:**
 
 | ID | Paket | Inhalt |
 |---|---|---|
 | M10-01 | Schema + Rollen-Vokabular | Tabellen oben; Rollen als gepflegtes Vokabular (Vorbild bestehende `vocab_*`); **D-CON-3: keine Concept-in-Concept-Verschachtelung in v1** |
-| M10-02 | Baustein-Browser | Bausteine als eigene, rollen-getaggte, **referenzierte** Slot-Inhalte pflegen (Liste + Editor, Jarvis-Dichte wie R13/R14) |
-| M10-03 | Concept-Editor (3-Spalten) | Slot-Gerüst links, Slot-Befüllung Mitte (Baustein **oder** Gericht je Slot), Live-Cockpit rechts — wiederverwendet das M9/R18-Drei-Spalten-Muster |
-| M10-04 | Live-Output-Preis | Slot → Concept aufsummieren über die bestehende D-6/GL-11-Preislogik (keine neue Mathematik) |
+| M10-02 | Baustein-Browser | Bausteine bauen = mehrere Gerichte zu einem rollen-getaggten **Bündel mit eigenem Preis** zusammenfassen; Preis auto aus den Gerichten (Wareneinsatz→Marge) oder manuell, danach **gespeichert**. Liste + Editor (Jarvis-Dichte R13/R14) |
+| M10-03 | Concept-Editor (3-Spalten) | Slot-Gerüst links, Slot-Befüllung Mitte (Baustein **oder** fest gesetztes Gericht je Slot), Live-Cockpit rechts — wiederverwendet das M9/R18-Drei-Spalten-Muster |
+| M10-04 | Live-Output-Preis | Concept-Preis = Σ der **gespeicherten Baustein-Preise** (+ fest gesetzte Gerichte). Tausch = Preis-**Differenz**, kein Kaskaden-Recompute. Der Baustein-Preis selbst kommt aus D-6/GL-11 (Wareneinsatz→Marge), wird beim Pflegen einmal gerechnet & gecacht; eine GP-Preis-Änderung markiert betroffene Bausteine zur Neuberechnung (GL-02-Muster) |
 | M10-05 | Vorlage = Fork | „Aus Vorlage starten“ kopiert das Slot-Gerüst; Concept lebt danach eigenständig (Vorlage zieht **nicht** durch — D-CON-7); „als Vorlage speichern“ friert ein |
 
 **Bezug zum Bestand:** Live-Summe existiert im Editor (M9) · Niveau-System (haute/gehoben/
@@ -205,7 +217,10 @@ nur Kombination-ref“. Chat-Assistent bleibt **verworfen** (Dominique 2026-06-1
 (kein Personal/Service/Logistik/Marge).
 
 **Hängt ab von:** Rezept-Ebene (vorhanden). Rollt in Concept/Foodbook/Speiseplan auf.
-**Entscheidungs-Gates:** D-HK-1 (Bezugsgröße, Skalierung, Garverlust-Richtung, HK2-Umfang).
+**Modell (D-HK-1, entschieden):** **Zuschlagskalkulation** — auf den Wareneinsatz (HK1) werden
+Gemeinkosten-Zuschläge addiert (HK2). HK2 pro Portion; Garverlust Brutto→Netto pro Position;
+anfangs **ein** Pauschal-Zuschlagssatz (Team-Setting), später differenzierte Sätze (Energie
+nach Garmethode → M15).
 
 **Pakete:**
 
@@ -295,22 +310,22 @@ und Kosten. Kein Scope vor dem gemeinsamen Brainstorming.
 
 ---
 
-## 5. Entscheidungs-Gates (vor Baubeginn klären)
+## 5. Entscheidungs-Gates — ENTSCHIEDEN (Dominique, 2026-06-13)
 
-Aus den „Offenen Punkten“ des Konzeptpapiers + Architektur-Bedarf. **Pflege als Discussions
-im Dev-Modul-Package** `platforms-food-alchemisten`.
+Aus den „Offenen Punkten“ des Konzeptpapiers. **Alle neun Gates sind entschieden** (unten);
+zur Doku zusätzlich als Discussions ins Dev-Modul-Package `platforms-food-alchemisten`.
 
-| Gate | Frage | Empfehlung | Blockiert | Owner |
-|---|---|---|---|---|
-| **D-CON-1** | Was ist ein **Baustein** technisch — und enthält er **ein** Rezept oder ein **Bündel**? | **eigene Entität** `foodalchemist_bausteine` (Rolle + Inhalts-Referenz + Preis-Metadaten); v1 = **ein** VK-Rezept je Baustein, Bündel später; **Gericht** = direkte VK-Setzung im Slot | M10-01 (Schema!) | Dominique/Dev |
-| **D-CON-2** | Rollen-Vokabular fix oder frei? | **gepflegtes Vokabular**, team-erweiterbar (Vorbild `vocab_*`) | M10-01, M13-01 | Dominique |
-| **D-CON-3** | Concept-in-Concept-**Verschachtelung**? | **Nein in v1** (eine Ebene über Slots — wie D-8 „keine Kombination-in-Kombination“) | M10-01 | Dominique |
-| **D-CON-4** | Concept im Foodbook **Referenz oder Kopie**? | **beides:** Master-Referenz (zieht durch) **+** Fork pro Foodbook (Baustein=Referenz, Vorlage/Concept-Kopie=Fork) | M11-01 | Dominique |
-| **D-CON-5** | **Kundenbindung:** Concept/Baustein global oder kundengebunden? | **team-scoped** Stammdaten + Team-Hierarchie (Eltern→Kind-Kataloge, nativ vorhanden) | M10-01 Scoping | Dominique |
-| **D-CON-6** | **Konfigurator-Tiefe?** | phasen: M10 = frei+live · M13-02 = Solver · M13-03 = KI-Vorschlag (optional) | M13-Scope | Dominique |
-| **D-CON-7** | **Vorlagen-Pflege/Versionierung?** | Vorlage = Fork (keine Propagation per Design) → „veraltet“ unkritisch; optional „Diff zur Vorlage“ später | M10-05 | Dominique |
-| **D-HK-1** | HK2: **Bezugsgröße · Skalierung · Garverlust-Richtung · Umfang?** | HK2 pro Portion; Garverlust Brutto→Netto pro Position; Umfang erst nur Energie; Fix-/Sprungmengen später | M12-Detail | Dominique |
-| **D-PLAN-1** | Speiseplan: einzelne Gerichte **oder** ganze Concepts auf Zeit-Slots? | **beides** (Concept „Grillbuffet am Freitag“ **und** Einzel-Gericht) | M14-01 | Dominique |
+| Gate | Frage | ✅ ENTSCHIEDEN |
+|---|---|---|
+| **D-CON-1** | Was ist ein **Baustein**? | **Bepreistes Bündel mehrerer Gerichte**, das eine Rolle füllt (z. B. „Salad Wall", „Grill-Station") — Baukasten für den Verkäufer. Eigener Per-Person-Preis (+EK+W%), **gespeichert**, damit ein Tausch im Concept nicht neu rechnet. Tabellen `foodalchemist_bausteine` + `_baustein_gerichte`. **Gericht** = direkt gesetztes Einzel-Gericht im Slot |
+| **D-CON-2** | Rollen-Vokabular fix oder frei? | **Frei** (team-erweiterbar) |
+| **D-CON-3** | Concept-in-Concept-Verschachtelung? | **Nein** (eine Ebene über Slots) |
+| **D-CON-4** | Concept im Foodbook Referenz oder Kopie? | **Beides** (Master-Referenz + Fork pro Foodbook) |
+| **D-CON-5** | Kundenbindung wo? | **Am Foodbook** — Concepts & Bausteine sind team-globale Baukasten-Teile; kundenspezifisch wird erst das Foodbook |
+| **D-CON-6** | Konfigurator-Tiefe? | **Phasiert** (M10 frei+live · M13-02 Solver · M13-03 KI optional) |
+| **D-CON-7** | Vorlagen-Versionierung? | **Vorlage = Fork**, keine Propagation; optional „Diff zur Vorlage" später |
+| **D-HK-1** | HK-Modell? | **HK1 = Herstellkosten als Zuschlagskalkulation** (Wareneinsatz + Gemeinkosten-Zuschläge → HK2); HK2 pro Portion, Garverlust Brutto→Netto pro Position, anfangs ein Pauschal-Zuschlag, später differenziert (Energie nach Garmethode, M15) |
+| **D-PLAN-1** | Speiseplan: Gerichte **oder** Concepts auf Zeit-Slots? | **Beides** (Concept „Grill-Buffet am Freitag" **und** Einzel-Gericht) |
 
 ---
 

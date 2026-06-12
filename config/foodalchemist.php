@@ -137,7 +137,7 @@ return [
                     'icon'  => 'heroicon-o-book-open',
                 ],
                 [   // M12/M15 — Herstellkosten HK1 → HK2 (Übersicht; surft auch in den Cockpits auf)
-                    'label' => 'Kalkulation (HK2)',
+                    'label' => 'Kalkulation',
                     'route' => 'foodalchemist.demnaechst',
                     'icon'  => 'heroicon-o-calculator',
                 ],
@@ -146,26 +146,9 @@ return [
                     'route' => 'foodalchemist.demnaechst',
                     'icon'  => 'heroicon-o-calendar-days',
                 ],
-                [   // M16 — operative Domänen (downstream)
-                    'label' => 'Produktionsplanung',
-                    'route' => 'foodalchemist.demnaechst',
-                    'icon'  => 'heroicon-o-cog-8-tooth',
-                ],
-                [   // M16
-                    'label' => 'Einkauf',
-                    'route' => 'foodalchemist.demnaechst',
-                    'icon'  => 'heroicon-o-shopping-cart',
-                ],
-                [   // M16
-                    'label' => 'Lager',
-                    'route' => 'foodalchemist.demnaechst',
-                    'icon'  => 'heroicon-o-archive-box',
-                ],
-                [   // M16
-                    'label' => 'Controlling',
-                    'route' => 'foodalchemist.demnaechst',
-                    'icon'  => 'heroicon-o-chart-bar',
-                ],
+                // M16+-Domänen (Produktionsplanung/Einkauf/Lager/Controlling) bewusst NICHT
+                // gelistet — Sidebar zeigt nur, was lt. Masterplan real wird (Dominique 2026-06-13);
+                // sie bleiben in docs/15_MASTERPLAN_VISION.md §M16+ dokumentiert.
             ],
         ],
         [
