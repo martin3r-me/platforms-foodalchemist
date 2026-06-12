@@ -225,7 +225,7 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 
 | ID | Paket | Inhalt | Ref | DoD | Status |
 |---|---|---|---|---|---|
-| M8-01 | MCP-Tools | `foodalchemist.gps.GET/SEARCH`, `recipes.GET` … (ToolContract, REST-Verben, Tools→Services); **auch Schreib-Tools** (POST/PUT nur via GL-07-Proposal-Flow, nie Direkt-Write); je Meilenstein mitziehen (nach M2/M3/M4/M6), nicht gesammelt am Ende — Vorleistung für M7-10 Voice | 01 §Tools; GL-07 | Tools im Registry, Smoke via MCP; nach jedem abgeschlossenen Modul sind dessen Tools vorhanden | ☐ |
+| M8-01 | MCP-Tools | `foodalchemist.gps.GET/SEARCH`, `recipes.GET` … (ToolContract, REST-Verben, Tools→Services); **auch Schreib-Tools** (POST/PUT nur via GL-07-Proposal-Flow, nie Direkt-Write); je Meilenstein mitziehen (nach M2/M3/M4/M6), nicht gesammelt am Ende — Vorleistung für M7-10 Voice | 01 §Tools; GL-07 | Tools im Registry, Smoke via MCP; nach jedem abgeschlossenen Modul sind dessen Tools vorhanden | ☑ (M2–M6-Tools) |
 | M8-02 | Policies + ActivityLog | Policies je Model (curate-Gate M1-08), LogsActivity-Abdeckung prüfen | Plattform-Muster | Policy-Tests grün | ☐ |
 | M8-03 | Leak-Suite | Geschwister-Test je Sektion (M2/M3/M4/M6) in CI-Lauf bündeln | D1-Risiko | alle grün | ☐ |
 | M8-04 | Performance-Pass | Indizes (gps name/status/WG; items designation; prices item+valid_to), Lazy-Audit, N+1-Check | 02 | Browser-Seiten < 300 ms Server-Zeit (Sandbox) | ☐ |
@@ -233,6 +233,8 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | M8-06 | Doku-Sync | Nach jedem Modul: D-Spec §4 + 00_INDEX + dieser Roadmap-Status aktualisieren | Kaizen | Status-Spalten aktuell | ☐ |
 
 ---
+
+> **Status M8-01 (2026-06-12):** 7 Modul-Tools (ToolContract, Naming `<modul>.resource.VERB`, Tools→Services, team-scoped über ToolContext): `gps.SEARCH/GET` (GET inkl. GL-01-Allergen-Aggregat), `recipes.SEARCH/GET` (basis-Scope, GET mit Zutaten+GL-02-Aggregaten), `verkaufsrezepte.SEARCH` (inkl. Marketing-/Kunden-Wording-Suche), `artikel.SEARCH`, plus **Schreib-Tool-Muster `recipe_klasse.POST`** — ausschließlich GL-07-Proposal-Flow: ohne accept nur Vorschlag, accept=true geht durch den Accept-Pfad (Lineage ki, Stempel, **Override-First blockt als Tool-Error `OVERRIDE_FIRST`**), nie Direkt-Write. Registrierung im ServiceProvider idempotent mit resolved-Check (Stolperstein: die Core-Registry ist beim Modul-Boot oft schon resolved — `afterResolving` allein feuert dann nie). **Live-Smoke gegen Sandbox: alle 7 registriert, gps.SEARCH »Agar« → »Agar Agar: trocken, Pulver«, verkaufsrezepte.SEARCH → Rinderfilet 25 €, artikel.SEARCH 39 Treffer.** Pest (3/29): Registry-Smoke + Schema-Typen, Scope-Härte über Tools (VK nicht in recipes.SEARCH), Proposal-Flow inkl. ehrlicher Nicht-Treffer + manual-Block. Im Live-Connector erscheinen die Tools erst nach Deploy (CLAUDE.md). »Je Meilenstein mitziehen« gilt ab jetzt: M7-10-Voice nutzt diese Tools als Loop-Basis. Suite: **351/351**.
 
 ## Offene Entscheide / externe Abhängigkeiten
 

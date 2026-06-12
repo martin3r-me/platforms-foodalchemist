@@ -191,6 +191,38 @@ class FoodAlchemistServiceProvider extends ServiceProvider
          * <livewire:foodalchemist.dashboard />
          */
         $this->registerLivewireComponents();
+
+        // M8-01: Modul-Tools (ToolContract) — idempotent in die Core-Registry;
+        // afterResolving, damit die Registrierung auch greift, wenn der MCP-
+        // Server die Registry erst später aufbaut (Auto-Discovery-Pfad variiert)
+        if (class_exists(\Platform\Core\Tools\ToolRegistry::class)) {
+            $toolHook = function ($registry) {
+                foreach ([
+                    \Platform\FoodAlchemist\Tools\GpsSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\GpsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesGetTool::class,
+                    \Platform\FoodAlchemist\Tools\VerkaufsrezepteSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeKlassePostTool::class,
+                ] as $toolClass) {
+                    try {
+                        $tool = new $toolClass();
+                        if (! $registry->has($tool->getName())) {
+                            $registry->register($tool);
+                        }
+                    } catch (\Throwable) {
+                        // Tool-Registrierung darf den Boot nie reißen
+                    }
+                }
+            };
+            // Singleton ggf. schon resolved (Core-Boot) → sofort; sonst beim ersten make
+            if ($this->app->resolved(\Platform\Core\Tools\ToolRegistry::class)) {
+                $toolHook($this->app->make(\Platform\Core\Tools\ToolRegistry::class));
+            } else {
+                $this->app->afterResolving(\Platform\Core\Tools\ToolRegistry::class, $toolHook);
+            }
+        }
         
         /**
          * SCHRITT 7: Tools registrieren (optional)
