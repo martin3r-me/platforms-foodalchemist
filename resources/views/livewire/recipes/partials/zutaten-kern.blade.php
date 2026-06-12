@@ -13,13 +13,15 @@
                     <th class="{{ $th }} !px-2">{{ $head }}</th>
                 @endforeach
             </tr></thead>
-            <tbody>
+            {{-- tbody je Zutat: Haupt-Zeile + aufklappbare LA-Peek-Zeile (HTML erlaubt mehrere tbody) --}}
                 <template x-for="(zeile, i) in rows" :key="zeile._key">
-                    <tr class="{{ $tr }}" :class="zeile.is_optional ? 'opacity-60' : ''" data-editor-zeile>
-                        <td class="{{ $td }} !px-2 whitespace-nowrap">
-                            <span class="text-gray-400 tabular-nums" x-text="i + 1"></span>
-                            <button type="button" class="text-gray-300 hover:text-violet-500 px-0.5" @click="hoch(i)" :disabled="i === 0" title="nach oben">↑</button>
-                            <button type="button" class="text-gray-300 hover:text-violet-500 px-0.5" @click="runter(i)" :disabled="i === rows.length - 1" title="nach unten">↓</button>
+                    <tbody @dragover.prevent @drop="dropAuf(i)"
+                           :class="dragIdx === i ? 'opacity-40' : ''" data-editor-zeile>
+                    <tr class="{{ $tr }} !border-b-0" :class="zeile.is_optional ? 'opacity-60' : ''">
+                        <td class="{{ $td }} !px-1.5 !py-1 whitespace-nowrap">
+                            <span class="cursor-grab active:cursor-grabbing text-gray-300 hover:text-violet-500 select-none" draggable="true"
+                                  @dragstart="dragIdx = i" @dragend="dragIdx = null" title="ziehen zum Sortieren" data-drag-handle>⠿</span>
+                            <span class="text-gray-400 tabular-nums text-xs ml-0.5" x-text="i + 1"></span>
                         </td>
                         <td class="{{ $td }} !px-2"><input type="text" x-model="zeile.menge" class="{{ $input }} !w-20 !py-1 text-right" data-menge /></td>
                         <td class="{{ $td }} !px-2"><input type="text" x-model="zeile.menge_max" placeholder="–" class="{{ $input }} !w-16 !py-1 text-right" /></td>
@@ -28,9 +30,11 @@
                                 @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                             </select>
                         </td>
-                        <td class="{{ $td }} !px-2 max-w-[16rem]">
+                        <td class="{{ $td }} !px-2 !py-1 max-w-[18rem]">
                             <span class="text-xs" :class="zeile.gp_id || zeile.referenced_recipe_id ? 'text-violet-600 dark:text-violet-400' : 'text-gray-400'"
                                   x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"></span>
+                            <button type="button" x-show="zeile.gp_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Lieferantenartikel hinter dem GP (Peek)"
+                                    @click="peek(zeile)" data-gp-peek>📦</button>
                             <span class="block text-[10px] text-gray-400 italic truncate" x-text="zeile.lineage ? 'via ' + zeile.lineage : ''"></span>
                         </td>
                         <td class="{{ $td }} !px-2"><input type="text" x-model="zeile.note" placeholder="Hinweis" class="{{ $input }} !w-28 !py-1" /></td>
@@ -45,8 +49,40 @@
                             <button type="button" class="text-rose-400 hover:text-rose-600" @click="rows.splice(i, 1)" title="Zeile entfernen" data-zeile-entfernen>✕</button>
                         </td>
                     </tr>
+                    {{-- GP-Peek (D-5 §4.2.3, Ist-App): LA-Tabelle hinter dem GP, ★ = Lead --}}
+                    <tr x-show="zeile._peek" x-cloak>
+                        <td colspan="9" class="!px-3 !py-2 bg-black/[0.02] dark:bg-white/[0.03]">
+                            <div class="rounded-lg border-l-2 border-orange-400 bg-white dark:bg-gray-900 px-3 py-2" data-gp-peek-tabelle>
+                                <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">
+                                    📦 <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
+                                </p>
+                                <table class="w-full text-xs">
+                                    <thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-400">
+                                        <th class="px-1.5 py-0.5"></th><th class="px-1.5 py-0.5">Lieferant</th><th class="px-1.5 py-0.5">Art.-Nr</th>
+                                        <th class="px-1.5 py-0.5">Bezeichnung</th><th class="px-1.5 py-0.5">Marke</th><th class="px-1.5 py-0.5">VPE</th>
+                                        <th class="px-1.5 py-0.5 text-right">Preis</th><th class="px-1.5 py-0.5 text-right">Vergleichspreis</th><th class="px-1.5 py-0.5 text-right">Match</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        <template x-for="(la, j) in (zeile._peek ?? [])" :key="j">
+                                            <tr class="border-t border-black/5 dark:border-white/5" :class="la.lead ? 'bg-orange-500/10' : ''">
+                                                <td class="px-1.5 py-1"><span x-show="la.lead" class="text-orange-500" title="Lead-LA (GL-03)">★</span></td>
+                                                <td class="px-1.5 py-1 text-gray-600 dark:text-gray-300" x-text="la.lieferant"></td>
+                                                <td class="px-1.5 py-1 font-mono text-gray-500" x-text="la.artikelnr"></td>
+                                                <td class="px-1.5 py-1 text-gray-900 dark:text-gray-100" x-text="la.bezeichnung"></td>
+                                                <td class="px-1.5 py-1 text-gray-500" x-text="la.marke ?? '—'"></td>
+                                                <td class="px-1.5 py-1 text-gray-500 italic" x-text="la.vpe ?? '—'"></td>
+                                                <td class="px-1.5 py-1 text-right tabular-nums" x-text="la.preis ?? '—'"></td>
+                                                <td class="px-1.5 py-1 text-right tabular-nums text-gray-500" x-text="la.vergleichspreis ?? '—'"></td>
+                                                <td class="px-1.5 py-1 text-right text-gray-500" x-text="la.match ?? '—'"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>
+                    </tbody>
                 </template>
-            </tbody>
             <tfoot>
                 <tr class="border-t border-black/10 dark:border-white/10">
                     <td colspan="7" class="{{ $td }} !px-2 text-right text-xs text-gray-400">

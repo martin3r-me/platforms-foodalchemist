@@ -55,7 +55,7 @@
     <div class="absolute inset-0 bg-black/50 backdrop-blur-md" @click="close()"></div>
 
     {{-- Panel (frosted, DESIGN.md) --}}
-    <div class="relative w-full {{ $size }} max-h-[85vh] flex flex-col overflow-hidden rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-2xl shadow-black/20">
+    <div class="relative w-full {{ $size }} max-h-[92vh] flex flex-col overflow-hidden rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-2xl shadow-black/20">
         <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
 
         {{-- Kopf: Titel + Schließen, darunter fixe Aktionen oben links (P-2) --}}
@@ -78,7 +78,7 @@
         </div>
 
         {{-- Körper: scrollt, Sektionen via <x-foodalchemist::modal-section> --}}
-        <div class="flex-1 overflow-y-auto px-6 py-5 space-y-6" data-modal-zone="body">
+        <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4" data-modal-zone="body">
             {{ $slot }}
         </div>
 

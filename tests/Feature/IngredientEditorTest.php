@@ -121,3 +121,33 @@ it('Modal-Roundtrip: speichern synct + dispatcht Events; D1-Gate blockt fremde T
         ->call('speichern', [])
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Besitzer-Team'));
 });
+
+it('gpArtikel (GP-Peek): liefert LAs hinter dem GP mit ★-Lead zuerst, VPE, Preis und Vergleichspreis', function () {
+    $gp = ($this->mkGpMitPreis)('Pflaumenmarmelade', 3.50);                      // Lead: Necta, 1 kg
+    $hanos = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Hanos']);
+    $la2 = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $hanos->id,
+        'designation' => 'PFLAUMENMARMELADE GROSS', 'article_number' => '23438031',
+        'qty' => 0.75, 'unit_code' => 'kg',
+    ]);
+    FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la2->id, 'gp_id' => $gp->id]);
+    FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la2->id, 'price' => 4.20, 'status' => '0']);
+
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
+    $artikel = Livewire::test(IngredientEditor::class)->instance()->gpArtikel($gp->id);
+
+    expect($artikel)->toHaveCount(2)
+        ->and($artikel[0]['lead'])->toBeTrue()                                   // Lead sortiert nach oben
+        ->and($artikel[0]['lieferant'])->toBe('Necta')
+        ->and($artikel[0]['preis'])->toBe('3,50 €')
+        ->and($artikel[0]['vergleichspreis'])->toBe('3,50 €/kg')
+        ->and($artikel[1]['lead'])->toBeFalse()
+        ->and($artikel[1]['lieferant'])->toBe('Hanos')
+        ->and($artikel[1]['artikelnr'])->toBe('23438031')
+        ->and($artikel[1]['vpe'])->toBe('0,75 kg')
+        ->and($artikel[1]['vergleichspreis'])->toBe('5,60 €/kg');                // 4,20 € / 0,75 kg
+
+    // Editor-Markup: Drag-Handle + Peek-Hooks im (eingebetteten) Editor vorhanden
+    $html = Livewire::test(IngredientEditor::class, ['recipeId' => $this->rezept->id, 'eingebettet' => true])->html();
+    expect($html)->toContain('data-drag-handle')->toContain('data-gp-peek');
+});

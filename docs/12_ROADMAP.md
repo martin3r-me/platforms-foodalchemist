@@ -238,6 +238,12 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 > **④ Aroma-Netz-Layout:** Kollisionsauflösung für Verwandte (Mindest-Winkelabstand statt Klumpen), Zentrum-Name lesbar UNTER dem Kreis (34 Z.), Kopf-Spacing, Verwandten-/Speichen-Kanten stark gedimmt (0,14/0,10 — Brücken dominieren wieder), Label-Halo (paint-order stroke) über Kanten. Screenshot-verifiziert.
 > Live verifiziert (Editor, VK-Panel 4 Anker-Chips, Taxonomie-Seite 200 mit W-1, Netz). Equipment-Gruppen-Fix: Komponente lud `gruppe` nicht mit (zeigte »sonstig«). Suite: **368/368**.
 
+> **EDITOR-PARITÄT Runde 2 (2026-06-12, Dominique mit Jarvis-Zutaten-Editor-Screenshot) — Drag&Drop · GP-Peek · dichter/größer:**
+> **① Drag&Drop:** Zutaten-Zeilen per Drag-Handle (⠿) umsortierbar — natives HTML5-Drag&Drop rein in Alpine (`dragIdx`/`dropAuf` an je einem `<tbody>` pro Zutat, kein neues JS-Paket), Reihenfolge = Position beim Speichern (bestehender Sync-Vertrag M4-07). Die ↑/↓-Buttons bleiben als Fallback.
+> **② GP-Artikel-Peek (Ist-App-Feature):** 📦-Button an jeder GP-Zutat klappt eine Detail-Zeile auf: Lieferantenartikel hinter dem GP als Tabelle **★ Lead · Lieferant · Art.-Nr · Bezeichnung · Marke · VPE · Preis · Vergleichspreis · Match** (Lead-Zeile orange markiert, GL-03/GL-11-Daten via `GpService::lasForGp` + `PriceService::vergleichspreis` — neuer Endpoint `IngredientEditor::gpArtikel`, Daten lazy erst beim Aufklappen, Editor-Zustand bleibt unberührt).
+> **③ Größer + dichter:** Rezept-Modal `max-w-4xl→6xl`, Modal-Hülle `max-h-[92vh]`, Body-/Sektions-Abstände reduziert (py-4/space-y-4, Sektionen pt-4).
+> Verifiziert headless (Pflaumenmarmelade-GP: 2 Hanos-LAs, ★-Lead korrekt, »—« bei price=NULL ist Datenlage; Gegenprobe mit Preisen: 1,37 € / 1,37 €/Stk) + Marker im gerenderten HTML. Regressionstest `gpArtikel` (Lead-Sortierung, VPE-/Preis-/Vergleichspreis-Format, Markup-Hooks). Suite: **369/369 (1.515 Assertions)**.
+
 ## M8 — Querschnitt (laufend)
 
 | ID | Paket | Inhalt | Ref | DoD | Status |

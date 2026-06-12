@@ -88,6 +88,44 @@ class IngredientEditor extends Component
         return ['verluste' => $verluste, 'confidence' => max(0.0, min(1.0, $vorschlag->confidence))];
     }
 
+    /**
+     * GP-Peek (D-5 §4.2.3 / Ist-App): Lieferantenartikel hinter dem GP —
+     * Lieferant · Art.-Nr · Bezeichnung · Marke · VPE · Preis · Vergleichspreis
+     * · Match, ★ = Lead-LA. Ohne Editor-Verlust (Alpine klappt auf).
+     */
+    public function gpArtikel(int $gpId): array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $gp = $team !== null ? app(\Platform\FoodAlchemist\Services\GpService::class)->find($gpId, $team) : null;
+        if ($gp === null) {
+            return [];
+        }
+        $preise = app(\Platform\FoodAlchemist\Services\PriceService::class);
+
+        return app(\Platform\FoodAlchemist\Services\GpService::class)->lasForGp($gp)
+            ->map(function ($la) use ($gp, $preise) {
+                $preis = $la->price?->price !== null ? (float) $la->price->price : null;
+                $vergleich = $la->item !== null ? $preise->vergleichspreis($la->item, $preis) : null;
+
+                return [
+                    'lead' => $la->item !== null && (int) $la->item->id === (int) $gp->lead_la_supplier_item_id,
+                    'lieferant' => $la->supplier?->name ?? '—',
+                    'artikelnr' => $la->item?->article_number ?? '—',
+                    'bezeichnung' => $la->item?->designation ?? '—',
+                    'marke' => $la->item?->brand ?? null,
+                    'vpe' => $la->item?->qty !== null
+                        ? rtrim(rtrim(number_format((float) $la->item->qty, 2, ',', '.'), '0'), ',') . ' ' . ($la->item->packaging_unit ?? $la->item->unit_code ?? '')
+                        : null,
+                    'preis' => $preis !== null ? number_format($preis, 2, ',', '.') . ' €' : null,
+                    'vergleichspreis' => $vergleich !== null ? number_format($vergleich['wert'], 2, ',', '.') . ' ' . $vergleich['einheit'] : null,
+                    'match' => $la->structure?->hauptzutat_konfidenz !== null
+                        ? round((float) $la->structure->hauptzutat_konfidenz * 100) . ' %'
+                        : null,
+                ];
+            })
+            ->sortByDesc('lead')->values()->all();
+    }
+
     /** GP-/Sub-Picker (M4-08): liefert Auto-Fill-Daten inkl. ek_pro_g. */
     public function sucheZiel(string $suche): array
     {

@@ -25,8 +25,19 @@
             pickerErgebnisse: [],
             _n: zeilen.length,
 
+            dragIdx: null,
+            dropAuf(i) {
+                if (this.dragIdx === null || this.dragIdx === i) { this.dragIdx = null; return; }
+                const [z] = this.rows.splice(this.dragIdx, 1);
+                this.rows.splice(i, 0, z);
+                this.dragIdx = null;
+            },
+            async peek(zeile) {  // D-5 §4.2.3: LA-Tabelle hinter dem GP, lazy vom Server
+                if (zeile._peek) { zeile._peek = null; return; }
+                zeile._peek = await this.$wire.gpArtikel(zeile.gp_id);
+            },
             payload() {
-                return this.rows.map(({ _key, ziel_name, lineage, ek_pro_g, _garverlust_ki, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
+                return this.rows.map(({ _key, ziel_name, lineage, ek_pro_g, _garverlust_ki, _peek, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
             },
             init() {
                 // Modal-Footer liegt außerhalb des x-data-Scopes → Window-Event;
