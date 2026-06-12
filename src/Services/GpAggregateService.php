@@ -128,7 +128,12 @@ class GpAggregateService
      * (is_discontinued=0), NULL-Werte fallen aus dem AVG (Invariante 5).
      * Rückgabe: [kernwert => ['avg' => float|null, 'n' => int]] + 'salt_g' (sodium×0.0025).
      */
-    public function naehrwerte(FoodAlchemistGp $gp): array
+    /**
+     * $mitKiFallback (R10, NUR Panel-Anzeige): ohne LA-Daten die KI-/manuelle
+     * Schätzschicht vom GP zurückgeben — die GL-08-Rezept-Aggregation ruft
+     * bewusst OHNE Fallback (Schätzwerte verfälschen keine Rezept-Nährwerte).
+     */
+    public function naehrwerte(FoodAlchemistGp $gp, bool $mitKiFallback = false): array
     {
         $kerne = FoodAlchemistItemNutritional::KERNWERTE;
 
@@ -157,6 +162,20 @@ class GpAggregateService
             'avg' => $out['sodium']['avg'] !== null ? $out['sodium']['avg'] * 0.0025 : null,
             'n' => $out['sodium']['n'],
         ];
+        $out['quelle'] = $out['energy_kcal']['avg'] !== null ? 'la' : 'keine';
+
+        // R10: Fallback-Schicht (ki|manual) — nur wenn KEINE LA-Daten und gewünscht
+        if ($mitKiFallback && $out['energy_kcal']['avg'] === null && $gp->nutri_quelle !== null) {
+            $map = [
+                'energy_kcal' => 'nutri_kcal_per_100g', 'protein' => 'nutri_protein_g_per_100g',
+                'fat' => 'nutri_fat_g_per_100g', 'carbs_absorbable' => 'nutri_carbs_g_per_100g',
+                'salt_g' => 'nutri_salt_g_per_100g',
+            ];
+            foreach ($map as $key => $feld) {
+                $out[$key] = ['avg' => $gp->{$feld} !== null ? (float) $gp->{$feld} : null, 'n' => 0];
+            }
+            $out['quelle'] = $gp->nutri_quelle;                   // 'ki' | 'manual'
+        }
 
         return $out;
     }

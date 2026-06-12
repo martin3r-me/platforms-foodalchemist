@@ -49,7 +49,13 @@ class Ki extends Component
                 ->groupBy('feature', 'tier')->orderByDesc('calls')->limit(30)->get()
             : collect();
 
+        // M9-04: €-Schätzung je Feature (Tokens × Tier-Preis aus der Deployment-Config)
+        $preise = config('foodalchemist.ai.kosten_pro_mio', []);
+        $euro = fn ($z) => ((float) $z->t_in * ($preise[$z->tier]['in'] ?? 0) + (float) $z->t_out * ($preise[$z->tier]['out'] ?? 0)) / 1_000_000;
+
         return view('foodalchemist::livewire.settings.ki', [
+            'kosten' => $statistik->mapWithKeys(fn ($z) => [$z->feature . '|' . $z->tier => $euro($z)]),
+            'kostenGesamt' => $statistik->sum($euro),
             'provider' => config('foodalchemist.ai.provider', 'core'),
             'tiers' => config('foodalchemist.ai.tiers', []),
             'fallbackModel' => config('foodalchemist.ai.fallback_model'),

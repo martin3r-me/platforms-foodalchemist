@@ -75,6 +75,11 @@ return [
                     'route' => 'foodalchemist.dashboard',
                     'icon'  => 'heroicon-o-home',
                 ],
+                [
+                    'label' => 'Zu prüfen',
+                    'route' => 'foodalchemist.review',
+                    'icon'  => 'heroicon-o-clipboard-document-check',
+                ],
             ],
         ],
         [
@@ -189,7 +194,26 @@ return [
             'C' => env('FOODALCHEMIST_AI_TIER_C'),
             'D' => env('FOODALCHEMIST_AI_TIER_D'),
         ],
+
+        /*
+         * M9-04 / V-09: €-Preise je Tier (in/out je 1 Mio Tokens) — DEPLOYMENT-
+         * Config wie die Modell-Strings; Defaults = Anthropic-Listenpreise der
+         * Default-Modelle (Stand 2026-06, in €) — beim Modell-Wechsel anpassen.
+         */
+        'kosten_pro_mio' => [
+            'A' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_A_IN', 2.80), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_A_OUT', 14.00)],
+            'B' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_B_IN', 0.75), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_B_OUT', 3.75)],
+            'C' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_C_IN', 2.80), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_C_OUT', 14.00)],
+            'D' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_D_IN', 2.80), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_D_OUT', 14.00)],
+        ],
     ],
+
+    /*
+     * V-16: Nutzungsbasierte Plattform-Abrechnung (billables) — Struktur nach
+     * CLAUDE.md/planner-Vorbild. WAS abgerechnet wird (Rezepte? GPs? KI-Calls?)
+     * ist ein Dominique/Martin-Entscheid — bis dahin bewusst leer.
+     */
+    'billables' => [],
 
     /**
      * TASK_PROMPT-Registry — Skeleton (M0-14).
@@ -282,6 +306,11 @@ return [
             'task' => 'Leite die 14 EU-Allergene (LMIV Anhang II) fuer das Grundprodukt ab — '
                 . 'je Allergen enthalten|spuren|nicht_enthalten|unbekannt, im Zweifel unbekannt '
                 . '(F7.1: nie falsch-negativ raten): werte = {allergene: {<slug>: wert}}.',
+        ],
+        'gp.naehrwerte' => [
+            'tier' => 'B',                                            // R10 (Ist-Feature): Fallback ohne LA-Daten
+            'task' => 'Schaetze die Naehrwerte des Grundprodukts je 100 g (Lebensmittel-'
+                . 'Standardwerte, konservativ): werte = {kcal, protein_g, fat_g, carbs_g, salt_g}.',
         ],
         'gp.domain' => [
             'tier' => 'B',

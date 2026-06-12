@@ -68,6 +68,29 @@ V-22-Pflegelücken (VK ohne Klasse) · Rezepte im Review-Status. Zähler in der 
 `billables`-Block in `config/foodalchemist.php` (Vorbild `planner.php`) + €-Auswertung
 in den KI-Settings aus `ai_call_log` (Tokens × Tier-Preis).
 
+> **Status M9-03 (2026-06-12):** Review-Queue gebaut — Route  + Sidebar «Zu prüfen»:
+> offene **LA→GP-Match-Vorschläge** (Übernehmen/Verwerfen via MatchService, Live: 2 offen),
+> offene **Bulk-KI-Vorschläge** (Einzel-Übernahme via BulkEnrichService), **VK ohne Klasse** (V-22),
+> **Rezepte im Review** (Live: 1.365) und **ungemappte Zutaten** (F7.1) — Rezept-Klicks öffnen die
+> Editoren als Modal. Aktionen laufen über die bestehenden Services (eine Regel-Stelle).
+
+> **Status M9-04 (2026-06-12):** KI-Kosten sichtbar —  je Tier (€/1M Tokens
+> in/out, env-überschreibbar, Defaults = Anthropic-Listenpreise) + **≈-Kosten-Spalte und
+> Gesamt-Summe** in der KI-Settings-Nutzungstabelle (Tokens × Tier-Preis). -Block
+> (V-16, Plattform-Abrechnung) als dokumentierter LEERER Block angelegt — WAS abgerechnet wird,
+> ist Dominique/Martin-Entscheid.
+
+> **Status R10 (2026-06-12, Dominique-Wunsch «Allergene/Nährwerte über KI, falls kein LA»):**
+> Nährwert-Aggregation GEPRÜFT — kein Bug: 4.090/7.774 GPs haben LA-Nährwerte, der Rest sind
+> echte BLS-Lücken (Beleg Berliner: Nutritional-Zeile existiert, aber alle Kernwerte NULL).
+> **✨-Fallback gebaut:** -Prompt (Registry +1) + Migration 000039
+> (5 nutri-Felder + Lineage am GP); GP-Panel zeigt «✨ per KI schätzen» NUR wenn die jeweilige
+> Daten-Quelle leer ist; GL-07-Vorschlags-Box → Übernehmen schreibt Allergene in den
+> **Override-Layer** (GL-01 Prio 1,  wird nie geschrieben — F7.1) bzw. Nährwerte in
+> die **Fallback-Schicht mit ✨-KI-Marker** — die bewusst NUR der Panel-Anzeige dient
+> () und NIE in die GL-08-Rezept-Aggregation fließt.
+> 3 neue Tests. Live verifiziert (Button-Logik korrekt kontextabhängig). Suite: **388/388 (1.628 Assertions)**.
+
 ### M9-05 Verwendungssuche (Dominique-Wunsch «Fehlt Verwendungssuche»)
 Durchgängige «Wo verwendet?»-Navigation: GP → Rezepte (Liste statt nur Zähler),
 Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion + globale Suche.

@@ -123,13 +123,35 @@
             </div>
         </div>
 
+        {{-- R10: GL-07-Vorschlags-Box für ✨-Schätzungen (Allergene/Nährwerte) --}}
+        @if($kiVorschlag !== null)
+            <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-sm" data-gp-ki-vorschlag>
+                <p class="text-gray-900 dark:text-gray-100">✨ {{ $kiVorschlag['typ'] === 'allergene' ? 'Allergen-Schätzung' : 'Nährwert-Schätzung' }}
+                    <span class="text-xs text-gray-400">· {{ round($kiVorschlag['confidence'] * 100) }} % · schreibt als Override (GL-01 Prio 1)</span></p>
+                <div class="flex flex-wrap gap-1 mt-1">
+                    @foreach($kiVorschlag['werte'] as $feld => $wert)
+                        <span class="{{ $pill }} {{ $kiVorschlag['typ'] === 'allergene' ? (['enthalten' => $variantPill['danger'], 'spuren' => $variantPill['warning'], 'nicht_enthalten' => $variantPill['secondary']][$wert] ?? $variantPill['secondary']) : $variantPill['info'] }}"
+                              wire:key="kiw-{{ $feld }}">{{ $feld }}: {{ $wert }}</span>
+                    @endforeach
+                </div>
+                <div class="flex gap-1.5 mt-1.5">
+                    <button type="button" wire:click="kiUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-gp-ki-uebernehmen>Übernehmen</button>
+                    <button type="button" wire:click="kiVerwerfen" class="{{ $btnGhostXs }}" data-gp-ki-verwerfen>Verwerfen</button>
+                </div>
+            </div>
+        @endif
+
         {{-- ALLERGENE (effektiv, GL-01) — immer sichtbar --}}
         <div class="border-t border-black/5 dark:border-white/10 pt-2" data-sektion="allergene">
-            <p class="{{ $dt }} mb-1">Allergene <span class="normal-case">(effektiv)</span>
+            <p class="{{ $dt }} mb-1 flex items-center gap-2">Allergene <span class="normal-case">(effektiv)</span>
                 @if($allergenKonfidenz !== null)
                     <span class="ml-1 font-semibold normal-case {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$allergenKonfidenz['konfidenz']] ?? 'text-gray-400' }}">{{ strtoupper($allergenKonfidenz['konfidenz']) }}</span>
                     <span class="normal-case text-gray-400 font-normal"> · aus {{ $allergenKonfidenz['n_las_mit_daten'] }}/{{ $gp->n_las_total }} LAs</span>
                     @if($allergenKonfidenz['needs_review'])<span class="{{ $pill }} {{ $variantPill['danger'] }} ml-1" title="enthalten ↔ nicht_enthalten ohne spuren-Mittelweg: {{ implode(', ', $allergenKonfidenz['konflikt_felder']) }}">Review nötig</span>@endif
+                @endif
+                @if($kannKuratieren && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0)
+                    <button type="button" wire:click="kiAllergene" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 ml-auto normal-case"
+                            title="Ist-Feature: ohne LA-Daten per KI schätzen — Vorschlag, Übernehmen schreibt Override (GL-01)" data-ki-allergene>✨ per KI schätzen</button>
                 @endif
             </p>
             @if($allergene !== null)
@@ -169,7 +191,16 @@
 
         {{-- NÄHRWERTE (Ø je 100 g, GL-08) — immer sichtbar --}}
         <div class="border-t border-black/5 dark:border-white/10 pt-2" data-sektion="naehrwerte">
-            <p class="{{ $dt }} mb-1">Nährwerte <span class="normal-case">(Ø aus LAs, je 100 g)</span></p>
+            <p class="{{ $dt }} mb-1 flex items-center gap-2">Nährwerte
+                <span class="normal-case">({{ ($naehrwerte['quelle'] ?? 'la') === 'la' ? 'Ø aus LAs, je 100 g' : (($naehrwerte['quelle'] ?? '') === 'ki' ? 'KI-Schätzung je 100 g' : 'je 100 g') }})</span>
+                @if(($naehrwerte['quelle'] ?? null) === 'ki')
+                    <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case" title="KI-geschätzt — keine LA-Daten{{ $gp->nutri_ai_confidence !== null ? ' · ' . round($gp->nutri_ai_confidence * 100) . ' %' : '' }}" data-naehrwerte-ki-marker>✨ KI</span>
+                @endif
+                @if($kannKuratieren && $naehrwerte !== null && $naehrwerte['energy_kcal']['avg'] === null)
+                    <button type="button" wire:click="kiNaehrwerte" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 ml-auto normal-case"
+                            title="Ist-Feature: ohne LA-Daten per KI schätzen (nur Panel-Anzeige — fließt NICHT in Rezept-Nährwerte)" data-ki-naehrwerte>✨ per KI schätzen</button>
+                @endif
+            </p>
             @if($naehrwerte !== null && $naehrwerte['energy_kcal']['avg'] !== null)
                 <dl class="space-y-0.5">
                     @foreach([

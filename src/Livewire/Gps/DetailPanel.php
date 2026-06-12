@@ -38,6 +38,7 @@ class DetailPanel extends Component
         $this->gpId = $id;
         $this->laSuche = '';
         $this->fehler = null;
+        $this->kiVorschlag = null;
     }
 
     // ── M3-07: LA-Aktionen ──────────────────────────────────────────────
@@ -68,6 +69,125 @@ class DetailPanel extends Component
         $this->laAktion(fn ($svc, $gp, $team) => $svc->verknuepfen($team, $gp, $laId), nurKurator: true);
         $this->laSuche = '';
         $this->dispatch('gp-las-geaendert');
+    }
+
+    // ── R10 (Ist-Feature): ✨ Allergene/Nährwerte per KI schätzen, wenn keine LA-Daten ──
+
+    /** @var ?array{typ: string, werte: array, confidence: float} Vorschau — NICHTS persistiert (GL-07) */
+    public ?array $kiVorschlag = null;
+
+    public function kiAllergene(): void
+    {
+        $gp = $this->kuratierbaresGp();
+        if ($gp === null) {
+            return;
+        }
+        try {
+            $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('gp.allergene', [
+                'name' => $gp->name, 'zustand' => $gp->zustand, 'warengruppe' => $gp->warengruppe?->name,
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $werte = [];
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
+            $wert = $v->werte['allergene'][$feld] ?? null;
+            if (in_array($wert, ['enthalten', 'spuren', 'nicht_enthalten'], true)) {
+                $werte[$feld] = $wert;                            // 'unbekannt' ⇒ kein Override (F7.1)
+            }
+        }
+        if ($werte === []) {
+            $this->fehler = 'KI lieferte keine verwertbaren Allergen-Werte — echter Provider nötig.';
+
+            return;
+        }
+        $this->kiVorschlag = ['typ' => 'allergene', 'werte' => $werte, 'confidence' => max(0.0, min(1.0, $v->confidence))];
+    }
+
+    public function kiNaehrwerte(): void
+    {
+        $gp = $this->kuratierbaresGp();
+        if ($gp === null) {
+            return;
+        }
+        try {
+            $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('gp.naehrwerte', [
+                'name' => $gp->name, 'zustand' => $gp->zustand, 'warengruppe' => $gp->warengruppe?->name,
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $werte = [];
+        foreach (['kcal', 'protein_g', 'fat_g', 'carbs_g', 'salt_g'] as $feld) {
+            $wert = $v->werte[$feld] ?? null;
+            if (is_numeric($wert) && (float) $wert >= 0) {
+                $werte[$feld] = round((float) $wert, 2);
+            }
+        }
+        if (! isset($werte['kcal'])) {                              // kcal = Leit-Indikator (GL-08)
+            $this->fehler = 'KI lieferte keine verwertbaren Nährwerte (kcal fehlt) — echter Provider nötig.';
+
+            return;
+        }
+        $this->kiVorschlag = ['typ' => 'naehrwerte', 'werte' => $werte, 'confidence' => max(0.0, min(1.0, $v->confidence))];
+    }
+
+    /** Übernehmen = der EINE Schreib-Moment (GL-07): Override-Layer bzw. Fallback-Schicht. */
+    public function kiUebernehmen(): void
+    {
+        $gp = $this->kuratierbaresGp();
+        if ($gp === null || $this->kiVorschlag === null) {
+            return;
+        }
+        if ($this->kiVorschlag['typ'] === 'allergene') {
+            $update = [];
+            foreach ($this->kiVorschlag['werte'] as $feld => $wert) {
+                $update["allergen_{$feld}"] = $wert;             // GL-01 Prio 1: Override
+            }
+            $update['allergene_ki_confidence'] = $this->kiVorschlag['confidence'];
+            $gp->update($update);
+        } else {
+            $w = $this->kiVorschlag['werte'];
+            $gp->update([
+                'nutri_kcal_per_100g' => $w['kcal'] ?? null,
+                'nutri_protein_g_per_100g' => $w['protein_g'] ?? null,
+                'nutri_fat_g_per_100g' => $w['fat_g'] ?? null,
+                'nutri_carbs_g_per_100g' => $w['carbs_g'] ?? null,
+                'nutri_salt_g_per_100g' => $w['salt_g'] ?? null,
+                'nutri_quelle' => 'ki',
+                'nutri_ai_confidence' => $this->kiVorschlag['confidence'],
+            ]);
+        }
+        $this->kiVorschlag = null;
+    }
+
+    public function kiVerwerfen(): void
+    {
+        $this->kiVorschlag = null;                                 // reject lässt Fachdaten unberührt (GL-07)
+    }
+
+    /** Curate-Gate + frisches GP — KI-Schätzung ist eine globale Katalog-Aktion (D1). */
+    private function kuratierbaresGp(): ?FoodAlchemistGp
+    {
+        $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        $gp = $team !== null && $this->gpId !== null
+            ? FoodAlchemistGp::visibleToTeam($team)->with('warengruppe')->find($this->gpId)
+            : null;
+        if ($gp === null) {
+            return null;
+        }
+        if (! Curate::canCurate(Auth::user(), $gp)) {
+            $this->fehler = 'Globale Katalog-Aktion — nur fürs Kurations-Team (D1).';
+
+            return null;
+        }
+
+        return $gp;
     }
 
     private function laAktion(\Closure $aktion, bool $nurKurator = false): void
@@ -113,7 +233,7 @@ class DetailPanel extends Component
             'allergene' => $gp !== null ? $aggregate->allergene($gp) : null,
             'allergenKonfidenz' => $gp !== null ? $aggregate->allergenKonfidenz($gp) : null,
             'zusatzstoffe' => $gp !== null ? $aggregate->zusatzstoffe($gp) : null,
-            'naehrwerte' => $gp !== null ? $aggregate->naehrwerte($gp) : null,
+            'naehrwerte' => $gp !== null ? $aggregate->naehrwerte($gp, mitKiFallback: true) : null,
             'kette' => $gp !== null ? $leads->rangliste($gp, $team) : null,
             'effektiverLeadId' => $gp !== null ? $leads->effektiverLead($gp, $team)?->id : null,
             'verknuepfbare' => $gp !== null && $this->laSuche !== '' ? $leads->sucheVerknuepfbare($team, $this->laSuche) : collect(),

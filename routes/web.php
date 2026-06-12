@@ -75,3 +75,9 @@ Route::get('/verkaufsrezepte', \Platform\FoodAlchemist\Livewire\Verkauf\Browser:
  */
 Route::get('/demnaechst', \Platform\FoodAlchemist\Livewire\Demnaechst::class)
     ->name('foodalchemist.demnaechst');
+
+/**
+ * M9-03 / V-10: Review-Queue — zentrale «Zu prüfen»-Seite.
+ */
+Route::get('/zu-pruefen', \Platform\FoodAlchemist\Livewire\ReviewQueue::class)
+    ->name('foodalchemist.review');

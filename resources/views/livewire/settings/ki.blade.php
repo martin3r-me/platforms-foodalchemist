@@ -40,7 +40,7 @@
         @else
             <table class="{{ $table }}" data-ki-statistik>
                 <thead><tr class="text-left">
-                    @foreach(['Feature', 'Tier', 'Calls', 'Tokens in', 'Tokens out', 'Fehler', 'Accepted'] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach
+                    @foreach(['Feature', 'Tier', 'Calls', 'Tokens in', 'Tokens out', 'Fehler', 'Accepted', '≈ Kosten'] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach
                 </tr></thead>
                 <tbody>
                     @foreach($statistik as $z)
@@ -52,9 +52,16 @@
                             <td class="{{ $td }} text-gray-500">{{ number_format($z->t_out, 0, ',', '.') }}</td>
                             <td class="{{ $td }} {{ $z->fehler > 0 ? 'text-rose-500' : 'text-gray-500' }}">{{ $z->fehler }}</td>
                             <td class="{{ $td }} text-gray-500">{{ $z->accepted }}</td>
+                            <td class="{{ $td }} text-right tabular-nums" data-ki-kosten>{{ number_format($kosten[$z->feature . '|' . $z->tier] ?? 0, 4, ',', '.') }} €</td>
                         </tr>
                     @endforeach
                 </tbody>
+                <tfoot>
+                    <tr class="border-t border-black/10 dark:border-white/10">
+                        <td colspan="7" class="{{ $td }} text-right text-xs text-gray-400">≈ Gesamt (Tokens × Tier-Preis, Deployment-Config <code>ai.kosten_pro_mio</code>)</td>
+                        <td class="{{ $td }} text-right font-medium tabular-nums" data-ki-kosten-gesamt>{{ number_format($kostenGesamt, 2, ',', '.') }} €</td>
+                    </tr>
+                </tfoot>
             </table>
         @endif
     </div>
