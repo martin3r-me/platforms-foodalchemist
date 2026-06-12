@@ -96,6 +96,148 @@ class SalesRecipeService
             ->find($id);
     }
 
+    // ── M6-04: Editor-Schreibpfade (V-07: Mehr-Zeilen-Writes in Transaktionen) ──
+
+    /** Erlaubte VK-Feldgruppen (V-12: Policy-Grenze mitten durchs geteilte Modell). */
+    private const VK_FELDER = [
+        'name', 'vk_wording_standard', 'speisen_klasse_id', 'aufschlagsklasse_id', 'mwst_satz',
+        'vk_netto', 'vk_einheit_vocab_id', 'vk_anzahl_einheiten', 'vk_menge_pro_einheit_g',
+        'behaelter_warm_vocab_id', 'behaelter_warm_anzahl', 'behaelter_kalt_vocab_id', 'behaelter_kalt_anzahl',
+        'servier_vehikel_vocab_id', 'geschmacksrichtung',
+    ];
+
+    public function updateVk(Team $team, int $id, array $in): FoodAlchemistRecipe
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($id);
+        if (! $recipe->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbtes Rezept — VK-Pflege nur durchs Besitzer-Team (D1).');
+        }
+
+        return DB::transaction(function () use ($recipe, $in) {
+            $update = array_intersect_key($in, array_flip(self::VK_FELDER));
+            // Wording manuell editiert → Lineage auf manual (GL-07)
+            if (array_key_exists('vk_wording_standard', $update) && $update['vk_wording_standard'] !== $recipe->vk_wording_standard) {
+                $update['vk_wording_quelle'] = 'manual';
+                $update['vk_wording_ai_confidence'] = null;
+            }
+            // brutto konsistent halten, wenn netto/mwst manuell gesetzt werden (User-Hoheit, I9)
+            $netto = array_key_exists('vk_netto', $update) ? $update['vk_netto'] : $recipe->vk_netto;
+            $mwst = array_key_exists('mwst_satz', $update) ? $update['mwst_satz'] : $recipe->mwst_satz;
+            if ($netto !== null && $mwst !== null) {
+                $update['vk_brutto'] = round((float) $netto * (1 + (float) $mwst / 100), 2);
+            } elseif ($netto === null) {
+                $update['vk_brutto'] = null;
+            }
+            $update['last_modified_by'] = 'vk_editor';
+            $recipe->update($update);
+
+            return $recipe->refresh();
+        });
+    }
+
+    /**
+     * DoD M6-04: VK anlegen AUS Basisrezept — neues VK-Rezept mit dem
+     * Basisrezept als erster Komponente (eine Charge = yield in g), danach
+     * GL-02-Recompute über den D-5-Sync (eine Regel-Stelle).
+     */
+    public function createFromBasis(Team $team, int $basisRecipeId, string $name): FoodAlchemistRecipe
+    {
+        $basis = FoodAlchemistRecipe::visibleToTeam($team)->basis()->findOrFail($basisRecipeId);
+        $recipes = app(RecipeService::class);
+
+        return DB::transaction(function () use ($team, $basis, $name, $recipes) {
+            $vk = $recipes->create($team, ['name' => $name, 'ist_verkaufsrezept' => true]);
+            $gramm = $basis->yield_kg !== null ? round((float) $basis->yield_kg * 1000, 1) : 1000.0;
+            $einheitG = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', 'g')->value('id');
+
+            return $recipes->syncIngredients($team, $vk->id, [[
+                'raw_text' => $basis->name,
+                'display_name' => $basis->name,
+                'menge' => $gramm,
+                'einheit_vocab_id' => $einheitG,
+                'referenced_recipe_id' => $basis->id,
+                'match_method' => 'recipe_ref',
+            ]]);
+        });
+    }
+
+    // V-19: Regen-Programme (zeilenbasiert)
+
+    public function upsertRegeneration(Team $team, int $recipeId, array $in, ?int $id = null): void
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        $werte = [
+            'komponente_label' => trim((string) ($in['komponente_label'] ?? '')) ?: 'Gesamt',
+            'geraet_vocab_id' => $in['geraet_vocab_id'] ?? null,
+            'temp_c' => $in['temp_c'] ?? null,
+            'dauer_min' => $in['dauer_min'] ?? null,
+            'kerntemp_c' => $in['kerntemp_c'] ?? null,
+            'hinweis' => $in['hinweis'] ?? null,
+            'quelle' => 'manual', 'ai_confidence' => null, 'ai_begruendung' => null,      // manual gewinnt (GL-07)
+            'updated_at' => now(),
+        ];
+        if ($id !== null) {
+            DB::table('foodalchemist_recipe_regenerations')->where('id', $id)->where('recipe_id', $recipe->id)->update($werte);
+
+            return;
+        }
+        DB::table('foodalchemist_recipe_regenerations')->insert($werte + [
+            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+            'team_id' => $recipe->team_id,
+            'recipe_id' => $recipe->id,
+            'sort_order' => (int) DB::table('foodalchemist_recipe_regenerations')
+                ->where('recipe_id', $recipe->id)->whereNull('deleted_at')->max('sort_order') + 1,
+            'created_at' => now(),
+        ]);
+    }
+
+    public function deleteRegeneration(Team $team, int $recipeId, int $id): void
+    {
+        FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        DB::table('foodalchemist_recipe_regenerations')->where('id', $id)->where('recipe_id', $recipeId)
+            ->update(['deleted_at' => now()]);
+    }
+
+    /** @param list<int> $ids neue Reihenfolge */
+    public function reorderRegenerations(Team $team, int $recipeId, array $ids): void
+    {
+        FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        DB::transaction(function () use ($recipeId, $ids) {
+            foreach (array_values($ids) as $i => $id) {
+                DB::table('foodalchemist_recipe_regenerations')
+                    ->where('id', (int) $id)->where('recipe_id', $recipeId)->update(['sort_order' => $i]);
+            }
+        });
+    }
+
+    // Verwendungsnachweise (Kunde × Marketing-Name, team-eigen)
+
+    public function addCustomerName(Team $team, int $recipeId, string $kunde, string $marketingName, ?string $note = null): void
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        DB::table('foodalchemist_recipe_customer_names')->updateOrInsert(
+            ['recipe_id' => $recipe->id, 'customer_name' => trim($kunde)],
+            ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
+                'marketing_name' => trim($marketingName), 'note' => $note, 'deleted_at' => null,
+                'updated_at' => now(), 'created_at' => now()],
+        );
+    }
+
+    public function deleteCustomerName(Team $team, int $recipeId, int $id): void
+    {
+        FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        DB::table('foodalchemist_recipe_customer_names')->where('id', $id)->where('recipe_id', $recipeId)
+            ->update(['deleted_at' => now()]);
+    }
+
+    /** @return list<string> Autocomplete, team-scoped (§7.7) */
+    public function distinctCustomerNames(Team $team): array
+    {
+        return DB::table('foodalchemist_recipe_customer_names')
+            ->where('team_id', $team->id)->whereNull('deleted_at')
+            ->distinct()->orderBy('customer_name')->pluck('customer_name')->all();
+    }
+
     /**
      * VERKAUFT-ALS-Box + Marge-Cockpit in einem Aufruf (alles abgeleitet, GL-02 I9):
      * g/Einheit = Primär-Eingabe oder aus Yield/Anzahl; VK-Daten via MargeService.

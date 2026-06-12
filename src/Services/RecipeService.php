@@ -73,6 +73,27 @@ class RecipeService
             ->find($id);
     }
 
+    /**
+     * M6-04 / D-6 §6 (VK-Parität): sicht-NEUTRALES Detail für den geteilten
+     * Zutaten-Editor — ein Editor für beide Sichten. Die Sicht-Services
+     * (detail()/SalesRecipeService::detail()) bleiben strikt gescoped (§7.8);
+     * NUR der Editor lädt hierüber.
+     */
+    public function detailAnySicht(Team $team, int $id): ?FoodAlchemistRecipe
+    {
+        return FoodAlchemistRecipe::visibleToTeam($team)
+            ->with([
+                'kategorie:id,main_group_id,bezeichnung',
+                'ingredients.gp:id,name,hauptzutat_slug,lead_la_supplier_item_id,stk_default_g',
+                'ingredients.einheit:id,slug,display_de,dimension,default_in_g,default_in_ml',
+                'ingredients.referencedRecipe:id,name,ek_per_kg_eur',
+                'equipment',
+                'niveauEignungen',
+                'sektorEignungen',
+            ])
+            ->find($id);
+    }
+
     public function statusCounts(Team $team): array
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->basis()

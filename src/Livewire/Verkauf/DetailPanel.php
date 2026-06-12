@@ -30,6 +30,12 @@ class DetailPanel extends Component
         $this->recipeId = $id;
     }
 
+    #[On('recipe-gespeichert')]
+    public function aktualisiere(): void
+    {
+        // Editor-Save → Cockpit neu rendern (Kontext bleibt)
+    }
+
     public function render(SalesRecipeService $verkauf)
     {
         $team = Auth::user()?->currentTeamRelation;

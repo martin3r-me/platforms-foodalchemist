@@ -88,8 +88,9 @@ class IngredientEditor extends Component
     public function render(RecipeRecomputeService $recompute)
     {
         $team = Auth::user()?->currentTeamRelation;
+        // M6-04 / D-6 §6: sicht-neutral laden — EIN Editor für Basis- UND VK-Sicht
         $rezept = $team !== null && $this->recipeId !== null
-            ? app(RecipeService::class)->detail($team, $this->recipeId)
+            ? app(RecipeService::class)->detailAnySicht($team, $this->recipeId)
             : null;
 
         $zeilen = [];

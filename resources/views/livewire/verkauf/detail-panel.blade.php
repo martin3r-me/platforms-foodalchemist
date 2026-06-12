@@ -9,7 +9,13 @@
         </div>
     @else
         <div>
-            <h3 class="font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-snug">{{ $rezept->name }}</h3>
+            <div class="flex items-start justify-between gap-2">
+                <h3 class="font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-snug">{{ $rezept->name }}</h3>
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <button type="button" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-bearbeiten>Bearbeiten</button>
+                    <button type="button" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-komponenten>Komponenten</button>
+                </div>
+            </div>
             @if($rezept->vk_wording_standard !== null)
                 <p class="text-xs italic text-gray-400 mt-0.5">{{ $rezept->vk_wording_standard }}</p>
             @endif
