@@ -183,6 +183,14 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > + `@dragenter.prevent` auf der Drop-Zone). Live verifiziert: ▲-Klick und Drag&Drop
 > ändern beide die Reihenfolge korrekt, Zeilenhöhe 24 px. Suite: **394/394 (1.668 Assertions)**.
 
+> **Status R16/Editor-Fenster (2026-06-12, Dominique: «Editor-Fenster kleiner — Jarvis war
+> mir aber zu schmal; Pfeile zu hell»):** Basis- und VK-Editor von **Vollbild auf
+> `max-w-7xl` (1280 px)** — Mittelweg: kompakter als Vollbild, deutlich breiter als Jarvis'
+> 720-px-Default (sein dortiger Kritikpunkt); einspaltige Anordnung bewusst beibehalten,
+> die Zutaten-Tabelle passt mit R15-Dichte locker. ▲▼-Sortier-Pfeile + ⠿-Drag-Handle von
+> gray-300 auf **gray-500/dark:gray-400** (waren kaum sichtbar). Live verifiziert
+> (max-w-7xl am Fenster, Pfeil-Farbe = gray-500, Screenshot). Suite: **394/394 (1.668 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).

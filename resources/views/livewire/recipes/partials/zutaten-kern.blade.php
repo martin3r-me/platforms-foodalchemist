@@ -24,14 +24,14 @@
                     <tr class="{{ $tr }} !border-b-0" :class="zeile.is_optional ? 'opacity-60' : ''">
                         <td class="{{ $td }} !px-1.5 !py-0.5 whitespace-nowrap">
                             {{-- R4: setData ist PFLICHT, sonst startet Safari den Drag gar nicht --}}
-                            <span class="inline-block cursor-grab active:cursor-grabbing text-gray-300 hover:text-violet-500 select-none" draggable="true"
+                            <span class="inline-block cursor-grab active:cursor-grabbing text-gray-500 dark:text-gray-400 hover:text-violet-500 select-none" draggable="true"
                                   @dragstart="dragIdx = i; $event.dataTransfer.setData('text/plain', String(i)); $event.dataTransfer.effectAllowed = 'move'"
                                   @dragend="dragIdx = null" title="ziehen zum Sortieren" data-drag-handle>⠿</span>
                             {{-- R15 (Jarvis moveUpDown): ▲▼ als zuverlässige Sortier-Alternative zu DnD --}}
                             <span class="inline-flex flex-col align-middle leading-none">
-                                <button type="button" class="text-[9px] text-gray-300 hover:text-violet-500 leading-none disabled:opacity-20"
+                                <button type="button" class="text-[9px] text-gray-500 dark:text-gray-400 hover:text-violet-500 leading-none disabled:opacity-20"
                                         :disabled="i === 0" @click="verschiebe(i, -1)" title="nach oben" data-zeile-hoch>▲</button>
-                                <button type="button" class="text-[9px] text-gray-300 hover:text-violet-500 leading-none disabled:opacity-20"
+                                <button type="button" class="text-[9px] text-gray-500 dark:text-gray-400 hover:text-violet-500 leading-none disabled:opacity-20"
                                         :disabled="i === rows.length - 1" @click="verschiebe(i, 1)" title="nach unten" data-zeile-runter>▼</button>
                             </span>
                             <span class="text-gray-400 tabular-nums text-[11px] ml-0.5" x-text="i + 1"></span>
