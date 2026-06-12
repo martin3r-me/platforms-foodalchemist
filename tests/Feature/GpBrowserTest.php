@@ -92,7 +92,7 @@ it('Browser: mount mit ?gp= aus der URL befüllt das Panel sofort (Kontext-Erhal
         ->assertDispatched('gp-selected', id: $this->zander->id);
 });
 
-it('DetailPanel M3-05: Sektionen laden lazy — Allergen-Werte erst nach toggleSektion', function () {
+it('DetailPanel R9: Sektionen IMMER sichtbar — Allergene/Nährwerte/Verwendungen ohne Klapperei', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
 
     $supplier = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);
@@ -107,15 +107,11 @@ it('DetailPanel M3-05: Sektionen laden lazy — Allergen-Werte erst nach toggleS
     ]);
 
     Livewire::test(DetailPanel::class, ['gpId' => $this->zander->id])
-        ->assertDontSee('Konfidenz')                       // lazy: zu ist zu
-        ->call('toggleSektion', 'allergene')
-        ->assertSee('Konfidenz HIGH')
-        ->assertSee('aggregiert aus 1/')
-        ->call('toggleSektion', 'naehrwerte')
+        ->assertSee('HIGH')                                // R9: Konfidenz direkt sichtbar
+        ->assertSee('aus 1/')
         ->assertSee('Nährwerte')
-        // Kontext-Erhalt: GP-Wechsel lässt die Sektionen offen
-        ->dispatch('gp-selected', id: $this->zander->id)
-        ->assertSet('offen.allergene', true);
+        ->assertSee('Verwendet in Rezepten')
+        ->assertSeeHtml('data-lead-stern');                // ★ direkt klickbar
 });
 
 it('DetailPanel M3-07 (DoD): LA A sperren ⇒ B wird effektiver Lead — im Panel beweisbar', function () {
@@ -140,7 +136,6 @@ it('DetailPanel M3-07 (DoD): LA A sperren ⇒ B wird effektiver Lead — im Pane
     $b = $mkLa('LA B teurer', 4.00);
 
     $panel = Livewire::test(DetailPanel::class, ['gpId' => $this->zander->id])
-        ->call('toggleSektion', 'las')
         ->assertSee('LA A billig')
         ->assertSee('LA B teurer');
 
@@ -157,7 +152,6 @@ it('DetailPanel M3-07 (DoD): LA A sperren ⇒ B wird effektiver Lead — im Pane
     // Kind-Team ohne Kurations-Recht: globale Aktion blockt mit D1-Hinweis
     $this->actingAs($this->makeUser($this->childA, 'Kind User'));
     Livewire::test(DetailPanel::class, ['gpId' => $this->zander->id])
-        ->call('toggleSektion', 'las')
         ->call('leadSetzen', $b->id)
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Kurations-Team'));
 });

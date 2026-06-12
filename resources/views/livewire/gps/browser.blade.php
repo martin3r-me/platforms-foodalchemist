@@ -67,6 +67,9 @@
 
     {{-- M3-09: GP-Modal (P-2: Modals immer innerhalb von x-ui-page) --}}
     <livewire:foodalchemist.gps.gp-modal />
+    {{-- R9/M9-05: Verwendungs-Klicks aus dem Panel öffnen die Rezept-Editoren als Modal --}}
+    <livewire:foodalchemist.recipes.recipe-modal />
+    <livewire:foodalchemist.verkauf.vk-modal />
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between -mb-2">

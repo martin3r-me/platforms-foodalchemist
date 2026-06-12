@@ -133,6 +133,77 @@ class ItemModal extends Component
         }
     }
 
+    // ── R9 (Jarvis «GP-MAPPING»): ✨ KI-Vorschlag + GP zuweisen/lösen am LA ──
+
+    public string $gpSuche = '';
+
+    /** @var array<int, array{gp_id: int, name: string, score: int, grund: string}> */
+    public array $gpVorschlaege = [];
+
+    public function kiGpVorschlag(): void
+    {
+        $this->fehler = null;
+        $item = $this->item($this->itemId);
+        $this->gpVorschlaege = app(\Platform\FoodAlchemist\Services\MatchService::class)
+            ->vorschlaegeFuerLa($item, $this->team())
+            ->map(fn ($v) => [
+                'gp_id' => $v['gp']->id,
+                'name' => $v['gp']->name,
+                'score' => (int) round(((float) $v['score']) * 100),
+                'grund' => (string) ($v['grund'] ?? $v['methode'] ?? ''),
+            ])->all();
+        if ($this->gpVorschlaege === []) {
+            $this->fehler = 'Kein Match-Kandidat gefunden (MatchService v1 — exakt + fuzzy).';
+        }
+    }
+
+    public function gpZuweisen(int $gpId): void
+    {
+        $this->fehler = null;
+        $team = $this->team();
+        $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+        if (! Curate::canCurate(Auth::user(), $gp)) {
+            $this->fehler = 'Globale Katalog-Aktion — nur fürs Kurations-Team (D1).';
+
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\LeadLaService::class)->verknuepfen($team, $gp, $this->itemId);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->gpSuche = '';
+        $this->gpVorschlaege = [];
+        $this->dispatch('gp-las-geaendert');
+    }
+
+    public function gpLoesen(): void
+    {
+        $this->fehler = null;
+        $team = $this->team();
+        $gpId = $this->item($this->itemId)->structure?->gp_id;
+        // VOLL laden — die Panel-Relation (structure.gp:id,name) trägt kein team_id (Curate-Gate!)
+        $gp = $gpId !== null ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($gpId) : null;
+        if ($gp === null) {
+            return;
+        }
+        if (! Curate::canCurate(Auth::user(), $gp)) {
+            $this->fehler = 'Globale Katalog-Aktion — nur fürs Kurations-Team (D1).';
+
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\LeadLaService::class)->entknuepfen($team, $gp, $this->itemId);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->dispatch('gp-las-geaendert');
+    }
+
     public function render(PriceService $preise)
     {
         $item = $this->itemId !== null ? $this->item($this->itemId) : null;
@@ -150,6 +221,12 @@ class ItemModal extends Component
             'vergleichspreis' => $item !== null && $aktiv !== null
                 ? $preise->vergleichspreis($item, (float) $aktiv->price)
                 : null,
+            // R9: manuelle GP-Suche fürs Mapping
+            'gpKandidaten' => $item !== null && trim($this->gpSuche) !== ''
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($this->team())
+                    ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($this->gpSuche)) . '%'])
+                    ->orderBy('name')->limit(6)->get(['id', 'name'])
+                : collect(),
         ]);
     }
 

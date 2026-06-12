@@ -23,9 +23,6 @@ class DetailPanel extends Component
 {
     public ?int $gpId = null;
 
-    /** @var array<string, bool> aufgeklappte Sektionen (allergene|zusatzstoffe|naehrwerte|las) */
-    public array $offen = [];
-
     public string $laSuche = '';
 
     public ?string $fehler = null;
@@ -38,16 +35,9 @@ class DetailPanel extends Component
     #[On('gp-selected')]
     public function zeige(int $id): void
     {
-        $this->gpId = $id;       // $offen bleibt — gleiche Sektionen beim nächsten GP offen
+        $this->gpId = $id;
         $this->laSuche = '';
         $this->fehler = null;
-    }
-
-    public function toggleSektion(string $sektion): void
-    {
-        if (in_array($sektion, ['allergene', 'zusatzstoffe', 'naehrwerte', 'las'], true)) {
-            $this->offen[$sektion] = ! ($this->offen[$sektion] ?? false);
-        }
     }
 
     // ── M3-07: LA-Aktionen ──────────────────────────────────────────────
@@ -113,20 +103,29 @@ class DetailPanel extends Component
                 ->find($this->gpId);
         }
 
-        $lasOffen = $gp !== null && ($this->offen['las'] ?? false);
-
+        // R9 (Dominique: «Anzeige komplett Bug»): Sektionen IMMER sichtbar — die
+        // Lazy-Klapperei der Ist-Abnahme versteckte alle Inhalte und Aktionen.
+        // Aggregate sind DB-MAX/Ø-Queries über die LAs (M8-04: Panels 2–16 ms).
         return view('foodalchemist::livewire.gps.detail-panel', [
             'gp' => $gp,
             'team' => $team,
             'kannKuratieren' => $gp !== null && Curate::canCurate(Auth::user(), $gp),
-            // lazy: nur offene Sektionen rechnen (M3-05-DoD)
-            'allergene' => $gp !== null && ($this->offen['allergene'] ?? false) ? $aggregate->allergene($gp) : null,
-            'allergenKonfidenz' => $gp !== null && ($this->offen['allergene'] ?? false) ? $aggregate->allergenKonfidenz($gp) : null,
-            'zusatzstoffe' => $gp !== null && ($this->offen['zusatzstoffe'] ?? false) ? $aggregate->zusatzstoffe($gp) : null,
-            'naehrwerte' => $gp !== null && ($this->offen['naehrwerte'] ?? false) ? $aggregate->naehrwerte($gp) : null,
-            'kette' => $lasOffen ? $leads->rangliste($gp, $team) : null,
-            'effektiverLeadId' => $lasOffen ? $leads->effektiverLead($gp, $team)?->id : null,
-            'verknuepfbare' => $lasOffen && $this->laSuche !== '' ? $leads->sucheVerknuepfbare($team, $this->laSuche) : collect(),
+            'allergene' => $gp !== null ? $aggregate->allergene($gp) : null,
+            'allergenKonfidenz' => $gp !== null ? $aggregate->allergenKonfidenz($gp) : null,
+            'zusatzstoffe' => $gp !== null ? $aggregate->zusatzstoffe($gp) : null,
+            'naehrwerte' => $gp !== null ? $aggregate->naehrwerte($gp) : null,
+            'kette' => $gp !== null ? $leads->rangliste($gp, $team) : null,
+            'effektiverLeadId' => $gp !== null ? $leads->effektiverLead($gp, $team)?->id : null,
+            'verknuepfbare' => $gp !== null && $this->laSuche !== '' ? $leads->sucheVerknuepfbare($team, $this->laSuche) : collect(),
+            // M9-05 (GP-Blickwinkel): in welchen Rezepten eingesetzt — klickbar
+            'verwendungen' => $gp !== null
+                ? \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients AS ri')
+                    ->join('foodalchemist_recipes AS r', 'r.id', '=', 'ri.recipe_id')
+                    ->where('ri.gp_id', $gp->id)->whereNull('ri.deleted_at')->whereNull('r.deleted_at')
+                    ->whereIn('r.team_id', FoodAlchemistGp::teamAncestryIds($team))
+                    ->orderBy('r.name')->distinct()
+                    ->limit(30)->get(['r.id', 'r.name', 'r.ist_verkaufsrezept'])
+                : collect(),
         ]);
     }
 }

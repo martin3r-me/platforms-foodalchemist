@@ -139,6 +139,47 @@
                 </div>
             </x-foodalchemist::modal-section>
 
+            {{-- R9 (Jarvis «GP-MAPPING»): aktuelles Mapping + ✨ KI-Vorschlag (MatchService) + manuelle Zuweisung --}}
+            <x-foodalchemist::modal-section title="GP-Mapping">
+                <x-slot:actions>
+                    <button type="button" wire:click="kiGpVorschlag" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400"
+                            title="MatchService v1: exakte Dubletten (EAN/Art.-Nr) + GL-04-Fuzzy" data-ki-gp-vorschlag>✨ KI-Vorschlag</button>
+                </x-slot:actions>
+
+                @if($item->structure?->gp)
+                    <div class="flex items-center justify-between gap-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-gp-mapping-aktuell>
+                        <p class="text-sm text-gray-900 dark:text-gray-100 min-w-0 truncate">🧺 {{ $item->structure->gp->name }}</p>
+                        <button type="button" wire:click="gpLoesen" wire:confirm="GP-Zuordnung lösen? War das LA Lead, wird sofort neu gewählt (GL-03 I4)."
+                                class="{{ $btnGhostXs }} text-rose-500 shrink-0" data-gp-loesen>✕ lösen</button>
+                    </div>
+                @else
+                    <p class="text-sm text-gray-400 italic" data-gp-mapping-leer>— kein GP zugeordnet —</p>
+                @endif
+
+                @if($gpVorschlaege !== [])
+                    <div class="mt-2 rounded-lg bg-violet-500/5 border border-violet-500/20 px-3 py-2 space-y-1" data-gp-vorschlaege>
+                        <p class="text-xs font-medium text-violet-700 dark:text-violet-300">✨ Match-Kandidaten — Klick weist zu:</p>
+                        @foreach($gpVorschlaege as $v)
+                            <button type="button" wire:key="gpv-{{ $v['gp_id'] }}" wire:click="gpZuweisen({{ $v['gp_id'] }})"
+                                    class="flex items-center gap-2 w-full text-left px-2 py-1 rounded text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10" data-gp-vorschlag>
+                                <span class="font-semibold {{ $v['score'] >= 90 ? 'text-green-600' : 'text-amber-500' }} shrink-0">{{ $v['score'] }} %</span>
+                                <span class="min-w-0 truncate">{{ $v['name'] }}</span>
+                                <span class="text-gray-400 shrink-0">{{ $v['grund'] }}</span>
+                            </button>
+                        @endforeach
+                    </div>
+                @endif
+
+                <div class="mt-2" data-gp-zuweisen>
+                    <input type="search" wire:model.live.debounce.300ms="gpSuche"
+                           placeholder="+ GP zuweisen — Name suchen …" class="{{ $input }} !py-1" />
+                    @foreach($gpKandidaten as $kandidat)
+                        <button type="button" wire:key="gpk-{{ $kandidat->id }}" wire:click="gpZuweisen({{ $kandidat->id }})"
+                                class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">{{ $kandidat->name }}</button>
+                    @endforeach
+                </div>
+            </x-foodalchemist::modal-section>
+
             <x-foodalchemist::modal-section title="Preise">
                 @if($darfEdit)
                     <div class="flex items-end gap-2 mb-3" data-preis-neu>

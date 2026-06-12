@@ -72,6 +72,23 @@ in den KI-Settings aus `ai_call_log` (Tokens × Tier-Preis).
 Durchgängige «Wo verwendet?»-Navigation: GP → Rezepte (Liste statt nur Zähler),
 Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion + globale Suche.
 
+> **Status R9/GP-Welt (2026-06-12, Dominique: «beim Grundprodukt läuft gar nichts»):**
+> **(1) GP-Panel NEU (Jarvis-Stil):** die M3-Lazy-Klapp-Sektionen versteckten alle Inhalte und
+> Aktionen — jetzt ALLES direkt sichtbar: sauberes Stammdaten-Raster, Eigenschafts-Tags
+> (ja/nein/unbewertet), 14-Allergene-Grid (rot/amber/grau, Override-✎/Mutter-↑-Marker),
+> Zusatzstoffe, Nährwerte, LA-Liste mit **★-Direktklick = Lead setzen** (Lead-Zeile orange)
+> + Hover-Aktionen + «+ LA verknüpfen»-Suche. GpBrowserTest auf das neue Soll umgestellt.
+> **(2) M9-05 GP-Blickwinkel:** Sektion «Verwendet in Rezepten (n)» — klickbare Liste
+> (📖 Basis → recipe-modal, 💶 VK → vk-modal; beide Modals im GP-Browser eingebunden).
+> **(3) LA-Modal GP-MAPPING (Jarvis):** aktuelles Mapping mit ✕-Lösen, **✨ KI-Vorschlag**
+> (MatchService v1: EAN/Art.-Nr-Dubletten + GL-04-Fuzzy, Live-Beleg: 90 % fuzzy_name auf
+> Pflaumenmarmelade) und manuelle GP-Suche — Zuweisung über LeadLaService::verknuepfen
+> (GL-05-Guard: fremd-zugeordnet blockt). **Bug-Lehre:** abgespeckte Eager-Loads
+> () tragen kein team_id — Curate-Gates brauchen das VOLL geladene
+> Modell. **(4) GP-Editor:** live geprüft — öffnen/speichern/schließen ok (kein Defekt
+> reproduzierbar; vermutlich war der alte Browser-Stand das Problem).
+> 3 neue Tests. Live verifiziert. Suite: **385/385 (1.607 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).
