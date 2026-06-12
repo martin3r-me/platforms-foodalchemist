@@ -28,7 +28,7 @@
         'spuren' => ['≈', 'Spuren', 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'],
         'enthalten' => ['✓', 'enthalten', 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30'],
     ];
-    $btnBase = 'w-7 h-7 inline-flex items-center justify-center text-[11px] font-medium rounded-md border transition-all duration-150';
+    $btnBase = 'w-5 h-5 inline-flex items-center justify-center text-[10px] font-medium rounded border transition-all duration-150';
     $btnInaktiv = 'border-black/5 dark:border-white/10 text-gray-300 dark:text-gray-600';
     // fehlende Keys = unbekannt (GL-01: nie NULL-Lücken im Binding)
     $initial = collect($items)->mapWithKeys(fn ($label, $key) => [$key => $values[$key] ?? 'unbekannt'])->all();
@@ -38,7 +38,7 @@
      x-data="{ werte: @if($model) $wire.entangle('{{ $model }}') @else {{ Js::from($initial) }} @endif }"
      data-tri-state>
     @foreach($items as $key => $label)
-        <div class="flex items-center justify-between gap-3 py-1.5" data-tri-row="{{ $key }}">
+        <div class="flex items-center justify-between gap-3 py-1" data-tri-row="{{ $key }}">
             <span class="text-xs text-gray-700 dark:text-gray-300 min-w-0 truncate">{{ $label }}</span>
             <div class="flex items-center gap-1 shrink-0">
                 @foreach($buttons as $wert => [$zeichen, $titel, $aktivKlasse])

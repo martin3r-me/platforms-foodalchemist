@@ -222,6 +222,16 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > horizontalen Scroll in die Mitte. colspans angepasst. Live verifiziert (Panel-BG,
 > sticky, Kopfzeile ohne Hinweis, Zutat < 30 px). Suite: **397/397 (1.684 Assertions)**.
 
+> **Status R20/LMIV-Raster + Drift-Fix (2026-06-13):** **(1) LA-Modal:** Zusatzstoffe als
+> ZWEI Raster nebeneinander (chunk-Hälften, wie die Allergene), Tri-State-/Dekl-Buttons
+> von 28 auf 20 px + Zeilen py-1 — die LMIV-Sektionen sind nicht mehr «viel zu breit»
+> (tri-state-Baustein zentral verdichtet, wirkt auch im Rezept-Deklarations-Partial).
+> **(2) GP-Editor:** I4-Drift-Warnung («Name weicht vom Render ab») war bei JEDEM
+> Bestands-GP ohne Builder-Pflege falsch-positiv (Render aus dem Namens-Fallback weicht
+> immer ab) — Warnung wird jetzt unterdrückt, wenn `builder.hauptzutat` leer ist; bei
+> echter Builder-Pflege bleibt sie scharf. Live verifiziert (Zusatzstoffe 2-spaltig,
+> Buttons 20 px, «Add on Ente»-GP ohne Drift-Meldung). Suite: **397/397 (1.684 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).

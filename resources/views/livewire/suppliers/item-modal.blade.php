@@ -119,9 +119,12 @@
                         <button type="button" wire:click="deklarationenSpeichern" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">Zusatzstoffe speichern</button>
                     @endif
                 </div>
-                <div x-data="{ dekl: $wire.entangle('deklarationen') }" class="divide-y divide-black/5 dark:divide-white/5" data-deklarationen>
-                    @foreach($deklarationLabels as $stoff => $lbl)
-                        <div class="flex items-center justify-between gap-3 py-1.5" data-dekl-row="{{ $stoff }}">
+                {{-- R20 (Dominique): zwei Raster nebeneinander statt voller Breite --}}
+                <div x-data="{ dekl: $wire.entangle('deklarationen') }" class="grid grid-cols-1 md:grid-cols-2 gap-x-8" data-deklarationen>
+                    @foreach(collect($deklarationLabels)->chunk((int) ceil(count($deklarationLabels) / 2)) as $haelfte)
+                    <div class="divide-y divide-black/5 dark:divide-white/5">
+                    @foreach($haelfte as $stoff => $lbl)
+                        <div class="flex items-center justify-between gap-3 py-1" data-dekl-row="{{ $stoff }}">
                             <span class="text-xs text-gray-700 dark:text-gray-300 min-w-0 truncate">{{ $lbl }}</span>
                             <div class="flex items-center gap-1 shrink-0">
                                 @foreach([['nein', '−', 'bg-gray-500/20 text-gray-700 dark:bg-white/15 dark:text-gray-200 border-gray-500/30'], ['ja', '✓', 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30']] as [$wert, $zeichen, $aktiv])
@@ -130,11 +133,13 @@
                                                 @click="dekl['{{ $stoff }}'] = dekl['{{ $stoff }}'] === '{{ $wert }}' ? 'unbekannt' : '{{ $wert }}'"
                                             @else disabled @endif
                                             :class="dekl['{{ $stoff }}'] === '{{ $wert }}' ? @js($aktiv) : 'border-black/5 dark:border-white/10 text-gray-300 dark:text-gray-600 {{ $darfEdit ? 'hover:text-gray-500 hover:bg-black/5 dark:hover:bg-white/10' : 'opacity-60' }}'"
-                                            class="w-7 h-7 inline-flex items-center justify-center text-[11px] font-medium rounded-md border transition-all duration-150"
+                                            class="w-5 h-5 inline-flex items-center justify-center text-[10px] font-medium rounded border transition-all duration-150"
                                             data-dekl-btn="{{ $wert }}">{{ $zeichen }}</button>
                                 @endforeach
                             </div>
                         </div>
+                    @endforeach
+                    </div>
                     @endforeach
                 </div>
             </x-foodalchemist::modal-section>

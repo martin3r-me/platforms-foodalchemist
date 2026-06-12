@@ -279,6 +279,11 @@ class GpModal extends Component
         $name = $this->vorschauName();
         $slug = $naming->slugify($this->builder['hauptzutat'] ?: ($gp->hauptzutat_slug ?? ''));
         $pruefung = $naming->validateGpName($name, [...$this->builder, 'hauptzutat' => $this->builder['hauptzutat'] ?: $name]);
+        // R20: Drift (I4) ist nur aussagekräftig, wenn die strukturierten Felder gepflegt sind —
+        // Bestands-GPs ohne Builder-Pflege meldeten sonst IMMER Drift (Falsch-Positiv).
+        if (trim($this->builder['hauptzutat'] ?? '') === '') {
+            $pruefung['warnings'] = array_values(array_filter($pruefung['warnings'], fn ($w) => ! str_starts_with($w, 'Drift:')));
+        }
 
         return view('foodalchemist::livewire.gps.gp-modal', [
             'gp' => $gp,
