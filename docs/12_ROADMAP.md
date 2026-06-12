@@ -250,6 +250,14 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 > **③ Aroma-Nachbarn** (GL-10 §3.3 — komplett deterministisch, läuft in der Sandbox ECHT): `componentSuggestions` additiv erweitert um `trifft` (getroffene Teller-Anker-Slugs), `dish_n`, `allrounder` (Grad ≥ 50); Panel-Sektion mit Klassiker/Signature-Toggle und »verbindet n/m: …«-Zeilen wie im Ist. Live-Beleg Rezept 1373 (Hot Dog): honig 75 % [Allrounder] verbindet 4/4 brot·einlegegurke·senf·zwiebel, Signature-Top handkaese 100 %.
 > 5 neue Tests (Cache-Lebenszyklus inkl. stale/Re-Judge, Nicht-Treffer ohne Write, Heber-Validierung, Panel-Smoke beider Pfade). Suite: **374/374 (1.544 Assertions)**.
 
+> **EDITOR-PARITÄT Runde 4 (2026-06-12, Dominique: 19-Zutaten-Rezepte unübersichtlich, Peek/DnD »gehen nicht«, BIS unklar, Vorschlag Vollbild):**
+> **① Vollbild-Editor:** Modal-Baustein kann jetzt `fullscreen` (h-full + max-w-none — NUR Standard-Klassen, keine neue Build-Falle); der Rezept-Voll-Editor nutzt den ganzen Viewport (Live-Messung: Panel 929×998 bei 961×1030).
+> **② Dichte:** Lineage (»via gemini_proposed«) von eigener Block-Zeile zu Tooltip am Zutat-Namen, alle Zellen auf py-1 — halbiert die Zeilenhöhe, 19 Zutaten bleiben lesbar.
+> **③ DnD-Fix (Safari-Pflicht):** `dataTransfer.setData()` + `effectAllowed='move'` im dragstart — ohne setData startet Safari den Drag GAR NICHT (programmatische Tests sahen das nie, weil sie das DataTransfer selbst liefern); @drop.prevent ergänzt.
+> **④ Struktur-Bug gefixt:** der eingebettete »Zutaten speichern«-Block saß IM Picker-Dropdown (x-show pickerErgebnisse) — praktisch nie sichtbar; jetzt unter der Add-Zeile. (Headless-Marker-Tests sahen ihn trotzdem im HTML — Lehre: Sichtbarkeit gehört in den Browser-Verify.)
+> **⑤ BIS erklärt + entdeckt:** Spaltenkopf mit Hover-Tooltip (»Mengenbereich: Menge BIS, z. B. 2–3 — gerechnet wird mit dem Mittelwert«, gepunktete Unterstreichung als Affordance).
+> Live verifiziert im Preview-Browser (Modal 524: Peek-Tabelle sichtbar mit ★-Lead EPOS/28,90 €/5,78 €/kg, Drag tauscht Reihenfolge, Speichern-Button sichtbar, 0 JS-Fehler). Suite: **374/374**.
+
 ## M8 — Querschnitt (laufend)
 
 | ID | Paket | Inhalt | Ref | DoD | Status |

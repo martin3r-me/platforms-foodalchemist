@@ -2,7 +2,8 @@
      · KPI-Leiste · Equipment gruppiert · Eigenschaften · Beschreibung · Zubereitung (Tabs) · Notizen --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten: ' . $form['name']" size="max-w-5xl">
+{{-- R4 (Dominique): Voll-Editor nimmt den ganzen Bildschirm — 19-Zutaten-Rezepte brauchen die Fläche --}}
+<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten: ' . $form['name']" :fullscreen="true">
     {{-- Aktionsleiste (D-5 §4.2.1) --}}
     <x-slot:actions>
         <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>

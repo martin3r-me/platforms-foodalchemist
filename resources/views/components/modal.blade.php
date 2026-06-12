@@ -26,6 +26,7 @@
     'name',
     'title' => null,
     'size' => 'max-w-4xl',
+    'fullscreen' => false,                                            {{-- Editor-Parität R4: Voll-Editor nimmt den ganzen Viewport --}}
 ])
 
 @php
@@ -56,8 +57,9 @@
 
     {{-- Panel (frosted, DESIGN.md) --}}
     {{-- max-h: 85vh — Wert MUSS im Host-CSS-Build existieren (arbitrary value!);
-         92vh war nie gebaut ⇒ Panel ohne Höhen-Limit ⇒ innerer Scroll tot (Bug 2026-06-12) --}}
-    <div class="relative w-full {{ $size }} max-h-[85vh] flex flex-col overflow-hidden rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-2xl shadow-black/20">
+         92vh war nie gebaut ⇒ Panel ohne Höhen-Limit ⇒ innerer Scroll tot (Bug 2026-06-12).
+         fullscreen: h-full füllt den fixed-Wrapper (Viewport minus p-4) — nur Standard-Klassen. --}}
+    <div class="relative w-full {{ $fullscreen ? 'max-w-none h-full' : $size . ' max-h-[85vh]' }} flex flex-col overflow-hidden rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-2xl shadow-black/20">
         <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
 
         {{-- Kopf: Titel + Schließen, darunter fixe Aktionen oben links (P-2) --}}

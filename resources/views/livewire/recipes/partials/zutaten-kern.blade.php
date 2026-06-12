@@ -9,40 +9,43 @@
          data-zutaten-editor>
         <table class="{{ $table }}">
             <thead><tr class="text-left">
-                @foreach(['#', 'Menge', 'bis', 'Einheit', 'Verknüpfung / Beschreibung', 'Hinweis', 'Garv. %', 'EK €', ''] as $head)
-                    <th class="{{ $th }} !px-2">{{ $head }}</th>
+                @foreach(['#' => null, 'Menge' => null, 'bis' => 'Mengenbereich (optional): „Menge BIS", z. B. 2–3 Stk — gerechnet wird mit dem Mittelwert', 'Einheit' => null, 'Verknüpfung / Beschreibung' => null, 'Hinweis' => null, 'Garv. %' => null, 'EK €' => null, '' => null] as $head => $tip)
+                    <th class="{{ $th }} !px-2 {{ $tip ? 'cursor-help underline decoration-dotted decoration-gray-300 underline-offset-2' : '' }}" @if($tip) title="{{ $tip }}" @endif>{{ $head }}</th>
                 @endforeach
             </tr></thead>
             {{-- tbody je Zutat: Haupt-Zeile + aufklappbare LA-Peek-Zeile (HTML erlaubt mehrere tbody) --}}
                 <template x-for="(zeile, i) in rows" :key="zeile._key">
-                    <tbody @dragover.prevent @drop="dropAuf(i)"
+                    <tbody @dragover.prevent @drop.prevent="dropAuf(i)"
                            :class="dragIdx === i ? 'opacity-40' : ''" data-editor-zeile>
                     <tr class="{{ $tr }} !border-b-0" :class="zeile.is_optional ? 'opacity-60' : ''">
                         <td class="{{ $td }} !px-1.5 !py-1 whitespace-nowrap">
+                            {{-- R4: setData ist PFLICHT, sonst startet Safari den Drag gar nicht --}}
                             <span class="cursor-grab active:cursor-grabbing text-gray-300 hover:text-violet-500 select-none" draggable="true"
-                                  @dragstart="dragIdx = i" @dragend="dragIdx = null" title="ziehen zum Sortieren" data-drag-handle>⠿</span>
+                                  @dragstart="dragIdx = i; $event.dataTransfer.setData('text/plain', String(i)); $event.dataTransfer.effectAllowed = 'move'"
+                                  @dragend="dragIdx = null" title="ziehen zum Sortieren" data-drag-handle>⠿</span>
                             <span class="text-gray-400 tabular-nums text-xs ml-0.5" x-text="i + 1"></span>
                         </td>
-                        <td class="{{ $td }} !px-2"><input type="text" x-model="zeile.menge" class="{{ $input }} !w-20 !py-1 text-right" data-menge /></td>
-                        <td class="{{ $td }} !px-2"><input type="text" x-model="zeile.menge_max" placeholder="–" class="{{ $input }} !w-16 !py-1 text-right" /></td>
-                        <td class="{{ $td }} !px-2">
+                        <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.menge" class="{{ $input }} !w-20 !py-1 text-right" data-menge /></td>
+                        <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.menge_max" placeholder="–" title="Mengenbereich: bis (optional)" class="{{ $input }} !w-14 !py-1 text-right" /></td>
+                        <td class="{{ $td }} !px-2 !py-1">
                             <select x-model.number="zeile.einheit_vocab_id" class="{{ $input }} !w-24 !py-1">
                                 @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                             </select>
                         </td>
                         <td class="{{ $td }} !px-2 !py-1 max-w-[18rem]">
+                            {{-- R4 (Dichte): Lineage als Tooltip statt eigener Zeile — 19-Zutaten-Rezepte blieben sonst unlesbar --}}
                             <span class="text-xs" :class="zeile.gp_id || zeile.referenced_recipe_id ? 'text-violet-600 dark:text-violet-400' : 'text-gray-400'"
-                                  x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"></span>
+                                  x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
+                                  :title="zeile.lineage ? 'Verknüpfung via ' + zeile.lineage : ''"></span>
                             <button type="button" x-show="zeile.gp_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Lieferantenartikel hinter dem GP (Peek)"
                                     @click="peek(zeile)" data-gp-peek>📦</button>
-                            <span class="block text-[10px] text-gray-400 italic truncate" x-text="zeile.lineage ? 'via ' + zeile.lineage : ''"></span>
                         </td>
-                        <td class="{{ $td }} !px-2"><input type="text" x-model="zeile.note" placeholder="Hinweis" class="{{ $input }} !w-28 !py-1" /></td>
-                        <td class="{{ $td }} !px-2"><input type="text" x-model="zeile.garverlust_pct" placeholder="0" class="{{ $input }} !w-14 !py-1 text-right" /></td>
-                        <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
+                        <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.note" placeholder="Hinweis" class="{{ $input }} !w-28 !py-1" /></td>
+                        <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.garverlust_pct" placeholder="0" class="{{ $input }} !w-14 !py-1 text-right" /></td>
+                        <td class="{{ $td }} !px-2 !py-1 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
                             <span x-text="zeilenEk(zeile) ?? '—'" :class="zeilenEk(zeile) ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'"></span>
                         </td>
-                        <td class="{{ $td }} !px-2 whitespace-nowrap">
+                        <td class="{{ $td }} !px-2 !py-1 whitespace-nowrap">
                             <label class="inline-flex items-center gap-1 text-[10px] text-gray-400 mr-1" title="optional: zählt nicht in Yield/Kosten">
                                 <input type="checkbox" x-model="zeile.is_optional" class="rounded border-gray-300 !w-3 !h-3" />opt
                             </label>
@@ -112,14 +115,7 @@
                             <button type="button" class="block w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10"
                                     @click="hinzufuegen(ziel)" x-text="ziel.name" data-picker-treffer></button>
                         </template>
-                
-        @if($eingebettet)
-            <div class="mt-3 flex items-center justify-end gap-2" data-zutaten-eingebettet-aktionen>
-                <span class="text-[10px] text-gray-400">Zutaten speichern synct + rechnet GL-02 neu (eigener Schritt, P-8)</span>
-                <button type="button" @click="$wire.speichern(payload())" class="{{ $btnPrimary }}" data-zutaten-speichern-inline>Zutaten speichern</button>
-            </div>
-        @endif
-    </div>
+                    </div>
                 </div>
                 <label class="inline-flex items-center gap-1 text-xs text-gray-400">
                     <input type="checkbox" x-model="neu.is_optional" class="rounded border-gray-300" /> optional
@@ -129,4 +125,12 @@
             <button type="button" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 mt-1" @click="garverluste()" data-garverlust-ki
                     title="M4-11: KI-Schätzung je Zutat (GL-07 — geschrieben erst beim Speichern, quelle=ki)">✨ Garverluste vorschlagen</button>
         </div>
+
+        {{-- R4-Fix: dieser Block saß IM Picker-Dropdown (x-show) — der Button war praktisch nie sichtbar --}}
+        @if($eingebettet)
+            <div class="mt-3 flex items-center justify-end gap-2" data-zutaten-eingebettet-aktionen>
+                <span class="text-[10px] text-gray-400">Zutaten speichern synct + rechnet GL-02 neu (eigener Schritt, P-8)</span>
+                <button type="button" @click="$wire.speichern(payload())" class="{{ $btnPrimary }}" data-zutaten-speichern-inline>Zutaten speichern</button>
+            </div>
+        @endif
     </div>
