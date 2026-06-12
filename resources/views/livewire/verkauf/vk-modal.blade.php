@@ -11,7 +11,7 @@
     @endif
 
     @if($fehler !== null)
-        <p class="text-sm text-rose-600 dark:text-rose-400" data-vk-fehler>{{ $fehler }}</p>
+        <p class="text-xs text-rose-600 dark:text-rose-400" data-vk-fehler>{{ $fehler }}</p>
     @endif
 
     @if($rezept === null)
@@ -27,9 +27,9 @@
                     <input type="search" wire:model.live.debounce.300ms="basisSuche" class="{{ $input }}" placeholder="Basisrezept suchen …" data-vk-basis-suche />
                     @foreach($basisTreffer as $b)
                         <button type="button" wire:key="bt-{{ $b->id }}" wire:click="$set('basisId', {{ $b->id }})"
-                                class="block w-full text-left px-2 py-1 rounded text-sm {{ $basisId === $b->id ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}"
+                                class="block w-full text-left px-2 py-1 rounded text-xs {{ $basisId === $b->id ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}"
                                 data-vk-basis-treffer="{{ $b->id }}">
-                            {{ $b->name }} <span class="text-xs text-gray-400">{{ $b->yield_kg !== null ? number_format((float) $b->yield_kg, 2, ',', '.') . ' kg' : '' }} {{ $b->ek_total_eur !== null ? '· EK ' . number_format((float) $b->ek_total_eur, 2, ',', '.') . ' €' : '' }}</span>
+                            {{ $b->name }} <span class="text-[11px] text-gray-400">{{ $b->yield_kg !== null ? number_format((float) $b->yield_kg, 2, ',', '.') . ' kg' : '' }} {{ $b->ek_total_eur !== null ? '· EK ' . number_format((float) $b->ek_total_eur, 2, ',', '.') . ' €' : '' }}</span>
                         </button>
                     @endforeach
                 </div>
@@ -123,15 +123,15 @@
             </x-slot:actions>
 
             @if($rollenVorschlag !== null)
-                <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-sm" data-vk-editor-rollen-vorschlag>
-                    <p class="text-gray-900 dark:text-gray-100">🎭 Rollen-Verteilung <span class="text-xs text-gray-400">· {{ round($rollenVorschlag['confidence'] * 100) }} %</span></p>
+                <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs" data-vk-editor-rollen-vorschlag>
+                    <p class="text-gray-900 dark:text-gray-100">🎭 Rollen-Verteilung <span class="text-[11px] text-gray-400">· {{ round($rollenVorschlag['confidence'] * 100) }} %</span></p>
                     @if($rollenVorschlag['rollen'] === [])
-                        <p class="text-xs text-gray-400 mt-0.5">Kein gültiger Vorschlag (Vokabular: aroma_treiber · komponente · beilage · garnitur).</p>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Kein gültiger Vorschlag (Vokabular: aroma_treiber · komponente · beilage · garnitur).</p>
                     @else
                         <div class="mt-1 space-y-0.5">
                             @foreach($rollenVorschlag['rollen'] as $zeileId => $rolle)
                                 @php($zeile = $rezept->ingredients->firstWhere('id', $zeileId))
-                                <p class="text-xs text-gray-600 dark:text-gray-300" wire:key="vkmr-{{ $zeileId }}">{{ $zeile?->referencedRecipe?->name ?? $zeile?->gp?->name ?? $zeile?->display_name ?? "Zeile {$zeileId}" }} → <span class="font-medium">{{ $rolle }}</span></p>
+                                <p class="text-[11px] text-gray-600 dark:text-gray-300" wire:key="vkmr-{{ $zeileId }}">{{ $zeile?->referencedRecipe?->name ?? $zeile?->gp?->name ?? $zeile?->display_name ?? "Zeile {$zeileId}" }} → <span class="font-medium">{{ $rolle }}</span></p>
                             @endforeach
                         </div>
                     @endif
@@ -149,23 +149,23 @@
             <div class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2" data-vk-editor-kpis>
                 <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                     <span class="{{ $dt }}">Yield</span>
-                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
                 </div>
                 <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                     <span class="{{ $dt }}">EK gesamt</span>
-                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
                 <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
                     <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">EK / kg</span>
-                    <p class="text-sm font-bold text-orange-700 dark:text-orange-300">{{ $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
+                    <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
                 </div>
                 <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                     <span class="{{ $dt }}">Mit Preis</span>
-                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_n_ingredients_priced ?? 0 }}/{{ $rezept->ek_n_ingredients_total ?? 0 }}</p>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_n_ingredients_priced ?? 0 }}/{{ $rezept->ek_n_ingredients_total ?? 0 }}</p>
                 </div>
                 <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                     <span class="{{ $dt }}">Allergen-Konf.</span>
-                    <p class="text-sm font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergene_konfidenz) }}</p>
+                    <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergene_konfidenz) }}</p>
                 </div>
             </div>
         </x-foodalchemist::modal-section>
@@ -192,7 +192,7 @@
                 </div>
             </div>
             @if($cockpit !== null && $cockpit['vk']['vorschlag'] !== null)
-                <p class="text-xs text-gray-400 mt-2" data-vk-vorschau>Vorschlag aus Klasse: {{ number_format($cockpit['vk']['vorschlag']['vk_netto'], 2, ',', '.') }} € netto · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
+                <p class="text-[11px] text-gray-400 mt-2" data-vk-vorschau>Vorschlag aus Klasse: {{ number_format($cockpit['vk']['vorschlag']['vk_netto'], 2, ',', '.') }} € netto · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
             @endif
         </x-foodalchemist::modal-section>
 
@@ -204,7 +204,7 @@
         {{-- M9-01d: Nährwerte (GL-08-Aggregate — pro 100 g + pro Stück) --}}
         <x-foodalchemist::modal-section title="Nährwerte">
             @if($rezept->nutri_kcal_per_100g === null)
-                <p class="text-xs text-gray-400" data-vk-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
+                <p class="text-[11px] text-gray-400" data-vk-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
             @else
                 <table class="{{ $table }}" data-vk-naehrwerte>
                     <thead><tr class="text-left">
@@ -299,9 +299,9 @@
             </x-slot:actions>
             @if($regenVorschlaege !== [])
                 <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 space-y-1" data-regen-vorschlaege>
-                    <p class="text-xs font-medium text-violet-700 dark:text-violet-300">✨ Programm-Vorschläge — je Zeile übernehmen:</p>
+                    <p class="text-[11px] font-medium text-violet-700 dark:text-violet-300">✨ Programm-Vorschläge — je Zeile übernehmen:</p>
                     @foreach($regenVorschlaege as $idx => $rv)
-                        <div class="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-300" wire:key="rvz-{{ $idx }}">
+                        <div class="flex items-center justify-between gap-2 text-[11px] text-gray-600 dark:text-gray-300" wire:key="rvz-{{ $idx }}">
                             <span class="min-w-0 truncate">{{ $rv['komponente_label'] }}{{ $rv['temp_c'] !== null ? ' · ' . $rv['temp_c'] . ' °C' : '' }}{{ $rv['dauer_min'] !== null ? ' · ' . $rv['dauer_min'] . ' min' : '' }}{{ $rv['kerntemp_c'] !== null ? ' · KT ' . $rv['kerntemp_c'] . ' °C' : '' }}</span>
                             <button type="button" wire:click="regenVorschlagUebernehmen({{ $idx }})" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-regen-uebernehmen>+ Übernehmen</button>
                         </div>
@@ -310,7 +310,7 @@
             @endif
             <div class="space-y-1.5" data-vk-regen>
                 @foreach($regenZeilen as $z)
-                    <div wire:key="rg-{{ $z->id }}" class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200" data-regen-zeile="{{ $z->id }}">
+                    <div wire:key="rg-{{ $z->id }}" class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200" data-regen-zeile="{{ $z->id }}">
                         <span class="flex-1 truncate">
                             <span class="font-medium">{{ $z->komponente_label }}</span>
                             <span class="text-gray-400">· {{ $z->geraet ?? 'kalt servieren' }}{{ $z->temp_c !== null ? " · {$z->temp_c} °C" : '' }}{{ $z->dauer_min !== null ? " · {$z->dauer_min} min" : '' }}{{ $z->kerntemp_c !== null ? " · KT {$z->kerntemp_c} °C" : '' }}{{ $z->hinweis ? " · {$z->hinweis}" : '' }}</span>
@@ -380,7 +380,7 @@
                     <span class="text-[10px] text-gray-400">Markdown — ## für Phasen, nummerierte Schritte</span>
                     @include('foodalchemist::livewire.recipes.partials.md-toolbar', ['ziel' => 'vk-plating-text'])
                 </div>
-                <textarea wire:model="form.plating_text" id="vk-plating-text" rows="7" class="{{ $input }} font-mono text-xs" data-vk-plating-text></textarea>
+                <textarea wire:model="form.plating_text" id="vk-plating-text" rows="7" class="{{ $input }} font-mono text-[11px]" data-vk-plating-text></textarea>
             </div>
         </x-foodalchemist::modal-section>
 
@@ -392,7 +392,7 @@
         <x-foodalchemist::modal-section title="Verwendungsnachweise (Kunde × Marketing-Name)">
             <div class="space-y-1.5" data-vk-kunden>
                 @foreach($kunden as $k)
-                    <div wire:key="kn-{{ $k->id }}" class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200" data-kunde-zeile="{{ $k->id }}">
+                    <div wire:key="kn-{{ $k->id }}" class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200" data-kunde-zeile="{{ $k->id }}">
                         <span class="flex-1 truncate"><span class="font-medium">{{ $k->customer_name }}</span> <span class="text-gray-400">· {{ $k->marketing_name }}</span></span>
                         <button type="button" wire:click="kundeLoeschen({{ $k->id }})" class="{{ $btnGhostXs }} text-rose-500">✕</button>
                     </div>

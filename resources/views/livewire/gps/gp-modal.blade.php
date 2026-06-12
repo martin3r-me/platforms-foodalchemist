@@ -14,7 +14,7 @@
     @endif
 
     @if($fehler !== null)
-        <p class="text-sm text-rose-600 dark:text-rose-400 mb-3" data-modal-fehler>{{ $fehler }}</p>
+        <p class="text-xs text-rose-600 dark:text-rose-400 mb-3" data-modal-fehler>{{ $fehler }}</p>
     @endif
 
     {{-- Naming-Builder (Neuanlage) / Name (Edit) --}}
@@ -51,7 +51,7 @@
             </div>
             <div class="flex flex-wrap gap-4 mt-2" data-zusatz-klammern>
                 @foreach(['bio' => '(Bio)', 'vegan' => '(Vegan)', 'glutenfrei' => '(Glutenfrei)', 'laktosefrei' => '(Laktosefrei)'] as $flag => $klammer)
-                    <label class="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
+                    <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
                         <input type="checkbox" wire:model.live="builder.{{ $flag }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
                         {{ $klammer }}
                     </label>
@@ -66,14 +66,14 @@
 
         {{-- AUTO-SYNC-Vorschau: Name + Slug + gp_key --}}
         <div class="mt-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 space-y-0.5" data-naming-vorschau>
-            <p class="text-sm text-gray-900 dark:text-gray-100 font-medium" data-vorschau-name>{{ $vorschauName !== '' ? $vorschauName : '—' }}</p>
+            <p class="text-xs text-gray-900 dark:text-gray-100 font-medium" data-vorschau-name>{{ $vorschauName !== '' ? $vorschauName : '—' }}</p>
             <p class="text-[11px] text-gray-400 font-mono">slug: {{ $vorschauSlug !== '' ? $vorschauSlug : '—' }} · gp_key: {{ $vorschauKey !== '' && $vorschauKey !== '||' ? $vorschauKey : '—' }}</p>
         </div>
         @foreach($liveFehler as $f)
-            <p class="text-xs text-rose-600 dark:text-rose-400 mt-1" data-live-fehler>{{ $f }}</p>
+            <p class="text-[11px] text-rose-600 dark:text-rose-400 mt-1" data-live-fehler>{{ $f }}</p>
         @endforeach
         @foreach($warnungen as $w)
-            <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-live-warnung>{{ $w }}</p>
+            <p class="text-[11px] text-amber-600 dark:text-amber-400 mt-1" data-live-warnung>{{ $w }}</p>
         @endforeach
     </x-foodalchemist::modal-section>
 
@@ -96,15 +96,15 @@
 
     {{-- Derivat (§11) --}}
     <x-foodalchemist::modal-section title="Derivat (§11)">
-        <label class="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
+        <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
             <input type="checkbox" wire:model.live="builder.is_derivat" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-derivat-toggle />
-            Küchen-Nebenprodukt (Schale, Saft, Parüren, Karkasse …) — <code class="text-xs">requires_la=0</code>, erbt Allergene LIVE vom Mutter-GP (§16)
+            Küchen-Nebenprodukt (Schale, Saft, Parüren, Karkasse …) — <code class="text-[11px]">requires_la=0</code>, erbt Allergene LIVE vom Mutter-GP (§16)
         </label>
         @if($builder['is_derivat'])
             <div class="mt-2" data-derivat-mutter>
                 <label class="block {{ $label }} mb-1">Mutter-GP</label>
                 @if($builder['derivat_von_gp_id'])
-                    <p class="text-sm text-gray-900 dark:text-gray-100">
+                    <p class="text-xs text-gray-900 dark:text-gray-100">
                         {{ \Platform\FoodAlchemist\Models\FoodAlchemistGp::find($builder['derivat_von_gp_id'])?->name ?? '—' }}
                         <button type="button" wire:click="$set('builder.derivat_von_gp_id', null)" class="{{ $btnGhostXs }} ml-1">ändern</button>
                     </p>
@@ -113,7 +113,7 @@
                     @foreach($derivatKandidaten as $kandidat)
                         <button type="button" wire:key="dk-{{ $kandidat->id }}"
                                 wire:click="$set('builder.derivat_von_gp_id', {{ $kandidat->id }})"
-                                class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150">
+                                class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150">
                             {{ $kandidat->name }}
                         </button>
                     @endforeach
@@ -148,8 +148,8 @@
                     <div class="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1.5" data-tags-grid>
                         @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistGp::TAG_FIELDS as $tag)
                             <div class="flex items-center justify-between gap-1">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ str_replace(['is_', 'contains_', '_'], ['', 'enth. ', ' '], $tag) }}</span>
-                                <select wire:model.live="tags.{{ $tag }}" class="bg-transparent border-0 text-xs text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-0 py-0">
+                                <span class="text-[11px] text-gray-500 dark:text-gray-400 truncate">{{ str_replace(['is_', 'contains_', '_'], ['', 'enth. ', ' '], $tag) }}</span>
+                                <select wire:model.live="tags.{{ $tag }}" class="bg-transparent border-0 text-[11px] text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-0 py-0">
                                     <option value="">unbewertet</option>
                                     <option value="1">ja</option>
                                     <option value="0">nein</option>
@@ -164,7 +164,7 @@
 
     <x-slot:footer>
         <div class="flex items-center justify-between gap-3 w-full">
-            <label class="inline-flex items-center gap-1.5 text-xs text-gray-400" title="GT-12-10: HARD_STOP bei vorhandenem gp_key/Jaccard ≥ 0.92 — force legt bewusst trotzdem an">
+            <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-400" title="GT-12-10: HARD_STOP bei vorhandenem gp_key/Jaccard ≥ 0.92 — force legt bewusst trotzdem an">
                 @if($neu)<input type="checkbox" wire:model.live="force" class="rounded border-gray-300 text-rose-500 focus:ring-rose-400" data-force-flag /> bewusst trotzdem anlegen (force)@endif
             </label>
             <div class="flex items-center gap-2">

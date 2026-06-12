@@ -42,13 +42,13 @@
             <span class="{{ $ui['pill'] }} {{ $badge[1] }}"
                   @if($begruendung) title="{{ $begruendung }}" @endif>{{ $badge[0] }}</span>
             @if($quelle === 'ki' && $confidence !== null)
-                <span class="text-xs text-gray-400" data-ki-confidence>{{ round($confidence * 100) }}%</span>
+                <span class="text-[11px] text-gray-400" data-ki-confidence>{{ round($confidence * 100) }}%</span>
             @endif
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
             @if($hasProposal)
                 <button type="button" wire:click="accept_{{ $field }}"
-                        class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-md shadow-sm shadow-violet-500/25 hover:shadow-md transition-all duration-150">
+                        class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-md shadow-sm shadow-violet-500/25 hover:shadow-md transition-all duration-150">
                     Übernehmen
                 </button>
             @endif

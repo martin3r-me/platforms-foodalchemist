@@ -1,6 +1,6 @@
 {{-- P-8-Zutaten-Kern — EINE Quelle für Modal (M4-07) und Voll-Editor (Editor-Parität) --}}
     @if($fehler !== null)
-        <p class="text-sm text-rose-600 dark:text-rose-400 mb-3" data-editor-fehler>{{ $fehler }}</p>
+        <p class="text-xs text-rose-600 dark:text-rose-400 mb-3" data-editor-fehler>{{ $fehler }}</p>
     @endif
 
     {{-- wire:key: Alpine wertet x-data bei morphdom NICHT neu aus — Rezept-Wechsel muss das Element ersetzen --}}
@@ -27,7 +27,7 @@
                             <span class="cursor-grab active:cursor-grabbing text-gray-300 hover:text-violet-500 select-none" draggable="true"
                                   @dragstart="dragIdx = i; $event.dataTransfer.setData('text/plain', String(i)); $event.dataTransfer.effectAllowed = 'move'"
                                   @dragend="dragIdx = null" title="ziehen zum Sortieren" data-drag-handle>⠿</span>
-                            <span class="text-gray-400 tabular-nums text-xs ml-0.5" x-text="i + 1"></span>
+                            <span class="text-gray-400 tabular-nums text-[11px] ml-0.5" x-text="i + 1"></span>
                         </td>
                         <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.menge" class="{{ $input }} !w-20 !py-1 text-right" data-menge /></td>
                         <td class="{{ $td }} !px-2 !py-1">
@@ -40,7 +40,7 @@
                                  blockiert → Klick öffnet das Ziel als MODAL über dem Editor (Stand bleibt) --}}
                             <template x-if="zeile.gp_id || zeile.referenced_recipe_id">
                                 <button type="button"
-                                        class="text-xs text-violet-600 dark:text-violet-400 hover:underline text-left"
+                                        class="text-[11px] text-violet-600 dark:text-violet-400 hover:underline text-left"
                                         x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
                                         :title="(zeile.lineage ? 'via ' + zeile.lineage + ' — ' : '') + (zeile.gp_id ? 'GP öffnen' : 'Rezept öffnen')"
                                         @click="zeile.gp_id
@@ -49,7 +49,7 @@
                                         data-ziel-link></button>
                             </template>
                             <template x-if="!zeile.gp_id && !zeile.referenced_recipe_id">
-                                <span class="text-xs text-gray-400" x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
+                                <span class="text-[11px] text-gray-400" x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
                                       :title="zeile.lineage ? 'Verknüpfung via ' + zeile.lineage : ''"></span>
                             </template>
                             <button type="button" x-show="zeile.gp_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Lieferantenartikel hinter dem GP (Peek)"
@@ -87,10 +87,10 @@
                     <tr x-show="zeile._peek" x-cloak>
                         <td colspan="{{ $vkKontext ? 11 : 10 }}" class="!px-3 !py-2 bg-black/[0.02] dark:bg-white/[0.03]">
                             <div class="rounded-lg border-l-2 border-orange-400 bg-white dark:bg-gray-900 px-3 py-2" data-gp-peek-tabelle>
-                                <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">
+                                <p class="text-[11px] font-medium text-gray-900 dark:text-gray-100 mb-1">
                                     📦 <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
                                 </p>
-                                <table class="w-full text-xs">
+                                <table class="w-full text-[11px]">
                                     <thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-400">
                                         <th class="px-1.5 py-0.5"></th><th class="px-1.5 py-0.5">Lieferant</th><th class="px-1.5 py-0.5">Art.-Nr</th>
                                         <th class="px-1.5 py-0.5">Bezeichnung</th><th class="px-1.5 py-0.5">Marke</th><th class="px-1.5 py-0.5">VPE</th>
@@ -119,7 +119,7 @@
                 </template>
             <tfoot>
                 <tr class="border-t border-black/10 dark:border-white/10">
-                    <td colspan="{{ $vkKontext ? 7 : 6 }}" class="{{ $td }} !px-2 text-right text-xs text-gray-400">
+                    <td colspan="{{ $vkKontext ? 7 : 6 }}" class="{{ $td }} !px-2 text-right text-[11px] text-gray-400">
                         Σ live (Näherung — count-Einheiten & Brücken rechnet der Save-Recompute)
                     </td>
                     <td class="{{ $td }} !px-2 text-right font-medium tabular-nums text-gray-900 dark:text-gray-100" data-summe-live>
@@ -158,7 +158,7 @@
                     <div x-show="gefilterte().length > 0" x-cloak
                          class="absolute left-0 top-full mt-1 z-20 w-full rounded-lg bg-white dark:bg-gray-900 border border-black/10 dark:border-white/10 shadow-xl overflow-hidden">
                         <template x-for="ziel in gefilterte()" :key="ziel.typ + '-' + ziel.id">
-                            <button type="button" class="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10"
+                            <button type="button" class="flex items-center gap-2 w-full text-left px-3 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10"
                                     @click="hinzufuegen(ziel)" data-picker-treffer>
                                 <span class="shrink-0 px-1.5 rounded text-[9px] font-medium uppercase tracking-wider"
                                       :class="ziel.typ === 'gp' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'"
@@ -168,7 +168,7 @@
                         </template>
                     </div>
                 </div>
-                <label class="inline-flex items-center gap-1 text-xs text-gray-400">
+                <label class="inline-flex items-center gap-1 text-[11px] text-gray-400">
                     <input type="checkbox" x-model="neu.is_optional" class="rounded border-gray-300" /> optional
                 </label>
             </div>

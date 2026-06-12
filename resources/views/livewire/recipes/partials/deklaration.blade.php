@@ -4,19 +4,19 @@
 
 <div data-deklaration>
     <p class="{{ $dt }} mb-1">Diät & Spezifikation</p>
-    <div class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm" data-deklaration-diaet>
+    <div class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs" data-deklaration-diaet>
         @foreach([
             'spec_is_vegan' => 'Vegan', 'spec_is_vegetarian' => 'Vegetarisch',
             'spec_is_halal' => 'Halal', 'spec_is_gluten_free' => 'Glutenfrei',
             'spec_is_lactose_free' => 'Laktosefrei',
         ] as $feld => $lbl)
             @php($wert = $rezept->{$feld})
-            <span class="font-medium uppercase tracking-wide text-xs {{ $wert === true ? 'text-green-600 dark:text-green-400' : ($wert === false ? 'text-gray-400 line-through decoration-1' : 'text-gray-400 italic') }}"
+            <span class="font-medium uppercase tracking-wide text-[11px] {{ $wert === true ? 'text-green-600 dark:text-green-400' : ($wert === false ? 'text-gray-400 line-through decoration-1' : 'text-gray-400 italic') }}"
                   title="{{ $wert === null ? 'unbewertet' : ($wert ? 'ja' : 'nein') }}">{{ $lbl }} {{ $wert === true ? '✓' : ($wert === false ? '✕' : '?') }}</span>
         @endforeach
         @foreach(['spec_contains_pork' => 'enth. Schwein', 'spec_contains_beef' => 'enth. Rind'] as $feld => $lbl)
             @if($rezept->{$feld} === true)
-                <span class="font-medium uppercase tracking-wide text-xs text-amber-600 dark:text-amber-400">{{ $lbl }} ⚠</span>
+                <span class="font-medium uppercase tracking-wide text-[11px] text-amber-600 dark:text-amber-400">{{ $lbl }} ⚠</span>
             @endif
         @endforeach
     </div>
@@ -29,7 +29,7 @@
     <div class="grid grid-cols-2 gap-x-4 gap-y-0.5" data-allergen-grid>
         @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $feld => $lbl)
             @php($wert = $rezept->{"allergen_{$feld}"})
-            <span class="text-sm px-1.5 py-0.5 rounded {{ [
+            <span class="text-xs px-1.5 py-0.5 rounded {{ [
                     'enthalten' => 'bg-rose-500/10 text-rose-600 dark:text-rose-400 font-medium',
                     'spuren' => 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
                     'nicht_enthalten' => 'text-gray-400',
@@ -44,7 +44,7 @@
     <div class="grid grid-cols-2 gap-1" data-zusatz-grid>
         @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE as $stoff => $lbl)
             @php($wert = $rezept->{"zusatz_{$stoff}"})
-            <span class="text-xs px-1.5 py-0.5 rounded border truncate {{ $wert === null
+            <span class="text-[11px] px-1.5 py-0.5 rounded border truncate {{ $wert === null
                     ? 'border-dashed border-black/15 dark:border-white/15 text-gray-400 italic'
                     : ((int) $wert === 3
                         ? 'border-rose-300 dark:border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-medium'

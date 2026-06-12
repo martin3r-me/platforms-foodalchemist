@@ -24,7 +24,7 @@
                     :class="läuft ? 'animate-pulse' : ''" class="{{ $btnPrimary }}" data-voice-rec>
                 <span x-text="läuft ? '⏹ Stopp & senden' : '🎙 Aufnahme starten'"></span>
             </button>
-            <span class="text-xs text-gray-400">Kurz-Befehl sprechen (wenige Sekunden) — z. B. »Suche BBQ-Sauce«, »Öffne Rezept …«, »Klassifiziere …«</span>
+            <span class="text-[11px] text-gray-400">Kurz-Befehl sprechen (wenige Sekunden) — z. B. »Suche BBQ-Sauce«, »Öffne Rezept …«, »Klassifiziere …«</span>
         </div>
 
         {{-- Fallback/Sandbox: Befehl tippen --}}
@@ -33,21 +33,21 @@
             <button type="submit" class="{{ $btnGhostXs }}">Senden</button>
         </form>
 
-        @if($fehler !== null)<p class="text-sm text-rose-500" data-voice-fehler>{{ $fehler }}</p>@endif
+        @if($fehler !== null)<p class="text-xs text-rose-500" data-voice-fehler>{{ $fehler }}</p>@endif
         @if($transcript !== null)
-            <p class="text-xs text-gray-400" data-voice-transcript>Transkript: »{{ $transcript }}«</p>
+            <p class="text-[11px] text-gray-400" data-voice-transcript>Transkript: »{{ $transcript }}«</p>
         @endif
 
         @if($ergebnis !== null)
             <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 space-y-1.5" data-voice-ergebnis>
                 @if($ergebnis['text'] !== null)
-                    <p class="text-sm text-gray-900 dark:text-gray-100">{{ $ergebnis['text'] }}</p>
+                    <p class="text-xs text-gray-900 dark:text-gray-100">{{ $ergebnis['text'] }}</p>
                 @endif
                 <p class="text-[10px] text-gray-400">{{ $ergebnis['runden'] }} Runde(n) · {{ count($ergebnis['tool_laeufe']) }} Tool-Aufruf(e) · {{ $ergebnis['elapsed_ms'] }} ms</p>
                 @foreach($ergebnis['proposals'] as $i => $p)
-                    <div class="rounded bg-violet-500/10 border border-violet-500/30 px-2 py-1.5 text-sm" wire:key="vp-{{ $i }}" data-voice-proposal>
+                    <div class="rounded bg-violet-500/10 border border-violet-500/30 px-2 py-1.5 text-xs" wire:key="vp-{{ $i }}" data-voice-proposal>
                         ✨ Speisen-Klasse: <span class="font-medium">{{ $p['klasse_name'] ?? 'kein Treffer' }}</span>
-                        <span class="text-xs text-gray-400">· {{ round(($p['confidence'] ?? 0) * 100) }} %</span>
+                        <span class="text-[11px] text-gray-400">· {{ round(($p['confidence'] ?? 0) * 100) }} %</span>
                         @if($p['accepted'] ?? false)
                             <span class="{{ $pill }} {{ $variantPill['success'] }} ml-1">übernommen</span>
                         @elseif(($p['klasse_id'] ?? null) !== null)

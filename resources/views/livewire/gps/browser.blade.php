@@ -20,28 +20,28 @@
                 </select>
 
                 <button type="button" wire:click="waehleWg('')"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-all duration-150 {{ $warengruppe === ''
+                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $warengruppe === ''
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                             : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                     <span class="font-medium">Alle Warengruppen</span>
-                    <span class="text-xs text-gray-400">{{ number_format(array_sum($wgCounts), 0, ',', '.') }}</span>
+                    <span class="text-[11px] text-gray-400">{{ number_format(array_sum($wgCounts), 0, ',', '.') }}</span>
                 </button>
 
                 <div class="space-y-0.5 -mx-1" data-wg-liste>
                     @foreach($warengruppen as $wg)
                         <div wire:key="wg-{{ $wg->code }}">
                             <button type="button" wire:click="waehleWg('{{ $wg->code }}')"
-                                    class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-sm transition-all duration-150 {{ $warengruppe === $wg->code
+                                    class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $warengruppe === $wg->code
                                         ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                                         : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                                 <span class="min-w-0 truncate">{{ $wg->code }} {{ $wg->name }}</span>
-                                <span class="text-xs text-gray-400 shrink-0 ml-2">{{ $wgCounts[$wg->code] ?? 0 }}</span>
+                                <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $wgCounts[$wg->code] ?? 0 }}</span>
                             </button>
                             @if($warengruppe === $wg->code && count($subCounts) > 0)
                                 <div class="ml-4 mt-0.5 space-y-0.5" data-sub-liste>
                                     @foreach($subCounts as $sub => $n)
                                         <button type="button" wire:key="sub-{{ md5($sub) }}" wire:click="waehleSub('{{ addslashes($sub) }}')"
-                                                class="w-full flex items-center justify-between px-2 py-0.5 rounded text-xs transition-all duration-150 {{ $subKategorie === $sub
+                                                class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $subKategorie === $sub
                                                     ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
                                                     : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                                             <span class="min-w-0 truncate">{{ $sub }}</span>
@@ -86,7 +86,7 @@
                 </h3>
                 <span class="{{ $label }} flex items-center gap-2">
                     {{ number_format($gps->total(), 0, ',', '.') }} Treffer ·
-                    <select wire:model.live="perPage" class="bg-transparent border-0 text-xs uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
+                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
                         @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
                     </select>
                 </span>
@@ -111,7 +111,7 @@
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-gp-name>{{ $gp->name }}</span>
                                 @if($gp->is_derivat)<span class="ml-1.5 {{ $pill }} {{ $variantPill['info'] }}">Derivat</span>@endif
                             </td>
-                            <td class="{{ $td }} text-xs italic text-gray-500 whitespace-nowrap max-w-36 truncate" title="{{ $gp->warengruppe?->name ?? '' }}">{{ $gp->warengruppe?->name ?? $gp->warengruppe_code ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-500 whitespace-nowrap max-w-36 truncate" title="{{ $gp->warengruppe?->name ?? '' }}">{{ $gp->warengruppe?->name ?? $gp->warengruppe_code ?? '—' }}</td>
                             <td class="{{ $td }} whitespace-nowrap"><span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span></td>
                             <td class="{{ $td }} text-right tabular-nums">
                                 @if($gp->n_las_total > 0)<span class="text-gray-500">{{ $gp->n_las_total }}</span>
@@ -136,7 +136,7 @@
                                 @empty
                                     <span class="text-gray-400">—</span>
                                 @endforelse
-                                @if(count($gp->allergen_badges) > 3)<span class="text-xs text-gray-400">+{{ count($gp->allergen_badges) - 3 }}</span>@endif
+                                @if(count($gp->allergen_badges) > 3)<span class="text-[11px] text-gray-400">+{{ count($gp->allergen_badges) - 3 }}</span>@endif
                             </td>
                         </tr>
                     @empty

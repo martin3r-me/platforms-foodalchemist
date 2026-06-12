@@ -159,6 +159,18 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > angepasst. Live verifiziert (Messung: Tabelle 1316→771 px, Scroll-Test ok, Screenshot).
 > Suite: **394/394 (1.665 Assertions)**.
 
+> **Status R14/Jarvis-Schriftskala (2026-06-12, Dominique: «Schrift zu groß, kein rundes
+> Gefühl — schau bei Jarvis welche Größe»):** Jarvis-Quellcode ausgewertet
+> (`COOKING JARVIS/00_SYSTEM/00.07_App/cooking-jarvis/src/App.css`): Basis 13px,
+> .data-table **12px**/th 11px, Sidebar-Listen 12px (Counts 10px), Detail-Panel h2 **15px** /
+> Sektions-Label **10px uppercase** / Werte 12px / Meta 11px, Inputs+Buttons 12px, btn-sm 11px.
+> Exakt übernommen: zentral (`Ui::maps()`) table→12px, input/btnPrimary/btnGhost→12px,
+> btnGhostXs→11px, label+dt→10px-uppercase (Jarvis .detail h3); Sweep über ALLE 38 Modul-Views
+> (Reihenfolge: text-xs→11px, dann text-sm→12px — Meta-Zeilen rutschen mit auf Jarvis-Maß);
+> Panel-Titel (GP/Basis/VK) auf 15px. Core-Navigation links außen UNANGETASTET (tabu).
+> Live nachgemessen: Tabelle 12px/Zeile 26px, Panel-Titel 15px, Label 10px, Werte 12px,
+> WG-Sidebar-Buttons 12px. Suite: **394/394 (1.668 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).

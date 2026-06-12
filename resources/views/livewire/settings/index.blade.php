@@ -10,7 +10,7 @@
 
         @if($istKindTeam)
             <div class="{{ $card }} p-4 border-amber-500/20">
-                <p class="text-sm text-amber-600 dark:text-amber-400">
+                <p class="text-xs text-amber-600 dark:text-amber-400">
                     Du siehst den geerbten Katalog deines Eltern-Teams — editierbar ist nur, was deinem Team gehört (D1).
                     Einkaufs- und Kalkulations-Einstellungen entscheidet dein Team selbst.
                 </p>
@@ -25,8 +25,8 @@
                        class="block px-3 py-2 rounded-lg transition-all duration-150 {{ $sektion === $key
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                             : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                        <span class="block text-sm font-medium">{{ $meta['label'] }}</span>
-                        <span class="block text-xs text-gray-400 mt-0.5">{{ $meta['hint'] }}</span>
+                        <span class="block text-xs font-medium">{{ $meta['label'] }}</span>
+                        <span class="block text-[11px] text-gray-400 mt-0.5">{{ $meta['hint'] }}</span>
                     </a>
                 @endforeach
             </nav>

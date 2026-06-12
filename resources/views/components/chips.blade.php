@@ -35,7 +35,7 @@
      }"
      data-chips>
     <template x-for="(chip, i) in chips" :key="chip">
-        <span class="inline-flex items-center gap-1 {{ $star ? 'pl-1.5' : 'pl-2.5' }} {{ $readonly ? 'pr-2.5' : 'pr-1' }} py-0.5 rounded-full text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300"
+        <span class="inline-flex items-center gap-1 {{ $star ? 'pl-1.5' : 'pl-2.5' }} {{ $readonly ? 'pr-2.5' : 'pr-1' }} py-0.5 rounded-full text-[11px] bg-violet-500/10 text-violet-700 dark:text-violet-300"
               data-chip>
             @if($star)<span class="text-amber-500">★</span>@endif
             <span x-text="chip"></span>
@@ -50,7 +50,7 @@
     @unless($readonly)
         <input type="text" x-model="neu" @keydown.enter.prevent="add()" @change="add()"
                list="{{ $listId }}" placeholder="{{ $placeholder }}"
-               class="w-32 px-2 py-0.5 text-xs bg-black/[0.03] dark:bg-white/5 rounded-full border-0 placeholder-gray-400 focus:ring-2 focus:ring-violet-500/20 focus:bg-white dark:focus:bg-white/10 transition-all duration-150"
+               class="w-32 px-2 py-0.5 text-[11px] bg-black/[0.03] dark:bg-white/5 rounded-full border-0 placeholder-gray-400 focus:ring-2 focus:ring-violet-500/20 focus:bg-white dark:focus:bg-white/10 transition-all duration-150"
                data-chip-add />
         <datalist id="{{ $listId }}">
             @foreach($vocabular as $eintrag)

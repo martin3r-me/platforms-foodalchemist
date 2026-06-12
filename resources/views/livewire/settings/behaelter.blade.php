@@ -4,10 +4,10 @@
 <div class="space-y-6" data-settings-behaelter>
     <div>
         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Behälter & Geräte</h3>
-        <p class="text-xs text-gray-400 mt-0.5">Behälter, Regenerations-Geräte und Servier-Vehikel (VK-Rezepte) plus Koch-Equipment (Basisrezepte). V-06: nur deaktivieren, nie löschen.</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Behälter, Regenerations-Geräte und Servier-Vehikel (VK-Rezepte) plus Koch-Equipment (Basisrezepte). V-06: nur deaktivieren, nie löschen.</p>
     </div>
-    @if($fehler !== null)<p class="text-sm text-rose-600 dark:text-rose-400" data-behaelter-fehler>{{ $fehler }}</p>@endif
-    @if($meldung !== null)<p class="text-sm text-emerald-600 dark:text-emerald-400" data-behaelter-meldung>{{ $meldung }}</p>@endif
+    @if($fehler !== null)<p class="text-xs text-rose-600 dark:text-rose-400" data-behaelter-fehler>{{ $fehler }}</p>@endif
+    @if($meldung !== null)<p class="text-xs text-emerald-600 dark:text-emerald-400" data-behaelter-meldung>{{ $meldung }}</p>@endif
 
     @foreach($listen as $key => $vokabular)
         <div data-vokabular="{{ $key }}">
@@ -16,7 +16,7 @@
             @foreach($vokabular['zeilen']->groupBy(fn ($z) => $z->gruppe ?? 'sonstig') as $gruppe => $zeilen)
                 <div class="flex items-start gap-2 mb-1">
                     @if($vokabular['zeilen']->pluck('gruppe')->filter()->isNotEmpty())
-                        <span class="shrink-0 w-28 text-xs text-gray-400 pt-0.5">{{ $gruppe }}</span>
+                        <span class="shrink-0 w-28 text-[11px] text-gray-400 pt-0.5">{{ $gruppe }}</span>
                     @endif
                     <div class="flex flex-wrap gap-1">
                         @foreach($zeilen as $zeile)

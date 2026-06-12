@@ -7,7 +7,7 @@
 
 <div>
     {{-- Modul Header --}}
-    <div x-show="!collapsed" class="p-3 text-sm italic text-[var(--ui-secondary)] uppercase border-b border-[var(--ui-border)] mb-2">
+    <div x-show="!collapsed" class="p-3 text-xs italic text-[var(--ui-secondary)] uppercase border-b border-[var(--ui-border)] mb-2">
         Food Alchemist
     </div>
 
@@ -16,7 +16,7 @@
             @foreach($gruppe['items'] ?? [] as $item)
                 <x-ui-sidebar-item :href="route($item['route'])">
                     @svg($item['icon'] ?? 'heroicon-o-cube', 'w-4 h-4 text-[var(--ui-secondary)]')
-                    <span class="ml-2 text-sm">{{ $item['label'] }}</span>
+                    <span class="ml-2 text-xs">{{ $item['label'] }}</span>
                 </x-ui-sidebar-item>
             @endforeach
         </x-ui-sidebar-list>

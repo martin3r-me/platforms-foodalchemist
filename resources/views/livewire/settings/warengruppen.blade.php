@@ -3,10 +3,10 @@
 
 <div class="space-y-4">
     @if($fehler)
-        <div class="{{ $card }} p-3 border-red-500/20"><p class="text-sm text-red-600 dark:text-red-400">{{ $fehler }}</p></div>
+        <div class="{{ $card }} p-3 border-red-500/20"><p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p></div>
     @endif
     @if($meldung)
-        <div class="{{ $card }} p-3 border-emerald-500/20"><p class="text-sm text-emerald-600 dark:text-emerald-400">{{ $meldung }}</p></div>
+        <div class="{{ $card }} p-3 border-emerald-500/20"><p class="text-xs text-emerald-600 dark:text-emerald-400">{{ $meldung }}</p></div>
     @endif
 
     {{-- Warengruppen --}}
@@ -14,7 +14,7 @@
         <div class="{{ $cardAccent }}"></div>
         <div class="px-5 pt-4 pb-2">
             <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Warengruppen</h3>
-            <p class="text-xs text-gray-400 mt-0.5">Regelwerk GP §3: Die Codes 01–15 sind <strong>fix</strong> — nur fachliche Produkttypen, keine Zustände/Verarbeitung. Namen pflegt das Besitzer-Team.</p>
+            <p class="text-[11px] text-gray-400 mt-0.5">Regelwerk GP §3: Die Codes 01–15 sind <strong>fix</strong> — nur fachliche Produkttypen, keine Zustände/Verarbeitung. Namen pflegt das Besitzer-Team.</p>
         </div>
         <table class="{{ $table }}">
             <thead><tr class="text-left">
@@ -58,7 +58,7 @@
         <div class="flex items-center justify-between gap-3">
             <div>
                 <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Sub-Kategorien</h3>
-                <p class="text-xs text-gray-400 mt-0.5">Freitext-Feld auf den GPs — Rename propagiert auf alle EIGENEN GPs (geerbte bleiben unberührt, D1).</p>
+                <p class="text-[11px] text-gray-400 mt-0.5">Freitext-Feld auf den GPs — Rename propagiert auf alle EIGENEN GPs (geerbte bleiben unberührt, D1).</p>
             </div>
             <select wire:model.live="subWg" class="{{ $input }} !w-64">
                 @foreach($warengruppen as $wg)<option value="{{ $wg->code }}">{{ $wg->code }} {{ $wg->name }}</option>@endforeach
@@ -71,7 +71,7 @@
                     <input type="text" wire:model="renameNeu" wire:keydown.enter="rename" wire:keydown.escape="$set('renameAlt', null)" class="{{ $input }} !py-1 flex-1" />
                     <button type="button" wire:click="rename" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0">Umbenennen</button>
                 @else
-                    <span class="text-sm text-gray-700 dark:text-gray-300 min-w-0 truncate">{{ $sub->sub_kategorie }} <span class="text-xs text-gray-400">({{ $sub->n }} GPs)</span></span>
+                    <span class="text-xs text-gray-700 dark:text-gray-300 min-w-0 truncate">{{ $sub->sub_kategorie }} <span class="text-[11px] text-gray-400">({{ $sub->n }} GPs)</span></span>
                     <span class="shrink-0 space-x-1">
                         <button type="button" wire:click="startRename('{{ addslashes($sub->sub_kategorie) }}')" class="{{ $btnGhostXs }}">Umbenennen</button>
                         <button type="button" wire:click="clearWert('{{ addslashes($sub->sub_kategorie) }}')" wire:confirm="„{{ $sub->sub_kategorie }}" auf allen eigenen GPs auf NULL setzen?" class="{{ $btnGhostXs }} text-red-500">→ NULL</button>
@@ -79,7 +79,7 @@
                 @endif
             </div>
         @empty
-            <p class="text-sm text-gray-500">Keine Sub-Kategorien in dieser Warengruppe.</p>
+            <p class="text-xs text-gray-500">Keine Sub-Kategorien in dieser Warengruppe.</p>
         @endforelse
     </div>
 </div>

@@ -30,7 +30,7 @@
 ])
 
 @php
-    $label = 'text-xs font-medium uppercase tracking-wider text-gray-400';
+    $label = 'text-[11px] font-medium uppercase tracking-wider text-gray-400';
 @endphp
 
 <div x-data="{

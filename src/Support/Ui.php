@@ -28,20 +28,20 @@ final class Ui
             'cardAccent' => 'absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent',
 
             // ── Formulare
-            'input' => 'w-full px-3 py-2 text-sm bg-black/[0.03] dark:bg-white/5 rounded-lg border-0 placeholder-gray-400 focus:ring-2 focus:ring-violet-500/20 focus:bg-white dark:focus:bg-white/10 transition-all duration-150',
+            'input' => 'w-full px-3 py-1.5 text-xs bg-black/[0.03] dark:bg-white/5 rounded-lg border-0 placeholder-gray-400 focus:ring-2 focus:ring-violet-500/20 focus:bg-white dark:focus:bg-white/10 transition-all duration-150',
 
             // ── Typo
-            'label' => 'text-xs font-medium uppercase tracking-wider text-gray-400',
+            'label' => 'text-[10px] font-medium uppercase tracking-wider text-gray-400',
 
-            // ── Tabelle (R13 Jarvis-Dichte: 13px, py-1, px-3, Header einzeilig)
-            'table' => 'w-full text-[13px]',
+            // ── Tabelle (R14 Jarvis-Skala: 12px wie .data-table, Header 11px, py-1/px-3)
+            'table' => 'w-full text-xs',
             'th' => 'px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-gray-400 whitespace-nowrap',
             'td' => 'px-3 py-1',
             'tr' => 'border-t border-black/5 dark:border-white/10 hover:bg-gradient-to-r hover:from-violet-500/5 hover:to-indigo-500/5 transition-all duration-150',
 
             // ── Definition-Listen (Detail-Sektionen)
             'row' => 'flex justify-between gap-4 py-1.5',
-            'dt' => 'text-gray-500 dark:text-gray-400',
+            'dt' => 'text-[10px] font-medium uppercase tracking-wider text-gray-400',   // Jarvis .detail h3
             'dd' => 'text-gray-900 dark:text-gray-100 text-right',
 
             // ── Pills
@@ -62,9 +62,9 @@ final class Ui
             ],
 
             // ── Buttons
-            'btnPrimary' => 'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-lg shadow-sm shadow-violet-500/25 hover:shadow-md hover:shadow-violet-500/30 transition-all duration-150',
-            'btnGhost' => 'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-white/5 backdrop-blur-sm border border-black/5 dark:border-white/10 rounded-lg hover:bg-white/80 dark:hover:bg-white/10 transition-all duration-150',
-            'btnGhostXs' => 'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-md hover:bg-white/80 dark:hover:bg-white/10 transition-all duration-150',
+            'btnPrimary' => 'inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-lg shadow-sm shadow-violet-500/25 hover:shadow-md hover:shadow-violet-500/30 transition-all duration-150',
+            'btnGhost' => 'inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-white/5 backdrop-blur-sm border border-black/5 dark:border-white/10 rounded-lg hover:bg-white/80 dark:hover:bg-white/10 transition-all duration-150',
+            'btnGhostXs' => 'inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-md hover:bg-white/80 dark:hover:bg-white/10 transition-all duration-150',
         ];
     }
 }

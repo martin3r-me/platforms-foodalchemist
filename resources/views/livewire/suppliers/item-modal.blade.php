@@ -6,17 +6,17 @@
         @if($item)
             @if($darfEdit)
                 <x-slot:actions>
-                    <button type="button" wire:click="speichern" class="inline-flex items-center gap-2 px-4 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-lg shadow-sm shadow-violet-500/25 hover:shadow-md transition-all duration-150">Speichern</button>
+                    <button type="button" wire:click="speichern" class="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-lg shadow-sm shadow-violet-500/25 hover:shadow-md transition-all duration-150">Speichern</button>
                 </x-slot:actions>
             @endif
 
             {{-- Modal-Kopf: EK + Vergleichspreis (M2-05) + Lieferant + GP --}}
             <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 -mt-1" data-modal-kopf>
-                <span class="text-sm text-gray-500">{{ $item->supplier?->name }}</span>
-                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <span class="text-xs text-gray-500">{{ $item->supplier?->name }}</span>
+                <span class="text-xs font-medium text-gray-900 dark:text-gray-100">
                     EK: {{ $aktiverPreis?->price !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}
                 </span>
-                <span class="text-sm text-gray-500" data-vergleichspreis-kopf>
+                <span class="text-xs text-gray-500" data-vergleichspreis-kopf>
                     {{ $vergleichspreis ? number_format($vergleichspreis['wert'], 2, ',', '.') . ' ' . $vergleichspreis['einheit'] : 'kein Vergleichspreis' }}
                 </span>
                 @if($item->structure?->gp)
@@ -26,7 +26,7 @@
                 @endif
                 @unless($darfEdit)<span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="Geerbter Katalog (D1)">read-only</span>@endunless
             </div>
-            @if($fehler)<p class="text-sm text-red-600 dark:text-red-400 mt-2">{{ $fehler }}</p>@endif
+            @if($fehler)<p class="text-xs text-red-600 dark:text-red-400 mt-2">{{ $fehler }}</p>@endif
 
             <x-foodalchemist::modal-section title="Stammdaten">
                 <div class="grid grid-cols-2 gap-3">
@@ -95,7 +95,7 @@
 
             <x-foodalchemist::modal-section title="Allergene (14 EU-Pflichtangaben)">
                 <div class="flex items-center justify-between mb-2" data-allergen-kopf>
-                    <p class="text-xs text-gray-400">− nicht enthalten · ≈ Spuren · ✓ enthalten · ungesetzt = unbekannt (GL-01). Quelle:
+                    <p class="text-[11px] text-gray-400">− nicht enthalten · ≈ Spuren · ✓ enthalten · ungesetzt = unbekannt (GL-01). Quelle:
                         <span class="{{ $pill }} {{ $allergenQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $allergenQuelle ?? 'Import' }}</span>
                     </p>
                     @if($darfEdit)
@@ -112,7 +112,7 @@
 
             <x-foodalchemist::modal-section title="Zusatzstoffe (18 deklarationspflichtige Stoffe, LMIV)">
                 <div class="flex items-center justify-between mb-2" data-deklaration-kopf>
-                    <p class="text-xs text-gray-400">− nein · ✓ ja · ungesetzt = keine Angabe (GL-09). Quelle:
+                    <p class="text-[11px] text-gray-400">− nein · ✓ ja · ungesetzt = keine Angabe (GL-09). Quelle:
                         <span class="{{ $pill }} {{ $deklarationQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $deklarationQuelle ?? 'Import' }}</span>
                     </p>
                     @if($darfEdit)
@@ -122,7 +122,7 @@
                 <div x-data="{ dekl: $wire.entangle('deklarationen') }" class="divide-y divide-black/5 dark:divide-white/5" data-deklarationen>
                     @foreach($deklarationLabels as $stoff => $lbl)
                         <div class="flex items-center justify-between gap-3 py-1.5" data-dekl-row="{{ $stoff }}">
-                            <span class="text-sm text-gray-700 dark:text-gray-300 min-w-0 truncate">{{ $lbl }}</span>
+                            <span class="text-xs text-gray-700 dark:text-gray-300 min-w-0 truncate">{{ $lbl }}</span>
                             <div class="flex items-center gap-1 shrink-0">
                                 @foreach([['nein', '−', 'bg-gray-500/20 text-gray-700 dark:bg-white/15 dark:text-gray-200 border-gray-500/30'], ['ja', '✓', 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30']] as [$wert, $zeichen, $aktiv])
                                     <button type="button" title="{{ $wert }}"
@@ -130,7 +130,7 @@
                                                 @click="dekl['{{ $stoff }}'] = dekl['{{ $stoff }}'] === '{{ $wert }}' ? 'unbekannt' : '{{ $wert }}'"
                                             @else disabled @endif
                                             :class="dekl['{{ $stoff }}'] === '{{ $wert }}' ? @js($aktiv) : 'border-black/5 dark:border-white/10 text-gray-300 dark:text-gray-600 {{ $darfEdit ? 'hover:text-gray-500 hover:bg-black/5 dark:hover:bg-white/10' : 'opacity-60' }}'"
-                                            class="w-7 h-7 inline-flex items-center justify-center text-xs font-medium rounded-md border transition-all duration-150"
+                                            class="w-7 h-7 inline-flex items-center justify-center text-[11px] font-medium rounded-md border transition-all duration-150"
                                             data-dekl-btn="{{ $wert }}">{{ $zeichen }}</button>
                                 @endforeach
                             </div>
@@ -148,20 +148,20 @@
 
                 @if($item->structure?->gp)
                     <div class="flex items-center justify-between gap-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-gp-mapping-aktuell>
-                        <p class="text-sm text-gray-900 dark:text-gray-100 min-w-0 truncate">🧺 {{ $item->structure->gp->name }}</p>
+                        <p class="text-xs text-gray-900 dark:text-gray-100 min-w-0 truncate">🧺 {{ $item->structure->gp->name }}</p>
                         <button type="button" wire:click="gpLoesen" wire:confirm="GP-Zuordnung lösen? War das LA Lead, wird sofort neu gewählt (GL-03 I4)."
                                 class="{{ $btnGhostXs }} text-rose-500 shrink-0" data-gp-loesen>✕ lösen</button>
                     </div>
                 @else
-                    <p class="text-sm text-gray-400 italic" data-gp-mapping-leer>— kein GP zugeordnet —</p>
+                    <p class="text-xs text-gray-400 italic" data-gp-mapping-leer>— kein GP zugeordnet —</p>
                 @endif
 
                 @if($gpVorschlaege !== [])
                     <div class="mt-2 rounded-lg bg-violet-500/5 border border-violet-500/20 px-3 py-2 space-y-1" data-gp-vorschlaege>
-                        <p class="text-xs font-medium text-violet-700 dark:text-violet-300">✨ Match-Kandidaten — Klick weist zu:</p>
+                        <p class="text-[11px] font-medium text-violet-700 dark:text-violet-300">✨ Match-Kandidaten — Klick weist zu:</p>
                         @foreach($gpVorschlaege as $v)
                             <button type="button" wire:key="gpv-{{ $v['gp_id'] }}" wire:click="gpZuweisen({{ $v['gp_id'] }})"
-                                    class="flex items-center gap-2 w-full text-left px-2 py-1 rounded text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10" data-gp-vorschlag>
+                                    class="flex items-center gap-2 w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10" data-gp-vorschlag>
                                 <span class="font-semibold {{ $v['score'] >= 90 ? 'text-green-600' : 'text-amber-500' }} shrink-0">{{ $v['score'] }} %</span>
                                 <span class="min-w-0 truncate">{{ $v['name'] }}</span>
                                 <span class="text-gray-400 shrink-0">{{ $v['grund'] }}</span>
@@ -175,7 +175,7 @@
                            placeholder="+ GP zuweisen — Name suchen …" class="{{ $input }} !py-1" />
                     @foreach($gpKandidaten as $kandidat)
                         <button type="button" wire:key="gpk-{{ $kandidat->id }}" wire:click="gpZuweisen({{ $kandidat->id }})"
-                                class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">{{ $kandidat->name }}</button>
+                                class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">{{ $kandidat->name }}</button>
                     @endforeach
                 </div>
             </x-foodalchemist::modal-section>
@@ -183,7 +183,7 @@
             <x-foodalchemist::modal-section title="Preise">
                 {{-- R12 (Jarvis): EK-aktuell-Box + Tabelle gültig von/bis · Kategorie · Preis (+€/kg) · Notiz · ✎ --}}
                 <div class="flex items-center justify-end gap-3 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 mb-2" data-ek-aktuell>
-                    <p class="text-sm text-gray-900 dark:text-gray-100">EK aktuell:
+                    <p class="text-xs text-gray-900 dark:text-gray-100">EK aktuell:
                         <span class="font-semibold {{ $aktiverPreis !== null ? 'text-green-600 dark:text-green-400' : 'text-gray-400' }}">{{ $aktiverPreis !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}</span>
                         <span class="text-gray-400">pro {{ $item->ordering_unit ?? $item->unit_code ?? 'Einheit' }}{{ $vergleichspreis !== null ? ' · ' . number_format($vergleichspreis['wert'], 2, ',', '.') . ' ' . $vergleichspreis['einheit'] : '' }}</span>
                     </p>
@@ -231,7 +231,7 @@
                                             <span class="block text-[11px] text-gray-400">= {{ number_format((float) $p->price / (float) $item->qty, 2, ',', '.') }} €/{{ $item->unit_code }}</span>
                                         @endif
                                     </td>
-                                    <td class="{{ $td }} !px-2 text-gray-500 text-xs max-w-[10rem] truncate" title="{{ $p->note ?? '' }}">{{ $p->note ?? '—' }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-500 text-[11px] max-w-[10rem] truncate" title="{{ $p->note ?? '' }}">{{ $p->note ?? '—' }}</td>
                                     <td class="{{ $td }} !px-2 text-right whitespace-nowrap">
                                         @if($darfEdit)
                                             <button type="button" wire:click="preisBearbeiten({{ $p->id }})" class="{{ $btnGhostXs }}" title="bearbeiten" data-preis-edit>✎</button>

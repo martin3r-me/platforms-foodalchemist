@@ -3,7 +3,7 @@
 
 <div class="space-y-4">
     @if($fehler)
-        <div class="{{ $card }} p-3 border-red-500/20"><p class="text-sm text-red-600 dark:text-red-400">{{ $fehler }}</p></div>
+        <div class="{{ $card }} p-3 border-red-500/20"><p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p></div>
     @endif
 
     <div class="flex gap-4 items-start">
@@ -12,11 +12,11 @@
             <div class="{{ $label }} px-2 pb-2">Hauptgruppen ({{ $hauptgruppen->count() }})</div>
             @foreach($hauptgruppen as $hg)
                 <button type="button" wire:key="hg-{{ $hg->id }}" wire:click="waehleHg({{ $hg->id }})"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-all duration-150 {{ $hauptgruppeId === $hg->id
+                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppeId === $hg->id
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                             : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                     <span class="min-w-0 truncate text-left">{{ $hg->bezeichnung }}</span>
-                    <span class="text-xs text-gray-400 shrink-0 ml-2">{{ $hg->kategorie_count }}</span>
+                    <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $hg->kategorie_count }}</span>
                 </button>
             @endforeach
         </div>

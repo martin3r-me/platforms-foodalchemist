@@ -22,12 +22,12 @@
     </x-slot:actions>
 
     @if($fehler !== null)
-        <p class="text-sm text-rose-600 dark:text-rose-400 mb-3" data-modal-fehler>{{ $fehler }}</p>
+        <p class="text-xs text-rose-600 dark:text-rose-400 mb-3" data-modal-fehler>{{ $fehler }}</p>
     @endif
 
     {{-- ✨-Anreichern-Lauf (M7-06-Mechanik auf EIN Rezept) --}}
     @if($bulkRun !== null)
-        <div class="mb-3 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-sm flex items-center gap-2"
+        <div class="mb-3 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs flex items-center gap-2"
              @if($bulkRun->status === 'running') wire:poll.2s @endif data-anreichern-status>
             @if($bulkRun->status === 'running')
                 <span>✨ Anreicherung läuft …</span>
@@ -84,12 +84,12 @@
             </div>
         </div>
         @if(isset($kiVorschlag['kategorie']))
-            <div class="mt-2 text-sm" data-kategorie-vorschlag>
+            <div class="mt-2 text-xs" data-kategorie-vorschlag>
                 <span class="{{ $pill }} {{ $variantPill['primary'] }}">✨ Kategorie: {{ $kiVorschlag['kategorie']['werte']['kategorie_name'] ?? $kiVorschlag['kategorie']['werte']['kategorie_id'] ?? '—' }} · {{ round($kiVorschlag['kategorie']['confidence'] * 100) }} %</span>
                 <button type="button" wire:click="accept_kategorie" class="{{ $btnGhostXs }} text-emerald-600">Übernehmen</button>
             </div>
         @endif
-        <label class="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300 mt-3">
+        <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 mt-3">
             <input type="checkbox" wire:model="form.ist_verkaufsrezept" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
             Verkaufsrezept (D-6 — VK-Felder im VK-Editor)
         </label>
@@ -117,13 +117,13 @@
                     @if($ueberarbeitung !== null)
                         <div class="rounded-lg bg-white/60 dark:bg-gray-900/60 px-3 py-2 space-y-1.5 max-h-72 overflow-y-auto" data-ueberarbeiten-vorschau>
                             @if(is_string($ueberarbeitung['werte']['aenderungs_notiz'] ?? null))
-                                <p class="text-xs font-medium text-violet-700 dark:text-violet-300">{{ $ueberarbeitung['werte']['aenderungs_notiz'] }}</p>
+                                <p class="text-[11px] font-medium text-violet-700 dark:text-violet-300">{{ $ueberarbeitung['werte']['aenderungs_notiz'] }}</p>
                             @endif
                             @if(!empty($ueberarbeitung['werte']['zutaten']))
                                 <p class="{{ $dt }}">Zutaten (neu)</p>
                                 @foreach($ueberarbeitung['werte']['zutaten'] as $z)
                                     @if(is_array($z))
-                                        <p class="text-xs text-gray-600 dark:text-gray-300" wire:key="uz-{{ $loop->index }}">
+                                        <p class="text-[11px] text-gray-600 dark:text-gray-300" wire:key="uz-{{ $loop->index }}">
                                             {{ $z['menge'] ?? '?' }} {{ $z['einheit_slug'] ?? '' }} · {{ $z['text'] ?? '—' }}
                                             <span class="text-gray-400">{{ isset($z['id']) ? '(bestehend #' . $z['id'] . ')' : '(neu)' }}</span>
                                         </p>
@@ -132,11 +132,11 @@
                             @endif
                             @if(is_string($ueberarbeitung['werte']['beschreibung'] ?? null))
                                 <p class="{{ $dt }}">Beschreibung (neu)</p>
-                                <p class="text-xs text-gray-600 dark:text-gray-300">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['beschreibung'], 280) }}</p>
+                                <p class="text-[11px] text-gray-600 dark:text-gray-300">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['beschreibung'], 280) }}</p>
                             @endif
                             @if(is_string($ueberarbeitung['werte']['zubereitung'] ?? null))
                                 <p class="{{ $dt }}">Zubereitung (neu)</p>
-                                <p class="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['zubereitung'], 400) }}</p>
+                                <p class="text-[11px] text-gray-600 dark:text-gray-300 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['zubereitung'], 400) }}</p>
                             @endif
                         </div>
                         <div class="flex items-center gap-1.5">
@@ -154,23 +154,23 @@
                 <div class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2" data-editor-kpis>
                     <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                         <span class="{{ $dt }}">Yield</span>
-                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
+                        <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
                     </div>
                     <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                         <span class="{{ $dt }}">EK gesamt</span>
-                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $voll->ek_total_eur !== null ? number_format((float) $voll->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
+                        <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $voll->ek_total_eur !== null ? number_format((float) $voll->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
                     </div>
                     <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
                         <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">EK / kg</span>
-                        <p class="text-sm font-bold text-orange-700 dark:text-orange-300">{{ $voll->ek_per_kg_eur !== null ? number_format((float) $voll->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
+                        <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ $voll->ek_per_kg_eur !== null ? number_format((float) $voll->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
                     </div>
                     <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                         <span class="{{ $dt }}">Mit Preis</span>
-                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $voll->ek_n_ingredients_priced ?? 0 }}/{{ $voll->ek_n_ingredients_total ?? 0 }}</p>
+                        <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $voll->ek_n_ingredients_priced ?? 0 }}/{{ $voll->ek_n_ingredients_total ?? 0 }}</p>
                     </div>
                     <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                         <span class="{{ $dt }}">Allergen-Konf.</span>
-                        <p class="text-sm font-semibold {{ ['high' => 'text-emerald-600', 'medium' => 'text-amber-600', 'low' => 'text-rose-600'][$voll->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper((string) $voll->allergene_konfidenz) }}</p>
+                        <p class="text-xs font-semibold {{ ['high' => 'text-emerald-600', 'medium' => 'text-amber-600', 'low' => 'text-rose-600'][$voll->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper((string) $voll->allergene_konfidenz) }}</p>
                     </div>
                 </div>
                 <div class="mt-2">
@@ -252,7 +252,7 @@
         <textarea wire:model="form.beschreibung" rows="3" class="{{ $input }}"></textarea>
         @if(isset($kiVorschlag['beschreibung']))
             <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-beschreibung-vorschlag>
-                <p class="text-xs text-violet-700 dark:text-violet-300 italic">{{ $kiVorschlag['beschreibung']['werte']['beschreibung'] ?? '—' }}</p>
+                <p class="text-[11px] text-violet-700 dark:text-violet-300 italic">{{ $kiVorschlag['beschreibung']['werte']['beschreibung'] ?? '—' }}</p>
                 <button type="button" wire:click="accept_beschreibung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['beschreibung']['confidence'] * 100) }} %)</button>
             </div>
         @endif
@@ -278,7 +278,7 @@
                 </span>
             </div>
             <div x-show="tab === 'schreiben'">
-                <textarea wire:model="form.zubereitung" id="zubereitung-text" rows="8" class="{{ $input }} font-mono text-xs" data-rezept-zubereitung></textarea>
+                <textarea wire:model="form.zubereitung" id="zubereitung-text" rows="8" class="{{ $input }} font-mono text-[11px]" data-rezept-zubereitung></textarea>
             </div>
             <div x-show="tab === 'vorschau'" x-cloak class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-4 py-3" data-zubereitung-vorschau>
                 <div class="prose prose-sm dark:prose-invert max-w-none">
@@ -309,7 +309,7 @@
                     <div class="space-y-1.5 mb-2">
                         @foreach($schrittFotos as $schritt => $fotos)
                             <div class="flex items-start gap-2" wire:key="sfg-{{ $schritt }}">
-                                <span class="shrink-0 w-20 text-xs text-gray-400 pt-1">{{ $schritt === 0 ? 'allgemein' : "Schritt {$schritt}" }}</span>
+                                <span class="shrink-0 w-20 text-[11px] text-gray-400 pt-1">{{ $schritt === 0 ? 'allgemein' : "Schritt {$schritt}" }}</span>
                                 <div class="flex flex-wrap gap-1.5">
                                     @foreach($fotos as $foto)
                                         <span class="relative group" wire:key="sf-{{ $foto->id }}">
@@ -325,19 +325,19 @@
                 @endif
                 <div class="flex flex-wrap items-center gap-2" data-foto-upload>
                     <input type="number" min="0" max="99" wire:model="fotoSchritt" placeholder="Schritt-Nr" title="Schritt-Nummer aus der Zubereitung (leer/0 = allgemeines Rezept-Foto)" class="{{ $input }} !py-1 !w-24" />
-                    <input type="file" wire:model="fotoUpload" accept="image/*" class="text-xs text-gray-500 file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-violet-500/10 file:text-violet-600 dark:file:text-violet-300 file:text-xs file:cursor-pointer" data-foto-datei />
+                    <input type="file" wire:model="fotoUpload" accept="image/*" class="text-[11px] text-gray-500 file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-violet-500/10 file:text-violet-600 dark:file:text-violet-300 file:text-[11px] file:cursor-pointer" data-foto-datei />
                     <input type="text" wire:model="fotoCaption" placeholder="Bildunterschrift (optional)" class="{{ $input }} !py-1 w-56" />
                     <button type="button" wire:click="fotoHochladen" wire:loading.attr="disabled" wire:target="fotoUpload, fotoHochladen" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-foto-hochladen>
                         <span wire:loading.remove wire:target="fotoUpload, fotoHochladen">Hochladen</span>
                         <span wire:loading wire:target="fotoUpload, fotoHochladen">lädt …</span>
                     </button>
-                    @error('fotoUpload')<span class="text-xs text-rose-500">{{ $message }}</span>@enderror
+                    @error('fotoUpload')<span class="text-[11px] text-rose-500">{{ $message }}</span>@enderror
                 </div>
             </div>
         @endif
         @if(isset($kiVorschlag['zubereitung']))
             <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 max-h-40 overflow-y-auto" data-zubereitung-ki-vorschlag>
-                <p class="text-xs text-violet-700 dark:text-violet-300 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($kiVorschlag['zubereitung']['werte']['zubereitung'] ?? '—', 900) }}</p>
+                <p class="text-[11px] text-violet-700 dark:text-violet-300 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($kiVorschlag['zubereitung']['werte']['zubereitung'] ?? '—', 900) }}</p>
                 <button type="button" wire:click="accept_zubereitung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['zubereitung']['confidence'] * 100) }} %)</button>
             </div>
         @endif

@@ -60,7 +60,7 @@
             <div class="relative overflow-hidden {{ $card }} px-4 py-3" data-dashboard-ki>
                 <div class="{{ $cardAccent }}"></div>
                 <span class="{{ $dt }}">✨ KI-Nutzung (dieses Team)</span>
-                <p class="text-2xl font-semibold text-gray-900 dark:text-gray-100">{{ number_format($ki['calls'], 0, ',', '.') }} <span class="text-sm font-normal text-gray-400">Calls</span></p>
+                <p class="text-2xl font-semibold text-gray-900 dark:text-gray-100">{{ number_format($ki['calls'], 0, ',', '.') }} <span class="text-xs font-normal text-gray-400">Calls</span></p>
                 <p class="text-[10px] text-gray-400 mt-0.5">{{ number_format($ki['accepted'], 0, ',', '.') }} übernommene Vorschläge · Details + Kill-Switch in den <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'ki']) }}" class="text-violet-600 dark:text-violet-400 hover:underline">KI-Einstellungen</a></p>
             </div>
             <div class="relative overflow-hidden {{ $card }} px-4 py-3" data-dashboard-links>

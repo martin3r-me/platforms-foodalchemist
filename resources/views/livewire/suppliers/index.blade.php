@@ -27,8 +27,8 @@
                                 class="w-full px-2 py-1.5 rounded-lg text-left transition-all duration-150 {{ !$globaleSuche && $supplierId === $l->id
                                     ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10'
                                     : 'hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                            <span class="block text-sm {{ $l->is_inactive ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-200' }} truncate">{{ $l->name }}</span>
-                            <span class="block text-xs text-gray-400">{{ number_format($l->item_count, 0, ',', '.') }} Artikel ·
+                            <span class="block text-xs {{ $l->is_inactive ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-200' }} truncate">{{ $l->name }}</span>
+                            <span class="block text-[11px] text-gray-400">{{ number_format($l->item_count, 0, ',', '.') }} Artikel ·
                                 <span class="text-emerald-600 dark:text-emerald-400">{{ number_format($l->mapped_count, 0, ',', '.') }} gemapped</span></span>
                         </button>
                     @endforeach
@@ -41,7 +41,7 @@
         {{-- M9-06: offene Match-Vorschläge → Review-Queue --}}
         @php($offeneMatches = \Illuminate\Support\Facades\DB::table('foodalchemist_match_proposals')->where('status', 'offen')->whereNull('deleted_at')->count())
         @if($offeneMatches > 0)
-            <a href="{{ \Illuminate\Support\Facades\Route::has('foodalchemist.review') ? route('foodalchemist.review') : '/foodalchemist/zu-pruefen' }}" class="block rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200 hover:border-amber-500/60 transition-colors" data-zu-pruefen-hinweis>
+            <a href="{{ \Illuminate\Support\Facades\Route::has('foodalchemist.review') ? route('foodalchemist.review') : '/foodalchemist/zu-pruefen' }}" class="block rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200 hover:border-amber-500/60 transition-colors" data-zu-pruefen-hinweis>
                 ⏳ {{ number_format($offeneMatches, 0, ',', '.') }} LA→GP-Match-Vorschläge warten auf Review → <span class="underline">Zu prüfen</span>
             </a>
         @endif
@@ -88,7 +88,7 @@
                     <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">
                         Match-Vorschläge
                         @if($bulkStats !== null)
-                            <span class="text-gray-400 font-normal text-sm">— Lauf: {{ $bulkStats['geprueft'] }} geprüft · {{ $bulkStats['exact'] }} exact · {{ $bulkStats['fuzzy'] }} fuzzy · {{ $bulkStats['ohne_treffer'] }} ohne Treffer · {{ $bulkStats['uebersprungen'] }} übersprungen</span>
+                            <span class="text-gray-400 font-normal text-xs">— Lauf: {{ $bulkStats['geprueft'] }} geprüft · {{ $bulkStats['exact'] }} exact · {{ $bulkStats['fuzzy'] }} fuzzy · {{ $bulkStats['ohne_treffer'] }} ohne Treffer · {{ $bulkStats['uebersprungen'] }} übersprungen</span>
                         @endif
                     </h3>
                     <button type="button" wire:click="$set('reviewOffen', false)" class="{{ $btnGhostXs }}">Schließen</button>
@@ -98,14 +98,14 @@
                         <div wire:key="mp-{{ $v->id }}" class="flex items-center gap-2 py-1 border-b border-black/5 dark:border-white/5 last:border-0" data-vorschlag="{{ $v->id }}">
                             <span class="{{ $pill }} shrink-0 {{ ['exact' => $variantPill['success'], 'fuzzy_high' => $variantPill['info'], 'fuzzy_low' => $variantPill['warning']][$v->band] ?? $variantPill['secondary'] }}"
                                   title="{{ $v->methode }}">{{ number_format((float) $v->score, 2, ',', '.') }}</span>
-                            <span class="text-xs text-gray-900 dark:text-gray-100 truncate flex-1" title="{{ $v->item?->designation }}">{{ $v->item?->designation }}</span>
-                            <span class="text-xs text-gray-400 shrink-0">→</span>
-                            <span class="text-xs text-violet-600 dark:text-violet-400 truncate flex-1" title="{{ $v->gp?->name }}">{{ $v->gp?->name }}</span>
+                            <span class="text-[11px] text-gray-900 dark:text-gray-100 truncate flex-1" title="{{ $v->item?->designation }}">{{ $v->item?->designation }}</span>
+                            <span class="text-[11px] text-gray-400 shrink-0">→</span>
+                            <span class="text-[11px] text-violet-600 dark:text-violet-400 truncate flex-1" title="{{ $v->gp?->name }}">{{ $v->gp?->name }}</span>
                             <button type="button" wire:click="vorschlagUebernehmen({{ $v->id }})" class="{{ $btnGhostXs }} shrink-0">Übernehmen</button>
                             <button type="button" wire:click="vorschlagVerwerfen({{ $v->id }})" class="{{ $btnGhostXs }} shrink-0 text-rose-500">Verwerfen</button>
                         </div>
                     @empty
-                        <p class="text-sm text-gray-400 py-3">Keine offenen Vorschläge — Bulk-Match starten oder alles entschieden.</p>
+                        <p class="text-xs text-gray-400 py-3">Keine offenen Vorschläge — Bulk-Match starten oder alles entschieden.</p>
                     @endforelse
                 </div>
             </div>
@@ -114,14 +114,14 @@
         {{-- M3-11-Nachtrag: Bulk-Leiste (D-2 §4) — erscheint bei Auswahl --}}
         @if(count(array_filter($auswahl)) > 0)
             <div class="relative overflow-hidden {{ $card }} px-5 py-3 flex items-center gap-2 flex-wrap" data-bulk-leiste>
-                <span class="text-sm text-gray-900 dark:text-gray-100 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt</span>
+                <span class="text-xs text-gray-900 dark:text-gray-100 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt</span>
                 <span class="relative">
                     <input type="search" wire:model.live.debounce.300ms="bulkGpSuche" placeholder="GP zuweisen — suchen …" class="{{ $input }} !w-56" data-bulk-gp-suche />
                     @if($bulkGpKandidaten->isNotEmpty())
                         <span class="absolute left-0 top-full mt-1 z-20 w-80 rounded-lg bg-white dark:bg-gray-900 border border-black/10 dark:border-white/10 shadow-xl overflow-hidden">
                             @foreach($bulkGpKandidaten as $kandidat)
                                 <button type="button" wire:key="bgk-{{ $kandidat->id }}" wire:click="bulkGpZuweisen({{ $kandidat->id }})"
-                                        class="block w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150">{{ $kandidat->name }}</button>
+                                        class="block w-full text-left px-3 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150">{{ $kandidat->name }}</button>
                             @endforeach
                         </span>
                     @endif
@@ -141,7 +141,7 @@
                 <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Artikel</h3>
                 <span class="{{ $label }} flex items-center gap-2">
                     {{ $artikel ? number_format($artikel->total(), 0, ',', '.') : 0 }} Treffer ·
-                    <select wire:model.live="perPage" class="bg-transparent border-0 text-xs uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
+                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
                         @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
                     </select>
                 </span>
@@ -168,7 +168,7 @@
                             @if($globaleSuche)
                                 <td class="{{ $td }} text-gray-500">{{ $item->supplier?->name ?? '—' }}</td>
                             @endif
-                            <td class="{{ $td }} font-mono text-xs text-gray-500">{{ $item->article_number ?? '—' }}</td>
+                            <td class="{{ $td }} font-mono text-[11px] text-gray-500">{{ $item->article_number ?? '—' }}</td>
                             <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" title="{{ $item->designation }}">
                                 <button type="button" wire:click="$dispatch('item-modal.oeffnen', { id: {{ $item->id }} })"
                                         class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150 truncate max-w-full text-left">{{ $item->designation }}</button>
@@ -221,7 +221,7 @@
 
         {{-- Feedback 2026-06-11: Neuer Lieferant (gehört dem anlegenden Team — D1) --}}
         <x-foodalchemist::modal name="lieferant-neu" title="Neuer Lieferant" size="max-w-2xl">
-            @if($fehler)<p class="text-sm text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
+            @if($fehler)<p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
             <x-foodalchemist::modal-section title="Stammdaten">
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Name *</label>
@@ -231,7 +231,7 @@
                     <div><label class="block {{ $label }} mb-1">Bestell-E-Mail</label>
                         <input type="text" wire:model="neuLieferant.email_order" class="{{ $input }}" /></div>
                 </div>
-                <p class="text-xs text-gray-400 mt-2">Gehört deinem Team (D1). Artikel danach über „+ Neuer Artikel".</p>
+                <p class="text-[11px] text-gray-400 mt-2">Gehört deinem Team (D1). Artikel danach über „+ Neuer Artikel".</p>
             </x-foodalchemist::modal-section>
             <x-slot:footer>
                 <button type="button" @click="$dispatch('modal.close', { name: 'lieferant-neu' })" class="{{ $btnGhost }}">Abbrechen</button>
@@ -241,7 +241,7 @@
 
         {{-- M2-14: Lieferant bearbeiten (nur Besitzer-Team) --}}
         <x-foodalchemist::modal name="lieferant-edit" title="Lieferant bearbeiten" size="max-w-2xl">
-            @if($fehler)<p class="text-sm text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
+            @if($fehler)<p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
             <x-foodalchemist::modal-section title="Stammdaten">
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Name *</label>
@@ -268,7 +268,7 @@
 
         {{-- M2-11: Neuer Artikel (Minimal-Pflichtfelder, gehört dem anlegenden Team — D1) --}}
         <x-foodalchemist::modal name="artikel-neu" title="Neuer Artikel" size="max-w-2xl">
-            @if($fehler)<p class="text-sm text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
+            @if($fehler)<p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
             <x-foodalchemist::modal-section title="Stammdaten">
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Bezeichnung *</label>
@@ -285,7 +285,7 @@
                             </select></div>
                     </div>
                 </div>
-                <p class="text-xs text-gray-400 mt-2">Wird für <strong>{{ $aktiverLieferant?->name ?? '—' }}</strong> angelegt und gehört deinem Team — Eltern-/Geschwister-Teams sehen ihn nicht (D1).</p>
+                <p class="text-[11px] text-gray-400 mt-2">Wird für <strong>{{ $aktiverLieferant?->name ?? '—' }}</strong> angelegt und gehört deinem Team — Eltern-/Geschwister-Teams sehen ihn nicht (D1).</p>
             </x-foodalchemist::modal-section>
             <x-slot:footer>
                 <button type="button" @click="$dispatch('modal.close', { name: 'artikel-neu' })" class="{{ $btnGhost }}">Abbrechen</button>
@@ -296,7 +296,7 @@
         {{-- M2-12: Preis-Anomalien-Report --}}
         <x-foodalchemist::modal name="preis-anomalien" title="Preis-Anomalien" size="max-w-5xl">
             @if($anomalien === null)
-                <p class="text-sm text-gray-500">Wird berechnet …</p>
+                <p class="text-xs text-gray-500">Wird berechnet …</p>
             @else
                 <x-foodalchemist::modal-section title="Vergleichspreis-Ausreißer je Warengruppe (Faktor ≥ 4 vom Median)">
                     <table class="{{ $table }}" data-ausreisser>
@@ -319,9 +319,9 @@
                 </x-foodalchemist::modal-section>
                 <x-foodalchemist::modal-section title="Sprünge > 30 % zwischen Preis-Generationen">
                     @forelse($anomalien['spruenge'] as $sp)
-                        <p class="text-sm text-gray-700 dark:text-gray-300 py-1">LA #{{ $sp->supplier_item_id }}: {{ number_format($sp->von, 2, ',', '.') }} € → {{ number_format($sp->nach, 2, ',', '.') }} € <span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $sp->sprung_pct }} %</span></p>
+                        <p class="text-xs text-gray-700 dark:text-gray-300 py-1">LA #{{ $sp->supplier_item_id }}: {{ number_format($sp->von, 2, ',', '.') }} € → {{ number_format($sp->nach, 2, ',', '.') }} € <span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $sp->sprung_pct }} %</span></p>
                     @empty
-                        <p class="text-sm text-gray-400">Keine Generationen-Sprünge (Bestand ist Single-Snapshot — Historie wächst ab jetzt, GL-11 §3.3).</p>
+                        <p class="text-xs text-gray-400">Keine Generationen-Sprünge (Bestand ist Single-Snapshot — Historie wächst ab jetzt, GL-11 §3.3).</p>
                     @endforelse
                 </x-foodalchemist::modal-section>
             @endif

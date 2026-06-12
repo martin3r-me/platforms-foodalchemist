@@ -4,9 +4,9 @@
 <div class="space-y-5" data-settings-schreibstile>
     <div>
         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Schreibstile</h3>
-        <p class="text-xs text-gray-400 mt-0.5">Sprach-Duktus je Stil ist Prompt-Material für VK-Wording (GL-06-Feld-Hülle). V-06: nur deaktivieren, nie löschen.</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Sprach-Duktus je Stil ist Prompt-Material für VK-Wording (GL-06-Feld-Hülle). V-06: nur deaktivieren, nie löschen.</p>
     </div>
-    @if($fehler !== null)<p class="text-sm text-rose-600 dark:text-rose-400" data-stil-fehler>{{ $fehler }}</p>@endif
+    @if($fehler !== null)<p class="text-xs text-rose-600 dark:text-rose-400" data-stil-fehler>{{ $fehler }}</p>@endif
 
     <table class="{{ $table }}" data-stil-tabelle>
         <thead><tr class="text-left">@foreach(['Name', 'Sprach-Duktus', 'Beschreibung', 'Sort', ''] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>
@@ -26,9 +26,9 @@
                         </td>
                     @else
                         <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $stil->name }} <span class="text-[10px] font-mono text-gray-400">{{ $stil->slug }}</span></td>
-                        <td class="{{ $td }} text-xs text-gray-500 max-w-md truncate" title="{{ $stil->sprach_duktus }}">{{ $stil->sprach_duktus }}</td>
-                        <td class="{{ $td }} text-xs text-gray-400 max-w-[12rem] truncate">{{ $stil->beschreibung ?? '—' }}</td>
-                        <td class="{{ $td }} text-xs text-gray-400">{{ $stil->sort_order }}</td>
+                        <td class="{{ $td }} text-[11px] text-gray-500 max-w-md truncate" title="{{ $stil->sprach_duktus }}">{{ $stil->sprach_duktus }}</td>
+                        <td class="{{ $td }} text-[11px] text-gray-400 max-w-[12rem] truncate">{{ $stil->beschreibung ?? '—' }}</td>
+                        <td class="{{ $td }} text-[11px] text-gray-400">{{ $stil->sort_order }}</td>
                         <td class="{{ $td }} whitespace-nowrap">
                             <button type="button" wire:click="edit({{ $stil->id }})" class="{{ $btnGhostXs }}" data-stil-edit>Bearbeiten</button>
                             <button type="button" wire:click="toggleInactive({{ $stil->id }})" class="{{ $btnGhostXs }}">{{ $stil->is_inactive ? 'aktivieren' : 'deaktivieren' }}</button>

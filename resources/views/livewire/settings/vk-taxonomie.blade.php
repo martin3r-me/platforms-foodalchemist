@@ -4,9 +4,9 @@
 <div class="space-y-5" data-settings-vk-taxonomie>
     <div>
         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">VK-Taxonomie</h3>
-        <p class="text-xs text-gray-400 mt-0.5">Speisen-Hauptgruppen → Klassen (HG × Diätform) mit Rezept-Zählern. Lösch-Schutz V-06: referenzierte Einträge nur deaktivierbar.</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Speisen-Hauptgruppen → Klassen (HG × Diätform) mit Rezept-Zählern. Lösch-Schutz V-06: referenzierte Einträge nur deaktivierbar.</p>
     </div>
-    @if($meldung !== null)<p class="text-sm text-emerald-600 dark:text-emerald-400" data-taxo-meldung>{{ $meldung }}</p>@endif
+    @if($meldung !== null)<p class="text-xs text-emerald-600 dark:text-emerald-400" data-taxo-meldung>{{ $meldung }}</p>@endif
 
     <div>
         <p class="{{ $dt }} mb-1.5">Speisen-Hauptgruppen ({{ $hauptgruppen->count() }}) → Klassen</p>
@@ -26,7 +26,7 @@
                         <tr class="{{ $tr }}" wire:key="tk-{{ $k->id }}">
                             <td class="{{ $td }}">{{ $k->bezeichnung }} <span class="text-[10px] font-mono text-gray-400">{{ $k->code }}</span></td>
                             <td class="{{ $td }}"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $k->diaetform }}</span></td>
-                            <td class="{{ $td }} text-xs text-gray-400">{{ collect(['vegan' => $k->is_vegan, 'vegi' => $k->is_vegi, 'halal' => $k->is_halal, 'koscher' => $k->is_koscher])->filter()->keys()->implode(' · ') ?: '—' }}</td>
+                            <td class="{{ $td }} text-[11px] text-gray-400">{{ collect(['vegan' => $k->is_vegan, 'vegi' => $k->is_vegi, 'halal' => $k->is_halal, 'koscher' => $k->is_koscher])->filter()->keys()->implode(' · ') ?: '—' }}</td>
                             <td class="{{ $td }}">{{ $klassenZaehler[$k->id] ?? 0 }}</td>
                         </tr>
                     @endforeach
@@ -35,5 +35,5 @@
         @endif
     </div>
 
-    <p class="text-xs text-gray-400" data-taxo-verweis>Aufschlagsklassen, Schreibstile und Behälter/Geräte haben jetzt eigene Seiten (R5) — siehe Navigation links.</p>
+    <p class="text-[11px] text-gray-400" data-taxo-verweis>Aufschlagsklassen, Schreibstile und Behälter/Geräte haben jetzt eigene Seiten (R5) — siehe Navigation links.</p>
 </div>

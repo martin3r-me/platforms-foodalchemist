@@ -4,9 +4,9 @@
 <div class="space-y-5" data-settings-aufschlagsklassen>
     <div>
         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Aufschlagsklassen</h3>
-        <p class="text-xs text-gray-400 mt-0.5">Rohaufschlag · Bedienung · Profit · MwSt fließen direkt in die Marge-Rechnung (GT-8). Formel «deckungsbeitrag» bleibt W-1-gesperrt, bis die Formel entschieden ist.</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Rohaufschlag · Bedienung · Profit · MwSt fließen direkt in die Marge-Rechnung (GT-8). Formel «deckungsbeitrag» bleibt W-1-gesperrt, bis die Formel entschieden ist.</p>
     </div>
-    @if($fehler !== null)<p class="text-sm text-rose-600 dark:text-rose-400" data-ak-fehler>{{ $fehler }}</p>@endif
+    @if($fehler !== null)<p class="text-xs text-rose-600 dark:text-rose-400" data-ak-fehler>{{ $fehler }}</p>@endif
 
     <table class="{{ $table }}" data-ak-tabelle>
         <thead><tr class="text-left">@foreach(['Code', 'Bezeichnung', 'Rohaufschlag %', 'Bedienung %', 'Profit %', 'MwSt %', 'Formel', 'Rezepte', ''] as $h)<th class="{{ $th }} !px-2">{{ $h }}</th>@endforeach</tr></thead>
@@ -14,7 +14,7 @@
             @foreach($klassen as $ak)
                 <tr class="{{ $tr }} {{ $ak->is_inactive ? 'opacity-50' : '' }}" wire:key="ak-{{ $ak->id }}">
                     @if($editId === $ak->id)
-                        <td class="{{ $td }} !px-2 font-mono text-xs">{{ $ak->code }}</td>
+                        <td class="{{ $td }} !px-2 font-mono text-[11px]">{{ $ak->code }}</td>
                         <td class="{{ $td }} !px-2"><input type="text" wire:model="form.bezeichnung" class="{{ $input }} !py-1" /></td>
                         @foreach(['rohaufschlag_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'] as $feld)
                             <td class="{{ $td }} !px-2"><input type="text" wire:model="form.{{ $feld }}" class="{{ $input }} !py-1 !w-16 text-right" /></td>
@@ -31,7 +31,7 @@
                             <button type="button" wire:click="cancel" class="{{ $btnGhostXs }}">Abbrechen</button>
                         </td>
                     @else
-                        <td class="{{ $td }} !px-2 font-mono text-xs">{{ $ak->code }}</td>
+                        <td class="{{ $td }} !px-2 font-mono text-[11px]">{{ $ak->code }}</td>
                         <td class="{{ $td }} !px-2">{{ $ak->bezeichnung }}</td>
                         @foreach(['rohaufschlag_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'] as $feld)
                             <td class="{{ $td }} !px-2 text-right tabular-nums">{{ rtrim(rtrim(number_format((float) $ak->{$feld}, 2, ',', '.'), '0'), ',') }}</td>

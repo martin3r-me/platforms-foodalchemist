@@ -3,7 +3,7 @@
 
 <x-foodalchemist::modal name="generator-modal" title="✨ Basisrezept generieren" size="max-w-2xl">
     @if($fehler !== null)
-        <p class="text-sm text-rose-600 dark:text-rose-400 mb-3" data-generator-fehler>{{ $fehler }}</p>
+        <p class="text-xs text-rose-600 dark:text-rose-400 mb-3" data-generator-fehler>{{ $fehler }}</p>
     @endif
 
     @if($ergebnis === null)
@@ -20,11 +20,11 @@
             <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-generator-parameter>
                 @foreach(\Platform\FoodAlchemist\Livewire\Recipes\GeneratorModal::RICHTUNGEN as $g)
                     <div data-richtung="{{ $g['feld'] }}">
-                        <p class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{{ $g['label'] }}</p>
+                        <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">{{ $g['label'] }}</p>
                         <div class="flex flex-wrap gap-1.5">
                             @foreach($g['optionen'] as $wert => $lbl)
                                 <button type="button" wire:click="togglePill('{{ $g['feld'] }}', '{{ $wert }}')"
-                                        class="px-2.5 py-1 rounded-full border text-xs transition-colors {{ $parameter[$g['feld']] === $wert ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
+                                        class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ $parameter[$g['feld']] === $wert ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
                             @endforeach
                         </div>
                         <p class="text-[11px] text-gray-400 mt-1">{{ $g['hint'][$parameter[$g['feld']]] ?? '' }}</p>
@@ -32,13 +32,13 @@
                 @endforeach
 
                 <div data-richtung="aroma">
-                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Aroma-Richtung</p>
+                    <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">Aroma-Richtung</p>
                     <input type="text" wire:model="parameter.aroma" placeholder="frei — z. B. rauchig-karamellig, mediterran …" class="{{ $input }} !py-1.5" />
                     <p class="text-[11px] text-gray-400 mt-1">{{ $parameter['aroma'] === '' ? 'Keine Aroma-Vorgabe — KI wählt passend zur Beschreibung' : '' }}</p>
                 </div>
 
                 <div data-richtung="sektor">
-                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Sektor (Verpflegungskontext)</p>
+                    <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">Sektor (Verpflegungskontext)</p>
                     <select wire:model="parameter.sektor" class="{{ $input }} !py-1.5">
                         <option value="">(egal/universell)</option>
                         <option value="betriebsgastronomie">Betriebsgastronomie</option>
@@ -51,11 +51,11 @@
                 </div>
 
                 <div class="md:col-span-2" data-richtung="diaet">
-                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
+                    <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
                     <div class="flex flex-wrap gap-1.5">
                         @foreach(['vegan' => 'Vegan', 'vegetarisch' => 'Vegetarisch', 'glutenfrei' => 'Glutenfrei', 'laktosefrei' => 'Laktosefrei', 'halal' => 'Halal', 'low_carb' => 'Low Carb'] as $wert => $lbl)
                             <button type="button" wire:click="togglePill('diaet_hart', '{{ $wert }}')"
-                                    class="px-2.5 py-1 rounded-full border text-xs transition-colors {{ in_array($wert, $parameter['diaet_hart'], true) ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
+                                    class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, $parameter['diaet_hart'], true) ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
                         @endforeach
                     </div>
                 </div>
@@ -63,7 +63,7 @@
         </x-foodalchemist::modal-section>
     @else
         <x-foodalchemist::modal-section title="Ergebnis">
-            <p class="text-sm text-gray-900 dark:text-gray-100 font-medium" data-generator-ergebnis>{{ $ergebnis['name'] }}</p>
+            <p class="text-xs text-gray-900 dark:text-gray-100 font-medium" data-generator-ergebnis>{{ $ergebnis['name'] }}</p>
             <div class="flex flex-wrap gap-1.5 mt-2">
                 <span class="{{ $pill }} {{ $variantPill['success'] }}">{{ $ergebnis['statistik']['bestand_gp'] }} GP aus Bestand</span>
                 <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $ergebnis['statistik']['bestand_sub'] }} Sub-Rezepte</span>
@@ -74,7 +74,7 @@
                 <div class="mt-3 space-y-1" data-generator-offene>
                     <p class="{{ $label }}">Hard-Stops (Bestand-Lücken ohne Halbfabrikat-Marker):</p>
                     @foreach($ergebnis['offene'] as $offen)
-                        <p class="text-xs text-gray-600 dark:text-gray-300">
+                        <p class="text-[11px] text-gray-600 dark:text-gray-300">
                             🔴 {{ $offen['text'] }} —
                             <span class="text-violet-600 dark:text-violet-400">{{ $offen['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}</span>
                             @if(count($offen['shortlist']) > 0)<span class="text-gray-400">· {{ count($offen['shortlist']) }} Shortlist-Kandidaten</span>@endif

@@ -5,7 +5,7 @@
 <div class="space-y-4">
     @if($fehler)
         <div class="{{ $card }} p-3 border-red-500/20">
-            <p class="text-sm text-red-600 dark:text-red-400">{{ $fehler }}</p>
+            <p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p>
         </div>
     @endif
 

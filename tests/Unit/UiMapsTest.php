@@ -18,12 +18,14 @@ it('liefert alle Map-Schlüssel, die Views und Bausteine erwarten', function () 
     }
 });
 
-it('trägt die Jarvis-Dichte (R13): Tabelle 13px, Zellen py-1/px-3, Header einzeilig', function () {
+it('trägt die Jarvis-Skala (R14): Tabelle 12px, Zellen py-1/px-3, Header einzeilig, Labels 10px', function () {
     $maps = Ui::maps();
 
-    expect($maps['table'])->toContain('text-[13px]')
+    expect($maps['table'])->toContain('text-xs')
         ->and($maps['td'])->toContain('py-1')->toContain('px-3')
         ->and($maps['th'])->toContain('whitespace-nowrap')
+        ->and($maps['input'])->toContain('text-xs')
+        ->and($maps['dt'])->toContain('text-[10px]')->toContain('uppercase')
         ->and($maps['label'])->toContain('uppercase tracking-wider');
 });
 

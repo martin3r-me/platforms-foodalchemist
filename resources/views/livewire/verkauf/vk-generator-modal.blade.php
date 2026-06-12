@@ -3,7 +3,7 @@
 
 <x-foodalchemist::modal name="vk-generator-modal" title="✨ Verkaufsrezept generieren" size="max-w-2xl">
     @if($fehler !== null)
-        <p class="text-sm text-rose-600 dark:text-rose-400 mb-3" data-vk-generator-fehler>{{ $fehler }}</p>
+        <p class="text-xs text-rose-600 dark:text-rose-400 mb-3" data-vk-generator-fehler>{{ $fehler }}</p>
     @endif
 
     @if($ergebnis === null)
@@ -74,7 +74,7 @@
                     <input type="text" wire:model="parameter.sektor" placeholder="z. B. catering" class="{{ $input }}" />
                 </div>
                 <div class="flex items-end pb-2 gap-3">
-                    <label class="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
+                    <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
                         <input type="checkbox" wire:model="parameter.bio" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" /> Bio
                     </label>
                 </div>
@@ -86,7 +86,7 @@
         </x-foodalchemist::modal-section>
     @else
         <x-foodalchemist::modal-section title="Ergebnis">
-            <p class="text-sm text-gray-900 dark:text-gray-100 font-medium" data-vk-generator-ergebnis>{{ $ergebnis['name'] }}</p>
+            <p class="text-xs text-gray-900 dark:text-gray-100 font-medium" data-vk-generator-ergebnis>{{ $ergebnis['name'] }}</p>
             <div class="flex flex-wrap gap-1.5 mt-2">
                 <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $ergebnis['statistik']['bestand_sub'] }} Basisrezept-Komponenten</span>
                 <span class="{{ $pill }} {{ $variantPill['success'] }}">{{ $ergebnis['statistik']['bestand_gp'] }} GP aus Bestand</span>
@@ -97,7 +97,7 @@
                 <div class="mt-3 space-y-1" data-vk-generator-offene>
                     <p class="{{ $label }}">Hard-Stops (Bestand-Lücken ohne Halbfabrikat-Marker):</p>
                     @foreach($ergebnis['offene'] as $offen)
-                        <p class="text-xs text-gray-600 dark:text-gray-300">
+                        <p class="text-[11px] text-gray-600 dark:text-gray-300">
                             🔴 {{ $offen['text'] }} —
                             <span class="text-violet-600 dark:text-violet-400">{{ $offen['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}</span>
                             @if(count($offen['shortlist']) > 0)<span class="text-gray-400">· {{ count($offen['shortlist']) }} Shortlist-Kandidaten</span>@endif

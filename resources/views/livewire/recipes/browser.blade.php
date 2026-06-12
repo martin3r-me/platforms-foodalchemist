@@ -34,37 +34,37 @@
 
                 {{-- R6: Template-Filter (Jarvis-Sidebar) --}}
                 <button type="button" wire:click="toggleTemplates"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-all duration-150 {{ $nurTemplates
+                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $nurTemplates
                             ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/15 text-orange-700 dark:text-orange-300'
                             : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}" data-templates-toggle>
                     <span class="font-medium">📐 Templates</span>
-                    <span class="text-xs {{ $nurTemplates ? 'text-orange-500 font-medium' : 'text-gray-400' }}">{{ $nurTemplates ? 'aktiv' : $templateAnzahl }}</span>
+                    <span class="text-[11px] {{ $nurTemplates ? 'text-orange-500 font-medium' : 'text-gray-400' }}">{{ $nurTemplates ? 'aktiv' : $templateAnzahl }}</span>
                 </button>
 
                 <button type="button" wire:click="waehleHauptgruppe(null)"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-all duration-150 {{ $hauptgruppe === null
+                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === null
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                             : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                     <span class="font-medium">Alle Hauptgruppen</span>
-                    <span class="text-xs text-gray-400">{{ number_format(array_sum($hgCounts), 0, ',', '.') }}</span>
+                    <span class="text-[11px] text-gray-400">{{ number_format(array_sum($hgCounts), 0, ',', '.') }}</span>
                 </button>
 
                 <div class="space-y-0.5 -mx-1" data-hg-liste>
                     @foreach($hauptgruppen as $hg)
                         <div wire:key="hg-{{ $hg->id }}">
                             <button type="button" wire:click="waehleHauptgruppe({{ $hg->id }})"
-                                    class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-sm transition-all duration-150 {{ $hauptgruppe === $hg->id
+                                    class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === $hg->id
                                         ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                                         : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                                 <span class="min-w-0 truncate">{{ $hg->bezeichnung }}</span>
-                                <span class="text-xs text-gray-400 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
+                                <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
                             </button>
                             @if($hauptgruppe === $hg->id && $kategorien->isNotEmpty())
                                 <div class="ml-4 mt-0.5 space-y-0.5" data-kat-liste>
                                     @foreach($kategorien as $kat)
                                         @if(($katCounts[$kat->id] ?? 0) > 0)
                                             <button type="button" wire:key="kat-{{ $kat->id }}" wire:click="waehleKategorie({{ $kat->id }})"
-                                                    class="w-full flex items-center justify-between px-2 py-0.5 rounded text-xs transition-all duration-150 {{ $kategorie === $kat->id
+                                                    class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $kategorie === $kat->id
                                                         ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
                                                         : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                                                 <span class="min-w-0 truncate">{{ $kat->bezeichnung }}</span>
@@ -118,12 +118,12 @@
                         <div class="absolute left-0 top-full mt-1 z-30 w-80 max-h-80 overflow-y-auto rounded-lg bg-white dark:bg-gray-900 border border-black/10 dark:border-white/10 shadow-xl" data-template-liste>
                             @forelse($templateListe as $template)
                                 <button type="button" wire:key="tpl-{{ $template->id }}" wire:click="ausTemplate({{ $template->id }})"
-                                        class="block w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">
+                                        class="block w-full text-left px-3 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">
                                     {{ $template->name }}
                                     <span class="text-gray-400">· {{ $template->n_zutaten_total }} Zutaten{{ $template->yield_kg !== null ? ' · ' . number_format((float) $template->yield_kg, 2, ',', '.') . ' kg' : '' }}</span>
                                 </button>
                             @empty
-                                <p class="px-3 py-2 text-xs text-gray-400">Keine Templates — im Editor «📐 Template» markieren.</p>
+                                <p class="px-3 py-2 text-[11px] text-gray-400">Keine Templates — im Editor «📐 Template» markieren.</p>
                             @endforelse
                         </div>
                     @endif
@@ -139,7 +139,7 @@
                             <span class="{{ $pill }} {{ $variantPill['info'] }}">✨ Bulk läuft … {{ $run->done }}/{{ $run->total }}</span>
                         @else
                             <span class="{{ $pill }} {{ $variantPill['success'] }}">✨ Bulk fertig: {{ $run->done }}/{{ $run->total }}{{ $run->fehler > 0 ? " · {$run->fehler} Fehler" : '' }}</span>
-                            <span class="text-xs text-gray-500">{{ $bulkSvc->offeneVorschlaege(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId) }} Vorschläge offen</span>
+                            <span class="text-[11px] text-gray-500">{{ $bulkSvc->offeneVorschlaege(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId) }} Vorschläge offen</span>
                             <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-bulk-alle-uebernehmen>Alle übernehmen</button>
                             <button type="button" wire:click="bulkSchliessen" class="{{ $btnGhostXs }}" title="Vorschläge bleiben offen (Review)">Schließen</button>
                         @endif
@@ -149,7 +149,7 @@
             @if(count(array_filter($auswahl)) > 0)
                 <div class="flex items-center gap-1.5" data-bulk-status>
                     <button type="button" wire:click="bulkAnreichern" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Beschreibung · Kategorie · Geschmack als Review-Vorschläge (GL-07: nie Auto-Persistenz)" data-bulk-anreichern>✨ Bulk anreichern</button>
-                    <span class="text-sm text-gray-900 dark:text-gray-100 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt:</span>
+                    <span class="text-xs text-gray-900 dark:text-gray-100 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt:</span>
                     @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
                         <button type="button" wire:click="bulkStatus('{{ $wert }}')" class="{{ $btnGhostXs }}" data-bulk-status-btn="{{ $wert }}">→ {{ $lbl }}</button>
                     @endforeach
@@ -162,7 +162,7 @@
                 <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Basisrezepte</h3>
                 <span class="{{ $label }} flex items-center gap-2">
                     {{ number_format($rezepte->total(), 0, ',', '.') }} Treffer ·
-                    <select wire:model.live="perPage" class="bg-transparent border-0 text-xs uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
+                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
                         @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
                     </select>
                 </span>
@@ -190,7 +190,7 @@
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
                                 @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>📐 Template</span>@endif
                             </td>
-                            <td class="{{ $td }} text-xs italic text-gray-500 truncate max-w-[12rem] whitespace-nowrap">{{ $r->kategorie?->bezeichnung ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-500 truncate max-w-[12rem] whitespace-nowrap">{{ $r->kategorie?->bezeichnung ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->geschmacksrichtung ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->fertigungstiefe ?? '—' }}</td>
                             <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $statusPill['merged'] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span></td>
