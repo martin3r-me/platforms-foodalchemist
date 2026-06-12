@@ -231,6 +231,180 @@ return [
                 . 'aroma_treiber | komponente | beilage | garnitur — jede Zutat genau eine Rolle, '
                 . 'Gesamt-Gericht-Sicht statt Einzelbetrachtung): werte = {rollen: {<zutat_id>: rolle}}.',
         ],
+        // ── M7-04: Anhang-A-Inventar komplett (06_KI) ────────────────────
+        // Bewusst NICHT portiert: #2 TEMPLATE_FILL + #38 AGENTIC_RESOLVER
+        // (Tier-D-Tool-Loops → M7-10/M8-01), #37 FOODBOOK_PLAN (Phase 2 ⚠D5),
+        // #39 DISAMBIG (toter Code laut Inventar).
+        'gp.allergene' => [
+            'tier' => 'A',                                            // Compliance (#4)
+            'task' => 'Leite die 14 EU-Allergene (LMIV Anhang II) fuer das Grundprodukt ab — '
+                . 'je Allergen enthalten|spuren|nicht_enthalten|unbekannt, im Zweifel unbekannt '
+                . '(F7.1: nie falsch-negativ raten): werte = {allergene: {<slug>: wert}}.',
+        ],
+        'gp.domain' => [
+            'tier' => 'B',
+            'task' => 'Ordne das Grundprodukt GENAU EINER Wissens-Domain aus der mitgegebenen '
+                . 'Liste zu: werte = {domain_slug}.',
+        ],
+        'gp.stk_default_g' => [
+            'tier' => 'B',
+            'task' => 'Schaetze das Stueck-Durchschnittsgewicht des Grundprodukts in Gramm '
+                . '(kuechenuebliche Handelsware): werte = {stk_default_g}.',
+        ],
+        'gp.zaehl_einheiten' => [
+            'tier' => 'B',
+            'task' => 'Liste die natuerlichen Zaehl-Einheiten des Grundprodukts mit '
+                . 'Durchschnittsgewichten: werte = {einheiten: [{einheit, gewicht_g}]}.',
+        ],
+        'gp.anker' => [
+            'tier' => 'B',
+            'task' => 'Bestimme den Kern-Anker (Aroma-Identitaet) des Grundprodukts aus dem '
+                . 'mitgegebenen Anker-Vokabular; kein Aroma-Traeger => neutral: werte = {anker_slug}.',
+        ],
+        'gp.rolle' => [
+            'tier' => 'B',                                            // Inline-Prompt im Ist — gehoben
+            'task' => 'Bestimme die kulinarische Rolle des Grundprodukts '
+                . '(aroma_treiber|komponente|beilage|garnitur): werte = {rolle}.',
+        ],
+        'gp.la_suggest' => [
+            'tier' => 'B',
+            'task' => 'Ordne die unzugeordneten Lieferanten-Artikel dem passenden Grundprodukt '
+                . 'aus der Kandidaten-Liste zu; unsicher => weglassen: werte = {zuordnungen: [{item_id, gp_id}]}.',
+        ],
+        'gp.term_la_rank' => [
+            'tier' => 'B',
+            'task' => 'Ranke die Lieferanten-Artikel-Kandidaten als Basis fuer den Produktbegriff '
+                . '(beste GP-Stammware zuerst): werte = {ranking: [item_id, …]}.',
+        ],
+        'recipe.sektor' => [
+            'tier' => 'B',
+            'task' => 'Beurteile die Eignung des Rezepts je Verpflegungs-Sektor '
+                . '(geeignet|bedingt|ungeeignet + kurze Begruendung): werte = {sektoren: {<slug>: {eignung, grund}}}.',
+        ],
+        'recipe.niveau' => [
+            'tier' => 'B',
+            'task' => 'Beurteile die Eignung des Rezepts je Niveau-Stufe '
+                . '(geeignet|bedingt|ungeeignet + kurze Begruendung): werte = {niveaus: {<slug>: {eignung, grund}}}.',
+        ],
+        'recipe.sub_typ' => [
+            'tier' => 'B',
+            'task' => 'Klassifiziere das Rezept zu GENAU EINEM Sub-Rezept-Typ aus dem mitgegebenen '
+                . 'Vokabular; kein Treffer => null: werte = {sub_typ_slug}.',
+        ],
+        'recipe.fertigungstiefe' => [
+            'tier' => 'B',
+            'task' => 'Klassifiziere die Fertigungstiefe (from_scratch|teilfertig|convenience) '
+                . 'aus den Zutaten: werte = {fertigungstiefe}.',
+        ],
+        'recipe.zubereitung' => [
+            'tier' => 'A',                                            // V-02: langes Einzeltext-Feld
+            'task' => 'Schreibe die Schritt-fuer-Schritt-Zubereitung fuers PRODUKTIONS-Rezept '
+                . '(Markdown, nummerierte Schritte, Temperaturen/Zeiten konkret, H2 fuer Phasen): '
+                . 'werte = {zubereitung}.',
+        ],
+        'recipe.eigenschaften' => [
+            'tier' => 'B',
+            'task' => 'Schaetze die drei Rezept-Eigenschaften (haltbarkeit_tage, '
+                . 'regenerierbarkeit gut|bedingt|nein, transportstabilitaet gut|bedingt|nein): '
+                . 'werte = {haltbarkeit_tage, regenerierbarkeit, transportstabilitaet}.',
+        ],
+        'recipe.geschmack' => [
+            'tier' => 'B',                                            // Auto-Apply-Ausnahme (GL-07 §4.3)
+            'task' => 'Bestimme die grobe Geschmacksrichtung fuer die Menueplanung '
+                . '(suess|herzhaft|neutral): werte = {geschmacksrichtung}.',
+        ],
+        'recipe.review' => [
+            'tier' => 'A',
+            'task' => 'Pruefe das Produktionsrezept als Sous-Chef auf Plausibilitaet (Mengen, '
+                . 'Technik, Reihenfolge, Luecken) — konkrete Befunde statt Floskeln: '
+                . 'werte = {befunde: [{schwere, text}], gesamturteil}.',
+        ],
+        'recipe.pairing' => [
+            'tier' => 'A',                                            // groesster Ist-Kostenblock — Qualitaet zaehlt
+            'task' => 'Schlage 12-25 BELEGTE Flavor-Pairing-Partner aus dem mitgegebenen '
+                . 'Grounding vor (typ klassisch|modern|kontrast, konfidenz hoch|mittel|niedrig; '
+                . 'erfinde KEINE unbelegten Paarungen): werte = {pairings: [{slug, typ, konfidenz}]}.',
+        ],
+        'recipe.anker' => [
+            'tier' => 'B',
+            'task' => 'Bestimme die 1-5 Kern-Anker (Aroma-Identitaet) des Rezepts aus dem '
+                . 'mitgegebenen Vokabular (GL-10 Cap 5): werte = {anker_slugs: []}.',
+        ],
+        'recipe.equipment' => [
+            'tier' => 'B',
+            'task' => 'Schlage das Equipment-Set fuer die Produktion aus dem mitgegebenen '
+                . 'Vokabular vor: werte = {equipment_slugs: []}.',
+        ],
+        'recipe.extract' => [
+            'tier' => 'C',                                            // Vision — blockiert auf Martin-Frage (Offene Entscheide)
+            'task' => 'Extrahiere das Rezept TREU aus dem Anhang (Foto/PDF/Text) — NICHTS '
+                . 'anreichern oder erfinden (GL-13 Inv. 7, Wissenskontext bewusst leer): '
+                . 'werte = {name, zutaten: [{text, menge, einheit}], zubereitung}.',
+        ],
+        'vk.plating' => [
+            'tier' => 'A',                                            // V-02
+            'task' => 'Schreibe die Hybrid-Plating-Anweisung fuers Verkaufsrezept (Teller-Aufbau, '
+                . 'Mengenverteilung pro Komponente, Service-Anweisung — NICHT die Produktion): '
+                . 'werte = {zubereitung}.',
+        ],
+        'vk.name_putzen' => [
+            'tier' => 'B',
+            'task' => 'Normalisiere den Verkaufsrezept-Namen auf die Pipe-Syntax §4.4 '
+                . '«<HG-Code>: Hauptkomponente | Komponente | …» (max 5 Felder, Title Case, '
+                . 'keine Marketing-Adjektive): werte = {name}.',
+        ],
+        'vk.marketing' => [
+            'tier' => 'A',
+            'task' => 'Schreibe den verkaeuferischen Marketing-Text fuers Foodbook (appetitlich, '
+                . 'ehrlich, im mitgegebenen Schreibstil-Duktus): werte = {marketing_text}.',
+        ],
+        'vk.wording' => [
+            'tier' => 'A',
+            'task' => 'Generiere den kanonischen Marketing-Namen (VK-Wording-Standard, '
+                . 'stil-neutral — Schreibstile transformieren erst spaeter): werte = {vk_wording_standard}.',
+        ],
+        'vk.behaelter' => [
+            'tier' => 'B',
+            'task' => 'Schlage Behaelter (warm/kalt getrennt) + Anzahl fuers Catering vor '
+                . '(Kontext: Gesamtgewicht + Speisen-Klasse, Vokabular mitgegeben): '
+                . 'werte = {behaelter_warm_id, behaelter_warm_anzahl, behaelter_kalt_id, behaelter_kalt_anzahl}.',
+        ],
+        'vk.regeneration' => [
+            'tier' => 'B',
+            'task' => 'Schlage die Regenerations-Programme als LISTE vor — eine Zeile pro '
+                . 'erkannter Komponente (V-19; Geraet aus Vokabular, kalt = ohne Geraet): '
+                . 'werte = {programme: [{komponente_label, geraet_id, temp_c, dauer_min, kerntemp_c, hinweis}]}.',
+        ],
+        'vk.servier_vehikel' => [
+            'tier' => 'B',
+            'task' => 'Schlage das Servier-Vehikel vor (Kontext: Speisen-Klasse + Komposition + '
+                . 'Portion, Vokabular mitgegeben): werte = {servier_vehikel_id}.',
+        ],
+        'vk.review' => [
+            'tier' => 'A',
+            'task' => 'Pruefe das Verkaufsrezept als Copilot auf Verkaufs-Tauglichkeit '
+                . '(Marge, Portionierung, Service-Logik, Wording): werte = {befunde: [{schwere, text}], gesamturteil}.',
+        ],
+        'vk.kohaerenz' => [
+            'tier' => 'A',                                            // Inline-Prompt im Ist (culinary_coherence_judge) — gehoben
+            'task' => 'Beurteile die kulinarische Kohaerenz des Tellers (Score 0-100, Label wie '
+                . '«Klassischer Teller», kurze Begruendung): werte = {score, label, begruendung}.',
+        ],
+        'vk.teller_heber' => [
+            'tier' => 'A',                                            // Inline-Prompt im Ist (plate_suggester) — gehoben
+            'task' => 'Schlage vor, was den Teller hebt (1-3 konkrete, machbare Verbesserungen '
+                . 'aus dem Bestand — keine Fantasie-Zutaten): werte = {vorschlaege: [{text, aufwand}]}.',
+        ],
+        'price.plausi' => [
+            'tier' => 'B',
+            'task' => 'Pruefe den auffaelligen Lieferanten-Preis auf Plausibilitaet (Kontext: '
+                . 'Artikel, Historie, Vergleichspreise): werte = {plausibel: bool, grund}.',
+        ],
+        'chat.message' => [
+            'tier' => 'A',                                            // Inline-Prompt im Ist — gehoben
+            'task' => 'Beantworte die Kuechen-/Datenfrage als Catering-Souschef auf Basis des '
+                . 'mitgegebenen Kontexts — ehrlich bei Luecken: werte = {antwort}.',
+        ],
         'gp.tags' => [
             'tier' => 'C',
             'task' => 'Bewerte die Eigenschafts-Tags des Grundprodukts (vegan, vegetarisch, halal, '
