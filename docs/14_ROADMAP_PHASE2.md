@@ -145,6 +145,20 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > ohne modules-Tabelle). 3 neue Tests (R12JarvisParitaetTest). Live verifiziert (Screenshots
 > GP-Panel + Preise-Block, ✨-Kandidaten-Box, Toggle, Inline-Edit). Suite: **394/394 (1.663 Assertions)**.
 
+> **Status R13/Listen-Dichte (2026-06-12, Dominique: «Spalten zu breit … in Cooking Jarvis
+> um einiges besser — betrifft jedes Modul»):** ZENTRAL in `Support/Ui::maps()` verdichtet
+> (wirkt in allen 30 Views, die die Map nutzen): `th/td` px-5→px-3, td py-1.5→py-1,
+> Header `whitespace-nowrap` + 11px, Pills px-1.5/py-px/11px. Zeilenhöhe real 29 px
+> (vorher 44–60 px durch umbrechende Warengruppen). In den 4 Browsern (GPs, Lieferanten,
+> Basis, VK) zusätzlich: **Name-Spalte als flexible truncate-Spalte** (`w-full max-w-0
+> min-w-44 truncate` — nimmt allen Restplatz, bläht die Tabelle NIE über den Container,
+> Tooltip trägt den vollen Namen), Warengruppe/Kategorie einzeilig kursiv klein mit
+> Breiten-Deckel, Geld-/Zahlen-Spalten rechtsbündig `tabular-nums`, Allergen-Badges max. 3
+> + «+n». Haupttabellen in `overflow-x-auto`-Wrapper: schmaler Mittelteil (Panel offen)
+> scrollt horizontal statt Spalten hart abzuschneiden. UiMapsTest-Soll auf R13-Dichte
+> angepasst. Live verifiziert (Messung: Tabelle 1316→771 px, Scroll-Test ok, Screenshot).
+> Suite: **394/394 (1.665 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).

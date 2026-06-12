@@ -167,11 +167,13 @@
                     </select>
                 </span>
             </div>
+            <div class="overflow-x-auto">{{-- R13: schmaler Mittelteil scrollt statt abzuschneiden --}}
             <table class="{{ $table }}">
                 <thead><tr class="text-left">
                     <th class="{{ $th }} !pr-0 w-8"></th>
-                    @foreach(['Name', 'Kategorie', 'Geschmack', 'Fertigung', 'Status', 'Zutaten', 'Yield', 'Allergen-Konf.'] as $head)
-                        <th class="{{ $th }}">{{ $head }}</th>
+                    {{-- R13 (Jarvis-Dichte): Name flexibel, Zahlen rechtsbündig --}}
+                    @foreach([['Name', 'w-full'], ['Kategorie', ''], ['Geschmack', ''], ['Fertigung', ''], ['Status', ''], ['Zutaten', 'text-right'], ['Yield', 'text-right'], ['Allergen-Konf.', '']] as [$head, $align])
+                        <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
                     @endforeach
                 </tr></thead>
                 <tbody>
@@ -184,19 +186,19 @@
                                 <input type="checkbox" wire:model.live="auswahl.{{ $r->id }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-rezept-checkbox="{{ $r->id }}" />
                             </td>
                             {{-- R6: Namens-Klick öffnet direkt den Voll-Editor (Zeilen-Klick bleibt Panel-Selektion) --}}
-                            <td class="{{ $td }} font-medium max-w-sm truncate" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
+                            <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
                                 @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>📐 Template</span>@endif
                             </td>
-                            <td class="{{ $td }} text-gray-500 truncate max-w-[12rem]">{{ $r->kategorie?->bezeichnung ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-500">{{ $r->geschmacksrichtung ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-500">{{ $r->fertigungstiefe ?? '—' }}</td>
+                            <td class="{{ $td }} text-xs italic text-gray-500 truncate max-w-[12rem] whitespace-nowrap">{{ $r->kategorie?->bezeichnung ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->geschmacksrichtung ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->fertigungstiefe ?? '—' }}</td>
                             <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $statusPill['merged'] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span></td>
-                            <td class="{{ $td }} text-gray-500">
+                            <td class="{{ $td }} text-gray-500 text-right tabular-nums whitespace-nowrap">
                                 {{ $r->n_zutaten_total }}
                                 @if($r->n_zutaten_ungemappt > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }} ml-1" title="ungemappte Zutaten — F7.1: Allergene unbekannt">{{ $r->n_zutaten_ungemappt }}?</span>@endif
                             </td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '—' }}</td>
+                            <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '—' }}</td>
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergene_konfidenz] ?? $variantPill['secondary'] }}">{{ $r->allergene_konfidenz }}</span>
                             </td>
@@ -206,6 +208,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
             <div class="px-5 py-3 border-t border-black/5 dark:border-white/10">{{ $rezepte->links() }}</div>
         </div>
     </x-ui-page-container>

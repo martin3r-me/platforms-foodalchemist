@@ -91,10 +91,12 @@
                     </select>
                 </span>
             </div>
+            <div class="overflow-x-auto">{{-- R13: schmaler Mittelteil scrollt statt abzuschneiden --}}
             <table class="{{ $table }}">
                 <thead><tr class="text-left">
-                    @foreach(['Name', 'Warengruppe', 'Status', 'LAs', 'Lead-Preis', 'Rezepte', 'Allergene'] as $head)
-                        <th class="{{ $th }}">{{ $head }}</th>
+                    {{-- R13 (Jarvis-Dichte): Name flexibel, Rest schmal — Zahlen-Spalten rechtsbündig --}}
+                    @foreach([['Name', 'w-full'], ['Warengruppe', ''], ['Status', ''], ['LAs', 'text-right'], ['Lead-Preis', 'text-right'], ['Rezepte', 'text-right'], ['Allergene', '']] as [$head, $align])
+                        <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
                     @endforeach
                 </tr></thead>
                 <tbody>
@@ -104,18 +106,19 @@
                             class="{{ $tr }} cursor-pointer {{ $gpId === $gp->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                             data-gp-zeile="{{ $gp->id }}">
                             {{-- R6: Namens-Klick öffnet direkt den GP-Editor (Zeilen-Klick bleibt Panel) --}}
-                            <td class="{{ $td }} font-medium max-w-sm truncate" wire:click.stop="bearbeite({{ $gp->id }})" title="{{ $gp->name }} — Klick: bearbeiten">
+                            {{-- R13: w-full + max-w-0 = Spalte nimmt allen Restplatz und truncated — Tabelle bläht NIE über den Container --}}
+                            <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" wire:click.stop="bearbeite({{ $gp->id }})" title="{{ $gp->name }} — Klick: bearbeiten">
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-gp-name>{{ $gp->name }}</span>
                                 @if($gp->is_derivat)<span class="ml-1.5 {{ $pill }} {{ $variantPill['info'] }}">Derivat</span>@endif
                             </td>
-                            <td class="{{ $td }} text-gray-500">{{ $gp->warengruppe?->name ?? $gp->warengruppe_code ?? '—' }}</td>
-                            <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span></td>
-                            <td class="{{ $td }}">
+                            <td class="{{ $td }} text-xs italic text-gray-500 whitespace-nowrap max-w-36 truncate" title="{{ $gp->warengruppe?->name ?? '' }}">{{ $gp->warengruppe?->name ?? $gp->warengruppe_code ?? '—' }}</td>
+                            <td class="{{ $td }} whitespace-nowrap"><span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span></td>
+                            <td class="{{ $td }} text-right tabular-nums">
                                 @if($gp->n_las_total > 0)<span class="text-gray-500">{{ $gp->n_las_total }}</span>
                                 @elseif(!$gp->requires_la)<span class="text-gray-400" title="bewusst LA-frei">n/a</span>
                                 @else<span class="{{ $pill }} font-medium {{ $variantPill['warning'] }}" title="kein LA verknüpft — EK-/Allergen-Lücke">0</span>@endif
                             </td>
-                            <td class="{{ $td }} whitespace-nowrap" data-lead-preis>
+                            <td class="{{ $td }} whitespace-nowrap text-right tabular-nums" data-lead-preis>
                                 @if($gp->lead_vergleichspreis)
                                     <span class="text-gray-900 dark:text-gray-100">{{ number_format($gp->lead_vergleichspreis['wert'], 2, ',', '.') }} {{ $gp->lead_vergleichspreis['einheit'] }}</span>
                                 @elseif($gp->lead_preis !== null)
@@ -124,16 +127,16 @@
                                     <span class="text-gray-400">—</span>
                                 @endif
                             </td>
-                            <td class="{{ $td }} text-gray-500">{{ $gp->rezepte_count ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $gp->rezepte_count ?? '—' }}</td>
                             <td class="{{ $td }}" data-allergen-badges>
                                 {{-- GL-01-Effektivwerte (Override > Mutter > LA-MAX), Bulk aus paginateBrowser --}}
-                                @forelse(array_slice($gp->allergen_badges, 0, 5) as $feld)
+                                @forelse(array_slice($gp->allergen_badges, 0, 3) as $feld)
                                     <span class="{{ $pill }} {{ $variantPill['danger'] }} mr-1"
                                           title="{{ \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$feld] ?? $feld }}">{{ ucfirst(explode('_', $feld)[0]) }}</span>
                                 @empty
                                     <span class="text-gray-400">—</span>
                                 @endforelse
-                                @if(count($gp->allergen_badges) > 5)<span class="text-xs text-gray-400">+{{ count($gp->allergen_badges) - 5 }}</span>@endif
+                                @if(count($gp->allergen_badges) > 3)<span class="text-xs text-gray-400">+{{ count($gp->allergen_badges) - 3 }}</span>@endif
                             </td>
                         </tr>
                     @empty
@@ -141,6 +144,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
             <div class="px-5 py-3 border-t border-black/5 dark:border-white/10">{{ $gps->links() }}</div>
         </div>
     </x-ui-page-container>

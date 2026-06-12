@@ -33,10 +33,10 @@ final class Ui
             // ── Typo
             'label' => 'text-xs font-medium uppercase tracking-wider text-gray-400',
 
-            // ── Tabelle (Ist-App-Dichte: 13px, py-1.5)
+            // ── Tabelle (R13 Jarvis-Dichte: 13px, py-1, px-3, Header einzeilig)
             'table' => 'w-full text-[13px]',
-            'th' => 'px-5 py-2 text-xs font-medium uppercase tracking-wider text-gray-400',
-            'td' => 'px-5 py-1.5',
+            'th' => 'px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-gray-400 whitespace-nowrap',
+            'td' => 'px-3 py-1',
             'tr' => 'border-t border-black/5 dark:border-white/10 hover:bg-gradient-to-r hover:from-violet-500/5 hover:to-indigo-500/5 transition-all duration-150',
 
             // ── Definition-Listen (Detail-Sektionen)
@@ -45,7 +45,7 @@ final class Ui
             'dd' => 'text-gray-900 dark:text-gray-100 text-right',
 
             // ── Pills
-            'pill' => 'inline-flex px-2 py-0.5 rounded-full text-xs',
+            'pill' => 'inline-flex px-1.5 py-px rounded-full text-[11px]',
             'statusPill' => [
                 'approved' => 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
                 'tentative' => 'bg-amber-500/10 text-amber-600 dark:text-amber-400',

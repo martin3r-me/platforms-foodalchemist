@@ -146,13 +146,15 @@
                     </select>
                 </span>
             </div>
+            <div class="overflow-x-auto">{{-- R13: schmaler Mittelteil scrollt statt abzuschneiden --}}
             <table class="{{ $table }}">
                 <thead>
                     <tr class="text-left">
                         <th class="{{ $th }} !pr-0 w-8"></th>
                         @if($globaleSuche)<th class="{{ $th }}">Lieferant</th>@endif
-                        @foreach(['ArtNr', 'Bezeichnung', 'Gebinde', 'Status', 'EK', 'Vergleichspreis', 'Grundprodukt', '★'] as $head)
-                            <th class="{{ $th }}">{{ $head }}</th>
+                        {{-- R13 (Jarvis-Dichte): Bezeichnung flexibel, Preise rechtsbündig --}}
+                        @foreach([['ArtNr', ''], ['Bezeichnung', 'w-full'], ['Gebinde', ''], ['Status', ''], ['EK', 'text-right'], ['Vergleichspreis', 'text-right'], ['Grundprodukt', ''], ['★', 'text-right']] as [$head, $align])
+                            <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
                         @endforeach
                     </tr>
                 </thead>
@@ -167,7 +169,7 @@
                                 <td class="{{ $td }} text-gray-500">{{ $item->supplier?->name ?? '—' }}</td>
                             @endif
                             <td class="{{ $td }} font-mono text-xs text-gray-500">{{ $item->article_number ?? '—' }}</td>
-                            <td class="{{ $td }} font-medium max-w-md truncate" title="{{ $item->designation }}">
+                            <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" title="{{ $item->designation }}">
                                 <button type="button" wire:click="$dispatch('item-modal.oeffnen', { id: {{ $item->id }} })"
                                         class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150 truncate max-w-full text-left">{{ $item->designation }}</button>
                             </td>
@@ -180,16 +182,16 @@
                                 @else<span class="{{ $pill }} {{ $variantPill['success'] }}">aktiv</span>@endif
                                 @if($item->is_preorder)<span class="ml-1 {{ $pill }} {{ $variantPill['info'] }}" title="Vorbestell-Artikel (V-29){{ $item->preorder_days ? ' — ' . $item->preorder_days . ' Tage Vorlauf' : '' }}" data-vorbestell-pill>Vorbestellung{{ $item->preorder_days ? ' · ' . $item->preorder_days . ' T' : '' }}</span>@endif
                             </td>
-                            <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                            <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap text-right tabular-nums">
                                 {{ $item->aktiver_preis !== null ? number_format((float) $item->aktiver_preis, 2, ',', '.') . ' €' : '—' }}
                             </td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap" data-vergleichspreis>
+                            <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums" data-vergleichspreis>
                                 {{ $item->vergleichspreis !== null ? number_format($item->vergleichspreis['wert'], 2, ',', '.') . ' ' . $item->vergleichspreis['einheit'] : '—' }}
                             </td>
-                            <td class="{{ $td }}">
+                            <td class="{{ $td }} max-w-48 truncate">
                                 @if($item->structure?->gp)
                                     <a href="{{ \Platform\FoodAlchemist\Support\Sprungziel::gp($item->structure->gp_id) }}"
-                                       class="text-violet-600 dark:text-violet-400 hover:underline">{{ $item->structure->gp->name }}</a>
+                                       class="text-violet-600 dark:text-violet-400 hover:underline" title="{{ $item->structure->gp->name }}">{{ $item->structure->gp->name }}</a>
                                 @else
                                     <span class="text-gray-400">— nicht gemappt —</span>
                                 @endif
@@ -209,6 +211,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
             @if($artikel)
                 <div class="px-5 py-3 border-t border-black/5 dark:border-white/10">{{ $artikel->links() }}</div>
             @endif
