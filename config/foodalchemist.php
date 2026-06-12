@@ -399,12 +399,14 @@ return [
         'vk.kohaerenz' => [
             'tier' => 'A',                                            // Inline-Prompt im Ist (culinary_coherence_judge) — gehoben
             'task' => 'Beurteile die kulinarische Kohaerenz des Tellers (Score 0-100, Label wie '
-                . '«Klassischer Teller», kurze Begruendung): werte = {score, label, begruendung}.',
+                . '«Klassischer Teller», kurze Begruendung, groesste Schwachstelle als eine Zutat '
+                . 'oder null): werte = {score, label, begruendung, schwachstelle}.',
         ],
         'vk.teller_heber' => [
             'tier' => 'A',                                            // Inline-Prompt im Ist (plate_suggester) — gehoben
-            'task' => 'Schlage vor, was den Teller hebt (1-3 konkrete, machbare Verbesserungen '
-                . 'aus dem Bestand — keine Fantasie-Zutaten): werte = {vorschlaege: [{text, aufwand}]}.',
+            'task' => 'Schlage vor, was den Teller hebt (1-3 konkrete, machbare Verbesserungen — '
+                . 'keine Fantasie-Zutaten; typ je Vorschlag: kontrast | ergaenzung | veredelung): '
+                . 'werte = {einschaetzung, vorschlaege: [{typ, zutat, kategorie, begruendung, confidence}]}.',
         ],
         'price.plausi' => [
             'tier' => 'B',

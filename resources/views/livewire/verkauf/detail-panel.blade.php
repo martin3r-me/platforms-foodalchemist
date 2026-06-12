@@ -203,6 +203,130 @@
             @endif
         </div>
 
+        {{-- D-6 §5.x / GL-10 Achse 2: Kohärenz-Judge (gecacht, nie mit Aroma-Score verrechnet) --}}
+        <div data-vk-kohaerenz>
+            <button type="button" wire:click="toggleSektion('kohaerenz')"
+                    class="w-full flex items-center justify-between py-1 text-xs font-medium uppercase tracking-wider text-gray-400 hover:text-violet-500 transition-colors">
+                <span>Kulinarische Kohärenz <span class="normal-case tracking-normal">· KI-Urteil</span></span>
+                <span>{{ ($offen['kohaerenz'] ?? false) ? '▾' : '▸' }}</span>
+            </button>
+            @if(($offen['kohaerenz'] ?? false) && $kohaerenzStatus !== null)
+                @php($urteil = $kohaerenzStatus['cache'])
+                @if($kiFehler !== null)<p class="text-xs text-rose-500 mb-1" data-vk-ki-fehler>{{ $kiFehler }}</p>@endif
+                @if($urteil?->score !== null)
+                    <div class="mt-1 space-y-1.5" data-vk-kohaerenz-urteil>
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl font-semibold {{ $urteil->score >= 80 ? 'text-green-600 dark:text-green-400' : ($urteil->score >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400') }}">{{ $urteil->score }} %</span>
+                            @if($urteil->label !== null)
+                                <span class="px-2.5 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider {{ $urteil->score >= 80 ? 'border-green-600 text-green-700 dark:border-green-400 dark:text-green-300' : 'border-amber-500 text-amber-700 dark:text-amber-300' }}">{{ $urteil->label }}</span>
+                            @endif
+                        </div>
+                        @if($urteil->begruendung !== null)
+                            <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{{ $urteil->begruendung }}</p>
+                        @endif
+                        @if($urteil->schwachstelle !== null)
+                            <p class="text-xs text-amber-600 dark:text-amber-400">Schwachstelle: {{ $urteil->schwachstelle }}</p>
+                        @endif
+                        <p class="text-xs text-gray-400">{{ $urteil->judged_at?->format('Y-m-d') }} · {{ $urteil->judge_model }}
+                            @if($kohaerenzStatus['stale'])<span class="text-amber-500" data-vk-kohaerenz-stale> · Zutaten geändert — Urteil veraltet</span>@endif
+                        </p>
+                    </div>
+                @else
+                    <p class="text-xs text-gray-400 mt-1">Noch kein Urteil — der Judge beurteilt die Stimmigkeit des Tellers (zweite Achse neben der Aroma-Kohäsion).</p>
+                @endif
+                <button type="button" wire:click="pruefeKohaerenz" class="{{ $btnGhostXs }} mt-1.5" data-vk-kohaerenz-pruefen>
+                    {{ $urteil?->score !== null ? 'Erneut prüfen' : '✨ Prüfen' }}
+                </button>
+            @endif
+        </div>
+
+        {{-- D-6 §5.x: Was hebt den Teller? (vk.teller_heber, gecacht in derselben Zeile) --}}
+        <div data-vk-heber>
+            <button type="button" wire:click="toggleSektion('heber')"
+                    class="w-full flex items-center justify-between py-1 text-xs font-medium uppercase tracking-wider text-gray-400 hover:text-violet-500 transition-colors">
+                <span>Was hebt den Teller? <span class="normal-case tracking-normal">· KI-Vorschlag</span></span>
+                <span>{{ ($offen['heber'] ?? false) ? '▾' : '▸' }}</span>
+            </button>
+            @if(($offen['heber'] ?? false) && $kohaerenzStatus !== null)
+                @php($heber = $kohaerenzStatus['cache']?->heber_json)
+                @if($kiFehler !== null)<p class="text-xs text-rose-500 mb-1" data-vk-ki-fehler>{{ $kiFehler }}</p>@endif
+                @if($heber !== null && ($heber['vorschlaege'] ?? []) !== [])
+                    @php($typen = collect($heber['vorschlaege'])->countBy('typ'))
+                    <div class="mt-1 space-y-2" x-data="{ typ: '{{ collect($heber['vorschlaege'])->first()['typ'] }}' }" data-vk-heber-vorschlaege>
+                        @if(($heber['einschaetzung'] ?? null) !== null)
+                            <p class="text-sm font-medium text-gray-900 dark:text-gray-100 leading-relaxed">{{ $heber['einschaetzung'] }}</p>
+                        @endif
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach(['kontrast' => 'Kontrast', 'ergaenzung' => 'Ergänzung', 'veredelung' => 'Veredelung'] as $t => $lbl)
+                                @if(($typen[$t] ?? 0) > 0)
+                                    <button type="button" @click="typ = '{{ $t }}'"
+                                            class="px-2.5 py-0.5 rounded-full border text-[11px] transition-colors"
+                                            :class="typ === '{{ $t }}' ? 'border-amber-500 text-amber-700 dark:text-amber-300 font-semibold' : 'border-black/10 dark:border-white/15 text-gray-400'">{{ $lbl }} {{ $typen[$t] }}</button>
+                                @endif
+                            @endforeach
+                        </div>
+                        @foreach($heber['vorschlaege'] as $v)
+                            <div x-show="typ === '{{ $v['typ'] }}'" class="flex gap-2 text-sm" wire:key="vkh-{{ $loop->index }}">
+                                @if($v['confidence'] !== null)<span class="font-semibold text-green-600 dark:text-green-400 shrink-0">{{ round($v['confidence'] * 100) }} %</span>@endif
+                                <div class="min-w-0">
+                                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ $v['zutat'] }}
+                                        @if($v['kategorie'] !== null)<span class="text-xs font-normal text-gray-400 ml-1">{{ $v['kategorie'] }}</span>@endif
+                                    </p>
+                                    @if($v['begruendung'] !== null)<p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{{ $v['begruendung'] }}</p>@endif
+                                </div>
+                            </div>
+                        @endforeach
+                        <p class="text-xs text-gray-400">{{ $kohaerenzStatus['cache']->heber_at?->format('Y-m-d') }} · {{ $kohaerenzStatus['cache']->heber_model }}</p>
+                    </div>
+                @else
+                    <p class="text-xs text-gray-400 mt-1">Noch keine Vorschläge — die KI nennt 1–3 machbare Hebel (Kontrast / Ergänzung / Veredelung).</p>
+                @endif
+                <button type="button" wire:click="schlageHeberVor" class="{{ $btnGhostXs }} mt-1.5" data-vk-heber-vorschlagen>
+                    {{ ($heber['vorschlaege'] ?? []) !== [] ? 'Erneut vorschlagen' : '✨ Vorschlagen' }}
+                </button>
+            @endif
+        </div>
+
+        {{-- D-6 §5.x / GL-10 §3.3: Aroma-Nachbarn (deterministisch — Discovery, kein Teller-Urteil) --}}
+        <div data-vk-nachbarn>
+            <button type="button" wire:click="toggleSektion('nachbarn')"
+                    class="w-full flex items-center justify-between py-1 text-xs font-medium uppercase tracking-wider text-gray-400 hover:text-violet-500 transition-colors">
+                <span>Aroma-Nachbarn <span class="normal-case tracking-normal">· geteilte Aromastoffe</span></span>
+                <span>{{ ($offen['nachbarn'] ?? false) ? '▾' : '▸' }}</span>
+            </button>
+            @if(($offen['nachbarn'] ?? false) && $nachbarn !== null)
+                <p class="text-xs text-gray-400 mt-1">Aromaverwandte Zutaten aus dem Geschmacks-Netz — Inspiration, kein Teller-Urteil.</p>
+                @if($nachbarn['klassiker'] === [])
+                    <p class="text-xs text-gray-400 mt-1" data-vk-nachbarn-leer>Zu wenige aufgelöste Anker (mind. 2 nötig) — Kern-Anker setzen hilft.</p>
+                @else
+                    <div class="mt-1.5 space-y-2" x-data="{ modus: 'klassiker' }" data-vk-nachbarn-liste>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" @click="modus = 'klassiker'" class="{{ $pill }} transition-colors"
+                                    :class="modus === 'klassiker' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'">Klassiker</button>
+                            <button type="button" @click="modus = 'signature'" class="{{ $pill }} transition-colors"
+                                    :class="modus === 'signature' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'">Signature</button>
+                            <span class="text-[10px] text-gray-400" x-text="modus === 'klassiker' ? 'trifft viele Komponenten (sicher)' : 'spezifisch statt promiskuitiv (eigen)'"></span>
+                        </div>
+                        @foreach(['klassiker', 'signature'] as $modus)
+                            <div x-show="modus === '{{ $modus }}'" class="space-y-1.5">
+                                @foreach($nachbarn[$modus] as $n)
+                                    <div class="flex gap-2 text-sm" wire:key="vkn-{{ $modus }}-{{ $n['anker_id'] }}">
+                                        <span class="font-semibold shrink-0 {{ $n['mean_w'] >= 80 ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400' }}">{{ $n['mean_w'] }} %</span>
+                                        <div class="min-w-0">
+                                            <p class="font-medium text-gray-900 dark:text-gray-100">{{ $n['slug'] }}
+                                                @if($n['allrounder'])<span class="text-xs font-normal text-gray-400 ml-1">Allrounder</span>@endif
+                                            </p>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400 truncate">verbindet {{ $n['cover'] }}/{{ $n['dish_n'] }}: {{ implode(', ', $n['trifft']) }}</p>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            @endif
+        </div>
+
         {{-- Zutaten-Kurzliste (Komponenten: GPs und/oder Basisrezepte) --}}
         <div>
             <p class="{{ $dt }} mb-1">Komponenten ({{ $rezept->ingredients->count() }})</p>

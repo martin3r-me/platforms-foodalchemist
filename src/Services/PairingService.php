@@ -289,7 +289,8 @@ class PairingService
 
         $grade = DB::table('foodalchemist_pairing_anker_edges')->whereIn('anker_a_id', array_keys($kandidaten))
             ->selectRaw('anker_a_id, COUNT(*) AS n')->groupBy('anker_a_id')->pluck('n', 'anker_a_id');
-        $namen = DB::table('foodalchemist_vocab_pairing_ankers')->whereIn('id', array_keys($kandidaten))
+        $namen = DB::table('foodalchemist_vocab_pairing_ankers')
+            ->whereIn('id', array_merge(array_keys($kandidaten), $dishIds))   // + dish für »verbindet n/m: …«
             ->pluck('slug', 'id');
 
         $liste = [];
@@ -304,6 +305,11 @@ class PairingService
                 'anker_id' => $id, 'slug' => (string) $namen[$id], 'cover' => $cover,
                 'mean_w' => $meanW, 'degree' => $degree,
                 'spec' => ($cover * $meanW / 100) / sqrt(max($degree, 1)),
+                // Anzeige-Zusatz (Ist-App »Aroma-Nachbarn«): welche Teller-Anker er trifft,
+                // |dish| als Nenner, Allrounder = promiskuitiver Kandidat (hoher Grad)
+                'trifft' => collect(array_keys($daten['best']))->map(fn ($d) => (string) ($namen[$d] ?? $d))->sort()->values()->all(),
+                'dish_n' => count($dishIds),
+                'allrounder' => $degree >= 50,
             ];
         }
 

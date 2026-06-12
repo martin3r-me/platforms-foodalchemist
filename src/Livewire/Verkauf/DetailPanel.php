@@ -122,8 +122,38 @@ class DetailPanel extends Component
 
     public function toggleSektion(string $sektion): void
     {
-        if (in_array($sektion, ['anker', 'pairing'], true)) {
+        if (in_array($sektion, ['anker', 'pairing', 'kohaerenz', 'heber', 'nachbarn'], true)) {
             $this->offen[$sektion] = ! ($this->offen[$sektion] ?? false);
+        }
+    }
+
+    // ── D-6 §5.x: Kohärenz-Judge + Teller-Heber (CoherenceService, gecacht) ──
+
+    public function pruefeKohaerenz(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->kiFehler = null;
+        try {
+            app(\Platform\FoodAlchemist\Services\CoherenceService::class)->judge($team, $this->recipeId);
+        } catch (\RuntimeException $e) {
+            $this->kiFehler = $e->getMessage();
+        }
+    }
+
+    public function schlageHeberVor(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->kiFehler = null;
+        try {
+            app(\Platform\FoodAlchemist\Services\CoherenceService::class)->tellerHeber($team, $this->recipeId);
+        } catch (\RuntimeException $e) {
+            $this->kiFehler = $e->getMessage();
         }
     }
 
@@ -167,6 +197,13 @@ class DetailPanel extends Component
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
                     ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),
+            // D-6 §5.x: Judge-Achse (gecacht) + deterministische Aroma-Nachbarn (lazy)
+            'kohaerenzStatus' => $rezept !== null && (($this->offen['kohaerenz'] ?? false) || ($this->offen['heber'] ?? false))
+                ? app(\Platform\FoodAlchemist\Services\CoherenceService::class)->status($team, $rezept->id)
+                : null,
+            'nachbarn' => $rezept !== null && ($this->offen['nachbarn'] ?? false)
+                ? $pairing->componentSuggestions($rezept)
+                : null,
         ]);
     }
 }
