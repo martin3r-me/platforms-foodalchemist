@@ -31,6 +31,12 @@
             },
 
             dragIdx: null,
+            verschiebe(i, dir) {                                  // R15: Jarvis moveUpDown — DnD-unabhängig
+                const ziel = i + dir;
+                if (ziel < 0 || ziel >= this.rows.length) return;
+                const [z] = this.rows.splice(i, 1);
+                this.rows.splice(ziel, 0, z);
+            },
             dropAuf(i) {
                 if (this.dragIdx === null || this.dragIdx === i) { this.dragIdx = null; return; }
                 const [z] = this.rows.splice(this.dragIdx, 1);

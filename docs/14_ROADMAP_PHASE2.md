@@ -171,6 +171,18 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > Live nachgemessen: Tabelle 12px/Zeile 26px, Panel-Titel 15px, Label 10px, Werte 12px,
 > WG-Sidebar-Buttons 12px. Suite: **394/394 (1.668 Assertions)**.
 
+> **Status R15/Zutaten-Editor (2026-06-12, Dominique: «Zeilen zu weit auseinander,
+> Verschieben/DnD geht nicht»):** Ein Fix im geteilten P-8-Kern wirkt in BEIDEN Kontexten
+> (Basis- + VK-Editor). **Dichte:** Zeilen-tds und Inline-Inputs py-1→py-0.5, Editor-Inputs
+> 11px (Jarvis .ingredient-table), `border-collapse` auf der Editor-Tabelle (Browser-Default
+> «separate + 2px spacing» zog die Zeilen zusätzlich auseinander) — Zeilenhöhe real
+> **24 px** (vorher ~40). **Sortieren:** Jarvis macht es per moveUpDown-Buttons, nicht
+> (nur) DnD — übernommen: **▲/▼ je Zeile** (data-zeile-hoch/-runter, disabled an den
+> Enden) als browser-unabhängige Lösung; HTML5-DnD zusätzlich für Safari gehärtet
+> (Handle `inline-block` — Safari startet Drags auf inline-Elementen nicht zuverlässig —
+> + `@dragenter.prevent` auf der Drop-Zone). Live verifiziert: ▲-Klick und Drag&Drop
+> ändern beide die Reihenfolge korrekt, Zeilenhöhe 24 px. Suite: **394/394 (1.668 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).

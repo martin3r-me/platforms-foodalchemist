@@ -7,7 +7,7 @@
     <div wire:key="zutaten-editor-{{ $rezept?->id ?? 0 }}"
          x-data="zutatenEditor(@js($zeilenJson), @js(! $eingebettet), @js($einheiten->keyBy('id')->map(fn ($e) => ['slug' => $e->slug, 'g' => $e->default_in_g !== null ? (float) $e->default_in_g : ($e->default_in_ml !== null ? (float) $e->default_in_ml : null)])->all()))"
          data-zutaten-editor>
-        <table class="{{ $table }}">
+        <table class="{{ $table }} border-collapse">
             {{-- R5: BIS-Spalte raus (Dominique) — menge_max bleibt in den Daten erhalten; 3 EK-Sichten statt einer --}}
             <thead><tr class="text-left">
                 @php($koepfe = ['#' => null, 'Menge' => null, 'Einheit' => null, 'Verknüpfung / Beschreibung' => 'Klick auf den Namen öffnet GP/Rezept als Fenster über dem Editor']
@@ -19,23 +19,30 @@
             </tr></thead>
             {{-- tbody je Zutat: Haupt-Zeile + aufklappbare LA-Peek-Zeile (HTML erlaubt mehrere tbody) --}}
                 <template x-for="(zeile, i) in rows" :key="zeile._key">
-                    <tbody @dragover.prevent @drop.prevent="dropAuf(i)"
+                    <tbody @dragover.prevent @dragenter.prevent @drop.prevent="dropAuf(i)"
                            :class="dragIdx === i ? 'opacity-40' : ''" data-editor-zeile>
                     <tr class="{{ $tr }} !border-b-0" :class="zeile.is_optional ? 'opacity-60' : ''">
-                        <td class="{{ $td }} !px-1.5 !py-1 whitespace-nowrap">
+                        <td class="{{ $td }} !px-1.5 !py-0.5 whitespace-nowrap">
                             {{-- R4: setData ist PFLICHT, sonst startet Safari den Drag gar nicht --}}
-                            <span class="cursor-grab active:cursor-grabbing text-gray-300 hover:text-violet-500 select-none" draggable="true"
+                            <span class="inline-block cursor-grab active:cursor-grabbing text-gray-300 hover:text-violet-500 select-none" draggable="true"
                                   @dragstart="dragIdx = i; $event.dataTransfer.setData('text/plain', String(i)); $event.dataTransfer.effectAllowed = 'move'"
                                   @dragend="dragIdx = null" title="ziehen zum Sortieren" data-drag-handle>⠿</span>
+                            {{-- R15 (Jarvis moveUpDown): ▲▼ als zuverlässige Sortier-Alternative zu DnD --}}
+                            <span class="inline-flex flex-col align-middle leading-none">
+                                <button type="button" class="text-[9px] text-gray-300 hover:text-violet-500 leading-none disabled:opacity-20"
+                                        :disabled="i === 0" @click="verschiebe(i, -1)" title="nach oben" data-zeile-hoch>▲</button>
+                                <button type="button" class="text-[9px] text-gray-300 hover:text-violet-500 leading-none disabled:opacity-20"
+                                        :disabled="i === rows.length - 1" @click="verschiebe(i, 1)" title="nach unten" data-zeile-runter>▼</button>
+                            </span>
                             <span class="text-gray-400 tabular-nums text-[11px] ml-0.5" x-text="i + 1"></span>
                         </td>
-                        <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.menge" class="{{ $input }} !w-20 !py-1 text-right" data-menge /></td>
-                        <td class="{{ $td }} !px-2 !py-1">
-                            <select x-model.number="zeile.einheit_vocab_id" class="{{ $input }} !w-24 !py-1">
+                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.menge" class="{{ $input }} !w-20 !py-0.5 !text-[11px] text-right" data-menge /></td>
+                        <td class="{{ $td }} !px-2 !py-0.5">
+                            <select x-model.number="zeile.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
                                 @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                             </select>
                         </td>
-                        <td class="{{ $td }} !px-2 !py-1 max-w-[18rem]">
+                        <td class="{{ $td }} !px-2 !py-0.5 max-w-[18rem]">
                             {{-- R4 (Dichte): Lineage als Tooltip; R7-Fix: neuer Tab ist bei Dominique
                                  blockiert → Klick öffnet das Ziel als MODAL über dem Editor (Stand bleibt) --}}
                             <template x-if="zeile.gp_id || zeile.referenced_recipe_id">
@@ -56,8 +63,8 @@
                                     @click="peek(zeile)" data-gp-peek>📦</button>
                         </td>
                         @if($vkKontext)
-                            <td class="{{ $td }} !px-2 !py-1">
-                                <select x-model="zeile.rolle" class="{{ $input }} !w-32 !py-1" data-rolle-select>
+                            <td class="{{ $td }} !px-2 !py-0.5">
+                                <select x-model="zeile.rolle" class="{{ $input }} !w-32 !py-0.5 !text-[11px]" data-rolle-select>
                                     <option value="">—</option>
                                     @foreach(\Platform\FoodAlchemist\Services\SpeisenKlassenService::ROLLEN as $rolle)
                                         <option value="{{ $rolle }}">{{ $rolle }}</option>
@@ -65,18 +72,18 @@
                                 </select>
                             </td>
                         @endif
-                        <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.note" placeholder="Hinweis" class="{{ $input }} !w-28 !py-1" /></td>
-                        <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.garverlust_pct" placeholder="0" class="{{ $input }} !w-14 !py-1 text-right" /></td>
-                        <td class="{{ $td }} !px-2 !py-1 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
+                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.note" placeholder="Hinweis" class="{{ $input }} !w-28 !py-0.5 !text-[11px]" /></td>
+                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.garverlust_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" /></td>
+                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
                             <span x-text="zeilenEk(zeile) ?? '—'" :class="zeilenEk(zeile) ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'"></span>
                         </td>
-                        <td class="{{ $td }} !px-2 !py-1 text-right tabular-nums whitespace-nowrap text-gray-500" data-zeilen-ek-min>
+                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap text-gray-500" data-zeilen-ek-min>
                             <span x-text="zeilenEk(zeile, 'ek_pro_g_min') ?? '—'"></span>
                         </td>
-                        <td class="{{ $td }} !px-2 !py-1 text-right tabular-nums whitespace-nowrap text-gray-500" data-zeilen-ek-avg>
+                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap text-gray-500" data-zeilen-ek-avg>
                             <span x-text="zeilenEk(zeile, 'ek_pro_g_avg') ?? '—'"></span>
                         </td>
-                        <td class="{{ $td }} !px-2 !py-1 whitespace-nowrap">
+                        <td class="{{ $td }} !px-2 !py-0.5 whitespace-nowrap">
                             <label class="inline-flex items-center gap-1 text-[10px] text-gray-400 mr-1" title="optional: zählt nicht in Yield/Kosten">
                                 <input type="checkbox" x-model="zeile.is_optional" class="rounded border-gray-300 !w-3 !h-3" />opt
                             </label>
@@ -140,7 +147,7 @@
         <div class="mt-3 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-add-zeile>
             <div class="flex items-center gap-2">
                 <input type="text" x-model="neu.menge" placeholder="Menge" class="{{ $input }} !w-20 !py-1 text-right" data-neu-menge />
-                <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-1">
+                <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
                     @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                 </select>
                 {{-- R5: Typ-Filter (Alle/GP/Rezept) — smarte Suche bleibt, Treffer tragen Typ-Badges --}}
