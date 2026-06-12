@@ -111,6 +111,25 @@ status: D1–D5 mit Arbeits-Annahmen — finale Entscheide ausstehend
 | 2026-06-10 | D5 (Arbeits-Annahme) | MVP = D-1…D-6 | Dominique |
 | — | D1–D3, D6, D7 | offen, Arbeits-Annahmen aktiv | — |
 
+## E-2026-06-12 — M6-00-GATE: D6/D7-Entscheidungsvorlage (wartet auf Dominique)
+
+**D7 (Verlust-Formel):** faktisch entschieden-umgesetzt — multiplikativ, siehe Eintrag GL-02 A-1
+unten. Es fehlt nur die Bestätigung; bei Veto eine Zeile im RecomputeService + GT-5 drehen.
+
+**D6 (Deckungsbeitrags-Formel, W-1):** Optionen zur Entscheidung —
+
+| | Formel | Bewertung |
+|---|---|---|
+| **(a) DB₁ — Empfehlung** | `db = vk_netto − ek_pro_einheit` (€/Einheit, zusätzlich als % vom VK) | Einfachste belastbare Definition (= Arbeits-Annahme D6); ohne Gemeinkosten-Modell ehrlich; jederzeit erweiterbar |
+| (b) DB mit Zuschlägen | `vk_vorschlag = ek × (1+roh%) × (1+bedienung%) × (1+profit%)` — die Alt-UI-Kette als eigene Formel | bedienung/profit sind in ALLEN Seed-Klassen 0 % → ergebnisgleich mit (a)+`aufschlag`; nur sinnvoll, wenn die Klassen künftig echte Werte bekommen |
+| (c) Vollkosten-DB | `db = vk_netto − ek − anteilige Gemeinkosten` | braucht ein Gemeinkosten-Modell (existiert nirgends) — Phase 2+ |
+
+**Bis zum Entscheid gilt die D-6-§6-Disziplin (umgesetzt in M6-02):** Klassen mit
+`formel_typ='deckungsbeitrag'` sind anlegbar (Stammdaten-Vorrat), aber der Vorschlags-Pfad
+wirft eine typisierte Exception statt still falsch zu rechnen; das UI kennzeichnet
+»Formel nicht definiert«. Es existiert real nur EINE betroffene Klasse-Kandidatin
+(PAUS, 0 %-Sätze) — Seed trägt durchgehend `aufschlag`. **Kein Blocker für M6.**
+
 ## E-2026-06-12 — GL-02 A-1: Verlust-Formel multiplikativ (Empfehlung umgesetzt, Bestätigung offen)
 
 Regelwerk §6 F6.2 formuliert additiv `(1 − putz − gar)`; Ist + GT-1/GT-2 (DB-verifiziert)

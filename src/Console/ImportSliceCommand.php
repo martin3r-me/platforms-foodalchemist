@@ -271,6 +271,9 @@ class ImportSliceCommand extends Command
         // ── M4-02: Rezepte (D-5) — 1.407 + 9.590 Zutaten + Equipment + Eignungen ──
         $stats = [...$stats, ...$this->importRecipes($pdo, $dryRun)];
 
+        // ── M6-01: Verkaufslayer (D-6) — Stammdaten + FK-Resolve + V-19 + V-22 ──
+        $stats = [...$stats, ...$this->importVerkauf($pdo, $dryRun)];
+
         $this->table(
             ['Phase', 'Quelle', 'importiert', 'übersprungen (id_map)'],
             collect($stats)->map(fn ($s, $k) => [$k, $s['source'] ?? '—', $s['imported'] ?? '—', $s['skipped'] ?? '—'])->all()
@@ -278,7 +281,7 @@ class ImportSliceCommand extends Command
 
         // Row-Count-Verifikation (07 §5): Quelle == id_map je Quell-Tabelle
         if (! $dryRun) {
-            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional', 'recipes', 'recipe_ingredients', 'vocab_kochequipment', 'recipe_niveau_eignung', 'recipe_sektor_eignung', 'wawi_gp_count_unit_defaults', 'vocab_pairing_anker', 'pairing_anker_edges', 'gp_anker_mapping', 'recipe_anker_mapping', 'recipe_pairings', 'recipe_prozess_anker'] as $sourceTable) {
+            foreach (['lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2', 'suppliers', 'supplier_items', 'prices', 'wawi_la_structured', 'recipe_hauptgruppen', 'recipe_kategorien', 'allergens', 'declarations', 'nutritional', 'recipes', 'recipe_ingredients', 'vocab_kochequipment', 'recipe_niveau_eignung', 'recipe_sektor_eignung', 'wawi_gp_count_unit_defaults', 'vocab_pairing_anker', 'pairing_anker_edges', 'gp_anker_mapping', 'recipe_anker_mapping', 'recipe_pairings', 'recipe_prozess_anker', 'aufschlagsklassen', 'speisen_hauptgruppen', 'speisen_klassen', 'schreibstile', 'vocab_behaelter', 'vocab_regen_geraet', 'vocab_serviervehikel', 'recipe_customer_names'] as $sourceTable) {
                 $sourceCount = (int) $pdo->query("SELECT COUNT(*) FROM {$sourceTable}")->fetchColumn();
                 $mapCount = DB::table('foodalchemist_legacy_id_map')->where('source_table', $sourceTable)->count();
                 $flag = $sourceCount === $mapCount ? '✅' : '❌ BLOCKER';
@@ -817,12 +820,171 @@ class ImportSliceCommand extends Command
         return ['source' => $totalGlobal + $totalWg, 'imported' => count($rows), 'skipped' => $skipped];
     }
 
+    /**
+     * M6-01 / D-6 §2.2: Verkaufslayer-Stammdaten (8 Quell-Tabellen), danach
+     * FK-Resolve der M4-01-Rohwerte (*_legacy_id) am Rezept, V-19-Migration
+     * (Regen-Skalare → genau eine »Gesamt«-Zeile) und V-22-Seed-Gate
+     * (VK-Rezepte ohne Klasse/Aufschlagsklasse/VK-Einheit nur zählen/flaggen).
+     */
+    private function importVerkauf(PDO $pdo, bool $dryRun): array
+    {
+        $stats = [];
+        $stats['markup_classes'] = $this->importBulk($pdo, $dryRun, 'aufschlagsklassen', 'foodalchemist_markup_classes', 'aufschlagsklasse_id',
+            fn (array $r) => [
+                'legacy_id' => $r['aufschlagsklasse_id'],
+                'code' => $r['code'],
+                'bezeichnung' => $r['bezeichnung'],
+                'rohaufschlag_pct' => $r['rohaufschlag_pct'] ?? 0,
+                'bedienung_pct' => $r['bedienung_pct'] ?? 0,
+                'profit_pct' => $r['profit_pct'] ?? 0,
+                'mwst_satz' => $r['mwst_satz'] ?? 19,
+                'formel_typ' => $r['formel_typ'] ?? 'aufschlag',      // 'deckungsbeitrag' bleibt anlegbar — Vorschlags-Pfad wirft (W-1)
+                'note' => self::nullIfBlank($r['note'] ?? null),
+            ]);
+        $akMap = $this->targetMap('foodalchemist_markup_classes');
+
+        $stats['dish_main_groups'] = $this->importBulk($pdo, $dryRun, 'speisen_hauptgruppen', 'foodalchemist_dish_main_groups', 'hauptgruppe_id',
+            fn (array $r) => [
+                'legacy_id' => $r['hauptgruppe_id'],
+                'code' => $r['code'],
+                'bezeichnung' => $r['bezeichnung'],
+            ]);
+        $dhgMap = $this->targetMap('foodalchemist_dish_main_groups');
+
+        $stats['dish_classes'] = $this->importBulk($pdo, $dryRun, 'speisen_klassen', 'foodalchemist_dish_classes', 'klasse_id',
+            fn (array $r) => [
+                'legacy_id' => $r['klasse_id'],
+                'dish_main_group_id' => $r['hauptgruppe_id'] !== null ? ($dhgMap[(int) $r['hauptgruppe_id']] ?? null) : null,
+                'code' => $r['code'],
+                'bezeichnung' => $r['bezeichnung'],
+                'default_markup_class_id' => $r['default_aufschlagsklasse_id'] !== null ? ($akMap[(int) $r['default_aufschlagsklasse_id']] ?? null) : null,
+                'diaetform' => $r['diaetform'] ?? 'neutral',
+                'is_vegi' => (bool) ($r['is_vegi'] ?? 0),
+                'is_vegan' => (bool) ($r['is_vegan'] ?? 0),
+                'is_halal' => (bool) ($r['is_halal'] ?? 0),
+                'is_koscher' => (bool) ($r['is_koscher'] ?? 0),
+                'note' => self::nullIfBlank($r['note'] ?? null),
+            ]);
+
+        $stats['writing_styles'] = $this->importBulk($pdo, $dryRun, 'schreibstile', 'foodalchemist_writing_styles', 'schreibstil_id',
+            fn (array $r) => [
+                'legacy_id' => $r['schreibstil_id'],
+                'slug' => $r['slug'],
+                'name' => $r['name'],
+                'sprach_duktus' => $r['sprach_duktus'],
+                'beispiele_md' => self::nullIfBlank($r['beispiele_md'] ?? null),
+                'beschreibung' => self::nullIfBlank($r['beschreibung'] ?? null),
+                'is_inactive' => (bool) ($r['is_inactive'] ?? 0),
+                'sort_order' => (int) ($r['sort_order'] ?? 0),
+            ]);
+
+        $vokabular = fn (array $r) => [
+            'legacy_id' => $r['vocab_id'],
+            'slug' => $r['slug'],
+            'name' => $r['name'],
+            'gruppe' => self::nullIfBlank($r['gruppe'] ?? null),
+            'sort_order' => (int) ($r['sort_order'] ?? 100),
+            'is_inactive' => (bool) ($r['is_inactive'] ?? 0),
+        ];
+        $stats['vocab_behaelter'] = $this->importBulk($pdo, $dryRun, 'vocab_behaelter', 'foodalchemist_vocab_behaelter', 'vocab_id',
+            fn (array $r) => $vokabular($r) + ['kapazitaet_kg' => $r['kapazitaet_kg'] ?? null]);
+        $stats['vocab_regen_geraete'] = $this->importBulk($pdo, $dryRun, 'vocab_regen_geraet', 'foodalchemist_vocab_regen_geraete', 'vocab_id', $vokabular);
+        $stats['vocab_serviervehikel'] = $this->importBulk($pdo, $dryRun, 'vocab_serviervehikel', 'foodalchemist_vocab_serviervehikel', 'vocab_id', $vokabular);
+
+        $recipeMap = $this->targetMap('foodalchemist_recipes', 'recipes');
+        $stats['recipe_customer_names'] = $this->importBulk($pdo, $dryRun, 'recipe_customer_names', 'foodalchemist_recipe_customer_names', 'id',
+            fn (array $r) => [
+                'legacy_id' => $r['id'],
+                'recipe_id' => $recipeMap[(int) $r['recipe_id']] ?? null,
+                'customer_name' => $r['customer_name'],
+                'marketing_name' => $r['marketing_name'],
+                'note' => self::nullIfBlank($r['note'] ?? null),
+            ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]));
+
+        if ($dryRun) {
+            return $stats;
+        }
+
+        // FK-Resolve: M4-01-Rohwerte → echte FKs (idempotent, nur 1.407 Rezepte)
+        $klasseMap = $this->targetMap('foodalchemist_dish_classes');
+        $behMap = $this->targetMap('foodalchemist_vocab_behaelter');
+        $regenMap = $this->targetMap('foodalchemist_vocab_regen_geraete');
+        $vehikelMap = $this->targetMap('foodalchemist_vocab_serviervehikel');
+        $resolved = 0;
+        foreach (DB::table('foodalchemist_recipes')->whereNotNull('legacy_id')->get([
+            'id', 'speisen_klasse_legacy_id', 'aufschlagsklasse_legacy_id', 'behaelter_warm_legacy_id',
+            'behaelter_kalt_legacy_id', 'servier_vehikel_legacy_id',
+        ]) as $r) {
+            $update = array_filter([
+                'speisen_klasse_id' => $r->speisen_klasse_legacy_id !== null ? ($klasseMap[(int) $r->speisen_klasse_legacy_id] ?? null) : null,
+                'aufschlagsklasse_id' => $r->aufschlagsklasse_legacy_id !== null ? ($akMap[(int) $r->aufschlagsklasse_legacy_id] ?? null) : null,
+                'behaelter_warm_vocab_id' => $r->behaelter_warm_legacy_id !== null ? ($behMap[(int) $r->behaelter_warm_legacy_id] ?? null) : null,
+                'behaelter_kalt_vocab_id' => $r->behaelter_kalt_legacy_id !== null ? ($behMap[(int) $r->behaelter_kalt_legacy_id] ?? null) : null,
+                'servier_vehikel_vocab_id' => $r->servier_vehikel_legacy_id !== null ? ($vehikelMap[(int) $r->servier_vehikel_legacy_id] ?? null) : null,
+            ]);
+            if ($update !== []) {
+                DB::table('foodalchemist_recipes')->where('id', $r->id)->update($update);
+                $resolved++;
+            }
+        }
+        $stats['vk_fk_resolve'] = ['source' => '—', 'imported' => $resolved, 'skipped' => '—'];
+
+        // V-19: Regen-Skalare → genau EINE »Gesamt«-Zeile (idempotent: nur wenn leer)
+        $regenZeilen = 0;
+        foreach (DB::table('foodalchemist_recipes')->whereNotNull('legacy_id')
+            ->where(fn ($q) => $q->whereNotNull('regeneration_geraet_legacy_id')
+                ->orWhereNotNull('regeneration_temp_c')->orWhereNotNull('regeneration_dauer_min')->orWhereNotNull('regeneration_kerntemp_c'))
+            ->get(['id', 'team_id', 'regeneration_geraet_legacy_id', 'regeneration_temp_c', 'regeneration_dauer_min', 'regeneration_kerntemp_c']) as $r) {
+            if (DB::table('foodalchemist_recipe_regenerations')->where('recipe_id', $r->id)->whereNull('deleted_at')->exists()) {
+                continue;
+            }
+            DB::table('foodalchemist_recipe_regenerations')->insert([
+                'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+                'team_id' => $r->team_id,
+                'recipe_id' => $r->id,
+                'komponente_label' => 'Gesamt',
+                'geraet_vocab_id' => $r->regeneration_geraet_legacy_id !== null ? ($regenMap[(int) $r->regeneration_geraet_legacy_id] ?? null) : null,
+                'temp_c' => $r->regeneration_temp_c,
+                'dauer_min' => $r->regeneration_dauer_min,
+                'kerntemp_c' => $r->regeneration_kerntemp_c,
+                'quelle' => 'import',
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $regenZeilen++;
+        }
+        $stats['regenerations_v19'] = ['source' => '—', 'imported' => $regenZeilen, 'skipped' => '—'];
+
+        // V-22-Seed-Gate: Befüllungs-Rückstand sichtbar machen (Review-Queue = Filter, keine Spalte)
+        $luecken = DB::table('foodalchemist_recipes')->where('ist_verkaufsrezept', true)->whereNull('deleted_at')
+            ->where(fn ($q) => $q->whereNull('speisen_klasse_id')->orWhereNull('aufschlagsklasse_id')->orWhereNull('vk_einheit_vocab_id'))
+            ->count();
+        $vkGesamt = DB::table('foodalchemist_recipes')->where('ist_verkaufsrezept', true)->whereNull('deleted_at')->count();
+        $this->warn("V-22-Seed-Gate: {$luecken}/{$vkGesamt} VK-Rezepte ohne Speisen-Klasse/Aufschlagsklasse/VK-Einheit (Review-Rückstand, kein Soll).");
+        $stats['v22_seed_gate'] = ['source' => $vkGesamt, 'imported' => $vkGesamt - $luecken, 'skipped' => $luecken];
+
+        return $stats;
+    }
+
     private function freshen(): void
     {
         $this->warn('--fresh: leere Slice-Tabellen …');
         DB::table('foodalchemist_gps')->update([
             'merged_into_id' => null, 'derivat_von_gp_id' => null, 'lead_la_supplier_item_id' => null,
         ]);
+        // M6-01: Verkaufslayer zuerst (FKs auf recipes + Stammdaten)
+        DB::table('foodalchemist_recipes')->update([
+            'speisen_klasse_id' => null, 'aufschlagsklasse_id' => null, 'behaelter_warm_vocab_id' => null,
+            'behaelter_kalt_vocab_id' => null, 'servier_vehikel_vocab_id' => null,
+        ]);
+        DB::table('foodalchemist_recipe_regenerations')->delete();
+        DB::table('foodalchemist_recipe_customer_names')->delete();
+        DB::table('foodalchemist_vocab_serviervehikel')->delete();
+        DB::table('foodalchemist_vocab_regen_geraete')->delete();
+        DB::table('foodalchemist_vocab_behaelter')->delete();
+        DB::table('foodalchemist_writing_styles')->delete();
+        DB::table('foodalchemist_dish_classes')->delete();
+        DB::table('foodalchemist_dish_main_groups')->delete();
+        DB::table('foodalchemist_markup_classes')->delete();
         // M5-03: Pairing-Graph zuerst (FKs auf gps/recipes/anker)
         DB::table('foodalchemist_recipe_prozess_anker')->delete();
         DB::table('foodalchemist_recipe_pairings')->delete();
@@ -861,6 +1023,8 @@ class ImportSliceCommand extends Command
                 'recipe_niveau_eignung', 'recipe_sektor_eignung', 'wawi_gp_count_unit_defaults',
                 'vocab_pairing_anker', 'pairing_anker_edges', 'gp_anker_mapping',
                 'recipe_anker_mapping', 'recipe_pairings', 'recipe_prozess_anker',
+                'aufschlagsklassen', 'speisen_hauptgruppen', 'speisen_klassen', 'schreibstile',
+                'vocab_behaelter', 'vocab_regen_geraet', 'vocab_serviervehikel', 'recipe_customer_names',
             ])
             ->delete();
     }
