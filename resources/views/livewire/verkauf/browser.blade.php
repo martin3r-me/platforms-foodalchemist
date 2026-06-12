@@ -81,7 +81,7 @@
     <livewire:foodalchemist.recipes.recipe-modal />
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="flex items-center justify-between -mb-2">
+        <div class="flex items-center justify-between pt-1">
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="$dispatch('vk-modal.oeffnen')" class="{{ $btnPrimary }}" data-vk-anlegen>+ Neues Gericht</button>
                 <button type="button" wire:click="$dispatch('vk-generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-vk-generator>✨ KI-Rezept</button>

@@ -113,35 +113,55 @@ return [
             ],
         ],
         [
-            // R7 (Dominique): künftige Domänen sichtbar machen — Klick = Phase-2-Vorschau
+            // Reihenfolge = Bau-Sequenz aus docs/15_MASTERPLAN_VISION.md (Concepter-Vision).
+            // Der Concepter (Concepts + Bausteine) führt: er ist das Rückgrat, auf dem Foodbook,
+            // Kalkulation und Speiseplan aufsetzen — NICHT eines von sechs gleichrangigen Themen.
+            // Klick = Vorschau (foodalchemist.demnaechst); gebaute Domänen wandern in eine eigene
+            // aktive Gruppe ÜBER "In Planung". Zielpreis-Konfigurator = Modus im Concept-Editor
+            // (KEIN eigener Eintrag — Entscheid 2026-06-13).
             'group' => 'In Planung',
             'items' => [
-                [
+                [   // M10 — Concepter-Fundament (Rückgrat): Slot-Gerüste aus Bausteinen/Gerichten
+                    'label' => 'Concepts',
+                    'route' => 'foodalchemist.demnaechst',
+                    'icon'  => 'heroicon-o-rectangle-stack',
+                ],
+                [   // M10 — austauschbare Slot-Bausteine (im Konzeptpapier "Modul")
+                    'label' => 'Bausteine',
+                    'route' => 'foodalchemist.demnaechst',
+                    'icon'  => 'heroicon-o-puzzle-piece',
+                ],
+                [   // M11 — Foodbook / Portfolio (komponiert Concepts; Schreibstil, PDF, Snapshot)
                     'label' => 'Foodbook / Portfolio',
                     'route' => 'foodalchemist.demnaechst',
                     'icon'  => 'heroicon-o-book-open',
                 ],
-                [
+                [   // M12/M15 — Herstellkosten HK1 → HK2 (Übersicht; surft auch in den Cockpits auf)
                     'label' => 'Kalkulation (HK2)',
                     'route' => 'foodalchemist.demnaechst',
                     'icon'  => 'heroicon-o-calculator',
                 ],
-                [
-                    'label' => 'Produktionsplanung',
-                    'route' => 'foodalchemist.demnaechst',
-                    'icon'  => 'heroicon-o-cog-8-tooth',
-                ],
-                [
+                [   // M14 — Speiseplan (dieselben Concepts über die Zeitachse)
                     'label' => 'Speiseplan',
                     'route' => 'foodalchemist.demnaechst',
                     'icon'  => 'heroicon-o-calendar-days',
                 ],
-                [
-                    'label' => 'Einkauf & Lager',
+                [   // M16 — operative Domänen (downstream)
+                    'label' => 'Produktionsplanung',
+                    'route' => 'foodalchemist.demnaechst',
+                    'icon'  => 'heroicon-o-cog-8-tooth',
+                ],
+                [   // M16
+                    'label' => 'Einkauf',
                     'route' => 'foodalchemist.demnaechst',
                     'icon'  => 'heroicon-o-shopping-cart',
                 ],
-                [
+                [   // M16
+                    'label' => 'Lager',
+                    'route' => 'foodalchemist.demnaechst',
+                    'icon'  => 'heroicon-o-archive-box',
+                ],
+                [   // M16
                     'label' => 'Controlling',
                     'route' => 'foodalchemist.demnaechst',
                     'icon'  => 'heroicon-o-chart-bar',

@@ -254,6 +254,19 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > Concept → Foodbook, `docs/concepter-konzept.md`). Live verifiziert (/gerichte lädt,
 > Sidebar «Gerichte», kein «Verkaufsrezept» mehr im UI). Suite: **397/397 (1.684 Assertions)**.
 
+> **Status R23/Kopf-Buttons + Anlege-Editoren (2026-06-13, Dominique: «Buttons zu klein
+> und überlappt; Editor aktualisieren»):** **(1) Überlappung:** das `-mb-2` an den
+> Browser-Kopfzeilen (GPs/Basis/Gerichte) zog die Karte in die Buttons → durch `pt-1`
+> ersetzt. **(2) Button-Größe:** btnPrimary/btnGhost zentral von 12 px/py-1.5 auf
+> **13 px/py-2** (Kopf-Aktionen waren nach R14 zu klein) + `whitespace-nowrap` auf ALLEN
+> Button-Stilen («+ Neues Basisrezept» brach zweizeilig, 101×55 px → 155×36 px einzeilig).
+> **(3) Anlege-Editoren:** Neu-Modus öffnet jetzt KOMPAKT (`max-w-3xl` — fokussiertes
+> Stammdaten-Formular), erst der Edit-Modus nimmt die volle 3-Container-Breite
+> (max-w-[100rem]). Live verifiziert. **Mit-committet (Dominique):** Sidebar-Umbau auf
+> die Masterplan-Sequenz (Concepts + Bausteine führen «In Planung» an, Zielpreis-
+> Konfigurator = Modus im Concept-Editor) + 15_MASTERPLAN_VISION-Feinschliff.
+> Suite: **397/397 (1.684 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).

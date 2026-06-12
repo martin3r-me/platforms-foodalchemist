@@ -9,6 +9,15 @@
 > Landkarte mit Abhängigkeiten, Entscheidungs-Gates und „jetzt vs. später“.
 > **Stand:** 2026-06-13 · **Status:** Entwurf zur Abstimmung mit Dominique.
 
+> **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Baustein heißt bei uns
+> **„Baustein“** — im Konzeptpapier „Modul“, aber die Plattform reserviert „Modul“ für ganze
+> Pakete (`platform-<modul>`), darum kollisionsfrei umbenannt. Code/Tabellen:
+> `foodalchemist_bausteine`, `baustein_id`. **Wo das Konzeptpapier „Modul“ sagt, ist hier
+> „Baustein“ gemeint.**
+> **Sidebar-Entscheid (2026-06-13):** Der **Zielpreis-Konfigurator** ist ein **Modus im
+> Concept-Editor** (kein eigener Nav-Eintrag). **„Kalkulation (HK2)“** bekommt einen eigenen
+> Sidebar-Eintrag (Übersicht), surft aber zusätzlich in den Cockpits auf.
+
 ---
 
 ## 0. Die eine Kernerkenntnis
@@ -28,7 +37,7 @@ KONZEPTPAPIER:    GP → Rezept → Gericht (VK) → [ CONCEPT ] ─────
 ```
 
 Ein **Concept** ist ein **Slot-Gerüst**: Slots definieren Rollen (Vorspeise / Hauptgang /
-Dessert …), gefüllt mit **einem von zwei** Inhalten — einem **Modul** (austauschbar,
+Dessert …), gefüllt mit **einem von zwei** Inhalten — einem **Baustein** (austauschbar,
 mehrere Optionen, preisgesteuert) oder einem **fest gesetzten Gericht** (Fixkosten).
 
 **Konsequenz für die Roadmap:** Der Concepter ist nicht „eines von sechs Platzhalter-Themen“,
@@ -38,8 +47,10 @@ Umsortierung, die dieser Masterplan vornimmt.
 
 > Das alte D-8-Konstrukt **„Kombination“** (wiederverwendbare Menü-/Buffet-Vorlage) ist der
 > nächste Verwandte zum Concept — aber das Konzeptpapier formalisiert es deutlich weiter
-> (Slots, Rollen, Modul-vs-Gericht, Preis-Input-Konfigurator, HK1/HK2, Speiseplan). Der
-> Concepter **ist** die ausgebaute Kombination. Wir bauen nicht beides.
+> (Slots, Rollen, Baustein-vs-Gericht, Preis-Input-Konfigurator, HK1/HK2, Speiseplan). Der
+> Concepter **ist** die ausgebaute Kombination. Wir bauen nicht beides — beim M10-Bau wird
+> die `kombination`-Spec aus D-8 / 02_DATENMODELL vom Concept **abgelöst** (Foodbook-Block
+> referenziert künftig `concept_ref` statt `kombination_ref`).
 
 ---
 
@@ -50,13 +61,13 @@ Umsortierung, die dieser Masterplan vornimmt.
 > **Speiseplan** (über die Zeit) — münden und bis zur **echten Herstellkosten (HK2)**
 > durchgerechnet werden.
 
-| # | Baustein | Was es liefert | Konzeptpapier |
+| # | Säule | Was es liefert | Konzeptpapier |
 |---|---|---|---|
-| **B1** | **Concepter** (Slots · Rollen · Module · Gerichte) | wiederverwendbare Foodkonzepte; Preis als **Output** live | §Zweck, Kernprinzip 1+3 |
-| **B2** | **Produktionsrechner HK1 → HK2** | echte Food-Vollkosten; Nebenkosten **am Modul** (wandern beim Tausch mit) | §Produktionsrechner |
-| **B3** | **Zielpreis-Konfigurator** | Preis als **Input** — System tauscht Module derselben Rolle gegen den Zielpreis | Kernprinzip 2 |
-| **B4** | **Foodbook / Portfolio** | Anlass-Komposition vieler Concepts; Schreibstil-Veredelung; Versand-Snapshot + PDF | §Bezug, M10 (Doc 14) |
-| **B5** | **Speiseplan** | dieselben Bausteine über eine Zeitachse (Tag/Woche/Zyklus) | §Speiseplan |
+| **S1** | **Concepter** (Slots · Rollen · Bausteine · Gerichte) | wiederverwendbare Foodkonzepte; Preis als **Output** live | §Zweck, Kernprinzip 1+3 |
+| **S2** | **Produktionsrechner HK1 → HK2** | echte Food-Vollkosten; Nebenkosten **am Baustein** (wandern beim Tausch mit) | §Produktionsrechner |
+| **S3** | **Zielpreis-Konfigurator** | Preis als **Input** — System tauscht Bausteine derselben Rolle gegen den Zielpreis | Kernprinzip 2 |
+| **S4** | **Foodbook / Portfolio** | Anlass-Komposition vieler Concepts; Schreibstil-Veredelung; Versand-Snapshot + PDF | §Bezug, M10 (Doc 14) |
+| **S5** | **Speiseplan** | dieselben Bausteine über eine Zeitachse (Tag/Woche/Zyklus) | §Speiseplan |
 
 ---
 
@@ -70,7 +81,7 @@ Umsortierung, die dieser Masterplan vornimmt.
                                                │
                                 ┌──────────────▼───────────────┐
                                 │  M10  CONCEPTER-FUNDAMENT     │  ◀── das Rückgrat
-                                │  Slots · Rollen · Module ·    │
+                                │  Slots · Rollen · Bausteine · │
                                 │  Gericht-Placement · Editor   │
                                 │  (Freiform + Vorlage) ·       │
                                 │  Live-Output-Preis            │
@@ -81,19 +92,19 @@ Umsortierung, die dieser Masterplan vornimmt.
  ┌──────────────────┐            ┌──────────────────────┐        ┌────────────────────┐
  │ M11 FOODBOOK      │            │ M13 ZIELPREIS-       │        │ M14 SPEISEPLAN      │
  │ (committed)       │            │     KONFIGURATOR     │        │ (2. Ausgabeform)    │
- │ composes Concepts │            │ (Ausbaustufe)        │        │ Zeit-Slots · Zyklen │
+ │ composes Concepts │            │ Modus im Editor      │        │ Zeit-Slots · Zyklen │
  │ Snapshot·PDF·Stil │            │ swap-by-Rolle→Ziel   │        │ Wochenbilanz        │
  └──────────────────┘            └──────────┬───────────┘        └─────────┬──────────┘
                                             │                              │
    ┌─────────────────────────┐             │ braucht Kosten-Wahrheit       │ braucht Kosten
    │ M12 PRODUKTIONSRECHNER   │◀────────────┴──────────────────────────────┘
-   │ HK1 (Wareneinsatz, ver-  │   (Nebenkosten am Rezept/Modul → wandern beim Tausch mit)
+   │ HK1 (Wareneinsatz, ver-  │   (Nebenkosten am Rezept/Baustein → wandern beim Tausch mit)
    │ lustkorr.) → HK2 (grob % │
    │ → fein nach Garmethode)  │
    └────────────┬─────────────┘
                 ▼
    ┌──────────────────────────────────────────────────────────────────────┐
-   │ M15+  OPERATIVE DOMÄNEN (downstream): Produktionsplanung → Einkauf →   │
+   │ M16+  OPERATIVE DOMÄNEN (downstream): Produktionsplanung → Einkauf →   │
    │       Lager → Controlling  (verbrauchen Concept/Plan-Mengen + HK2)     │
    └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -115,7 +126,7 @@ Das Konzeptpapier sequenziert selbst sehr bewusst („jetzt vs. später“). Die
 | 1 | **M10 Concepter-Fundament** | Rückgrat — ohne es geht nichts anderes | „Preis als Output (Basis)“, Vorlage=Slot-Gerüst |
 | 2 | **M11 Foodbook auf Concept-Basis** | von Dominique bereits zugesagt („kommt definitiv“); braucht nur M10 + die schon vorhandene VK-Preislogik | „Foodbook kommt definitiv“ (Doc 14) |
 | 3 | **M12 HK1 + HK2-Struktur (grob)** | Kosten-Wahrheit; läuft **parallel zu M11** (Rezept-Ebene), schärft dessen Cockpit | „HK1 jetzt sauber bauen; HK2 zunächst Pauschal-Aufschlag“ |
-| 4 | **M13 Zielpreis-Konfigurator** | das Konzeptpapier nennt es ausdrücklich **Ausbaustufe** | „Preis als Input (Konfigurator, Ausbaustufe)“ |
+| 4 | **M13 Zielpreis-Konfigurator** | das Konzeptpapier nennt es ausdrücklich **Ausbaustufe**; geliefert als **Modus im Concept-Editor** | „Preis als Input (Konfigurator, Ausbaustufe)“ |
 | 5 | **M14 Speiseplan** | zweite Ausgabeform; wiederverwendet M10-Mechanik + M12-Kosten | „zweite Ausgabeform neben dem Foodbook“ |
 | 6 | **M15 HK2-Verfeinerung** | Energie nach Garmethode/Prozess | „Später, Verfeinerung … Optional max. Genauigkeit“ |
 | 7 | **M16+ Operative Domänen** | downstream von allem | Doc-14-Platzhalter, jetzt mit klaren Hooks |
@@ -130,7 +141,7 @@ Das Konzeptpapier sequenziert selbst sehr bewusst („jetzt vs. später“). Die
 
 ### M10 — Concepter-Fundament  *(Rückgrat · keine externen Blocker außer Entscheid-Gates)*
 
-**Ziel:** Wiederverwendbare Foodkonzepte aus Modulen & Gerichten bauen; Preis live als
+**Ziel:** Wiederverwendbare Foodkonzepte aus Bausteinen & Gerichten bauen; Preis live als
 Output; Vorlage und Freiform als **eine** Mechanik.
 
 **Hängt ab von:** M9 (VK-Welt fertig). **Entscheidungs-Gates vorab:** D-CON-1, -2, -3, -5, -7.
@@ -141,8 +152,8 @@ Output; Vorlage und Freiform als **eine** Mechanik.
 |---|---|
 | `foodalchemist_concepts` | die Mappe: Name, Anlass-Tag, Niveau-Tag, Status, `is_vorlage` (Vorlage = gespeichertes Slot-Gerüst) |
 | `foodalchemist_concept_slots` | Rolle/Position je Concept; `rolle_id` (→ Rollen-Vokabular), `position`, `pflicht`/`optional` |
-| `foodalchemist_concept_slot_items` | Slot-Inhalt: **entweder** `modul_id` (Referenz) **oder** `vk_recipe_id` (fest gesetztes Gericht) + `menge`/`einheit` |
-| `foodalchemist_modules` | austauschbarer Baustein: `rolle_id`, Referenz auf Inhalt (VK-Rezept/Bündel), Preis-/Austauschbarkeits-Metadaten |
+| `foodalchemist_concept_slot_items` | Slot-Inhalt: **entweder** `baustein_id` (Referenz) **oder** `vk_recipe_id` (fest gesetztes Gericht) + `menge`/`einheit` |
+| `foodalchemist_bausteine` | austauschbarer Baustein: `rolle_id`, Referenz auf Inhalt (VK-Rezept/Bündel — siehe D-CON-1), Preis-/Austauschbarkeits-Metadaten |
 | `foodalchemist_vocab_rollen` | Rollen-Vokabular (Grill-Hauptgang, Vorspeise …) — team-erweiterbar |
 
 **Pakete:**
@@ -150,8 +161,8 @@ Output; Vorlage und Freiform als **eine** Mechanik.
 | ID | Paket | Inhalt |
 |---|---|---|
 | M10-01 | Schema + Rollen-Vokabular | Tabellen oben; Rollen als gepflegtes Vokabular (Vorbild bestehende `vocab_*`); **D-CON-3: keine Concept-in-Concept-Verschachtelung in v1** |
-| M10-02 | Module-Browser | Module als eigene, rollen-getaggte, **referenzierte** Bausteine pflegen (Liste + Editor, Jarvis-Dichte wie R13/R14) |
-| M10-03 | Concept-Editor (3-Spalten) | Slot-Gerüst links, Slot-Befüllung Mitte (Modul **oder** Gericht je Slot), Live-Cockpit rechts — wiederverwendet das M9/R18-Drei-Spalten-Muster |
+| M10-02 | Baustein-Browser | Bausteine als eigene, rollen-getaggte, **referenzierte** Slot-Inhalte pflegen (Liste + Editor, Jarvis-Dichte wie R13/R14) |
+| M10-03 | Concept-Editor (3-Spalten) | Slot-Gerüst links, Slot-Befüllung Mitte (Baustein **oder** Gericht je Slot), Live-Cockpit rechts — wiederverwendet das M9/R18-Drei-Spalten-Muster |
 | M10-04 | Live-Output-Preis | Slot → Concept aufsummieren über die bestehende D-6/GL-11-Preislogik (keine neue Mathematik) |
 | M10-05 | Vorlage = Fork | „Aus Vorlage starten“ kopiert das Slot-Gerüst; Concept lebt danach eigenständig (Vorlage zieht **nicht** durch — D-CON-7); „als Vorlage speichern“ friert ein |
 
@@ -159,7 +170,7 @@ Output; Vorlage und Freiform als **eine** Mechanik.
 klassisch) als Tag wiederverwendbar · die V-21-**Rollen**-Spalte im VK-Editor ist die
 Keimzelle für das Rollen-Denken.
 
-**Was jetzt / was später:** *Jetzt:* Modul **als Referenz**, Gericht **als feste Setzung** —
+**Was jetzt / was später:** *Jetzt:* Baustein **als Referenz**, Gericht **als feste Setzung** —
 die zwei Wiederverwendungs-Mechaniken sauber trennen (Konzeptpapier §„Zwei getrennte
 Mechaniken“). *Später:* GP-Mehrfach-Rollen, datengestützte Slot-Vorschläge.
 
@@ -170,7 +181,7 @@ Mechaniken“). *Später:* GP-Mehrfach-Rollen, datengestützte Slot-Vorschläge.
 **Ziel:** Anlass-Komposition vieler Concepts zu einem versendbaren Foodbook; Schreibstil-
 Veredelung als Kern-Wert; Snapshot + PDF.
 
-**Hängt ab von:** M10 (Foodbook-Blöcke referenzieren Concepts/Module/Gerichte).
+**Hängt ab von:** M10 (Foodbook-Blöcke referenzieren Concepts/Bausteine/Gerichte).
 **Entscheidungs-Gates:** D-CON-4 (Referenz vs. Kopie im Foodbook).
 
 **Pakete (verfeinert aus Doc-14-M10 + D-8-Spec):**
@@ -201,38 +212,40 @@ nur Kombination-ref“. Chat-Assistent bleibt **verworfen** (Dominique 2026-06-1
 | ID | Paket | Inhalt | jetzt/später |
 |---|---|---|---|
 | M12-01 | **HK1 sauber** | Σ(GP-Preis × Menge), bereinigt um Garverlust/Schwund pro Position (Brutto-Einkauf → Netto-Teller) | **jetzt** |
-| M12-02 | **HK2-Datenstruktur** | Feld „Energie-/Nebenkosten“ **pro Rezept/Modul** anlegen (Migration) — anfangs grob geschätzt | **jetzt** |
+| M12-02 | **HK2-Datenstruktur** | Feld „Energie-/Nebenkosten“ **pro Rezept/Baustein** anlegen (Migration) — anfangs grob geschätzt | **jetzt** |
 | M12-03 | **HK2 grob** | HK1 + X % Pauschal-Aufschlag; Aufschlag als Team-Setting | **jetzt, grob** |
-| M12-04 | HK1/HK2 im Concept-Cockpit | Aufsummierung der Kaskade abwärts; HK2 wandert **mit dem Modul** beim Tausch (darum am Modul, nicht am Concept) | mit M10 verzahnt |
+| M12-04 | HK1/HK2 im Concept-Cockpit | Aufsummierung der Kaskade abwärts; HK2 wandert **mit dem Baustein** beim Tausch (darum am Baustein, nicht am Concept) | mit M10 verzahnt |
 
 > **Designentscheidung (Konzeptpapier, verbindlich):** Nebenkosten sitzen auf **Rezept-/
-> Modul-Ebene**, nicht erst auf Concept-Ebene — nur so sinkt HK2 automatisch, wenn man im
+> Baustein-Ebene**, nicht erst auf Concept-Ebene — nur so sinkt HK2 automatisch, wenn man im
 > Grillbuffet den langen Schmor-HG gegen einen kalt angerichteten tauscht.
 
 **Bezug zum Bestand:** „Garverluste vorschlagen“ + `per_instance`-Mengen existieren bereits;
 `arbeitszeit_min` ist je Rezept gepflegt (Brücke zu HK2/Kalkulation). Das ist die
-**„Kalkulation (HK2)“**-Sidebar-Kachel.
+**„Kalkulation (HK2)“**-Sidebar-Kachel (eigener Übersichts-Eintrag, Entscheid 2026-06-13).
 
 ---
 
-### M13 — Zielpreis-Konfigurator  *(Ausbaustufe)*
+### M13 — Zielpreis-Konfigurator  *(Ausbaustufe · Modus im Concept-Editor)*
 
-**Ziel:** Preis als **Input** — Zielpreis vorgeben, System schlägt Module vor / tauscht sie.
-Greift **nur an Modul-Slots** an (feste Gerichte = Fixkosten, Module = Stellschrauben).
+**Ziel:** Preis als **Input** — Zielpreis vorgeben, System schlägt Bausteine vor / tauscht sie.
+Greift **nur an Baustein-Slots** an (feste Gerichte = Fixkosten, Bausteine = Stellschrauben).
+**Auslieferung:** kein eigener Sidebar-Eintrag, sondern ein Modus *innerhalb* des
+Concept-Editors (Zielpreis-Feld → Vorschlag/Tausch im selben Screen).
 
-**Hängt ab von:** M10 (Module mit Rollen + Preis-Metadaten), idealerweise M12 (kostenbewusste
+**Hängt ab von:** M10 (Bausteine mit Rollen + Preis-Metadaten), idealerweise M12 (kostenbewusste
 Vorschläge). **Entscheidungs-Gates:** D-CON-6 (Tiefe). **Externer Blocker:** echter LLM-Key
-für gute Vorschläge; Embeddings für „ähnliche Module derselben Rolle“.
+für gute Vorschläge; Embeddings für „ähnliche Bausteine derselben Rolle“.
 
 **Pakete:**
 
 | ID | Paket | Inhalt |
 |---|---|---|
-| M13-01 | Tausch-Logik (deterministisch) | nur Module **derselben Rolle** sind tauschbar; Concept-Preis rechnet bei Tausch automatisch neu (Stellschraube) |
-| M13-02 | Zielpreis-Solver | „komm auf X €/Person“ → schlägt Modul-Kombination vor (greedy/Heuristik, ohne LLM lauffähig) |
+| M13-01 | Tausch-Logik (deterministisch) | nur Bausteine **derselben Rolle** sind tauschbar; Concept-Preis rechnet bei Tausch automatisch neu (Stellschraube) |
+| M13-02 | Zielpreis-Solver | „komm auf X €/Person“ → schlägt Baustein-Kombination vor (greedy/Heuristik, ohne LLM lauffähig) |
 | M13-03 | ✨ KI-Vorschlag | rollen-konforme Alternativen ranken (braucht LLM/Embeddings) — GL-07-Propose/Accept-Muster |
 
-**Bezug zum Bestand:** Voraussetzung „Module mit Preis-Metadaten + Rollen-Tags“ wird in M10
+**Bezug zum Bestand:** Voraussetzung „Bausteine mit Preis-Metadaten + Rollen-Tags“ wird in M10
 geschaffen. Der Solver ist die einzige echt neue Mathematik des Masterplans.
 
 ---
@@ -249,7 +262,7 @@ M12 (Kosten pro Tag/Woche). **Entscheidungs-Gates:** D-PLAN-1 (siehe §5).
 
 | ID | Paket | Inhalt |
 |---|---|---|
-| M14-01 | Zeit-Slot-Schema | Belegung von Tag×Mahlzeit mit Gericht/Modul/**ganzem Concept** |
+| M14-01 | Zeit-Slot-Schema | Belegung von Tag×Mahlzeit mit Gericht/Baustein/**ganzem Concept** |
 | M14-02 | Zyklen/Rotation | einmaliger Plan vs. rotierender Zyklus (z. B. 4-Wochen-Plan) |
 | M14-03 | Wiederholungs-/Abstandsregeln | verhindert, dass dasselbe Gericht zu oft/zu eng wiederkehrt (GV-Anforderung) |
 | M14-04 | Wochenbilanz | Nährwert-/Allergen-/Ausgewogenheits-Sicht über die Woche (Aggregate liegen vor); Sektor-Eignung als Filter |
@@ -289,11 +302,11 @@ im Dev-Modul-Package** `platforms-food-alchemisten`.
 
 | Gate | Frage | Empfehlung | Blockiert | Owner |
 |---|---|---|---|---|
-| **D-CON-1** | Was ist ein **Modul** technisch? | **eigene Entität** `foodalchemist_modules` (Rolle + Inhalts-Referenz + Preis-Metadaten); **Gericht** = direkte VK-Setzung im Slot | M10-01 | Dominique/Dev |
+| **D-CON-1** | Was ist ein **Baustein** technisch — und enthält er **ein** Rezept oder ein **Bündel**? | **eigene Entität** `foodalchemist_bausteine` (Rolle + Inhalts-Referenz + Preis-Metadaten); v1 = **ein** VK-Rezept je Baustein, Bündel später; **Gericht** = direkte VK-Setzung im Slot | M10-01 (Schema!) | Dominique/Dev |
 | **D-CON-2** | Rollen-Vokabular fix oder frei? | **gepflegtes Vokabular**, team-erweiterbar (Vorbild `vocab_*`) | M10-01, M13-01 | Dominique |
 | **D-CON-3** | Concept-in-Concept-**Verschachtelung**? | **Nein in v1** (eine Ebene über Slots — wie D-8 „keine Kombination-in-Kombination“) | M10-01 | Dominique |
-| **D-CON-4** | Concept im Foodbook **Referenz oder Kopie**? | **beides:** Master-Referenz (zieht durch) **+** Fork pro Foodbook (Modul=Referenz, Vorlage/Concept-Kopie=Fork) | M11-01 | Dominique |
-| **D-CON-5** | **Kundenbindung:** Concept/Modul global oder kundengebunden? | **team-scoped** Stammdaten + Team-Hierarchie (Eltern→Kind-Kataloge, nativ vorhanden) | M10-01 Scoping | Dominique |
+| **D-CON-4** | Concept im Foodbook **Referenz oder Kopie**? | **beides:** Master-Referenz (zieht durch) **+** Fork pro Foodbook (Baustein=Referenz, Vorlage/Concept-Kopie=Fork) | M11-01 | Dominique |
+| **D-CON-5** | **Kundenbindung:** Concept/Baustein global oder kundengebunden? | **team-scoped** Stammdaten + Team-Hierarchie (Eltern→Kind-Kataloge, nativ vorhanden) | M10-01 Scoping | Dominique |
 | **D-CON-6** | **Konfigurator-Tiefe?** | phasen: M10 = frei+live · M13-02 = Solver · M13-03 = KI-Vorschlag (optional) | M13-Scope | Dominique |
 | **D-CON-7** | **Vorlagen-Pflege/Versionierung?** | Vorlage = Fork (keine Propagation per Design) → „veraltet“ unkritisch; optional „Diff zur Vorlage“ später | M10-05 | Dominique |
 | **D-HK-1** | HK2: **Bezugsgröße · Skalierung · Garverlust-Richtung · Umfang?** | HK2 pro Portion; Garverlust Brutto→Netto pro Position; Umfang erst nur Energie; Fix-/Sprungmengen später | M12-Detail | Dominique |
@@ -301,23 +314,27 @@ im Dev-Modul-Package** `platforms-food-alchemisten`.
 
 ---
 
-## 6. Mapping auf die heutigen Sidebar-Platzhalter
+## 6. Mapping auf die Sidebar (Stand 2026-06-13 umgesetzt)
 
-Die sechs „In Planung“-Kacheln (`config/foodalchemist.php`, alle → `foodalchemist.demnaechst`)
-lösen sich so auf:
+Die alten sechs gleichrangigen „In Planung“-Kacheln sind durch eine **nach Bau-Sequenz
+sortierte** Liste ersetzt (alle weiter auf `foodalchemist.demnaechst`, bis gebaut). Der
+Concepter führt:
 
-| Sidebar-Kachel (heute) | wird zu |
-|---|---|
-| Foodbook / Portfolio | **M11** (+ Concepter-Unterbau **M10**) |
-| Kalkulation (HK2) | **M12** (HK1→HK2) + **M15** (Verfeinerung) |
-| Produktionsplanung | **M16** |
-| Speiseplan | **M14** |
-| Einkauf & Lager | **M16** |
-| Controlling | **M16** |
+| Sidebar-Eintrag (neu, in dieser Reihenfolge) | Milestone | Status |
+|---|---|---|
+| **Concepts** | M10 | Platzhalter |
+| **Bausteine** | M10 | Platzhalter |
+| Foodbook / Portfolio | M11 | Platzhalter |
+| Kalkulation (HK2) | M12 / M15 | Platzhalter (eigener Übersichts-Eintrag) |
+| Speiseplan | M14 | Platzhalter |
+| Produktionsplanung | M16 | Platzhalter |
+| Einkauf | M16 | Platzhalter (aus „Einkauf & Lager“ getrennt) |
+| Lager | M16 | Platzhalter |
+| Controlling | M16 | Platzhalter |
 
-> **Neu in der Sidebar nötig:** eine Gruppe/Kachel **„Concepter“** (Module + Concepts) — heute
-> gibt es sie nicht, weil der Platzhalter-Block die Ebene überspringt. Außerdem später
-> „Zielpreis-Konfigurator“ als Einstieg im Concept-Editor.
+- **Zielpreis-Konfigurator:** *kein* eigener Eintrag — Modus im Concept-Editor (M13).
+- **Sobald M10 gebaut ist:** „Concepts“ + „Bausteine“ wandern in eine **eigene aktive Gruppe
+  „Concepter“** über „In Planung“; analog die übrigen Domänen beim jeweiligen Bau.
 
 ---
 
@@ -326,7 +343,7 @@ lösen sich so auf:
 | Was | Wer | Blockiert in diesem Plan |
 |---|---|---|
 | Echter LLM-Key in der Sandbox | Martin | M11-03 (Schreibstil-Veredelung), M13-03 (KI-Vorschlag) — Mechanik steht |
-| Embeddings/RAG | Martin | M13-03 (rollen-konforme Modul-Alternativen ranken) |
+| Embeddings/RAG | Martin | M13-03 (rollen-konforme Baustein-Alternativen ranken) |
 | PDF-Engine (Browsershot/DomPDF) | Setup | M11-04 (PDF-Export) |
 | D6-Deckungsbeitrags-Formel | Dominique | Margen-Sicht in M11/M12-Cockpits |
 | Push/Repo-Sichtbarkeit | Dominique/Martin | jeden Push |

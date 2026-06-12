@@ -72,7 +72,7 @@
     <livewire:foodalchemist.verkauf.vk-modal />
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="flex items-center justify-between -mb-2">
+        <div class="flex items-center justify-between pt-1">
             <button type="button" wire:click="$dispatch('gp-modal.oeffnen')" class="{{ $btnPrimary }}" data-gp-anlegen>+ Neues Grundprodukt</button>
             <x-foodalchemist::kpi-bar :kpis="$kpis" />
         </div>
