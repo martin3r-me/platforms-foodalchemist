@@ -96,8 +96,25 @@
                 <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
                 <button type="button" wire:click="$dispatch('generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-generator-oeffnen>✨ KI-Rezept</button>
             </div>
+            @if($bulkRunId !== null)
+                @php($bulkSvc = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class))
+                @php($run = $bulkSvc->status(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId))
+                @if($run !== null)
+                    <div class="flex items-center gap-2" @if($run->status === 'running') wire:poll.2s @endif data-bulk-progress>
+                        @if($run->status === 'running')
+                            <span class="{{ $pill }} {{ $variantPill['info'] }}">✨ Bulk läuft … {{ $run->done }}/{{ $run->total }}</span>
+                        @else
+                            <span class="{{ $pill }} {{ $variantPill['success'] }}">✨ Bulk fertig: {{ $run->done }}/{{ $run->total }}{{ $run->fehler > 0 ? " · {$run->fehler} Fehler" : '' }}</span>
+                            <span class="text-xs text-gray-500">{{ $bulkSvc->offeneVorschlaege(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId) }} Vorschläge offen</span>
+                            <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-bulk-alle-uebernehmen>Alle übernehmen</button>
+                            <button type="button" wire:click="bulkSchliessen" class="{{ $btnGhostXs }}" title="Vorschläge bleiben offen (Review)">Schließen</button>
+                        @endif
+                    </div>
+                @endif
+            @endif
             @if(count(array_filter($auswahl)) > 0)
                 <div class="flex items-center gap-1.5" data-bulk-status>
+                    <button type="button" wire:click="bulkAnreichern" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Beschreibung · Kategorie · Geschmack als Review-Vorschläge (GL-07: nie Auto-Persistenz)" data-bulk-anreichern>✨ Bulk anreichern</button>
                     <span class="text-sm text-gray-900 dark:text-gray-100 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt:</span>
                     @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
                         <button type="button" wire:click="bulkStatus('{{ $wert }}')" class="{{ $btnGhostXs }}" data-bulk-status-btn="{{ $wert }}">→ {{ $lbl }}</button>

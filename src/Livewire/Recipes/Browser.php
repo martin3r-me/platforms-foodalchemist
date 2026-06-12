@@ -99,6 +99,36 @@ class Browser extends Component
     /** @var array<int, bool> */
     public array $auswahl = [];
 
+    // ── M7-06: Bulk-Autopilot (Queue + Fortschritts-Polling) ─────────────
+
+    public ?int $bulkRunId = null;
+
+    public function bulkAnreichern(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $ids = array_map('intval', array_keys(array_filter($this->auswahl)));
+        if ($team === null || $ids === []) {
+            return;
+        }
+        $this->bulkRunId = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->starte($team, $ids);
+        $this->auswahl = [];
+    }
+
+    public function bulkAlleUebernehmen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && $this->bulkRunId !== null) {
+            app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->alleUebernehmen($team, $this->bulkRunId);
+            $this->bulkRunId = null;
+            $this->dispatch('recipe-gespeichert');
+        }
+    }
+
+    public function bulkSchliessen(): void
+    {
+        $this->bulkRunId = null;                                     // Vorschläge bleiben offen (Review später)
+    }
+
     public function bulkStatus(string $status): void
     {
         $team = Auth::user()?->currentTeamRelation;
