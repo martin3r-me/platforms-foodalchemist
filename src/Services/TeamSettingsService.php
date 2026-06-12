@@ -28,6 +28,12 @@ class TeamSettingsService
         'boutique_patisserie' => 'Boutique-Pâtisserie (Präzision, kleine Chargen, from scratch)',
     ];
 
+    /** M7-08: Kill-Switch — false stoppt ALLE KI-Calls des Teams (Gateway-Guard). */
+    public function kiAktiv(Team $team): bool
+    {
+        return (bool) ($this->for($team)->ki_aktiv ?? true);
+    }
+
     public function kuechenTyp(Team $team): ?string
     {
         $typ = $this->for($team)->kuechen_typ;

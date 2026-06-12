@@ -36,6 +36,12 @@ class AiGatewayService
      */
     public function propose(string $promptKey, array $context = [], array $options = []): AiProposal
     {
+        // M7-08: Kill-Switch — Team-Schalter stoppt jeden Call VOR dem Provider
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && ! app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->kiAktiv($team)) {
+            throw new \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException();
+        }
+
         // Literaler Array-Zugriff — Prompt-Keys enthalten Punkte (config()-Dot-Notation würde sie als Pfad lesen)
         $prompt = config('foodalchemist.prompts', [])[$promptKey] ?? null;
         if (!is_array($prompt) || empty($prompt['task'])) {

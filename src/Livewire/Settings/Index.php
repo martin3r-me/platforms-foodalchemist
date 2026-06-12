@@ -25,6 +25,7 @@ class Index extends Component
         'einkauf' => ['label' => 'Einkauf & Lead-LA', 'hint' => 'Lead-Strategie (V-27) · Stamm-Lieferanten-Matrix'],
         'kalkulation' => ['label' => 'Kalkulation', 'hint' => 'Garverlust-, MwSt-Defaults, Rundung (GL-02)'],
         'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Mandanten-Tendenz für den Generator (M7-07, Hooks gewinnen)'],
+        'ki' => ['label' => 'KI', 'hint' => 'Provider · Tiering (V-01) · Nutzung · Kill-Switch (M7-08)'],
     ];
 
     public function mount(string $sektion = 'einheiten'): void
