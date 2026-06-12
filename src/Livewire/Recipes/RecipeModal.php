@@ -20,7 +20,9 @@ class RecipeModal extends Component
     private const LEER = [
         'name' => '', 'herkunft' => '', 'kategorie_id' => null, 'hauptgruppe_id' => null,
         'geschmacksrichtung' => '', 'fertigungstiefe' => '', 'arbeitszeit_min' => null,
-        'yield_kg_manual' => null, 'beschreibung' => '', 'ist_verkaufsrezept' => false,
+        'temperatur' => '', 'funktion' => '', 'status' => 'draft',
+        'yield_kg_manual' => null, 'beschreibung' => '', 'zubereitung' => '',
+        'notizen_manual' => '', 'equipment_ids' => [], 'ist_verkaufsrezept' => false,
     ];
 
     public ?int $recipeId = null;
@@ -38,7 +40,7 @@ class RecipeModal extends Component
 
         if ($id !== null) {
             $team = Auth::user()?->currentTeamRelation;
-            $r = FoodAlchemistRecipe::visibleToTeam($team)->with('kategorie:id,main_group_id')->find($id);
+            $r = FoodAlchemistRecipe::visibleToTeam($team)->with(['kategorie:id,main_group_id', 'equipment:id'])->find($id);
             if ($r !== null) {
                 $this->form = [
                     'name' => $r->name,
@@ -48,8 +50,14 @@ class RecipeModal extends Component
                     'geschmacksrichtung' => $r->geschmacksrichtung ?? '',
                     'fertigungstiefe' => $r->fertigungstiefe ?? '',
                     'arbeitszeit_min' => $r->arbeitszeit_min,
+                    'temperatur' => $r->temperatur ?? '',
+                    'funktion' => $r->funktion ?? '',
+                    'status' => $r->status->value,
                     'yield_kg_manual' => $r->yield_kg_manual,
                     'beschreibung' => $r->beschreibung ?? '',
+                    'zubereitung' => $r->zubereitung ?? '',
+                    'notizen_manual' => $r->notizen_manual ?? '',
+                    'equipment_ids' => $r->equipment()->pluck('foodalchemist_vocab_kochequipment.id')->map(fn ($i) => (string) $i)->all(),
                     'ist_verkaufsrezept' => (bool) $r->ist_verkaufsrezept,
                 ];
             }
@@ -137,6 +145,60 @@ class RecipeModal extends Component
     {
         if (trim($this->form['beschreibung']) !== '') {
             $this->rezept()?->update(['beschreibung' => $this->form['beschreibung'], 'beschreibung_quelle' => 'manual', 'beschreibung_ai_confidence' => null]);
+        }
+    }
+
+    // ── UI-Audit: GL-07-Lebenszyklus zubereitung (D-5 §4.2.5, V-02-Klasse) ──
+
+    public function ai_zubereitung(AiGatewayService $ki): void
+    {
+        $r = $this->rezept();
+        $vorschlag = $ki->propose('recipe.zubereitung', [
+            'name' => $r?->name ?? $this->form['name'],
+            'zubereitung' => $this->form['zubereitung'] ?: null,
+            'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
+        ]);
+        $this->kiVorschlag['zubereitung'] = [
+            'werte' => $vorschlag->werte,
+            'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
+            'begruendung' => $vorschlag->begruendung,
+        ];
+    }
+
+    public function accept_zubereitung(): void
+    {
+        $r = $this->rezept();
+        $vorschlag = $this->kiVorschlag['zubereitung'] ?? null;
+        if ($r === null || $vorschlag === null) {
+            return;
+        }
+        if ($r->zubereitung_quelle === 'manual') {                            // GL-07 Override-First
+            $this->fehler = 'Zubereitung ist manuell gepflegt — erst Reset, dann KI übernehmen.';
+
+            return;
+        }
+        $wert = $vorschlag['werte']['zubereitung'] ?? null;
+        if (! is_string($wert) || trim($wert) === '') {
+            $this->fehler = 'KI-Vorschlag enthält keine Zubereitung.';
+
+            return;
+        }
+        $r->update(['zubereitung' => $wert, 'zubereitung_quelle' => 'ki', 'zubereitung_ai_confidence' => $vorschlag['confidence']]);
+        $this->form['zubereitung'] = $wert;
+        unset($this->kiVorschlag['zubereitung']);
+    }
+
+    public function clear_zubereitung(): void
+    {
+        $this->rezept()?->update(['zubereitung' => null, 'zubereitung_quelle' => null, 'zubereitung_ai_confidence' => null]);
+        $this->form['zubereitung'] = '';
+        unset($this->kiVorschlag['zubereitung']);
+    }
+
+    public function manual_zubereitung(): void
+    {
+        if (trim($this->form['zubereitung']) !== '') {
+            $this->rezept()?->update(['zubereitung' => $this->form['zubereitung'], 'zubereitung_quelle' => 'manual', 'zubereitung_ai_confidence' => null]);
         }
     }
 
@@ -234,8 +296,25 @@ class RecipeModal extends Component
     {
         $team = Auth::user()?->currentTeamRelation;
 
+        // UI-Audit: ehrliche Feld-Zustände für die KI-Felder-Sektion (vorher
+        // zeigte »unbefüllt« trotz Inhalt — Quelle NULL bei Import-Beständen)
+        $r = $this->rezept();
+        $feldZustand = function (?string $inhalt, ?string $quelle): string {
+            if ($inhalt === null || trim($inhalt) === '') {
+                return 'unbefüllt';
+            }
+
+            return $quelle ?? 'import';
+        };
+
         return view('foodalchemist::livewire.recipes.recipe-modal', [
             'neu' => $this->recipeId === null,
+            'zustaende' => [
+                'beschreibung' => $feldZustand($r?->beschreibung, $r?->beschreibung_quelle),
+                'zubereitung' => $feldZustand($r?->zubereitung, $r?->zubereitung_quelle),
+                'kategorie' => $r?->kategorie_id !== null ? ($r?->kategorie_quelle ?? 'import') : 'unbefüllt',
+            ],
+            'equipmentListe' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::orderBy('name')->get(['id', 'name']),
             'hauptgruppen' => $team !== null ? $recipes->mainGroups($team) : collect(),
             'kategorien' => $this->form['hauptgruppe_id'] !== null
                 ? FoodAlchemistRecipeCategory::where('main_group_id', $this->form['hauptgruppe_id'])->orderBy('sort_order')->get()

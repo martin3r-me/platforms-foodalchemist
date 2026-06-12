@@ -147,6 +147,7 @@
                 <tbody>
                     @forelse($rezepte as $r)
                         <tr wire:key="r-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
+                            x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                             data-rezept-zeile="{{ $r->id }}">
                             <td class="{{ $td }} !pr-0" wire:click.stop>

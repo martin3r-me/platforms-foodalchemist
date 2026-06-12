@@ -112,3 +112,31 @@ it('Modal-Roundtrip: Anlage validiert, Edit mit yield_kg_manual triggert Recompu
         ->call('speichern')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Pflicht'));
 });
+
+it('UI-Audit: update pflegt die §4.2-Editor-Felder (Status/Zubereitung/Eigenschaften/Notizen/Equipment)', function () {
+    // KEIN zweiter seedTeamHierarchy — beforeEach seedet schon; ein Doppel-Seed
+    // vergiftet den statischen Ancestry-Cache für nachfolgende Tests (Team-Id-Kollision)
+    $svc = app(\Platform\FoodAlchemist\Services\RecipeService::class);
+    $r = $svc->create($this->rootTeam, ['name' => 'Fond: Audit']);
+    $geraet = \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::create(['team_id' => $this->rootTeam->id, 'slug' => 'kombi', 'name' => 'Kombidämpfer']);
+
+    $nach = $svc->update($this->rootTeam, $r->id, [
+        'name' => 'Fond: Audit',
+        'status' => 'review',
+        'zubereitung' => "1. Ansetzen\n2. Reduzieren",
+        'temperatur' => 'warm',
+        'funktion' => 'Saucenbasis',
+        'notizen_manual' => 'Insel-Notiz',
+        'equipment_ids' => [$geraet->id],
+    ]);
+
+    expect($nach->status->value)->toBe('review')
+        ->and($nach->zubereitung)->toContain('Reduzieren')
+        ->and($nach->temperatur)->toBe('warm')
+        ->and($nach->funktion)->toBe('Saucenbasis')
+        ->and($nach->notizen_manual)->toBe('Insel-Notiz')
+        ->and($nach->equipment()->pluck('slug')->all())->toBe(['kombi']);
+
+    // ungültiger Status fällt still auf den Bestand zurück (Whitelist)
+    expect($svc->update($this->rootTeam, $r->id, ['name' => 'Fond: Audit', 'status' => 'quatsch'])->status->value)->toBe('review');
+});

@@ -36,15 +36,20 @@
         open: false,
         close() { this.open = false; this.$dispatch('modal.closed', { name: '{{ $name }}' }); },
      }"
+     {{-- UI-Audit 2026-06-12: `.dot` wird vom gebündelten Alpine 3.15 IGNORIERT
+          (Listener hörte effektiv auf `modal-open` — kein Modal konnte je per
+          Livewire-Event öffnen). Punkte im Event-Namen gehen in der @-Syntax
+          nicht → explizite addEventListener in x-init; Event-Namen
+          `modal.open`/`modal.close` (Planner-Konvention) bleiben unverändert. --}}
+     x-init="
+        window.addEventListener('modal.open', e => { if (e.detail?.name === '{{ $name }}') open = true });
+        window.addEventListener('modal.close', e => { if (!e.detail?.name || e.detail.name === '{{ $name }}') close() });
+     "
      x-show="open" x-cloak
-     {{-- .dot-Syntax: Alpine liest Punkte sonst als Modifier — lauscht auf `modal.open`/`modal.close` --}}
-     @modal-open.dot.window="if ($event.detail?.name === '{{ $name }}') open = true"
-     @modal-close.dot.window="if (!$event.detail?.name || $event.detail.name === '{{ $name }}') close()"
      @keydown.window.escape="if (open) close()"
      class="fixed inset-0 z-[100] flex items-center justify-center p-4"
      data-modal="{{ $name }}"
-     role="dialog" aria-modal="true" @if($title) aria-label="{{ $title }}" @endif
-     x-transition.opacity.duration.200ms>
+     role="dialog" aria-modal="true" @if($title) aria-label="{{ $title }}" @endif>
 
     {{-- Backdrop --}}
     <div class="absolute inset-0 bg-black/50 backdrop-blur-md" @click="close()"></div>

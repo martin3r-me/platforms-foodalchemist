@@ -180,9 +180,20 @@ class RecipeService
             'arbeitszeit_min' => array_key_exists('arbeitszeit_min', $in) ? $in['arbeitszeit_min'] : $recipe->arbeitszeit_min,
             'yield_kg_manual' => array_key_exists('yield_kg_manual', $in) ? $in['yield_kg_manual'] : $recipe->yield_kg_manual,
             'beschreibung' => array_key_exists('beschreibung', $in) ? (($in['beschreibung'] ?? '') ?: null) : $recipe->beschreibung,
+            // UI-Audit (D-5 §4.2): Eigenschaften/Zubereitung/Notizen/Status im Editor pflegbar
+            'temperatur' => array_key_exists('temperatur', $in) ? (($in['temperatur'] ?? '') ?: null) : $recipe->temperatur,
+            'funktion' => array_key_exists('funktion', $in) ? (($in['funktion'] ?? '') ?: null) : $recipe->funktion,
+            'zubereitung' => array_key_exists('zubereitung', $in) ? (($in['zubereitung'] ?? '') ?: null) : $recipe->zubereitung,
+            'notizen_manual' => array_key_exists('notizen_manual', $in) ? (($in['notizen_manual'] ?? '') ?: null) : $recipe->notizen_manual,
+            'status' => array_key_exists('status', $in) && in_array($in['status'], ['stub', 'draft', 'review', 'approved', 'archived'], true)
+                ? $in['status'] : $recipe->status,
             'version' => $recipe->version + 1,
             'last_modified_by' => 'editor',
         ]);
+        // Equipment (§4.2.6): M:N-Sync, nur wenn übergeben
+        if (array_key_exists('equipment_ids', $in) && is_array($in['equipment_ids'])) {
+            $recipe->equipment()->sync(array_map('intval', $in['equipment_ids']));
+        }
         if (array_key_exists('yield_kg_manual', $in) && $in['yield_kg_manual'] !== $altManual) {
             app(RecipeRecomputeService::class)->recomputeAndPropagate($recipe->id); // ek/kg-Nenner (A-3)
         }

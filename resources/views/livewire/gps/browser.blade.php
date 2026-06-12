@@ -97,6 +97,7 @@
                 <tbody>
                     @forelse($gps as $gp)
                         <tr wire:key="gp-{{ $gp->id }}" wire:click="waehleGp({{ $gp->id }})"
+                            x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $gpId === $gp->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                             data-gp-zeile="{{ $gp->id }}">
                             <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100 max-w-sm truncate" title="{{ $gp->name }}">

@@ -285,7 +285,7 @@
 
             {{-- Section: Baustein modal (M0-08 / P-2) — Sektions-Modal, modal.open-Event, State-Leak-Probe --}}
             <div x-data="{ demoNote: '' }"
-                 @modal-closed.dot.window="if ($event.detail.name === 'demo-modal') demoNote = ''">
+                 x-init="window.addEventListener('modal.closed', e => { if (e.detail?.name === 'demo-modal') demoNote = '' })">
                 <div class="mb-3">
                     <h2 class="text-sm font-medium tracking-tight text-gray-900 dark:text-gray-100">Baustein: modal (P-2)</h2>
                     <p class="text-xs text-gray-400 mt-0.5">Großes Sektions-Modal · öffnet via <code>modal.open</code> · Schließen setzt den Demo-State zurück (kein Leak)</p>

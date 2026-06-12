@@ -32,8 +32,10 @@ it('rendert Titel, fixe Kopf-Aktionen, Sektionen und Footer-Slot', function () {
 it('verdrahtet den Event-Vertrag modal.open / modal.close / modal.closed', function () {
     $html = Blade::render('<x-foodalchemist::modal name="demo" title="T">X</x-foodalchemist::modal>');
 
-    expect($html)->toContain('modal-open.dot.window')   // .dot: Alpine-Syntax für Event-Namen mit Punkt
-        ->and($html)->toContain('modal-close.dot.window')
+    // UI-Audit 2026-06-12: .dot wird von Alpine 3.15 ignoriert (Live-Beweis) —
+    // der Vertrag ist jetzt die addEventListener-Brücke (ModalBausteinVertragTest)
+    expect($html)->toContain("addEventListener('modal.open'")
+        ->and($html)->toContain("addEventListener('modal.close'")
         ->and($html)->toContain('modal.closed')          // Schließen meldet sich (State-Reset-Vertrag)
         ->and($html)->toContain('keydown.window.escape') // ESC schließt
         ->and($html)->toContain('x-cloak');              // kein Aufblitzen vor Alpine-Boot
