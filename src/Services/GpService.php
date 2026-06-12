@@ -166,7 +166,9 @@ class GpService
             ->with('warengruppe')
             ->orderBy('foodalchemist_gps.name');
 
-        $seite = $q->paginate($perPage)->withQueryString();
+        // M8-04: Total OHNE den Lead-Join zählen (1:1-Join ändert die Zeilen-
+        // zahl nicht, kostete im Paginator-COUNT aber ~120 ms auf 7,7k GPs)
+        $seite = $q->paginate($perPage, total: $this->browserQuery($team, $filters)->count())->withQueryString();
 
         $preise = app(PriceService::class);
         $rezepteAktiv = \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_recipes');
@@ -176,14 +178,18 @@ class GpService
         $mutterIds = $zeilen->filter(fn ($gp) => $gp->is_derivat && $gp->derivat_von_gp_id !== null)->pluck('derivat_von_gp_id');
         $raenge = app(GpAggregateService::class)->laMaxRaengeBulk($zeilen->pluck('id')->merge($mutterIds)->unique()->values()->all());
         $muetter = $mutterIds->isNotEmpty() ? FoodAlchemistGp::whereIn('id', $mutterIds)->get()->keyBy('id') : collect();
+        // M8-04: Rezept-Verwendungen in EINEM Query statt je Zeile (war N+1: 100×count)
+        $rezeptCounts = $rezepteAktiv && $zeilen->isNotEmpty()
+            ? \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients')
+                ->whereIn('gp_id', $zeilen->pluck('id'))->whereNull('deleted_at')
+                ->selectRaw('gp_id, COUNT(*) AS n')->groupBy('gp_id')->pluck('n', 'gp_id')
+            : collect();
 
-        $zeilen->each(function ($gp) use ($preise, $rezepteAktiv, $raenge, $muetter) {
+        $zeilen->each(function ($gp) use ($preise, $rezepteAktiv, $raenge, $muetter, $rezeptCounts) {
             $gp->setAttribute('lead_vergleichspreis', $gp->lead_preis !== null
                 ? $preise->vergleichspreis((object) ['qty' => $gp->lead_qty, 'unit_code' => $gp->lead_unit_code], (float) $gp->lead_preis)
                 : null);
-            $gp->setAttribute('rezepte_count', $rezepteAktiv
-                ? (int) \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients')->where('gp_id', $gp->id)->whereNull('deleted_at')->count()
-                : null);
+            $gp->setAttribute('rezepte_count', $rezepteAktiv ? (int) ($rezeptCounts[$gp->id] ?? 0) : null);
 
             $mutter = $gp->is_derivat ? $muetter->get($gp->derivat_von_gp_id) : null;
             $badges = [];
