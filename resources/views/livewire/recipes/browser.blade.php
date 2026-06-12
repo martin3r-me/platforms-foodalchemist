@@ -89,6 +89,8 @@
 
     {{-- M4-06: Stammdaten-Modal (P-2: innerhalb x-ui-page) --}}
     <livewire:foodalchemist.recipes.recipe-modal />
+    {{-- R7-Fix: Zutat-Klick öffnet das GP als Modal ÜBER dem Editor (neuer Tab bei Dominique blockiert) --}}
+    <livewire:foodalchemist.gps.gp-modal />
 
     {{-- M4-07/08: Zutaten-Editor (P-8) --}}
     <livewire:foodalchemist.recipes.ingredient-editor />

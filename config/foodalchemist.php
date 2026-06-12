@@ -108,6 +108,42 @@ return [
             ],
         ],
         [
+            // R7 (Dominique): künftige Domänen sichtbar machen — Klick = Phase-2-Vorschau
+            'group' => 'In Planung',
+            'items' => [
+                [
+                    'label' => 'Foodbook / Portfolio',
+                    'route' => 'foodalchemist.demnaechst',
+                    'icon'  => 'heroicon-o-book-open',
+                ],
+                [
+                    'label' => 'Kalkulation (HK2)',
+                    'route' => 'foodalchemist.demnaechst',
+                    'icon'  => 'heroicon-o-calculator',
+                ],
+                [
+                    'label' => 'Produktionsplanung',
+                    'route' => 'foodalchemist.demnaechst',
+                    'icon'  => 'heroicon-o-cog-8-tooth',
+                ],
+                [
+                    'label' => 'Speiseplan',
+                    'route' => 'foodalchemist.demnaechst',
+                    'icon'  => 'heroicon-o-calendar-days',
+                ],
+                [
+                    'label' => 'Einkauf & Lager',
+                    'route' => 'foodalchemist.demnaechst',
+                    'icon'  => 'heroicon-o-shopping-cart',
+                ],
+                [
+                    'label' => 'Controlling',
+                    'route' => 'foodalchemist.demnaechst',
+                    'icon'  => 'heroicon-o-chart-bar',
+                ],
+            ],
+        ],
+        [
             'group' => 'Einstellungen',
             'items' => [
                 [

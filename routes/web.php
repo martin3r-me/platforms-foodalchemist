@@ -69,3 +69,9 @@ Route::get('/einstellungen/{sektion?}', \Platform\FoodAlchemist\Livewire\Setting
  */
 Route::get('/verkaufsrezepte', \Platform\FoodAlchemist\Livewire\Verkauf\Browser::class)
     ->name('foodalchemist.verkauf.index');
+
+/**
+ * R7: «In Planung» — Vorschau der Phase-2-Domänen (14_ROADMAP_PHASE2).
+ */
+Route::get('/demnaechst', \Platform\FoodAlchemist\Livewire\Demnaechst::class)
+    ->name('foodalchemist.demnaechst');

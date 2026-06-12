@@ -33,14 +33,19 @@
                             </select>
                         </td>
                         <td class="{{ $td }} !px-2 !py-1 max-w-[18rem]">
-                            {{-- R4 (Dichte): Lineage als Tooltip; R5: Name klickbar → GP/Rezept in neuem Tab (Editor-Stand bleibt) --}}
-                            <template x-if="zeile.ziel_url">
-                                <a :href="zeile.ziel_url" target="_blank" rel="noopener"
-                                   class="text-xs text-violet-600 dark:text-violet-400 hover:underline"
-                                   x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
-                                   :title="(zeile.lineage ? 'via ' + zeile.lineage + ' — ' : '') + 'in neuem Tab öffnen'" data-ziel-link></a>
+                            {{-- R4 (Dichte): Lineage als Tooltip; R7-Fix: neuer Tab ist bei Dominique
+                                 blockiert → Klick öffnet das Ziel als MODAL über dem Editor (Stand bleibt) --}}
+                            <template x-if="zeile.gp_id || zeile.referenced_recipe_id">
+                                <button type="button"
+                                        class="text-xs text-violet-600 dark:text-violet-400 hover:underline text-left"
+                                        x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
+                                        :title="(zeile.lineage ? 'via ' + zeile.lineage + ' — ' : '') + (zeile.gp_id ? 'GP öffnen' : 'Rezept öffnen')"
+                                        @click="zeile.gp_id
+                                            ? Livewire.dispatch('gp-modal.oeffnen', { id: zeile.gp_id })
+                                            : Livewire.dispatch('recipe-modal.oeffnen', { id: zeile.referenced_recipe_id })"
+                                        data-ziel-link></button>
                             </template>
-                            <template x-if="!zeile.ziel_url">
+                            <template x-if="!zeile.gp_id && !zeile.referenced_recipe_id">
                                 <span class="text-xs text-gray-400" x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
                                       :title="zeile.lineage ? 'Verknüpfung via ' + zeile.lineage : ''"></span>
                             </template>

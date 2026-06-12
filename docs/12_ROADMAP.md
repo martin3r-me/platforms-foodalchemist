@@ -297,6 +297,10 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 
 > **Status M8-05 (2026-06-12):** `foodalchemist:team-onboarding` (--parent/--name/--user/--startpaket/--dry-run, eine Transaktion): legt das Kind-Team in der Hierarchie an (`parent_team_id` — D1: Eltern-Katalog ist über die Kette SOFORT sichtbar, nichts zu kopieren), trägt den Owner in `team_user` ein, schaltet das Modul über **`modulables`** frei (Team-morph, enabled — Mechanik aus der Core-Wissensbasis) und kopiert optional ein **Rezept-Startpaket als D2-SNAPSHOTS** (via `RecipeService::duplicate`, dann dem Kind übereignet — team-eigen editierbar, Eltern-Original unberührt). **DoD-Test: neues Kind sieht Eltern-GP + Eltern-Rezept sofort, Snapshot isOwnedBy(kind), Original bleibt beim Root; dry-run schreibt nichts** (2 Tests/12 Assertions). Suite: **361/361**.
 
+> **PHASE 2 (2026-06-12):** Diese Roadmap ist ABGESCHLOSSEN (M0–M8 + UI-Runden R1–R6).
+> Alles Weitere — VK-Editor-Vollparität (M9), Foodbook/Portfolio (M10, OHNE Chat — verworfen),
+> neue Domänen (M11+) — steht in **`14_ROADMAP_PHASE2.md`**.
+
 ## Offene Entscheide / externe Abhängigkeiten
 
 | Was | Wer | Blockiert |

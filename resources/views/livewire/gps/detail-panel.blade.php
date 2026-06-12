@@ -1,7 +1,7 @@
 {{-- M3-03: GP-DetailPanel (rechte Page-Sidebar, P-1) — Stammdaten-Sektion; Allergene/Tags/LAs folgen M3-05/07 --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<div class="p-4 space-y-4" data-gp-panel>
+<div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]" data-gp-panel>
     @if($gp === null)
         <div class="text-center text-sm text-gray-400 py-12">
             <div class="text-2xl mb-2">⌘</div>
