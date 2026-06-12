@@ -273,9 +273,12 @@
                 <button type="button" @click="tab = 'schreiben'" :class="tab === 'schreiben' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'" class="{{ $pill }}">Schreiben</button>
                 <button type="button" @click="tab = 'vorschau'; $wire.vorschauZubereitung()" :class="tab === 'vorschau' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'" class="{{ $pill }}" data-tab-vorschau>Vorschau</button>
                 <span class="text-[10px] text-gray-400 ml-2">Markdown — <code>##</code> für Phasen (Mise en Place / Finish), nummerierte Schritte</span>
+                <span class="ml-auto" x-show="tab === 'schreiben'">
+                    @include('foodalchemist::livewire.recipes.partials.md-toolbar', ['ziel' => 'zubereitung-text'])
+                </span>
             </div>
             <div x-show="tab === 'schreiben'">
-                <textarea wire:model="form.zubereitung" rows="8" class="{{ $input }} font-mono text-xs" data-rezept-zubereitung></textarea>
+                <textarea wire:model="form.zubereitung" id="zubereitung-text" rows="8" class="{{ $input }} font-mono text-xs" data-rezept-zubereitung></textarea>
             </div>
             <div x-show="tab === 'vorschau'" x-cloak class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-4 py-3" data-zubereitung-vorschau>
                 <div class="prose prose-sm dark:prose-invert max-w-none">

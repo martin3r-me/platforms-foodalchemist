@@ -40,6 +40,23 @@ Live-Marge (AK/MwSt/VK-manuell → brutto/Marge/Wareneinsatz/Stück-Werte + Form
 | j | **Markdown-Toolbar** | B / I / H2 / H3 / Listen / `<>` über Plating UND Basis-Zubereitung (Politur-Lücke aus M4-13) | Screenshot 3 |
 | k | **VK-Panel-Rest** | Sektor-/Niveau-Eignung mit «+ manuell…» + ✨ Eignung (Basis-Panel zeigt nur read-only); Marketing-Text mit ✨-Button im Panel | Screenshot 4/5 |
 
+> **Status M9-01 (2026-06-12) — Pakete a–j GEBAUT, k offen:** **(a)** Zutaten inline im VK-Editor
+> (geteilter P-8-Kern, `vkKontext` zeigt die **Rollen-Spalte** als Select je Zeile — `rolle` geht durch
+> payload→syncIngredients, V-21-getestet) + 🎭 Rollen-Proposal-Box (verteileRollen/acceptRollen,
+> Editor re-mountet über Versions-Key). **(b)** KPI-Leiste (Yield · EK · EK/kg · Mit Preis · Allergen-Konf.).
+> **(c)** R6-Deklarations-Partial im Editor. **(d)** Nährwerte-Tabelle pro 100 g + pro Stück
+> (g/Stück aus dem Cockpit; Konfidenz-Zeile + GL-08-Ehrlichkeits-Hinweis; leer-Zustand wenn nie
+> aggregiert). **(e)** Spezifikation: Bio-/Regional-Anteil Gramm-gewichtet über GP-Tags
+> (`is_organic`/`is_regional`, detail() lädt sie jetzt mit). **(f)** Eigenschaften + KI-Beschreibung.
+> **(g)** `plating_text` (Migration 000038 + Lineage-Trio; manueller Edit stempelt manual via
+> updateVk-Schleife). **(h)** Notizen. **(i)** ✨ Wording · Marketing · Eigenschaften · Behälter
+> (ID-validiert gegen Vokabular) · Servier-Vorschlag (dito) · Regeneration (Programm-LISTE,
+> Übernahme je Zeile) · Plating — alle im «Vorschlag in die Form, Save = Accept»-Muster,
+> FakeProvider ⇒ ehrlicher kiFehler. **(j)** Markdown-Toolbar (B/I/H2/H3/Listen/<>) an VK-Plating
+> UND Basis-Zubereitung — per Element-ID statt $refs (verschachtelte Alpine-Scopes teilen keine refs).
+> **(k) Eignungs-Pflege im Panel: OFFEN.** VK_FELDER-Whitelist +8 Felder. 5 neue Tests.
+> Live verifiziert (alle Sektionen + Rollen-Spalte im VK, NICHT im Basis-Editor). Suite: **382/382 (1.594 Assertions)**.
+
 ### M9-02 Design: Panel-Kontrast ✅ (erledigt 2026-06-12)
 Rechte Detail-Spalte (GP/Basis/VK) leicht grau hinterlegt wie in der Ist-App — nur Modul-Views, Core-Sidebar unangetastet.
 

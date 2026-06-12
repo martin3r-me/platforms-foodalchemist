@@ -91,7 +91,9 @@ class SalesRecipeService
                 'aufschlagsklasse',
                 'vkEinheit:id,slug,display_de',
                 'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
-                'ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name',
+                // M9-01e: Bio-/Regional-Anteil braucht die GP-Tags; Nährwert-Faktor die Einheit
+                'ingredients.gp:id,name,is_organic,is_regional', 'ingredients.referencedRecipe:id,name',
+                'ingredients.einheit:id,slug,display_de,default_in_g,default_in_ml',
             ])
             ->find($id);
     }
@@ -104,6 +106,9 @@ class SalesRecipeService
         'vk_netto', 'vk_einheit_vocab_id', 'vk_anzahl_einheiten', 'vk_menge_pro_einheit_g',
         'behaelter_warm_vocab_id', 'behaelter_warm_anzahl', 'behaelter_kalt_vocab_id', 'behaelter_kalt_anzahl',
         'servier_vehikel_vocab_id', 'geschmacksrichtung',
+        // M9-01: Voll-Editor-Parität — Eigenschaften, Texte, Plating, Notizen
+        'marketing_text', 'beschreibung', 'arbeitszeit_min', 'temperatur', 'funktion',
+        'fertigungstiefe', 'plating_text', 'notizen_manual',
     ];
 
     public function updateVk(Team $team, int $id, array $in): FoodAlchemistRecipe
@@ -115,10 +120,12 @@ class SalesRecipeService
 
         return DB::transaction(function () use ($recipe, $in) {
             $update = array_intersect_key($in, array_flip(self::VK_FELDER));
-            // Wording manuell editiert → Lineage auf manual (GL-07)
-            if (array_key_exists('vk_wording_standard', $update) && $update['vk_wording_standard'] !== $recipe->vk_wording_standard) {
-                $update['vk_wording_quelle'] = 'manual';
-                $update['vk_wording_ai_confidence'] = null;
+            // Wording/Marketing/Plating manuell editiert → Lineage auf manual (GL-07)
+            foreach (['vk_wording_standard' => 'vk_wording', 'marketing_text' => 'marketing_text', 'plating_text' => 'plating'] as $feld => $praefix) {
+                if (array_key_exists($feld, $update) && $update[$feld] !== $recipe->{$feld}) {
+                    $update["{$praefix}_quelle"] = 'manual';
+                    $update["{$praefix}_ai_confidence"] = null;
+                }
             }
             // brutto konsistent halten, wenn netto/mwst manuell gesetzt werden (User-Hoheit, I9)
             $netto = array_key_exists('vk_netto', $update) ? $update['vk_netto'] : $recipe->vk_netto;

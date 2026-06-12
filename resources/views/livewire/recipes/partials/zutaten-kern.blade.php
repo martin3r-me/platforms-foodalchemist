@@ -10,7 +10,10 @@
         <table class="{{ $table }}">
             {{-- R5: BIS-Spalte raus (Dominique) — menge_max bleibt in den Daten erhalten; 3 EK-Sichten statt einer --}}
             <thead><tr class="text-left">
-                @foreach(['#' => null, 'Menge' => null, 'Einheit' => null, 'Verknüpfung / Beschreibung' => 'Klick auf den Namen öffnet das GP/Rezept in neuem Tab', 'Hinweis' => null, 'Garv. %' => null, 'EK €' => 'EK nach Lead-LA-Strategie (V-27 — damit rechnet das Rezept)', 'EK ↓' => 'günstigster Lieferantenartikel hinter dem GP', 'EK Ø' => 'Durchschnitt über alle Lieferantenartikel hinter dem GP', '' => null] as $head => $tip)
+                @php($koepfe = ['#' => null, 'Menge' => null, 'Einheit' => null, 'Verknüpfung / Beschreibung' => 'Klick auf den Namen öffnet GP/Rezept als Fenster über dem Editor']
+                    + ($vkKontext ? ['Rolle' => 'V-21: aroma_treiber · komponente · beilage · garnitur (🎭 verteilt per KI)'] : [])
+                    + ['Hinweis' => null, 'Garv. %' => null, 'EK €' => 'EK nach Lead-LA-Strategie (V-27 — damit rechnet das Rezept)', 'EK ↓' => 'günstigster Lieferantenartikel hinter dem GP', 'EK Ø' => 'Durchschnitt über alle Lieferantenartikel hinter dem GP', '' => null])
+                @foreach($koepfe as $head => $tip)
                     <th class="{{ $th }} !px-2 {{ $tip ? 'cursor-help underline decoration-dotted decoration-gray-300 underline-offset-2' : '' }}" @if($tip) title="{{ $tip }}" @endif>{{ $head }}</th>
                 @endforeach
             </tr></thead>
@@ -52,6 +55,16 @@
                             <button type="button" x-show="zeile.gp_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Lieferantenartikel hinter dem GP (Peek)"
                                     @click="peek(zeile)" data-gp-peek>📦</button>
                         </td>
+                        @if($vkKontext)
+                            <td class="{{ $td }} !px-2 !py-1">
+                                <select x-model="zeile.rolle" class="{{ $input }} !w-32 !py-1" data-rolle-select>
+                                    <option value="">—</option>
+                                    @foreach(\Platform\FoodAlchemist\Services\SpeisenKlassenService::ROLLEN as $rolle)
+                                        <option value="{{ $rolle }}">{{ $rolle }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
+                        @endif
                         <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.note" placeholder="Hinweis" class="{{ $input }} !w-28 !py-1" /></td>
                         <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.garverlust_pct" placeholder="0" class="{{ $input }} !w-14 !py-1 text-right" /></td>
                         <td class="{{ $td }} !px-2 !py-1 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
@@ -72,7 +85,7 @@
                     </tr>
                     {{-- GP-Peek (D-5 §4.2.3, Ist-App): LA-Tabelle hinter dem GP, ★ = Lead --}}
                     <tr x-show="zeile._peek" x-cloak>
-                        <td colspan="10" class="!px-3 !py-2 bg-black/[0.02] dark:bg-white/[0.03]">
+                        <td colspan="{{ $vkKontext ? 11 : 10 }}" class="!px-3 !py-2 bg-black/[0.02] dark:bg-white/[0.03]">
                             <div class="rounded-lg border-l-2 border-orange-400 bg-white dark:bg-gray-900 px-3 py-2" data-gp-peek-tabelle>
                                 <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">
                                     📦 <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
@@ -106,7 +119,7 @@
                 </template>
             <tfoot>
                 <tr class="border-t border-black/10 dark:border-white/10">
-                    <td colspan="6" class="{{ $td }} !px-2 text-right text-xs text-gray-400">
+                    <td colspan="{{ $vkKontext ? 7 : 6 }}" class="{{ $td }} !px-2 text-right text-xs text-gray-400">
                         Σ live (Näherung — count-Einheiten & Brücken rechnet der Save-Recompute)
                     </td>
                     <td class="{{ $td }} !px-2 text-right font-medium tabular-nums text-gray-900 dark:text-gray-100" data-summe-live>

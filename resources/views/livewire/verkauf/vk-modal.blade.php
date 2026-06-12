@@ -39,6 +39,11 @@
         </x-foodalchemist::modal-section>
     @else
         <x-foodalchemist::modal-section title="Stammdaten">
+            {{-- M9-01i: ✨-Vorschläge in die Form-Felder (Save = Accept) --}}
+            <x-slot:actions>
+                <button type="button" wire:click="ki('wording')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.wording: kanonischer Marketing-Name, stil-neutral" data-ki-wording>✨ Wording</button>
+                <button type="button" wire:click="ki('marketing')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.marketing: verkäuferischer Foodbook-Text" data-ki-marketing>✨ Marketing</button>
+            </x-slot:actions>
             <div class="grid grid-cols-2 gap-3">
                 <div class="col-span-2">
                     <label class="block {{ $label }} mb-1">Name*</label>
@@ -47,6 +52,11 @@
                 <div class="col-span-2">
                     <label class="block {{ $label }} mb-1">VK-Wording (kanonischer Marketing-Name, stil-neutral)</label>
                     <input type="text" wire:model="form.vk_wording_standard" class="{{ $input }}" data-vk-wording />
+                    <p class="text-[10px] text-gray-400 mt-0.5">Schreibstile (Foodbook, M10) transformieren später diesen Standard in Brand-Voice-Varianten.</p>
+                </div>
+                <div class="col-span-2">
+                    <label class="block {{ $label }} mb-1">Marketing-Text (Foodbook)</label>
+                    <textarea wire:model="form.marketing_text" rows="2" class="{{ $input }}" data-vk-marketing-text></textarea>
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Geschmack</label>
@@ -106,6 +116,60 @@
             </div>
         </x-foodalchemist::modal-section>
 
+        {{-- M9-01a/b: Zutaten INLINE (P-8-Kern, VK-Kontext = Rollen-Spalte) + 🎭 + KPI-Leiste --}}
+        <x-foodalchemist::modal-section title="Zutaten ({{ $rezept->ingredients->count() }})">
+            <x-slot:actions>
+                <button type="button" wire:click="ai_rollen" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-editor-rollen>🎭 Rollen verteilen</button>
+            </x-slot:actions>
+
+            @if($rollenVorschlag !== null)
+                <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-sm" data-vk-editor-rollen-vorschlag>
+                    <p class="text-gray-900 dark:text-gray-100">🎭 Rollen-Verteilung <span class="text-xs text-gray-400">· {{ round($rollenVorschlag['confidence'] * 100) }} %</span></p>
+                    @if($rollenVorschlag['rollen'] === [])
+                        <p class="text-xs text-gray-400 mt-0.5">Kein gültiger Vorschlag (Vokabular: aroma_treiber · komponente · beilage · garnitur).</p>
+                    @else
+                        <div class="mt-1 space-y-0.5">
+                            @foreach($rollenVorschlag['rollen'] as $zeileId => $rolle)
+                                @php($zeile = $rezept->ingredients->firstWhere('id', $zeileId))
+                                <p class="text-xs text-gray-600 dark:text-gray-300" wire:key="vkmr-{{ $zeileId }}">{{ $zeile?->referencedRecipe?->name ?? $zeile?->gp?->name ?? $zeile?->display_name ?? "Zeile {$zeileId}" }} → <span class="font-medium">{{ $rolle }}</span></p>
+                            @endforeach
+                        </div>
+                    @endif
+                    <div class="flex gap-1.5 mt-1.5">
+                        @if($rollenVorschlag['rollen'] !== [])
+                            <button type="button" wire:click="accept_rollen" class="{{ $btnGhostXs }} text-emerald-600" data-vk-rollen-accept>Übernehmen</button>
+                        @endif
+                        <button type="button" wire:click="reject_rollen" class="{{ $btnGhostXs }}">Verwerfen</button>
+                    </div>
+                </div>
+            @endif
+
+            <livewire:foodalchemist.recipes.ingredient-editor :recipe-id="$recipeId" :eingebettet="true" wire:key="vk-zutaten-{{ $recipeId }}-v{{ $zutatenVersion }}" />
+
+            <div class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2" data-vk-editor-kpis>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Yield</span>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">EK gesamt</span>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">EK / kg</span>
+                    <p class="text-sm font-bold text-orange-700 dark:text-orange-300">{{ $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Mit Preis</span>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_n_ingredients_priced ?? 0 }}/{{ $rezept->ek_n_ingredients_total ?? 0 }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Allergen-Konf.</span>
+                    <p class="text-sm font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergene_konfidenz) }}</p>
+                </div>
+            </div>
+        </x-foodalchemist::modal-section>
+
         <x-foodalchemist::modal-section title="Verkaufs-Block (Live-Marge)">
             <div class="grid grid-cols-3 gap-3" data-vk-verkaufsblock>
                 <div>
@@ -132,7 +196,66 @@
             @endif
         </x-foodalchemist::modal-section>
 
+        {{-- M9-01c: Allergene · Zusatzstoffe · Diät (geteiltes R6-Partial) --}}
+        <x-foodalchemist::modal-section title="Deklaration">
+            @include('foodalchemist::livewire.recipes.partials.deklaration', ['rezept' => $rezept])
+        </x-foodalchemist::modal-section>
+
+        {{-- M9-01d: Nährwerte (GL-08-Aggregate — pro 100 g + pro Stück) --}}
+        <x-foodalchemist::modal-section title="Nährwerte">
+            @if($rezept->nutri_kcal_per_100g === null)
+                <p class="text-xs text-gray-400" data-vk-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
+            @else
+                <table class="{{ $table }}" data-vk-naehrwerte>
+                    <thead><tr class="text-left">
+                        <th class="{{ $th }}">Nährwert</th>
+                        <th class="{{ $th }} text-right">pro 100 g</th>
+                        <th class="{{ $th }} text-right">pro Stück {{ $gProStueck !== null ? '(≈ ' . number_format($gProStueck, 0, ',', '.') . ' g)' : '' }}</th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach([
+                            ['Brennwert', $rezept->nutri_kcal_per_100g, 'kcal', 0],
+                            ['Eiweiß', $rezept->nutri_protein_g_per_100g, 'g', 1],
+                            ['Fett', $rezept->nutri_fat_g_per_100g, 'g', 1],
+                            ['Kohlenhydrate', $rezept->nutri_carbs_g_per_100g, 'g', 1],
+                            ['Salz', $rezept->nutri_salt_g_per_100g, 'g', 2],
+                        ] as [$lbl, $wert, $einheit, $dez])
+                            <tr class="{{ $tr }}" wire:key="vkn-{{ $lbl }}">
+                                <td class="{{ $td }} {{ $lbl === 'Brennwert' ? 'font-medium text-gray-900 dark:text-gray-100' : '' }}">{{ $lbl }}</td>
+                                <td class="{{ $td }} text-right tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $einheit : '—' }}</td>
+                                <td class="{{ $td }} text-right tabular-nums">{{ $wert !== null && $gProStueck !== null ? number_format((float) $wert * $gProStueck / 100, $dez, ',', '.') . ' ' . $einheit : '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+                <p class="text-[10px] text-gray-400 mt-1">
+                    Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->nutri_konfidenz] ?? '' }}">{{ strtoupper($rezept->nutri_konfidenz ?? '—') }}</span>
+                    · {{ $rezept->nutri_n_ingredients_mapped ?? 0 }}/{{ $rezept->nutri_n_ingredients_total ?? 0 }} Zutaten mit Nährwert-Daten
+                    {{ $rezept->nutri_aggregiert_am !== null ? '· aggregiert ' . $rezept->nutri_aggregiert_am->format('Y-m-d H:i') : '' }}
+                    — Garverlust/Putzverlust werden NICHT angewendet (BLS-Rohwerte); Stück-Zutaten ohne g/ml-Basis tragen nichts bei.
+                </p>
+            @endif
+        </x-foodalchemist::modal-section>
+
+        {{-- M9-01e: Spezifikation (Bio-/Regional-Anteil, Gramm-gewichtet über GP-Tags) --}}
+        <x-foodalchemist::modal-section title="Spezifikation">
+            <div class="grid grid-cols-2 gap-3" data-vk-spezifikation>
+                <div>
+                    <span class="{{ $dt }}">Bio-Anteil</span>
+                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ $anteile['bio'] !== null ? number_format($anteile['bio'], 1, ',', '.') . ' %' : '—' }}</p>
+                </div>
+                <div>
+                    <span class="{{ $dt }}">Regional (DE)</span>
+                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ $anteile['regional'] !== null && $anteile['regional'] > 0 ? number_format($anteile['regional'], 1, ',', '.') . ' %' : '—' }}</p>
+                </div>
+            </div>
+        </x-foodalchemist::modal-section>
+
         <x-foodalchemist::modal-section title="Container & Service">
+            <x-slot:actions>
+                <button type="button" wire:click="ki('behaelter')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.behaelter: warm/kalt + Anzahl fürs Catering" data-ki-behaelter>✨ Behälter</button>
+                <button type="button" wire:click="ki('vehikel')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.servier_vehikel: worauf wird angerichtet" data-ki-vehikel>✨ Servier-Vorschlag</button>
+            </x-slot:actions>
             <div class="grid grid-cols-2 gap-3" data-vk-container>
                 <div>
                     <label class="block {{ $label }} mb-1">Behälter warm</label>
@@ -171,6 +294,20 @@
         </x-foodalchemist::modal-section>
 
         <x-foodalchemist::modal-section title="Regeneration (je Komponente, V-19)">
+            <x-slot:actions>
+                <button type="button" wire:click="kiRegeneration" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.regeneration: ein Programm je Komponente (Vorschlag, Übernahme je Zeile)" data-ki-regeneration>✨ Regeneration</button>
+            </x-slot:actions>
+            @if($regenVorschlaege !== [])
+                <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 space-y-1" data-regen-vorschlaege>
+                    <p class="text-xs font-medium text-violet-700 dark:text-violet-300">✨ Programm-Vorschläge — je Zeile übernehmen:</p>
+                    @foreach($regenVorschlaege as $idx => $rv)
+                        <div class="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-300" wire:key="rvz-{{ $idx }}">
+                            <span class="min-w-0 truncate">{{ $rv['komponente_label'] }}{{ $rv['temp_c'] !== null ? ' · ' . $rv['temp_c'] . ' °C' : '' }}{{ $rv['dauer_min'] !== null ? ' · ' . $rv['dauer_min'] . ' min' : '' }}{{ $rv['kerntemp_c'] !== null ? ' · KT ' . $rv['kerntemp_c'] . ' °C' : '' }}</span>
+                            <button type="button" wire:click="regenVorschlagUebernehmen({{ $idx }})" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-regen-uebernehmen>+ Übernehmen</button>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
             <div class="space-y-1.5" data-vk-regen>
                 @foreach($regenZeilen as $z)
                     <div wire:key="rg-{{ $z->id }}" class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200" data-regen-zeile="{{ $z->id }}">
@@ -197,6 +334,59 @@
                     <button type="button" wire:click="regenSpeichern" class="{{ $btnGhostXs }}" data-regen-speichern>{{ $regenEditId !== null ? 'Aktualisieren' : '+ Zeile' }}</button>
                 </div>
             </div>
+        </x-foodalchemist::modal-section>
+
+        {{-- M9-01f: Eigenschaften (+ ✨ recipe.eigenschaften/geschmack) --}}
+        <x-foodalchemist::modal-section title="Eigenschaften">
+            <x-slot:actions>
+                <button type="button" wire:click="ki('eigenschaften')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-ki-eigenschaften>✨ Eigenschaften</button>
+            </x-slot:actions>
+            <div class="grid grid-cols-2 gap-3" data-vk-eigenschaften>
+                <div>
+                    <label class="block {{ $label }} mb-1">Arbeitszeit (min)</label>
+                    <input type="number" min="0" wire:model="form.arbeitszeit_min" class="{{ $input }}" />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Temperatur</label>
+                    <input type="text" wire:model="form.temperatur" placeholder="z. B. 75 °C Kerntemperatur · gekühlt" class="{{ $input }}" />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Funktion</label>
+                    <input type="text" wire:model="form.funktion" placeholder="z. B. Hauptgang, Fingerfood" class="{{ $input }}" />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Fertigungstiefe</label>
+                    <select wire:model="form.fertigungstiefe" class="{{ $input }}">
+                        <option value="">— unbestimmt —</option>
+                        <option value="from_scratch">from scratch</option>
+                        <option value="teilfertig">teilfertig</option>
+                        <option value="convenience">Convenience</option>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="block {{ $label }} mb-1">KI-Beschreibung (3–5 Sätze nüchtern, §8.3)</label>
+                    <textarea wire:model="form.beschreibung" rows="3" class="{{ $input }}" data-vk-beschreibung></textarea>
+                </div>
+            </div>
+        </x-foodalchemist::modal-section>
+
+        {{-- M9-01g: Plating & Service (Teller-Aufbau, Mengenverteilung — keine Produktion) --}}
+        <x-foodalchemist::modal-section title="Plating &amp; Service">
+            <x-slot:actions>
+                <button type="button" wire:click="ki('plating')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.plating: Hybrid-Plating-Anweisung" data-ki-plating>✨ Plating</button>
+            </x-slot:actions>
+            <div x-data data-vk-plating>
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] text-gray-400">Markdown — ## für Phasen, nummerierte Schritte</span>
+                    @include('foodalchemist::livewire.recipes.partials.md-toolbar', ['ziel' => 'vk-plating-text'])
+                </div>
+                <textarea wire:model="form.plating_text" id="vk-plating-text" rows="7" class="{{ $input }} font-mono text-xs" data-vk-plating-text></textarea>
+            </div>
+        </x-foodalchemist::modal-section>
+
+        {{-- M9-01h: Notizen (§9.1 — manuelle Insel) --}}
+        <x-foodalchemist::modal-section title="Notizen (§9.1 — bleibt bei jedem KI-Sync erhalten)">
+            <textarea wire:model="form.notizen_manual" rows="3" class="{{ $input }}" data-vk-notizen></textarea>
         </x-foodalchemist::modal-section>
 
         <x-foodalchemist::modal-section title="Verwendungsnachweise (Kunde × Marketing-Name)">

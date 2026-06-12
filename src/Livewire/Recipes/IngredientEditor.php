@@ -214,6 +214,8 @@ class IngredientEditor extends Component
             'rezept' => $rezept,
             'zeilenJson' => $zeilen,
             'einheiten' => $einheiten,
+            // M9-01a: VK-Kontext zeigt die Rollen-Spalte (V-21 — Gesamt-Gericht-Sicht)
+            'vkKontext' => (bool) ($rezept?->ist_verkaufsrezept ?? false),
         ]);
     }
 }

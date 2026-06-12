@@ -80,6 +80,15 @@ class VkModal extends Component
                 'behaelter_kalt_vocab_id' => $r->behaelter_kalt_vocab_id,
                 'behaelter_kalt_anzahl' => $r->behaelter_kalt_anzahl,
                 'servier_vehikel_vocab_id' => $r->servier_vehikel_vocab_id,
+                // M9-01: Voll-Editor-Parität (Texte/Eigenschaften/Plating/Notizen)
+                'marketing_text' => $r->marketing_text,
+                'beschreibung' => $r->beschreibung,
+                'arbeitszeit_min' => $r->arbeitszeit_min,
+                'temperatur' => $r->temperatur,
+                'funktion' => $r->funktion,
+                'fertigungstiefe' => $r->fertigungstiefe,
+                'plating_text' => $r->plating_text,
+                'notizen_manual' => $r->notizen_manual,
             ];
             $this->hauptgruppeId = $r->speisenKlasse?->dish_main_group_id;
         }
@@ -90,7 +99,7 @@ class VkModal extends Component
     // (modal.closed ist ein Alpine-window-Event, das Livewire nicht erreicht)
     private function formZuruecksetzen(): void
     {
-        $this->reset(['recipeId', 'form', 'hauptgruppeId', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler']);
+        $this->reset(['recipeId', 'form', 'hauptgruppeId', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege']);
     }
 
     public function updatedHauptgruppeId(): void
@@ -135,6 +144,192 @@ class VkModal extends Component
         }
         $this->dispatch('recipe-gespeichert');
         $this->dispatch('modal.close', name: 'vk-modal');
+    }
+
+    // ── M9-01i: ✨-Aktionen — Vorschlag in die Form-Felder (Save = Accept, RecipeModal-Muster) ──
+
+    /** Re-Mount-Zähler für den eingebetteten Zutaten-Editor (Client-rows). */
+    public int $zutatenVersion = 0;
+
+    /** @var ?array{rollen: array<int, string>, confidence: float, begruendung: ?string} */
+    public ?array $rollenVorschlag = null;
+
+    public function ki(string $aktion): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->fehler = null;
+        $r = app(SalesRecipeService::class)->detail($team, $this->recipeId);
+        $gateway = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class);
+        $kontext = [
+            'name' => $this->form['name'] ?? $r->name,
+            'vk_wording_standard' => $this->form['vk_wording_standard'] ?? null,
+            'komponenten' => $r->ingredients->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all(),
+            'speisen_klasse' => $r->speisenKlasse?->bezeichnung,
+        ];
+
+        try {
+            match ($aktion) {
+                'wording' => $this->uebernehmeText('vk_wording_standard', $gateway->propose('vk.wording', $kontext)),
+                'marketing' => $this->uebernehmeText('marketing_text', $gateway->propose('vk.marketing', $kontext)),
+                'plating' => $this->uebernehmePlating($gateway->propose('vk.plating', $kontext + ['portion_g' => $this->form['vk_menge_pro_einheit_g'] ?? null])),
+                'eigenschaften' => $this->uebernehmeEigenschaften($gateway, $kontext),
+                'behaelter' => $this->uebernehmeBehaelter($gateway->propose('vk.behaelter', $kontext + [
+                    'vokabular' => DB::table('foodalchemist_vocab_behaelter')->whereNull('deleted_at')->where('is_inactive', false)->pluck('name', 'id')->all(),
+                ])),
+                'vehikel' => $this->uebernehmeVehikel($gateway->propose('vk.servier_vehikel', $kontext + [
+                    'vokabular' => DB::table('foodalchemist_vocab_serviervehikel')->whereNull('deleted_at')->where('is_inactive', false)->pluck('name', 'id')->all(),
+                ])),
+                default => null,
+            };
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    private function uebernehmeText(string $feld, \Platform\FoodAlchemist\Services\Ai\AiProposal $v): void
+    {
+        $wert = $v->werte[$feld] ?? null;
+        if (is_string($wert) && trim($wert) !== '') {
+            $this->form[$feld] = trim($wert);
+        } else {
+            $this->fehler = 'KI lieferte keinen verwertbaren Text — echter Provider nötig.';
+        }
+    }
+
+    private function uebernehmePlating(\Platform\FoodAlchemist\Services\Ai\AiProposal $v): void
+    {
+        $wert = $v->werte['zubereitung'] ?? $v->werte['plating_text'] ?? null;   // Registry-Schema: {zubereitung}
+        if (is_string($wert) && trim($wert) !== '') {
+            $this->form['plating_text'] = trim($wert);
+        } else {
+            $this->fehler = 'KI lieferte keinen verwertbaren Plating-Text — echter Provider nötig.';
+        }
+    }
+
+    private function uebernehmeEigenschaften(\Platform\FoodAlchemist\Services\Ai\AiGatewayService $ki, array $kontext): void
+    {
+        $v = $ki->propose('recipe.eigenschaften', $kontext + [
+            'arbeitszeit_min' => $this->form['arbeitszeit_min'] ?? null,
+            'temperatur' => $this->form['temperatur'] ?? null,
+            'funktion' => $this->form['funktion'] ?? null,
+        ]);
+        foreach (['arbeitszeit_min', 'temperatur', 'funktion'] as $feld) {
+            if (! empty($v->werte[$feld])) {
+                $this->form[$feld] = $v->werte[$feld];
+            }
+        }
+        $g = $ki->propose('recipe.geschmack', $kontext + ['geschmacksrichtung' => $this->form['geschmacksrichtung'] ?? null]);
+        if (in_array($g->werte['geschmacksrichtung'] ?? null, ['suess', 'herzhaft', 'neutral'], true)) {
+            $this->form['geschmacksrichtung'] = $g->werte['geschmacksrichtung'];
+        }
+    }
+
+    private function uebernehmeBehaelter(\Platform\FoodAlchemist\Services\Ai\AiProposal $v): void
+    {
+        $gueltig = DB::table('foodalchemist_vocab_behaelter')->whereNull('deleted_at')->pluck('id')->flip();
+        $gesetzt = false;
+        foreach (['warm', 'kalt'] as $seite) {
+            $id = $v->werte["behaelter_{$seite}_id"] ?? null;
+            if ($id !== null && isset($gueltig[(int) $id])) {
+                $this->form["behaelter_{$seite}_vocab_id"] = (int) $id;
+                $anzahl = $v->werte["behaelter_{$seite}_anzahl"] ?? null;
+                $this->form["behaelter_{$seite}_anzahl"] = is_numeric($anzahl) ? (int) $anzahl : null;
+                $gesetzt = true;
+            }
+        }
+        if (! $gesetzt) {
+            $this->fehler = 'KI lieferte keinen gültigen Behälter-Vorschlag — echter Provider nötig.';
+        }
+    }
+
+    private function uebernehmeVehikel(\Platform\FoodAlchemist\Services\Ai\AiProposal $v): void
+    {
+        $id = $v->werte['servier_vehikel_id'] ?? null;
+        if ($id !== null && DB::table('foodalchemist_vocab_serviervehikel')->whereNull('deleted_at')->where('id', (int) $id)->exists()) {
+            $this->form['servier_vehikel_vocab_id'] = (int) $id;
+        } else {
+            $this->fehler = 'KI lieferte kein gültiges Servier-Vehikel — echter Provider nötig.';
+        }
+    }
+
+    // ── M9-01i: ✨ Regeneration — Programm-Liste als Vorschlag, Übernahme je Zeile (GL-07) ──
+
+    /** @var array<int, array> */
+    public array $regenVorschlaege = [];
+
+    public function kiRegeneration(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->fehler = null;
+        $r = app(SalesRecipeService::class)->detail($team, $this->recipeId);
+        $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.regeneration', [
+            'name' => $r->name,
+            'komponenten' => $r->ingredients->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all(),
+            'vokabular' => DB::table('foodalchemist_vocab_regen_geraete')->whereNull('deleted_at')->where('is_inactive', false)->pluck('name', 'id')->all(),
+        ]);
+        $gueltig = DB::table('foodalchemist_vocab_regen_geraete')->whereNull('deleted_at')->pluck('id')->flip();
+        $this->regenVorschlaege = collect((array) ($v->werte['programme'] ?? []))
+            ->filter(fn ($z) => is_array($z) && ! empty($z['komponente_label']))
+            ->map(fn ($z) => [
+                'komponente_label' => (string) $z['komponente_label'],
+                'geraet_vocab_id' => isset($z['geraet_id']) && isset($gueltig[(int) $z['geraet_id']]) ? (int) $z['geraet_id'] : null,
+                'temp_c' => is_numeric($z['temp_c'] ?? null) ? (int) $z['temp_c'] : null,
+                'dauer_min' => is_numeric($z['dauer_min'] ?? null) ? (int) $z['dauer_min'] : null,
+                'kerntemp_c' => is_numeric($z['kerntemp_c'] ?? null) ? (int) $z['kerntemp_c'] : null,
+                'hinweis' => is_string($z['hinweis'] ?? null) ? $z['hinweis'] : null,
+            ])->values()->all();
+        if ($this->regenVorschlaege === []) {
+            $this->fehler = 'KI lieferte keine verwertbaren Regenerations-Programme — echter Provider nötig.';
+        }
+    }
+
+    public function regenVorschlagUebernehmen(int $idx): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $zeile = $this->regenVorschlaege[$idx] ?? null;
+        if ($team === null || $this->recipeId === null || $zeile === null) {
+            return;
+        }
+        app(SalesRecipeService::class)->upsertRegeneration($team, $this->recipeId, $zeile, null);
+        unset($this->regenVorschlaege[$idx]);
+        $this->regenVorschlaege = array_values($this->regenVorschlaege);
+    }
+
+    // ── M9-01a: 🎭 Rollen verteilen (V-21) — Proposal-Box über den Zutaten ──
+
+    public function ai_rollen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->fehler = null;
+        $this->rollenVorschlag = app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)
+            ->verteileRollen($team, $this->recipeId);
+    }
+
+    public function accept_rollen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null || $this->rollenVorschlag === null || $this->rollenVorschlag['rollen'] === []) {
+            return;
+        }
+        app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)
+            ->acceptRollen($team, $this->recipeId, $this->rollenVorschlag['rollen']);
+        $this->rollenVorschlag = null;
+        $this->zutatenVersion++;                                     // Editor-rows neu vom Server
+        $this->dispatch('recipe-gespeichert');
+    }
+
+    public function reject_rollen(): void
+    {
+        $this->rollenVorschlag = null;
     }
 
     // ── V-19: Regen-Zeilen ───────────────────────────────────────────────
@@ -216,9 +411,38 @@ class VkModal extends Component
         $team = Auth::user()?->currentTeamRelation;
         $rezept = $team !== null && $this->recipeId !== null ? $verkauf->detail($team, $this->recipeId) : null;
 
+        // M9-01d/e: Nährwerte pro Stück + Bio-/Regional-Anteil (Gramm-gewichtet über GP-Tags)
+        $gProStueck = null;
+        $anteile = ['bio' => null, 'regional' => null];
+        if ($rezept !== null) {
+            $cockpitTmp = $verkauf->cockpit($rezept);
+            $gProStueck = $cockpitTmp['verkauft_als']['g_pro_einheit'] ?? null;
+            $totalG = 0.0;
+            $summen = ['bio' => 0.0, 'regional' => 0.0];
+            foreach ($rezept->ingredients as $z) {
+                $faktor = (float) ($z->einheit?->default_in_g ?? $z->einheit?->default_in_ml ?? 0);
+                $g = (float) $z->menge * $faktor;
+                if ($g <= 0 || $z->is_optional) {
+                    continue;
+                }
+                $totalG += $g;
+                if ($z->gp?->is_organic) {
+                    $summen['bio'] += $g;
+                }
+                if ($z->gp?->is_regional) {
+                    $summen['regional'] += $g;
+                }
+            }
+            if ($totalG > 0) {
+                $anteile = ['bio' => round(100 * $summen['bio'] / $totalG, 1), 'regional' => round(100 * $summen['regional'] / $totalG, 1)];
+            }
+        }
+
         return view('foodalchemist::livewire.verkauf.vk-modal', [
             'rezept' => $rezept,
-            'cockpit' => $rezept !== null ? $verkauf->cockpit($rezept) : null,
+            'cockpit' => $rezept !== null ? ($cockpitTmp ?? $verkauf->cockpit($rezept)) : null,
+            'gProStueck' => $gProStueck,
+            'anteile' => $anteile,
             'hauptgruppen' => $team !== null ? $verkauf->dishMainGroups($team) : collect(),
             'klassen' => $this->hauptgruppeId !== null
                 ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppeId)->orderBy('bezeichnung')->get(['id', 'bezeichnung', 'diaetform'])
