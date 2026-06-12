@@ -39,9 +39,14 @@ class AiGatewayService
         if (!empty($prompt['system'])) {
             $messages[] = ['role' => 'system', 'content' => $prompt['system']];
         }
+        // GL-13: Fakten-Wissen gehört in den USER-Prompt (Hüllen = Verhalten, additiv, nie redundant)
+        $wissen = isset($options['knowledge']) && is_string($options['knowledge']) && $options['knowledge'] !== ''
+            ? $options['knowledge'] . "\n\n"
+            : '';
+        unset($options['knowledge']);
         $messages[] = [
             'role' => 'user',
-            'content' => $prompt['task'] . "\n\nKontext:\n" . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            'content' => $wissen . $prompt['task'] . "\n\nKontext:\n" . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
         ];
 
         $start = hrtime(true);

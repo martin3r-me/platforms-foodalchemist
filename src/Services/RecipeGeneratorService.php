@@ -48,10 +48,16 @@ class RecipeGeneratorService
     {
         $kiRezept = $kiRezeptOverride;
         if ($kiRezept === null) {
+            // M5-06 / GL-13: Souschef-Wissen (7 Always-Load + Domains + Pairing-Block)
+            // als Fakten-Block in den User-Prompt; Stil-Filter zieht erst beim VK-
+            // Generator (M6, Tabelle 4.1). Leere Wissensbasis = leerer Block, nie Fehler.
+            $wissen = app(Ai\KnowledgeContextService::class)->contextFor(
+                'ai_generate_recipe', $beschreibung, $parameter['kompositions_stil'] ?? null
+            );
             $vorschlag = $this->ki->propose('recipe.generator', [
                 'beschreibung' => $beschreibung,
                 'parameter' => $parameter,
-            ]);
+            ], ['knowledge' => $wissen['block']]);
             $kiRezept = $vorschlag->werte;
         }
         if (empty($kiRezept['name']) || empty($kiRezept['zutaten']) || ! is_array($kiRezept['zutaten'])) {
