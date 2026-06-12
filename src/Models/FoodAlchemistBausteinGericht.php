@@ -1,0 +1,45 @@
+<?php
+
+namespace Platform\FoodAlchemist\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\ActivityLog\Traits\LogsActivity;
+use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
+use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
+
+/**
+ * @ai.description Baustein-Gericht (M10-01) — ein VK-Rezept als Bestandteil eines
+ * Bausteins (z. B. „Green Power" in „Salad Wall"). Position-sortiert.
+ */
+class FoodAlchemistBausteinGericht extends Model
+{
+    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+
+    protected $table = 'foodalchemist_baustein_gerichte';
+
+    protected $guarded = ['id'];
+
+    protected $casts = [
+        'uuid' => 'string',
+        'menge' => 'decimal:3',
+        'position' => 'integer',
+    ];
+
+    public function baustein(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistBaustein::class, 'baustein_id');
+    }
+
+    /** Das verknüpfte Gericht (VK-Rezept). */
+    public function gericht(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'vk_recipe_id');
+    }
+
+    public function einheit(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
+    }
+}

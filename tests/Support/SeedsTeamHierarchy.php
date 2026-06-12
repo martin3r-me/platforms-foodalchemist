@@ -77,6 +77,8 @@ trait SeedsTeamHierarchy
         // Stale Ketten aus früheren Tests desselben Prozesses verwerfen.
         // Weitere Models mit BelongsToTeamHierarchy hier ergänzen, sobald getestet.
         FoodAlchemistGp::flushTeamAncestryCache();
+        \Platform\FoodAlchemist\Models\FoodAlchemistBaustein::flushTeamAncestryCache();
+        \Platform\FoodAlchemist\Models\FoodAlchemistConcept::flushTeamAncestryCache();
     }
 
     /** User mit current_team_id im gegebenen Team (für UI-/Curate-Gating-Tests, M1-08). */
