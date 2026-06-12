@@ -436,6 +436,83 @@ class PairingService
             ->get(['a.slug', 'a.display_de', 'rp.typ', 'rp.konfidenz']);
     }
 
+    // ── M5-07: Aroma-Netz-Graph (D-7, 13_REFERENZ Nachlieferung 2) ───────
+
+    /**
+     * Datenbasis fürs Aroma-Netz-Modal: Ring = Kern-Anker (★, zuerst) +
+     * Pairing-Anker des Rezepts (Cap 28 für Lesbarkeit), Brücken = beste Kante
+     * je ungeordnetem Anker-Paar im Ring (GL-10-Typen), Verwandte = Rezepte
+     * mit gemeinsamen Pairing-Ankern inkl. Andock-Anker-Ids, Vorschläge =
+     * je Ring-Anker die stärksten Nachbarn AUSSERHALB des Rings.
+     *
+     * @return array{zentrum: ?array, anker: list<array>, kanten: list<array>, verwandte: list<array>, vorschlaege: list<array>}
+     */
+    public function aromaNetz(Team $team, int $recipeId, int $vorschlaegeProAnker = 0): array
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find($recipeId);
+        if ($recipe === null) {
+            return ['zentrum' => null, 'anker' => [], 'kanten' => [], 'verwandte' => [], 'vorschlaege' => []];
+        }
+
+        $kern = $this->recipeAnkers($recipeId);
+        $pairing = DB::table('foodalchemist_recipe_pairings AS rp')
+            ->join('foodalchemist_vocab_pairing_ankers AS a', 'a.id', '=', 'rp.anker_id')
+            ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
+            ->whereNotIn('a.id', $kern->pluck('id'))
+            ->orderByRaw("CASE rp.typ WHEN 'klassisch' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
+            ->orderBy('a.slug')->distinct()
+            ->get(['a.id', 'a.slug', 'a.display_de']);
+
+        $anker = $kern->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de, 'kern' => true])
+            ->concat($pairing->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de, 'kern' => false]))
+            ->unique('id')->take(28)->values();
+        $ringIds = $anker->pluck('id')->all();
+
+        // Brücken: beste Kante je ungeordnetem Paar (a < b dedupe)
+        $kanten = [];
+        foreach ($this->edgeBest($ringIds) as $a => $nachbarn) {
+            foreach ($nachbarn as $b => [$w, $typ]) {
+                if ($a < $b) {
+                    $kanten[] = ['a' => (int) $a, 'b' => (int) $b, 'typ' => $typ];
+                }
+            }
+        }
+
+        $verwandte = $this->recipesSharingPairings($team, $recipeId)->map(function (array $v) use ($ringIds) {
+            $v['shared_anker_ids'] = DB::table('foodalchemist_recipe_pairings')
+                ->where('recipe_id', $v['recipe_id'])->whereNull('deleted_at')
+                ->whereIn('anker_id', $ringIds)->distinct()->pluck('anker_id')->map(fn ($i) => (int) $i)->all();
+            $v['vk'] = (bool) FoodAlchemistRecipe::withoutGlobalScopes()->whereKey($v['recipe_id'])->value('ist_verkaufsrezept');
+
+            return $v;
+        })->values()->all();
+
+        // Vorschlags-Modus: je Anker top-n Nachbarn außerhalb des Rings (Typ-Priorität wie Ist)
+        $vorschlaege = [];
+        if ($vorschlaegeProAnker > 0) {
+            $gesehen = array_flip($ringIds);
+            foreach ($anker as $a) {
+                $neu = $this->ankerNeighbors($a['slug'], null, 60)
+                    ->filter(fn ($n) => ! isset($gesehen[(int) $n->id]))
+                    ->take($vorschlaegeProAnker);
+                foreach ($neu as $n) {
+                    $vorschlaege[] = [
+                        'anker_id' => $a['id'], 'id' => (int) $n->id,
+                        'slug' => $n->slug, 'display_de' => $n->display_de, 'typ' => $n->typ,
+                    ];
+                }
+            }
+        }
+
+        return [
+            'zentrum' => ['id' => $recipe->id, 'name' => $recipe->name],
+            'anker' => $anker->all(),
+            'kanten' => $kanten,
+            'verwandte' => $verwandte,
+            'vorschlaege' => $vorschlaege,
+        ];
+    }
+
     // ── intern ───────────────────────────────────────────────────────────
 
     /** Beste Kante je ungeordnetem Anker-Paar: [a][b] => [gewicht, typ]. */

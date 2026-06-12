@@ -87,6 +87,9 @@
     {{-- M4-14: Generator --}}
     <livewire:foodalchemist.recipes.generator-modal />
 
+    {{-- M5-07: Aroma-Netz-Graph (innerhalb x-ui-page, P-2) --}}
+    <livewire:foodalchemist.recipes.aroma-netz-modal />
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between -mb-2">
             <div class="flex items-center gap-2">

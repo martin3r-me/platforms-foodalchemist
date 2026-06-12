@@ -192,11 +192,15 @@
 
         {{-- M5-05: Pairing-Chips + verwandte Rezepte (lazy) --}}
         <div data-pairing-sektion>
-            <button type="button" wire:click="toggleSektion('pairing')"
-                    class="w-full flex items-center justify-between py-1 text-xs font-medium uppercase tracking-wider text-gray-400 hover:text-violet-500 transition-colors">
-                <span>Pairings</span>
-                <span>{{ ($offen['pairing'] ?? false) ? '▾' : '▸' }}</span>
-            </button>
+            <div class="flex items-center gap-2">
+                <button type="button" wire:click="toggleSektion('pairing')"
+                        class="flex-1 flex items-center justify-between py-1 text-xs font-medium uppercase tracking-wider text-gray-400 hover:text-violet-500 transition-colors">
+                    <span>Pairings</span>
+                    <span>{{ ($offen['pairing'] ?? false) ? '▾' : '▸' }}</span>
+                </button>
+                <button type="button" wire:click="$dispatch('aroma-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
+                        class="{{ $btnGhostXs }} shrink-0" title="Aroma-Netz: Anker, Brücken und verwandte Rezepte als Graph" data-aroma-netz-btn>🕸 Aroma-Netz</button>
+            </div>
             @if($pairings !== null)
                 <div class="flex flex-wrap gap-1 mt-1" data-pairing-chips>
                     @foreach($pairings as $p)
