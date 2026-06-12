@@ -74,7 +74,10 @@ class RecipeGeneratorService
                 $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
                     ->orderBy('code')->pluck('bezeichnung', 'code')->all();
             }
-            $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, ['knowledge' => $wissen['block']]);
+            $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [
+                'knowledge' => $wissen['block'],
+                'knowledge_used' => $wissen['files_used'],            // M7-01: GL-13-§6-Audit-Lücke geschlossen
+            ]);
             $kiRezept = $vorschlag->werte;
         }
         if (empty($kiRezept['name']) || empty($kiRezept['zutaten']) || ! is_array($kiRezept['zutaten'])) {

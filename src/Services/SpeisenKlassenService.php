@@ -57,11 +57,12 @@ class SpeisenKlassenService
             'klasse_name' => $klasse?->bezeichnung,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
             'begruendung' => $vorschlag->begruendung,
+            'call_log_id' => $vorschlag->callLogId,                   // M7-01: Accept stempelt (§5 Pflicht 3)
         ];
     }
 
-    /** GL-07-Accept: schreibt Klasse + Lineage-Trio; Override-First. */
-    public function acceptKlasse(Team $team, int $recipeId, int $klasseId, float $confidence, ?string $begruendung): void
+    /** GL-07-Accept: schreibt Klasse + Lineage-Trio; Override-First; stempelt accepted_at (§5 P3). */
+    public function acceptKlasse(Team $team, int $recipeId, int $klasseId, float $confidence, ?string $begruendung, ?int $callLogId = null): void
     {
         $r = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
         if ($r->speisen_klasse_quelle === 'manual') {
@@ -75,6 +76,7 @@ class SpeisenKlassenService
             'speisen_klasse_ai_confidence' => $confidence,
             'speisen_klasse_ai_begruendung' => $begruendung,
         ]);
+        $this->ki->stempleAccepted($callLogId);
     }
 
     /**

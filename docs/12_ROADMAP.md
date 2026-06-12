@@ -196,8 +196,8 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 
 | ID | Paket | Inhalt | Ref | DoD | Status |
 |---|---|---|---|---|---|
-| M7-01 | ai_call_log | Audit-Tabelle + Schreiber in Gateway (Modul, Prompt-Key, Tokens, Dauer, Erfolg) | D-4 | jeder Call geloggt | ☐ |
-| M7-02 | Tiering | Tier-Klassen A–D abstrakt, Zuordnung je TASK_PROMPT in config (V-01) | 06_KI §2 | Tier wählbar, Default sinnvoll | ☐ |
+| M7-01 | ai_call_log | Audit-Tabelle + Schreiber in Gateway (Modul, Prompt-Key, Tokens, Dauer, Erfolg) | D-4 | jeder Call geloggt | ☑ |
+| M7-02 | Tiering | Tier-Klassen A–D abstrakt, Zuordnung je TASK_PROMPT in config (V-01) | 06_KI §2 | Tier wählbar, Default sinnvoll | ☑ |
 | M7-03 | Retry-Schutz | Structural-Retry + Degenerations-Erkennung generalisiert (V-02) | 06_KI | Test: kaputte Fake-Antwort → Retry → Erfolg | ☐ |
 | M7-04 | Prompt-Registry | Die 42 TASK_PROMPTs aus 06_KI migrieren (Feld-Hüllen modul-eigen) | **06_KI** | Registry vollständig; Keys == Inventar | ☐ |
 | M7-05 | Voice-Hüllen | Anbindung core.semantic_layer (`SemanticLayerResolver::resolveFor`) für Ton/Perspektive | D3; GL-06 §6 | Layer-Wechsel ändert Prompt nachweisbar | ☐ |
@@ -206,6 +206,8 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | M7-08 | KI-Settings | Settings-Sektion: Provider-Status, Tier-Zuordnung, Budget-Anzeige, Kill-Switch | M1-01 | Kill-Switch stoppt Autopilot-Buttons | ☐ |
 | M7-09 | Embeddings/RAG | GL-04-RAG + V-24 — **wartet auf Martin** (Embedding-Support Plattform-LLM) | GL-04; D3-Rest | blockiert markieren | ☐ blockiert |
 | M7-10 | Voice-Interface | Sprachbedienung als zweiter Bedienweg (UI bleibt parallel): Mikro-Aufnahme (MediaRecorder, Opus mono — Vorbild `platforms-whisper`) → **eigener sync Kurz-Audio-STT** (`SttServiceContract` + `AssemblyAiSttService`, **D8**: kein Fremdmodul-Require, kein Core-Eingriff) → agentischer Tool-Loop (`callWithTools`, Tier D) über M8-01-Tools; Schreibaktionen NUR via GL-07-Proposal-Flow (sprechen → Proposal → bestätigen); nach: M7-04 + erste M8-01-Tools | **D8 in 08**; Dev-Modul Discussion #1; 06_KI §1; GL-07; M8-01; martin3r-me/platforms-whisper | 3 Sprachbefehle end-to-end (Suche, Detail öffnen, Schreib-Proposal mit Accept); Befehls-Latenz gemessen + dokumentiert | ☐ (Deploy braucht `ASSEMBLYAI_API_KEY` — Martin; Sandbox-Bau frei) |
+
+> **Status M7-01/02 (2026-06-12):** Migration 000030 `foodalchemist_ai_call_log` (06_KI-§5-Schema: feature/tier/model, layers_used-Slot für M7-05, **knowledge_used** schließt die GL-13-§6-Audit-Lücke, prompt_hash SHA-256 statt Volltext, response_summary ≤ 200 Z., tokens in/out, target, accepted/rejected_at, error, elapsed_ms; Abweichung dokumentiert: team/user nullable wegen CLI-Calls). Gateway: **jeder Call loggt VOR Rückgabe, auch der Fehlerpfad** (try/catch + Wurf NACH dem Log — §5 Pflicht 2), Audit-Write selbst graceful (reißt den Fach-Call nie), `callLogId` geht im DTO mit; generische `stempleAccepted/-Rejected` (§5 Pflicht 3) — verdrahtet im neuen Klassen-Accept (classify → call_log_id → acceptKlasse stempelt); die M4-11-Bestands-Accepts (beschreibung/kategorie) stempeln noch nicht → Faden für M7-04-Registry-Umzug notiert. **Tiering (V-01):** Tier aus der Prompt-Registry (alle Prompts tragen tier seit M0-14), `options['tier']`-Override je Call, Tier→Modell-Mapping als Deployment-Config (`foodalchemist.ai.tiers`, env-bar, null = Plattform-Default — Modell-Strings sind nicht Spec). Generator reicht `files_used` als knowledge_used durch. Pest (5/24): Pflicht 1 (eine Zeile, alle Felder inkl. team/hash/summary), Pflicht 2 (Fehlerpfad mit error+model, Registry-Fehler VOR Call ohne Zeile), Pflicht 3 (Stempel + null-no-op), Tier-Registry/-Override, GL-13-Faden end-to-end über den Generator. Suite: **323/323**.
 
 ## M8 — Querschnitt (laufend)
 

@@ -67,6 +67,7 @@ class DetailPanel extends Component
             app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)->acceptKlasse(
                 $team, $this->recipeId, $this->klasseVorschlag['klasse_id'],
                 $this->klasseVorschlag['confidence'], $this->klasseVorschlag['begruendung'],
+                $this->klasseVorschlag['call_log_id'] ?? null,
             );
         } catch (\RuntimeException $e) {
             $this->kiFehler = $e->getMessage();

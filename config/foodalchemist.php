@@ -132,6 +132,21 @@ return [
      */
     'ai' => [
         'provider' => env('FOODALCHEMIST_AI_PROVIDER', 'core'),
+
+        /*
+         * M7-02 / V-01: Tier→Modell-Mapping (06_KI §2). Modell-Strings sind
+         * DEPLOYMENT-Config, nicht Spec — null = Plattform-Default-Modell
+         * (LLMProviderContract-Binding entscheidet). Tier je Prompt steht in
+         * der Registry unten; options['tier'] übersteuert je Call.
+         *   A = Qualität (Generatoren, lange Texte) · B = Mechanik-Labels
+         *   C = Vision (Wissenskontext leer, GL-13 Inv. 7) · D = Reasoning/Tools
+         */
+        'tiers' => [
+            'A' => env('FOODALCHEMIST_AI_TIER_A'),
+            'B' => env('FOODALCHEMIST_AI_TIER_B'),
+            'C' => env('FOODALCHEMIST_AI_TIER_C'),
+            'D' => env('FOODALCHEMIST_AI_TIER_D'),
+        ],
     ],
 
     /**
