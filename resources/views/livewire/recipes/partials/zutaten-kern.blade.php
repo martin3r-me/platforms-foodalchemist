@@ -145,15 +145,17 @@
 
         {{-- Add-Zeile (M4-08): GP-/Sub-Picker mit Auto-Fill --}}
         <div class="mt-3 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-add-zeile>
-            {{-- R17 (Dominique): Menge + Einheit ÜBER dem Suchfeld — nach dem Treffer-Klick ist die
-                 Maus direkt darunter, der Weg zur Mengen-Eingabe wird minimal --}}
-            <div class="flex items-center gap-2 mb-1.5">
-                <input type="text" x-model="neu.menge" placeholder="Menge" class="{{ $input }} !w-20 !py-1 text-right" data-neu-menge />
-                <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
-                    @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
-                </select>
-            </div>
-            <div class="flex items-center gap-2">
+            {{-- R17 (Dominique): Menge + Einheit ÜBER dem Suchfeld, exakt an dessen linker Kante —
+                 Grid teilt die Spaltenkante (Spalte 1 = Typ-Filter, Spalte 2 = Suchfeld-Bereich),
+                 nach dem Treffer-Klick ist die Maus direkt unter der Mengen-Eingabe --}}
+            <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1.5 items-center">
+                <div></div>
+                <div class="flex items-center gap-2">
+                    <input type="text" x-model="neu.menge" placeholder="Menge" class="{{ $input }} !w-20 !py-1 text-right" data-neu-menge />
+                    <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
+                        @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
+                    </select>
+                </div>
                 {{-- R5: Typ-Filter (Alle/GP/Rezept) — smarte Suche bleibt, Treffer tragen Typ-Badges --}}
                 <div class="flex items-center gap-1" data-picker-typ-filter>
                     <template x-for="t in [['alle', 'Alle'], ['gp', 'GPs'], ['sub', 'Rezepte']]" :key="t[0]">
@@ -163,6 +165,7 @@
                                 x-text="t[1]"></button>
                     </template>
                 </div>
+                <div class="flex items-center gap-2">
                 <div class="relative flex-1">
                     <input type="search" x-model="pickerSuche" @input.debounce.300ms="suchen()"
                            placeholder="GP oder Basisrezept suchen … (Auto-Fill)" class="{{ $input }} !py-1" data-picker-suche />
@@ -182,6 +185,7 @@
                 <label class="inline-flex items-center gap-1 text-[11px] text-gray-400">
                     <input type="checkbox" x-model="neu.is_optional" class="rounded border-gray-300" /> optional
                 </label>
+                </div>
             </div>
             <p class="text-[10px] text-gray-400 mt-1">Syntax §1.2: Menge · Einheit · Verknüpfung — Hinweis/Verarbeitung in die Hinweis-Spalte (Regelwerk §2)</p>
             <button type="button" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 mt-1" @click="garverluste()" data-garverlust-ki
