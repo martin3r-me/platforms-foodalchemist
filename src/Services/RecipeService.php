@@ -493,6 +493,7 @@ class RecipeService
                 ->where('kategorie_id', (int) $filters['kategorie']))
             ->when(($filters['status'] ?? '') !== '', fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(($filters['geschmack'] ?? '') !== '', fn (Builder $q) => $q->where('geschmacksrichtung', $filters['geschmack']))
-            ->when(($filters['fertigung'] ?? '') !== '', fn (Builder $q) => $q->where('fertigungstiefe', $filters['fertigung']));
+            ->when(($filters['fertigung'] ?? '') !== '', fn (Builder $q) => $q->where('fertigungstiefe', $filters['fertigung']))
+            ->when($filters['nur_templates'] ?? false, fn (Builder $q) => $q->where('is_template', true));  // R6: Template-Filter
     }
 }

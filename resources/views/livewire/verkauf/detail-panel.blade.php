@@ -327,6 +327,9 @@
             @endif
         </div>
 
+        {{-- R6 (Dominique, Bild-5): Diät · Allergene · Zusatzstoffe wie im Basis-Panel --}}
+        @include('foodalchemist::livewire.recipes.partials.deklaration')
+
         {{-- Zutaten-Kurzliste (Komponenten: GPs und/oder Basisrezepte) --}}
         <div>
             <p class="{{ $dt }} mb-1">Komponenten ({{ $rezept->ingredients->count() }})</p>

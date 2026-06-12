@@ -13,6 +13,11 @@
             <span class="text-gray-300 dark:text-gray-600">|</span>
             <button type="button" wire:click="allesAnreichern" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400"
                     title="D-5 §4.4: Vorschläge für Beschreibung · Kategorie · Geschmack (Review, nie Auto-Persistenz)" data-alles-anreichern>✨ Alles anreichern</button>
+            {{-- R6: Template-Markierung (Basis für «Aus Template» im Browser) --}}
+            <button type="button" wire:click="templateToggle" class="{{ $btnGhostXs }} {{ $istTemplate ? 'text-orange-600 dark:text-orange-400' : '' }}"
+                    title="Template = Vorlage für neue Rezepte (Browser: «Aus Template»)" data-template-toggle>
+                📐 {{ $istTemplate ? 'Template ✓' : 'Als Template' }}
+            </button>
         @endif
     </x-slot:actions>
 
@@ -93,7 +98,57 @@
     {{-- ZUTATEN (§4.2.3) — der P-8-Kern eingebettet + KPI-Leiste (Ist-App unten) --}}
     @if(!$neu)
         <x-foodalchemist::modal-section title="Zutaten ({{ $voll?->ingredients?->count() ?? 0 }})">
-            <livewire:foodalchemist.recipes.ingredient-editor :recipe-id="$recipeId" :eingebettet="true" wire:key="zutaten-inline-{{ $recipeId }}" />
+            {{-- R6e: ✨ KI-Überarbeiten (Ist-Button) — freie Anweisung, Vorschau, Übernehmen --}}
+            <x-slot:actions>
+                <button type="button" wire:click="$toggle('ueberarbeitenOffen')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400"
+                        title="Freie Anweisung — KI überarbeitet Zutaten, Mengen, Zubereitung & Beschreibung (Vorschau + Übernehmen)" data-ki-ueberarbeiten>✨ KI-Überarbeiten</button>
+            </x-slot:actions>
+
+            @if($ueberarbeitenOffen)
+                <div class="mb-3 rounded-lg bg-violet-500/5 border border-violet-500/20 px-3 py-2 space-y-2" data-ueberarbeiten-box>
+                    <div class="flex items-center gap-2">
+                        <input type="text" wire:model="anweisung" wire:keydown.enter="kiUeberarbeiten"
+                               placeholder="z. B. «mach das Rezept vegan und halbiere den Zucker»" class="{{ $input }} !py-1.5 flex-1" data-anweisung />
+                        <button type="button" wire:click="kiUeberarbeiten" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-ueberarbeiten-start>
+                            <span wire:loading.remove wire:target="kiUeberarbeiten">✨ Vorschlagen</span>
+                            <span wire:loading wire:target="kiUeberarbeiten">denkt …</span>
+                        </button>
+                    </div>
+                    @if($ueberarbeitung !== null)
+                        <div class="rounded-lg bg-white/60 dark:bg-gray-900/60 px-3 py-2 space-y-1.5 max-h-72 overflow-y-auto" data-ueberarbeiten-vorschau>
+                            @if(is_string($ueberarbeitung['werte']['aenderungs_notiz'] ?? null))
+                                <p class="text-xs font-medium text-violet-700 dark:text-violet-300">{{ $ueberarbeitung['werte']['aenderungs_notiz'] }}</p>
+                            @endif
+                            @if(!empty($ueberarbeitung['werte']['zutaten']))
+                                <p class="{{ $dt }}">Zutaten (neu)</p>
+                                @foreach($ueberarbeitung['werte']['zutaten'] as $z)
+                                    @if(is_array($z))
+                                        <p class="text-xs text-gray-600 dark:text-gray-300" wire:key="uz-{{ $loop->index }}">
+                                            {{ $z['menge'] ?? '?' }} {{ $z['einheit_slug'] ?? '' }} · {{ $z['text'] ?? '—' }}
+                                            <span class="text-gray-400">{{ isset($z['id']) ? '(bestehend #' . $z['id'] . ')' : '(neu)' }}</span>
+                                        </p>
+                                    @endif
+                                @endforeach
+                            @endif
+                            @if(is_string($ueberarbeitung['werte']['beschreibung'] ?? null))
+                                <p class="{{ $dt }}">Beschreibung (neu)</p>
+                                <p class="text-xs text-gray-600 dark:text-gray-300">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['beschreibung'], 280) }}</p>
+                            @endif
+                            @if(is_string($ueberarbeitung['werte']['zubereitung'] ?? null))
+                                <p class="{{ $dt }}">Zubereitung (neu)</p>
+                                <p class="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['zubereitung'], 400) }}</p>
+                            @endif
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" wire:click="ueberarbeitungUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-ueberarbeiten-uebernehmen>Übernehmen ({{ round($ueberarbeitung['confidence'] * 100) }} %)</button>
+                            <button type="button" wire:click="ueberarbeitungVerwerfen" class="{{ $btnGhostXs }}" data-ueberarbeiten-verwerfen>Verwerfen</button>
+                            <span class="text-[10px] text-gray-400">Übernehmen schreibt Zutaten-Sync + Texte mit Lineage ki — manuell Gepflegtes bleibt (GL-07).</span>
+                        </div>
+                    @endif
+                </div>
+            @endif
+
+            <livewire:foodalchemist.recipes.ingredient-editor :recipe-id="$recipeId" :eingebettet="true" wire:key="zutaten-inline-{{ $recipeId }}-v{{ $zutatenVersion }}" />
 
             @if($voll !== null)
                 <div class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2" data-editor-kpis>
@@ -222,10 +277,61 @@
             <div x-show="tab === 'schreiben'">
                 <textarea wire:model="form.zubereitung" rows="8" class="{{ $input }} font-mono text-xs" data-rezept-zubereitung></textarea>
             </div>
-            <div x-show="tab === 'vorschau'" x-cloak class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-4 py-3 prose prose-sm dark:prose-invert max-w-none" data-zubereitung-vorschau>
-                {!! $zubereitungVorschau ?? '<p class="text-gray-400">Vorschau lädt …</p>' !!}
+            <div x-show="tab === 'vorschau'" x-cloak class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-4 py-3" data-zubereitung-vorschau>
+                <div class="prose prose-sm dark:prose-invert max-w-none">
+                    {!! $zubereitungVorschau ?? '<p class="text-gray-400">Vorschau lädt …</p>' !!}
+                </div>
+                {{-- R6: Schritt-Fotos in der Vorschau, gruppiert an der Anleitung --}}
+                @foreach($schrittFotos as $schritt => $fotos)
+                    <div class="mt-3 pt-2 border-t border-black/5 dark:border-white/10" wire:key="vfg-{{ $schritt }}">
+                        <p class="{{ $dt }} mb-1">{{ $schritt === 0 ? 'Rezept-Fotos' : "Fotos zu Schritt {$schritt}" }}</p>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach($fotos as $foto)
+                                <figure class="w-32" wire:key="vf-{{ $foto->id }}">
+                                    <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? "Schritt {$schritt}" }}" class="w-32 h-24 object-cover rounded-lg border border-black/10 dark:border-white/10" loading="lazy" />
+                                    @if($foto->caption)<figcaption class="text-[10px] text-gray-400 mt-0.5 truncate">{{ $foto->caption }}</figcaption>@endif
+                                </figure>
+                            @endforeach
+                        </div>
+                    </div>
+                @endforeach
             </div>
         </div>
+
+        {{-- R6: Step-by-Step-Fotos — Verwaltung (Upload + Löschen), gekoppelt über Schritt-Nr --}}
+        @if(!$neu)
+            <div class="mt-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-schritt-fotos>
+                <p class="{{ $dt }} mb-1.5">📷 Schritt-Fotos ({{ $schrittFotos->flatten()->count() }})</p>
+                @if($schrittFotos->isNotEmpty())
+                    <div class="space-y-1.5 mb-2">
+                        @foreach($schrittFotos as $schritt => $fotos)
+                            <div class="flex items-start gap-2" wire:key="sfg-{{ $schritt }}">
+                                <span class="shrink-0 w-20 text-xs text-gray-400 pt-1">{{ $schritt === 0 ? 'allgemein' : "Schritt {$schritt}" }}</span>
+                                <div class="flex flex-wrap gap-1.5">
+                                    @foreach($fotos as $foto)
+                                        <span class="relative group" wire:key="sf-{{ $foto->id }}">
+                                            <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}" class="w-16 h-12 object-cover rounded border border-black/10 dark:border-white/10" loading="lazy" />
+                                            <button type="button" wire:click="fotoLoeschen({{ $foto->id }})" wire:confirm="Foto löschen?"
+                                                    class="hidden group-hover:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center rounded-full bg-rose-500 text-white text-[9px]" title="löschen" data-foto-loeschen>✕</button>
+                                        </span>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+                <div class="flex flex-wrap items-center gap-2" data-foto-upload>
+                    <input type="number" min="0" max="99" wire:model="fotoSchritt" placeholder="Schritt-Nr" title="Schritt-Nummer aus der Zubereitung (leer/0 = allgemeines Rezept-Foto)" class="{{ $input }} !py-1 !w-24" />
+                    <input type="file" wire:model="fotoUpload" accept="image/*" class="text-xs text-gray-500 file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-violet-500/10 file:text-violet-600 dark:file:text-violet-300 file:text-xs file:cursor-pointer" data-foto-datei />
+                    <input type="text" wire:model="fotoCaption" placeholder="Bildunterschrift (optional)" class="{{ $input }} !py-1 w-56" />
+                    <button type="button" wire:click="fotoHochladen" wire:loading.attr="disabled" wire:target="fotoUpload, fotoHochladen" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-foto-hochladen>
+                        <span wire:loading.remove wire:target="fotoUpload, fotoHochladen">Hochladen</span>
+                        <span wire:loading wire:target="fotoUpload, fotoHochladen">lädt …</span>
+                    </button>
+                    @error('fotoUpload')<span class="text-xs text-rose-500">{{ $message }}</span>@enderror
+                </div>
+            </div>
+        @endif
         @if(isset($kiVorschlag['zubereitung']))
             <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 max-h-40 overflow-y-auto" data-zubereitung-ki-vorschlag>
                 <p class="text-xs text-violet-700 dark:text-violet-300 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($kiVorschlag['zubereitung']['werte']['zubereitung'] ?? '—', 900) }}</p>

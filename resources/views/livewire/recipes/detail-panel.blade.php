@@ -69,28 +69,28 @@
             </div>
         </div>
 
-        {{-- Screen-5: 14 EU-Allergene + 18 LMIV-Zusatzstoffe (Aggregat-Spalten, GL-01/09) --}}
-        <div data-rezept-allergene>
-            <p class="{{ $dt }} mb-1">Allergene <span class="normal-case">({{ $rezept->allergene_konfidenz }})</span></p>
-            <div class="flex flex-wrap gap-1">
-                @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $feld => $lbl)
-                    @php($wert = $rezept->{"allergen_{$feld}"})
-                    <span class="{{ $pill }} {{ ['enthalten' => $variantPill['danger'], 'spuren' => $variantPill['warning'], 'nicht_enthalten' => $variantPill['secondary']][$wert] ?? $variantPill['secondary'] . ' opacity-40 italic' }}"
-                          title="{{ $wert }}">{{ explode(' ', $lbl)[0] }}</span>
-                @endforeach
-            </div>
-        </div>
-        @php($zusatzJa = collect(array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE))->filter(fn ($st) => (int) ($rezept->{"zusatz_{$st}"} ?? 0) === 3))
-        @if($zusatzJa->isNotEmpty())
-            <div data-rezept-zusatzstoffe>
-                <p class="{{ $dt }} mb-1">Zusatzstoffe (LMIV)</p>
-                <div class="flex flex-wrap gap-1">
-                    @foreach($zusatzJa as $stoff)
-                        <span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE[$stoff] }}</span>
+        {{-- R6: Step-by-Step-Fotos (Pflege im Voll-Editor, Zubereitungs-Sektion) --}}
+        @if($schrittFotos->isNotEmpty())
+            <div data-panel-schritt-fotos>
+                <p class="{{ $dt }} mb-1">📷 Schritt-Fotos</p>
+                <div class="space-y-1.5">
+                    @foreach($schrittFotos as $schritt => $fotos)
+                        <div class="flex items-start gap-2" wire:key="psfg-{{ $schritt }}">
+                            <span class="shrink-0 w-16 text-[10px] text-gray-400 pt-1">{{ $schritt === 0 ? 'allgemein' : "Schritt {$schritt}" }}</span>
+                            <div class="flex flex-wrap gap-1.5">
+                                @foreach($fotos as $foto)
+                                    <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}"
+                                         class="w-20 h-14 object-cover rounded border border-black/10 dark:border-white/10" loading="lazy" wire:key="psf-{{ $foto->id }}" />
+                                @endforeach
+                            </div>
+                        </div>
                     @endforeach
                 </div>
             </div>
         @endif
+
+        {{-- R6: Diät · Allergene · Zusatzstoffe — geteiltes Partial (auch im VK-Panel) --}}
+        @include('foodalchemist::livewire.recipes.partials.deklaration')
 
         {{-- M4-10: ↑-Navigation — Rezepte, die dieses als Sub-Rezept nutzen --}}
         @if($eltern->isNotEmpty())
@@ -106,22 +106,6 @@
                 </div>
             </div>
         @endif
-
-        {{-- Diät & Spezifikation (Nachtrag 13_REFERENZ: ✓-Liste aus spec_*) --}}
-        <div data-diaet>
-            <p class="{{ $dt }} mb-1">Diät & Spezifikation</p>
-            <div class="flex flex-wrap gap-1">
-                @foreach([
-                    'spec_is_vegan' => 'Vegan', 'spec_is_vegetarian' => 'Vegetarisch', 'spec_is_halal' => 'Halal',
-                    'spec_is_gluten_free' => 'Glutenfrei', 'spec_is_lactose_free' => 'Laktosefrei',
-                    'spec_contains_pork' => 'enth. Schwein', 'spec_contains_beef' => 'enth. Rind',
-                ] as $feld => $lbl)
-                    @php($wert = $rezept->{$feld})
-                    <span class="{{ $pill }} {{ $wert === true ? (str_starts_with($feld, 'spec_contains') ? $variantPill['warning'] : $variantPill['success']) : ($wert === false ? $variantPill['secondary'] : $variantPill['secondary'] . ' opacity-50') }}"
-                          title="{{ $wert === null ? 'unbewertet' : ($wert ? 'ja' : 'nein') }}">{{ $wert === true ? '✓ ' : ($wert === false ? '✕ ' : '? ') }}{{ $lbl }}</span>
-                @endforeach
-            </div>
-        </div>
 
         {{-- Eignungen + Equipment --}}
         @if($rezept->niveauEignungen->isNotEmpty() || $rezept->sektorEignungen->isNotEmpty())

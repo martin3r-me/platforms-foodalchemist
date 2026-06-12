@@ -19,7 +19,6 @@
  */
 
 use Platform\FoodAlchemist\Livewire\Dashboard;
-use Platform\FoodAlchemist\Livewire\Test;
 use Platform\FoodAlchemist\Livewire\Sidebar;
 
 /**
@@ -29,12 +28,6 @@ use Platform\FoodAlchemist\Livewire\Sidebar;
  */
 Route::get('/', Dashboard::class)->name('foodalchemist.dashboard');
 
-/**
- * Test Route
- * 
- * Test-Seite für Entwicklung und Demonstration
- */
-Route::get('/test', Test::class)->name('foodalchemist.test');
 
 /**
  * Grundprodukte (Vertical Slice, D-3-Teil) — Model-Binding-Parameter = Modelname in camelCase

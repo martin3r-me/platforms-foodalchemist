@@ -265,6 +265,15 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 > **④ VK-Editor:** fullscreen wie der Basis-Editor (Detail-Anpassungen «im Gesamten» warten auf Dominiques Konkretisierung).
 > Smoke-Datenspuren in der Sandbox zurückgerollt (ALC-Rohaufschlag 420 aus der Quell-SQLite wiederhergestellt!). 3 neue Tests (Settings-CRUD inkl. Validierungs-/Dubletten-Pfade). Live verifiziert (Editor-Spalten/Link/Summen, Generator-Pills, 3 Settings-Seiten). Suite: **377/377 (1.564 Assertions)**.
 
+> **EDITOR-PARITÄT Runde 6 (2026-06-12, Dominique-Liste) — Templates · Direkt-Öffnen · Deklaration · Schritt-Fotos · KI-Überarbeiten · Dashboard:**
+> **① Templates (Jarvis-Parität):** `is_template` war komplett im Datenmodell (Import: 16 Templates, `setTemplate`-Service) — nur UI fehlte: 📐-Badge in der Liste, Sidebar-Filter «Templates» (URL `?templates=1`), Header-Button **«Aus Template»** (Liste → dupliziert OHNE Template-Flag → öffnet den Editor), Template-Toggle in der Editor-Aktionsleiste. Live: Filter zeigt exakt 16/16 mit Badges.
+> **② Direkt-Öffnen:** Klick auf den NAMEN öffnet in allen drei Browsern (GP/Basis/VK) direkt den Editor (`bearbeite()` → modal.oeffnen); Zeilen-Klick bleibt Panel-Selektion — Hover-Underline als Affordance.
+> **③ Deklarations-Partial (Bild-5-Vorbild):** Diät & Spezifikation (Label ✓/✕/?) · 14 EU-Allergene als 2-Spalten-Grid (enthalten rot, Spuren amber, unbewertet kursiv) · ALLE 18 LMIV-Zusatzstoffe (enthalten rot, unbewertet gestrichelt) — EIN Partial (`partials/deklaration`), eingebunden im Basis- UND VK-Panel.
+> **④ Schritt-Fotos (NEU, freie Gestaltung):** Tabelle `recipe_step_photos` (Migration 000037, Model mit 4 Pflicht-Traits), Kopplung an die Anleitung über `schritt_nr` (0 = allgemein); Upload/Löschen in der Zubereitungs-Sektion des Voll-Editors (Livewire-Upload, public-Disk, D1-Besitzer-Guard), Anzeige gruppiert in der Markdown-Vorschau UND im DetailPanel.
+> **⑤ ✨ KI-Überarbeiten (Ist-Button):** freie Anweisung → `recipe.ueberarbeiten` (Registry +1, Soll-Test erweitert) → Vorschau (Zutaten/Beschreibung/Zubereitung/Änderungs-Notiz) → **Übernehmen** = Zutaten-Sync (ids bestehender Zeilen behalten GP-Verknüpfung, neue ohne id ungemappt) + Texte im accept_zubereitung-Muster (Lineage ki, **Override-First: manual blockt**); eingebetteter Editor re-mountet über Versions-Key (Client-rows!). FakeProvider ⇒ ehrlicher Fehler. **Copilot-Chat = Phase 2 (D-8).**
+> **⑥ Dashboard neu + Test-Seite raus:** Bestand (KpiService: 7.774 GPs · 9.803 LAs — deckt die Ist-App-Headerzahl — · 120 Lieferanten · 1.408 Rezepte), Workflow-Kacheln klickbar mit #[Url]-Filtern (Review/Templates/Allergen-Lücken/VK ohne Klasse), KI-Nutzung (ai_call_log); `/test`-Route + Livewire\Test + View + Sidebar-Eintrag entfernt.
+> Live verifiziert im Preview-Browser (Dashboard-Kacheln echt, Template-Filter 16/16, Namens-Klick öffnet Editor mit Überarbeiten-Box/Foto-Upload/Template ✓). Suite: **377/377 (1.567 Assertions)**.
+
 ## M8 — Querschnitt (laufend)
 
 | ID | Paket | Inhalt | Ref | DoD | Status |

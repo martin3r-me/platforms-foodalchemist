@@ -52,6 +52,13 @@ class Browser extends Component
         $this->resetPage();
     }
 
+    /** R6: Direkt-Öffnen — Namens-Klick öffnet den GP-Editor. */
+    public function bearbeite(int $id): void
+    {
+        $this->waehleGp($id);
+        $this->dispatch('gp-modal.oeffnen', id: $id);
+    }
+
     public function waehleGp(int $id): void
     {
         $this->gpId = $id;

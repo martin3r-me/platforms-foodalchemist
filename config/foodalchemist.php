@@ -75,11 +75,6 @@ return [
                     'route' => 'foodalchemist.dashboard',
                     'icon'  => 'heroicon-o-home',
                 ],
-                [
-                    'label' => 'Test',
-                    'route' => 'foodalchemist.test',
-                    'icon'  => 'heroicon-o-beaker',
-                ],
             ],
         ],
         [
@@ -345,6 +340,12 @@ return [
             'tier' => 'B',
             'task' => 'Schlage das Equipment-Set fuer die Produktion aus dem mitgegebenen '
                 . 'Vokabular vor: werte = {equipment_slugs: []}.',
+        ],
+        'recipe.ueberarbeiten' => [
+            'tier' => 'A',                                            // R6 (Ist: KI-Überarbeiten-Button) — freie Anweisung, Gesamt-Rezept
+            'task' => 'Ueberarbeite das Rezept exakt nach der freien Anweisung (anweisung) — '
+                . 'aendere NUR Angefragtes, behalte ids bestehender Zutaten, neue Zutaten ohne id: '
+                . 'werte = {beschreibung, zubereitung, zutaten: [{id, text, menge, einheit_slug}], aenderungs_notiz}.',
         ],
         'recipe.extract' => [
             'tier' => 'C',                                            // Vision — blockiert auf Martin-Frage (Offene Entscheide)

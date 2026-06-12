@@ -108,7 +108,10 @@
                             x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                             data-vk-zeile="{{ $r->id }}">
-                            <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100 max-w-sm truncate" title="{{ $r->name }}">{{ $r->name }}</td>
+                            {{-- R6: Namens-Klick öffnet direkt den VK-Editor --}}
+                            <td class="{{ $td }} font-medium max-w-sm truncate" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
+                                <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-vk-name>{{ $r->name }}</span>
+                            </td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->speisenKlasse?->hauptgruppe?->code ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 truncate max-w-[10rem]">{{ $r->speisenKlasse?->bezeichnung ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500">{{ $r->geschmacksrichtung ?? '—' }}</td>

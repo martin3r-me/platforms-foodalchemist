@@ -22,6 +22,7 @@ const REGISTRY_SOLL = [
     'recipe.zubereitung' => 'A', 'recipe.eigenschaften' => 'B', 'recipe.geschmack' => 'B',
     'recipe.review' => 'A', 'recipe.pairing' => 'A', 'recipe.anker' => 'B',
     'recipe.equipment' => 'B', 'recipe.extract' => 'C',
+    'recipe.ueberarbeiten' => 'A',                                    // R6: KI-Überarbeiten (freie Anweisung, Ist-Button)
     // VK-Welt
     'vk.generator' => 'B', 'vk.speisen_klasse' => 'B', 'vk.rollen' => 'B',
     'vk.plating' => 'A', 'vk.name_putzen' => 'B', 'vk.marketing' => 'A', 'vk.wording' => 'A',

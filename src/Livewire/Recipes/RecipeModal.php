@@ -17,6 +17,8 @@ use Platform\FoodAlchemist\Services\RecipeService;
  */
 class RecipeModal extends Component
 {
+    use \Livewire\WithFileUploads;
+
     private const LEER = [
         'name' => '', 'herkunft' => '', 'kategorie_id' => null, 'hauptgruppe_id' => null,
         'geschmacksrichtung' => '', 'fertigungstiefe' => '', 'arbeitszeit_min' => null,
@@ -277,6 +279,188 @@ class RecipeModal extends Component
 
     // ── Editor-Parität (Ist-App-Vorbild): Löschen · ✨-Header-Aktionen · Anreichern ──
 
+    // ── R6e: ✨ KI-Überarbeiten — freie Anweisung, Vorschau, Übernehmen (GL-07) ──
+
+    public bool $ueberarbeitenOffen = false;
+
+    public string $anweisung = '';
+
+    /** @var ?array{werte: array, confidence: float} Vorschau — NICHTS persistiert */
+    public ?array $ueberarbeitung = null;
+
+    /** Re-Mount-Zähler für den eingebetteten Zutaten-Editor (rows leben im Client). */
+    public int $zutatenVersion = 0;
+
+    public function kiUeberarbeiten(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null || trim($this->anweisung) === '') {
+            $this->fehler = 'Anweisung ist Pflicht (z. B. «mach das Rezept vegan und halbiere den Zucker»).';
+
+            return;
+        }
+        $this->fehler = null;
+        $r = app(RecipeService::class)->detailAnySicht($team, $this->recipeId);
+        if ($r === null) {
+            return;
+        }
+
+        try {
+            $vorschlag = app(AiGatewayService::class)->propose('recipe.ueberarbeiten', [
+                'anweisung' => trim($this->anweisung),
+                'name' => $r->name,
+                'beschreibung' => $r->beschreibung,
+                'zubereitung' => $r->zubereitung,
+                'zutaten' => $r->ingredients->map(fn ($z) => [
+                    'id' => $z->id,
+                    'text' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text,
+                    'menge' => (float) $z->menge,
+                    'einheit_slug' => $z->einheit?->slug,
+                ])->values()->all(),
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+
+        if (empty($vorschlag->werte['zutaten']) && empty($vorschlag->werte['zubereitung']) && empty($vorschlag->werte['beschreibung'])) {
+            $this->fehler = 'KI lieferte keine verwertbare Überarbeitung — echter Provider nötig (FakeProvider-Grenze).';
+
+            return;
+        }
+        $this->ueberarbeitung = ['werte' => $vorschlag->werte, 'confidence' => max(0.0, min(1.0, $vorschlag->confidence))];
+    }
+
+    /** Übernehmen = der EINE Schreib-Moment: Zutaten-Sync + Text-Felder mit Lineage ki. */
+    public function ueberarbeitungUebernehmen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null || $this->ueberarbeitung === null) {
+            return;
+        }
+        $werte = $this->ueberarbeitung['werte'];
+        $r = app(RecipeService::class)->detailAnySicht($team, $this->recipeId);
+        $einheiten = FoodAlchemistRecipe::query()->getConnection()->table('foodalchemist_vocab_einheiten')
+            ->whereNull('deleted_at')->pluck('id', 'slug');
+
+        try {
+            if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
+                $original = $r->ingredients->keyBy('id');
+                $zeilen = [];
+                foreach ($werte['zutaten'] as $z) {
+                    if (! is_array($z)) {
+                        continue;
+                    }
+                    $orig = isset($z['id']) ? $original->get((int) $z['id']) : null;
+                    $menge = is_numeric(str_replace(',', '.', (string) ($z['menge'] ?? ''))) ? (float) str_replace(',', '.', (string) $z['menge']) : null;
+                    $zeilen[] = [
+                        'id' => $orig?->id,
+                        'gp_id' => $orig?->gp_id,                     // Verknüpfung des Originals bleibt
+                        'referenced_recipe_id' => $orig?->referenced_recipe_id,
+                        'raw_text' => (string) ($z['text'] ?? $orig?->raw_text ?? ''),
+                        'display_name' => (string) ($z['text'] ?? $orig?->display_name ?? ''),
+                        'menge' => $menge ?? (float) ($orig?->menge ?? 1),
+                        'einheit_vocab_id' => $einheiten[$z['einheit_slug'] ?? ''] ?? $orig?->einheit_vocab_id ?? $einheiten['g'] ?? null,
+                        'garverlust_pct' => $orig?->garverlust_pct,
+                        'is_optional' => (bool) ($orig?->is_optional ?? false),
+                        'note' => $orig?->note,
+                    ];
+                }
+                if ($zeilen !== []) {
+                    app(RecipeService::class)->syncIngredients($team, $this->recipeId, $zeilen);
+                }
+            }
+            // Texte im Bestands-Muster (accept_zubereitung): direkter Write MIT Lineage,
+            // Override-First — manuell gepflegte Felder bleiben unangetastet (GL-07 §4.2)
+            $frisch = $r->fresh();
+            if (is_string($werte['beschreibung'] ?? null) && trim($werte['beschreibung']) !== '' && $frisch->beschreibung_quelle !== 'manual') {
+                $frisch->update(['beschreibung' => $werte['beschreibung'], 'beschreibung_quelle' => 'ki', 'beschreibung_ai_confidence' => $this->ueberarbeitung['confidence']]);
+                $this->form['beschreibung'] = $werte['beschreibung'];
+            }
+            if (is_string($werte['zubereitung'] ?? null) && trim($werte['zubereitung']) !== '' && $frisch->zubereitung_quelle !== 'manual') {
+                $frisch->update(['zubereitung' => $werte['zubereitung'], 'zubereitung_quelle' => 'ki', 'zubereitung_ai_confidence' => $this->ueberarbeitung['confidence']]);
+                $this->form['zubereitung'] = $werte['zubereitung'];
+            }
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+
+        $this->ueberarbeitung = null;
+        $this->anweisung = '';
+        $this->ueberarbeitenOffen = false;
+        $this->zutatenVersion++;                                      // eingebetteten Editor neu mounten (Client-rows!)
+        $this->dispatch('recipe-gespeichert');
+    }
+
+    public function ueberarbeitungVerwerfen(): void
+    {
+        $this->ueberarbeitung = null;                                 // reject lässt Fachdaten unberührt (GL-07)
+    }
+
+    // ── R6: Step-by-Step-Fotos (an die Zubereitung gekoppelt über schritt_nr) ──
+
+    public $fotoUpload = null;
+
+    public ?int $fotoSchritt = null;
+
+    public string $fotoCaption = '';
+
+    public function fotoHochladen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null || $this->fotoUpload === null) {
+            return;
+        }
+        $r = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($this->recipeId);
+        if ((int) $r->team_id !== (int) $team->id) {
+            $this->fehler = 'Geerbtes Rezept — Fotos nur durchs Besitzer-Team (D1).';
+
+            return;
+        }
+        $this->validate(['fotoUpload' => 'image|max:8192'], [], ['fotoUpload' => 'Foto']);
+        $pfad = $this->fotoUpload->store("foodalchemist/rezepte/{$this->recipeId}", 'public');
+        \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::create([
+            'team_id' => $team->id,
+            'recipe_id' => $this->recipeId,
+            'schritt_nr' => max(0, (int) $this->fotoSchritt),
+            'pfad' => $pfad,
+            'caption' => trim($this->fotoCaption) ?: null,
+        ]);
+        $this->reset('fotoUpload', 'fotoSchritt', 'fotoCaption');
+    }
+
+    public function fotoLoeschen(int $fotoId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $foto = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $this->recipeId)
+            ->where('team_id', $team->id)->find($fotoId);
+        if ($foto !== null) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($foto->pfad);
+            $foto->delete();
+        }
+    }
+
+    /** R6: Template-Markierung an/aus (Service-Guard: nur Besitzer-Team, D1). */
+    public function templateToggle(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        try {
+            app(RecipeService::class)->setTemplate($team, $this->recipeId);
+            $this->dispatch('recipe-gespeichert');
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function loeschen(RecipeService $recipes): void
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -425,6 +609,11 @@ class RecipeModal extends Component
 
         return view('foodalchemist::livewire.recipes.recipe-modal', [
             'neu' => $this->recipeId === null,
+            'istTemplate' => (bool) ($r?->is_template ?? false),
+            'schrittFotos' => $this->recipeId !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $this->recipeId)
+                    ->orderBy('schritt_nr')->orderBy('sort_order')->orderBy('id')->get()->groupBy('schritt_nr')
+                : collect(),
             'voll' => $voll,
             'bulkRun' => $bulkRun,
             'bulkOffen' => $bulkRun !== null

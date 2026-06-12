@@ -61,6 +61,13 @@ class Browser extends Component
         $this->resetPage();
     }
 
+    /** R6: Direkt-Öffnen — Namens-Klick öffnet den VK-Editor. */
+    public function bearbeite(int $id): void
+    {
+        $this->waehleRezept($id);
+        $this->dispatch('vk-modal.oeffnen', id: $id);
+    }
+
     public function waehleRezept(int $id): void
     {
         $this->recipeId = $id;

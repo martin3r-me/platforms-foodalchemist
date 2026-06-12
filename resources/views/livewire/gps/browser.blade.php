@@ -100,8 +100,9 @@
                             x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $gpId === $gp->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                             data-gp-zeile="{{ $gp->id }}">
-                            <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100 max-w-sm truncate" title="{{ $gp->name }}">
-                                {{ $gp->name }}
+                            {{-- R6: Namens-Klick öffnet direkt den GP-Editor (Zeilen-Klick bleibt Panel) --}}
+                            <td class="{{ $td }} font-medium max-w-sm truncate" wire:click.stop="bearbeite({{ $gp->id }})" title="{{ $gp->name }} — Klick: bearbeiten">
+                                <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-gp-name>{{ $gp->name }}</span>
                                 @if($gp->is_derivat)<span class="ml-1.5 {{ $pill }} {{ $variantPill['info'] }}">Derivat</span>@endif
                             </td>
                             <td class="{{ $td }} text-gray-500">{{ $gp->warengruppe?->name ?? $gp->warengruppe_code ?? '—' }}</td>

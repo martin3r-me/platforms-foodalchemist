@@ -124,6 +124,11 @@ class DetailPanel extends Component
 
         return view('foodalchemist::livewire.recipes.detail-panel', [
             'rezept' => $rezept,
+            // R6: Step-by-Step-Fotos (gruppiert nach Schritt)
+            'schrittFotos' => $rezept !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $rezept->id)
+                    ->orderBy('schritt_nr')->orderBy('sort_order')->orderBy('id')->get()->groupBy('schritt_nr')
+                : collect(),
             // Nachtrag 13_REFERENZ: EK je Zeile — dieselbe T3-Kaskade wie der Recompute (eine Regel-Stelle)
             'zeilenEk' => $rezept !== null ? app(RecipeRecomputeService::class)->zeilenKosten($rezept) : [],
             // M4-10: ↑-Navigation („Verwendet in")

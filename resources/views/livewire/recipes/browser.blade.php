@@ -32,6 +32,15 @@
                     </select>
                 </div>
 
+                {{-- R6: Template-Filter (Jarvis-Sidebar) --}}
+                <button type="button" wire:click="toggleTemplates"
+                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-all duration-150 {{ $nurTemplates
+                            ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/15 text-orange-700 dark:text-orange-300'
+                            : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}" data-templates-toggle>
+                    <span class="font-medium">📐 Templates</span>
+                    <span class="text-xs {{ $nurTemplates ? 'text-orange-500 font-medium' : 'text-gray-400' }}">{{ $nurTemplates ? 'aktiv' : $templateAnzahl }}</span>
+                </button>
+
                 <button type="button" wire:click="waehleHauptgruppe(null)"
                         class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-all duration-150 {{ $hauptgruppe === null
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
@@ -98,6 +107,23 @@
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
                 <button type="button" wire:click="$dispatch('generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-generator-oeffnen>✨ KI-Rezept</button>
+                {{-- R6: «Aus Template» — Liste der 📐-Templates, Klick dupliziert + öffnet den Editor --}}
+                <div class="relative">
+                    <button type="button" wire:click="$toggle('templateWahlOffen')" class="{{ $btnGhostXs }}" data-aus-template>📐 Aus Template</button>
+                    @if($templateWahlOffen)
+                        <div class="absolute left-0 top-full mt-1 z-30 w-80 max-h-80 overflow-y-auto rounded-lg bg-white dark:bg-gray-900 border border-black/10 dark:border-white/10 shadow-xl" data-template-liste>
+                            @forelse($templateListe as $template)
+                                <button type="button" wire:key="tpl-{{ $template->id }}" wire:click="ausTemplate({{ $template->id }})"
+                                        class="block w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">
+                                    {{ $template->name }}
+                                    <span class="text-gray-400">· {{ $template->n_zutaten_total }} Zutaten{{ $template->yield_kg !== null ? ' · ' . number_format((float) $template->yield_kg, 2, ',', '.') . ' kg' : '' }}</span>
+                                </button>
+                            @empty
+                                <p class="px-3 py-2 text-xs text-gray-400">Keine Templates — im Editor «📐 Template» markieren.</p>
+                            @endforelse
+                        </div>
+                    @endif
+                </div>
                 <button type="button" wire:click="$dispatch('voice-modal.oeffnen')" class="{{ $btnGhostXs }}" title="Sprachbedienung (M7-10) — zweiter Bedienweg, UI bleibt parallel" data-voice-oeffnen>🎙</button>
             </div>
             @if($bulkRunId !== null)
@@ -153,7 +179,11 @@
                             <td class="{{ $td }} !pr-0" wire:click.stop>
                                 <input type="checkbox" wire:model.live="auswahl.{{ $r->id }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-rezept-checkbox="{{ $r->id }}" />
                             </td>
-                            <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100 max-w-sm truncate" title="{{ $r->name }}">{{ $r->name }}</td>
+                            {{-- R6: Namens-Klick öffnet direkt den Voll-Editor (Zeilen-Klick bleibt Panel-Selektion) --}}
+                            <td class="{{ $td }} font-medium max-w-sm truncate" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
+                                <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
+                                @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>📐 Template</span>@endif
+                            </td>
                             <td class="{{ $td }} text-gray-500 truncate max-w-[12rem]">{{ $r->kategorie?->bezeichnung ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500">{{ $r->geschmacksrichtung ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500">{{ $r->fertigungstiefe ?? '—' }}</td>

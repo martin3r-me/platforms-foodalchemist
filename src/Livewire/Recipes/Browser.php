@@ -43,6 +43,39 @@ class Browser extends Component
     #[Url(as: 'zeilen')]
     public int $perPage = 100;
 
+    /** R6: Template-Filter (Jarvis-Sidebar «Templates») */
+    #[Url(as: 'templates')]
+    public bool $nurTemplates = false;
+
+    public bool $templateWahlOffen = false;
+
+    public function toggleTemplates(): void
+    {
+        $this->nurTemplates = ! $this->nurTemplates;
+        $this->resetPage();
+    }
+
+    /** R6: Direkt-Öffnen — Namens-Klick öffnet den Voll-Editor (Zeilen-Klick bleibt Panel). */
+    public function bearbeite(int $id): void
+    {
+        $this->waehleRezept($id);
+        $this->dispatch('recipe-modal.oeffnen', id: $id);
+    }
+
+    /** R6: «Aus Template» — dupliziert das Template (Kopie ist KEIN Template) und öffnet den Editor. */
+    public function ausTemplate(int $templateId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        $template = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($templateId);
+        $kopie = app(RecipeService::class)->duplicate($team, $templateId, $template->name . ' (aus Template)');
+        $this->templateWahlOffen = false;
+        $this->dispatch('recipe-gespeichert');
+        $this->bearbeite($kopie->id);
+    }
+
     public function waehleHauptgruppe(?int $id): void
     {
         $this->hauptgruppe = $this->hauptgruppe === $id ? null : $id;
@@ -157,10 +190,15 @@ class Browser extends Component
             'status' => $this->status,
             'geschmack' => $this->geschmack,
             'fertigung' => $this->fertigung,
+            'nur_templates' => $this->nurTemplates,
         ];
 
         return view('foodalchemist::livewire.recipes.browser', [
             'rezepte' => $recipes->paginateBrowser($filters, $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100),
+            'templateAnzahl' => \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()->where('is_template', true)->count(),
+            'templateListe' => $this->templateWahlOffen
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()->where('is_template', true)->orderBy('name')->get(['id', 'name', 'yield_kg', 'n_zutaten_total'])
+                : collect(),
             'hauptgruppen' => $recipes->mainGroups($team),
             'hgCounts' => $recipes->hauptgruppenCounts($team, $filters),
             'katCounts' => $this->hauptgruppe !== null ? $recipes->kategorieCounts($team, $this->hauptgruppe) : [],
