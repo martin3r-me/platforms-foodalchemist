@@ -39,6 +39,7 @@ class DetailPanel extends Component
         $this->laSuche = '';
         $this->fehler = null;
         $this->kiVorschlag = null;
+        $this->laKandidaten = null;
     }
 
     // ── M3-07: LA-Aktionen ──────────────────────────────────────────────
@@ -68,7 +69,38 @@ class DetailPanel extends Component
     {
         $this->laAktion(fn ($svc, $gp, $team) => $svc->verknuepfen($team, $gp, $laId), nurKurator: true);
         $this->laSuche = '';
+        $this->laKandidaten = null;
         $this->dispatch('gp-las-geaendert');
+    }
+
+    // ── R12 (Jarvis): ✨ KI-Vorschlag — unverknüpfte LA-Kandidaten zum GP ──
+
+    /** @var ?array<int, array{id:int, designation:string, supplier:?string, score:float}> */
+    public ?array $laKandidaten = null;
+
+    public function laVorschlaege(): void
+    {
+        $gp = $this->kuratierbaresGp();                            // verknuepfen ist Katalog-Aktion (D1)
+        if ($gp === null) {
+            return;
+        }
+        $team = Auth::user()->currentTeamRelation;
+        $this->laKandidaten = app(LeadLaService::class)->kandidatenFuerGp($team, $gp)
+            ->map(fn ($la) => [
+                'id' => (int) $la->id,
+                'designation' => (string) $la->designation,
+                'supplier' => $la->supplier_name,
+                'score' => round((float) $la->match_score, 2),
+            ])->all();
+        if ($this->laKandidaten === []) {
+            $this->fehler = 'Keine unverknüpften Artikel gefunden, die zum GP-Namen passen.';
+            $this->laKandidaten = null;
+        }
+    }
+
+    public function laVorschlaegeVerwerfen(): void
+    {
+        $this->laKandidaten = null;
     }
 
     // ── R10 (Ist-Feature): ✨ Allergene/Nährwerte per KI schätzen, wenn keine LA-Daten ──

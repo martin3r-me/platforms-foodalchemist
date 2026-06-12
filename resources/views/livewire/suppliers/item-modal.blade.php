@@ -181,35 +181,64 @@
             </x-foodalchemist::modal-section>
 
             <x-foodalchemist::modal-section title="Preise">
+                {{-- R12 (Jarvis): EK-aktuell-Box + Tabelle gültig von/bis · Kategorie · Preis (+€/kg) · Notiz · ✎ --}}
+                <div class="flex items-center justify-end gap-3 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 mb-2" data-ek-aktuell>
+                    <p class="text-sm text-gray-900 dark:text-gray-100">EK aktuell:
+                        <span class="font-semibold {{ $aktiverPreis !== null ? 'text-green-600 dark:text-green-400' : 'text-gray-400' }}">{{ $aktiverPreis !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}</span>
+                        <span class="text-gray-400">pro {{ $item->ordering_unit ?? $item->unit_code ?? 'Einheit' }}{{ $vergleichspreis !== null ? ' · ' . number_format($vergleichspreis['wert'], 2, ',', '.') . ' ' . $vergleichspreis['einheit'] : '' }}</span>
+                    </p>
+                    @if($darfEdit)
+                        <button type="button" x-data @click="$el.closest('[data-modal]').querySelector('[data-preis-neu]')?.classList.toggle('hidden')" class="{{ $btnPrimary }}" data-preis-neu-toggle>+ Neuer Preis</button>
+                    @endif
+                </div>
                 @if($darfEdit)
-                    <div class="flex items-end gap-2 mb-3" data-preis-neu>
+                    <div class="hidden flex items-end gap-2 mb-3" data-preis-neu>
                         <div><label class="block {{ $label }} mb-1">Neuer Preis (€, netto)</label>
                             <input type="text" wire:model="preisNeu.preis" placeholder="z. B. 47,50" class="{{ $input }} !w-36" /></div>
-                        <div><label class="block {{ $label }} mb-1">Status</label>
+                        <div><label class="block {{ $label }} mb-1">Kategorie</label>
                             <select wire:model="preisNeu.status" class="{{ $input }} !w-40">
-                                <option value="0">0 · Standard-EK</option>
-                                <option value="2">2 · Aktion</option>
+                                <option value="0">Standard-EK</option>
+                                <option value="2">Aktion</option>
                             </select></div>
-                        <button type="button" wire:click="preisAnlegen" class="{{ $btnGhostXs }} !px-3 !py-2 text-violet-600 dark:text-violet-400">+ Neuer Preis (schließt Vorgänger)</button>
+                        <button type="button" wire:click="preisAnlegen" class="{{ $btnGhostXs }} !px-3 !py-2 text-violet-600 dark:text-violet-400">Anlegen (schließt Vorgänger)</button>
                     </div>
                 @endif
                 <table class="{{ $table }}" data-preis-historie>
                     <thead><tr class="text-left">
-                        @foreach(['Preis', 'Kategorie', 'Status', 'gültig bis', 'angelegt', ''] as $head)<th class="{{ $th }} !px-2">{{ $head }}</th>@endforeach
+                        @foreach(['Gültig von', 'Gültig bis', 'Kategorie', 'Preis', 'Notiz', ''] as $head)<th class="{{ $th }} !px-2 {{ $head === 'Preis' ? 'text-right' : '' }}">{{ $head }}</th>@endforeach
                     </tr></thead>
                     <tbody>
                         @forelse($historie as $p)
                             <tr wire:key="preis-{{ $p->id }}" class="{{ $tr }}">
-                                <td class="{{ $td }} !px-2 text-gray-900 dark:text-gray-100">{{ $p->price !== null ? number_format((float) $p->price, 2, ',', '.') . ' €' : '—' }}</td>
-                                <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $p->kategorie->istAktiv() ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $p->kategorie->label() }}</span></td>
-                                <td class="{{ $td }} !px-2 text-gray-500">{{ $p->status ?? '—' }}</td>
-                                <td class="{{ $td }} !px-2 text-gray-500">{{ $p->valid_to ? \Illuminate\Support\Carbon::parse($p->valid_to)->format('d.m.Y') : 'unbefristet' }}</td>
-                                <td class="{{ $td }} !px-2 text-gray-500">{{ $p->creation_date ? \Illuminate\Support\Carbon::parse($p->creation_date)->format('d.m.Y') : '—' }}</td>
-                                <td class="{{ $td }} !px-2 text-right">
-                                    @if($darfEdit)
-                                        <button type="button" wire:click="preisLoeschen({{ $p->id }})" wire:confirm="Preiszeile löschen?" class="{{ $btnGhostXs }} text-red-500">Löschen</button>
-                                    @endif
-                                </td>
+                                @if($preisEditId === $p->id)
+                                    <td class="{{ $td }} !px-2 text-gray-500" colspan="2">
+                                        bis: <input type="date" wire:model="preisEdit.valid_to" class="{{ $input }} !py-1 !w-36 inline-block" />
+                                    </td>
+                                    <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $p->kategorie->label() }}</span></td>
+                                    <td class="{{ $td }} !px-2 text-right"><input type="text" wire:model="preisEdit.preis" class="{{ $input }} !py-1 !w-24 text-right" /></td>
+                                    <td class="{{ $td }} !px-2"><input type="text" wire:model="preisEdit.note" placeholder="Notiz" class="{{ $input }} !py-1 !w-32" /></td>
+                                    <td class="{{ $td }} !px-2 text-right whitespace-nowrap">
+                                        <button type="button" wire:click="preisUpdate" class="{{ $btnGhostXs }} text-emerald-600" data-preis-update>Speichern</button>
+                                        <button type="button" wire:click="preisEditAbbrechen" class="{{ $btnGhostXs }}">Abbrechen</button>
+                                    </td>
+                                @else
+                                    <td class="{{ $td }} !px-2 text-gray-500">{{ $p->status_valid_from ? \Illuminate\Support\Carbon::parse($p->status_valid_from)->format('Y-m-d') : ($p->creation_date ? \Illuminate\Support\Carbon::parse($p->creation_date)->format('Y-m-d') : '—') }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-500">{{ $p->valid_to ? \Illuminate\Support\Carbon::parse($p->valid_to)->format('Y-m-d') : '—' }}</td>
+                                    <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $p->kategorie->istAktiv() ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $p->kategorie->label() }}</span></td>
+                                    <td class="{{ $td }} !px-2 text-right">
+                                        <span class="text-gray-900 dark:text-gray-100 font-medium tabular-nums">{{ $p->price !== null ? number_format((float) $p->price, 2, ',', '.') . ' €' : '—' }}</span>
+                                        @if($p->price !== null && $item->qty !== null && in_array($item->unit_code, ['kg', 'l', 'Stk'], true))
+                                            <span class="block text-[11px] text-gray-400">= {{ number_format((float) $p->price / (float) $item->qty, 2, ',', '.') }} €/{{ $item->unit_code }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="{{ $td }} !px-2 text-gray-500 text-xs max-w-[10rem] truncate" title="{{ $p->note ?? '' }}">{{ $p->note ?? '—' }}</td>
+                                    <td class="{{ $td }} !px-2 text-right whitespace-nowrap">
+                                        @if($darfEdit)
+                                            <button type="button" wire:click="preisBearbeiten({{ $p->id }})" class="{{ $btnGhostXs }}" title="bearbeiten" data-preis-edit>✎</button>
+                                            <button type="button" wire:click="preisLoeschen({{ $p->id }})" wire:confirm="Preiszeile löschen?" class="{{ $btnGhostXs }} text-red-500">löschen</button>
+                                        @endif
+                                    </td>
+                                @endif
                             </tr>
                         @empty
                             <tr><td colspan="6" class="px-2 py-6 text-center text-gray-400">Keine Preiszeilen.</td></tr>

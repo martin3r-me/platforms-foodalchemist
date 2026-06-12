@@ -196,6 +196,45 @@ class LeadLaService
     }
 
     /** M3-07-Picker: verknüpfbare LAs (Struktur-Zeile mit gp_id NULL), Suche über designation. */
+    /**
+     * R12 (Jarvis «✨ KI-Vorschlag» am GP): unverknüpfte LA-Kandidaten — deterministisch
+     * (kein LLM). Pflicht: das ERSTE GP-Namens-Token (= Hauptzutat, steht vorne) muss als
+     * ganzes Wort im LA-Namen stehen («burger» trifft NICHT «Hamburgerblätter»). Score =
+     * Anteil aller Tokens mit Wort-Treffer, sortiert nach Score + Name.
+     */
+    public function kandidatenFuerGp(Team $team, FoodAlchemistGp $gp, int $limit = 6): Collection
+    {
+        $basis = mb_strtolower(trim(explode(':', $gp->name)[0]));   // «Aepfel Braeburn: frisch» → «aepfel braeburn»
+        $tokens = array_values(array_filter(preg_split('/[\s\/,-]+/', $basis), fn ($t) => mb_strlen($t) >= 3));
+        if ($tokens === []) {
+            return collect();
+        }
+        $alsWort = fn (string $name, string $token): bool => (bool) preg_match('/\b' . preg_quote($token, '/') . '\b/u', $name);
+
+        $query = FoodAlchemistSupplierItem::query()
+            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
+            ->whereNull('s.gp_id')->whereNull('s.deleted_at')
+            ->where('foodalchemist_supplier_items.is_discontinued', false)
+            ->whereRaw('LOWER(foodalchemist_supplier_items.designation) LIKE ?', ['%' . $tokens[0] . '%'])
+            ->limit(200)
+            ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
+            ->get();
+
+        return $query
+            ->map(function ($item) use ($tokens, $alsWort) {
+                $name = mb_strtolower((string) $item->designation);
+                $treffer = count(array_filter($tokens, fn ($t) => $alsWort($name, $t)));
+                $item->match_score = $treffer / count($tokens);
+
+                return $item;
+            })
+            // Pflicht: Haupttoken als Wort + mind. die Hälfte aller Tokens («Mini …»-Rauschen raus)
+            ->filter(fn ($item) => $item->match_score >= 0.5 && $alsWort(mb_strtolower((string) $item->designation), $tokens[0]))
+            ->sortBy([fn ($a, $b) => $b->match_score <=> $a->match_score, fn ($a, $b) => strcmp($a->designation, $b->designation)])
+            ->take($limit)->values();
+    }
+
     public function sucheVerknuepfbare(Team $team, string $suche, int $limit = 8): Collection
     {
         if (trim($suche) === '') {

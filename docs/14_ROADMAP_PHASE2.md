@@ -124,6 +124,27 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > Eignung-Setzen: Chip erscheint, Slug verschwindet aus dem Select). Suite: **391/391 (1.645 Assertions)**.
 > **M9 ist damit KOMPLETT** — offen bleibt nur V-03 (Namens-Normalisierung, wartet auf echten LLM).
 
+> **Status R12/Jarvis-Parität (2026-06-12, 4 Screenshot-Punkte von Dominique):**
+> **(1) Lieferanten-★:** Artikel-Tabelle hat eine klickbare ★-Spalte (nur bei gemappten
+> Artikeln) — Klick setzt den Artikel als globalen Lead/Favorit am GP (`Index::leadSetzen`,
+> Curate-Gate, GL-03); ungemappt → Hinweis «erst mappen». **(2) Preise-Block im LA-Modal**
+> nach Jarvis-Vorbild: EK-aktuell-Box (grüner Preis + «pro Gebinde» + Vergleichspreis),
+> «+ Neuer Preis»-Toggle, Tabelle Gültig von/bis · Kategorie-Pill · Preis (mit «= €/kg»-
+> Subzeile) · Notiz · ✎-Inline-Edit (preisBearbeiten/preisUpdate, Komma-Parsing, Curate-Gate).
+> **(3) GP-Panel-Redesign:** Slug in grauer Box unterm Namen, Bearbeiten-Zeile darunter,
+> Box «Natürliche Einheit & Gewicht» (1 Stück ≈ X g), LAs als BREITE Karten (Lead = orange
+> Karte, Gebinde-Preis groß rechts + €/kg klein, «Lieferant · Menge Einheit · Art-Nr»),
+> **✨ KI-Vorschlag** für LA-Kandidaten: `LeadLaService::kandidatenFuerGp` — deterministisch
+> (Haupttoken des GP-Namens MUSS als ganzes Wort treffen + ≥ 50 % aller Tokens; «burger»
+> trifft nicht «Hamburgerblätter»), Klick = verknüpfen. *Grenze:* die restlichen unverknüpften
+> Sandbox-LAs sind fast nur Non-Food (Hanos-Gläser/-Boxen) — bessere Vorschläge brauchen
+> Embeddings (Blocker Martin). **(4) VK-Panel:** Aktions-Buttons (Bearbeiten · Komponenten ·
+> ✨ Klassifizieren · 🎭 Rollen) in eigener Zeile UNTER dem Namen; Komponenten-Liste im
+> Jarvis-Format (Menge+Einheit grau vorangestellt, voller Name, text-sm, ohne ↗).
+> Nebenbei: zwei ungeschützte `route()`-Aufrufe in suppliers/index abgesichert (Test-Boot
+> ohne modules-Tabelle). 3 neue Tests (R12JarvisParitaetTest). Live verifiziert (Screenshots
+> GP-Panel + Preise-Block, ✨-Kandidaten-Box, Toggle, Inline-Edit). Suite: **394/394 (1.663 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).

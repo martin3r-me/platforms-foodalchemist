@@ -41,7 +41,7 @@
         {{-- M9-06: offene Match-Vorschläge → Review-Queue --}}
         @php($offeneMatches = \Illuminate\Support\Facades\DB::table('foodalchemist_match_proposals')->where('status', 'offen')->whereNull('deleted_at')->count())
         @if($offeneMatches > 0)
-            <a href="{{ route('foodalchemist.review') }}" class="block rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200 hover:border-amber-500/60 transition-colors" data-zu-pruefen-hinweis>
+            <a href="{{ \Illuminate\Support\Facades\Route::has('foodalchemist.review') ? route('foodalchemist.review') : '/foodalchemist/zu-pruefen' }}" class="block rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200 hover:border-amber-500/60 transition-colors" data-zu-pruefen-hinweis>
                 ⏳ {{ number_format($offeneMatches, 0, ',', '.') }} LA→GP-Match-Vorschläge warten auf Review → <span class="underline">Zu prüfen</span>
             </a>
         @endif
@@ -151,7 +151,7 @@
                     <tr class="text-left">
                         <th class="{{ $th }} !pr-0 w-8"></th>
                         @if($globaleSuche)<th class="{{ $th }}">Lieferant</th>@endif
-                        @foreach(['ArtNr', 'Bezeichnung', 'Gebinde', 'Status', 'EK', 'Vergleichspreis', 'Grundprodukt'] as $head)
+                        @foreach(['ArtNr', 'Bezeichnung', 'Gebinde', 'Status', 'EK', 'Vergleichspreis', 'Grundprodukt', '★'] as $head)
                             <th class="{{ $th }}">{{ $head }}</th>
                         @endforeach
                     </tr>
@@ -188,18 +188,24 @@
                             </td>
                             <td class="{{ $td }}">
                                 @if($item->structure?->gp)
-                                    @if((int) $item->structure->gp->lead_la_supplier_item_id === (int) $item->id)
-                                        <span class="text-amber-500" title="Lead-LA dieses GP (GL-03)" data-lead-stern>★</span>
-                                    @endif
-                                    <a href="{{ route('foodalchemist.gps.index', ['gp' => $item->structure->gp_id]) }}"
+                                    <a href="{{ \Platform\FoodAlchemist\Support\Sprungziel::gp($item->structure->gp_id) }}"
                                        class="text-violet-600 dark:text-violet-400 hover:underline">{{ $item->structure->gp->name }}</a>
                                 @else
                                     <span class="text-gray-400">— nicht gemappt —</span>
                                 @endif
                             </td>
+                            {{-- R12 (Jarvis): ★ klickbar = Lead-LA des GPs setzen --}}
+                            <td class="{{ $td }} text-right">
+                                @if($item->structure?->gp)
+                                    @php($istLead = (int) $item->structure->gp->lead_la_supplier_item_id === (int) $item->id)
+                                    <button type="button" wire:click="leadSetzen({{ $item->id }})"
+                                            class="text-base transition-colors {{ $istLead ? 'text-orange-500' : 'text-gray-300 dark:text-gray-600 hover:text-orange-400' }}"
+                                            title="{{ $istLead ? 'Lead-LA dieses GP (GL-03)' : 'Klick: als Lead/Favorit setzen — wird die gewählte Wahl im GP' }}" data-lead-stern-btn>★</button>
+                                @endif
+                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="9" class="px-5 py-10 text-center text-gray-400">Keine Artikel gefunden.</td></tr>
+                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-400">Keine Artikel gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>

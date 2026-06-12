@@ -124,6 +124,55 @@ class ItemModal extends Component
         }
     }
 
+    // R12 (Jarvis): Preiszeile bearbeiten (✎) — Preis, gültig bis, Notiz
+    public ?int $preisEditId = null;
+
+    /** @var array{preis: string, valid_to: string, note: string} */
+    public array $preisEdit = ['preis' => '', 'valid_to' => '', 'note' => ''];
+
+    public function preisBearbeiten(int $priceId): void
+    {
+        $p = \Platform\FoodAlchemist\Models\FoodAlchemistPrice::where('supplier_item_id', $this->itemId)->find($priceId);
+        if ($p === null) {
+            return;
+        }
+        $this->preisEditId = $priceId;
+        $this->preisEdit = [
+            'preis' => $p->price !== null ? number_format((float) $p->price, 2, ',', '') : '',
+            'valid_to' => $p->valid_to ? \Illuminate\Support\Carbon::parse($p->valid_to)->format('Y-m-d') : '',
+            'note' => (string) ($p->note ?? ''),
+        ];
+    }
+
+    public function preisUpdate(): void
+    {
+        $p = \Platform\FoodAlchemist\Models\FoodAlchemistPrice::where('supplier_item_id', $this->itemId)->find($this->preisEditId);
+        if ($p === null || ! Curate::canCurate(Auth::user(), $this->item($this->itemId))) {
+            $this->fehler = 'Bearbeiten nur fürs Besitzer-Team (D1).';
+
+            return;
+        }
+        $preis = str_replace(',', '.', trim($this->preisEdit['preis']));
+        if (! is_numeric($preis) || (float) $preis < 0) {
+            $this->fehler = 'Preis braucht eine Zahl ≥ 0.';
+
+            return;
+        }
+        $p->update([
+            'price' => (float) $preis,
+            'valid_to' => $this->preisEdit['valid_to'] !== '' ? $this->preisEdit['valid_to'] . ' 23:59:59' : null,
+            'note' => trim($this->preisEdit['note']) ?: null,
+            'change_date' => now(),
+        ]);
+        $this->preisEditId = null;
+        $this->fehler = null;
+    }
+
+    public function preisEditAbbrechen(): void
+    {
+        $this->preisEditId = null;
+    }
+
     public function preisLoeschen(int $priceId): void
     {
         try {

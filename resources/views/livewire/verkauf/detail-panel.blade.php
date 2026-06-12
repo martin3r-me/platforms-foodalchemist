@@ -9,18 +9,17 @@
         </div>
     @else
         <div>
-            <div class="flex items-start justify-between gap-2">
-                <h3 class="font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-snug">{{ $rezept->name }}</h3>
-                <div class="flex items-center gap-1.5 shrink-0">
-                    <button type="button" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-bearbeiten>Bearbeiten</button>
-                    <button type="button" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-komponenten>Komponenten</button>
-                    <button type="button" wire:click="ai_klassifizieren" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="ai_classify_speisen_klasse (GL-07)" data-vk-klassifizieren>✨ Klassifizieren</button>
-                    <button type="button" wire:click="ai_rollen" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-rollen>🎭 Rollen</button>
-                </div>
-            </div>
+            {{-- R12 (Dominique): Name braucht die volle Breite — Aktionen als eigene Zeile DARUNTER --}}
+            <h3 class="font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-snug">{{ $rezept->name }}</h3>
             @if($rezept->vk_wording_standard !== null)
                 <p class="text-xs italic text-gray-400 mt-0.5">{{ $rezept->vk_wording_standard }}</p>
             @endif
+            <div class="flex flex-wrap items-center gap-1.5 mt-2" data-vk-aktionen>
+                <button type="button" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-bearbeiten>Bearbeiten</button>
+                <button type="button" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-komponenten>Komponenten</button>
+                <button type="button" wire:click="ai_klassifizieren" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="ai_classify_speisen_klasse (GL-07)" data-vk-klassifizieren>✨ Klassifizieren</button>
+                <button type="button" wire:click="ai_rollen" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-rollen>🎭 Rollen</button>
+            </div>
             <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
                 <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
                 @if($rezept->speisenKlasse !== null)
@@ -382,15 +381,14 @@
         {{-- R6 (Dominique, Bild-5): Diät · Allergene · Zusatzstoffe wie im Basis-Panel --}}
         @include('foodalchemist::livewire.recipes.partials.deklaration')
 
-        {{-- Zutaten-Kurzliste (Komponenten: GPs und/oder Basisrezepte) --}}
+        {{-- Zutaten-Kurzliste — R12 Jarvis-Format: Menge+Einheit grau vorangestellt, voller Name, text-sm --}}
         <div>
             <p class="{{ $dt }} mb-1">Komponenten ({{ $rezept->ingredients->count() }})</p>
-            <div class="space-y-0.5" data-vk-zutaten>
+            <div class="space-y-1" data-vk-zutaten>
                 @foreach($rezept->ingredients as $z)
-                    <p class="text-xs text-gray-600 dark:text-gray-300 truncate" wire:key="vkz-{{ $z->id }}">
-                        <span class="text-gray-400">{{ $z->menge !== null ? rtrim(rtrim(number_format((float) $z->menge, 2, ',', '.'), '0'), ',') : '' }}</span>
+                    <p class="text-sm text-gray-900 dark:text-gray-100 leading-snug" wire:key="vkz-{{ $z->id }}">
+                        <span class="text-gray-400 tabular-nums">{{ $z->menge !== null ? rtrim(rtrim(number_format((float) $z->menge, 2, ',', '.'), '0'), ',') . ' ' . ($z->einheit?->slug ?? '') : '' }}</span>
                         {{ $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name }}
-                        {{ $z->referenced_recipe_id !== null ? '↗' : '' }}
                     </p>
                 @endforeach
             </div>

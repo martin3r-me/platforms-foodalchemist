@@ -9,17 +9,20 @@
             Grundprodukt in der Tabelle anklicken —<br>Details erscheinen hier.
         </div>
     @else
+        {{-- R12 (Jarvis): Kopf — Name + Status, slug in grauer Box, Aktionen als eigene Zeile darunter --}}
         <div>
             <div class="flex items-start justify-between gap-2">
                 <h3 class="font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-snug">{{ $gp->name }}</h3>
-                <div class="flex items-center gap-1.5 shrink-0">
-                    @if($kannKuratieren)
-                        <button type="button" wire:click="$dispatch('gp-modal.oeffnen', { id: {{ $gp->id }} })" class="{{ $btnGhostXs }}" data-gp-bearbeiten>Bearbeiten</button>
-                    @endif
-                    <span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
-                </div>
+                <span class="{{ $pill }} font-medium shrink-0 {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
             </div>
-            <p class="text-xs text-gray-400 mt-0.5 font-mono">{{ $gp->hauptzutat_slug ?? '—' }}</p>
+            @if($gp->hauptzutat_slug !== null)
+                <span class="inline-block mt-1.5 rounded-md bg-black/5 dark:bg-white/10 px-2 py-0.5 text-[11px] font-mono text-gray-500 dark:text-gray-400" data-gp-slug>{{ $gp->hauptzutat_slug }}</span>
+            @endif
+            @if($kannKuratieren)
+                <div class="mt-2">
+                    <button type="button" wire:click="$dispatch('gp-modal.oeffnen', { id: {{ $gp->id }} })" class="{{ $btnGhostXs }}" data-gp-bearbeiten>Bearbeiten</button>
+                </div>
+            @endif
         </div>
 
         @if($fehler !== null)
@@ -32,9 +35,7 @@
                 ['Warengruppe', $gp->warengruppe?->name ?? $gp->warengruppe_code ?? '—'],
                 ['Sub-Kategorie', $gp->sub_kategorie ?? '—'],
                 ['Zustand', $gp->zustand ?? '—'],
-                ['Zähleinheit', $gp->preferredCountUnit?->name ?? '—'],
                 ['Garverlust-Default', $gp->garverlust_default_pct !== null ? number_format((float) $gp->garverlust_default_pct, 1, ',', '.') . ' %' : '—'],
-                ['Stück-Gewicht', $gp->stk_default_g !== null ? number_format((float) $gp->stk_default_g, 0, ',', '.') . ' g' : '—'],
             ] as [$lbl, $wert])
                 <div class="min-w-0">
                     <dt class="{{ $dt }}">{{ $lbl }}</dt>
@@ -42,6 +43,23 @@
                 </div>
             @endforeach
         </dl>
+
+        {{-- R12 (Jarvis): «Natürliche Einheit & Gewicht» prominent statt zweier Raster-Zellen --}}
+        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-einheit-gewicht>
+            <p class="{{ $dt }} mb-0.5">Natürliche Einheit &amp; Gewicht</p>
+            @if($gp->preferredCountUnit !== null || $gp->stk_default_g !== null)
+                <p class="text-sm text-gray-900 dark:text-gray-100">
+                    1 {{ $gp->preferredCountUnit?->name ?? 'Stück' }}
+                    @if($gp->stk_default_g !== null)
+                        ≈ <span class="font-semibold">{{ number_format((float) $gp->stk_default_g, 0, ',', '.') }} g</span>
+                    @else
+                        <span class="text-gray-400">— Gewicht nicht hinterlegt</span>
+                    @endif
+                </p>
+            @else
+                <p class="text-sm text-gray-400">— keine Zähleinheit hinterlegt —</p>
+            @endif
+        </div>
 
         @if($gp->is_derivat || $gp->is_platzhalter)
             <div class="flex gap-1.5">
@@ -62,51 +80,81 @@
             </div>
         </div>
 
-        {{-- ★ VERKNÜPFTE LIEFERANTENARTIKEL — Lead per Stern-Klick (Jarvis), Aktionen beim Hover --}}
+        {{-- ★ VERKNÜPFTE LIEFERANTENARTIKEL — R12: breite Jarvis-Karten (Lead orange, Preis groß rechts) --}}
         <div class="border-t border-black/5 dark:border-white/10 pt-2" data-sektion="las">
-            <p class="{{ $dt }} mb-1">Lieferantenartikel ({{ $gp->n_las_total }})</p>
-            <div class="space-y-1">
+            <p class="{{ $dt }} mb-1.5 flex items-center">Lieferantenartikel ({{ $gp->n_las_total }})
+                @if($kannKuratieren)
+                    <button type="button" wire:click="laVorschlaege" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 ml-auto normal-case"
+                            title="Unverknüpfte Artikel finden, die zum GP-Namen passen (deterministischer Token-Match)" data-la-ki-vorschlag>✨ KI-Vorschlag</button>
+                @endif
+            </p>
+            <div class="space-y-1.5">
                 @forelse($kette ?? [] as $rang => $la)
+                    @php($istLead = $la->id === $effektiverLeadId)
                     <div wire:key="la-{{ $la->id }}"
-                         class="group rounded-lg px-2 py-1.5 -mx-2 {{ $la->id === $effektiverLeadId ? 'bg-orange-500/10 border border-orange-500/30' : 'hover:bg-black/[0.03] dark:hover:bg-white/5' }} {{ $la->gesperrt ? 'opacity-50' : '' }}"
+                         class="group rounded-lg border px-2.5 py-2 {{ $istLead ? 'bg-orange-500/10 border-orange-500/40' : 'border-black/5 dark:border-white/10 hover:bg-black/[0.03] dark:hover:bg-white/5' }} {{ $la->gesperrt ? 'opacity-50' : '' }}"
                          data-la-zeile="{{ $la->id }}">
-                        <div class="flex items-start gap-1.5">
+                        <div class="flex items-start gap-2">
                             {{-- R9: ★ direkt klickbar = globalen Lead setzen (vorher nur im Hover-Menü versteckt) --}}
                             <button type="button" wire:click="leadSetzen({{ $la->id }})"
-                                    class="shrink-0 text-sm leading-5 transition-colors {{ $la->id === $effektiverLeadId ? 'text-orange-500' : 'text-gray-300 dark:text-gray-600 hover:text-orange-400' }}"
-                                    title="{{ $la->id === $effektiverLeadId ? 'Effektiver Lead (Team-Sicht)' : 'Klick: als Lead setzen (GL-03, Kurations-Team)' }}" data-lead-stern>★</button>
+                                    class="shrink-0 text-base leading-5 transition-colors {{ $istLead ? 'text-orange-500' : 'text-gray-300 dark:text-gray-600 hover:text-orange-400' }}"
+                                    title="{{ $istLead ? 'Effektiver Lead (Team-Sicht)' : 'Klick: als Lead setzen (GL-03, Kurations-Team)' }}" data-lead-stern>★</button>
                             <div class="min-w-0 flex-1">
-                                <p class="text-xs text-gray-900 dark:text-gray-100 truncate" title="{{ $la->designation }}">{{ $la->designation }}</p>
-                                <p class="text-[11px] text-gray-400 truncate">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100 leading-snug" title="{{ $la->designation }}">{{ $la->designation }}</p>
+                                <p class="text-[11px] text-gray-400 truncate mt-0.5">
                                     {{ $la->supplier_name ?? '—' }}
-                                    @if($gp->lead_la_supplier_item_id === $la->id) · <span title="globaler Default-Lead (GL-03)">global ★</span>@endif
-                                    {{ $la->ist_stamm ? '· Stamm' : '' }}
-                                    @if($la->is_discontinued) · <span class="text-rose-400">ausgelistet</span>@endif
-                                    @if($la->gepinnt) · <span class="text-violet-500">gepinnt</span>@endif
-                                    @if($la->gesperrt) · <span class="text-rose-500">gesperrt</span>@endif
+                                    @if($la->qty !== null && $la->unit_code !== null) · {{ rtrim(rtrim(number_format((float) $la->qty, 3, ',', '.'), '0'), ',') }} {{ $la->unit_code }}@endif
+                                    @if($la->order_number !== null) · Art-Nr {{ $la->order_number }}@endif
                                 </p>
-                            </div>
-                            <span class="shrink-0 text-xs tabular-nums {{ $la->vergleichspreis !== null ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400' }}" data-la-preis>
-                                @if($la->vergleichspreis !== null)
-                                    {{ number_format($la->vergleichspreis['wert'], 2, ',', '.') }} {{ $la->vergleichspreis['einheit'] }}
-                                @elseif($la->aktiver_preis !== null)
-                                    <span title="Gebinde-Preis — kein Vergleichspreis, qty fehlt (GL-03 A-2)">{{ number_format((float) $la->aktiver_preis, 2, ',', '.') }} € ⚠</span>
-                                @else
-                                    —
+                                @if($gp->lead_la_supplier_item_id === $la->id || $la->ist_stamm || $la->is_discontinued || $la->gepinnt || $la->gesperrt)
+                                    <p class="text-[11px] truncate">
+                                        @if($gp->lead_la_supplier_item_id === $la->id)<span class="text-orange-500" title="globaler Default-Lead (GL-03)">global ★</span>@endif
+                                        {{ $la->ist_stamm ? ' · Stamm' : '' }}
+                                        @if($la->is_discontinued) · <span class="text-rose-400">ausgelistet</span>@endif
+                                        @if($la->gepinnt) · <span class="text-violet-500">gepinnt</span>@endif
+                                        @if($la->gesperrt) · <span class="text-rose-500">gesperrt</span>@endif
+                                    </p>
                                 @endif
-                            </span>
+                            </div>
+                            <div class="shrink-0 text-right" data-la-preis>
+                                @if($la->aktiver_preis !== null)
+                                    <p class="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ number_format((float) $la->aktiver_preis, 2, ',', '.') }} €</p>
+                                    @if($la->vergleichspreis !== null)
+                                        <p class="text-[11px] tabular-nums text-gray-400">{{ number_format($la->vergleichspreis['wert'], 2, ',', '.') }} {{ $la->vergleichspreis['einheit'] }}</p>
+                                    @else
+                                        <p class="text-[11px] text-gray-400" title="kein Vergleichspreis — qty fehlt (GL-03 A-2)">⚠ ohne €/kg</p>
+                                    @endif
+                                @else
+                                    <p class="text-sm text-gray-400">—</p>
+                                @endif
+                            </div>
                         </div>
-                        <div class="hidden group-hover:flex items-center gap-1 mt-1 ml-5" data-la-aktionen>
+                        <div class="hidden group-hover:flex items-center gap-1 mt-1.5 ml-6" data-la-aktionen>
                             <button type="button" wire:click="pinToggle({{ $la->id }}, {{ $la->gepinnt ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $la->gepinnt ? 'Pin lösen' : 'Pinnen' }}</button>
                             <button type="button" wire:click="sperreToggle({{ $la->id }}, {{ $la->gesperrt ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $la->gesperrt ? 'Entsperren' : 'Sperren' }}</button>
                             @if($kannKuratieren)
-                                <button type="button" wire:click="loesen({{ $la->id }})" wire:confirm="LA vom GP lösen? War er Lead, wird sofort neu gewählt (GL-03 I4)." class="{{ $btnGhostXs }} text-rose-500">Lösen</button>
+                                <button type="button" wire:click="loesen({{ $la->id }})" wire:confirm="LA vom GP lösen? War er Lead, wird sofort neu gewählt (GL-03 I4)." class="{{ $btnGhostXs }} text-rose-500">✕ Lösen</button>
                             @endif
                         </div>
                     </div>
                 @empty
                     <p class="text-xs text-gray-400">Keine LAs verknüpft{{ !$gp->requires_la ? ' — bewusst LA-frei' : '' }}.</p>
                 @endforelse
+
+                {{-- R12: ✨-Kandidaten — Klick = verknüpfen (GL-03 verknuepfen, Kurations-Gate in der Aktion) --}}
+                @if($laKandidaten !== null)
+                    <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-2.5 py-2" data-la-kandidaten>
+                        <p class="text-xs text-gray-900 dark:text-gray-100 mb-1">✨ Passende unverknüpfte Artikel <span class="text-gray-400">· Klick = verknüpfen</span></p>
+                        @foreach($laKandidaten as $kandidat)
+                            <button type="button" wire:key="lakand-{{ $kandidat['id'] }}" wire:click="verknuepfe({{ $kandidat['id'] }})"
+                                    class="w-full text-left px-2 py-1 rounded text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/15 transition-colors duration-150 flex items-baseline gap-2">
+                                <span class="min-w-0 flex-1 truncate">{{ $kandidat['designation'] }} <span class="text-gray-400">· {{ $kandidat['supplier'] ?? '—' }}</span></span>
+                                <span class="shrink-0 tabular-nums text-violet-500">{{ round($kandidat['score'] * 100) }} %</span>
+                            </button>
+                        @endforeach
+                        <button type="button" wire:click="laVorschlaegeVerwerfen" class="{{ $btnGhostXs }} mt-1" data-la-kandidaten-verwerfen>Verwerfen</button>
+                    </div>
+                @endif
 
                 @if($kannKuratieren)
                     <div class="pt-1" data-la-verknuepfen>

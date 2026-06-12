@@ -64,6 +64,33 @@ class Index extends Component
 
     public string $bulkGpSuche = '';
 
+    /** R12 (Jarvis): ★ in der Artikel-Tabelle — LA als Lead seines GPs setzen (GL-03). */
+    public function leadSetzen(int $itemId): void
+    {
+        $this->fehler = null;
+        $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation;
+        $gpId = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_item_structures')
+            ->where('supplier_item_id', $itemId)->whereNull('deleted_at')->value('gp_id');
+        $gp = $team !== null && $gpId !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($gpId)
+            : null;
+        if ($gp === null) {
+            $this->fehler = 'Artikel ist keinem GP zugeordnet — erst mappen (LA-Modal → GP-Mapping).';
+
+            return;
+        }
+        if (! \Platform\FoodAlchemist\Support\Curate::canCurate(\Illuminate\Support\Facades\Auth::user(), $gp)) {
+            $this->fehler = 'Globale Katalog-Aktion — nur fürs Kurations-Team (D1).';
+
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\LeadLaService::class)->setLeadLa($team, $gp, $itemId);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function waehleLieferant(int $id): void
     {
         $this->supplierId = $id;
