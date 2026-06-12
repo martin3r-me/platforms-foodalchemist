@@ -1,0 +1,186 @@
+<?php
+
+namespace Platform\FoodAlchemist\Livewire\Concepts;
+
+use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Url;
+use Livewire\Component;
+use Livewire\WithPagination;
+use Platform\FoodAlchemist\Services\BausteinService;
+use Platform\FoodAlchemist\Services\ConceptService;
+
+/**
+ * M10-03/04/05 / Doc 15 §M10: Concept-Editor — Slot-Gerüst bauen, jeden Slot mit
+ * einem Baustein (austauschbar) ODER festem Gericht füllen, Live-Preis = Σ der
+ * gespeicherten Baustein-Preise. „Aus Vorlage starten" (Fork) + „Als Vorlage
+ * speichern". Liste links, Editor + Cockpit rechts.
+ */
+class Index extends Component
+{
+    use WithPagination;
+
+    #[Url(as: 'q')]
+    public string $search = '';
+
+    #[Url(as: 'vorlagen')]
+    public bool $showVorlagen = false;
+
+    #[Url(as: 'c')]
+    public ?int $selectedId = null;
+
+    public array $form = ['name' => '', 'anlass' => '', 'niveau' => '', 'status' => 'draft', 'beschreibung' => ''];
+
+    /** Pro Slot editierbare Rolle/Titel (keyed by slot-id). */
+    public array $slotForm = [];
+
+    public string $neuerSlotRolle = '';
+
+    /** Slot, für den gerade ein festes Gericht gesucht wird. */
+    public ?int $fillSlotId = null;
+
+    public string $gerichtSuche = '';
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedShowVorlagen(): void
+    {
+        $this->resetPage();
+    }
+
+    public function neu(ConceptService $svc): void
+    {
+        $c = $svc->create($this->team(), ['name' => 'Neues Concept', 'is_vorlage' => $this->showVorlagen]);
+        $this->waehle($c->id, $svc);
+    }
+
+    public function ausVorlage(int $vorlageId, ConceptService $svc): void
+    {
+        $vorlage = $svc->detail($this->team(), $vorlageId);
+        if ($vorlage === null) {
+            return;
+        }
+        $fork = $svc->forkVonVorlage($this->team(), $vorlageId, $vorlage->name . ' – Kopie');
+        $this->showVorlagen = false;
+        $this->waehle($fork->id, $svc);
+    }
+
+    public function waehle(int $id, ConceptService $svc): void
+    {
+        $c = $svc->detail($this->team(), $id);
+        if ($c === null) {
+            return;
+        }
+        $this->selectedId = $id;
+        $this->form = [
+            'name' => $c->name, 'anlass' => $c->anlass ?? '', 'niveau' => $c->niveau ?? '',
+            'status' => $c->status, 'beschreibung' => $c->beschreibung ?? '',
+        ];
+        $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '']])->all();
+        $this->fillSlotId = null;
+        $this->gerichtSuche = '';
+    }
+
+    public function speichern(ConceptService $svc): void
+    {
+        if ($this->selectedId !== null) {
+            $svc->update($this->team(), $this->selectedId, $this->form);
+        }
+    }
+
+    public function loeschen(int $id, ConceptService $svc): void
+    {
+        $svc->delete($this->team(), $id);
+        if ($this->selectedId === $id) {
+            $this->selectedId = null;
+        }
+    }
+
+    public function slotHinzu(ConceptService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $svc->addSlot($this->team(), $this->selectedId, ['rolle' => $this->neuerSlotRolle ?: null, 'titel' => $this->neuerSlotRolle ?: null]);
+        $this->neuerSlotRolle = '';
+        $this->waehle($this->selectedId, $svc);
+    }
+
+    public function slotSpeichern(int $slotId, ConceptService $svc): void
+    {
+        $svc->updateSlot($this->team(), $slotId, $this->slotForm[$slotId] ?? []);
+    }
+
+    public function slotRaus(int $slotId, ConceptService $svc): void
+    {
+        $svc->removeSlot($this->team(), $slotId);
+        $this->waehle($this->selectedId, $svc);
+    }
+
+    public function fuelleBaustein(int $slotId, int $bausteinId, ConceptService $svc): void
+    {
+        $svc->fillSlot($this->team(), $slotId, ['baustein_id' => $bausteinId]);
+        $this->waehle($this->selectedId, $svc);
+    }
+
+    public function fuelleGericht(int $slotId, int $vkRecipeId, ConceptService $svc): void
+    {
+        $svc->fillSlot($this->team(), $slotId, ['vk_recipe_id' => $vkRecipeId, 'menge' => 1]);
+        $this->fillSlotId = null;
+        $this->gerichtSuche = '';
+        $this->waehle($this->selectedId, $svc);
+    }
+
+    public function slotLeeren(int $slotId, ConceptService $svc): void
+    {
+        $svc->fillSlot($this->team(), $slotId, []);
+        $this->waehle($this->selectedId, $svc);
+    }
+
+    public function gerichtPicker(int $slotId): void
+    {
+        $this->fillSlotId = $this->fillSlotId === $slotId ? null : $slotId;
+        $this->gerichtSuche = '';
+    }
+
+    public function alsVorlage(ConceptService $svc): void
+    {
+        if ($this->selectedId !== null) {
+            $svc->alsVorlageSpeichern($this->team(), $this->selectedId);
+            $this->dispatch('concept-vorlage-gespeichert');
+        }
+    }
+
+    public function render(ConceptService $svc)
+    {
+        $team = $this->team();
+        $selected = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
+        $cockpit = $selected !== null ? $svc->preisCockpit($selected) : null;
+
+        $tauschbar = [];
+        if ($selected !== null) {
+            foreach ($selected->slots as $slot) {
+                $tauschbar[$slot->id] = $svc->tauschbareBausteine($team, $slot);
+            }
+        }
+
+        $kandidaten = $this->fillSlotId !== null && $this->gerichtSuche !== ''
+            ? app(BausteinService::class)->gerichtKandidaten($team, $this->gerichtSuche)
+            : collect();
+
+        return view('foodalchemist::livewire.concepts.index', [
+            'concepts' => $svc->paginateBrowser(['search' => $this->search, 'vorlagen' => $this->showVorlagen], $team),
+            'selected' => $selected,
+            'cockpit' => $cockpit,
+            'tauschbar' => $tauschbar,
+            'kandidaten' => $kandidaten,
+        ])->layout('platform::layouts.app');
+    }
+
+    private function team()
+    {
+        return Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    }
+}

@@ -113,24 +113,29 @@ return [
             ],
         ],
         [
-            // Reihenfolge = Bau-Sequenz aus docs/15_MASTERPLAN_VISION.md (Concepter-Vision).
-            // Der Concepter (Concepts + Bausteine) führt: er ist das Rückgrat, auf dem Foodbook,
-            // Kalkulation und Speiseplan aufsetzen — NICHT eines von sechs gleichrangigen Themen.
-            // Klick = Vorschau (foodalchemist.demnaechst); gebaute Domänen wandern in eine eigene
-            // aktive Gruppe ÜBER "In Planung". Zielpreis-Konfigurator = Modus im Concept-Editor
-            // (KEIN eigener Eintrag — Entscheid 2026-06-13).
-            'group' => 'In Planung',
+            // M10 GEBAUT (Doc 15 §M10): Concepter ist das Rückgrat → eigene AKTIVE Gruppe
+            // über "In Planung". Concepts = Slot-Gerüst über mehrere Rollen; Bausteine =
+            // bepreiste Bündel mehrerer Gerichte (im Konzeptpapier "Modul").
+            'group' => 'Concepter',
             'items' => [
-                [   // M10 — Concepter-Fundament (Rückgrat): Slot-Gerüste aus Bausteinen/Gerichten
+                [
                     'label' => 'Concepts',
-                    'route' => 'foodalchemist.demnaechst',
+                    'route' => 'foodalchemist.concepts.index',
                     'icon'  => 'heroicon-o-rectangle-stack',
                 ],
-                [   // M10 — austauschbare Slot-Bausteine (im Konzeptpapier "Modul")
+                [
                     'label' => 'Bausteine',
-                    'route' => 'foodalchemist.demnaechst',
+                    'route' => 'foodalchemist.bausteine.index',
                     'icon'  => 'heroicon-o-puzzle-piece',
                 ],
+            ],
+        ],
+        [
+            // Reihenfolge = Bau-Sequenz aus docs/15_MASTERPLAN_VISION.md. Concepter ist gebaut
+            // (eigene Gruppe oben); hier bleibt, was noch kommt. Klick = Vorschau (demnaechst).
+            // Zielpreis-Konfigurator = Modus im Concept-Editor (KEIN eigener Eintrag).
+            'group' => 'In Planung',
+            'items' => [
                 [   // M11 — Foodbook / Portfolio (komponiert Concepts; Schreibstil, PDF, Snapshot)
                     'label' => 'Foodbook / Portfolio',
                     'route' => 'foodalchemist.demnaechst',
