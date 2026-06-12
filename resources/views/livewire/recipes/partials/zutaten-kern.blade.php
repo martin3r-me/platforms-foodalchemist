@@ -10,7 +10,9 @@
         {{-- R18: Drei-Spalten-Layout — Browsen (links GPs, rechts Basisrezepte) und Editieren
              (Mitte) konkurrieren nicht mehr um denselben Platz; Spalten scrollen intern. --}}
         <div class="flex gap-3 items-start">
-        <aside class="w-56 shrink-0 hidden xl:block" data-browser-gps>
+        {{-- R19 (Dominique): Seitenspalten als ECHTE Panels — farblich abgehoben, stehen fest
+             (sticky), nur die Mitte scrollt; die Trefferlisten scrollen intern. --}}
+        <aside class="w-56 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] dark:bg-white/[0.05] border border-black/5 dark:border-white/10 p-2.5 sticky top-0 self-start max-h-[70vh]" data-browser-gps>
             <p class="{{ $dt }} mb-1">Produkte (<span x-text="gpTotal"></span>)</p>
             <div class="space-y-1 mb-1.5">
                 <select x-model="gpFilter.wg" @change="gpFilter.sub = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-gp-filter-wg>
@@ -41,7 +43,7 @@
                     </label>
                 </div>
             </div>
-            <div class="space-y-px max-h-[46vh] overflow-y-auto -mx-1 px-1" data-gp-liste>
+            <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1" data-gp-liste>
                 <template x-for="ziel in gpListe" :key="'bg' + ziel.id">
                     <div class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px]">
                         <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider bg-violet-500/10 text-violet-600 dark:text-violet-300">GP</span>
@@ -63,7 +65,7 @@
             <thead><tr class="text-left">
                 @php($koepfe = ['#' => null, 'Menge' => null, 'Einheit' => null, 'Verknüpfung / Beschreibung' => 'Klick auf den Namen öffnet GP/Rezept als Fenster über dem Editor']
                     + ($vkKontext ? ['Rolle' => 'V-21: aroma_treiber · komponente · beilage · garnitur (🎭 verteilt per KI)'] : [])
-                    + ['Hinweis' => null, 'Garv. %' => null, 'EK €' => 'EK nach Lead-LA-Strategie (V-27 — damit rechnet das Rezept)', 'EK ↓' => 'günstigster Lieferantenartikel hinter dem GP', 'EK Ø' => 'Durchschnitt über alle Lieferantenartikel hinter dem GP', '' => null])
+                    + ['Garv. %' => null, 'EK €' => 'EK nach Lead-LA-Strategie (V-27 — damit rechnet das Rezept)', 'EK ↓' => 'günstigster Lieferantenartikel hinter dem GP', 'EK Ø' => 'Durchschnitt über alle Lieferantenartikel hinter dem GP', '' => null])
                 @foreach($koepfe as $head => $tip)
                     <th class="{{ $th }} !px-2 {{ $tip ? 'cursor-help underline decoration-dotted decoration-gray-300 underline-offset-2' : '' }}" @if($tip) title="{{ $tip }}" @endif>{{ $head }}</th>
                 @endforeach
@@ -93,7 +95,8 @@
                                 @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                             </select>
                         </td>
-                        <td class="{{ $td }} !px-2 !py-0.5 max-w-[18rem]">
+                        {{-- R19: Hinweis-Spalte raus → Platz für die EINZEILIGE Zutat (note bleibt im Datensatz) --}}
+                        <td class="{{ $td }} !px-2 !py-0.5 whitespace-nowrap">
                             {{-- R4 (Dichte): Lineage als Tooltip; R7-Fix: neuer Tab ist bei Dominique
                                  blockiert → Klick öffnet das Ziel als MODAL über dem Editor (Stand bleibt) --}}
                             <template x-if="zeile.gp_id || zeile.referenced_recipe_id">
@@ -123,7 +126,6 @@
                                 </select>
                             </td>
                         @endif
-                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.note" placeholder="Hinweis" class="{{ $input }} !w-28 !py-0.5 !text-[11px]" /></td>
                         <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.garverlust_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" /></td>
                         <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
                             <span x-text="zeilenEk(zeile) ?? '—'" :class="zeilenEk(zeile) ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'"></span>
@@ -143,7 +145,7 @@
                     </tr>
                     {{-- GP-Peek (D-5 §4.2.3, Ist-App): LA-Tabelle hinter dem GP, ★ = Lead --}}
                     <tr x-show="zeile._peek" x-cloak>
-                        <td colspan="{{ $vkKontext ? 11 : 10 }}" class="!px-3 !py-2 bg-black/[0.02] dark:bg-white/[0.03]">
+                        <td colspan="{{ $vkKontext ? 10 : 9 }}" class="!px-3 !py-2 bg-black/[0.02] dark:bg-white/[0.03]">
                             <div class="rounded-lg border-l-2 border-orange-400 bg-white dark:bg-gray-900 px-3 py-2" data-gp-peek-tabelle>
                                 <p class="text-[11px] font-medium text-gray-900 dark:text-gray-100 mb-1">
                                     📦 <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
@@ -177,7 +179,7 @@
                 </template>
             <tfoot>
                 <tr class="border-t border-black/10 dark:border-white/10">
-                    <td colspan="{{ $vkKontext ? 7 : 6 }}" class="{{ $td }} !px-2 text-right text-[11px] text-gray-400">
+                    <td colspan="{{ $vkKontext ? 6 : 5 }}" class="{{ $td }} !px-2 text-right text-[11px] text-gray-400">
                         Σ live (Näherung — count-Einheiten & Brücken rechnet der Save-Recompute)
                     </td>
                     <td class="{{ $td }} !px-2 text-right font-medium tabular-nums text-gray-900 dark:text-gray-100" data-summe-live>
@@ -233,7 +235,7 @@
             </div>
         @endif
         </div>{{-- /Mitte --}}
-        <aside class="w-56 shrink-0 hidden xl:block" data-browser-rezepte>
+        <aside class="w-56 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] dark:bg-white/[0.05] border border-black/5 dark:border-white/10 p-2.5 sticky top-0 self-start max-h-[70vh]" data-browser-rezepte>
             <p class="{{ $dt }} mb-1">Basisrezepte (<span x-text="rezTotal"></span>)</p>
             <div class="space-y-1 mb-1.5">
                 <select x-model="rezFilter.hg" @change="rezFilter.kat = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-hg>
@@ -255,7 +257,7 @@
                     </template>
                 </select>
             </div>
-            <div class="space-y-px max-h-[46vh] overflow-y-auto -mx-1 px-1" data-rez-liste>
+            <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1" data-rez-liste>
                 <template x-for="ziel in rezListe" :key="'br' + ziel.id">
                     <div class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-emerald-500/5 text-[11px]">
                         <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">REZ</span>

@@ -213,6 +213,15 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > Park-Flow, Filter-Kaskade WG→Sub, Niveau-Filter + Punkte, Layout ohne Überlappung).
 > Suite: **397/397 (1.684 Assertions)**.
 
+> **Status R19/Panel-Politur (2026-06-12, Dominique: «2 Panels, farblich abgehoben, nur
+> Mitte scrollt; Hinweis raus → Zutat einzeilig»):** Seitenspalten als ECHTE Panels —
+> grauer Hintergrund (gray-500/7 %) + Rand + rounded-xl, **sticky** (stehen fest, nur die
+> Mitte scrollt; Trefferlisten scrollen intern via flex-1). **Hinweis-Spalte entfernt**
+> (note bleibt im Datensatz/payload erhalten — nur keine Spalte mehr); Zutaten-Name
+> einzeilig (`whitespace-nowrap`, Limit weg) — die Tabelle passt jetzt komplett ohne
+> horizontalen Scroll in die Mitte. colspans angepasst. Live verifiziert (Panel-BG,
+> sticky, Kopfzeile ohne Hinweis, Zutat < 30 px). Suite: **397/397 (1.684 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).
