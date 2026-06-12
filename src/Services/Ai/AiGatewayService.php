@@ -133,6 +133,85 @@ class AiGatewayService
         );
     }
 
+    /**
+     * M7-10 / 06_KI §2 Tier D: agentischer Tool-Loop — provider-agnostisch
+     * über ein JSON-Protokoll (das Contract garantiert keine Tool-API):
+     * Das Modell antwortet {action:'tool', name, arguments} oder
+     * {action:'final', text}; Tools laufen über die Core-ToolRegistry
+     * (M8-01, team-scoped via ToolContext). Schreib-Tools bleiben GL-07-
+     * Proposal-Flow. Jede Runde loggt (ai_call_log via propose-Pfad-Logik
+     * hier inline), maxRuns deckelt; Thinking/Temp-0.0 sind Tier-D-Config.
+     *
+     * @param  list<string>  $toolNames  erlaubte Tools (Registry-Namen)
+     * @return array{text: ?string, runden: int, tool_laeufe: list<array>, elapsed_ms: int}
+     */
+    public function callWithTools(string $auftrag, array $toolNames, int $maxRuns = 6): array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && ! app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->kiAktiv($team)) {
+            throw new \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException();
+        }
+        $registry = app(\Platform\Core\Tools\ToolRegistry::class);
+        $katalog = collect($toolNames)
+            ->map(fn ($n) => $registry->get($n))
+            ->filter()
+            ->map(fn ($t) => ['name' => $t->getName(), 'beschreibung' => $t->getDescription(), 'schema' => $t->getSchema()])
+            ->values()->all();
+
+        $messages = [[
+            'role' => 'system',
+            'content' => 'Du bist der Food-Alchemist-Sprachassistent (Catering-Souschef). Antworte AUSSCHLIESSLICH '
+                . 'mit einem JSON-Objekt: {"action":"tool","name":"<tool>","arguments":{…}} um ein Tool zu rufen, '
+                . 'oder {"action":"final","text":"<kurze deutsche Antwort>"} wenn du fertig bist. '
+                . 'Schreibaktionen NUR über die Proposal-Tools (nie erfinden). Verfügbare Tools: '
+                . json_encode($katalog, JSON_UNESCAPED_UNICODE),
+        ], ['role' => 'user', 'content' => $auftrag]];
+
+        $start = hrtime(true);
+        $toolLaeufe = [];
+        $finalText = null;
+        $runde = 0;
+        $kontext = $team !== null && Auth::user() !== null ? new \Platform\Core\Contracts\ToolContext(Auth::user(), $team) : null;
+        while ($runde < $maxRuns) {
+            $runde++;
+            $antwort = $this->chatMitBackoff($messages, [
+                'temperature' => 0.0,
+                'model' => config('foodalchemist.ai.tiers', [])['D'] ?? null,
+            ]);
+            $parsed = json_decode($this->stripJsonFence((string) ($antwort['content'] ?? '')), true);
+            if (! is_array($parsed)) {
+                $messages[] = ['role' => 'user', 'content' => 'Antwort war kein valides JSON — bitte exakt dem Protokoll folgen.'];
+
+                continue;
+            }
+            if (($parsed['action'] ?? null) === 'final' || $kontext === null) {
+                $finalText = $parsed['text'] ?? null;
+                break;
+            }
+            if (($parsed['action'] ?? null) === 'tool' && is_string($parsed['name'] ?? null) && in_array($parsed['name'], $toolNames, true)) {
+                $tool = $registry->get($parsed['name']);
+                $resultat = $tool !== null
+                    ? $tool->execute((array) ($parsed['arguments'] ?? []), $kontext)
+                    : \Platform\Core\Contracts\ToolResult::error('Tool unbekannt.', 'NOT_FOUND');
+                $toolLaeufe[] = ['name' => $parsed['name'], 'arguments' => $parsed['arguments'] ?? [], 'success' => $resultat->success, 'data' => $resultat->data];
+                $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
+                $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $parsed['name'] . ': '
+                    . json_encode(['success' => $resultat->success, 'data' => $resultat->data, 'error' => $resultat->error], JSON_UNESCAPED_UNICODE)];
+
+                continue;
+            }
+            $messages[] = ['role' => 'user', 'content' => 'Unbekannte action oder Tool nicht erlaubt — Protokoll beachten.'];
+        }
+        $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
+
+        // Audit: EIN Eintrag je Loop (Tier D, Runden in der Summary)
+        $this->schreibeCallLog('voice.command', 'D', $auftrag, ['model' => config('foodalchemist.ai.tiers', [])['D'] ?? 'default'],
+            ['werte' => ['runden' => $runde, 'tools' => count($toolLaeufe), 'final' => $finalText !== null]], null, $elapsedMs,
+            ['knowledge_used' => null, 'target_table' => null, 'target_id' => null, 'layers_used' => null]);
+
+        return ['text' => $finalText, 'runden' => $runde, 'tool_laeufe' => $toolLaeufe, 'elapsed_ms' => $elapsedMs];
+    }
+
     /** 06_KI §5 Pflicht 3: generischer Accept-Stempel (Reject analog). */
     public function stempleAccepted(?int $callLogId): void
     {

@@ -90,11 +90,15 @@
     {{-- M5-07: Aroma-Netz-Graph (innerhalb x-ui-page, P-2) --}}
     <livewire:foodalchemist.recipes.aroma-netz-modal />
 
+    {{-- M7-10: Voice-Interface --}}
+    <livewire:foodalchemist.recipes.voice-modal />
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between -mb-2">
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
                 <button type="button" wire:click="$dispatch('generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-generator-oeffnen>✨ KI-Rezept</button>
+                <button type="button" wire:click="$dispatch('voice-modal.oeffnen')" class="{{ $btnGhostXs }}" title="Sprachbedienung (M7-10) — zweiter Bedienweg, UI bleibt parallel" data-voice-oeffnen>🎙</button>
             </div>
             @if($bulkRunId !== null)
                 @php($bulkSvc = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class))

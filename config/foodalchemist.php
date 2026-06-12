@@ -130,6 +130,17 @@ return [
      * 'provider': 'core' = Plattform-LLM via LLMProviderContract (Default)
      *             'fake' = deterministischer FakeAiProvider (Sandbox/Tests ohne Key)
      */
+    /*
+     * M7-10 / D8: STT (sync Kurz-Audio). provider 'fake' = Sandbox/Tests;
+     * 'assemblyai' braucht ASSEMBLYAI_API_KEY (Deploy-Rest bei Martin).
+     */
+    'stt' => [
+        'provider' => env('FOODALCHEMIST_STT_PROVIDER', 'fake'),
+        'key' => env('ASSEMBLYAI_API_KEY', ''),
+        'timeout_s' => 30,
+        'fake_text' => 'Suche BBQ Sauce',
+    ],
+
     'ai' => [
         'provider' => env('FOODALCHEMIST_AI_PROVIDER', 'core'),
 

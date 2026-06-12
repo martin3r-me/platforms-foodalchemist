@@ -82,6 +82,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // M7-10 / D8: STT-Fassade — Binding-Tausch genügt für einen späteren Core-Contract
+        $this->app->bind(\Platform\FoodAlchemist\Services\Stt\SttServiceContract::class, fn () => match (config('foodalchemist.stt.provider', 'fake')) {
+            'assemblyai' => new \Platform\FoodAlchemist\Services\Stt\AssemblyAiSttService(),
+            default => new \Platform\FoodAlchemist\Services\Stt\FakeSttService(),
+        });
+
         /**
          * SCHRITT 1: Modul-Registrierung prüfen
          * 
@@ -221,6 +227,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\VerkaufsrezepteSearchTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelSearchTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeKlassePostTool::class,
+                    \Platform\FoodAlchemist\Tools\UiOpenTool::class,
                 ] as $toolClass) {
                     try {
                         $tool = new $toolClass();
