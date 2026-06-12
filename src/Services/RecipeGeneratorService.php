@@ -58,6 +58,14 @@ class RecipeGeneratorService
                 'beschreibung' => $beschreibung,
                 'parameter' => $parameter,
             ];
+            // M7-07: Küchen-Profil VOR den Hooks (Soft-Default-Schicht,
+            // commands.rs:12590-Pendant) — explizite Richtungs-Parameter gewinnen
+            $kuechenTyp = app(TeamSettingsService::class)->kuechenTyp($team);
+            if ($kuechenTyp !== null) {
+                $kontext = ['kuechen_profil' => 'Mandanten-Profil (Soft-Default — explizite '
+                    . 'Richtungs-Parameter haben VORRANG): '
+                    . TeamSettingsService::KUECHEN_TYPEN[$kuechenTyp]] + $kontext;
+            }
             // M6-07 / V-04 (Audit-Hebel 3): Reuse-at-Generation — lexikalischer
             // Prefetch des Bestands VOR der Benennung; die KI soll vorhandene
             // Basisrezepte EXAKT so benennen (billiger als Nach-Matching).

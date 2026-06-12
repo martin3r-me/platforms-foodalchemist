@@ -19,6 +19,22 @@ class TeamSettingsService
 
     public const RUNDUNG_DEFAULTS = ['nachkommastellen' => 2, 'modus' => 'kaufmaennisch'];
 
+    /** M7-07: Küchen-Typ-Vokabular (commands.rs:12590-Pendant, team-scoped statt global). */
+    public const KUECHEN_TYPEN = [
+        'restaurant' => 'Restaurant (à la carte, kleine Chargen, frische Technik)',
+        'grosskueche' => 'Großküche (große Chargen, robuste Prozesse, Teil-Convenience üblich)',
+        'catering' => 'Catering (transportstabil, regenerierbar, Chargen nach Auftrag)',
+        'hotel' => 'Hotel (Bankett + à la carte gemischt, breites Spektrum)',
+        'boutique_patisserie' => 'Boutique-Pâtisserie (Präzision, kleine Chargen, from scratch)',
+    ];
+
+    public function kuechenTyp(Team $team): ?string
+    {
+        $typ = $this->for($team)->kuechen_typ;
+
+        return isset(self::KUECHEN_TYPEN[$typ]) ? $typ : null;
+    }
+
     public function for(Team $team): FoodAlchemistTeamSetting
     {
         return FoodAlchemistTeamSetting::firstOrNew(['team_id' => $team->id]);
