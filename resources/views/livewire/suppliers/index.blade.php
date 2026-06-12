@@ -38,6 +38,14 @@
     </x-slot>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
+        {{-- M9-06: offene Match-Vorschläge → Review-Queue --}}
+        @php($offeneMatches = \Illuminate\Support\Facades\DB::table('foodalchemist_match_proposals')->where('status', 'offen')->whereNull('deleted_at')->count())
+        @if($offeneMatches > 0)
+            <a href="{{ route('foodalchemist.review') }}" class="block rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200 hover:border-amber-500/60 transition-colors" data-zu-pruefen-hinweis>
+                ⏳ {{ number_format($offeneMatches, 0, ',', '.') }} LA→GP-Match-Vorschläge warten auf Review → <span class="underline">Zu prüfen</span>
+            </a>
+        @endif
+
 
         {{-- Kopf-Aktionen (P-7) --}}
         <div class="flex items-center justify-between gap-3 pt-1">

@@ -354,7 +354,55 @@ class RecipeService
             ->whereIn('id', \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::where('referenced_recipe_id', $id)
                 ->whereNull('deleted_at')->distinct()->pluck('recipe_id'))
             ->orderBy('name')
-            ->get(['id', 'name', 'status', 'team_id']);
+            ->get(['id', 'name', 'status', 'team_id', 'ist_verkaufsrezept']);
+    }
+
+    // ── M9-01k: Sektor-/Niveau-Eignung pflegen (Zeile = geeignet; unique recipe+slug) ──
+
+    private const EIGNUNG_TABELLEN = [
+        'niveau' => ['tabelle' => 'foodalchemist_recipe_niveau_eignung', 'spalte' => 'niveau_slug', 'slugs' => ['haute_cuisine', 'gehoben', 'klassisch']],
+        'sektor' => ['tabelle' => 'foodalchemist_recipe_sektor_eignung', 'spalte' => 'sektor_slug', 'slugs' => ['business', 'care', 'crew', 'event_privat', 'kita_schule', 'restaurant']],
+    ];
+
+    /** @return array<string, array> Vokabular fürs UI */
+    public static function eignungVokabular(): array
+    {
+        return self::EIGNUNG_TABELLEN;
+    }
+
+    public function setzeEignung(Team $team, int $recipeId, string $typ, string $slug, string $quelle = 'manual', ?float $confidence = null, ?string $grund = null): void
+    {
+        $meta = self::EIGNUNG_TABELLEN[$typ] ?? throw new \RuntimeException("Unbekannter Eignungs-Typ [{$typ}].");
+        if (! in_array($slug, $meta['slugs'], true)) {
+            throw new \RuntimeException("Unbekannter {$typ}-Slug [{$slug}].");
+        }
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        if (! $recipe->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbtes Rezept — Pflege nur durchs Besitzer-Team (D1).');
+        }
+
+        // unique(recipe, slug) gilt inkl. soft-deleted ⇒ vorhandene Zeile reaktivieren
+        $vorhanden = DB::table($meta['tabelle'])->where('recipe_id', $recipeId)->where($meta['spalte'], $slug)->first();
+        $werte = ['quelle' => $quelle, 'ai_confidence' => $confidence, 'ai_begruendung' => $grund, 'deleted_at' => null, 'updated_at' => now()];
+        if ($vorhanden !== null) {
+            DB::table($meta['tabelle'])->where('id', $vorhanden->id)->update($werte);
+        } else {
+            DB::table($meta['tabelle'])->insert($werte + [
+                'uuid' => (string) \Illuminate\Support\Str::uuid7(),
+                'team_id' => $team->id, 'recipe_id' => $recipeId, $meta['spalte'] => $slug, 'created_at' => now(),
+            ]);
+        }
+    }
+
+    public function entferneEignung(Team $team, int $recipeId, string $typ, string $slug): void
+    {
+        $meta = self::EIGNUNG_TABELLEN[$typ] ?? throw new \RuntimeException("Unbekannter Eignungs-Typ [{$typ}].");
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        if (! $recipe->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbtes Rezept — Pflege nur durchs Besitzer-Team (D1).');
+        }
+        DB::table($meta['tabelle'])->where('recipe_id', $recipeId)->where($meta['spalte'], $slug)
+            ->update(['deleted_at' => now(), 'updated_at' => now()]);
     }
 
     // ── M4-07/08: Zutaten-Editor (P-8) ──────────────────────────────────

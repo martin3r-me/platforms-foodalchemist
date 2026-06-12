@@ -112,6 +112,18 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > reproduzierbar; vermutlich war der alte Browser-Stand das Problem).
 > 3 neue Tests. Live verifiziert. Suite: **385/385 (1.607 Assertions)**.
 
+> **Status R11/M9-Abschluss (2026-06-12):** **M9-01k:** Sektor-/Niveau-Eignung im VK-Panel
+> pflegbar — Chips mit ✕ (Hover), «+ manuell…»-Select aus dem festen Slug-Vokabular,
+> **✨ Eignung** (recipe.sektor + recipe.niveau, nur «geeignet»-Urteile werden Vorschlag,
+> Übernehmen schreibt quelle ai_inferred); Service-Methoden setzeEignung/entferneEignung
+> (Slug-Whitelist, Besitzer-Guard, Reaktivierung statt unique-Crash bei soft-deleted Zeilen).
+> **✨ Marketing im Panel** (Override-First: manual blockt). **M9-05-Rest:** Basis-Panel
+> «Verwendet in» unterscheidet jetzt 💶-VK-Eltern (öffnen den VK-Editor als Modal) von
+> ↑-Basis-Eltern (Panel-Hop). **M9-06:** Zu-prüfen-Hinweis-Banner im Lieferanten-Browser
+> (offene Match-Vorschläge → Review-Queue). 3 neue Tests. Live verifiziert (manuelles
+> Eignung-Setzen: Chip erscheint, Slug verschwindet aus dem Select). Suite: **391/391 (1.645 Assertions)**.
+> **M9 ist damit KOMPLETT** — offen bleibt nur V-03 (Namens-Normalisierung, wartet auf echten LLM).
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).

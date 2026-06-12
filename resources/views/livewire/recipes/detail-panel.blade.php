@@ -98,9 +98,12 @@
                 <p class="{{ $dt }} mb-1">Verwendet in ({{ $eltern->count() }})</p>
                 <div class="space-y-0.5">
                     @foreach($eltern as $parent)
-                        <button type="button" wire:key="el-{{ $parent->id }}" wire:click="zeige({{ $parent->id }})"
+                        {{-- M9-05-Rest: VK-Eltern öffnen den VK-Editor als Modal, Basis-Eltern hüpfen im Panel --}}
+                        <button type="button" wire:key="el-{{ $parent->id }}"
+                                @if($parent->ist_verkaufsrezept) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })"
+                                @else wire:click="zeige({{ $parent->id }})" @endif
                                 class="block w-full text-left text-xs text-sky-600 dark:text-sky-400 hover:underline truncate" data-eltern-link>
-                            ↑ {{ $parent->name }}
+                            {{ $parent->ist_verkaufsrezept ? '💶' : '↑' }} {{ $parent->name }}
                         </button>
                     @endforeach
                 </div>

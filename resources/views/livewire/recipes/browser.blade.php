@@ -91,6 +91,8 @@
     <livewire:foodalchemist.recipes.recipe-modal />
     {{-- R7-Fix: Zutat-Klick öffnet das GP als Modal ÜBER dem Editor (neuer Tab bei Dominique blockiert) --}}
     <livewire:foodalchemist.gps.gp-modal />
+    {{-- M9-05-Rest: VK-Eltern aus dem Basis-Panel öffnen den VK-Editor --}}
+    <livewire:foodalchemist.verkauf.vk-modal />
 
     {{-- M4-07/08: Zutaten-Editor (P-8) --}}
     <livewire:foodalchemist.recipes.ingredient-editor />

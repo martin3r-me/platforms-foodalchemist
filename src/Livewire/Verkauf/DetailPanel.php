@@ -179,6 +179,154 @@ class DetailPanel extends Component
         }
     }
 
+    // ── M9-01k: Sektor-/Niveau-Eignung pflegen + ✨ Eignung + ✨ Marketing (Panel) ──
+
+    /** @var ?array{typ: string, slugs: array<string, string>, confidence: float} */
+    public ?array $eignungVorschlag = null;
+
+    /** @var ?array{text: string, confidence: float} */
+    public ?array $marketingVorschlag = null;
+
+    public function eignungSetzen(string $typ, string $slug): void
+    {
+        $this->fachAktion(fn ($team) => app(\Platform\FoodAlchemist\Services\RecipeService::class)
+            ->setzeEignung($team, $this->recipeId, $typ, $slug, 'manual'));
+    }
+
+    public function eignungEntfernen(string $typ, string $slug): void
+    {
+        $this->fachAktion(fn ($team) => app(\Platform\FoodAlchemist\Services\RecipeService::class)
+            ->entferneEignung($team, $this->recipeId, $typ, $slug));
+    }
+
+    public function kiEignung(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->kiFehler = null;
+        $r = app(SalesRecipeService::class)->detail($team, $this->recipeId);
+        $gateway = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class);
+        $kontext = ['name' => $r->name, 'komponenten' => $r->ingredients->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all()];
+        $vokabular = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular();
+
+        try {
+            $slugs = [];
+            $conf = 0.0;
+            foreach (['sektor' => ['recipe.sektor', 'sektoren'], 'niveau' => ['recipe.niveau', 'niveaus']] as $typ => [$prompt, $schluessel]) {
+                $v = $gateway->propose($prompt, $kontext + ['vokabular' => $vokabular[$typ]['slugs']]);
+                $conf = max($conf, $v->confidence);
+                foreach ((array) ($v->werte[$schluessel] ?? []) as $slug => $urteil) {
+                    if (in_array($slug, $vokabular[$typ]['slugs'], true) && (($urteil['eignung'] ?? null) === 'geeignet')) {
+                        $slugs[$slug] = $typ;
+                    }
+                }
+            }
+        } catch (\RuntimeException $e) {
+            $this->kiFehler = $e->getMessage();
+
+            return;
+        }
+        if ($slugs === []) {
+            $this->kiFehler = 'KI lieferte keine verwertbare Eignung — echter Provider nötig.';
+
+            return;
+        }
+        $this->eignungVorschlag = ['slugs' => $slugs, 'confidence' => max(0.0, min(1.0, $conf))];
+    }
+
+    public function eignungUebernehmen(): void
+    {
+        if ($this->eignungVorschlag === null) {
+            return;
+        }
+        $this->fachAktion(function ($team) {
+            foreach ($this->eignungVorschlag['slugs'] as $slug => $typ) {
+                app(\Platform\FoodAlchemist\Services\RecipeService::class)
+                    ->setzeEignung($team, $this->recipeId, $typ, $slug, 'ai_inferred', $this->eignungVorschlag['confidence']);
+            }
+            $this->eignungVorschlag = null;
+        });
+    }
+
+    public function eignungVerwerfen(): void
+    {
+        $this->eignungVorschlag = null;
+    }
+
+    public function kiMarketing(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->kiFehler = null;
+        $r = app(SalesRecipeService::class)->detail($team, $this->recipeId);
+        try {
+            $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.marketing', [
+                'name' => $r->name, 'vk_wording_standard' => $r->vk_wording_standard,
+                'komponenten' => $r->ingredients->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all(),
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->kiFehler = $e->getMessage();
+
+            return;
+        }
+        $text = $v->werte['marketing_text'] ?? null;
+        if (! is_string($text) || trim($text) === '') {
+            $this->kiFehler = 'KI lieferte keinen Marketing-Text — echter Provider nötig.';
+
+            return;
+        }
+        $this->marketingVorschlag = ['text' => trim($text), 'confidence' => max(0.0, min(1.0, $v->confidence))];
+    }
+
+    public function marketingUebernehmen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null || $this->marketingVorschlag === null) {
+            return;
+        }
+        $r = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId);
+        if ($r === null || ! $r->isOwnedBy($team)) {
+            $this->kiFehler = 'Geerbtes Rezept — Pflege nur durchs Besitzer-Team (D1).';
+
+            return;
+        }
+        if ($r->marketing_text_quelle === 'manual') {                // GL-07 Override-First
+            $this->kiFehler = 'Marketing-Text ist manuell gepflegt — erst im Editor zurücksetzen.';
+
+            return;
+        }
+        $r->update([
+            'marketing_text' => $this->marketingVorschlag['text'],
+            'marketing_text_quelle' => 'ki',
+            'marketing_text_ai_confidence' => $this->marketingVorschlag['confidence'],
+        ]);
+        $this->marketingVorschlag = null;
+        $this->dispatch('recipe-gespeichert');
+    }
+
+    public function marketingVerwerfen(): void
+    {
+        $this->marketingVorschlag = null;
+    }
+
+    private function fachAktion(\Closure $tu): void
+    {
+        $this->kiFehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        try {
+            $tu($team);
+        } catch (\RuntimeException $e) {
+            $this->kiFehler = $e->getMessage();
+        }
+    }
+
     public function render(SalesRecipeService $verkauf)
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -204,6 +352,10 @@ class DetailPanel extends Component
             'nachbarn' => $rezept !== null && ($this->offen['nachbarn'] ?? false)
                 ? $pairing->componentSuggestions($rezept)
                 : null,
+            // M9-01k: Eignungen + Vokabular für die Pflege-Selects
+            'niveauEignungen' => $rezept !== null ? $rezept->niveauEignungen()->get() : collect(),
+            'sektorEignungen' => $rezept !== null ? $rezept->sektorEignungen()->get() : collect(),
+            'eignungVokabular' => \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular(),
         ]);
     }
 }

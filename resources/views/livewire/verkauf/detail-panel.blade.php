@@ -133,12 +133,64 @@
                 <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{{ $rezept->beschreibung }}</p>
             </div>
         @endif
-        @if($rezept->marketing_text !== null)
-            <div>
-                <p class="{{ $dt }} mb-1">Marketing</p>
+        <div data-vk-marketing>
+            <p class="{{ $dt }} mb-1 flex items-center gap-2">Marketing
+                <button type="button" wire:click="kiMarketing" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 ml-auto normal-case" title="vk.marketing — Vorschlag, Übernehmen schreibt mit Lineage ki (manual blockt)" data-ki-marketing-panel>✨ Marketing</button>
+            </p>
+            @if($marketingVorschlag !== null)
+                <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-sm mb-1" data-marketing-vorschlag>
+                    <p class="text-xs text-gray-600 dark:text-gray-300">{{ $marketingVorschlag['text'] }}</p>
+                    <div class="flex gap-1.5 mt-1.5">
+                        <button type="button" wire:click="marketingUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-marketing-uebernehmen>Übernehmen ({{ round($marketingVorschlag['confidence'] * 100) }} %)</button>
+                        <button type="button" wire:click="marketingVerwerfen" class="{{ $btnGhostXs }}">Verwerfen</button>
+                    </div>
+                </div>
+            @endif
+            @if($rezept->marketing_text !== null)
                 <p class="text-sm italic text-gray-600 dark:text-gray-300 leading-relaxed">{{ $rezept->marketing_text }}</p>
-            </div>
-        @endif
+            @else
+                <p class="text-xs text-gray-400">— noch kein Marketing-Text —</p>
+            @endif
+        </div>
+
+        {{-- M9-01k: Sektor-/Niveau-Eignung — Chips mit ✕, +manuell-Select, ✨ Eignung --}}
+        <div data-vk-eignung>
+            <p class="{{ $dt }} mb-1 flex items-center gap-2">Eignung
+                <button type="button" wire:click="kiEignung" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 ml-auto normal-case" title="recipe.sektor + recipe.niveau — nur «geeignet»-Urteile werden Vorschlag" data-ki-eignung>✨ Eignung</button>
+            </p>
+            @if($eignungVorschlag !== null)
+                <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-sm mb-1" data-eignung-vorschlag>
+                    <p class="text-xs text-gray-600 dark:text-gray-300">✨ geeignet für:
+                        @foreach($eignungVorschlag['slugs'] as $slug => $typ)<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">{{ $typ }}: {{ $slug }}</span>@endforeach
+                    </p>
+                    <div class="flex gap-1.5 mt-1.5">
+                        <button type="button" wire:click="eignungUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-eignung-uebernehmen>Übernehmen ({{ round($eignungVorschlag['confidence'] * 100) }} %)</button>
+                        <button type="button" wire:click="eignungVerwerfen" class="{{ $btnGhostXs }}">Verwerfen</button>
+                    </div>
+                </div>
+            @endif
+            @foreach(['sektor' => ['Sektor', $sektorEignungen, 'sektor_slug'], 'niveau' => ['Niveau', $niveauEignungen, 'niveau_slug']] as $typ => [$lbl, $eignungen, $slugSpalte])
+                <div class="flex items-center gap-1.5 flex-wrap py-0.5" data-eignung-zeile="{{ $typ }}">
+                    <span class="text-xs text-gray-400 w-12 shrink-0">{{ $lbl }}</span>
+                    @forelse($eignungen as $e)
+                        <span wire:key="eig-{{ $typ }}-{{ $e->id }}" class="{{ $pill }} {{ $variantPill[$typ === 'sektor' ? 'secondary' : 'info'] }} group"
+                              title="{{ $e->quelle }}{{ $e->ai_confidence !== null ? ' · ' . round($e->ai_confidence * 100) . ' %' : '' }}">
+                            {{ $e->{$slugSpalte} }}
+                            <button type="button" wire:click="eignungEntfernen('{{ $typ }}', '{{ $e->{$slugSpalte} }}')" class="hidden group-hover:inline text-rose-400 ml-0.5" title="entfernen">✕</button>
+                        </span>
+                    @empty
+                        <span class="text-xs text-gray-400 italic">— keine —</span>
+                    @endforelse
+                    <select wire:change="eignungSetzen('{{ $typ }}', $event.target.value)"
+                            class="{{ $input }} !py-0.5 !w-32 !text-xs" data-eignung-select="{{ $typ }}">
+                        <option value="">+ manuell…</option>
+                        @foreach($eignungVokabular[$typ]['slugs'] as $slug)
+                            @if(!$eignungen->contains($slugSpalte, $slug))<option value="{{ $slug }}">{{ $slug }}</option>@endif
+                        @endforeach
+                    </select>
+                </div>
+            @endforeach
+        </div>
 
         {{-- D-6 §5.x (MVP): Kern-Anker VOR Pairing (Kern = Identität, dann Partner) --}}
         <div data-vk-kern-anker>
