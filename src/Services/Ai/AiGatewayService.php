@@ -47,7 +47,16 @@ class AiGatewayService
         $tierModell = config('foodalchemist.ai.tiers', [])[$tier] ?? null;
 
         $messages = [];
-        // Hüllen-Hook (M7-05): hier kommt später der SemanticLayerResolver-Block davor
+        // M7-05 / GL-06 §6 (Hybrid): Voice-Hülle aus core.semantic_layer als
+        // ERSTE systemInstruction (kanonische Reihenfolge: 1. Voice-Hülle,
+        // 2. Feld-Hülle aus der Registry, … 4. Task) — defensiv: ohne Core-
+        // Resolver/Layer läuft der Call unverändert (Resolver liefert empty).
+        $layersUsed = null;
+        $huelle = $this->voiceHuelle();
+        if ($huelle !== null) {
+            $messages[] = ['role' => 'system', 'content' => $huelle['block']];
+            $layersUsed = $huelle['version_chain'];
+        }
         if (!empty($prompt['system'])) {
             $messages[] = ['role' => 'system', 'content' => $prompt['system']];
         }
@@ -100,6 +109,7 @@ class AiGatewayService
         }
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
 
+        $audit['layers_used'] = $layersUsed;
         $callLogId = $this->schreibeCallLog($promptKey, $tier, $userContent, $antwort, $parsed, $fehler, $elapsedMs, $audit);
 
         if ($fehler !== null) {
@@ -145,6 +155,8 @@ class AiGatewayService
                 'feature' => $feature,
                 'tier' => $tier,
                 'model' => $antwort['model'] ?? null,
+                'layers_used' => isset($audit['layers_used']) && $audit['layers_used'] !== null && $audit['layers_used'] !== []
+                    ? json_encode($audit['layers_used']) : null,      // GL-06 Inv. 7
                 'knowledge_used' => isset($audit['knowledge_used']) && $audit['knowledge_used'] !== null && $audit['knowledge_used'] !== []
                     ? json_encode($audit['knowledge_used']) : null,
                 'prompt_hash' => hash('sha256', $userContent),
@@ -245,6 +257,32 @@ class AiGatewayService
         }
 
         return substr($raw, $start);                                 // unbalanciert → ehrlich
+    }
+
+    /**
+     * M7-05: Voice-Hülle (Ton/Perspektive/Negativ-Raum) team-aufgelöst über
+     * `core.semantic_layer` — Verhalten als systemInstruction; Fakten-Wissen
+     * (GL-13) bleibt im User-Prompt. Additiv, nie redundant (GL-13 §1).
+     *
+     * @return ?array{block: string, version_chain: array}
+     */
+    private function voiceHuelle(): ?array
+    {
+        if (! config('foodalchemist.ai.huellen', true)
+            || ! class_exists(\Platform\Core\SemanticLayer\Services\SemanticLayerResolver::class)) {
+            return null;
+        }
+        try {
+            $resolved = app(\Platform\Core\SemanticLayer\Services\SemanticLayerResolver::class)
+                ->resolveFor(Auth::user()?->currentTeamRelation, 'foodalchemist');
+        } catch (\Throwable) {
+            return null;                                             // Hülle darf den Fach-Call nie reißen
+        }
+        if ($resolved->rendered_block === null || $resolved->isEmpty()) {
+            return null;
+        }
+
+        return ['block' => $resolved->rendered_block, 'version_chain' => $resolved->version_chain];
     }
 
     public function provider(): LLMProviderContract
