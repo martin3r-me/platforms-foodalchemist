@@ -7,8 +7,8 @@
 > **M11+ (Domänen-Platzhalter)** von Doc 14 — sie waren bewusst „Zuschnitt mit Dominique
 > abstimmen“ / reine Brainstorming-Zeilen. Hier wird daraus eine sequenzierte, baubare
 > Landkarte mit Abhängigkeiten, Entscheidungs-Gates und „jetzt vs. später“.
-> **Stand:** 2026-06-13 · **Status:** Entscheidungs-Gates (§5) von Dominique **entschieden** —
-> M10-Schema baubereit.
+> **Stand:** 2026-06-13 · **Status:** Gates (§5) entschieden · **M10 (Concepter) KOMPLETT
+> GEBAUT** (Suite 412/412, lokal committet) · nächster Schritt M11 (Foodbook auf Concept-Basis).
 
 > **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Baustein heißt bei uns
 > **„Baustein“** — im Konzeptpapier „Modul“, aber die Plattform reserviert „Modul“ für ganze
@@ -141,6 +141,17 @@ Das Konzeptpapier sequenziert selbst sehr bewusst („jetzt vs. später“). Die
 ## 4. Milestones im Detail
 
 ### M10 — Concepter-Fundament  *(Rückgrat · keine externen Blocker außer Entscheid-Gates)*
+
+> **Status M10 (2026-06-13): KOMPLETT GEBAUT.** Schema (5 Tabellen: concepts ·
+> concept_slots · bausteine · baustein_gerichte · vocab_rollen) + 5 Models + Services
+> (BausteinService, ConceptService) + Livewire-UI (Bausteine\Index, Concepts\Index) +
+> Routes /bausteine /concepts + Sidebar-Gruppe „Concepter" aktiv. Live-Preis = Σ
+> gespeicherte Baustein-Preise (Tausch = nur Differenz); Baustein-Preis manuell oder auto
+> (MargeService); Vorlage-Fork + „als Vorlage speichern". **Tests:** ConcepterSchemaTest (4),
+> ConcepterServiceTest (8), ConcepterUiTest (3) — Suite **412/412**. Live (headless):
+> /concepts + /bausteine = 200, kein 500. Commits 9b69e8b + efe845d (lokal, nicht gepusht).
+> *Offen als Folge-Politur:* Jarvis-Dichte/3-Spalten (R-Runde), ▲▼-Slot-Reorder im UI,
+> markStaleForRecipe in die RecipeRecompute-Pipeline einhängen.
 
 **Ziel:** Wiederverwendbare Foodkonzepte aus Bausteinen & Gerichten bauen; Preis live als
 Output; Vorlage und Freiform als **eine** Mechanik.
