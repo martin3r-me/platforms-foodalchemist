@@ -73,7 +73,30 @@ class IngredientMatchService
             }
         }
 
-        // 4.4k/l — Pool-Priorität (Halbfabrikat-Gate × Modus, §4.2)
+        $final = $this->poolLauf($team, $queryTokens, $querySlug, $mode, $pref, $preferRaw, $bio);
+
+        // M6-07 / V-05 (Audit-Hebel 4): Decompounding-FALLBACK — läuft NUR, wenn
+        // der v1-Lauf unter der Schwelle bleibt (additiv; GL-04-Goldens unberührt).
+        // »Kürbispüree« → kuerbis+pueree, validiert gegen das Pool-Token-Vokabular.
+        if ($final['score'] < MatchHeuristics::MIN_MATCH_SCORE
+            && config('foodalchemist.matching.decompound', true)) {
+            $erweitert = $this->decompoundTokens($team, $queryTokens);
+            if ($erweitert !== null) {
+                $zweiter = $this->poolLauf($team, $erweitert, $querySlug, $mode, $pref, $preferRaw, $bio);
+                if ($zweiter['score'] > $final['score']) {
+                    $final = $zweiter;
+                }
+            }
+        }
+
+        return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
+            ? $this->noMatch($final['score'])
+            : $final;
+    }
+
+    /** 4.4k/l — Pool-Priorität (Halbfabrikat-Gate × Modus, §4.2) — v1-Kernlauf. */
+    private function poolLauf(Team $team, array $queryTokens, ?string $querySlug, string $mode, string $pref, bool $preferRaw, string $bio): array
+    {
         if ($this->heuristik->queryIstHalbfabrikat($queryTokens)) {
             $subBest = $this->bestSubrecipeMatch($team, $queryTokens, $querySlug);
             $gpBest = $this->bestGpMatch($team, $queryTokens, $querySlug, $pref, $preferRaw, $bio);
@@ -81,20 +104,81 @@ class IngredientMatchService
             $preferSub = $mode === 'sub_recipe_first'
                 ? $subScore >= MatchHeuristics::SUB_PRIORITY_THRESHOLD
                 : $subScore >= MatchHeuristics::SUB_EXACT_OVERRIDE;
-            $final = $preferSub
+
+            return $preferSub
                 ? ($subBest ?? $gpBest ?? $this->noMatch(0.0))
                 : $this->besserer($gpBest, $subBest);
-        } else {
-            $gpBest = $this->bestGpMatch($team, $queryTokens, $querySlug, $pref, $preferRaw, $bio);
-            $subBest = ($gpBest['score'] ?? 0.0) < MatchHeuristics::GP_PRIORITY_THRESHOLD
-                ? $this->bestSubrecipeMatch($team, $queryTokens, $querySlug)
-                : null;
-            $final = $this->besserer($gpBest, $subBest);
+        }
+        $gpBest = $this->bestGpMatch($team, $queryTokens, $querySlug, $pref, $preferRaw, $bio);
+        $subBest = ($gpBest['score'] ?? 0.0) < MatchHeuristics::GP_PRIORITY_THRESHOLD
+            ? $this->bestSubrecipeMatch($team, $queryTokens, $querySlug)
+            : null;
+
+        return $this->besserer($gpBest, $subBest);
+    }
+
+    /**
+     * V-05: 2-Split je Kompositum-Token (≥8 Z.) gegen das Pool-Token-Vokabular
+     * (Basisrezept- + GP-Namen, je Team gecacht); Fugen-s/-n toleriert.
+     * null = nichts zerlegbar (kein zweiter Lauf).
+     *
+     * @param  list<string>  $queryTokens
+     * @return ?list<string>
+     */
+    private function decompoundTokens(Team $team, array $queryTokens): ?array
+    {
+        $vokabular = $this->poolVokabular($team);
+        $erweitert = [];
+        $gefunden = false;
+        foreach ($queryTokens as $tok) {
+            $erweitert[] = $tok;
+            if (mb_strlen($tok) < 8) {
+                continue;
+            }
+            for ($i = 4; $i <= mb_strlen($tok) - 4; $i++) {
+                $kopf = mb_substr($tok, 0, $i);
+                $rest = mb_substr($tok, $i);
+                // Fugen-Element am Kopf-Ende tolerieren (rinds|braten → rind)
+                $kopfBasis = isset($vokabular[$kopf]) ? $kopf
+                    : (in_array(mb_substr($kopf, -1), ['s', 'n'], true) && isset($vokabular[mb_substr($kopf, 0, -1)])
+                        ? mb_substr($kopf, 0, -1) : null);
+                if ($kopfBasis !== null && isset($vokabular[$rest])) {
+                    $erweitert[] = $kopfBasis;
+                    $erweitert[] = $rest;
+                    $gefunden = true;
+                    break;
+                }
+            }
         }
 
-        return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
-            ? $this->noMatch($final['score'])
-            : $final;
+        return $gefunden ? array_values(array_unique($erweitert)) : null;
+    }
+
+    /** @var array<int, array<string, true>> Pool-Token-Vokabular je Team (Request-Cache) */
+    private array $vokabularCache = [];
+
+    private function poolVokabular(Team $team): array
+    {
+        if (isset($this->vokabularCache[$team->id])) {
+            return $this->vokabularCache[$team->id];
+        }
+        $vokabular = [];
+        foreach (FoodAlchemistRecipe::visibleToTeam($team)->basis()->pluck('name') as $name) {
+            foreach ($this->engine->tokenize($name) as $t) {
+                if (mb_strlen($t) >= 4) {
+                    $vokabular[$t] = true;
+                }
+            }
+        }
+        foreach (FoodAlchemistGp::visibleToTeam($team)->where('is_platzhalter', false)->pluck('name') as $name) {
+            foreach ($this->engine->tokenize($name) as $t) {
+                if (mb_strlen($t) >= 4) {
+                    $vokabular[$t] = true;
+                }
+            }
+        }
+
+        return $this->vokabularCache[$team->id] = $vokabular;
     }
 
     /**
@@ -253,6 +337,19 @@ class IngredientMatchService
         if ($tokens === []) {
             $tokens = $queryTokens;
         }
+        // M6-07 (Hebel-1-Rest »umlaut-blindes Reuse-Inventar«): Tokens sind
+        // umlaut-expandiert (kuerbis), DB-Namen tragen Umlaute (Kürbis) — je
+        // Token zusätzlich die Umlaut-Rückform LIKEn. Rein additiv: erweitert
+        // NUR das Kandidaten-Set, Scores bleiben token-normalisiert.
+        $varianten = [];
+        foreach ($tokens as $t) {
+            $varianten[$t] = true;
+            $u = str_replace(['ae', 'oe', 'ue', 'ss'], ['ä', 'ö', 'ü', 'ß'], $t);
+            if ($u !== $t) {
+                $varianten[$u] = true;
+            }
+        }
+        $tokens = array_keys($varianten);
         $slugN = $querySlug !== null ? $this->engine->normalizeSlug($querySlug) : null;
 
         $query->where(function ($q) use ($tokens, $slugN, $spalten) {

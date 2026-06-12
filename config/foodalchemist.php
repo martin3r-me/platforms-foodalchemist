@@ -197,7 +197,9 @@ return [
                 . 'keine Marketing-Adjektive), beschreibung (§8-Stil), geschmacksrichtung, '
                 . 'zubereitung (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '
                 . 'NICHT die Produktion), zutaten: [{text, menge, einheit (g|ml|kg|l|el|tl|stk), slug, note}] '
-                . '(Komponenten bevorzugt als Basisrezepte), speisen_klasse_id (aus der mitgegebenen Liste, '
+                . '(Komponenten bevorzugt als Basisrezepte; wenn bestands_inventar mitgegeben ist, benenne '
+                . 'passende Komponenten EXAKT wie dort gelistet — vorhandene Basisrezepte zuerst), '
+                . 'speisen_klasse_id (aus der mitgegebenen Liste, '
                 . 'null wenn unsicher), aufschlagsklasse_code (aus der mitgegebenen Liste)}. '
                 . 'Diät-harte Vorgaben sind VERBINDLICH.',
         ],

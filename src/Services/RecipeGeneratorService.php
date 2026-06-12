@@ -58,6 +58,13 @@ class RecipeGeneratorService
                 'beschreibung' => $beschreibung,
                 'parameter' => $parameter,
             ];
+            // M6-07 / V-04 (Audit-Hebel 3): Reuse-at-Generation — lexikalischer
+            // Prefetch des Bestands VOR der Benennung; die KI soll vorhandene
+            // Basisrezepte EXAKT so benennen (billiger als Nach-Matching).
+            $inventar = $this->bestandsInventar($team, $beschreibung);
+            if ($inventar !== []) {
+                $kontext['bestands_inventar'] = $inventar;
+            }
             if ($vkModus) {
                 // M6-06: VK-Achsen + Taxonomie-Vorrat für Klasse/AK-Vorschlag
                 $kontext['speisen_klassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::query()
@@ -175,6 +182,33 @@ class RecipeGeneratorService
 
             return ['recipe' => $recipe, 'statistik' => $statistik, 'offene' => $offene];
         });
+    }
+
+    /**
+     * V-04: Top-Bestands-Kandidaten zur Beschreibung (Token-LIKE über die
+     * Basisrezept-Namen, approved zuerst) — als »benenne EXAKT so«-Inventar.
+     *
+     * @return list<string>
+     */
+    private function bestandsInventar(Team $team, string $beschreibung, int $limit = 30): array
+    {
+        $tokens = array_values(array_filter(
+            app(Matching\TokenEngine::class)->tokenize($beschreibung),
+            fn ($t) => mb_strlen($t) >= 4,
+        ));
+        if ($tokens === []) {
+            return [];
+        }
+
+        return FoodAlchemistRecipe::visibleToTeam($team)->basis()
+            ->whereIn('status', ['draft', 'review', 'approved'])
+            ->where(function ($q) use ($tokens) {
+                foreach ($tokens as $t) {
+                    $q->orWhereRaw('LOWER(name) LIKE ?', ['%' . $t . '%']);
+                }
+            })
+            ->orderByRaw("CASE status WHEN 'approved' THEN 0 WHEN 'review' THEN 1 ELSE 2 END")
+            ->orderBy('name')->limit($limit)->pluck('name')->all();
     }
 
     /** „500 ml brauner Kalbsfond" → Stub-Name ohne Mengen-Präfix. */
