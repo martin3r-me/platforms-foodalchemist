@@ -126,6 +126,27 @@ class IngredientEditor extends Component
             ->sortByDesc('lead')->values()->all();
     }
 
+    /**
+     * R5 (Dominique): EK-Varianten je GP — günstigster LA-Preis + Ø über alle
+     * LAs (€/g via GL-11-Vergleichspreis), neben der Lead-Strategie-Spalte.
+     *
+     * @return array{min: ?float, avg: ?float}
+     */
+    private function ekVarianten(\Platform\FoodAlchemist\Models\FoodAlchemistGp $gp): array
+    {
+        $preise = app(\Platform\FoodAlchemist\Services\PriceService::class);
+        $werte = app(\Platform\FoodAlchemist\Services\GpService::class)->lasForGp($gp)
+            ->map(fn ($la) => $la->item !== null
+                ? $preise->preisProGramm($la->item, $la->price?->price !== null ? (float) $la->price->price : null)
+                : null)
+            ->filter(fn ($v) => $v !== null)->values();
+
+        return [
+            'min' => $werte->isNotEmpty() ? (float) $werte->min() : null,
+            'avg' => $werte->isNotEmpty() ? (float) $werte->avg() : null,
+        ];
+    }
+
     /** GP-/Sub-Picker (M4-08): liefert Auto-Fill-Daten inkl. ek_pro_g. */
     public function sucheZiel(string $suche): array
     {
@@ -149,8 +170,10 @@ class IngredientEditor extends Component
         if ($rezept !== null) {
             foreach ($rezept->ingredients as $z) {
                 $ekProG = null;
+                $varianten = ['min' => null, 'avg' => null];
                 if ($z->gp !== null) {
                     $ekProG = $recompute->preisProGrammPublic($z->gp);
+                    $varianten = $this->ekVarianten($z->gp);          // R5: günstigster + Ø über alle LAs
                 } elseif ($z->referencedRecipe?->ek_per_kg_eur !== null) {
                     $ekProG = ((float) $z->referencedRecipe->ek_per_kg_eur) / 1000;
                 }
@@ -159,6 +182,10 @@ class IngredientEditor extends Component
                     'gp_id' => $z->gp_id,
                     'referenced_recipe_id' => $z->referenced_recipe_id,
                     'ziel_name' => $z->gp?->name ?? ($z->referencedRecipe !== null ? '↳ ' . $z->referencedRecipe->name : null),
+                    // R5: Sprung-Ziel (neuer Tab — Editor-Stand bleibt unberührt)
+                    'ziel_url' => $z->gp_id !== null
+                        ? \Platform\FoodAlchemist\Support\Sprungziel::gp($z->gp_id)
+                        : ($z->referenced_recipe_id !== null ? \Platform\FoodAlchemist\Support\Sprungziel::rezept($z->referenced_recipe_id) : null),
                     'raw_text' => $z->raw_text,
                     'display_name' => $z->display_name,
                     'menge' => (float) $z->menge,
@@ -172,6 +199,8 @@ class IngredientEditor extends Component
                     'ist_wertgebend' => (bool) $z->ist_wertgebend,
                     'lineage' => $z->match_method?->value,
                     'ek_pro_g' => $ekProG,
+                    'ek_pro_g_min' => $varianten['min'],
+                    'ek_pro_g_avg' => $varianten['avg'],
                 ];
             }
         }

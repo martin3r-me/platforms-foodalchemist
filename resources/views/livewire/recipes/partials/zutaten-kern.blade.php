@@ -8,8 +8,9 @@
          x-data="zutatenEditor(@js($zeilenJson), @js(! $eingebettet), @js($einheiten->keyBy('id')->map(fn ($e) => ['slug' => $e->slug, 'g' => $e->default_in_g !== null ? (float) $e->default_in_g : ($e->default_in_ml !== null ? (float) $e->default_in_ml : null)])->all()))"
          data-zutaten-editor>
         <table class="{{ $table }}">
+            {{-- R5: BIS-Spalte raus (Dominique) — menge_max bleibt in den Daten erhalten; 3 EK-Sichten statt einer --}}
             <thead><tr class="text-left">
-                @foreach(['#' => null, 'Menge' => null, 'bis' => 'Mengenbereich (optional): „Menge BIS", z. B. 2–3 Stk — gerechnet wird mit dem Mittelwert', 'Einheit' => null, 'Verknüpfung / Beschreibung' => null, 'Hinweis' => null, 'Garv. %' => null, 'EK €' => null, '' => null] as $head => $tip)
+                @foreach(['#' => null, 'Menge' => null, 'Einheit' => null, 'Verknüpfung / Beschreibung' => 'Klick auf den Namen öffnet das GP/Rezept in neuem Tab', 'Hinweis' => null, 'Garv. %' => null, 'EK €' => 'EK nach Lead-LA-Strategie (V-27 — damit rechnet das Rezept)', 'EK ↓' => 'günstigster Lieferantenartikel hinter dem GP', 'EK Ø' => 'Durchschnitt über alle Lieferantenartikel hinter dem GP', '' => null] as $head => $tip)
                     <th class="{{ $th }} !px-2 {{ $tip ? 'cursor-help underline decoration-dotted decoration-gray-300 underline-offset-2' : '' }}" @if($tip) title="{{ $tip }}" @endif>{{ $head }}</th>
                 @endforeach
             </tr></thead>
@@ -26,17 +27,23 @@
                             <span class="text-gray-400 tabular-nums text-xs ml-0.5" x-text="i + 1"></span>
                         </td>
                         <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.menge" class="{{ $input }} !w-20 !py-1 text-right" data-menge /></td>
-                        <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.menge_max" placeholder="–" title="Mengenbereich: bis (optional)" class="{{ $input }} !w-14 !py-1 text-right" /></td>
                         <td class="{{ $td }} !px-2 !py-1">
                             <select x-model.number="zeile.einheit_vocab_id" class="{{ $input }} !w-24 !py-1">
                                 @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                             </select>
                         </td>
                         <td class="{{ $td }} !px-2 !py-1 max-w-[18rem]">
-                            {{-- R4 (Dichte): Lineage als Tooltip statt eigener Zeile — 19-Zutaten-Rezepte blieben sonst unlesbar --}}
-                            <span class="text-xs" :class="zeile.gp_id || zeile.referenced_recipe_id ? 'text-violet-600 dark:text-violet-400' : 'text-gray-400'"
-                                  x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
-                                  :title="zeile.lineage ? 'Verknüpfung via ' + zeile.lineage : ''"></span>
+                            {{-- R4 (Dichte): Lineage als Tooltip; R5: Name klickbar → GP/Rezept in neuem Tab (Editor-Stand bleibt) --}}
+                            <template x-if="zeile.ziel_url">
+                                <a :href="zeile.ziel_url" target="_blank" rel="noopener"
+                                   class="text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                                   x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
+                                   :title="(zeile.lineage ? 'via ' + zeile.lineage + ' — ' : '') + 'in neuem Tab öffnen'" data-ziel-link></a>
+                            </template>
+                            <template x-if="!zeile.ziel_url">
+                                <span class="text-xs text-gray-400" x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
+                                      :title="zeile.lineage ? 'Verknüpfung via ' + zeile.lineage : ''"></span>
+                            </template>
                             <button type="button" x-show="zeile.gp_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Lieferantenartikel hinter dem GP (Peek)"
                                     @click="peek(zeile)" data-gp-peek>📦</button>
                         </td>
@@ -44,6 +51,12 @@
                         <td class="{{ $td }} !px-2 !py-1"><input type="text" x-model="zeile.garverlust_pct" placeholder="0" class="{{ $input }} !w-14 !py-1 text-right" /></td>
                         <td class="{{ $td }} !px-2 !py-1 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
                             <span x-text="zeilenEk(zeile) ?? '—'" :class="zeilenEk(zeile) ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'"></span>
+                        </td>
+                        <td class="{{ $td }} !px-2 !py-1 text-right tabular-nums whitespace-nowrap text-gray-500" data-zeilen-ek-min>
+                            <span x-text="zeilenEk(zeile, 'ek_pro_g_min') ?? '—'"></span>
+                        </td>
+                        <td class="{{ $td }} !px-2 !py-1 text-right tabular-nums whitespace-nowrap text-gray-500" data-zeilen-ek-avg>
+                            <span x-text="zeilenEk(zeile, 'ek_pro_g_avg') ?? '—'"></span>
                         </td>
                         <td class="{{ $td }} !px-2 !py-1 whitespace-nowrap">
                             <label class="inline-flex items-center gap-1 text-[10px] text-gray-400 mr-1" title="optional: zählt nicht in Yield/Kosten">
@@ -54,7 +67,7 @@
                     </tr>
                     {{-- GP-Peek (D-5 §4.2.3, Ist-App): LA-Tabelle hinter dem GP, ★ = Lead --}}
                     <tr x-show="zeile._peek" x-cloak>
-                        <td colspan="9" class="!px-3 !py-2 bg-black/[0.02] dark:bg-white/[0.03]">
+                        <td colspan="10" class="!px-3 !py-2 bg-black/[0.02] dark:bg-white/[0.03]">
                             <div class="rounded-lg border-l-2 border-orange-400 bg-white dark:bg-gray-900 px-3 py-2" data-gp-peek-tabelle>
                                 <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">
                                     📦 <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
@@ -88,11 +101,17 @@
                 </template>
             <tfoot>
                 <tr class="border-t border-black/10 dark:border-white/10">
-                    <td colspan="7" class="{{ $td }} !px-2 text-right text-xs text-gray-400">
+                    <td colspan="6" class="{{ $td }} !px-2 text-right text-xs text-gray-400">
                         Σ live (Näherung — count-Einheiten & Brücken rechnet der Save-Recompute)
                     </td>
                     <td class="{{ $td }} !px-2 text-right font-medium tabular-nums text-gray-900 dark:text-gray-100" data-summe-live>
                         <span x-text="summe()"></span>
+                    </td>
+                    <td class="{{ $td }} !px-2 text-right tabular-nums text-gray-500" data-summe-min>
+                        <span x-text="summe('ek_pro_g_min')"></span>
+                    </td>
+                    <td class="{{ $td }} !px-2 text-right tabular-nums text-gray-500" data-summe-avg>
+                        <span x-text="summe('ek_pro_g_avg')"></span>
                     </td>
                     <td></td>
                 </tr>
@@ -106,14 +125,28 @@
                 <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-1">
                     @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                 </select>
+                {{-- R5: Typ-Filter (Alle/GP/Rezept) — smarte Suche bleibt, Treffer tragen Typ-Badges --}}
+                <div class="flex items-center gap-1" data-picker-typ-filter>
+                    <template x-for="t in [['alle', 'Alle'], ['gp', 'GPs'], ['sub', 'Rezepte']]" :key="t[0]">
+                        <button type="button" @click="pickerTyp = t[0]"
+                                class="px-2 py-0.5 rounded-full text-[11px] border transition-colors"
+                                :class="pickerTyp === t[0] ? 'border-violet-500 text-violet-700 dark:text-violet-300 font-medium' : 'border-black/10 dark:border-white/15 text-gray-400'"
+                                x-text="t[1]"></button>
+                    </template>
+                </div>
                 <div class="relative flex-1">
                     <input type="search" x-model="pickerSuche" @input.debounce.300ms="suchen()"
                            placeholder="GP oder Basisrezept suchen … (Auto-Fill)" class="{{ $input }} !py-1" data-picker-suche />
-                    <div x-show="pickerErgebnisse.length > 0" x-cloak
+                    <div x-show="gefilterte().length > 0" x-cloak
                          class="absolute left-0 top-full mt-1 z-20 w-full rounded-lg bg-white dark:bg-gray-900 border border-black/10 dark:border-white/10 shadow-xl overflow-hidden">
-                        <template x-for="ziel in pickerErgebnisse" :key="ziel.typ + '-' + ziel.id">
-                            <button type="button" class="block w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10"
-                                    @click="hinzufuegen(ziel)" x-text="ziel.name" data-picker-treffer></button>
+                        <template x-for="ziel in gefilterte()" :key="ziel.typ + '-' + ziel.id">
+                            <button type="button" class="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10"
+                                    @click="hinzufuegen(ziel)" data-picker-treffer>
+                                <span class="shrink-0 px-1.5 rounded text-[9px] font-medium uppercase tracking-wider"
+                                      :class="ziel.typ === 'gp' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'"
+                                      x-text="ziel.typ === 'gp' ? 'GP' : 'Rezept'"></span>
+                                <span x-text="ziel.name"></span>
+                            </button>
                         </template>
                     </div>
                 </div>

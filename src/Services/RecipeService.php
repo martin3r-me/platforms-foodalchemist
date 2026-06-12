@@ -455,6 +455,7 @@ class RecipeService
             ->map(fn ($gp) => [
                 'typ' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
                 'ek_pro_g' => $recompute->preisProGrammPublic($gp),
+                'url' => \Platform\FoodAlchemist\Support\Sprungziel::gp($gp->id),  // R5: Sprung-Ziel
             ]);
 
         $subs = FoodAlchemistRecipe::visibleToTeam($team)->basis()
@@ -465,6 +466,7 @@ class RecipeService
             ->map(fn ($r) => [
                 'typ' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
                 'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
+                'url' => \Platform\FoodAlchemist\Support\Sprungziel::rezept($r->id),
             ]);
 
         return $gps->concat($subs)->take($limit)->values()->all();

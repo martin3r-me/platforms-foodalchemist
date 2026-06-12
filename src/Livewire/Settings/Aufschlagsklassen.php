@@ -1,0 +1,127 @@
+<?php
+
+namespace Platform\FoodAlchemist\Livewire\Settings;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
+use Livewire\Component;
+use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
+
+/**
+ * R5 (Dominique): Aufschlagsklassen als EIGENE Settings-Seite, jetzt
+ * EDITIERBAR (vorher Lese-Tabelle in der VK-Taxonomie) — Rohaufschlag/
+ * Bedienung/Profit/MwSt fließen direkt in den MargeService (GT-8).
+ * `formel_typ` bleibt auf aufschlag|deckungsbeitrag begrenzt (W-1-Gate:
+ * deckungsbeitrag wirft im MargeService, bis die Formel entschieden ist).
+ */
+class Aufschlagsklassen extends Component
+{
+    public ?int $editId = null;
+
+    public array $form = [];
+
+    public array $neu = ['code' => '', 'bezeichnung' => '', 'rohaufschlag_pct' => '', 'bedienung_pct' => '0', 'profit_pct' => '0', 'mwst_satz' => '19', 'formel_typ' => 'aufschlag', 'note' => ''];
+
+    public ?string $fehler = null;
+
+    private const PROZENT_FELDER = ['rohaufschlag_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'];
+
+    public function edit(int $id): void
+    {
+        $ak = FoodAlchemistMarkupClass::find($id);
+        if ($ak === null) {
+            return;
+        }
+        $this->editId = $id;
+        $this->fehler = null;
+        $this->form = [
+            'bezeichnung' => $ak->bezeichnung,
+            'rohaufschlag_pct' => (string) $ak->rohaufschlag_pct,
+            'bedienung_pct' => (string) $ak->bedienung_pct,
+            'profit_pct' => (string) $ak->profit_pct,
+            'mwst_satz' => (string) $ak->mwst_satz,
+            'formel_typ' => $ak->formel_typ,
+            'note' => $ak->note,
+        ];
+    }
+
+    public function cancel(): void
+    {
+        $this->reset('editId', 'form', 'fehler');
+    }
+
+    public function save(): void
+    {
+        $werte = $this->validiert($this->form);
+        if ($werte === null) {
+            return;
+        }
+        FoodAlchemistMarkupClass::findOrFail($this->editId)->update($werte);
+        $this->cancel();
+        $this->dispatch('recipe-gespeichert');                        // Marge-Anzeigen (Cockpit) neu rechnen
+    }
+
+    public function create(): void
+    {
+        $code = strtoupper(trim($this->neu['code']));
+        if ($code === '' || trim($this->neu['bezeichnung']) === '') {
+            $this->fehler = 'Code und Bezeichnung sind Pflicht.';
+
+            return;
+        }
+        if (FoodAlchemistMarkupClass::where('code', $code)->exists()) {
+            $this->fehler = "Code «{$code}» ist schon vergeben.";
+
+            return;
+        }
+        $werte = $this->validiert($this->neu);
+        if ($werte === null) {
+            return;
+        }
+        FoodAlchemistMarkupClass::create($werte + [
+            'code' => $code,
+            'team_id' => Auth::user()?->currentTeamRelation?->id,
+        ]);
+        $this->reset('neu', 'fehler');
+    }
+
+    public function toggleInactive(int $id): void
+    {
+        $ak = FoodAlchemistMarkupClass::find($id);
+        $ak?->update(['is_inactive' => ! $ak->is_inactive]);
+    }
+
+    /** Prozente kommasicher parsen + formel_typ-Whitelist; null = Fehler gesetzt. */
+    private function validiert(array $eingabe): ?array
+    {
+        $werte = ['bezeichnung' => trim($eingabe['bezeichnung'] ?? ''), 'note' => ($eingabe['note'] ?? '') ?: null];
+        if ($werte['bezeichnung'] === '') {
+            $this->fehler = 'Bezeichnung ist Pflicht.';
+
+            return null;
+        }
+        foreach (self::PROZENT_FELDER as $feld) {
+            $wert = str_replace(',', '.', trim((string) ($eingabe[$feld] ?? '')));
+            if (! is_numeric($wert) || (float) $wert < 0) {
+                $this->fehler = "«{$feld}» braucht eine Zahl ≥ 0.";
+
+                return null;
+            }
+            $werte[$feld] = (float) $wert;
+        }
+        $werte['formel_typ'] = in_array($eingabe['formel_typ'] ?? '', ['aufschlag', 'deckungsbeitrag'], true)
+            ? $eingabe['formel_typ'] : 'aufschlag';
+
+        return $werte;
+    }
+
+    public function render()
+    {
+        return view('foodalchemist::livewire.settings.aufschlagsklassen', [
+            'klassen' => FoodAlchemistMarkupClass::orderBy('code')->get(),
+            'zaehler' => DB::table('foodalchemist_recipes')->whereNull('deleted_at')
+                ->whereNotNull('aufschlagsklasse_id')->selectRaw('aufschlagsklasse_id, COUNT(*) AS n')
+                ->groupBy('aufschlagsklasse_id')->pluck('n', 'aufschlagsklasse_id'),
+        ]);
+    }
+}

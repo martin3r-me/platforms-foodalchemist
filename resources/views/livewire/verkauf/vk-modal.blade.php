@@ -1,7 +1,8 @@
 {{-- M6-04: VK-Editor (D-6 §4.2–4.5) — Anlage aus Basisrezept + Sektionen-Edit --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="vk-modal" title="{{ $rezept !== null ? 'Verkaufsrezept bearbeiten' : 'Neues Verkaufsrezept' }}" size="max-w-3xl">
+{{-- R5 (Dominique): VK-Editor nimmt wie der Basis-Editor den ganzen Bildschirm --}}
+<x-foodalchemist::modal name="vk-modal" title="{{ $rezept !== null ? 'Verkaufsrezept bearbeiten' : 'Neues Verkaufsrezept' }}" :fullscreen="true">
     @if($rezept !== null)
         <x-slot:actions>
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-vk-speichern>Speichern</button>

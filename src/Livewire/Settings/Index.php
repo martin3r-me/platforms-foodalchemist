@@ -26,7 +26,11 @@ class Index extends Component
         'kalkulation' => ['label' => 'Kalkulation', 'hint' => 'Garverlust-, MwSt-Defaults, Rundung (GL-02)'],
         'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Mandanten-Tendenz für den Generator (M7-07, Hooks gewinnen)'],
         'ki' => ['label' => 'KI', 'hint' => 'Provider · Tiering (V-01) · Nutzung · Kill-Switch (M7-08)'],
-        'vk-taxonomie' => ['label' => 'VK-Taxonomie', 'hint' => 'Speisen-HG/Klassen · Aufschlagsklassen (W-1) · Stile · Container (D-6 §4.6)'],
+        'vk-taxonomie' => ['label' => 'VK-Taxonomie', 'hint' => 'Speisen-Hauptgruppen → Klassen mit Rezept-Zählern (D-6 §4.6)'],
+        // R5 (Dominique): eigene Seiten statt Sammel-Sektion — mit Anlegen/Bearbeiten
+        'aufschlagsklassen' => ['label' => 'Aufschlagsklassen', 'hint' => 'Rohaufschlag/MwSt editierbar (GT-8) · W-1-Kennzeichnung'],
+        'schreibstile' => ['label' => 'Schreibstile', 'hint' => 'Sprach-Duktus = Prompt-Material (GL-06) · anlegen + bearbeiten'],
+        'behaelter' => ['label' => 'Behälter & Geräte', 'hint' => 'Behälter · Regen-Geräte · Servier-Vehikel · Koch-Equipment'],
     ];
 
     public function mount(string $sektion = 'einheiten'): void

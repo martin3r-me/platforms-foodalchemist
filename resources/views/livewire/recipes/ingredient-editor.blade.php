@@ -23,7 +23,12 @@
             neu: { menge: '', einheit_vocab_id: Object.keys(einheiten)[0] ? parseInt(Object.keys(einheiten)[0]) : null, is_optional: false },
             pickerSuche: '',
             pickerErgebnisse: [],
+            pickerTyp: 'alle',                                       // R5: Typ-Filter (alle | gp | sub)
             _n: zeilen.length,
+
+            gefilterte() {
+                return this.pickerTyp === 'alle' ? this.pickerErgebnisse : this.pickerErgebnisse.filter(z => z.typ === this.pickerTyp);
+            },
 
             dragIdx: null,
             dropAuf(i) {
@@ -37,7 +42,7 @@
                 zeile._peek = await this.$wire.gpArtikel(zeile.gp_id);
             },
             payload() {
-                return this.rows.map(({ _key, ziel_name, lineage, ek_pro_g, _garverlust_ki, _peek, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
+                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, _garverlust_ki, _peek, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
             },
             init() {
                 // Modal-Footer liegt außerhalb des x-data-Scopes → Window-Event;
@@ -51,16 +56,16 @@
                 const m = this.zahl(z.menge); const mx = this.zahl(z.menge_max);
                 return m === null ? null : (mx !== null ? (m + mx) / 2 : m);
             },
-            zeilenEk(z) {  // Live-Näherung: menge_g × ek_pro_g (T3-Quelle vom Server)
-                if (z.is_optional || z.ek_pro_g === null || z.ek_pro_g === undefined) return null;
+            zeilenEk(z, feld = 'ek_pro_g') {  // Live-Näherung: menge_g × €/g; R5: feld wählt Lead | min | Ø
+                if (z.is_optional || z[feld] === null || z[feld] === undefined) return null;
                 const avg = this.mengeAvg(z); const f = this.einheiten[z.einheit_vocab_id]?.g;
                 if (avg === null || !f) return null;
-                return (avg * f * z.ek_pro_g).toFixed(2).replace('.', ',') + ' €';
+                return (avg * f * z[feld]).toFixed(2).replace('.', ',') + ' €';
             },
-            summe() {
+            summe(feld = 'ek_pro_g') {
                 let s = 0;
                 for (const z of this.rows) {
-                    const w = this.zeilenEk(z);
+                    const w = this.zeilenEk(z, feld);
                     if (w) s += parseFloat(w.replace(',', '.'));
                 }
                 return s.toFixed(2).replace('.', ',') + ' €';
@@ -85,6 +90,7 @@
                     gp_id: ziel.typ === 'gp' ? ziel.id : null,
                     referenced_recipe_id: ziel.typ === 'sub' ? ziel.id : null,
                     ziel_name: ziel.name,
+                    ziel_url: ziel.url ?? null,
                     raw_text: (this.neu.menge || '') + ' ' + ziel.name,
                     display_name: ziel.name,
                     menge: this.zahl(this.neu.menge) ?? 1,

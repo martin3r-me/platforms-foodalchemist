@@ -13,47 +13,51 @@
             <p class="text-[10px] text-gray-400 mt-1">Aus Foto/PDF: blockiert auf die Vision-Frage bei Martin (Offene Entscheide) — bis dahin Text.</p>
         </x-foodalchemist::modal-section>
 
-        <x-foodalchemist::modal-section title="Richtungs-Parameter">
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-3" data-generator-parameter>
-                <div>
-                    <label class="block {{ $label }} mb-1">Convenience</label>
-                    <select wire:model="parameter.convenience" class="{{ $input }}">
-                        <option value="from_scratch">from scratch</option>
-                        <option value="teil_convenience">Teil-Convenience</option>
-                        <option value="standard">Standard</option>
-                        <option value="voll_convenience">Voll-Convenience</option>
+        {{-- R5 (Ist-App «Richtung (optional)»): Pill-Gruppen mit Hilfetexten statt Selects --}}
+        <x-foodalchemist::modal-section title="Richtung (optional)">
+            @php($pillAktiv = 'border-emerald-500 text-emerald-700 dark:text-emerald-300 font-medium')
+            @php($pillRuhe = 'border-black/10 dark:border-white/15 text-gray-500 dark:text-gray-400 hover:border-violet-400')
+            <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-generator-parameter>
+                @foreach(\Platform\FoodAlchemist\Livewire\Recipes\GeneratorModal::RICHTUNGEN as $g)
+                    <div data-richtung="{{ $g['feld'] }}">
+                        <p class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{{ $g['label'] }}</p>
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach($g['optionen'] as $wert => $lbl)
+                                <button type="button" wire:click="togglePill('{{ $g['feld'] }}', '{{ $wert }}')"
+                                        class="px-2.5 py-1 rounded-full border text-xs transition-colors {{ $parameter[$g['feld']] === $wert ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
+                            @endforeach
+                        </div>
+                        <p class="text-[11px] text-gray-400 mt-1">{{ $g['hint'][$parameter[$g['feld']]] ?? '' }}</p>
+                    </div>
+                @endforeach
+
+                <div data-richtung="aroma">
+                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Aroma-Richtung</p>
+                    <input type="text" wire:model="parameter.aroma" placeholder="frei — z. B. rauchig-karamellig, mediterran …" class="{{ $input }} !py-1.5" />
+                    <p class="text-[11px] text-gray-400 mt-1">{{ $parameter['aroma'] === '' ? 'Keine Aroma-Vorgabe — KI wählt passend zur Beschreibung' : '' }}</p>
+                </div>
+
+                <div data-richtung="sektor">
+                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Sektor (Verpflegungskontext)</p>
+                    <select wire:model="parameter.sektor" class="{{ $input }} !py-1.5">
+                        <option value="">(egal/universell)</option>
+                        <option value="betriebsgastronomie">Betriebsgastronomie</option>
+                        <option value="catering">Catering / Event</option>
+                        <option value="restaurant">Restaurant / à la carte</option>
+                        <option value="care">Care / Klinik</option>
+                        <option value="schule_kita">Schule / Kita</option>
                     </select>
+                    <p class="text-[11px] text-gray-400 mt-1">{{ $parameter['sektor'] === '' ? 'Kein Sektor-Constraint' : '' }}</p>
                 </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Frische-Hook</label>
-                    <select wire:model="parameter.frische" class="{{ $input }}">
-                        <option value="frisch">frisch</option><option value="tk">alles aus TK</option><option value="konserve">Konserve/haltbar</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Diät (hart)</label>
-                    <select wire:model="parameter.diaet_hart" class="{{ $input }}">
-                        <option value="">—</option>
-                        <option value="vegan">vegan</option><option value="vegetarisch">vegetarisch</option>
-                        <option value="glutenfrei">glutenfrei</option><option value="laktosefrei">laktosefrei</option><option value="halal">halal</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Niveau</label>
-                    <input type="text" wire:model="parameter.niveau" placeholder="z. B. fine_dining" class="{{ $input }}" />
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Sektor</label>
-                    <input type="text" wire:model="parameter.sektor" placeholder="z. B. catering" class="{{ $input }}" />
-                </div>
-                <div class="flex items-end pb-2 gap-3">
-                    <label class="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
-                        <input type="checkbox" wire:model="parameter.bio" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" /> Bio
-                    </label>
-                </div>
-                <div class="col-span-2 md:col-span-3">
-                    <label class="block {{ $label }} mb-1">Aroma-Richtung</label>
-                    <input type="text" wire:model="parameter.aroma" placeholder="z. B. rauchig-karamellig, mediterran …" class="{{ $input }}" />
+
+                <div class="md:col-span-2" data-richtung="diaet">
+                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach(['vegan' => 'Vegan', 'vegetarisch' => 'Vegetarisch', 'glutenfrei' => 'Glutenfrei', 'laktosefrei' => 'Laktosefrei', 'halal' => 'Halal', 'low_carb' => 'Low Carb'] as $wert => $lbl)
+                            <button type="button" wire:click="togglePill('diaet_hart', '{{ $wert }}')"
+                                    class="px-2.5 py-1 rounded-full border text-xs transition-colors {{ in_array($wert, $parameter['diaet_hart'], true) ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
+                        @endforeach
+                    </div>
                 </div>
             </div>
         </x-foodalchemist::modal-section>
