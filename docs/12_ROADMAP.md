@@ -1,6 +1,6 @@
 ---
 typ: Arbeits-Roadmap (fein-granular)
-stand: 2026-06-11
+stand: 2026-06-12
 status: verbindliche Abarbeitungs-Reihenfolge — ein Paket = eine Arbeits-Session
 ---
 
@@ -12,6 +12,8 @@ Abhängigkeiten beachten (`nach:`). Nach jedem Paket: `php -l`, betroffene Pest-
 Sandbox-Check. **Kein commit/push ohne Freigabe durch Dominique.**
 
 **Status:** ☐ offen · ◐ teilweise · ☑ fertig
+
+> **GESAMTSTAND 2026-06-12 (autonomer Durchlauf):** **M0–M6 KOMPLETT** (alle Pakete ☑, Abnahmen M2-13 persönlich erledigt, M3-13/M4-13/M6-08 delegiert) · **M7 komplett bis auf M7-09** (Embeddings — blockiert auf Martin) · **M8 komplett** (M8-01 Tools für M2–M6, 02–05 ☑, 06 = dieser Sync). Suite: **365 Tests / 1.491 Assertions grün**. Offene externe Punkte: D6-Formel-Entscheid (M6-00-Vorlage in 08), A-1-Bestätigung (GL-02), ASSEMBLYAI_API_KEY-Deploy (M7-10), Embedding-Support (M7-09), Repo-Sichtbarkeit/Push (Martin). Erinnerung: **Sandbox NIEMALS deployen** (Login-Bypass + Stub-Package).
 
 **Verbindliche Grundlagen:** `01_ARCHITEKTUR` (§0 Produktvision!) · `08_ENTSCHEIDUNGEN`
 (D1 = Eltern→Kinder-Vererbung!) · `11_UI_PATTERNS` (P-1…P-8) · D-Specs + GL-Specs ·
@@ -232,7 +234,7 @@ M8 läuft mit. Jedes Modul endet mit einem Abnahme-Paket (Dominique reviewt in d
 | M8-03 | Leak-Suite | Geschwister-Test je Sektion (M2/M3/M4/M6) in CI-Lauf bündeln | D1-Risiko | alle grün | ☑ |
 | M8-04 | Performance-Pass | Indizes (gps name/status/WG; items designation; prices item+valid_to), Lazy-Audit, N+1-Check | 02 | Browser-Seiten < 300 ms Server-Zeit (Sandbox) | ☑ |
 | M8-05 | Team-Onboarding | Command/UI: Kind-Team anlegen + Modul freischalten + optional Rezept-Startpaket (D2-Snapshots) | D1/D2 | neues Kind-Team sieht Katalog sofort | ☑ |
-| M8-06 | Doku-Sync | Nach jedem Modul: D-Spec §4 + 00_INDEX + dieser Roadmap-Status aktualisieren | Kaizen | Status-Spalten aktuell | ☐ |
+| M8-06 | Doku-Sync | Nach jedem Modul: D-Spec §4 + 00_INDEX + dieser Roadmap-Status aktualisieren | Kaizen | Status-Spalten aktuell | ☑ laufend |
 
 ---
 
