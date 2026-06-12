@@ -44,20 +44,30 @@ class RecipeGeneratorService
      * @param array $parameter convenience|frische|bio|niveau|sektor|diaet_hart|aroma
      * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
      */
-    public function generiere(Team $team, string $beschreibung, array $parameter = [], ?array $kiRezeptOverride = null): array
+    public function generiere(Team $team, string $beschreibung, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false): array
     {
         $kiRezept = $kiRezeptOverride;
         if ($kiRezept === null) {
             // M5-06 / GL-13: Souschef-Wissen (7 Always-Load + Domains + Pairing-Block)
-            // als Fakten-Block in den User-Prompt; Stil-Filter zieht erst beim VK-
-            // Generator (M6, Tabelle 4.1). Leere Wissensbasis = leerer Block, nie Fehler.
+            // als Fakten-Block in den User-Prompt; Stil-Filter (Achse 10) zieht im
+            // VK-Modus über kompositions_stil. Leere Wissensbasis = leer, nie Fehler.
             $wissen = app(Ai\KnowledgeContextService::class)->contextFor(
                 'ai_generate_recipe', $beschreibung, $parameter['kompositions_stil'] ?? null
             );
-            $vorschlag = $this->ki->propose('recipe.generator', [
+            $kontext = [
                 'beschreibung' => $beschreibung,
                 'parameter' => $parameter,
-            ], ['knowledge' => $wissen['block']]);
+            ];
+            if ($vkModus) {
+                // M6-06: VK-Achsen + Taxonomie-Vorrat für Klasse/AK-Vorschlag
+                $kontext['speisen_klassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::query()
+                    ->join('foodalchemist_dish_main_groups AS hg', 'hg.id', '=', 'foodalchemist_dish_classes.dish_main_group_id')
+                    ->selectRaw("foodalchemist_dish_classes.id AS id, hg.code || ' / ' || foodalchemist_dish_classes.bezeichnung AS label")
+                    ->orderBy('foodalchemist_dish_classes.id')->pluck('label', 'id')->all();
+                $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
+                    ->orderBy('code')->pluck('bezeichnung', 'code')->all();
+            }
+            $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, ['knowledge' => $wissen['block']]);
             $kiRezept = $vorschlag->werte;
         }
         if (empty($kiRezept['name']) || empty($kiRezept['zutaten']) || ! is_array($kiRezept['zutaten'])) {
@@ -65,8 +75,9 @@ class RecipeGeneratorService
         }
 
         // Parameter → GL-04-Hooks (A-1: from_scratch UND teil_convenience drehen den Pool)
+        // VK-Modus: Komponenten = Basisrezepte zuerst (D-6 — Zutaten sind GPs UND/ODER Basisrezepte)
         $convenience = $parameter['convenience'] ?? 'standard';
-        $mode = in_array($convenience, ['from_scratch', 'teil_convenience'], true) ? 'sub_recipe_first' : 'gp_first';
+        $mode = $vkModus || in_array($convenience, ['from_scratch', 'teil_convenience'], true) ? 'sub_recipe_first' : 'gp_first';
         $preferRaw = $convenience === 'from_scratch';
         $pref = match ($parameter['frische'] ?? null) {
             'frisch' => 'fresh_first',
@@ -76,9 +87,10 @@ class RecipeGeneratorService
         };
         $bio = ($parameter['bio'] ?? false) ? 'bio' : 'conventional';        // Bio nur auf Ansage (4.4r)
 
-        return DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio) {
+        return DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $vkModus) {
             $recipe = $this->recipes->create($team, [
                 'name' => $kiRezept['name'],
+                'ist_verkaufsrezept' => $vkModus,
                 'beschreibung' => $kiRezept['beschreibung'] ?? null,
                 'geschmacksrichtung' => $kiRezept['geschmacksrichtung'] ?? null,
                 'fertigungstiefe' => match ($parameter['convenience'] ?? null) {
@@ -90,9 +102,25 @@ class RecipeGeneratorService
             ]);
             $recipe->update([
                 'zubereitung' => $kiRezept['zubereitung'] ?? null,
-                'last_modified_by' => 'generator',
+                'last_modified_by' => $vkModus ? 'vk_generator' : 'generator',
                 'beschreibung_quelle' => ! empty($kiRezept['beschreibung']) ? 'ki' : null,
             ]);
+
+            // M6-06: Klasse/AK aus dem Vorschlag — beides validiert, Lineage ki (GL-07)
+            if ($vkModus) {
+                $klasse = isset($kiRezept['speisen_klasse_id'])
+                    ? \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::find((int) $kiRezept['speisen_klasse_id'])
+                    : null;
+                $ak = isset($kiRezept['aufschlagsklasse_code'])
+                    ? \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('code', $kiRezept['aufschlagsklasse_code'])->first()
+                    : null;
+                $recipe->update(array_filter([
+                    'speisen_klasse_id' => $klasse?->id,
+                    'speisen_klasse_quelle' => $klasse !== null ? 'ki' : null,
+                    'aufschlagsklasse_id' => $ak?->id ?? $klasse?->default_markup_class_id,
+                    'mwst_satz' => $ak?->mwst_satz,
+                ], fn ($v) => $v !== null));
+            }
 
             $statistik = ['bestand_gp' => 0, 'bestand_sub' => 0, 'stub_neu' => 0, 'offen' => 0];
             $offene = [];

@@ -188,6 +188,19 @@ return [
             'task' => 'Normalisiere den Rezept-Namen auf die §1-Syntax «<Typ>: <Bezeichnung>[, Zusatz]» '
                 . '(Typ aus dem §1.2-Vokabular, Singular, keine Abkürzungen): werte = {name}.',
         ],
+        'vk.generator' => [
+            'tier' => 'B',
+            'task' => 'Erzeuge ein VERKAUFSREZEPT (Teller/Speise mit VK-Preis) aus der Beschreibung '
+                . 'unter Beachtung der Richtungs-Parameter (convenience, frische, bio, niveau, sektor, '
+                . 'diaet_hart, aroma, anlass, serviceform, kompositions_stil): werte = '
+                . '{name (Pipe-Syntax §4.4 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
+                . 'keine Marketing-Adjektive), beschreibung (§8-Stil), geschmacksrichtung, '
+                . 'zubereitung (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '
+                . 'NICHT die Produktion), zutaten: [{text, menge, einheit (g|ml|kg|l|el|tl|stk), slug, note}] '
+                . '(Komponenten bevorzugt als Basisrezepte), speisen_klasse_id (aus der mitgegebenen Liste, '
+                . 'null wenn unsicher), aufschlagsklasse_code (aus der mitgegebenen Liste)}. '
+                . 'Diät-harte Vorgaben sind VERBINDLICH.',
+        ],
         'vk.speisen_klasse' => [
             'tier' => 'B',
             'task' => 'Klassifiziere das Verkaufsrezept in GENAU EINE Speisen-Klasse aus der '

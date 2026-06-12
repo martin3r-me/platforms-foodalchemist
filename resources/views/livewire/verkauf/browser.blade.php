@@ -73,13 +73,14 @@
 
     {{-- M6-04: VK-Editor + geteilter Zutaten-Editor (P-2: innerhalb x-ui-page) --}}
     <livewire:foodalchemist.verkauf.vk-modal />
+    <livewire:foodalchemist.verkauf.vk-generator-modal />
     <livewire:foodalchemist.recipes.ingredient-editor />
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between -mb-2">
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="$dispatch('vk-modal.oeffnen')" class="{{ $btnPrimary }}" data-vk-anlegen>+ Neues Verkaufsrezept</button>
-                <button type="button" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 opacity-50 cursor-not-allowed" disabled title="VK-Generator kommt mit M6-06" data-vk-generator>✨ KI-Rezept</button>
+                <button type="button" wire:click="$dispatch('vk-generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-vk-generator>✨ KI-Rezept</button>
             </div>
             <p class="text-xs text-gray-400">Speisen mit VK-Preis. Zutaten = Grundprodukte und/oder Basisrezepte. Live-Marge aus EK × Aufschlagsklasse.</p>
         </div>
