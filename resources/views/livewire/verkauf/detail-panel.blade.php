@@ -14,6 +14,8 @@
                 <div class="flex items-center gap-1.5 shrink-0">
                     <button type="button" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-bearbeiten>Bearbeiten</button>
                     <button type="button" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-komponenten>Komponenten</button>
+                    <button type="button" wire:click="ai_klassifizieren" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="ai_classify_speisen_klasse (GL-07)" data-vk-klassifizieren>✨ Klassifizieren</button>
+                    <button type="button" wire:click="ai_rollen" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-rollen>🎭 Rollen</button>
                 </div>
             </div>
             @if($rezept->vk_wording_standard !== null)
@@ -29,6 +31,48 @@
                 @endif
             </div>
         </div>
+
+        {{-- M6-05: GL-07-Vorschlags-Boxen (editierbar vor Übernahme: Verwerfen + neu) --}}
+        @if($kiFehler !== null)<p class="text-xs text-rose-500" data-ki-fehler>{{ $kiFehler }}</p>@endif
+        @if($klasseVorschlag !== null)
+            <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-sm" data-klasse-vorschlag>
+                <p class="text-gray-900 dark:text-gray-100">
+                    ✨ Speisen-Klasse: <span class="font-medium">{{ $klasseVorschlag['klasse_name'] ?? 'kein sicherer Treffer' }}</span>
+                    <span class="text-xs text-gray-400">· {{ round($klasseVorschlag['confidence'] * 100) }} %</span>
+                </p>
+                @if($klasseVorschlag['begruendung'] !== null)<p class="text-xs text-gray-400 mt-0.5">{{ $klasseVorschlag['begruendung'] }}</p>@endif
+                <div class="flex gap-1.5 mt-1.5">
+                    @if($klasseVorschlag['klasse_id'] !== null)
+                        <button type="button" wire:click="accept_klasse" class="{{ $btnGhostXs }} text-emerald-600" data-klasse-accept>Übernehmen</button>
+                    @endif
+                    <button type="button" wire:click="reject_klasse" class="{{ $btnGhostXs }}" data-klasse-reject>Verwerfen</button>
+                </div>
+            </div>
+        @endif
+        @if($rollenVorschlag !== null)
+            <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-sm" data-rollen-vorschlag>
+                <p class="text-gray-900 dark:text-gray-100">🎭 Rollen-Verteilung <span class="text-xs text-gray-400">· {{ round($rollenVorschlag['confidence'] * 100) }} %</span></p>
+                @if($rollenVorschlag['rollen'] === [])
+                    <p class="text-xs text-gray-400 mt-0.5">Kein gültiger Vorschlag (Rollen-Vokabular: aroma_treiber · komponente · beilage · garnitur).</p>
+                @else
+                    <div class="mt-1 space-y-0.5">
+                        @foreach($rollenVorschlag['rollen'] as $zeileId => $rolle)
+                            @php($zeile = $rezept->ingredients->firstWhere('id', $zeileId))
+                            <p class="text-xs text-gray-600 dark:text-gray-300" wire:key="rv-{{ $zeileId }}">
+                                {{ $zeile?->referencedRecipe?->name ?? $zeile?->gp?->name ?? $zeile?->display_name ?? "Zeile {$zeileId}" }}
+                                → <span class="font-medium">{{ $rolle }}</span>
+                            </p>
+                        @endforeach
+                    </div>
+                @endif
+                <div class="flex gap-1.5 mt-1.5">
+                    @if($rollenVorschlag['rollen'] !== [])
+                        <button type="button" wire:click="accept_rollen" class="{{ $btnGhostXs }} text-emerald-600" data-rollen-accept>Übernehmen (danach pro Zeile korrigierbar)</button>
+                    @endif
+                    <button type="button" wire:click="reject_rollen" class="{{ $btnGhostXs }}" data-rollen-reject>Verwerfen</button>
+                </div>
+            </div>
+        @endif
 
         {{-- VERKAUFT-ALS-Box (Orange, 13_REFERENZ) --}}
         @if($cockpit['verkauft_als'] !== null)

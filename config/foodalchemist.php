@@ -188,6 +188,19 @@ return [
             'task' => 'Normalisiere den Rezept-Namen auf die §1-Syntax «<Typ>: <Bezeichnung>[, Zusatz]» '
                 . '(Typ aus dem §1.2-Vokabular, Singular, keine Abkürzungen): werte = {name}.',
         ],
+        'vk.speisen_klasse' => [
+            'tier' => 'B',
+            'task' => 'Klassifiziere das Verkaufsrezept in GENAU EINE Speisen-Klasse aus der '
+                . 'mitgegebenen Taxonomie (Kontext: Name, Komponenten, Diät-Eigenschaften). '
+                . 'Kein sicherer Treffer => speisen_klasse_id = null (NICHT raten): '
+                . 'werte = {speisen_klasse_id, klasse_name}.',
+        ],
+        'vk.rollen' => [
+            'tier' => 'B',
+            'task' => 'Verteile die Komponenten-Rollen uebers GANZE Gericht (V-21-Vokabular: '
+                . 'aroma_treiber | komponente | beilage | garnitur — jede Zutat genau eine Rolle, '
+                . 'Gesamt-Gericht-Sicht statt Einzelbetrachtung): werte = {rollen: {<zutat_id>: rolle}}.',
+        ],
         'gp.tags' => [
             'tier' => 'C',
             'task' => 'Bewerte die Eigenschafts-Tags des Grundprodukts (vegan, vegetarisch, halal, '
