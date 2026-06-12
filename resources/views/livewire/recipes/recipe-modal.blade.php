@@ -91,7 +91,7 @@
         @endif
         <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 mt-3">
             <input type="checkbox" wire:model="form.ist_verkaufsrezept" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-            Verkaufsrezept (D-6 — VK-Felder im VK-Editor)
+            Gericht (D-6 — VK-Felder im VK-Editor)
         </label>
     </x-foodalchemist::modal-section>
 

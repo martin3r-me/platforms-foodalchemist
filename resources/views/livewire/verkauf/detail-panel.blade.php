@@ -5,7 +5,7 @@
     @if($rezept === null)
         <div class="text-center text-xs text-gray-400 py-12">
             <div class="text-2xl mb-2">€</div>
-            Verkaufsrezept in der Tabelle anklicken —<br>Marge-Cockpit erscheint hier.
+            Gericht in der Tabelle anklicken —<br>Marge-Cockpit erscheint hier.
         </div>
     @else
         <div>

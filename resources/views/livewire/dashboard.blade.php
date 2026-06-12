@@ -67,7 +67,7 @@
                 <span class="{{ $dt }}">Schnellzugriff</span>
                 <div class="flex flex-wrap gap-1.5 mt-1.5">
                     <a href="{{ route('foodalchemist.recipes.index') }}" class="{{ $btnGhostXs }}">📖 Basisrezepte</a>
-                    <a href="{{ route('foodalchemist.verkauf.index') }}" class="{{ $btnGhostXs }}">💶 Verkaufsrezepte</a>
+                    <a href="{{ route('foodalchemist.verkauf.index') }}" class="{{ $btnGhostXs }}">💶 Gerichte</a>
                     <a href="{{ route('foodalchemist.gps.index') }}" class="{{ $btnGhostXs }}">🧺 Grundprodukte</a>
                     <a href="{{ route('foodalchemist.suppliers.index') }}" class="{{ $btnGhostXs }}">🚚 Lieferanten</a>
                     <a href="{{ route('foodalchemist.einstellungen') }}" class="{{ $btnGhostXs }}">⚙️ Einstellungen</a>

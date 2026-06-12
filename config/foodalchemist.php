@@ -106,7 +106,7 @@ return [
                     'icon'  => 'heroicon-o-book-open',
                 ],
                 [
-                    'label' => 'Verkaufsrezepte',
+                    'label' => 'Gerichte',
                     'route' => 'foodalchemist.verkauf.index',
                     'icon'  => 'heroicon-o-banknotes',
                 ],

@@ -106,7 +106,7 @@
             {{-- Legende (Referenz: Knoten-Typen | Brücken-Typen) --}}
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] text-gray-500 dark:text-gray-400" data-netz-legende>
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-orange-300 border border-orange-600"></span> Quell-Rezept</span>
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-300 border border-blue-600"></span> VK-Rezept</span>
+                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-300 border border-blue-600"></span> Gericht</span>
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-green-300 border border-green-600"></span> Basisrezept</span>
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-pink-300 border border-pink-600"></span> Pairing-Anker (★ Kern)</span>
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-300 border border-amber-600"></span> Vorschlag über Anker</span>

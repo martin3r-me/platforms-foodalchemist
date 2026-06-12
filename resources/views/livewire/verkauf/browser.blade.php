@@ -3,7 +3,7 @@
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Verkaufsrezepte" icon="heroicon-o-banknotes" />
+        <x-ui-page-navbar title="Gerichte" icon="heroicon-o-banknotes" />
     </x-slot:navbar>
 
     <x-slot name="sidebar">
@@ -83,7 +83,7 @@
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between -mb-2">
             <div class="flex items-center gap-2">
-                <button type="button" wire:click="$dispatch('vk-modal.oeffnen')" class="{{ $btnPrimary }}" data-vk-anlegen>+ Neues Verkaufsrezept</button>
+                <button type="button" wire:click="$dispatch('vk-modal.oeffnen')" class="{{ $btnPrimary }}" data-vk-anlegen>+ Neues Gericht</button>
                 <button type="button" wire:click="$dispatch('vk-generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-vk-generator>✨ KI-Rezept</button>
             </div>
             <p class="text-[11px] text-gray-400">Speisen mit VK-Preis. Zutaten = Grundprodukte und/oder Basisrezepte. Live-Marge aus EK × Aufschlagsklasse.</p>
@@ -91,7 +91,7 @@
         <div class="relative overflow-hidden {{ $card }}" data-vk-tabelle>
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Verkaufsrezepte</h3>
+                <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Gerichte</h3>
                 <span class="{{ $label }} flex items-center gap-2">
                     {{ number_format($rezepte->total(), 0, ',', '.') }} Treffer ·
                     <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
@@ -129,7 +129,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="9" class="px-5 py-10 text-center text-gray-400">Keine Verkaufsrezepte gefunden.</td></tr>
+                        <tr><td colspan="9" class="px-5 py-10 text-center text-gray-400">Keine Gerichte gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>

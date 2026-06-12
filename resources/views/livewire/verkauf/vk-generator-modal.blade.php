@@ -1,7 +1,7 @@
 {{-- M6-06: ✨ VK-Generator v1 — D-5-Achsen + Anlass/Serviceform/Kompositions-Stil, Bestand-Hybrid --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="vk-generator-modal" title="✨ Verkaufsrezept generieren" size="max-w-2xl">
+<x-foodalchemist::modal name="vk-generator-modal" title="✨ Gericht generieren" size="max-w-2xl">
     @if($fehler !== null)
         <p class="text-xs text-rose-600 dark:text-rose-400 mb-3" data-vk-generator-fehler>{{ $fehler }}</p>
     @endif

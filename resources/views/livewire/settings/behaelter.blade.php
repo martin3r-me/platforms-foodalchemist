@@ -4,7 +4,7 @@
 <div class="space-y-6" data-settings-behaelter>
     <div>
         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Behälter & Geräte</h3>
-        <p class="text-[11px] text-gray-400 mt-0.5">Behälter, Regenerations-Geräte und Servier-Vehikel (VK-Rezepte) plus Koch-Equipment (Basisrezepte). V-06: nur deaktivieren, nie löschen.</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Behälter, Regenerations-Geräte und Servier-Vehikel (Gerichte) plus Koch-Equipment (Basisrezepte). V-06: nur deaktivieren, nie löschen.</p>
     </div>
     @if($fehler !== null)<p class="text-xs text-rose-600 dark:text-rose-400" data-behaelter-fehler>{{ $fehler }}</p>@endif
     @if($meldung !== null)<p class="text-xs text-emerald-600 dark:text-emerald-400" data-behaelter-meldung>{{ $meldung }}</p>@endif

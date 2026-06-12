@@ -241,6 +241,19 @@ Basisrezept → Eltern (existiert) → VK-Rezepte, LA → GPs. Als Panel-Sektion
 > (versteckter Button war programmatisch klickbar → 500er). Live verifiziert.
 > Suite: **397/397 (1.684 Assertions)**.
 
+> **Status R22/Spalten + Umbranding (2026-06-13):** **(1) Editor-Spalten:** #/Menge/Einheit
+> (und alle schmalen Spalten) per `w-px` auf Inhaltsbreite gezwungen, die Zutaten-Spalte
+> trägt `w-full` — gemessen: # 43 px (vorher ~110), Menge 96, Einheit 112; der Restplatz
+> gehört dem Zutaten-Namen (lange Gericht-Namen passen). **(2) UMBRANDING: «Verkaufs-
+> rezepte» → «Gerichte»** in ALLEN sichtbaren Texten (Sidebar, Browser-Titel, Panel,
+> Editor «Gericht bearbeiten», «Neues Gericht», Generator, Dashboard, recipe-modal-
+> Checkbox) + URL-Pfad `/verkaufsrezepte` → **`/gerichte`** (Route-NAME
+> `foodalchemist.verkauf.index` bleibt — alle route()-Aufrufe intakt). Interne Identifier
+> (ist_verkaufsrezept, Verkauf\*-Klassen, vk-modal-Events, DB) BEWUSST unverändert —
+> reines Anzeige-Branding, passt zur Concepter-Kaskade (GP → Rezept → **Gericht** →
+> Concept → Foodbook, `docs/concepter-konzept.md`). Live verifiziert (/gerichte lädt,
+> Sidebar «Gerichte», kein «Verkaufsrezept» mehr im UI). Suite: **397/397 (1.684 Assertions)**.
+
 ### M9-06 Politur-Rest aus den Abnahmen
 needs_review-Zähler im Lieferanten-Browser · V-03-Namens-Normalisierung (wartet auf echten
 LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).
@@ -248,6 +261,14 @@ LLM — Werkzeug steht) · ~~/test-Route~~ ✅ (R6).
 ---
 
 ## M10 — Foodbook / Portfolio (Zuschnitt mit Dominique abstimmen)
+
+> **⮕ Präzisiert & umsortiert durch [`15_MASTERPLAN_VISION.md`](15_MASTERPLAN_VISION.md)
+> (2026-06-13):** Das Konzeptpapier [`concepter-konzept.md`](concepter-konzept.md) schiebt
+> zwischen VK und Foodbook eine eigene **Concepter-Ebene** ein (Slots · Rollen · Module ·
+> Gerichte). Der Masterplan macht daraus die Reihenfolge **M10 Concepter → M11 Foodbook →
+> M12 HK1/HK2 → M13 Zielpreis-Konfigurator → M14 Speiseplan → M16 operative Domänen** und
+> ersetzt damit den folgenden M10-Foodbook-Schnitt sowie den M11+-Platzhalter-Block weiter
+> unten. Die Pakete unten bleiben als Detail-Spec für **M11-Foodbook** gültig.
 
 **Architektur-Empfehlung (Entscheid offen):** EIGENE Domäne **im** `platforms-foodalchemist`
 (eigene Sidebar-Gruppe «Foodbook», eigene Tabellen `foodalchemist_foodbooks…`) — NICHT als
