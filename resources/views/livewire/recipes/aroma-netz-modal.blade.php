@@ -10,6 +10,7 @@
                     <input type="checkbox" x-model="alle" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-netz-bruecken-toggle />
                     Alle Aroma-Brücken ({{ count($kanten) }})
                 </label>
+                <span class="text-gray-300 dark:text-gray-600">·</span>
                 <label class="inline-flex items-center gap-1.5">
                     Pairing-Vorschläge pro Anker:
                     <select wire:model.live="vorschlaege" class="rounded-md border-gray-300 dark:border-white/10 dark:bg-gray-800 text-xs py-0.5" data-netz-vorschlaege>
@@ -26,7 +27,7 @@
                 {{-- 1. Zentrum→Anker (Grundgerüst, dezent) --}}
                 @foreach($anker as $a)
                     <line x1="{{ $cx }}" y1="{{ $cy }}" x2="{{ $a['x'] }}" y2="{{ $a['y'] }}"
-                          class="stroke-gray-400" stroke-width="1" opacity="0.18" />
+                          class="stroke-gray-400" stroke-width="0.7" opacity="0.10" />
                 @endforeach
 
                 {{-- 2. Verwandte→gemeinsame Anker (grün = Basis, blau = VK) --}}
@@ -34,7 +35,7 @@
                     @foreach($v['shared_anker_ids'] as $aid)
                         @if($pos->has($aid))
                             <line x1="{{ $v['x'] }}" y1="{{ $v['y'] }}" x2="{{ $pos[$aid]['x'] }}" y2="{{ $pos[$aid]['y'] }}"
-                                  stroke="{{ $v['vk'] ? '#3b82f6' : '#22c55e' }}" stroke-width="1" opacity="0.3" />
+                                  stroke="{{ $v['vk'] ? '#3b82f6' : '#22c55e' }}" stroke-width="0.8" opacity="0.14" />
                         @endif
                     @endforeach
                 @endforeach
@@ -65,7 +66,7 @@
                             <title>{{ $s['display_de'] }} ({{ $s['typ'] }}) — Vorschlag über {{ $pos[$s['anker_id']]['slug'] }}</title>
                         </circle>
                         <text x="{{ $s['x'] }}" y="{{ $s['y'] + 16 }}" text-anchor="middle" font-size="9"
-                              class="fill-amber-600 dark:fill-amber-400">{{ $s['slug'] }}</text>
+                              style="paint-order: stroke; stroke: rgba(255,255,255,.8); stroke-width: 2px;" class="fill-amber-600 dark:fill-amber-400">{{ $s['slug'] }}</text>
                     @endif
                 @endforeach
 
@@ -78,7 +79,7 @@
                             <title>{{ $a['display_de'] }}{{ $a['kern'] ? ' (Kern-Anker)' : '' }}</title>
                         </circle>
                         <text x="{{ $a['x'] }}" y="{{ $a['y'] + ($a['kern'] ? 25 : 22) }}" text-anchor="middle" font-size="10"
-                              class="fill-gray-700 dark:fill-gray-200 {{ $a['kern'] ? 'font-semibold' : '' }}">{{ $a['kern'] ? '★ ' : '' }}{{ $a['slug'] }}</text>
+                              class="fill-gray-700 dark:fill-gray-200 {{ $a['kern'] ? 'font-semibold' : '' }}" style="paint-order: stroke; stroke: rgba(255,255,255,.8); stroke-width: 2.5px;">{{ $a['kern'] ? '★ ' : '' }}{{ $a['slug'] }}</text>
                     </g>
                 @endforeach
 
@@ -90,7 +91,7 @@
                             <title>{{ $v['name'] }} — {{ $v['shared'] }} gemeinsame Anker (von {{ $v['eigene_gesamt'] }})</title>
                         </circle>
                         <text x="{{ $v['x'] }}" y="{{ $v['y'] + 21 }}" text-anchor="middle" font-size="9.5"
-                              class="fill-gray-600 dark:fill-gray-300">{{ mb_strimwidth($v['name'], 0, 22, '…') }}</text>
+                              style="paint-order: stroke; stroke: rgba(255,255,255,.8); stroke-width: 2.5px;" class="fill-gray-600 dark:fill-gray-300">{{ mb_strimwidth($v['name'], 0, 18, '…') }}</text>
                     </g>
                 @endforeach
 
@@ -98,8 +99,8 @@
                 <circle cx="{{ $cx }}" cy="{{ $cy }}" r="32" fill="#fdba74" stroke="#ea580c" stroke-width="2.5" data-netz-zentrum>
                     <title>{{ $zentrum['name'] }}</title>
                 </circle>
-                <text x="{{ $cx }}" y="{{ $cy + 3 }}" text-anchor="middle" font-size="11" font-weight="600"
-                      class="fill-orange-950">{{ mb_strimwidth($zentrum['name'], 0, 12, '…') }}</text>
+                <text x="{{ $cx }}" y="{{ $cy + 50 }}" text-anchor="middle" font-size="12" font-weight="600"
+                      class="fill-gray-900 dark:fill-gray-100" style="paint-order: stroke; stroke: rgba(255,255,255,.85); stroke-width: 3px;">{{ mb_strimwidth($zentrum['name'], 0, 34, '…') }}</text>
             </svg>
 
             {{-- Legende (Referenz: Knoten-Typen | Brücken-Typen) --}}

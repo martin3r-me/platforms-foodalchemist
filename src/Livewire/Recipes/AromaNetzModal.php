@@ -74,7 +74,8 @@ class AromaNetzModal extends Component
         unset($a);
 
         $m = max(1, count($netz['verwandte']));
-        foreach ($netz['verwandte'] as $j => &$v) {
+        $wunsch = [];
+        foreach ($netz['verwandte'] as $j => $v) {
             $vx = $vy = 0.0;
             foreach ($v['shared_anker_ids'] as $aid) {
                 if (isset($winkel[$aid])) {
@@ -82,15 +83,23 @@ class AromaNetzModal extends Component
                     $vy += sin($winkel[$aid]);
                 }
             }
-            // Kein Andock-Anker im Ring → gleichmäßig verteilen; sonst zirkuläres
-            // Mittel + leichte Index-Streuung gegen Label-Kollisionen
-            $w = (abs($vx) < 1e-9 && abs($vy) < 1e-9)
+            $wunsch[$j] = (abs($vx) < 1e-9 && abs($vy) < 1e-9)
                 ? 2 * M_PI * $j / $m - M_PI / 2
-                : atan2($vy, $vx) + (($j % 3) - 1) * 0.16;
-            $v['x'] = round($cx + self::R_VERWANDT * cos($w), 1);
-            $v['y'] = round($cy + self::R_VERWANDT * sin($w), 1);
+                : atan2($vy, $vx);
         }
-        unset($v);
+        // UI-Review: Kollisionsauflösung — nach Wunsch-Winkel sortieren und einen
+        // MINDEST-Winkelabstand erzwingen (vorher klumpten die Verwandten an einem Punkt)
+        asort($wunsch);
+        $minAbstand = min(0.5, 2 * M_PI / max(1, $m));
+        $vergeben = [];
+        foreach ($wunsch as $j => $w) {
+            while ($vergeben !== [] && $w - end($vergeben) < $minAbstand) {
+                $w = end($vergeben) + $minAbstand;
+            }
+            $vergeben[] = $w;
+            $netz['verwandte'][$j]['x'] = round($cx + self::R_VERWANDT * cos($w), 1);
+            $netz['verwandte'][$j]['y'] = round($cy + self::R_VERWANDT * sin($w), 1);
+        }
 
         // Vorschläge: radial außen am jeweiligen Anker, je Anker leicht gefächert
         $jeAnker = [];

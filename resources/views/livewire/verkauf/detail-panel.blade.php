@@ -140,6 +140,69 @@
             </div>
         @endif
 
+        {{-- D-6 §5.x (MVP): Kern-Anker VOR Pairing (Kern = Identität, dann Partner) --}}
+        <div data-vk-kern-anker>
+            <div class="flex items-center gap-2">
+                <button type="button" wire:click="toggleSektion('anker')"
+                        class="flex-1 flex items-center justify-between py-1 text-xs font-medium uppercase tracking-wider text-gray-400 hover:text-violet-500 transition-colors">
+                    <span>Kern-Anker ({{ $kernAnker->count() }}/5)</span>
+                    <span>{{ ($offen['anker'] ?? false) ? '▾' : '▸' }}</span>
+                </button>
+                <button type="button" wire:click="$dispatch('aroma-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
+                        class="{{ $btnGhostXs }} shrink-0" title="Komponenten-Netz (D-6 §5.x)" data-vk-aroma-netz>🕸 Netz</button>
+            </div>
+            <div class="flex flex-wrap gap-1 mt-1">
+                @foreach($kernAnker as $anker)
+                    <span wire:key="vka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->quelle }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
+                        ★ {{ $anker->display_de }}
+                        <button type="button" wire:click="ankerLoesen({{ $anker->id }})" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
+                    </span>
+                @endforeach
+            </div>
+            @if($offen['anker'] ?? false)
+                @if($fehlerAnker !== null)<p class="text-xs text-rose-500 mt-1" data-vk-anker-fehler>{{ $fehlerAnker }}</p>@endif
+                <div class="relative mt-1.5">
+                    <input type="search" wire:model.live.debounce.300ms="ankerSuche" placeholder="Anker verknüpfen …" class="{{ $input }} !py-1" data-vk-anker-suche />
+                    @foreach($ankerKandidaten as $kandidat)
+                        <button type="button" wire:key="vkak-{{ $kandidat->id }}" wire:click="ankerVerknuepfen({{ $kandidat->id }})"
+                                class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">{{ $kandidat->display_de }} <span class="text-gray-400">{{ $kandidat->slug }}</span></button>
+                    @endforeach
+                </div>
+                @if($kohaesion !== null)
+                    <div class="mt-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 text-xs space-y-0.5" data-vk-kohaesion>
+                        <p class="text-gray-900 dark:text-gray-100">Aroma-Kohäsion: <span class="font-medium">{{ $kohaesion['score'] }}</span>
+                            · min {{ $kohaesion['min_score'] }} · Coverage {{ $kohaesion['coverage_pct'] }} % ({{ $kohaesion['rated_pairs'] }}/{{ $kohaesion['total_pairs'] }})
+                            @if($kohaesion['coverage_pct'] < 30)<span class="text-amber-500">· dünne Datenlage</span>@endif
+                        </p>
+                        @if($kohaesion['weakest_pair'] !== null)
+                            <p class="text-gray-400">Schwächstes Glied: {{ $kohaesion['weakest_pair']['a'] }} ↔ {{ $kohaesion['weakest_pair']['b'] }} ({{ $kohaesion['weakest_pair']['score'] }}, {{ $kohaesion['weakest_pair']['typ'] }})</p>
+                        @endif
+                        @php($orphans = collect($kohaesion['komponenten'])->filter(fn ($k) => $k['is_orphan']))
+                        @if($orphans->isNotEmpty())
+                            <p class="text-amber-600 dark:text-amber-400">Ausreißer: {{ $orphans->pluck('label')->implode(', ') }}</p>
+                        @endif
+                    </div>
+                @endif
+            @endif
+        </div>
+
+        {{-- D-6 §5.x: Pairing-Section (✨-Vorschläge folgen mit echtem Provider) --}}
+        <div data-vk-pairing-sektion>
+            <button type="button" wire:click="toggleSektion('pairing')"
+                    class="w-full flex items-center justify-between py-1 text-xs font-medium uppercase tracking-wider text-gray-400 hover:text-violet-500 transition-colors">
+                <span>Pairings</span>
+                <span>{{ ($offen['pairing'] ?? false) ? '▾' : '▸' }}</span>
+            </button>
+            @if($pairings !== null)
+                <div class="flex flex-wrap gap-1 mt-1" data-vk-pairing-chips>
+                    @foreach($pairings as $p)
+                        <span wire:key="vkpp-{{ $loop->index }}" class="{{ $pill }} {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->typ] ?? $variantPill['secondary'] }}"
+                              title="{{ $p->typ }} · {{ $p->konfidenz }}">{{ $p->display_de }}</span>
+                    @endforeach
+                </div>
+            @endif
+        </div>
+
         {{-- Zutaten-Kurzliste (Komponenten: GPs und/oder Basisrezepte) --}}
         <div>
             <p class="{{ $dt }} mb-1">Komponenten ({{ $rezept->ingredients->count() }})</p>

@@ -75,6 +75,7 @@
     <livewire:foodalchemist.verkauf.vk-modal />
     <livewire:foodalchemist.verkauf.vk-generator-modal />
     <livewire:foodalchemist.recipes.ingredient-editor />
+    <livewire:foodalchemist.recipes.aroma-netz-modal />
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between -mb-2">

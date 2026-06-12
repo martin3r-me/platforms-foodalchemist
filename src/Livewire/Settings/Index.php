@@ -26,6 +26,7 @@ class Index extends Component
         'kalkulation' => ['label' => 'Kalkulation', 'hint' => 'Garverlust-, MwSt-Defaults, Rundung (GL-02)'],
         'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Mandanten-Tendenz für den Generator (M7-07, Hooks gewinnen)'],
         'ki' => ['label' => 'KI', 'hint' => 'Provider · Tiering (V-01) · Nutzung · Kill-Switch (M7-08)'],
+        'vk-taxonomie' => ['label' => 'VK-Taxonomie', 'hint' => 'Speisen-HG/Klassen · Aufschlagsklassen (W-1) · Stile · Container (D-6 §4.6)'],
     ];
 
     public function mount(string $sektion = 'einheiten'): void

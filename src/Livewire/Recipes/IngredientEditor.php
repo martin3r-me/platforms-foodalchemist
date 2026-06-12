@@ -26,9 +26,21 @@ class IngredientEditor extends Component
 
     public ?string $fehler = null;
 
+    /** Editor-Parität: eingebettet im Voll-Editor (ohne Modal-Hülle, eine Quelle). */
+    public bool $eingebettet = false;
+
+    public function mount(?int $recipeId = null, bool $eingebettet = false): void
+    {
+        $this->recipeId = $recipeId;
+        $this->eingebettet = $eingebettet;
+    }
+
     #[On('zutaten-editor.oeffnen')]
     public function oeffnen(int $id): void
     {
+        if ($this->eingebettet) {
+            return;                                                  // Modal-Event geht nur an die Modal-Instanz
+        }
         $this->fehler = null;
         $this->recipeId = $id;
         $this->dispatch('modal.open', name: 'zutaten-editor');
@@ -45,7 +57,9 @@ class IngredientEditor extends Component
 
         try {
             app(RecipeService::class)->syncIngredients($team, $this->recipeId, $zeilen);
-            $this->dispatch('modal.close', name: 'zutaten-editor');
+            if (! $this->eingebettet) {
+                $this->dispatch('modal.close', name: 'zutaten-editor');
+            }
             $this->dispatch('recipe-gespeichert');
             $this->dispatch('recipe-selected', id: $this->recipeId);
         } catch (\RuntimeException $e) {

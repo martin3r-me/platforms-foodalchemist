@@ -275,6 +275,118 @@ class RecipeModal extends Component
         return FoodAlchemistRecipe::visibleToTeam($team)->with('ingredients:id,recipe_id,raw_text')->find($this->recipeId);
     }
 
+    // ── Editor-Parität (Ist-App-Vorbild): Löschen · ✨-Header-Aktionen · Anreichern ──
+
+    public function loeschen(RecipeService $recipes): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        try {
+            $recipes->delete($team, $this->recipeId);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->dispatch('modal.close', name: 'recipe-modal');
+        $this->dispatch('recipe-gespeichert');
+    }
+
+    /** ✨ Fertigung: Vorschlag direkt ins Feld (wie namePutzen — nichts persistiert). */
+    public function kiFertigung(AiGatewayService $ki): void
+    {
+        $r = $this->rezept();
+        $vorschlag = $ki->propose('recipe.fertigungstiefe', [
+            'name' => $this->form['name'],
+            'fertigungstiefe' => $this->form['fertigungstiefe'] ?: null,
+            'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
+        ]);
+        $wert = $vorschlag->werte['fertigungstiefe'] ?? null;
+        if (in_array($wert, ['from_scratch', 'teilfertig', 'convenience'], true)) {
+            $this->form['fertigungstiefe'] = $wert;
+        }
+    }
+
+    /** ✨ Eigenschaften: Arbeitszeit/Temperatur/Funktion + Geschmack in die Form (Ist-App-Pendant). */
+    public function kiEigenschaften(AiGatewayService $ki): void
+    {
+        $r = $this->rezept();
+        $zutaten = $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [];
+        $eigenschaften = $ki->propose('recipe.eigenschaften', [
+            'name' => $this->form['name'],
+            'haltbarkeit_tage' => null, 'regenerierbarkeit' => null, 'transportstabilitaet' => null,
+            'arbeitszeit_min' => $this->form['arbeitszeit_min'], 'temperatur' => $this->form['temperatur'] ?: null,
+            'funktion' => $this->form['funktion'] ?: null, 'zutaten' => $zutaten,
+        ]);
+        foreach (['arbeitszeit_min', 'temperatur', 'funktion'] as $feld) {
+            if (! empty($eigenschaften->werte[$feld])) {
+                $this->form[$feld] = $eigenschaften->werte[$feld];
+            }
+        }
+        $geschmack = $ki->propose('recipe.geschmack', [
+            'name' => $this->form['name'], 'geschmacksrichtung' => $this->form['geschmacksrichtung'] ?: null, 'zutaten' => $zutaten,
+        ]);
+        if (in_array($geschmack->werte['geschmacksrichtung'] ?? null, ['suess', 'herzhaft', 'neutral'], true)) {
+            $this->form['geschmacksrichtung'] = $geschmack->werte['geschmacksrichtung'];
+        }
+    }
+
+    /** ✨ Equipment: Slug-Vorschläge → Auswahl-Pills (nichts persistiert). */
+    public function kiEquipment(AiGatewayService $ki): void
+    {
+        $r = $this->rezept();
+        $vorschlag = $ki->propose('recipe.equipment', [
+            'name' => $this->form['name'],
+            'equipment_slugs' => [],
+            'vokabular' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::pluck('slug')->all(),
+            'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
+        ]);
+        $slugs = array_filter((array) ($vorschlag->werte['equipment_slugs'] ?? []), 'is_string');
+        if ($slugs !== []) {
+            $ids = \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::whereIn('slug', $slugs)
+                ->pluck('id')->map(fn ($i) => (string) $i)->all();
+            $this->form['equipment_ids'] = array_values(array_unique([...$this->form['equipment_ids'], ...$ids]));
+        }
+    }
+
+    // ── ✨ Alles anreichern (D-5 §4.4 auf EIN Rezept — Bulk-Mechanik M7-06) ──
+
+    public ?int $bulkRunId = null;
+
+    public function allesAnreichern(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->bulkRunId = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)
+            ->starte($team, [$this->recipeId]);
+    }
+
+    public function bulkAlleUebernehmen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && $this->bulkRunId !== null) {
+            app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->alleUebernehmen($team, $this->bulkRunId);
+            $this->bulkRunId = null;
+            $this->oeffnen($this->recipeId);                          // Form mit den übernommenen Werten neu laden
+            $this->dispatch('recipe-gespeichert');
+        }
+    }
+
+    // ── Zubereitung: Markdown-Vorschau (Schreiben/Vorschau-Tabs, Ist-App) ──
+
+    public ?string $zubereitungVorschau = null;
+
+    public function vorschauZubereitung(): void
+    {
+        $this->zubereitungVorschau = trim($this->form['zubereitung']) !== ''
+            ? \Illuminate\Support\Str::markdown($this->form['zubereitung'])
+            : '<p class="text-gray-400">— leer —</p>';
+    }
+
     /** „Name putzen": §1-Syntax via KI-Gateway (GL-07: Vorschlag direkt ins Feld, nichts persistiert). */
     public function namePutzen(AiGatewayService $ki): void
     {
@@ -307,14 +419,22 @@ class RecipeModal extends Component
             return $quelle ?? 'import';
         };
 
+        $voll = $r !== null && $team !== null ? app(RecipeService::class)->detailAnySicht($team, $r->id) : null;
+        $bulkRun = $this->bulkRunId !== null && $team !== null
+            ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->status($team, $this->bulkRunId) : null;
+
         return view('foodalchemist::livewire.recipes.recipe-modal', [
             'neu' => $this->recipeId === null,
+            'voll' => $voll,
+            'bulkRun' => $bulkRun,
+            'bulkOffen' => $bulkRun !== null
+                ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->offeneVorschlaege($team, $this->bulkRunId) : 0,
             'zustaende' => [
                 'beschreibung' => $feldZustand($r?->beschreibung, $r?->beschreibung_quelle),
                 'zubereitung' => $feldZustand($r?->zubereitung, $r?->zubereitung_quelle),
                 'kategorie' => $r?->kategorie_id !== null ? ($r?->kategorie_quelle ?? 'import') : 'unbefüllt',
             ],
-            'equipmentListe' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::orderBy('name')->get(['id', 'name']),
+            'equipmentListe' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::orderBy('gruppe')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'gruppe']),
             'hauptgruppen' => $team !== null ? $recipes->mainGroups($team) : collect(),
             'kategorien' => $this->form['hauptgruppe_id'] !== null
                 ? FoodAlchemistRecipeCategory::where('main_group_id', $this->form['hauptgruppe_id'])->orderBy('sort_order')->get()

@@ -111,14 +111,62 @@ class DetailPanel extends Component
         $this->rollenVorschlag = null;
     }
 
+    // ── D-6 §5.x (MVP): Foodpairing am VK-Rezept — gleiche Bausteine wie M5 ──
+
+    /** @var array<string, bool> lazy Sektionen (nur offene rechnen, P-1) */
+    public array $offen = [];
+
+    public string $ankerSuche = '';
+
+    public ?string $fehlerAnker = null;
+
+    public function toggleSektion(string $sektion): void
+    {
+        if (in_array($sektion, ['anker', 'pairing'], true)) {
+            $this->offen[$sektion] = ! ($this->offen[$sektion] ?? false);
+        }
+    }
+
+    public function ankerVerknuepfen(int $ankerId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\PairingService::class)->setRecipeAnker($team, $this->recipeId, $ankerId);
+            $this->ankerSuche = '';
+        } catch (\RuntimeException $e) {
+            $this->fehlerAnker = $e->getMessage();
+        }
+    }
+
+    public function ankerLoesen(int $ankerId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && $this->recipeId !== null) {
+            app(\Platform\FoodAlchemist\Services\PairingService::class)->removeRecipeAnker($team, $this->recipeId, $ankerId);
+        }
+    }
+
     public function render(SalesRecipeService $verkauf)
     {
         $team = Auth::user()?->currentTeamRelation;
         $rezept = $team !== null && $this->recipeId !== null ? $verkauf->detail($team, $this->recipeId) : null;
+        $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
 
         return view('foodalchemist::livewire.verkauf.detail-panel', [
             'rezept' => $rezept,
             'cockpit' => $rezept !== null ? $verkauf->cockpit($rezept) : null,
+            // D-6 §5.x: Kern-Anker · Kohäsions-Score · Pairing-Section (lazy)
+            'kernAnker' => $rezept !== null ? $pairing->recipeAnkers($rezept->id) : collect(),
+            'kohaesion' => $rezept !== null && ($this->offen['anker'] ?? false) ? $pairing->recipeCohesion($rezept) : null,
+            'pairings' => $rezept !== null && ($this->offen['pairing'] ?? false) ? $pairing->recipePairings($rezept->id) : null,
+            'ankerKandidaten' => $this->ankerSuche !== ''
+                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_ankers')
+                    ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
+                    ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
+                : collect(),
         ]);
     }
 }
