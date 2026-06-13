@@ -35,7 +35,7 @@ status: E1–E5 abgeschlossen — Spec-Korpus VOLLSTÄNDIG; nächster Schritt = 
 | 11_UI_PATTERNS (P-1…P-8, aus 5 Ist-App-Referenz-Screens; gewinnt bei Widerspruch ggü. D-Spec-§4-UI) | ✅ | Post-Slice (2026-06-11) |
 | **12_ROADMAP (fein-granulare Arbeits-Pakete M0–M8 — DER Abarbeitungs-Fahrplan)** | ✅ lebt — **M0–M6 KOMPLETT ☑, M7 bis auf M7-09 (Martin-blockiert) ☑, M8 komplett ☑ (Stand 2026-06-12, Suite 365/365)**; Details + Belege in den Status-Notizen der Roadmap selbst | Post-Slice (2026-06-12) |
 | **14_ROADMAP_PHASE2 (M9+ Arbeits-Roadmap)** | ✅ lebt — **M9 KOMPLETT** (VK-Editor-Vollparität + UI-Runden, Suite 397/397) | 2026-06-12 |
-| **15_MASTERPLAN_VISION (Concepter→Vollausbau, M10–M16)** | ✅ lebt — **Concepter komplett** (M10/M10p/M10c, Begriff „Paket", person-unabh., Kategorie-Baum) + **M11 Foodbook Schema+Service** gebaut; Suite 423/423; §9 Feature-Katalog; offen M11-03 Editor-UI, dann M12+ | 2026-06-13 |
+| **15_MASTERPLAN_VISION (Concepter→Vollausbau, M10–M16)** | ✅ lebt — **Concepter komplett** + **M11 Foodbook komplett** (Editor/Concept-Zusammensteller, Jarvis-angeglichen, /foodbooks aktiv); Suite 427/427; §9 Feature-Katalog; offen nur extern blockiert (Snapshot/Schreibstil/PDF), nächster Schritt M12 Kalkulation | 2026-06-13 |
 
 **Stand der offenen Punkte (aktualisiert 2026-06-11 nach Code-Eingang):**
 1. ~~⚠D3 KI-Konvention~~ → **✅ aus platforms-core beantwortet**: zentraler `LLMProviderContract` + `core.semantic_layer` existieren; Gateway = Fassade, Hüllen-Hybrid (08/D3, GL-06 §6). **Restfragen an Martin:** Embedding-Support (kritisch für Matching-RAG!), Vision, Team-Rate-Limits.

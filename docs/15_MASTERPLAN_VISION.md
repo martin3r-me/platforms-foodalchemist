@@ -7,11 +7,13 @@
 > **M11+ (Domänen-Platzhalter)** von Doc 14 — sie waren bewusst „Zuschnitt mit Dominique
 > abstimmen“ / reine Brainstorming-Zeilen. Hier wird daraus eine sequenzierte, baubare
 > Landkarte mit Abhängigkeiten, Entscheidungs-Gates und „jetzt vs. später“.
-> **Stand:** 2026-06-13 · **Status (Suite 423/423):** Gates (§5) entschieden · **Concepter
-> KOMPLETT** (M10 + M10p + M10c; Begriff **„Paket"** statt Baustein; Concept person-unabhängig;
-> Kategorie-Baum; Allergen-Rollup) · **M11 Foodbook: Schema + Service GEBAUT** (Mappe mit Kunde+
-> Pax, Kapitel-Baum, Blöcke concept_ref/recipe_ref, rekursives Aggregat, Pax-Gesamtpreis F-12) —
-> **offen M11-03: 3-Panel-Editor-UI + Routes/Sidebar**, danach Snapshot/Schreibstil/PDF, dann M12+.
+> **Stand:** 2026-06-13 · **Status (Suite 427/427):** Gates (§5) entschieden · **Concepter
+> KOMPLETT** (M10/M10p/M10c; Begriff **„Paket"**; Concept person-unabhängig; Kategorie-Baum;
+> Allergen-Rollup) · **M11 Foodbook KOMPLETT** (Schema + Service + 3-Panel-Editor; an Jarvis
+> angeglichen: 8 Block-Typen, Header-Presets, Staffelpreise, Wahl-Gruppen; **Foodbook komponiert
+> Concepts, KEINE Einzel-Gerichte** — Concepter = Kern; Pax-Gesamtpreis F-12; Route /foodbooks +
+> Sidebar aktiv) · **offen (extern blockiert):** F-08 Versand-Snapshot, F-07 Schreibstil (LLM),
+> F-09 PDF (Engine) · **nächster Schritt M12 Kalkulation HK1/HK2**.
 
 > **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Inhalt heißt bei uns
 > **„Paket“** (Dominique: bessere Beschreibung als „Baustein“; im Konzeptpapier „Modul“ —
