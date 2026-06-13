@@ -322,3 +322,39 @@ Einstellungen pflegen"). Concept/Paket: aggregierte Sicht; editierbar auf Gerich
 | **M-K9** | Gemeinkosten-Blöcke Material-GK · Fertigungs-GK · Verwaltung/Vertrieb · Logistik (aus Fixkosten gespeist) — im Default-Schema. | ✓ |
 
 > Arbeitszeit-Schätzung (nicht-linear) bleibt KI (D-K2b). Foodbook-Anbindung separat.
+
+---
+
+## 11. Pivot: Standalone Kalkulations-Editor / Composer (Dominique 2026-06-13)
+
+> **Auslöser:** Der bisherige /kalkulation-Screen ist eine read-only Übersicht über
+> bestehende Gerichte/Concepts. Dominique will stattdessen einen **echten Editor**:
+> „einen Editor, wo ich Dinge hinzufügen und wegmachen kann, sodass ich am Ende eine
+> Kalkulation habe." **Concept-/Menü-Ebene, nicht ein einzelnes Gericht.** Daten ziehen
+> aus Gericht + Basisrezept (Wareneinsatz, Arbeitszeit), Sätze aus den Einstellungen.
+> **Standalone, OHNE Kopplung an den Concepter — erstmal nur eine Prüfung** (POC der Logik).
+> Vorbild: die Excel-„Module" (HK_Kap) = eine **Positionsliste** → Σ WE + Lohn + Lager/
+> Schwund/Logistik → HK → ×Marge → EK.
+
+### 11.1 Modell — eine **Kalkulation** = Positionsliste (Composer)
+- Eigenes, freistehendes Objekt (nicht der Concepter-Concept): `titel` + **Positionen** (add/remove).
+- **Positionstypen:**
+  - **Gericht-Referenz** → zieht Wareneinsatz (ek_total/Portion) + Arbeitszeit aus dem VK-Gericht
+    (das wiederum seine Basisrezepte/GP aggregiert, GL-02). Optional Menge/Faktor.
+  - **Freie Position** → ad-hoc Zeile (Label + €-Betrag ODER %-Aufschlag), zum „Dinge hinzufügen".
+  - *(später: Basisrezept-Ref, GP-Ref direkt.)*
+- **Sätze/Grunddaten aus den Einstellungen** (Stundensatz, Gemeinkosten-Blöcke MGK/FGK/
+  Verwaltung/Logistik, Marge) — automatisch auf die Positionssumme angewandt (mehrstufig wie §10),
+  je Kalkulation überschreib-/abschaltbar.
+- **Ergebnis:** HK1 = Σ Wareneinsatz der Positionen · HK2 = + Lohn + Gemeinkosten · VK-Vorschlag = ×Marge.
+
+### 11.2 Eigenschaften
+- **Standalone:** kein Foreign Key auf Concepter-Concept; eigener Screen/Tabelle. Später optional
+  koppelbar (ein Concepter-Concept könnte eine Kalkulation erzeugen), JETZT bewusst entkoppelt.
+- **Gespeichert** (damit die „Prüfung" erhalten bleibt + mehrere vergleichbar sind) — Gate D-K9.
+- Ersetzt die read-only /kalkulation-Übersicht NICHT zwingend — kann ein neuer „Kalkulator"-Screen sein.
+
+### 11.3 Offene Entscheidung — D-K9
+Gespeichertes Prüf-Dokument (eigene Tabelle, mehrere anlegen/vergleichen) **oder** ephemerer
+Rechner (nur Session, zum schnellen Testen)? Empfehlung: **gespeichert** (Bibliothek von
+Kalkulationen, später als Vorlage/Angebot nutzbar).
