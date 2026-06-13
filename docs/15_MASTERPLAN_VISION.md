@@ -11,8 +11,9 @@
 > KOMPLETT** (Begriff „Paket"; person-unabhängig; Kategorie-Baum; Allergen-Rollup) · **M11
 > Foodbook KOMPLETT** (3-Panel-Editor, Jarvis-angeglichen; komponiert Concepts, keine Gerichte;
 > /foodbooks) · **M12 Kalkulation KOMPLETT** (HK2-Zuschlagskalkulation HK1→HK2 + Vollkosten-DB,
-> Übersicht /kalkulation) · **offen extern:** Versand-Snapshot/Schreibstil(LLM)/PDF(Engine),
-> HK2 in den Cockpits (K-04), markStale-Wiring (K-07) · **nächster Schritt M13 Zielpreis-Konfigurator**.
+> Übersicht /kalkulation) · **M13 Zielpreis-Konfigurator KOMPLETT** (deterministischer Solver,
+> Modus im Concept-Editor; greift nur an Paket-Slots; KI-Vorschlag Z-03 offen=LLM) · **offen
+> extern:** Versand-Snapshot/Schreibstil(LLM)/PDF(Engine) · **nächster Schritt M14 Speiseplan**.
 
 > **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Inhalt heißt bei uns
 > **„Paket“** (Dominique: bessere Beschreibung als „Baustein“; im Konzeptpapier „Modul“ —
