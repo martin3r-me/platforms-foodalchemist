@@ -80,6 +80,7 @@ trait SeedsTeamHierarchy
         \Platform\FoodAlchemist\Models\FoodAlchemistPaket::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistConcept::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory::flushTeamAncestryCache();
+        \Platform\FoodAlchemist\Models\FoodAlchemistVocabKlasse::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::flushTeamAncestryCache();

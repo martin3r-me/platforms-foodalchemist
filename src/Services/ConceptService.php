@@ -626,27 +626,44 @@ class ConceptService
 
     /**
      * Flache, vorsortierte Kategorie-Liste mit Tiefe (Pre-Order) — die UI rendert
-     * daraus Baum (Einrückung) und Select.
+     * daraus Baum (Einrückung) und Select. Enthält `ancestors` + `has_children`
+     * für <x-foodalchemist::tree>.
      *
-     * @return list<array{id:int, name:string, parent_id:?int, depth:int, label:string}>
+     * @return list<array{id:int, name:string, parent_id:?int, depth:int, label:string, ancestors:list<int>, has_children:bool}>
      */
     public function categoriesFlat(Team $team): array
     {
         $alle = FoodAlchemistConceptCategory::visibleToTeam($team)
             ->orderBy('position')->orderBy('name')->get(['id', 'name', 'parent_id']);
+
+        return $this->flacherBaum($alle);
+    }
+
+    /**
+     * Pre-Order-Walk über eine Baum-Sammlung (Items mit id/name/parent_id) → flache Liste
+     * mit Tiefe, Vorfahren-Kette und Kinder-Flag. Eingabe-Format für <x-foodalchemist::tree>.
+     *
+     * @param  Collection<int, object>  $alle
+     * @return list<array{id:int, name:string, parent_id:?int, depth:int, label:string, ancestors:list<int>, has_children:bool}>
+     */
+    private function flacherBaum(Collection $alle): array
+    {
         $byParent = $alle->groupBy(fn ($c) => $c->parent_id ?? 0);
         $out = [];
-        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$out) {
+        $walk = function ($parentId, int $depth, array $ancestors) use (&$walk, $byParent, &$out) {
             foreach ($byParent[$parentId] ?? [] as $c) {
+                $id = (int) $c->id;
                 $out[] = [
-                    'id' => (int) $c->id, 'name' => $c->name,
+                    'id' => $id, 'name' => $c->name,
                     'parent_id' => $c->parent_id !== null ? (int) $c->parent_id : null,
                     'depth' => $depth, 'label' => str_repeat('— ', $depth) . $c->name,
+                    'ancestors' => $ancestors,
+                    'has_children' => isset($byParent[$id]),
                 ];
-                $walk((int) $c->id, $depth + 1);
+                $walk($id, $depth + 1, [...$ancestors, $id]);
             }
         };
-        $walk(0, 0);
+        $walk(0, 0, []);
 
         return $out;
     }
@@ -708,12 +725,83 @@ class ConceptService
         });
     }
 
+    // ── Klassen (Baum, §10.3) ──────────────────────────────────────────────
+
+    /**
+     * Flache, vorsortierte Klasse-Liste (Baum) — wie categoriesFlat, über das
+     * Klasse-Vokabular. `concepts.klasse` referenziert per Name-String (frei wählbar).
+     *
+     * @return list<array{id:int, name:string, parent_id:?int, depth:int, label:string, ancestors:list<int>, has_children:bool}>
+     */
+    public function klassenFlat(Team $team): array
+    {
+        $alle = FoodAlchemistVocabKlasse::visibleToTeam($team)
+            ->where('is_inactive', false)
+            ->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'parent_id']);
+
+        return $this->flacherBaum($alle);
+    }
+
+    public function createKlasse(Team $team, string $name, ?int $parentId = null): FoodAlchemistVocabKlasse
+    {
+        $name = trim($name);
+        $name = $name !== '' ? $name : 'Neue Klasse';
+
+        // Slug team-eindeutig (vocab_klassen.unique[team_id, slug]) — bei Kollision suffixen.
+        $basis = \Illuminate\Support\Str::slug($name) ?: 'klasse';
+        $slug = $basis;
+        $i = 2;
+        while (FoodAlchemistVocabKlasse::where('team_id', $team->id)->where('slug', $slug)->exists()) {
+            $slug = $basis.'-'.$i++;
+        }
+
+        $maxSort = FoodAlchemistVocabKlasse::where('team_id', $team->id)
+            ->when($parentId, fn ($q, $p) => $q->where('parent_id', $p), fn ($q) => $q->whereNull('parent_id'))
+            ->max('sort_order');
+
+        return FoodAlchemistVocabKlasse::create([
+            'team_id' => $team->id,
+            'name' => $name,
+            'slug' => $slug,
+            'parent_id' => $parentId ?: null,
+            'sort_order' => (int) $maxSort + 1,
+        ]);
+    }
+
+    public function renameKlasse(Team $team, int $id, string $name): void
+    {
+        $k = FoodAlchemistVocabKlasse::visibleToTeam($team)->findOrFail($id);
+        $this->guardOwnerKlasse($k, $team);
+        $name = trim($name);
+        if ($name !== '') {
+            $k->update(['name' => $name]);
+        }
+    }
+
+    /** Löschen: Kinder an den Eltern hängen, dann löschen. `concepts.klasse` (String) bleibt unberührt. */
+    public function deleteKlasse(Team $team, int $id): void
+    {
+        $k = FoodAlchemistVocabKlasse::visibleToTeam($team)->findOrFail($id);
+        $this->guardOwnerKlasse($k, $team);
+        DB::transaction(function () use ($k) {
+            FoodAlchemistVocabKlasse::where('parent_id', $k->id)->update(['parent_id' => $k->parent_id]);
+            $k->delete();
+        });
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     private function guardOwnerCategory(FoodAlchemistConceptCategory $cat, Team $team): void
     {
         if (! $cat->isOwnedBy($team)) {
             throw new \RuntimeException('Geerbte Kategorie — Pflege nur durchs Besitzer-Team (D1).');
+        }
+    }
+
+    private function guardOwnerKlasse(FoodAlchemistVocabKlasse $klasse, Team $team): void
+    {
+        if (! $klasse->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbte Klasse — Pflege nur durchs Besitzer-Team (D1).');
         }
     }
 

@@ -22,6 +22,7 @@ class Index extends Component
         'einheiten' => ['label' => 'Einheiten', 'hint' => 'Gramm-/ml-Defaults, Stück-Gewichte (GL-02/GL-11)'],
         'warengruppen' => ['label' => 'Warengruppen & Sub-Kategorien', 'hint' => '§3-Codes fix · Sub-Kategorien-Housekeeping'],
         'taxonomie' => ['label' => 'Rezept-Taxonomie', 'hint' => 'Hauptgruppen + Kategorien (M4-Browser-Bäume)'],
+        'konzept-taxonomie' => ['label' => 'Konzept-Taxonomie', 'hint' => 'Kategorie- + Klasse-Baum über den Concepts (Filter-Achse, Foodbook-Picker)'],
         'einkauf' => ['label' => 'Einkauf & Lead-LA', 'hint' => 'Lead-Strategie (V-27) · Stamm-Lieferanten-Matrix'],
         'kalkulation' => ['label' => 'Kalkulation', 'hint' => 'Garverlust-, MwSt-Defaults, Rundung (GL-02)'],
         'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Mandanten-Tendenz für den Generator (M7-07, Hooks gewinnen)'],
