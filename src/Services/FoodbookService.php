@@ -3,11 +3,14 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
 /**
  * M11-02 / Doc 15 §9.3 + D-8: Foodbook-Service — Mappe + Kapitel-BAUM + Blöcke.
@@ -179,14 +182,17 @@ class FoodbookService
 
     // ── Blöcke ────────────────────────────────────────────────────────────────
 
+    /** Block-Typen (Jarvis-Parität, FoodbookBlockList). */
+    public const BLOCK_TYPES = ['concept_ref', 'recipe_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text', 'image'];
+
     private const BLOCK_FELDER = ['type', 'ebene', 'sichtbar', 'bezeichnung', 'kundentext', 'interne_bemerkung',
-        'variant_group_id', 'concept_id', 'vk_recipe_id', 'menge', 'einheit_vocab_id', 'preis_wert', 'preis_basis', 'hoehe'];
+        'variant_group_id', 'concept_id', 'vk_recipe_id', 'menge', 'einheit_vocab_id', 'preis_wert', 'preis_basis', 'hoehe', 'header_quelle', 'payload_json'];
 
     public function addBlock(Team $team, int $kapitelId, array $in): FoodAlchemistFoodbookBlock
     {
         $k = $this->ownedKapitel($team, $kapitelId);
         $daten = array_intersect_key($in, array_flip(self::BLOCK_FELDER));
-        $daten['type'] = in_array($in['type'] ?? '', ['concept_ref', 'recipe_ref', 'header', 'text', 'spacer', 'image'], true) ? $in['type'] : 'text';
+        $daten['type'] = in_array($in['type'] ?? '', self::BLOCK_TYPES, true) ? $in['type'] : 'text';
         $daten['team_id'] = $k->team_id;
         $daten['position'] = (int) $k->blocks()->max('position') + 1;
 
@@ -217,54 +223,161 @@ class FoodbookService
         });
     }
 
+    /** Wahl-Gruppe „A|B|C": nächste freie Gruppen-ID im Kapitel. */
+    public function nextVariantGroupId(Team $team, int $kapitelId): int
+    {
+        $this->ownedKapitel($team, $kapitelId);
+
+        return (int) FoodAlchemistFoodbookBlock::where('kapitel_id', $kapitelId)->max('variant_group_id') + 1;
+    }
+
+    /** @param list<int> $blockIds */
+    public function setVariantGroup(Team $team, array $blockIds, ?int $groupId): void
+    {
+        foreach ($blockIds as $id) {
+            $block = $this->ownedBlock($team, (int) $id);
+            $block->update(['variant_group_id' => $groupId]);
+        }
+    }
+
+    /**
+     * Staffelpreise eines header_frei_preis-Blocks setzen (Vollersatz).
+     *
+     * @param  array<int, array{min_personen:int, preis:float}>  $rows
+     */
+    public function setStaffel(Team $team, int $blockId, array $rows): void
+    {
+        $block = $this->ownedBlock($team, $blockId);
+        DB::transaction(function () use ($block, $rows) {
+            $block->staffel()->forceDelete();
+            $i = 0;
+            foreach ($rows as $row) {
+                $block->staffel()->create([
+                    'team_id' => $block->team_id,
+                    'min_personen' => max(1, (int) ($row['min_personen'] ?? 1)),
+                    'preis' => (float) ($row['preis'] ?? 0),
+                    'position' => $i++,
+                ]);
+            }
+        });
+    }
+
+    /**
+     * Header-Presets für den „+ Inhalt"-Picker (Jarvis-Parität).
+     *
+     * @return array<string, list<array{slug:string, label:string, type:string, preis_basis?:string, sichtbar?:bool}>>
+     */
+    public static function headerPresets(): array
+    {
+        $gang = fn ($slug, $label) => ['slug' => "gang.$slug", 'label' => $label, 'type' => 'header_neutral'];
+        $zeit = fn ($slug, $label) => ['slug' => "zeit.$slug", 'label' => $label, 'type' => 'header_neutral'];
+
+        return [
+            'Gänge / Service' => [
+                $gang('get_together', 'Get-together'), $gang('aperitif', 'Aperitif'), $gang('flying', 'Flying'),
+                $gang('vorspeisen', 'Vorspeisen'), $gang('suppen', 'Suppen'), $gang('zwischengang', 'Zwischengang'),
+                $gang('hauptgang', 'Hauptgang'), $gang('beilagen', 'Beilagen'), $gang('dessert', 'Dessert'),
+                $gang('kaese', 'Käse'), $gang('buffet', 'Buffet'), $gang('fingerfood', 'Fingerfood'),
+                $gang('snacks', 'Snacks'), $gang('late_night', 'Late Night'), $gang('getraenke', 'Getränke'),
+                $gang('kaffee_tee', 'Kaffee & Tee'),
+            ],
+            'Tageszeit' => [
+                $zeit('breakfast', 'Breakfast'), $zeit('brunch', 'Brunch'), $zeit('lunch', 'Lunch'),
+                $zeit('coffee_break', 'Coffee Break'), $zeit('dinner', 'Dinner'), $zeit('after_work', 'After Work'),
+            ],
+            'Konzept / Format (+ Preis)' => [
+                ['slug' => 'format.menue_paket', 'label' => 'Menü-Paket', 'type' => 'header_frei_preis', 'preis_basis' => 'person'],
+                ['slug' => 'format.buffet_paket', 'label' => 'Buffet-Paket', 'type' => 'header_frei_preis', 'preis_basis' => 'person'],
+                ['slug' => 'format.flat_rate', 'label' => 'Flat-Rate', 'type' => 'header_frei_preis', 'preis_basis' => 'pauschal'],
+                ['slug' => 'format.staffelpreis_block', 'label' => 'Staffelpreis-Block', 'type' => 'header_frei_preis', 'preis_basis' => 'staffel'],
+            ],
+            'Intern (nicht sichtbar)' => [
+                ['slug' => 'intern.kalkulation', 'label' => 'Interne Kalkulation', 'type' => 'header_neutral', 'sichtbar' => false],
+                ['slug' => 'intern.personal', 'label' => 'Personal', 'type' => 'header_neutral', 'sichtbar' => false],
+                ['slug' => 'intern.logistik', 'label' => 'Logistik', 'type' => 'header_neutral', 'sichtbar' => false],
+                ['slug' => 'intern.equipment', 'label' => 'Equipment', 'type' => 'header_neutral', 'sichtbar' => false],
+                ['slug' => 'intern.bemerkungen', 'label' => 'Bemerkungen', 'type' => 'header_neutral', 'sichtbar' => false],
+            ],
+        ];
+    }
+
     // ── Aggregat / Preis (M11 Cockpit) ──────────────────────────────────────────
 
     /**
-     * Per-Person-Preis eines Blocks: concept_ref = Concept-€/Person (person-unabhängig),
-     * recipe_ref = vk_netto × Menge, sonst 0.
+     * Preis-Beitrag eines Blocks (Jarvis-Parität): liefert Per-Person-Anteil (vk/ek)
+     * UND einen Pauschal-Anteil (flach, nicht ×Pax).
+     *  - recipe_ref  → vk/ek = vk_netto/ek_total × Menge (Per-Person)
+     *  - concept_ref → Concept-€/Person (person-unabhängig)
+     *  - header_frei_preis: person→Per-Person · staffel→Per-Person (nach Pax aufgelöst) · pauschal→flach
      *
-     * @return array{vk: float, ek: float}
+     * @return array{vk_pp: float, ek_pp: float, pauschal: float}
      */
-    public function blockPreis(FoodAlchemistFoodbookBlock $block): array
+    public function blockPreis(FoodAlchemistFoodbookBlock $block, ?int $pax = null): array
     {
         if ($block->type === 'concept_ref' && $block->concept) {
             $cockpit = $this->concepts->preisCockpit($block->concept);
 
-            return ['vk' => (float) $cockpit['preis_pro_person'], 'ek' => (float) $cockpit['ek_pro_person']];
+            return ['vk_pp' => (float) $cockpit['preis_pro_person'], 'ek_pp' => (float) $cockpit['ek_pro_person'], 'pauschal' => 0.0];
         }
         if ($block->type === 'recipe_ref' && $block->gericht) {
             $faktor = $block->menge !== null ? (float) $block->menge : 1.0;
 
-            return ['vk' => round((float) ($block->gericht->vk_netto ?? 0) * $faktor, 2),
-                'ek' => round((float) ($block->gericht->ek_total_eur ?? 0) * $faktor, 2)];
+            return ['vk_pp' => round((float) ($block->gericht->vk_netto ?? 0) * $faktor, 2),
+                'ek_pp' => round((float) ($block->gericht->ek_total_eur ?? 0) * $faktor, 2), 'pauschal' => 0.0];
+        }
+        if ($block->type === 'header_frei_preis') {
+            return match ($block->preis_basis) {
+                'pauschal' => ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => (float) ($block->preis_wert ?? 0)],
+                'staffel' => ['vk_pp' => $this->resolveStaffel($block, $pax), 'ek_pp' => 0.0, 'pauschal' => 0.0],
+                default => ['vk_pp' => (float) ($block->preis_wert ?? 0), 'ek_pp' => 0.0, 'pauschal' => 0.0], // person
+            };
         }
 
-        return ['vk' => 0.0, 'ek' => 0.0];
+        return ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => 0.0];
+    }
+
+    /** Staffel-Auflösung: höchste Stufe mit min_personen ≤ Pax (ohne Pax die niedrigste). */
+    public function resolveStaffel(FoodAlchemistFoodbookBlock $block, ?int $pax): float
+    {
+        $stufen = $block->relationLoaded('staffel') ? $block->staffel : $block->staffel()->get();
+        if ($stufen->isEmpty()) {
+            return 0.0;
+        }
+        if ($pax === null) {
+            return (float) $stufen->sortBy('min_personen')->first()->preis;
+        }
+        $treffer = $stufen->where('min_personen', '<=', $pax)->sortByDesc('min_personen')->first();
+
+        return (float) ($treffer?->preis ?? $stufen->sortBy('min_personen')->first()->preis);
     }
 
     /**
-     * Rekursives Kapitel-Aggregat (Per-Person): sichtbare Blöcke + Unterkapitel.
-     * Manuell gesetzter `preis_pro_person` übersteuert die VK-Summe (EK bleibt gerechnet).
+     * Rekursives Kapitel-Aggregat: sichtbare Blöcke + Unterkapitel. Per-Person (vk/ek)
+     * getrennt vom Pauschal-Anteil. Manuell gesetzter `preis_pro_person` übersteuert
+     * die Per-Person-VK-Summe (EK + Pauschal bleiben gerechnet).
      *
-     * @return array{vk_pro_person: float, ek_pro_person: float, wareneinsatz_prozent: ?float}
+     * @return array{vk_pro_person: float, ek_pro_person: float, pauschal: float, wareneinsatz_prozent: ?float}
      */
-    public function kapitelAggregat(Team $team, FoodAlchemistFoodbookKapitel $kapitel): array
+    public function kapitelAggregat(Team $team, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null): array
     {
         $kapitel->loadMissing(['blocks' => fn ($q) => $q->where('sichtbar', true),
             'blocks.concept:id,name,preis_pro_person_cache', 'blocks.gericht:id,vk_netto,ek_total_eur',
-            'children']);
+            'blocks.staffel', 'children']);
 
         $vk = 0.0;
         $ek = 0.0;
+        $pauschal = 0.0;
         foreach ($kapitel->blocks as $block) {
-            $p = $this->blockPreis($block);
-            $vk += $p['vk'];
-            $ek += $p['ek'];
+            $p = $this->blockPreis($block, $pax);
+            $vk += $p['vk_pp'];
+            $ek += $p['ek_pp'];
+            $pauschal += $p['pauschal'];
         }
         foreach ($kapitel->children as $kind) {
-            $kindAgg = $this->kapitelAggregat($team, $kind);
+            $kindAgg = $this->kapitelAggregat($team, $kind, $pax);
             $vk += $kindAgg['vk_pro_person'];
             $ek += $kindAgg['ek_pro_person'];
+            $pauschal += $kindAgg['pauschal'];
         }
 
         if ($kapitel->preis_modus === 'manuell' && $kapitel->preis_pro_person !== null) {
@@ -274,34 +387,56 @@ class FoodbookService
         return [
             'vk_pro_person' => round($vk, 2),
             'ek_pro_person' => round($ek, 2),
+            'pauschal' => round($pauschal, 2),
             'wareneinsatz_prozent' => $vk > 0 ? round($ek / $vk * 100, 1) : null,
         ];
     }
 
     /**
-     * Foodbook-Gesamt: Σ Top-Kapitel (Per-Person) × Pax. Erst HIER wird die
-     * Gästezahl bindend (F-12).
+     * Foodbook-Gesamt: (Σ Top-Kapitel Per-Person × Pax) + Pauschal-Anteile. Erst HIER
+     * wird die Gästezahl bindend (F-12, D-CON-5).
      *
-     * @return array{vk_pro_person: float, ek_pro_person: float, personen: ?int, gesamt_vk: ?float, gesamt_ek: ?float}
+     * @return array{vk_pro_person: float, ek_pro_person: float, pauschal: float, personen: ?int, gesamt_vk: ?float, gesamt_ek: ?float}
      */
     public function gesamt(Team $team, FoodAlchemistFoodbook $fb): array
     {
+        $pax = $fb->personen;
         $vk = 0.0;
         $ek = 0.0;
+        $pauschal = 0.0;
         foreach ($fb->kapitel()->whereNull('parent_id')->get() as $top) {
-            $agg = $this->kapitelAggregat($team, $top);
+            $agg = $this->kapitelAggregat($team, $top, $pax);
             $vk += $agg['vk_pro_person'];
             $ek += $agg['ek_pro_person'];
+            $pauschal += $agg['pauschal'];
         }
-        $pax = $fb->personen;
 
         return [
             'vk_pro_person' => round($vk, 2),
             'ek_pro_person' => round($ek, 2),
+            'pauschal' => round($pauschal, 2),
             'personen' => $pax,
-            'gesamt_vk' => $pax !== null ? round($vk * $pax, 2) : null,
+            'gesamt_vk' => $pax !== null ? round($vk * $pax + $pauschal, 2) : null,
             'gesamt_ek' => $pax !== null ? round($ek * $pax, 2) : null,
         ];
+    }
+
+    // ── Picker (für den Editor) ─────────────────────────────────────────────
+
+    /** Concepts (echte, keine Vorlagen) für den concept_ref-Picker. */
+    public function conceptKandidaten(Team $team, string $suche, int $limit = 20): Collection
+    {
+        return FoodAlchemistConcept::visibleToTeam($team)->echte()
+            ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'preis_pro_person_cache']);
+    }
+
+    /** Einzelne Gerichte (VK-Rezepte) für den recipe_ref-Picker. */
+    public function gerichtKandidaten(Team $team, string $suche, int $limit = 20): Collection
+    {
+        return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
+            ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'vk_netto']);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

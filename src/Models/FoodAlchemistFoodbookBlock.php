@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
@@ -54,5 +55,11 @@ class FoodAlchemistFoodbookBlock extends Model
     public function einheit(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
+    }
+
+    /** Staffelpreise (nur bei preis_basis='staffel'). */
+    public function staffel(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistFoodbookBlockStaffel::class, 'block_id')->orderBy('min_personen');
     }
 }

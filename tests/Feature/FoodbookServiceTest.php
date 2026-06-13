@@ -72,3 +72,39 @@ it('M11-02: Owner-Guard — Kind-Team kann geerbtes Foodbook nicht pflegen (D1)'
         ->and(fn () => $this->foodbooks->addKapitel($this->childA, $fb->id, ['titel' => 'X']))
         ->toThrow(\RuntimeException::class);
 });
+
+it('M11 Jarvis: header_frei_preis person/pauschal/staffel im Gesamtpreis (Pax-aufgelöst)', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'Buffet-Angebot', 'personen' => 100]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Pakete']);
+
+    // Person: 38 €/P
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'preis_basis' => 'person', 'preis_wert' => 38, 'bezeichnung' => 'Menü-Paket']);
+    // Pauschal: 200 € flach
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'preis_basis' => 'pauschal', 'preis_wert' => 200, 'bezeichnung' => 'Servicepauschale']);
+    // Staffel: ab 50 = 36, ab 100 = 32 → bei 100 Pax = 32
+    $staffelBlock = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'preis_basis' => 'staffel', 'bezeichnung' => 'Staffel']);
+    $this->foodbooks->setStaffel($this->rootTeam, $staffelBlock->id, [
+        ['min_personen' => 50, 'preis' => 36], ['min_personen' => 100, 'preis' => 32],
+    ]);
+
+    $agg = $this->foodbooks->kapitelAggregat($this->rootTeam, $kap->refresh(), 100);
+    expect($agg['vk_pro_person'])->toBe(70.00)                       // 38 (person) + 32 (staffel@100)
+        ->and($agg['pauschal'])->toBe(200.00);
+
+    $gesamt = $this->foodbooks->gesamt($this->rootTeam, $fb->refresh());
+    expect($gesamt['vk_pro_person'])->toBe(70.00)
+        ->and($gesamt['gesamt_vk'])->toBe(7200.00);                  // 70 × 100 + 200 pauschal
+});
+
+it('M11 Jarvis: Wahl-Gruppe (A|B|C) über Blöcke setzen', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB']);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Hauptgang']);
+    $a = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'vk_recipe_id' => $this->gericht->id]);
+    $b = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'vk_recipe_id' => $this->gericht->id]);
+
+    $gid = $this->foodbooks->nextVariantGroupId($this->rootTeam, $kap->id);
+    $this->foodbooks->setVariantGroup($this->rootTeam, [$a->id, $b->id], $gid);
+
+    expect($a->refresh()->variant_group_id)->toBe($gid)
+        ->and($b->refresh()->variant_group_id)->toBe($gid);
+});
