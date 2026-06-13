@@ -29,7 +29,6 @@ class FoodAlchemistConcept extends Model
     protected $casts = [
         'uuid' => 'string',
         'is_vorlage' => 'boolean',
-        'personen' => 'integer',
         'preis_pro_person_cache' => 'decimal:2',
     ];
 
@@ -52,5 +51,11 @@ class FoodAlchemistConcept extends Model
     public function vorlageQuelle(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistConcept::class, 'vorlage_quelle_id');
+    }
+
+    /** Organisatorische Kategorie (M10c-B, Baum). */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistConceptCategory::class, 'category_id');
     }
 }

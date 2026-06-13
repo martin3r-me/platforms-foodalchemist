@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistBaustein;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 
 /**
@@ -37,6 +38,9 @@ class ConceptService
                     ->orWhereRaw('LOWER(COALESCE(anlass, \'\')) LIKE ?', [$s]));
             })
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
+            ->when(($filters['category'] ?? null) === 'none', fn ($q) => $q->whereNull('category_id'))
+            ->when(is_numeric($filters['category'] ?? null), fn ($q) => $q
+                ->whereIn('category_id', $this->descendantIds($team, (int) $filters['category'])))
             ->orderBy('name')
             ->paginate($perPage);
     }
@@ -66,13 +70,17 @@ class ConceptService
         ]);
     }
 
-    private const FELDER = ['name', 'anlass', 'niveau', 'personen', 'status', 'beschreibung', 'note'];
+    private const FELDER = ['name', 'anlass', 'niveau', 'category_id', 'status', 'beschreibung', 'note'];
 
     public function update(Team $team, int $id, array $in): FoodAlchemistConcept
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
         $this->guardOwner($concept, $team);
-        $concept->update(array_intersect_key($in, array_flip(self::FELDER)));
+        $update = array_intersect_key($in, array_flip(self::FELDER));
+        if (array_key_exists('category_id', $update) && ($update['category_id'] === '' || (int) $update['category_id'] === 0)) {
+            $update['category_id'] = null;
+        }
+        $concept->update($update);
 
         return $concept->refresh();
     }
@@ -217,30 +225,25 @@ class ConceptService
             $ekTotal += $ek;
         }
 
-        $personen = $concept->personen;
-
         return [
             'zeilen' => $zeilen,
             'preis_pro_person' => round($vkTotal, 2),
             'ek_pro_person' => round($ekTotal, 2),
-            'personen' => $personen,
-            'gesamt_preis' => $personen !== null ? round($vkTotal * $personen, 2) : null,
-            'gesamt_ek' => $personen !== null ? round($ekTotal * $personen, 2) : null,
             'hat_stale' => $hatStale,
             'hat_leer' => $hatLeer,
         ];
     }
 
     /**
-     * C-08: Mengen-Hochrechnung für N Personen — je Gericht (aus den Bausteinen +
-     * fest gesetzte Gerichte) `menge` pro Person × Personen. Grundlage für die
-     * spätere Produktionsplanung (M16). `menge` = Menge pro Person in der Einheit.
+     * Mengen-Hochrechnung für eine GEGEBENE Pax-Zahl — je Gericht (aus den
+     * Bausteinen + fest gesetzte Gerichte) `menge` pro Person × Pax. Das Concept
+     * ist person-UNABHÄNGIG (D-CON-5) — die Pax kommt vom Aufruf (Foodbook/Angebot,
+     * M11), nicht vom Concept. `menge` = Menge pro Person in der Einheit.
      *
      * @return list<array{rolle:?string, baustein:?string, gericht:string, menge_pro_person:?float, einheit:?string, gesamt_menge:?float}>
      */
-    public function mengenHochrechnung(FoodAlchemistConcept $concept): array
+    public function mengenHochrechnung(FoodAlchemistConcept $concept, ?int $personen = null): array
     {
-        $personen = $concept->personen;
         $concept->loadMissing([
             'slots' => fn ($q) => $q->orderBy('position'),
             'slots.baustein.gerichte.gericht:id,name',
@@ -364,7 +367,100 @@ class ConceptService
         return $vorlage->refresh();
     }
 
+    // ── M10c-B: Kategorien (Baum) ──────────────────────────────────────────
+
+    /**
+     * Flache, vorsortierte Kategorie-Liste mit Tiefe (Pre-Order) — die UI rendert
+     * daraus Baum (Einrückung) und Select.
+     *
+     * @return list<array{id:int, name:string, parent_id:?int, depth:int, label:string}>
+     */
+    public function categoriesFlat(Team $team): array
+    {
+        $alle = FoodAlchemistConceptCategory::visibleToTeam($team)
+            ->orderBy('position')->orderBy('name')->get(['id', 'name', 'parent_id']);
+        $byParent = $alle->groupBy(fn ($c) => $c->parent_id ?? 0);
+        $out = [];
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$out) {
+            foreach ($byParent[$parentId] ?? [] as $c) {
+                $out[] = [
+                    'id' => (int) $c->id, 'name' => $c->name,
+                    'parent_id' => $c->parent_id !== null ? (int) $c->parent_id : null,
+                    'depth' => $depth, 'label' => str_repeat('— ', $depth) . $c->name,
+                ];
+                $walk((int) $c->id, $depth + 1);
+            }
+        };
+        $walk(0, 0);
+
+        return $out;
+    }
+
+    /** Kategorie-ID + alle Nachfahren (Filter inkl. Untergruppen). @return list<int> */
+    public function descendantIds(Team $team, int $categoryId): array
+    {
+        $kinder = [];
+        foreach ($this->categoriesFlat($team) as $row) {
+            $kinder[$row['parent_id'] ?? 0][] = $row['id'];
+        }
+        $ids = [];
+        $stack = [$categoryId];
+        while ($stack) {
+            $id = array_pop($stack);
+            $ids[] = $id;
+            foreach ($kinder[$id] ?? [] as $kid) {
+                $stack[] = $kid;
+            }
+        }
+
+        return $ids;
+    }
+
+    public function createCategory(Team $team, string $name, ?int $parentId = null): FoodAlchemistConceptCategory
+    {
+        $name = trim($name);
+        $maxPos = FoodAlchemistConceptCategory::where('team_id', $team->id)
+            ->when($parentId, fn ($q, $p) => $q->where('parent_id', $p), fn ($q) => $q->whereNull('parent_id'))
+            ->max('position');
+
+        return FoodAlchemistConceptCategory::create([
+            'team_id' => $team->id,
+            'name' => $name !== '' ? $name : 'Neue Kategorie',
+            'parent_id' => $parentId ?: null,
+            'position' => (int) $maxPos + 1,
+        ]);
+    }
+
+    public function renameCategory(Team $team, int $id, string $name): void
+    {
+        $cat = FoodAlchemistConceptCategory::visibleToTeam($team)->findOrFail($id);
+        $this->guardOwnerCategory($cat, $team);
+        $name = trim($name);
+        if ($name !== '') {
+            $cat->update(['name' => $name]);
+        }
+    }
+
+    /** Löschen: Kinder + zugeordnete Concepts an den Eltern hängen, dann löschen. */
+    public function deleteCategory(Team $team, int $id): void
+    {
+        $cat = FoodAlchemistConceptCategory::visibleToTeam($team)->findOrFail($id);
+        $this->guardOwnerCategory($cat, $team);
+        DB::transaction(function () use ($cat) {
+            FoodAlchemistConceptCategory::where('parent_id', $cat->id)->update(['parent_id' => $cat->parent_id]);
+            FoodAlchemistConcept::where('category_id', $cat->id)->update(['category_id' => $cat->parent_id]);
+            $cat->delete();
+        });
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    private function guardOwnerCategory(FoodAlchemistConceptCategory $cat, Team $team): void
+    {
+        if (! $cat->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbte Kategorie — Pflege nur durchs Besitzer-Team (D1).');
+        }
+    }
 
     private function ownedSlot(Team $team, int $slotId): FoodAlchemistConceptSlot
     {

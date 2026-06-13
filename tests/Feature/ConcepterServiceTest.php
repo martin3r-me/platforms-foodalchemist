@@ -137,25 +137,49 @@ it('Owner-Guard: Kind-Team kann geerbten Baustein/Concept nicht pflegen (D1)', f
         ->toThrow(\RuntimeException::class);
 });
 
-it('M10p C-08: Personenzahl → Gesamtpreis ×N + Mengen-Hochrechnung', function () {
+it('M10c-A: Concept ist person-unabhängig — Pax kommt erst beim Aufruf der Hochrechnung', function () {
     $b = $this->bausteine->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
     $this->bausteine->update($this->rootTeam, $b->id, ['preis_pro_person' => 4.50, 'ek_pro_person' => 1.41]);
     $this->bausteine->syncGerichte($this->rootTeam, $b->id, [['vk_recipe_id' => $this->green->id, 'menge' => 120]]); // 120 g/Person
 
     $c = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
-    $this->concepts->update($this->rootTeam, $c->id, ['personen' => 80]);
     $slot = $this->concepts->addSlot($this->rootTeam, $c->id, ['rolle' => 'Vorspeise']);
     $this->concepts->fillSlot($this->rootTeam, $slot->id, ['baustein_id' => $b->id]);
 
+    // Cockpit kennt KEINE Pax mehr (person-unabhängig) — nur €/Person
     $cockpit = $this->concepts->preisCockpit($c->refresh());
     expect($cockpit['preis_pro_person'])->toBe(4.50)
-        ->and($cockpit['personen'])->toBe(80)
-        ->and($cockpit['gesamt_preis'])->toBe(360.00);                // 4,50 × 80
+        ->and($cockpit)->not->toHaveKey('personen')
+        ->and($cockpit)->not->toHaveKey('gesamt_preis');
 
-    $hr = $this->concepts->mengenHochrechnung($c->refresh());
+    // Pax kommt vom Aufruf (Foodbook/Angebot, M11)
+    $hr = $this->concepts->mengenHochrechnung($c->refresh(), 80);
     expect($hr)->toHaveCount(1)
         ->and($hr[0]['menge_pro_person'])->toBe(120.0)
         ->and($hr[0]['gesamt_menge'])->toBe(9600.0);                  // 120 g × 80
+    // ohne Pax: keine Gesamtmenge
+    expect($this->concepts->mengenHochrechnung($c->refresh())[0]['gesamt_menge'])->toBeNull();
+});
+
+it('M10c-B: Kategorie-Baum — flat mit Tiefe, Nachfahren-Filter, Löschen rückt zum Eltern', function () {
+    $sommer = $this->concepts->createCategory($this->rootTeam, 'Sommer');
+    $grill = $this->concepts->createCategory($this->rootTeam, 'Grill-Linie', $sommer->id);
+
+    $flat = $this->concepts->categoriesFlat($this->rootTeam);
+    expect($flat)->toHaveCount(2)
+        ->and($flat[0]['name'])->toBe('Sommer')->and($flat[0]['depth'])->toBe(0)
+        ->and($flat[1]['name'])->toBe('Grill-Linie')->and($flat[1]['depth'])->toBe(1)
+        ->and($this->concepts->descendantIds($this->rootTeam, $sommer->id))->toContain($sommer->id)->toContain($grill->id);
+
+    // Concept in der Unterkategorie → Filter auf die OBERkategorie findet es (inkl. Nachfahren)
+    $c = $this->concepts->create($this->rootTeam, ['name' => 'Buffet']);
+    $this->concepts->update($this->rootTeam, $c->id, ['category_id' => $grill->id]);
+    expect($this->concepts->paginateBrowser(['category' => (string) $sommer->id], $this->rootTeam)->pluck('name')->all())->toBe(['Buffet']);
+
+    // Sommer löschen → Grill-Linie rückt auf parent null; Concept bleibt an Grill-Linie
+    $this->concepts->deleteCategory($this->rootTeam, $sommer->id);
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory::find($grill->id)->parent_id)->toBeNull()
+        ->and($c->refresh()->category_id)->toBe($grill->id);
 });
 
 it('M10p C-09: Allergen-/Diät-Rollup — all-Flags vs enthält-Flags, Konfidenz = schwächstes Glied', function () {

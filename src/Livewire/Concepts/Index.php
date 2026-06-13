@@ -28,7 +28,16 @@ class Index extends Component
     #[Url(as: 'c')]
     public ?int $selectedId = null;
 
-    public array $form = ['name' => '', 'anlass' => '', 'niveau' => '', 'personen' => null, 'status' => 'draft', 'beschreibung' => ''];
+    #[Url(as: 'kat')]
+    public string $categoryFilter = '';   // '' = alle · 'none' = ohne Kategorie · sonst Kategorie-ID
+
+    public string $neueKategorie = '';
+
+    public ?int $editKatId = null;
+
+    public string $editKatName = '';
+
+    public array $form = ['name' => '', 'anlass' => '', 'niveau' => '', 'category_id' => null, 'status' => 'draft', 'beschreibung' => ''];
 
     /** Pro Slot editierbare Rolle/Titel (keyed by slot-id). */
     public array $slotForm = [];
@@ -76,7 +85,7 @@ class Index extends Component
         $this->selectedId = $id;
         $this->form = [
             'name' => $c->name, 'anlass' => $c->anlass ?? '', 'niveau' => $c->niveau ?? '',
-            'personen' => $c->personen, 'status' => $c->status, 'beschreibung' => $c->beschreibung ?? '',
+            'category_id' => $c->category_id, 'status' => $c->status, 'beschreibung' => $c->beschreibung ?? '',
         ];
         $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '']])->all();
         $this->fillSlotId = null;
@@ -171,6 +180,47 @@ class Index extends Component
         $this->gerichtSuche = '';
     }
 
+    // ── M10c-B: Kategorien (Baum) ──────────────────────────────────────────
+
+    public function kategorieWaehlen(string $wert): void
+    {
+        $this->categoryFilter = $this->categoryFilter === $wert ? '' : $wert;
+        $this->resetPage();
+    }
+
+    public function kategorieNeu(ConceptService $svc): void
+    {
+        if (trim($this->neueKategorie) === '') {
+            return;
+        }
+        $parent = is_numeric($this->categoryFilter) ? (int) $this->categoryFilter : null;
+        $svc->createCategory($this->team(), $this->neueKategorie, $parent);
+        $this->neueKategorie = '';
+    }
+
+    public function kategorieEditStart(int $id, string $name): void
+    {
+        $this->editKatId = $id;
+        $this->editKatName = $name;
+    }
+
+    public function kategorieRename(ConceptService $svc): void
+    {
+        if ($this->editKatId !== null) {
+            $svc->renameCategory($this->team(), $this->editKatId, $this->editKatName);
+        }
+        $this->editKatId = null;
+        $this->editKatName = '';
+    }
+
+    public function kategorieLoeschen(int $id, ConceptService $svc): void
+    {
+        $svc->deleteCategory($this->team(), $id);
+        if ($this->categoryFilter === (string) $id) {
+            $this->categoryFilter = '';
+        }
+    }
+
     public function alsVorlage(ConceptService $svc): void
     {
         if ($this->selectedId !== null) {
@@ -197,11 +247,14 @@ class Index extends Component
             : collect();
 
         return view('foodalchemist::livewire.concepts.index', [
-            'concepts' => $svc->paginateBrowser(['search' => $this->search, 'vorlagen' => $this->showVorlagen], $team),
+            'concepts' => $svc->paginateBrowser([
+                'search' => $this->search, 'vorlagen' => $this->showVorlagen,
+                'category' => $this->categoryFilter !== '' ? $this->categoryFilter : null,
+            ], $team),
             'selected' => $selected,
             'cockpit' => $cockpit,
             'rollup' => $selected !== null ? $svc->allergenRollup($selected) : null,
-            'hochrechnung' => $selected !== null && $selected->personen !== null ? $svc->mengenHochrechnung($selected) : [],
+            'kategorienFlat' => $svc->categoriesFlat($team),
             'tauschbar' => $tauschbar,
             'kandidaten' => $kandidaten,
         ])->layout('platform::layouts.app');

@@ -5,6 +5,7 @@ use Platform\FoodAlchemist\Livewire\Bausteine\Index as BausteineIndex;
 use Platform\FoodAlchemist\Livewire\Concepts\Index as ConceptsIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistBaustein;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\BausteinService;
 use Platform\FoodAlchemist\Services\ConceptService;
@@ -89,27 +90,39 @@ it('Vorlage-Fork über die UI erzeugt ein eigenständiges Concept (M10-05)', fun
         ->and(FoodAlchemistConcept::echte()->first()->slots()->count())->toBe(1);
 });
 
-it('M10p: Personenzahl → Gesamtpreis im Cockpit, Slot-Reorder über die UI', function () {
+it('M10c: Concept-Editor zeigt €/Person (kein Pax), Slot-Reorder über die UI', function () {
     $b = app(BausteinService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
     app(BausteinService::class)->update($this->rootTeam, $b->id, ['preis_pro_person' => 4.50]);
     $c = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
 
     $comp = Livewire::test(ConceptsIndex::class)
         ->call('waehle', $c->id)
-        ->set('form.personen', 10)
-        ->call('speichern')
         ->set('neuerSlotRolle', 'Vorspeise')->call('slotHinzu')
         ->set('neuerSlotRolle', 'Dessert')->call('slotHinzu');
 
     $slots = $c->slots()->orderBy('position')->pluck('id')->all();
     $comp->call('fuelleBaustein', $slots[0], $b->id)
-        ->assertSee('45,00');                                         // 4,50 × 10 Personen
-
-    expect((int) $c->refresh()->personen)->toBe(10);
+        ->assertSee('4,50')                                           // €/Person, kein Gesamtpreis
+        ->assertSee('erst im Foodbook');
 
     // Slot-Reorder: zweiten Slot nach oben
     $comp->call('slotHoch', $slots[1]);
     expect($c->slots()->orderBy('position')->pluck('id')->first())->toBe($slots[1]);
+});
+
+it('M10c-B: Kategorie anlegen + Concept filtern (UI)', function () {
+    Livewire::test(ConceptsIndex::class)->set('neueKategorie', 'Sommer')->call('kategorieNeu');
+    $kat = FoodAlchemistConceptCategory::where('team_id', $this->rootTeam->id)->first();
+    expect($kat?->name)->toBe('Sommer');
+
+    $drin = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
+    app(ConceptService::class)->update($this->rootTeam, $drin->id, ['category_id' => $kat->id]);
+    app(ConceptService::class)->create($this->rootTeam, ['name' => 'Anderes Concept']);
+
+    Livewire::test(ConceptsIndex::class)
+        ->set('categoryFilter', (string) $kat->id)
+        ->assertSee('Grill-Buffet')
+        ->assertDontSee('Anderes Concept');
 });
 
 it('M10p: Baustein-Gericht Menge/Person setzen + ▲▼-Reorder', function () {

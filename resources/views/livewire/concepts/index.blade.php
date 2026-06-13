@@ -16,6 +16,32 @@
                     <button type="button" wire:click="$set('showVorlagen', true)"
                             class="{{ $pill }} {{ $showVorlagen ? $variantPill['primary'] : $variantPill['secondary'] }}">Vorlagen</button>
                 </div>
+
+                {{-- M10c-B: Kategorie-Baum (Filter + Pflege) --}}
+                @php($katAktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300')
+                @php($katHover = 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5')
+                <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                    <span class="{{ $label }}">Kategorien</span>
+                    <button type="button" wire:click="kategorieWaehlen('')" class="w-full text-left text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === '' ? $katAktiv : $katHover }}">Alle</button>
+                    <button type="button" wire:click="kategorieWaehlen('none')" class="w-full text-left text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === 'none' ? $katAktiv : $katHover }}">Ohne Kategorie</button>
+                    @foreach($kategorienFlat as $kat)
+                        <div wire:key="kat-{{ $kat['id'] }}" class="group flex items-center gap-1" style="padding-left: {{ $kat['depth'] * 12 }}px">
+                            @if($editKatId === $kat['id'])
+                                <input type="text" wire:model="editKatName" wire:keydown.enter="kategorieRename" wire:blur="kategorieRename" class="{{ $input }} py-0.5 flex-1" autofocus />
+                            @else
+                                <button type="button" wire:click="kategorieWaehlen('{{ $kat['id'] }}')" class="flex-1 min-w-0 text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === (string) $kat['id'] ? $katAktiv : $katHover }}">{{ $kat['name'] }}</button>
+                                <button type="button" wire:click="kategorieEditStart({{ $kat['id'] }}, @js($kat['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px]" title="umbenennen">✎</button>
+                                <button type="button" wire:click="kategorieLoeschen({{ $kat['id'] }})" wire:confirm="Kategorie löschen? (Untergruppen & Concepts rücken zum Eltern)" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-[11px]" title="löschen">✕</button>
+                            @endif
+                        </div>
+                    @endforeach
+                    <div class="flex gap-1 pt-1">
+                        <input type="text" wire:model="neueKategorie" wire:keydown.enter="kategorieNeu"
+                               placeholder="{{ is_numeric($categoryFilter) ? 'Unterkategorie …' : 'Neue Kategorie …' }}" class="{{ $input }} py-0.5" />
+                        <button type="button" wire:click="kategorieNeu" class="{{ $btnGhostXs }}" title="Kategorie anlegen">+</button>
+                    </div>
+                </div>
+
                 <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ {{ $showVorlagen ? 'Neue Vorlage' : 'Neues Concept' }}</button>
 
                 <div class="space-y-0.5 -mx-1 pt-1">
@@ -43,13 +69,9 @@
             @if($selected && $cockpit)
                 <div class="p-4 space-y-3">
                     <div class="text-center py-2">
-                        @if($cockpit['personen'])
-                            <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($cockpit['gesamt_preis'], 2, ',', '.') }} €</div>
-                            <div class="{{ $label }}">gesamt für {{ $cockpit['personen'] }} Pers. · {{ number_format($cockpit['preis_pro_person'], 2, ',', '.') }} €/Person</div>
-                        @else
-                            <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($cockpit['preis_pro_person'], 2, ',', '.') }} €</div>
-                            <div class="{{ $label }}">pro Person · EK {{ number_format($cockpit['ek_pro_person'], 2, ',', '.') }} €</div>
-                        @endif
+                        <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($cockpit['preis_pro_person'], 2, ',', '.') }} €</div>
+                        <div class="{{ $label }}">pro Person · EK {{ number_format($cockpit['ek_pro_person'], 2, ',', '.') }} €</div>
+                        <div class="text-[10px] text-gray-400 mt-1">Gästezahl &amp; Gesamtpreis erst im Foodbook/Angebot</div>
                     </div>
                     @if($cockpit['hat_leer'])<p class="{{ $pill }} {{ $variantPill['secondary'] }} w-full justify-center">Es gibt noch leere Slots</p>@endif
                     @if($cockpit['hat_stale'])<p class="{{ $pill }} {{ $variantPill['warning'] }} w-full justify-center">Ein Baustein-Preis ist veraltet</p>@endif
@@ -103,8 +125,11 @@
                         <input type="text" wire:model="form.anlass" class="{{ $input }}" placeholder="z. B. Sommerfest" />
                     </div>
                     <div>
-                        <label class="{{ $label }}">Personen</label>
-                        <input type="number" min="1" step="1" wire:model.live="form.personen" wire:change="speichern" class="{{ $input }} text-right tabular-nums" placeholder="z. B. 80" title="Gästezahl → Gesamtpreis + Mengen-Hochrechnung" />
+                        <label class="{{ $label }}">Kategorie</label>
+                        <select wire:model="form.category_id" class="{{ $input }}">
+                            <option value="">— ohne —</option>
+                            @foreach($kategorienFlat as $kat)<option value="{{ $kat['id'] }}">{{ $kat['label'] }}</option>@endforeach
+                        </select>
                     </div>
                     <div>
                         <label class="{{ $label }}">Status</label>
@@ -197,31 +222,6 @@
                 </div>
             </div>
 
-            {{-- C-08: Mengen-Hochrechnung für N Personen (Brücke zur Produktionsplanung M16) --}}
-            @if(!empty($hochrechnung))
-                <div class="relative overflow-hidden {{ $card }} p-5 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Produktionsmengen <span class="{{ $label }}">für {{ $selected->personen }} Personen</span></h3>
-                    <div class="overflow-x-auto">
-                        <table class="{{ $table }}">
-                            <thead><tr class="text-left">
-                                @foreach([['Rolle', ''], ['Baustein', ''], ['Gericht', 'w-full'], ['Menge/P', 'text-right'], ['Gesamt', 'text-right']] as [$h, $a])<th class="{{ $th }} {{ $a }}">{{ $h }}</th>@endforeach
-                            </tr></thead>
-                            <tbody>
-                                @foreach($hochrechnung as $z)
-                                    <tr class="{{ $tr }}">
-                                        <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $z['rolle'] ?? '—' }}</td>
-                                        <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $z['baustein'] ?? '—' }}</td>
-                                        <td class="{{ $td }} truncate">{{ $z['gericht'] }}</td>
-                                        <td class="{{ $td }} text-right tabular-nums whitespace-nowrap">{{ $z['menge_pro_person'] !== null ? number_format($z['menge_pro_person'], 0, ',', '.') . ' ' . ($z['einheit'] ?? '') : '—' }}</td>
-                                        <td class="{{ $td }} text-right tabular-nums whitespace-nowrap text-gray-900 dark:text-gray-100">{{ $z['gesamt_menge'] !== null ? number_format($z['gesamt_menge'], 0, ',', '.') . ' ' . ($z['einheit'] ?? '') : '—' }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                    <p class="text-[11px] text-gray-400">Menge/P = pro Person im Baustein gepflegt. Leere Zeilen = noch keine Menge hinterlegt.</p>
-                </div>
-            @endif
         @else
             <div class="{{ $card }} p-10 text-center text-sm text-gray-400">
                 Links ein Concept auswählen oder „+ Neues Concept" anlegen. Vorlagen lassen sich per „↧ nutzen" zu einem eigenständigen Concept forken.
