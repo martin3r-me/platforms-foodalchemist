@@ -620,3 +620,22 @@ Concepter führt:
 - `foodalchemist_foodbooks`: + `schreibstil_id` (Override).
 - `foodalchemist_concept_slots`: `rolle` → optional (Rolle kommt vom Paket).
 - NEU `foodalchemist_vocab_klassen` (frei/wählbar, wie vocab_rollen).
+
+### 10.10 KI-Autonomie (KI-First) — Concept muss von einer KI autonom schreibbar sein
+> Dominique 2026-06-13: Felder so anlegen, dass eine KI ein Concept **autonom komponiert + schreibt**.
+
+- **Brief/Vorgaben am Concept (die KI-Eingabe):** Anlass · Niveau · Zielpreis/Person · **Diät-Vorgabe**
+  (z. B. „je Gang ≥1 vegan" / „rein vegetarisch") · **Struktur-/Gänge-Vorgabe** (z. B. „3-Gang" oder
+  „Buffet: Salatbar+HG+Dessert" / Rollen-Liste) · Saison · Zielgruppe/Sektor · Schreibstil · **freier
+  Brief-/Kontext-Text**. Größtenteils dieselben Felder wie die VK-Metadaten + ein `brief`-Feld.
+- **KI-Generierung (analog `ai_plan_dishes` / RecipeGenerator):** Brief → KI **komponiert** (Pakete/
+  Gerichte rollen-/niveau-/diät-/preis-konform wählen, Struktur füllen) **+ schreibt** Marketing-Wording
+  im gewählten Stil. **Tools rufen Services** (ConceptService/PaketService), nie Models (Plattform-Gebot).
+- **GL-07-Lineage auf KI-Feldern:** `_quelle` (manual/ki) · `ai_confidence` · `ai_begruendung`;
+  Propose/Accept-Muster (Vorschlag in die Form, Save = Accept) wie im ganzen Modul.
+- **Prompt-Registry:** `concept.generate` (Brief→Struktur+Auswahl) · `concept.wording` (Marketing-Text
+  im Stil). Mechanik (AiGatewayService, FakeAiProvider, Hüllen GL-06) steht; **echte Generierung =
+  LLM-Key-Blocker**, aber **Brief-Felder + Lineage + Prompts JETZT mitbauen** (FakeProvider liefert
+  deterministische Demo, ehrlicher kiFehler ohne Key).
+- Die **Voll-Aggregation** (Nährwert/Allergen/Kosten/Zeit) + die **deterministische Bewertung** dienen
+  der KI als Kontext UND als Selbst-Check gegen den Brief. [→ M10R-1 Felder/Lineage · M10R-3 ✨-Hook im Editor]
