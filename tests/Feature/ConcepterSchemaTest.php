@@ -1,6 +1,6 @@
 <?php
 
-use Platform\FoodAlchemist\Models\FoodAlchemistBaustein;
+use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -17,7 +17,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
 
-    // Zwei Gerichte (VK-Rezepte) für den Vorspeisen-Baustein
+    // Zwei Gerichte (VK-Rezepte) für den Vorspeisen-Paket
     $this->greenPower = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'gp1', 'name' => 'Salat: Green Power',
         'status' => 'approved', 'ist_verkaufsrezept' => true,
@@ -28,33 +28,33 @@ beforeEach(function () {
     ]);
 });
 
-it('legt einen Baustein als bepreistes Bündel mehrerer Gerichte an (Salad Wall)', function () {
-    $baustein = FoodAlchemistBaustein::create([
+it('legt einen Paket als bepreistes Bündel mehrerer Gerichte an (Salad Wall)', function () {
+    $paket = FoodAlchemistPaket::create([
         'team_id' => $this->rootTeam->id, 'name' => 'Salad Wall', 'rolle' => 'Vorspeise',
         'preis_pro_person' => 4.50, 'ek_pro_person' => 1.41, 'wareneinsatz_prozent' => 31.3,
         'preis_modus' => 'manuell',
     ]);
-    $baustein->gerichte()->create(['team_id' => $this->rootTeam->id, 'vk_recipe_id' => $this->greenPower->id, 'position' => 0]);
-    $baustein->gerichte()->create(['team_id' => $this->rootTeam->id, 'vk_recipe_id' => $this->sunnyKick->id, 'position' => 1]);
+    $paket->gerichte()->create(['team_id' => $this->rootTeam->id, 'vk_recipe_id' => $this->greenPower->id, 'position' => 0]);
+    $paket->gerichte()->create(['team_id' => $this->rootTeam->id, 'vk_recipe_id' => $this->sunnyKick->id, 'position' => 1]);
 
-    expect($baustein->uuid)->not->toBeNull()                          // HasUuidV7
-        ->and($baustein->gerichte()->count())->toBe(2)
-        ->and((float) $baustein->preis_pro_person)->toBe(4.50)
-        ->and($baustein->gerichte->first()->gericht->name)->toBe('Salat: Green Power');
+    expect($paket->uuid)->not->toBeNull()                          // HasUuidV7
+        ->and($paket->gerichte()->count())->toBe(2)
+        ->and((float) $paket->preis_pro_person)->toBe(4.50)
+        ->and($paket->gerichte->first()->gericht->name)->toBe('Salat: Green Power');
 });
 
-it('baut ein Concept mit Slots: Baustein ODER festes Gericht je Slot (Grill-Buffet)', function () {
-    $saladWall = FoodAlchemistBaustein::create([
+it('baut ein Concept mit Slots: Paket ODER festes Gericht je Slot (Grill-Buffet)', function () {
+    $saladWall = FoodAlchemistPaket::create([
         'team_id' => $this->rootTeam->id, 'name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'preis_pro_person' => 4.50,
     ]);
 
     $concept = FoodAlchemistConcept::create([
         'team_id' => $this->rootTeam->id, 'name' => 'Grill-Buffet', 'anlass' => 'Sommerfest', 'status' => 'draft',
     ]);
-    // Slot A: gefüllt mit Baustein (austauschbar)
+    // Slot A: gefüllt mit Paket (austauschbar)
     $concept->slots()->create([
         'team_id' => $this->rootTeam->id, 'rolle' => 'Vorspeise', 'titel' => 'Vorspeise',
-        'position' => 0, 'baustein_id' => $saladWall->id,
+        'position' => 0, 'paket_id' => $saladWall->id,
     ]);
     // Slot B: festes Gericht
     $concept->slots()->create([
@@ -64,27 +64,27 @@ it('baut ein Concept mit Slots: Baustein ODER festes Gericht je Slot (Grill-Buff
 
     $slots = $concept->slots()->get();
     expect($slots)->toHaveCount(2)
-        ->and($slots[0]->istBaustein())->toBeTrue()
-        ->and($slots[0]->baustein->name)->toBe('Salad Wall')
-        ->and($slots[1]->istBaustein())->toBeFalse()
+        ->and($slots[0]->istPaket())->toBeTrue()
+        ->and($slots[0]->paket->name)->toBe('Salad Wall')
+        ->and($slots[1]->istPaket())->toBeFalse()
         ->and($slots[1]->gericht->name)->toBe('Salat: Green Power');
 });
 
-it('Team-Hierarchie: Kind sieht Eltern-Bausteine, Besitzer-Check greift (D1)', function () {
-    $rootBaustein = FoodAlchemistBaustein::create(['team_id' => $this->rootTeam->id, 'name' => 'Root-Baustein', 'rolle' => 'Vorspeise']);
-    $childBaustein = FoodAlchemistBaustein::create(['team_id' => $this->childA->id, 'name' => 'Kind-A-Baustein', 'rolle' => 'Vorspeise']);
+it('Team-Hierarchie: Kind sieht Eltern-Pakete, Besitzer-Check greift (D1)', function () {
+    $rootPaket = FoodAlchemistPaket::create(['team_id' => $this->rootTeam->id, 'name' => 'Root-Paket', 'rolle' => 'Vorspeise']);
+    $childPaket = FoodAlchemistPaket::create(['team_id' => $this->childA->id, 'name' => 'Kind-A-Paket', 'rolle' => 'Vorspeise']);
 
     // Kind A sieht eigenen + geerbten (Root); NICHT den von Geschwister-Kind B
-    $sichtbarFuerA = FoodAlchemistBaustein::visibleToTeam($this->childA)->pluck('name')->all();
-    expect($sichtbarFuerA)->toContain('Root-Baustein')->toContain('Kind-A-Baustein');
+    $sichtbarFuerA = FoodAlchemistPaket::visibleToTeam($this->childA)->pluck('name')->all();
+    expect($sichtbarFuerA)->toContain('Root-Paket')->toContain('Kind-A-Paket');
 
     // Root sieht nur eigene (Kinder werden NICHT nach oben sichtbar)
-    $sichtbarFuerRoot = FoodAlchemistBaustein::visibleToTeam($this->rootTeam)->pluck('name')->all();
-    expect($sichtbarFuerRoot)->toContain('Root-Baustein')->not->toContain('Kind-A-Baustein');
+    $sichtbarFuerRoot = FoodAlchemistPaket::visibleToTeam($this->rootTeam)->pluck('name')->all();
+    expect($sichtbarFuerRoot)->toContain('Root-Paket')->not->toContain('Kind-A-Paket');
 
-    expect($rootBaustein->isOwnedBy($this->rootTeam))->toBeTrue()
-        ->and($rootBaustein->isOwnedBy($this->childA))->toBeFalse()
-        ->and($childBaustein->isOwnedBy($this->childA))->toBeTrue();
+    expect($rootPaket->isOwnedBy($this->rootTeam))->toBeTrue()
+        ->and($rootPaket->isOwnedBy($this->childA))->toBeFalse()
+        ->and($childPaket->isOwnedBy($this->childA))->toBeTrue();
 });
 
 it('Vorlage-Scopes + Rollen-Vokabular', function () {

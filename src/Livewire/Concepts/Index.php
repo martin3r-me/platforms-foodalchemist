@@ -6,13 +6,13 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
-use Platform\FoodAlchemist\Services\BausteinService;
+use Platform\FoodAlchemist\Services\PaketService;
 use Platform\FoodAlchemist\Services\ConceptService;
 
 /**
  * M10-03/04/05 / Doc 15 §M10: Concept-Editor — Slot-Gerüst bauen, jeden Slot mit
- * einem Baustein (austauschbar) ODER festem Gericht füllen, Live-Preis = Σ der
- * gespeicherten Baustein-Preise. „Aus Vorlage starten" (Fork) + „Als Vorlage
+ * einem Paket (austauschbar) ODER festem Gericht füllen, Live-Preis = Σ der
+ * gespeicherten Paket-Preise. „Aus Vorlage starten" (Fork) + „Als Vorlage
  * speichern". Liste links, Editor + Cockpit rechts.
  */
 class Index extends Component
@@ -154,9 +154,9 @@ class Index extends Component
         $this->waehle($this->selectedId, $svc);
     }
 
-    public function fuelleBaustein(int $slotId, int $bausteinId, ConceptService $svc): void
+    public function fuellePaket(int $slotId, int $paketId, ConceptService $svc): void
     {
-        $svc->fillSlot($this->team(), $slotId, ['baustein_id' => $bausteinId]);
+        $svc->fillSlot($this->team(), $slotId, ['paket_id' => $paketId]);
         $this->waehle($this->selectedId, $svc);
     }
 
@@ -238,12 +238,12 @@ class Index extends Component
         $tauschbar = [];
         if ($selected !== null) {
             foreach ($selected->slots as $slot) {
-                $tauschbar[$slot->id] = $svc->tauschbareBausteine($team, $slot);
+                $tauschbar[$slot->id] = $svc->tauschbarePakete($team, $slot);
             }
         }
 
         $kandidaten = $this->fillSlotId !== null && $this->gerichtSuche !== ''
-            ? app(BausteinService::class)->gerichtKandidaten($team, $this->gerichtSuche)
+            ? app(PaketService::class)->gerichtKandidaten($team, $this->gerichtSuche)
             : collect();
 
         return view('foodalchemist::livewire.concepts.index', [

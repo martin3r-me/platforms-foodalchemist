@@ -1,4 +1,4 @@
-{{-- M10-03/04/05 / Doc 15 §M10: Concept-Editor — Slot-Gerüst, Befüllung Baustein/Gericht, Live-Preis --}}
+{{-- M10-03/04/05 / Doc 15 §M10: Concept-Editor — Slot-Gerüst, Befüllung Paket/Gericht, Live-Preis --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <x-ui-page>
@@ -74,7 +74,7 @@
                         <div class="text-[10px] text-gray-400 mt-1">Gästezahl &amp; Gesamtpreis erst im Foodbook/Angebot</div>
                     </div>
                     @if($cockpit['hat_leer'])<p class="{{ $pill }} {{ $variantPill['secondary'] }} w-full justify-center">Es gibt noch leere Slots</p>@endif
-                    @if($cockpit['hat_stale'])<p class="{{ $pill }} {{ $variantPill['warning'] }} w-full justify-center">Ein Baustein-Preis ist veraltet</p>@endif
+                    @if($cockpit['hat_stale'])<p class="{{ $pill }} {{ $variantPill['warning'] }} w-full justify-center">Ein Paket-Preis ist veraltet</p>@endif
 
                     {{-- C-09: Allergen-/Diät-Rollup übers ganze Concept --}}
                     @if($rollup && $rollup['n_gerichte'] > 0)
@@ -94,7 +94,7 @@
                             <div class="flex items-center justify-between gap-2 text-xs py-1 border-t border-black/5 dark:border-white/10">
                                 <span class="min-w-0 truncate">
                                     <span class="text-[10px] text-gray-400 uppercase mr-1">{{ $z['rolle'] ?? '—' }}</span>{{ $z['label'] }}
-                                    @if($z['typ'] === 'baustein')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Baustein</span>@elseif($z['typ'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
+                                    @if($z['typ'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['typ'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
                                 </span>
                                 <span class="shrink-0 tabular-nums {{ $z['preis'] === null ? 'text-gray-300' : 'text-gray-900 dark:text-gray-100' }}">{{ $z['preis'] !== null ? number_format($z['preis'], 2, ',', '.') . ' €' : '—' }}</span>
                             </div>
@@ -171,27 +171,27 @@
 
                             {{-- Befüllung --}}
                             <div class="flex flex-wrap items-center gap-2">
-                                @if($slot->baustein_id && $slot->baustein)
-                                    <span class="{{ $pill }} {{ $variantPill['info'] }}">Baustein</span>
-                                    <span class="text-sm font-medium">{{ $slot->baustein->name }}</span>
-                                    <span class="text-gray-400 text-xs tabular-nums">{{ $slot->baustein->preis_pro_person !== null ? number_format((float) $slot->baustein->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</span>
+                                @if($slot->paket_id && $slot->paket)
+                                    <span class="{{ $pill }} {{ $variantPill['info'] }}">Paket</span>
+                                    <span class="text-sm font-medium">{{ $slot->paket->name }}</span>
+                                    <span class="text-gray-400 text-xs tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</span>
                                 @elseif($slot->vk_recipe_id && $slot->gericht)
                                     <span class="{{ $pill }} {{ $variantPill['secondary'] }}">festes Gericht</span>
                                     <span class="text-sm font-medium">{{ $slot->gericht->name }}</span>
                                     <span class="text-gray-400 text-xs tabular-nums">{{ $slot->gericht->vk_netto !== null ? number_format((float) $slot->gericht->vk_netto, 2, ',', '.') . ' €' : '—' }}</span>
                                 @else
-                                    <span class="text-xs text-gray-400">leer — Baustein wählen oder festes Gericht setzen</span>
+                                    <span class="text-xs text-gray-400">leer — Paket wählen oder festes Gericht setzen</span>
                                 @endif
-                                @if($slot->baustein_id || $slot->vk_recipe_id)
+                                @if($slot->paket_id || $slot->vk_recipe_id)
                                     <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-400 hover:text-red-500">leeren</button>
                                 @endif
                             </div>
 
-                            {{-- Steuerung: Baustein (gleiche Rolle) wählen ODER festes Gericht suchen --}}
+                            {{-- Steuerung: Paket (gleiche Rolle) wählen ODER festes Gericht suchen --}}
                             <div class="flex flex-wrap items-center gap-2">
-                                <select x-on:change="$wire.fuelleBaustein({{ $slot->id }}, $event.target.value); $event.target.value=''"
+                                <select x-on:change="$wire.fuellePaket({{ $slot->id }}, $event.target.value); $event.target.value=''"
                                         class="{{ $input }} w-56">
-                                    <option value="">↹ Baustein (Rolle {{ $slot->rolle ?: '–' }}) …</option>
+                                    <option value="">↹ Paket (Rolle {{ $slot->rolle ?: '–' }}) …</option>
                                     @foreach(($tauschbar[$slot->id] ?? []) as $b)
                                         <option value="{{ $b->id }}">{{ $b->name }}{{ $b->preis_pro_person !== null ? ' (' . number_format((float) $b->preis_pro_person, 2, ',', '.') . ' €)' : '' }}</option>
                                     @endforeach

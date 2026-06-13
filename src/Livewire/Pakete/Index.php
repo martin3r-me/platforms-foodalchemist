@@ -1,15 +1,15 @@
 <?php
 
-namespace Platform\FoodAlchemist\Livewire\Bausteine;
+namespace Platform\FoodAlchemist\Livewire\Pakete;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
-use Platform\FoodAlchemist\Services\BausteinService;
+use Platform\FoodAlchemist\Services\PaketService;
 
 /**
- * M10-02 / Doc 15 §M10: Baustein-Browser — Bausteine (bepreiste Bündel mehrerer
+ * M10-02 / Doc 15 §M10: Paket-Browser — Pakete (bepreiste Bündel mehrerer
  * Gerichte für eine Rolle) anlegen, Gerichte zusammenstellen, Per-Person-Preis
  * pflegen (manuell oder auto aus den Gerichten). Liste links, Edit-/Gerichte-
  * Panel rechts (P-1, Kontext in der URL).
@@ -27,7 +27,7 @@ class Index extends Component
     #[Url(as: 'b')]
     public ?int $selectedId = null;
 
-    /** Editierbare Felder des gewählten Bausteins. */
+    /** Editierbare Felder des gewählten Pakets. */
     public array $form = [
         'name' => '', 'rolle' => '', 'niveau' => '', 'preis_modus' => 'manuell',
         'preis_pro_person' => null, 'ek_pro_person' => null, 'wareneinsatz_prozent' => null,
@@ -36,7 +36,7 @@ class Index extends Component
 
     public string $gerichtSuche = '';
 
-    /** Menge/Person je Baustein-Gericht (keyed by baustein_gericht-id). */
+    /** Menge/Person je Paket-Gericht (keyed by paket_gericht-id). */
     public array $mengeForm = [];
 
     public function updatedSearch(): void
@@ -44,14 +44,14 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function neu(BausteinService $svc): void
+    public function neu(PaketService $svc): void
     {
         $team = $this->team();
-        $b = $svc->create($team, ['name' => 'Neuer Baustein', 'rolle' => $this->rolleFilter ?: null]);
+        $b = $svc->create($team, ['name' => 'Neuer Paket', 'rolle' => $this->rolleFilter ?: null]);
         $this->waehle($b->id, $svc);
     }
 
-    public function waehle(int $id, BausteinService $svc): void
+    public function waehle(int $id, PaketService $svc): void
     {
         $b = $svc->detail($this->team(), $id);
         if ($b === null) {
@@ -68,7 +68,7 @@ class Index extends Component
         $this->gerichtSuche = '';
     }
 
-    public function gerichtMengeSpeichern(int $rowId, BausteinService $svc): void
+    public function gerichtMengeSpeichern(int $rowId, PaketService $svc): void
     {
         if ($this->selectedId === null) {
             return;
@@ -77,17 +77,17 @@ class Index extends Component
         $svc->setGerichtMenge($this->team(), $this->selectedId, $rowId, $menge !== null && $menge !== '' ? (float) $menge : null);
     }
 
-    public function gerichtHoch(int $rowId, BausteinService $svc): void
+    public function gerichtHoch(int $rowId, PaketService $svc): void
     {
         $this->verschiebeGericht($rowId, -1, $svc);
     }
 
-    public function gerichtRunter(int $rowId, BausteinService $svc): void
+    public function gerichtRunter(int $rowId, PaketService $svc): void
     {
         $this->verschiebeGericht($rowId, 1, $svc);
     }
 
-    private function verschiebeGericht(int $rowId, int $richtung, BausteinService $svc): void
+    private function verschiebeGericht(int $rowId, int $richtung, PaketService $svc): void
     {
         if ($this->selectedId === null) {
             return;
@@ -103,17 +103,17 @@ class Index extends Component
         $this->waehle($this->selectedId, $svc);
     }
 
-    public function speichern(BausteinService $svc): void
+    public function speichern(PaketService $svc): void
     {
         if ($this->selectedId === null) {
             return;
         }
         $svc->update($this->team(), $this->selectedId, $this->form);
-        $this->dispatch('baustein-gespeichert');
+        $this->dispatch('paket-gespeichert');
         $this->waehle($this->selectedId, $svc);
     }
 
-    public function loeschen(int $id, BausteinService $svc): void
+    public function loeschen(int $id, PaketService $svc): void
     {
         $svc->delete($this->team(), $id);
         if ($this->selectedId === $id) {
@@ -121,7 +121,7 @@ class Index extends Component
         }
     }
 
-    public function gerichtHinzu(int $vkRecipeId, BausteinService $svc): void
+    public function gerichtHinzu(int $vkRecipeId, PaketService $svc): void
     {
         if ($this->selectedId === null) {
             return;
@@ -133,7 +133,7 @@ class Index extends Component
         $this->waehle($this->selectedId, $svc);
     }
 
-    public function gerichtRaus(int $vkRecipeId, BausteinService $svc): void
+    public function gerichtRaus(int $vkRecipeId, PaketService $svc): void
     {
         if ($this->selectedId === null) {
             return;
@@ -144,7 +144,7 @@ class Index extends Component
         $this->waehle($this->selectedId, $svc);
     }
 
-    public function neuBerechnen(BausteinService $svc): void
+    public function neuBerechnen(PaketService $svc): void
     {
         if ($this->selectedId === null) {
             return;
@@ -154,13 +154,13 @@ class Index extends Component
         $this->waehle($this->selectedId, $svc);
     }
 
-    public function render(BausteinService $svc)
+    public function render(PaketService $svc)
     {
         $team = $this->team();
         $selected = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
 
-        return view('foodalchemist::livewire.bausteine.index', [
-            'bausteine' => $svc->paginateBrowser(['search' => $this->search, 'rolle' => $this->rolleFilter], $team),
+        return view('foodalchemist::livewire.pakete.index', [
+            'pakete' => $svc->paginateBrowser(['search' => $this->search, 'rolle' => $this->rolleFilter], $team),
             'rollen' => $svc->rollen($team),
             'selected' => $selected,
             'kandidaten' => $selected !== null

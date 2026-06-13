@@ -114,7 +114,7 @@ return [
         ],
         [
             // M10 GEBAUT (Doc 15 §M10): Concepter ist das Rückgrat → eigene AKTIVE Gruppe
-            // über "In Planung". Concepts = Slot-Gerüst über mehrere Rollen; Bausteine =
+            // über "In Planung". Concepts = Slot-Gerüst über mehrere Rollen; Pakete =
             // bepreiste Bündel mehrerer Gerichte (im Konzeptpapier "Modul").
             'group' => 'Concepter',
             'items' => [
@@ -124,8 +124,8 @@ return [
                     'icon'  => 'heroicon-o-rectangle-stack',
                 ],
                 [
-                    'label' => 'Bausteine',
-                    'route' => 'foodalchemist.bausteine.index',
+                    'label' => 'Pakete',
+                    'route' => 'foodalchemist.pakete.index',
                     'icon'  => 'heroicon-o-puzzle-piece',
                 ],
             ],

@@ -11,7 +11,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Concept-Slot (M10-01) — eine Rolle im Concept, gefüllt mit GENAU
- * EINEM: `baustein_id` (austauschbares Bündel) ODER `vk_recipe_id` (fest gesetztes
+ * EINEM: `paket_id` (austauschbares Bündel) ODER `vk_recipe_id` (fest gesetztes
  * Gericht). Der Service erzwingt „genau eines". Position-sortiert.
  */
 class FoodAlchemistConceptSlot extends Model
@@ -34,10 +34,10 @@ class FoodAlchemistConceptSlot extends Model
         return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id');
     }
 
-    /** Befüllung A: austauschbarer Baustein. */
-    public function baustein(): BelongsTo
+    /** Befüllung A: austauschbarer Paket. */
+    public function paket(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistBaustein::class, 'baustein_id');
+        return $this->belongsTo(FoodAlchemistPaket::class, 'paket_id');
     }
 
     /** Befüllung B: fest gesetztes Gericht (VK-Rezept). */
@@ -51,9 +51,9 @@ class FoodAlchemistConceptSlot extends Model
         return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
     }
 
-    /** True, wenn der Slot durch einen austauschbaren Baustein gefüllt ist. */
-    public function istBaustein(): bool
+    /** True, wenn der Slot durch einen austauschbaren Paket gefüllt ist. */
+    public function istPaket(): bool
     {
-        return $this->baustein_id !== null;
+        return $this->paket_id !== null;
     }
 }

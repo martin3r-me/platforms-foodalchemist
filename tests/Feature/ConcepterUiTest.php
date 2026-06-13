@@ -1,13 +1,13 @@
 <?php
 
 use Livewire\Livewire;
-use Platform\FoodAlchemist\Livewire\Bausteine\Index as BausteineIndex;
+use Platform\FoodAlchemist\Livewire\Pakete\Index as PaketeIndex;
 use Platform\FoodAlchemist\Livewire\Concepts\Index as ConceptsIndex;
-use Platform\FoodAlchemist\Models\FoodAlchemistBaustein;
+use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
-use Platform\FoodAlchemist\Services\BausteinService;
+use Platform\FoodAlchemist\Services\PaketService;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -31,16 +31,16 @@ beforeEach(function () {
     $this->sunny = $mk('s', 'Salat: Sunny Kick', 3.00);
 });
 
-it('Baustein-Browser: anlegen, Gerichte hinzufügen, speichern (Voll-Page-Render)', function () {
-    Livewire::test(BausteineIndex::class)
+it('Paket-Browser: anlegen, Gerichte hinzufügen, speichern (Voll-Page-Render)', function () {
+    Livewire::test(PaketeIndex::class)
         ->assertOk()
         ->call('neu')
         ->assertSet('selectedId', fn ($v) => $v !== null);
 
-    expect(FoodAlchemistBaustein::count())->toBe(1);
-    $id = FoodAlchemistBaustein::first()->id;
+    expect(FoodAlchemistPaket::count())->toBe(1);
+    $id = FoodAlchemistPaket::first()->id;
 
-    Livewire::test(BausteineIndex::class)
+    Livewire::test(PaketeIndex::class)
         ->call('waehle', $id)
         ->call('gerichtHinzu', $this->green->id)
         ->call('gerichtHinzu', $this->sunny->id)
@@ -49,14 +49,14 @@ it('Baustein-Browser: anlegen, Gerichte hinzufügen, speichern (Voll-Page-Render
         ->call('speichern')
         ->assertSee('Salad Wall');
 
-    $b = FoodAlchemistBaustein::find($id);
+    $b = FoodAlchemistPaket::find($id);
     expect($b->name)->toBe('Salad Wall')->and($b->rolle)->toBe('Vorspeise')
         ->and($b->gerichte()->count())->toBe(2);
 });
 
-it('Concept-Editor: Slot anlegen, mit Baustein füllen, Live-Preis im Cockpit', function () {
-    $b = app(BausteinService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
-    app(BausteinService::class)->update($this->rootTeam, $b->id, ['preis_pro_person' => 4.50]);
+it('Concept-Editor: Slot anlegen, mit Paket füllen, Live-Preis im Cockpit', function () {
+    $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
+    app(PaketService::class)->update($this->rootTeam, $b->id, ['preis_pro_person' => 4.50]);
 
     Livewire::test(ConceptsIndex::class)->call('neu');
     $c = FoodAlchemistConcept::echte()->first();
@@ -69,7 +69,7 @@ it('Concept-Editor: Slot anlegen, mit Baustein füllen, Live-Preis im Cockpit', 
         ->call('slotHinzu');
 
     $slot = $c->slots()->first();
-    $comp->call('fuelleBaustein', $slot->id, $b->id)
+    $comp->call('fuellePaket', $slot->id, $b->id)
         ->assertSee('Salad Wall')
         ->assertSee('4,50');
 
@@ -91,8 +91,8 @@ it('Vorlage-Fork über die UI erzeugt ein eigenständiges Concept (M10-05)', fun
 });
 
 it('M10c: Concept-Editor zeigt €/Person (kein Pax), Slot-Reorder über die UI', function () {
-    $b = app(BausteinService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
-    app(BausteinService::class)->update($this->rootTeam, $b->id, ['preis_pro_person' => 4.50]);
+    $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
+    app(PaketService::class)->update($this->rootTeam, $b->id, ['preis_pro_person' => 4.50]);
     $c = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
 
     $comp = Livewire::test(ConceptsIndex::class)
@@ -101,7 +101,7 @@ it('M10c: Concept-Editor zeigt €/Person (kein Pax), Slot-Reorder über die UI'
         ->set('neuerSlotRolle', 'Dessert')->call('slotHinzu');
 
     $slots = $c->slots()->orderBy('position')->pluck('id')->all();
-    $comp->call('fuelleBaustein', $slots[0], $b->id)
+    $comp->call('fuellePaket', $slots[0], $b->id)
         ->assertSee('4,50')                                           // €/Person, kein Gesamtpreis
         ->assertSee('erst im Foodbook');
 
@@ -125,10 +125,10 @@ it('M10c-B: Kategorie anlegen + Concept filtern (UI)', function () {
         ->assertDontSee('Anderes Concept');
 });
 
-it('M10p: Baustein-Gericht Menge/Person setzen + ▲▼-Reorder', function () {
-    $b = app(BausteinService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
+it('M10p: Paket-Gericht Menge/Person setzen + ▲▼-Reorder', function () {
+    $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
 
-    $comp = Livewire::test(BausteineIndex::class)
+    $comp = Livewire::test(PaketeIndex::class)
         ->call('waehle', $b->id)
         ->call('gerichtHinzu', $this->green->id)
         ->call('gerichtHinzu', $this->sunny->id);

@@ -71,14 +71,14 @@ Route::get('/gerichte', \Platform\FoodAlchemist\Livewire\Verkauf\Browser::class)
     ->name('foodalchemist.verkauf.index');
 
 /**
- * M10 / Doc 15 §M10: Concepter — Bausteine (bepreiste Bündel mehrerer Gerichte)
+ * M10 / Doc 15 §M10: Concepter — Pakete (bepreiste Bündel mehrerer Gerichte)
  * und Concepts (Slot-Gerüst über mehrere Rollen). Kontext/Auswahl in der URL (V-17).
  */
 Route::get('/concepts', \Platform\FoodAlchemist\Livewire\Concepts\Index::class)
     ->name('foodalchemist.concepts.index');
 
-Route::get('/bausteine', \Platform\FoodAlchemist\Livewire\Bausteine\Index::class)
-    ->name('foodalchemist.bausteine.index');
+Route::get('/pakete', \Platform\FoodAlchemist\Livewire\Pakete\Index::class)
+    ->name('foodalchemist.pakete.index');
 
 /**
  * R7: «In Planung» — Vorschau der Phase-2-Domänen (14_ROADMAP_PHASE2).

@@ -6,12 +6,12 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
-use Platform\FoodAlchemist\Models\FoodAlchemistBaustein;
+use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabRolle;
 
 /**
- * M10-02/04 / Doc 15 §M10: Baustein = bepreistes Bündel mehrerer Gerichte, das
+ * M10-02/04 / Doc 15 §M10: Paket = bepreistes Bündel mehrerer Gerichte, das
  * eine Rolle füllt. Trägt einen GESPEICHERTEN Per-Person-Preis (Einzelpreis),
  * damit ein Tausch im Concept nur die Differenz rechnet (kein Kaskaden-Recompute).
  *
@@ -24,7 +24,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistVocabRolle;
  * Scope-Härte: visibleToTeam in JEDER Query; Schreiben nur durchs Besitzer-Team
  * (D1/Curate). team_id NOT NULL im Service erzwungen.
  */
-class BausteinService
+class PaketService
 {
     public function __construct(private MargeService $marge)
     {
@@ -32,7 +32,7 @@ class BausteinService
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
-        return FoodAlchemistBaustein::visibleToTeam($team)
+        return FoodAlchemistPaket::visibleToTeam($team)
             ->withCount('gerichte')
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
                 $s = '%' . mb_strtolower($filters['search']) . '%';
@@ -49,7 +49,7 @@ class BausteinService
     /** Distinkte, real verwendete Rollen (für Filter) + Vokabular-Vorschläge. */
     public function rollen(Team $team): array
     {
-        $verwendet = FoodAlchemistBaustein::visibleToTeam($team)
+        $verwendet = FoodAlchemistPaket::visibleToTeam($team)
             ->whereNotNull('rolle')->distinct()->orderBy('rolle')->pluck('rolle')->all();
         $vokabular = FoodAlchemistVocabRolle::visibleToTeam($team)
             ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->pluck('name')->all();
@@ -57,79 +57,79 @@ class BausteinService
         return collect($verwendet)->merge($vokabular)->unique()->values()->all();
     }
 
-    public function detail(Team $team, int $id): ?FoodAlchemistBaustein
+    public function detail(Team $team, int $id): ?FoodAlchemistPaket
     {
-        return FoodAlchemistBaustein::visibleToTeam($team)
+        return FoodAlchemistPaket::visibleToTeam($team)
             ->with(['gerichte' => fn ($q) => $q->orderBy('position'),
                 'gerichte.gericht:id,name,vk_netto,vk_brutto,ek_total_eur,mwst_satz',
                 'gerichte.einheit:id,slug,display_de'])
             ->find($id);
     }
 
-    public function create(Team $team, array $in): FoodAlchemistBaustein
+    public function create(Team $team, array $in): FoodAlchemistPaket
     {
         $modus = $in['preis_modus'] ?? 'manuell';
 
-        return FoodAlchemistBaustein::create([
+        return FoodAlchemistPaket::create([
             'team_id' => $team->id,
-            'name' => trim((string) ($in['name'] ?? 'Neuer Baustein')) ?: 'Neuer Baustein',
+            'name' => trim((string) ($in['name'] ?? 'Neuer Paket')) ?: 'Neuer Paket',
             'rolle' => $this->normalizeRolle($in['rolle'] ?? null),
             'niveau' => $in['niveau'] ?? null,
             'preis_modus' => in_array($modus, ['auto', 'manuell'], true) ? $modus : 'manuell',
         ]);
     }
 
-    /** Editierbare Baustein-Felder (Stamm + manuelle Preise). */
+    /** Editierbare Paket-Felder (Stamm + manuelle Preise). */
     private const FELDER = [
         'name', 'rolle', 'niveau', 'preis_modus', 'preis_pro_person',
         'ek_pro_person', 'wareneinsatz_prozent', 'beschreibung', 'note', 'is_inactive',
     ];
 
-    public function update(Team $team, int $id, array $in): FoodAlchemistBaustein
+    public function update(Team $team, int $id, array $in): FoodAlchemistPaket
     {
-        $baustein = FoodAlchemistBaustein::visibleToTeam($team)->findOrFail($id);
-        $this->guardOwner($baustein, $team);
+        $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($id);
+        $this->guardOwner($paket, $team);
 
         $update = array_intersect_key($in, array_flip(self::FELDER));
         if (array_key_exists('rolle', $update)) {
             $update['rolle'] = $this->normalizeRolle($update['rolle']);
         }
-        $baustein->update($update);
+        $paket->update($update);
 
         // Auto-Modus: Preis wird abgeleitet, manuelle Eingaben werden überschrieben
-        if ($baustein->preis_modus === 'auto') {
-            $this->recomputePrice($baustein);
+        if ($paket->preis_modus === 'auto') {
+            $this->recomputePrice($paket);
         }
 
-        return $baustein->refresh();
+        return $paket->refresh();
     }
 
     public function delete(Team $team, int $id): void
     {
-        $baustein = FoodAlchemistBaustein::visibleToTeam($team)->findOrFail($id);
-        $this->guardOwner($baustein, $team);
-        $baustein->delete();
+        $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($id);
+        $this->guardOwner($paket, $team);
+        $paket->delete();
     }
 
     /**
-     * Setzt die Gerichte des Bausteins (Vollersatz) in EINER Transaktion (V-07),
+     * Setzt die Gerichte des Pakets (Vollersatz) in EINER Transaktion (V-07),
      * danach Preis-Recompute im Auto-Modus.
      *
      * @param  array<int, array{vk_recipe_id:int, menge?:float|null, einheit_vocab_id?:int|null}>  $items
      */
-    public function syncGerichte(Team $team, int $bausteinId, array $items): FoodAlchemistBaustein
+    public function syncGerichte(Team $team, int $paketId, array $items): FoodAlchemistPaket
     {
-        $baustein = FoodAlchemistBaustein::visibleToTeam($team)->findOrFail($bausteinId);
-        $this->guardOwner($baustein, $team);
+        $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($paketId);
+        $this->guardOwner($paket, $team);
 
-        DB::transaction(function () use ($baustein, $items) {
-            $baustein->gerichte()->forceDelete();
+        DB::transaction(function () use ($paket, $items) {
+            $paket->gerichte()->forceDelete();
             foreach (array_values($items) as $i => $row) {
                 if (empty($row['vk_recipe_id'])) {
                     continue;
                 }
-                $baustein->gerichte()->create([
-                    'team_id' => $baustein->team_id,
+                $paket->gerichte()->create([
+                    'team_id' => $paket->team_id,
                     'vk_recipe_id' => (int) $row['vk_recipe_id'],
                     'menge' => $row['menge'] ?? null,
                     'einheit_vocab_id' => $row['einheit_vocab_id'] ?? null,
@@ -138,32 +138,32 @@ class BausteinService
             }
         });
 
-        if ($baustein->preis_modus === 'auto') {
-            $this->recomputePrice($baustein);
+        if ($paket->preis_modus === 'auto') {
+            $this->recomputePrice($paket);
         } else {
-            $baustein->update(['preis_stale' => false]); // manuell: Stand bestätigt
+            $paket->update(['preis_stale' => false]); // manuell: Stand bestätigt
         }
 
-        return $baustein->refresh();
+        return $paket->refresh();
     }
 
-    /** Menge/Person eines Gerichts im Baustein setzen (C-08-Hochrechnung). */
-    public function setGerichtMenge(Team $team, int $bausteinId, int $gerichtRowId, ?float $menge): void
+    /** Menge/Person eines Gerichts im Paket setzen (C-08-Hochrechnung). */
+    public function setGerichtMenge(Team $team, int $paketId, int $gerichtRowId, ?float $menge): void
     {
-        $baustein = FoodAlchemistBaustein::visibleToTeam($team)->findOrFail($bausteinId);
-        $this->guardOwner($baustein, $team);
-        $baustein->gerichte()->where('id', $gerichtRowId)->update(['menge' => $menge]);
+        $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($paketId);
+        $this->guardOwner($paket, $team);
+        $paket->gerichte()->where('id', $gerichtRowId)->update(['menge' => $menge]);
     }
 
-    /** @param list<int> $ids neue Reihenfolge der baustein_gerichte-IDs */
-    public function reorderGerichte(Team $team, int $bausteinId, array $ids): void
+    /** @param list<int> $ids neue Reihenfolge der paket_gerichte-IDs */
+    public function reorderGerichte(Team $team, int $paketId, array $ids): void
     {
-        $baustein = FoodAlchemistBaustein::visibleToTeam($team)->findOrFail($bausteinId);
-        $this->guardOwner($baustein, $team);
-        DB::transaction(function () use ($bausteinId, $ids) {
+        $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($paketId);
+        $this->guardOwner($paket, $team);
+        DB::transaction(function () use ($paketId, $ids) {
             foreach (array_values($ids) as $i => $id) {
-                \Platform\FoodAlchemist\Models\FoodAlchemistBausteinGericht::where('id', (int) $id)
-                    ->where('baustein_id', $bausteinId)->update(['position' => $i]);
+                \Platform\FoodAlchemist\Models\FoodAlchemistPaketGericht::where('id', (int) $id)
+                    ->where('paket_id', $paketId)->update(['position' => $i]);
             }
         });
     }
@@ -172,15 +172,15 @@ class BausteinService
      * Auto-Preis = Σ der Gerichte (vk_netto/ek_total), W% via MargeService.
      * Manuell-Modus: nur den Stale-Marker löschen (gesetzter Preis bleibt).
      */
-    public function recomputePrice(FoodAlchemistBaustein $baustein): FoodAlchemistBaustein
+    public function recomputePrice(FoodAlchemistPaket $paket): FoodAlchemistPaket
     {
-        if ($baustein->preis_modus !== 'auto') {
-            $baustein->update(['preis_stale' => false]);
+        if ($paket->preis_modus !== 'auto') {
+            $paket->update(['preis_stale' => false]);
 
-            return $baustein->refresh();
+            return $paket->refresh();
         }
 
-        $gerichte = $baustein->gerichte()->with('gericht:id,vk_netto,ek_total_eur')->get();
+        $gerichte = $paket->gerichte()->with('gericht:id,vk_netto,ek_total_eur')->get();
         $vkSum = 0.0;
         $ekSum = 0.0;
         foreach ($gerichte as $g) {
@@ -190,7 +190,7 @@ class BausteinService
         }
         $marge = $this->marge->marge($vkSum > 0 ? $vkSum : null, $ekSum);
 
-        $baustein->update([
+        $paket->update([
             'preis_pro_person' => $vkSum > 0 ? round($vkSum, 2) : null,
             'ek_pro_person' => $ekSum > 0 ? round($ekSum, 4) : null,
             'wareneinsatz_prozent' => $marge['wareneinsatz_pct'] ?? null,
@@ -198,21 +198,21 @@ class BausteinService
             'preis_stale' => false,
         ]);
 
-        return $baustein->refresh();
+        return $paket->refresh();
     }
 
     /**
-     * GL-02-Muster: markiert alle Auto-Bausteine, die ein bestimmtes Gericht
+     * GL-02-Muster: markiert alle Auto-Pakete, die ein bestimmtes Gericht
      * enthalten, als preis_stale (neu zu berechnen). Aufruf-Hook für die
      * Recompute-Pipeline, wenn sich ein GP-/Rezept-Preis ändert.
      */
     public function markStaleForRecipe(int $vkRecipeId): int
     {
-        $bausteinIds = DB::table('foodalchemist_baustein_gerichte')
+        $paketIds = DB::table('foodalchemist_paket_gerichte')
             ->where('vk_recipe_id', $vkRecipeId)->whereNull('deleted_at')
-            ->distinct()->pluck('baustein_id');
+            ->distinct()->pluck('paket_id');
 
-        return FoodAlchemistBaustein::whereIn('id', $bausteinIds)
+        return FoodAlchemistPaket::whereIn('id', $paketIds)
             ->where('preis_modus', 'auto')->update(['preis_stale' => true]);
     }
 
@@ -232,10 +232,10 @@ class BausteinService
         return $rolle === '' ? null : $rolle;
     }
 
-    private function guardOwner(FoodAlchemistBaustein $baustein, Team $team): void
+    private function guardOwner(FoodAlchemistPaket $paket, Team $team): void
     {
-        if (! $baustein->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbter Baustein — Pflege nur durchs Besitzer-Team (D1).');
+        if (! $paket->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Paket — Pflege nur durchs Besitzer-Team (D1).');
         }
     }
 }

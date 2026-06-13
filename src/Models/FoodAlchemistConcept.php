@@ -14,7 +14,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 /**
  * @ai.description Concept (M10-01) — die verkäufliche Komposition über mehrere
  * Rollen-Slots (z. B. „Grill-Buffet" = Vorspeise + Hauptgang + Dessert). Jeder
- * Slot ist mit einem Baustein oder einem festen Gericht gefüllt; der Concept-Preis
+ * Slot ist mit einem Paket oder einem festen Gericht gefüllt; der Concept-Preis
  * = Σ der Slot-Preise. `is_vorlage` markiert ein gespeichertes Slot-Gerüst
  * (Vorlage = Kopie-Quelle, Fork beim Start — D-CON-7). team-eigen.
  */

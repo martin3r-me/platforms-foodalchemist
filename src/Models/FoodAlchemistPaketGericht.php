@@ -10,14 +10,14 @@ use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
- * @ai.description Baustein-Gericht (M10-01) — ein VK-Rezept als Bestandteil eines
- * Bausteins (z. B. „Green Power" in „Salad Wall"). Position-sortiert.
+ * @ai.description Paket-Gericht (M10-01) — ein VK-Rezept als Bestandteil eines
+ * Pakets (z. B. „Green Power" in „Salad Wall"). Position-sortiert.
  */
-class FoodAlchemistBausteinGericht extends Model
+class FoodAlchemistPaketGericht extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_baustein_gerichte';
+    protected $table = 'foodalchemist_paket_gerichte';
 
     protected $guarded = ['id'];
 
@@ -27,9 +27,9 @@ class FoodAlchemistBausteinGericht extends Model
         'position' => 'integer',
     ];
 
-    public function baustein(): BelongsTo
+    public function paket(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistBaustein::class, 'baustein_id');
+        return $this->belongsTo(FoodAlchemistPaket::class, 'paket_id');
     }
 
     /** Das verknüpfte Gericht (VK-Rezept). */

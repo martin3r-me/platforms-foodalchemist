@@ -10,7 +10,7 @@ use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
- * @ai.description Baustein (M10-01, D-CON-1) — bepreistes Bündel MEHRERER Gerichte,
+ * @ai.description Paket (M10-01, D-CON-1) — bepreistes Bündel MEHRERER Gerichte,
  * das eine Rolle füllt (Baukasten für den Verkäufer; z. B. „Salad Wall"). Trägt
  * einen GESPEICHERTEN Per-Person-Preis (preis_pro_person) + EK + W%, damit ein
  * Tausch im Concept nur die Differenz rechnet — kein Kaskaden-Recompute. Preis
@@ -18,11 +18,11 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  * markiert eine nötige Neuberechnung (GP-Preis-Änderung, GL-02-Muster).
  * team-eigen (BelongsToTeamHierarchy: sichtbar Kette aufwärts, editierbar = Besitzer).
  */
-class FoodAlchemistBaustein extends Model
+class FoodAlchemistPaket extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_bausteine';
+    protected $table = 'foodalchemist_pakete';
 
     protected $guarded = ['id'];
 
@@ -36,15 +36,15 @@ class FoodAlchemistBaustein extends Model
         'is_inactive' => 'boolean',
     ];
 
-    /** Die Gerichte (VK-Rezepte) in diesem Baustein. */
+    /** Die Gerichte (VK-Rezepte) in diesem Paket. */
     public function gerichte(): HasMany
     {
-        return $this->hasMany(FoodAlchemistBausteinGericht::class, 'baustein_id')->orderBy('position');
+        return $this->hasMany(FoodAlchemistPaketGericht::class, 'paket_id')->orderBy('position');
     }
 
-    /** Slots, die diesen Baustein referenzieren (für „wo verwendet?" / Löschschutz). */
+    /** Slots, die diesen Paket referenzieren (für „wo verwendet?" / Löschschutz). */
     public function slots(): HasMany
     {
-        return $this->hasMany(FoodAlchemistConceptSlot::class, 'baustein_id');
+        return $this->hasMany(FoodAlchemistConceptSlot::class, 'paket_id');
     }
 }

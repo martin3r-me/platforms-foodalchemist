@@ -10,9 +10,9 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Rollen-Vokabular (M10-01, D-CON-2) — freie, team-erweiterbare
- * Liste der Slot-/Baustein-Rollen (Vorspeise · Grill-Hauptgang · Dessert …).
+ * Liste der Slot-/Paket-Rollen (Vorspeise · Grill-Hauptgang · Dessert …).
  * Dient als Autocomplete/Pflege-Quelle; die Rolle selbst wird als String an
- * Slot/Baustein gehalten (kein harter FK — „frei").
+ * Slot/Paket gehalten (kein harter FK — „frei").
  */
 class FoodAlchemistVocabRolle extends Model
 {
