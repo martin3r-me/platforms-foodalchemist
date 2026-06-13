@@ -88,3 +88,42 @@ it('Vorlage-Fork über die UI erzeugt ein eigenständiges Concept (M10-05)', fun
     expect(FoodAlchemistConcept::echte()->where('name', '3-Gang – Kopie')->exists())->toBeTrue()
         ->and(FoodAlchemistConcept::echte()->first()->slots()->count())->toBe(1);
 });
+
+it('M10p: Personenzahl → Gesamtpreis im Cockpit, Slot-Reorder über die UI', function () {
+    $b = app(BausteinService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
+    app(BausteinService::class)->update($this->rootTeam, $b->id, ['preis_pro_person' => 4.50]);
+    $c = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
+
+    $comp = Livewire::test(ConceptsIndex::class)
+        ->call('waehle', $c->id)
+        ->set('form.personen', 10)
+        ->call('speichern')
+        ->set('neuerSlotRolle', 'Vorspeise')->call('slotHinzu')
+        ->set('neuerSlotRolle', 'Dessert')->call('slotHinzu');
+
+    $slots = $c->slots()->orderBy('position')->pluck('id')->all();
+    $comp->call('fuelleBaustein', $slots[0], $b->id)
+        ->assertSee('45,00');                                         // 4,50 × 10 Personen
+
+    expect((int) $c->refresh()->personen)->toBe(10);
+
+    // Slot-Reorder: zweiten Slot nach oben
+    $comp->call('slotHoch', $slots[1]);
+    expect($c->slots()->orderBy('position')->pluck('id')->first())->toBe($slots[1]);
+});
+
+it('M10p: Baustein-Gericht Menge/Person setzen + ▲▼-Reorder', function () {
+    $b = app(BausteinService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
+
+    $comp = Livewire::test(BausteineIndex::class)
+        ->call('waehle', $b->id)
+        ->call('gerichtHinzu', $this->green->id)
+        ->call('gerichtHinzu', $this->sunny->id);
+
+    $rows = $b->gerichte()->orderBy('position')->pluck('id')->all();
+    $comp->set("mengeForm.{$rows[0]}", 120)->call('gerichtMengeSpeichern', $rows[0])
+        ->call('gerichtHoch', $rows[1]);
+
+    expect((float) $b->gerichte()->find($rows[0])->menge)->toBe(120.0)
+        ->and($b->gerichte()->orderBy('position')->pluck('id')->first())->toBe($rows[1]);
+});

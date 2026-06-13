@@ -36,6 +36,9 @@ class Index extends Component
 
     public string $gerichtSuche = '';
 
+    /** Menge/Person je Baustein-Gericht (keyed by baustein_gericht-id). */
+    public array $mengeForm = [];
+
     public function updatedSearch(): void
     {
         $this->resetPage();
@@ -61,7 +64,43 @@ class Index extends Component
             'ek_pro_person' => $b->ek_pro_person, 'wareneinsatz_prozent' => $b->wareneinsatz_prozent,
             'beschreibung' => $b->beschreibung ?? '',
         ];
+        $this->mengeForm = $b->gerichte->mapWithKeys(fn ($g) => [$g->id => $g->menge !== null ? (float) $g->menge : null])->all();
         $this->gerichtSuche = '';
+    }
+
+    public function gerichtMengeSpeichern(int $rowId, BausteinService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $menge = $this->mengeForm[$rowId] ?? null;
+        $svc->setGerichtMenge($this->team(), $this->selectedId, $rowId, $menge !== null && $menge !== '' ? (float) $menge : null);
+    }
+
+    public function gerichtHoch(int $rowId, BausteinService $svc): void
+    {
+        $this->verschiebeGericht($rowId, -1, $svc);
+    }
+
+    public function gerichtRunter(int $rowId, BausteinService $svc): void
+    {
+        $this->verschiebeGericht($rowId, 1, $svc);
+    }
+
+    private function verschiebeGericht(int $rowId, int $richtung, BausteinService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $ids = $svc->detail($this->team(), $this->selectedId)->gerichte->pluck('id')->all();
+        $pos = array_search($rowId, $ids, true);
+        $ziel = $pos + $richtung;
+        if ($pos === false || $ziel < 0 || $ziel >= count($ids)) {
+            return;
+        }
+        [$ids[$pos], $ids[$ziel]] = [$ids[$ziel], $ids[$pos]];
+        $svc->reorderGerichte($this->team(), $this->selectedId, $ids);
+        $this->waehle($this->selectedId, $svc);
     }
 
     public function speichern(BausteinService $svc): void

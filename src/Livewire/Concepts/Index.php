@@ -28,7 +28,7 @@ class Index extends Component
     #[Url(as: 'c')]
     public ?int $selectedId = null;
 
-    public array $form = ['name' => '', 'anlass' => '', 'niveau' => '', 'status' => 'draft', 'beschreibung' => ''];
+    public array $form = ['name' => '', 'anlass' => '', 'niveau' => '', 'personen' => null, 'status' => 'draft', 'beschreibung' => ''];
 
     /** Pro Slot editierbare Rolle/Titel (keyed by slot-id). */
     public array $slotForm = [];
@@ -76,7 +76,7 @@ class Index extends Component
         $this->selectedId = $id;
         $this->form = [
             'name' => $c->name, 'anlass' => $c->anlass ?? '', 'niveau' => $c->niveau ?? '',
-            'status' => $c->status, 'beschreibung' => $c->beschreibung ?? '',
+            'personen' => $c->personen, 'status' => $c->status, 'beschreibung' => $c->beschreibung ?? '',
         ];
         $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '']])->all();
         $this->fillSlotId = null;
@@ -116,6 +116,32 @@ class Index extends Component
     public function slotRaus(int $slotId, ConceptService $svc): void
     {
         $svc->removeSlot($this->team(), $slotId);
+        $this->waehle($this->selectedId, $svc);
+    }
+
+    public function slotHoch(int $slotId, ConceptService $svc): void
+    {
+        $this->verschiebeSlot($slotId, -1, $svc);
+    }
+
+    public function slotRunter(int $slotId, ConceptService $svc): void
+    {
+        $this->verschiebeSlot($slotId, 1, $svc);
+    }
+
+    private function verschiebeSlot(int $slotId, int $richtung, ConceptService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $ids = $svc->detail($this->team(), $this->selectedId)->slots->pluck('id')->all();
+        $pos = array_search($slotId, $ids, true);
+        $ziel = $pos + $richtung;
+        if ($pos === false || $ziel < 0 || $ziel >= count($ids)) {
+            return;
+        }
+        [$ids[$pos], $ids[$ziel]] = [$ids[$ziel], $ids[$pos]];
+        $svc->reorderSlots($this->team(), $this->selectedId, $ids);
         $this->waehle($this->selectedId, $svc);
     }
 
@@ -174,6 +200,8 @@ class Index extends Component
             'concepts' => $svc->paginateBrowser(['search' => $this->search, 'vorlagen' => $this->showVorlagen], $team),
             'selected' => $selected,
             'cockpit' => $cockpit,
+            'rollup' => $selected !== null ? $svc->allergenRollup($selected) : null,
+            'hochrechnung' => $selected !== null && $selected->personen !== null ? $svc->mengenHochrechnung($selected) : [],
             'tauschbar' => $tauschbar,
             'kandidaten' => $kandidaten,
         ])->layout('platform::layouts.app');

@@ -136,3 +136,49 @@ it('Owner-Guard: Kind-Team kann geerbten Baustein/Concept nicht pflegen (D1)', f
     expect(fn () => $this->concepts->update($this->childA, $c->id, ['name' => 'Hack']))
         ->toThrow(\RuntimeException::class);
 });
+
+it('M10p C-08: Personenzahl → Gesamtpreis ×N + Mengen-Hochrechnung', function () {
+    $b = $this->bausteine->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
+    $this->bausteine->update($this->rootTeam, $b->id, ['preis_pro_person' => 4.50, 'ek_pro_person' => 1.41]);
+    $this->bausteine->syncGerichte($this->rootTeam, $b->id, [['vk_recipe_id' => $this->green->id, 'menge' => 120]]); // 120 g/Person
+
+    $c = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
+    $this->concepts->update($this->rootTeam, $c->id, ['personen' => 80]);
+    $slot = $this->concepts->addSlot($this->rootTeam, $c->id, ['rolle' => 'Vorspeise']);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['baustein_id' => $b->id]);
+
+    $cockpit = $this->concepts->preisCockpit($c->refresh());
+    expect($cockpit['preis_pro_person'])->toBe(4.50)
+        ->and($cockpit['personen'])->toBe(80)
+        ->and($cockpit['gesamt_preis'])->toBe(360.00);                // 4,50 × 80
+
+    $hr = $this->concepts->mengenHochrechnung($c->refresh());
+    expect($hr)->toHaveCount(1)
+        ->and($hr[0]['menge_pro_person'])->toBe(120.0)
+        ->and($hr[0]['gesamt_menge'])->toBe(9600.0);                  // 120 g × 80
+});
+
+it('M10p C-09: Allergen-/Diät-Rollup — all-Flags vs enthält-Flags, Konfidenz = schwächstes Glied', function () {
+    $veg1 = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'v1', 'name' => 'Salat A', 'status' => 'approved', 'ist_verkaufsrezept' => true,
+        'spec_is_vegan' => true, 'spec_is_vegetarian' => true, 'spec_is_gluten_free' => true, 'allergene_konfidenz' => 'high']);
+    $veg2 = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'v2', 'name' => 'Salat B', 'status' => 'approved', 'ist_verkaufsrezept' => true,
+        'spec_is_vegan' => true, 'spec_is_vegetarian' => true, 'spec_is_gluten_free' => true, 'allergene_konfidenz' => 'medium']);
+    $pork = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'p1', 'name' => 'Pulled Pork', 'status' => 'approved', 'ist_verkaufsrezept' => true,
+        'spec_is_vegan' => false, 'spec_is_vegetarian' => false, 'spec_contains_pork' => true, 'allergene_konfidenz' => 'low']);
+
+    $vorspeise = $this->bausteine->create($this->rootTeam, ['name' => 'Salate', 'rolle' => 'Vorspeise']);
+    $this->bausteine->syncGerichte($this->rootTeam, $vorspeise->id, [['vk_recipe_id' => $veg1->id], ['vk_recipe_id' => $veg2->id]]);
+
+    $c = $this->concepts->create($this->rootTeam, ['name' => 'Buffet']);
+    $sVor = $this->concepts->addSlot($this->rootTeam, $c->id, ['rolle' => 'Vorspeise']);
+    $sHg = $this->concepts->addSlot($this->rootTeam, $c->id, ['rolle' => 'Hauptgang']);
+    $this->concepts->fillSlot($this->rootTeam, $sVor->id, ['baustein_id' => $vorspeise->id]);
+    $this->concepts->fillSlot($this->rootTeam, $sHg->id, ['vk_recipe_id' => $pork->id]);
+
+    $rollup = $this->concepts->allergenRollup($c->refresh());
+    expect($rollup['n_gerichte'])->toBe(3)
+        ->and($rollup['is_vegan'])->toBeFalse()                       // Pork nicht vegan
+        ->and($rollup['contains_pork'])->toBeTrue()                   // mind. eines
+        ->and($rollup['is_gluten_free'])->toBeFalse()                 // Pork nicht als glutenfrei markiert
+        ->and($rollup['konfidenz'])->toBe('low');                     // schwächstes Glied
+});

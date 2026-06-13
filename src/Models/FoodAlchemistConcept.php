@@ -29,6 +29,7 @@ class FoodAlchemistConcept extends Model
     protected $casts = [
         'uuid' => 'string',
         'is_vorlage' => 'boolean',
+        'personen' => 'integer',
         'preis_pro_person_cache' => 'decimal:2',
     ];
 

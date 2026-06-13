@@ -83,17 +83,29 @@
                                 wire:confirm="Baustein löschen?" class="{{ $btnGhost }} text-red-600 dark:text-red-400">Löschen</button>
                     </div>
 
-                    {{-- Gerichte im Baustein --}}
+                    {{-- Gerichte im Baustein (B-03: einfügen wie im Gerichte-Screen) --}}
+                    @php($sumVk = $selected->gerichte->sum(fn ($g) => (float) ($g->gericht?->vk_netto ?? 0)))
                     <div class="space-y-2 pt-2 border-t border-black/5 dark:border-white/10">
-                        <label class="{{ $label }}">Gerichte in diesem Baustein ({{ $selected->gerichte->count() }})</label>
+                        {{-- B-07: KPI-Leiste --}}
+                        <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+                            <span><span class="{{ $label }}">Gerichte</span> <span class="tabular-nums">{{ $selected->gerichte->count() }}</span></span>
+                            <span><span class="{{ $label }}">Σ Gerichte-VK</span> <span class="tabular-nums">{{ number_format($sumVk, 2, ',', '.') }} €</span></span>
+                            <span><span class="{{ $label }}">Baustein €/P</span> <span class="tabular-nums">{{ $selected->preis_pro_person !== null ? number_format((float) $selected->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</span></span>
+                            <span><span class="{{ $label }}">W%</span> <span class="tabular-nums">{{ $selected->wareneinsatz_prozent !== null ? number_format((float) $selected->wareneinsatz_prozent, 1, ',', '.') . ' %' : '—' }}</span></span>
+                        </div>
+                        <label class="{{ $label }}">Gerichte in diesem Baustein (nur Gerichte, keine Basisrezepte)</label>
                         <div class="space-y-1">
                             @forelse($selected->gerichte as $g)
-                                <div wire:key="bg-{{ $g->id }}" class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg bg-black/[0.03] dark:bg-white/5 text-xs">
-                                    <span class="truncate">{{ $g->gericht?->name ?? '—' }}</span>
-                                    <span class="flex items-center gap-2 shrink-0">
-                                        <span class="text-gray-400 tabular-nums">{{ $g->gericht?->vk_netto !== null ? number_format((float) $g->gericht->vk_netto, 2, ',', '.') . ' €' : '' }}</span>
-                                        <button type="button" wire:click="gerichtRaus({{ $g->vk_recipe_id }})" class="text-gray-400 hover:text-red-500" title="Entfernen">✕</button>
+                                <div wire:key="bg-{{ $g->id }}" class="flex items-center gap-2 px-2 py-1 rounded-lg bg-black/[0.03] dark:bg-white/5 text-xs">
+                                    <span class="flex flex-col -my-0.5 shrink-0">
+                                        <button type="button" wire:click="gerichtHoch({{ $g->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="hoch">▲</button>
+                                        <button type="button" wire:click="gerichtRunter({{ $g->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="runter">▼</button>
                                     </span>
+                                    <span class="flex-1 min-w-0 truncate">{{ $g->gericht?->name ?? '—' }}</span>
+                                    <input type="number" step="1" min="0" wire:model.blur="mengeForm.{{ $g->id }}" wire:change="gerichtMengeSpeichern({{ $g->id }})"
+                                           class="{{ $input }} w-16 text-right tabular-nums py-0.5" placeholder="g/P" title="Menge pro Person" />
+                                    <span class="text-gray-400 tabular-nums shrink-0 w-14 text-right">{{ $g->gericht?->vk_netto !== null ? number_format((float) $g->gericht->vk_netto, 2, ',', '.') . ' €' : '' }}</span>
+                                    <button type="button" wire:click="gerichtRaus({{ $g->vk_recipe_id }})" class="text-gray-400 hover:text-red-500 shrink-0" title="Entfernen">✕</button>
                                 </div>
                             @empty
                                 <p class="text-[11px] text-gray-400">Noch keine Gerichte. Unten suchen und hinzufügen.</p>

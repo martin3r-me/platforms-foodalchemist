@@ -43,11 +43,30 @@
             @if($selected && $cockpit)
                 <div class="p-4 space-y-3">
                     <div class="text-center py-2">
-                        <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($cockpit['preis_pro_person'], 2, ',', '.') }} €</div>
-                        <div class="{{ $label }}">pro Person · EK {{ number_format($cockpit['ek_pro_person'], 2, ',', '.') }} €</div>
+                        @if($cockpit['personen'])
+                            <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($cockpit['gesamt_preis'], 2, ',', '.') }} €</div>
+                            <div class="{{ $label }}">gesamt für {{ $cockpit['personen'] }} Pers. · {{ number_format($cockpit['preis_pro_person'], 2, ',', '.') }} €/Person</div>
+                        @else
+                            <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($cockpit['preis_pro_person'], 2, ',', '.') }} €</div>
+                            <div class="{{ $label }}">pro Person · EK {{ number_format($cockpit['ek_pro_person'], 2, ',', '.') }} €</div>
+                        @endif
                     </div>
                     @if($cockpit['hat_leer'])<p class="{{ $pill }} {{ $variantPill['secondary'] }} w-full justify-center">Es gibt noch leere Slots</p>@endif
                     @if($cockpit['hat_stale'])<p class="{{ $pill }} {{ $variantPill['warning'] }} w-full justify-center">Ein Baustein-Preis ist veraltet</p>@endif
+
+                    {{-- C-09: Allergen-/Diät-Rollup übers ganze Concept --}}
+                    @if($rollup && $rollup['n_gerichte'] > 0)
+                        <div class="flex flex-wrap gap-1 pt-1 border-t border-black/5 dark:border-white/10">
+                            @if($rollup['is_vegan'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>
+                            @elseif($rollup['is_vegetarian'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegetarisch</span>@endif
+                            @if($rollup['is_gluten_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">glutenfrei</span>@endif
+                            @if($rollup['is_lactose_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">laktosefrei</span>@endif
+                            @if($rollup['is_halal'])<span class="{{ $pill }} {{ $variantPill['info'] }}">halal</span>@endif
+                            @if($rollup['contains_pork'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Schwein</span>@endif
+                            @if($rollup['contains_beef'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Rind</span>@endif
+                            <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$rollup['konfidenz']] ?? $variantPill['secondary'] }}" title="Allergen-Konfidenz (schwächstes Gericht)">Konf. {{ $rollup['konfidenz'] }}</span>
+                        </div>
+                    @endif
                     <div class="space-y-1 pt-1">
                         @foreach($cockpit['zeilen'] as $z)
                             <div class="flex items-center justify-between gap-2 text-xs py-1 border-t border-black/5 dark:border-white/10">
@@ -74,7 +93,7 @@
             {{-- Concept-Stammdaten --}}
             <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="hdr-{{ $selected->id }}">
                 <div class="{{ $cardAccent }}"></div>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div class="md:col-span-2">
                         <label class="{{ $label }}">Name {{ $selected->is_vorlage ? '(Vorlage)' : '' }}</label>
                         <input type="text" wire:model="form.name" class="{{ $input }}" />
@@ -82,6 +101,10 @@
                     <div>
                         <label class="{{ $label }}">Anlass</label>
                         <input type="text" wire:model="form.anlass" class="{{ $input }}" placeholder="z. B. Sommerfest" />
+                    </div>
+                    <div>
+                        <label class="{{ $label }}">Personen</label>
+                        <input type="number" min="1" step="1" wire:model.live="form.personen" wire:change="speichern" class="{{ $input }} text-right tabular-nums" placeholder="z. B. 80" title="Gästezahl → Gesamtpreis + Mengen-Hochrechnung" />
                     </div>
                     <div>
                         <label class="{{ $label }}">Status</label>
@@ -110,6 +133,10 @@
                     @forelse($selected->slots as $slot)
                         <div wire:key="slot-{{ $slot->id }}" class="rounded-xl border border-black/5 dark:border-white/10 p-3 space-y-2">
                             <div class="flex items-center gap-2">
+                                <span class="flex flex-col -my-0.5 shrink-0">
+                                    <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="hoch">▲</button>
+                                    <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="runter">▼</button>
+                                </span>
                                 <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.rolle" wire:change="slotSpeichern({{ $slot->id }})"
                                        class="{{ $input }} w-40" placeholder="Rolle" />
                                 <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.titel" wire:change="slotSpeichern({{ $slot->id }})"
@@ -169,6 +196,32 @@
                     @endforelse
                 </div>
             </div>
+
+            {{-- C-08: Mengen-Hochrechnung für N Personen (Brücke zur Produktionsplanung M16) --}}
+            @if(!empty($hochrechnung))
+                <div class="relative overflow-hidden {{ $card }} p-5 space-y-2">
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Produktionsmengen <span class="{{ $label }}">für {{ $selected->personen }} Personen</span></h3>
+                    <div class="overflow-x-auto">
+                        <table class="{{ $table }}">
+                            <thead><tr class="text-left">
+                                @foreach([['Rolle', ''], ['Baustein', ''], ['Gericht', 'w-full'], ['Menge/P', 'text-right'], ['Gesamt', 'text-right']] as [$h, $a])<th class="{{ $th }} {{ $a }}">{{ $h }}</th>@endforeach
+                            </tr></thead>
+                            <tbody>
+                                @foreach($hochrechnung as $z)
+                                    <tr class="{{ $tr }}">
+                                        <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $z['rolle'] ?? '—' }}</td>
+                                        <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $z['baustein'] ?? '—' }}</td>
+                                        <td class="{{ $td }} truncate">{{ $z['gericht'] }}</td>
+                                        <td class="{{ $td }} text-right tabular-nums whitespace-nowrap">{{ $z['menge_pro_person'] !== null ? number_format($z['menge_pro_person'], 0, ',', '.') . ' ' . ($z['einheit'] ?? '') : '—' }}</td>
+                                        <td class="{{ $td }} text-right tabular-nums whitespace-nowrap text-gray-900 dark:text-gray-100">{{ $z['gesamt_menge'] !== null ? number_format($z['gesamt_menge'], 0, ',', '.') . ' ' . ($z['einheit'] ?? '') : '—' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-[11px] text-gray-400">Menge/P = pro Person im Baustein gepflegt. Leere Zeilen = noch keine Menge hinterlegt.</p>
+                </div>
+            @endif
         @else
             <div class="{{ $card }} p-10 text-center text-sm text-gray-400">
                 Links ein Concept auswählen oder „+ Neues Concept" anlegen. Vorlagen lassen sich per „↧ nutzen" zu einem eigenständigen Concept forken.

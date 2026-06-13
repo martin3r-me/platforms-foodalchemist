@@ -66,7 +66,7 @@ class ConceptService
         ]);
     }
 
-    private const FELDER = ['name', 'anlass', 'niveau', 'status', 'beschreibung', 'note'];
+    private const FELDER = ['name', 'anlass', 'niveau', 'personen', 'status', 'beschreibung', 'note'];
 
     public function update(Team $team, int $id, array $in): FoodAlchemistConcept
     {
@@ -217,12 +217,107 @@ class ConceptService
             $ekTotal += $ek;
         }
 
+        $personen = $concept->personen;
+
         return [
             'zeilen' => $zeilen,
             'preis_pro_person' => round($vkTotal, 2),
             'ek_pro_person' => round($ekTotal, 2),
+            'personen' => $personen,
+            'gesamt_preis' => $personen !== null ? round($vkTotal * $personen, 2) : null,
+            'gesamt_ek' => $personen !== null ? round($ekTotal * $personen, 2) : null,
             'hat_stale' => $hatStale,
             'hat_leer' => $hatLeer,
+        ];
+    }
+
+    /**
+     * C-08: Mengen-Hochrechnung für N Personen — je Gericht (aus den Bausteinen +
+     * fest gesetzte Gerichte) `menge` pro Person × Personen. Grundlage für die
+     * spätere Produktionsplanung (M16). `menge` = Menge pro Person in der Einheit.
+     *
+     * @return list<array{rolle:?string, baustein:?string, gericht:string, menge_pro_person:?float, einheit:?string, gesamt_menge:?float}>
+     */
+    public function mengenHochrechnung(FoodAlchemistConcept $concept): array
+    {
+        $personen = $concept->personen;
+        $concept->loadMissing([
+            'slots' => fn ($q) => $q->orderBy('position'),
+            'slots.baustein.gerichte.gericht:id,name',
+            'slots.baustein.gerichte.einheit:id,slug,display_de',
+            'slots.gericht:id,name', 'slots.einheit:id,slug,display_de',
+        ]);
+
+        $zeilen = [];
+        foreach ($concept->slots as $slot) {
+            if ($slot->baustein_id !== null && $slot->baustein) {
+                foreach ($slot->baustein->gerichte as $bg) {
+                    $mpp = $bg->menge !== null ? (float) $bg->menge : null;
+                    $zeilen[] = [
+                        'rolle' => $slot->rolle, 'baustein' => $slot->baustein->name,
+                        'gericht' => $bg->gericht?->name ?? '—',
+                        'menge_pro_person' => $mpp,
+                        'einheit' => $bg->einheit?->display_de ?? $bg->einheit?->slug,
+                        'gesamt_menge' => $mpp !== null && $personen !== null ? round($mpp * $personen, 2) : null,
+                    ];
+                }
+            } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
+                $mpp = $slot->menge !== null ? (float) $slot->menge : null;
+                $zeilen[] = [
+                    'rolle' => $slot->rolle, 'baustein' => null,
+                    'gericht' => $slot->gericht->name,
+                    'menge_pro_person' => $mpp,
+                    'einheit' => $slot->einheit?->display_de ?? $slot->einheit?->slug,
+                    'gesamt_menge' => $mpp !== null && $personen !== null ? round($mpp * $personen, 2) : null,
+                ];
+            }
+        }
+
+        return $zeilen;
+    }
+
+    /**
+     * C-09: Allergen-/Diät-Rollup über ALLE Gerichte des Concepts (aus den
+     * Bausteinen + feste Gerichte). „all"-Flags (vegan/vegetarisch/halal/glutenfrei/
+     * laktosefrei) gelten nur, wenn ALLE Gerichte sie erfüllen; „enthält"-Flags
+     * (Schwein/Rind) bei MIND. EINEM. Konfidenz = schwächstes Glied. Liest die
+     * GL-08-Spec-Flags am Rezept — keine eigene Aggregation (eine Regel-Stelle).
+     *
+     * @return array{n_gerichte:int, is_vegan:bool, is_vegetarian:bool, is_halal:bool, is_gluten_free:bool, is_lactose_free:bool, contains_pork:bool, contains_beef:bool, konfidenz:string}
+     */
+    public function allergenRollup(FoodAlchemistConcept $concept): array
+    {
+        $concept->loadMissing([
+            'slots.baustein.gerichte.gericht:id,spec_is_vegan,spec_is_vegetarian,spec_is_halal,spec_is_gluten_free,spec_is_lactose_free,spec_contains_pork,spec_contains_beef,allergene_konfidenz',
+            'slots.gericht:id,spec_is_vegan,spec_is_vegetarian,spec_is_halal,spec_is_gluten_free,spec_is_lactose_free,spec_contains_pork,spec_contains_beef,allergene_konfidenz',
+        ]);
+
+        $gerichte = collect();
+        foreach ($concept->slots as $slot) {
+            if ($slot->baustein) {
+                $gerichte = $gerichte->merge($slot->baustein->gerichte->pluck('gericht')->filter());
+            }
+            if ($slot->gericht) {
+                $gerichte->push($slot->gericht);
+            }
+        }
+        $gerichte = $gerichte->filter()->unique('id')->values();
+
+        $alle = fn (string $feld) => $gerichte->isNotEmpty() && $gerichte->every(fn ($g) => (bool) $g->{$feld});
+        $eines = fn (string $feld) => $gerichte->contains(fn ($g) => (bool) $g->{$feld});
+        $rang = ['unknown' => 0, 'low' => 1, 'medium' => 2, 'high' => 3];
+        $minKonf = $gerichte->min(fn ($g) => $rang[$g->allergene_konfidenz] ?? 0);
+
+        return [
+            'n_gerichte' => $gerichte->count(),
+            'is_vegan' => $alle('spec_is_vegan'),
+            'is_vegetarian' => $alle('spec_is_vegetarian'),
+            'is_halal' => $alle('spec_is_halal'),
+            'is_gluten_free' => $alle('spec_is_gluten_free'),
+            'is_lactose_free' => $alle('spec_is_lactose_free'),
+            'contains_pork' => $eines('spec_contains_pork'),
+            'contains_beef' => $eines('spec_contains_beef'),
+            'konfidenz' => array_search($minKonf, $rang, true) ?: 'unknown',
         ];
     }
 

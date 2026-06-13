@@ -147,6 +147,27 @@ class BausteinService
         return $baustein->refresh();
     }
 
+    /** Menge/Person eines Gerichts im Baustein setzen (C-08-Hochrechnung). */
+    public function setGerichtMenge(Team $team, int $bausteinId, int $gerichtRowId, ?float $menge): void
+    {
+        $baustein = FoodAlchemistBaustein::visibleToTeam($team)->findOrFail($bausteinId);
+        $this->guardOwner($baustein, $team);
+        $baustein->gerichte()->where('id', $gerichtRowId)->update(['menge' => $menge]);
+    }
+
+    /** @param list<int> $ids neue Reihenfolge der baustein_gerichte-IDs */
+    public function reorderGerichte(Team $team, int $bausteinId, array $ids): void
+    {
+        $baustein = FoodAlchemistBaustein::visibleToTeam($team)->findOrFail($bausteinId);
+        $this->guardOwner($baustein, $team);
+        DB::transaction(function () use ($bausteinId, $ids) {
+            foreach (array_values($ids) as $i => $id) {
+                \Platform\FoodAlchemist\Models\FoodAlchemistBausteinGericht::where('id', (int) $id)
+                    ->where('baustein_id', $bausteinId)->update(['position' => $i]);
+            }
+        });
+    }
+
     /**
      * Auto-Preis = Σ der Gerichte (vk_netto/ek_total), W% via MargeService.
      * Manuell-Modus: nur den Stale-Marker löschen (gesetzter Preis bleibt).
