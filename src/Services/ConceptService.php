@@ -304,29 +304,21 @@ class ConceptService
                 $gerichte->push($slot->gericht);
             }
         }
-        $gerichte = $gerichte->filter()->unique('id')->values();
 
-        $alle = fn (string $feld) => $gerichte->isNotEmpty() && $gerichte->every(fn ($g) => (bool) $g->{$feld});
-        $eines = fn (string $feld) => $gerichte->contains(fn ($g) => (bool) $g->{$feld});
-        $rang = ['unknown' => 0, 'low' => 1, 'medium' => 2, 'high' => 3];
-        $minKonf = $gerichte->min(fn ($g) => $rang[$g->allergene_konfidenz] ?? 0);
-
-        return [
-            'n_gerichte' => $gerichte->count(),
-            'is_vegan' => $alle('spec_is_vegan'),
-            'is_vegetarian' => $alle('spec_is_vegetarian'),
-            'is_halal' => $alle('spec_is_halal'),
-            'is_gluten_free' => $alle('spec_is_gluten_free'),
-            'is_lactose_free' => $alle('spec_is_lactose_free'),
-            'contains_pork' => $eines('spec_contains_pork'),
-            'contains_beef' => $eines('spec_contains_beef'),
-            'konfidenz' => array_search($minKonf, $rang, true) ?: 'unknown',
-        ];
+        // M10R-1: kanonische Rollup-Stelle (eine Regel) — Output-Form unverändert.
+        return app(ConcepterAggregateService::class)->allergenRollupFromGerichte($gerichte);
     }
 
     private function refreshCache(FoodAlchemistConcept $concept): void
     {
-        $concept->update(['preis_pro_person_cache' => $this->preisCockpit($concept)['preis_pro_person']]);
+        // M10R-1: Preis-Cache + Voll-Aggregat-Caches (Nährwerte/Person, Arbeitszeit, EK).
+        $agg = app(ConcepterAggregateService::class)->conceptAggregat($concept);
+        $concept->update([
+            'preis_pro_person_cache' => $this->preisCockpit($concept)['preis_pro_person'],
+            'naehrwerte_cache' => $agg['naehrwerte'],
+            'arbeitszeit_min_cache' => $agg['arbeitszeit_min'],
+            'ek_pro_person_cache' => $agg['ek_pro_person'],
+        ]);
     }
 
     // ── M10-05: Vorlage = Fork ─────────────────────────────────────────────

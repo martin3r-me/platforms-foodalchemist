@@ -30,6 +30,12 @@ class FoodAlchemistConcept extends Model
         'uuid' => 'string',
         'is_vorlage' => 'boolean',
         'preis_pro_person_cache' => 'decimal:2',
+        // M10R-1: VK-Parität + KI-Brief + Aggregat-Caches
+        'zielpreis_pro_person' => 'decimal:2',
+        'ek_pro_person_cache' => 'decimal:4',
+        'arbeitszeit_min_cache' => 'integer',
+        'ai_confidence' => 'decimal:3',
+        'naehrwerte_cache' => 'array',
     ];
 
     public function scopeVorlagen(Builder $q): Builder
@@ -57,5 +63,17 @@ class FoodAlchemistConcept extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistConceptCategory::class, 'category_id');
+    }
+
+    /** Schreibstil am Concept (M10R-1, §10.8) — Foodbook kann ihn überschreiben. */
+    public function schreibstil(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistWritingStyle::class, 'schreibstil_id');
+    }
+
+    /** Mehrwertige Sektor-Eignung (M10R-1, §10.8 — VK-Parität). */
+    public function sektorEignungen(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistConceptSektorEignung::class, 'concept_id');
     }
 }

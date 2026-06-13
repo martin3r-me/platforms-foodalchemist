@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
@@ -32,5 +33,11 @@ class FoodAlchemistFoodbook extends Model
     public function kapitel(): HasMany
     {
         return $this->hasMany(FoodAlchemistFoodbookKapitel::class, 'foodbook_id')->orderBy('position');
+    }
+
+    /** Schreibstil-Override je Kunde/Foodbook (M10R-1, §10.8). */
+    public function schreibstil(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistWritingStyle::class, 'schreibstil_id');
     }
 }

@@ -144,6 +144,9 @@ class PaketService
             $paket->update(['preis_stale' => false]); // manuell: Stand bestätigt
         }
 
+        // M10R-1: Nährwert-/Arbeitszeit-Aggregat-Cache aktualisieren (Gerichte geändert).
+        app(ConcepterAggregateService::class)->cachePaket($paket);
+
         return $paket->refresh();
     }
 
@@ -153,6 +156,9 @@ class PaketService
         $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($paketId);
         $this->guardOwner($paket, $team);
         $paket->gerichte()->where('id', $gerichtRowId)->update(['menge' => $menge]);
+
+        // M10R-1: Mengen-Faktor fließt in Nährwert-/Kosten-Rollup → Cache neu.
+        app(ConcepterAggregateService::class)->cachePaket($paket->refresh());
     }
 
     /** @param list<int> $ids neue Reihenfolge der paket_gerichte-IDs */

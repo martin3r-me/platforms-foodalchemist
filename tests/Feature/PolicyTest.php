@@ -43,7 +43,7 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
     $satelliten = [
         'FoodAlchemistGpCountUnitDefault', 'FoodAlchemistGpLaPreference', 'FoodAlchemistMatchProposal',
         'FoodAlchemistRecipeIngredient', 'FoodAlchemistRecipeNiveauEignung', 'FoodAlchemistRecipeSektorEignung',
-        'FoodAlchemistTeamSetting',
+        'FoodAlchemistConceptSektorEignung', 'FoodAlchemistTeamSetting',
     ];
     $modelDir = dirname((new ReflectionClass(FoodAlchemistRecipe::class))->getFileName());
     $fehlend = [];

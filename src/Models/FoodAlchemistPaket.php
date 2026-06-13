@@ -34,6 +34,9 @@ class FoodAlchemistPaket extends Model
         'preis_berechnet_am' => 'datetime',
         'preis_stale' => 'boolean',
         'is_inactive' => 'boolean',
+        // M10R-1: Aggregat-Caches (Nährwerte/Person, Arbeitszeit)
+        'arbeitszeit_min_cache' => 'integer',
+        'naehrwerte_cache' => 'array',
     ];
 
     /** Die Gerichte (VK-Rezepte) in diesem Paket. */
