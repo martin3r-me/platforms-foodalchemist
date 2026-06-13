@@ -100,6 +100,21 @@ it('DetailPanel zeigt Paket-Nährwerte + Allergen-Rollup', function () {
         ->assertSee('vegan');                                        // Green Power ist vegan (einziges Gericht)
 });
 
+it('DetailPanel dupliziert ein Concept (C-13)', function () {
+    Livewire::test(DetailPanel::class)
+        ->call('zeige', 'concepts', $this->concept->id)
+        ->call('dupliziere')
+        ->assertDispatched('concepter-gespeichert');
+
+    expect(FoodAlchemistConcept::where('name', 'Grill-Buffet (Kopie)')->exists())->toBeTrue();
+});
+
+it('DetailPanel zeigt die Menü-Karte (Konsumenten-Sicht, C-10)', function () {
+    Livewire::test(DetailPanel::class)
+        ->call('zeige', 'concepts', $this->concept->id)
+        ->assertSee('Menü-Karte');
+});
+
 it('DetailPanel forkt eine Vorlage und öffnet den Fork (M10R-4)', function () {
     $v = $this->concepts->create($this->rootTeam, ['name' => '3-Gang', 'is_vorlage' => true]);
     $this->concepts->addSlot($this->rootTeam, $v->id, ['rolle' => 'Vorspeise']);

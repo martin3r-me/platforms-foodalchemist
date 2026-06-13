@@ -108,6 +108,9 @@
                                     </span>
                                     <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.rolle" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} w-40" placeholder="Rolle" />
                                     <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.titel" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} flex-1" placeholder="Titel (optional)" />
+                                    <label class="inline-flex items-center gap-1 text-[10px] text-gray-500 shrink-0" title="Pflicht-Gang vs. optionale Position">
+                                        <input type="checkbox" wire:model="slotForm.{{ $slot->id }}.is_pflicht" wire:change="slotSpeichern({{ $slot->id }})" class="rounded border-gray-300 text-violet-500 focus:ring-violet-500/30" /> Pflicht
+                                    </label>
                                     <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-400 hover:text-red-500 px-2" title="Position entfernen">✕</button>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-2">

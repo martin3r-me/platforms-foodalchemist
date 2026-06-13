@@ -104,6 +104,17 @@ it('M10R-4: inline neues Paket im Slot schnüren öffnet das Paket im selben Mod
         ->and($slot->refresh()->paket_id)->not->toBeNull();
 });
 
+it('C-02: Pflicht/optional-Toggle je Slot speichert is_pflicht', function () {
+    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
+
+    Livewire::test(Editor::class)
+        ->call('oeffnen', 'concepts', $this->concept->id)
+        ->set("slotForm.{$slot->id}.is_pflicht", false)
+        ->call('slotSpeichern', $slot->id);
+
+    expect($slot->refresh()->is_pflicht)->toBeFalse();
+});
+
 it('M10R-4: Als Vorlage speichern aus dem Editor', function () {
     $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
 

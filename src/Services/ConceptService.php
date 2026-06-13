@@ -435,6 +435,34 @@ class ConceptService
         });
     }
 
+    /** C-13: Concept duplizieren (Stamm + Slots, eigenständig, „(Kopie)"). */
+    public function duplicate(Team $team, int $id): FoodAlchemistConcept
+    {
+        $orig = FoodAlchemistConcept::visibleToTeam($team)->with('slots')->findOrFail($id);
+
+        return DB::transaction(function () use ($team, $orig) {
+            $felder = array_intersect_key($orig->attributesToArray(), array_flip([
+                'konsumenten_name', 'anlass', 'niveau', 'klasse', 'geschmacksrichtung', 'schreibstil_id',
+                'category_id', 'beschreibung', 'zusatztext', 'brief', 'diaet_vorgabe', 'struktur_vorgabe',
+                'saison', 'zielgruppe', 'zielpreis_pro_person', 'is_vorlage',
+            ]));
+            $neu = FoodAlchemistConcept::create($felder + [
+                'team_id' => $team->id, 'name' => $orig->name . ' (Kopie)', 'status' => 'draft',
+            ]);
+            foreach ($orig->slots as $slot) {
+                $neu->slots()->create([
+                    'team_id' => $team->id, 'rolle' => $slot->rolle, 'titel' => $slot->titel,
+                    'position' => $slot->position, 'is_pflicht' => $slot->is_pflicht,
+                    'paket_id' => $slot->paket_id, 'vk_recipe_id' => $slot->vk_recipe_id,
+                    'menge' => $slot->menge, 'einheit_vocab_id' => $slot->einheit_vocab_id,
+                ]);
+            }
+            $this->refreshCache($neu);
+
+            return $neu->refresh();
+        });
+    }
+
     /** „Als Vorlage speichern" — friert das aktuelle Slot-Gerüst als neue Vorlage ein. */
     public function alsVorlageSpeichern(Team $team, int $conceptId, ?string $name = null): FoodAlchemistConcept
     {

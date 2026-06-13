@@ -40,9 +40,11 @@
                 @else
                     <button type="button" wire:click="alsVorlage" class="{{ $btnGhostXs }}">Als Vorlage</button>
                 @endif
+                <button type="button" wire:click="dupliziere" class="{{ $btnGhostXs }}">⎘ Duplizieren</button>
                 <button type="button" wire:click="loeschen" wire:confirm="Concept löschen?" class="{{ $btnGhostXs }} text-red-600 dark:text-red-400">Löschen</button>
             @else
                 <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'pakete', id: {{ $paket->id }} })" class="{{ $btnGhostXs }}">✎ Bearbeiten</button>
+                <button type="button" wire:click="dupliziere" class="{{ $btnGhostXs }}">⎘ Duplizieren</button>
                 <button type="button" wire:click="loeschen" wire:confirm="Paket löschen?" class="{{ $btnGhostXs }} text-red-600 dark:text-red-400">Löschen</button>
             @endif
         </div>
@@ -160,6 +162,25 @@
                 @empty
                     <p class="text-[11px] text-gray-400 py-1">Noch keine Gerichte im Paket.</p>
                 @endforelse
+            </div>
+        @endif
+
+        {{-- Menü-Karte (Konsumenten-Sicht · C-10) --}}
+        @if($concept)
+            <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
+                <span class="{{ $label }}">Menü-Karte (Konsumenten-Sicht)</span>
+                <div class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2 bg-white/40 dark:bg-white/[0.03]">
+                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $concept->konsumenten_name ?: $concept->name }}</p>
+                    @if($concept->zusatztext)<p class="text-[11px] italic text-gray-500 mb-1">{{ $concept->zusatztext }}</p>@endif
+                    @forelse($concept->slots as $slot)
+                        <div class="py-0.5">
+                            <span class="text-[9px] uppercase tracking-wider text-gray-400">{{ $slot->rolle ?: '—' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
+                            <p class="text-xs text-gray-800 dark:text-gray-200">{{ $slot->titel ?: ($slot->paket?->name ?? $slot->gericht?->name ?? '(leer)') }}</p>
+                        </div>
+                    @empty
+                        <p class="text-[11px] text-gray-400">Noch keine Positionen.</p>
+                    @endforelse
+                </div>
             </div>
         @endif
 

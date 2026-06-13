@@ -58,6 +58,20 @@ class DetailPanel extends Component
         $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $fork->id);
     }
 
+    /** C-13/B-10: Duplizieren (typ-adaptiv) + Kopie auswählen. */
+    public function dupliziere(ConceptService $concepts, PaketService $pakete): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $neu = $this->type === 'pakete'
+            ? $pakete->duplicate($this->team(), $this->selectedId)
+            : $concepts->duplicate($this->team(), $this->selectedId);
+        $this->selectedId = $neu->id;
+        $this->dispatch('concepter-gespeichert');
+        $this->dispatch('concepter-selected', type: $this->type, id: $neu->id);
+    }
+
     public function loeschen(ConceptService $concepts, PaketService $pakete): void
     {
         if ($this->selectedId === null) {

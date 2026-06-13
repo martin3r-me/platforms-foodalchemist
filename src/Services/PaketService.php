@@ -130,6 +130,31 @@ class PaketService
         $paket->delete();
     }
 
+    /** B-10: Paket duplizieren (Stamm + Gerichte, „(Kopie)"). */
+    public function duplicate(Team $team, int $id): FoodAlchemistPaket
+    {
+        $orig = FoodAlchemistPaket::visibleToTeam($team)->with('gerichte')->findOrFail($id);
+
+        return DB::transaction(function () use ($team, $orig) {
+            $felder = array_intersect_key($orig->attributesToArray(), array_flip([
+                'konsumenten_name', 'rolle', 'klasse', 'niveau', 'preis_modus', 'preis_pro_person',
+                'ek_pro_person', 'wareneinsatz_prozent', 'beschreibung', 'note',
+            ]));
+            $neu = FoodAlchemistPaket::create($felder + [
+                'team_id' => $team->id, 'name' => $orig->name . ' (Kopie)',
+            ]);
+            foreach ($orig->gerichte as $g) {
+                $neu->gerichte()->create([
+                    'team_id' => $team->id, 'vk_recipe_id' => $g->vk_recipe_id,
+                    'menge' => $g->menge, 'einheit_vocab_id' => $g->einheit_vocab_id, 'position' => $g->position,
+                ]);
+            }
+            app(ConcepterAggregateService::class)->cachePaket($neu);
+
+            return $neu->refresh();
+        });
+    }
+
     /**
      * Setzt die Gerichte des Pakets (Vollersatz) in EINER Transaktion (V-07),
      * danach Preis-Recompute im Auto-Modus.

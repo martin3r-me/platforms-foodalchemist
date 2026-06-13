@@ -3,6 +3,7 @@
 @php($katById = collect($kategorienFlat)->keyBy('id'))
 @php($tabAktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300')
 @php($filterHover = 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5')
+@php($niveauDot = ['klassisch' => 'bg-sky-400', 'gehoben' => 'bg-amber-400', 'haute' => 'bg-violet-500'])
 
 <x-ui-page>
     <x-slot:navbar>
@@ -115,6 +116,7 @@
                             x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $selectedId === $it->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}">
                             <td wire:click.stop="bearbeite({{ $it->id }})" class="{{ $td }} font-medium text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer" title="Editor öffnen">
+                                @if($it->niveau)<span class="inline-block w-1.5 h-1.5 rounded-full {{ $niveauDot[$it->niveau] ?? 'bg-gray-300' }} mr-1 align-middle" title="Niveau: {{ $it->niveau }}"></span>@endif
                                 {{ $it->name }}
                                 @if($tab === 'concepts' && $it->is_vorlage)<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Vorlage</span>@endif
                             </td>

@@ -98,7 +98,7 @@ class Editor extends Component
                 'zielgruppe' => $c->zielgruppe ?? '', 'zielpreis_pro_person' => $c->zielpreis_pro_person,
                 'note' => $c->note ?? '',
             ];
-            $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '']])->all();
+            $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht]])->all();
         }
 
         $this->dispatch('modal.open', name: 'concepter-editor');
@@ -260,7 +260,7 @@ class Editor extends Component
     private function reloadSlotForm(): void
     {
         $c = app(ConceptService::class)->detail($this->team(), $this->id);
-        $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '']])->all() : [];
+        $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht]])->all() : [];
     }
 
     // ── Aufbau · Paket-Gerichte ──────────────────────────────────────────────

@@ -25,6 +25,9 @@ class Index extends Component
     #[Url(as: 'tab')]
     public string $tab = 'gerichte';   // gerichte | concepts
 
+    #[Url(as: 'sel')]
+    public ?int $selectedId = null;
+
     public function updatedSearch(): void
     {
         $this->resetPage();
@@ -33,7 +36,13 @@ class Index extends Component
     public function setTab(string $tab): void
     {
         $this->tab = $tab === 'concepts' ? 'concepts' : 'gerichte';
+        $this->selectedId = null;
         $this->resetPage();
+    }
+
+    public function waehle(int $id): void
+    {
+        $this->selectedId = $this->selectedId === $id ? null : $id;
     }
 
     public function render(KalkulationService $kalk, SalesRecipeService $sales, ConceptService $concepts)
@@ -62,9 +71,25 @@ class Index extends Component
             })->all();
         }
 
+        // M-K4: Wasserfall-Detail für die ausgewählte Zeile (Block-Aufschlüsselung).
+        $detail = null;
+        if ($this->selectedId !== null) {
+            if ($this->tab === 'concepts') {
+                $c = $concepts->detail($team, $this->selectedId);
+                $detail = $c !== null ? ['name' => $c->name, 'einheit' => '/Person', 'hk' => $kalk->conceptHk($team, $c)] : null;
+            } else {
+                $r = $sales->detail($team, $this->selectedId);
+                $detail = $r !== null ? ['name' => $r->name, 'einheit' => '/Portion', 'hk' => $kalk->recipeHk($team, $r)] : null;
+            }
+            if ($detail === null) {
+                $this->selectedId = null;
+            }
+        }
+
         return view('foodalchemist::livewire.kalkulation.index', [
             'page' => $page,
             'zeilen' => $zeilen,
+            'detail' => $detail,
             'zuschlag' => $kalk->hk2($team, 100) - 100, // Anzeige: effektiver Zuschlag in % (auf 100 €)
         ])->layout('platform::layouts.app');
     }

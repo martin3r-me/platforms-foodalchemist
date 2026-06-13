@@ -2,6 +2,7 @@
 
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Concepter\Editor;
+use Platform\FoodAlchemist\Livewire\Kalkulation\Index as KalkulationBrowser;
 use Platform\FoodAlchemist\Livewire\Settings\Kalkulation as KalkulationSettings;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
@@ -101,6 +102,22 @@ it('Settings/Kalkulation: Block-Schema + Marge über die UI speichern', function
     expect((float) $schema['lohn']['wert'])->toBe(40.0)
         ->and(app(TeamSettingsService::class)->margePct($this->rootTeam))->toBe(20.0)
         ->and($schema->has('gemeinkosten'))->toBeTrue();              // Gemeinkosten bleibt im Schema
+});
+
+it('Kalkulation-Browser: Zeile wählen zeigt HK2-Wasserfall im Detail', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'hk', 'name' => 'HG: Filet', 'status' => 'approved',
+        'ist_verkaufsrezept' => true, 'ek_total_eur' => 8.00, 'vk_anzahl_einheiten' => 1, 'vk_netto' => 25.00,
+    ]);
+    $id = FoodAlchemistRecipe::where('recipe_key', 'hk')->value('id');
+
+    Livewire::test(KalkulationBrowser::class)
+        ->call('waehle', $id)
+        ->assertSet('selectedId', $id)
+        ->assertSee('HK2')
+        ->assertSee('VK-Vorschlag')
+        ->assertSee('Wareneinsatz');
 });
 
 it('Concepter-Editor: Kalkulation-Tab zeigt den HK2-Wasserfall', function () {

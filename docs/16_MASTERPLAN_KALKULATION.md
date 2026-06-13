@@ -208,6 +208,7 @@ Excel-Logik ab — mit **6–7 Reglern** statt 37 Tabs.
 |---|---|---|
 | **D-K1** | Kostenblöcke **feste benannte Liste** (an/aus + Wert) oder frei erfindbar? | **Feste Liste** (WE·Lohn·Verpackung·Schwund·Lager·Gemeinkosten·Marge) — einfacher, verständlicher |
 | **D-K2** | Lohn: **ein** Team-Stundensatz oder mehrere Rollen-Sätze (wie Excel: Annahme/Produktion/Spüle)? | **Ein Satz** in v1; Rollen-Sätze später, falls nötig |
+| **D-K2b** | Woher kommt die **Arbeitszeit** je Gericht (inkl. Basisrezepte, Batch-Größe)? | **KI-ENGINE (Dominique 2026-06-13):** Arbeitszeit ist **nicht-linear** skalierbar (5 kg → 100 kg ≠ ×20) und muss die Sub-Rezept-Zeiten realistisch zusammenfassen → das ist eine KI-Schätzung (LLM-Blocker), KEINE deterministische Σ. **v1 nutzt den manuell gepflegten `arbeitszeit_min`** je Rezept; die automatische Zeit-Schätzung/-Skalierung kommt mit dem KI-Batch. |
 | **D-K3** | Schwund: steckt er schon in GL-02 (WE verlustkorrigiert) — zusätzlicher Block = Doppelzählung? | **Default-Block = 0 %** (an, aber 0), damit keine Doppelzählung; pflegbar wenn GL-02 den Schwund nicht abdeckt |
 | **D-K4** | Pax-Staffel-Degression (günstigerer WE bei mehr Menge) jetzt oder später? | **Später** (M-K5) — v1 ohne Mengenstaffel |
 | **D-K5** | Event-Kosten (Personal/Logistik/Equipment je Event) — gehören sie an die **Produkt-HK** oder ans **Foodbook/Angebot**? | **Ans Foodbook** (Angebotsebene, Pax bindet dort) — HK bleibt produktbezogen |
