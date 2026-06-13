@@ -119,22 +119,13 @@ return [
             'group' => 'Concepter',
             'items' => [
                 [
-                    // M10R-2: vereinheitlichter Browser (Concepts | Pakete in einem Screen).
-                    // Concepts/Pakete-Einträge bleiben transitorisch erreichbar (Editor),
-                    // werden in M10R-5 zusammengeführt (§10.2 „Pakete-Eintrag entfällt").
+                    // M10R-5 (§10.2): EIN Eintrag — der vereinheitlichte Browser mit
+                    // Umschalter Concepts | Pakete + Voll-Editor-Modal (Tabs). Die
+                    // alten Einzel-Screens /concepts + /pakete bleiben als Deep-Link
+                    // erreichbar (nicht mehr in der Sidebar).
                     'label' => 'Concepter',
                     'route' => 'foodalchemist.concepter.index',
                     'icon'  => 'heroicon-o-square-3-stack-3d',
-                ],
-                [
-                    'label' => 'Concepts',
-                    'route' => 'foodalchemist.concepts.index',
-                    'icon'  => 'heroicon-o-rectangle-stack',
-                ],
-                [
-                    'label' => 'Pakete',
-                    'route' => 'foodalchemist.pakete.index',
-                    'icon'  => 'heroicon-o-puzzle-piece',
                 ],
             ],
         ],
