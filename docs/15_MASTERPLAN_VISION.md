@@ -7,13 +7,12 @@
 > **M11+ (Domänen-Platzhalter)** von Doc 14 — sie waren bewusst „Zuschnitt mit Dominique
 > abstimmen“ / reine Brainstorming-Zeilen. Hier wird daraus eine sequenzierte, baubare
 > Landkarte mit Abhängigkeiten, Entscheidungs-Gates und „jetzt vs. später“.
-> **Stand:** 2026-06-13 · **Status (Suite 427/427):** Gates (§5) entschieden · **Concepter
-> KOMPLETT** (M10/M10p/M10c; Begriff **„Paket"**; Concept person-unabhängig; Kategorie-Baum;
-> Allergen-Rollup) · **M11 Foodbook KOMPLETT** (Schema + Service + 3-Panel-Editor; an Jarvis
-> angeglichen: 8 Block-Typen, Header-Presets, Staffelpreise, Wahl-Gruppen; **Foodbook komponiert
-> Concepts, KEINE Einzel-Gerichte** — Concepter = Kern; Pax-Gesamtpreis F-12; Route /foodbooks +
-> Sidebar aktiv) · **offen (extern blockiert):** F-08 Versand-Snapshot, F-07 Schreibstil (LLM),
-> F-09 PDF (Engine) · **nächster Schritt M12 Kalkulation HK1/HK2**.
+> **Stand:** 2026-06-13 · **Status (Suite 432/432):** Gates (§5) entschieden · **M10 Concepter
+> KOMPLETT** (Begriff „Paket"; person-unabhängig; Kategorie-Baum; Allergen-Rollup) · **M11
+> Foodbook KOMPLETT** (3-Panel-Editor, Jarvis-angeglichen; komponiert Concepts, keine Gerichte;
+> /foodbooks) · **M12 Kalkulation KOMPLETT** (HK2-Zuschlagskalkulation HK1→HK2 + Vollkosten-DB,
+> Übersicht /kalkulation) · **offen extern:** Versand-Snapshot/Schreibstil(LLM)/PDF(Engine),
+> HK2 in den Cockpits (K-04), markStale-Wiring (K-07) · **nächster Schritt M13 Zielpreis-Konfigurator**.
 
 > **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Inhalt heißt bei uns
 > **„Paket“** (Dominique: bessere Beschreibung als „Baustein“; im Konzeptpapier „Modul“ —
