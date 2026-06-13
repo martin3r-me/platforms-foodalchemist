@@ -7,10 +7,10 @@
 > **M11+ (Domänen-Platzhalter)** von Doc 14 — sie waren bewusst „Zuschnitt mit Dominique
 > abstimmen“ / reine Brainstorming-Zeilen. Hier wird daraus eine sequenzierte, baubare
 > Landkarte mit Abhängigkeiten, Entscheidungs-Gates und „jetzt vs. später“.
-> **Stand:** 2026-06-13 · **Status:** Gates (§5) entschieden · **M10 (Concepter) GEBAUT**
-> (Suite 412/412) · **Feature-Katalog §9** ergänzt (Self-Review + Detail je Modul; Concepter =
-> WaWi-Menü-Teil, Bedienung wie der Gerichte-Editor) · nächster Schritt **M10p** (Concepter-
-> Politur: Park-Flow-Einfügen, Personenzahl/Hochrechnung, Allergen-Rollup), dann M11 Foodbook.
+> **Stand:** 2026-06-13 · **Status:** Gates (§5) entschieden · **M10 + M10p (Concepter) GEBAUT**
+> (Suite 416/416) · **Feature-Katalog §9** ergänzt (Concepter = WaWi-Menü-Teil, Bedienung wie
+> der Gerichte-Editor) · M10p: Park-Flow-Einfügen (▲▼/Menge), KPI, Personenzahl→Gesamtpreis×N,
+> Allergen-/Diät-Rollup, Produktionsmengen · **nächster Schritt M11 Foodbook**.
 
 > **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Baustein heißt bei uns
 > **„Baustein“** — im Konzeptpapier „Modul“, aber die Plattform reserviert „Modul“ für ganze
@@ -441,6 +441,9 @@ Concepter führt:
 > Vorlage-Fork; keine Basisrezepte ✓). **Lücken zur „wie-im-Gerichte"-Erwartung:** B-03/C-05
 > (Park-Flow-Einfügen), B-06 (Buffet-Mengenmodell), C-08 (Personenzahl/Hochrechnung), C-09
 > (Allergen-Rollup), C-12 + B-07/B-08 (Jarvis-Dichte). → **M10-Politur-Runde „M10p"** vor M11.
+> **M10p GEBAUT (2026-06-13):** ✓ B-03/C-05 (▲▼-Reorder + Menge/Person je Gericht), ✓ B-07 (KPI),
+> ✓ C-07 (Slot-▲▼), ✓ C-08 (Personenzahl→Gesamtpreis×N + Produktionsmengen), ✓ C-09 (Allergen-
+> Rollup). Offen (kosmetisch, eigene R-Runde): voller R18-3-Spalten-Katalog, Jarvis-Dichte, DnD.
 
 ### 9.3 M11 · Foodbook / Portfolio (D-8-Spec, Angebots-/Menü-Mappe)
 
