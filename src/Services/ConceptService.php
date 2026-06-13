@@ -9,7 +9,9 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory;
+use Platform\FoodAlchemist\Models\FoodAlchemistConceptSektorEignung;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabKlasse;
 
 /**
@@ -100,6 +102,46 @@ class ConceptService
         $concept->update($update);
 
         return $concept->refresh();
+    }
+
+    // ── Sektor-Eignung (Politur · VK-Parität §10.8, mehrwertig wie Rezept) ───
+
+    /** @return list<string> aktive Sektor-Slugs des Concepts. */
+    public function sektorEignungSlugs(FoodAlchemistConcept $concept): array
+    {
+        return $concept->sektorEignungen()->pluck('sektor_slug')->all();
+    }
+
+    /** Sektor zuweisen — reaktiviert soft-deleted Zeilen (wie RecipeService::setzeEignung, R11). */
+    public function setzeSektorEignung(Team $team, int $conceptId, string $slug): void
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
+        $this->guardOwner($concept, $team);
+        $slug = trim($slug);
+        if ($slug === '') {
+            return;
+        }
+        $row = FoodAlchemistConceptSektorEignung::withTrashed()
+            ->where('concept_id', $conceptId)->where('sektor_slug', $slug)->first();
+        if ($row !== null) {
+            if ($row->trashed()) {
+                $row->restore();
+            }
+
+            return;
+        }
+        FoodAlchemistConceptSektorEignung::create([
+            'team_id' => $concept->team_id, 'concept_id' => $conceptId,
+            'sektor_slug' => $slug, 'quelle' => 'manual',
+        ]);
+    }
+
+    public function entferneSektorEignung(Team $team, int $conceptId, string $slug): void
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
+        $this->guardOwner($concept, $team);
+        FoodAlchemistConceptSektorEignung::where('concept_id', $conceptId)
+            ->where('sektor_slug', trim($slug))->delete();
     }
 
     /** Distinkte verwendete Klassen (Filter) + freies Klasse-Vokabular (§10.3). */
@@ -196,6 +238,22 @@ class ConceptService
                 FoodAlchemistConceptSlot::where('id', (int) $id)->where('concept_id', $conceptId)->update(['position' => $i]);
             }
         });
+    }
+
+    /**
+     * Politur F-11: „Wo verwendet?" — Foodbooks, die dieses Concept über einen
+     * Block referenzieren (Bibliotheks-Sicht über Portfolios/Jahre, §10.8).
+     */
+    public function verwendetInFoodbooks(Team $team, int $conceptId): \Illuminate\Support\Collection
+    {
+        $foodbookIds = DB::table('foodalchemist_foodbook_blocks as b')
+            ->join('foodalchemist_foodbook_kapitel as k', 'k.id', '=', 'b.kapitel_id')
+            ->where('b.concept_id', $conceptId)->whereNull('b.deleted_at')
+            ->distinct()->pluck('k.foodbook_id');
+
+        return FoodAlchemistFoodbook::visibleToTeam($team)
+            ->whereIn('id', $foodbookIds)->orderBy('bezeichnung')
+            ->get(['id', 'bezeichnung', 'jahr', 'kunde', 'status']);
     }
 
     /** Austauschbare Pakete für einen Slot = gleiche Rolle (M13-Vorstufe). */

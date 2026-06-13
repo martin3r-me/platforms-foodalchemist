@@ -52,6 +52,8 @@ class Editor extends Component
 
     public ?array $zielVorschlag = null;
 
+    public string $neuerSektor = '';
+
     public ?string $fehler = null;
 
     #[On('concepter-editor.oeffnen')]
@@ -262,7 +264,8 @@ class Editor extends Component
 
     // ── Aufbau · Paket-Gerichte ──────────────────────────────────────────────
 
-    public function gerichtHinzu(int $vkRecipeId): void
+    /** Park-Flow: Gericht mit der eingegebenen Menge/Person einfügen (Politur). */
+    public function gerichtHinzu(int $vkRecipeId, $menge = null): void
     {
         if ($this->type !== 'pakete' || $this->id === null) {
             return;
@@ -271,7 +274,7 @@ class Editor extends Component
         $paket = $svc->detail($this->team(), $this->id);
         $items = $paket->gerichte->map(fn ($g) => ['vk_recipe_id' => $g->vk_recipe_id, 'menge' => $g->menge, 'einheit_vocab_id' => $g->einheit_vocab_id])->all();
         if (! collect($items)->pluck('vk_recipe_id')->contains($vkRecipeId)) {
-            $items[] = ['vk_recipe_id' => $vkRecipeId];
+            $items[] = ['vk_recipe_id' => $vkRecipeId, 'menge' => ($menge !== null && $menge !== '') ? (float) $menge : null];
         }
         $svc->syncGerichte($this->team(), $this->id, $items);
         $this->paketGerichtSuche = '';
@@ -326,6 +329,26 @@ class Editor extends Component
             $this->form['preis_pro_person'] = $p->refresh()->preis_pro_person;
             $this->form['ek_pro_person'] = $p->ek_pro_person;
             $this->form['wareneinsatz_prozent'] = $p->wareneinsatz_prozent;
+            $this->dispatch('concepter-gespeichert', id: $this->id);
+        }
+    }
+
+    // ── Sektor-Eignung (Politur · Concept) ───────────────────────────────────
+
+    public function sektorHinzu(): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null || trim($this->neuerSektor) === '') {
+            return;
+        }
+        app(ConceptService::class)->setzeSektorEignung($this->team(), $this->id, $this->neuerSektor);
+        $this->neuerSektor = '';
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    public function sektorRaus(string $slug): void
+    {
+        if ($this->type === 'concepts' && $this->id !== null) {
+            app(ConceptService::class)->entferneSektorEignung($this->team(), $this->id, $slug);
             $this->dispatch('concepter-gespeichert', id: $this->id);
         }
     }
@@ -401,6 +424,7 @@ class Editor extends Component
             'tauschbar' => $tauschbar,
             'kandidaten' => $kandidaten,
             'paketKandidaten' => $paketKandidaten,
+            'sektorSlugs' => $concept !== null ? $concepts->sektorEignungSlugs($concept) : [],
             'kategorienFlat' => $this->type === 'concepts' ? $concepts->categoriesFlat($team) : [],
             'klassen' => $this->type === 'pakete' ? $pakete->klassen($team) : $concepts->klassen($team),
             'rollen' => $pakete->rollen($team),

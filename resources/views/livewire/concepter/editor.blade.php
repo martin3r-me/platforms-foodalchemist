@@ -178,18 +178,36 @@
                             <p class="text-xs text-gray-400 py-4 text-center">Noch keine Gerichte. Unten suchen und hinzufügen.</p>
                         @endforelse
                     </div>
-                    <div class="space-y-1 pt-1">
-                        <input type="search" wire:model.live.debounce.300ms="paketGerichtSuche" placeholder="Gericht suchen und hinzufügen …" class="{{ $input }}" />
-                        @if($paketGerichtSuche !== '' && $paketKandidaten->isNotEmpty())
-                            <div class="space-y-0.5 max-h-48 overflow-y-auto">
-                                @foreach($paketKandidaten as $kand)
-                                    <button type="button" wire:key="epk-{{ $kand->id }}" wire:click="gerichtHinzu({{ $kand->id }})" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                        <span class="truncate">{{ $kand->name }}</span>
-                                        <span class="text-gray-400 tabular-nums shrink-0">{{ $kand->vk_netto !== null ? number_format((float) $kand->vk_netto, 2, ',', '.') . ' €' : '' }}</span>
-                                    </button>
-                                @endforeach
-                            </div>
-                        @endif
+                    {{-- Park-Flow (Politur): suchen → [+] parken → Menge/Person → Enter → ✓-Flash --}}
+                    <div class="space-y-1 pt-1" x-data="{
+                            geparkt: null, menge: '', flash: false,
+                            park(id, name) { this.geparkt = { id, name }; this.menge = ''; this.$nextTick(() => this.$refs.menge && this.$refs.menge.focus()); },
+                            einfuegen() { if (!this.geparkt) return; this.$wire.gerichtHinzu(this.geparkt.id, this.menge); this.geparkt = null; this.menge = ''; this.flash = true; setTimeout(() => { this.flash = false; }, 1400); },
+                         }">
+                        <div x-show="geparkt === null">
+                            <input type="search" wire:model.live.debounce.300ms="paketGerichtSuche" placeholder="Gericht suchen — [+] parken, Menge/Person, Enter …" class="{{ $input }}" />
+                            @if($paketGerichtSuche !== '' && $paketKandidaten->isNotEmpty())
+                                <div class="space-y-0.5 max-h-48 overflow-y-auto mt-1">
+                                    @foreach($paketKandidaten as $kand)
+                                        <div wire:key="epk-{{ $kand->id }}" class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">
+                                            <span class="truncate">{{ $kand->name }}</span>
+                                            <span class="flex items-center gap-2 shrink-0">
+                                                <span class="text-gray-400 tabular-nums">{{ $kand->vk_netto !== null ? number_format((float) $kand->vk_netto, 2, ',', '.') . ' €' : '' }}</span>
+                                                <button type="button" @click="park({{ $kand->id }}, @js($kand->name))" class="text-violet-500 font-bold px-1" title="parken">+</button>
+                                            </span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                        <div x-show="geparkt !== null" x-cloak class="flex items-center gap-2" data-park-zeile>
+                            <span class="{{ $pill }} {{ $variantPill['info'] }}">Gericht</span>
+                            <span class="flex-1 truncate text-sm" x-text="geparkt?.name"></span>
+                            <input type="number" step="0.01" min="0" x-ref="menge" x-model="menge" @keydown.enter.prevent="einfuegen()" placeholder="Menge/Person" class="{{ $input }} w-32 text-right tabular-nums" />
+                            <button type="button" @click="einfuegen()" class="{{ $btnGhostXs }} text-emerald-600">Einfügen ⏎</button>
+                            <button type="button" @click="geparkt = null" class="{{ $btnGhostXs }}">✕</button>
+                        </div>
+                        <p x-show="flash" x-cloak class="text-[11px] text-emerald-600 dark:text-emerald-400">✓ hinzugefügt</p>
                     </div>
                 @endif
             @endif
@@ -339,8 +357,20 @@
                                 <input type="text" wire:model="form.saison" class="{{ $input }}" />
                             </div>
                             <div>
-                                <label class="{{ $label }}">Zielgruppe/Sektor</label>
+                                <label class="{{ $label }}">Zielgruppe/Sektor (frei)</label>
                                 <input type="text" wire:model="form.zielgruppe" class="{{ $input }}" />
+                            </div>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="{{ $label }}">Sektor-Eignung (mehrwertig, wie VK-Rezept)</label>
+                            <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                @foreach($sektorSlugs as $slug)
+                                    <span wire:key="sek-{{ $slug }}" class="{{ $pill }} {{ $variantPill['info'] }} inline-flex items-center gap-1">
+                                        {{ $slug }}
+                                        <button type="button" wire:click="sektorRaus(@js($slug))" class="hover:text-red-500" title="entfernen">✕</button>
+                                    </span>
+                                @endforeach
+                                <input type="text" wire:model="neuerSektor" wire:keydown.enter.prevent="sektorHinzu" placeholder="Sektor + Enter (z. B. Kita, Klinik, Catering) …" class="{{ $input }} w-56" />
                             </div>
                         </div>
                         <div class="md:col-span-2">

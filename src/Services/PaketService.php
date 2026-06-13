@@ -6,6 +6,8 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabKlasse;
@@ -237,6 +239,20 @@ class PaketService
 
         return FoodAlchemistPaket::whereIn('id', $paketIds)
             ->where('preis_modus', 'auto')->update(['preis_stale' => true]);
+    }
+
+    /**
+     * Politur B-09: „Wo verwendet?" — Concepts, die dieses Paket in einem Slot
+     * referenzieren (Verwendungsnachweis + Löschschutz-Hinweis).
+     */
+    public function verwendetInConcepts(Team $team, int $paketId): Collection
+    {
+        $conceptIds = FoodAlchemistConceptSlot::where('paket_id', $paketId)
+            ->whereNull('deleted_at')->distinct()->pluck('concept_id');
+
+        return FoodAlchemistConcept::visibleToTeam($team)
+            ->whereIn('id', $conceptIds)->orderBy('name')
+            ->get(['id', 'name', 'status', 'is_vorlage']);
     }
 
     /** Gericht-Picker: VK-Rezepte zum Hinzufügen suchen (team-scoped). */

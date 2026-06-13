@@ -162,5 +162,18 @@
                 @endforelse
             </div>
         @endif
+
+        {{-- Wo verwendet? (Verwendungsnachweis · Politur B-09/F-11) --}}
+        <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
+            <span class="{{ $label }}">Wo verwendet? ({{ $verwendung->count() }})</span>
+            @forelse($verwendung as $v)
+                <div class="flex items-center justify-between gap-2 text-xs py-0.5">
+                    <span class="min-w-0 truncate">{{ $concept ? ($v->bezeichnung ?? '—') : $v->name }}</span>
+                    <span class="shrink-0 text-[10px] text-gray-400">{{ $concept ? ('Foodbook' . ($v->jahr ? ' ' . $v->jahr : '') . ($v->kunde ? ' · ' . $v->kunde : '')) : 'Concept' }}</span>
+                </div>
+            @empty
+                <p class="text-[11px] text-gray-400 py-0.5">{{ $concept ? 'In keinem Foodbook referenziert.' : 'In keinem Concept verwendet.' }}</p>
+            @endforelse
+        </div>
     @endif
 </div>

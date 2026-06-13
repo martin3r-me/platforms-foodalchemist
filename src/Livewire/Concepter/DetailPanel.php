@@ -82,12 +82,15 @@ class DetailPanel extends Component
         $aggregat = null;
         $bewertet = null;
 
+        $verwendung = collect();
+
         if ($this->selectedId !== null && $this->type === 'concepts') {
             $concept = $concepts->detail($team, $this->selectedId);
             if ($concept !== null) {
                 $cockpit = $concepts->preisCockpit($concept);
                 $aggregat = $agg->conceptAggregat($concept);
                 $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
+                $verwendung = $concepts->verwendetInFoodbooks($team, $concept->id);
             } else {
                 $this->selectedId = null;
             }
@@ -95,6 +98,7 @@ class DetailPanel extends Component
             $paket = $pakete->detail($team, $this->selectedId);
             if ($paket !== null) {
                 $aggregat = $agg->paketAggregat($paket);
+                $verwendung = $pakete->verwendetInConcepts($team, $paket->id);
             } else {
                 $this->selectedId = null;
             }
@@ -106,6 +110,7 @@ class DetailPanel extends Component
             'cockpit' => $cockpit,
             'aggregat' => $aggregat,
             'bewertung' => $bewertet,
+            'verwendung' => $verwendung,
         ]);
     }
 
