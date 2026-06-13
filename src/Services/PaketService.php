@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabKlasse;
@@ -182,14 +183,12 @@ class PaketService
             }
         });
 
-        if ($paket->preis_modus === 'auto') {
-            $this->recomputePrice($paket);
-        } else {
-            $paket->update(['preis_stale' => false]); // manuell: Stand bestätigt
-        }
+        // EK/W% (im auto-Modus zusätzlich der Preis) aus den Gerichten ableiten —
+        // setzt zugleich preis_stale=false (manuell: Stand bestätigt).
+        $this->recomputePrice($paket);
 
         // M10R-1: Nährwert-/Arbeitszeit-Aggregat-Cache aktualisieren (Gerichte geändert).
-        app(ConcepterAggregateService::class)->cachePaket($paket);
+        app(ConcepterAggregateService::class)->cachePaket($paket->refresh());
 
         return $paket->refresh();
     }
@@ -201,7 +200,8 @@ class PaketService
         $this->guardOwner($paket, $team);
         $paket->gerichte()->where('id', $gerichtRowId)->update(['menge' => $menge]);
 
-        // M10R-1: Mengen-Faktor fließt in Nährwert-/Kosten-Rollup → Cache neu.
+        // M10R-1: Mengen-Faktor fließt in Nährwert-/Kosten-Rollup → EK + Cache neu.
+        $this->recomputePrice($paket->refresh());
         app(ConcepterAggregateService::class)->cachePaket($paket->refresh());
     }
 
@@ -219,34 +219,42 @@ class PaketService
     }
 
     /**
-     * Auto-Preis = Σ der Gerichte (vk_netto/ek_total), W% via MargeService.
-     * Manuell-Modus: nur den Stale-Marker löschen (gesetzter Preis bleibt).
+     * Kosten (EK/Person + W%) IMMER aus den Gerichten ableiten — ein Paket = noch ein
+     * Rezept, der Wareneinsatz folgt dem, was draufliegt (Dominique-Feedback 2026-06-13).
+     * Im manuell-Modus bleibt nur der VERKAUFspreis fix (Buffet-Pauschale); der auto-Modus
+     * leitet zusätzlich den Preis ab. Sind keine Gerichte hinterlegt, bleibt ein evtl. von
+     * Hand gesetzter EK unangetastet.
+     *
+     * EK je Gericht = ek_total_eur / vk_anzahl_einheiten (Wareneinsatz PRO PORTION, nicht
+     * Batch!) × menge — konsistent zur Per-Portion-Logik in recipeHk/ConcepterAggregate.
      */
     public function recomputePrice(FoodAlchemistPaket $paket): FoodAlchemistPaket
     {
-        if ($paket->preis_modus !== 'auto') {
-            $paket->update(['preis_stale' => false]);
+        $auto = $paket->preis_modus === 'auto';
+        $gerichte = $paket->gerichte()->with('gericht:id,vk_netto,ek_total_eur,vk_anzahl_einheiten')->get();
 
-            return $paket->refresh();
-        }
-
-        $gerichte = $paket->gerichte()->with('gericht:id,vk_netto,ek_total_eur')->get();
         $vkSum = 0.0;
         $ekSum = 0.0;
         foreach ($gerichte as $g) {
             $faktor = $g->menge !== null ? (float) $g->menge : 1.0;
+            $anzahl = max(1, (int) ($g->gericht->vk_anzahl_einheiten ?? 1));
             $vkSum += (float) ($g->gericht->vk_netto ?? 0) * $faktor;
-            $ekSum += (float) ($g->gericht->ek_total_eur ?? 0) * $faktor;
+            $ekSum += (float) ($g->gericht->ek_total_eur ?? 0) / $anzahl * $faktor;
         }
-        $marge = $this->marge->marge($vkSum > 0 ? $vkSum : null, $ekSum);
 
-        $paket->update([
-            'preis_pro_person' => $vkSum > 0 ? round($vkSum, 2) : null,
-            'ek_pro_person' => $ekSum > 0 ? round($ekSum, 4) : null,
-            'wareneinsatz_prozent' => $marge['wareneinsatz_pct'] ?? null,
-            'preis_berechnet_am' => now(),
-            'preis_stale' => false,
-        ]);
+        $vkBezug = $auto ? ($vkSum > 0 ? $vkSum : null)
+            : ($paket->preis_pro_person !== null ? (float) $paket->preis_pro_person : null);
+        $marge = $this->marge->marge($vkBezug, $ekSum);
+
+        $update = ['preis_berechnet_am' => now(), 'preis_stale' => false];
+        if ($gerichte->isNotEmpty()) {
+            $update['ek_pro_person'] = $ekSum > 0 ? round($ekSum, 4) : null;
+            $update['wareneinsatz_prozent'] = $marge['wareneinsatz_pct'] ?? null;
+        }
+        if ($auto) {
+            $update['preis_pro_person'] = $vkSum > 0 ? round($vkSum, 2) : null;
+        }
+        $paket->update($update);
 
         return $paket->refresh();
     }
@@ -281,10 +289,21 @@ class PaketService
     }
 
     /** Gericht-Picker: VK-Rezepte zum Hinzufügen suchen (team-scoped). */
-    public function gerichtKandidaten(Team $team, string $suche, int $limit = 30): Collection
+    /**
+     * Gericht-Treffer für den Aufbau-Picker. Neben der Freitext-Suche jetzt
+     * BAUM-FILTER (VK-Hauptgruppe → Klasse, + Geschmack) — gleiche Kaskade wie
+     * der VK-Browser, damit man Gerichte browsen statt nur tippen kann.
+     *
+     * @param  array{hauptgruppe?:?int, klasse?:?int, geschmack?:?string}  $filter
+     */
+    public function gerichtKandidaten(Team $team, string $suche, array $filter = [], int $limit = 60): Collection
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
+            ->when($filter['hauptgruppe'] ?? null, fn ($q, $hg) => $q
+                ->whereIn('speisen_klasse_id', FoodAlchemistDishClass::where('dish_main_group_id', $hg)->pluck('id')))
+            ->when($filter['klasse'] ?? null, fn ($q, $k) => $q->where('speisen_klasse_id', $k))
+            ->when(($filter['geschmack'] ?? '') !== '', fn ($q) => $q->where('geschmacksrichtung', $filter['geschmack']))
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'vk_netto']);
     }

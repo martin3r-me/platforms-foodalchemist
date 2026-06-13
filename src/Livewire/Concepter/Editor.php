@@ -5,12 +5,14 @@ namespace Platform\FoodAlchemist\Livewire\Concepter;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
 use Platform\FoodAlchemist\Services\ConcepterBewertungService;
 use Platform\FoodAlchemist\Services\KalkulationService;
 use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Services\SalesRecipeService;
 
 /**
  * M10R-3 / Doc 15 §10.4: Voll-Editor-Modal im VK-Stil (wie VkModal) — kontext-
@@ -46,6 +48,15 @@ class Editor extends Component
     // Aufbau (Paket): Gericht-Suche
     public string $paketGerichtSuche = '';
 
+    // Aufbau · Gericht-Baum (Picker-Filter, geteilt von Concept-Slot + Paket-Schnüren):
+    // gleiche VK-Hauptgruppe→Klasse-Kaskade wie der VK-Browser, damit man Gerichte
+    // browsen statt nur tippen kann (Feedback D.B. 2026-06-13).
+    public ?int $pickHg = null;
+
+    public ?int $pickKlasse = null;
+
+    public string $pickGeschmack = '';
+
     // Kalkulation (Concept): Zielpreis-Modus (M13)
     public bool $zielModus = false;
 
@@ -61,7 +72,8 @@ class Editor extends Component
     public function oeffnen(string $type, ?int $id): void
     {
         $this->reset(['form', 'slotForm', 'neuerSlotRolle', 'fillSlotId', 'gerichtSuche',
-            'paketGerichtSuche', 'zielModus', 'zielPreis', 'zielVorschlag', 'fehler']);
+            'paketGerichtSuche', 'pickHg', 'pickKlasse', 'pickGeschmack',
+            'zielModus', 'zielPreis', 'zielVorschlag', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
         $this->id = $id;
         $this->tab = 'aufbau';
@@ -201,6 +213,32 @@ class Editor extends Component
     {
         $this->fillSlotId = $this->fillSlotId === $slotId ? null : $slotId;
         $this->gerichtSuche = '';
+        $this->pickFilterReset();
+    }
+
+    // ── Aufbau · Gericht-Baum (VK-Hauptgruppe → Klasse → Geschmack) ───────────
+
+    public function pickHgWaehle(?int $id): void
+    {
+        $this->pickHg = $this->pickHg === $id ? null : $id;
+        $this->pickKlasse = null;   // Kaskade zurücksetzen (wie VK-Browser §4.1)
+    }
+
+    public function pickKlasseWaehle(int $id): void
+    {
+        $this->pickKlasse = $this->pickKlasse === $id ? null : $id;
+    }
+
+    public function pickGeschmackWaehle(string $wert): void
+    {
+        $this->pickGeschmack = $this->pickGeschmack === $wert ? '' : $wert;
+    }
+
+    private function pickFilterReset(): void
+    {
+        $this->pickHg = null;
+        $this->pickKlasse = null;
+        $this->pickGeschmack = '';
     }
 
     public function fuelleGericht(int $slotId, int $vkRecipeId): void
@@ -381,7 +419,7 @@ class Editor extends Component
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
-    public function render(ConceptService $concepts, PaketService $pakete, ConcepterAggregateService $agg, ConcepterBewertungService $bewertung, KalkulationService $kalk)
+    public function render(ConceptService $concepts, PaketService $pakete, ConcepterAggregateService $agg, ConcepterBewertungService $bewertung, KalkulationService $kalk, SalesRecipeService $sales)
     {
         $team = $this->team();
         $concept = null;
@@ -394,6 +432,10 @@ class Editor extends Component
         $kandidaten = collect();
         $paketKandidaten = collect();
 
+        // Gericht-Baum (geteilt von beiden Pickern): aktiv, sobald ein Filter ODER Suchtext gesetzt ist.
+        $pickFilter = ['hauptgruppe' => $this->pickHg, 'klasse' => $this->pickKlasse, 'geschmack' => $this->pickGeschmack];
+        $pickAktiv = fn (string $suche) => $suche !== '' || $this->pickHg !== null || $this->pickKlasse !== null || $this->pickGeschmack !== '';
+
         if ($this->id !== null && $this->type === 'concepts') {
             $concept = $concepts->detail($team, $this->id);
             if ($concept !== null) {
@@ -404,8 +446,8 @@ class Editor extends Component
                 foreach ($concept->slots as $slot) {
                     $tauschbar[$slot->id] = $concepts->tauschbarePakete($team, $slot);
                 }
-                if ($this->fillSlotId !== null && $this->gerichtSuche !== '') {
-                    $kandidaten = $pakete->gerichtKandidaten($team, $this->gerichtSuche);
+                if ($this->fillSlotId !== null && $pickAktiv($this->gerichtSuche)) {
+                    $kandidaten = $pakete->gerichtKandidaten($team, $this->gerichtSuche, $pickFilter);
                 }
             }
         } elseif ($this->id !== null && $this->type === 'pakete') {
@@ -413,13 +455,19 @@ class Editor extends Component
             if ($paket !== null) {
                 $aggregat = $agg->paketAggregat($paket);
                 $kalkulation = $kalk->paketHk($team, $paket);
-                if ($this->paketGerichtSuche !== '') {
-                    $paketKandidaten = $pakete->gerichtKandidaten($team, $this->paketGerichtSuche);
+                if ($pickAktiv($this->paketGerichtSuche)) {
+                    $paketKandidaten = $pakete->gerichtKandidaten($team, $this->paketGerichtSuche, $pickFilter);
                 }
             }
         }
 
         return view('foodalchemist::livewire.concepter.editor', [
+            'pickHauptgruppen' => $sales->dishMainGroups($team),
+            'pickHgCounts' => $sales->hauptgruppenCounts($team),
+            'pickKlassen' => $this->pickHg !== null
+                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->pickHg)->orderBy('bezeichnung')->get(['id', 'bezeichnung'])
+                : collect(),
+            'pickKlassenCounts' => $this->pickHg !== null ? $sales->klassenCounts($team, $this->pickHg) : [],
             'concept' => $concept,
             'paket' => $paket,
             'cockpit' => $cockpit,

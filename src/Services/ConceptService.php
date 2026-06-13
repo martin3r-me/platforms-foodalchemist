@@ -293,19 +293,19 @@ class ConceptService
                 $ek = (float) ($slot->paket->ek_pro_person ?? 0);
                 $hatStale = $hatStale || (bool) $slot->paket->preis_stale;
                 $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'paket', 'rolle' => $slot->rolle,
-                    'label' => $slot->paket->name, 'preis' => $vk, 'stale' => (bool) $slot->paket->preis_stale];
+                    'label' => $slot->paket->name, 'preis' => $vk, 'ek' => round($ek, 2), 'stale' => (bool) $slot->paket->preis_stale];
             } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
                 $faktor = $slot->menge !== null ? (float) $slot->menge : 1.0;
                 $vk = (float) ($slot->gericht->vk_netto ?? 0) * $faktor;
                 $ek = (float) ($slot->gericht->ek_total_eur ?? 0) * $faktor;
                 $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'gericht', 'rolle' => $slot->rolle,
-                    'label' => $slot->gericht->name, 'preis' => round($vk, 2), 'stale' => false];
+                    'label' => $slot->gericht->name, 'preis' => round($vk, 2), 'ek' => round($ek, 2), 'stale' => false];
             } else {
                 $vk = 0.0;
                 $ek = 0.0;
                 $hatLeer = true;
                 $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'leer', 'rolle' => $slot->rolle,
-                    'label' => $slot->titel ?? '(leer)', 'preis' => null, 'stale' => false];
+                    'label' => $slot->titel ?? '(leer)', 'preis' => null, 'ek' => null, 'stale' => false];
             }
             $vkTotal += $vk;
             $ekTotal += $ek;

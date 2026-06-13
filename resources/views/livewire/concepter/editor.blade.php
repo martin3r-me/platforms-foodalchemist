@@ -90,6 +90,43 @@
 
             {{-- ── Tab: AUFBAU ───────────────────────────────────────────── --}}
             @if($tab === 'aufbau')
+                {{-- Live-Kosten-Streifen: Wareneinsatz → HK2 → VK-Vorschlag → DB, aktualisiert
+                     sofort beim Bauen (Feedback D.B.: „ein Concept = noch ein Rezept"). --}}
+                @if($kalkulation)
+                    {{-- EINE Basis: alles aus $kalkulation (conceptHk/paketHk) — der gleiche Kalkulator
+                         wie im Tab „Kalkulation" und auf der Kalkulations-Seite, damit der Streifen nie
+                         sich selbst widerspricht (Wareneinsatz = HK1, das in HK2 fließt). --}}
+                    @php($stripVk = $concept ? ($cockpit['preis_pro_person'] ?? 0) : ($paket?->preis_pro_person !== null ? (float) $paket->preis_pro_person : null))
+                    @php($stripEk = (float) ($kalkulation['hk1_pro_person'] ?? 0))
+                    @php($stripWpct = ($stripVk !== null && $stripVk > 0) ? $stripEk / $stripVk * 100 : null)
+                    <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
+                        <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2">
+                            <span class="text-[10px] uppercase tracking-wider text-violet-600 dark:text-violet-400">VK €/Person</span>
+                            <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ $stripVk !== null ? number_format((float) $stripVk, 2, ',', '.') . ' €' : '—' }}</p>
+                        </div>
+                        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                            <span class="{{ $dt }}">Wareneinsatz/Pers.</span>
+                            <p class="text-sm font-semibold tabular-nums">{{ number_format($stripEk, 2, ',', '.') }} €</p>
+                        </div>
+                        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                            <span class="{{ $dt }}">Wareneinsatz %</span>
+                            <p class="text-sm font-semibold tabular-nums">{{ $stripWpct !== null ? number_format($stripWpct, 1, ',', '.') . ' %' : '—' }}</p>
+                        </div>
+                        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                            <span class="{{ $dt }}">HK2 (Vollkosten)</span>
+                            <p class="text-sm font-semibold tabular-nums">{{ number_format((float) ($kalkulation['hk2_pro_person'] ?? 0), 2, ',', '.') }} €</p>
+                        </div>
+                        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                            <span class="{{ $dt }}">VK-Vorschlag</span>
+                            <p class="text-sm font-semibold tabular-nums text-violet-700 dark:text-violet-300">{{ number_format((float) ($kalkulation['vk_vorschlag'] ?? 0), 2, ',', '.') }} €</p>
+                        </div>
+                        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                            <span class="{{ $dt }}">Deckungsbeitrag</span>
+                            <p class="text-sm font-semibold tabular-nums {{ ($kalkulation['db_eur'] ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400' }}">{{ $kalkulation['db_eur'] !== null ? number_format((float) $kalkulation['db_eur'], 2, ',', '.') . ' €' : '—' }}</p>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-gray-400 -mt-1">Live aus den Gerichten · Marge/Blöcke in Einstellungen → Kalkulation · volle Aufschlüsselung im Tab „Kalkulation".</p>
+                @endif
                 @if($concept)
                     <div class="flex items-center justify-between">
                         <h3 class="font-medium text-gray-900 dark:text-gray-100">Positionen</h3>
@@ -140,9 +177,9 @@
                                 </div>
                                 @if($fillSlotId === $slot->id)
                                     <div class="space-y-1 pl-1">
-                                        <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht suchen …" class="{{ $input }}" />
-                                        @if($gerichtSuche !== '' && $kandidaten->isNotEmpty())
-                                            <div class="space-y-0.5 max-h-48 overflow-y-auto">
+                                        @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'gerichtSuche'])
+                                        @if($kandidaten->isNotEmpty())
+                                            <div class="space-y-0.5 max-h-56 overflow-y-auto">
                                                 @foreach($kandidaten as $kand)
                                                     <button type="button" wire:key="ek-{{ $slot->id }}-{{ $kand->id }}" wire:click="fuelleGericht({{ $slot->id }}, {{ $kand->id }})" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
                                                         <span class="truncate">{{ $kand->name }}</span>
@@ -150,6 +187,8 @@
                                                     </button>
                                                 @endforeach
                                             </div>
+                                        @elseif($gerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '')
+                                            <p class="text-[11px] text-gray-400 px-2 py-1">Keine Gerichte für diese Auswahl.</p>
                                         @endif
                                     </div>
                                 @endif
@@ -188,9 +227,10 @@
                             einfuegen() { if (!this.geparkt) return; this.$wire.gerichtHinzu(this.geparkt.id, this.menge); this.geparkt = null; this.menge = ''; this.flash = true; setTimeout(() => { this.flash = false; }, 1400); },
                          }">
                         <div x-show="geparkt === null">
-                            <input type="search" wire:model.live.debounce.300ms="paketGerichtSuche" placeholder="Gericht suchen — [+] parken, Menge/Person, Enter …" class="{{ $input }}" />
-                            @if($paketGerichtSuche !== '' && $paketKandidaten->isNotEmpty())
-                                <div class="space-y-0.5 max-h-48 overflow-y-auto mt-1">
+                            @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'paketGerichtSuche'])
+                            <p class="text-[10px] text-gray-400 mt-0.5">Treffer: <span class="text-violet-500 font-bold">+</span> parken → Menge/Person → Enter.</p>
+                            @if($paketKandidaten->isNotEmpty())
+                                <div class="space-y-0.5 max-h-56 overflow-y-auto mt-1">
                                     @foreach($paketKandidaten as $kand)
                                         <div wire:key="epk-{{ $kand->id }}" class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">
                                             <span class="truncate">{{ $kand->name }}</span>
@@ -201,6 +241,8 @@
                                         </div>
                                     @endforeach
                                 </div>
+                            @elseif($paketGerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '')
+                                <p class="text-[11px] text-gray-400 px-2 py-1 mt-1">Keine Gerichte für diese Auswahl.</p>
                             @endif
                         </div>
                         <div x-show="geparkt !== null" x-cloak class="flex items-center gap-2" data-park-zeile>
@@ -288,15 +330,87 @@
                         <p class="text-[10px] text-gray-400 pt-0.5">Blöcke pflegst du in Einstellungen → Kalkulation.</p>
                     </div>
                 @endif
+
+                {{-- Wareneinsatz je Position — woraus sich die Kosten zusammensetzen (wie die Zutatenliste beim Gericht) --}}
                 @if($concept && $cockpit)
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div class="rounded-xl border border-black/5 dark:border-white/10 p-3">
+                        <p class="{{ $label }} mb-1.5">Wareneinsatz je Position / Person</p>
+                        <table class="w-full text-xs">
+                            <thead><tr class="text-gray-400 text-[10px] uppercase tracking-wider">
+                                <th class="text-left font-medium py-1">Position</th>
+                                <th class="text-right font-medium">Wareneinsatz</th>
+                                <th class="text-right font-medium">VK</th>
+                                <th class="text-right font-medium">W-%</th>
+                            </tr></thead>
+                            <tbody>
+                            @foreach($cockpit['zeilen'] as $z)
+                                @php($zw = (($z['preis'] ?? 0) > 0 && $z['ek'] !== null) ? $z['ek'] / $z['preis'] * 100 : null)
+                                <tr class="border-t border-black/5 dark:border-white/10">
+                                    <td class="py-1">@if($z['rolle'])<span class="text-gray-400">{{ $z['rolle'] }}:</span> @endif{{ $z['label'] }}</td>
+                                    <td class="text-right tabular-nums">{{ $z['ek'] !== null ? number_format((float) $z['ek'], 2, ',', '.') . ' €' : '—' }}</td>
+                                    <td class="text-right tabular-nums text-gray-500">{{ $z['preis'] !== null ? number_format((float) $z['preis'], 2, ',', '.') . ' €' : '—' }}</td>
+                                    <td class="text-right tabular-nums">{{ $zw !== null ? number_format($zw, 1, ',', '.') . ' %' : '—' }}</td>
+                                </tr>
+                            @endforeach
+                            </tbody>
+                            <tfoot>
+                                <tr class="border-t border-black/10 dark:border-white/15 font-semibold text-gray-900 dark:text-gray-100">
+                                    <td class="py-1">Summe / Person</td>
+                                    <td class="text-right tabular-nums">{{ number_format((float) $cockpit['ek_pro_person'], 2, ',', '.') }} €</td>
+                                    <td class="text-right tabular-nums text-gray-500">{{ number_format((float) $cockpit['preis_pro_person'], 2, ',', '.') }} €</td>
+                                    <td class="text-right tabular-nums">{{ $cockpit['preis_pro_person'] > 0 ? number_format($cockpit['ek_pro_person'] / $cockpit['preis_pro_person'] * 100, 1, ',', '.') . ' %' : '—' }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                @elseif($paket)
+                    <div class="rounded-xl border border-black/5 dark:border-white/10 p-3">
+                        <p class="{{ $label }} mb-1.5">Wareneinsatz je Gericht / Person</p>
+                        <table class="w-full text-xs">
+                            <thead><tr class="text-gray-400 text-[10px] uppercase tracking-wider">
+                                <th class="text-left font-medium py-1">Gericht</th>
+                                <th class="text-right font-medium">Menge</th>
+                                <th class="text-right font-medium">Wareneinsatz</th>
+                                <th class="text-right font-medium">VK</th>
+                            </tr></thead>
+                            <tbody>
+                            @forelse($paket->gerichte as $pg)
+                                @php($faktor = $pg->menge !== null ? (float) $pg->menge : 1.0)
+                                <tr class="border-t border-black/5 dark:border-white/10">
+                                    <td class="py-1">{{ $pg->gericht?->name ?? '—' }}</td>
+                                    <td class="text-right tabular-nums text-gray-500">{{ $pg->menge !== null ? rtrim(rtrim(number_format($faktor, 2, ',', '.'), '0'), ',') : '1' }}</td>
+                                    <td class="text-right tabular-nums">{{ $pg->gericht?->ek_total_eur !== null ? number_format((float) $pg->gericht->ek_total_eur * $faktor, 2, ',', '.') . ' €' : '—' }}</td>
+                                    <td class="text-right tabular-nums text-gray-500">{{ $pg->gericht?->vk_netto !== null ? number_format((float) $pg->gericht->vk_netto * $faktor, 2, ',', '.') . ' €' : '—' }}</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="4" class="py-2 text-center text-gray-400">Noch keine Gerichte.</td></tr>
+                            @endforelse
+                            </tbody>
+                            <tfoot>
+                                <tr class="border-t border-black/10 dark:border-white/15 font-semibold text-gray-900 dark:text-gray-100">
+                                    <td class="py-1">Summe / Person</td>
+                                    <td></td>
+                                    <td class="text-right tabular-nums">{{ $aggregat !== null ? number_format((float) $aggregat['ek_pro_person'], 2, ',', '.') . ' €' : '—' }}</td>
+                                    <td class="text-right tabular-nums text-gray-500">{{ $aggregat !== null ? number_format((float) $aggregat['vk_summe'], 2, ',', '.') . ' €' : '—' }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                @endif
+
+                @if($concept && $cockpit)
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
                         <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2">
                             <span class="text-[10px] uppercase tracking-wider text-violet-600 dark:text-violet-400">€/Person</span>
                             <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ number_format($cockpit['preis_pro_person'], 2, ',', '.') }} €</p>
                         </div>
                         <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                            <span class="{{ $dt }}">EK/Person</span>
-                            <p class="text-xs font-semibold tabular-nums">{{ $aggregat !== null ? number_format((float) $aggregat['ek_pro_person'], 2, ',', '.') . ' €' : '—' }}</p>
+                            <span class="{{ $dt }}">Wareneinsatz/Pers.</span>
+                            <p class="text-xs font-semibold tabular-nums">{{ $kalkulation !== null ? number_format((float) $kalkulation['hk1_pro_person'], 2, ',', '.') . ' €' : '—' }}</p>
+                        </div>
+                        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                            <span class="{{ $dt }}">Wareneinsatz %</span>
+                            <p class="text-xs font-semibold tabular-nums">{{ ($kalkulation !== null && $cockpit['preis_pro_person'] > 0) ? number_format($kalkulation['hk1_pro_person'] / $cockpit['preis_pro_person'] * 100, 1, ',', '.') . ' %' : '—' }}</p>
                         </div>
                         <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                             <span class="{{ $dt }}">Arbeitszeit</span>
@@ -349,17 +463,18 @@
                             <input type="number" step="0.01" min="0" wire:model="form.preis_pro_person" @disabled($form['preis_modus'] === 'auto') class="{{ $input }} text-right tabular-nums" />
                         </div>
                         <div>
-                            <label class="{{ $label }}">EK/Person</label>
-                            <input type="number" step="0.0001" min="0" wire:model="form.ek_pro_person" @disabled($form['preis_modus'] === 'auto') class="{{ $input }} text-right tabular-nums" />
+                            <label class="{{ $label }}">EK/Person <span class="text-gray-400 normal-case">· aus Gerichten</span></label>
+                            <input type="number" step="0.0001" min="0" wire:model="form.ek_pro_person" disabled class="{{ $input }} text-right tabular-nums opacity-70" />
                         </div>
                         <div>
-                            <label class="{{ $label }}">Wareneinsatz %</label>
-                            <input type="number" step="0.1" min="0" wire:model="form.wareneinsatz_prozent" @disabled($form['preis_modus'] === 'auto') class="{{ $input }} text-right tabular-nums" />
+                            <label class="{{ $label }}">Wareneinsatz % <span class="text-gray-400 normal-case">· abgeleitet</span></label>
+                            <input type="number" step="0.1" min="0" wire:model="form.wareneinsatz_prozent" disabled class="{{ $input }} text-right tabular-nums opacity-70" />
                         </div>
                     </div>
-                    @if($form['preis_modus'] === 'auto')
-                        <button type="button" wire:click="neuBerechnen" class="{{ $btnGhost }}">↻ Aus Gerichten neu berechnen</button>
-                    @endif
+                    <div class="flex items-center gap-2">
+                        <button type="button" wire:click="neuBerechnen" class="{{ $btnGhost }}">↻ EK aus Gerichten neu berechnen</button>
+                        <span class="text-[10px] text-gray-400">Kosten folgen den Gerichten; nur der €/Person ist im manuell-Modus (Buffet) frei.</span>
+                    </div>
                 @endif
             @endif
 
