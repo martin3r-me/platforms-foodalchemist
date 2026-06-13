@@ -521,3 +521,68 @@ Concepter führt:
 2. **M11 — Foodbook** (F-01…F-11; F-03-Wahl-Gruppen, F-07-Schreibstil, F-08-Snapshot).
 3. **M12 — Kalkulation HK1/HK2** (K-01…K-07; B-06/K-05 Buffet-Kosten).
 4. **M13 — Konfigurator** · **M14 — Speiseplan** · **M15 — HK2-Verfeinerung** · **M16+ — Betrieb**.
+
+---
+
+## 10. Concepter v2 — Menü-Planungs-Modul (Redesign nach Audit 2026-06-13)
+
+> **Auslöser (Dominique):** Der Concepter (M10) ist funktional da, aber noch nicht auf dem
+> **Reifegrad der Gerichte-/VK-Module**. Ziel: **EIN** Modul, in dem man einwandfrei **Menüs &
+> Buffets plant** — gleicher Anspruch wie VK (3-Panel · Detail-Panel · Voll-Editor mit Tabs ·
+> dynamische Taxonomie). Inspiration: Necta-„Menü"-Editor (Gänge + Tabs Nährwerte/Allergene/
+> Kalkulation) — Niveau, nicht Optik. **Entscheide aus dem Audit (Dominique 2026-06-13):**
+> Pakete = Tab IM Concepter (kein eigenes Modul) + inline schnürbar · Taxonomie = freier
+> Kategorie-Baum beliebiger Tiefe **+ Klasse** (frei eingebbar + wählbar) · Diät (VEGI/VEGAN/BIO)
+> = **automatische Anzeige** (Badge + Rollup, kein manuelles Gruppieren).
+
+### 10.1 Modell-Klärung — „Slots sind Pakete" (verbindlich)
+- **Concept** = geordnete Folge von **Positionen** (Gänge/Sektionen).
+- Position = **ein Paket** (Normalfall) ODER **ein Einzel-Gericht** (Schnellfall).
+- **Paket** = flache Liste *mehrerer* Gerichte (1…n) + Rolle + Per-Person-Preis (klein bis Buffet-Baukasten).
+- Die **Rolle kommt vom Paket**, nicht vom Slot → die `concept_slots.rolle` wird optional/abgeleitet;
+  der Slot ist nur die geordnete Position. **Buffet** = Pakete mit vielen Gerichten, **Menü** =
+  Pakete mit je 1 Gericht. Tausch (M13) = Paket gegen Paket gleicher Rolle (bleibt).
+
+### 10.2 Ein Modul (Pakete im Concepter)
+- Sidebar: EINE Gruppe „Concepter" → ein Screen mit **Umschalter Concepts | Pakete** (separater
+  Pakete-Sidebar-Eintrag entfällt). Im Concept-Aufbau: Position = bestehendes Paket wählen ODER
+  **inline neues Paket schnüren** (Gerichte direkt hinzufügen) ODER Einzel-Gericht — kein Modulwechsel.
+
+### 10.3 Taxonomie (frei + wählbar, dynamisch)
+- **Kategorie-Baum** (beliebige Tiefe — vorhanden) **+ Klasse** (NEUE Dimension, freies/wählbares
+  Vokabular wie die Rollen). Beide an Concept UND Paket. Linkes Panel filtert Klasse → Kategorie-Baum
+  (+ Suche), analog VK Hauptgruppe→Klasse.
+
+### 10.4 3-Panel + Detail-Panel + Voll-Editor (VK-Standard)
+- **Links:** Klasse/Kategorie-Baum-Filter + Umschalter **Concepts | Pakete** + Suche.
+- **Mitte:** dichte Tabelle (Jarvis-Dichte): Name · Klasse · Kategorie · #Positionen bzw. #Gerichte ·
+  €/Person · HK2/W% · Allergen-Konf./Diät-Badges.
+- **Rechts:** **Detail-Panel im VK-Stil, kontext-adaptiert**: Stammdaten · Positionen/Gerichte ·
+  Preis-/HK2-Cockpit · Diät-/Allergen-Badges · Nährwert-Rollup · Aktionen (Editor · Vorlage · Zielpreis).
+- **Voll-Editor (Modal, wie VkModal) mit Tabs:** **Aufbau** (Positionen/Gerichte, inline Paket
+  schnüren, ▲▼-Reihenfolge, Einzel-Gericht) · **Nährwerte** (/Person, aggregiert) · **Allergene &
+  Deklaration** (aggregiert) · **Kalkulation** (HK1/HK2/Marge) · **Notizen**. Kopf: Bezeichnung
+  (intern) · **Konsumentenbezeichnung** · Zusatztext · Klasse · Kategorie · Anlass/Niveau.
+
+### 10.5 Aggregation (aus den Gerichten, kein manuelles Gruppieren)
+- **Nährwerte** /Person über alle Gerichte (× Paket-Mengen) — NEUER Rollup (GL-08-Daten am Rezept).
+- **Allergene/Diät** Rollup (für Concepts vorhanden) → auf Paket erweitern; Diät = Badge je Gericht/
+  Paket + Rollup, **keine** manuellen Diät-Sektionen (Audit-Entscheid).
+
+### 10.6 Phasen (M10R — Concepter-Redesign)
+| Phase | Inhalt |
+|---|---|
+| **M10R-1** | Modell additiv: `klasse` an concepts + pakete (freies Vokabular `vocab_klassen`); `concept_slots.rolle` optional (Rolle vom Paket); **Nährwert-Rollup-Service** (Concept + Paket). |
+| **M10R-2** | **3-Panel-Browser** (Klasse/Kategorie-Baum-Filter links · dichte Tabelle Mitte) + **Concepts\|Pakete-Umschalter** in einem Screen. |
+| **M10R-3** | **Detail-Panel** (VK-Stil, kontext-adaptiert) + **Voll-Editor-Modal mit Tabs** (Aufbau/Nährwerte/Allergene/Kalkulation/Notizen) + Konsumenten-Felder. |
+| **M10R-4** | **Inline-Paket-Schnüren** (Park-Flow wie Gerichte-Editor) + Einzel-Gericht direkt; Zielpreis + Vorlage in den Editor integriert. |
+| **M10R-5** | Sidebar zusammenführen (Pakete-Eintrag weg → „Concepter"-Screen mit Tabs), Tests, Live-Verifikation. |
+
+### 10.7 Was bleibt / wird wiederverwendet
+- **Schema bleibt** (concepts · concept_slots=Positionen · pakete · paket_gerichte · vocab_rollen ·
+  concept_categories) — **additiv** erweitert (Klasse, Nährwert-Aggregat-Spalten). ConceptService/
+  PaketService bleiben Kern; **Zielpreis-Solver, Allergen-Rollup, HK1/HK2, Vorlage-Fork bleiben**.
+- **Neu/Umbau:** Klasse-Dimension · Nährwert-Rollup · VK-Detail-Panel · Voll-Editor-Modal mit Tabs ·
+  3-Panel-Browser mit Concepts\|Pakete-Umschalter · Inline-Paket-Schnüren · Sidebar-Merge.
+- **Necta-Parität** (Niveau): Menü-Kopf (Bezeichnung/Konsumentenbez./Klasse/Kategorie) + Tabs
+  (Aufbau/Nährwerte/Allergene/Kalkulation/Notizen) + Positions-Liste mit Mengen/Preis/Nährwert je Zeile.
