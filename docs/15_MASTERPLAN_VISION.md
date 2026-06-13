@@ -586,3 +586,37 @@ Concepter führt:
   3-Panel-Browser mit Concepts\|Pakete-Umschalter · Inline-Paket-Schnüren · Sidebar-Merge.
 - **Necta-Parität** (Niveau): Menü-Kopf (Bezeichnung/Konsumentenbez./Klasse/Kategorie) + Tabs
   (Aufbau/Nährwerte/Allergene/Kalkulation/Notizen) + Positions-Liste mit Mengen/Preis/Nährwert je Zeile.
+
+### 10.8 Erweiterte Anforderungen (Dominique 2026-06-13, in M10R eingearbeitet)
+
+- **Artikel-Hierarchie:** **Concept = Hauptartikel**, **Paket = Artikel**, Gericht = VK-Artikel →
+  Basisrezept → GP. Das Foodbook/Portfolio referenziert den **Hauptartikel** (concept_ref). [→ M10R-1]
+- **VK-Parität-Metadaten am Concept:** **Niveau · Anlass · Sektor-Eignung · Geschmack** wie am
+  VK-Rezept (gleiche Vokabulare/Eignungs-Strukturen). Im Menü wird „nur zusammengebaut", sonst
+  dieselbe Editor-Erfahrung. [→ M10R-1/3]
+- **Voll-Aggregation Gericht→Paket→Concept:** Nährwerte · Allergene/Diät · **Kosten (HK1/HK2)** ·
+  **Produktionszeit (`arbeitszeit_min`)**. Speist die Kalkulation („wie lange brauche ich für
+  Concept X?") und später die Produktionsplanung (M16). NEU: `arbeitszeit_min`-Rollup. [→ M10R-1]
+- **Wording (ENTSCHIEDEN):** **Gerichte bleiben NEUTRAL** (kein Stil am Gericht — `vk_wording_standard`
+  ist die neutrale Basis). Der **Schreibstil wird am Concept gewählt** (`schreibstil_id` → vorhandene
+  `foodalchemist_writing_styles`, 11 Stile). Das **Foodbook überschreibt je Kunde/Foodbook**
+  (`schreibstil_id` am Foodbook). Effektiver Stil = **Foodbook-Override ?? Concept-Stil**. JETZT:
+  Auswahl + Speichern + effektive-Stil-Auflösung + Anzeige; die **Text-Transformation bleibt F-07
+  (LLM-Key)**. Nutzt die GL-06-Hüllen-Kaskade. [→ M10R-3]
+- **Generelle Bewertung (ENTSCHIEDEN, statt Foodpairing):** **deterministische Menü-Checks JETZT** —
+  Gang-/Struktur-Abdeckung · Niveau-Konsistenz über die Gänge · Diät-Abdeckung (vegan/veg vorhanden?) ·
+  Preis im Zielkorridor · Allergen-Konfidenz → Score/Checkliste im Detail-Panel + Editor. **LLM-
+  Kohärenz-Urteil** (passen die Gänge zusammen, analog VK-Judge) als spätere Ausbaustufe. Aroma/
+  Foodpairing entfällt auf Concept-Ebene. [→ M10R-3]
+- **Wiederverwendbarkeit über Portfolios/Jahre:** Concepts/Pakete = **Bibliothek**; jedes Foodbook/
+  Portfolio (z. B. „Portfolio 2024", „2025") referenziert sie (live oder Fork). **„Wo verwendet?"**
+  am Concept/Paket (in welchen Foodbooks). [→ M10R-2/3, Foodbook bereits concept_ref-fähig]
+
+### 10.9 Schema-Deltas M10R (additiv)
+- `foodalchemist_concepts`: + `klasse` (frei/wählbar), + `schreibstil_id` (FK writing_styles),
+  + `geschmacksrichtung`, + Aggregat-Spalten (`naehrwerte_json`/`arbeitszeit_min_sum` cache) —
+  Niveau/Anlass/category_id vorhanden; Sektor-Eignung via Eignungs-Tabelle (wie Rezept).
+- `foodalchemist_pakete`: + `klasse`; Aggregate (ek/arbeitszeit) gecacht.
+- `foodalchemist_foodbooks`: + `schreibstil_id` (Override).
+- `foodalchemist_concept_slots`: `rolle` → optional (Rolle kommt vom Paket).
+- NEU `foodalchemist_vocab_klassen` (frei/wählbar, wie vocab_rollen).
