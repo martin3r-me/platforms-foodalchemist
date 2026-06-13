@@ -1,5 +1,7 @@
 <?php
 
+use Livewire\Livewire;
+use Platform\FoodAlchemist\Livewire\Settings\Taxonomie;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup;
 use Platform\FoodAlchemist\Services\VocabularyService;
@@ -61,4 +63,27 @@ it('Kind-Team legt eigene Kategorie im geerbten Baum an — Geschwister sehen si
     expect($this->vocab->listRecipeCategories($this->childA, $this->hg->id)->pluck('bezeichnung'))->toContain('Hausfond A')
         ->and($this->vocab->listRecipeCategories($this->childB, $this->hg->id)->pluck('bezeichnung'))->not->toContain('Hausfond A')
         ->and($eigene->team_id)->toBe($this->childA->id);
+});
+
+it('legt eine neue Hauptgruppe an — Bug-Fix 2026-06-14 (vorher gar nicht möglich)', function () {
+    $hg = $this->vocab->createMainGroup($this->rootTeam, ['bezeichnung' => 'Saucen & Dips']);
+
+    expect($hg->code)->toBe('saucen_dips')
+        ->and($hg->team_id)->toBe($this->rootTeam->id)
+        ->and($this->vocab->listMainGroups($this->rootTeam)->pluck('bezeichnung'))->toContain('Saucen & Dips');
+
+    // Slug-Kollision wird suffixt (unique[team_id, code])
+    expect($this->vocab->createMainGroup($this->rootTeam, ['bezeichnung' => 'Saucen Dips'])->code)->toBe('saucen_dips_2');
+});
+
+it('Livewire: „Neue Hauptgruppe" legt an und wählt sie direkt aus', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    Livewire::test(Taxonomie::class)
+        ->set('neueHauptgruppe', 'Frühstück')
+        ->call('hgNeu')
+        ->assertSet('neueHauptgruppe', '')
+        ->assertSet('hauptgruppeId', fn ($id) => $id !== null);
+
+    expect(FoodAlchemistRecipeMainGroup::where('bezeichnung', 'Frühstück')->where('team_id', $this->rootTeam->id)->exists())->toBeTrue();
 });

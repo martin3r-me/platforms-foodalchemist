@@ -202,6 +202,36 @@ class VocabularyService
             ->each(fn ($kat) => $kat->setAttribute('recipe_count', $this->recipeCount($kat->id)));
     }
 
+    /**
+     * Hauptgruppe (oberste Ebene der Rezept-Taxonomie) anlegen. Bisher fehlte das — Kategorien
+     * konnten nur INNERHALB einer HG entstehen, eine neue HG gar nicht (Bug 2026-06-14).
+     * `code` = Slug der Bezeichnung, team-eindeutig (unique[team_id, code]); `bereich` optional.
+     */
+    public function createMainGroup(Team $team, array $input): FoodAlchemistRecipeMainGroup
+    {
+        $bezeichnung = trim($input['bezeichnung'] ?? '');
+        if ($bezeichnung === '') {
+            throw new RuntimeException('Hauptgruppe braucht eine Bezeichnung.');
+        }
+
+        $basis = Str::slug($bezeichnung, '_') ?: 'hauptgruppe';
+        $code = $basis;
+        $i = 2;
+        while (FoodAlchemistRecipeMainGroup::where('team_id', $team->id)->where('code', $code)->exists()) {
+            $code = $basis.'_'.$i++;
+        }
+
+        $maxSort = FoodAlchemistRecipeMainGroup::where('team_id', $team->id)->max('sort_order');
+
+        return FoodAlchemistRecipeMainGroup::create([
+            'team_id' => $team->id,
+            'code' => $code,
+            'bezeichnung' => $bezeichnung,
+            'bereich' => ($input['bereich'] ?? '') ?: null,
+            'sort_order' => (int) ($input['sort_order'] ?? ((int) $maxSort + 1)),
+        ]);
+    }
+
     public function createRecipeCategory(Team $team, int $mainGroupId, array $input): FoodAlchemistRecipeCategory
     {
         $hg = FoodAlchemistRecipeMainGroup::visibleToTeam($team)->findOrFail($mainGroupId);

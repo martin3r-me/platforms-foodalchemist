@@ -21,12 +21,29 @@ class Taxonomie extends Component
 
     public array $neu = ['bezeichnung' => '', 'technik' => '', 'sort_order' => 999];
 
+    public string $neueHauptgruppe = '';
+
     public ?string $fehler = null;
 
     public function waehleHg(int $id): void
     {
         $this->hauptgruppeId = $id;
         $this->reset('editId', 'form', 'fehler');
+    }
+
+    /** Bug-Fix 2026-06-14: oberste Ebene (Hauptgruppe) anlegen — fehlte komplett. */
+    public function hgNeu(): void
+    {
+        if (trim($this->neueHauptgruppe) === '') {
+            return;
+        }
+        try {
+            $hg = app(VocabularyService::class)->createMainGroup($this->team(), ['bezeichnung' => $this->neueHauptgruppe]);
+            $this->hauptgruppeId = $hg->id;
+            $this->reset('neueHauptgruppe', 'editId', 'form', 'fehler');
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     public function edit(int $id): void

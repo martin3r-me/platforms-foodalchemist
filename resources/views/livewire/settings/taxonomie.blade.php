@@ -19,6 +19,12 @@
                     <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $hg->kategorie_count }}</span>
                 </button>
             @endforeach
+
+            <div class="flex gap-1 pt-2 mt-1 border-t border-black/5 dark:border-white/10" data-taxonomie-hg-neu>
+                <input type="text" wire:model="neueHauptgruppe" wire:keydown.enter="hgNeu"
+                       placeholder="Neue Hauptgruppe …" class="{{ $input }} py-0.5" />
+                <button type="button" wire:click="hgNeu" class="{{ $btnGhostXs }}" title="Hauptgruppe anlegen">+</button>
+            </div>
         </div>
 
         {{-- Kategorien der gewählten HG --}}
