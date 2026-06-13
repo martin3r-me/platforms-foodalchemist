@@ -105,33 +105,42 @@ class TeamSettingsService
     public const MARGE_DEFAULT = 15.0;
 
     /**
-     * Kanonisches Default-Schema (feste benannte Blöcke, D-K1). Reihenfolge = `sort`.
-     * Typen: pct_we (% auf Wareneinsatz) · pct_hk (% auf laufende HK) ·
-     * eur_pro_portion (Fixbetrag/Portion) · arbeitszeit (min/60 × Stundensatz).
+     * Kanonisches Default-Schema — mehrstufige Zuschlagskalkulation (D-K8, produzierendes
+     * Gewerbe). Stufen: MEK + MGK(%·MEK) + FEK + FGK(%·FEK) = HK → +VwGK/Logistik(%·HK)
+     * = Selbstkosten(HK2). Typen:
+     *   arbeitszeit   — Fertigungseinzelkosten (FEK), min/60 × Stundensatz
+     *   eur_pro_portion — direkter Fixbetrag/Portion (Verpackung)
+     *   pct_mek       — % auf Wareneinsatz (Material-Gemeinkosten, Schwund)
+     *   pct_fek       — % auf Fertigungslohn (Fertigungs-Gemeinkosten)
+     *   pct_hk        — % auf Herstellkosten (Verwaltung/Vertrieb, Logistik)
+     * `modus` (manuell|abgeleitet) steuert, ob der %-Satz aus Fixkosten kommt (M-K6).
      *
-     * @return list<array{key:string, label:string, typ:string, wert:float, aktiv:bool, sort:int}>
+     * @return list<array{key:string,label:string,typ:string,wert:float,aktiv:bool,sort:int,modus:string}>
      */
     public function defaultSchema(Team $team): array
     {
         return [
-            ['key' => 'lohn', 'label' => 'Lohn / Produktion', 'typ' => 'arbeitszeit', 'wert' => 0.0, 'aktiv' => true, 'sort' => 10],
-            ['key' => 'verpackung', 'label' => 'Verpackung', 'typ' => 'eur_pro_portion', 'wert' => 0.25, 'aktiv' => false, 'sort' => 20],
-            ['key' => 'schwund', 'label' => 'Schwund', 'typ' => 'pct_we', 'wert' => 0.0, 'aktiv' => true, 'sort' => 30],
-            ['key' => 'lager', 'label' => 'Lager', 'typ' => 'eur_pro_portion', 'wert' => 0.0, 'aktiv' => false, 'sort' => 40],
-            // Gemeinkosten erbt den M12-Wert (rückwärtskompatibel).
-            ['key' => 'gemeinkosten', 'label' => 'Gemeinkosten', 'typ' => 'pct_hk', 'wert' => $this->hk2Zuschlag($team), 'aktiv' => true, 'sort' => 50],
+            ['key' => 'lohn', 'label' => 'Lohn / Produktion (FEK)', 'typ' => 'arbeitszeit', 'wert' => 0.0, 'aktiv' => true, 'sort' => 10, 'modus' => 'manuell'],
+            ['key' => 'verpackung', 'label' => 'Verpackung (direkt)', 'typ' => 'eur_pro_portion', 'wert' => 0.25, 'aktiv' => false, 'sort' => 20, 'modus' => 'manuell'],
+            ['key' => 'schwund', 'label' => 'Schwund (auf Wareneinsatz)', 'typ' => 'pct_mek', 'wert' => 0.0, 'aktiv' => true, 'sort' => 30, 'modus' => 'manuell'],
+            // „gemeinkosten" = Material-GK; erbt den M12-Wert (rückwärtskompatibel: % auf MEK).
+            ['key' => 'gemeinkosten', 'label' => 'Material-Gemeinkosten (Einkauf/Lager/Warenannahme)', 'typ' => 'pct_mek', 'wert' => $this->hk2Zuschlag($team), 'aktiv' => true, 'sort' => 40, 'modus' => 'manuell'],
+            ['key' => 'fertigungs_gk', 'label' => 'Fertigungs-Gemeinkosten (Spüle/Energie/Maschinen)', 'typ' => 'pct_fek', 'wert' => 0.0, 'aktiv' => true, 'sort' => 50, 'modus' => 'manuell'],
+            ['key' => 'verwaltung', 'label' => 'Verwaltung & Vertrieb', 'typ' => 'pct_hk', 'wert' => 0.0, 'aktiv' => true, 'sort' => 60, 'modus' => 'manuell'],
+            ['key' => 'logistik', 'label' => 'Logistik', 'typ' => 'pct_hk', 'wert' => 0.0, 'aktiv' => true, 'sort' => 70, 'modus' => 'manuell'],
         ];
     }
 
     /**
      * Aktives Kalkulations-Schema (gespeichert oder Default), nach `sort` geordnet,
-     * nur normalisierte Blöcke. arbeitszeit-Block ohne Wert → Default-Stundensatz.
+     * normalisiert. Legacy `pct_we` → `pct_mek`. arbeitszeit-Block ohne Wert →
+     * Default-Stundensatz (in der Berechnung).
      *
-     * @return list<array{key:string, label:string, typ:string, wert:float, aktiv:bool, sort:int}>
+     * @return list<array{key:string,label:string,typ:string,wert:float,aktiv:bool,sort:int,modus:string}>
      */
     public function kalkulationSchema(Team $team): array
     {
-        $erlaubteTypen = ['pct_we', 'pct_hk', 'eur_pro_portion', 'arbeitszeit'];
+        $erlaubteTypen = ['pct_mek', 'pct_fek', 'pct_hk', 'eur_pro_portion', 'arbeitszeit', 'pct_we'];
         $schema = $this->for($team)->kalkulation_schema;
         if (! is_array($schema) || $schema === []) {
             $schema = $this->defaultSchema($team);
@@ -141,13 +150,16 @@ class TeamSettingsService
             if (! is_array($b) || ! in_array($b['typ'] ?? '', $erlaubteTypen, true)) {
                 continue;
             }
+            $typ = $b['typ'] === 'pct_we' ? 'pct_mek' : $b['typ'];   // Legacy-Alias
+            $modus = $b['modus'] ?? 'manuell';
             $norm[] = [
                 'key' => (string) ($b['key'] ?? ''),
                 'label' => (string) ($b['label'] ?? ($b['key'] ?? 'Block')),
-                'typ' => $b['typ'],
+                'typ' => $typ,
                 'wert' => (float) ($b['wert'] ?? 0),
                 'aktiv' => (bool) ($b['aktiv'] ?? true),
                 'sort' => (int) ($b['sort'] ?? 100),
+                'modus' => in_array($modus, ['manuell', 'abgeleitet'], true) ? $modus : 'manuell',
             ];
         }
         usort($norm, fn ($a, $b) => $a['sort'] <=> $b['sort']);

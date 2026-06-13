@@ -244,6 +244,15 @@ Excel-Logik ab — mit **6–7 Reglern** statt 37 Tabs.
 
 ## 10. Ausbau v2 — Einzelkosten vs. Gemeinkosten + Fixkosten-Ableitung (Dominique 2026-06-13)
 
+> **Strategischer Zweck (Dominique):** BHG/Broich kalkuliert echte **White-Label-
+> Produktionen** — dafür braucht es einen **System-Kostenrechner**, der die Kosten
+> erfasst UND rechnet (das Excel-pro-Auftrag ohne System fällt weg). Weil das Modell
+> **team-scoped & generisch** ist (keine kundenspezifischen Hardcodings — alles über
+> Team-Settings/Fixkosten), ist es **auch für andere Kunden/Teams anbietbar**; die
+> mehrstufige Zuschlagskalkulation macht die Kalkulation **genauer** als ein
+> Pauschalsatz. → Daten erfassen (Fixkosten/Sätze in Settings, Einzelkosten am Produkt)
+> + reproduzierbar rechnen, statt Excel.
+
 > **Leitbild: produzierendes Gewerbe / klassische Zuschlagskalkulation.** Dominique:
 > „Einen Editor, in den alle Infos reingehen und man Sachen einträgt; die Daten müssen
 > in den Einstellungen gepflegt sein — eigene, viel detailliertere Settings-Seite; und
@@ -279,9 +288,13 @@ Gemeinkosten-Blöcke sollen nicht geraten, sondern aus **echten Fixkosten** abge
 - Jeder Gemeinkosten-Block im Schema: **`abgeleitet`** (aus Fixkosten) **ODER** `manuell %`
   (Override). Die Settings-Seite zeigt die abgeleiteten Sätze live.
 
-> **Offener Entscheid — Bezugsbasis (D-K8):** Wareneinsatz-Basis (Materialgemeinkosten-
-> zuschlag) · Umsatz-Basis (Fixkostenanteil am Umsatz) · Produktionsstunden-Basis. Empfehlung
-> **Wareneinsatz** (eine Basis, passt zu den bestehenden pct_we/pct_hk-Blöcken; „nicht so komplex").
+> **Bezugsbasis (D-K8) — ENTSCHIEDEN (Dominique): mehrere Basen je Block** (mehrstufige
+> Zuschlagskalkulation wie in der Industrie): **Material-GK** (Einkauf/Lager/Warenannahme/
+> Schwund) auf **Wareneinsatz (MEK)** · **Fertigungs-GK** (Spüle/Energie/Maschinen) auf
+> **Fertigungslohn (FEK)** · **Verwaltung/Vertrieb + Logistik** auf **Herstellkosten (HK)**.
+> Stufen: `MEK + MGK(%·MEK) + FEK + FGK(%·FEK) = HK → +VwGK/VtGK/Logistik(%·HK) =
+> Selbstkosten(HK2) → ×Marge = VK`. Jeder GK-Block: abgeleitet (Σ Fixkosten ÷ Basis-
+> Periodenwert) oder manuell. Bezugsbasen (erwarteter WE/FEK/HK je Periode) = Team-Settings.
 
 ### 10.3 Detaillierte Settings-Seite (Kalkulation)
 1. **Einzelkosten-Parameter:** Stundensatz(e) Fertigung.

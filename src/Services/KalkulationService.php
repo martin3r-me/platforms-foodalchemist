@@ -30,44 +30,77 @@ class KalkulationService
     }
 
     /**
-     * Kern: Block-Wasserfall WE → +Blöcke → HK2 → VK-Vorschlag.
+     * Kern: MEHRSTUFIGE Zuschlagskalkulation (D-K8, produzierendes Gewerbe).
+     *
+     *   MEK = Wareneinsatz · FEK = Σ Lohn (arbeitszeit) · direkt = Σ eur_pro_portion + Nebenkosten
+     *   MGK = Σ pct_mek × MEK · FGK = Σ pct_fek × FEK
+     *   HK (Herstellkosten) = MEK + FEK + direkt + MGK + FGK
+     *   HKGK = Σ pct_hk × HK  (Verwaltung/Vertrieb, Logistik)
+     *   HK2 (Selbstkosten) = HK + HKGK · VK-Vorschlag = HK2 × (1 + Marge)
      *
      * @return array{bloecke: list<array{key:string,label:string,typ:string,betrag:float}>,
-     *               hk2: float, marge_pct: float, vk_vorschlag: float}
+     *               hk2: float, hk: float, mek: float, fek: float, marge_pct: float, vk_vorschlag: float}
      */
     public function berechne(Team $team, float $we, float $arbeitszeitMin = 0.0, float $nebenkosten = 0.0): array
     {
         $stundensatz = $this->settings->stundensatz($team);
-        $running = max(0.0, $we);
-        $bloecke = [['key' => 'we', 'label' => 'Wareneinsatz', 'typ' => 'basis', 'betrag' => round($we, 4)]];
+        $schema = $this->settings->kalkulationSchema($team);
+        $aktiv = array_values(array_filter($schema, fn ($b) => $b['aktiv']));
 
-        foreach ($this->settings->kalkulationSchema($team) as $b) {
-            if (! $b['aktiv']) {
-                continue;
+        $rate = fn (array $b) => $b['wert'] > 0 ? $b['wert'] : $stundensatz;
+
+        // ── Stufe A: Basisgrößen (reihenfolge-unabhängig) ───────────────────
+        $mek = max(0.0, $we);
+        $fek = 0.0;
+        $direkt = abs($nebenkosten) > 1e-9 ? $nebenkosten : 0.0;
+        foreach ($aktiv as $b) {
+            if ($b['typ'] === 'arbeitszeit') {
+                $fek += $arbeitszeitMin / 60 * $rate($b);
+            } elseif ($b['typ'] === 'eur_pro_portion') {
+                $direkt += (float) $b['wert'];
             }
+        }
+        $mgkTotal = 0.0;
+        $fgkTotal = 0.0;
+        foreach ($aktiv as $b) {
+            if ($b['typ'] === 'pct_mek') {
+                $mgkTotal += $mek * ($b['wert'] / 100);
+            } elseif ($b['typ'] === 'pct_fek') {
+                $fgkTotal += $fek * ($b['wert'] / 100);
+            }
+        }
+        $hk = $mek + $fek + $direkt + $mgkTotal + $fgkTotal;   // Herstellkosten
+
+        // ── Stufe B: Wasserfall-Blöcke in Sort-Reihenfolge (Anzeige) ────────
+        $bloecke = [['key' => 'we', 'label' => 'Wareneinsatz (MEK)', 'typ' => 'basis', 'betrag' => round($mek, 4)]];
+        $hkgkTotal = 0.0;
+        foreach ($aktiv as $b) {
             $betrag = match ($b['typ']) {
-                'pct_we' => $we * ($b['wert'] / 100),
-                'pct_hk' => $running * ($b['wert'] / 100),
-                'eur_pro_portion' => $b['wert'],
-                'arbeitszeit' => $arbeitszeitMin / 60 * ($b['wert'] > 0 ? $b['wert'] : $stundensatz),
+                'arbeitszeit' => $arbeitszeitMin / 60 * $rate($b),
+                'eur_pro_portion' => (float) $b['wert'],
+                'pct_mek' => $mek * ($b['wert'] / 100),
+                'pct_fek' => $fek * ($b['wert'] / 100),
+                'pct_hk' => $hk * ($b['wert'] / 100),
                 default => 0.0,
             };
-            $running += $betrag;
+            if ($b['typ'] === 'pct_hk') {
+                $hkgkTotal += $betrag;
+            }
             $bloecke[] = ['key' => $b['key'], 'label' => $b['label'], 'typ' => $b['typ'], 'betrag' => round($betrag, 4)];
         }
-
-        // Rezept-spezifische Nebenkosten zuletzt (Gemeinkosten-% greift NICHT darauf — M12-Verhalten).
         if (abs($nebenkosten) > 1e-9) {
-            $running += $nebenkosten;
             $bloecke[] = ['key' => 'nebenkosten', 'label' => 'Nebenkosten (Rezept)', 'typ' => 'eur_pro_portion', 'betrag' => round($nebenkosten, 4)];
         }
 
-        $hk2 = round($running, 4);
+        $hk2 = round($hk + $hkgkTotal, 4);   // Selbstkosten
         $marge = $this->settings->margePct($team);
 
         return [
             'bloecke' => $bloecke,
             'hk2' => $hk2,
+            'hk' => round($hk, 4),
+            'mek' => round($mek, 4),
+            'fek' => round($fek, 4),
             'marge_pct' => $marge,
             'vk_vorschlag' => round($hk2 * (1 + $marge / 100), 2),
         ];

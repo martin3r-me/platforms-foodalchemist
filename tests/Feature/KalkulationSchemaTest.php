@@ -38,19 +38,20 @@ it('Default-Schema: Lohn/Schwund/Gemeinkosten aktiv, Verpackung/Lager inaktiv', 
         ->and($schema['schwund']['aktiv'])->toBeTrue()
         ->and($schema['gemeinkosten']['aktiv'])->toBeTrue()
         ->and($schema['gemeinkosten']['wert'])->toBe(20.0)            // erbt hk2_zuschlag_pct
-        ->and($schema['verpackung']['aktiv'])->toBeFalse()
-        ->and($schema['lager']['aktiv'])->toBeFalse();
+        ->and($schema['gemeinkosten']['typ'])->toBe('pct_mek')        // Material-GK auf Wareneinsatz
+        ->and($schema['verpackung']['aktiv'])->toBeFalse();
 });
 
-it('berechne: Wasserfall WE → +Lohn → +Gemeinkosten → HK2 → VK-Vorschlag', function () {
-    // WE 10 €, 10 min Arbeit @ 30 €/h = 5 € Lohn; Gemeinkosten 20 % auf (10+5)=15 → 3 €.
+it('berechne: mehrstufig — Material-GK auf MEK, Lohn = FEK, HK2 = Selbstkosten', function () {
+    // MEK 10 €; Lohn 10 min @ 30 €/h = 5 € (FEK); Material-GK 20 % × MEK(10) = 2 €.
+    // HK2 = 10 + 5 + 2 = 17 (Fertigungs-/Verwaltungs-/Logistik-GK default 0).
     $r = $this->kalk->berechne($this->rootTeam, 10.0, 10.0, 0.0);
 
     expect(block($r, 'we'))->toBe(10.0)
         ->and(block($r, 'lohn'))->toBe(5.0)
-        ->and(block($r, 'gemeinkosten'))->toBe(3.0)
-        ->and($r['hk2'])->toBe(18.0)
-        ->and($r['vk_vorschlag'])->toBe(20.7);                        // 18 × 1,15
+        ->and(block($r, 'gemeinkosten'))->toBe(2.0)                   // 20 % auf MEK, NICHT auf MEK+Lohn
+        ->and($r['hk2'])->toBe(17.0)
+        ->and($r['vk_vorschlag'])->toBe(19.55);                       // 17 × 1,15
 });
 
 it('berechne ohne Arbeitszeit + 0 Gemeinkosten = HK2 ist WE (childA)', function () {
@@ -66,9 +67,9 @@ it('recipeHk: Lohn aus arbeitszeit_min/Portion fließt in HK2', function () {
     ]);
 
     $hk = $this->kalk->recipeHk($this->rootTeam, $r);
-    expect($hk['hk2_pro_portion'])->toBe(18.0)                        // 10 + 5 Lohn + 3 Gemeinkosten
+    expect($hk['hk2_pro_portion'])->toBe(17.0)                        // MEK 10 + FEK 5 + Material-GK 2
         ->and(block($hk, 'lohn'))->toBe(5.0)
-        ->and($hk['db_eur'])->toBe(7.0);                              // 25 − 18
+        ->and($hk['db_eur'])->toBe(8.0);                              // 25 − 17
 });
 
 it('conceptHk: Lohn aus dem Arbeitszeit-Rollup pro Person (M-K2)', function () {
@@ -84,9 +85,10 @@ it('conceptHk: Lohn aus dem Arbeitszeit-Rollup pro Person (M-K2)', function () {
     app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $paket->id]);
 
     $hk = $this->kalk->conceptHk($this->rootTeam, $concept->refresh());
-    // WE/Person = 2,00 (auto-Paket = Σ ek); Lohn = 10 min @ 30 = 5,00; Gemeinkosten 20 % × 7 = 1,40.
+    // WE/Person = 2,00 (auto-Paket = Σ ek); Lohn = 10 min @ 30 = 5,00 (FEK);
+    // Material-GK 20 % × MEK(2) = 0,40. HK2 = 2 + 5 + 0,40 = 7,40.
     expect(block($hk, 'lohn'))->toBe(5.0)
-        ->and($hk['hk2_pro_person'])->toBe(8.4);                      // 2 + 5 + 1,4
+        ->and($hk['hk2_pro_person'])->toBe(7.4);
 });
 
 it('Settings/Kalkulation: Block-Schema + Marge über die UI speichern', function () {
