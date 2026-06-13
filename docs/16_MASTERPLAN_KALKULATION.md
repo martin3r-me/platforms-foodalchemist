@@ -193,7 +193,7 @@ Excel-Logik ab — mit **6–7 Reglern** statt 37 Tabs.
 | **M-K1** | **Block-Schema + Service-Umbau:** `kalkulation_schema` + `stundensatz_eur` am Team-Setting; `KalkulationService` rechnet HK aus den Blöcken (pct_we/pct_hk/eur_pro_portion/arbeitszeit) und liefert die Aufschlüsselung. Rückwärtskompatibel (alter Zuschlag = Gemeinkosten-Block). | ✓ |
 | **M-K2** | **Lohn-Block aus Arbeitszeit:** `arbeitszeit_min × Stundensatz` für Rezept; Rollup für Paket/Concept (`arbeitszeit_min_pro_portion`). | ✓ |
 | **M-K3** | **UI:** Settings-Schema-CRUD + HK2-Wasserfall im Concepter-Editor-Tab. (Browser-3-Panel-Wasserfall = optionaler Schliff, recipeHk/conceptHk liefern die Blöcke schon.) | ✓ |
-| **M-K4** | **Politur-Blöcke:** Verpackung, Schwund-als-Block (Gate D-K3), Lager; Garungstyp-Tag + Faktor (Gate D-K7); Wasserfall auch im `/kalkulation`-Browser-Detail. | offen |
+| **M-K4** | **Politur:** Wasserfall im `/kalkulation`-Browser-Detail ✓ · K-07 markStale-Wiring (Auto-Pakete bei Preis-Änderung) ✓ · Verpackung/Schwund/Lager als Blöcke im Schema vorhanden+pflegbar ✓. Offen: Garungstyp-Tag + Faktor (Gate D-K7, eher KI). | ◐ |
 | **M-K5** *(später)* | **Mengen-/Event-Schicht:** Pax-Staffel-Degression (D-K4) und Event-/Angebots-Kalkulation (Personal/Logistik/Equipment) **am Foodbook** (D-K5) — die Excel-Ebene D. | offen |
 
 > v1 = **M-K1 + M-K2 + M-K3 ✓**: strukturierte, sichtbare HK je Portion/Person, team-

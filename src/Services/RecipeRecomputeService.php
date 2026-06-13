@@ -79,6 +79,18 @@ class RecipeRecomputeService
             }
             $ebene = $eltern;
         }
+
+        // K-07 / Doc 15 §M12: Auto-Pakete, die ein neu berechnetes Gericht enthalten,
+        // als preis_stale markieren (GP-Preis-Änderung → Baustein-Preis veraltet).
+        // Best-effort, außerhalb der Recompute-Transaktion (I8: Edit nicht blocken).
+        try {
+            $paketSvc = app(PaketService::class);
+            foreach (array_keys($besucht) as $rid) {
+                $paketSvc->markStaleForRecipe((int) $rid);
+            }
+        } catch (\Throwable $e) {
+            Log::warning("K-07 markStaleForRecipe fehlgeschlagen: {$e->getMessage()}");
+        }
     }
 
     /**
