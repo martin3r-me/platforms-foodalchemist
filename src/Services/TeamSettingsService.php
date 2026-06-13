@@ -182,4 +182,22 @@ class TeamSettingsService
 
         return $v !== null ? (float) $v : self::MARGE_DEFAULT;
     }
+
+    /**
+     * Bezugsbasen je Periode (monatlich) für die Fixkosten-Ableitung (M-K6):
+     * mek = erwarteter Wareneinsatz, fek = erwartete Fertigungslöhne, hk = erwartete
+     * Herstellkosten. 0 = nicht gepflegt (Ableitung dann 0 für diese Basis).
+     *
+     * @return array{mek: float, fek: float, hk: float}
+     */
+    public function bezugsbasen(Team $team): array
+    {
+        $b = $this->for($team)->kalkulation_bezugsbasen ?? [];
+
+        return [
+            'mek' => (float) ($b['mek'] ?? 0),
+            'fek' => (float) ($b['fek'] ?? 0),
+            'hk' => (float) ($b['hk'] ?? 0),
+        ];
+    }
 }

@@ -33,5 +33,7 @@ class FoodAlchemistTeamSetting extends Model
         'kalkulation_schema' => 'array',
         'stundensatz_eur' => 'decimal:2',
         'marge_pct' => 'decimal:2',
+        // M-K6: Bezugsbasen für die Fixkosten-Ableitung (mek/fek/hk, monatlich)
+        'kalkulation_bezugsbasen' => 'array',
     ];
 }

@@ -26,6 +26,7 @@ class KalkulationService
         private TeamSettingsService $settings,
         private ConceptService $concepts,
         private ConcepterAggregateService $aggregat,
+        private FixkostenService $fixkosten,
     ) {
     }
 
@@ -44,7 +45,8 @@ class KalkulationService
     public function berechne(Team $team, float $we, float $arbeitszeitMin = 0.0, float $nebenkosten = 0.0): array
     {
         $stundensatz = $this->settings->stundensatz($team);
-        $schema = $this->settings->kalkulationSchema($team);
+        // M-K6: Schema mit aus Fixkosten abgeleiteten %-Sätzen (abgeleitete Blöcke).
+        $schema = $this->fixkosten->aufgeloestesSchema($team);
         $aktiv = array_values(array_filter($schema, fn ($b) => $b['aktiv']));
 
         $rate = fn (array $b) => $b['wert'] > 0 ? $b['wert'] : $stundensatz;
