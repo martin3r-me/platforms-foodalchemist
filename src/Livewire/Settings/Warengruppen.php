@@ -27,6 +27,12 @@ class Warengruppen extends Component
 
     public ?string $meldung = null;
 
+    public function waehleWg(string $code): void
+    {
+        $this->subWg = $code;
+        $this->reset('editId', 'editName', 'renameAlt', 'renameNeu', 'fehler', 'meldung');
+    }
+
     public function startEditName(int $id, string $aktuell): void
     {
         $this->editId = $id;

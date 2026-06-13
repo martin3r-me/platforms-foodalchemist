@@ -39,6 +39,15 @@ class KonzeptTaxonomie extends Component
 
     public ?string $fehler = null;
 
+    /** Achse für die Detail-Tabelle (Master-Detail wie Rezept-Taxonomie): kategorie|klasse. */
+    public string $achse = 'kategorie';
+
+    public function setAchse(string $achse): void
+    {
+        $this->achse = $achse === 'klasse' ? 'klasse' : 'kategorie';
+        $this->reset('editKatId', 'editKlasseId', 'fehler');
+    }
+
     // ── Kategorie ──────────────────────────────────────────────────────────
 
     public function katWaehlen(int $id): void
