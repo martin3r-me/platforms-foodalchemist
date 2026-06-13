@@ -97,4 +97,77 @@ class TeamSettingsService
     {
         return (float) ($this->for($team)->hk2_zuschlag_pct ?? 0);
     }
+
+    // ── M-K1 / Doc 16: Kalkulations-Block-Schema ─────────────────────────────
+
+    public const STUNDENSATZ_DEFAULT = 35.0;
+
+    public const MARGE_DEFAULT = 15.0;
+
+    /**
+     * Kanonisches Default-Schema (feste benannte Blöcke, D-K1). Reihenfolge = `sort`.
+     * Typen: pct_we (% auf Wareneinsatz) · pct_hk (% auf laufende HK) ·
+     * eur_pro_portion (Fixbetrag/Portion) · arbeitszeit (min/60 × Stundensatz).
+     *
+     * @return list<array{key:string, label:string, typ:string, wert:float, aktiv:bool, sort:int}>
+     */
+    public function defaultSchema(Team $team): array
+    {
+        return [
+            ['key' => 'lohn', 'label' => 'Lohn / Produktion', 'typ' => 'arbeitszeit', 'wert' => 0.0, 'aktiv' => true, 'sort' => 10],
+            ['key' => 'verpackung', 'label' => 'Verpackung', 'typ' => 'eur_pro_portion', 'wert' => 0.25, 'aktiv' => false, 'sort' => 20],
+            ['key' => 'schwund', 'label' => 'Schwund', 'typ' => 'pct_we', 'wert' => 0.0, 'aktiv' => true, 'sort' => 30],
+            ['key' => 'lager', 'label' => 'Lager', 'typ' => 'eur_pro_portion', 'wert' => 0.0, 'aktiv' => false, 'sort' => 40],
+            // Gemeinkosten erbt den M12-Wert (rückwärtskompatibel).
+            ['key' => 'gemeinkosten', 'label' => 'Gemeinkosten', 'typ' => 'pct_hk', 'wert' => $this->hk2Zuschlag($team), 'aktiv' => true, 'sort' => 50],
+        ];
+    }
+
+    /**
+     * Aktives Kalkulations-Schema (gespeichert oder Default), nach `sort` geordnet,
+     * nur normalisierte Blöcke. arbeitszeit-Block ohne Wert → Default-Stundensatz.
+     *
+     * @return list<array{key:string, label:string, typ:string, wert:float, aktiv:bool, sort:int}>
+     */
+    public function kalkulationSchema(Team $team): array
+    {
+        $erlaubteTypen = ['pct_we', 'pct_hk', 'eur_pro_portion', 'arbeitszeit'];
+        $schema = $this->for($team)->kalkulation_schema;
+        if (! is_array($schema) || $schema === []) {
+            $schema = $this->defaultSchema($team);
+        }
+        $norm = [];
+        foreach ($schema as $b) {
+            if (! is_array($b) || ! in_array($b['typ'] ?? '', $erlaubteTypen, true)) {
+                continue;
+            }
+            $norm[] = [
+                'key' => (string) ($b['key'] ?? ''),
+                'label' => (string) ($b['label'] ?? ($b['key'] ?? 'Block')),
+                'typ' => $b['typ'],
+                'wert' => (float) ($b['wert'] ?? 0),
+                'aktiv' => (bool) ($b['aktiv'] ?? true),
+                'sort' => (int) ($b['sort'] ?? 100),
+            ];
+        }
+        usort($norm, fn ($a, $b) => $a['sort'] <=> $b['sort']);
+
+        return $norm;
+    }
+
+    /** Default-Lohnsatz €/h für den arbeitszeit-Block (D-K2: ein Team-Satz). */
+    public function stundensatz(Team $team): float
+    {
+        $v = $this->for($team)->stundensatz_eur;
+
+        return $v !== null && (float) $v > 0 ? (float) $v : self::STUNDENSATZ_DEFAULT;
+    }
+
+    /** Marge % auf die HK → VK-Vorschlag (Doc 16). */
+    public function margePct(Team $team): float
+    {
+        $v = $this->for($team)->marge_pct;
+
+        return $v !== null ? (float) $v : self::MARGE_DEFAULT;
+    }
 }

@@ -33,7 +33,7 @@ class ConcepterAggregateService
     private function recipeCols(): array
     {
         return [
-            'id', 'name', 'vk_netto', 'ek_total_eur', 'arbeitszeit_min', 'vk_menge_pro_einheit_g',
+            'id', 'name', 'vk_netto', 'ek_total_eur', 'arbeitszeit_min', 'vk_anzahl_einheiten', 'vk_menge_pro_einheit_g',
             'nutri_kcal_per_100g', 'nutri_protein_g_per_100g', 'nutri_fat_g_per_100g',
             'nutri_carbs_g_per_100g', 'nutri_salt_g_per_100g', 'nutri_konfidenz',
             'spec_is_vegan', 'spec_is_vegetarian', 'spec_is_halal', 'spec_is_gluten_free',
@@ -104,11 +104,15 @@ class ConcepterAggregateService
         $ek = 0.0;
         $vk = 0.0;
         $zeit = 0;
+        $zeitProPortion = 0.0;
         foreach ($mitMenge as $r) {
             $faktor = $r['menge'] !== null ? (float) $r['menge'] : 1.0;
             $ek += (float) ($r['gericht']->ek_total_eur ?? 0) * $faktor;
             $vk += (float) ($r['gericht']->vk_netto ?? 0) * $faktor;
             $zeit += (int) ($r['gericht']->arbeitszeit_min ?? 0);
+            // M-K2: Arbeitszeit/Person = Rezept-Arbeitszeit / Portionen × Mengen-Faktor.
+            $anzahl = max(1, (int) ($r['gericht']->vk_anzahl_einheiten ?? 1));
+            $zeitProPortion += (float) ($r['gericht']->arbeitszeit_min ?? 0) / $anzahl * $faktor;
         }
 
         // Allergene: je Gericht EINMAL (Eigenschaft, nicht Portion) → dedupe.
@@ -120,7 +124,8 @@ class ConcepterAggregateService
             'allergene' => $this->allergenRollupFromGerichte($distinkt),
             'ek_pro_person' => round($ek, 4),
             'vk_summe' => round($vk, 2),
-            'arbeitszeit_min' => $zeit,
+            'arbeitszeit_min' => $zeit,                       // Σ roher Rezept-Arbeitszeit (Planungsproxy)
+            'arbeitszeit_min_pro_portion' => round($zeitProPortion, 2), // Σ je Person (M-K2 Lohn-Block)
         ];
     }
 

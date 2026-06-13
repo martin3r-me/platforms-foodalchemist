@@ -29,5 +29,9 @@ class FoodAlchemistTeamSetting extends Model
         'mwst_defaults' => 'array',
         'rundungsregeln' => 'array',
         'hk2_zuschlag_pct' => 'decimal:2',
+        // M-K1: Kalkulations-Block-Schema (Doc 16)
+        'kalkulation_schema' => 'array',
+        'stundensatz_eur' => 'decimal:2',
+        'marge_pct' => 'decimal:2',
     ];
 }
