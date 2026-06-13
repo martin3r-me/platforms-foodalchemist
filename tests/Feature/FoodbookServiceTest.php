@@ -32,20 +32,24 @@ beforeEach(function () {
     $this->concepts->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $paket->id]);
 });
 
-it('M11-02: Kapitel-Aggregat (concept_ref + recipe_ref) + Pax-Gesamtpreis', function () {
+it('M11-02: Kapitel-Aggregat (concept_ref + Paket-Preisblock) + Pax-Gesamtpreis — KEINE Einzelgerichte', function () {
     $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'Angebot Adler', 'kunde' => 'Hotel Adler', 'personen' => 100]);
     $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Menü']);
+    // Foodbook komponiert Concepts (4,50 €/P) + strukturierte Preis-Blöcke — kein Gericht-Picker
     $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
-    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'vk_recipe_id' => $this->gericht->id, 'menge' => 1]);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'preis_basis' => 'person', 'preis_wert' => 2.50, 'bezeichnung' => 'Aperitif-Paket']);
 
     $agg = $this->foodbooks->kapitelAggregat($this->rootTeam, $kap->refresh());
-    expect($agg['vk_pro_person'])->toBe(7.00)                         // 4,50 Concept + 2,50 Gericht
-        ->and($agg['ek_pro_person'])->toBe(2.10);                     // 1,35 + 0,75
+    expect($agg['vk_pro_person'])->toBe(7.00)                         // 4,50 Concept + 2,50 Paket-Preis
+        ->and($agg['ek_pro_person'])->toBe(1.35);                     // nur Concept-EK (Preisblock ohne EK)
 
     $gesamt = $this->foodbooks->gesamt($this->rootTeam, $fb->refresh());
     expect($gesamt['vk_pro_person'])->toBe(7.00)
         ->and($gesamt['personen'])->toBe(100)
         ->and($gesamt['gesamt_vk'])->toBe(700.00);                    // 7,00 × 100 Pax
+
+    // recipe_ref ist KEIN angebotener Block-Typ mehr (wird zu 'text' degradiert)
+    expect(\Platform\FoodAlchemist\Services\FoodbookService::BLOCK_TYPES)->not->toContain('recipe_ref');
 });
 
 it('M11-02: Kapitel-Baum + Move mit Zyklus-Schutz', function () {
@@ -96,11 +100,11 @@ it('M11 Jarvis: header_frei_preis person/pauschal/staffel im Gesamtpreis (Pax-au
         ->and($gesamt['gesamt_vk'])->toBe(7200.00);                  // 70 × 100 + 200 pauschal
 });
 
-it('M11 Jarvis: Wahl-Gruppe (A|B|C) über Blöcke setzen', function () {
+it('M11 Jarvis: Wahl-Gruppe (A|B|C) zwischen Concepts setzen', function () {
     $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB']);
     $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Hauptgang']);
-    $a = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'vk_recipe_id' => $this->gericht->id]);
-    $b = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'vk_recipe_id' => $this->gericht->id]);
+    $a = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+    $b = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
 
     $gid = $this->foodbooks->nextVariantGroupId($this->rootTeam, $kap->id);
     $this->foodbooks->setVariantGroup($this->rootTeam, [$a->id, $b->id], $gid);

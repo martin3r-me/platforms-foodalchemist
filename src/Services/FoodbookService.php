@@ -182,8 +182,13 @@ class FoodbookService
 
     // ── Blöcke ────────────────────────────────────────────────────────────────
 
-    /** Block-Typen (Jarvis-Parität, FoodbookBlockList). */
-    public const BLOCK_TYPES = ['concept_ref', 'recipe_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text', 'image'];
+    /**
+     * Block-Typen. **Foodbook komponiert Concepts, KEINE Einzel-Gerichte** (Dominique
+     * 2026-06-13) — die Gericht-Ebene ist Sache des Concepters (GP→Rezept→Gericht→Concept→
+     * Foodbook). Daher kein `recipe_ref` im Angebot; die Spalte/Relation bleibt nur als
+     * Schema-Altlast (Jarsvis hatte keine Concept-Ebene). Wahl-Gruppen A|B|C = zwischen Concepts.
+     */
+    public const BLOCK_TYPES = ['concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text', 'image'];
 
     private const BLOCK_FELDER = ['type', 'ebene', 'sichtbar', 'bezeichnung', 'kundentext', 'interne_bemerkung',
         'variant_group_id', 'concept_id', 'vk_recipe_id', 'menge', 'einheit_vocab_id', 'preis_wert', 'preis_basis', 'hoehe', 'header_quelle', 'payload_json'];
