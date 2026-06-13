@@ -81,6 +81,12 @@ Route::get('/pakete', \Platform\FoodAlchemist\Livewire\Pakete\Index::class)
     ->name('foodalchemist.pakete.index');
 
 /**
+ * M11: Foodbook / Portfolio — stellt Concepts zu Kunden-Angeboten zusammen.
+ */
+Route::get('/foodbooks', \Platform\FoodAlchemist\Livewire\Foodbooks\Index::class)
+    ->name('foodalchemist.foodbooks.index');
+
+/**
  * R7: «In Planung» — Vorschau der Phase-2-Domänen (14_ROADMAP_PHASE2).
  */
 Route::get('/demnaechst', \Platform\FoodAlchemist\Livewire\Demnaechst::class)

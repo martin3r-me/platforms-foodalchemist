@@ -131,16 +131,23 @@ return [
             ],
         ],
         [
-            // Reihenfolge = Bau-Sequenz aus docs/15_MASTERPLAN_VISION.md. Concepter ist gebaut
-            // (eigene Gruppe oben); hier bleibt, was noch kommt. Klick = Vorschau (demnaechst).
+            // M11 GEBAUT: Foodbook stellt fertige Concepts zu Kunden-Angeboten zusammen
+            // (Kapitel, Pax, Angebots-Preise) — KEINE Einzel-Gerichte (Concepter = Kern).
+            'group' => 'Foodbook',
+            'items' => [
+                [
+                    'label' => 'Foodbook / Portfolio',
+                    'route' => 'foodalchemist.foodbooks.index',
+                    'icon'  => 'heroicon-o-book-open',
+                ],
+            ],
+        ],
+        [
+            // Reihenfolge = Bau-Sequenz aus docs/15_MASTERPLAN_VISION.md. Concepter + Foodbook
+            // sind gebaut (eigene Gruppen oben); hier bleibt, was noch kommt. Klick = Vorschau.
             // Zielpreis-Konfigurator = Modus im Concept-Editor (KEIN eigener Eintrag).
             'group' => 'In Planung',
             'items' => [
-                [   // M11 — Foodbook / Portfolio (komponiert Concepts; Schreibstil, PDF, Snapshot)
-                    'label' => 'Foodbook / Portfolio',
-                    'route' => 'foodalchemist.demnaechst',
-                    'icon'  => 'heroicon-o-book-open',
-                ],
                 [   // M12/M15 — Herstellkosten HK1 → HK2 (Übersicht; surft auch in den Cockpits auf)
                     'label' => 'Kalkulation',
                     'route' => 'foodalchemist.demnaechst',

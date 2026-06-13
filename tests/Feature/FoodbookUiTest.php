@@ -1,0 +1,77 @@
+<?php
+
+use Livewire\Livewire;
+use Platform\FoodAlchemist\Livewire\Foodbooks\Index as FoodbooksIndex;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
+use Platform\FoodAlchemist\Services\ConceptService;
+use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
+use Platform\FoodAlchemist\Tests\TestCase;
+
+uses(TestCase::class, SeedsTeamHierarchy::class);
+
+/**
+ * M11-03: Livewire-Smoke des Foodbook-Editors — anlegen, Kapitel, Concept einfügen,
+ * Pax-Gesamtpreis im Cockpit. Voll-Page-Render gegen platform::layouts.app.
+ */
+beforeEach(function () {
+    $this->seedTeamHierarchy();
+    $this->user = $this->makeUser($this->rootTeam);
+    $this->actingAs($this->user);
+
+    // Concept „Grill-Buffet" (4,50 €/P) als einfügbarer Inhalt
+    $paket = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
+    app(PaketService::class)->update($this->rootTeam, $paket->id, ['preis_pro_person' => 4.50]);
+    $this->concept = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
+    $slot = app(ConceptService::class)->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
+    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $paket->id]);
+});
+
+it('Foodbook-Editor: anlegen, Kapitel, Concept einfügen, Pax-Gesamtpreis im Cockpit', function () {
+    Livewire::test(FoodbooksIndex::class)->assertOk()->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+    expect($fb)->not->toBeNull();
+
+    $comp = Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $fb->id)
+        ->set('form.bezeichnung', 'Angebot Adler')
+        ->set('form.kunde', 'Hotel Adler')
+        ->set('form.personen', 100)
+        ->call('speichern')
+        ->set('neuesKapitelTitel', 'Menü')
+        ->call('kapitelNeu');
+
+    $kap = $fb->kapitel()->first();
+    expect($kap)->not->toBeNull();
+
+    // Concept einfügen (KEIN Gericht-Picker) → Cockpit zeigt 100 × 4,50 = 450 €
+    $comp->call('conceptHinzu', $this->concept->id)
+        ->assertSee('Grill-Buffet')
+        ->assertSee('450,00');
+
+    expect($kap->blocks()->where('type', 'concept_ref')->count())->toBe(1)
+        ->and((int) $fb->refresh()->personen)->toBe(100);
+});
+
+it('Foodbook-Editor: Header-Preis-Block (person) addiert pro Person', function () {
+    Livewire::test(FoodbooksIndex::class)->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+    $comp = Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $fb->id)
+        ->set('form.personen', 50)->call('speichern')
+        ->set('neuesKapitelTitel', 'Pakete')->call('kapitelNeu');
+
+    $kap = $fb->kapitel()->first();
+    $comp->call('presetHinzu', 'header_frei_preis', 'format.menue_paket', 'Menü-Paket', 'person', true);
+    $block = $kap->blocks()->where('type', 'header_frei_preis')->first();
+    expect($block)->not->toBeNull();
+
+    // Preis setzen via Inline-Editor
+    $comp->call('blockBearbeiten', $block->id)
+        ->set('blockForm.preis_wert', 38)
+        ->set('blockForm.preis_basis', 'person')
+        ->call('blockSpeichern')
+        ->assertSee('1.900,00');                                      // 38 × 50
+
+    expect((float) $block->refresh()->preis_wert)->toBe(38.0);
+});
