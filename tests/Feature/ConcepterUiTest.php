@@ -125,6 +125,28 @@ it('M10c-B: Kategorie anlegen + Concept filtern (UI)', function () {
         ->assertDontSee('Anderes Concept');
 });
 
+it('M13: Zielpreis-Modus — Vorschlag berechnen + übernehmen (UI)', function () {
+    $v4 = app(PaketService::class)->create($this->rootTeam, ['name' => 'Vorspeise A', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
+    $v6 = app(PaketService::class)->create($this->rootTeam, ['name' => 'Vorspeise B', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
+    app(PaketService::class)->update($this->rootTeam, $v4->id, ['preis_pro_person' => 4.00]);
+    app(PaketService::class)->update($this->rootTeam, $v6->id, ['preis_pro_person' => 6.00]);
+    $c = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
+    $slot = app(ConceptService::class)->addSlot($this->rootTeam, $c->id, ['rolle' => 'Vorspeise']);
+    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $v4->id]);
+
+    Livewire::test(ConceptsIndex::class)
+        ->call('waehle', $c->id)
+        ->call('zielpreisToggle')
+        ->set('zielPreis', '6')
+        ->call('zielpreisBerechnen')
+        ->assertSet('zielVorschlag.preis', 6.00)
+        ->assertSet('zielVorschlag.aenderungen', 1)
+        ->call('zielpreisUebernehmen');
+
+    expect((float) $c->refresh()->preis_pro_person_cache)->toBe(6.00)
+        ->and($slot->refresh()->paket_id)->toBe($v6->id);
+});
+
 it('M10p: Paket-Gericht Menge/Person setzen + ▲▼-Reorder', function () {
     $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
 

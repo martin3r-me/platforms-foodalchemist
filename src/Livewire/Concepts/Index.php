@@ -49,6 +49,13 @@ class Index extends Component
 
     public string $gerichtSuche = '';
 
+    /** M13: Zielpreis-Konfigurator (Modus im Editor). */
+    public bool $zielModus = false;
+
+    public string $zielPreis = '';
+
+    public ?array $zielVorschlag = null;
+
     public function updatedSearch(): void
     {
         $this->resetPage();
@@ -90,6 +97,37 @@ class Index extends Component
         $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '']])->all();
         $this->fillSlotId = null;
         $this->gerichtSuche = '';
+        $this->zielModus = false;
+        $this->zielVorschlag = null;
+    }
+
+    // ── M13: Zielpreis-Konfigurator ─────────────────────────────────────────
+
+    public function zielpreisToggle(): void
+    {
+        $this->zielModus = ! $this->zielModus;
+        $this->zielVorschlag = null;
+    }
+
+    public function zielpreisBerechnen(ConceptService $svc): void
+    {
+        $ziel = (float) str_replace(',', '.', $this->zielPreis);
+        if ($this->selectedId === null || $ziel <= 0) {
+            return;
+        }
+        $this->zielVorschlag = $svc->zielpreisVorschlag($this->team(), $this->selectedId, $ziel);
+    }
+
+    public function zielpreisUebernehmen(ConceptService $svc): void
+    {
+        if ($this->selectedId !== null && $this->zielVorschlag !== null) {
+            $svc->zielpreisAnwenden($this->team(), $this->selectedId, $this->zielVorschlag['vorschlag']);
+        }
+        $this->zielVorschlag = null;
+        $this->zielModus = false;
+        if ($this->selectedId !== null) {
+            $this->waehle($this->selectedId, $svc);
+        }
     }
 
     public function speichern(ConceptService $svc): void

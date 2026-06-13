@@ -367,6 +367,155 @@ class ConceptService
         return $vorlage->refresh();
     }
 
+    // ── M13: Zielpreis-Konfigurator (Modus im Concept-Editor) ───────────────
+
+    /**
+     * Schlägt eine Paket-Kombination vor, die dem Zielpreis (€/Person) am nächsten
+     * kommt. Greift NUR an Paket-Slots (gleiche Rolle = `tauschbarePakete`); feste
+     * Gerichte sind Fixkosten. Deterministisch: exhaustiv bei kleiner Kombinatorik,
+     * sonst greedy Hill-Climb. Persistiert NICHTS — erst `zielpreisAnwenden`.
+     *
+     * @return array{vorschlag: array<int,int>, preis: float, aktuell: float, ziel: float,
+     *               aenderungen: int, min: float, max: float, fix: float}
+     */
+    public function zielpreisVorschlag(Team $team, int $conceptId, float $ziel): array
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->with('slots')->findOrFail($conceptId);
+
+        $fix = 0.0;
+        $slots = [];   // adjustable: ['slot_id', 'current_paket_id', 'kandidaten' => [paket_id => preis]]
+        foreach ($concept->slots as $slot) {
+            $kandidaten = $this->tauschbarePakete($team, $slot)
+                ->mapWithKeys(fn ($p) => [(int) $p->id => (float) ($p->preis_pro_person ?? 0)])->all();
+            // aktuelles Paket aufnehmen, falls (z. B. inaktiv) nicht in den Kandidaten
+            if ($slot->paket_id !== null && ! isset($kandidaten[$slot->paket_id]) && $slot->paket) {
+                $kandidaten[(int) $slot->paket_id] = (float) ($slot->paket->preis_pro_person ?? 0);
+            }
+            if (! empty($kandidaten)) {
+                $slots[] = ['slot_id' => (int) $slot->id, 'current' => $slot->paket_id !== null ? (int) $slot->paket_id : null, 'kandidaten' => $kandidaten];
+            } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
+                $fix += (float) ($slot->gericht->vk_netto ?? 0) * ($slot->menge !== null ? (float) $slot->menge : 1.0);
+            }
+        }
+
+        $aktuell = $this->preisCockpit($concept)['preis_pro_person'];
+        $zielRest = $ziel - $fix;
+
+        // erreichbare Spanne (Σ min/max je Slot)
+        $min = $fix;
+        $max = $fix;
+        foreach ($slots as $s) {
+            $min += min($s['kandidaten']);
+            $max += max($s['kandidaten']);
+        }
+
+        $wahl = $this->loeseZielpreis($slots, $zielRest);  // [slot_id => paket_id]
+        $preis = $fix;
+        foreach ($wahl as $slotId => $paketId) {
+            $s = collect($slots)->firstWhere('slot_id', $slotId);
+            $preis += $s['kandidaten'][$paketId];
+        }
+        $aenderungen = collect($slots)->filter(fn ($s) => ($wahl[$s['slot_id']] ?? null) !== $s['current'])->count();
+
+        return [
+            'vorschlag' => $wahl,
+            'preis' => round($preis, 2),
+            'aktuell' => $aktuell,
+            'ziel' => round($ziel, 2),
+            'aenderungen' => $aenderungen,
+            'min' => round($min, 2),
+            'max' => round($max, 2),
+            'fix' => round($fix, 2),
+        ];
+    }
+
+    /**
+     * Kombinations-Optimierung: eine Kandidaten-ID je Slot so wählen, dass die Summe
+     * dem Rest-Ziel am nächsten kommt. Exhaustiv (≤ 4000 Kombis), sonst greedy.
+     *
+     * @param  list<array{slot_id:int, current:?int, kandidaten:array<int,float>}>  $slots
+     * @return array<int,int> slot_id => paket_id
+     */
+    private function loeseZielpreis(array $slots, float $zielRest): array
+    {
+        if (empty($slots)) {
+            return [];
+        }
+        $kombis = array_product(array_map(fn ($s) => count($s['kandidaten']), $slots));
+
+        if ($kombis > 0 && $kombis <= 4000) {
+            $bestGap = INF;
+            $best = [];
+            $listen = array_map(fn ($s) => array_keys($s['kandidaten']), $slots);
+            $n = count($slots);
+            for ($i = 0; $i < $kombis; $i++) {
+                $rest = $i;
+                $sum = 0.0;
+                $wahl = [];
+                for ($j = 0; $j < $n; $j++) {
+                    $anz = count($listen[$j]);
+                    $idx = $rest % $anz;
+                    $rest = intdiv($rest, $anz);
+                    $pid = $listen[$j][$idx];
+                    $wahl[$slots[$j]['slot_id']] = $pid;
+                    $sum += $slots[$j]['kandidaten'][$pid];
+                }
+                $gap = abs($sum - $zielRest);
+                if ($gap < $bestGap - 1e-9) {
+                    $bestGap = $gap;
+                    $best = $wahl;
+                }
+            }
+
+            return $best;
+        }
+
+        // Greedy Hill-Climb: Start = aktuelles (oder günstigstes) Paket je Slot
+        $wahl = [];
+        $sum = 0.0;
+        foreach ($slots as $s) {
+            $pid = $s['current'] !== null && isset($s['kandidaten'][$s['current']])
+                ? $s['current'] : array_key_first($s['kandidaten']);
+            $wahl[$s['slot_id']] = $pid;
+            $sum += $s['kandidaten'][$pid];
+        }
+        for ($iter = 0; $iter < 200; $iter++) {
+            $bestGap = abs($sum - $zielRest);
+            $move = null;
+            foreach ($slots as $s) {
+                foreach ($s['kandidaten'] as $pid => $preis) {
+                    if ($pid === $wahl[$s['slot_id']]) {
+                        continue;
+                    }
+                    $neu = $sum - $s['kandidaten'][$wahl[$s['slot_id']]] + $preis;
+                    if (abs($neu - $zielRest) < $bestGap - 1e-9) {
+                        $bestGap = abs($neu - $zielRest);
+                        $move = ['slot' => $s['slot_id'], 'pid' => $pid, 'sum' => $neu];
+                    }
+                }
+            }
+            if ($move === null) {
+                break;
+            }
+            $wahl[$move['slot']] = $move['pid'];
+            $sum = $move['sum'];
+        }
+
+        return $wahl;
+    }
+
+    /** Wendet einen Zielpreis-Vorschlag an (Paket-Tausch je Slot). */
+    public function zielpreisAnwenden(Team $team, int $conceptId, array $vorschlag): FoodAlchemistConcept
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
+        $this->guardOwner($concept, $team);
+        foreach ($vorschlag as $slotId => $paketId) {
+            $this->fillSlot($team, (int) $slotId, ['paket_id' => (int) $paketId]);
+        }
+
+        return $concept->refresh();
+    }
+
     // ── M10c-B: Kategorien (Baum) ──────────────────────────────────────────
 
     /**

@@ -140,8 +140,39 @@
                 </div>
                 <div class="flex gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
+                    <button type="button" wire:click="zielpreisToggle" class="{{ $btnGhost }} {{ $zielModus ? 'text-violet-600 dark:text-violet-400' : '' }}">🎯 Zielpreis</button>
                     <button type="button" wire:click="loeschen({{ $selected->id }})" wire:confirm="Concept löschen?" class="{{ $btnGhost }} text-red-600 dark:text-red-400">Löschen</button>
                 </div>
+
+                {{-- M13: Zielpreis-Konfigurator (greift nur an Paket-Slots) --}}
+                @if($zielModus)
+                    <div class="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3 space-y-2">
+                        <div class="flex items-end gap-2 flex-wrap">
+                            <div>
+                                <label class="{{ $label }}">Zielpreis €/Person</label>
+                                <input type="number" step="0.01" min="0" wire:model="zielPreis" wire:keydown.enter="zielpreisBerechnen" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 36,00" />
+                            </div>
+                            <button type="button" wire:click="zielpreisBerechnen" class="{{ $btnPrimary }}">Vorschlag berechnen</button>
+                            <span class="text-[11px] text-gray-400">Tauscht Pakete derselben Rolle; feste Gerichte bleiben Fixkosten.</span>
+                        </div>
+                        @if($zielVorschlag)
+                            <div class="text-xs space-y-1 pt-1 border-t border-violet-500/20">
+                                <div class="flex flex-wrap gap-x-6 gap-y-1">
+                                    <span><span class="{{ $label }}">Aktuell</span> <span class="tabular-nums">{{ number_format($zielVorschlag['aktuell'], 2, ',', '.') }} €</span></span>
+                                    <span><span class="{{ $label }}">Vorschlag</span> <span class="tabular-nums font-semibold text-gray-900 dark:text-gray-100">{{ number_format($zielVorschlag['preis'], 2, ',', '.') }} €</span></span>
+                                    <span><span class="{{ $label }}">Ziel</span> <span class="tabular-nums">{{ number_format($zielVorschlag['ziel'], 2, ',', '.') }} €</span></span>
+                                    <span><span class="{{ $label }}">Δ Ziel</span> <span class="tabular-nums {{ abs($zielVorschlag['preis'] - $zielVorschlag['ziel']) < 0.01 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400' }}">{{ number_format($zielVorschlag['preis'] - $zielVorschlag['ziel'], 2, ',', '.') }} €</span></span>
+                                    <span><span class="{{ $label }}">Tausche</span> <span class="tabular-nums">{{ $zielVorschlag['aenderungen'] }}</span></span>
+                                </div>
+                                <p class="text-[11px] text-gray-400">Erreichbar mit den Paketen: {{ number_format($zielVorschlag['min'], 2, ',', '.') }} – {{ number_format($zielVorschlag['max'], 2, ',', '.') }} €/Person{{ $zielVorschlag['fix'] > 0 ? ' (inkl. ' . number_format($zielVorschlag['fix'], 2, ',', '.') . ' € feste Gerichte)' : '' }}.</p>
+                                <div class="flex gap-2 pt-1">
+                                    <button type="button" wire:click="zielpreisUebernehmen" @disabled($zielVorschlag['aenderungen'] === 0) class="{{ $btnPrimary }}">Übernehmen ({{ $zielVorschlag['aenderungen'] }} Tausch)</button>
+                                    <button type="button" wire:click="$set('zielVorschlag', null)" class="{{ $btnGhost }}">Verwerfen</button>
+                                </div>
+                            </div>
+                        @endif
+                    </div>
+                @endif
             </div>
 
             {{-- Slot-Gerüst --}}
