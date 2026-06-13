@@ -585,8 +585,12 @@ Concepter führt:
 > Detail-Panel (Einzel-Gericht + Zielpreis waren schon in M10R-3).
 > M10R-5: Sidebar auf EINEN „Concepter"-Eintrag zusammengeführt; /concepts + /pakete
 > bleiben als Deep-Link. Live: /concepter + ?tab=pakete = 200, Sidebar gemerged.
-> **Offen als Politur (eigene R-Runde):** voller Alpine-Park-Flow (grüner Flash/Live-DnD);
-> Sektor-Eignung-Pflege-UI; KI-Generierung (concept.generate/wording) = LLM-Key-Blocker.
+> **Politur GEBAUT (e31117d, Suite 472/472):** „Wo verwendet?" (Paket→Concepts /
+> Concept→Foodbooks) im Detail-Panel · Park-Flow beim Paket-Schnüren (parken→Menge/
+> Person→Enter→✓-Flash, Menge-bei-Einfügen) · Sektor-Eignung-Pflege am Concept (Chips,
+> reaktiviert soft-deleted, nutzt concept_sektor_eignung).
+> **Offen (rein optisch, eigener Schliff):** grüner Zeilen-Flash über den Re-Render +
+> Live-DnD. **Extern blockiert:** KI-Generierung (concept.generate/wording) = LLM-Key.
 
 | Phase | Inhalt | Status |
 |---|---|---|
