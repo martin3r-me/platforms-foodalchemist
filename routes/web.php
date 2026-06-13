@@ -74,6 +74,14 @@ Route::get('/gerichte', \Platform\FoodAlchemist\Livewire\Verkauf\Browser::class)
  * M10 / Doc 15 §M10: Concepter — Pakete (bepreiste Bündel mehrerer Gerichte)
  * und Concepts (Slot-Gerüst über mehrere Rollen). Kontext/Auswahl in der URL (V-17).
  */
+/**
+ * M10R-2 / Doc 15 §10.2: vereinheitlichter Concepter-Browser (Concepts | Pakete
+ * in EINEM Screen, 3-Panel im VK-Stil). /concepts + /pakete bleiben transitorisch
+ * (Editor), bis das Voll-Editor-Modal (M10R-3) steht.
+ */
+Route::get('/concepter', \Platform\FoodAlchemist\Livewire\Concepter\Browser::class)
+    ->name('foodalchemist.concepter.index');
+
 Route::get('/concepts', \Platform\FoodAlchemist\Livewire\Concepts\Index::class)
     ->name('foodalchemist.concepts.index');
 

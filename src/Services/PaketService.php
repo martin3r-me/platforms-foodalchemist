@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabKlasse;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabRolle;
 
 /**
@@ -41,6 +42,7 @@ class PaketService
                     ->orWhereRaw('LOWER(COALESCE(rolle, \'\')) LIKE ?', [$s]));
             })
             ->when(($filters['rolle'] ?? '') !== '', fn ($q) => $q->where('rolle', $filters['rolle']))
+            ->when(($filters['klasse'] ?? '') !== '', fn ($q) => $q->where('klasse', $filters['klasse']))
             ->when(($filters['niveau'] ?? '') !== '', fn ($q) => $q->where('niveau', $filters['niveau']))
             ->orderBy('rolle')->orderBy('name')
             ->paginate($perPage);
@@ -52,6 +54,17 @@ class PaketService
         $verwendet = FoodAlchemistPaket::visibleToTeam($team)
             ->whereNotNull('rolle')->distinct()->orderBy('rolle')->pluck('rolle')->all();
         $vokabular = FoodAlchemistVocabRolle::visibleToTeam($team)
+            ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->pluck('name')->all();
+
+        return collect($verwendet)->merge($vokabular)->unique()->values()->all();
+    }
+
+    /** Distinkte verwendete Klassen (Filter) + freies Klasse-Vokabular (§10.3). */
+    public function klassen(Team $team): array
+    {
+        $verwendet = FoodAlchemistPaket::visibleToTeam($team)
+            ->whereNotNull('klasse')->distinct()->orderBy('klasse')->pluck('klasse')->all();
+        $vokabular = FoodAlchemistVocabKlasse::visibleToTeam($team)
             ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->pluck('name')->all();
 
         return collect($verwendet)->merge($vokabular)->unique()->values()->all();
@@ -74,14 +87,15 @@ class PaketService
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neuer Paket')) ?: 'Neuer Paket',
             'rolle' => $this->normalizeRolle($in['rolle'] ?? null),
+            'klasse' => $this->normalizeRolle($in['klasse'] ?? null),
             'niveau' => $in['niveau'] ?? null,
             'preis_modus' => in_array($modus, ['auto', 'manuell'], true) ? $modus : 'manuell',
         ]);
     }
 
-    /** Editierbare Paket-Felder (Stamm + manuelle Preise). */
+    /** Editierbare Paket-Felder (Stamm + Klasse/Konsumenten-Name + manuelle Preise). */
     private const FELDER = [
-        'name', 'rolle', 'niveau', 'preis_modus', 'preis_pro_person',
+        'name', 'konsumenten_name', 'rolle', 'klasse', 'niveau', 'preis_modus', 'preis_pro_person',
         'ek_pro_person', 'wareneinsatz_prozent', 'beschreibung', 'note', 'is_inactive',
     ];
 
@@ -93,6 +107,9 @@ class PaketService
         $update = array_intersect_key($in, array_flip(self::FELDER));
         if (array_key_exists('rolle', $update)) {
             $update['rolle'] = $this->normalizeRolle($update['rolle']);
+        }
+        if (array_key_exists('klasse', $update)) {
+            $update['klasse'] = $this->normalizeRolle($update['klasse']);
         }
         $paket->update($update);
 

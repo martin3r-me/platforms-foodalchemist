@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabKlasse;
 
 /**
  * M10-03/04/05 / Doc 15 §M10: Concept = Slot-Gerüst über mehrere Rollen
@@ -38,6 +39,7 @@ class ConceptService
                     ->orWhereRaw('LOWER(COALESCE(anlass, \'\')) LIKE ?', [$s]));
             })
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
+            ->when(($filters['klasse'] ?? '') !== '', fn ($q) => $q->where('klasse', $filters['klasse']))
             ->when(($filters['category'] ?? null) === 'none', fn ($q) => $q->whereNull('category_id'))
             ->when(is_numeric($filters['category'] ?? null), fn ($q) => $q
                 ->whereIn('category_id', $this->descendantIds($team, (int) $filters['category'])))
@@ -65,24 +67,50 @@ class ConceptService
             'name' => trim((string) ($in['name'] ?? 'Neues Concept')) ?: 'Neues Concept',
             'anlass' => $in['anlass'] ?? null,
             'niveau' => $in['niveau'] ?? null,
+            'klasse' => $this->norm($in['klasse'] ?? null),
             'status' => $in['status'] ?? 'draft',
             'is_vorlage' => (bool) ($in['is_vorlage'] ?? false),
         ]);
     }
 
-    private const FELDER = ['name', 'anlass', 'niveau', 'category_id', 'status', 'beschreibung', 'note'];
+    // M10R-1/3: VK-Parität-Metadaten + Konsumenten-Felder + KI-Brief am Concept editierbar.
+    private const FELDER = [
+        'name', 'konsumenten_name', 'anlass', 'niveau', 'klasse', 'geschmacksrichtung',
+        'schreibstil_id', 'category_id', 'status', 'beschreibung', 'zusatztext', 'note',
+        'brief', 'zielpreis_pro_person', 'diaet_vorgabe', 'struktur_vorgabe', 'saison', 'zielgruppe',
+    ];
+
+    /** Felder, die leer („" / 0) als NULL gespeichert werden (FK/optional). */
+    private const FELDER_NULLBAR = ['category_id', 'schreibstil_id', 'zielpreis_pro_person'];
 
     public function update(Team $team, int $id, array $in): FoodAlchemistConcept
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
         $this->guardOwner($concept, $team);
         $update = array_intersect_key($in, array_flip(self::FELDER));
-        if (array_key_exists('category_id', $update) && ($update['category_id'] === '' || (int) $update['category_id'] === 0)) {
-            $update['category_id'] = null;
+        foreach (self::FELDER_NULLBAR as $feld) {
+            if (array_key_exists($feld, $update) && ($update[$feld] === '' || $update[$feld] === null
+                || (in_array($feld, ['category_id', 'schreibstil_id'], true) && (int) $update[$feld] === 0))) {
+                $update[$feld] = null;
+            }
+        }
+        if (array_key_exists('klasse', $update)) {
+            $update['klasse'] = $this->norm($update['klasse']);
         }
         $concept->update($update);
 
         return $concept->refresh();
+    }
+
+    /** Distinkte verwendete Klassen (Filter) + freies Klasse-Vokabular (§10.3). */
+    public function klassen(Team $team): array
+    {
+        $verwendet = FoodAlchemistConcept::visibleToTeam($team)
+            ->whereNotNull('klasse')->distinct()->orderBy('klasse')->pluck('klasse')->all();
+        $vokabular = FoodAlchemistVocabKlasse::visibleToTeam($team)
+            ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->pluck('name')->all();
+
+        return collect($verwendet)->merge($vokabular)->unique()->values()->all();
     }
 
     public function delete(Team $team, int $id): void

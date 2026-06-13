@@ -49,7 +49,9 @@ class ConcepterAggregateService
      */
     public function paketAggregat(FoodAlchemistPaket $paket): array
     {
-        $paket->loadMissing([
+        // load() statt loadMissing(): erzwingt den vollen Spalten-Satz, auch wenn der
+        // Aufrufer die Gerichte schon mit reduzierten Spalten geladen hat (z. B. detail()).
+        $paket->load([
             'gerichte' => fn ($q) => $q->orderBy('position'),
             'gerichte.gericht' => fn ($q) => $q->select($this->recipeCols()),
         ]);
@@ -69,7 +71,9 @@ class ConcepterAggregateService
      */
     public function conceptAggregat(FoodAlchemistConcept $concept): array
     {
-        $concept->loadMissing([
+        // load() statt loadMissing(): erzwingt den vollen Recipe-Spalten-Satz, auch wenn
+        // der Aufrufer Slots/Gerichte schon mit reduzierten Spalten geladen hat (detail()).
+        $concept->load([
             'slots' => fn ($q) => $q->orderBy('position'),
             'slots.paket.gerichte' => fn ($q) => $q->orderBy('position'),
             'slots.paket.gerichte.gericht' => fn ($q) => $q->select($this->recipeCols()),
