@@ -13,11 +13,14 @@
 > bindend erst am Foodbook/Angebot, M11)**; **Concept-Kategorien als Baum** (Sammlungen/Linien).
 > **nächster Schritt M11 Foodbook** (inkl. Pax/Gästezahl + Mengen-Hochrechnung je Angebot).
 
-> **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Baustein heißt bei uns
-> **„Baustein“** — im Konzeptpapier „Modul“, aber die Plattform reserviert „Modul“ für ganze
-> Pakete (`platform-<modul>`), darum kollisionsfrei umbenannt. Code/Tabellen:
-> `foodalchemist_bausteine`, `baustein_id`. **Wo das Konzeptpapier „Modul“ sagt, ist hier
-> „Baustein“ gemeint.**
+> **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Inhalt heißt bei uns
+> **„Paket“** (Dominique: bessere Beschreibung als „Baustein“; im Konzeptpapier „Modul“ —
+> die Plattform reserviert „Modul“ für ganze Composer-Pakete). Code/Tabellen:
+> `foodalchemist_pakete`, `foodalchemist_paket_gerichte`, `paket_id`; Klassen `FoodAlchemistPaket`,
+> `PaketService`, Livewire `Pakete\Index`, Route `/pakete`. **Wo unten/im Konzeptpapier noch
+> „Baustein“ bzw. „Modul“ steht, ist „Paket“ gemeint** (das bepreiste Bündel mehrerer Gerichte
+> für eine Rolle). Generische „Baustein“-Nutzung für UI-Komponenten (modal/chips/…) bleibt davon
+> unberührt.
 > **Sidebar-Entscheid (2026-06-13):** Der **Zielpreis-Konfigurator** ist ein **Modus im
 > Concept-Editor** (kein eigener Nav-Eintrag). **„Kalkulation (HK2)“** bekommt einen eigenen
 > Sidebar-Eintrag (Übersicht), surft aber zusätzlich in den Cockpits auf.
