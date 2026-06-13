@@ -7,13 +7,15 @@
 > **M11+ (Domänen-Platzhalter)** von Doc 14 — sie waren bewusst „Zuschnitt mit Dominique
 > abstimmen“ / reine Brainstorming-Zeilen. Hier wird daraus eine sequenzierte, baubare
 > Landkarte mit Abhängigkeiten, Entscheidungs-Gates und „jetzt vs. später“.
-> **Stand:** 2026-06-13 · **Status (Suite 432/432):** Gates (§5) entschieden · **M10 Concepter
+> **Stand:** 2026-06-13 · **Status (Suite 439/439):** alle fünf Säulen S1–S5 gebaut · **M10 Concepter
 > KOMPLETT** (Begriff „Paket"; person-unabhängig; Kategorie-Baum; Allergen-Rollup) · **M11
 > Foodbook KOMPLETT** (3-Panel-Editor, Jarvis-angeglichen; komponiert Concepts, keine Gerichte;
 > /foodbooks) · **M12 Kalkulation KOMPLETT** (HK2-Zuschlagskalkulation HK1→HK2 + Vollkosten-DB,
 > Übersicht /kalkulation) · **M13 Zielpreis-Konfigurator KOMPLETT** (deterministischer Solver,
-> Modus im Concept-Editor; greift nur an Paket-Slots; KI-Vorschlag Z-03 offen=LLM) · **offen
-> extern:** Versand-Snapshot/Schreibstil(LLM)/PDF(Engine) · **nächster Schritt M14 Speiseplan**.
+> Modus im Concept-Editor; KI-Vorschlag Z-03 offen=LLM) · **M14 Speiseplan KOMPLETT** (/speiseplan;
+> Zeit-Raster Tag×Mahlzeit, Wiederholungs-Check, Kosten/Tag·Woche). **Offen:** M15 HK2-fein
+> (Garmethode), M16 operative Domänen (Produktion/Einkauf/Lager/Controlling); extern blockiert:
+> Schreibstil + KI-Vorschlag (LLM), PDF (Engine), Versand-Snapshot (baubar).
 
 > **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Inhalt heißt bei uns
 > **„Paket“** (Dominique: bessere Beschreibung als „Baustein“; im Konzeptpapier „Modul“ —
