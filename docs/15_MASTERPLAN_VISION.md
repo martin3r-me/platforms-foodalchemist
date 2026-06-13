@@ -7,8 +7,10 @@
 > **M11+ (Domänen-Platzhalter)** von Doc 14 — sie waren bewusst „Zuschnitt mit Dominique
 > abstimmen“ / reine Brainstorming-Zeilen. Hier wird daraus eine sequenzierte, baubare
 > Landkarte mit Abhängigkeiten, Entscheidungs-Gates und „jetzt vs. später“.
-> **Stand:** 2026-06-13 · **Status:** Gates (§5) entschieden · **M10 (Concepter) KOMPLETT
-> GEBAUT** (Suite 412/412, lokal committet) · nächster Schritt M11 (Foodbook auf Concept-Basis).
+> **Stand:** 2026-06-13 · **Status:** Gates (§5) entschieden · **M10 (Concepter) GEBAUT**
+> (Suite 412/412) · **Feature-Katalog §9** ergänzt (Self-Review + Detail je Modul; Concepter =
+> WaWi-Menü-Teil, Bedienung wie der Gerichte-Editor) · nächster Schritt **M10p** (Concepter-
+> Politur: Park-Flow-Einfügen, Personenzahl/Hochrechnung, Allergen-Rollup), dann M11 Foodbook.
 
 > **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Baustein heißt bei uns
 > **„Baustein“** — im Konzeptpapier „Modul“, aber die Plattform reserviert „Modul“ für ganze
@@ -387,3 +389,119 @@ Concepter führt:
   `platforms-food-alchemisten`; die Gates **D-CON-1…7 / D-HK-1 / D-PLAN-1** als
   **Discussions**; dieser Masterplan als **Doc-Seite** (architecture/overview).
 - **Reihenfolge bleibt:** erst **Basis** (M10), dann Ausgabeformen — wie in Doc 14 verankert.
+
+---
+
+## 9. Feature-Katalog je Modul (Detail)
+
+> **Einordnung:** Der Concepter ist der **Menü-Teil einer klassischen WaWi** (Dominique
+> 2026-06-13) — die Ebene, auf der Gerichte zu verkaufbaren Menüs/Buffets/Linien komponiert,
+> bepreist, mengen-hochgerechnet und deklariert werden. **Leit-Pattern:** Bedienung wie im
+> **Gerichte-Editor** (`IngredientEditor` + R18-Park-Flow) — Suchen→Parken→Menge/Einheit→Enter→
+> grüner Flash, ▲▼-Reorder, Katalog-Spalte, Live-Summen Alpine-first, Save = eine Transaktion.
+> **Status-Legende:** ✓ gebaut · ◐ teilweise · ○ offen.
+> **Harte Regel (Dominique):** Im Concepter werden **nur Gerichte (VK)** eingefügt — **keine
+> Basisrezepte** (die leben unter dem Gericht).
+
+### 9.1 M10 · Bausteine (bepreiste Bündel mehrerer Gerichte)
+
+| ID | Feature | Status | Bezug / Anmerkung |
+|---|---|---|---|
+| B-01 | Baustein anlegen/bearbeiten (Name, Rolle, Niveau) | ✓ | `BausteinService` |
+| B-02 | Gerichte zum Baustein hinzufügen/entfernen | ◐ | aktuell einfache Suche-→-Klick |
+| B-03 | **Gericht-Einfügen wie im Gerichte-Screen** (Park-Flow: suchen→parken→Menge/Einheit→Enter→grüner Flash; ▲▼-Reorder) — **nur Gerichte, keine Basisrezepte** | ○ | geteilter Park-Flow-Kern aus `IngredientEditor`/`zutaten-kern` adaptieren |
+| B-04 | Preis manuell (Buffet-Normalfall) | ✓ | `preis_modus=manuell` |
+| B-05 | Preis auto = Σ der Gerichte | ◐ | aktuell Σ vk_netto — **Buffet-Modell verfeinern** (B-06) |
+| B-06 | Buffet-Per-Person-Modell: Portionsfaktor/Erwartungsmenge je Gericht statt 1:1-Summe | ○ | speist HK1/HK2 (M12); D-HK-1 |
+| B-07 | KPI-Leiste im Baustein-Panel (Σ EK · Σ VK · W% · #Gerichte) | ○ | wie Gerichte-KPI-Leiste (M9-01b) |
+| B-08 | Niveau-Farbpunkte + Rollen-Pill in der Liste | ○ | wie R18 Basisrezept-Spalte |
+| B-09 | „Wo verwendet?" — in welchen Concepts steckt der Baustein | ○ | Verwendungsnachweis (M9-05-Muster) |
+| B-10 | Baustein duplizieren | ○ | |
+| B-11 | Allergen-/Diät-/Geschmacks-Rollup aus den Gerichten | ○ | GL-01/GL-08-Aggregate der Gerichte bündeln |
+
+### 9.2 M10 · Concepts (Slot-Gerüst = das Menü)
+
+| ID | Feature | Status | Bezug / Anmerkung |
+|---|---|---|---|
+| C-01 | Concept anlegen (Name, Anlass, Niveau, Status) | ✓ | `ConceptService` |
+| C-02 | Slots anlegen, Rolle/Titel, Pflicht/optional | ◐ | Pflicht/optional-Toggle im UI offen |
+| C-03 | Slot füllen mit Baustein **XOR** festem Gericht | ✓ | `fillSlot` erzwingt „genau eines" |
+| C-04 | Baustein-Tausch nach Rolle (Dropdown gleicher Rolle) | ✓ | `tauschbareBausteine` |
+| C-05 | festes Gericht einsetzen — **Park-Flow wie Gerichte-Screen** | ◐ | derzeit Suche-→-Klick; auf B-03-Niveau heben |
+| C-06 | Live-Preis-Cockpit = Σ gespeicherte Baustein-Preise (+ feste Gerichte) | ✓ | Tausch = nur Differenz |
+| C-07 | ▲▼/DnD-Slot-Reorder im UI | ○ | `reorderSlots` existiert, UI fehlt |
+| C-08 | **Personen-/Gästezahl am Concept** → Σ × N + Mengen-Hochrechnung | ○ | **WaWi-Menü-Kern** („für 80 Personen") |
+| C-09 | **Allergen-/Diät-Rollup übers ganze Concept** | ○ | Pflicht für Menü-/Angebots-Sicht (GL-01/08) |
+| C-10 | Menü-Karten-Vorschau (Konsumenten-Sicht: Titel/Claim je Slot) | ○ | Brücke zu M11-Foodbook |
+| C-11 | Vorlage-Fork + „als Vorlage speichern" | ✓ | D-CON-7 |
+| C-12 | Drei-Spalten-Layout (Concepts · Slots · Katalog) | ○ | R18-Optik; Jarvis-Dichte-Politur |
+| C-13 | Concept duplizieren | ○ | |
+
+> **Self-Review M10 (2026-06-13):** Modell sitzt (Concept→Baustein→Gericht, Preis-Cascade,
+> Vorlage-Fork; keine Basisrezepte ✓). **Lücken zur „wie-im-Gerichte"-Erwartung:** B-03/C-05
+> (Park-Flow-Einfügen), B-06 (Buffet-Mengenmodell), C-08 (Personenzahl/Hochrechnung), C-09
+> (Allergen-Rollup), C-12 + B-07/B-08 (Jarvis-Dichte). → **M10-Politur-Runde „M10p"** vor M11.
+
+### 9.3 M11 · Foodbook / Portfolio (D-8-Spec, Angebots-/Menü-Mappe)
+
+| ID | Feature | Status | Bezug / Anmerkung |
+|---|---|---|---|
+| F-01 | Foodbook (Code/Jahr/Status) + Kapitel-Baum (CRUD, move, reorder, Zyklus-Check) | ○ | D-8 §2/§3 |
+| F-02 | Blöcke: **concept_ref** · recipe_ref (Gericht) · header · text · image · spacer | ○ | concept_ref ist neu ggü. D-8 |
+| F-03 | **variant_group** „A \| B \| C" (Gast wählt 1) — **auf Foodbook-Block-Ebene** | ○ | Dependency-Entscheid (Concept-Slot bleibt 1 Befüllung) |
+| F-04 | 3-Panel-Editor (Kapitel-Baum · Block-Liste · Cockpit) | ○ | D-8 §4 |
+| F-05 | Kapitel-Aggregat EK/VK/Wareneinsatz% rekursiv | ○ | `kapitelAggregat` |
+| F-06 | Preis je Kapitel: pro Person / pauschal / **Staffel (min_personen)** | ○ | D-8 |
+| F-07 | **Schreibstil-Transformation** (vk_wording → Brand-Voice, 11 Stile) | ○ | **Kern-Wert**; LLM-Blocker |
+| F-08 | Versand-**Snapshot** (status=sent friert Preise/Wording ein) | ○ | V-25, ab Tag 1 |
+| F-09 | PDF/HTML-Export (nur sichtbar=1, Konsumenten-Felder) | ○ | PDF-Engine = Setup-Blocker |
+| F-10 | Concept im Foodbook: **Referenz (live) ODER Fork (Kopie)** | ○ | D-CON-4 beides |
+| F-11 | Verwendungsnachweis Kunde × Marketing-Name | ◐ | existiert bei Gerichten (M6) |
+
+### 9.4 M12 · Kalkulation HK1 → HK2 (Zuschlagskalkulation)
+
+| ID | Feature | Status | Bezug / Anmerkung |
+|---|---|---|---|
+| K-01 | HK1 = Wareneinsatz verlustkorrigiert (Garverlust/Putzverlust, Brutto→Netto) | ◐ | Verlustfelder existieren je Zutat |
+| K-02 | HK2-Feld pro Rezept/Baustein (Energie-/Nebenkosten) + Migration | ○ | wandert beim Baustein-Tausch mit |
+| K-03 | HK2 grob = HK1 + 1 Pauschal-Zuschlagssatz (Team-Setting) | ○ | Zuschlagskalkulation, D-HK-1 |
+| K-04 | HK1/HK2 in Concept-/Foodbook-Cockpit aufsummiert | ○ | |
+| K-05 | Buffet-Per-Person-Kostenbasis (Erwartungsmenge) | ○ | hängt an B-06 |
+| K-06 | Kalkulations-Übersicht (Sidebar „Kalkulation"): Gerichte/Bausteine/Concepts × HK1/HK2/Marge | ○ | eigener Nav-Eintrag (Entscheid) |
+| K-07 | `markStaleForRecipe` in die RecipeRecompute-Pipeline einhängen | ○ | Baustein wird bei GP-Preis-Änderung stale |
+
+### 9.5 M13 · Zielpreis-Konfigurator (Modus im Concept-Editor)
+
+| ID | Feature | Status | Bezug / Anmerkung |
+|---|---|---|---|
+| Z-01 | Tausch-Logik nur gleiche Rolle, Preis-Differenz live | ◐ | `tauschbareBausteine` ist die Basis |
+| Z-02 | Zielpreis-Solver (greedy: „komm auf X €/Person") | ○ | einzige neue Mathematik |
+| Z-03 | ✨ KI-Vorschlag rollen-konformer Alternativen | ○ | LLM/Embeddings-Blocker |
+| Z-04 | Zielpreis-Feld + Vorschlags-/Tausch-UI im Concept-Editor | ○ | kein eigener Nav-Eintrag |
+
+### 9.6 M14 · Speiseplan (zweite Ausgabeform)
+
+| ID | Feature | Status | Bezug / Anmerkung |
+|---|---|---|---|
+| S-01 | Zeit-Slot-Schema (Tag × Mahlzeit), Belegung mit Gericht/Baustein/**ganzem Concept** | ○ | D-PLAN-1 beides |
+| S-02 | Zyklen/Rotation (z. B. 4-Wochen-Plan) | ○ | |
+| S-03 | Wiederholungs-/Abstandsregeln | ○ | GV-Anforderung |
+| S-04 | Wochenbilanz (Nährwert/Allergen/Ausgewogenheit) + Sektor-Eignung-Filter | ○ | Aggregate liegen vor |
+| S-05 | Kosten pro Tag/Woche (HK1/HK2) | ○ | hängt an M12 |
+
+### 9.7 M16+ · Operative Domänen (downstream, grob)
+
+| ID | Feature | Bezug |
+|---|---|---|
+| O-01 | Produktionsplanung: Aufträge aus Concept-/Speiseplan-Mengen → Yield-Skalierung | Mathematik existiert |
+| O-02 | Einkauf: Bestellvorschläge aus Produktionsmengen × Lead-LA (V-29-Vorbestellzeiten) | |
+| O-03 | Lager: Bestände je LA/GP, Wareneingang, Chargen → Allergen-Rückverfolgung | |
+| O-04 | Controlling: Soll/Ist-Wareneinsatz, Margen-Trends, HK2 + KI-Kosten | M9-04 |
+
+### 9.8 Empfohlene Bau-Reihenfolge (verfeinert)
+
+1. **M10p — Concepter-Politur** (B-03/C-05 Park-Flow-Einfügen · C-08 Personenzahl/Hochrechnung ·
+   C-09 Allergen-Rollup · B-07/B-08/C-07/C-12 Dichte+Reorder). Schließt den „wie-im-Gerichte"-Wunsch.
+2. **M11 — Foodbook** (F-01…F-11; F-03-Wahl-Gruppen, F-07-Schreibstil, F-08-Snapshot).
+3. **M12 — Kalkulation HK1/HK2** (K-01…K-07; B-06/K-05 Buffet-Kosten).
+4. **M13 — Konfigurator** · **M14 — Speiseplan** · **M15 — HK2-Verfeinerung** · **M16+ — Betrieb**.
