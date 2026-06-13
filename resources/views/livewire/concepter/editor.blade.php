@@ -10,6 +10,9 @@
     <x-foodalchemist::modal name="concepter-editor" :title="$titel" fullscreen>
         <x-slot:actions>
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
+            @if($concept && ! $concept->is_vorlage)
+                <button type="button" wire:click="alsVorlage" class="{{ $btnGhost }}">Als Vorlage speichern</button>
+            @endif
             @if($fehler)<span class="{{ $pill }} {{ $variantPill['danger'] }}">{{ $fehler }}</span>@endif
             @if($bewertung)
                 @php($scorePill = $bewertung['score'] >= 80 ? $variantPill['success'] : ($bewertung['score'] >= 50 ? $variantPill['warning'] : $variantPill['danger']))
@@ -130,6 +133,7 @@
                                         @endforeach
                                     </select>
                                     <button type="button" wire:click="gerichtPicker({{ $slot->id }})" class="{{ $btnGhostXs }}">festes Gericht …</button>
+                                    <button type="button" wire:click="neuesPaketImSlot({{ $slot->id }})" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Inline ein neues Paket schnüren">+ neues Paket</button>
                                 </div>
                                 @if($fillSlotId === $slot->id)
                                     <div class="space-y-1 pl-1">

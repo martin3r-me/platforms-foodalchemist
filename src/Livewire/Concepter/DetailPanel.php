@@ -43,6 +43,21 @@ class DetailPanel extends Component
         }
     }
 
+    /** M10R-4 (D-CON-7): „Aus Vorlage starten" — forkt das Slot-Gerüst und öffnet den Fork. */
+    public function ausVorlage(ConceptService $concepts): void
+    {
+        if ($this->type !== 'concepts' || $this->selectedId === null) {
+            return;
+        }
+        $vorlage = $concepts->detail($this->team(), $this->selectedId);
+        if ($vorlage === null || ! $vorlage->is_vorlage) {
+            return;
+        }
+        $fork = $concepts->forkVonVorlage($this->team(), $this->selectedId, $vorlage->name . ' – Kopie');
+        $this->dispatch('concepter-gespeichert');
+        $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $fork->id);
+    }
+
     public function loeschen(ConceptService $concepts, PaketService $pakete): void
     {
         if ($this->selectedId === null) {

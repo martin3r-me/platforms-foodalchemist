@@ -214,6 +214,46 @@ class Editor extends Component
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
+    /**
+     * M10R-4 (§10.2): inline NEUES Paket schnüren — legt ein Paket mit der Rolle des
+     * Slots an, füllt den Slot damit und öffnet das neue Paket direkt im selben Modal
+     * (Gerichte hinzufügen), ohne den Screen zu wechseln. „Speichern & schließen"
+     * bringt zurück zum Concept (erneut auswählen).
+     */
+    public function neuesPaketImSlot(int $slotId): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        $team = $this->team();
+        $svc = app(ConceptService::class);
+        $slot = collect($svc->detail($team, $this->id)->slots)->firstWhere('id', $slotId);
+        if ($slot === null) {
+            return;
+        }
+        $rolle = $slot->rolle ?: null;
+        $paket = app(PaketService::class)->create($team, [
+            'name' => trim(($rolle ? $rolle . '-' : '') . 'Paket'),
+            'rolle' => $rolle,
+        ]);
+        $svc->fillSlot($team, $slotId, ['paket_id' => $paket->id]);
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+        // direkt das neue Paket im selben Modal öffnen (Gerichte schnüren)
+        $this->oeffnen('pakete', $paket->id);
+    }
+
+    // ── Vorlage (M10R-4 · D-CON-7) ───────────────────────────────────────────
+
+    public function alsVorlage(): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        app(ConceptService::class)->alsVorlageSpeichern($this->team(), $this->id);
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+        $this->dispatch('concepter-vorlage-gespeichert');
+    }
+
     private function reloadSlotForm(): void
     {
         $c = app(ConceptService::class)->detail($this->team(), $this->id);

@@ -3,6 +3,7 @@
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Concepter\Editor;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\PaketService;
@@ -87,4 +88,29 @@ it('Tab-Wechsel funktioniert', function () {
         ->assertSet('tab', 'kalkulation')
         ->call('setTab', 'unsinn')
         ->assertSet('tab', 'kalkulation');                            // ungültiger Tab ignoriert
+});
+
+it('M10R-4: inline neues Paket im Slot schnüren öffnet das Paket im selben Modal', function () {
+    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
+    $vorher = FoodAlchemistPaket::count();
+
+    Livewire::test(Editor::class)
+        ->call('oeffnen', 'concepts', $this->concept->id)
+        ->call('neuesPaketImSlot', $slot->id)
+        ->assertSet('type', 'pakete')                                 // Editor zeigt jetzt das neue Paket
+        ->assertSet('id', fn ($v) => $v !== null);
+
+    expect(FoodAlchemistPaket::count())->toBe($vorher + 1)
+        ->and($slot->refresh()->paket_id)->not->toBeNull();
+});
+
+it('M10R-4: Als Vorlage speichern aus dem Editor', function () {
+    $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
+
+    Livewire::test(Editor::class)
+        ->call('oeffnen', 'concepts', $this->concept->id)
+        ->call('alsVorlage')
+        ->assertDispatched('concepter-vorlage-gespeichert');
+
+    expect(FoodAlchemistConcept::vorlagen()->count())->toBe(1);
 });

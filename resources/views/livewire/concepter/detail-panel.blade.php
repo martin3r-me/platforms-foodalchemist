@@ -35,9 +35,11 @@
         <div class="flex flex-wrap items-center gap-1.5">
             @if($concept)
                 <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ $concept->id }} })" class="{{ $btnGhostXs }}">✎ Bearbeiten</button>
-                @unless($concept->is_vorlage)
+                @if($concept->is_vorlage)
+                    <button type="button" wire:click="ausVorlage" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">↧ Als Concept nutzen</button>
+                @else
                     <button type="button" wire:click="alsVorlage" class="{{ $btnGhostXs }}">Als Vorlage</button>
-                @endunless
+                @endif
                 <button type="button" wire:click="loeschen" wire:confirm="Concept löschen?" class="{{ $btnGhostXs }} text-red-600 dark:text-red-400">Löschen</button>
             @else
                 <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'pakete', id: {{ $paket->id }} })" class="{{ $btnGhostXs }}">✎ Bearbeiten</button>

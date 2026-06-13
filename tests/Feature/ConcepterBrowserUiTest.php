@@ -100,6 +100,18 @@ it('DetailPanel zeigt Paket-Nährwerte + Allergen-Rollup', function () {
         ->assertSee('vegan');                                        // Green Power ist vegan (einziges Gericht)
 });
 
+it('DetailPanel forkt eine Vorlage und öffnet den Fork (M10R-4)', function () {
+    $v = $this->concepts->create($this->rootTeam, ['name' => '3-Gang', 'is_vorlage' => true]);
+    $this->concepts->addSlot($this->rootTeam, $v->id, ['rolle' => 'Vorspeise']);
+
+    Livewire::test(DetailPanel::class)
+        ->call('zeige', 'concepts', $v->id)
+        ->call('ausVorlage')
+        ->assertDispatched('concepter-editor.oeffnen');
+
+    expect(FoodAlchemistConcept::echte()->where('name', '3-Gang – Kopie')->exists())->toBeTrue();
+});
+
 it('DetailPanel löscht und meldet concepter-geloescht', function () {
     Livewire::test(DetailPanel::class)
         ->call('zeige', 'pakete', $this->paket->id)
