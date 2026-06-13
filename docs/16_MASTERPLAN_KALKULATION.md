@@ -180,17 +180,25 @@ Excel-Logik ab — mit **6–7 Reglern** statt 37 Tabs.
 
 ## 6. Phasen (M-K1 … M-K5)
 
-| Phase | Inhalt |
-|---|---|
-| **M-K1** | **Block-Schema + Service-Umbau:** `kalkulation_schema_json` + `stundensatz_eur` am Team-Setting; `KalkulationService` rechnet HK aus den Blöcken (pct_we/pct_hk/eur_pro_portion/arbeitszeit) und liefert die Aufschlüsselung. Rückwärtskompatibel (alter Zuschlag = Gemeinkosten-Block). Golden-Tests gegen feste Beispielzahlen. |
-| **M-K2** | **Lohn-Block aus Arbeitszeit:** `arbeitszeit_min × Stundensatz` für Rezept; Rollup für Paket/Concept (M10R-Aggregat liefert `arbeitszeit_min` schon). |
-| **M-K3** | **UI:** Settings-Schema-CRUD + Kalkulation-Browser 3-Panel mit Wasserfall-Detail + Integration in Concepter-Editor-Tab. (Vorbild: VK-/Vokabular-Seiten.) |
-| **M-K4** | **Politur-Blöcke:** Verpackung, Schwund-als-Block (Gate D-K3), Lager; Garungstyp-Tag + Faktor (Gate D-K7). |
-| **M-K5** *(später)* | **Mengen-/Event-Schicht:** Pax-Staffel-Degression (D-K4) und Event-/Angebots-Kalkulation (Personal/Logistik/Equipment) **am Foodbook** (D-K5) — die Excel-Ebene D. |
+> **Bau-Stand (2026-06-13): v1 GEBAUT (M-K1 + M-K2 + M-K3 ✓). Suite 480/480 grün, live.**
+> M-K1/M-K2 (Commit 4cf695f): `team_settings.kalkulation_schema`/`stundensatz_eur`/
+> `marge_pct` (Migration 000050) · `TeamSettingsService` (defaultSchema/kalkulationSchema/
+> stundensatz/margePct) · `KalkulationService::berechne` (Block-Wasserfall) + recipeHk/
+> conceptHk auf Schema umgestellt (M12-Werte erhalten) + `paketHk` · Aggregat-
+> `arbeitszeit_min_pro_portion`. M-K3 (Commit b528609): Settings-Block-Schema-Editor +
+> HK2-Wasserfall im Concepter-Editor-Tab.
 
-> v1 = **M-K1 + M-K2 + M-K3**: strukturierte, sichtbare HK je Portion/Person, team-
-> konfigurierbar, im ganzen Modul aufgeschlüsselt. Das ist „die Herstellkosten im Modul
-> rechnen können" — schlank.
+| Phase | Inhalt | Status |
+|---|---|---|
+| **M-K1** | **Block-Schema + Service-Umbau:** `kalkulation_schema` + `stundensatz_eur` am Team-Setting; `KalkulationService` rechnet HK aus den Blöcken (pct_we/pct_hk/eur_pro_portion/arbeitszeit) und liefert die Aufschlüsselung. Rückwärtskompatibel (alter Zuschlag = Gemeinkosten-Block). | ✓ |
+| **M-K2** | **Lohn-Block aus Arbeitszeit:** `arbeitszeit_min × Stundensatz` für Rezept; Rollup für Paket/Concept (`arbeitszeit_min_pro_portion`). | ✓ |
+| **M-K3** | **UI:** Settings-Schema-CRUD + HK2-Wasserfall im Concepter-Editor-Tab. (Browser-3-Panel-Wasserfall = optionaler Schliff, recipeHk/conceptHk liefern die Blöcke schon.) | ✓ |
+| **M-K4** | **Politur-Blöcke:** Verpackung, Schwund-als-Block (Gate D-K3), Lager; Garungstyp-Tag + Faktor (Gate D-K7); Wasserfall auch im `/kalkulation`-Browser-Detail. | offen |
+| **M-K5** *(später)* | **Mengen-/Event-Schicht:** Pax-Staffel-Degression (D-K4) und Event-/Angebots-Kalkulation (Personal/Logistik/Equipment) **am Foodbook** (D-K5) — die Excel-Ebene D. | offen |
+
+> v1 = **M-K1 + M-K2 + M-K3 ✓**: strukturierte, sichtbare HK je Portion/Person, team-
+> konfigurierbar, im Settings + Concepter-Editor aufgeschlüsselt. „Die Herstellkosten im
+> Modul rechnen" — schlank, erledigt.
 
 ---
 
