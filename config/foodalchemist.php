@@ -143,16 +143,22 @@ return [
             ],
         ],
         [
-            // Reihenfolge = Bau-Sequenz aus docs/15_MASTERPLAN_VISION.md. Concepter + Foodbook
-            // sind gebaut (eigene Gruppen oben); hier bleibt, was noch kommt. Klick = Vorschau.
+            // M12 GEBAUT: Kalkulations-Übersicht (HK1 Wareneinsatz → HK2 Vollkosten + Deckungsbeitrag).
+            'group' => 'Kalkulation',
+            'items' => [
+                [
+                    'label' => 'Kalkulation (HK2)',
+                    'route' => 'foodalchemist.kalkulation.index',
+                    'icon'  => 'heroicon-o-calculator',
+                ],
+            ],
+        ],
+        [
+            // Reihenfolge = Bau-Sequenz aus docs/15_MASTERPLAN_VISION.md. Concepter + Foodbook +
+            // Kalkulation sind gebaut (eigene Gruppen oben); hier bleibt, was noch kommt.
             // Zielpreis-Konfigurator = Modus im Concept-Editor (KEIN eigener Eintrag).
             'group' => 'In Planung',
             'items' => [
-                [   // M12/M15 — Herstellkosten HK1 → HK2 (Übersicht; surft auch in den Cockpits auf)
-                    'label' => 'Kalkulation',
-                    'route' => 'foodalchemist.demnaechst',
-                    'icon'  => 'heroicon-o-calculator',
-                ],
                 [   // M14 — Speiseplan (dieselben Concepts über die Zeitachse)
                     'label' => 'Speiseplan',
                     'route' => 'foodalchemist.demnaechst',

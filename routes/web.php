@@ -87,6 +87,12 @@ Route::get('/foodbooks', \Platform\FoodAlchemist\Livewire\Foodbooks\Index::class
     ->name('foodalchemist.foodbooks.index');
 
 /**
+ * M12: Kalkulations-Übersicht (HK1/HK2/Vollkosten-DB).
+ */
+Route::get('/kalkulation', \Platform\FoodAlchemist\Livewire\Kalkulation\Index::class)
+    ->name('foodalchemist.kalkulation.index');
+
+/**
  * R7: «In Planung» — Vorschau der Phase-2-Domänen (14_ROADMAP_PHASE2).
  */
 Route::get('/demnaechst', \Platform\FoodAlchemist\Livewire\Demnaechst::class)
