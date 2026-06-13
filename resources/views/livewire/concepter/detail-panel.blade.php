@@ -34,17 +34,13 @@
         {{-- Aktionen (Bearbeiten navigiert in M10R-2 noch zum bestehenden Editor) --}}
         <div class="flex flex-wrap items-center gap-1.5">
             @if($concept)
-                @if(Route::has('foodalchemist.concepts.index'))
-                    <a href="{{ route('foodalchemist.concepts.index', ['c' => $concept->id]) }}" wire:navigate class="{{ $btnGhostXs }}">✎ Bearbeiten</a>
-                @endif
+                <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ $concept->id }} })" class="{{ $btnGhostXs }}">✎ Bearbeiten</button>
                 @unless($concept->is_vorlage)
                     <button type="button" wire:click="alsVorlage" class="{{ $btnGhostXs }}">Als Vorlage</button>
                 @endunless
                 <button type="button" wire:click="loeschen" wire:confirm="Concept löschen?" class="{{ $btnGhostXs }} text-red-600 dark:text-red-400">Löschen</button>
             @else
-                @if(Route::has('foodalchemist.pakete.index'))
-                    <a href="{{ route('foodalchemist.pakete.index', ['b' => $paket->id]) }}" wire:navigate class="{{ $btnGhostXs }}">✎ Bearbeiten</a>
-                @endif
+                <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'pakete', id: {{ $paket->id }} })" class="{{ $btnGhostXs }}">✎ Bearbeiten</button>
                 <button type="button" wire:click="loeschen" wire:confirm="Paket löschen?" class="{{ $btnGhostXs }} text-red-600 dark:text-red-400">Löschen</button>
             @endif
         </div>

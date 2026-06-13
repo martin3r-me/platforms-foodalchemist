@@ -114,7 +114,7 @@
                         <tr wire:key="row-{{ $tab }}-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
                             x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $selectedId === $it->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}">
-                            <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">
+                            <td wire:click.stop="bearbeite({{ $it->id }})" class="{{ $td }} font-medium text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer" title="Editor öffnen">
                                 {{ $it->name }}
                                 @if($tab === 'concepts' && $it->is_vorlage)<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Vorlage</span>@endif
                             </td>
@@ -144,4 +144,7 @@
         </div>
         <div>{{ $items->links() }}</div>
     </x-ui-page-container>
+
+    {{-- Voll-Editor-Modal (M10R-3) — auf Seitenebene, öffnet via concepter-editor.oeffnen --}}
+    <livewire:foodalchemist.concepter.editor />
 </x-ui-page>

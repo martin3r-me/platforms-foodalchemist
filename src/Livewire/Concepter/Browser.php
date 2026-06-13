@@ -112,25 +112,38 @@ class Browser extends Component
         $this->resetPage();
     }
 
-    /** Neues Concept/Paket anlegen → auswählen (Bearbeiten via Editor M10R-3). */
+    /** Neues Concept/Paket anlegen → auswählen + Editor öffnen. */
     public function neu(ConceptService $concepts, PaketService $pakete): void
     {
         $team = $this->team();
         if ($this->tab === 'pakete') {
             $p = $pakete->create($team, ['name' => 'Neues Paket']);
             $this->waehle($p->id);
+            $this->dispatch('concepter-editor.oeffnen', type: 'pakete', id: $p->id);
 
             return;
         }
         $c = $concepts->create($team, ['name' => 'Neues Concept', 'is_vorlage' => $this->showVorlagen]);
         $this->waehle($c->id);
+        $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $c->id);
+    }
+
+    /** Doppel-/Namensklick in der Tabelle → Editor öffnen. */
+    public function bearbeite(int $id): void
+    {
+        $this->waehle($id);
+        $this->dispatch('concepter-editor.oeffnen', type: $this->tab, id: $id);
     }
 
     #[On('concepter-gespeichert')]
-    #[On('concepter-geloescht')]
-    public function aktualisiere(?int $id = null): void
+    public function aktualisiere(): void
     {
-        // Edit/Delete im Detail-Panel/Editor → Liste + Counts neu rendern.
+        // Edit im Editor/Detail → Liste + Counts neu rendern (Auswahl bleibt).
+    }
+
+    #[On('concepter-geloescht')]
+    public function entfernt(?int $id = null): void
+    {
         if ($id !== null && $id === $this->selectedId) {
             $this->selectedId = null;
         }
