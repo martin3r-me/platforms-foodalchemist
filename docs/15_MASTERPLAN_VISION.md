@@ -7,10 +7,11 @@
 > **M11+ (Domänen-Platzhalter)** von Doc 14 — sie waren bewusst „Zuschnitt mit Dominique
 > abstimmen“ / reine Brainstorming-Zeilen. Hier wird daraus eine sequenzierte, baubare
 > Landkarte mit Abhängigkeiten, Entscheidungs-Gates und „jetzt vs. später“.
-> **Stand:** 2026-06-13 · **Status:** Gates (§5) entschieden · **M10 + M10p (Concepter) GEBAUT**
-> (Suite 416/416) · **Feature-Katalog §9** ergänzt (Concepter = WaWi-Menü-Teil, Bedienung wie
-> der Gerichte-Editor) · M10p: Park-Flow-Einfügen (▲▼/Menge), KPI, Personenzahl→Gesamtpreis×N,
-> Allergen-/Diät-Rollup, Produktionsmengen · **nächster Schritt M11 Foodbook**.
+> **Stand:** 2026-06-13 · **Status:** Gates (§5) entschieden · **M10 + M10p + M10c (Concepter)
+> GEBAUT** (Suite 418/418) · **Feature-Katalog §9** (Concepter = WaWi-Menü-Teil, Bedienung wie
+> der Gerichte-Editor) · M10c-Entscheide Dominique: **Concept ist person-unabhängig (Pax raus →
+> bindend erst am Foodbook/Angebot, M11)**; **Concept-Kategorien als Baum** (Sammlungen/Linien).
+> **nächster Schritt M11 Foodbook** (inkl. Pax/Gästezahl + Mengen-Hochrechnung je Angebot).
 
 > **Terminologie-Entscheid (2026-06-13):** Der austauschbare Slot-Baustein heißt bei uns
 > **„Baustein“** — im Konzeptpapier „Modul“, aber die Plattform reserviert „Modul“ für ganze
@@ -444,6 +445,10 @@ Concepter führt:
 > **M10p GEBAUT (2026-06-13):** ✓ B-03/C-05 (▲▼-Reorder + Menge/Person je Gericht), ✓ B-07 (KPI),
 > ✓ C-07 (Slot-▲▼), ✓ C-08 (Personenzahl→Gesamtpreis×N + Produktionsmengen), ✓ C-09 (Allergen-
 > Rollup). Offen (kosmetisch, eigene R-Runde): voller R18-3-Spalten-Katalog, Jarvis-Dichte, DnD.
+> **M10c GEBAUT (2026-06-13, Dominique-Korrektur):** **Pax RAUS aus dem Concept** — Concept ist
+> person-unabhängig; Cockpit nur €/Person + Hinweis „Gästezahl erst im Foodbook"; C-08-Hochrechnung
+> nimmt Pax als Aufruf-Parameter (→ M11/F-12). **Concept-Kategorien als Baum** (neu, war nicht im
+> Erst-Katalog): Sidebar-Baum (anlegen/umbenennen/löschen/filtern inkl. Nachfahren) + Header-Select.
 
 ### 9.3 M11 · Foodbook / Portfolio (D-8-Spec, Angebots-/Menü-Mappe)
 
@@ -460,6 +465,7 @@ Concepter führt:
 | F-09 | PDF/HTML-Export (nur sichtbar=1, Konsumenten-Felder) | ○ | PDF-Engine = Setup-Blocker |
 | F-10 | Concept im Foodbook: **Referenz (live) ODER Fork (Kopie)** | ○ | D-CON-4 beides |
 | F-11 | Verwendungsnachweis Kunde × Marketing-Name | ◐ | existiert bei Gerichten (M6) |
+| F-12 | **Pax/Gästezahl je Angebot/Kapitel** → Gesamtpreis + Mengen-Hochrechnung | ○ | von M10c hierher verlagert — `ConceptService::mengenHochrechnung($concept,$personen)` steht schon, Pax bindet hier |
 
 ### 9.4 M12 · Kalkulation HK1 → HK2 (Zuschlagskalkulation)
 
