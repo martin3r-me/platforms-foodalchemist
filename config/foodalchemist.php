@@ -154,19 +154,17 @@ return [
             ],
         ],
         [
-            // Reihenfolge = Bau-Sequenz aus docs/15_MASTERPLAN_VISION.md. Concepter + Foodbook +
-            // Kalkulation sind gebaut (eigene Gruppen oben); hier bleibt, was noch kommt.
-            // Zielpreis-Konfigurator = Modus im Concept-Editor (KEIN eigener Eintrag).
-            'group' => 'In Planung',
+            // M14 GEBAUT: Speiseplan — Bausteine über die Zeitachse (Tag × Mahlzeit, Wochen-Zyklus).
+            // M10–M14 sind damit alle gebaut. M16+-Domänen (Produktionsplanung/Einkauf/Lager/
+            // Controlling) + Zielpreis-Konfigurator-Modus stehen in docs/15_MASTERPLAN_VISION.md;
+            // Sidebar zeigt nur Gebautes (Dominique 2026-06-13). Konfigurator = Modus im Concept-Editor.
+            'group' => 'Speiseplan',
             'items' => [
-                [   // M14 — Speiseplan (dieselben Concepts über die Zeitachse)
+                [
                     'label' => 'Speiseplan',
-                    'route' => 'foodalchemist.demnaechst',
+                    'route' => 'foodalchemist.speiseplan.index',
                     'icon'  => 'heroicon-o-calendar-days',
                 ],
-                // M16+-Domänen (Produktionsplanung/Einkauf/Lager/Controlling) bewusst NICHT
-                // gelistet — Sidebar zeigt nur, was lt. Masterplan real wird (Dominique 2026-06-13);
-                // sie bleiben in docs/15_MASTERPLAN_VISION.md §M16+ dokumentiert.
             ],
         ],
         [

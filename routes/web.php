@@ -93,6 +93,12 @@ Route::get('/kalkulation', \Platform\FoodAlchemist\Livewire\Kalkulation\Index::c
     ->name('foodalchemist.kalkulation.index');
 
 /**
+ * M14: Speiseplan — Bausteine über die Zeitachse (Tag × Mahlzeit, Wochen-Zyklus).
+ */
+Route::get('/speiseplan', \Platform\FoodAlchemist\Livewire\Speiseplan\Index::class)
+    ->name('foodalchemist.speiseplan.index');
+
+/**
  * R7: «In Planung» — Vorschau der Phase-2-Domänen (14_ROADMAP_PHASE2).
  */
 Route::get('/demnaechst', \Platform\FoodAlchemist\Livewire\Demnaechst::class)

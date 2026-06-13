@@ -83,6 +83,8 @@ trait SeedsTeamHierarchy
         \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::flushTeamAncestryCache();
+        \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::flushTeamAncestryCache();
+        \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag::flushTeamAncestryCache();
     }
 
     /** User mit current_team_id im gegebenen Team (für UI-/Curate-Gating-Tests, M1-08). */
