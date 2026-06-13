@@ -150,6 +150,13 @@ return [
                     'route' => 'foodalchemist.kalkulation.index',
                     'icon'  => 'heroicon-o-calculator',
                 ],
+                [
+                    // M-K10 / Doc 16 §11: standalone Composer — Positionen (Gericht/
+                    // Basisrezept/GP/frei) zusammenstellen → HK1/HK2/VK. Entkoppelt (Prüfung).
+                    'label' => 'Kalkulator',
+                    'route' => 'foodalchemist.kalkulator.index',
+                    'icon'  => 'heroicon-o-squares-plus',
+                ],
             ],
         ],
         [

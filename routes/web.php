@@ -101,6 +101,13 @@ Route::get('/kalkulation', \Platform\FoodAlchemist\Livewire\Kalkulation\Index::c
     ->name('foodalchemist.kalkulation.index');
 
 /**
+ * M-K10 / Doc 16 §11: Kalkulator — standalone Composer (Positionen aus Gericht/
+ * Basisrezept/GP/frei → HK1/HK2/VK), entkoppelt vom Concepter (Prüfung).
+ */
+Route::get('/kalkulator', \Platform\FoodAlchemist\Livewire\Kalkulator\Index::class)
+    ->name('foodalchemist.kalkulator.index');
+
+/**
  * M14: Speiseplan — Bausteine über die Zeitachse (Tag × Mahlzeit, Wochen-Zyklus).
  */
 Route::get('/speiseplan', \Platform\FoodAlchemist\Livewire\Speiseplan\Index::class)
