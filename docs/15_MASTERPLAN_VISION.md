@@ -458,7 +458,7 @@ Concepter führt:
 | ID | Feature | Status | Bezug / Anmerkung |
 |---|---|---|---|
 | F-01 | Foodbook (Code/Jahr/Status) + Kapitel-Baum (CRUD, move, reorder, Zyklus-Check) | ○ | D-8 §2/§3 |
-| F-02 | Blöcke: **concept_ref** · recipe_ref (Gericht) · header · text · image · spacer | ○ | concept_ref ist neu ggü. D-8 |
+| F-02 | Blöcke: **concept_ref** · header_neutral (Presets) · header_frei · header_frei_preis (Person/Pauschal/Staffel) · text · spacer · image | ◐ | **Foodbook komponiert Concepts, KEINE Einzel-Gerichte** (Dominique 2026-06-13): Jarvis ging nur bis VK-Rezepte (keine Concept-Ebene); bei uns ist der **Concepter der Kern**, das Foodbook stellt nur fertige Concepts + Angebots-Pricing zusammen. `recipe_ref` deaktiviert. Service gebaut |
 | F-03 | **variant_group** „A \| B \| C" (Gast wählt 1) — **auf Foodbook-Block-Ebene** | ○ | Dependency-Entscheid (Concept-Slot bleibt 1 Befüllung) |
 | F-04 | 3-Panel-Editor (Kapitel-Baum · Block-Liste · Cockpit) | ○ | D-8 §4 |
 | F-05 | Kapitel-Aggregat EK/VK/Wareneinsatz% rekursiv | ○ | `kapitelAggregat` |
