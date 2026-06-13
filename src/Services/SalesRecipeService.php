@@ -109,6 +109,7 @@ class SalesRecipeService
         // M9-01: Voll-Editor-Parität — Eigenschaften, Texte, Plating, Notizen
         'marketing_text', 'beschreibung', 'arbeitszeit_min', 'temperatur', 'funktion',
         'fertigungstiefe', 'plating_text', 'notizen_manual',
+        'nebenkosten_eur',                                            // M12: Energie/Nebenkosten je Charge (HK2)
     ];
 
     public function updateVk(Team $team, int $id, array $in): FoodAlchemistRecipe

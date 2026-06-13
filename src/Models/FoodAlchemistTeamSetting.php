@@ -28,5 +28,6 @@ class FoodAlchemistTeamSetting extends Model
         'garverlust_defaults' => 'array',
         'mwst_defaults' => 'array',
         'rundungsregeln' => 'array',
+        'hk2_zuschlag_pct' => 'decimal:2',
     ];
 }

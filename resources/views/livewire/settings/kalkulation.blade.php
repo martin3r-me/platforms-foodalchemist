@@ -54,5 +54,15 @@
         </div>
     </div>
 
+    {{-- M12: HK2-Zuschlagskalkulation --}}
+    <div class="{{ $card }} p-5 space-y-3" data-kalk-hk2>
+        <div>
+            <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Herstellkosten HK2 (Zuschlagskalkulation)</h3>
+            <p class="text-[11px] text-gray-400 mt-0.5">Gemeinkosten-Zuschlag auf den Wareneinsatz (HK1): <strong>HK2 = HK1 × (1 + Zuschlag%) + Energie/Nebenkosten je Rezept</strong>. Speist die Vollkosten-Marge in der Kalkulations-Übersicht und den Cockpits.</p>
+        </div>
+        <div class="flex items-center gap-3"><span class="w-40 text-xs text-gray-600 dark:text-gray-300">Gemeinkosten-Zuschlag</span>
+            <input type="text" wire:model="hk2Zuschlag" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="0" /> <span class="text-[11px] text-gray-400">% auf HK1</span></div>
+    </div>
+
     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
 </div>

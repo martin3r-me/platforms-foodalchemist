@@ -21,6 +21,9 @@ class Kalkulation extends Component
 
     public array $rundung = [];
 
+    /** M12: Gemeinkosten-Zuschlag % (HK1 → HK2, Zuschlagskalkulation). */
+    public string $hk2Zuschlag = '0';
+
     public ?string $meldung = null;
 
     public function mount(): void
@@ -29,6 +32,7 @@ class Kalkulation extends Component
         $this->garverlust = array_map(strval(...), $settings->garverlust_defaults ?? []);
         $this->mwst = array_replace(TeamSettingsService::MWST_DEFAULTS, $settings->mwst_defaults ?? []);
         $this->rundung = array_replace(TeamSettingsService::RUNDUNG_DEFAULTS, $settings->rundungsregeln ?? []);
+        $this->hk2Zuschlag = rtrim(rtrim(number_format((float) ($settings->hk2_zuschlag_pct ?? 0), 2, '.', ''), '0'), '.') ?: '0';
     }
 
     public function speichern(): void
@@ -50,6 +54,7 @@ class Kalkulation extends Component
                 'nachkommastellen' => max(0, min(4, (int) $this->rundung['nachkommastellen'])),
                 'modus' => in_array($this->rundung['modus'], ['kaufmaennisch', 'auf', 'ab'], true) ? $this->rundung['modus'] : 'kaufmaennisch',
             ],
+            'hk2_zuschlag_pct' => max(0, (float) str_replace(',', '.', $this->hk2Zuschlag)),
         ]);
         $this->meldung = 'Gespeichert — der Rezept-Editor (M4) liest diese Defaults.';
     }

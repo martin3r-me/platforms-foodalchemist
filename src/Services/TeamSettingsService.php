@@ -91,4 +91,10 @@ class TeamSettingsService
     {
         return array_replace(self::RUNDUNG_DEFAULTS, $this->for($team)->rundungsregeln ?? []);
     }
+
+    /** M12: Gemeinkosten-Zuschlag % auf den Wareneinsatz (HK1 → HK2, D-HK-1). */
+    public function hk2Zuschlag(Team $team): float
+    {
+        return (float) ($this->for($team)->hk2_zuschlag_pct ?? 0);
+    }
 }

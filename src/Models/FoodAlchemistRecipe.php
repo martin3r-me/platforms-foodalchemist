@@ -38,6 +38,7 @@ class FoodAlchemistRecipe extends Model
         'yield_kg_manual' => 'decimal:3',
         'ek_total_eur' => 'decimal:4',
         'ek_per_kg_eur' => 'decimal:4',
+        'nebenkosten_eur' => 'decimal:4',
         'n_zutaten_total' => 'integer',
         'n_zutaten_ungemappt' => 'integer',
         'ai_confidence' => 'decimal:3',
