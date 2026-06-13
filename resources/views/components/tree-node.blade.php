@@ -22,14 +22,14 @@
 @endphp
 
 <div wire:key="tree-node-{{ $nodeId }}"
-     @if(! empty($ancestors)) x-show="!hiddenBy({{ \Illuminate\Support\Js::from(array_values(array_map('intval', (array) $ancestors))) }})" @endif
+     @if(! empty($ancestors)) x-show="!hiddenBy({{ \Illuminate\Support\Js::from(array_values((array) $ancestors)) }})" x-cloak @endif
      class="group flex items-center gap-1 rounded-lg text-xs {{ $active ? $aktivCls : $hoverCls }}"
      style="padding-left: {{ $depth * 12 }}px">
     @if($hasChildren)
-        <button type="button" @click="toggle({{ (int) $nodeId }})"
+        <button type="button" @click="toggle({{ \Illuminate\Support\Js::from($nodeId) }})"
                 class="shrink-0 w-4 text-gray-400 hover:text-violet-500 text-[10px] leading-none"
                 title="auf-/zuklappen">
-            <span x-text="isCollapsed({{ (int) $nodeId }}) ? '▸' : '▾'">▾</span>
+            <span x-text="isCollapsed({{ \Illuminate\Support\Js::from($nodeId) }}) ? '▸' : '▾'">▾</span>
         </button>
     @else
         <span class="shrink-0 w-4"></span>

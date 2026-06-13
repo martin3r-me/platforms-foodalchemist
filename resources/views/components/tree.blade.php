@@ -15,9 +15,10 @@
     'initialCollapsed' => [],
 ])
 
+<style>[x-cloak]{display:none!important}</style>
 <div
     x-data="{
-        collapsed: {{ \Illuminate\Support\Js::from(array_values(array_map('intval', (array) $initialCollapsed))) }},
+        collapsed: {{ \Illuminate\Support\Js::from(array_values((array) $initialCollapsed)) }},
         toggle(id) { this.collapsed = this.collapsed.includes(id) ? this.collapsed.filter(x => x !== id) : [...this.collapsed, id] },
         isCollapsed(id) { return this.collapsed.includes(id) },
         hiddenBy(ancestors) { return ancestors.some(a => this.collapsed.includes(a)) },

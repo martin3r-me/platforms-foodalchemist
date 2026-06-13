@@ -1,4 +1,4 @@
-{{-- M1-04: Rezept-Taxonomie — HG-Baum links, Kategorien rechts (M4 liest dieselben Service-Methoden) --}}
+{{-- M1-04: Rezept-Taxonomie — ausklappbarer HG→Kategorie-Baum (Basisrezepte-Look), rechts Edit-Panel --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <div class="space-y-4">
@@ -7,81 +7,85 @@
     @endif
 
     <div class="flex gap-4 items-start">
-        {{-- Hauptgruppen --}}
-        <div class="w-80 shrink-0 {{ $card }} p-3 space-y-0.5" data-taxonomie-hg>
-            <div class="{{ $label }} px-2 pb-2">Hauptgruppen ({{ $hauptgruppen->count() }})</div>
-            @foreach($hauptgruppen as $hg)
-                <button type="button" wire:key="hg-{{ $hg->id }}" wire:click="waehleHg({{ $hg->id }})"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppeId === $hg->id
-                            ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
-                            : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                    <span class="min-w-0 truncate text-left">{{ $hg->bezeichnung }}</span>
-                    <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $hg->kategorie_count }}</span>
-                </button>
-            @endforeach
+        {{-- Baum: Hauptgruppen → Kategorien (ausklappbar) --}}
+        <div class="w-96 shrink-0 {{ $card }} p-3" data-taxonomie-hg>
+            <x-foodalchemist::tree heading="Hauptgruppen ({{ $hauptgruppen->count() }})" :initial-collapsed="$initialCollapsed">
+                @foreach($baum as $node)
+                    @if($node['kind'] === 'hg')
+                        <x-foodalchemist::tree-node
+                            :node-id="$node['id']" :depth="0" :has-children="$node['has_children']"
+                            :count="$node['count']" :active="$hauptgruppeId === $node['hg_id']">
+                            <button type="button" wire:click="waehleHg({{ $node['hg_id'] }})"
+                                    x-on:click="toggle(@js($node['id']))"
+                                    class="flex-1 min-w-0 text-left truncate px-1 py-0.5 font-medium">{{ $node['name'] }}</button>
+                        </x-foodalchemist::tree-node>
+                    @else
+                        <x-foodalchemist::tree-node
+                            :node-id="$node['id']" :depth="1" :ancestors="$node['ancestors']" :has-children="false"
+                            :count="$node['count']" :active="$editId === $node['kat_id']">
+                            <button type="button" wire:click="edit({{ $node['kat_id'] }})"
+                                    class="flex-1 min-w-0 text-left truncate px-1 py-0.5">
+                                {{ $node['name'] }}
+                                @if($node['technik'])<span class="text-[10px] text-gray-400 ml-1">· {{ $node['technik'] }}</span>@endif
+                            </button>
+                            @if($node['darf_edit'])
+                                <button type="button" wire:click="delete({{ $node['kat_id'] }})"
+                                        @if($node['count'] > 0) disabled title="Hat {{ $node['count'] }} Rezepte — erst mergen/umhängen (AT-D1-02)" @endif
+                                        wire:confirm="Kategorie „{{ $node['name'] }}" löschen?"
+                                        class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] {{ $node['count'] > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500' }}"
+                                        title="löschen">✕</button>
+                            @endif
+                        </x-foodalchemist::tree-node>
+                    @endif
+                @endforeach
 
-            <div class="flex gap-1 pt-2 mt-1 border-t border-black/5 dark:border-white/10" data-taxonomie-hg-neu>
-                <input type="text" wire:model="neueHauptgruppe" wire:keydown.enter="hgNeu"
-                       placeholder="Neue Hauptgruppe …" class="{{ $input }} py-0.5" />
-                <button type="button" wire:click="hgNeu" class="{{ $btnGhostXs }}" title="Hauptgruppe anlegen">+</button>
-            </div>
+                <div class="flex gap-1 pt-2 mt-1 border-t border-black/5 dark:border-white/10" data-taxonomie-hg-neu>
+                    <input type="text" wire:model="neueHauptgruppe" wire:keydown.enter="hgNeu"
+                           placeholder="Neue Hauptgruppe …" class="{{ $input }} py-0.5" />
+                    <button type="button" wire:click="hgNeu" class="{{ $btnGhostXs }}" title="Hauptgruppe anlegen">+</button>
+                </div>
+            </x-foodalchemist::tree>
         </div>
 
-        {{-- Kategorien der gewählten HG --}}
+        {{-- Detail rechts: Kategorie bearbeiten ODER neue Kategorie in der gewählten HG --}}
         <div class="flex-1 min-w-0 space-y-4">
-            <div class="relative overflow-hidden {{ $card }}" data-taxonomie-kategorien>
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Kategorien</h3>
-                    <span class="{{ $label }}">{{ $kategorien->count() }} in dieser Hauptgruppe</span>
+            @if($editId !== null)
+                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" data-taxonomie-edit>
+                    <div class="{{ $cardAccent }}"></div>
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Kategorie bearbeiten</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <div class="md:col-span-2">
+                            <label class="{{ $label }}">Bezeichnung</label>
+                            <input type="text" wire:model="form.bezeichnung" wire:keydown.enter="save" class="{{ $input }}" />
+                        </div>
+                        <div>
+                            <label class="{{ $label }}">Technik</label>
+                            <input type="text" wire:model="form.technik" wire:keydown.enter="save" class="{{ $input }}" placeholder="optional" />
+                        </div>
+                        <div>
+                            <label class="{{ $label }}">Sort</label>
+                            <input type="number" wire:model="form.sort_order" class="{{ $input }}" />
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="button" wire:click="save" class="{{ $btnPrimary }}">Speichern</button>
+                        <button type="button" wire:click="$set('editId', null)" class="{{ $btnGhost }}">Abbrechen</button>
+                    </div>
                 </div>
-                <table class="{{ $table }}">
-                    <thead><tr class="text-left">
-                        @foreach(['Bezeichnung', 'Technik', 'Sort', 'Rezepte', ''] as $head)<th class="{{ $th }}">{{ $head }}</th>@endforeach
-                    </tr></thead>
-                    <tbody>
-                        @foreach($kategorien as $kat)
-                            @php($darfEdit = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $kat))
-                            <tr wire:key="kat-{{ $kat->id }}" class="{{ $tr }}">
-                                @if($editId === $kat->id)
-                                    <td class="{{ $td }}"><input type="text" wire:model="form.bezeichnung" wire:keydown.enter="save" class="{{ $input }} !py-1" /></td>
-                                    <td class="{{ $td }}"><input type="text" wire:model="form.technik" wire:keydown.enter="save" class="{{ $input }} !py-1" /></td>
-                                    <td class="{{ $td }}"><input type="number" wire:model="form.sort_order" class="{{ $input }} !py-1 w-16" /></td>
-                                    <td class="{{ $td }}"></td>
-                                    <td class="{{ $td }} text-right whitespace-nowrap">
-                                        <button type="button" wire:click="save" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">Speichern</button>
-                                        <button type="button" wire:click="$set('editId', null)" class="{{ $btnGhostXs }}">Abbrechen</button>
-                                    </td>
-                                @else
-                                    <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $kat->bezeichnung }}</td>
-                                    <td class="{{ $td }} text-gray-500">{{ $kat->technik ?? '—' }}</td>
-                                    <td class="{{ $td }} text-gray-400">{{ $kat->sort_order }}</td>
-                                    <td class="{{ $td }} text-gray-500">{{ $kat->recipe_count }}</td>
-                                    <td class="{{ $td }} text-right whitespace-nowrap">
-                                        @if($darfEdit)
-                                            <button type="button" wire:click="edit({{ $kat->id }})" class="{{ $btnGhostXs }}">Bearbeiten</button>
-                                            <button type="button" wire:click="delete({{ $kat->id }})"
-                                                    @if($kat->recipe_count > 0) disabled title="Hat {{ $kat->recipe_count }} Rezepte — erst mergen/umhängen (AT-D1-02)" @endif
-                                                    wire:confirm="Kategorie „{{ $kat->bezeichnung }}" löschen?"
-                                                    class="{{ $btnGhostXs }} {{ $kat->recipe_count > 0 ? 'opacity-40 cursor-not-allowed' : 'text-red-500' }}">Löschen</button>
-                                        @endif
-                                    </td>
-                                @endif
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="{{ $card }} p-5" data-taxonomie-neu>
-                <h4 class="{{ $label }} mb-3">Neue Kategorie in dieser Hauptgruppe</h4>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <input type="text" wire:model="neu.bezeichnung" placeholder="Bezeichnung" class="{{ $input }}" />
-                    <input type="text" wire:model="neu.technik" placeholder="Technik (optional)" class="{{ $input }}" />
-                    <input type="number" wire:model="neu.sort_order" placeholder="Sort" class="{{ $input }}" />
-                    <button type="button" wire:click="create" class="{{ $btnPrimary }} justify-center">Anlegen</button>
+            @else
+                <div class="{{ $card }} p-5" data-taxonomie-neu>
+                    <h4 class="{{ $label }} mb-3">Neue Kategorie
+                        @if($hauptgruppeId){{ '· in ' . optional($hauptgruppen->firstWhere('id', $hauptgruppeId))->bezeichnung }}@endif
+                    </h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <input type="text" wire:model="neu.bezeichnung" placeholder="Bezeichnung" class="{{ $input }}" />
+                        <input type="text" wire:model="neu.technik" placeholder="Technik (optional)" class="{{ $input }}" />
+                        <input type="number" wire:model="neu.sort_order" placeholder="Sort" class="{{ $input }}" />
+                        <button type="button" wire:click="create" class="{{ $btnPrimary }} justify-center">Anlegen</button>
+                    </div>
+                    <p class="text-[11px] text-gray-400 mt-2">Hauptgruppe links wählen (= Ziel), Knoten aufklappen mit dem Pfeil. Kategorie anklicken zum Bearbeiten.</p>
                 </div>
-            </div>
+            @endif
         </div>
     </div>
 </div>
