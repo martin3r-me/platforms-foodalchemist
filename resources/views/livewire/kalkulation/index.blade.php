@@ -76,6 +76,25 @@
                                             @endif
                                             <p class="text-[10px] text-gray-400 pt-1">Arbeitszeit-Schätzung (nicht-linear skalierbar) folgt mit der KI.</p>
                                         </div>
+
+                                        {{-- M-K8: direkte Einzelkosten am Gericht eintragbar; Gemeinkosten read-only aus Settings --}}
+                                        @if($tab === 'gerichte')
+                                            <div class="mt-3 pt-3 border-t border-black/10 dark:border-white/10 flex flex-wrap items-end gap-3" wire:key="edit-{{ $z['id'] }}">
+                                                <div>
+                                                    <label class="{{ $label }}">Fertigungszeit (min)</label>
+                                                    <input type="number" min="0" step="1" wire:model="editArbeitszeit" class="{{ $input }} !w-28 text-right tabular-nums" placeholder="—" />
+                                                </div>
+                                                <div>
+                                                    <label class="{{ $label }}">Nebenkosten direkt (€)</label>
+                                                    <input type="number" min="0" step="0.01" wire:model="editNebenkosten" class="{{ $input }} !w-28 text-right tabular-nums" placeholder="—" />
+                                                </div>
+                                                <button type="button" wire:click="speichereGericht" class="{{ $btnPrimary }}">Speichern</button>
+                                                @if($meldung)<span class="text-[11px] text-emerald-600 dark:text-emerald-400">{{ $meldung }}</span>@endif
+                                                <span class="text-[10px] text-gray-400">Gemeinkosten (Logistik/Spüle/…) pflegst du in Einstellungen → Kalkulation.</span>
+                                            </div>
+                                        @else
+                                            <p class="text-[10px] text-gray-400 mt-1">Einzelkosten je Gericht eintragbar im Tab „Gerichte".</p>
+                                        @endif
                                     </td>
                                 </tr>
                             @endif

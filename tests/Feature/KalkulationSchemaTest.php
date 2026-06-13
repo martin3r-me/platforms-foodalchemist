@@ -143,6 +143,26 @@ it('Settings/Kalkulation: Fixkosten anlegen/löschen + Bezugsbasen speichern (UI
     expect(FoodAlchemistFixkosten::where('bezeichnung', 'LKW Logistik')->exists())->toBeFalse();
 });
 
+it('Kalkulation-Browser: direkte Einzelkosten am Gericht eintragen (M-K8)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'e', 'name' => 'HG: Edit', 'status' => 'approved',
+        'ist_verkaufsrezept' => true, 'ek_total_eur' => 8.00, 'vk_anzahl_einheiten' => 1, 'vk_netto' => 25.00,
+    ]);
+    $id = FoodAlchemistRecipe::where('recipe_key', 'e')->value('id');
+
+    Livewire::test(KalkulationBrowser::class)
+        ->call('waehle', $id)
+        ->set('editArbeitszeit', '20')
+        ->set('editNebenkosten', '1.50')
+        ->call('speichereGericht')
+        ->assertSee('Gespeichert');
+
+    $r = FoodAlchemistRecipe::find($id);
+    expect((int) $r->arbeitszeit_min)->toBe(20)
+        ->and((float) $r->nebenkosten_eur)->toBe(1.5);
+});
+
 it('Concepter-Editor: Kalkulation-Tab zeigt den HK2-Wasserfall', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $concept = app(ConceptService::class)->create($this->rootTeam, ['name' => 'C']);

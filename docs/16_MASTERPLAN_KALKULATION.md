@@ -310,11 +310,15 @@ die Gemeinkosten-Zuschläge kommen read-only aus den Settings (mit Hinweis „in
 Einstellungen pflegen"). Concept/Paket: aggregierte Sicht; editierbar auf Gericht-Ebene.
 
 ### 10.5 Phasen
-| Phase | Inhalt |
-|---|---|
-| **M-K6** | `foodalchemist_fixkosten`-Tabelle + Service (Σ je Block, Zuschlag-% = Σ/Basis) + Bezugsbasis-Setting. Gemeinkosten-Blöcke: Modus `abgeleitet`/`manuell`. |
-| **M-K7** | Detaillierte Settings-Seite: Fixkosten-CRUD + Bezugsbasis + abgeleitete Sätze live + Block-Schema + Marge. |
-| **M-K8** | Per-Item-Kalkulations-Editor (Einzelkosten eintragen, Wasserfall live) in `/kalkulation`. |
-| **M-K9** | Gemeinkosten-Blöcke um Logistik/Spüle/Warenannahme/Verwaltung erweitern (aus Fixkosten gespeist). |
+> **Bau-Stand (2026-06-13): Ausbau v2 GEBAUT (M-K6…M-K9 ✓). Suite 491/491, live.**
+> P1 (c318bb5) mehrstufiges Rechenmodell · P2 (08c6bc0) Fixkosten+Ableitung ·
+> P3 (c25bd71) detaillierte Settings · P4 Per-Item-Editor.
+
+| Phase | Inhalt | Status |
+|---|---|---|
+| **M-K6** | `foodalchemist_fixkosten` + FixkostenService (Σ je Block, Zuschlag-% = Σ/Basis je MEK/FEK/HK) + Bezugsbasen-Setting; Blöcke `abgeleitet`/`manuell`; mehrstufige `berechne`. | ✓ |
+| **M-K7** | Detaillierte Settings-Seite: Fixkosten-CRUD + Bezugsbasen + abgeleitete Sätze live + Block-Schema (Basis/Modus) + Marge. | ✓ |
+| **M-K8** | Per-Item-Editor in `/kalkulation`: direkte Einzelkosten (Fertigungszeit, Nebenkosten) am Gericht eintragbar, Wasserfall live; Gemeinkosten read-only aus Settings. | ✓ |
+| **M-K9** | Gemeinkosten-Blöcke Material-GK · Fertigungs-GK · Verwaltung/Vertrieb · Logistik (aus Fixkosten gespeist) — im Default-Schema. | ✓ |
 
 > Arbeitszeit-Schätzung (nicht-linear) bleibt KI (D-K2b). Foodbook-Anbindung separat.

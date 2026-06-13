@@ -28,6 +28,13 @@ class Index extends Component
     #[Url(as: 'sel')]
     public ?int $selectedId = null;
 
+    /** M-K8: editierbare Einzelkosten des gewählten Gerichts (direkt am Produkt). */
+    public ?string $editArbeitszeit = null;
+
+    public ?string $editNebenkosten = null;
+
+    public ?string $meldung = null;
+
     public function updatedSearch(): void
     {
         $this->resetPage();
@@ -37,12 +44,41 @@ class Index extends Component
     {
         $this->tab = $tab === 'concepts' ? 'concepts' : 'gerichte';
         $this->selectedId = null;
+        $this->meldung = null;
         $this->resetPage();
     }
 
     public function waehle(int $id): void
     {
         $this->selectedId = $this->selectedId === $id ? null : $id;
+        $this->meldung = null;
+        $this->editArbeitszeit = $this->editNebenkosten = null;
+        if ($this->selectedId !== null && $this->tab === 'gerichte') {
+            $r = app(SalesRecipeService::class)->detail($this->team(), $this->selectedId);
+            if ($r !== null) {
+                $this->editArbeitszeit = $r->arbeitszeit_min !== null ? (string) $r->arbeitszeit_min : '';
+                $this->editNebenkosten = $r->nebenkosten_eur !== null
+                    ? rtrim(rtrim(number_format((float) $r->nebenkosten_eur, 4, '.', ''), '0'), '.') : '';
+            }
+        }
+    }
+
+    /** M-K8: direkte Einzelkosten (Fertigungszeit, Nebenkosten) am Gericht speichern. */
+    public function speichereGericht(): void
+    {
+        if ($this->selectedId === null || $this->tab !== 'gerichte') {
+            return;
+        }
+        app(SalesRecipeService::class)->updateVk($this->team(), $this->selectedId, [
+            'arbeitszeit_min' => ($this->editArbeitszeit ?? '') !== '' ? max(0, (int) $this->editArbeitszeit) : null,
+            'nebenkosten_eur' => ($this->editNebenkosten ?? '') !== '' ? max(0, (float) str_replace(',', '.', $this->editNebenkosten)) : null,
+        ]);
+        $this->meldung = 'Gespeichert — HK2 neu berechnet.';
+    }
+
+    private function team()
+    {
+        return Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     }
 
     public function render(KalkulationService $kalk, SalesRecipeService $sales, ConceptService $concepts)
