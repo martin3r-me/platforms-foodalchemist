@@ -54,14 +54,44 @@
         </div>
     </div>
 
-    {{-- M12: HK2-Zuschlagskalkulation --}}
+    {{-- M-K1/Doc 16: Herstellkosten — Kostenblock-Schema --}}
+    @php($einheit = ['pct_we' => '% auf Wareneinsatz', 'pct_hk' => '% auf lfd. HK', 'eur_pro_portion' => '€ / Portion', 'arbeitszeit' => '€ / h'])
     <div class="{{ $card }} p-5 space-y-3" data-kalk-hk2>
         <div>
-            <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Herstellkosten HK2 (Zuschlagskalkulation)</h3>
-            <p class="text-[11px] text-gray-400 mt-0.5">Gemeinkosten-Zuschlag auf den Wareneinsatz (HK1): <strong>HK2 = HK1 × (1 + Zuschlag%) + Energie/Nebenkosten je Rezept</strong>. Speist die Vollkosten-Marge in der Kalkulations-Übersicht und den Cockpits.</p>
+            <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Herstellkosten — Kostenblöcke (HK2)</h3>
+            <p class="text-[11px] text-gray-400 mt-0.5"><strong>HK2 = Wareneinsatz + Σ aktive Blöcke</strong> (Lohn aus Arbeitszeit × Stundensatz, Verpackung, Schwund, Lager, Gemeinkosten). <strong>VK-Vorschlag = HK2 × (1 + Marge)</strong>. Speist die Kalkulations-Übersicht und die Cockpits.</p>
         </div>
-        <div class="flex items-center gap-3"><span class="w-40 text-xs text-gray-600 dark:text-gray-300">Gemeinkosten-Zuschlag</span>
-            <input type="text" wire:model="hk2Zuschlag" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="0" /> <span class="text-[11px] text-gray-400">% auf HK1</span></div>
+
+        <table class="{{ $table }}">
+            <thead><tr>
+                <th class="{{ $th }} text-left">Block</th>
+                <th class="{{ $th }} text-left">Einheit</th>
+                <th class="{{ $th }} text-center">aktiv</th>
+                <th class="{{ $th }} text-right">Wert</th>
+            </tr></thead>
+            <tbody>
+                @foreach($schema as $i => $b)
+                    <tr wire:key="kblock-{{ $b['key'] }}" class="{{ $tr }}">
+                        <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $b['label'] }}</td>
+                        <td class="{{ $td }} text-gray-400 text-[11px]">{{ $einheit[$b['typ']] ?? $b['typ'] }}</td>
+                        <td class="{{ $td }} text-center"><input type="checkbox" wire:model="schema.{{ $i }}.aktiv" class="rounded border-gray-300 text-violet-500 focus:ring-violet-500/30" /></td>
+                        <td class="{{ $td }} text-right"><input type="text" wire:model="schema.{{ $i }}.wert" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="0" /></td>
+                    </tr>
+                @endforeach
+                <tr class="{{ $tr }}">
+                    <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">Gemeinkosten</td>
+                    <td class="{{ $td }} text-gray-400 text-[11px]">% auf lfd. HK</td>
+                    <td class="{{ $td }} text-center text-gray-300">immer</td>
+                    <td class="{{ $td }} text-right"><input type="text" wire:model="hk2Zuschlag" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="0" /></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="flex items-center gap-3 pt-1 border-t border-black/5 dark:border-white/10">
+            <span class="w-40 text-xs text-gray-600 dark:text-gray-300">Marge (→ VK-Vorschlag)</span>
+            <input type="text" wire:model="marge" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="15" /> <span class="text-[11px] text-gray-400">% auf HK2</span>
+        </div>
+        <p class="text-[11px] text-gray-400">Lohn-Wert = €/h (greift auf die Arbeitszeit je Rezept; Rollup Gericht→Paket→Concept). Schwund-Default 0 % — der Wareneinsatz ist über GL-02 bereits verlustkorrigiert (Doppelzählung vermeiden, D-K3).</p>
     </div>
 
     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>

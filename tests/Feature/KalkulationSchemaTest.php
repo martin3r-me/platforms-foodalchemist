@@ -1,5 +1,8 @@
 <?php
 
+use Livewire\Livewire;
+use Platform\FoodAlchemist\Livewire\Concepter\Editor;
+use Platform\FoodAlchemist\Livewire\Settings\Kalkulation as KalkulationSettings;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\KalkulationService;
@@ -83,6 +86,32 @@ it('conceptHk: Lohn aus dem Arbeitszeit-Rollup pro Person (M-K2)', function () {
     // WE/Person = 2,00 (auto-Paket = Σ ek); Lohn = 10 min @ 30 = 5,00; Gemeinkosten 20 % × 7 = 1,40.
     expect(block($hk, 'lohn'))->toBe(5.0)
         ->and($hk['hk2_pro_person'])->toBe(8.4);                      // 2 + 5 + 1,4
+});
+
+it('Settings/Kalkulation: Block-Schema + Marge über die UI speichern', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $comp = Livewire::test(KalkulationSettings::class)->assertOk();
+    // Lohn-Block (erster editierbarer) auf €/h setzen + aktiv, Marge ändern.
+    $comp->set('schema.0.aktiv', true)->set('schema.0.wert', '40')
+        ->set('marge', '20')
+        ->call('speichern');
+
+    $schema = collect(app(TeamSettingsService::class)->kalkulationSchema($this->rootTeam))->keyBy('key');
+    expect((float) $schema['lohn']['wert'])->toBe(40.0)
+        ->and(app(TeamSettingsService::class)->margePct($this->rootTeam))->toBe(20.0)
+        ->and($schema->has('gemeinkosten'))->toBeTrue();              // Gemeinkosten bleibt im Schema
+});
+
+it('Concepter-Editor: Kalkulation-Tab zeigt den HK2-Wasserfall', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $concept = app(ConceptService::class)->create($this->rootTeam, ['name' => 'C']);
+
+    Livewire::test(Editor::class)
+        ->call('oeffnen', 'concepts', $concept->id)
+        ->call('setTab', 'kalkulation')
+        ->assertSee('HK2')
+        ->assertSee('VK-Vorschlag');
 });
 
 it('Schema lässt sich speichern und wird normalisiert (sortiert, nur valide Typen)', function () {

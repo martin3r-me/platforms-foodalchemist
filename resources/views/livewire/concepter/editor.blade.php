@@ -256,6 +256,35 @@
 
             {{-- ── Tab: KALKULATION ──────────────────────────────────────── --}}
             @if($tab === 'kalkulation')
+                {{-- M-K1/Doc 16: Herstellkosten-Wasserfall (WE → +Blöcke → HK2 → VK-Vorschlag) --}}
+                @if($kalkulation)
+                    <div class="rounded-xl border border-black/5 dark:border-white/10 p-3 space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span class="{{ $label }}">Herstellkosten (HK2) — Aufschlüsselung / {{ $concept ? 'Person' : 'Person' }}</span>
+                            <span class="text-[11px] text-gray-400">Marge {{ rtrim(rtrim(number_format((float) $kalkulation['marge_pct'], 2, ',', '.'), '0'), ',') }} %</span>
+                        </div>
+                        @foreach($kalkulation['bloecke'] as $blk)
+                            <div class="flex items-center justify-between text-xs py-0.5 {{ $blk['key'] === 'we' ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300' }}">
+                                <span>{{ $blk['key'] === 'we' ? '' : '+ ' }}{{ $blk['label'] }}</span>
+                                <span class="tabular-nums">{{ number_format((float) $blk['betrag'], 2, ',', '.') }} €</span>
+                            </div>
+                        @endforeach
+                        <div class="flex items-center justify-between text-xs py-1 border-t border-black/5 dark:border-white/10 font-semibold text-gray-900 dark:text-gray-100">
+                            <span>= HK2</span><span class="tabular-nums">{{ number_format((float) $kalkulation['hk2_pro_person'] ?? $kalkulation['hk2_pro_portion'] ?? 0, 2, ',', '.') }} €</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-gray-500">VK-Vorschlag (HK2 × Marge)</span>
+                            <span class="tabular-nums text-violet-700 dark:text-violet-300 font-medium">{{ number_format((float) $kalkulation['vk_vorschlag'], 2, ',', '.') }} €</span>
+                        </div>
+                        @if($kalkulation['db_eur'] !== null)
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-gray-500">Deckungsbeitrag (gesetzter VK − HK2)</span>
+                                <span class="tabular-nums {{ $kalkulation['db_eur'] >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400' }}">{{ number_format((float) $kalkulation['db_eur'], 2, ',', '.') }} €{{ $kalkulation['db_pct'] !== null ? ' · ' . number_format((float) $kalkulation['db_pct'], 1, ',', '.') . ' %' : '' }}</span>
+                            </div>
+                        @endif
+                        <p class="text-[10px] text-gray-400 pt-0.5">Blöcke pflegst du in Einstellungen → Kalkulation.</p>
+                    </div>
+                @endif
                 @if($concept && $cockpit)
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                         <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2">

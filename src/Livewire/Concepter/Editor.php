@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
 use Platform\FoodAlchemist\Services\ConcepterBewertungService;
+use Platform\FoodAlchemist\Services\KalkulationService;
 use Platform\FoodAlchemist\Services\PaketService;
 
 /**
@@ -380,7 +381,7 @@ class Editor extends Component
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
-    public function render(ConceptService $concepts, PaketService $pakete, ConcepterAggregateService $agg, ConcepterBewertungService $bewertung)
+    public function render(ConceptService $concepts, PaketService $pakete, ConcepterAggregateService $agg, ConcepterBewertungService $bewertung, KalkulationService $kalk)
     {
         $team = $this->team();
         $concept = null;
@@ -388,6 +389,7 @@ class Editor extends Component
         $cockpit = null;
         $aggregat = null;
         $bewertet = null;
+        $kalkulation = null;
         $tauschbar = [];
         $kandidaten = collect();
         $paketKandidaten = collect();
@@ -398,6 +400,7 @@ class Editor extends Component
                 $cockpit = $concepts->preisCockpit($concept);
                 $aggregat = $agg->conceptAggregat($concept);
                 $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
+                $kalkulation = $kalk->conceptHk($team, $concept);
                 foreach ($concept->slots as $slot) {
                     $tauschbar[$slot->id] = $concepts->tauschbarePakete($team, $slot);
                 }
@@ -409,6 +412,7 @@ class Editor extends Component
             $paket = $pakete->detail($team, $this->id);
             if ($paket !== null) {
                 $aggregat = $agg->paketAggregat($paket);
+                $kalkulation = $kalk->paketHk($team, $paket);
                 if ($this->paketGerichtSuche !== '') {
                     $paketKandidaten = $pakete->gerichtKandidaten($team, $this->paketGerichtSuche);
                 }
@@ -421,6 +425,7 @@ class Editor extends Component
             'cockpit' => $cockpit,
             'aggregat' => $aggregat,
             'bewertung' => $bewertet,
+            'kalkulation' => $kalkulation,
             'tauschbar' => $tauschbar,
             'kandidaten' => $kandidaten,
             'paketKandidaten' => $paketKandidaten,
