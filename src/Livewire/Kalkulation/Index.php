@@ -56,7 +56,8 @@ class Index extends Component
 
                 return ['id' => $c->id, 'name' => $c->name, 'einheit' => '/Person',
                     'hk' => ['hk1' => $h['hk1_pro_person'], 'hk2' => $h['hk2_pro_person'],
-                        'vk' => $h['vk_pro_person'], 'db_eur' => $h['db_eur'], 'db_pct' => $h['db_pct']]];
+                        'vk' => $h['vk_pro_person'], 'vk_vorschlag' => $h['vk_vorschlag'],
+                        'db_eur' => $h['db_eur'], 'db_pct' => $h['db_pct']]];
             })->all();
         } else {
             $page = $sales->paginateBrowser(['search' => $this->search], $team, 50);
@@ -66,7 +67,8 @@ class Index extends Component
                 return [
                     'id' => $r->id, 'name' => $r->name, 'einheit' => '/Portion',
                     'hk' => ['hk1' => $hk['hk1_pro_portion'], 'hk2' => $hk['hk2_pro_portion'],
-                        'vk' => $hk['vk_netto'], 'db_eur' => $hk['db_eur'], 'db_pct' => $hk['db_pct']],
+                        'vk' => $hk['vk_netto'], 'vk_vorschlag' => $hk['vk_vorschlag'],
+                        'db_eur' => $hk['db_eur'], 'db_pct' => $hk['db_pct']],
                 ];
             })->all();
         }
