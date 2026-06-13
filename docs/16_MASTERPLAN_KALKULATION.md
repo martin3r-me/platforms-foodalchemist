@@ -239,3 +239,69 @@ Excel-Logik ab — mit **6–7 Reglern** statt 37 Tabs.
   einen **Kalkulation-Tab** (wird um die Block-Aufschlüsselung erweitert).
 - **GL-02:** WE ist verlustkorrigiert (Garverlust/Putzverlust je Zutat) — die HK1-Basis
   ist also schon „ehrlich".
+
+---
+
+## 10. Ausbau v2 — Einzelkosten vs. Gemeinkosten + Fixkosten-Ableitung (Dominique 2026-06-13)
+
+> **Leitbild: produzierendes Gewerbe / klassische Zuschlagskalkulation.** Dominique:
+> „Einen Editor, in den alle Infos reingehen und man Sachen einträgt; die Daten müssen
+> in den Einstellungen gepflegt sein — eigene, viel detailliertere Settings-Seite; und
+> **Dinge, die NICHT direkt mit dem Produkt zu tun haben (Logistik, Spüle …), gehören in
+> die Einstellungen**; zu den **Fixkosten brauchen wir Daten, um Prozente abzuleiten**."
+
+### 10.1 Die Trennung (verbindlich)
+| Ebene | Was | Wo gepflegt |
+|---|---|---|
+| **Einzelkosten** (direkt am Produkt) | Materialeinzelkosten = **Wareneinsatz** (aus Zutaten, GL-02) · Fertigungseinzelkosten = **direkte Produktionszeit × Stundensatz** (Arbeitszeit; Schätzung später KI) · ggf. produktdirekte Verpackung | **Per-Item-Kalkulations-Editor** (am Gericht) |
+| **Gemeinkosten** (indirekt, NICHT produktbezogen) | **Logistik · Spüle · Lager · Warenannahme/Einkauf · Energie-Grundlast · Verwaltung/Vertrieb · Schwund** | **Einstellungen** (als Zuschlagssätze) |
+| **Marge/Gewinn** | Aufschlag auf die Selbstkosten | Einstellungen |
+
+```
+Materialeinzelkosten (WE)
++ Fertigungseinzelkosten (direkte Zeit × Satz)        ← Produkt (Editor)
++ Σ Gemeinkosten-Zuschläge (Logistik/Spüle/Lager/…)   ← Einstellungen (abgeleitet o. manuell)
+= Selbstkosten (HK2)
++ Marge
+= VK / EK an DOEC
+```
+
+### 10.2 Fixkosten → Zuschlag-% ableiten (das Kern-Neue)
+Gemeinkosten-Blöcke sollen nicht geraten, sondern aus **echten Fixkosten** abgeleitet werden:
+
+- **Fixkosten-Erfassung** (Settings, neue Tabelle `foodalchemist_fixkosten`): Zeilen mit
+  `bezeichnung · betrag · periode (monatlich/jährlich) · gemeinkosten_block` (Zuordnung
+  zu Logistik/Spüle/Lager/Verwaltung/…). Beispiele: Miete 3.000/Mt, Spülpersonal 2.000/Mt,
+  LKW/Logistik 1.500/Mt, Verwaltung 2.500/Mt.
+- **Bezugsbasis/Periode** (Team-Setting): worüber die Fixkosten verteilt werden →
+  **abgeleiteter Zuschlag-% je Block = Σ Fixkosten(Block) ÷ Bezugsbasis × 100**
+  (klassischer Gemeinkostenzuschlagssatz).
+- Jeder Gemeinkosten-Block im Schema: **`abgeleitet`** (aus Fixkosten) **ODER** `manuell %`
+  (Override). Die Settings-Seite zeigt die abgeleiteten Sätze live.
+
+> **Offener Entscheid — Bezugsbasis (D-K8):** Wareneinsatz-Basis (Materialgemeinkosten-
+> zuschlag) · Umsatz-Basis (Fixkostenanteil am Umsatz) · Produktionsstunden-Basis. Empfehlung
+> **Wareneinsatz** (eine Basis, passt zu den bestehenden pct_we/pct_hk-Blöcken; „nicht so komplex").
+
+### 10.3 Detaillierte Settings-Seite (Kalkulation)
+1. **Einzelkosten-Parameter:** Stundensatz(e) Fertigung.
+2. **Fixkosten-Liste** (CRUD) + Bezugsbasis → **abgeleitete Gemeinkosten-Sätze** (live).
+3. **Gemeinkosten-Block-Schema:** je Block abgeleitet/manuell, an/aus, Wert.
+4. **Marge.**
+(UI wie die Vokabular-/Settings-Seiten: Karten, dichte Tabellen, x-ui.)
+
+### 10.4 Per-Item-Kalkulations-Editor (am Gericht, in `/kalkulation`)
+Zeile anklicken → Editor (Modal/Inline) mit: **HK2-Wasserfall live** + editierbaren
+**Einzelkosten-Feldern** (direkte Produktionszeit, produktdirekte Verpackung/Nebenkosten);
+die Gemeinkosten-Zuschläge kommen read-only aus den Settings (mit Hinweis „in
+Einstellungen pflegen"). Concept/Paket: aggregierte Sicht; editierbar auf Gericht-Ebene.
+
+### 10.5 Phasen
+| Phase | Inhalt |
+|---|---|
+| **M-K6** | `foodalchemist_fixkosten`-Tabelle + Service (Σ je Block, Zuschlag-% = Σ/Basis) + Bezugsbasis-Setting. Gemeinkosten-Blöcke: Modus `abgeleitet`/`manuell`. |
+| **M-K7** | Detaillierte Settings-Seite: Fixkosten-CRUD + Bezugsbasis + abgeleitete Sätze live + Block-Schema + Marge. |
+| **M-K8** | Per-Item-Kalkulations-Editor (Einzelkosten eintragen, Wasserfall live) in `/kalkulation`. |
+| **M-K9** | Gemeinkosten-Blöcke um Logistik/Spüle/Warenannahme/Verwaltung erweitern (aus Fixkosten gespeist). |
+
+> Arbeitszeit-Schätzung (nicht-linear) bleibt KI (D-K2b). Foodbook-Anbindung separat.
