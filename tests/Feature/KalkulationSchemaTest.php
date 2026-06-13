@@ -4,6 +4,7 @@ use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Concepter\Editor;
 use Platform\FoodAlchemist\Livewire\Kalkulation\Index as KalkulationBrowser;
 use Platform\FoodAlchemist\Livewire\Settings\Kalkulation as KalkulationSettings;
+use Platform\FoodAlchemist\Models\FoodAlchemistFixkosten;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\KalkulationService;
@@ -120,6 +121,26 @@ it('Kalkulation-Browser: Zeile wählen zeigt HK2-Wasserfall im Detail', function
         ->assertSee('HK2')
         ->assertSee('VK-Vorschlag')
         ->assertSee('Wareneinsatz');
+});
+
+it('Settings/Kalkulation: Fixkosten anlegen/löschen + Bezugsbasen speichern (UI)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $comp = Livewire::test(KalkulationSettings::class)->assertOk()
+        ->set('neuFix.bezeichnung', 'LKW Logistik')
+        ->set('neuFix.betrag', '1500')
+        ->set('neuFix.block_key', 'logistik')
+        ->call('fixHinzu');
+
+    expect(FoodAlchemistFixkosten::where('bezeichnung', 'LKW Logistik')->exists())->toBeTrue();
+
+    $comp->set('bezugsbasen.hk', '30000')->set('bezugsbasen.mek', '20000')->call('speichern');
+    $basen = app(TeamSettingsService::class)->bezugsbasen($this->rootTeam);
+    expect($basen['hk'])->toBe(30000.0)->and($basen['mek'])->toBe(20000.0);
+
+    $id = FoodAlchemistFixkosten::where('bezeichnung', 'LKW Logistik')->value('id');
+    $comp->call('fixLoeschen', $id);
+    expect(FoodAlchemistFixkosten::where('bezeichnung', 'LKW Logistik')->exists())->toBeFalse();
 });
 
 it('Concepter-Editor: Kalkulation-Tab zeigt den HK2-Wasserfall', function () {
