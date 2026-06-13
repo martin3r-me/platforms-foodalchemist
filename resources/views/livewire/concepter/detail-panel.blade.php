@@ -118,6 +118,25 @@
             </div>
         @endif
 
+        {{-- Deterministische Menü-Bewertung (§10.8) --}}
+        @if($concept && $bewertung)
+            @php($statusIcon = ['ok' => '✓', 'warn' => '!', 'fail' => '✕', 'info' => 'ℹ'])
+            @php($statusColor = ['ok' => 'text-emerald-600 dark:text-emerald-400', 'warn' => 'text-amber-600 dark:text-amber-400', 'fail' => 'text-red-600 dark:text-red-400', 'info' => 'text-gray-400'])
+            @php($scorePill = $bewertung['score'] >= 80 ? $variantPill['success'] : ($bewertung['score'] >= 50 ? $variantPill['warning'] : $variantPill['danger']))
+            <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
+                <div class="flex items-center justify-between">
+                    <span class="{{ $label }}">Menü-Bewertung</span>
+                    <span class="{{ $pill }} {{ $scorePill }}" title="Anteil bestandener Checks">Score {{ $bewertung['score'] }}</span>
+                </div>
+                @foreach($bewertung['checks'] as $c)
+                    <div class="flex items-start gap-2 text-[11px] py-0.5">
+                        <span class="{{ $statusColor[$c['status']] ?? '' }} font-bold w-3 shrink-0 text-center">{{ $statusIcon[$c['status']] ?? '·' }}</span>
+                        <span class="text-gray-600 dark:text-gray-300"><span class="font-medium">{{ $c['label'] }}:</span> {{ $c['detail'] }}</span>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
         {{-- Slot-/Gericht-Aufbau (kompakt) --}}
         @if($concept && $cockpit)
             <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">

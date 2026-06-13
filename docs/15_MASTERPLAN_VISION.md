@@ -570,13 +570,23 @@ Concepter führt:
   Paket + Rollup, **keine** manuellen Diät-Sektionen (Audit-Entscheid).
 
 ### 10.6 Phasen (M10R — Concepter-Redesign)
-| Phase | Inhalt |
-|---|---|
-| **M10R-1** | Modell additiv: `klasse` an concepts + pakete (freies Vokabular `vocab_klassen`); `concept_slots.rolle` optional (Rolle vom Paket); **Nährwert-Rollup-Service** (Concept + Paket). |
-| **M10R-2** | **3-Panel-Browser** (Klasse/Kategorie-Baum-Filter links · dichte Tabelle Mitte) + **Concepts\|Pakete-Umschalter** in einem Screen. |
-| **M10R-3** | **Detail-Panel** (VK-Stil, kontext-adaptiert) + **Voll-Editor-Modal mit Tabs** (Aufbau/Nährwerte/Allergene/Kalkulation/Notizen) + Konsumenten-Felder. |
-| **M10R-4** | **Inline-Paket-Schnüren** (Park-Flow wie Gerichte-Editor) + Einzel-Gericht direkt; Zielpreis + Vorlage in den Editor integriert. |
-| **M10R-5** | Sidebar zusammenführen (Pakete-Eintrag weg → „Concepter"-Screen mit Tabs), Tests, Live-Verifikation. |
+> **Bau-Stand (2026-06-13):** M10R-1 ✓ · M10R-2 ✓ · M10R-3/4/5 offen. Suite 452/452.
+> M10R-1 (Commit 7d8e0e5): additives Schema (vocab_klassen, concept_sektor_eignung,
+> klasse/schreibstil_id/geschmack/Brief+KI-Lineage/Aggregat-Caches an concepts;
+> klasse+Caches an pakete; schreibstil_id am foodbook) + WritingStyle/VocabKlasse/
+> ConceptSektorEignung-Models + **ConcepterAggregateService** (Nährwerte/Person ehrlich
+> degradierend · Allergen/Diät kanonisch · EK/VK · Arbeitszeit; Cache-Hooks). M10R-2
+> (Commit dbd200f): Concepter\Browser (Tabs Concepts|Pakete, Klasse/Kategorie/Rollen-
+> Filter, dichte Tabelle) + Concepter\DetailPanel (KPIs/Rollups/Aktionen) + Route
+> /concepter + Sidebar. Live: /concepter = 200.
+
+| Phase | Inhalt | Status |
+|---|---|---|
+| **M10R-1** | Modell additiv: `klasse` an concepts + pakete (freies Vokabular `vocab_klassen`); `concept_slots.rolle` optional (Rolle vom Paket); **Nährwert-Rollup-Service** (Concept + Paket). | ✓ |
+| **M10R-2** | **3-Panel-Browser** (Klasse/Kategorie-Baum-Filter links · dichte Tabelle Mitte) + **Concepts\|Pakete-Umschalter** in einem Screen. | ✓ |
+| **M10R-3** | **Detail-Panel** (VK-Stil, kontext-adaptiert) + **Voll-Editor-Modal mit Tabs** (Aufbau/Nährwerte/Allergene/Kalkulation/Notizen) + Konsumenten-Felder. | offen |
+| **M10R-4** | **Inline-Paket-Schnüren** (Park-Flow wie Gerichte-Editor) + Einzel-Gericht direkt; Zielpreis + Vorlage in den Editor integriert. | offen |
+| **M10R-5** | Sidebar zusammenführen (Pakete-Eintrag weg → „Concepter"-Screen mit Tabs), Tests, Live-Verifikation. | offen |
 
 ### 10.7 Was bleibt / wird wiederverwendet
 - **Schema bleibt** (concepts · concept_slots=Positionen · pakete · paket_gerichte · vocab_rollen ·

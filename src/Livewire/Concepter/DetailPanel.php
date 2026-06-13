@@ -7,6 +7,7 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
+use Platform\FoodAlchemist\Services\ConcepterBewertungService;
 use Platform\FoodAlchemist\Services\PaketService;
 
 /**
@@ -57,19 +58,21 @@ class DetailPanel extends Component
         $this->dispatch('concepter-geloescht', id: $id);
     }
 
-    public function render(ConceptService $concepts, PaketService $pakete, ConcepterAggregateService $agg)
+    public function render(ConceptService $concepts, PaketService $pakete, ConcepterAggregateService $agg, ConcepterBewertungService $bewertung)
     {
         $team = $this->team();
         $concept = null;
         $paket = null;
         $cockpit = null;
         $aggregat = null;
+        $bewertet = null;
 
         if ($this->selectedId !== null && $this->type === 'concepts') {
             $concept = $concepts->detail($team, $this->selectedId);
             if ($concept !== null) {
                 $cockpit = $concepts->preisCockpit($concept);
                 $aggregat = $agg->conceptAggregat($concept);
+                $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
             } else {
                 $this->selectedId = null;
             }
@@ -87,6 +90,7 @@ class DetailPanel extends Component
             'paket' => $paket,
             'cockpit' => $cockpit,
             'aggregat' => $aggregat,
+            'bewertung' => $bewertet,
         ]);
     }
 
