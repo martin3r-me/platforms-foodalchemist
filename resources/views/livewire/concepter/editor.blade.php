@@ -156,10 +156,10 @@
                                         <span class="text-sm font-medium">{{ $slot->paket->name }}</span>
                                         <span class="text-gray-400 text-xs tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</span>
                                     @elseif($slot->vk_recipe_id && $slot->gericht)
-                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">festes Gericht</span>
+                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->type === 'basisrezept' ? 'Basisrezept' : 'festes Gericht' }}</span>
                                         <span class="text-sm font-medium">{{ $slot->gericht->name }}</span>
                                     @else
-                                        <span class="text-xs text-gray-400">leer — Paket wählen oder festes Gericht setzen</span>
+                                        <span class="text-xs text-gray-400">leer — Paket, Gericht oder Basisrezept setzen</span>
                                     @endif
                                     @if($slot->paket_id || $slot->vk_recipe_id)
                                         <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-400 hover:text-red-500">leeren</button>
@@ -177,18 +177,28 @@
                                 </div>
                                 @if($fillSlotId === $slot->id)
                                     <div class="space-y-1 pl-1">
-                                        @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'gerichtSuche'])
+                                        <div class="flex gap-1.5">
+                                            <button type="button" wire:click="pickTypWaehle('gericht')" class="{{ $pill }} {{ $pickTyp === 'gericht' ? $variantPill['primary'] : $variantPill['secondary'] }}">Gericht (VK)</button>
+                                            <button type="button" wire:click="pickTypWaehle('basisrezept')" class="{{ $pill }} {{ $pickTyp === 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Basisrezept</button>
+                                        </div>
+                                        @if($pickTyp === 'gericht')
+                                            @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'gerichtSuche'])
+                                        @else
+                                            <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Basisrezept suchen …" class="{{ $input }}" />
+                                        @endif
                                         @if($kandidaten->isNotEmpty())
                                             <div class="space-y-0.5 max-h-56 overflow-y-auto">
                                                 @foreach($kandidaten as $kand)
-                                                    <button type="button" wire:key="ek-{{ $slot->id }}-{{ $kand->id }}" wire:click="fuelleGericht({{ $slot->id }}, {{ $kand->id }})" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                                    <button type="button" wire:key="ek-{{ $slot->id }}-{{ $kand->id }}" wire:click="fuelleGericht({{ $slot->id }}, {{ $kand->id }}, '{{ $pickTyp }}')" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
                                                         <span class="truncate">{{ $kand->name }}</span>
-                                                        <span class="text-gray-400 tabular-nums shrink-0">{{ $kand->vk_netto !== null ? number_format((float) $kand->vk_netto, 2, ',', '.') . ' €' : '' }}</span>
+                                                        <span class="text-gray-400 tabular-nums shrink-0">
+                                                            @if($pickTyp === 'gericht'){{ $kand->vk_netto !== null ? number_format((float) $kand->vk_netto, 2, ',', '.') . ' €' : '' }}@else{{ $kand->ek_total_eur !== null ? 'EK ' . number_format((float) $kand->ek_total_eur, 2, ',', '.') . ' €' : '' }}@endif
+                                                        </span>
                                                     </button>
                                                 @endforeach
                                             </div>
                                         @elseif($gerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '')
-                                            <p class="text-[11px] text-gray-400 px-2 py-1">Keine Gerichte für diese Auswahl.</p>
+                                            <p class="text-[11px] text-gray-400 px-2 py-1">Keine Treffer für diese Auswahl.</p>
                                         @endif
                                     </div>
                                 @endif

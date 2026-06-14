@@ -203,17 +203,20 @@ class ConceptService
 
         if (! empty($in['paket_id'])) {
             $slot->update([
+                'type' => 'paket',
                 'paket_id' => (int) $in['paket_id'],
                 'vk_recipe_id' => null, 'menge' => null, 'einheit_vocab_id' => null,
             ]);
         } elseif (! empty($in['vk_recipe_id'])) {
             $slot->update([
+                // B2: Gericht (VK) ODER Basisrezept — beide referenzieren vk_recipe_id, `type` unterscheidet.
+                'type' => ($in['type'] ?? null) === 'basisrezept' ? 'basisrezept' : 'gericht',
                 'vk_recipe_id' => (int) $in['vk_recipe_id'],
                 'menge' => $in['menge'] ?? null, 'einheit_vocab_id' => $in['einheit_vocab_id'] ?? null,
                 'paket_id' => null,
             ]);
         } else {
-            $slot->update(['paket_id' => null, 'vk_recipe_id' => null, 'menge' => null, 'einheit_vocab_id' => null]);
+            $slot->update(['type' => 'gericht', 'paket_id' => null, 'vk_recipe_id' => null, 'menge' => null, 'einheit_vocab_id' => null]);
         }
         $this->refreshCache($slot->concept);
 

@@ -308,6 +308,15 @@ class PaketService
             ->get(['id', 'name', 'vk_netto']);
     }
 
+    /** B2: Basisrezepte als Concept-Position (keine Dish-Klassen-Filter — die hängen an VK-Gerichten). */
+    public function basisKandidaten(Team $team, string $suche, int $limit = 60): Collection
+    {
+        return FoodAlchemistRecipe::visibleToTeam($team)->basis()
+            ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($suche).'%']))
+            ->orderBy('name')->limit($limit)
+            ->get(['id', 'name', 'ek_total_eur']);
+    }
+
     private function normalizeRolle(?string $rolle): ?string
     {
         $rolle = $rolle !== null ? trim($rolle) : null;

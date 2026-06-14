@@ -42,6 +42,9 @@ class Editor extends Component
 
     public string $gerichtSuche = '';
 
+    // B2: Quelle des Position-Pickers — VK-Gericht ODER Basisrezept (keine Produkte/GPs).
+    public string $pickTyp = 'gericht';   // gericht | basisrezept
+
     /** @var array<int, array{rolle:string, titel:string}> */
     public array $slotForm = [];
 
@@ -71,7 +74,7 @@ class Editor extends Component
     #[On('concepter-editor.oeffnen')]
     public function oeffnen(string $type, ?int $id): void
     {
-        $this->reset(['form', 'slotForm', 'neuerSlotRolle', 'fillSlotId', 'gerichtSuche',
+        $this->reset(['form', 'slotForm', 'neuerSlotRolle', 'fillSlotId', 'gerichtSuche', 'pickTyp',
             'paketGerichtSuche', 'pickHg', 'pickKlasse', 'pickGeschmack',
             'zielModus', 'zielPreis', 'zielVorschlag', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
@@ -213,6 +216,15 @@ class Editor extends Component
     {
         $this->fillSlotId = $this->fillSlotId === $slotId ? null : $slotId;
         $this->gerichtSuche = '';
+        $this->pickTyp = 'gericht';
+        $this->pickFilterReset();
+    }
+
+    /** Picker-Quelle wechseln: VK-Gericht ⇄ Basisrezept (B2). */
+    public function pickTypWaehle(string $typ): void
+    {
+        $this->pickTyp = $typ === 'basisrezept' ? 'basisrezept' : 'gericht';
+        $this->gerichtSuche = '';
         $this->pickFilterReset();
     }
 
@@ -241,9 +253,12 @@ class Editor extends Component
         $this->pickGeschmack = '';
     }
 
-    public function fuelleGericht(int $slotId, int $vkRecipeId): void
+    public function fuelleGericht(int $slotId, int $vkRecipeId, string $typ = 'gericht'): void
     {
-        app(ConceptService::class)->fillSlot($this->team(), $slotId, ['vk_recipe_id' => $vkRecipeId, 'menge' => 1]);
+        app(ConceptService::class)->fillSlot($this->team(), $slotId, [
+            'vk_recipe_id' => $vkRecipeId, 'menge' => 1,
+            'type' => $typ === 'basisrezept' ? 'basisrezept' : 'gericht',
+        ]);
         $this->fillSlotId = null;
         $this->gerichtSuche = '';
         $this->dispatch('concepter-gespeichert', id: $this->id);
@@ -446,8 +461,12 @@ class Editor extends Component
                 foreach ($concept->slots as $slot) {
                     $tauschbar[$slot->id] = $concepts->tauschbarePakete($team, $slot);
                 }
-                if ($this->fillSlotId !== null && $pickAktiv($this->gerichtSuche)) {
-                    $kandidaten = $pakete->gerichtKandidaten($team, $this->gerichtSuche, $pickFilter);
+                if ($this->fillSlotId !== null) {
+                    if ($this->pickTyp === 'basisrezept') {
+                        $kandidaten = $this->gerichtSuche !== '' ? $pakete->basisKandidaten($team, $this->gerichtSuche) : collect();
+                    } elseif ($pickAktiv($this->gerichtSuche)) {
+                        $kandidaten = $pakete->gerichtKandidaten($team, $this->gerichtSuche, $pickFilter);
+                    }
                 }
             }
         } elseif ($this->id !== null && $this->type === 'pakete') {

@@ -66,6 +66,30 @@ it('markStaleForRecipe markiert nur Auto-Pakete mit dem Gericht', function () {
         ->and($manuell->refresh()->preis_stale)->toBeFalse();
 });
 
+it('B2: fillSlot pflegt type (paket|gericht|basisrezept); basisKandidaten findet nur Basisrezepte', function () {
+    $paket = $this->pakete->create($this->rootTeam, ['name' => 'P', 'rolle' => 'Vorspeise']);
+    $basis = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'b1', 'name' => 'Fond: Hell',
+        'status' => 'approved', 'ist_verkaufsrezept' => false, 'ek_total_eur' => 0.40,
+    ]);
+
+    $c = $this->concepts->create($this->rootTeam, ['name' => 'Menü']);
+    $s = $this->concepts->addSlot($this->rootTeam, $c->id, ['rolle' => 'Vorspeise']);
+
+    $this->concepts->fillSlot($this->rootTeam, $s->id, ['paket_id' => $paket->id]);
+    expect($s->refresh()->type)->toBe('paket');
+
+    $this->concepts->fillSlot($this->rootTeam, $s->id, ['vk_recipe_id' => $this->green->id]);
+    expect($s->refresh()->type)->toBe('gericht');
+
+    $this->concepts->fillSlot($this->rootTeam, $s->id, ['vk_recipe_id' => $basis->id, 'type' => 'basisrezept']);
+    expect($s->refresh()->type)->toBe('basisrezept')->and($s->vk_recipe_id)->toBe($basis->id);
+
+    // Basisrezept-Suche findet das Basisrezept, NICHT die VK-Gerichte
+    expect($this->pakete->basisKandidaten($this->rootTeam, 'Fond')->pluck('name')->all())->toContain('Fond: Hell');
+    expect($this->pakete->basisKandidaten($this->rootTeam, 'Green')->pluck('name')->all())->not->toContain('Salat: Green Power');
+});
+
 it('ConceptService fillSlot erzwingt GENAU EINES (Paket XOR Gericht)', function () {
     $b = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
     $concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
