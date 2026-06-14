@@ -38,6 +38,21 @@
         </div>
     @endif
 
+    {{-- R7 (Dominique 2026-06-14): Tabs statt langem Scroll — Concepter-Parität (editor.blade.php §10.4).
+         Alpine x-show statt Livewire-setTab: alle Sektionen bleiben im DOM (Marker/Tests bleiben grün),
+         der eingebettete <livewire ingredient-editor> wird NICHT neu gemountet, ungespeicherte Eingaben
+         bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
+    <div x-data="{ tab: 'aufbau' }" data-rezept-tabs>
+        <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
+            @foreach(['aufbau' => 'Aufbau', 'zubereitung' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'notizen' => 'Notizen'] as $tabKey => $tabLabel)
+                <button type="button" @click="tab = '{{ $tabKey }}'"
+                        :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+                        class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors" data-rezept-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
+            @endforeach
+        </div>
+
+    {{-- ── Tab: AUFBAU (Stammdaten + Zutaten) ───────────────────────── --}}
+    <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
     {{-- STAMMDATEN (§4.2.2) — ✨-Aktionen im Sektions-Header (Ist-App-Pattern) --}}
     <x-foodalchemist::modal-section title="Stammdaten">
         <x-slot:actions>
@@ -180,7 +195,10 @@
             @endif
         </x-foodalchemist::modal-section>
     @endif
+    </div>{{-- /Tab AUFBAU --}}
 
+    {{-- ── Tab: ZUBEREITUNG (Equipment + Zubereitung) ────────────────── --}}
+    <div x-show="tab === 'zubereitung'" x-cloak class="pt-4 space-y-4">
     {{-- EQUIPMENT (§4.2.6) — gruppiert nach Vokabular-Gruppe (Ist-App-Layout) --}}
     <x-foodalchemist::modal-section title="Equipment">
         <x-slot:actions>
@@ -203,60 +221,6 @@
                 </div>
             @endforeach
         </div>
-    </x-foodalchemist::modal-section>
-
-    {{-- EIGENSCHAFTEN (§4.2.4) --}}
-    <x-foodalchemist::modal-section title="Eigenschaften">
-        <x-slot:actions>
-            <button type="button" wire:click="kiEigenschaften" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Arbeitszeit/Temperatur/Funktion + Geschmack (in die Felder, nichts persistiert)">✨ Eigenschaften</button>
-        </x-slot:actions>
-        <div class="grid grid-cols-2 gap-3">
-            <div>
-                <label class="block {{ $label }} mb-1">Arbeitszeit (min)</label>
-                <input type="number" wire:model="form.arbeitszeit_min" min="0" class="{{ $input }}" />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Temperatur</label>
-                <input type="text" wire:model="form.temperatur" placeholder="z. B. raumtemperatur, warm, kalt" class="{{ $input }}" />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Funktion</label>
-                <input type="text" wire:model="form.funktion" placeholder="z. B. Sauce, Bindung, Topping" class="{{ $input }}" />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Geschmacksrichtung <span class="normal-case text-gray-400">(via ✨ oder manuell)</span></label>
-                <select wire:model="form.geschmacksrichtung" class="{{ $input }}">
-                    <option value="">—</option>
-                    <option value="suess">süß</option><option value="herzhaft">herzhaft</option><option value="neutral">neutral</option>
-                </select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Fertigungstiefe <span class="normal-case text-gray-400">(via ✨ Fertigung oder manuell)</span></label>
-                <select wire:model="form.fertigungstiefe" class="{{ $input }}">
-                    <option value="">—</option>
-                    <option value="from_scratch">From Scratch</option><option value="teilfertig">teilfertig</option><option value="convenience">Convenience</option>
-                </select>
-            </div>
-        </div>
-    </x-foodalchemist::modal-section>
-
-    {{-- BESCHREIBUNG (§8) --}}
-    <x-foodalchemist::modal-section title="Beschreibung (§8.3 — 3-5 Sätze nüchtern)">
-        <x-slot:actions>
-            @if(!$neu)
-                <button type="button" wire:click="ai_beschreibung" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-ai-beschreibung>✨ Beschreibung</button>
-                <button type="button" wire:click="manual_beschreibung" class="{{ $btnGhostXs }}" title="aktuellen Text als manuell markieren (Override-First-Schutz)">als manuell</button>
-                <button type="button" wire:click="clear_beschreibung" class="{{ $btnGhostXs }}" title="Feld + Lineage leeren">Reset</button>
-            @endif
-        </x-slot:actions>
-        <textarea wire:model="form.beschreibung" rows="3" class="{{ $input }}"></textarea>
-        @if(isset($kiVorschlag['beschreibung']))
-            <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-beschreibung-vorschlag>
-                <p class="text-[11px] text-violet-700 dark:text-violet-300 italic">{{ $kiVorschlag['beschreibung']['werte']['beschreibung'] ?? '—' }}</p>
-                <button type="button" wire:click="accept_beschreibung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['beschreibung']['confidence'] * 100) }} %)</button>
-            </div>
-        @endif
-        @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['beschreibung'] }}</p>@endif
     </x-foodalchemist::modal-section>
 
     {{-- ZUBEREITUNG (§4.2.5) — Schreiben/Vorschau-Tabs (Ist-App) --}}
@@ -343,12 +307,75 @@
         @endif
         @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['zubereitung'] }}</p>@endif
     </x-foodalchemist::modal-section>
+    </div>{{-- /Tab ZUBEREITUNG --}}
 
+    {{-- ── Tab: EIGENSCHAFTEN (Eigenschaften + Beschreibung) ─────────── --}}
+    <div x-show="tab === 'eigenschaften'" x-cloak class="pt-4 space-y-4">
+    {{-- EIGENSCHAFTEN (§4.2.4) --}}
+    <x-foodalchemist::modal-section title="Eigenschaften">
+        <x-slot:actions>
+            <button type="button" wire:click="kiEigenschaften" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Arbeitszeit/Temperatur/Funktion + Geschmack (in die Felder, nichts persistiert)">✨ Eigenschaften</button>
+        </x-slot:actions>
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="block {{ $label }} mb-1">Arbeitszeit (min)</label>
+                <input type="number" wire:model="form.arbeitszeit_min" min="0" class="{{ $input }}" />
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Temperatur</label>
+                <input type="text" wire:model="form.temperatur" placeholder="z. B. raumtemperatur, warm, kalt" class="{{ $input }}" />
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Funktion</label>
+                <input type="text" wire:model="form.funktion" placeholder="z. B. Sauce, Bindung, Topping" class="{{ $input }}" />
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Geschmacksrichtung <span class="normal-case text-gray-400">(via ✨ oder manuell)</span></label>
+                <select wire:model="form.geschmacksrichtung" class="{{ $input }}">
+                    <option value="">—</option>
+                    <option value="suess">süß</option><option value="herzhaft">herzhaft</option><option value="neutral">neutral</option>
+                </select>
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Fertigungstiefe <span class="normal-case text-gray-400">(via ✨ Fertigung oder manuell)</span></label>
+                <select wire:model="form.fertigungstiefe" class="{{ $input }}">
+                    <option value="">—</option>
+                    <option value="from_scratch">From Scratch</option><option value="teilfertig">teilfertig</option><option value="convenience">Convenience</option>
+                </select>
+            </div>
+        </div>
+    </x-foodalchemist::modal-section>
+
+    {{-- BESCHREIBUNG (§8) --}}
+    <x-foodalchemist::modal-section title="Beschreibung (§8.3 — 3-5 Sätze nüchtern)">
+        <x-slot:actions>
+            @if(!$neu)
+                <button type="button" wire:click="ai_beschreibung" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-ai-beschreibung>✨ Beschreibung</button>
+                <button type="button" wire:click="manual_beschreibung" class="{{ $btnGhostXs }}" title="aktuellen Text als manuell markieren (Override-First-Schutz)">als manuell</button>
+                <button type="button" wire:click="clear_beschreibung" class="{{ $btnGhostXs }}" title="Feld + Lineage leeren">Reset</button>
+            @endif
+        </x-slot:actions>
+        <textarea wire:model="form.beschreibung" rows="3" class="{{ $input }}"></textarea>
+        @if(isset($kiVorschlag['beschreibung']))
+            <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-beschreibung-vorschlag>
+                <p class="text-[11px] text-violet-700 dark:text-violet-300 italic">{{ $kiVorschlag['beschreibung']['werte']['beschreibung'] ?? '—' }}</p>
+                <button type="button" wire:click="accept_beschreibung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['beschreibung']['confidence'] * 100) }} %)</button>
+            </div>
+        @endif
+        @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['beschreibung'] }}</p>@endif
+    </x-foodalchemist::modal-section>
+    </div>{{-- /Tab EIGENSCHAFTEN --}}
+
+    {{-- ── Tab: NOTIZEN ──────────────────────────────────────────────── --}}
+    <div x-show="tab === 'notizen'" x-cloak class="pt-4 space-y-4">
     {{-- NOTIZEN (§9.1 — manuelle Insel) --}}
     <x-foodalchemist::modal-section title="Notizen (§9.1 — bleibt bei jedem KI-Sync erhalten)">
         <textarea wire:model="form.notizen_manual" rows="3" class="{{ $input }}" data-rezept-notizen
                   placeholder="z. B. Anpassung im Catering-Kontext, Mengen-Korrektur, …"></textarea>
     </x-foodalchemist::modal-section>
+    </div>{{-- /Tab NOTIZEN --}}
+
+    </div>{{-- /Tabs --}}
 
     <x-slot:footer>
         <button type="button" wire:click="$dispatch('modal.close', { name: 'recipe-modal' })" class="{{ $btnGhost }}">Abbrechen</button>

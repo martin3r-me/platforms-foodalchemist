@@ -38,6 +38,21 @@
             </div>
         </x-foodalchemist::modal-section>
     @else
+        {{-- R7 (Dominique 2026-06-14): Tabs statt langem Scroll — Concepter-Parität (editor.blade.php §10.4).
+             Alpine x-show statt Livewire-setTab: alle Sektionen bleiben im DOM (Marker/Tests bleiben grün),
+             der eingebettete <livewire ingredient-editor> wird NICHT neu gemountet, ungespeicherte Eingaben
+             bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
+        <div x-data="{ tab: 'aufbau' }" data-vk-tabs>
+            <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
+                @foreach(['aufbau' => 'Aufbau', 'naehrwerte' => 'Nährwerte', 'allergene' => 'Allergene & Diät', 'kalkulation' => 'Kalkulation', 'service' => 'Service', 'notizen' => 'Notizen'] as $tabKey => $tabLabel)
+                    <button type="button" @click="tab = '{{ $tabKey }}'"
+                            :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+                            class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors" data-vk-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
+                @endforeach
+            </div>
+
+        {{-- ── Tab: AUFBAU (Stammdaten + Klassifikation + Zutaten) ──────── --}}
+        <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
         <x-foodalchemist::modal-section title="Stammdaten">
             {{-- M9-01i: ✨-Vorschläge in die Form-Felder (Save = Accept) --}}
             <x-slot:actions>
@@ -89,29 +104,6 @@
                             <option value="{{ $k->id }}">{{ $k->bezeichnung }} ({{ $k->diaetform }})</option>
                         @endforeach
                     </select>
-                </div>
-            </div>
-        </x-foodalchemist::modal-section>
-
-        <x-foodalchemist::modal-section title="Verkaufseinheit">
-            <div class="grid grid-cols-3 gap-3" data-vk-einheit-block>
-                <div>
-                    <label class="block {{ $label }} mb-1">Einheit</label>
-                    <select wire:model="form.vk_einheit_vocab_id" class="{{ $input }}">
-                        <option value="">—</option>
-                        @foreach($einheiten as $e)
-                            <option value="{{ $e->id }}">{{ $e->display_de ?? $e->slug }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Anzahl Einheiten (primär)</label>
-                    <input type="number" step="0.1" min="0" wire:model="form.vk_anzahl_einheiten" class="{{ $input }}" data-vk-anzahl />
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">g/Einheit (leer = aus Yield)</label>
-                    <input type="number" step="1" min="0" wire:model="form.vk_menge_pro_einheit_g" class="{{ $input }}"
-                           placeholder="{{ $cockpit['verkauft_als']['g_pro_einheit'] ?? '' }}" data-vk-g-einheit />
                 </div>
             </div>
         </x-foodalchemist::modal-section>
@@ -169,38 +161,10 @@
                 </div>
             </div>
         </x-foodalchemist::modal-section>
+        </div>{{-- /Tab AUFBAU --}}
 
-        <x-foodalchemist::modal-section title="Verkaufs-Block (Live-Marge)">
-            <div class="grid grid-cols-3 gap-3" data-vk-verkaufsblock>
-                <div>
-                    <label class="block {{ $label }} mb-1">Aufschlagsklasse</label>
-                    <select wire:model="form.aufschlagsklasse_id" class="{{ $input }}" data-vk-ak>
-                        <option value="">—</option>
-                        @foreach($aufschlagsklassen as $ak)
-                            <option value="{{ $ak->id }}">{{ $ak->code }} ({{ rtrim(rtrim(number_format((float) $ak->rohaufschlag_pct, 1, '.', ''), '0'), '.') }} %){{ $ak->formel_typ === 'deckungsbeitrag' ? ' — Formel nicht definiert (W-1)' : '' }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">MwSt-Satz %</label>
-                    <input type="number" step="0.1" min="0" wire:model="form.mwst_satz" class="{{ $input }}" data-vk-mwst />
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">VK netto manuell € (leer = aus Klasse)</label>
-                    <input type="number" step="0.01" min="0" wire:model="form.vk_netto" class="{{ $input }}"
-                           placeholder="{{ $cockpit['vk']['vorschlag']['vk_netto'] ?? '' }}" data-vk-netto-manuell />
-                </div>
-            </div>
-            @if($cockpit !== null && $cockpit['vk']['vorschlag'] !== null)
-                <p class="text-[11px] text-gray-400 mt-2" data-vk-vorschau>Vorschlag aus Klasse: {{ number_format($cockpit['vk']['vorschlag']['vk_netto'], 2, ',', '.') }} € netto · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
-            @endif
-        </x-foodalchemist::modal-section>
-
-        {{-- M9-01c: Allergene · Zusatzstoffe · Diät (geteiltes R6-Partial) --}}
-        <x-foodalchemist::modal-section title="Deklaration">
-            @include('foodalchemist::livewire.recipes.partials.deklaration', ['rezept' => $rezept])
-        </x-foodalchemist::modal-section>
-
+        {{-- ── Tab: NÄHRWERTE (Nährwerte + Spezifikation) ──────────────── --}}
+        <div x-show="tab === 'naehrwerte'" x-cloak class="pt-4 space-y-4">
         {{-- M9-01d: Nährwerte (GL-08-Aggregate — pro 100 g + pro Stück) --}}
         <x-foodalchemist::modal-section title="Nährwerte">
             @if($rezept->nutri_kcal_per_100g === null)
@@ -250,7 +214,70 @@
                 </div>
             </div>
         </x-foodalchemist::modal-section>
+        </div>{{-- /Tab NÄHRWERTE --}}
 
+        {{-- ── Tab: ALLERGENE & DIÄT (Deklaration) ─────────────────────── --}}
+        <div x-show="tab === 'allergene'" x-cloak class="pt-4 space-y-4">
+        {{-- M9-01c: Allergene · Zusatzstoffe · Diät (geteiltes R6-Partial) --}}
+        <x-foodalchemist::modal-section title="Deklaration">
+            @include('foodalchemist::livewire.recipes.partials.deklaration', ['rezept' => $rezept])
+        </x-foodalchemist::modal-section>
+        </div>{{-- /Tab ALLERGENE --}}
+
+        {{-- ── Tab: KALKULATION (Verkaufseinheit + Verkaufs-Block) ──────── --}}
+        <div x-show="tab === 'kalkulation'" x-cloak class="pt-4 space-y-4">
+        <x-foodalchemist::modal-section title="Verkaufseinheit">
+            <div class="grid grid-cols-3 gap-3" data-vk-einheit-block>
+                <div>
+                    <label class="block {{ $label }} mb-1">Einheit</label>
+                    <select wire:model="form.vk_einheit_vocab_id" class="{{ $input }}">
+                        <option value="">—</option>
+                        @foreach($einheiten as $e)
+                            <option value="{{ $e->id }}">{{ $e->display_de ?? $e->slug }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Anzahl Einheiten (primär)</label>
+                    <input type="number" step="0.1" min="0" wire:model="form.vk_anzahl_einheiten" class="{{ $input }}" data-vk-anzahl />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">g/Einheit (leer = aus Yield)</label>
+                    <input type="number" step="1" min="0" wire:model="form.vk_menge_pro_einheit_g" class="{{ $input }}"
+                           placeholder="{{ $cockpit['verkauft_als']['g_pro_einheit'] ?? '' }}" data-vk-g-einheit />
+                </div>
+            </div>
+        </x-foodalchemist::modal-section>
+
+        <x-foodalchemist::modal-section title="Verkaufs-Block (Live-Marge)">
+            <div class="grid grid-cols-3 gap-3" data-vk-verkaufsblock>
+                <div>
+                    <label class="block {{ $label }} mb-1">Aufschlagsklasse</label>
+                    <select wire:model="form.aufschlagsklasse_id" class="{{ $input }}" data-vk-ak>
+                        <option value="">—</option>
+                        @foreach($aufschlagsklassen as $ak)
+                            <option value="{{ $ak->id }}">{{ $ak->code }} ({{ rtrim(rtrim(number_format((float) $ak->rohaufschlag_pct, 1, '.', ''), '0'), '.') }} %){{ $ak->formel_typ === 'deckungsbeitrag' ? ' — Formel nicht definiert (W-1)' : '' }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">MwSt-Satz %</label>
+                    <input type="number" step="0.1" min="0" wire:model="form.mwst_satz" class="{{ $input }}" data-vk-mwst />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">VK netto manuell € (leer = aus Klasse)</label>
+                    <input type="number" step="0.01" min="0" wire:model="form.vk_netto" class="{{ $input }}"
+                           placeholder="{{ $cockpit['vk']['vorschlag']['vk_netto'] ?? '' }}" data-vk-netto-manuell />
+                </div>
+            </div>
+            @if($cockpit !== null && $cockpit['vk']['vorschlag'] !== null)
+                <p class="text-[11px] text-gray-400 mt-2" data-vk-vorschau>Vorschlag aus Klasse: {{ number_format($cockpit['vk']['vorschlag']['vk_netto'], 2, ',', '.') }} € netto · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
+            @endif
+        </x-foodalchemist::modal-section>
+        </div>{{-- /Tab KALKULATION --}}
+
+        {{-- ── Tab: SERVICE (Behälter + Regeneration + Eigenschaften + Plating) ── --}}
+        <div x-show="tab === 'service'" x-cloak class="pt-4 space-y-4">
         <x-foodalchemist::modal-section title="Container & Service">
             <x-slot:actions>
                 <button type="button" wire:click="ki('behaelter')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.behaelter: warm/kalt + Anzahl fürs Catering" data-ki-behaelter>✨ Behälter</button>
@@ -383,7 +410,10 @@
                 <textarea wire:model="form.plating_text" id="vk-plating-text" rows="7" class="{{ $input }} font-mono text-[11px]" data-vk-plating-text></textarea>
             </div>
         </x-foodalchemist::modal-section>
+        </div>{{-- /Tab SERVICE --}}
 
+        {{-- ── Tab: NOTIZEN (Notizen + Verwendungsnachweise) ───────────── --}}
+        <div x-show="tab === 'notizen'" x-cloak class="pt-4 space-y-4">
         {{-- M9-01h: Notizen (§9.1 — manuelle Insel) --}}
         <x-foodalchemist::modal-section title="Notizen (§9.1 — bleibt bei jedem KI-Sync erhalten)">
             <textarea wire:model="form.notizen_manual" rows="3" class="{{ $input }}" data-vk-notizen></textarea>
@@ -404,5 +434,8 @@
                 </div>
             </div>
         </x-foodalchemist::modal-section>
+        </div>{{-- /Tab NOTIZEN --}}
+
+        </div>{{-- /Tabs --}}
     @endif
 </x-foodalchemist::modal>
