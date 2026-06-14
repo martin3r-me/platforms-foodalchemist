@@ -152,122 +152,139 @@
                             <button type="button" wire:click="$set('auswahl', [])" class="{{ $btnGhostXs }}">Abbrechen</button>
                         </div>
                     @endif
-                    <div class="space-y-2">
+                    <div class="overflow-x-auto">
+                    <table class="{{ $table }} border-collapse">
+                        <thead><tr class="text-left">
+                            @foreach(['#' => 'w-px', 'Menge' => 'w-px', 'Einheit' => 'w-px', 'Verknüpfung / Beschreibung' => 'w-full', 'Rolle' => 'w-px', 'EK €' => 'w-px', '' => 'w-px'] as $kopf => $w)
+                                <th class="{{ $th }} !px-2 {{ $w }}">{{ $kopf }}</th>
+                            @endforeach
+                        </tr></thead>
+                        <tbody>
                         @forelse($concept->slots as $slot)
-                            @if(in_array($slot->type, ['text', 'spacer', 'header', 'header_preis']))
-                                {{-- B3: Struktur-Block (keine Preis-Position) --}}
-                                <div wire:key="eblock-{{ $slot->id }}" class="flex items-center gap-2 rounded-xl border border-dashed border-violet-500/30 bg-violet-500/[0.03] px-3 py-2">
-                                    <span class="flex flex-col -my-0.5 shrink-0">
-                                        <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="hoch">▲</button>
-                                        <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="runter">▼</button>
+                            @php($istStruktur = in_array($slot->type, ['text', 'spacer', 'header', 'header_preis']))
+                            @php($ekz = $cockpitZeilen[$slot->id]['ek'] ?? null)
+                            <tr wire:key="erow-{{ $slot->id }}" class="{{ $tr }} {{ $istStruktur ? 'bg-violet-500/[0.03]' : '' }}">
+                                <td class="{{ $td }} !px-1.5 !py-0.5 whitespace-nowrap align-top">
+                                    <span class="inline-flex flex-col align-middle leading-none">
+                                        <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-[9px] text-gray-500 hover:text-violet-500 leading-none" title="hoch">▲</button>
+                                        <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-[9px] text-gray-500 hover:text-violet-500 leading-none" title="runter">▼</button>
                                     </span>
-                                    @if($slot->type === 'spacer')
-                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Leerzeile</span>
-                                        <select wire:model="blockForm.{{ $slot->id }}.hoehe" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-32">
-                                            @foreach(['klein', 'mittel', 'gross'] as $h)<option value="{{ $h }}">{{ $h }}</option>@endforeach
-                                        </select>
-                                        <span class="flex-1"></span>
-                                    @elseif($slot->type === 'text')
-                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Text</span>
-                                        <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.text_inhalt" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} flex-1" placeholder="Freitext …" />
-                                    @else
-                                        <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $slot->type === 'header_preis' ? 'Header + Preis' : 'Header' }}</span>
-                                        <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.titel" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} flex-1 font-medium" placeholder="Überschrift …" />
-                                        @if($slot->type === 'header_preis')
-                                            <input type="number" step="0.01" min="0" wire:model.blur="blockForm.{{ $slot->id }}.preis_wert" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-24 text-right tabular-nums" placeholder="€" />
-                                            <select wire:model="blockForm.{{ $slot->id }}.preis_basis" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-28">
-                                                @foreach(['person' => '/Person', 'pauschal' => 'pauschal', 'staffel' => 'Staffel'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
+                                    @if(! $istStruktur && $slot->vk_recipe_id)
+                                        <input type="checkbox" wire:click="toggleAuswahl({{ $slot->id }})" @checked(in_array($slot->id, $auswahl)) class="ml-1 align-middle rounded border-gray-300 text-violet-500 focus:ring-violet-500/30" title="für „Paket bilden“ markieren" />
+                                    @endif
+                                </td>
+                                @if($istStruktur)
+                                    <td class="{{ $td }} !px-2" colspan="5">
+                                        @if($slot->type === 'spacer')
+                                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Leerzeile</span>
+                                            <select wire:model="blockForm.{{ $slot->id }}.hoehe" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-32 ml-1">
+                                                @foreach(['klein', 'mittel', 'gross'] as $h)<option value="{{ $h }}">{{ $h }}</option>@endforeach
                                             </select>
-                                        @endif
-                                    @endif
-                                    <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-400 hover:text-red-500 px-2" title="entfernen">✕</button>
-                                </div>
-                            @else
-                            <div wire:key="eslot-{{ $slot->id }}" class="rounded-xl border border-black/5 dark:border-white/10 p-3 space-y-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="flex flex-col -my-0.5 shrink-0">
-                                        <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="hoch">▲</button>
-                                        <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="runter">▼</button>
-                                    </span>
-                                    @if($slot->vk_recipe_id)
-                                        <input type="checkbox" wire:click="toggleAuswahl({{ $slot->id }})" @checked(in_array($slot->id, $auswahl)) class="shrink-0 rounded border-gray-300 text-violet-500 focus:ring-violet-500/30" title="für „Paket bilden“ markieren" />
-                                    @else
-                                        <span class="w-4 shrink-0"></span>
-                                    @endif
-                                    <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.rolle" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} w-40" placeholder="Rolle" />
-                                    <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.titel" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} flex-1" placeholder="Titel (optional)" />
-                                    <label class="inline-flex items-center gap-1 text-[10px] text-gray-500 shrink-0" title="Pflicht-Gang vs. optionale Position">
-                                        <input type="checkbox" wire:model="slotForm.{{ $slot->id }}.is_pflicht" wire:change="slotSpeichern({{ $slot->id }})" class="rounded border-gray-300 text-violet-500 focus:ring-violet-500/30" /> Pflicht
-                                    </label>
-                                    <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-400 hover:text-red-500 px-2" title="Position entfernen">✕</button>
-                                </div>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    @php($ekz = $cockpitZeilen[$slot->id]['ek'] ?? null)
-                                    @if($slot->paket_id && $slot->paket)
-                                        <span class="{{ $pill }} {{ $variantPill['info'] }}">Paket</span>
-                                        <span class="text-sm font-medium min-w-0 truncate">{{ $slot->paket->name }}</span>
-                                        <span class="text-gray-400 text-xs tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €/P' : '—' }}</span>
-                                    @elseif($slot->vk_recipe_id && $slot->gericht)
-                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->type === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
-                                        <span class="text-sm font-medium min-w-0 truncate">{{ $slot->gericht->name }}</span>
-                                        <span class="text-[10px] text-gray-400 ml-1">Menge</span>
-                                        <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.menge" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} w-16 text-right tabular-nums" placeholder="1" />
-                                        <select wire:model="slotForm.{{ $slot->id }}.einheit_vocab_id" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} w-24">
-                                            <option value="">Einheit</option>
-                                            @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
-                                        </select>
-                                    @else
-                                        <span class="text-xs text-gray-400">leer — Paket, Gericht oder Basisrezept setzen</span>
-                                    @endif
-                                    @if($ekz !== null)
-                                        <span class="text-gray-400 text-xs tabular-nums">EK {{ number_format((float) $ekz, 2, ',', '.') }} €</span>
-                                    @endif
-                                    @if($slot->paket_id || $slot->vk_recipe_id)
-                                        <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-400 hover:text-red-500">leeren</button>
-                                    @endif
-                                </div>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <select x-on:change="$wire.fuellePaket({{ $slot->id }}, $event.target.value); $event.target.value=''" class="{{ $input }} w-56">
-                                        <option value="">↹ Paket (Rolle {{ $slot->rolle ?: '–' }}) …</option>
-                                        @foreach(($tauschbar[$slot->id] ?? []) as $b)
-                                            <option value="{{ $b->id }}">{{ $b->name }}{{ $b->preis_pro_person !== null ? ' (' . number_format((float) $b->preis_pro_person, 2, ',', '.') . ' €)' : '' }}</option>
-                                        @endforeach
-                                    </select>
-                                    <button type="button" wire:click="gerichtPicker({{ $slot->id }})" class="{{ $btnGhostXs }}">festes Gericht …</button>
-                                    <button type="button" wire:click="neuesPaketImSlot({{ $slot->id }})" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Inline ein neues Paket schnüren">+ neues Paket</button>
-                                </div>
-                                @if($fillSlotId === $slot->id)
-                                    <div class="space-y-1 pl-1">
-                                        <div class="flex gap-1.5">
-                                            <button type="button" wire:click="pickTypWaehle('gericht')" class="{{ $pill }} {{ $pickTyp === 'gericht' ? $variantPill['primary'] : $variantPill['secondary'] }}">Gericht (VK)</button>
-                                            <button type="button" wire:click="pickTypWaehle('basisrezept')" class="{{ $pill }} {{ $pickTyp === 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Basisrezept</button>
-                                        </div>
-                                        @if($pickTyp === 'gericht')
-                                            @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'gerichtSuche'])
+                                        @elseif($slot->type === 'text')
+                                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Text</span>
+                                            <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.text_inhalt" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-full mt-1" placeholder="Freitext …" />
                                         @else
-                                            <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Basisrezept suchen …" class="{{ $input }}" />
+                                            <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $slot->type === 'header_preis' ? 'Header + Preis' : 'Header' }}</span>
+                                            <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.titel" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-full mt-1 font-medium" placeholder="Überschrift …" />
+                                            @if($slot->type === 'header_preis')
+                                                <span class="inline-flex items-center gap-1 mt-1">
+                                                    <input type="number" step="0.01" min="0" wire:model.blur="blockForm.{{ $slot->id }}.preis_wert" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-24 text-right tabular-nums" placeholder="€" />
+                                                    <select wire:model="blockForm.{{ $slot->id }}.preis_basis" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-28">
+                                                        @foreach(['person' => '/Person', 'pauschal' => 'pauschal', 'staffel' => 'Staffel'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
+                                                    </select>
+                                                </span>
+                                            @endif
                                         @endif
-                                        @if($kandidaten->isNotEmpty())
-                                            <div class="space-y-0.5 max-h-56 overflow-y-auto">
-                                                @foreach($kandidaten as $kand)
-                                                    <button type="button" wire:key="ek-{{ $slot->id }}-{{ $kand->id }}" wire:click="fuelleGericht({{ $slot->id }}, {{ $kand->id }}, '{{ $pickTyp }}')" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                                        <span class="truncate">{{ $kand->name }}</span>
-                                                        <span class="text-gray-400 tabular-nums shrink-0">
-                                                            @if($pickTyp === 'gericht'){{ $kand->vk_netto !== null ? number_format((float) $kand->vk_netto, 2, ',', '.') . ' €' : '' }}@else{{ $kand->ek_total_eur !== null ? 'EK ' . number_format((float) $kand->ek_total_eur, 2, ',', '.') . ' €' : '' }}@endif
-                                                        </span>
-                                                    </button>
-                                                @endforeach
-                                            </div>
-                                        @elseif($gerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '')
-                                            <p class="text-[11px] text-gray-400 px-2 py-1">Keine Treffer für diese Auswahl.</p>
+                                    </td>
+                                @else
+                                    <td class="{{ $td }} !px-2 align-top">
+                                        @if($slot->vk_recipe_id)
+                                            <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.menge" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} !w-16 text-right tabular-nums" placeholder="1" />
+                                        @else<span class="text-gray-300">—</span>@endif
+                                    </td>
+                                    <td class="{{ $td }} !px-2 align-top">
+                                        @if($slot->vk_recipe_id)
+                                            <select wire:model="slotForm.{{ $slot->id }}.einheit_vocab_id" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} !w-24">
+                                                <option value="">—</option>
+                                                @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
+                                            </select>
+                                        @else<span class="text-gray-300">—</span>@endif
+                                    </td>
+                                    <td class="{{ $td }} !px-2 align-top">
+                                        @if($slot->paket_id && $slot->paket)
+                                            <span class="{{ $pill }} {{ $variantPill['info'] }}">Paket</span>
+                                            <span class="text-sm font-medium">{{ $slot->paket->name }}</span>
+                                            <span class="text-gray-400 text-[11px] tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €/P' : '' }}</span>
+                                        @elseif($slot->vk_recipe_id && $slot->gericht)
+                                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->type === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
+                                            <span class="text-sm font-medium">{{ $slot->gericht->name }}</span>
+                                        @else
+                                            <span class="text-xs text-gray-400">leer — unten wählen</span>
                                         @endif
-                                    </div>
+                                    </td>
+                                    <td class="{{ $td }} !px-2 align-top"><input type="text" wire:model.blur="slotForm.{{ $slot->id }}.rolle" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} !w-28" placeholder="Rolle" /></td>
+                                    <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $ekz !== null ? number_format((float) $ekz, 2, ',', '.') . ' €' : '—' }}</td>
                                 @endif
-                            </div>
-                            @endif {{-- B3: Struktur-Block vs. Preis-Position --}}
+                                <td class="{{ $td }} !px-2 text-right whitespace-nowrap align-top">
+                                    @if(! $istStruktur)
+                                        <label class="inline-flex items-center gap-0.5 text-[10px] text-gray-400 mr-1" title="Pflicht-Position">
+                                            <input type="checkbox" wire:model="slotForm.{{ $slot->id }}.is_pflicht" wire:change="slotSpeichern({{ $slot->id }})" class="rounded border-gray-300 !w-3 !h-3" />P
+                                        </label>
+                                        <button type="button" wire:click="fillToggle({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 text-[11px]" title="Befüllung ändern">⚙</button>
+                                    @endif
+                                    <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-400 hover:text-red-500 ml-1" title="entfernen">✕</button>
+                                </td>
+                            </tr>
+                            @if(! $istStruktur && ($fillOpenId === $slot->id || (! $slot->paket_id && ! $slot->vk_recipe_id)))
+                                <tr wire:key="efill-{{ $slot->id }}">
+                                    <td></td>
+                                    <td colspan="6" class="!px-2 !pb-2 bg-black/[0.02] dark:bg-white/[0.03]">
+                                        <div class="flex flex-wrap items-center gap-2 pt-1">
+                                            <select x-on:change="$wire.fuellePaket({{ $slot->id }}, $event.target.value); $event.target.value=''" class="{{ $input }} w-56">
+                                                <option value="">↹ Paket (Rolle {{ $slot->rolle ?: '–' }}) …</option>
+                                                @foreach(($tauschbar[$slot->id] ?? []) as $b)
+                                                    <option value="{{ $b->id }}">{{ $b->name }}{{ $b->preis_pro_person !== null ? ' (' . number_format((float) $b->preis_pro_person, 2, ',', '.') . ' €)' : '' }}</option>
+                                                @endforeach
+                                            </select>
+                                            <button type="button" wire:click="gerichtPicker({{ $slot->id }})" class="{{ $btnGhostXs }}">Gericht / Basisrezept …</button>
+                                            <button type="button" wire:click="neuesPaketImSlot({{ $slot->id }})" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Inline ein neues Paket schnüren">+ neues Paket</button>
+                                            @if($slot->paket_id || $slot->vk_recipe_id)
+                                                <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-400 hover:text-red-500">leeren</button>
+                                            @endif
+                                        </div>
+                                        @if($fillSlotId === $slot->id)
+                                            <div class="space-y-1 pl-1 mt-2">
+                                                <div class="flex gap-1.5">
+                                                    <button type="button" wire:click="pickTypWaehle('gericht')" class="{{ $pill }} {{ $pickTyp === 'gericht' ? $variantPill['primary'] : $variantPill['secondary'] }}">Gericht (VK)</button>
+                                                    <button type="button" wire:click="pickTypWaehle('basisrezept')" class="{{ $pill }} {{ $pickTyp === 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Basisrezept</button>
+                                                </div>
+                                                @if($pickTyp === 'gericht')
+                                                    @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'gerichtSuche'])
+                                                @else
+                                                    <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Basisrezept suchen …" class="{{ $input }}" />
+                                                @endif
+                                                @if($kandidaten->isNotEmpty())
+                                                    <div class="space-y-0.5 max-h-56 overflow-y-auto">
+                                                        @foreach($kandidaten as $kand)
+                                                            <button type="button" wire:key="ek-{{ $slot->id }}-{{ $kand->id }}" wire:click="fuelleGericht({{ $slot->id }}, {{ $kand->id }}, '{{ $pickTyp }}')" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                                                <span class="truncate">{{ $kand->name }}</span>
+                                                                <span class="text-gray-400 tabular-nums shrink-0">@if($pickTyp === 'gericht'){{ $kand->vk_netto !== null ? number_format((float) $kand->vk_netto, 2, ',', '.') . ' €' : '' }}@else{{ $kand->ek_total_eur !== null ? 'EK ' . number_format((float) $kand->ek_total_eur, 2, ',', '.') . ' €' : '' }}@endif</span>
+                                                            </button>
+                                                        @endforeach
+                                                    </div>
+                                                @elseif($gerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '')
+                                                    <p class="text-[11px] text-gray-400 px-2 py-1">Keine Treffer für diese Auswahl.</p>
+                                                @endif
+                                            </div>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endif
                         @empty
-                            <p class="text-xs text-gray-400 py-4 text-center">Noch keine Positionen. Oben eine Rolle eintragen und „+ Position".</p>
+                            <tr><td colspan="7" class="text-xs text-gray-400 py-4 text-center">Noch keine Positionen. Oben eine Rolle eintragen und „+ Position".</td></tr>
                         @endforelse
+                        </tbody>
+                    </table>
                     </div>
                 @else
                     {{-- Paket: Gerichte schnüren --}}

@@ -67,11 +67,14 @@
                         <span class="{{ $label }}">Kategorien</span>
                         <button type="button" wire:click="waehleKategorie('')" class="w-full text-left text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === '' ? $tabAktiv : $filterHover }}">Alle</button>
                         <button type="button" wire:click="waehleKategorie('none')" class="w-full text-left text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === 'none' ? $tabAktiv : $filterHover }}">Ohne Kategorie</button>
-                        @foreach($kategorienFlat as $kat)
-                            <button type="button" wire:key="kat-{{ $kat['id'] }}" wire:click="waehleKategorie('{{ $kat['id'] }}')"
-                                    class="w-full text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === (string) $kat['id'] ? $tabAktiv : $filterHover }}"
-                                    style="padding-left: {{ 8 + $kat['depth'] * 12 }}px">{{ $kat['name'] }}</button>
-                        @endforeach
+                        <x-foodalchemist::tree :initial-collapsed="collect($kategorienFlat)->where('has_children', true)->pluck('id')->all()">
+                            @foreach($kategorienFlat as $kat)
+                                <x-foodalchemist::tree-node :node-id="$kat['id']" :depth="$kat['depth']" :ancestors="$kat['ancestors'] ?? []"
+                                    :has-children="$kat['has_children'] ?? false" :active="$categoryFilter === (string) $kat['id']">
+                                    <button type="button" wire:click="waehleKategorie('{{ $kat['id'] }}')" class="flex-1 min-w-0 text-left truncate text-xs px-1 py-0.5">{{ $kat['name'] }}</button>
+                                </x-foodalchemist::tree-node>
+                            @endforeach
+                        </x-foodalchemist::tree>
                     </div>
                 @endif
 

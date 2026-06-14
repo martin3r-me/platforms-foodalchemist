@@ -40,6 +40,9 @@ class Editor extends Component
 
     public ?int $fillSlotId = null;
 
+    /** Welche Position ihre Befüllungs-/Picker-Zeile aufgeklappt hat (Tabellen-Editor). */
+    public ?int $fillOpenId = null;
+
     public string $gerichtSuche = '';
 
     // B2: Quelle des Position-Pickers — VK-Gericht ODER Basisrezept (keine Produkte/GPs).
@@ -82,7 +85,7 @@ class Editor extends Component
     #[On('concepter-editor.oeffnen')]
     public function oeffnen(string $type, ?int $id): void
     {
-        $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'gerichtSuche', 'pickTyp',
+        $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'gerichtSuche', 'pickTyp',
             'paketGerichtSuche', 'pickHg', 'pickKlasse', 'pickGeschmack',
             'zielModus', 'zielPreis', 'zielVorschlag', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
@@ -240,6 +243,15 @@ class Editor extends Component
         $this->gerichtSuche = '';
         $this->pickTyp = 'gericht';
         $this->pickFilterReset();
+    }
+
+    /** Befüllungs-Zeile (Paket-Tausch/Picker) einer Position auf-/zuklappen (Tabellen-Editor). */
+    public function fillToggle(int $slotId): void
+    {
+        $this->fillOpenId = $this->fillOpenId === $slotId ? null : $slotId;
+        if ($this->fillOpenId === null) {
+            $this->fillSlotId = null;
+        }
     }
 
     /** Picker-Quelle wechseln: VK-Gericht ⇄ Basisrezept (B2). */
