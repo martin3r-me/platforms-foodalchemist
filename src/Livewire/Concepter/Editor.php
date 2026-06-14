@@ -48,6 +48,9 @@ class Editor extends Component
     /** @var array<int, array{rolle:string, titel:string}> */
     public array $slotForm = [];
 
+    /** B3: Inline-Inhalt der Struktur-Blöcke (Text/Header/Preis), keyed by slotId. */
+    public array $blockForm = [];
+
     // Aufbau (Paket): Gericht-Suche
     public string $paketGerichtSuche = '';
 
@@ -74,7 +77,7 @@ class Editor extends Component
     #[On('concepter-editor.oeffnen')]
     public function oeffnen(string $type, ?int $id): void
     {
-        $this->reset(['form', 'slotForm', 'neuerSlotRolle', 'fillSlotId', 'gerichtSuche', 'pickTyp',
+        $this->reset(['form', 'slotForm', 'blockForm', 'neuerSlotRolle', 'fillSlotId', 'gerichtSuche', 'pickTyp',
             'paketGerichtSuche', 'pickHg', 'pickKlasse', 'pickGeschmack',
             'zielModus', 'zielPreis', 'zielVorschlag', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
@@ -114,6 +117,10 @@ class Editor extends Component
                 'note' => $c->note ?? '',
             ];
             $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht]])->all();
+            $this->blockForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => [
+                'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
+                'preis_wert' => $s->preis_wert, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
+            ]])->all();
         }
 
         $this->dispatch('modal.open', name: 'concepter-editor');
@@ -314,6 +321,28 @@ class Editor extends Component
     {
         $c = app(ConceptService::class)->detail($this->team(), $this->id);
         $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht]])->all() : [];
+        $this->blockForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => [
+            'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
+            'preis_wert' => $s->preis_wert, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
+        ]])->all() : [];
+    }
+
+    // ── Aufbau · Struktur-Blöcke (B3) ────────────────────────────────────────
+
+    public function blockHinzu(string $type): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        app(ConceptService::class)->addBlock($this->team(), $this->id, $type);
+        $this->reloadSlotForm();
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    public function blockSpeichern(int $slotId): void
+    {
+        app(ConceptService::class)->updateBlock($this->team(), $slotId, $this->blockForm[$slotId] ?? []);
+        $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
     // ── Aufbau · Paket-Gerichte ──────────────────────────────────────────────

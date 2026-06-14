@@ -90,6 +90,25 @@ it('B2: fillSlot pflegt type (paket|gericht|basisrezept); basisKandidaten findet
     expect($this->pakete->basisKandidaten($this->rootTeam, 'Green')->pluck('name')->all())->not->toContain('Salat: Green Power');
 });
 
+it('B3: Struktur-Blöcke (text/spacer/header/header_preis) zählen nicht zum Concept-Preis', function () {
+    $concept = $this->concepts->create($this->rootTeam, ['name' => 'Menü']);
+    $s = $this->concepts->addSlot($this->rootTeam, $concept->id, ['rolle' => 'HG']);
+    $this->concepts->fillSlot($this->rootTeam, $s->id, ['vk_recipe_id' => $this->dessert->id]); // 5,50
+
+    $header = $this->concepts->addBlock($this->rootTeam, $concept->id, 'header_preis', ['titel' => 'Vorspeisen', 'preis_wert' => 12.00]);
+    $this->concepts->addBlock($this->rootTeam, $concept->id, 'text', ['text_inhalt' => 'Hinweis']);
+    $this->concepts->addBlock($this->rootTeam, $concept->id, 'spacer');
+
+    expect($header->type)->toBe('header_preis')->and((float) $header->preis_wert)->toBe(12.0);
+
+    $cockpit = $this->concepts->preisCockpit($concept->refresh());
+    expect($cockpit['preis_pro_person'])->toBe(5.50)   // nur das Gericht — Struktur zählt nicht
+        ->and($cockpit['zeilen'])->toHaveCount(1)       // Struktur-Blöcke nicht im Cockpit
+        ->and($cockpit['hat_leer'])->toBeFalse();
+
+    expect(fn () => $this->concepts->addBlock($this->rootTeam, $concept->id, 'image'))->toThrow(RuntimeException::class);
+});
+
 it('ConceptService fillSlot erzwingt GENAU EINES (Paket XOR Gericht)', function () {
     $b = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
     $concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);

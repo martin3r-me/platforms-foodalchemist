@@ -135,8 +135,45 @@
                             <button type="button" wire:click="slotHinzu" class="{{ $btnGhost }}">+ Position</button>
                         </div>
                     </div>
+                    {{-- B3: Struktur-Blöcke (wie Foodbook) zwischen den Positionen --}}
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="{{ $label }} mr-1">Struktur:</span>
+                        <button type="button" wire:click="blockHinzu('text')" class="{{ $btnGhostXs }}">+ Text</button>
+                        <button type="button" wire:click="blockHinzu('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>
+                        <button type="button" wire:click="blockHinzu('header')" class="{{ $btnGhostXs }}">+ Header</button>
+                        <button type="button" wire:click="blockHinzu('header_preis')" class="{{ $btnGhostXs }}">+ Header/Preis</button>
+                    </div>
                     <div class="space-y-2">
                         @forelse($concept->slots as $slot)
+                            @if(in_array($slot->type, ['text', 'spacer', 'header', 'header_preis']))
+                                {{-- B3: Struktur-Block (keine Preis-Position) --}}
+                                <div wire:key="eblock-{{ $slot->id }}" class="flex items-center gap-2 rounded-xl border border-dashed border-violet-500/30 bg-violet-500/[0.03] px-3 py-2">
+                                    <span class="flex flex-col -my-0.5 shrink-0">
+                                        <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="hoch">▲</button>
+                                        <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="runter">▼</button>
+                                    </span>
+                                    @if($slot->type === 'spacer')
+                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Leerzeile</span>
+                                        <select wire:model="blockForm.{{ $slot->id }}.hoehe" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-32">
+                                            @foreach(['klein', 'mittel', 'gross'] as $h)<option value="{{ $h }}">{{ $h }}</option>@endforeach
+                                        </select>
+                                        <span class="flex-1"></span>
+                                    @elseif($slot->type === 'text')
+                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Text</span>
+                                        <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.text_inhalt" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} flex-1" placeholder="Freitext …" />
+                                    @else
+                                        <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $slot->type === 'header_preis' ? 'Header + Preis' : 'Header' }}</span>
+                                        <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.titel" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} flex-1 font-medium" placeholder="Überschrift …" />
+                                        @if($slot->type === 'header_preis')
+                                            <input type="number" step="0.01" min="0" wire:model.blur="blockForm.{{ $slot->id }}.preis_wert" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-24 text-right tabular-nums" placeholder="€" />
+                                            <select wire:model="blockForm.{{ $slot->id }}.preis_basis" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-28">
+                                                @foreach(['person' => '/Person', 'pauschal' => 'pauschal', 'staffel' => 'Staffel'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
+                                            </select>
+                                        @endif
+                                    @endif
+                                    <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-400 hover:text-red-500 px-2" title="entfernen">✕</button>
+                                </div>
+                            @else
                             <div wire:key="eslot-{{ $slot->id }}" class="rounded-xl border border-black/5 dark:border-white/10 p-3 space-y-2">
                                 <div class="flex items-center gap-2">
                                     <span class="flex flex-col -my-0.5 shrink-0">
@@ -203,6 +240,7 @@
                                     </div>
                                 @endif
                             </div>
+                            @endif {{-- B3: Struktur-Block vs. Preis-Position --}}
                         @empty
                             <p class="text-xs text-gray-400 py-4 text-center">Noch keine Positionen. Oben eine Rolle eintragen und „+ Position".</p>
                         @endforelse

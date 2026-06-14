@@ -193,6 +193,54 @@ class ConceptService
         return $slot->refresh();
     }
 
+    /** B3: Struktur-Block-Typen (keine Preis-Position) — analog Foodbook-Block. */
+    public const STRUKTUR_TYPEN = ['text', 'spacer', 'header', 'header_preis'];
+
+    /**
+     * B3: Struktur-Block (Text/Leerzeile/Überschrift/Überschrift+Preis) als Position anlegen —
+     * wie ein Foodbook-Block, aber am Concept. Trägt nicht zum Wareneinsatz/VK bei.
+     */
+    public function addBlock(Team $team, int $conceptId, string $type, array $in = []): FoodAlchemistConceptSlot
+    {
+        if (! in_array($type, self::STRUKTUR_TYPEN, true)) {
+            throw new \RuntimeException('Unbekannter Block-Typ.');
+        }
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
+        $this->guardOwner($concept, $team);
+
+        return $concept->slots()->create([
+            'team_id' => $concept->team_id,
+            'type' => $type,
+            'titel' => $this->norm($in['titel'] ?? null),
+            'text_inhalt' => $this->norm($in['text_inhalt'] ?? null),
+            'hoehe' => $type === 'spacer' ? ($in['hoehe'] ?? 'mittel') : null,
+            'preis_wert' => $type === 'header_preis' ? ($in['preis_wert'] ?? null) : null,
+            'preis_basis' => $type === 'header_preis' ? ($in['preis_basis'] ?? 'person') : null,
+            'is_pflicht' => false,
+            'position' => (int) ($concept->slots()->max('position') ?? -1) + 1,
+        ]);
+    }
+
+    /** B3: Inhalt eines Struktur-Blocks pflegen (Titel/Text/Höhe/Preis). */
+    public function updateBlock(Team $team, int $slotId, array $in): FoodAlchemistConceptSlot
+    {
+        $slot = $this->ownedSlot($team, $slotId);
+        $update = [];
+        foreach (['titel', 'text_inhalt', 'hoehe', 'preis_basis'] as $f) {
+            if (array_key_exists($f, $in)) {
+                $update[$f] = $this->norm($in[$f]);
+            }
+        }
+        if (array_key_exists('preis_wert', $in)) {
+            $update['preis_wert'] = ($in['preis_wert'] !== '' && $in['preis_wert'] !== null) ? (float) $in['preis_wert'] : null;
+        }
+        if ($update !== []) {
+            $slot->update($update);
+        }
+
+        return $slot->refresh();
+    }
+
     /**
      * Befüllt einen Slot mit GENAU EINEM: Paket ODER festem Gericht.
      * Das jeweils andere wird geleert (Invariante „genau eines").
@@ -291,6 +339,9 @@ class ConceptService
         $hatLeer = false;
 
         foreach ($concept->slots as $slot) {
+            if (in_array($slot->type, self::STRUKTUR_TYPEN, true)) {
+                continue; // Struktur-Blöcke (Text/Leerzeile/Header) sind keine Preis-Positionen
+            }
             if ($slot->paket_id !== null && $slot->paket) {
                 $vk = (float) ($slot->paket->preis_pro_person ?? 0);
                 $ek = (float) ($slot->paket->ek_pro_person ?? 0);
