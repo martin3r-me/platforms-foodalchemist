@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
@@ -25,8 +26,10 @@ class FoodAlchemistConceptSlot extends Model
     protected $casts = [
         'uuid' => 'string',
         'position' => 'integer',
+        'ebene' => 'integer',
         'is_pflicht' => 'boolean',
         'menge' => 'decimal:3',
+        'preis_wert' => 'decimal:2',
     ];
 
     public function concept(): BelongsTo
@@ -49,6 +52,12 @@ class FoodAlchemistConceptSlot extends Model
     public function einheit(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
+    }
+
+    /** Staffelpreise (nur bei type=header_preis + preis_basis='staffel'). */
+    public function staffel(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistConceptSlotStaffel::class, 'slot_id')->orderBy('min_personen');
     }
 
     /** True, wenn der Slot durch einen austauschbaren Paket gefüllt ist. */
