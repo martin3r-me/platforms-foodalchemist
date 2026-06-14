@@ -121,7 +121,7 @@ class Editor extends Component
                 'zielgruppe' => $c->zielgruppe ?? '', 'zielpreis_pro_person' => $c->zielpreis_pro_person,
                 'note' => $c->note ?? '',
             ];
-            $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht]])->all();
+            $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id]])->all();
             $this->blockForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => [
                 'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
                 'preis_wert' => $s->preis_wert, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
@@ -181,6 +181,16 @@ class Editor extends Component
     public function slotSpeichern(int $slotId): void
     {
         app(ConceptService::class)->updateSlot($this->team(), $slotId, $this->slotForm[$slotId] ?? []);
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    /** Zeilen-Editor: Menge + Einheit einer Gericht-/Basisrezept-Position speichern. */
+    public function mengeSpeichern(int $slotId): void
+    {
+        $f = $this->slotForm[$slotId] ?? [];
+        $menge = ($f['menge'] ?? '') !== '' && $f['menge'] !== null ? (float) $f['menge'] : null;
+        $einheit = ($f['einheit_vocab_id'] ?? '') !== '' ? (int) $f['einheit_vocab_id'] : null;
+        app(ConceptService::class)->setSlotMengeEinheit($this->team(), $slotId, $menge, $einheit);
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
@@ -325,7 +335,7 @@ class Editor extends Component
     private function reloadSlotForm(): void
     {
         $c = app(ConceptService::class)->detail($this->team(), $this->id);
-        $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht]])->all() : [];
+        $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id]])->all() : [];
         $this->blockForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => [
             'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
             'preis_wert' => $s->preis_wert, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
@@ -550,6 +560,8 @@ class Editor extends Component
             'concept' => $concept,
             'paket' => $paket,
             'cockpit' => $cockpit,
+            'cockpitZeilen' => $cockpit ? collect($cockpit['zeilen'])->keyBy('slot_id') : collect(),
+            'einheiten' => app(\Platform\FoodAlchemist\Services\VocabularyService::class)->listEinheiten($team),
             'aggregat' => $aggregat,
             'bewertung' => $bewertet,
             'kalkulation' => $kalkulation,

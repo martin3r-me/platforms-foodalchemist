@@ -271,6 +271,19 @@ class ConceptService
         return $slot->refresh();
     }
 
+    /** Inline-Pflege Menge + Einheit einer Gericht-/Basisrezept-Position (Zeilen-Editor). */
+    public function setSlotMengeEinheit(Team $team, int $slotId, ?float $menge, ?int $einheitId = null): FoodAlchemistConceptSlot
+    {
+        $slot = $this->ownedSlot($team, $slotId);
+        $slot->update([
+            'menge' => $menge,
+            'einheit_vocab_id' => $einheitId ?: null,
+        ]);
+        $this->refreshCache($slot->concept);
+
+        return $slot->refresh();
+    }
+
     public function removeSlot(Team $team, int $slotId): void
     {
         $slot = $this->ownedSlot($team, $slotId);

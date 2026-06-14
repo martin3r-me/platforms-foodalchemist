@@ -202,15 +202,25 @@
                                     <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-400 hover:text-red-500 px-2" title="Position entfernen">✕</button>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-2">
+                                    @php($ekz = $cockpitZeilen[$slot->id]['ek'] ?? null)
                                     @if($slot->paket_id && $slot->paket)
                                         <span class="{{ $pill }} {{ $variantPill['info'] }}">Paket</span>
-                                        <span class="text-sm font-medium">{{ $slot->paket->name }}</span>
-                                        <span class="text-gray-400 text-xs tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</span>
+                                        <span class="text-sm font-medium min-w-0 truncate">{{ $slot->paket->name }}</span>
+                                        <span class="text-gray-400 text-xs tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €/P' : '—' }}</span>
                                     @elseif($slot->vk_recipe_id && $slot->gericht)
-                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->type === 'basisrezept' ? 'Basisrezept' : 'festes Gericht' }}</span>
-                                        <span class="text-sm font-medium">{{ $slot->gericht->name }}</span>
+                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->type === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
+                                        <span class="text-sm font-medium min-w-0 truncate">{{ $slot->gericht->name }}</span>
+                                        <span class="text-[10px] text-gray-400 ml-1">Menge</span>
+                                        <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.menge" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} w-16 text-right tabular-nums" placeholder="1" />
+                                        <select wire:model="slotForm.{{ $slot->id }}.einheit_vocab_id" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} w-24">
+                                            <option value="">Einheit</option>
+                                            @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
+                                        </select>
                                     @else
                                         <span class="text-xs text-gray-400">leer — Paket, Gericht oder Basisrezept setzen</span>
+                                    @endif
+                                    @if($ekz !== null)
+                                        <span class="text-gray-400 text-xs tabular-nums">EK {{ number_format((float) $ekz, 2, ',', '.') }} €</span>
                                     @endif
                                     @if($slot->paket_id || $slot->vk_recipe_id)
                                         <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-400 hover:text-red-500">leeren</button>

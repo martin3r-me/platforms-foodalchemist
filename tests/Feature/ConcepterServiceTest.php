@@ -129,6 +129,17 @@ it('B4: bildePaketAusPositionen — markierte Gerichte → 1 wiederverwendbares 
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistPaket::where('name', 'Grill-HG')->where('rolle', 'HG')->exists())->toBeTrue();
 });
 
+it('B5: setSlotMengeEinheit skaliert Preis/EK der Position (Zeilen-Editor)', function () {
+    $concept = $this->concepts->create($this->rootTeam, ['name' => 'Menü']);
+    $s = $this->concepts->addSlot($this->rootTeam, $concept->id, ['rolle' => 'HG']);
+    $this->concepts->fillSlot($this->rootTeam, $s->id, ['vk_recipe_id' => $this->dessert->id]); // vk 5,50, menge null→1
+    expect($this->concepts->preisCockpit($concept->refresh())['preis_pro_person'])->toBe(5.50);
+
+    $this->concepts->setSlotMengeEinheit($this->rootTeam, $s->id, 2.0, null);
+    expect((float) $s->refresh()->menge)->toBe(2.0)
+        ->and($this->concepts->preisCockpit($concept->refresh())['preis_pro_person'])->toBe(11.00); // 5,50 × 2
+});
+
 it('ConceptService fillSlot erzwingt GENAU EINES (Paket XOR Gericht)', function () {
     $b = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
     $concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
