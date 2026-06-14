@@ -27,7 +27,7 @@ return new class extends Migration
 
             // Hinweis: NULL-warengruppe_code ist vom Unique ausgenommen (NULL ≠ NULL auf allen Engines)
             // — Duplikat-Schutz für global macht der Service.
-            $table->unique(['team_id', 'supplier_id', 'warengruppe_code']);
+            $table->unique(['team_id', 'supplier_id', 'warengruppe_code'], 'fa_stamm_lief_team_supp_wg_unique');
         });
     }
 

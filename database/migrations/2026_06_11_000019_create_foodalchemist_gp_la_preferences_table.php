@@ -26,7 +26,7 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->unique(['team_id', 'gp_id', 'supplier_item_id']);
+            $table->unique(['team_id', 'gp_id', 'supplier_item_id'], 'fa_gp_la_pref_team_gp_si_unique');
         });
     }
 

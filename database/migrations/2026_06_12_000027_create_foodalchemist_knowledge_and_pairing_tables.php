@@ -77,7 +77,7 @@ return new class extends Migration
             $table->string('source_slug')->nullable();
             $table->timestamps();
 
-            $table->unique(['anker_a_id', 'anker_b_id', 'typ']);
+            $table->unique(['anker_a_id', 'anker_b_id', 'typ'], 'fa_pairing_edges_a_b_typ_unique');
             $table->index('anker_b_id');
         });
 

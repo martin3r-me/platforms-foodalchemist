@@ -55,7 +55,7 @@ return new class extends Migration
                 $table->timestamps();
                 $table->softDeletes();
 
-                $table->unique(['concept_id', 'sektor_slug']);
+                $table->unique(['concept_id', 'sektor_slug'], 'fa_concept_sektor_concept_sektor_unique');
             });
         }
 

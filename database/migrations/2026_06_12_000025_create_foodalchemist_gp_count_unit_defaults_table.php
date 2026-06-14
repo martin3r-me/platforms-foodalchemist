@@ -28,7 +28,7 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->unique(['gp_id', 'einheit_vocab_id']);
+            $table->unique(['gp_id', 'einheit_vocab_id'], 'fa_gp_count_defaults_gp_einheit_unique');
         });
     }
 

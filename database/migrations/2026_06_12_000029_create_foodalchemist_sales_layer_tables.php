@@ -128,7 +128,7 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->unique(['recipe_id', 'customer_name']);
+            $table->unique(['recipe_id', 'customer_name'], 'fa_recipe_cust_names_recipe_cust_unique');
         });
 
         // V-19: Multi-Komponenten-Regeneration (ersetzt das Ein-Programm-Skalar-Modell;
