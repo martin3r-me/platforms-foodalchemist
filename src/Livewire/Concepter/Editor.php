@@ -51,6 +51,11 @@ class Editor extends Component
     /** B3: Inline-Inhalt der Struktur-Blöcke (Text/Header/Preis), keyed by slotId. */
     public array $blockForm = [];
 
+    /** B4: markierte Positionen für „Paket bilden". @var array<int> */
+    public array $auswahl = [];
+
+    public string $paketName = '';
+
     // Aufbau (Paket): Gericht-Suche
     public string $paketGerichtSuche = '';
 
@@ -77,7 +82,7 @@ class Editor extends Component
     #[On('concepter-editor.oeffnen')]
     public function oeffnen(string $type, ?int $id): void
     {
-        $this->reset(['form', 'slotForm', 'blockForm', 'neuerSlotRolle', 'fillSlotId', 'gerichtSuche', 'pickTyp',
+        $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'gerichtSuche', 'pickTyp',
             'paketGerichtSuche', 'pickHg', 'pickKlasse', 'pickGeschmack',
             'zielModus', 'zielPreis', 'zielVorschlag', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
@@ -325,6 +330,32 @@ class Editor extends Component
             'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
             'preis_wert' => $s->preis_wert, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
         ]])->all() : [];
+    }
+
+    // ── Aufbau · „Paket bilden" aus markierten Positionen (B4) ───────────────
+
+    public function toggleAuswahl(int $slotId): void
+    {
+        $this->auswahl = in_array($slotId, $this->auswahl, true)
+            ? array_values(array_diff($this->auswahl, [$slotId]))
+            : [...$this->auswahl, $slotId];
+    }
+
+    public function paketBilden(): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null || $this->auswahl === []) {
+            return;
+        }
+        try {
+            app(ConceptService::class)->bildePaketAusPositionen($this->team(), $this->id, $this->auswahl, $this->paketName ?: 'Paket');
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->reset('auswahl', 'paketName', 'fehler');
+        $this->reloadSlotForm();
+        $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
     // ── Aufbau · Struktur-Blöcke (B3) ────────────────────────────────────────

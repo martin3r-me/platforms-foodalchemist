@@ -308,6 +308,42 @@ class ConceptService
     }
 
     /** Austauschbare Pakete für einen Slot = gleiche Rolle (M13-Vorstufe). */
+    /**
+     * B4: Aus markierten Gericht-/Basisrezept-Positionen ein wiederverwendbares Paket bilden —
+     * die Positionen werden durch EINE Paket-Position ersetzt. Struktur-Blöcke/Pakete in der
+     * Auswahl werden ignoriert (nur vk_recipe_id-Positionen wandern ins Paket).
+     */
+    public function bildePaketAusPositionen(Team $team, int $conceptId, array $slotIds, string $name, ?string $rolle = null): FoodAlchemistConceptSlot
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
+        $this->guardOwner($concept, $team);
+
+        return DB::transaction(function () use ($team, $concept, $slotIds, $name, $rolle) {
+            $slots = $concept->slots()->whereIn('id', $slotIds)->whereNotNull('vk_recipe_id')
+                ->orderBy('position')->get();
+            if ($slots->isEmpty()) {
+                throw new \RuntimeException('Keine Gericht-/Basisrezept-Positionen ausgewählt.');
+            }
+            $minPos = (int) $slots->min('position');
+
+            $paketSvc = app(PaketService::class);
+            // auto-Preis: das gebildete Paket = Σ der Gericht-Preise → Concept-Summe bleibt unverändert.
+            $paket = $paketSvc->create($team, ['name' => trim($name) !== '' ? trim($name) : 'Paket', 'rolle' => $rolle, 'preis_modus' => 'auto']);
+            $paketSvc->syncGerichte($team, $paket->id, $slots->map(fn ($s) => [
+                'vk_recipe_id' => $s->vk_recipe_id, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id,
+            ])->values()->all());
+
+            $concept->slots()->whereIn('id', $slots->pluck('id'))->delete();
+            $neu = $concept->slots()->create([
+                'team_id' => $concept->team_id, 'type' => 'paket', 'paket_id' => $paket->id,
+                'rolle' => $rolle, 'position' => $minPos, 'is_pflicht' => true,
+            ]);
+            $this->refreshCache($concept->refresh());
+
+            return $neu;
+        });
+    }
+
     public function tauschbarePakete(Team $team, FoodAlchemistConceptSlot $slot): Collection
     {
         return FoodAlchemistPaket::visibleToTeam($team)

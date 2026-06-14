@@ -143,6 +143,15 @@
                         <button type="button" wire:click="blockHinzu('header')" class="{{ $btnGhostXs }}">+ Header</button>
                         <button type="button" wire:click="blockHinzu('header_preis')" class="{{ $btnGhostXs }}">+ Header/Preis</button>
                     </div>
+                    {{-- B4: aus markierten Gericht-/Basisrezept-Positionen ein Paket bilden --}}
+                    @if(count($auswahl) > 0)
+                        <div class="flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/5 px-3 py-2" data-paket-bilden>
+                            <span class="text-xs font-medium text-violet-700 dark:text-violet-300 shrink-0">{{ count($auswahl) }} markiert →</span>
+                            <input type="text" wire:model="paketName" wire:keydown.enter="paketBilden" placeholder="Paket-Name (z. B. Grill-Hauptgang) …" class="{{ $input }} flex-1" />
+                            <button type="button" wire:click="paketBilden" class="{{ $btnPrimary }}">Paket bilden</button>
+                            <button type="button" wire:click="$set('auswahl', [])" class="{{ $btnGhostXs }}">Abbrechen</button>
+                        </div>
+                    @endif
                     <div class="space-y-2">
                         @forelse($concept->slots as $slot)
                             @if(in_array($slot->type, ['text', 'spacer', 'header', 'header_preis']))
@@ -180,6 +189,11 @@
                                         <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="hoch">▲</button>
                                         <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="runter">▼</button>
                                     </span>
+                                    @if($slot->vk_recipe_id)
+                                        <input type="checkbox" wire:click="toggleAuswahl({{ $slot->id }})" @checked(in_array($slot->id, $auswahl)) class="shrink-0 rounded border-gray-300 text-violet-500 focus:ring-violet-500/30" title="für „Paket bilden“ markieren" />
+                                    @else
+                                        <span class="w-4 shrink-0"></span>
+                                    @endif
                                     <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.rolle" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} w-40" placeholder="Rolle" />
                                     <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.titel" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} flex-1" placeholder="Titel (optional)" />
                                     <label class="inline-flex items-center gap-1 text-[10px] text-gray-500 shrink-0" title="Pflicht-Gang vs. optionale Position">

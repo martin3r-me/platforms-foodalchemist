@@ -109,6 +109,26 @@ it('B3: Struktur-Blöcke (text/spacer/header/header_preis) zählen nicht zum Con
     expect(fn () => $this->concepts->addBlock($this->rootTeam, $concept->id, 'image'))->toThrow(RuntimeException::class);
 });
 
+it('B4: bildePaketAusPositionen — markierte Gerichte → 1 wiederverwendbares Paket, Summe unverändert', function () {
+    $concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
+    $s1 = $this->concepts->addSlot($this->rootTeam, $concept->id, ['rolle' => 'HG']);
+    $s2 = $this->concepts->addSlot($this->rootTeam, $concept->id, ['rolle' => 'HG']);
+    $s3 = $this->concepts->addSlot($this->rootTeam, $concept->id, ['rolle' => 'Dessert']);
+    $this->concepts->fillSlot($this->rootTeam, $s1->id, ['vk_recipe_id' => $this->green->id]);   // 2,00
+    $this->concepts->fillSlot($this->rootTeam, $s2->id, ['vk_recipe_id' => $this->sunny->id]);   // 3,00
+    $this->concepts->fillSlot($this->rootTeam, $s3->id, ['vk_recipe_id' => $this->dessert->id]); // 5,50
+    expect($this->concepts->preisCockpit($concept->refresh())['preis_pro_person'])->toBe(10.50);
+
+    $neu = $this->concepts->bildePaketAusPositionen($this->rootTeam, $concept->id, [$s1->id, $s2->id], 'Grill-HG', 'HG');
+
+    expect($neu->type)->toBe('paket')
+        ->and($neu->paket->gerichte()->count())->toBe(2)
+        ->and($concept->refresh()->slots()->count())->toBe(2)                                       // 2 Gerichte → 1 Paket, + Dessert
+        ->and($this->concepts->preisCockpit($concept->refresh())['preis_pro_person'])->toBe(10.50); // Summe unverändert
+
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistPaket::where('name', 'Grill-HG')->where('rolle', 'HG')->exists())->toBeTrue();
+});
+
 it('ConceptService fillSlot erzwingt GENAU EINES (Paket XOR Gericht)', function () {
     $b = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
     $concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
