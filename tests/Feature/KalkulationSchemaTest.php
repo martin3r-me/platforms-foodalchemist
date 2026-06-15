@@ -3,6 +3,7 @@
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Concepter\Editor;
 use Platform\FoodAlchemist\Livewire\Kalkulation\Index as KalkulationBrowser;
+use Platform\FoodAlchemist\Livewire\Settings\Herstellkosten as HerstellkostenSettings;
 use Platform\FoodAlchemist\Livewire\Settings\Kalkulation as KalkulationSettings;
 use Platform\FoodAlchemist\Models\FoodAlchemistFixkosten;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -92,10 +93,10 @@ it('conceptHk: Lohn aus dem Arbeitszeit-Rollup pro Person (M-K2)', function () {
         ->and($hk['hk2_pro_person'])->toBe(7.4);
 });
 
-it('Settings/Kalkulation: Block-Schema + Marge über die UI speichern', function () {
+it('Settings/Herstellkosten: Block-Schema + Marge über die UI speichern', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    $comp = Livewire::test(KalkulationSettings::class)->assertOk();
+    $comp = Livewire::test(HerstellkostenSettings::class)->assertOk();
     // Lohn-Block (erster editierbarer) auf €/h setzen + aktiv, Marge ändern.
     $comp->set('schema.0.aktiv', true)->set('schema.0.wert', '40')
         ->set('marge', '20')
@@ -105,6 +106,18 @@ it('Settings/Kalkulation: Block-Schema + Marge über die UI speichern', function
     expect((float) $schema['lohn']['wert'])->toBe(40.0)
         ->and(app(TeamSettingsService::class)->margePct($this->rootTeam))->toBe(20.0)
         ->and($schema->has('gemeinkosten'))->toBeTrue();              // Gemeinkosten bleibt im Schema
+});
+
+it('Settings/Kalkulation: Gar-/Putzverlust-Defaults speichern (HK ist ausgelagert)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    Livewire::test(KalkulationSettings::class)->assertOk()
+        ->set('garverlust.*', '12')->set('putzverlust.*', '4')
+        ->call('speichern');
+
+    $svc = app(TeamSettingsService::class);
+    expect($svc->garverlustDefault($this->rootTeam))->toBe(12.0)
+        ->and($svc->putzverlustDefault($this->rootTeam))->toBe(4.0);
 });
 
 it('Kalkulation-Browser: Zeile wählen zeigt HK2-Wasserfall im Detail', function () {
@@ -123,10 +136,10 @@ it('Kalkulation-Browser: Zeile wählen zeigt HK2-Wasserfall im Detail', function
         ->assertSee('Wareneinsatz');
 });
 
-it('Settings/Kalkulation: Fixkosten anlegen/löschen + Bezugsbasen speichern (UI)', function () {
+it('Settings/Herstellkosten: Fixkosten anlegen/löschen + Bezugsbasen speichern (UI)', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    $comp = Livewire::test(KalkulationSettings::class)->assertOk()
+    $comp = Livewire::test(HerstellkostenSettings::class)->assertOk()
         ->set('neuFix.bezeichnung', 'LKW Logistik')
         ->set('neuFix.betrag', '1500')
         ->set('neuFix.block_key', 'logistik')
