@@ -47,6 +47,9 @@
                         <td class="{{ $td }} !px-2 whitespace-nowrap">
                             <button type="button" wire:click="edit({{ $ak->id }})" class="{{ $btnGhostXs }}" data-ak-edit>Bearbeiten</button>
                             <button type="button" wire:click="toggleInactive({{ $ak->id }})" class="{{ $btnGhostXs }}">{{ $ak->is_inactive ? 'aktivieren' : 'deaktivieren' }}</button>
+                            <button type="button" wire:click="delete({{ $ak->id }})" wire:confirm="Diese Aufschlagsklasse löschen?" @disabled(($zaehler[$ak->id] ?? 0) > 0)
+                                    class="{{ $btnGhostXs }} {{ ($zaehler[$ak->id] ?? 0) > 0 ? 'opacity-40 cursor-not-allowed' : 'text-red-500' }}"
+                                    title="{{ ($zaehler[$ak->id] ?? 0) > 0 ? 'Wird von Rezepten genutzt — erst umhängen/deaktivieren' : 'löschen' }}">Löschen</button>
                         </td>
                     @endif
                 </tr>

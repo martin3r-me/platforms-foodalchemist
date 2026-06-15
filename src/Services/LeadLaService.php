@@ -50,7 +50,7 @@ class LeadLaService
             return $kandidaten;
         }
 
-        $strategie = $this->settings->leadLaStrategie($team);
+        $strategie = $this->settings->leadLaStrategie($team, $gp->warengruppe_code); // Phase 3: WG-Override vor Global
         $prioritaeten = array_map('intval', $this->settings->leadLaPrioritaeten($team));
         $stammIds = array_map('intval', $this->stamm->stammSupplierIdsFor($team, $gp->warengruppe_code));
         $overlay = FoodAlchemistGpLaPreference::where('team_id', $team->id)->where('gp_id', $gp->id)

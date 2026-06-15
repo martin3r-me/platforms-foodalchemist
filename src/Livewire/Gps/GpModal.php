@@ -37,6 +37,9 @@ class GpModal extends Component
     /** Manueller Namens-Override — leer = AUTO-SYNC aus dem Builder (I4). */
     public string $manuellerName = '';
 
+    /** Kalkulations-Defaults (GL-02) — direkt persistiert, nur im Edit-Modus (Phase 2). */
+    public array $defaults = ['garverlust_default_pct' => '', 'putzverlust_default_pct' => '', 'stk_default_g' => ''];
+
     public bool $force = false;
 
     public ?string $fehler = null;
@@ -73,6 +76,11 @@ class GpModal extends Component
                 $wert = $gp->getAttribute("tag_{$tag}");
                 $this->tags[$tag] = $wert === null ? '' : ($wert ? '1' : '0');
             }
+            $this->defaults = [
+                'garverlust_default_pct' => $gp->garverlust_default_pct !== null ? (string) (float) $gp->garverlust_default_pct : '',
+                'putzverlust_default_pct' => $gp->putzverlust_default_pct !== null ? (string) (float) $gp->putzverlust_default_pct : '',
+                'stk_default_g' => $gp->stk_default_g !== null ? (string) (float) $gp->stk_default_g : '',
+            ];
         }
 
         $this->dispatch('modal.open', name: 'gp-modal');
@@ -82,8 +90,19 @@ class GpModal extends Component
     public function geschlossen(string $name): void
     {
         if ($name === 'gp-modal') {
-            $this->reset('gpId', 'builder', 'manuellerName', 'fehler', 'force', 'kiVorschlag', 'kiRohtext');
+            $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'force', 'kiVorschlag', 'kiRohtext');
         }
+    }
+
+    /** Kalkulations-Defaults direkt persistieren (Phase 2; nur Edit). Leer ⇒ NULL. */
+    private function speichereDefaults(FoodAlchemistGp $gp): void
+    {
+        $num = fn ($v) => trim((string) $v) === '' ? null : max(0, (float) str_replace(',', '.', (string) $v));
+        $gp->update([
+            'garverlust_default_pct' => $num($this->defaults['garverlust_default_pct'] ?? ''),
+            'putzverlust_default_pct' => $num($this->defaults['putzverlust_default_pct'] ?? ''),
+            'stk_default_g' => $num($this->defaults['stk_default_g'] ?? ''),
+        ]);
     }
 
     public function speichern(GpNamingService $naming): void
@@ -110,6 +129,7 @@ class GpModal extends Component
                 }
                 $gp = $naming->updateGp($team, $gp, $in);
                 $this->speichereTags($gp);
+                $this->speichereDefaults($gp);
             }
 
             $this->dispatch('modal.close', name: 'gp-modal');

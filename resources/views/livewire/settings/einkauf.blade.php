@@ -47,6 +47,22 @@
             </div>
         @endif
 
+        {{-- Phase 3: Strategie je Warengruppe (überschreibt die globale oben) --}}
+        <div class="pt-3 border-t border-black/5 dark:border-white/5 space-y-2" data-strategie-per-wg>
+            <div class="{{ $label }}">Strategie je Warengruppe (optional — überschreibt die globale)</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+                @foreach($warengruppen as $wg)
+                    <div class="flex items-center gap-2 py-0.5" wire:key="strat-wg-{{ $wg->code }}">
+                        <span class="flex-1 min-w-0 truncate text-xs text-gray-600 dark:text-gray-300">{{ $wg->name }}</span>
+                        <select wire:model="strategiePerWg.{{ $wg->code }}" class="{{ $input }} !w-48 !py-0.5 !text-[11px]">
+                            <option value="">— globale Strategie —</option>
+                            @foreach($strategien as $s)<option value="{{ $s->value }}">{{ $s->label() }}</option>@endforeach
+                        </select>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
         <label class="flex items-center gap-2 pt-3 border-t border-black/5 dark:border-white/5 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
             <input type="checkbox" wire:model="ausweichKette" class="rounded border-gray-300" />
             Ausweich-Kette anzeigen (im GP-Detail: wer würde Lead, wenn der aktuelle ausfällt)

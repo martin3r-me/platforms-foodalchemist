@@ -23,9 +23,11 @@ class FoodAlchemistTeamSetting extends Model
 
     protected $casts = [
         'lead_la_strategie' => LeadLaStrategie::class,
+        'lead_la_strategie_per_wg' => 'array',
         'lead_la_prioritaeten' => 'array',
         'ausweich_kette_anzeigen' => 'boolean',
         'garverlust_defaults' => 'array',
+        'putzverlust_defaults' => 'array',
         'mwst_defaults' => 'array',
         'rundungsregeln' => 'array',
         'hk2_zuschlag_pct' => 'decimal:2',
@@ -35,5 +37,7 @@ class FoodAlchemistTeamSetting extends Model
         'marge_pct' => 'decimal:2',
         // M-K6: Bezugsbasen für die Fixkosten-Ableitung (mek/fek/hk, monatlich)
         'kalkulation_bezugsbasen' => 'array',
+        // Phase 5: pro-Typ-Farben (GP / Basisrezept / Gericht), teamweit
+        'typ_farben' => 'array',
     ];
 }

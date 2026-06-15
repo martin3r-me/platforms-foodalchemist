@@ -23,6 +23,11 @@ class Taxonomie extends Component
 
     public string $neueHauptgruppe = '';
 
+    /** Inline-Rename der Hauptgruppe (oberste Ebene). */
+    public ?int $hgEditId = null;
+
+    public string $hgEditName = '';
+
     public ?string $fehler = null;
 
     public function waehleHg(int $id): void
@@ -41,6 +46,36 @@ class Taxonomie extends Component
             $hg = app(VocabularyService::class)->createMainGroup($this->team(), ['bezeichnung' => $this->neueHauptgruppe]);
             $this->hauptgruppeId = $hg->id;
             $this->reset('neueHauptgruppe', 'editId', 'form', 'fehler');
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /** Hauptgruppe umbenennen (Inline). */
+    public function startHgEdit(int $id, string $aktuell): void
+    {
+        $this->hgEditId = $id;
+        $this->hgEditName = $aktuell;
+        $this->fehler = null;
+    }
+
+    public function hgSave(): void
+    {
+        try {
+            app(VocabularyService::class)->updateMainGroup($this->team(), (int) $this->hgEditId, ['bezeichnung' => $this->hgEditName]);
+            $this->reset('hgEditId', 'hgEditName');
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function hgDelete(int $id): void
+    {
+        try {
+            app(VocabularyService::class)->deleteMainGroup($this->team(), $id);
+            if ($this->hauptgruppeId === $id) {
+                $this->hauptgruppeId = null;
+            }
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

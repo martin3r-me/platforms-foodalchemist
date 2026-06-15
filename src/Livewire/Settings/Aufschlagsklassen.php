@@ -91,6 +91,30 @@ class Aufschlagsklassen extends Component
         $ak?->update(['is_inactive' => ! $ak->is_inactive]);
     }
 
+    /** Phase 5: hart löschen, wenn unbenutzt (sonst gesperrt → deaktivieren). */
+    public function delete(int $id): void
+    {
+        $ak = FoodAlchemistMarkupClass::find($id);
+        if ($ak === null) {
+            return;
+        }
+        $team = Auth::user()?->currentTeamRelation;
+        if ($ak->team_id !== null && $team !== null && (int) $ak->team_id !== (int) $team->id) {
+            $this->fehler = 'Geerbte Aufschlagsklasse — nur das Besitzer-Team kann löschen.';
+
+            return;
+        }
+        $nRec = DB::table('foodalchemist_recipes')->whereNull('deleted_at')->where('aufschlagsklasse_id', $id)->count();
+        $nCls = DB::table('foodalchemist_dish_classes')->whereNull('deleted_at')->where('default_markup_class_id', $id)->count();
+        if ($nRec + $nCls > 0) {
+            $this->fehler = "Wird von {$nRec} Gericht(en) + {$nCls} Klasse(n) genutzt — erst umhängen oder deaktivieren.";
+
+            return;
+        }
+        $ak->delete();
+        $this->fehler = null;
+    }
+
     /** Prozente kommasicher parsen + formel_typ-Whitelist; null = Fehler gesetzt. */
     private function validiert(array $eingabe): ?array
     {

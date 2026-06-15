@@ -103,8 +103,53 @@ class VocabularyService
 
     // ── Warengruppen & Sub-Kategorien (M1-03, Regelwerk GP §3) ─────────
 
-    /** Die 15 fachlichen §3-Warengruppen — Codes sind FIX, nie löschbar. */
+    /**
+     * Die 15 kanonischen §3-Warengruppen — seit 2026-06-15 nur noch EMPFEHLUNG/Seed,
+     * nicht mehr unveränderlich (Entscheid Dominique: jeder Kunde ist anders, wir geben
+     * das Set als Vorschlag mit). Teams dürfen eigene WG anlegen/umbenennen/löschen.
+     * Schutz läuft NICHT mehr über diese Liste, sondern über den GP-Referenz-Guard:
+     * eine WG mit verknüpften GPs ist nicht löschbar (egal ob kanonisch oder custom).
+     * Regelwerk_Grundprodukte §3 → v3.4.
+     */
     public const PARAGRAF3_CODES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15'];
+
+    /** Ist dieser Code eine der 15 kanonischen §3-WG (für UI-Kennzeichnung „Empfehlung")? */
+    public function istKanonischeWarengruppe(string $code): bool
+    {
+        return in_array($code, self::PARAGRAF3_CODES, true);
+    }
+
+    /**
+     * Eigene Warengruppe anlegen (team-eigen). Code = bereinigter Vorgabe-Code oder
+     * Slug der Bezeichnung (≤8 Z., GROSS), team-eindeutig. Custom-WG haben keine
+     * §8-Pflichtangaben/Necta-Regel (reine Team-Klassifikation, Regelwerk §3 v3.4).
+     */
+    public function createWarengruppe(Team $team, string $name, ?string $code = null): FoodAlchemistLookupWarengruppe
+    {
+        $name = trim($name);
+        if ($name === '') {
+            throw new RuntimeException('Warengruppe braucht einen Namen.');
+        }
+        $code = mb_strtoupper(trim((string) ($code ?? '')));
+        if ($code === '') {
+            $code = mb_strtoupper(Str::slug($name, '')) ?: 'WG';
+        }
+        $code = mb_substr($code, 0, 8);
+        $basis = $code;
+        $i = 2;
+        while (FoodAlchemistLookupWarengruppe::where('team_id', $team->id)->where('code', $code)->exists()) {
+            $suffix = (string) $i++;
+            $code = mb_substr($basis, 0, max(1, 8 - mb_strlen($suffix))).$suffix;
+        }
+        $maxSort = FoodAlchemistLookupWarengruppe::where('team_id', $team->id)->max('sort_order');
+
+        return FoodAlchemistLookupWarengruppe::create([
+            'team_id' => $team->id,
+            'code' => $code,
+            'name' => $name,
+            'sort_order' => (int) $maxSort + 1,
+        ]);
+    }
 
     /** WG-Liste mit GP-Zählern je Team-Kette (read-mostly). */
     public function listWarengruppen(Team $team): Collection
@@ -135,18 +180,19 @@ class VocabularyService
         return $wg;
     }
 
-    /** §3-Codes sind fix: Löschen wird IMMER verweigert (Regelwerk GP §3). */
+    /**
+     * WG löschen (v3.4): hart wenn UNBENUTZT, sonst gesperrt. Kein §3-Sonderfall mehr —
+     * der GP-Referenz-Guard schützt die genutzten (kanonischen wie custom) automatisch.
+     */
     public function deleteWarengruppe(Team $team, int $id): void
     {
         $wg = FoodAlchemistLookupWarengruppe::visibleToTeam($team)->findOrFail($id);
-        if (in_array($wg->code, self::PARAGRAF3_CODES, true)) {
-            throw new RuntimeException("Warengruppe {$wg->code} ist ein fixer §3-Code — nicht löschbar (Regelwerk GP §3).");
-        }
         if (! $wg->isOwnedBy($team)) {
             throw new RuntimeException('Geerbte Warengruppe — Pflege nur durch das Besitzer-Team (D1).');
         }
-        if (FoodAlchemistGp::where('warengruppe_code', $wg->code)->exists()) {
-            throw new RuntimeException('Warengruppe wird von GPs referenziert — nicht löschbar.'); // V-06
+        $n = FoodAlchemistGp::where('warengruppe_code', $wg->code)->whereNull('deleted_at')->count();
+        if ($n > 0) {
+            throw new RuntimeException("Warengruppe wird von {$n} GP(s) genutzt — erst umhängen, dann löschen."); // V-06
         }
         $wg->delete();
     }
@@ -381,6 +427,72 @@ class VocabularyService
         ]);
     }
 
+    /** VK-Hauptgruppe umbenennen (Code bleibt stabil — er ist Namings-Präfix, D-6 §4.4). */
+    public function updateDishMainGroup(Team $team, int $id, string $name): FoodAlchemistDishMainGroup
+    {
+        $hg = FoodAlchemistDishMainGroup::visibleToTeam($team)->findOrFail($id);
+        if (! $hg->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Speisen-Hauptgruppe — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        if (trim($name) === '') {
+            throw new RuntimeException('Bezeichnung darf nicht leer sein.');
+        }
+        $hg->update(['bezeichnung' => trim($name)]);
+
+        return $hg;
+    }
+
+    /** VK-Hauptgruppe löschen: hart wenn keine Klassen hängen, sonst gesperrt. */
+    public function deleteDishMainGroup(Team $team, int $id): void
+    {
+        $hg = FoodAlchemistDishMainGroup::visibleToTeam($team)->findOrFail($id);
+        if (! $hg->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Speisen-Hauptgruppe — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        $n = FoodAlchemistDishClass::where('dish_main_group_id', $hg->id)->whereNull('deleted_at')->count();
+        if ($n > 0) {
+            throw new RuntimeException("Hauptgruppe hat {$n} Klasse(n) — erst dort entfernen, dann löschen.");
+        }
+        $hg->delete();
+    }
+
+    /** VK-Klasse umbenennen (+ Diätform; is_vegi/is_vegan werden neu abgeleitet). Code stabil. */
+    public function updateDishClass(Team $team, int $id, array $input): FoodAlchemistDishClass
+    {
+        $klasse = FoodAlchemistDishClass::visibleToTeam($team)->findOrFail($id);
+        if (! $klasse->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Klasse — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        $bezeichnung = trim($input['bezeichnung'] ?? '');
+        $diaet = in_array($input['diaetform'] ?? '', ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'], true)
+            ? $input['diaetform'] : $klasse->diaetform;
+        $klasse->update([
+            'bezeichnung' => $bezeichnung !== '' ? $bezeichnung : $klasse->bezeichnung,
+            'diaetform' => $diaet,
+            'is_vegi' => in_array($diaet, ['vegi', 'vegan'], true),
+            'is_vegan' => $diaet === 'vegan',
+        ]);
+
+        return $klasse;
+    }
+
+    /** VK-Klasse löschen: hart wenn kein Rezept darauf zeigt, sonst gesperrt. */
+    public function deleteDishClass(Team $team, int $id): void
+    {
+        $klasse = FoodAlchemistDishClass::visibleToTeam($team)->findOrFail($id);
+        if (! $klasse->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Klasse — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        if (\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_recipes')) {
+            $n = (int) \Illuminate\Support\Facades\DB::table('foodalchemist_recipes')
+                ->where('speisen_klasse_id', $klasse->id)->whereNull('deleted_at')->count();
+            if ($n > 0) {
+                throw new RuntimeException("Klasse wird von {$n} Gericht(en) genutzt — erst umhängen, dann löschen.");
+            }
+        }
+        $klasse->delete();
+    }
+
     public function updateRecipeCategory(Team $team, int $id, array $input): FoodAlchemistRecipeCategory
     {
         $kat = FoodAlchemistRecipeCategory::visibleToTeam($team)->findOrFail($id);
@@ -417,6 +529,40 @@ class VocabularyService
             throw new RuntimeException('Geerbte Hauptgruppe — Pflege nur durch das Besitzer-Team (D1).');
         }
         $hg->update(['sort_order' => $sortOrder]);
+    }
+
+    /** Rezept-Hauptgruppe umbenennen (Code bleibt stabil — Rezept-Kategorien hängen am code/id). */
+    public function updateMainGroup(Team $team, int $id, array $input): FoodAlchemistRecipeMainGroup
+    {
+        $hg = FoodAlchemistRecipeMainGroup::visibleToTeam($team)->findOrFail($id);
+        if (! $hg->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Hauptgruppe — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        $bezeichnung = trim($input['bezeichnung'] ?? '');
+        if ($bezeichnung === '') {
+            throw new RuntimeException('Bezeichnung darf nicht leer sein.');
+        }
+        $hg->update([
+            'bezeichnung' => $bezeichnung,
+            'bereich' => array_key_exists('bereich', $input) ? (($input['bereich'] ?? '') ?: null) : $hg->bereich,
+            'sort_order' => (int) ($input['sort_order'] ?? $hg->sort_order),
+        ]);
+
+        return $hg;
+    }
+
+    /** Rezept-Hauptgruppe löschen: hart wenn keine Kategorien hängen, sonst gesperrt. */
+    public function deleteMainGroup(Team $team, int $id): void
+    {
+        $hg = FoodAlchemistRecipeMainGroup::visibleToTeam($team)->findOrFail($id);
+        if (! $hg->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbte Hauptgruppe — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        $n = FoodAlchemistRecipeCategory::where('main_group_id', $hg->id)->whereNull('deleted_at')->count();
+        if ($n > 0) {
+            throw new RuntimeException("Hauptgruppe hat {$n} Kategorie(n) — erst dort entfernen, dann löschen.");
+        }
+        $hg->delete();
     }
 
     /** Abgeleitet — echte Zählung sobald foodalchemist_recipes existiert (M4-01). */

@@ -4,7 +4,7 @@
 <div class="space-y-5" data-settings-schreibstile>
     <div>
         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Schreibstile</h3>
-        <p class="text-[11px] text-gray-400 mt-0.5">Sprach-Duktus je Stil ist Prompt-Material für VK-Wording (GL-06-Feld-Hülle). V-06: nur deaktivieren, nie löschen.</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Sprach-Duktus je Stil ist Prompt-Material für VK-Wording (GL-06-Feld-Hülle). Löschen nur wenn von keinem Concept/Foodbook genutzt — sonst deaktivieren.</p>
     </div>
     @if($fehler !== null)<p class="text-xs text-rose-600 dark:text-rose-400" data-stil-fehler>{{ $fehler }}</p>@endif
 
@@ -32,6 +32,7 @@
                         <td class="{{ $td }} whitespace-nowrap">
                             <button type="button" wire:click="edit({{ $stil->id }})" class="{{ $btnGhostXs }}" data-stil-edit>Bearbeiten</button>
                             <button type="button" wire:click="toggleInactive({{ $stil->id }})" class="{{ $btnGhostXs }}">{{ $stil->is_inactive ? 'aktivieren' : 'deaktivieren' }}</button>
+                            <button type="button" wire:click="delete({{ $stil->id }})" wire:confirm="Diesen Schreibstil löschen?" class="{{ $btnGhostXs }} text-red-500" title="löschen (nur wenn ungenutzt)">Löschen</button>
                         </td>
                     @endif
                 </tr>

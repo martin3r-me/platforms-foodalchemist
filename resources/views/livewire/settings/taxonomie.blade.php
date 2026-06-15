@@ -11,13 +11,24 @@
         <div class="w-80 shrink-0 {{ $card }} p-3 space-y-0.5" data-taxonomie-hg>
             <div class="{{ $label }} px-2 pb-2">Hauptgruppen ({{ $hauptgruppen->count() }})</div>
             @foreach($hauptgruppen as $hg)
-                <button type="button" wire:key="hg-{{ $hg->id }}" wire:click="waehleHg({{ $hg->id }})"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppeId === $hg->id
-                            ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
-                            : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                    <span class="min-w-0 truncate text-left">{{ $hg->bezeichnung }}</span>
-                    <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $hg->kategorie_count }}</span>
-                </button>
+                @php($darfEditHg = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $hg))
+                <div wire:key="hg-{{ $hg->id }}" class="group flex items-center gap-1 rounded-lg {{ $hauptgruppeId === $hg->id
+                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                    @if($hgEditId === $hg->id)
+                        <input type="text" wire:model="hgEditName" wire:keydown.enter="hgSave" wire:keydown.escape="$set('hgEditId', null)" class="{{ $input }} !py-0.5 flex-1" autofocus />
+                        <button type="button" wire:click="hgSave" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0">OK</button>
+                    @else
+                        <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $hg->bezeichnung }}</button>
+                        <span class="text-[11px] text-gray-400 shrink-0">{{ $hg->kategorie_count }}</span>
+                        @if($darfEditHg)
+                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->bezeichnung))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" @disabled($hg->kategorie_count > 0)
+                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $hg->kategorie_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500' }}"
+                                    title="{{ $hg->kategorie_count > 0 ? 'Hat Kategorien — erst dort entfernen' : 'löschen' }}">✕</button>
+                        @endif
+                    @endif
+                </div>
             @endforeach
 
             <div class="flex gap-1 pt-2 mt-1 border-t border-black/5 dark:border-white/10" data-taxonomie-hg-neu>

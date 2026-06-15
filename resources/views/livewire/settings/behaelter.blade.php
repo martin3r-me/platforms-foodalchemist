@@ -4,7 +4,7 @@
 <div class="space-y-6" data-settings-behaelter>
     <div>
         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Behälter & Geräte</h3>
-        <p class="text-[11px] text-gray-400 mt-0.5">Behälter, Regenerations-Geräte und Servier-Vehikel (Gerichte) plus Koch-Equipment (Basisrezepte). V-06: nur deaktivieren, nie löschen.</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Behälter, Regenerations-Geräte und Servier-Vehikel (Gerichte) plus Koch-Equipment (Basisrezepte). ✕ deaktivieren · 🗑 löschen (nur wenn von keinem Rezept genutzt).</p>
     </div>
     @if($fehler !== null)<p class="text-xs text-rose-600 dark:text-rose-400" data-behaelter-fehler>{{ $fehler }}</p>@endif
     @if($meldung !== null)<p class="text-xs text-emerald-600 dark:text-emerald-400" data-behaelter-meldung>{{ $meldung }}</p>@endif
@@ -26,7 +26,9 @@
                                 {{ $zeile->name }}
                                 <button type="button" wire:click="toggleInactive('{{ $key }}', {{ $zeile->id }})"
                                         class="hidden group-hover:inline ml-0.5 {{ $zeile->is_inactive ? 'text-emerald-500' : 'text-rose-400' }}"
-                                        title="{{ $zeile->is_inactive ? 'aktivieren' : 'deaktivieren (V-06)' }}">{{ $zeile->is_inactive ? '↻' : '✕' }}</button>
+                                        title="{{ $zeile->is_inactive ? 'aktivieren' : 'deaktivieren' }}">{{ $zeile->is_inactive ? '↻' : '✕' }}</button>
+                                <button type="button" wire:click="delete('{{ $key }}', {{ $zeile->id }})" wire:confirm="Diesen Eintrag löschen?"
+                                        class="hidden group-hover:inline ml-0.5 text-rose-500" title="löschen (nur wenn ungenutzt)">🗑</button>
                             </span>
                         @endforeach
                     </div>

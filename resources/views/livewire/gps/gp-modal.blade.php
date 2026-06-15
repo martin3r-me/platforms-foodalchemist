@@ -160,6 +160,25 @@
                 </x-foodalchemist::ki-header>
             </div>
         </x-foodalchemist::modal-section>
+
+        {{-- Kalkulations-Defaults (Phase 2): speisen die Verlust-Kaskade (GL-02) --}}
+        <x-foodalchemist::modal-section title="Kalkulations-Defaults (GL-02)">
+            <p class="text-[11px] text-gray-400 mb-2">Greifen, wenn eine Rezept-Zutat keinen eigenen Wert hat. Leer = nächste Stufe (Team-WG-Default → 0).</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3" data-gp-defaults>
+                <div>
+                    <label class="{{ $label }}">Garverlust-Default %</label>
+                    <input type="text" wire:model="defaults.garverlust_default_pct" placeholder="—" class="{{ $input }} mt-1" data-gp-garverlust />
+                </div>
+                <div>
+                    <label class="{{ $label }}">Putzverlust-Default %</label>
+                    <input type="text" wire:model="defaults.putzverlust_default_pct" placeholder="—" class="{{ $input }} mt-1" data-gp-putzverlust />
+                </div>
+                <div>
+                    <label class="{{ $label }}">Stück-Gewicht (g)</label>
+                    <input type="text" wire:model="defaults.stk_default_g" placeholder="—" class="{{ $input }} mt-1" data-gp-stk />
+                </div>
+            </div>
+        </x-foodalchemist::modal-section>
     @endif
 
     <x-slot:footer>

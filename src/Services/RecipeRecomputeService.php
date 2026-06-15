@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\AllergenValue;
 use Platform\FoodAlchemist\Enums\MatchMethod;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
@@ -34,6 +35,15 @@ class RecipeRecomputeService
 
     private const PROPAGATION_LIMIT = 10;
 
+    /** Team + WG-Default-Memo des aktuell laufenden Rezepts (Verlust-Kaskade, GL-02). */
+    private ?Team $recomputeTeam = null;
+
+    /** @var array<string, float> */
+    private array $garverlustWgCache = [];
+
+    /** @var array<string, float> */
+    private array $putzverlustWgCache = [];
+
     public function __construct(
         private GpAggregateService $gpAggregate,
         private PriceService $preise,
@@ -47,6 +57,10 @@ class RecipeRecomputeService
         DB::transaction(function () use ($recipeId) {
             $recipe = FoodAlchemistRecipe::with(['ingredients.einheit', 'ingredients.gp', 'ingredients.referencedRecipe'])
                 ->findOrFail($recipeId);
+            // Verlust-Kaskade (GL-02): Team + WG-Default-Memo je Recompute-Lauf frisch.
+            $this->recomputeTeam = Team::find($recipe->team_id);
+            $this->garverlustWgCache = [];
+            $this->putzverlustWgCache = [];
             $zutaten = $recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored);
 
             $this->yieldUndZaehler($recipe, $zutaten);
@@ -242,8 +256,8 @@ class RecipeRecomputeService
             }
             // Ungemappte tragen zum Yield bei (Masse ist mapping-unabhängig, §3.1)
             $yieldG += $this->mengeAvg($z) * $this->grammFaktor($z)
-                * (1 - ((float) ($z->putzverlust_pct ?? 0)) / 100)  // A-1: multiplikativ (Entscheid)
-                * (1 - ((float) ($z->garverlust_pct ?? 0)) / 100);
+                * (1 - $this->effektiverPutzverlust($z) / 100)       // A-1: multiplikativ (Entscheid)
+                * (1 - $this->effektiverGarverlust($z) / 100);
         }
 
         $recipe->yield_kg = $yieldG > 0 ? round($yieldG / 1000, 3) : null;
@@ -255,6 +269,52 @@ class RecipeRecomputeService
             $geminiDabei => 'medium',
             default => 'high',
         };
+    }
+
+    /** Verlust-Kaskade (GL-02): Zutat-Wert → GP-Default → Team-WG-Default → 0. */
+    private function effektiverGarverlust(FoodAlchemistRecipeIngredient $z): float
+    {
+        if ($z->garverlust_pct !== null) {
+            return (float) $z->garverlust_pct;
+        }
+        if ($z->gp?->garverlust_default_pct !== null) {
+            return (float) $z->gp->garverlust_default_pct;
+        }
+
+        return $this->teamVerlustDefault('garverlust', $z->gp?->warengruppe_code);
+    }
+
+    private function effektiverPutzverlust(FoodAlchemistRecipeIngredient $z): float
+    {
+        if ($z->putzverlust_pct !== null) {
+            return (float) $z->putzverlust_pct;
+        }
+        if ($z->gp?->putzverlust_default_pct !== null) {
+            return (float) $z->gp->putzverlust_default_pct;
+        }
+
+        return $this->teamVerlustDefault('putzverlust', $z->gp?->warengruppe_code);
+    }
+
+    /** Team-WG-Default (je Lauf gecacht); 0 wenn kein Team / kein Default hinterlegt. */
+    private function teamVerlustDefault(string $art, ?string $wgCode): float
+    {
+        if ($this->recomputeTeam === null) {
+            return 0.0;
+        }
+        $key = $wgCode ?? '*';
+        if ($art === 'putzverlust') {
+            if (! array_key_exists($key, $this->putzverlustWgCache)) {
+                $this->putzverlustWgCache[$key] = app(TeamSettingsService::class)->putzverlustDefault($this->recomputeTeam, $wgCode) ?? 0.0;
+            }
+
+            return $this->putzverlustWgCache[$key];
+        }
+        if (! array_key_exists($key, $this->garverlustWgCache)) {
+            $this->garverlustWgCache[$key] = app(TeamSettingsService::class)->garverlustDefault($this->recomputeTeam, $wgCode) ?? 0.0;
+        }
+
+        return $this->garverlustWgCache[$key];
     }
 
     // ── 2. Allergene (GL-01) ────────────────────────────────────────────

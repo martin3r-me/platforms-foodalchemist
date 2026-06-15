@@ -92,6 +92,32 @@ class Schreibstile extends Component
         }
     }
 
+    /** Phase 5: hart löschen, wenn nicht von Concepts/Foodbooks referenziert (sonst gesperrt). */
+    public function delete(int $id): void
+    {
+        $zeile = DB::table('foodalchemist_writing_styles')->where('id', $id)->first(['team_id', 'name']);
+        if ($zeile === null) {
+            return;
+        }
+        $team = Auth::user()?->currentTeamRelation;
+        if ($zeile->team_id !== null && $team !== null && (int) $zeile->team_id !== (int) $team->id) {
+            $this->fehler = 'Geerbter Schreibstil — nur das Besitzer-Team kann löschen.';
+
+            return;
+        }
+        $nConcept = \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_concepts')
+            ? DB::table('foodalchemist_concepts')->whereNull('deleted_at')->where('schreibstil_id', $id)->count() : 0;
+        $nFoodbook = \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_foodbooks')
+            ? DB::table('foodalchemist_foodbooks')->whereNull('deleted_at')->where('schreibstil_id', $id)->count() : 0;
+        if ($nConcept + $nFoodbook > 0) {
+            $this->fehler = "Wird von {$nConcept} Concept(s) + {$nFoodbook} Foodbook(s) genutzt — erst umhängen oder deaktivieren.";
+
+            return;
+        }
+        DB::table('foodalchemist_writing_styles')->where('id', $id)->delete();
+        $this->fehler = null;
+    }
+
     public function render()
     {
         return view('foodalchemist::livewire.settings.schreibstile', [

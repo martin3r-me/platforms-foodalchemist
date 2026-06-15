@@ -34,18 +34,29 @@ class Einkauf extends Component
     /** M1-06: Add-Selects der Matrix, key = WG-Code ('' = global) */
     public array $stammNeu = [];
 
+    /** Phase 3: WG-Strategie-Override, key = WG-Code, '' = keine Override (globale Strategie gilt). */
+    public array $strategiePerWg = [];
+
     public function mount(): void
     {
         $settings = app(TeamSettingsService::class)->for($this->team());
         $this->strategie = ($settings->lead_la_strategie ?? LeadLaStrategie::GuenstigsterPreis)->value;
         $this->prioritaeten = $settings->lead_la_prioritaeten ?? [];
         $this->ausweichKette = (bool) ($settings->ausweich_kette_anzeigen ?? false);
+        $this->strategiePerWg = is_array($settings->lead_la_strategie_per_wg ?? null) ? $settings->lead_la_strategie_per_wg : [];
     }
 
     public function speichern(): void
     {
+        // Nur gültige Strategie-Overrides behalten; leere = global (Default).
+        $gueltig = array_map(fn ($c) => $c->value, LeadLaStrategie::cases());
+        $perWg = collect($this->strategiePerWg)
+            ->filter(fn ($v) => is_string($v) && in_array($v, $gueltig, true))
+            ->all();
+
         app(TeamSettingsService::class)->update($this->team(), [
             'lead_la_strategie' => LeadLaStrategie::from($this->strategie),
+            'lead_la_strategie_per_wg' => $perWg ?: null,
             'lead_la_prioritaeten' => array_values(array_map('intval', $this->prioritaeten)),
             'ausweich_kette_anzeigen' => $this->ausweichKette,
         ]);

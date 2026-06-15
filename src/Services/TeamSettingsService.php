@@ -19,6 +19,9 @@ class TeamSettingsService
 
     public const RUNDUNG_DEFAULTS = ['nachkommastellen' => 2, 'modus' => 'kaufmaennisch'];
 
+    /** Phase 5: Default-Typ-Farben (GP violett · Basisrezept teal · Gericht amber) — Hex. */
+    public const TYP_FARBEN_DEFAULTS = ['gp' => '#7c3aed', 'basisrezept' => '#0d9488', 'gericht' => '#d97706'];
+
     /** M7-07: Küchen-Typ-Vokabular (commands.rs:12590-Pendant, team-scoped statt global). */
     public const KUECHEN_TYPEN = [
         'restaurant' => 'Restaurant (à la carte, kleine Chargen, frische Technik)',
@@ -32,6 +35,26 @@ class TeamSettingsService
     public function kiAktiv(Team $team): bool
     {
         return (bool) ($this->for($team)->ki_aktiv ?? true);
+    }
+
+    /**
+     * Phase 5: Typ-Farben (GP / Basisrezept / Gericht) als Hex, gemerged mit den Defaults.
+     * Nur valide #rrggbb-Werte überschreiben — Müll/Teil-Konfig fällt auf Default zurück.
+     *
+     * @return array{gp: string, basisrezept: string, gericht: string}
+     */
+    public function typFarben(Team $team): array
+    {
+        $gespeichert = $this->for($team)->typ_farben ?? [];
+        $farben = self::TYP_FARBEN_DEFAULTS;
+        foreach (array_keys($farben) as $key) {
+            $wert = $gespeichert[$key] ?? null;
+            if (is_string($wert) && preg_match('/^#[0-9a-fA-F]{6}$/', $wert)) {
+                $farben[$key] = strtolower($wert);
+            }
+        }
+
+        return $farben;
     }
 
     public function kuechenTyp(Team $team): ?string
@@ -54,9 +77,29 @@ class TeamSettingsService
         return $settings;
     }
 
-    public function leadLaStrategie(Team $team): LeadLaStrategie
+    /**
+     * Lead-LA-Strategie — mit optionalem WG-Override (Phase 3): existiert für die
+     * Warengruppe eine eigene Strategie, gewinnt sie vor der globalen Team-Strategie.
+     */
+    public function leadLaStrategie(Team $team, ?string $warengruppeCode = null): LeadLaStrategie
     {
-        return $this->for($team)->lead_la_strategie ?? LeadLaStrategie::StammLieferant; // V-27-Default = Ist-Verhalten (GL-03 §6)
+        $settings = $this->for($team);
+        if ($warengruppeCode !== null) {
+            $override = ($settings->lead_la_strategie_per_wg ?? [])[$warengruppeCode] ?? null;
+            if ($override !== null && ($enum = LeadLaStrategie::tryFrom($override)) !== null) {
+                return $enum;
+            }
+        }
+
+        return $settings->lead_la_strategie ?? LeadLaStrategie::StammLieferant; // V-27-Default = Ist-Verhalten (GL-03 §6)
+    }
+
+    /** @return array<string, string> WG-Code => Strategie-Wert (nur gesetzte Overrides). */
+    public function leadLaStrategiePerWg(Team $team): array
+    {
+        $map = $this->for($team)->lead_la_strategie_per_wg ?? [];
+
+        return is_array($map) ? $map : [];
     }
 
     /** @return array<int> geordnete supplier_ids (nur Strategie prioritaets_kette) */
@@ -74,6 +117,16 @@ class TeamSettingsService
     public function garverlustDefault(Team $team, ?string $warengruppeCode = null): ?float
     {
         $defaults = $this->for($team)->garverlust_defaults ?? [];
+
+        $wert = $defaults[$warengruppeCode] ?? $defaults['*'] ?? null;
+
+        return $wert === null ? null : (float) $wert;
+    }
+
+    /** Putzverlust-Default in % je GP-Klasse (Warengruppen-Code), '*' = global (Phase 2). */
+    public function putzverlustDefault(Team $team, ?string $warengruppeCode = null): ?float
+    {
+        $defaults = $this->for($team)->putzverlust_defaults ?? [];
 
         $wert = $defaults[$warengruppeCode] ?? $defaults['*'] ?? null;
 

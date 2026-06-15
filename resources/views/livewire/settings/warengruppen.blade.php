@@ -15,6 +15,10 @@
         {{-- Warengruppen links --}}
         <div class="w-96 shrink-0 {{ $card }} p-3 space-y-0.5" data-warengruppen-liste>
             <div class="{{ $label }} px-2 pb-2">Warengruppen ({{ $warengruppen->count() }})</div>
+            <div class="flex gap-1 px-1 pb-2 mb-1 border-b border-black/5 dark:border-white/10" data-wg-neu>
+                <input type="text" wire:model="neuWg" wire:keydown.enter="wgNeu" placeholder="Eigene Warengruppe …" class="{{ $input }} !py-0.5 flex-1" />
+                <button type="button" wire:click="wgNeu" class="{{ $btnGhostXs }}" title="Eigene Warengruppe anlegen (§3-Set ist nur Empfehlung)">+</button>
+            </div>
             @foreach($warengruppen as $wg)
                 @php($darfEdit = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $wg))
                 @php($istParagraf3 = in_array($wg->code, $paragraf3, true))
@@ -27,13 +31,14 @@
                         <button type="button" wire:click="waehleWg('{{ $wg->code }}')" class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-2 py-1 text-xs">
                             <span class="font-mono text-[10px] text-gray-400">{{ $wg->code }}</span>
                             <span class="min-w-0 truncate">{{ $wg->name }}</span>
-                            @if($istParagraf3)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">§3</span>@endif
+                            @if($istParagraf3)<span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="Kanonische §3-Empfehlung (Seed) — frei änderbar">§3</span>@endif
                         </button>
                         <span class="text-[11px] text-gray-400 shrink-0">{{ $wg->gp_count }}</span>
                         @if($darfEdit)
-                            <button type="button" wire:click="startEditName({{ $wg->id }}, '{{ addslashes($wg->name) }}')" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Name ändern">✎</button>
-                            <button type="button" wire:click="deleteWg({{ $wg->id }})" @if($istParagraf3) disabled title="Fixer §3-Code — nicht löschbar" @endif
-                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $istParagraf3 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500' }}" title="löschen">✕</button>
+                            <button type="button" wire:click="startEditName({{ $wg->id }}, @js($wg->name))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Name ändern">✎</button>
+                            <button type="button" wire:click="deleteWg({{ $wg->id }})" wire:confirm="Diese Warengruppe löschen?" @disabled($wg->gp_count > 0)
+                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $wg->gp_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500' }}"
+                                    title="{{ $wg->gp_count > 0 ? 'Wird von GPs genutzt — erst umhängen' : 'löschen' }}">✕</button>
                         @endif
                     @endif
                 </div>

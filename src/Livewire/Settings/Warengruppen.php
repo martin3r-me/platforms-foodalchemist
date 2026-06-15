@@ -8,14 +8,17 @@ use Platform\FoodAlchemist\Services\VocabularyService;
 use RuntimeException;
 
 /**
- * M1-03 / Regelwerk GP §3: Warengruppen (read-mostly, Codes fix) +
- * Sub-Kategorien-Housekeeping (Rename propagiert auf GPs, Clear → NULL).
+ * M1-03 / Regelwerk GP §3 (v3.4): Warengruppen voll editierbar — die 15 kanonischen
+ * sind nur noch Seed/Empfehlung. Anlegen + Umbenennen (Code stabil) + Löschen (hart
+ * wenn unbenutzt, sonst per GP-Referenz gesperrt). Plus Sub-Kategorien-Housekeeping.
  */
 class Warengruppen extends Component
 {
     public ?int $editId = null;
 
     public string $editName = '';
+
+    public string $neuWg = '';
 
     public string $subWg = '';
 
@@ -52,12 +55,29 @@ class Warengruppen extends Component
         }
     }
 
+    /** Eigene Warengruppe anlegen (v3.4 — die 15 kanonischen sind nur Empfehlung). */
+    public function wgNeu(): void
+    {
+        if (trim($this->neuWg) === '') {
+            return;
+        }
+        try {
+            $wg = app(VocabularyService::class)->createWarengruppe($this->team(), $this->neuWg);
+            $this->reset('neuWg', 'fehler');
+            $this->subWg = $wg->code;
+            $this->meldung = "Warengruppe „{$wg->name}\" angelegt (Code {$wg->code}).";
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function deleteWg(int $id): void
     {
         try {
             app(VocabularyService::class)->deleteWarengruppe($this->team(), $id);
+            $this->meldung = 'Warengruppe gelöscht.';
         } catch (RuntimeException $e) {
-            $this->fehler = $e->getMessage(); // §3-Codes laufen IMMER hier rein
+            $this->fehler = $e->getMessage(); // genutzte WG werden durch den GP-Referenz-Guard gesperrt
         }
     }
 

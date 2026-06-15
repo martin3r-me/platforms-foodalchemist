@@ -30,6 +30,15 @@ class VkTaxonomie extends Component
 
     public string $neuKlasseDiaet = 'neutral';
 
+    /** Inline-Rename. */
+    public ?int $hgEditId = null;
+
+    public string $hgEditName = '';
+
+    public ?int $klasseEditId = null;
+
+    public string $klasseEditName = '';
+
     public function waehleHg(int $id): void
     {
         $this->hauptgruppeId = $this->hauptgruppeId === $id ? null : $id;
@@ -65,6 +74,63 @@ class VkTaxonomie extends Component
             $this->reset('neuKlasse', 'fehler');
             $this->neuKlasseDiaet = 'neutral';
             $this->meldung = 'Klasse angelegt.';
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /** VK-Hauptgruppe umbenennen (Inline; Code bleibt stabil). */
+    public function startHgEdit(int $id, string $aktuell): void
+    {
+        $this->hgEditId = $id;
+        $this->hgEditName = $aktuell;
+        $this->fehler = null;
+    }
+
+    public function hgSave(): void
+    {
+        try {
+            app(VocabularyService::class)->updateDishMainGroup($this->team(), (int) $this->hgEditId, $this->hgEditName);
+            $this->reset('hgEditId', 'hgEditName');
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function hgDelete(int $id): void
+    {
+        try {
+            app(VocabularyService::class)->deleteDishMainGroup($this->team(), $id);
+            if ($this->hauptgruppeId === $id) {
+                $this->hauptgruppeId = null;
+            }
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /** VK-Klasse umbenennen (Inline). */
+    public function startKlasseEdit(int $id, string $aktuell): void
+    {
+        $this->klasseEditId = $id;
+        $this->klasseEditName = $aktuell;
+        $this->fehler = null;
+    }
+
+    public function klasseSave(): void
+    {
+        try {
+            app(VocabularyService::class)->updateDishClass($this->team(), (int) $this->klasseEditId, ['bezeichnung' => $this->klasseEditName]);
+            $this->reset('klasseEditId', 'klasseEditName');
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function klasseDelete(int $id): void
+    {
+        try {
+            app(VocabularyService::class)->deleteDishClass($this->team(), $id);
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

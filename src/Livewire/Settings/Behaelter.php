@@ -87,6 +87,60 @@ class Behaelter extends Component
         }
     }
 
+    /** Phase 5: hart löschen, wenn von keinem Rezept genutzt (sonst gesperrt → deaktivieren). */
+    public function delete(string $vokabular, int $id): void
+    {
+        $meta = self::VOKABULARE[$vokabular] ?? null;
+        if ($meta === null) {
+            return;
+        }
+        $zeile = DB::table($meta['tabelle'])->where('id', $id)->first(['id', 'legacy_id', 'team_id', 'name']);
+        if ($zeile === null) {
+            return;
+        }
+        $team = Auth::user()?->currentTeamRelation;
+        if ($zeile->team_id !== null && $team !== null && (int) $zeile->team_id !== (int) $team->id) {
+            $this->fehler = 'Geerbter Eintrag — nur das Besitzer-Team kann löschen.';
+
+            return;
+        }
+        $n = $this->referenzen($vokabular, $zeile);
+        if ($n > 0) {
+            $this->fehler = "«{$zeile->name}» wird von {$n} Rezept(en) genutzt — erst umhängen oder deaktivieren.";
+
+            return;
+        }
+        DB::table($meta['tabelle'])->where('id', $id)->delete();
+        $this->fehler = null;
+        $this->meldung = "«{$zeile->name}» gelöscht.";
+    }
+
+    /** Rezept-Nutzungen je Vokabular (Behälter/Regen/Vehikel via legacy_id, Equipment via Pivot). */
+    private function referenzen(string $vokabular, object $zeile): int
+    {
+        $recipeRef = function (array $cols) use ($zeile): int {
+            if ($zeile->legacy_id === null) {
+                return 0;
+            }
+
+            return DB::table('foodalchemist_recipes')->whereNull('deleted_at')
+                ->where(function ($q) use ($cols, $zeile) {
+                    foreach ($cols as $c) {
+                        $q->orWhere($c, $zeile->legacy_id);
+                    }
+                })->count();
+        };
+
+        return match ($vokabular) {
+            'behaelter' => $recipeRef(['behaelter_warm_legacy_id', 'behaelter_kalt_legacy_id']),
+            'regen' => $recipeRef(['regeneration_geraet_legacy_id']),
+            'vehikel' => $recipeRef(['servier_vehikel_legacy_id']),
+            'equipment' => \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_recipe_equipment')
+                ? DB::table('foodalchemist_recipe_equipment')->where('equipment_id', $zeile->id)->count() : 0,
+            default => 0,
+        };
+    }
+
     public function render()
     {
         $listen = [];
