@@ -23,7 +23,7 @@ class RecipeModal extends Component
         'name' => '', 'herkunft' => '', 'kategorie_id' => null, 'hauptgruppe_id' => null,
         'geschmacksrichtung' => '', 'fertigungstiefe' => '', 'arbeitszeit_min' => null,
         'temperatur' => '', 'funktion' => '', 'status' => 'draft',
-        'yield_kg_manual' => null, 'beschreibung' => '', 'zubereitung' => '',
+        'yield_kg_manual' => null, 'ertrag_stueck' => null, 'beschreibung' => '', 'zubereitung' => '',
         'notizen_manual' => '', 'equipment_ids' => [], 'ist_verkaufsrezept' => false,
     ];
 
@@ -56,6 +56,7 @@ class RecipeModal extends Component
                     'funktion' => $r->funktion ?? '',
                     'status' => $r->status->value,
                     'yield_kg_manual' => $r->yield_kg_manual,
+                    'ertrag_stueck' => $r->ertrag_stueck,
                     'beschreibung' => $r->beschreibung ?? '',
                     'zubereitung' => $r->zubereitung ?? '',
                     'notizen_manual' => $r->notizen_manual ?? '',
@@ -80,6 +81,7 @@ class RecipeModal extends Component
             $in = [...$this->form,
                 'arbeitszeit_min' => $this->form['arbeitszeit_min'] !== null && $this->form['arbeitszeit_min'] !== '' ? (int) $this->form['arbeitszeit_min'] : null,
                 'yield_kg_manual' => $this->form['yield_kg_manual'] !== null && $this->form['yield_kg_manual'] !== '' ? (float) str_replace(',', '.', (string) $this->form['yield_kg_manual']) : null,
+                'ertrag_stueck' => $this->form['ertrag_stueck'] !== null && $this->form['ertrag_stueck'] !== '' ? (float) str_replace(',', '.', (string) $this->form['ertrag_stueck']) : null,
             ];
             $recipe = $this->recipeId === null
                 ? $recipes->create($team, $in)

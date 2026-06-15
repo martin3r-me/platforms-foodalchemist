@@ -37,6 +37,7 @@ class ConcepterAggregateService
     {
         return [
             'id', 'name', 'vk_netto', 'ek_total_eur', 'arbeitszeit_min', 'vk_anzahl_einheiten', 'vk_menge_pro_einheit_g',
+            'yield_kg', 'ertrag_stueck',                     // Stück-Modus (kg↔Stück): Teiler/Gramm aus Ertrag+Yield
             'nutri_kcal_per_100g', 'nutri_protein_g_per_100g', 'nutri_fat_g_per_100g',
             'nutri_carbs_g_per_100g', 'nutri_salt_g_per_100g', 'nutri_konfidenz',
             'spec_is_vegan', 'spec_is_vegetarian', 'spec_is_halal', 'spec_is_gluten_free',
@@ -80,6 +81,21 @@ class ConcepterAggregateService
         }
 
         return ($menge * (float) $einheit->default_in_g) / (float) $portionG;
+    }
+
+    /**
+     * Stück-Modus (kg↔Stück): greift, wenn die Position eine Zähl-Einheit (Portion/Stück) trägt
+     * UND das Rezept einen Ertrag in Stück (`ertrag_stueck`) hat. Dann ist 1 verrechnete Einheit
+     * = 1 Stück → EK/Stück = ek_total_eur / ertrag_stueck, Gramm/Stück = yield_g / ertrag_stueck.
+     * Rückwärtskompatibel: ohne `ertrag_stueck` (alle Bestandsdaten) nie aktiv.
+     */
+    public static function stueckModus(?object $einheit, ?object $gericht): bool
+    {
+        return $einheit !== null
+            && ($einheit->dimension ?? null) === 'count'
+            && $gericht !== null
+            && $gericht->ertrag_stueck !== null
+            && (float) $gericht->ertrag_stueck > 0;
     }
 
     // ── Paket-Aggregat ──────────────────────────────────────────────────────
@@ -151,6 +167,8 @@ class ConcepterAggregateService
         $zeitProPortion = 0.0;
         $ekPositionen = 0;
         $ekBeitragend = 0;
+        $gewicht = 0.0;                 // Σ Effektiv-Gramm/Person
+        $gewichtVollstaendig = true;    // false, sobald eine Position keine belastbare Gramm-Angabe hat
         foreach ($mitMenge as $r) {
             $zeit += (int) ($r['gericht']->arbeitszeit_min ?? 0);   // Σ roh (Planungsproxy), mengenunabhängig
             $ekPositionen++;
@@ -161,15 +179,34 @@ class ConcepterAggregateService
                 $r['gericht'],
             );
             if ($pae === null) {
+                $gewichtVollstaendig = false; // unbekannte Menge → auch Gewicht unvollständig
                 continue; // Gramm-Position ohne Portionsgewicht → trägt ehrlich nicht bei
             }
             $ekBeitragend++;
-            $anzahl = max(1, (int) ($r['gericht']->vk_anzahl_einheiten ?? 1));
-            // EK/Person = ek_total_eur ÷ Portionszahl (Batch→Portion) × Portions-Äquivalent.
+            $stueck = self::stueckModus($r['einheit'] ?? null, $r['gericht']);
+            // Teiler von ek_total: Stück-Modus → ertrag_stueck, sonst Portionszahl (Batch→Portion).
+            $anzahl = $stueck ? (float) $r['gericht']->ertrag_stueck : max(1, (int) ($r['gericht']->vk_anzahl_einheiten ?? 1));
             $ek += (float) ($r['gericht']->ek_total_eur ?? 0) / $anzahl * $pae;
             $vk += (float) ($r['gericht']->vk_netto ?? 0) * $pae;
-            // M-K2: Arbeitszeit/Person = Rezept-Arbeitszeit ÷ Portionen × Portions-Äquivalent.
+            // M-K2: Arbeitszeit/Person = Rezept-Arbeitszeit ÷ Teiler × Portions-Äquivalent.
             $zeitProPortion += (float) ($r['gericht']->arbeitszeit_min ?? 0) / $anzahl * $pae;
+            // Gewicht/Person = Portions-Äquivalent × Gramm je Einheit. Stück-Modus: yield_g / ertrag_stueck;
+            // sonst Portionsgramm. Fehlt die Basis → Gewicht unvollständig (ehrlich).
+            if ($stueck) {
+                $yieldKg = $r['gericht']->yield_kg;
+                if ($yieldKg !== null && (float) $yieldKg > 0) {
+                    $gewicht += $pae * ((float) $yieldKg * 1000 / (float) $r['gericht']->ertrag_stueck);
+                } else {
+                    $gewichtVollstaendig = false;
+                }
+            } else {
+                $portionG = $r['gericht']->vk_menge_pro_einheit_g;
+                if ($portionG !== null && (float) $portionG > 0) {
+                    $gewicht += $pae * (float) $portionG;
+                } else {
+                    $gewichtVollstaendig = false;
+                }
+            }
         }
 
         // Allergene: je Gericht EINMAL (Eigenschaft, nicht Portion) → dedupe.
@@ -183,6 +220,8 @@ class ConcepterAggregateService
             'ek_n_positionen' => $ekPositionen,               // kostentragende Positionen gesamt
             'ek_n_beitragend' => $ekBeitragend,               // davon mit belastbarem EK (Lücke = ehrlich aus)
             'vk_summe' => round($vk, 2),
+            'gewicht_pro_person_g' => round($gewicht),        // Σ Effektiv-Gramm/Person
+            'gewicht_vollstaendig' => $gewichtVollstaendig,   // false → ≥1 Position ohne Portionsgewicht (Gewicht unvollständig)
             'arbeitszeit_min' => $zeit,                       // Σ roher Rezept-Arbeitszeit (Planungsproxy)
             'arbeitszeit_min_pro_portion' => round($zeitProPortion, 2), // Σ je Person (M-K2 Lohn-Block)
         ];

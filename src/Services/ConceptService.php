@@ -81,10 +81,11 @@ class ConceptService
         'name', 'konsumenten_name', 'anlass', 'niveau', 'klasse', 'geschmacksrichtung',
         'schreibstil_id', 'category_id', 'status', 'beschreibung', 'zusatztext', 'note',
         'brief', 'zielpreis_pro_person', 'diaet_vorgabe', 'struktur_vorgabe', 'saison', 'zielgruppe',
+        'preis_modus', 'preis_pro_person_manuell',
     ];
 
     /** Felder, die leer („" / 0) als NULL gespeichert werden (FK/optional). */
-    private const FELDER_NULLBAR = ['category_id', 'schreibstil_id', 'zielpreis_pro_person'];
+    private const FELDER_NULLBAR = ['category_id', 'schreibstil_id', 'zielpreis_pro_person', 'preis_pro_person_manuell'];
 
     public function update(Team $team, int $id, array $in): FoodAlchemistConcept
     {
@@ -160,6 +161,13 @@ class ConceptService
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
         $this->guardOwner($concept, $team);
+
+        // GT-FB-4 / V-06: referenziertes Concept nicht still löschen — erst aus den Foodbooks nehmen.
+        $fbs = $this->verwendetInFoodbooks($team, $id);
+        if ($fbs->isNotEmpty()) {
+            throw new \RuntimeException('Concept wird in '.$fbs->count().' Foodbook(s) verwendet — dort zuerst entfernen.');
+        }
+
         $concept->delete();
     }
 
@@ -268,6 +276,16 @@ class ConceptService
             $slot->update(['type' => 'gericht', 'paket_id' => null, 'vk_recipe_id' => null, 'menge' => null, 'einheit_vocab_id' => null]);
         }
         $this->refreshCache($slot->concept);
+
+        return $slot->refresh();
+    }
+
+    /** Concept-übergreifendes Wording: Brand-Voice-Anzeigename einer Position setzen/leeren. */
+    public function setSlotWording(Team $team, int $slotId, ?string $text): FoodAlchemistConceptSlot
+    {
+        $slot = $this->ownedSlot($team, $slotId);
+        $text = $text !== null ? trim($text) : null;
+        $slot->update(['wording' => $text === '' ? null : $text]);
 
         return $slot->refresh();
     }
@@ -381,7 +399,7 @@ class ConceptService
         $concept->loadMissing(['slots' => fn ($q) => $q->orderBy('position'),
             'slots.einheit:id,slug,dimension,default_in_g',
             'slots.paket:id,name,preis_pro_person,ek_pro_person,preis_stale',
-            'slots.gericht:id,name,vk_netto,ek_total_eur,vk_anzahl_einheiten,vk_menge_pro_einheit_g']);
+            'slots.gericht:id,name,vk_netto,ek_total_eur,vk_anzahl_einheiten,vk_menge_pro_einheit_g,yield_kg,ertrag_stueck']);
 
         $zeilen = [];
         $vkTotal = 0.0;
@@ -408,7 +426,10 @@ class ConceptService
                     $slot->gericht,
                 );
                 $ekFehlt = $pae === null;       // Gramm-Position ohne Portionsgewicht → ehrlich „unbekannt"
-                $anzahl = max(1, (int) ($slot->gericht->vk_anzahl_einheiten ?? 1));
+                // Teiler von ek_total: Stück-Modus (kg↔Stück) → ertrag_stueck, sonst Portionszahl.
+                $anzahl = ConcepterAggregateService::stueckModus($slot->einheit, $slot->gericht)
+                    ? (float) $slot->gericht->ertrag_stueck
+                    : max(1, (int) ($slot->gericht->vk_anzahl_einheiten ?? 1));
                 $vk = $ekFehlt ? 0.0 : (float) ($slot->gericht->vk_netto ?? 0) * $pae;
                 $ek = $ekFehlt ? 0.0 : (float) ($slot->gericht->ek_total_eur ?? 0) / $anzahl * $pae;
                 $hatEkLuecke = $hatEkLuecke || $ekFehlt;
@@ -426,9 +447,16 @@ class ConceptService
             $ekTotal += $ek;
         }
 
+        $summe = round($vkTotal, 2);
+        // Manueller Concept-VK (z. B. Lunchbuffet, Preis auf EK-Basis) überschreibt die Summe; EK bleibt aus den Positionen.
+        $manuell = ($concept->preis_modus ?? 'auto') === 'manuell' && $concept->preis_pro_person_manuell !== null;
+        $preis = $manuell ? round((float) $concept->preis_pro_person_manuell, 2) : $summe;
+
         return [
             'zeilen' => $zeilen,
-            'preis_pro_person' => round($vkTotal, 2),
+            'preis_pro_person' => $preis,
+            'summe_pro_person' => $summe,        // berechnete Summe der Positionen (auch im manuellen Modus, zur Anzeige)
+            'preis_modus' => $manuell ? 'manuell' : 'auto',
             'ek_pro_person' => round($ekTotal, 2),
             'hat_stale' => $hatStale,
             'hat_leer' => $hatLeer,

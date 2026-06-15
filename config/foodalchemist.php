@@ -465,6 +465,13 @@ return [
             'task' => 'Generiere den kanonischen Marketing-Namen (VK-Wording-Standard, '
                 . 'stil-neutral — Schreibstile transformieren erst spaeter): werte = {vk_wording_standard}.',
         ],
+        'concept.wording' => [
+            'tier' => 'A',
+            'task' => 'Erzeuge im mitgegebenen Schreibstil ein stimmiges Konzept-Wording ueber ALLE Positionen: '
+                . 'werte = {intro, slots}. intro = kurzer Einleitungs-/Praesentationstext fuer das ganze Konzept. '
+                . 'slots = Map slot_id -> Brand-Voice-Anzeigename je Position (Variante des neutralen vk_wording_standard, '
+                . 'ueber das gesamte Menue stimmig und wiedererkennbar).',
+        ],
         'vk.behaelter' => [
             'tier' => 'B',
             'task' => 'Schlage Behaelter (warm/kalt getrennt) + Anzahl fuers Catering vor '

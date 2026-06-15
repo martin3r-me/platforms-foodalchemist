@@ -21,6 +21,34 @@
         @endif
     </x-slot:actions>
 
+    {{-- Phase 1: KPI-Streifen fix im Modal-Kopf (immer sichtbar, scrollt nie weg) --}}
+    @if($voll !== null)
+        <x-slot:kpiHeader>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-2" data-editor-kpis>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Yield</span>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">EK gesamt</span>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $voll->ek_total_eur !== null ? number_format((float) $voll->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">EK / kg</span>
+                    <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ $voll->ek_per_kg_eur !== null ? number_format((float) $voll->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Mit Preis</span>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $voll->ek_n_ingredients_priced ?? 0 }}/{{ $voll->ek_n_ingredients_total ?? 0 }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Allergen-Konf.</span>
+                    <p class="text-xs font-semibold {{ ['high' => 'text-emerald-600', 'medium' => 'text-amber-600', 'low' => 'text-rose-600'][$voll->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper((string) $voll->allergene_konfidenz) }}</p>
+                </div>
+            </div>
+        </x-slot:kpiHeader>
+    @endif
+
     @if($fehler !== null)
         <p class="text-xs text-rose-600 dark:text-rose-400 mb-3" data-modal-fehler>{{ $fehler }}</p>
     @endif
@@ -44,7 +72,7 @@
          bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
     <div x-data="{ tab: 'aufbau' }" data-rezept-tabs>
         <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
-            @foreach(['aufbau' => 'Aufbau', 'zubereitung' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'notizen' => 'Notizen'] as $tabKey => $tabLabel)
+            @foreach(['aufbau' => 'Aufbau', 'zubereitung' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'details' => 'Details', 'notizen' => 'Notizen'] as $tabKey => $tabLabel)
                 <button type="button" @click="tab = '{{ $tabKey }}'"
                         :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
                         class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors" data-rezept-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
@@ -166,31 +194,19 @@
             <livewire:foodalchemist.recipes.ingredient-editor :recipe-id="$recipeId" :eingebettet="true" wire:key="zutaten-inline-{{ $recipeId }}-v{{ $zutatenVersion }}" />
 
             @if($voll !== null)
-                <div class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2" data-editor-kpis>
-                    <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                        <span class="{{ $dt }}">Yield</span>
-                        <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
+                <div class="mt-2 flex flex-wrap items-end gap-4">
+                    <div>
+                        <label class="block {{ $label }} mb-1">Yield manuell (kg, A-3 — Vorrang vor Auto-Summe)</label>
+                        <input type="text" wire:model="form.yield_kg_manual" placeholder="leer = Auto ({{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') : '—' }})" class="{{ $input }} !w-48" data-yield-manual />
                     </div>
-                    <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                        <span class="{{ $dt }}">EK gesamt</span>
-                        <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $voll->ek_total_eur !== null ? number_format((float) $voll->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
+                    <div>
+                        <label class="block {{ $label }} mb-1">Ertrag in Stück (kg ↔ Stück)</label>
+                        <input type="text" wire:model.live.debounce.500ms="form.ertrag_stueck" placeholder="z. B. 50 (Törtchen)" class="{{ $input }} !w-40" data-ertrag-stueck />
+                        @php($es = is_numeric(str_replace(',', '.', (string) ($form['ertrag_stueck'] ?? ''))) ? (float) str_replace(',', '.', (string) $form['ertrag_stueck']) : null)
+                        @if($es !== null && $es > 0 && $voll->yield_kg !== null)
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">1 Stück ≈ {{ number_format((float) $voll->yield_kg / $es * 1000, 0, ',', '.') }} g{{ $voll->ek_total_eur !== null ? ' · EK/Stück ≈ ' . number_format((float) $voll->ek_total_eur / $es, 2, ',', '.') . ' €' : '' }}</p>
+                        @endif
                     </div>
-                    <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
-                        <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">EK / kg</span>
-                        <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ $voll->ek_per_kg_eur !== null ? number_format((float) $voll->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
-                    </div>
-                    <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                        <span class="{{ $dt }}">Mit Preis</span>
-                        <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $voll->ek_n_ingredients_priced ?? 0 }}/{{ $voll->ek_n_ingredients_total ?? 0 }}</p>
-                    </div>
-                    <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                        <span class="{{ $dt }}">Allergen-Konf.</span>
-                        <p class="text-xs font-semibold {{ ['high' => 'text-emerald-600', 'medium' => 'text-amber-600', 'low' => 'text-rose-600'][$voll->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper((string) $voll->allergene_konfidenz) }}</p>
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <label class="block {{ $label }} mb-1">Yield manuell (kg, A-3 — Vorrang vor Auto-Summe)</label>
-                    <input type="text" wire:model="form.yield_kg_manual" placeholder="leer = Auto ({{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') : '—' }})" class="{{ $input }} !w-48" data-yield-manual />
                 </div>
             @endif
         </x-foodalchemist::modal-section>
@@ -365,6 +381,15 @@
         @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['beschreibung'] }}</p>@endif
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab EIGENSCHAFTEN --}}
+
+    {{-- ── Tab: DETAILS — Detail-Panel-Inhalte als Kartei (geteilte Render-Quelle, eingebettet) ── --}}
+    <div x-show="tab === 'details'" x-cloak class="pt-4">
+        @if($recipeId !== null)
+            <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" wire:key="rdetail-{{ $recipeId }}" />
+        @else
+            <p class="text-xs text-gray-400 py-6 text-center">Details erscheinen nach dem ersten Speichern.</p>
+        @endif
+    </div>
 
     {{-- ── Tab: NOTIZEN ──────────────────────────────────────────────── --}}
     <div x-show="tab === 'notizen'" x-cloak class="pt-4 space-y-4">

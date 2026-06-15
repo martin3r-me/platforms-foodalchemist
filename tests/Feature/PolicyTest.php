@@ -37,6 +37,16 @@ it('Policy gilt auch für Rezepte (geteiltes Modell, beide Sichten)', function (
         ->and(Gate::forUser($kindUser)->allows('update', $rootRezept))->toBeFalse();
 });
 
+it('Policy gilt für Foodbooks (M11-10): Kind sieht Eltern-Foodbook, kuratiert es aber nicht', function () {
+    $this->seedTeamHierarchy();
+    $kindUser = $this->makeUser($this->childA, 'Kind A');
+    $rootFb = app(\Platform\FoodAlchemist\Services\FoodbookService::class)->create($this->rootTeam, ['bezeichnung' => 'Root-FB']);
+
+    expect(Gate::forUser($kindUser)->allows('view', $rootFb))->toBeTrue()        // Kette aufwärts
+        ->and(Gate::forUser($kindUser)->allows('update', $rootFb))->toBeFalse()  // Curate nur Besitzer
+        ->and(Gate::forUser($kindUser)->allows('delete', $rootFb))->toBeFalse();
+});
+
 it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + HasUuidV7 + SoftDeletes', function () {
     // Satelliten scopen BEWUSST über ihr Eltern-Aggregat (Zugriff nur via
     // GP-/Rezept-Relation bzw. TeamSettingsService) — kein eigener Team-Scope

@@ -27,6 +27,7 @@ beforeEach(function () {
     // Concept „Grill-Buffet" mit einem Paket (manuell 4,50 €/P) → preis_pro_person_cache
     $paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
     $this->pakete->update($this->rootTeam, $paket->id, ['preis_pro_person' => 4.50, 'ek_pro_person' => 1.35]);
+    $this->paket = $paket;
     $this->concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
     $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
     $this->concepts->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $paket->id]);
@@ -111,4 +112,85 @@ it('M11 Jarvis: Wahl-Gruppe (A|B|C) zwischen Concepts setzen', function () {
 
     expect($a->refresh()->variant_group_id)->toBe($gid)
         ->and($b->refresh()->variant_group_id)->toBe($gid);
+});
+
+// ── Golden-Tests M11 (Abnahme-Gates der Foodbook-Roadmap) ────────────────────
+
+it('GT-FB-2: Live-Referenz — Concept-Preisänderung zieht im Foodbook live mit (keine Kopie)', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB', 'personen' => 10]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Menü']);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+
+    expect($this->foodbooks->gesamt($this->rootTeam, $fb->refresh())['vk_pro_person'])->toBe(4.50);
+
+    // Paket-Preis am Concept ändern → Foodbook-Summe zieht live mit (Live-Referenz, kein Snapshot).
+    $this->pakete->update($this->rootTeam, $this->paket->id, ['preis_pro_person' => 6.00]);
+    expect($this->foodbooks->gesamt($this->rootTeam, $fb->refresh())['vk_pro_person'])->toBe(6.00);
+});
+
+it('GT-FB-3: n:m — gleiches Concept in zwei Foodbooks, Änderung wirkt in beiden', function () {
+    $fb1 = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB1', 'personen' => 10]);
+    $fb2 = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB2', 'personen' => 10]);
+    $k1 = $this->foodbooks->addKapitel($this->rootTeam, $fb1->id, ['titel' => 'K']);
+    $k2 = $this->foodbooks->addKapitel($this->rootTeam, $fb2->id, ['titel' => 'K']);
+    $this->foodbooks->addBlock($this->rootTeam, $k1->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+    $this->foodbooks->addBlock($this->rootTeam, $k2->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+
+    expect($this->foodbooks->gesamt($this->rootTeam, $fb1->refresh())['vk_pro_person'])->toBe(4.50)
+        ->and($this->foodbooks->gesamt($this->rootTeam, $fb2->refresh())['vk_pro_person'])->toBe(4.50);
+
+    $this->pakete->update($this->rootTeam, $this->paket->id, ['preis_pro_person' => 5.00]);
+    expect($this->foodbooks->gesamt($this->rootTeam, $fb1->refresh())['vk_pro_person'])->toBe(5.00)
+        ->and($this->foodbooks->gesamt($this->rootTeam, $fb2->refresh())['vk_pro_person'])->toBe(5.00); // keine Kopie
+});
+
+it('GT-FB-4: Lösch-Guard — referenziertes Concept löschen wirft typisierte Exception (V-06)', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB']);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'K']);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+
+    expect(fn () => $this->concepts->delete($this->rootTeam, $this->concept->id))
+        ->toThrow(\RuntimeException::class, 'Foodbook');
+
+    // Nach Entfernen des Blocks ist Löschen wieder erlaubt.
+    $block = $kap->refresh()->blocks->first();
+    $this->foodbooks->deleteBlock($this->rootTeam, $block->id);
+    $this->concepts->delete($this->rootTeam, $this->concept->id);
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistConcept::find($this->concept->id))->toBeNull();
+});
+
+it('GT-FB-7: Concept-Picker filtert nach Concept-Kategorie (FB-1)', function () {
+    $cat = $this->concepts->createCategory($this->rootTeam, 'Buffets');
+    $this->concept->update(['category_id' => $cat->id]);                              // Grill-Buffet → „Buffets"
+    $this->concepts->create($this->rootTeam, ['name' => 'Fingerfood-Konzept']);       // ohne Kategorie
+
+    $inKat = $this->foodbooks->conceptKandidaten($this->rootTeam, '', $cat->id);
+    expect($inKat->pluck('name')->all())
+        ->toContain('Grill-Buffet')->not->toContain('Fingerfood-Konzept');
+
+    $alle = $this->foodbooks->conceptKandidaten($this->rootTeam, '', null);
+    expect($alle->pluck('name')->all())
+        ->toContain('Grill-Buffet')->toContain('Fingerfood-Konzept');
+});
+
+it('M11-09: Block-Notiz (interne_bemerkung) persistiert via updateBlock — auch auf concept_ref', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB']);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'K']);
+    $block = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+
+    $this->foodbooks->updateBlock($this->rootTeam, $block->id, ['interne_bemerkung' => 'Allergiker-Hinweis intern']);
+    expect($block->refresh()->interne_bemerkung)->toBe('Allergiker-Hinweis intern');
+});
+
+it('M11-08: kiAndockKontext assembliert Kunde + Briefing + Concept-Liste (kein LLM-Call)', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB', 'kunde' => 'Hotel Adler', 'beschreibung' => 'Sommerliches Gartenfest', 'personen' => 80]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Menü']);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+
+    $ctx = $this->foodbooks->kiAndockKontext($this->rootTeam, $fb->id);
+    expect($ctx['kunde'])->toBe('Hotel Adler')
+        ->and($ctx['briefing'])->toBe('Sommerliches Gartenfest')
+        ->and($ctx['personen'])->toBe(80)
+        ->and($ctx['concepts'])->toContain('Grill-Buffet')
+        ->and($ctx['kapitel'])->toContain('Menü');
 });

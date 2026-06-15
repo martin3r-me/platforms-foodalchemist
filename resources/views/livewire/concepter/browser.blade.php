@@ -152,4 +152,9 @@
 
     {{-- Voll-Editor-Modal (M10R-3) — auf Seitenebene, öffnet via concepter-editor.oeffnen --}}
     <livewire:foodalchemist.concepter.editor />
+
+    {{-- Phase 6: Typ-Einsehen — Basisrezept/VK-Gericht als Fenster ÜBER dem Concepter-Editor.
+         Nach dem Editor platziert → stapelt obenauf (gleiche z-[100]-Konvention). --}}
+    <livewire:foodalchemist.recipes.recipe-modal />
+    <livewire:foodalchemist.verkauf.vk-modal />
 </x-ui-page>

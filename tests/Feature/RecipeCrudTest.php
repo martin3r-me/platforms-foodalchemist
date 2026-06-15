@@ -140,3 +140,14 @@ it('UI-Audit: update pflegt die §4.2-Editor-Felder (Status/Zubereitung/Eigensch
     // ungültiger Status fällt still auf den Bestand zurück (Whitelist)
     expect($svc->update($this->rootTeam, $r->id, ['name' => 'Fond: Audit', 'status' => 'quatsch'])->status->value)->toBe('review');
 });
+
+it('Ertrag in Stück (kg↔Stück): persistiert und leert sauber', function () {
+    $r = $this->svc->create($this->rootTeam, ['name' => 'Törtchen-Teig', 'ist_verkaufsrezept' => false]);
+
+    $this->svc->update($this->rootTeam, $r->id, ['ertrag_stueck' => 50]);
+    expect((float) $r->fresh()->ertrag_stueck)->toBe(50.0);
+
+    // Leer-String → null (UI-Pfad)
+    $this->svc->update($this->rootTeam, $r->id, ['ertrag_stueck' => '']);
+    expect($r->fresh()->ertrag_stueck)->toBeNull();
+});

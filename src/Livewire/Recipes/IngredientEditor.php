@@ -316,6 +316,10 @@ class IngredientEditor extends Component
             'rezept' => $rezept,
             'zeilenJson' => $zeilen,
             'einheiten' => $einheiten,
+            // Phase 5: Typ-Farben (GP / Basisrezept / Gericht) für die Seiten-Listen-Badges
+            'typFarben' => $team === null
+                ? \Platform\FoodAlchemist\Services\TeamSettingsService::TYP_FARBEN_DEFAULTS
+                : app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->typFarben($team),
             // M9-01a: VK-Kontext zeigt die Rollen-Spalte (V-21 — Gesamt-Gericht-Sicht)
             'vkKontext' => (bool) ($rezept?->ist_verkaufsrezept ?? false),
             'browserVokabular' => $team === null ? null : [

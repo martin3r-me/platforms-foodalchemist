@@ -209,3 +209,53 @@ it('Gramm-Einheit ohne Portionsgewicht trägt ehrlich nicht bei', function () {
     $cockpit = $this->concepts->preisCockpit($c->refresh());
     expect($cockpit['hat_ek_luecke'])->toBeTrue();            // UI kann ehrlich warnen
 });
+
+it('Gewicht/Person: Σ Effektiv-Gramm; Position ohne Portionsgewicht → unvollständig', function () {
+    // a: 250 g/Portion, b: 200 g/Portion (beide vollständig)
+    $c = $this->concepts->create($this->rootTeam, ['name' => 'Gewicht-voll']);
+    $s1 = $this->concepts->addSlot($this->rootTeam, $c->id, ['rolle' => 'Vorspeise']);
+    $this->concepts->fillSlot($this->rootTeam, $s1->id, ['vk_recipe_id' => $this->a->id, 'menge' => 1]); // 1 × 250 g
+    $s2 = $this->concepts->addSlot($this->rootTeam, $c->id, ['rolle' => 'Hauptgang']);
+    $this->concepts->fillSlot($this->rootTeam, $s2->id, ['vk_recipe_id' => $this->b->id, 'menge' => 2]); // 2 × 200 g
+
+    $agg = $this->agg->conceptAggregat($c->refresh());
+    expect((float) $agg['gewicht_pro_person_g'])->toBe(650.0)
+        ->and($agg['gewicht_vollstaendig'])->toBeTrue();
+
+    // + c ohne Portionsgewicht → Gewicht unvollständig (c trägt nichts bei)
+    $c2 = $this->concepts->create($this->rootTeam, ['name' => 'Gewicht-Lücke']);
+    $x1 = $this->concepts->addSlot($this->rootTeam, $c2->id, ['rolle' => 'Vorspeise']);
+    $this->concepts->fillSlot($this->rootTeam, $x1->id, ['vk_recipe_id' => $this->a->id, 'menge' => 1]); // 250 g
+    $x2 = $this->concepts->addSlot($this->rootTeam, $c2->id, ['rolle' => 'Extra']);
+    $this->concepts->fillSlot($this->rootTeam, $x2->id, ['vk_recipe_id' => $this->c->id, 'menge' => 1]); // c: kein Portionsgewicht
+
+    $agg2 = $this->agg->conceptAggregat($c2->refresh());
+    expect((float) $agg2['gewicht_pro_person_g'])->toBe(250.0)
+        ->and($agg2['gewicht_vollstaendig'])->toBeFalse();
+});
+
+it('Stück-Modus (kg↔Stück): EK/Stück = ek_total÷ertrag, Gewicht/Stück = yield_g÷ertrag', function () {
+    $stk = FoodAlchemistVocabEinheit::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'stk', 'display_de' => 'Stück', 'dimension' => 'count',
+    ]);
+    // 20 kg Batch ergibt 50 Törtchen, EK gesamt 20 € → 1 Stück = 400 g, EK/Stück = 0,40 €.
+    $toertchen = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'status' => 'approved', 'ist_verkaufsrezept' => false,
+        'recipe_key' => 'toertchen', 'name' => 'Törtchen-Teig',
+        'ek_total_eur' => 20.00, 'yield_kg' => 20, 'ertrag_stueck' => 50,
+    ]);
+
+    $c = $this->concepts->create($this->rootTeam, ['name' => 'Stück-Test']);
+    $slot = $this->concepts->addSlot($this->rootTeam, $c->id, ['rolle' => 'Petit Four']);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['vk_recipe_id' => $toertchen->id, 'type' => 'basisrezept', 'menge' => 2]);
+    $this->concepts->setSlotMengeEinheit($this->rootTeam, $slot->id, 2, $stk->id);
+
+    $agg = $this->agg->conceptAggregat($c->refresh());
+    expect((float) $agg['ek_pro_person'])->toBe(0.8)            // 20/50 × 2
+        ->and((float) $agg['gewicht_pro_person_g'])->toBe(800.0) // (20000/50) × 2
+        ->and($agg['gewicht_vollstaendig'])->toBeTrue();
+
+    $cockpit = $this->concepts->preisCockpit($c->refresh());
+    $zeile = collect($cockpit['zeilen'])->firstWhere('slot_id', $slot->id);
+    expect((float) $zeile['ek'])->toBe(0.8);                     // Cockpit identisch (kanonische Stelle)
+});

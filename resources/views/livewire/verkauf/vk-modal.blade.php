@@ -10,6 +10,34 @@
         </x-slot:actions>
     @endif
 
+    {{-- Phase 1: KPI-Streifen fix im Modal-Kopf (immer sichtbar, scrollt nie weg) --}}
+    @if($rezept !== null)
+        <x-slot:kpiHeader>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-2" data-vk-editor-kpis>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Yield</span>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">EK gesamt</span>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">EK / kg</span>
+                    <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Mit Preis</span>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_n_ingredients_priced ?? 0 }}/{{ $rezept->ek_n_ingredients_total ?? 0 }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Allergen-Konf.</span>
+                    <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergene_konfidenz) }}</p>
+                </div>
+            </div>
+        </x-slot:kpiHeader>
+    @endif
+
     @if($fehler !== null)
         <p class="text-xs text-rose-600 dark:text-rose-400" data-vk-fehler>{{ $fehler }}</p>
     @endif
@@ -137,29 +165,6 @@
             @endif
 
             <livewire:foodalchemist.recipes.ingredient-editor :recipe-id="$recipeId" :eingebettet="true" wire:key="vk-zutaten-{{ $recipeId }}-v{{ $zutatenVersion }}" />
-
-            <div class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2" data-vk-editor-kpis>
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                    <span class="{{ $dt }}">Yield</span>
-                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
-                </div>
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                    <span class="{{ $dt }}">EK gesamt</span>
-                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
-                </div>
-                <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">EK / kg</span>
-                    <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
-                </div>
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                    <span class="{{ $dt }}">Mit Preis</span>
-                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_n_ingredients_priced ?? 0 }}/{{ $rezept->ek_n_ingredients_total ?? 0 }}</p>
-                </div>
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                    <span class="{{ $dt }}">Allergen-Konf.</span>
-                    <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergene_konfidenz) }}</p>
-                </div>
-            </div>
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab AUFBAU --}}
 

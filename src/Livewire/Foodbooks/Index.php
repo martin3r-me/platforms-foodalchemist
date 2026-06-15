@@ -26,13 +26,15 @@ class Index extends Component
     #[Url(as: 'kap')]
     public ?int $selectedKapitelId = null;
 
-    public array $form = ['bezeichnung' => '', 'kunde' => '', 'jahr' => null, 'personen' => null, 'status' => 'draft'];
+    public array $form = ['bezeichnung' => '', 'kunde' => '', 'jahr' => null, 'personen' => null, 'status' => 'draft', 'beschreibung' => ''];
 
     public array $kapitelForm = ['titel' => '', 'konsumententitel' => '', 'preis_modus' => 'auto', 'preis_pro_person' => null];
 
     public string $neuesKapitelTitel = '';
 
     public string $conceptSuche = '';
+
+    public ?int $conceptKategorie = null;
 
     /** Block, dessen Inline-Editor offen ist + dessen Formular. */
     public ?int $editBlockId = null;
@@ -64,7 +66,7 @@ class Index extends Component
         $this->selectedId = $id;
         $this->form = [
             'bezeichnung' => $fb->bezeichnung, 'kunde' => $fb->kunde ?? '', 'jahr' => $fb->jahr,
-            'personen' => $fb->personen, 'status' => $fb->status,
+            'personen' => $fb->personen, 'status' => $fb->status, 'beschreibung' => $fb->beschreibung ?? '',
         ];
         $this->selectedKapitelId = $fb->kapitel->first()->id ?? null;
         $this->ladeKapitelForm($svc);
@@ -90,12 +92,13 @@ class Index extends Component
 
     // ── Kapitel ───────────────────────────────────────────────────────────
 
-    public function kapitelNeu(FoodbookService $svc, ?int $parentId = null): void
+    public function kapitelNeu(?int $parentId = null): void
     {
         if ($this->selectedId === null) {
             return;
         }
-        $titel = $parentId !== null ? 'Unterkapitel' : ($this->neuesKapitelTitel ?: 'Neues Kapitel');
+        $svc = app(FoodbookService::class);   // via Container, nicht als Action-Param — sonst kollidiert die DI mit $parentId
+        $titel = $parentId !== null ? 'Neues Unterkapitel' : ($this->neuesKapitelTitel ?: 'Neues Kapitel');
         $k = $svc->addKapitel($this->team(), $this->selectedId, ['titel' => $titel], $parentId);
         $this->neuesKapitelTitel = '';
         $this->selectedKapitelId = $k->id;
@@ -311,8 +314,9 @@ class Index extends Component
             'kapitelAgg' => $kapitel !== null ? $svc->kapitelAggregat($team, $kapitel, $fb?->personen) : null,
             'gesamt' => $fb !== null ? $svc->gesamt($team, $fb) : null,
             'headerPresets' => FoodbookService::headerPresets(),
-            'conceptKandidaten' => $this->conceptSuche !== '' && $this->selectedKapitelId !== null
-                ? $svc->conceptKandidaten($team, $this->conceptSuche) : collect(),
+            'conceptKategorien' => app(\Platform\FoodAlchemist\Services\ConceptService::class)->categoriesFlat($team),
+            'conceptKandidaten' => ($this->conceptSuche !== '' || $this->conceptKategorie !== null) && $this->selectedKapitelId !== null
+                ? $svc->conceptKandidaten($team, $this->conceptSuche, $this->conceptKategorie) : collect(),
         ])->layout('platform::layouts.app');
     }
 

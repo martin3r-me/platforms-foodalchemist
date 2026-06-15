@@ -210,6 +210,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCustomerName::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistRecipeRegeneration::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::class,                 // M11-10
+            \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::class,
         ] as $modelClass) {
             \Illuminate\Support\Facades\Gate::policy($modelClass, \Platform\FoodAlchemist\Policies\FoodAlchemistPolicy::class);
         }
@@ -225,6 +228,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipesSearchTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGetTool::class,
                     \Platform\FoodAlchemist\Tools\VerkaufsrezepteSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbooksGetTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelSearchTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeKlassePostTool::class,
                     \Platform\FoodAlchemist\Tools\UiOpenTool::class,

@@ -53,6 +53,22 @@ it('Foodbook-Editor: anlegen, Kapitel, Concept einfügen, Pax-Gesamtpreis im Coc
         ->and((int) $fb->refresh()->personen)->toBe(100);
 });
 
+it('Foodbook-Editor: kapitelNeu(parentId) legt ein Unterkapitel unter dem Eltern-Kapitel an', function () {
+    Livewire::test(FoodbooksIndex::class)->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+    $comp = Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $fb->id)
+        ->set('neuesKapitelTitel', 'Hauptteil')->call('kapitelNeu');       // Top-Kapitel (parentId = null)
+
+    $top = $fb->kapitel()->whereNull('parent_id')->first();
+    expect($top)->not->toBeNull();
+
+    $comp->call('kapitelNeu', $top->id);                                   // Unterkapitel unter Top
+    $sub = $fb->kapitel()->where('parent_id', $top->id)->first();
+    expect($sub)->not->toBeNull()
+        ->and($sub->parent_id)->toBe($top->id);                            // nicht flach → echtes Unterkapitel
+});
+
 it('Foodbook-Editor: Header-Preis-Block (person) addiert pro Person', function () {
     Livewire::test(FoodbooksIndex::class)->call('neu');
     $fb = FoodAlchemistFoodbook::first();

@@ -8,6 +8,8 @@
             Rezept in der Tabelle anklicken —<br>Details erscheinen hier.
         </div>
     @else
+        {{-- Eingebettet als Editor-Kartei: Kopf/KPI/Beschreibung/Zutaten/Fotos sind dort schon da → ausblenden. --}}
+        @unless($embedded ?? false)
         <div>
             <div class="flex items-start justify-between gap-2">
                 <h3 class="text-[15px] font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-snug">{{ $rezept->name }}</h3>
@@ -89,6 +91,7 @@
             </div>
         @endif
 
+        @endunless
         {{-- R6: Diät · Allergene · Zusatzstoffe — geteiltes Partial (auch im VK-Panel) --}}
         @include('foodalchemist::livewire.recipes.partials.deklaration')
 

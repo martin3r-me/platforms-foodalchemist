@@ -319,11 +319,30 @@ class PaketService
             ->get(['id', 'name', 'vk_netto']);
     }
 
-    /** B2: Basisrezepte als Concept-Position (keine Dish-Klassen-Filter — die hängen an VK-Gerichten). */
-    public function basisKandidaten(Team $team, string $suche, int $limit = 60): Collection
+    /** Pakete als Concept-Position (linke Liste, Umschalter) — Suche über Name/Rolle + Klasse-Filter. */
+    public function paketKandidaten(Team $team, string $suche, array $filter = [], int $limit = 60): Collection
+    {
+        return FoodAlchemistPaket::visibleToTeam($team)
+            ->when($suche !== '', fn ($q) => $q->where(fn ($w) => $w
+                ->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($suche).'%'])
+                ->orWhereRaw('LOWER(COALESCE(rolle, \'\')) LIKE ?', ['%'.mb_strtolower($suche).'%'])))
+            ->when(($filter['klasse'] ?? '') !== '', fn ($q) => $q->where('klasse', $filter['klasse']))
+            ->when(($filter['rolle'] ?? '') !== '', fn ($q) => $q->where('rolle', $filter['rolle']))
+            ->orderBy('name')->limit($limit)
+            ->get(['id', 'name', 'preis_pro_person', 'klasse', 'rolle']);
+    }
+
+    /**
+     * B2: Basisrezepte als Concept-Position (keine Dish-Klassen — die hängen an VK-Gerichten).
+     * Filter wie der Rezept-Browser: Hauptgruppe (via Kategorie→main_group), Kategorie, Niveau.
+     */
+    public function basisKandidaten(Team $team, string $suche, array $filter = [], int $limit = 60): Collection
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->basis()
             ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($suche).'%']))
+            ->when(($filter['hauptgruppe'] ?? null), fn ($q, $hg) => $q->whereHas('kategorie', fn ($k) => $k->where('main_group_id', (int) $hg)))
+            ->when(($filter['kategorie'] ?? null), fn ($q, $kat) => $q->where('kategorie_id', (int) $kat))
+            ->when(($filter['niveau'] ?? '') !== '', fn ($q) => $q->whereHas('niveauEignungen', fn ($n) => $n->where('niveau_slug', $filter['niveau'])))
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'ek_total_eur']);
     }

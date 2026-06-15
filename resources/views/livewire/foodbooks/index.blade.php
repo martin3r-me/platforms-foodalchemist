@@ -38,7 +38,7 @@
                                         class="flex-1 min-w-0 text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['titel'] }}</button>
                                 <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[10px]" title="hoch">▲</button>
                                 <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[10px]" title="runter">▼</button>
-                                <button type="button" wire:click="kapitelNeu(null, {{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[10px]" title="Unterkapitel">+</button>
+                                <button type="button" wire:click="kapitelNeu({{ $kt['id'] }})" class="shrink-0 text-violet-400 hover:text-violet-600 text-xs px-1 leading-none" title="Unterkapitel anlegen">＋</button>
                                 <button type="button" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-[11px]" title="löschen">✕</button>
                             </div>
                         @endforeach
@@ -89,6 +89,13 @@
                         <select wire:model="form.status" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
                     </div>
                 </div>
+                <div>
+                    <div class="flex items-center justify-between">
+                        <label class="{{ $label }}">Briefing / Einleitung (Kundentext)</label>
+                        <button type="button" disabled title="KI-Befüllung folgt — speist sich aus Kunde, Briefing und den enthaltenen Concepts (M11-08, LLM offen)" class="{{ $btnGhostXs }} opacity-50 cursor-not-allowed">✨ KI-Text (folgt)</button>
+                    </div>
+                    <textarea wire:model="form.beschreibung" rows="3" class="{{ $input }}" placeholder="Briefing / Einleitungstext fürs Angebot — später KI-befüllbar aus Kunde + Concepts"></textarea>
+                </div>
                 <div class="flex gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
                     <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhost }} text-red-600 dark:text-red-400">Löschen</button>
@@ -135,10 +142,18 @@
                         </div>
                     </div>
 
-                    {{-- Concept-Picker (KEIN Gericht-Picker — der Concepter ist der Kern) --}}
+                    {{-- Concept-Picker (KEIN Gericht-Picker — der Concepter ist der Kern); FB-1: Filter nach Concept-Kategorie --}}
                     <div class="space-y-1">
-                        <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen + einfügen …" class="{{ $input }}" />
-                        @if($conceptSuche !== '' && $conceptKandidaten->isNotEmpty())
+                        <div class="flex items-center gap-1.5">
+                            <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen + einfügen …" class="{{ $input }} flex-1" />
+                            <select wire:model.live="conceptKategorie" class="{{ $input }} w-44" title="nach Concept-Kategorie filtern">
+                                <option value="">Alle Kategorien</option>
+                                @foreach($conceptKategorien as $kat)
+                                    <option value="{{ $kat['id'] }}">{{ $kat['label'] ?? $kat['name'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        @if(($conceptSuche !== '' || $conceptKategorie !== null) && $conceptKandidaten->isNotEmpty())
                             <div class="space-y-0.5 max-h-44 overflow-y-auto">
                                 @foreach($conceptKandidaten as $ck)
                                     <button type="button" wire:key="ck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})"
@@ -148,6 +163,8 @@
                                     </button>
                                 @endforeach
                             </div>
+                        @elseif($conceptSuche !== '' || $conceptKategorie !== null)
+                            <p class="text-[11px] text-gray-400 px-2 py-1">Keine Concepts für diese Auswahl.</p>
                         @endif
                     </div>
 
@@ -188,8 +205,8 @@
                                     <button type="button" wire:click="blockEbene({{ $block->id }}, -1)" class="text-gray-400 hover:text-violet-500 shrink-0" title="ausrücken">←</button>
                                     <button type="button" wire:click="blockEbene({{ $block->id }}, 1)" class="text-gray-400 hover:text-violet-500 shrink-0" title="einrücken">→</button>
                                     <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="shrink-0 text-[10px] {{ $block->sichtbar ? 'text-gray-400' : 'text-amber-500' }}" title="sichtbar/intern">{{ $block->sichtbar ? '👁' : 'intern' }}</button>
-                                    @if($block->type !== 'concept_ref' && $block->type !== 'spacer')
-                                        <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="shrink-0 text-gray-400 hover:text-violet-500" title="bearbeiten">✎</button>
+                                    @if($block->type !== 'spacer')
+                                        <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="shrink-0 text-gray-400 hover:text-violet-500" title="bearbeiten / Notiz">✎</button>
                                     @endif
                                     <button type="button" wire:click="blockRaus({{ $block->id }})" class="shrink-0 text-gray-400 hover:text-red-500" title="entfernen">✕</button>
                                 </div>
@@ -210,6 +227,7 @@
                                         @else
                                             <input type="text" wire:model="blockForm.kundentext" class="{{ $input }}" placeholder="Kundentext / Untertitel (optional)" />
                                         @endif
+                                        <input type="text" wire:model="blockForm.interne_bemerkung" class="{{ $input }}" placeholder="Interne Notiz (nicht kundensichtbar)" />
                                         <div class="flex gap-2">
                                             <button type="button" wire:click="blockSpeichern" class="{{ $btnPrimary }}">OK</button>
                                             <button type="button" wire:click="$set('editBlockId', null)" class="{{ $btnGhost }}">Abbrechen</button>

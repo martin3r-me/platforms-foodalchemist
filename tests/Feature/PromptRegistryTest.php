@@ -29,6 +29,8 @@ const REGISTRY_SOLL = [
     'vk.plating' => 'A', 'vk.name_putzen' => 'B', 'vk.marketing' => 'A', 'vk.wording' => 'A',
     'vk.behaelter' => 'B', 'vk.regeneration' => 'B', 'vk.servier_vehikel' => 'B',
     'vk.review' => 'A', 'vk.kohaerenz' => 'A', 'vk.teller_heber' => 'A',
+    // Concepter
+    'concept.wording' => 'A',                                         // Concept-übergreifendes Wording (Schreibstil → Position-Namen + Intro)
     // Sonstiges
     'price.plausi' => 'B', 'chat.message' => 'A',
 ];

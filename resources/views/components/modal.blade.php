@@ -79,6 +79,12 @@
                     {{ $actions }}
                 </div>
             @endisset
+            {{-- KPI-Streifen: fix im Kopf (scrollt nie weg) — geteilt über alle Editoren --}}
+            @isset($kpiHeader)
+                <div class="px-6 pb-3 border-t border-black/5 dark:border-white/5 pt-3" data-modal-zone="kpi-header">
+                    {{ $kpiHeader }}
+                </div>
+            @endisset
         </div>
 
         {{-- Körper: scrollt, Sektionen via <x-foodalchemist::modal-section> --}}

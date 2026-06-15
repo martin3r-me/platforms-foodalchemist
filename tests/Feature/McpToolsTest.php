@@ -29,6 +29,7 @@ it('Registry-Smoke: alle Modul-Tools registriert (Naming <modul>.resource.VERB)'
         'foodalchemist.gps.SEARCH', 'foodalchemist.gps.GET',
         'foodalchemist.recipes.SEARCH', 'foodalchemist.recipes.GET',
         'foodalchemist.verkaufsrezepte.SEARCH', 'foodalchemist.artikel.SEARCH',
+        'foodalchemist.foodbook.GET',
         'foodalchemist.recipe_klasse.POST',
     ] as $name) {
         expect($this->registry->get($name))->not->toBeNull($name);
@@ -52,6 +53,34 @@ it('Lese-Tools: recipes.SEARCH/GET team-scoped, VK-Rezepte bleiben draußen (Sco
     $vkSuche = $this->registry->get('foodalchemist.verkaufsrezepte.SEARCH')->execute(['q' => 'Fond'], $this->kontext);
     expect($vkSuche->data['total'])->toBe(1)
         ->and($vkSuche->data['verkaufsrezepte'][0]['name'])->toBe('HG: Fond-Teller');
+});
+
+it('M11-11: foodbook.GET liefert Kopf + Kapitel/Blöcke + aggregierten Angebotspreis (team-scoped)', function () {
+    $pakete = app(\Platform\FoodAlchemist\Services\PaketService::class);
+    $concepts = app(\Platform\FoodAlchemist\Services\ConceptService::class);
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+
+    $paket = $pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
+    $pakete->update($this->rootTeam, $paket->id, ['preis_pro_person' => 4.50]);
+    $concept = $concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
+    $slot = $concepts->addSlot($this->rootTeam, $concept->id, ['rolle' => 'Vorspeise']);
+    $concepts->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $paket->id]);
+
+    $fb = $foodbooks->create($this->rootTeam, ['bezeichnung' => 'Angebot Adler', 'kunde' => 'Hotel Adler', 'personen' => 100]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Menü']);
+    $foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
+
+    $res = $this->registry->get('foodalchemist.foodbook.GET')->execute(['id' => $fb->id], $this->kontext);
+    expect($res->success)->toBeTrue()
+        ->and($res->data['bezeichnung'])->toBe('Angebot Adler')
+        ->and($res->data['kunde'])->toBe('Hotel Adler')
+        ->and($res->data['preis']['vk_pro_person'])->toBe(4.50)
+        ->and($res->data['preis']['gesamt_vk'])->toBe(450.00)               // 4,50 × 100 Pax
+        ->and($res->data['kapitel'][0]['titel'])->toBe('Menü')
+        ->and($res->data['kapitel'][0]['blocks'][0]['name'])->toBe('Grill-Buffet');
+
+    $miss = $this->registry->get('foodalchemist.foodbook.GET')->execute(['id' => 999999], $this->kontext);
+    expect($miss->success)->toBeFalse()->and($miss->errorCode)->toBe('NOT_FOUND');
 });
 
 it('Schreib-Tool: ohne accept nur Vorschlag; accept=true schreibt via GL-07; manual blockt als Tool-Error', function () {

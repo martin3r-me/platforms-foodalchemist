@@ -179,6 +179,7 @@ class RecipeService
             'fertigungstiefe' => array_key_exists('fertigungstiefe', $in) ? (($in['fertigungstiefe'] ?? '') ?: null) : $recipe->fertigungstiefe,
             'arbeitszeit_min' => array_key_exists('arbeitszeit_min', $in) ? $in['arbeitszeit_min'] : $recipe->arbeitszeit_min,
             'yield_kg_manual' => array_key_exists('yield_kg_manual', $in) ? $in['yield_kg_manual'] : $recipe->yield_kg_manual,
+            'ertrag_stueck' => array_key_exists('ertrag_stueck', $in) ? (($in['ertrag_stueck'] ?? '') !== '' ? $in['ertrag_stueck'] : null) : $recipe->ertrag_stueck,
             'beschreibung' => array_key_exists('beschreibung', $in) ? (($in['beschreibung'] ?? '') ?: null) : $recipe->beschreibung,
             // UI-Audit (D-5 §4.2): Eigenschaften/Zubereitung/Notizen/Status im Editor pflegbar
             'temperatur' => array_key_exists('temperatur', $in) ? (($in['temperatur'] ?? '') ?: null) : $recipe->temperatur,

@@ -44,7 +44,27 @@ class Editor extends Component
     /** Welche Position ihre Befüllungs-/Picker-Zeile aufgeklappt hat (Tabellen-Editor). */
     public ?int $fillOpenId = null;
 
+    /** Gezieltes Einfügen: hinter dieser Position landet die nächste neue Position (null = ans Ende). */
+    public ?int $einfuegenNachId = null;
+
     public string $gerichtSuche = '';
+
+    public string $basisSuche = '';   // Phase 3: linke Seiten-Liste (Basisrezepte)
+
+    // Kombi-Suche (wie Gerichte-Editor): filtert BEIDE Seiten-Listen gleichzeitig.
+    public string $kombiSuche = '';
+
+    // Linke Seiten-Liste: umschaltbar Basisrezept ⇄ Paket (Pakete bei 300+ über Such-/Filter-Liste einfügen)
+    public string $linkeListe = 'basisrezept';   // basisrezept | paket
+
+    public string $paketKlasse = '';
+
+    // Basisrezepte-Liste: Filter wie im Rezept-Browser (Hauptgruppe→Kategorie + Niveau)
+    public ?int $basisHg = null;
+
+    public ?int $basisKat = null;
+
+    public string $basisNiveau = '';
 
     // B2: Quelle des Position-Pickers — VK-Gericht ODER Basisrezept (keine Produkte/GPs).
     public string $pickTyp = 'gericht';   // gericht | basisrezept
@@ -81,14 +101,17 @@ class Editor extends Component
 
     public string $neuerSektor = '';
 
+    /** Beim Öffnen eines Pakets aus „+ Paket" gemerkt → „zurück zum Concept" springt dorthin. */
+    public ?int $rueckSprungConceptId = null;
+
     public ?string $fehler = null;
 
     #[On('concepter-editor.oeffnen')]
     public function oeffnen(string $type, ?int $id): void
     {
-        $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'gerichtSuche', 'pickTyp',
+        $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'einfuegenNachId', 'linkeListe', 'paketKlasse', 'basisSuche', 'kombiSuche', 'basisHg', 'basisKat', 'basisNiveau', 'gerichtSuche', 'pickTyp',
             'paketGerichtSuche', 'pickHg', 'pickKlasse', 'pickGeschmack',
-            'zielModus', 'zielPreis', 'zielVorschlag', 'fehler']);
+            'zielModus', 'zielPreis', 'zielVorschlag', 'rueckSprungConceptId', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
         $this->id = $id;
         $this->tab = 'aufbau';
@@ -123,9 +146,10 @@ class Editor extends Component
                 'brief' => $c->brief ?? '', 'diaet_vorgabe' => $c->diaet_vorgabe ?? '',
                 'struktur_vorgabe' => $c->struktur_vorgabe ?? '', 'saison' => $c->saison ?? '',
                 'zielgruppe' => $c->zielgruppe ?? '', 'zielpreis_pro_person' => $c->zielpreis_pro_person,
+                'preis_modus' => $c->preis_modus ?? 'auto', 'preis_pro_person_manuell' => $c->preis_pro_person_manuell,
                 'note' => $c->note ?? '',
             ];
-            $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id]])->all();
+            $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id, 'wording' => $s->wording ?? '']])->all();
             $this->blockForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => [
                 'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
                 'preis_wert' => $s->preis_wert, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
@@ -158,6 +182,77 @@ class Editor extends Component
             $this->fehler = $e->getMessage();
 
             return;
+        }
+        $this->fehler = null;
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    /** Concept-VK auto ⇄ manuell umschalten (und sofort sichern, damit Cockpit/KPI folgen). */
+    public function setPreisModus(string $modus): void
+    {
+        if ($this->type !== 'concepts') {
+            return;
+        }
+        $this->form['preis_modus'] = in_array($modus, ['auto', 'manuell'], true) ? $modus : 'auto';
+        $this->speichern();
+    }
+
+    /** Inline-Pflege des Brand-Voice-Anzeigenamens einer Position. */
+    public function wordingSpeichern(int $slotId): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        app(ConceptService::class)->setSlotWording($this->team(), $slotId, $this->slotForm[$slotId]['wording'] ?? null);
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    /**
+     * Concept-übergreifendes Wording (✨): erzeugt im gewählten Schreibstil über ALLE Positionen
+     * stimmig je Position einen Brand-Voice-Namen + einen Konzept-Einleitungstext. KI über das
+     * Gateway (FakeAiProvider in Sandbox/Tests; echter Text erst mit LLM-Key — Muster wie VkModal::ki).
+     */
+    public function wordingGenerieren(): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        $team = $this->team();
+        $concepts = app(ConceptService::class);
+        $concept = $concepts->detail($team, $this->id);
+        if ($concept === null) {
+            return;
+        }
+        $stil = $this->form['schreibstil_id'] ?? null;
+        $kontext = [
+            'concept' => $concept->name,
+            'anlass' => $concept->anlass,
+            'klasse' => $concept->klasse,
+            'schreibstil' => $stil ? optional(FoodAlchemistWritingStyle::find($stil))->name : null,
+            'positionen' => $concept->slots
+                ->filter(fn ($s) => $s->vk_recipe_id !== null && $s->gericht)
+                ->map(fn ($s) => ['slot_id' => $s->id, 'name' => $s->gericht->name, 'vk_wording_standard' => $s->gericht->vk_wording_standard ?? null])
+                ->values()->all(),
+        ];
+        try {
+            $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('concept.wording', $kontext);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $intro = $vorschlag->werte['intro'] ?? null;
+        if (is_string($intro) && trim($intro) !== '') {
+            $this->form['beschreibung'] = trim($intro);
+            $concepts->update($team, $this->id, ['beschreibung' => trim($intro)]);
+        }
+        foreach (($vorschlag->werte['slots'] ?? []) as $slotId => $text) {
+            if (is_string($text) && trim($text) !== '') {
+                $concepts->setSlotWording($team, (int) $slotId, trim($text));
+                if (isset($this->slotForm[(int) $slotId])) {
+                    $this->slotForm[(int) $slotId]['wording'] = trim($text);
+                }
+            }
         }
         $this->fehler = null;
         $this->dispatch('concepter-gespeichert', id: $this->id);
@@ -255,6 +350,12 @@ class Editor extends Component
         }
     }
 
+    /** Basisrezepte-Filter: bei Hauptgruppen-Wechsel die Kategorie zurücksetzen. */
+    public function updatedBasisHg(): void
+    {
+        $this->basisKat = null;
+    }
+
     /** Picker-Quelle wechseln: VK-Gericht ⇄ Basisrezept (B2). */
     public function pickTypWaehle(string $typ): void
     {
@@ -291,7 +392,7 @@ class Editor extends Component
     public function fuelleGericht(int $slotId, int $vkRecipeId, string $typ = 'gericht'): void
     {
         app(ConceptService::class)->fillSlot($this->team(), $slotId, [
-            'vk_recipe_id' => $vkRecipeId, 'menge' => 1,
+            'vk_recipe_id' => $vkRecipeId, 'menge' => 1, 'einheit_vocab_id' => $this->portionEinheitId(),
             'type' => $typ === 'basisrezept' ? 'basisrezept' : 'gericht',
         ]);
         $this->fillSlotId = null;
@@ -303,6 +404,137 @@ class Editor extends Component
     {
         app(ConceptService::class)->fillSlot($this->team(), $slotId, []);
         $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    /** Phase 3: aus den Seiten-Listen (Basisrezepte links / VK-Gerichte rechts) direkt eine neue Position anlegen. */
+    public function positionEinfuegen(string $typ, int $id): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        $neu = $this->neuePosition($typ, $id, $this->einfuegenNachId);
+        // Folge-Einfügungen ans selbe Ziel stapeln in natürlicher Reihenfolge (hinter die zuletzt eingefügte).
+        if ($this->einfuegenNachId !== null && $neu !== null) {
+            $this->einfuegenNachId = $neu;
+        }
+    }
+
+    /** Gezieltes Einfügen per Drag aus der Liste: neue Position direkt HINTER $afterSlotId. */
+    public function positionDrop(string $typ, int $id, int $afterSlotId): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        $this->neuePosition($typ, $id, $afterSlotId);
+    }
+
+    /** Inline-Drag-Reorder: bestehende Position $slotId direkt HINTER $afterSlotId verschieben. */
+    public function positionVerschieben(int $slotId, int $afterSlotId): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null || $slotId === $afterSlotId) {
+            return;
+        }
+        $this->positionNach(app(ConceptService::class), $slotId, $afterSlotId);
+        $this->reloadSlotForm();
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    /** „+ Paket": neue Position anlegen, frisches Paket erstellen, einfügen und direkt zum Bearbeiten öffnen. */
+    public function neuesPaketAlsPosition(): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        $team = $this->team();
+        $svc = app(ConceptService::class);
+        $slot = $svc->addSlot($team, $this->id, []);
+        if ($this->einfuegenNachId !== null) {
+            $this->positionNach($svc, $slot->id, $this->einfuegenNachId);
+            $this->einfuegenNachId = $slot->id;
+        }
+        $paket = app(PaketService::class)->create($team, ['name' => 'Neues Paket']);
+        $svc->fillSlot($team, $slot->id, ['paket_id' => $paket->id]);
+        $conceptId = $this->id;
+        $this->dispatch('concepter-gespeichert', id: $conceptId);
+        // direkt das neue Paket im selben Modal öffnen (Gerichte schnüren) …
+        $this->oeffnen('pakete', $paket->id);
+        // … und den Rückweg merken (oeffnen hat zurückgesetzt → danach setzen).
+        $this->rueckSprungConceptId = $conceptId;
+    }
+
+    /** In ein bestehendes Paket reinspringen (Paket-Editor öffnen) — Rückweg ins Concept merken. */
+    public function paketOeffnen(int $paketId): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        $conceptId = $this->id;
+        $this->oeffnen('pakete', $paketId);
+        $this->rueckSprungConceptId = $conceptId;
+    }
+
+    /** Aus dem Paket-Editor zurück ins auslösende Concept (Kopf des Pakets vorher sichern). */
+    public function zurueckZumConcept(): void
+    {
+        $ziel = $this->rueckSprungConceptId;
+        if ($this->type === 'pakete' && $this->id !== null) {
+            $this->speichern();
+        }
+        if ($ziel !== null) {
+            $this->oeffnen('concepts', $ziel);
+        }
+    }
+
+    /** Ziel-Position fürs Einfügen setzen/abwählen (die nächste neue Position landet darunter). */
+    public function zielSetzen(int $slotId): void
+    {
+        $this->einfuegenNachId = $this->einfuegenNachId === $slotId ? null : $slotId;
+    }
+
+    /**
+     * Default-Einheit „portion" (dimension=count) — wird beim Einfügen mitgegeben, damit
+     * Menge/EK von Anfang an wohldefiniert sind (vorher „—" → kein Übernehmen der Einheit).
+     */
+    private function portionEinheitId(): ?int
+    {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::visibleToTeam($this->team())
+            ->where('slug', 'portion')->value('id');
+    }
+
+    /** Legt eine gefüllte Position (Paket/Gericht/Basisrezept) an und sortiert sie ggf. hinter $afterId ein. */
+    private function neuePosition(string $typ, int $id, ?int $afterId): ?int
+    {
+        $svc = app(ConceptService::class);
+        $slot = $svc->addSlot($this->team(), $this->id, []);
+        if ($typ === 'paket') {
+            $svc->fillSlot($this->team(), $slot->id, ['paket_id' => $id]);
+        } else {
+            $svc->fillSlot($this->team(), $slot->id, [
+                'vk_recipe_id' => $id, 'menge' => 1, 'einheit_vocab_id' => $this->portionEinheitId(),
+                'type' => $typ === 'basisrezept' ? 'basisrezept' : 'gericht',
+            ]);
+        }
+        if ($afterId !== null) {
+            $this->positionNach($svc, $slot->id, $afterId);
+        }
+        $this->reloadSlotForm();
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+
+        return $slot->id;
+    }
+
+    /** Sortiert $slotId direkt hinter $afterId ein (über reorderSlots mit neu gebauter Reihenfolge). */
+    private function positionNach(ConceptService $svc, int $slotId, int $afterId): void
+    {
+        $ids = $svc->detail($this->team(), $this->id)->slots->pluck('id')->map(fn ($x) => (int) $x)->all();
+        $ids = array_values(array_filter($ids, fn ($x) => $x !== $slotId));
+        $pos = array_search($afterId, $ids, true);
+        if ($pos === false) {
+            $ids[] = $slotId;
+        } else {
+            array_splice($ids, $pos + 1, 0, [$slotId]);
+        }
+        $svc->reorderSlots($this->team(), $this->id, $ids);
     }
 
     /**
@@ -348,7 +580,7 @@ class Editor extends Component
     private function reloadSlotForm(): void
     {
         $c = app(ConceptService::class)->detail($this->team(), $this->id);
-        $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id]])->all() : [];
+        $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id, 'wording' => $s->wording ?? '']])->all() : [];
         $this->blockForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => [
             'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
             'preis_wert' => $s->preis_wert, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
@@ -546,6 +778,19 @@ class Editor extends Component
                 foreach ($concept->slots as $slot) {
                     $tauschbar[$slot->id] = $concepts->tauschbarePakete($team, $slot);
                 }
+                // Phase 3: persistente Seiten-Listen — links Basisrezepte ODER Pakete (Umschalter), rechts VK-Gerichte.
+                // Kombi-Suche (wie Gerichte-Editor) filtert beide Seiten; sonst die jeweilige Listen-Suche.
+                $linkeSuche = $this->kombiSuche !== '' ? $this->kombiSuche : $this->basisSuche;
+                $rechteSuche = $this->kombiSuche !== '' ? $this->kombiSuche : $this->gerichtSuche;
+                $basisListe = $this->linkeListe === 'basisrezept'
+                    ? $pakete->basisKandidaten($team, $linkeSuche, [
+                        'hauptgruppe' => $this->basisHg, 'kategorie' => $this->basisKat, 'niveau' => $this->basisNiveau,
+                    ])
+                    : collect();
+                $paketListe = $this->linkeListe === 'paket'
+                    ? $pakete->paketKandidaten($team, $linkeSuche, ['klasse' => $this->paketKlasse])
+                    : collect();
+                $gerichtListe = $pakete->gerichtKandidaten($team, $rechteSuche, $pickFilter);
                 if ($this->fillSlotId !== null) {
                     if ($this->pickTyp === 'basisrezept') {
                         $kandidaten = $this->gerichtSuche !== '' ? $pakete->basisKandidaten($team, $this->gerichtSuche) : collect();
@@ -583,6 +828,16 @@ class Editor extends Component
             'kalkulation' => $kalkulation,
             'tauschbar' => $tauschbar,
             'kandidaten' => $kandidaten,
+            'basisListe' => $basisListe ?? collect(),
+            'paketListe' => $paketListe ?? collect(),
+            'paketKlassenListe' => $this->type === 'concepts' ? $pakete->klassen($team) : [],
+            'gerichtListe' => $gerichtListe ?? collect(),
+            'basisHauptgruppen' => $this->type === 'concepts' ? app(\Platform\FoodAlchemist\Services\RecipeService::class)->mainGroups($team) : collect(),
+            'basisKategorien' => ($this->type === 'concepts' && $this->basisHg !== null)
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::where('main_group_id', $this->basisHg)->orderBy('bezeichnung')->get(['id', 'bezeichnung'])
+                : collect(),
+            'basisNiveaus' => [['slug' => 'haute_cuisine', 'label' => 'Haute'], ['slug' => 'gehoben', 'label' => 'Gehoben'], ['slug' => 'klassisch', 'label' => 'Klassisch']],
+            'typFarben' => app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->typFarben($team),
             'paketKandidaten' => $paketKandidaten,
             'sektorSlugs' => $concept !== null ? $concepts->sektorEignungSlugs($concept) : [],
             'kategorienFlat' => $this->type === 'concepts' ? $concepts->categoriesFlat($team) : [],

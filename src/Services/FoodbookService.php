@@ -68,6 +68,7 @@ class FoodbookService
             'jahr' => $in['jahr'] ?? null,
             'personen' => $in['personen'] ?? null,
             'status' => $in['status'] ?? 'draft',
+            'beschreibung' => $in['beschreibung'] ?? null,
         ]);
     }
 
@@ -428,12 +429,16 @@ class FoodbookService
 
     // ── Picker (für den Editor) ─────────────────────────────────────────────
 
-    /** Concepts (echte, keine Vorlagen) für den concept_ref-Picker. */
-    public function conceptKandidaten(Team $team, string $suche, int $limit = 20): Collection
+    /**
+     * Concepts (echte, keine Vorlagen) für den concept_ref-Picker — optional gefiltert nach
+     * Concept-Kategorie (descendant-inklusiv, FB-1/GT-FB-7).
+     */
+    public function conceptKandidaten(Team $team, string $suche, ?int $categoryId = null, int $limit = 20): Collection
     {
         return FoodAlchemistConcept::visibleToTeam($team)->echte()
             ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'preis_pro_person_cache']);
+            ->when($categoryId !== null, fn ($q) => $q->whereIn('category_id', $this->concepts->descendantIds($team, $categoryId)))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'preis_pro_person_cache', 'category_id']);
     }
 
     /** Einzelne Gerichte (VK-Rezepte) für den recipe_ref-Picker. */
@@ -442,6 +447,39 @@ class FoodbookService
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'vk_netto']);
+    }
+
+    /**
+     * M11-08: Andock-Kontext für die spätere KI-Text-Generierung (Einleitung/Kapitel) —
+     * assembliert NUR die Eingaben, KEIN LLM-Call (Befüllung extern/später, blockiert).
+     * Quelle: Kunde + Briefing (beschreibung) + die referenzierten Concepts + Kapitel-Titel.
+     * Der echte Canvas-Wissen-Link folgt mit D10; bis dahin ist `briefing` der lose Text.
+     *
+     * @return array{kunde: ?string, briefing: ?string, personen: ?int, concepts: list<string>, kapitel: list<string>}
+     */
+    public function kiAndockKontext(Team $team, int $foodbookId): array
+    {
+        $fb = $this->detail($team, $foodbookId);
+        if ($fb === null) {
+            return ['kunde' => null, 'briefing' => null, 'personen' => null, 'concepts' => [], 'kapitel' => []];
+        }
+
+        $conceptNamen = collect();
+        foreach ($fb->kapitel as $k) {
+            foreach ($k->blocks as $b) {
+                if ($b->type === 'concept_ref' && $b->concept) {
+                    $conceptNamen->push($b->concept->name);
+                }
+            }
+        }
+
+        return [
+            'kunde' => $fb->kunde,
+            'briefing' => $fb->beschreibung,
+            'personen' => $fb->personen,
+            'concepts' => $conceptNamen->unique()->values()->all(),
+            'kapitel' => $fb->kapitel->pluck('titel')->values()->all(),
+        ];
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

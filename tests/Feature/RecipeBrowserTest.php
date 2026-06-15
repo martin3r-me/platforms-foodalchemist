@@ -74,3 +74,16 @@ it('DetailPanel respektiert D1: fremdes Team-Rezept bleibt unsichtbar', function
         ->dispatch('recipe-selected', id: $kindA->id)
         ->assertDontSee('Kind-A-Spezial');
 });
+
+it('Punkt 5: DetailPanel embedded = Detail-Sektionen ohne KPI/Zutaten-Doppelung + ignoriert recipe-selected', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
+
+    $c = Livewire::test(DetailPanel::class, ['recipeId' => $this->bbq->id, 'embedded' => true])
+        ->assertSet('embedded', true)
+        ->assertSee('Vegan ✕')          // Deklaration-Sektion sichtbar (Detail-Inhalt)
+        ->assertDontSee('0,387 kg')      // Yield/KPI-Karte ausgeblendet (im Editor schon im Kopf)
+        ->assertDontSee('Zutaten (');    // Zutaten-Liste ausgeblendet (im Aufbau-Tab)
+
+    // Eingebettet bleibt auf dem Editor-Rezept, ignoriert Browser-Auswahl.
+    $c->dispatch('recipe-selected', id: 999999)->assertSet('recipeId', $this->bbq->id);
+});

@@ -30,6 +30,7 @@ class FoodAlchemistConcept extends Model
         'uuid' => 'string',
         'is_vorlage' => 'boolean',
         'preis_pro_person_cache' => 'decimal:2',
+        'preis_pro_person_manuell' => 'decimal:2',   // manueller Concept-VK (preis_modus=manuell)
         // M10R-1: VK-Parität + KI-Brief + Aggregat-Caches
         'zielpreis_pro_person' => 'decimal:2',
         'ek_pro_person_cache' => 'decimal:4',

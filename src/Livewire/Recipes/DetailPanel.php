@@ -19,9 +19,13 @@ class DetailPanel extends Component
 {
     public ?int $recipeId = null;
 
-    public function mount(?int $recipeId = null): void
+    /** Eingebettet als Editor-Kartei: blendet die im Editor redundante KPI/Beschreibung/Zutaten aus. */
+    public bool $embedded = false;
+
+    public function mount(?int $recipeId = null, bool $embedded = false): void
     {
         $this->recipeId = $recipeId;
+        $this->embedded = $embedded;
     }
 
     /** @var array<string, bool> M5-04/05: lazy Pairing-Sektionen (Kontext-Erhalt beim Wechsel) */
@@ -32,6 +36,9 @@ class DetailPanel extends Component
     #[On('recipe-selected')]
     public function zeige(int $id): void
     {
+        if ($this->embedded) {
+            return; // eingebettet als Editor-Kartei: bleibt auf dem Editor-Rezept, ignoriert Browser-Auswahl
+        }
         $this->recipeId = $id;
         $this->ankerSuche = '';
     }

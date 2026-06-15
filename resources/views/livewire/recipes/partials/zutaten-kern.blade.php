@@ -1,4 +1,7 @@
 {{-- P-8-Zutaten-Kern — EINE Quelle für Modal (M4-07) und Voll-Editor (Editor-Parität) --}}
+    {{-- Phase 5: Typ-Farben (Settings) als Inline-Style — Text = Hex, Hintergrund = Hex+1a (10%). --}}
+    @php($typFarben = $typFarben ?? \Platform\FoodAlchemist\Services\TeamSettingsService::TYP_FARBEN_DEFAULTS)
+    @php($typStyle = fn (string $t) => isset($typFarben[$t]) ? 'color:' . $typFarben[$t] . ';background-color:' . $typFarben[$t] . '1a' : '')
     @if($fehler !== null)
         <p class="text-xs text-rose-600 dark:text-rose-400 mb-3" data-editor-fehler>{{ $fehler }}</p>
     @endif
@@ -46,9 +49,11 @@
             <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1" data-gp-liste>
                 <template x-for="ziel in gpListe" :key="'bg' + ziel.id">
                     <div class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px]">
-                        <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider bg-violet-500/10 text-violet-600 dark:text-violet-300">GP</span>
-                        <span class="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-200" x-text="ziel.name" :title="ziel.name"></span>
+                        <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gp') }}">GP</span>
+                        <span class="min-w-0 flex-1 break-words leading-snug text-gray-700 dark:text-gray-200" x-text="ziel.name" :title="ziel.name"></span>
                         <span class="shrink-0 text-[10px] text-gray-400 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
+                        <button type="button" x-show="ziel.id" @click="Livewire.dispatch('gp-modal.oeffnen', { id: ziel.id })"
+                                class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Produkt einsehen">📦</button>
                         <button type="button" @click="parke(ziel)" data-parke
                                 class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none"
                                 title="übernehmen → Menge eingeben">+</button>
@@ -59,6 +64,33 @@
             </div>
         </aside>
         <div class="flex-1 min-w-0">
+        {{-- Such-/Park-Zeile FIX oben (sticky) — filtert beide Seitenspalten; die Tabelle scrollt darunter --}}
+        <div class="sticky top-0 z-10 mb-3 rounded-lg bg-white/90 dark:bg-gray-900/90 backdrop-blur border border-black/5 dark:border-white/10 px-3 py-2" data-add-zeile>
+            <div x-show="geparkt === null" class="flex items-center gap-2">
+                <input type="search" x-model="browseQ" @input.debounce.300ms="sucheGetippt()"
+                       placeholder="Suchen — filtert Produkte UND Rezepte … (Übernehmen per [+] in den Spalten)"
+                       class="{{ $input }} !py-1 flex-1" data-browse-suche />
+            </div>
+            <div x-show="geparkt !== null" x-cloak class="flex items-center gap-2" data-park-zeile>
+                <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider"
+                      :style="geparkt?.typ === 'gp' ? '{{ $typStyle('gp') }}' : '{{ $typStyle('basisrezept') }}'"
+                      x-text="geparkt?.typ === 'gp' ? 'GP' : 'Rezept'"></span>
+                <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-900 dark:text-gray-100" x-text="geparkt?.name" data-park-name></span>
+                <input type="text" x-model="neu.menge" @keydown.enter.prevent="einfuegen()" placeholder="Menge"
+                       class="{{ $input }} !w-20 !py-1 text-right" data-park-menge />
+                <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]" data-park-einheit>
+                    @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
+                </select>
+                <label class="inline-flex items-center gap-1 text-[11px] text-gray-400 shrink-0">
+                    <input type="checkbox" x-model="neu.is_optional" class="rounded border-gray-300" /> optional
+                </label>
+                <button type="button" @click="einfuegen()" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-park-einfuegen>Einfügen ⏎</button>
+                <button type="button" @click="verwerfen()" class="{{ $btnGhostXs }} shrink-0" title="Verwerfen" data-park-verwerfen>✕</button>
+            </div>
+            <p class="text-[10px] text-gray-400 mt-1">Erst Produkt/Rezept per [+] wählen — Einheit kommt automatisch mit, dann Menge + Enter (§1.2)</p>
+            <button type="button" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 mt-1" @click="garverluste()" data-garverlust-ki
+                    title="M4-11: KI-Schätzung je Zutat (GL-07 — geschrieben erst beim Speichern, quelle=ki)">✨ Garverluste vorschlagen</button>
+        </div>
         <div class="overflow-x-auto">{{-- R18: Mitte scrollt intern statt unter die Seitenspalten zu laufen --}}
         <table class="{{ $table }} border-collapse">
             {{-- R5: BIS-Spalte raus (Dominique) — menge_max bleibt in den Daten erhalten; 3 EK-Sichten statt einer --}}
@@ -116,6 +148,9 @@
                             </template>
                             <button type="button" x-show="zeile.gp_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Lieferantenartikel hinter dem GP (Peek)"
                                     @click="peek(zeile)" data-gp-peek>📦</button>
+                            {{-- Concepter-Logik überall: Basisrezept als Fenster öffnen (kein Sprung), eigenes Symbol --}}
+                            <button type="button" x-show="zeile.referenced_recipe_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Rezept einsehen"
+                                    @click="Livewire.dispatch('recipe-modal.oeffnen', { id: zeile.referenced_recipe_id })" data-rez-oeffnen>📖</button>
                         </td>
                         @if($vkKontext)
                             <td class="{{ $td }} !px-2 !py-0.5">
@@ -198,35 +233,7 @@
         </table>
         </div>
 
-        {{-- R18: Kombinierte Such-/Anzeigezeile — EIN Feld, zwei Eingangswege (Spec):
-             tippen = Textfilter auf BEIDE Seitenspalten · per [+] befüllt = Mengen-Eingabe
-             fürs geparkte Ziel (Einheit kommt vom Produkt, Enter fügt ein). --}}
-        <div class="mt-3 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-add-zeile>
-            <div x-show="geparkt === null" class="flex items-center gap-2">
-                <input type="search" x-model="browseQ" @input.debounce.300ms="sucheGetippt()"
-                       placeholder="Suchen — filtert Produkte UND Rezepte … (Übernehmen per [+] in den Spalten)"
-                       class="{{ $input }} !py-1 flex-1" data-browse-suche />
-            </div>
-            <div x-show="geparkt !== null" x-cloak class="flex items-center gap-2" data-park-zeile>
-                <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider"
-                      :class="geparkt?.typ === 'gp' ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'"
-                      x-text="geparkt?.typ === 'gp' ? 'GP' : 'Rezept'"></span>
-                <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-900 dark:text-gray-100" x-text="geparkt?.name" data-park-name></span>
-                <input type="text" x-model="neu.menge" @keydown.enter.prevent="einfuegen()" placeholder="Menge"
-                       class="{{ $input }} !w-20 !py-1 text-right" data-park-menge />
-                <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]" data-park-einheit>
-                    @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
-                </select>
-                <label class="inline-flex items-center gap-1 text-[11px] text-gray-400 shrink-0">
-                    <input type="checkbox" x-model="neu.is_optional" class="rounded border-gray-300" /> optional
-                </label>
-                <button type="button" @click="einfuegen()" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-park-einfuegen>Einfügen ⏎</button>
-                <button type="button" @click="verwerfen()" class="{{ $btnGhostXs }} shrink-0" title="Verwerfen" data-park-verwerfen>✕</button>
-            </div>
-            <p class="text-[10px] text-gray-400 mt-1">Erst Produkt/Rezept per [+] wählen — Einheit kommt automatisch mit, dann Menge + Enter (§1.2)</p>
-            <button type="button" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 mt-1" @click="garverluste()" data-garverlust-ki
-                    title="M4-11: KI-Schätzung je Zutat (GL-07 — geschrieben erst beim Speichern, quelle=ki)">✨ Garverluste vorschlagen</button>
-        </div>
+        {{-- Such-/Park-Zeile ist jetzt sticky am Anfang der Mittelspalte (oben). --}}
 
         {{-- R4-Fix: dieser Block saß IM Picker-Dropdown (x-show) — der Button war praktisch nie sichtbar --}}
         @if($eingebettet)
@@ -261,12 +268,14 @@
             <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1" data-rez-liste>
                 <template x-for="ziel in rezListe" :key="'br' + ziel.id">
                     <div class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-emerald-500/5 text-[11px]">
-                        <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">REZ</span>
+                        <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('basisrezept') }}">REZ</span>
                         {{-- Niveau-Farbpunkt (haute=violett · gehoben=amber · klassisch=blau) --}}
                         <span class="shrink-0 w-1.5 h-1.5 rounded-full" x-show="(ziel.niveaus ?? []).length > 0"
                               :class="niveauFarbe(ziel.niveaus?.[0])" :title="(ziel.niveaus ?? []).join(' · ')"></span>
-                        <span class="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-200" x-text="ziel.name.replace('↳ ', '')" :title="ziel.name"></span>
+                        <span class="min-w-0 flex-1 break-words leading-snug text-gray-700 dark:text-gray-200" x-text="ziel.name.replace('↳ ', '')" :title="ziel.name"></span>
                         <span class="shrink-0 text-[10px] text-gray-400 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
+                        <button type="button" x-show="ziel.id" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: ziel.id })"
+                                class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Rezept einsehen">📖</button>
                         <button type="button" @click="parke(ziel)" data-parke
                                 class="shrink-0 px-1 rounded font-medium text-emerald-500 hover:bg-emerald-500/15 leading-none"
                                 title="übernehmen → Menge eingeben">+</button>

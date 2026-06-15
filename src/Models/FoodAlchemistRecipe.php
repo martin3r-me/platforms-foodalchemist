@@ -36,6 +36,7 @@ class FoodAlchemistRecipe extends Model
         'is_user_stub' => 'boolean',
         'yield_kg' => 'decimal:3',
         'yield_kg_manual' => 'decimal:3',
+        'ertrag_stueck' => 'decimal:2',   // Basisrezept-Ertrag in Stück (kg↔Stück)
         'ek_total_eur' => 'decimal:4',
         'ek_per_kg_eur' => 'decimal:4',
         'nebenkosten_eur' => 'decimal:4',

@@ -65,3 +65,43 @@ it('Settings-Sektion speichert; ungültiger Slug wird genullt', function () {
     Livewire::test(Kueche::class)->set('kuechenTyp', 'quatsch')->call('speichern');
     expect(app(TeamSettingsService::class)->kuechenTyp($this->rootTeam))->toBeNull();
 });
+
+it('Phase 5: Typ-Farben — Defaults ohne Config, valide Hex überschreiben, Müll fällt zurück', function () {
+    $svc = app(TeamSettingsService::class);
+
+    // ohne Konfiguration → Defaults
+    expect($svc->typFarben($this->rootTeam))->toBe(TeamSettingsService::TYP_FARBEN_DEFAULTS);
+
+    // valide Hex überschreiben (case-insensitiv → lowercase), Müll + Teil-Config fallen auf Default
+    $svc->update($this->rootTeam, ['typ_farben' => [
+        'gp' => '#AABBCC',          // valide, wird lowercased
+        'basisrezept' => 'rot',     // ungültig → Default
+        // 'gericht' fehlt          // → Default
+        'fremd' => '#000000',       // unbekannter Key → ignoriert
+    ]]);
+
+    expect($svc->typFarben($this->rootTeam))->toBe([
+        'gp' => '#aabbcc',
+        'basisrezept' => TeamSettingsService::TYP_FARBEN_DEFAULTS['basisrezept'],
+        'gericht' => TeamSettingsService::TYP_FARBEN_DEFAULTS['gericht'],
+    ]);
+});
+
+it('Phase 5: Settings-UI speichert valide Farben und säubert ungültige', function () {
+    Livewire::test(Kueche::class)
+        ->set('typFarben.gp', '#123456')
+        ->set('typFarben.basisrezept', 'kaputt')
+        ->set('typFarben.gericht', '#ABCDEF')
+        ->call('speichern')
+        ->assertSet('meldung', fn ($m) => str_contains((string) $m, 'Gespeichert'));
+
+    expect(app(TeamSettingsService::class)->typFarben($this->rootTeam))->toBe([
+        'gp' => '#123456',
+        'basisrezept' => TeamSettingsService::TYP_FARBEN_DEFAULTS['basisrezept'],
+        'gericht' => '#abcdef',
+    ]);
+
+    // Zurücksetzen stellt die Defaults wieder her
+    Livewire::test(Kueche::class)->call('farbenZuruecksetzen')
+        ->assertSet('typFarben', TeamSettingsService::TYP_FARBEN_DEFAULTS);
+});
