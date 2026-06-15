@@ -6,8 +6,10 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\GpStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistLookupWarengruppe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
 
 /**
  * Stateless Lese-/Such-Service für Grundprodukte (D-3-Teilmenge des Vertical Slice).
@@ -60,6 +62,111 @@ class GpService
         return $this->scoped(FoodAlchemistGp::query(), $team)
             ->with(['warengruppe', 'preferredCountUnit', 'derivatVon', 'mergedInto', 'leadLa.supplier'])
             ->find($id);
+    }
+
+    // ── D-5: Platzhalter-GPs (neutrale Abstrakta für Grundrezept-Templates) ──
+    // Port von commands.rs (create_/rename_/delete_platzhalter_gp): abstrakt, kein
+    // §3-WG/§8/LA → schlanker Pfad. WG '00', is_platzhalter=1, requires_la=0,
+    // status approved, Name normalisiert auf "<Base> (neutral)", team-eigen (D1).
+    // Vom Matcher ausgeschlossen, im Zutaten-Katalog (browseKatalog) aber findbar.
+
+    /** Team-eigene Platzhalter (für die Verwaltung), inkl. Nutzungs-Zähler. */
+    public function platzhalterListe(Team $team): Collection
+    {
+        return FoodAlchemistGp::where('team_id', $team->id)
+            ->where('is_platzhalter', true)
+            ->withCount(['recipeIngredients as in_zeilen'])
+            ->orderBy('name')
+            ->get();
+    }
+
+    /** Platzhalter anlegen (idempotent: existierender Key wird wiederverwendet). */
+    public function createPlatzhalter(Team $team, string $name): FoodAlchemistGp
+    {
+        [$gpName, $slug, $gpKey, $base] = $this->platzhalterKeys($name);
+
+        $existing = FoodAlchemistGp::where('team_id', $team->id)->where('gp_key', $gpKey)->first();
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        return FoodAlchemistGp::create([
+            'team_id' => $team->id,
+            'gp_key' => $gpKey,
+            'name' => $gpName,
+            'warengruppe_code' => '00',
+            'hauptzutat_slug' => $slug,
+            'hauptzutat_display' => $base,
+            'status' => GpStatus::Approved,
+            'requires_la' => false,
+            'is_platzhalter' => true,
+            'first_seen_at' => now(),
+        ]);
+    }
+
+    /** Platzhalter umbenennen — nur is_platzhalter, nur team-eigen (D1), Key-Kollision verhindern. */
+    public function renamePlatzhalter(Team $team, int $id, string $name): FoodAlchemistGp
+    {
+        $gp = FoodAlchemistGp::where('team_id', $team->id)->findOrFail($id);
+        if (! $gp->is_platzhalter) {
+            throw new \RuntimeException('GP ist kein Platzhalter (Bearbeiten über den GP-Editor).');
+        }
+        [$gpName, $slug, $gpKey, $base] = $this->platzhalterKeys($name);
+
+        $kollision = FoodAlchemistGp::where('team_id', $team->id)
+            ->where('gp_key', $gpKey)->where('id', '!=', $id)->exists();
+        if ($kollision) {
+            throw new \RuntimeException("Es gibt bereits einen Platzhalter „{$gpName}\".");
+        }
+
+        $gp->update([
+            'gp_key' => $gpKey,
+            'name' => $gpName,
+            'hauptzutat_slug' => $slug,
+            'hauptzutat_display' => $base,
+        ]);
+
+        return $gp->refresh();
+    }
+
+    /** Platzhalter löschen — nur is_platzhalter, nur team-eigen, blockt bei Verwendung. */
+    public function deletePlatzhalter(Team $team, int $id): void
+    {
+        $gp = FoodAlchemistGp::where('team_id', $team->id)->findOrFail($id);
+        if (! $gp->is_platzhalter) {
+            throw new \RuntimeException('GP ist kein Platzhalter (Löschen über den GP-Editor).');
+        }
+        $n = FoodAlchemistRecipeIngredient::where('gp_id', $id)->whereNull('deleted_at')->count();
+        if ($n > 0) {
+            throw new \RuntimeException("Platzhalter wird in {$n} Rezept-Zeile(n) genutzt — dort erst entfernen.");
+        }
+        $gp->delete();
+    }
+
+    /**
+     * Normalisiert einen freien Namen zu den Platzhalter-Schlüsseln. "(neutral)"-Suffix
+     * wird vereinheitlicht (nie gedoppelt), Slug/Key über GpNamingService::slugify
+     * (EIN-Zeichen-Faltung — byte-identisch zum Seed-Bestand, sonst Key-Kollision).
+     *
+     * @return array{0:string,1:string,2:string,3:string}  [gpName, slug, gpKey, base]
+     */
+    private function platzhalterKeys(string $name): array
+    {
+        $base = trim(preg_replace('/\(\s*neutral\s*\)\s*$/iu', '', trim($name)));
+        if ($base === '') {
+            throw new \RuntimeException('Name ist Pflicht.');
+        }
+        $slugPart = app(GpNamingService::class)->slugify($base);
+        if ($slugPart === '') {
+            throw new \RuntimeException('Name ergibt keinen gültigen Slug.');
+        }
+
+        return [
+            $base . ' (neutral)',
+            'platzhalter_' . $slugPart,
+            'PLATZHALTER_' . mb_strtoupper($slugPart),
+            $base,
+        ];
     }
 
     /**

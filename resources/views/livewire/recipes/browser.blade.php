@@ -100,6 +100,9 @@
     {{-- M4-14: Generator --}}
     <livewire:foodalchemist.recipes.generator-modal />
 
+    {{-- D-5: Aus Vorlage instanziieren (Variante + Slot-Binding) --}}
+    <livewire:foodalchemist.recipes.template-instantiate-modal />
+
     {{-- M5-07: Aroma-Netz-Graph (innerhalb x-ui-page, P-2) --}}
     <livewire:foodalchemist.recipes.aroma-netz-modal />
 

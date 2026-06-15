@@ -62,18 +62,11 @@ class Browser extends Component
         $this->dispatch('recipe-modal.oeffnen', id: $id);
     }
 
-    /** R6: «Aus Template» — dupliziert das Template (Kopie ist KEIN Template) und öffnet den Editor. */
+    /** R6/D-5: «Aus Template» — öffnet den Instanziierungs-Dialog (Variante + Slot-Binding). */
     public function ausTemplate(int $templateId): void
     {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team === null) {
-            return;
-        }
-        $template = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($templateId);
-        $kopie = app(RecipeService::class)->duplicate($team, $templateId, $template->name . ' (aus Template)');
         $this->templateWahlOffen = false;
-        $this->dispatch('recipe-gespeichert');
-        $this->bearbeite($kopie->id);
+        $this->dispatch('template-instanziieren.oeffnen', templateId: $templateId);
     }
 
     public function waehleHauptgruppe(?int $id): void

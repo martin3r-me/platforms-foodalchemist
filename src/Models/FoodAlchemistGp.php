@@ -45,6 +45,7 @@ class FoodAlchemistGp extends Model
         'is_platzhalter' => 'boolean',
         'n_las_total' => 'integer',
         'garverlust_default_pct' => 'decimal:2',
+        'putzverlust_default_pct' => 'decimal:2',
         'stk_default_g' => 'decimal:2',
         'ai_confidence' => 'decimal:3',
         'allergene_ai_confidence' => 'decimal:3',
@@ -94,6 +95,12 @@ class FoodAlchemistGp extends Model
     public function structures(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(FoodAlchemistSupplierItemStructure::class, 'gp_id');
+    }
+
+    /** Rezept-Zutatenzeilen, die dieses GP referenzieren (Verwendungs-Zähler, D-5). */
+    public function recipeIngredients(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(FoodAlchemistRecipeIngredient::class, 'gp_id');
     }
 
     /** Kalkulationsführender Lieferantenartikel (GL-03; V-27-Kette folgt in D-2). */
