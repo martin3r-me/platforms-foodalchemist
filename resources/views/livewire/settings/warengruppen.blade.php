@@ -47,9 +47,13 @@
                 <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                     <div>
                         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Sub-Kategorien</h3>
-                        <p class="text-[11px] text-gray-400 mt-0.5">Freitext-Feld auf den GPs — Rename propagiert auf alle EIGENEN GPs (geerbte bleiben unberührt, D1).</p>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Verwaltete Liste je Warengruppe — anlegbar, plus vorhandene GP-Freitextwerte. Rename propagiert auf alle EIGENEN GPs (geerbte bleiben unberührt, D1).</p>
                     </div>
                     <span class="{{ $label }}">{{ optional($warengruppen->firstWhere('code', $subWg))->name }}</span>
+                </div>
+                <div class="px-5 pb-2 flex items-center gap-1.5">
+                    <input type="text" wire:model="neuSub" wire:keydown.enter="addSub" placeholder="Neue Sub-Kategorie …" class="{{ $input }} flex-1" @disabled($subWg === '') />
+                    <button type="button" wire:click="addSub" class="{{ $btnGhostXs }}" @disabled($subWg === '')>+ Sub-Kategorie</button>
                 </div>
                 <table class="{{ $table }}">
                     <thead><tr class="text-left">@foreach(['Sub-Kategorie', 'GPs', ''] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>

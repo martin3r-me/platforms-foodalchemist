@@ -5,11 +5,14 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistLookupWarengruppe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
+use Platform\FoodAlchemist\Models\FoodAlchemistWarengruppeSubkategorie;
 use RuntimeException;
 
 /**
@@ -148,16 +151,79 @@ class VocabularyService
         $wg->delete();
     }
 
-    /** Sub-Kategorie-Übersicht: distinct Werte + GP-Zähler je Team-Kette (D-1 §1). */
-    public function listSubCategories(Team $team, ?string $warengruppeCode = null): Collection
+    /**
+     * Sub-Kategorie-Übersicht (#371): verwaltete Einträge (anlegbar) + vorhandene GP-Freitext-
+     * werte (Bestand), gemerged je Warengruppe. Felder bleiben `sub_kategorie` + `n` (GP-Zähler)
+     * UI-kompatibel; `managed_id` markiert verwaltete Einträge.
+     */
+    public function listSubCategories(Team $team, ?string $warengruppeCode = null): \Illuminate\Support\Collection
     {
-        return FoodAlchemistGp::visibleToTeam($team)
+        $gpRows = FoodAlchemistGp::visibleToTeam($team)
             ->whereNotNull('sub_kategorie')
             ->when($warengruppeCode, fn ($q) => $q->where('warengruppe_code', $warengruppeCode))
             ->selectRaw('warengruppe_code, sub_kategorie, COUNT(*) AS n')
             ->groupBy('warengruppe_code', 'sub_kategorie')
-            ->orderBy('warengruppe_code')->orderBy('sub_kategorie')
             ->get();
+        $counts = $gpRows->keyBy(fn ($r) => $r->warengruppe_code.'|'.$r->sub_kategorie);
+
+        $managed = FoodAlchemistWarengruppeSubkategorie::visibleToTeam($team)
+            ->when($warengruppeCode, fn ($q) => $q->where('warengruppe_code', $warengruppeCode))
+            ->orderBy('position')->orderBy('name')->get();
+
+        $out = collect();
+        $gesehen = [];
+        foreach ($managed as $m) {
+            $key = $m->warengruppe_code.'|'.$m->name;
+            $gesehen[$key] = true;
+            $out->push((object) [
+                'warengruppe_code' => $m->warengruppe_code,
+                'sub_kategorie' => $m->name,
+                'n' => (int) ($counts[$key]->n ?? 0),
+                'managed_id' => $m->id,
+            ]);
+        }
+        foreach ($gpRows->sortBy('sub_kategorie') as $r) {  // Bestands-Freitextwerte (noch nicht verwaltet)
+            $key = $r->warengruppe_code.'|'.$r->sub_kategorie;
+            if (! isset($gesehen[$key])) {
+                $out->push((object) [
+                    'warengruppe_code' => $r->warengruppe_code,
+                    'sub_kategorie' => $r->sub_kategorie,
+                    'n' => (int) $r->n,
+                    'managed_id' => null,
+                ]);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * #371: verwaltete Sub-Kategorie zu einer Warengruppe anlegen (ohne GP nötig). Die §3-Codes
+     * der Warengruppe bleiben fix — nur die Sub-Kategorie-Liste ist pflegbar.
+     */
+    public function createSubCategory(Team $team, string $warengruppeCode, string $name): FoodAlchemistWarengruppeSubkategorie
+    {
+        $name = trim($name);
+        if ($name === '') {
+            throw new RuntimeException('Sub-Kategorie braucht einen Namen.');
+        }
+        if ($warengruppeCode === '') {
+            throw new RuntimeException('Erst eine Warengruppe wählen.');
+        }
+        $vorhanden = FoodAlchemistWarengruppeSubkategorie::where('team_id', $team->id)
+            ->where('warengruppe_code', $warengruppeCode)->where('name', $name)->exists();
+        if ($vorhanden) {
+            throw new RuntimeException('Diese Sub-Kategorie gibt es in der Warengruppe schon.');
+        }
+        $maxPos = FoodAlchemistWarengruppeSubkategorie::where('team_id', $team->id)
+            ->where('warengruppe_code', $warengruppeCode)->max('position');
+
+        return FoodAlchemistWarengruppeSubkategorie::create([
+            'team_id' => $team->id,
+            'warengruppe_code' => $warengruppeCode,
+            'name' => $name,
+            'position' => (int) $maxPos + 1,
+        ]);
     }
 
     /** Rename propagiert auf die GPs (AT-D1-03) — via D-3-Service, nur eigene Zeilen. */
@@ -167,6 +233,11 @@ class VocabularyService
         if ($neu === '') {
             throw new RuntimeException('Neuer Sub-Kategorie-Name darf nicht leer sein.');
         }
+
+        // #371: verwalteten Eintrag mitziehen, damit Liste und GP-Werte synchron bleiben.
+        FoodAlchemistWarengruppeSubkategorie::where('team_id', $team->id)
+            ->where('warengruppe_code', $warengruppeCode)->where('name', $alt)
+            ->update(['name' => $neu]);
 
         return app(GpService::class)->renameSubKategorie($team, $warengruppeCode, $alt, $neu);
     }
@@ -247,6 +318,66 @@ class VocabularyService
             'bezeichnung' => $bezeichnung,
             'technik' => ($input['technik'] ?? '') ?: null,
             'sort_order' => (int) ($input['sort_order'] ?? 999),
+        ]);
+    }
+
+    /**
+     * #372: Speisen-Hauptgruppe (VK-Taxonomie) anlegen — bisher read-only Referenzdaten.
+     * `code` = Slug der Bezeichnung (≤16 Zeichen, team-eindeutig). Diätform-Flags pflegen
+     * Klassen, nicht die HG.
+     */
+    public function createDishMainGroup(Team $team, array $input): FoodAlchemistDishMainGroup
+    {
+        $bezeichnung = trim($input['bezeichnung'] ?? '');
+        if ($bezeichnung === '') {
+            throw new RuntimeException('Speisen-Hauptgruppe braucht eine Bezeichnung.');
+        }
+
+        $basis = mb_substr(Str::slug($bezeichnung, '_') ?: 'hg', 0, 14);
+        $code = $basis;
+        $i = 2;
+        while (FoodAlchemistDishMainGroup::where('team_id', $team->id)->where('code', $code)->exists()) {
+            $code = mb_substr($basis, 0, 12).'_'.$i++;
+        }
+
+        return FoodAlchemistDishMainGroup::create([
+            'team_id' => $team->id,
+            'code' => $code,
+            'bezeichnung' => $bezeichnung,
+            'sort_order' => (int) FoodAlchemistDishMainGroup::max('sort_order') + 1,
+        ]);
+    }
+
+    /**
+     * #372: Speisen-Klasse zu einer Hauptgruppe anlegen. `diaetform` aus der festen Liste
+     * (fleisch|fisch|vegi|vegan|neutral|allergie); is_vegi/is_vegan werden daraus abgeleitet.
+     */
+    public function createDishClass(Team $team, int $mainGroupId, array $input): FoodAlchemistDishClass
+    {
+        $hg = FoodAlchemistDishMainGroup::findOrFail($mainGroupId);
+        $bezeichnung = trim($input['bezeichnung'] ?? '');
+        if ($bezeichnung === '') {
+            throw new RuntimeException('Klasse braucht eine Bezeichnung.');
+        }
+
+        $diaet = in_array($input['diaetform'] ?? '', ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'], true)
+            ? $input['diaetform'] : 'neutral';
+
+        $basis = mb_substr(Str::slug($bezeichnung, '_') ?: 'klasse', 0, 30);
+        $code = $basis;
+        $i = 2;
+        while (FoodAlchemistDishClass::where('team_id', $team->id)->where('code', $code)->exists()) {
+            $code = mb_substr($basis, 0, 28).'_'.$i++;
+        }
+
+        return FoodAlchemistDishClass::create([
+            'team_id' => $team->id,
+            'dish_main_group_id' => $hg->id,
+            'code' => $code,
+            'bezeichnung' => $bezeichnung,
+            'diaetform' => $diaet,
+            'is_vegi' => in_array($diaet, ['vegi', 'vegan'], true),
+            'is_vegan' => $diaet === 'vegan',
         ]);
     }
 

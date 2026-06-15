@@ -1,10 +1,11 @@
-{{-- D-6 §4.6: VK-Taxonomie — Master-Detail (Speisen-HG links, Klassen-Tabelle rechts); read-only Referenzdaten --}}
+{{-- D-6 §4.6: VK-Taxonomie — Master-Detail (Speisen-HG links, Klassen-Tabelle rechts); HG + Klassen anlegbar (#372) --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 @php($katAktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300')
 @php($katHover = 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5')
 
 <div class="space-y-4" data-settings-vk-taxonomie>
     @if($meldung !== null)<div class="{{ $card }} p-3 border-emerald-500/20"><p class="text-xs text-emerald-600 dark:text-emerald-400" data-taxo-meldung>{{ $meldung }}</p></div>@endif
+    @if($fehler !== null)<div class="{{ $card }} p-3 border-red-500/20"><p class="text-xs text-red-600 dark:text-red-400" data-taxo-fehler>{{ $fehler }}</p></div>@endif
 
     <div class="flex gap-4 items-start">
         {{-- Speisen-Hauptgruppen links --}}
@@ -18,7 +19,11 @@
                     <span class="text-[11px] text-gray-400 shrink-0">{{ $klassenJeHg[$hg->id] ?? 0 }}</span>
                 </button>
             @endforeach
-            <p class="text-[10px] text-gray-400 px-2 pt-2 leading-snug">Klassen = HG × Diätform (Referenzdaten, read-only). Aufschlagsklassen, Schreibstile, Behälter: eigene Seiten (R5).</p>
+            <div class="pt-2 mt-1 border-t border-black/5 dark:border-white/10 flex items-center gap-1.5">
+                <input type="text" wire:model="neuHg" wire:keydown.enter="createHg" placeholder="Neue Hauptgruppe …" class="{{ $input }} flex-1" />
+                <button type="button" wire:click="createHg" class="{{ $btnGhostXs }}">+ HG</button>
+            </div>
+            <p class="text-[10px] text-gray-400 px-2 pt-2 leading-snug">Klassen = HG × Diätform. Aufschlagsklassen, Schreibstile, Behälter: eigene Seiten (R5).</p>
         </div>
 
         {{-- Klassen der gewählten HG rechts --}}
@@ -45,6 +50,15 @@
                     </table>
                 @else
                     <div class="px-5 pb-5 text-xs text-gray-400">Links eine Speisen-Hauptgruppe wählen, um ihre Klassen zu sehen.</div>
+                @endif
+                @if($hauptgruppeId !== null)
+                    <div class="px-5 py-3 border-t border-black/5 dark:border-white/10 flex items-center gap-1.5">
+                        <input type="text" wire:model="neuKlasse" wire:keydown.enter="createKlasse" placeholder="Neue Klasse …" class="{{ $input }} flex-1" />
+                        <select wire:model="neuKlasseDiaet" class="{{ $input }} w-32">
+                            @foreach(['neutral', 'fleisch', 'fisch', 'vegi', 'vegan', 'allergie'] as $d)<option value="{{ $d }}">{{ $d }}</option>@endforeach
+                        </select>
+                        <button type="button" wire:click="createKlasse" class="{{ $btnGhostXs }}">+ Klasse</button>
+                    </div>
                 @endif
             </div>
         </div>

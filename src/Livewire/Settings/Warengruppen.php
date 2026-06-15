@@ -23,6 +23,8 @@ class Warengruppen extends Component
 
     public string $renameNeu = '';
 
+    public string $neuSub = '';
+
     public ?string $fehler = null;
 
     public ?string $meldung = null;
@@ -81,6 +83,18 @@ class Warengruppen extends Component
     {
         $n = app(VocabularyService::class)->clearSubCategory($this->team(), $this->subWg, $wert);
         $this->meldung = "{$n} GP(s) auf NULL gesetzt.";
+    }
+
+    /** #371: verwaltete Sub-Kategorie in der gewählten Warengruppe anlegen. */
+    public function addSub(): void
+    {
+        try {
+            app(VocabularyService::class)->createSubCategory($this->team(), $this->subWg, $this->neuSub);
+            $this->reset('neuSub', 'fehler');
+            $this->meldung = 'Sub-Kategorie angelegt.';
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     public function render(VocabularyService $vocab)
