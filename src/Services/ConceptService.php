@@ -54,8 +54,9 @@ class ConceptService
         return FoodAlchemistConcept::visibleToTeam($team)
             ->with([
                 'slots' => fn ($q) => $q->orderBy('position'),
-                'slots.paket:id,name,rolle,preis_pro_person,ek_pro_person,wareneinsatz_prozent,preis_modus,preis_stale',
-                'slots.gericht:id,name,vk_netto,ek_total_eur',
+                'slots.paket:id,name,rolle,klasse,preis_pro_person,ek_pro_person,wareneinsatz_prozent,preis_modus,preis_stale',
+                'slots.gericht:id,name,vk_netto,ek_total_eur,speisen_klasse_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergene_konfidenz',
+                'slots.gericht.speisenKlasse:id,bezeichnung',
                 'slots.einheit:id,slug,display_de',
                 'vorlageQuelle:id,name',
             ])
@@ -373,19 +374,21 @@ class ConceptService
      * (+ feste Gerichte). KEIN Kaskaden-Recompute — ein Tausch ändert nur die
      * betroffene Zeile.
      *
-     * @return array{zeilen: list<array>, preis_pro_person: float, ek_pro_person: float, hat_stale: bool, hat_leer: bool}
+     * @return array{zeilen: list<array>, preis_pro_person: float, ek_pro_person: float, hat_stale: bool, hat_leer: bool, hat_ek_luecke: bool}
      */
     public function preisCockpit(FoodAlchemistConcept $concept): array
     {
         $concept->loadMissing(['slots' => fn ($q) => $q->orderBy('position'),
+            'slots.einheit:id,slug,dimension,default_in_g',
             'slots.paket:id,name,preis_pro_person,ek_pro_person,preis_stale',
-            'slots.gericht:id,name,vk_netto,ek_total_eur']);
+            'slots.gericht:id,name,vk_netto,ek_total_eur,vk_anzahl_einheiten,vk_menge_pro_einheit_g']);
 
         $zeilen = [];
         $vkTotal = 0.0;
         $ekTotal = 0.0;
         $hatStale = false;
         $hatLeer = false;
+        $hatEkLuecke = false;
 
         foreach ($concept->slots as $slot) {
             if (in_array($slot->type, self::STRUKTUR_TYPEN, true)) {
@@ -396,19 +399,28 @@ class ConceptService
                 $ek = (float) ($slot->paket->ek_pro_person ?? 0);
                 $hatStale = $hatStale || (bool) $slot->paket->preis_stale;
                 $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'paket', 'rolle' => $slot->rolle,
-                    'label' => $slot->paket->name, 'preis' => $vk, 'ek' => round($ek, 2), 'stale' => (bool) $slot->paket->preis_stale];
+                    'label' => $slot->paket->name, 'preis' => $vk, 'ek' => round($ek, 2), 'ek_fehlt' => false, 'stale' => (bool) $slot->paket->preis_stale];
             } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
-                $faktor = $slot->menge !== null ? (float) $slot->menge : 1.0;
-                $vk = (float) ($slot->gericht->vk_netto ?? 0) * $faktor;
-                $ek = (float) ($slot->gericht->ek_total_eur ?? 0) * $faktor;
+                // Einheit-abhängige Mengen-Umrechnung — EINE Stelle (Konsistenz zu ConcepterAggregate/Paket).
+                $pae = ConcepterAggregateService::portionsAequivalent(
+                    $slot->menge !== null ? (float) $slot->menge : null,
+                    $slot->einheit,
+                    $slot->gericht,
+                );
+                $ekFehlt = $pae === null;       // Gramm-Position ohne Portionsgewicht → ehrlich „unbekannt"
+                $anzahl = max(1, (int) ($slot->gericht->vk_anzahl_einheiten ?? 1));
+                $vk = $ekFehlt ? 0.0 : (float) ($slot->gericht->vk_netto ?? 0) * $pae;
+                $ek = $ekFehlt ? 0.0 : (float) ($slot->gericht->ek_total_eur ?? 0) / $anzahl * $pae;
+                $hatEkLuecke = $hatEkLuecke || $ekFehlt;
                 $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'gericht', 'rolle' => $slot->rolle,
-                    'label' => $slot->gericht->name, 'preis' => round($vk, 2), 'ek' => round($ek, 2), 'stale' => false];
+                    'label' => $slot->gericht->name, 'preis' => round($vk, 2),
+                    'ek' => $ekFehlt ? null : round($ek, 2), 'ek_fehlt' => $ekFehlt, 'stale' => false];
             } else {
                 $vk = 0.0;
                 $ek = 0.0;
                 $hatLeer = true;
                 $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'leer', 'rolle' => $slot->rolle,
-                    'label' => $slot->titel ?? '(leer)', 'preis' => null, 'ek' => null, 'stale' => false];
+                    'label' => $slot->titel ?? '(leer)', 'preis' => null, 'ek' => null, 'ek_fehlt' => false, 'stale' => false];
             }
             $vkTotal += $vk;
             $ekTotal += $ek;
@@ -420,6 +432,7 @@ class ConceptService
             'ek_pro_person' => round($ekTotal, 2),
             'hat_stale' => $hatStale,
             'hat_leer' => $hatLeer,
+            'hat_ek_luecke' => $hatEkLuecke,   // ≥1 Gramm-Position ohne Portionsgewicht → EK unvollständig
         ];
     }
 
@@ -740,6 +753,37 @@ class ConceptService
             ->orderBy('position')->orderBy('name')->get(['id', 'name', 'parent_id']);
 
         return $this->flacherBaum($alle);
+    }
+
+    /**
+     * Rollup-Anzahl Concepts je Kategorie (Kategorie + alle Unterkategorien) — passend zum
+     * descendant-inklusiven Filter in paginateBrowser. Speist die Count-Badges der Kategorie-
+     * Sidebar (gleiche Optik wie Basisrezepte-/Gerichte-Browser). Nur >0 wird zurückgegeben.
+     *
+     * @return array<int, int>
+     */
+    public function categoryCounts(Team $team, bool $vorlagen = false): array
+    {
+        $direkt = FoodAlchemistConcept::visibleToTeam($team)
+            ->when($vorlagen, fn ($q) => $q->vorlagen(), fn ($q) => $q->echte())
+            ->whereNotNull('category_id')
+            ->selectRaw('category_id, COUNT(*) as c')
+            ->groupBy('category_id')
+            ->pluck('c', 'category_id')->all();
+
+        $counts = [];
+        foreach ($this->categoriesFlat($team) as $row) {
+            $self = (int) ($direkt[$row['id']] ?? 0);
+            if ($self === 0) {
+                continue; // Kinder tragen ihre eigenen Counts über ihre ancestors bei
+            }
+            $counts[$row['id']] = ($counts[$row['id']] ?? 0) + $self;
+            foreach ($row['ancestors'] as $anc) {
+                $counts[$anc] = ($counts[$anc] ?? 0) + $self;
+            }
+        }
+
+        return $counts;
     }
 
     /**

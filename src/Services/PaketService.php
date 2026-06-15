@@ -226,20 +226,31 @@ class PaketService
      * Hand gesetzter EK unangetastet.
      *
      * EK je Gericht = ek_total_eur / vk_anzahl_einheiten (Wareneinsatz PRO PORTION, nicht
-     * Batch!) × menge — konsistent zur Per-Portion-Logik in recipeHk/ConcepterAggregate.
+     * Batch!) × Portions-Äquivalent — einheit-abhängig über ConcepterAggregateService::
+     * portionsAequivalent() (EINE Stelle, konsistent zu recipeHk/ConcepterAggregate/Cockpit).
      */
     public function recomputePrice(FoodAlchemistPaket $paket): FoodAlchemistPaket
     {
         $auto = $paket->preis_modus === 'auto';
-        $gerichte = $paket->gerichte()->with('gericht:id,vk_netto,ek_total_eur,vk_anzahl_einheiten')->get();
+        $gerichte = $paket->gerichte()->with([
+            'gericht:id,vk_netto,ek_total_eur,vk_anzahl_einheiten,vk_menge_pro_einheit_g',
+            'einheit:id,slug,dimension,default_in_g',
+        ])->get();
 
         $vkSum = 0.0;
         $ekSum = 0.0;
         foreach ($gerichte as $g) {
-            $faktor = $g->menge !== null ? (float) $g->menge : 1.0;
+            $pae = ConcepterAggregateService::portionsAequivalent(
+                $g->menge !== null ? (float) $g->menge : null,
+                $g->einheit,
+                $g->gericht,
+            );
+            if ($pae === null) {
+                continue; // Gramm-Position ohne Portionsgewicht → trägt ehrlich nicht bei
+            }
             $anzahl = max(1, (int) ($g->gericht->vk_anzahl_einheiten ?? 1));
-            $vkSum += (float) ($g->gericht->vk_netto ?? 0) * $faktor;
-            $ekSum += (float) ($g->gericht->ek_total_eur ?? 0) / $anzahl * $faktor;
+            $vkSum += (float) ($g->gericht->vk_netto ?? 0) * $pae;
+            $ekSum += (float) ($g->gericht->ek_total_eur ?? 0) / $anzahl * $pae;
         }
 
         $vkBezug = $auto ? ($vkSum > 0 ? $vkSum : null)

@@ -70,7 +70,7 @@
                         <x-foodalchemist::tree :initial-collapsed="collect($kategorienFlat)->where('has_children', true)->pluck('id')->all()">
                             @foreach($kategorienFlat as $kat)
                                 <x-foodalchemist::tree-node :node-id="$kat['id']" :depth="$kat['depth']" :ancestors="$kat['ancestors'] ?? []"
-                                    :has-children="$kat['has_children'] ?? false" :active="$categoryFilter === (string) $kat['id']">
+                                    :has-children="$kat['has_children'] ?? false" :count="$kategorienCounts[$kat['id']] ?? null" :active="$categoryFilter === (string) $kat['id']">
                                     <button type="button" wire:click="waehleKategorie('{{ $kat['id'] }}')" class="flex-1 min-w-0 text-left truncate text-xs px-1 py-0.5">{{ $kat['name'] }}</button>
                                 </x-foodalchemist::tree-node>
                             @endforeach

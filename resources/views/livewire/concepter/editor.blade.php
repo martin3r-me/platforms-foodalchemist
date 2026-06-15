@@ -155,7 +155,7 @@
                     <div class="overflow-x-auto">
                     <table class="{{ $table }} border-collapse">
                         <thead><tr class="text-left">
-                            @foreach(['#' => 'w-px', 'Menge' => 'w-px', 'Einheit' => 'w-px', 'Verknüpfung / Beschreibung' => 'w-full', 'Rolle' => 'w-px', 'EK €' => 'w-px', '' => 'w-px'] as $kopf => $w)
+                            @foreach(['#' => 'w-px', 'Menge' => 'w-px', 'Einheit' => 'w-px', 'Verknüpfung / Beschreibung' => 'w-full', 'Rolle' => 'w-px', '€/P' => 'w-px', 'EK €' => 'w-px', 'W%' => 'w-px', '' => 'w-px'] as $kopf => $w)
                                 <th class="{{ $th }} !px-2 {{ $w }}">{{ $kopf }}</th>
                             @endforeach
                         </tr></thead>
@@ -163,6 +163,8 @@
                         @forelse($concept->slots as $slot)
                             @php($istStruktur = in_array($slot->type, ['text', 'spacer', 'header', 'header_preis']))
                             @php($ekz = $cockpitZeilen[$slot->id]['ek'] ?? null)
+                            @php($vkz = $cockpitZeilen[$slot->id]['preis'] ?? null)
+                            @php($wpct = ($vkz && (float) $vkz > 0 && $ekz !== null) ? ((float) $ekz / (float) $vkz * 100) : null)
                             <tr wire:key="erow-{{ $slot->id }}" class="{{ $tr }} {{ $istStruktur ? 'bg-violet-500/[0.03]' : '' }}">
                                 <td class="{{ $td }} !px-1.5 !py-0.5 whitespace-nowrap align-top">
                                     <span class="inline-flex flex-col align-middle leading-none">
@@ -174,7 +176,7 @@
                                     @endif
                                 </td>
                                 @if($istStruktur)
-                                    <td class="{{ $td }} !px-2" colspan="5">
+                                    <td class="{{ $td }} !px-2" colspan="7">
                                         @if($slot->type === 'spacer')
                                             <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Leerzeile</span>
                                             <select wire:model="blockForm.{{ $slot->id }}.hoehe" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-32 ml-1">
@@ -186,6 +188,10 @@
                                         @else
                                             <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $slot->type === 'header_preis' ? 'Header + Preis' : 'Header' }}</span>
                                             <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.titel" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-full mt-1 font-medium" placeholder="Überschrift …" />
+                                            @php($ss = $sektionSumme['h' . $slot->id] ?? null)
+                                            @if($ss && $ss['n'] > 0)
+                                                <div class="mt-1 text-[11px] text-violet-600 dark:text-violet-400 tabular-nums">{{ $ss['n'] }} {{ $ss['n'] === 1 ? 'Position' : 'Positionen' }} · Σ EK {{ number_format($ss['ek'], 2, ',', '.') }} € · {{ number_format($ss['vk'], 2, ',', '.') }} €/P</div>
+                                            @endif
                                             @if($slot->type === 'header_preis')
                                                 <span class="inline-flex items-center gap-1 mt-1">
                                                     <input type="number" step="0.01" min="0" wire:model.blur="blockForm.{{ $slot->id }}.preis_wert" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-24 text-right tabular-nums" placeholder="€" />
@@ -214,16 +220,25 @@
                                         @if($slot->paket_id && $slot->paket)
                                             <span class="{{ $pill }} {{ $variantPill['info'] }}">Paket</span>
                                             <span class="text-sm font-medium">{{ $slot->paket->name }}</span>
+                                            @if($slot->paket->klasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->paket->klasse }}</span>@endif
                                             <span class="text-gray-400 text-[11px] tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €/P' : '' }}</span>
                                         @elseif($slot->vk_recipe_id && $slot->gericht)
+                                            @php($g = $slot->gericht)
+                                            @php($enthaelt = collect(['Schwein' => $g->spec_contains_pork, 'Rind' => $g->spec_contains_beef])->filter()->keys()->all())
+                                            @php($allTitle = 'Allergene / Diät' . (count($enthaelt) ? ' — enthält ' . implode(', ', $enthaelt) : '') . ' · Konfidenz ' . ($g->allergene_konfidenz ?? 'unbekannt'))
                                             <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->type === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
-                                            <span class="text-sm font-medium">{{ $slot->gericht->name }}</span>
+                                            <span class="text-sm font-medium">{{ $g->name }}</span>
+                                            @if($g->speisenKlasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g->speisenKlasse->bezeichnung }}</span>@endif
+                                            @if($g->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($g->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
+                                            <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium align-middle {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="{{ $allTitle }}">A</span>
                                         @else
                                             <span class="text-xs text-gray-400">leer — unten wählen</span>
                                         @endif
                                     </td>
                                     <td class="{{ $td }} !px-2 align-top"><input type="text" wire:model.blur="slotForm.{{ $slot->id }}.rolle" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} !w-28" placeholder="Rolle" /></td>
+                                    <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $ekz !== null ? number_format((float) $ekz, 2, ',', '.') . ' €' : '—' }}</td>
+                                    <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top text-gray-400">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</td>
                                 @endif
                                 <td class="{{ $td }} !px-2 text-right whitespace-nowrap align-top">
                                     @if(! $istStruktur)
@@ -238,7 +253,7 @@
                             @if(! $istStruktur && ($fillOpenId === $slot->id || (! $slot->paket_id && ! $slot->vk_recipe_id)))
                                 <tr wire:key="efill-{{ $slot->id }}">
                                     <td></td>
-                                    <td colspan="6" class="!px-2 !pb-2 bg-black/[0.02] dark:bg-white/[0.03]">
+                                    <td colspan="8" class="!px-2 !pb-2 bg-black/[0.02] dark:bg-white/[0.03]">
                                         <div class="flex flex-wrap items-center gap-2 pt-1">
                                             <select x-on:change="$wire.fuellePaket({{ $slot->id }}, $event.target.value); $event.target.value=''" class="{{ $input }} w-56">
                                                 <option value="">↹ Paket (Rolle {{ $slot->rolle ?: '–' }}) …</option>
@@ -281,7 +296,7 @@
                                 </tr>
                             @endif
                         @empty
-                            <tr><td colspan="7" class="text-xs text-gray-400 py-4 text-center">Noch keine Positionen. Oben eine Rolle eintragen und „+ Position".</td></tr>
+                            <tr><td colspan="9" class="text-xs text-gray-400 py-4 text-center">Noch keine Positionen. Oben eine Rolle eintragen und „+ Position".</td></tr>
                         @endforelse
                         </tbody>
                     </table>

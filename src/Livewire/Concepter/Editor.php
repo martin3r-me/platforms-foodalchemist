@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Concepter;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
 use Platform\FoodAlchemist\Services\ConceptService;
@@ -526,6 +527,7 @@ class Editor extends Component
         $bewertet = null;
         $kalkulation = null;
         $tauschbar = [];
+        $sektionSumme = [];
         $kandidaten = collect();
         $paketKandidaten = collect();
 
@@ -537,6 +539,7 @@ class Editor extends Component
             $concept = $concepts->detail($team, $this->id);
             if ($concept !== null) {
                 $cockpit = $concepts->preisCockpit($concept);
+                $sektionSumme = $this->sektionsSummen($concept, $cockpit['zeilen']);
                 $aggregat = $agg->conceptAggregat($concept);
                 $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
                 $kalkulation = $kalk->conceptHk($team, $concept);
@@ -573,6 +576,7 @@ class Editor extends Component
             'paket' => $paket,
             'cockpit' => $cockpit,
             'cockpitZeilen' => $cockpit ? collect($cockpit['zeilen'])->keyBy('slot_id') : collect(),
+            'sektionSumme' => $sektionSumme,
             'einheiten' => app(\Platform\FoodAlchemist\Services\VocabularyService::class)->listEinheiten($team),
             'aggregat' => $aggregat,
             'bewertung' => $bewertet,
@@ -587,6 +591,41 @@ class Editor extends Component
             'schreibstile' => FoodAlchemistWritingStyle::visibleToTeam($team)->where('is_inactive', false)
                 ->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
         ]);
+    }
+
+    /**
+     * Zwischensummen je Header-Sektion: summiert EK + €/P der Positionen, die einem Header
+     * folgen, bis zum nächsten Header. Key = 'h'.<header-slot-id>. Positionen vor dem ersten
+     * Header gehören zu keiner Sektion (globaler Streifen oben zeigt das Gesamt).
+     *
+     * @param  array  $zeilen  preisCockpit-Zeilen (mit slot_id, preis, ek)
+     * @return array<string, array{ek: float, vk: float, n: int}>
+     */
+    private function sektionsSummen(FoodAlchemistConcept $concept, array $zeilen): array
+    {
+        $z = collect($zeilen)->keyBy('slot_id');
+        $summen = [];
+        $key = null;
+        foreach ($concept->slots as $slot) {
+            if (in_array($slot->type, ['header', 'header_preis'], true)) {
+                $key = 'h'.$slot->id;
+                $summen[$key] ??= ['ek' => 0.0, 'vk' => 0.0, 'n' => 0];
+
+                continue;
+            }
+            if ($key === null || in_array($slot->type, ['text', 'spacer'], true)) {
+                continue;
+            }
+            $row = $z->get($slot->id);
+            if ($row === null) {
+                continue;
+            }
+            $summen[$key]['ek'] += (float) ($row['ek'] ?? 0);
+            $summen[$key]['vk'] += (float) ($row['preis'] ?? 0);
+            $summen[$key]['n']++;
+        }
+
+        return $summen;
     }
 
     private function team()

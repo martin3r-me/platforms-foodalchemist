@@ -173,6 +173,7 @@ class Browser extends Component
             $klassen = $concepts->klassen($team);
             $rollen = [];
             $kategorienFlat = $concepts->categoriesFlat($team);
+            $kategorienCounts = $concepts->categoryCounts($team, $this->showVorlagen);
         }
 
         return view('foodalchemist::livewire.concepter.browser', [
@@ -180,6 +181,7 @@ class Browser extends Component
             'klassen' => $klassen,
             'rollen' => $rollen,
             'kategorienFlat' => $kategorienFlat,
+            'kategorienCounts' => $kategorienCounts ?? [],
         ])->layout('platform::layouts.app');
     }
 
