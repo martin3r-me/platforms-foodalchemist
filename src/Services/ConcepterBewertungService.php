@@ -87,6 +87,30 @@ class ConcepterBewertungService
         $status = ['high' => 'ok', 'medium' => 'warn', 'low' => 'fail', 'unknown' => 'fail'][$konf] ?? 'fail';
         $checks[] = $this->check('allergen', 'Allergen-Konfidenz', $status, 'Schwächstes Gericht: ' . $konf . '.');
 
+        // 6 — Sensorik passt zur Rolle (je Gang-Gericht; Sensorik-Layer, leichtgewichtig via fuerRezept)
+        $gerichtIds = DB::table('foodalchemist_concept_slots')
+            ->where('concept_id', $concept->id)->whereNull('deleted_at')
+            ->whereNotNull('vk_recipe_id')->pluck('vk_recipe_id')->all();
+        if ($gerichtIds === []) {
+            $checks[] = $this->check('sensorik_rolle', 'Sensorik / Rolle', 'info', 'Keine direkten Gang-Gerichte zum Prüfen.');
+        } else {
+            $sens = app(\Platform\FoodAlchemist\Services\SensorikService::class);
+            $warns = [];
+            foreach ($gerichtIds as $gid) {
+                $p = $sens->fuerRezept((int) $gid);
+                if ($p['leer'] ?? true) {
+                    continue;
+                }
+                $rc = $sens->rollenCheck((int) $gid, $p['geschmack']);
+                if ($rc !== null && $rc['status'] === 'warn') {
+                    $warns[] = $rc['detail'];
+                }
+            }
+            $checks[] = $warns === []
+                ? $this->check('sensorik_rolle', 'Sensorik / Rolle', 'ok', 'Alle Gänge passen sensorisch zu ihrer Rolle.')
+                : $this->check('sensorik_rolle', 'Sensorik / Rolle', 'warn', count($warns) . ' Gang/Gänge: ' . implode(' · ', array_slice($warns, 0, 2)));
+        }
+
         // Score = Anteil „ok" an den anwendbaren Checks (info zählt nicht).
         $anwendbar = array_filter($checks, fn ($c) => $c['status'] !== 'info');
         $ok = array_filter($anwendbar, fn ($c) => $c['status'] === 'ok');

@@ -431,7 +431,11 @@
                     </button>
                 </div>
             @endif
-            @include('foodalchemist::livewire.concepter.partials.sensorik')
+            @if(($komposition ?? null) && ! ($komposition['leer'] ?? true))
+                @include('foodalchemist::livewire.concepter.partials.sensorik_komposition')
+            @else
+                @include('foodalchemist::livewire.concepter.partials.sensorik')
+            @endif
             <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mt-5 mb-2">Pairing</h3>
             @include('foodalchemist::livewire.concepter.partials.pairing')
         </div>

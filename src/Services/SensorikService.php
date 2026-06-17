@@ -31,6 +31,18 @@ class SensorikService
 
     private const KNUSPRIG = ['knusprig', 'koernig', 'schnittfest'];
 
+    /**
+     * Rolle (Dish-Hauptgruppe) → erwartetes Sensorik-Soll: max über die Dims muss ≥ min sein.
+     * Nur Klar-Fälle — wo es kein festes Soll gibt, bleibt der Check „info".
+     */
+    private const ROLLE_SOLL = [
+        'Dessert' => ['dims' => ['suess'], 'min' => 0.5, 'label' => 'Süße'],
+        'Käse' => ['dims' => ['fettig', 'salzig', 'umami'], 'min' => 0.4, 'label' => 'herzhaft-fettige Tiefe'],
+        'Hauptgang' => ['dims' => ['umami', 'salzig'], 'min' => 0.35, 'label' => 'herzhafte Tiefe'],
+        'Suppe & Eintopf' => ['dims' => ['umami', 'salzig'], 'min' => 0.3, 'label' => 'herzhafte Basis'],
+        'Vorspeise' => ['dims' => ['sauer', 'scharf'], 'min' => 0.2, 'label' => 'Frische/Säure'],
+    ];
+
     /** GP-IDs aus Rezepten (deren Zutaten-GPs + 1 Ebene Sub-Rezepte). */
     private function gpIdsFromRecipes(array $recipeIds): array
     {
@@ -90,6 +102,91 @@ class SensorikService
         $recipeIds = $concept->slots->pluck('vk_recipe_id')->filter()->unique()->values()->all();
 
         return $this->auswertung($this->gpIdsFromRecipes($recipeIds), 'roh');
+    }
+
+    // ── B: Gericht als KOMPOSITION (statt Blend) + Rollen-Soll-Check ─────────
+
+    /** Hauptgruppe/Rolle eines Rezepts (Vorspeise/Hauptgang/Dessert …) via Speisen-Klasse. */
+    private function hauptgruppe(int $recipeId): ?string
+    {
+        return DB::table('foodalchemist_recipes AS r')
+            ->leftJoin('foodalchemist_dish_classes AS dc', 'dc.id', '=', 'r.speisen_klasse_id')
+            ->leftJoin('foodalchemist_dish_main_groups AS mg', 'mg.id', '=', 'dc.dish_main_group_id')
+            ->where('r.id', $recipeId)->value('mg.bezeichnung');
+    }
+
+    /**
+     * Rollen-Soll-Check: passt das (Teller-)Profil zur Rolle? (Dessert→süß, Hauptgang→umami …).
+     *
+     * @return ?array{rolle:string, status:string, detail:string}
+     */
+    public function rollenCheck(int $recipeId, array $geschmack): ?array
+    {
+        $hg = $this->hauptgruppe($recipeId);
+        if ($hg === null) {
+            return null;
+        }
+        $soll = self::ROLLE_SOLL[$hg] ?? null;
+        if ($soll === null) {
+            return ['rolle' => $hg, 'status' => 'info', 'detail' => 'Keine feste Sensorik-Erwartung für diese Rolle.'];
+        }
+        $ist = 0.0;
+        foreach ($soll['dims'] as $d) {
+            $ist = max($ist, (float) ($geschmack[$d] ?? 0));
+        }
+        $ok = $ist >= $soll['min'];
+
+        return [
+            'rolle' => $hg,
+            'status' => $ok ? 'ok' : 'warn',
+            'detail' => $ok
+                ? "{$hg}: {$soll['label']} vorhanden (" . number_format($ist, 2, ',', '.') . ').'
+                : "{$hg}: {$soll['label']} schwach (" . number_format($ist, 2, ',', '.') . ' < ' . number_format($soll['min'], 2, ',', '.') . ').',
+        ];
+    }
+
+    /**
+     * Gericht = Komposition seiner Komponenten (Sub-Rezepte = gegartes Profil, direkte GPs = roh),
+     * NICHT ein gemittelter Blend. Teller-Profil = MAX je Dimension („ist der Geschmack auf dem Teller
+     * irgendwo da?") → Dominanz/Lücke + Rollen-Soll-Check.
+     */
+    public function gerichtKomposition(int $recipeId): array
+    {
+        $ing = DB::table('foodalchemist_recipe_ingredients AS ri')
+            ->leftJoin('foodalchemist_gps AS g', 'g.id', '=', 'ri.gp_id')
+            ->leftJoin('foodalchemist_recipes AS sr', 'sr.id', '=', 'ri.referenced_recipe_id')
+            ->where('ri.recipe_id', $recipeId)->whereNull('ri.deleted_at')->orderBy('ri.position')
+            ->get(['ri.gp_id', 'ri.referenced_recipe_id', DB::raw('COALESCE(sr.name, g.name, ri.raw_text) AS name')]);
+
+        $komponenten = [];
+        $teller = array_fill_keys(self::DIMS, 0.0);
+        foreach ($ing as $z) {
+            $p = $z->referenced_recipe_id !== null
+                ? $this->fuerRezept((int) $z->referenced_recipe_id)
+                : ($z->gp_id !== null ? $this->fuerGp((int) $z->gp_id) : null);
+            if ($p === null || ($p['leer'] ?? false)) {
+                continue;
+            }
+            $g = $p['geschmack'];
+            foreach (self::DIMS as $d) {
+                $teller[$d] = max($teller[$d], (float) ($g[$d] ?? 0));
+            }
+            $komponenten[] = [
+                'name' => $z->name,
+                'quelle' => $p['quelle'] ?? 'roh',
+                'geschmack' => $g,
+                'dominant' => array_keys(array_filter($g, fn ($v) => $v >= 0.6)),
+            ];
+        }
+
+        return [
+            'leer' => $komponenten === [],
+            'komponenten' => $komponenten,
+            'teller' => $teller,
+            'dominant' => array_keys(array_filter($teller, fn ($v) => $v >= 0.6)),
+            'luecken' => array_keys(array_filter($teller, fn ($v) => $v < 0.3)),
+            'rollencheck' => $this->rollenCheck($recipeId, $teller),
+        ];
     }
 
     /** Roh-Aggregat über eine GP-Menge (MAX je Dimension, wie 232) → Montage. */
