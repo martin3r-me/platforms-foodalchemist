@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Angebote;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 use Platform\FoodAlchemist\Services\AngebotService;
 
 /**
@@ -15,6 +16,8 @@ use Platform\FoodAlchemist\Services\AngebotService;
  */
 class DetailPanel extends Component
 {
+    use ManagesCanvas;
+
     public ?int $selectedId = null;
 
     public array $form = [
@@ -198,6 +201,11 @@ class DetailPanel extends Component
         $angebot = $this->selectedId !== null ? $svc->detail($this->team(), $this->selectedId) : null;
         if ($this->selectedId !== null && $angebot === null) {
             $this->selectedId = null;
+        }
+
+        // Canvas: Angebot-Business-Case nur bei Selektions-WECHSEL (re)laden (kein Edit-Verlust).
+        if ($angebot !== null && $this->canvasOwnerId !== $angebot->id) {
+            $this->canvasInit('angebot', 'angebot', $angebot->id);
         }
 
         return view('foodalchemist::livewire.angebote.detail-panel', [

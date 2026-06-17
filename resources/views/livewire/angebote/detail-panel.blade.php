@@ -75,6 +75,17 @@
 
         <button type="button" wire:click="speichern" class="{{ $btnPrimary }} w-full justify-center">Speichern</button>
 
+        {{-- Canvas: Angebot-Business-Case (Kundenprojekt — fließt als KI-Kontext in die Angebots-/Menü-Texte) --}}
+        <div x-data="{ open: false }" class="pt-3 border-t border-black/5 dark:border-white/10" wire:key="angcanvas-{{ $angebot->id }}">
+            <button type="button" @click="open = !open" class="flex items-center justify-between w-full text-left">
+                <span class="{{ $label }}">Business Case (Canvas)</span>
+                <span class="text-gray-400 text-xs" x-text="open ? '▲' : '▼'"></span>
+            </button>
+            <div x-show="open" class="mt-2">
+                @include('foodalchemist::livewire.canvas.partials.board')
+            </div>
+        </div>
+
         {{-- CRM-Verknüpfung (MVP: nur verlinken) --}}
         <div class="space-y-2 pt-3 border-t border-black/5 dark:border-white/10">
             <span class="{{ $label }}">Kunde (CRM)</span>
