@@ -31,6 +31,76 @@ class TeamSettingsService
         'boutique_patisserie' => 'Boutique-Pâtisserie (Präzision, kleine Chargen, from scratch)',
     ];
 
+    /**
+     * #390 (2026-06-17): Per-Setting-Vererbungs-Policy über die Team-Hierarchie (Org→Team).
+     * Hier gelistete DB-Spalten werden vererbt: leeres Feld am Team erbt vom nächsten Vorfahr
+     * (Org), erstes Nicht-NULL gewinnt, Code-Default als Boden. NICHT gelistete Spalten sind
+     * team-lokal (lesen NUR die eigene Zeile — z. B. Marge/Stundensatz/Küchen-Profil, Dominique).
+     * Projekt-Ebene bewusst noch nicht (kommt mit #389 Food DNA Canvas).
+     *
+     * @var array<string, true>
+     */
+    public const ORG_VERERBT = [
+        'mwst_defaults'  => true,   // MwSt-Sätze: org-weit einheitlich (Dominique-Beispiel)
+        'rundungsregeln' => true,   // Rundungs-Konvention: org-weite Buchhaltungsregel
+        'typ_farben'     => true,   // Branding-Farben: org-weit konsistent
+    ];
+
+    /**
+     * #390: Roh-Wert einer Settings-Spalte mit Per-Setting-Vererbungs-Policy.
+     * Org-vererbte Spalte ⇒ self→…→root, erstes Nicht-NULL (≠[]); team-lokale Spalte ⇒ nur eigene Zeile.
+     * Rückgabe NULL = nicht gesetzt → Aufrufer setzt seinen Code-Default.
+     */
+    public function rohWert(Team $team, string $spalte): mixed
+    {
+        if (! array_key_exists($spalte, self::ORG_VERERBT)) {
+            return $this->for($team)->{$spalte};
+        }
+        foreach ($this->ahnenZeilen($team) as $row) {
+            $wert = $row->{$spalte};
+            if ($wert !== null && $wert !== []) {
+                return $wert;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * #390: Welches Team liefert den Wert einer (org-vererbten) Spalte? Für UI-Badges
+     * („geerbt von Org" vs „eigener Override"). NULL = niemand → Code-Default greift.
+     */
+    public function quelleTeamId(Team $team, string $spalte): ?int
+    {
+        if (! array_key_exists($spalte, self::ORG_VERERBT)) {
+            $wert = $this->for($team)->{$spalte};
+
+            return ($wert !== null && $wert !== []) ? (int) $team->id : null;
+        }
+        foreach ($this->ahnenZeilen($team) as $row) {
+            $wert = $row->{$spalte};
+            if ($wert !== null && $wert !== []) {
+                return (int) $row->team_id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Gespeicherte Settings-Zeilen entlang der Team-Ahnenkette, geordnet self→root
+     * (für den Resolver). Eine Query, dann in Ketten-Reihenfolge sortiert.
+     *
+     * @return list<FoodAlchemistTeamSetting>
+     */
+    private function ahnenZeilen(Team $team): array
+    {
+        $kette = FoodAlchemistTeamSetting::teamAncestryIds($team);   // [self, parent, …, root]
+        $rows = FoodAlchemistTeamSetting::whereIn('team_id', $kette)->get()->keyBy('team_id');
+
+        return array_values(array_filter(array_map(fn ($tid) => $rows->get($tid), $kette)));
+    }
+
     /** M7-08: Kill-Switch — false stoppt ALLE KI-Calls des Teams (Gateway-Guard). */
     public function kiAktiv(Team $team): bool
     {
@@ -45,7 +115,7 @@ class TeamSettingsService
      */
     public function typFarben(Team $team): array
     {
-        $gespeichert = $this->for($team)->typ_farben ?? [];
+        $gespeichert = $this->rohWert($team, 'typ_farben') ?? [];   // #390: org-vererbt
         $farben = self::TYP_FARBEN_DEFAULTS;
         foreach (array_keys($farben) as $key) {
             $wert = $gespeichert[$key] ?? null;
@@ -136,13 +206,13 @@ class TeamSettingsService
     /** @return array{regulaer: float, ermaessigt: float, default_satz: string} */
     public function mwst(Team $team): array
     {
-        return array_replace(self::MWST_DEFAULTS, $this->for($team)->mwst_defaults ?? []);
+        return array_replace(self::MWST_DEFAULTS, $this->rohWert($team, 'mwst_defaults') ?? []);   // #390: org-vererbt
     }
 
     /** @return array{nachkommastellen: int, modus: string} */
     public function rundung(Team $team): array
     {
-        return array_replace(self::RUNDUNG_DEFAULTS, $this->for($team)->rundungsregeln ?? []);
+        return array_replace(self::RUNDUNG_DEFAULTS, $this->rohWert($team, 'rundungsregeln') ?? []);   // #390: org-vererbt
     }
 
     /** M12: Gemeinkosten-Zuschlag % auf den Wareneinsatz (HK1 → HK2, D-HK-1). */

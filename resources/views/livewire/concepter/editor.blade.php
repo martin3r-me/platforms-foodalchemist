@@ -128,7 +128,14 @@
 
             {{-- ── Tab-Nav ───────────────────────────────────────────────── --}}
             <div class="flex gap-4 border-b border-black/5 dark:border-white/10 mt-1">
-                @foreach(['aufbau' => 'Aufbau', 'naehrwerte' => 'Nährwerte', 'allergene' => 'Allergene & Diät', 'kalkulation' => 'Kalkulation', 'notizen' => 'Notizen'] as $k => $l)
+                @php($editorTabs = ['aufbau' => 'Aufbau'])
+                @if($concept)@php($editorTabs['konzept'] = 'Konzept')@endif
+                @php($editorTabs['naehrwerte'] = 'Nährwerte')
+                @php($editorTabs['allergene'] = 'Allergene & Diät')
+                @php($editorTabs['kalkulation'] = 'Kalkulation')
+                @if($concept)@php($editorTabs['geschirr'] = 'Geschirr')@endif
+                @php($editorTabs['notizen'] = 'Notizen')
+                @foreach($editorTabs as $k => $l)
                     <button type="button" wire:click="setTab('{{ $k }}')"
                             class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors {{ $tab === $k ? $tabAktiv : $tabIdle }}">{{ $l }}</button>
                 @endforeach
@@ -810,6 +817,67 @@
                             <textarea wire:model="form.note" rows="2" class="{{ $input }}"></textarea>
                         </div>
                     </div>
+                @endif
+            @endif
+
+            {{-- ── Tab: KONZEPT (#389/Canvas — kreatives Foodkonzept) ── --}}
+            @if($tab === 'konzept')
+                @if($concept)
+                    <p class="text-[11px] text-gray-400 mb-2">Das kreative Foodkonzept (Leitidee, Inszenierung, Geschmackswelten) — fließt als Kontext in alle KI-Texte dieses Konzepts. Stil/Geschmack erbt es aus der Team-Food-DNA.</p>
+                    @include('foodalchemist::livewire.canvas.partials.board')
+                @endif
+            @endif
+
+            {{-- ── Tab: GESCHIRR (#388 — direktes Geschirr + Alternative je Gericht) ── --}}
+            @if($tab === 'geschirr')
+                @if($concept)
+                    @php($gerichtSlots = $concept->slots->filter(fn ($s) => $s->vk_recipe_id !== null || in_array($s->type, ['gericht', 'basisrezept'], true)))
+                    <p class="text-[11px] text-gray-400 mb-2">Pro Gericht ein Haupt-Geschirr + optional eine Alternative (z. B. anderer Leih-Caterer). Pflege den Geschirr-Katalog unter <span class="font-medium">Stammdaten → Geschirr</span>.</p>
+                    @forelse($gerichtSlots as $slot)
+                        <div wire:key="geschirr-slot-{{ $slot->id }}" class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2 mb-2">
+                            <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1.5 truncate">{{ $slot->wording ?: ($slot->gericht?->name ?: ($slot->titel ?: 'Position')) }}</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                @foreach(['haupt' => 'Haupt-Geschirr', 'alt' => 'Alternative'] as $rolle => $rolleLabel)
+                                    @php($item = $rolle === 'haupt' ? $slot->geschirrItem : $slot->geschirrAltItem)
+                                    <div>
+                                        <label class="{{ $label }} block mb-0.5">{{ $rolleLabel }}</label>
+                                        @if($item)
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs text-gray-800 dark:text-gray-200 truncate" title="{{ $item->bezeichnung }}">{{ $item->bezeichnung }}</span>
+                                                @if($item->leihpreis !== null)<span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0">{{ number_format((float) $item->leihpreis, 2, ',', '.') }} €</span>@endif
+                                            </div>
+                                            <div class="flex items-center gap-2 mt-0.5">
+                                                <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $rolle }}')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">ändern</button>
+                                                <button type="button" wire:click="geschirrEntfernen({{ $slot->id }}, '{{ $rolle }}')" class="{{ $btnGhostXs }} text-rose-500">entfernen</button>
+                                            </div>
+                                        @else
+                                            <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $rolle }}')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">+ Geschirr wählen</button>
+                                        @endif
+
+                                        @if($geschirrPickSlotId === $slot->id && $geschirrPickRolle === $rolle)
+                                            <div class="mt-1.5 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] p-2" wire:key="geschirr-pick-{{ $slot->id }}-{{ $rolle }}">
+                                                <input type="search" wire:model.live.debounce.300ms="geschirrSuche" placeholder="Geschirr suchen …" class="{{ $input }} !py-1 mb-1" autofocus />
+                                                <div class="space-y-0.5 max-h-48 overflow-y-auto">
+                                                    @forelse($geschirrKandidaten as $kandidat)
+                                                        <button type="button" wire:key="gk-{{ $slot->id }}-{{ $rolle }}-{{ $kandidat->id }}"
+                                                                wire:click="geschirrWaehle({{ $slot->id }}, '{{ $rolle }}', {{ $kandidat->id }})"
+                                                                class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors">
+                                                            {{ $kandidat->bezeichnung }}
+                                                            <span class="text-gray-400">· {{ $kandidat->supplier?->name }}{{ $kandidat->leihpreis !== null ? ' · ' . number_format((float) $kandidat->leihpreis, 2, ',', '.') . ' €' : '' }}</span>
+                                                        </button>
+                                                    @empty
+                                                        <p class="text-[11px] text-gray-400 px-2 py-1">{{ trim($geschirrSuche) === '' ? 'Tippen zum Suchen …' : 'Kein Geschirr gefunden.' }}</p>
+                                                    @endforelse
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @empty
+                        <p class="text-xs text-gray-400 py-6 text-center">Noch keine Gerichte im Konzept — erst im Aufbau-Tab Gerichte/Basisrezepte einfügen.</p>
+                    @endforelse
                 @endif
             @endif
         @endif

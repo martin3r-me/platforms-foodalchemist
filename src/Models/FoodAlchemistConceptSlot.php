@@ -54,6 +54,18 @@ class FoodAlchemistConceptSlot extends Model
         return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
     }
 
+    /** #388: direktes Geschirr je Gericht. */
+    public function geschirrItem(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'geschirr_item_id');
+    }
+
+    /** #388: Alternativ-Geschirr (z. B. anderer Leih-Caterer). */
+    public function geschirrAltItem(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'geschirr_alt_item_id');
+    }
+
     /** Staffelpreise (nur bei type=header_preis + preis_basis='staffel'). */
     public function staffel(): HasMany
     {

@@ -8,6 +8,7 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
+use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
 use Platform\FoodAlchemist\Services\ConcepterBewertungService;
@@ -27,14 +28,23 @@ use Platform\FoodAlchemist\Services\SalesRecipeService;
  */
 class Editor extends Component
 {
+    use ManagesCanvas;
+
     public string $type = 'concepts';   // concepts | pakete
 
     public ?int $id = null;
 
-    public string $tab = 'aufbau';       // aufbau | naehrwerte | allergene | kalkulation | notizen
+    public string $tab = 'aufbau';       // aufbau | naehrwerte | allergene | kalkulation | geschirr | notizen
 
     /** @var array<string, mixed> */
     public array $form = [];
+
+    // #388 Geschirr-Tab: Picker je Gericht-Slot (Haupt/Alternative)
+    public ?int $geschirrPickSlotId = null;
+
+    public string $geschirrPickRolle = 'haupt';   // haupt | alt
+
+    public string $geschirrSuche = '';
 
     // Aufbau (Concept): neuer Slot + festes-Gericht-Picker
     public string $neuerSlotRolle = '';
@@ -154,6 +164,8 @@ class Editor extends Component
                 'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
                 'preis_wert' => $s->preis_wert, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
             ]])->all();
+            // #389/Canvas: Concept-Canvas (kreatives Foodkonzept) über die zentrale Mechanik laden.
+            $this->canvasInit('concept', 'concept', $id);
         }
 
         $this->dispatch('modal.open', name: 'concepter-editor');
@@ -161,9 +173,33 @@ class Editor extends Component
 
     public function setTab(string $tab): void
     {
-        if (in_array($tab, ['aufbau', 'naehrwerte', 'allergene', 'kalkulation', 'notizen'], true)) {
+        if (in_array($tab, ['aufbau', 'konzept', 'naehrwerte', 'allergene', 'kalkulation', 'geschirr', 'notizen'], true)) {
             $this->tab = $tab;
         }
+    }
+
+    // ── #388 Geschirr-Tab ─────────────────────────────────────────────────────
+
+    /** Picker für slot+rolle auf/zu (Toggle). */
+    public function geschirrPicker(int $slotId, string $rolle = 'haupt'): void
+    {
+        $rolle = $rolle === 'alt' ? 'alt' : 'haupt';
+        $offen = $this->geschirrPickSlotId === $slotId && $this->geschirrPickRolle === $rolle;
+        $this->geschirrPickSlotId = $offen ? null : $slotId;
+        $this->geschirrPickRolle = $rolle;
+        $this->geschirrSuche = '';
+    }
+
+    public function geschirrWaehle(int $slotId, string $rolle, int $itemId): void
+    {
+        app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $rolle, $itemId);
+        $this->geschirrPickSlotId = null;
+        $this->geschirrSuche = '';
+    }
+
+    public function geschirrEntfernen(int $slotId, string $rolle): void
+    {
+        app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $rolle, null);
     }
 
     public function speichern(): void
@@ -235,7 +271,8 @@ class Editor extends Component
                 ->values()->all(),
         ];
         try {
-            $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('concept.wording', $kontext);
+            // #389: Concept-ID durchreichen → Food-DNA-Concept-Override gilt für dieses Wording.
+            $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('concept.wording', $kontext, ['food_dna_concept_id' => $concept->id]);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
 
@@ -845,6 +882,10 @@ class Editor extends Component
             'rollen' => $pakete->rollen($team),
             'schreibstile' => FoodAlchemistWritingStyle::visibleToTeam($team)->where('is_inactive', false)
                 ->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
+            // #388 Geschirr-Tab: Kandidaten nur wenn ein Picker offen ist (sonst leer = günstig).
+            'geschirrKandidaten' => ($this->tab === 'geschirr' && $this->geschirrPickSlotId !== null)
+                ? app(\Platform\FoodAlchemist\Services\GeschirrService::class)->searchItems($team, $this->geschirrSuche, 12)
+                : collect(),
         ]);
     }
 

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 use Platform\FoodAlchemist\Services\FoodbookService;
 
 /**
@@ -15,7 +16,7 @@ use Platform\FoodAlchemist\Services\FoodbookService;
  */
 class Index extends Component
 {
-    use WithPagination;
+    use WithPagination, ManagesCanvas;
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -340,6 +341,11 @@ class Index extends Component
         $fb = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
         $kapitel = $fb !== null && $this->selectedKapitelId !== null
             ? $fb->kapitel->firstWhere('id', $this->selectedKapitelId) : null;
+
+        // #389/Canvas: Foodbook-Leitidee-Canvas nur bei Selektions-WECHSEL (re)laden — kein Edit-Verlust je Roundtrip.
+        if ($fb !== null && $this->canvasOwnerId !== $fb->id) {
+            $this->canvasInit('foodbook', 'foodbook', $fb->id);
+        }
 
         return view('foodalchemist::livewire.foodbooks.index', [
             'foodbooks' => $svc->paginateBrowser(['search' => $this->search], $team),

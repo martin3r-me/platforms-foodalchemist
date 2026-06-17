@@ -59,6 +59,8 @@ class ConceptService
                 'slots.gericht:id,name,vk_netto,ek_total_eur,speisen_klasse_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergene_konfidenz',
                 'slots.gericht.speisenKlasse:id,bezeichnung',
                 'slots.einheit:id,slug,display_de',
+                'slots.geschirrItem:id,bezeichnung,leihpreis,einheit',
+                'slots.geschirrAltItem:id,bezeichnung,leihpreis,einheit',
                 'vorlageQuelle:id,name',
             ])
             ->find($id);
@@ -287,6 +289,22 @@ class ConceptService
         $slot = $this->ownedSlot($team, $slotId);
         $text = $text !== null ? trim($text) : null;
         $slot->update(['wording' => $text === '' ? null : $text]);
+
+        return $slot->refresh();
+    }
+
+    /**
+     * #388: Geschirr-Zuordnung je Gericht-Slot. $rolle ∈ haupt|alt; $itemId=null = entfernen.
+     * Item muss team-sichtbar sein (FoodAlchemistGeschirrItem::visibleToTeam).
+     */
+    public function setSlotGeschirr(Team $team, int $slotId, string $rolle, ?int $itemId): FoodAlchemistConceptSlot
+    {
+        $slot = $this->ownedSlot($team, $slotId);
+        if ($itemId !== null && ! \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::visibleToTeam($team)->whereKey($itemId)->exists()) {
+            throw new \RuntimeException('Geschirr-Artikel nicht sichtbar.');
+        }
+        $spalte = $rolle === 'alt' ? 'geschirr_alt_item_id' : 'geschirr_item_id';
+        $slot->update([$spalte => $itemId]);
 
         return $slot->refresh();
     }

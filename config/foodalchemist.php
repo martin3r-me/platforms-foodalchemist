@@ -81,6 +81,12 @@ return [
                     'route' => 'foodalchemist.review',
                     'icon'  => 'heroicon-o-bell-alert',
                 ],
+                [
+                    // #389: Food DNA — „Markenkern Küche", stehende KI-Referenz für alle Generatoren
+                    'label' => 'Food DNA',
+                    'route' => 'foodalchemist.food-dna.index',
+                    'icon'  => 'heroicon-o-finger-print',
+                ],
             ],
         ],
         [
@@ -95,6 +101,11 @@ return [
                     'label' => 'Lieferanten',
                     'route' => 'foodalchemist.suppliers.index',
                     'icon'  => 'heroicon-o-truck',
+                ],
+                [
+                    'label' => 'Geschirr',
+                    'route' => 'foodalchemist.geschirr.index',
+                    'icon'  => 'heroicon-o-square-2-stack',
                 ],
             ],
         ],

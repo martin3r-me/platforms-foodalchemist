@@ -58,6 +58,19 @@ Route::get('/lieferanten', \Platform\FoodAlchemist\Livewire\Suppliers\Index::cla
     ->name('foodalchemist.suppliers.index');
 
 /**
+ * #388 Geschirr-Datenbank (non-food) — Leih-Lieferant → Geschirr-Artikel,
+ * Master-Detail nach Lieferanten-Vorbild. Auswahl/Suche in der URL (V-17).
+ */
+Route::get('/geschirr', \Platform\FoodAlchemist\Livewire\Geschirr\Index::class)
+    ->name('foodalchemist.geschirr.index');
+
+/**
+ * #389 Food DNA — Team-Canvas „Markenkern Küche" (stehende KI-Referenz für alle Generatoren).
+ */
+Route::get('/food-dna', \Platform\FoodAlchemist\Livewire\FoodDna\Index::class)
+    ->name('foodalchemist.food-dna.index');
+
+/**
  * Einstellungen (M1-01, D-1 §4) — Sektion in der URL (V-17: kein Tab-State-Verlust).
  */
 Route::get('/einstellungen/{sektion?}', \Platform\FoodAlchemist\Livewire\Settings\Index::class)

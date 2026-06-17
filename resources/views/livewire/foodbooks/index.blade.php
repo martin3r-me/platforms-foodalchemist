@@ -141,6 +141,18 @@
                 </div>
             </div>
 
+            {{-- #389/Canvas: Foodbook-Leitidee (was muss rein, welche Konzepte, was muss es erfüllen) --}}
+            <div x-data="{ open: false }" class="relative overflow-hidden {{ $card }} p-5" wire:key="fbcanvas-{{ $fb->id }}">
+                <div class="{{ $cardAccent }}"></div>
+                <button type="button" @click="open = !open" class="flex items-center justify-between w-full text-left">
+                    <span class="{{ $label }}">Leitidee (Canvas) — was muss rein · welche Konzepte · was muss es erfüllen</span>
+                    <span class="text-gray-400 text-xs" x-text="open ? '▲' : '▼'"></span>
+                </button>
+                <div x-show="open" class="mt-3">
+                    @include('foodalchemist::livewire.canvas.partials.board')
+                </div>
+            </div>
+
             @if($kapitel)
                 {{-- Kapitel-Kopf --}}
                 <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="kaphdr-{{ $kapitel->id }}">
