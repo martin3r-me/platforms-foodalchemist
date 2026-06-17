@@ -631,6 +631,8 @@ class RecipeModal extends Component
                 ? FoodAlchemistRecipeCategory::where('main_group_id', $this->form['hauptgruppe_id'])->orderBy('sort_order')->get()
                 : collect(),
             'keyVorschau' => trim($this->form['name']) !== '' ? $recipes->rezeptKey($this->form['name']) : '',
+            'sensorik' => $this->recipeId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($this->recipeId) : null,
+            'pairing' => $r !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($r) : null,
         ]);
     }
 }

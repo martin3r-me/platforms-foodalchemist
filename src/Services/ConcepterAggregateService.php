@@ -37,6 +37,7 @@ class ConcepterAggregateService
     {
         return [
             'id', 'name', 'vk_netto', 'ek_total_eur', 'arbeitszeit_min', 'vk_anzahl_einheiten', 'vk_menge_pro_einheit_g',
+            'ist_verkaufsrezept',                            // Basis vs. VK — Paket-Posten-Badge + g/P-EK-Zweig
             'yield_kg', 'ertrag_stueck',                     // Stück-Modus (kg↔Stück): Teiler/Gramm aus Ertrag+Yield
             'nutri_kcal_per_100g', 'nutri_protein_g_per_100g', 'nutri_fat_g_per_100g',
             'nutri_carbs_g_per_100g', 'nutri_salt_g_per_100g', 'nutri_konfidenz',

@@ -78,7 +78,7 @@ class PaketService
     {
         return FoodAlchemistPaket::visibleToTeam($team)
             ->with(['gerichte' => fn ($q) => $q->orderBy('position'),
-                'gerichte.gericht:id,name,vk_netto,vk_brutto,ek_total_eur,mwst_satz',
+                'gerichte.gericht:id,name,vk_netto,vk_brutto,ek_total_eur,mwst_satz,ist_verkaufsrezept,yield_kg',
                 'gerichte.einheit:id,slug,display_de'])
             ->find($id);
     }
@@ -234,13 +234,25 @@ class PaketService
     {
         $auto = $paket->preis_modus === 'auto';
         $gerichte = $paket->gerichte()->with([
-            'gericht:id,vk_netto,ek_total_eur,vk_anzahl_einheiten,vk_menge_pro_einheit_g',
+            'gericht:id,vk_netto,ek_total_eur,vk_anzahl_einheiten,vk_menge_pro_einheit_g,ist_verkaufsrezept,yield_kg',
             'einheit:id,slug,dimension,default_in_g',
         ])->get();
 
         $vkSum = 0.0;
         $ekSum = 0.0;
         foreach ($gerichte as $g) {
+            // Basisrezept-Posten (z. B. Hausbrot im Brotkorb-Paket): Menge/Person = GRAMM,
+            // EK = g/Person ÷ Batch-Gramm × Batch-EK; kein Einzel-VK (Basis wird nicht solo verkauft).
+            // Zweig greift nur für ist_verkaufsrezept=0 → Gericht-Pfad unverändert (keine Regression).
+            if (! (bool) ($g->gericht->ist_verkaufsrezept ?? true)) {
+                $yieldG = (float) ($g->gericht->yield_kg ?? 0) * 1000;
+                $mengeG = $g->menge !== null ? (float) $g->menge : null;
+                if ($yieldG > 0 && $mengeG !== null && $mengeG > 0) {
+                    $ekSum += (float) ($g->gericht->ek_total_eur ?? 0) * ($mengeG / $yieldG);
+                }
+
+                continue;
+            }
             $pae = ConcepterAggregateService::portionsAequivalent(
                 $g->menge !== null ? (float) $g->menge : null,
                 $g->einheit,

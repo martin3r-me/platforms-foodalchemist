@@ -32,6 +32,8 @@ class DetailPanel extends Component
 
     public string $conceptSuche = '';
 
+    public ?int $conceptKategorie = null;
+
     #[On('angebot-selected')]
     public function zeige(?int $id): void
     {
@@ -215,7 +217,10 @@ class DetailPanel extends Component
             'firmen' => $svc->sucheFirmen($this->firmaSuche),
             'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
             'crmVerfuegbar' => $svc->crmVerfuegbar(),
-            'katalogTreffer' => $this->conceptSuche !== '' ? $svc->katalogConcepts($this->team(), $this->conceptSuche) : collect(),
+            'katalogTreffer' => ($this->conceptSuche !== '' || $this->conceptKategorie !== null)
+                ? $svc->katalogConcepts($this->team(), $this->conceptSuche, $this->conceptKategorie)
+                : collect(),
+            'conceptKategorien' => app(\Platform\FoodAlchemist\Services\ConceptService::class)->categoriesFlat($this->team()),
         ]);
     }
 

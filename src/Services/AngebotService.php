@@ -328,11 +328,12 @@ class AngebotService
     }
 
     /** Suche über standardisierte (echte) Katalog-Concepts für den Referenz-Picker. */
-    public function katalogConcepts(Team $team, string $suche, int $limit = 10): Collection
+    public function katalogConcepts(Team $team, string $suche, ?int $kategorieId = null, int $limit = 50): Collection
     {
         return FoodAlchemistConcept::visibleToTeam($team)->standardisiert()->echte()
             ->when(trim($suche) !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($suche)) . '%']))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'preis_pro_person_cache']);
+            ->when($kategorieId !== null, fn ($q) => $q->where('category_id', $kategorieId))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'preis_pro_person_cache', 'category_id']);
     }
 
     // ── CRM-Lese-Picker (MVP) — class_exists-geschützt (Modul läuft ohne crm) ──

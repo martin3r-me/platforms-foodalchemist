@@ -181,6 +181,14 @@
         </x-foodalchemist::modal-section>
     @endif
 
+    @if(! $neu)
+        <x-foodalchemist::modal-section title="Sensorik &amp; Pairing">
+            @include('foodalchemist::livewire.concepter.partials.sensorik')
+            <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mt-5 mb-2">Pairing</h3>
+            @include('foodalchemist::livewire.concepter.partials.pairing')
+        </x-foodalchemist::modal-section>
+    @endif
+
     <x-slot:footer>
         <div class="flex items-center justify-between gap-3 w-full">
             <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-400" title="GT-12-10: HARD_STOP bei vorhandenem gp_key/Jaccard ≥ 0.92 — force legt bewusst trotzdem an">

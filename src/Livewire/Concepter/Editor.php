@@ -93,6 +93,9 @@ class Editor extends Component
     // Aufbau (Paket): Gericht-Suche
     public string $paketGerichtSuche = '';
 
+    // Aufbau (Paket): Quelle des Posten-Pickers — Gericht (VK) oder Basisrezept (z. B. Hausbrot im Brotkorb-Paket).
+    public string $paketQuelle = 'gericht';
+
     // Aufbau · Gericht-Baum (Picker-Filter, geteilt von Concept-Slot + Paket-Schnüren):
     // gleiche VK-Hauptgruppe→Klasse-Kaskade wie der VK-Browser, damit man Gerichte
     // browsen statt nur tippen kann (Feedback D.B. 2026-06-13).
@@ -120,7 +123,7 @@ class Editor extends Component
     public function oeffnen(string $type, ?int $id): void
     {
         $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'einfuegenNachId', 'linkeListe', 'paketKlasse', 'basisSuche', 'kombiSuche', 'basisHg', 'basisKat', 'basisNiveau', 'gerichtSuche', 'pickTyp',
-            'paketGerichtSuche', 'pickHg', 'pickKlasse', 'pickGeschmack',
+            'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack',
             'zielModus', 'zielPreis', 'zielVorschlag', 'rueckSprungConceptId', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
         $this->id = $id;
@@ -173,7 +176,7 @@ class Editor extends Component
 
     public function setTab(string $tab): void
     {
-        if (in_array($tab, ['aufbau', 'konzept', 'naehrwerte', 'allergene', 'kalkulation', 'geschirr', 'notizen'], true)) {
+        if (in_array($tab, ['aufbau', 'konzept', 'naehrwerte', 'allergene', 'kalkulation', 'geschirr', 'sensorik', 'notizen'], true)) {
             $this->tab = $tab;
         }
     }
@@ -841,7 +844,11 @@ class Editor extends Component
             if ($paket !== null) {
                 $aggregat = $agg->paketAggregat($paket);
                 $kalkulation = $kalk->paketHk($team, $paket);
-                if ($pickAktiv($this->paketGerichtSuche)) {
+                if ($this->paketQuelle === 'basisrezept') {
+                    $paketKandidaten = $this->paketGerichtSuche !== ''
+                        ? $pakete->basisKandidaten($team, $this->paketGerichtSuche)
+                        : collect();
+                } elseif ($pickAktiv($this->paketGerichtSuche)) {
                     $paketKandidaten = $pakete->gerichtKandidaten($team, $this->paketGerichtSuche, $pickFilter);
                 }
             }
@@ -886,6 +893,10 @@ class Editor extends Component
             'geschirrKandidaten' => ($this->tab === 'geschirr' && $this->geschirrPickSlotId !== null)
                 ? app(\Platform\FoodAlchemist\Services\GeschirrService::class)->searchItems($team, $this->geschirrSuche, 12)
                 : collect(),
+            // Sensorik-Tab: Geschmacks-Balance + Textur über die Concept-Gerichte (nur wenn Tab aktiv).
+            'sensorik' => ($this->tab === 'sensorik' && $concept !== null)
+                ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerConcept($concept)
+                : null,
         ]);
     }
 

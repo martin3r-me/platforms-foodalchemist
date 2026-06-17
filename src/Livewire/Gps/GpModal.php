@@ -320,6 +320,8 @@ class GpModal extends Component
             'derivatKandidaten' => $this->derivatSuche !== '' && $team !== null
                 ? FoodAlchemistGp::visibleToTeam($team)->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($this->derivatSuche) . '%'])->orderBy('name')->limit(6)->get()
                 : collect(),
+            'sensorik' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerGp($this->gpId) : null,
+            'pairing' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelGp($this->gpId) : null,
         ]);
     }
 

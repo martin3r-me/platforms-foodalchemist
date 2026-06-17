@@ -466,6 +466,8 @@ class VkModal extends Component
                     ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($this->basisSuche)) . '%'])
                     ->orderBy('name')->limit(6)->get(['id', 'name', 'yield_kg', 'ek_total_eur'])
                 : collect(),
+            'sensorik' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($rezept->id) : null,
+            'pairing' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($rezept) : null,
         ]);
     }
 }

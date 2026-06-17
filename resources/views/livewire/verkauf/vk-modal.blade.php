@@ -2,7 +2,7 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 {{-- R5 (Dominique): VK-Editor nimmt wie der Basis-Editor den ganzen Bildschirm --}}
-<x-foodalchemist::modal name="vk-modal" title="{{ $rezept !== null ? 'Gericht bearbeiten' : 'Neues Gericht' }}" size="{{ $rezept !== null ? 'max-w-[100rem]' : 'max-w-3xl' }}">
+<x-foodalchemist::modal name="vk-modal" title="{{ $rezept !== null ? 'Gericht bearbeiten' : 'Neues Gericht' }}" size="max-w-3xl" :fullscreen="$rezept !== null">
     @if($rezept !== null)
         <x-slot:actions>
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-vk-speichern>Speichern</button>
@@ -72,7 +72,10 @@
              bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
         <div x-data="{ tab: 'aufbau' }" data-vk-tabs>
             <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
-                @foreach(['aufbau' => 'Aufbau', 'naehrwerte' => 'Nährwerte', 'allergene' => 'Allergene & Diät', 'kalkulation' => 'Kalkulation', 'service' => 'Service', 'notizen' => 'Notizen'] as $tabKey => $tabLabel)
+                @php($vkTabs = ['aufbau' => 'Aufbau', 'naehrwerte' => 'Nährwerte', 'allergene' => 'Allergene & Diät', 'kalkulation' => 'Kalkulation', 'service' => 'Service'])
+                @if($rezept !== null)@php($vkTabs['sensorik'] = 'Sensorik & Pairing')@endif
+                @php($vkTabs['notizen'] = 'Notizen')
+                @foreach($vkTabs as $tabKey => $tabLabel)
                     <button type="button" @click="tab = '{{ $tabKey }}'"
                             :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
                             class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors" data-vk-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
@@ -416,6 +419,13 @@
             </div>
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab SERVICE --}}
+
+        {{-- ── Tab: SENSORIK & PAIRING (Geschmacks-Balance + Textur + Aroma-Kohäsion über die Zutaten-GPs) ── --}}
+        <div x-show="tab === 'sensorik'" x-cloak class="pt-4">
+            @include('foodalchemist::livewire.concepter.partials.sensorik')
+            <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mt-5 mb-2">Pairing</h3>
+            @include('foodalchemist::livewire.concepter.partials.pairing')
+        </div>
 
         {{-- ── Tab: NOTIZEN (Notizen + Verwendungsnachweise) ───────────── --}}
         <div x-show="tab === 'notizen'" x-cloak class="pt-4 space-y-4">

@@ -442,6 +442,72 @@ class PairingService
             ->get(['a.slug', 'a.display_de', 'rp.typ', 'rp.konfidenz']);
     }
 
+    /** Kern-Aroma-Anker eines GP inkl. Slug/Quelle (GP-Pairing-Panel). */
+    public function gpAnkers(int $gpId): Collection
+    {
+        return DB::table('foodalchemist_gp_anker_mappings AS m')
+            ->join('foodalchemist_vocab_pairing_ankers AS a', 'a.id', '=', 'm.anker_id')
+            ->where('m.gp_id', $gpId)->where('m.rolle', 'kern')->whereNull('m.deleted_at')
+            ->orderByRaw('COALESCE(m.ai_confidence, 1.0) DESC')->orderBy('m.id')
+            ->get(['a.id', 'a.slug', 'a.display_de', 'm.quelle', 'm.ai_confidence']);
+    }
+
+    // ── Kompakt-Panels fürs »Sensorik & Pairing«-Tab (read-only) ─────────
+
+    /**
+     * Gericht/Basisrezept: Kohäsions-Kennzahlen + Kern-Anker + »komplettiert den Teller«.
+     * Spiegelt die Editor-Sicht — keine Schreibpfade, keine KI.
+     */
+    public function panelRecipe(FoodAlchemistRecipe $recipe): array
+    {
+        $k = $this->recipeCohesion($recipe);
+
+        return [
+            'typ' => 'recipe',
+            'score' => $k['score'],
+            'coverage_pct' => $k['coverage_pct'],
+            'rated_pairs' => $k['rated_pairs'],
+            'total_pairs' => $k['total_pairs'],
+            'weakest_pair' => $k['weakest_pair'],
+            'orphans' => array_values(array_map(
+                fn ($c) => $c['label'],
+                array_filter($k['komponenten'], fn ($c) => $c['is_orphan']),
+            )),
+            'anker' => $this->recipeAnkers($recipe->id)
+                ->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'quelle' => $a->quelle])->all(),
+            'vorschlaege' => collect($this->componentSuggestions($recipe, 6)['klassiker'])
+                ->map(fn ($v) => [
+                    'slug' => $v['slug'], 'cover' => $v['cover'], 'dish_n' => $v['dish_n'],
+                    'mean_w' => $v['mean_w'], 'allrounder' => $v['allrounder'],
+                ])->all(),
+        ];
+    }
+
+    /** GP: eigene Aroma-Anker + ihre klassischen Nachbarn (»passt zu«). */
+    public function panelGp(int $gpId): array
+    {
+        $anker = $this->gpAnkers($gpId);
+        $eigene = $anker->pluck('id')->map(fn ($i) => (int) $i)->all();
+
+        $nachbarn = [];
+        foreach ($anker as $a) {
+            foreach ($this->ankerNeighbors($a->slug, 'klassisch', 12) as $n) {
+                $id = (int) $n->id;
+                if (in_array($id, $eigene, true)) {
+                    continue;
+                }
+                $nachbarn[$id] = $n->display_de ?: $n->slug;
+            }
+        }
+        natcasesort($nachbarn);
+
+        return [
+            'typ' => 'gp',
+            'anker' => $anker->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'quelle' => $a->quelle])->all(),
+            'nachbarn' => array_slice(array_values($nachbarn), 0, 18),
+        ];
+    }
+
     // ── M5-07: Aroma-Netz-Graph (D-7, 13_REFERENZ Nachlieferung 2) ───────
 
     /**

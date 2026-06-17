@@ -26,11 +26,17 @@ class FoodAlchemistSpeiseplanEintrag extends Model
         'woche' => 'integer',
         'wochentag' => 'integer',
         'position' => 'integer',
+        'datum' => 'date',
     ];
 
     public function speiseplan(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistSpeiseplan::class, 'speiseplan_id');
+    }
+
+    public function linie(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistSpeiseplanLinie::class, 'linie_id');
     }
 
     public function concept(): BelongsTo

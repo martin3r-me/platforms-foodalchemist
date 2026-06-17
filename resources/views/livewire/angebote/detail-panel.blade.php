@@ -75,16 +75,17 @@
 
         <button type="button" wire:click="speichern" class="{{ $btnPrimary }} w-full justify-center">Speichern</button>
 
-        {{-- Canvas: Angebot-Business-Case (Kundenprojekt — fließt als KI-Kontext in die Angebots-/Menü-Texte) --}}
-        <div x-data="{ open: false }" class="pt-3 border-t border-black/5 dark:border-white/10" wire:key="angcanvas-{{ $angebot->id }}">
-            <button type="button" @click="open = !open" class="flex items-center justify-between w-full text-left">
-                <span class="{{ $label }}">Business Case (Canvas)</span>
-                <span class="text-gray-400 text-xs" x-text="open ? '▲' : '▼'"></span>
-            </button>
-            <div x-show="open" class="mt-2">
-                @include('foodalchemist::livewire.canvas.partials.board')
-            </div>
-        </div>
+        {{-- Canvas: Angebot-Business-Case — auf Klick im Modal --}}
+        <button type="button" @click="$dispatch('modal.open', { name: 'angebot-canvas' })"
+                class="{{ $btnGhost }} w-full justify-center" wire:key="angcanvas-btn-{{ $angebot->id }}">
+            Business-Case-Canvas
+        </button>
+        <x-foodalchemist::modal name="angebot-canvas" title="Angebot — Business Case (Canvas)" size="max-w-2xl">
+            @include('foodalchemist::livewire.canvas.partials.board')
+            <x-slot:footer>
+                <button type="button" @click="$dispatch('modal.close', { name: 'angebot-canvas' })" class="{{ $btnGhost }}">Schließen</button>
+            </x-slot:footer>
+        </x-foodalchemist::modal>
 
         {{-- CRM-Verknüpfung (MVP: nur verlinken) --}}
         <div class="space-y-2 pt-3 border-t border-black/5 dark:border-white/10">
@@ -142,27 +143,60 @@
             @endforelse
         </div>
 
-        {{-- #380 DoD-5: bestehende Katalog-Concepts referenzieren (Portfolio wiederverwenden) --}}
+        {{-- #380 DoD-5: Katalog-Concepts referenzieren — Picker im Livewire-sicheren Modal
+             (roomy, escaped das enge Panel; der x-teleport-Drawer brach die Live-Suche, weil
+             Livewire-morph teleportierten Inhalt nicht zuverlässig aktualisiert). --}}
         <div class="space-y-1.5 pt-3 border-t border-black/5 dark:border-white/10">
-            <span class="{{ $label }}">Aus Katalog (referenziert)</span>
+            <div class="flex items-center justify-between">
+                <span class="{{ $label }}">Aus Katalog (referenziert)</span>
+                <button type="button" @click="$dispatch('modal.open', { name: 'angebot-katalog' })" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">+ Concept einbinden</button>
+            </div>
             @forelse($angebot->referenzierteConcepts as $rc)
                 <div wire:key="refc-{{ $rc->id }}" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/[0.03] dark:bg-white/5 text-xs">
                     <span class="flex-1 min-w-0 truncate">{{ $rc->konsumenten_name ?: $rc->name }} <span class="text-gray-400">· {{ $rc->slots_count ?? 0 }} Pos.</span></span>
                     <button type="button" wire:click="entferneReferenz({{ $rc->id }})" class="text-gray-400 hover:text-red-500 shrink-0" title="Referenz lösen">✕</button>
                 </div>
             @empty
-                <p class="text-[11px] text-gray-400">Keine referenziert. Unten suchen, um ein bestehendes Katalog-Menü einzubinden (Portfolio wiederverwenden).</p>
+                <p class="text-[11px] text-gray-400">Keine referenziert. „+ Concept einbinden" öffnet den Katalog-Filter (Portfolio wiederverwenden).</p>
             @endforelse
-            <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Katalog-Concept suchen …" class="{{ $input }}" />
-            @if($katalogTreffer->isNotEmpty())
-                <div class="space-y-0.5">
-                    @foreach($katalogTreffer as $kt)
-                        <button type="button" wire:key="kref-{{ $kt->id }}" wire:click="referenziereConcept({{ $kt->id }})"
-                                class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $kt->name }}</button>
-                    @endforeach
-                </div>
-            @endif
         </div>
+
+        {{-- Katalog-Concept-Picker (Modal, Livewire-sicher) — Suche + Kategorie-Tree + Liste, „alles eingeben" --}}
+        <x-foodalchemist::modal name="angebot-katalog" title="Katalog-Concept einbinden" size="max-w-3xl">
+            <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-3" />
+            <div class="flex gap-3 min-h-[20rem]">
+                <div class="w-44 shrink-0 overflow-y-auto border-r border-black/5 dark:border-white/10 pr-2 space-y-0.5 max-h-[26rem]">
+                    <button type="button" wire:click="$set('conceptKategorie', null)"
+                            class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $conceptKategorie === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">Alle Kategorien</button>
+                    <x-foodalchemist::tree :initial-collapsed="collect($conceptKategorien)->where('has_children', true)->pluck('id')->all()">
+                        @foreach($conceptKategorien as $kat)
+                            <x-foodalchemist::tree-node :node-id="$kat['id']" :depth="$kat['depth']" :ancestors="$kat['ancestors'] ?? []"
+                                :has-children="$kat['has_children'] ?? false" :active="$conceptKategorie === $kat['id']">
+                                <button type="button" wire:click="$set('conceptKategorie', {{ $kat['id'] }})" class="flex-1 min-w-0 truncate text-left text-xs px-1 py-0.5">{{ $kat['name'] }}</button>
+                            </x-foodalchemist::tree-node>
+                        @endforeach
+                    </x-foodalchemist::tree>
+                </div>
+                <div class="flex-1 min-w-0 overflow-y-auto space-y-0.5 max-h-[26rem]">
+                    @if($katalogTreffer->isNotEmpty())
+                        @foreach($katalogTreffer as $kt)
+                            <button type="button" wire:key="acd-{{ $kt->id }}" wire:click="referenziereConcept({{ $kt->id }})"
+                                    class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                <span class="truncate text-gray-900 dark:text-gray-100">+ {{ $kt->name }}</span>
+                                <span class="text-gray-400 tabular-nums shrink-0">{{ $kt->preis_pro_person_cache !== null ? number_format((float) $kt->preis_pro_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                            </button>
+                        @endforeach
+                    @elseif($conceptSuche !== '' || $conceptKategorie !== null)
+                        <p class="text-[11px] text-gray-400 px-2 py-2">Keine Concepts für diese Auswahl.</p>
+                    @else
+                        <p class="text-[11px] text-gray-400 px-2 py-2">Kategorie wählen oder oben suchen.</p>
+                    @endif
+                </div>
+            </div>
+            <x-slot:footer>
+                <button type="button" @click="$dispatch('modal.close', { name: 'angebot-katalog' })" class="{{ $btnGhost }}">Schließen</button>
+            </x-slot:footer>
+        </x-foodalchemist::modal>
 
         {{-- #383: Mengen-Hochrechnung für die Pax (Einkaufs-/Produktionssicht) --}}
         @if($kalkulation && ! $kalkulation['leer'] && $kalkulation['pax'] > 0 && count($kalkulation['mengen']))
