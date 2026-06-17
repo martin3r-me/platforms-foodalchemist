@@ -157,6 +157,12 @@ class TeamSettingsService
 
     public const MARGE_DEFAULT = 15.0;
 
+    /** #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — gastro-üblich 28–35 %, Default 30 %. */
+    public const ZIEL_WARENEINSATZ_DEFAULT = 30.0;
+
+    /** #379+: Lohnnebenkosten-Zuschlag % (AG-Anteil auf Produktionslohn). Default 0 = nur Brutto-Lohn. */
+    public const LOHNNEBENKOSTEN_DEFAULT = 0.0;
+
     /**
      * Kanonisches Default-Schema — mehrstufige Zuschlagskalkulation (D-K8, produzierendes
      * Gewerbe). Stufen: MEK + MGK(%·MEK) + FEK + FGK(%·FEK) = HK → +VwGK/Logistik(%·HK)
@@ -234,6 +240,22 @@ class TeamSettingsService
         $v = $this->for($team)->marge_pct;
 
         return $v !== null ? (float) $v : self::MARGE_DEFAULT;
+    }
+
+    /** #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — Controlling-Ziel + Break-even-Treiber. */
+    public function zielWareneinsatzPct(Team $team): float
+    {
+        $v = $this->for($team)->ziel_wareneinsatz_pct;
+
+        return $v !== null && (float) $v > 0 ? (float) $v : self::ZIEL_WARENEINSATZ_DEFAULT;
+    }
+
+    /** #379+: Lohnnebenkosten-Zuschlag % auf den Produktionslohn (AG-/Sozialabgaben). */
+    public function lohnnebenkostenPct(Team $team): float
+    {
+        $v = $this->for($team)->lohnnebenkosten_pct;
+
+        return $v !== null && (float) $v >= 0 ? (float) $v : self::LOHNNEBENKOSTEN_DEFAULT;
     }
 
     /**

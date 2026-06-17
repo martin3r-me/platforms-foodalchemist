@@ -4,10 +4,14 @@ namespace Platform\FoodAlchemist\Livewire;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Services\BulkEnrichService;
 use Platform\FoodAlchemist\Services\MatchService;
+use Platform\FoodAlchemist\Services\SignalDetektorService;
+use Platform\FoodAlchemist\Services\SignalService;
 
 /**
  * M9-03 / V-10: Review-Queue — EINE «Zu prüfen»-Seite für alles, was eine
@@ -18,9 +22,17 @@ use Platform\FoodAlchemist\Services\MatchService;
  */
 class ReviewQueue extends Component
 {
+    use WithPagination;
+
     public ?string $meldung = null;
 
     public ?string $fehler = null;
+
+    #[Url(as: 'sig_status')]
+    public string $signalStatus = 'offen';
+
+    #[Url(as: 'sig_typ')]
+    public string $signalTyp = '';
 
     public function matchUebernehmen(int $proposalId): void
     {
@@ -40,6 +52,48 @@ class ReviewQueue extends Component
     public function bulkVerwerfen(int $proposalId): void
     {
         $this->aktion(fn ($team) => app(BulkEnrichService::class)->verwerfen($team, $proposalId), 'KI-Vorschlag verworfen.');
+    }
+
+    // ── Klasse B: Signale (#378) ───────────────────────────────────────────
+
+    public function signalErledigt(int $id): void
+    {
+        $this->aktion(fn ($team) => app(SignalService::class)->abschliessen($team, $id), 'Signal erledigt.');
+    }
+
+    public function signalIgnorieren(int $id): void
+    {
+        $this->aktion(fn ($team) => app(SignalService::class)->ignorieren($team, $id), 'Signal ignoriert.');
+    }
+
+    public function signalWiederOeffnen(int $id): void
+    {
+        $this->aktion(fn ($team) => app(SignalService::class)->wiederOeffnen($team, $id), 'Signal wieder geöffnet.');
+    }
+
+    /** Detektor manuell anstoßen (sonst via Scheduler/Command). */
+    public function detektorLaufen(): void
+    {
+        $this->meldung = null;
+        $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        $n = app(SignalDetektorService::class)->laufen($team);
+        $this->meldung = "Detektor gelaufen — {$n} Signal(e) erzeugt/aktualisiert.";
+    }
+
+    public function setSignalStatus(string $s): void
+    {
+        $this->signalStatus = $s;
+        $this->resetPage();
+    }
+
+    public function setSignalTyp(string $t): void
+    {
+        $this->signalTyp = $this->signalTyp === $t ? '' : $t;
+        $this->resetPage();
     }
 
     private function aktion(\Closure $tu, string $erfolg): void
@@ -74,6 +128,8 @@ class ReviewQueue extends Component
 
         $rezept = fn () => DB::table('foodalchemist_recipes')->whereIn('team_id', $kette)->whereNull('deleted_at');
 
+        $signalSvc = app(SignalService::class);
+
         return view('foodalchemist::livewire.review-queue', [
             'matchZahl' => (clone $matchOffen)->count(),
             'matches' => (clone $matchOffen)->orderByDesc('p.score')->limit(50)
@@ -89,6 +145,12 @@ class ReviewQueue extends Component
             'ungemappt' => (clone $rezept())->where('n_zutaten_ungemappt', '>', 0)->orderByDesc('n_zutaten_ungemappt')
                 ->limit(50)->get(['id', 'name', 'ist_verkaufsrezept', 'n_zutaten_ungemappt']),
             'ungemapptZahl' => (clone $rezept())->where('n_zutaten_ungemappt', '>', 0)->count(),
+            // Klasse B: Signale (#378)
+            'signale' => $signalSvc->paginate(['status' => $this->signalStatus, 'typ' => $this->signalTyp], $team, 30),
+            'signalOffen' => $signalSvc->offeneCount($team),
+            'signalNachTyp' => $signalSvc->offeneNachTyp($team),
+            'signalTypWerte' => $signalSvc->typWerte(),
+            'signalStatusWerte' => $signalSvc->statusWerte(),
         ])->layout('platform::layouts.app');
     }
 }

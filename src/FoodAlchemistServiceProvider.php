@@ -64,6 +64,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ImportSliceCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
                 \Platform\FoodAlchemist\Console\TeamOnboardingCommand::class,
+                \Platform\FoodAlchemist\Console\SignaleDetektorCommand::class,
             ]);
         }
     }

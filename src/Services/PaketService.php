@@ -37,6 +37,7 @@ class PaketService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistPaket::visibleToTeam($team)
+            ->standardisiert()   // #380: angebots-lokale Entwürfe gehören nicht in den Katalog
             ->withCount('gerichte')
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
                 $s = '%' . mb_strtolower($filters['search']) . '%';

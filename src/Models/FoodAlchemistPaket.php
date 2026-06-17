@@ -2,7 +2,9 @@
 
 namespace Platform\FoodAlchemist\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
@@ -49,5 +51,26 @@ class FoodAlchemistPaket extends Model
     public function slots(): HasMany
     {
         return $this->hasMany(FoodAlchemistConceptSlot::class, 'paket_id');
+    }
+
+    /**
+     * #380 — Angebot, dem dieses Paket als angebots-lokaler Entwurf gehört.
+     * NULL = standardisiert (im Concepter-Katalog). „Promote" = Flip auf NULL.
+     */
+    public function angebot(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistAngebot::class, 'angebot_id');
+    }
+
+    /** #380 — Standardisierter Katalog (angebot_id NULL). */
+    public function scopeStandardisiert(Builder $q): Builder
+    {
+        return $q->whereNull('angebot_id');
+    }
+
+    /** #380 — Angebots-lokaler (spekulativer) Entwurf. */
+    public function scopeAngebotsLokal(Builder $q): Builder
+    {
+        return $q->whereNotNull('angebot_id');
     }
 }

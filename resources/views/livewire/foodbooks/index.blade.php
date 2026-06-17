@@ -89,6 +89,44 @@
                         <select wire:model="form.status" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
                     </div>
                 </div>
+                {{-- #369: CRM-Kunde-Link (MVP, nur verlinken) — ergänzt das Freitext-Feld „Kunde" --}}
+                <div class="space-y-2 pt-1 border-t border-black/5 dark:border-white/10">
+                    <span class="{{ $label }}">Kunde (CRM)</span>
+                    @if(! $crmVerfuegbar)
+                        <p class="text-[11px] text-gray-400">CRM-Modul nicht verfügbar — Freitext-Feld „Kunde" oben nutzen.</p>
+                    @else
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+                            <div>Firma: <span class="font-medium text-gray-900 dark:text-gray-100">{{ $fb->crmCompany?->display_name ?? '—' }}</span></div>
+                            <div>Kontakt: <span class="font-medium text-gray-900 dark:text-gray-100">{{ $fb->crmContact?->display_name ?? '—' }}</span></div>
+                            @if($fb->crm_company_id || $fb->crm_contact_id)
+                                <button type="button" wire:click="loeseKunde" class="{{ $btnGhostXs }}">Verknüpfung lösen</button>
+                            @endif
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div>
+                                <input type="search" wire:model.live.debounce.300ms="firmaSuche" placeholder="Firma suchen …" class="{{ $input }}" />
+                                @if($firmen->isNotEmpty())
+                                    <div class="space-y-0.5 mt-1">
+                                        @foreach($firmen as $f)
+                                            <button type="button" wire:key="fbfi-{{ $f->id }}" wire:click="verknuepfeFirma({{ $f->id }})" class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $f->display_name }}</button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                            <div>
+                                <input type="search" wire:model.live.debounce.300ms="kontaktSuche" placeholder="Kontakt suchen …" class="{{ $input }}" />
+                                @if($kontakte->isNotEmpty())
+                                    <div class="space-y-0.5 mt-1">
+                                        @foreach($kontakte as $k)
+                                            <button type="button" wire:key="fbko-{{ $k->id }}" wire:click="verknuepfeKontakt({{ $k->id }})" class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $k->display_name }}</button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
                 <div>
                     <div class="flex items-center justify-between">
                         <label class="{{ $label }}">Briefing / Einleitung (Kundentext)</label>
@@ -98,6 +136,7 @@
                 </div>
                 <div class="flex gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
+                    <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Versendbares Foodbook-Dokument (Druck/PDF)">Dokument</a>
                     <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhost }} text-red-600 dark:text-red-400">Löschen</button>
                 </div>
             </div>
@@ -115,13 +154,14 @@
                 </div>
 
                 {{-- Block-Liste --}}
-                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3">
+                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" x-data="{ conceptDrawer: false }">
                     <div class="flex items-center justify-between flex-wrap gap-2">
                         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Inhalt <span class="text-gray-400 text-xs">({{ $kapitel->blocks->count() }})</span></h3>
                         <div class="flex items-center gap-2" x-data="{ presets: false }">
                             @if(count($markiert) >= 2)
                                 <button type="button" wire:click="wahlGruppeBilden" class="{{ $btnGhostXs }} text-amber-600">Wahl-Gruppe ({{ count($markiert) }})</button>
                             @endif
+                            <button type="button" @click="conceptDrawer = true" class="{{ $btnPrimary }}">+ Concept einfügen</button>
                             <button type="button" wire:click="blockBasis('text')" class="{{ $btnGhostXs }}">+ Text</button>
                             <button type="button" wire:click="blockBasis('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>
                             <div class="relative">
@@ -142,31 +182,6 @@
                         </div>
                     </div>
 
-                    {{-- Concept-Picker (KEIN Gericht-Picker — der Concepter ist der Kern); FB-1: Filter nach Concept-Kategorie --}}
-                    <div class="space-y-1">
-                        <div class="flex items-center gap-1.5">
-                            <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen + einfügen …" class="{{ $input }} flex-1" />
-                            <select wire:model.live="conceptKategorie" class="{{ $input }} w-44" title="nach Concept-Kategorie filtern">
-                                <option value="">Alle Kategorien</option>
-                                @foreach($conceptKategorien as $kat)
-                                    <option value="{{ $kat['id'] }}">{{ $kat['label'] ?? $kat['name'] }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        @if(($conceptSuche !== '' || $conceptKategorie !== null) && $conceptKandidaten->isNotEmpty())
-                            <div class="space-y-0.5 max-h-44 overflow-y-auto">
-                                @foreach($conceptKandidaten as $ck)
-                                    <button type="button" wire:key="ck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})"
-                                            class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                        <span class="truncate">{{ $ck->name }}</span>
-                                        <span class="text-gray-400 tabular-nums shrink-0">{{ $ck->preis_pro_person_cache !== null ? number_format((float) $ck->preis_pro_person_cache, 2, ',', '.') . ' €' : '' }}</span>
-                                    </button>
-                                @endforeach
-                            </div>
-                        @elseif($conceptSuche !== '' || $conceptKategorie !== null)
-                            <p class="text-[11px] text-gray-400 px-2 py-1">Keine Concepts für diese Auswahl.</p>
-                        @endif
-                    </div>
 
                     <div class="space-y-1">
                         @forelse($kapitel->blocks as $block)
@@ -236,9 +251,61 @@
                                 @endif
                             </div>
                         @empty
-                            <p class="text-xs text-gray-400 py-4 text-center">Noch kein Inhalt. Oben ein Concept suchen + einfügen, oder Header/Text/Preis-Block hinzufügen.</p>
+                            <p class="text-xs text-gray-400 py-4 text-center">Noch kein Inhalt. Oben „+ Concept einfügen" (Drawer rechts) oder Header/Text/Preis-Block hinzufügen.</p>
                         @endforelse
                     </div>
+
+                    {{-- FB: Concept-Einfüge-Drawer (rechts, Alpine). Angebot bleibt unberührt (hat eigenen Concepter-Editor).
+                         Concepter-Such-Wissen: Suche + collapsible Kategorie-Tree + Concept-Liste; bleibt offen für Mehrfach-Einfügen.
+                         x-teleport→body: entkommt der transformierten Shell, damit fixed echtes Viewport-Overlay wird (Scope bleibt erhalten). --}}
+                    <template x-teleport="body">
+                    <div x-show="conceptDrawer" x-cloak class="fixed inset-0 z-40" style="display:none">
+                        <div class="absolute inset-0 bg-black/30" @click="conceptDrawer = false"></div>
+                        <div class="absolute right-0 top-0 h-full w-[26rem] max-w-[92vw] bg-white dark:bg-gray-900 shadow-2xl flex flex-col border-l border-black/10 dark:border-white/10"
+                             x-transition:enter="transition ease-out duration-200" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
+                             x-transition:leave="transition ease-in duration-150" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full">
+                            <div class="flex items-center justify-between px-4 py-3 border-b border-black/5 dark:border-white/10 shrink-0">
+                                <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Concept einfügen</h3>
+                                <button type="button" @click="conceptDrawer = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">&times;</button>
+                            </div>
+                            <div class="p-3 border-b border-black/5 dark:border-white/10 shrink-0">
+                                <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full" />
+                            </div>
+                            <div class="flex-1 min-h-0 flex">
+                                {{-- Kategorie-Tree (collapsible, wie Concepter-Browser) --}}
+                                <div class="w-40 shrink-0 overflow-y-auto border-r border-black/5 dark:border-white/10 p-2 space-y-0.5">
+                                    <button type="button" wire:click="$set('conceptKategorie', null)"
+                                            class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $conceptKategorie === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">Alle Kategorien</button>
+                                    <x-foodalchemist::tree :initial-collapsed="collect($conceptKategorien)->where('has_children', true)->pluck('id')->all()">
+                                        @foreach($conceptKategorien as $kat)
+                                            <x-foodalchemist::tree-node :node-id="$kat['id']" :depth="$kat['depth']" :ancestors="$kat['ancestors'] ?? []"
+                                                :has-children="$kat['has_children'] ?? false" :active="$conceptKategorie === $kat['id']">
+                                                <button type="button" wire:click="$set('conceptKategorie', {{ $kat['id'] }})" class="flex-1 min-w-0 truncate text-left text-xs px-1 py-0.5">{{ $kat['name'] }}</button>
+                                            </x-foodalchemist::tree-node>
+                                        @endforeach
+                                    </x-foodalchemist::tree>
+                                </div>
+                                {{-- Concept-Liste --}}
+                                <div class="flex-1 min-w-0 overflow-y-auto p-2 space-y-0.5">
+                                    @if($conceptKandidaten->isNotEmpty())
+                                        @foreach($conceptKandidaten as $ck)
+                                            <button type="button" wire:key="dck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})"
+                                                    class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                                <span class="truncate text-gray-900 dark:text-gray-100">+ {{ $ck->name }}</span>
+                                                <span class="text-gray-400 tabular-nums shrink-0">{{ $ck->preis_pro_person_cache !== null ? number_format((float) $ck->preis_pro_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                            </button>
+                                        @endforeach
+                                    @elseif($conceptSuche !== '' || $conceptKategorie !== null)
+                                        <p class="text-[11px] text-gray-400 px-2 py-2">Keine Concepts für diese Auswahl.</p>
+                                    @else
+                                        <p class="text-[11px] text-gray-400 px-2 py-2">Kategorie wählen oder oben suchen.</p>
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="px-4 py-2 border-t border-black/5 dark:border-white/10 text-[10px] text-gray-400 shrink-0">Eingefügte Concepts erscheinen links im Inhalt. Drawer bleibt offen für mehrere.</div>
+                        </div>
+                    </div>
+                    </template>
                 </div>
             @else
                 <div class="{{ $card }} p-8 text-center text-sm text-gray-400">Links ein Kapitel wählen oder anlegen.</div>

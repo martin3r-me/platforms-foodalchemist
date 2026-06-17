@@ -32,6 +32,7 @@ class ConceptService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistConcept::visibleToTeam($team)
+            ->standardisiert()   // #380: angebots-lokale Entwürfe gehören nicht in den Katalog
             ->withCount('slots')
             ->when(($filters['vorlagen'] ?? false), fn ($q) => $q->vorlagen(), fn ($q) => $q->echte())
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
@@ -416,7 +417,7 @@ class ConceptService
                 $vk = (float) ($slot->paket->preis_pro_person ?? 0);
                 $ek = (float) ($slot->paket->ek_pro_person ?? 0);
                 $hatStale = $hatStale || (bool) $slot->paket->preis_stale;
-                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'paket', 'rolle' => $slot->rolle,
+                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'paket', 'rolle' => $slot->rolle, 'wording' => $slot->wording,
                     'label' => $slot->paket->name, 'preis' => $vk, 'ek' => round($ek, 2), 'ek_fehlt' => false, 'stale' => (bool) $slot->paket->preis_stale];
             } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
                 // Einheit-abhängige Mengen-Umrechnung — EINE Stelle (Konsistenz zu ConcepterAggregate/Paket).
@@ -433,7 +434,7 @@ class ConceptService
                 $vk = $ekFehlt ? 0.0 : (float) ($slot->gericht->vk_netto ?? 0) * $pae;
                 $ek = $ekFehlt ? 0.0 : (float) ($slot->gericht->ek_total_eur ?? 0) / $anzahl * $pae;
                 $hatEkLuecke = $hatEkLuecke || $ekFehlt;
-                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'gericht', 'rolle' => $slot->rolle,
+                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'gericht', 'rolle' => $slot->rolle, 'wording' => $slot->wording,
                     'label' => $slot->gericht->name, 'preis' => round($vk, 2),
                     'ek' => $ekFehlt ? null : round($ek, 2), 'ek_fehlt' => $ekFehlt, 'stale' => false];
             } else {

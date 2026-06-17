@@ -1,110 +1,57 @@
-{{-- M12-02 / Doc 16: Kalkulations-Übersicht — HK1/HK2/VK/DB + aufklappbarer HK2-Wasserfall je Zeile --}}
+{{-- #379+ (Dominique 2026-06-16): Kalkulations-Werkstatt = Controlling-Zentrum.
+     Stehende Kosten (Stundensatz · Fixkosten wie Strom/Nebenkosten · Aufschlagsätze · Marge)
+     an EINEM Ort pflegen → rollen auf alle Kalkulationen aus. Reine Kalkulation: Concepter. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Kalkulation (HK2)" icon="heroicon-o-calculator" />
+        <x-ui-page-navbar title="Kalkulations-Werkstatt" icon="heroicon-o-calculator" />
     </x-slot:navbar>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="flex items-center justify-between flex-wrap gap-2 pt-1">
-            <div class="flex items-center gap-1.5">
-                <button type="button" wire:click="setTab('gerichte')" class="{{ $pill }} {{ $tab === 'gerichte' ? $variantPill['primary'] : $variantPill['secondary'] }}">Gerichte</button>
-                <button type="button" wire:click="setTab('concepts')" class="{{ $pill }} {{ $tab === 'concepts' ? $variantPill['primary'] : $variantPill['secondary'] }}">Concepts</button>
-                <input type="search" wire:model.live.debounce.300ms="search" placeholder="suchen …" class="{{ $input }} w-48 ml-2" />
-            </div>
-            <p class="text-[11px] text-gray-400">Zeile anklicken → <strong>HK2-Aufschlüsselung</strong> (Wareneinsatz → +Lohn → +Gemeinkosten → HK2 → VK-Vorschlag). Blöcke pflegst du in Einstellungen → Kalkulation.</p>
-        </div>
-
-        <div class="relative overflow-hidden {{ $card }}">
+        {{-- Cockpit: die rolled-up Kosten-Wahrheit, die auf alle Kalkulationen ausrollt --}}
+        <div class="relative overflow-hidden {{ $card }} px-5 py-4">
             <div class="{{ $cardAccent }}"></div>
-            <div class="overflow-x-auto">
-                <table class="{{ $table }}">
-                    <thead><tr class="text-left">
-                        @foreach([['Name', 'w-full'], ['HK1', 'text-right'], ['+Zuschläge', 'text-right'], ['HK2', 'text-right'], ['VK', 'text-right'], ['VK-Vorschl.', 'text-right'], ['DB €', 'text-right'], ['DB %', 'text-right']] as [$h, $a])
-                            <th class="{{ $th }} {{ $a }}">{{ $h }}</th>
-                        @endforeach
-                    </tr></thead>
-                    <tbody>
-                        @forelse($zeilen as $z)
-                            @php($istSel = $selectedId === $z['id'])
-                            @php($zuschlaege = (float) $z['hk']['hk2'] - (float) $z['hk']['hk1'])
-                            <tr wire:key="kalk-{{ $tab }}-{{ $z['id'] }}" wire:click="waehle({{ $z['id'] }})"
-                                class="{{ $tr }} cursor-pointer {{ $istSel ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}">
-                                <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate text-gray-900 dark:text-gray-100">
-                                    <span class="text-gray-400 mr-1">{{ $istSel ? '▾' : '▸' }}</span>{{ $z['name'] }} <span class="text-[10px] text-gray-400">{{ $z['einheit'] }}</span>
-                                </td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-500 whitespace-nowrap">{{ number_format((float) $z['hk']['hk1'], 2, ',', '.') }} €</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-500 whitespace-nowrap">+ {{ number_format($zuschlaege, 2, ',', '.') }} €</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-900 dark:text-gray-100 whitespace-nowrap font-medium">{{ number_format((float) $z['hk']['hk2'], 2, ',', '.') }} €</td>
-                                <td class="{{ $td }} text-right tabular-nums whitespace-nowrap">{{ $z['hk']['vk'] !== null ? number_format((float) $z['hk']['vk'], 2, ',', '.') . ' €' : '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-violet-700 dark:text-violet-300 whitespace-nowrap">{{ $z['hk']['vk_vorschlag'] !== null ? number_format((float) $z['hk']['vk_vorschlag'], 2, ',', '.') . ' €' : '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums whitespace-nowrap {{ ($z['hk']['db_eur'] ?? 0) < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400' }}">{{ $z['hk']['db_eur'] !== null ? number_format((float) $z['hk']['db_eur'], 2, ',', '.') . ' €' : '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums whitespace-nowrap">
-                                    @if($z['hk']['db_pct'] !== null)
-                                        <span class="{{ $pill }} {{ $z['hk']['db_pct'] < 0 ? $variantPill['danger'] : ($z['hk']['db_pct'] < 30 ? $variantPill['warning'] : $variantPill['success']) }}">{{ number_format((float) $z['hk']['db_pct'], 1, ',', '.') }} %</span>
-                                    @else — @endif
-                                </td>
-                            </tr>
-
-                            {{-- Aufgeklappte HK2-Aufschlüsselung (Wasserfall) direkt unter der Zeile --}}
-                            @if($istSel && $detail !== null)
-                                @php($hk = $detail['hk'])
-                                @php($hk2 = (float) ($hk['hk2_pro_portion'] ?? $hk['hk2_pro_person'] ?? 0))
-                                <tr wire:key="kalk-detail-{{ $z['id'] }}" class="bg-violet-500/[0.04]">
-                                    <td colspan="8" class="px-6 py-3">
-                                        <div class="max-w-md space-y-1">
-                                            <p class="{{ $label }} mb-1">HK2-Aufschlüsselung {{ $detail['einheit'] }} · Marge {{ rtrim(rtrim(number_format((float) $hk['marge_pct'], 2, ',', '.'), '0'), ',') }} %</p>
-                                            @foreach($hk['bloecke'] as $blk)
-                                                <div class="flex items-center justify-between text-xs py-0.5 {{ $blk['key'] === 'we' ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300' }}">
-                                                    <span>{{ $blk['key'] === 'we' ? 'Wareneinsatz' : '+ ' . $blk['label'] }}</span>
-                                                    <span class="tabular-nums">{{ number_format((float) $blk['betrag'], 2, ',', '.') }} €</span>
-                                                </div>
-                                            @endforeach
-                                            <div class="flex items-center justify-between text-xs py-1 border-t border-black/10 dark:border-white/10 font-semibold text-gray-900 dark:text-gray-100">
-                                                <span>= HK2 (Herstellkosten)</span><span class="tabular-nums">{{ number_format($hk2, 2, ',', '.') }} €</span>
-                                            </div>
-                                            <div class="flex items-center justify-between text-xs">
-                                                <span class="text-gray-500">VK-Vorschlag (HK2 × Marge)</span>
-                                                <span class="tabular-nums text-violet-700 dark:text-violet-300 font-medium">{{ number_format((float) $hk['vk_vorschlag'], 2, ',', '.') }} €</span>
-                                            </div>
-                                            @if($hk['db_eur'] !== null)
-                                                <div class="flex items-center justify-between text-xs">
-                                                    <span class="text-gray-500">Deckungsbeitrag (gesetzter VK − HK2)</span>
-                                                    <span class="tabular-nums {{ (float) $hk['db_eur'] >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400' }}">{{ number_format((float) $hk['db_eur'], 2, ',', '.') }} €{{ $hk['db_pct'] !== null ? ' · ' . number_format((float) $hk['db_pct'], 1, ',', '.') . ' %' : '' }}</span>
-                                                </div>
-                                            @endif
-                                            <p class="text-[10px] text-gray-400 pt-1">Arbeitszeit-Schätzung (nicht-linear skalierbar) folgt mit der KI.</p>
-                                        </div>
-
-                                        {{-- M-K8: direkte Einzelkosten am Gericht eintragbar; Gemeinkosten read-only aus Settings --}}
-                                        @if($tab === 'gerichte')
-                                            <div class="mt-3 pt-3 border-t border-black/10 dark:border-white/10 flex flex-wrap items-end gap-3" wire:key="edit-{{ $z['id'] }}">
-                                                <div>
-                                                    <label class="{{ $label }}">Fertigungszeit (min)</label>
-                                                    <input type="number" min="0" step="1" wire:model="editArbeitszeit" class="{{ $input }} !w-28 text-right tabular-nums" placeholder="—" />
-                                                </div>
-                                                <div>
-                                                    <label class="{{ $label }}">Nebenkosten direkt (€)</label>
-                                                    <input type="number" min="0" step="0.01" wire:model="editNebenkosten" class="{{ $input }} !w-28 text-right tabular-nums" placeholder="—" />
-                                                </div>
-                                                <button type="button" wire:click="speichereGericht" class="{{ $btnPrimary }}">Speichern</button>
-                                                @if($meldung)<span class="text-[11px] text-emerald-600 dark:text-emerald-400">{{ $meldung }}</span>@endif
-                                                <span class="text-[10px] text-gray-400">Gemeinkosten (Logistik/Spüle/…) pflegst du in Einstellungen → Kalkulation.</span>
-                                            </div>
-                                        @else
-                                            <p class="text-[10px] text-gray-400 mt-1">Einzelkosten je Gericht eintragbar im Tab „Gerichte".</p>
-                                        @endif
-                                    </td>
-                                </tr>
-                            @endif
-                        @empty
-                            <tr><td colspan="8" class="px-5 py-10 text-center text-gray-400">Keine {{ $tab === 'concepts' ? 'Concepts' : 'Gerichte' }} gefunden.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Controlling-Zentrum — stehende Kosten</h3>
+                    <p class="text-[11px] text-gray-400 max-w-2xl">Pflege deine dauerhaften Kosten an <strong>einem Ort</strong> — Stundensatz/Personal, Fixkosten (Strom, Nebenkosten, Logistik …), Aufschlagsätze und Marge. Sie rollen automatisch auf HK2, VK-Vorschlag und das „Marge unter Ziel"-Signal in <strong>jedem</strong> Gericht &amp; Concept aus.</p>
+                </div>
+                <a href="{{ route('foodalchemist.concepter.index') }}" class="{{ $btnGhost }}" wire:navigate>Kalkulation im Concepter →</a>
             </div>
-            <div class="px-5 py-3 border-t border-black/5 dark:border-white/10">{{ $page->links() }}</div>
+            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 mt-3">
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2"><div class="{{ $label }}">Zielmarge</div><div class="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ number_format((float) $regeln['marge_pct'], 1, ',', '.') }} %</div></div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2"><div class="{{ $label }}">Ziel-Wareneinsatz</div><div class="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ number_format((float) $zielWe, 1, ',', '.') }} %</div></div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2"><div class="{{ $label }}">Stundensatz</div><div class="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ number_format((float) $regeln['stundensatz'], 2, ',', '.') }} €</div></div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2"><div class="{{ $label }}">HK2-Zuschlag (eff.)</div><div class="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ number_format((float) $zuschlag, 1, ',', '.') }} %</div></div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2"><div class="{{ $label }}">Fixkosten / Monat</div><div class="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ number_format((float) $fixkostenMonat, 0, ',', '.') }} €</div></div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" title="Σ Fixkosten/Monat ÷ Deckungsbeitragsquote (1 − Ziel-Wareneinsatz). Monatsumsatz, ab dem die Fixkosten gedeckt sind."><div class="{{ $label }}">Break-even / Monat</div><div class="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ $fixkostenMonat > 0 ? number_format((float) $breakEven, 0, ',', '.') . ' €' : '—' }}</div></div>
+            </div>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-gray-400">
+                <span><span class="text-gray-500 dark:text-gray-300 font-medium">MwSt</span> regulär {{ rtrim(rtrim(number_format((float) $mwst['regulaer'], 1, ',', '.'), '0'), ',') }} % · ermäßigt {{ rtrim(rtrim(number_format((float) $mwst['ermaessigt'], 1, ',', '.'), '0'), ',') }} % · Standard {{ $mwst['default_satz'] === 'regulaer' ? 'regulär' : 'ermäßigt' }}</span>
+                <span class="text-gray-300 dark:text-gray-600">·</span>
+                <span>{{ count($regeln['schema']) }} aktive Zuschlagsblöcke</span>
+                <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'kalkulation']) }}" class="text-violet-600 dark:text-violet-400 hover:underline" wire:navigate>MwSt / Verlust-Defaults pflegen →</a>
+            </div>
+            @if(count($regeln['schema']))
+                <div class="flex flex-wrap gap-1 mt-2">
+                    @foreach($regeln['schema'] as $b)
+                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $b['label'] }}: {{ rtrim(rtrim(number_format((float) ($b['wert'] ?? 0), 2, ',', '.'), '0'), ',') }}{{ str_starts_with((string) $b['typ'], 'pct') ? ' %' : ($b['typ'] === 'arbeitszeit' ? ' €/h' : ' €') }}</span>
+                    @endforeach
+                </div>
+            @endif
         </div>
+
+        {{-- Eingebetteter Kosten-Editor (vormals Einstellungen → Herstellkosten): Zuschlagsschema,
+             Fixkosten + Bezugsbasen, Marge. Speichern dispatched 'kosten-aktualisiert' → Kacheln oben ziehen nach. --}}
+        @livewire('foodalchemist.settings.herstellkosten')
+
+        <p class="text-[11px] text-gray-400 px-1 pt-1">
+            Die gerichts- und mengenbezogene Kalkulation (HK1 → HK2 → VK-Vorschlag → Deckungsbeitrag) läuft im
+            <a href="{{ route('foodalchemist.concepter.index') }}" class="text-violet-600 dark:text-violet-400 hover:underline" wire:navigate>Concepter</a>
+            und je Einzelgericht in den
+            <a href="{{ route('foodalchemist.verkauf.index') }}" class="text-violet-600 dark:text-violet-400 hover:underline" wire:navigate>Gerichten</a>.
+            Diese Werkstatt liefert die Regeln dafür.
+        </p>
     </x-ui-page-container>
 </x-ui-page>

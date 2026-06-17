@@ -76,9 +76,10 @@ return [
                     'icon'  => 'heroicon-o-home',
                 ],
                 [
-                    'label' => 'Zu prüfen',
+                    // #378: „Zu prüfen" → „Signale" — Aufmerksamkeits-Inbox (Klasse A Entscheidungs-Queues + Klasse B detektierte Signale)
+                    'label' => 'Signale',
                     'route' => 'foodalchemist.review',
-                    'icon'  => 'heroicon-o-clipboard-document-check',
+                    'icon'  => 'heroicon-o-bell-alert',
                 ],
             ],
         ],
@@ -142,20 +143,28 @@ return [
             ],
         ],
         [
+            // #380: Angebote — brief-getriebene Kunden-Angebote (individuelle Anfrage
+            // → maßgeschneidertes Angebot). Eigenständig neben Foodbook (Portfolio):
+            // gebaut wird im Concepter, hier kommt der Kunden-/Vertriebs-Mantel dazu.
+            'group' => 'Angebote',
+            'items' => [
+                [
+                    'label' => 'Angebote',
+                    'route' => 'foodalchemist.angebote.index',
+                    'icon'  => 'heroicon-o-document-text',
+                ],
+            ],
+        ],
+        [
             // M12 GEBAUT: Kalkulations-Übersicht (HK1 Wareneinsatz → HK2 Vollkosten + Deckungsbeitrag).
             'group' => 'Kalkulation',
             'items' => [
                 [
-                    'label' => 'Kalkulation (HK2)',
+                    // #379: „Kalkulation (HK2)" → Werkstatt (Regel-Cockpit + HK2-Ergebnis-Übersicht).
+                    // Kalkulator (Scratchpad) entfernt — Ad-hoc-Rechnen lebt im Angebote-Modul.
+                    'label' => 'Kalkulations-Werkstatt',
                     'route' => 'foodalchemist.kalkulation.index',
                     'icon'  => 'heroicon-o-calculator',
-                ],
-                [
-                    // M-K10 / Doc 16 §11: standalone Composer — Positionen (Gericht/
-                    // Basisrezept/GP/frei) zusammenstellen → HK1/HK2/VK. Entkoppelt (Prüfung).
-                    'label' => 'Kalkulator',
-                    'route' => 'foodalchemist.kalkulator.index',
-                    'icon'  => 'heroicon-o-squares-plus',
                 ],
             ],
         ],

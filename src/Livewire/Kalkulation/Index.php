@@ -3,132 +3,56 @@
 namespace Platform\FoodAlchemist\Livewire\Kalkulation;
 
 use Illuminate\Support\Facades\Auth;
-use Livewire\Attributes\Url;
+use Livewire\Attributes\On;
 use Livewire\Component;
-use Livewire\WithPagination;
-use Platform\FoodAlchemist\Services\ConceptService;
+use Platform\FoodAlchemist\Services\FixkostenService;
 use Platform\FoodAlchemist\Services\KalkulationService;
-use Platform\FoodAlchemist\Services\SalesRecipeService;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 
 /**
- * M12-02 / Doc 15 §M12 (K-06): Kalkulations-Übersicht — Gerichte bzw. Concepts mit
- * HK1 (Wareneinsatz) · HK2 (Vollkosten = +Zuschlag/Nebenkosten) · VK · Vollkosten-
- * Deckungsbeitrag. Macht die Food-seitige Kosten-Wahrheit sichtbar (D-HK-1).
+ * M12 / #379+ (Dominique 2026-06-16): Kalkulations-Werkstatt = Controlling-Zentrum.
+ *
+ * EIN zentraler Ort, an dem der F&B-Manager seine stehenden Kosten pflegt —
+ * Personal/Stundensatz, Fixkosten (Strom, Nebenkosten, Logistik …), Aufschlag-
+ * sätze und Marge — und von dem aus sie auf ALLE Kalkulationen ausrollen
+ * (HK2, VK-Vorschlag, „Marge unter Ziel"-Signal). Der eigentliche Kosten-Editor
+ * (vormals Einstellungen → Herstellkosten) ist hier eingebettet.
+ *
+ * Die reine, gerichts-/mengenbezogene Kalkulation (HK1 → HK2 → VK → DB) findet
+ * im Concepter (Concepts) bzw. je Einzelgericht im Verkaufs-Browser statt — die
+ * Werkstatt liefert nur die Regeln dafür.
  */
 class Index extends Component
 {
-    use WithPagination;
-
-    #[Url(as: 'q')]
-    public string $search = '';
-
-    #[Url(as: 'tab')]
-    public string $tab = 'gerichte';   // gerichte | concepts
-
-    #[Url(as: 'sel')]
-    public ?int $selectedId = null;
-
-    /** M-K8: editierbare Einzelkosten des gewählten Gerichts (direkt am Produkt). */
-    public ?string $editArbeitszeit = null;
-
-    public ?string $editNebenkosten = null;
-
-    public ?string $meldung = null;
-
-    public function updatedSearch(): void
+    /** Re-Render der Cockpit-Kacheln, sobald der eingebettete Editor speichert. */
+    #[On('kosten-aktualisiert')]
+    public function aktualisiert(): void
     {
-        $this->resetPage();
+        // no-op: löst nur das Re-Rendering der Summary-Kacheln aus.
     }
 
-    public function setTab(string $tab): void
-    {
-        $this->tab = $tab === 'concepts' ? 'concepts' : 'gerichte';
-        $this->selectedId = null;
-        $this->meldung = null;
-        $this->resetPage();
-    }
-
-    public function waehle(int $id): void
-    {
-        $this->selectedId = $this->selectedId === $id ? null : $id;
-        $this->meldung = null;
-        $this->editArbeitszeit = $this->editNebenkosten = null;
-        if ($this->selectedId !== null && $this->tab === 'gerichte') {
-            $r = app(SalesRecipeService::class)->detail($this->team(), $this->selectedId);
-            if ($r !== null) {
-                $this->editArbeitszeit = $r->arbeitszeit_min !== null ? (string) $r->arbeitszeit_min : '';
-                $this->editNebenkosten = $r->nebenkosten_eur !== null
-                    ? rtrim(rtrim(number_format((float) $r->nebenkosten_eur, 4, '.', ''), '0'), '.') : '';
-            }
-        }
-    }
-
-    /** M-K8: direkte Einzelkosten (Fertigungszeit, Nebenkosten) am Gericht speichern. */
-    public function speichereGericht(): void
-    {
-        if ($this->selectedId === null || $this->tab !== 'gerichte') {
-            return;
-        }
-        app(SalesRecipeService::class)->updateVk($this->team(), $this->selectedId, [
-            'arbeitszeit_min' => ($this->editArbeitszeit ?? '') !== '' ? max(0, (int) $this->editArbeitszeit) : null,
-            'nebenkosten_eur' => ($this->editNebenkosten ?? '') !== '' ? max(0, (float) str_replace(',', '.', $this->editNebenkosten)) : null,
-        ]);
-        $this->meldung = 'Gespeichert — HK2 neu berechnet.';
-    }
-
-    private function team()
-    {
-        return Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-    }
-
-    public function render(KalkulationService $kalk, SalesRecipeService $sales, ConceptService $concepts)
+    public function render(KalkulationService $kalk, FixkostenService $fix, TeamSettingsService $settings)
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
 
-        if ($this->tab === 'concepts') {
-            $page = $concepts->paginateBrowser(['search' => $this->search], $team, 50);
-            $zeilen = $page->getCollection()->map(function ($c) use ($kalk, $team) {
-                $h = $kalk->conceptHk($team, $c);
-
-                return ['id' => $c->id, 'name' => $c->name, 'einheit' => '/Person',
-                    'hk' => ['hk1' => $h['hk1_pro_person'], 'hk2' => $h['hk2_pro_person'],
-                        'vk' => $h['vk_pro_person'], 'vk_vorschlag' => $h['vk_vorschlag'],
-                        'db_eur' => $h['db_eur'], 'db_pct' => $h['db_pct']]];
-            })->all();
-        } else {
-            $page = $sales->paginateBrowser(['search' => $this->search], $team, 50);
-            $zeilen = $page->getCollection()->map(function ($r) use ($kalk, $team) {
-                $hk = $kalk->recipeHk($team, $r);
-
-                return [
-                    'id' => $r->id, 'name' => $r->name, 'einheit' => '/Portion',
-                    'hk' => ['hk1' => $hk['hk1_pro_portion'], 'hk2' => $hk['hk2_pro_portion'],
-                        'vk' => $hk['vk_netto'], 'vk_vorschlag' => $hk['vk_vorschlag'],
-                        'db_eur' => $hk['db_eur'], 'db_pct' => $hk['db_pct']],
-                ];
-            })->all();
-        }
-
-        // M-K4: Wasserfall-Detail für die ausgewählte Zeile (Block-Aufschlüsselung).
-        $detail = null;
-        if ($this->selectedId !== null) {
-            if ($this->tab === 'concepts') {
-                $c = $concepts->detail($team, $this->selectedId);
-                $detail = $c !== null ? ['name' => $c->name, 'einheit' => '/Person', 'hk' => $kalk->conceptHk($team, $c)] : null;
-            } else {
-                $r = $sales->detail($team, $this->selectedId);
-                $detail = $r !== null ? ['name' => $r->name, 'einheit' => '/Portion', 'hk' => $kalk->recipeHk($team, $r)] : null;
-            }
-            if ($detail === null) {
-                $this->selectedId = null;
-            }
-        }
+        // #379+ Controlling-Kennzahlen: Σ Fixkosten/Monat + Food-Cost-Ziel → Break-even.
+        // Break-even-Umsatz/Monat = Σ Fixkosten ÷ Deckungsbeitragsquote (= 1 − Wareneinsatzquote);
+        // gastro-Standardformel, Planungs-Näherung (Ø-DB über das Food-Cost-Ziel).
+        $fixMonat = array_sum($fix->summeJeBlock($team));
+        $zielWe = $settings->zielWareneinsatzPct($team);
+        $dbQuote = max(0.01, 1 - $zielWe / 100);
 
         return view('foodalchemist::livewire.kalkulation.index', [
-            'page' => $page,
-            'zeilen' => $zeilen,
-            'detail' => $detail,
-            'zuschlag' => $kalk->hk2($team, 100) - 100, // Anzeige: effektiver Zuschlag in % (auf 100 €)
+            'zuschlag' => $kalk->hk2($team, 100) - 100, // effektiver HK2-Zuschlag in % (auf 100 € Wareneinsatz)
+            'regeln' => [
+                'marge_pct' => $settings->margePct($team),
+                'stundensatz' => $settings->stundensatz($team),
+                'schema' => collect($fix->aufgeloestesSchema($team))->filter(fn ($b) => $b['aktiv'] ?? true)->values()->all(),
+            ],
+            'fixkostenMonat' => $fixMonat,
+            'zielWe' => $zielWe,
+            'breakEven' => $fixMonat > 0 ? $fixMonat / $dbQuote : 0.0,
+            'mwst' => $settings->mwst($team),
         ])->layout('platform::layouts.app');
     }
 }

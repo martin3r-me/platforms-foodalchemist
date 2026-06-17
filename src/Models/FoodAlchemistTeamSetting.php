@@ -35,6 +35,10 @@ class FoodAlchemistTeamSetting extends Model
         'kalkulation_schema' => 'array',
         'stundensatz_eur' => 'decimal:2',
         'marge_pct' => 'decimal:2',
+        // #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — Controlling-Ziel + Break-even-Treiber
+        'ziel_wareneinsatz_pct' => 'decimal:2',
+        // #379+: Lohnnebenkosten-Zuschlag % (AG-/Sozialabgaben auf den Produktionslohn)
+        'lohnnebenkosten_pct' => 'decimal:2',
         // M-K6: Bezugsbasen für die Fixkosten-Ableitung (mek/fek/hk, monatlich)
         'kalkulation_bezugsbasen' => 'array',
         // Phase 5: pro-Typ-Farben (GP / Basisrezept / Gericht), teamweit

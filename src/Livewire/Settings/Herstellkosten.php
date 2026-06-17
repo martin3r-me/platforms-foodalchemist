@@ -22,6 +22,12 @@ class Herstellkosten extends Component
 {
     public string $marge = '15';
 
+    /** #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — Controlling-Ziel. */
+    public string $zielWe = '30';
+
+    /** #379+: Lohnnebenkosten-Zuschlag % (AG-Anteil auf den Produktionslohn). */
+    public string $lnk = '0';
+
     /** Alle Kostenblöcke: [{key,label,typ,aktiv,modus,wert}]. */
     public array $schema = [];
 
@@ -43,6 +49,8 @@ class Herstellkosten extends Component
     {
         $svc = app(TeamSettingsService::class);
         $this->marge = $this->fmt($svc->margePct($this->team()));
+        $this->zielWe = $this->fmt($svc->zielWareneinsatzPct($this->team()));
+        $this->lnk = $this->fmt($svc->lohnnebenkostenPct($this->team()));
 
         $stundensatz = $svc->stundensatz($this->team());
         foreach ($svc->kalkulationSchema($this->team()) as $b) {
@@ -63,6 +71,7 @@ class Herstellkosten extends Component
         $this->fixListe = app(FixkostenService::class)->liste($this->team())->map(fn ($f) => [
             'id' => $f->id, 'bezeichnung' => $f->bezeichnung,
             'betrag' => $this->fmt((float) $f->betrag), 'periode' => $f->periode, 'block_key' => $f->block_key,
+            'monatsbetrag' => round((float) $f->monatsbetrag(), 2),   // #379+: normalisiert (jährlich/12) für Σ-Anzeige
         ])->all();
     }
 
@@ -94,9 +103,23 @@ class Herstellkosten extends Component
         while (in_array($key, $vorhanden, true)) {
             $key = $basis . '_' . $i++;
         }
-        $this->schema[] = ['key' => $key, 'label' => $label, 'typ' => $typ, 'aktiv' => true, 'modus' => 'manuell', 'wert' => '0'];
+        // #379+: Gemeinkosten-Blöcke werden standardmäßig AUTOMATISCH aus den Fixkosten abgeleitet
+        // (€ rein → % selbst gerechnet). Nur Direkt-Typen (Lohn/€-Portion) bleiben manuell.
+        $istGk = in_array($typ, ['pct_mek', 'pct_fek', 'pct_hk'], true);
+        $this->schema[] = ['key' => $key, 'label' => $label, 'typ' => $typ, 'aktiv' => true, 'modus' => $istGk ? 'abgeleitet' : 'manuell', 'wert' => '0'];
         $this->neuBlock = ['label' => '', 'typ' => 'pct_mek'];
         $this->fehler = null;
+    }
+
+    /** #379+: Alle Gemeinkosten-Blöcke auf automatische Ableitung aus den Fixkosten stellen. */
+    public function alleAutomatisch(): void
+    {
+        foreach ($this->schema as $i => $b) {
+            if (in_array($b['typ'], ['pct_mek', 'pct_fek', 'pct_hk'], true)) {
+                $this->schema[$i]['modus'] = 'abgeleitet';
+            }
+        }
+        $this->meldung = 'Alle Gemeinkosten werden jetzt automatisch aus den Fixkosten berechnet.';
     }
 
     public function blockEntfernen(int $index): void
@@ -115,12 +138,14 @@ class Herstellkosten extends Component
         app(FixkostenService::class)->create($this->team(), $this->neuFix);
         $this->neuFix = ['bezeichnung' => '', 'betrag' => '', 'periode' => 'monatlich', 'block_key' => ''];
         $this->ladeFix();
+        $this->dispatch('kosten-aktualisiert');   // #379+: Werkstatt-Cockpit live nachziehen
     }
 
     public function fixLoeschen(int $id): void
     {
         app(FixkostenService::class)->delete($this->team(), $id);
         $this->ladeFix();
+        $this->dispatch('kosten-aktualisiert');   // #379+: Werkstatt-Cockpit live nachziehen
     }
 
     public function speichern(): void
@@ -141,6 +166,8 @@ class Herstellkosten extends Component
             'hk2_zuschlag_pct' => $gemeinWert,                  // Rückwärtskompatibel (= Material-GK manuell)
             'stundensatz_eur' => $stundensatz,
             'marge_pct' => $this->num($this->marge),
+            'ziel_wareneinsatz_pct' => $this->num($this->zielWe),
+            'lohnnebenkosten_pct' => $this->num($this->lnk),
             'kalkulation_schema' => $this->baueSchema(),
             'kalkulation_bezugsbasen' => [
                 'mek' => $this->num((string) $this->bezugsbasen['mek']),
@@ -149,6 +176,7 @@ class Herstellkosten extends Component
             ],
         ]);
         $this->meldung = 'Gespeichert — Kalkulation & Cockpits nutzen diese Werte.';
+        $this->dispatch('kosten-aktualisiert');   // #379+: Werkstatt-Cockpit live nachziehen
     }
 
     /** Schema aus den editierten Zeilen (Reihenfolge = Index × 10). */
@@ -174,10 +202,18 @@ class Herstellkosten extends Component
     {
         $team = $this->team();
         $summen = $fix->summeJeBlock($team);
+
+        // #379+: Abgeleitete %-Sätze aus den LIVE-Bezugsbasen rechnen (nicht aus dem DB-Stand),
+        // damit der Satz beim Tippen der Basis sofort mitläuft — € rein → % automatisch.
+        $liveBasen = [
+            'mek' => $this->num((string) ($this->bezugsbasen['mek'] ?? '0')),
+            'fek' => $this->num((string) ($this->bezugsbasen['fek'] ?? '0')),
+            'hk' => $this->num((string) ($this->bezugsbasen['hk'] ?? '0')),
+        ];
         $abgeleitet = [];
-        foreach ($fix->aufgeloestesSchema($team) as $b) {
+        foreach ($this->schema as $b) {
             if (($b['modus'] ?? 'manuell') === 'abgeleitet') {
-                $abgeleitet[$b['key']] = $b['wert'];
+                $abgeleitet[$b['key']] = $fix->abgeleiteterSatz($team, $b, $summen, $liveBasen);
             }
         }
         $gkBloecke = collect($this->schema)
@@ -187,6 +223,7 @@ class Herstellkosten extends Component
         return view('foodalchemist::livewire.settings.herstellkosten', [
             'abgeleitet' => $abgeleitet,
             'fixSummen' => $summen,
+            'liveBasen' => $liveBasen,
             'gkBloecke' => $gkBloecke,
         ]);
     }

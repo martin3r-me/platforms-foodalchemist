@@ -36,6 +36,11 @@ class Index extends Component
 
     public ?int $conceptKategorie = null;
 
+    /** #369: CRM-Kunde-Picker. */
+    public string $firmaSuche = '';
+
+    public string $kontaktSuche = '';
+
     /** Block, dessen Inline-Editor offen ist + dessen Formular. */
     public ?int $editBlockId = null;
 
@@ -79,6 +84,36 @@ class Index extends Component
         if ($this->selectedId !== null) {
             $svc->update($this->team(), $this->selectedId, $this->form);
         }
+    }
+
+    // ── #369: CRM-Kunde-Link (MVP, nur verlinken) ──────────────────────────────
+
+    public function verknuepfeFirma(int $companyId, FoodbookService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $fb = $svc->detail($this->team(), $this->selectedId);
+        $svc->verknuepfeKunde($this->team(), $this->selectedId, $companyId, $fb?->crm_contact_id);
+        $this->firmaSuche = '';
+    }
+
+    public function verknuepfeKontakt(int $contactId, FoodbookService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $fb = $svc->detail($this->team(), $this->selectedId);
+        $svc->verknuepfeKunde($this->team(), $this->selectedId, $fb?->crm_company_id, $contactId);
+        $this->kontaktSuche = '';
+    }
+
+    public function loeseKunde(FoodbookService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $svc->verknuepfeKunde($this->team(), $this->selectedId, null, null);
     }
 
     public function loeschen(int $id, FoodbookService $svc): void
@@ -316,7 +351,11 @@ class Index extends Component
             'headerPresets' => FoodbookService::headerPresets(),
             'conceptKategorien' => app(\Platform\FoodAlchemist\Services\ConceptService::class)->categoriesFlat($team),
             'conceptKandidaten' => ($this->conceptSuche !== '' || $this->conceptKategorie !== null) && $this->selectedKapitelId !== null
-                ? $svc->conceptKandidaten($team, $this->conceptSuche, $this->conceptKategorie) : collect(),
+                ? $svc->conceptKandidaten($team, $this->conceptSuche, $this->conceptKategorie, 50) : collect(),
+            // #369: CRM-Kunde-Picker
+            'crmVerfuegbar' => $svc->crmVerfuegbar(),
+            'firmen' => $svc->sucheFirmen($this->firmaSuche),
+            'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
         ])->layout('platform::layouts.app');
     }
 

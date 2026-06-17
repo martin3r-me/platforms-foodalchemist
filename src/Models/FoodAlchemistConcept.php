@@ -49,6 +49,28 @@ class FoodAlchemistConcept extends Model
         return $q->where('is_vorlage', false);
     }
 
+    /**
+     * #380 — Angebot, dem dieses Concept als angebots-lokaler Entwurf gehört.
+     * NULL = standardisiert (im Concepter-Katalog). „Promote/live gehen" = Flip
+     * auf NULL (vom Angebot lösen).
+     */
+    public function angebot(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistAngebot::class, 'angebot_id');
+    }
+
+    /** #380 — Standardisierter Katalog (angebot_id NULL). Concepter-Browser MUSS hierauf filtern. */
+    public function scopeStandardisiert(Builder $q): Builder
+    {
+        return $q->whereNull('angebot_id');
+    }
+
+    /** #380 — Angebots-lokaler (spekulativer) Entwurf. */
+    public function scopeAngebotsLokal(Builder $q): Builder
+    {
+        return $q->whereNotNull('angebot_id');
+    }
+
     public function slots(): HasMany
     {
         return $this->hasMany(FoodAlchemistConceptSlot::class, 'concept_id')->orderBy('position');
