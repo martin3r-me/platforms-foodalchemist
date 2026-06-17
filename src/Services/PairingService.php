@@ -454,13 +454,44 @@ class PairingService
 
     // ── Kompakt-Panels fürs »Sensorik & Pairing«-Tab (read-only) ─────────
 
+    /** Prozess-/neutrale Anker sind keine Zutat-Vorschläge (»Fermentiert« kauft man nicht). */
+    private const NICHT_ZUTAT_ANKER = ['neutral', 'roestaromen', 'ferment', 'karamell', 'rauch'];
+
     /**
-     * Gericht/Basisrezept: Kohäsions-Kennzahlen + Kern-Anker + »komplettiert den Teller«.
+     * Aroma-Nachbarn eines Kanten-Typs über mehrere Anker, dedupliziert, ohne die eigenen.
+     * Quelle = dieselben Anker-Kanten wie der Aroma-Netz-Graph (klassisch | kontrast). Ranking
+     * nach »cover« (mit wie vielen Teller-Ankern bringt der Kandidat den Typ) — relevanteste zuerst;
+     * Prozess-/Neutral-Anker rausgefiltert (keine Zutat).
+     */
+    private function ankerNachbarnAggregiert(array $ankerSlugs, array $eigeneIds, string $typ): array
+    {
+        $treffer = [];
+        foreach ($ankerSlugs as $slug) {
+            foreach ($this->ankerNeighbors($slug, $typ, 20) as $n) {
+                $id = (int) $n->id;
+                if (in_array($id, $eigeneIds, true) || in_array($n->slug, self::NICHT_ZUTAT_ANKER, true)) {
+                    continue;
+                }
+                $treffer[$id] ??= ['name' => $n->display_de ?: $n->slug, 'cover' => 0];
+                $treffer[$id]['cover']++;
+            }
+        }
+        uasort($treffer, fn ($a, $b) => [$b['cover'], $a['name']] <=> [$a['cover'], $b['name']]);
+
+        return array_slice(array_map(fn ($t) => $t['name'], array_values($treffer)), 0, 18);
+    }
+
+    /**
+     * Gericht/Basisrezept: Kohäsion + Kern-Anker + »komplettiert den Teller« (klassisch) +
+     * Kontrast (kontrast-Kanten — kulinarischer Gegenpol, wie die cyan-Ebene im Aroma-Netz).
      * Spiegelt die Editor-Sicht — keine Schreibpfade, keine KI.
      */
     public function panelRecipe(FoodAlchemistRecipe $recipe): array
     {
         $k = $this->recipeCohesion($recipe);
+        $ankerRows = $this->recipeAnkers($recipe->id);
+        $slugs = $ankerRows->pluck('slug')->all();
+        $eigene = $ankerRows->pluck('id')->map(fn ($i) => (int) $i)->all();
 
         return [
             'typ' => 'recipe',
@@ -473,38 +504,29 @@ class PairingService
                 fn ($c) => $c['label'],
                 array_filter($k['komponenten'], fn ($c) => $c['is_orphan']),
             )),
-            'anker' => $this->recipeAnkers($recipe->id)
+            'anker' => $ankerRows
                 ->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'quelle' => $a->quelle])->all(),
             'vorschlaege' => collect($this->componentSuggestions($recipe, 6)['klassiker'])
                 ->map(fn ($v) => [
                     'slug' => $v['slug'], 'cover' => $v['cover'], 'dish_n' => $v['dish_n'],
                     'mean_w' => $v['mean_w'], 'allrounder' => $v['allrounder'],
                 ])->all(),
+            'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
         ];
     }
 
-    /** GP: eigene Aroma-Anker + ihre klassischen Nachbarn (»passt zu«). */
+    /** GP: eigene Aroma-Anker + klassische Nachbarn (»passt zu«) + Kontrast (Gegenpol). */
     public function panelGp(int $gpId): array
     {
         $anker = $this->gpAnkers($gpId);
+        $slugs = $anker->pluck('slug')->all();
         $eigene = $anker->pluck('id')->map(fn ($i) => (int) $i)->all();
-
-        $nachbarn = [];
-        foreach ($anker as $a) {
-            foreach ($this->ankerNeighbors($a->slug, 'klassisch', 12) as $n) {
-                $id = (int) $n->id;
-                if (in_array($id, $eigene, true)) {
-                    continue;
-                }
-                $nachbarn[$id] = $n->display_de ?: $n->slug;
-            }
-        }
-        natcasesort($nachbarn);
 
         return [
             'typ' => 'gp',
             'anker' => $anker->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'quelle' => $a->quelle])->all(),
-            'nachbarn' => array_slice(array_values($nachbarn), 0, 18),
+            'nachbarn' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'klassisch'),
+            'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
         ];
     }
 

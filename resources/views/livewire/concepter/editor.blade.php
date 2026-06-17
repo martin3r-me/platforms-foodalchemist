@@ -902,17 +902,7 @@
                             </div>
                         </div>
 
-                        @if(count($sensorik['vorschlaege']))
-                            <div class="relative overflow-hidden {{ $card }}">
-                                <div class="{{ $cardAccent }}"></div>
-                                <div class="px-5 py-4 space-y-1">
-                                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Ausgleich-Vorschläge (Kontrast)</h3>
-                                    @foreach($sensorik['vorschlaege'] as $vs)
-                                        <p class="text-xs text-gray-700 dark:text-gray-200"><span class="text-gray-400">{{ $dimLabel[$vs['dim']] ?? $vs['dim'] }} stärken:</span> {{ implode(' · ', $vs['gps']) }}</p>
-                                    @endforeach
-                                </div>
-                            </div>
-                        @endif
+                        {{-- Kontrast/Komplettierung kommt aus dem Anker-Graph (Pairing), nicht aus dem Grundgeschmack. --}}
                     @endif
                 @endif
             @endif

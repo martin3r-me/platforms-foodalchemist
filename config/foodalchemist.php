@@ -429,6 +429,18 @@ return [
             'task' => 'Bestimme die grobe Geschmacksrichtung fuer die Menueplanung '
                 . '(suess|herzhaft|neutral): werte = {geschmacksrichtung}.',
         ],
+        'recipe.sensorik' => [
+            'tier' => 'B',
+            'task' => 'Bewerte das FERTIG ZUBEREITETE Gericht sensorisch — wie es nach der angegebenen '
+                . 'Zubereitung auf dem Teller schmeckt und sich anfuehlt, NICHT die rohen Zutaten. '
+                . 'Beruecksichtige Gartransformationen (Maillard/Roestung, Karamell, Reduktion/Konzentration, '
+                . 'Schmoren, Kochen, Duensten, Saeuern): Garen baut Schaerfe ab und entwickelt Suesse/Umami, '
+                . 'Reduktion konzentriert. Jede Geschmacks-Dimension 0.0-1.0 (konservativ, meist 1-3 Dimensionen '
+                . 'deutlich >0); texturen-slugs NUR aus: knusprig,cremig,saftig,zaeh,gel,fluessig,koernig,'
+                . 'weich,schnittfest,pastoes,kalt_fest,kuehlend,waermend (intensitaet 0.0-1.0, 1-3 Eintraege): '
+                . 'werte = {geschmack: {suess,salzig,sauer,bitter,umami,fettig,scharf}, '
+                . 'texturen: [{slug, intensitaet}]}.',
+        ],
         'recipe.review' => [
             'tier' => 'A',
             'task' => 'Pruefe das Produktionsrezept als Sous-Chef auf Plausibilitaet (Mengen, '

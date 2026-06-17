@@ -396,6 +396,15 @@
 
     {{-- ── Tab: SENSORIK & PAIRING (Geschmacks-Balance + Textur + Aroma-Kohäsion über die Zutaten-GPs) ── --}}
     <div x-show="tab === 'sensorik'" x-cloak class="pt-4">
+        @unless($neu)
+            <div class="flex items-center justify-between gap-2 mb-2">
+                <span class="text-[11px] text-gray-400">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
+                <button type="button" wire:click="sensorikBewerten" wire:loading.attr="disabled" wire:target="sensorikBewerten" class="{{ $btnGhostXs }}">
+                    <span wire:loading.remove wire:target="sensorikBewerten">✨ Sensorik neu bewerten</span>
+                    <span wire:loading wire:target="sensorikBewerten">… bewertet</span>
+                </button>
+            </div>
+        @endunless
         @include('foodalchemist::livewire.concepter.partials.sensorik')
         <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mt-5 mb-2">Pairing</h3>
         @include('foodalchemist::livewire.concepter.partials.pairing')

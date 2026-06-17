@@ -59,6 +59,19 @@
                 </div>
             </div>
         @endif
+
+        @if(count($pairing['kontrast'] ?? []))
+            <div class="relative overflow-hidden {{ $card }} mt-3">
+                <div class="{{ $cardAccent }}"></div>
+                <div class="px-5 py-4 space-y-2">
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Kontrast (Aroma-Gegenpol)</h3>
+                    <p class="text-[11px] text-gray-400">Kuratierte Kontrast-Kanten aus dem Aroma-Netz (↔) — der Gegenpol, der den Teller spannend macht.</p>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($pairing['kontrast'] as $n)<span class="{{ $pill }}" style="background-color: rgba(6,182,212,0.14); color: #0891b2;">↔ {{ $n }}</span>@endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
     @endif
 @elseif(($pairing['typ'] ?? null) === 'gp')
     @if(count($pairing['anker']) === 0)
@@ -81,6 +94,18 @@
                     <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Passt klassisch zu</h3>
                     <div class="flex flex-wrap gap-1">
                         @foreach($pairing['nachbarn'] as $n)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $n }}</span>@endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        @if(count($pairing['kontrast'] ?? []))
+            <div class="relative overflow-hidden {{ $card }} mt-3">
+                <div class="{{ $cardAccent }}"></div>
+                <div class="px-5 py-4 space-y-2">
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Kontrast (Aroma-Gegenpol)</h3>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($pairing['kontrast'] as $n)<span class="{{ $pill }}" style="background-color: rgba(6,182,212,0.14); color: #0891b2;">↔ {{ $n }}</span>@endforeach
                     </div>
                 </div>
             </div>

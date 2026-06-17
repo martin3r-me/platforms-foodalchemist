@@ -537,6 +537,14 @@ class RecipeModal extends Component
         }
     }
 
+    /** ✨ Sensorik: KI bewertet das GEGARTE Rezept (Zutaten + Zubereitung) → Recipe-Sensorik-Tabellen. */
+    public function sensorikBewerten(): void
+    {
+        if ($this->recipeId !== null) {
+            app(\Platform\FoodAlchemist\Services\SensorikService::class)->bewerteRezept($this->recipeId, true);
+        }
+    }
+
     // ── ✨ Alles anreichern (D-5 §4.4 auf EIN Rezept — Bulk-Mechanik M7-06) ──
 
     public ?int $bulkRunId = null;

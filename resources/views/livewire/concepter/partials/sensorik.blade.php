@@ -5,7 +5,23 @@
 @if(! $sensorik || ($sensorik['leer'] ?? true))
     <p class="text-xs text-gray-400 py-4">Noch keine Sensorik-Daten (keine Grundprodukte mit Vektor).</p>
 @else
-    <p class="text-[11px] text-gray-400 mb-2">Aggregiert über {{ $sensorik['abdeckung']['gesamt'] }} Grundprodukte ({{ $sensorik['abdeckung']['mit'] }} mit Sensorik-Daten) — MAX je Dimension. Quelle: Sensorik-Graph.</p>
+    @php($sQuelle = $sensorik['quelle'] ?? 'roh')
+    <div class="flex items-center gap-2 mb-2 flex-wrap">
+        @if($sQuelle === 'ki')
+            <span class="{{ $pill }} {{ $variantPill['success'] }}">✨ KI-bewertet · gegart</span>
+            @if(($sensorik['confidence'] ?? null) !== null)<span class="text-[11px] text-gray-400">Konfidenz {{ number_format((float) $sensorik['confidence'], 2, ',', '.') }}</span>@endif
+        @elseif($sQuelle === 'manual')
+            <span class="{{ $pill }} {{ $variantPill['info'] }}">✎ manuell gesetzt · gegart</span>
+        @elseif($sQuelle === 'gp')
+            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Grundprodukt · Roh-Profil</span>
+        @else
+            <span class="{{ $pill }} {{ $variantPill['warning'] }}">aus Rohzutaten geschätzt</span>
+            @if(isset($sensorik['abdeckung']))<span class="text-[11px] text-gray-400">{{ $sensorik['abdeckung']['mit'] }}/{{ $sensorik['abdeckung']['gesamt'] }} GPs mit Daten · noch nicht KI-bewertet</span>@endif
+        @endif
+    </div>
+    @if(($sensorik['begruendung'] ?? null) !== null && $sQuelle === 'ki')
+        <p class="text-[11px] text-gray-400 mb-2 italic">{{ $sensorik['begruendung'] }}</p>
+    @endif
 
     <div class="relative overflow-hidden {{ $card }} mb-3">
         <div class="{{ $cardAccent }}"></div>
@@ -48,16 +64,6 @@
             @endif
         </div>
     </div>
-
-    @if(count($sensorik['vorschlaege']))
-        <div class="relative overflow-hidden {{ $card }}">
-            <div class="{{ $cardAccent }}"></div>
-            <div class="px-5 py-4 space-y-1">
-                <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Ausgleich-Vorschläge (Kontrast)</h3>
-                @foreach($sensorik['vorschlaege'] as $vs)
-                    <p class="text-xs text-gray-700 dark:text-gray-200"><span class="text-gray-400">{{ $dimLabel[$vs['dim']] ?? $vs['dim'] }} stärken:</span> {{ implode(' · ', $vs['gps']) }}</p>
-                @endforeach
-            </div>
-        </div>
-    @endif
+    {{-- Kein „Ausgleich/Kontrast"-Vorschlag hier: Grundgeschmack = reine Diagnose.
+         Kontrast/Komplettierung liefert der Anker-Graph (Pairing-Block: klassisch + kontrast). --}}
 @endif
