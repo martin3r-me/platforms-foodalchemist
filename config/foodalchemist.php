@@ -431,14 +431,16 @@ return [
         ],
         'recipe.sensorik' => [
             'tier' => 'B',
-            'task' => 'Bewerte das FERTIG ZUBEREITETE Gericht sensorisch — wie es nach der angegebenen '
-                . 'Zubereitung auf dem Teller schmeckt und sich anfuehlt, NICHT die rohen Zutaten. '
-                . 'Beruecksichtige Gartransformationen (Maillard/Roestung, Karamell, Reduktion/Konzentration, '
-                . 'Schmoren, Kochen, Duensten, Saeuern): Garen baut Schaerfe ab und entwickelt Suesse/Umami, '
-                . 'Reduktion konzentriert. Jede Geschmacks-Dimension 0.0-1.0 (konservativ, meist 1-3 Dimensionen '
-                . 'deutlich >0); texturen-slugs NUR aus: knusprig,cremig,saftig,zaeh,gel,fluessig,koernig,'
-                . 'weich,schnittfest,pastoes,kalt_fest,kuehlend,waermend (intensitaet 0.0-1.0, 1-3 Eintraege): '
-                . 'werte = {geschmack: {suess,salzig,sauer,bitter,umami,fettig,scharf}, '
+            'task' => 'Bewerte das FERTIG ZUBEREITETE Gericht sensorisch — wie es nach der Zubereitung auf dem '
+                . 'Teller schmeckt/sich anfuehlt, NICHT die rohen Zutaten. Der Kontext liefert zu jeder Zutat ihr '
+                . 'ROH-Profil + Menge (g) + %-Anteil — nimm das als FAKTEN-Anker und wende die ZUBEREITUNG als '
+                . 'Transformation an: (a) NUR wenn tatsaechlich erhitzt Schaerfe mildern und Suesse/Umami/Roest '
+                . 'aufbauen — roh/kalt erhaelt Schaerfe und Frische voll; (b) Menge zaehlt — eine Spur (<0.3 %) '
+                . 'kaum spuerbar, gut gewuerzt ~0.8-1 %; Salz und Saeure SAETTIGEN (oben flacht die Wahrnehmung ab); '
+                . '(c) spaet zugegebene oder kalte Saeure/Salz bleiben erhalten. Jede Geschmacks-Dimension 0.0-1.0 '
+                . '(konservativ, meist 1-3 Dimensionen deutlich >0); texturen-slugs NUR aus: knusprig,cremig,saftig,'
+                . 'zaeh,gel,fluessig,koernig,weich,schnittfest,pastoes,kalt_fest,kuehlend,waermend (intensitaet '
+                . '0.0-1.0, 1-3 Eintraege): werte = {geschmack: {suess,salzig,sauer,bitter,umami,fettig,scharf}, '
                 . 'texturen: [{slug, intensitaet}]}.',
         ],
         'recipe.review' => [

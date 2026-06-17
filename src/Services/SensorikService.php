@@ -187,7 +187,7 @@ class SensorikService
 
         $proposal = app(AiGatewayService::class)->propose('recipe.sensorik', [
             'name' => $recipe->name,
-            'zutaten' => $zutaten,
+            'zutaten_geerdet' => $this->groundingKontext($recipeId),     // Roh-Vektor + Menge(g) + %-Anteil je Zutat
             'zubereitung' => $recipe->zubereitung ?: ($recipe->beschreibung ?: null),
         ], ['target_table' => 'foodalchemist_recipe_geschmack_vektor', 'target_id' => $recipeId]);
 
@@ -199,6 +199,53 @@ class SensorikService
         $this->speichereRezept($recipeId, $geschmack, $werte['texturen'] ?? [], $hash, $proposal->confidence, $proposal->begruendung);
 
         return ['status' => 'bewertet', 'geschmack' => $geschmack, 'quelle' => 'ki'];
+    }
+
+    /**
+     * Grounding-Kontext für die KI: pro Zutat ROH-Profil (GP-Vektor) + Menge (g) + %-Anteil am
+     * Gesamtgewicht. Damit kennt die KI die Fakten (was, wie viel) und wendet nur die Zubereitung
+     * als Transformation an — statt aus dem Namen zu raten.
+     */
+    private function groundingKontext(int $recipeId): string
+    {
+        $rows = DB::table('foodalchemist_recipe_ingredients AS ri')
+            ->leftJoin('foodalchemist_gps AS g', 'g.id', '=', 'ri.gp_id')
+            ->leftJoin('foodalchemist_recipes AS sr', 'sr.id', '=', 'ri.referenced_recipe_id')
+            ->leftJoin('foodalchemist_vocab_einheiten AS e', 'e.id', '=', 'ri.einheit_vocab_id')
+            ->leftJoin('foodalchemist_gp_geschmack_vektor AS v', 'v.gp_id', '=', 'ri.gp_id')
+            ->where('ri.recipe_id', $recipeId)->whereNull('ri.deleted_at')->orderBy('ri.position')
+            ->get(['ri.menge', 'e.default_in_g', 'e.default_in_ml',
+                DB::raw('COALESCE(g.name, sr.name, ri.raw_text) AS name'),
+                'v.suess', 'v.salzig', 'v.sauer', 'v.bitter', 'v.umami', 'v.fettig', 'v.scharf']);
+
+        $gramm = [];
+        $total = 0.0;
+        foreach ($rows as $i => $r) {
+            $g = $r->menge !== null ? (float) $r->menge * (float) ($r->default_in_g ?? $r->default_in_ml ?? 0) : 0.0;
+            $gramm[$i] = $g;
+            $total += $g;
+        }
+
+        $lines = [];
+        foreach ($rows as $i => $r) {
+            if (($r->name ?? '') === '') {
+                continue;
+            }
+            $mengeTxt = $gramm[$i] > 0
+                ? ' ' . round($gramm[$i]) . 'g' . ($total > 0 ? ' (' . round($gramm[$i] / $total * 100, 1) . '%)' : '')
+                : '';
+            $dims = [];
+            foreach (self::DIMS as $d) {
+                $val = round((float) ($r->{$d} ?? 0), 2);
+                if ($val > 0) {
+                    $dims[] = self::DIM_LABEL[$d] . ' ' . $val;
+                }
+            }
+            $roh = $dims !== [] ? ' — roh: ' . implode(' / ', $dims) : '';
+            $lines[] = '- ' . $r->name . $mengeTxt . $roh;
+        }
+
+        return implode("\n", $lines);
     }
 
     /** Persistiert ein gegartes Profil (Geschmack upsert + Textur ersetzen, quelle='ai'). */
