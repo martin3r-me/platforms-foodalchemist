@@ -174,6 +174,26 @@ class ConcepterAggregateService
             $zeit += (int) ($r['gericht']->arbeitszeit_min ?? 0);   // Σ roh (Planungsproxy), mengenunabhängig
             $ekPositionen++;
 
+            // Basisrezept-Posten (Paket/Concept): Menge = GRAMM/Person → Beitrag als Batch-Bruchteil
+            // (g/Person ÷ Batch-Gramm) für EK/Zeit/Gewicht; kein Einzel-VK. Zweig nur bei
+            // ist_verkaufsrezept=0 → der Gericht-Pfad (Portion/Stück) bleibt unverändert.
+            if (! (bool) ($r['gericht']->ist_verkaufsrezept ?? true)) {
+                $yieldG = (float) ($r['gericht']->yield_kg ?? 0) * 1000;
+                $mengeG = $r['menge'] !== null ? (float) $r['menge'] : null;
+                if ($mengeG === null || $mengeG <= 0 || $yieldG <= 0) {
+                    $gewichtVollstaendig = false;
+
+                    continue;
+                }
+                $bruch = $mengeG / $yieldG;
+                $ekBeitragend++;
+                $ek += (float) ($r['gericht']->ek_total_eur ?? 0) * $bruch;
+                $zeitProPortion += (float) ($r['gericht']->arbeitszeit_min ?? 0) * $bruch;
+                $gewicht += $mengeG;
+
+                continue;
+            }
+
             $pae = self::portionsAequivalent(
                 $r['menge'] !== null ? (float) $r['menge'] : null,
                 $r['einheit'] ?? null,
@@ -253,8 +273,29 @@ class ConcepterAggregateService
                 continue;
             }
             $nTotal++;
-            $portionG = $g->vk_menge_pro_einheit_g !== null ? (float) $g->vk_menge_pro_einheit_g : null;
             $hatNutri = $g->nutri_kcal_per_100g !== null;
+
+            // Basisrezept: Menge = GRAMM/Person → Nährwert = pro 100 g × g/Person ÷ 100
+            // (kein Portionsgramm nötig). Zweig nur bei ist_verkaufsrezept=0.
+            if (! (bool) ($g->ist_verkaufsrezept ?? true)) {
+                $mengeG = $row['menge'] !== null ? (float) $row['menge'] : null;
+                if ($mengeG === null || $mengeG <= 0 || ! $hatNutri) {
+                    continue;
+                }
+                $faktorBasis = $mengeG / 100.0;
+                foreach ($felder as $key => $spalte) {
+                    if ($g->{$spalte} !== null) {
+                        $summe[$key] += (float) $g->{$spalte} * $faktorBasis;
+                    }
+                }
+                $nOk++;
+                $kB = self::KONF_RANG[$g->nutri_konfidenz] ?? 0;
+                $minKonf = $minKonf === null ? $kB : min($minKonf, $kB);
+
+                continue;
+            }
+
+            $portionG = $g->vk_menge_pro_einheit_g !== null ? (float) $g->vk_menge_pro_einheit_g : null;
             $pae = self::portionsAequivalent(
                 $row['menge'] !== null ? (float) $row['menge'] : null,
                 $row['einheit'] ?? null,
