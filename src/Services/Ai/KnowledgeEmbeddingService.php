@@ -46,6 +46,9 @@ class KnowledgeEmbeddingService
     /** Polymorpher entity_type im Core-Store. */
     public const ENTITY_TYPE = 'foodalchemist_knowledge_document';
 
+    /** entity_type für das Anker-Vokabular (semantische Anker-Auflösung, B). */
+    public const ENTITY_TYPE_ANKER = 'foodalchemist_pairing_anker';
+
     /** Kategorien mit Discovery-Bedarf — diese werden indiziert. */
     public const INDEXED_KATEGORIEN = ['domain', 'pairing'];
 
@@ -158,6 +161,83 @@ class KnowledgeEmbeddingService
         }
 
         return ['available' => true, 'candidates' => $candidates, 'kategorien' => $perKat];
+    }
+
+    /**
+     * Indiziert das Anker-Vokabular (für die semantische Anker-Auflösung, B).
+     * Text = display_de + Slug-Worte. 'neutral' wird ausgelassen (kein Aroma).
+     *
+     * @return array{available: bool, candidates: int}
+     */
+    public function embedAnkers(): array
+    {
+        if (! $this->isProviderAvailable()) {
+            return ['available' => false, 'candidates' => 0];
+        }
+
+        $service = app(EmbeddingService::class);
+        $providerName = $this->providerName();
+        $globalTeam = $this->globalTeamId();
+
+        $rows = DB::table('foodalchemist_vocab_pairing_ankers')
+            ->whereNull('deleted_at')
+            ->where('slug', '!=', 'neutral')
+            ->get(['id', 'slug', 'display_de', 'team_id']);
+
+        $byTeam = [];
+        foreach ($rows as $r) {
+            $teamId = $r->team_id === null ? $globalTeam : (int) $r->team_id;
+            $text = trim((string) $r->display_de . ' ' . str_replace('_', ' ', (string) $r->slug));
+            if ($text === '') {
+                continue;
+            }
+            $byTeam[$teamId][] = ['id' => (int) $r->id, 'text' => $text];
+        }
+
+        $count = 0;
+        foreach ($byTeam as $teamId => $entries) {
+            $service->embedAndStoreBatch(
+                teamId: (int) $teamId,
+                entityType: self::ENTITY_TYPE_ANKER,
+                entries: $entries,
+                providerName: $providerName,
+            );
+            $count += count($entries);
+        }
+
+        return ['available' => true, 'candidates' => $count];
+    }
+
+    /**
+     * Semantische Anker-Auflösung (B): Freitext → Anker-ID des besten Treffers
+     * über der Konfidenz-Schwelle (anker_min_score, höher als die Doc-Suche, weil
+     * eine FALSCHE Auflösung schädlicher ist als gar keine). null bei kein
+     * Treffer / kein Provider / Fehler.
+     */
+    public function resolveAnkerId(string $name, ?float $minScore = null): ?int
+    {
+        $name = trim($name);
+        if ($name === '' || ! $this->isProviderAvailable()) {
+            return null;
+        }
+        $minScore ??= (float) config('foodalchemist.semantic_search.anker_min_score', 0.55);
+
+        try {
+            $hits = app(EmbeddingService::class)->search(
+                teamId: $this->globalTeamId(),
+                queryText: $name,
+                entityTypes: [self::ENTITY_TYPE_ANKER],
+                limit: 1,
+                minScore: $minScore,
+                providerName: $this->providerName(),
+            );
+        } catch (Throwable $e) {
+            Log::warning('[KnowledgeEmbeddingService] anker resolve failed', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        return isset($hits[0]) ? (int) $hits[0]['entity_id'] : null;
     }
 
     /**

@@ -53,7 +53,51 @@
                     <p class="text-[11px] text-gray-400">Aromen, die zu mehreren Komponenten klassisch passen — Vorschlag, keine Pflicht.</p>
                     <div class="flex flex-wrap gap-1">
                         @foreach($pairing['vorschlaege'] as $v)
-                            <span class="{{ $pill }} {{ $v['allrounder'] ? $variantPill['secondary'] : $variantPill['info'] }}" title="passt zu {{ $v['cover'] }}/{{ $v['dish_n'] }} Komponenten{{ $v['allrounder'] ? ' · Allrounder' : '' }}">{{ $v['slug'] }} <span class="opacity-60">{{ $v['cover'] }}/{{ $v['dish_n'] }}</span></span>
+                            <span class="{{ $pill }} {{ $v['allrounder'] ? $variantPill['secondary'] : $variantPill['info'] }}" title="passt zu {{ $v['cover'] }}/{{ $v['dish_n'] }} Komponenten{{ $v['allrounder'] ? ' · Allrounder (passt zu fast allem)' : '' }}">{{ $v['slug'] }} <span class="opacity-60">{{ $v['cover'] }}/{{ $v['dish_n'] }}</span></span>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        @if(count($pairing['signature'] ?? []))
+            <div class="relative overflow-hidden {{ $card }} mt-3">
+                <div class="{{ $cardAccent }}"></div>
+                <div class="px-5 py-4 space-y-2">
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Macht den Teller eigen</h3>
+                    <p class="text-[11px] text-gray-400">Aromen, die spezifisch zu DIESEM Teller passen — Allrounder (passt-zu-allem) sind rausgerechnet. Schärft das Profil statt es zu glätten.</p>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($pairing['signature'] as $v)
+                            <span class="{{ $pill }} {{ $variantPill['info'] }}" title="passt zu {{ $v['cover'] }}/{{ $v['dish_n'] }} Komponenten, aber kein Allrounder">{{ $v['slug'] }} <span class="opacity-60">{{ $v['cover'] }}/{{ $v['dish_n'] }}</span></span>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- Basisrezept (Komponente): Graph-Sicht statt Teller-Logik. --}}
+        @if(count($pairing['nachbarn'] ?? []))
+            <div class="relative overflow-hidden {{ $card }} mt-3">
+                <div class="{{ $cardAccent }}"></div>
+                <div class="px-5 py-4 space-y-2">
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Passt klassisch zu</h3>
+                    <p class="text-[11px] text-gray-400">Aroma-Nachbarn dieser Komponente im Pairing-Graphen — womit sie klassisch harmoniert.</p>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($pairing['nachbarn'] as $n)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $n }}</span>@endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        @if(count($pairing['verwandte'] ?? []))
+            <div class="relative overflow-hidden {{ $card }} mt-3">
+                <div class="{{ $cardAccent }}"></div>
+                <div class="px-5 py-4 space-y-2">
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Verwandte Basisrezepte</h3>
+                    <p class="text-[11px] text-gray-400">Andere Basisrezepte, die Pairing-Anker mit diesem teilen — mehr geteilte Anker = näher verwandt.</p>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($pairing['verwandte'] as $r)
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="{{ $r['shared'] }} geteilte Anker{{ count($r['shared_slugs'] ?? []) ? ': ' . implode(', ', $r['shared_slugs']) : '' }}">{{ $r['name'] }} <span class="opacity-60">{{ $r['shared'] }}</span></span>
                         @endforeach
                     </div>
                 </div>

@@ -141,3 +141,28 @@ it('ist idempotent — zweiter Lauf ohne Inhaltsänderung legt nicht neu an', fu
     expect(DB::table('core_embeddings')->where('entity_type', KnowledgeEmbeddingService::ENTITY_TYPE)->count())->toBe(1)
         ->and($after->updated_at)->toBe($row->updated_at);
 });
+
+it('löst einen Anker semantisch über das Vokabular auf (B) — Schwelle hält Falsch-Treffer raus', function () {
+    $mkAnker = function (string $slug, string $display): int {
+        DB::table('foodalchemist_vocab_pairing_ankers')->insert([
+            'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'display_de' => $display,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return (int) DB::getPdo()->lastInsertId();
+    };
+    $portwein = $mkAnker('portwein', 'Portwein');
+    $mkAnker('rotwein', 'Rotwein');
+    $mkAnker('apfel', 'Apfel');
+
+    $anker = $this->svc->embedAnkers();
+
+    expect($anker['available'])->toBeTrue()
+        ->and($anker['candidates'])->toBe(3)
+        ->and(DB::table('core_embeddings')->where('entity_type', KnowledgeEmbeddingService::ENTITY_TYPE_ANKER)->count())->toBe(3);
+
+    // "Portwein weiss, 19 Vol%" teilt das Token 'portwein' → Portwein-Anker.
+    expect($this->svc->resolveAnkerId('Portwein weiss, 19 Vol%', 0.0))->toBe($portwein);
+    // Kein gemeinsames Token + hohe Schwelle → null (lieber „unbekannt" als falsch).
+    expect($this->svc->resolveAnkerId('Schnittlauch frisch', 0.9))->toBeNull();
+});

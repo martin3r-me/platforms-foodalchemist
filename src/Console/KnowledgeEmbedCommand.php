@@ -31,14 +31,19 @@ class KnowledgeEmbedCommand extends Command
         $kategorien = (array) $this->option('kategorie');
         $kategorien = $kategorien !== [] ? $kategorien : KnowledgeEmbeddingService::INDEXED_KATEGORIEN;
 
-        $this->info('Embedding-Lauf (idempotent — unveränderte Docs werden übersprungen) …');
+        $this->info('Embedding-Lauf (idempotent — unveränderte Einträge werden übersprungen) …');
         $stats = $service->embedCorpus($kategorien);
 
         $rows = [];
         foreach ($stats['kategorien'] as $kat => $count) {
             $rows[] = [$kat, $count];
         }
-        $this->table(['Kategorie', 'Docs (Kandidaten)'], $rows);
+
+        // Anker-Vokabular für die semantische Anker-Auflösung (B) mitindizieren.
+        $anker = $service->embedAnkers();
+        $rows[] = ['anker (Vokabular)', $anker['candidates']];
+
+        $this->table(['Quelle', 'Einträge (Kandidaten)'], $rows);
 
         $this->line('Provider: ' . ($service->providerName() ?? 'core-default')
             . ' · Sentinel-Team (global): ' . $service->globalTeamId());

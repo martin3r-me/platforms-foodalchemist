@@ -129,6 +129,23 @@ class PairingService
     }
 
     /**
+     * B: semantische Anker-Auflösung als Fallback (opt-in). Gibt die Anker-ID
+     * des besten Embedding-Treffers über der Schwelle zurück, sonst null.
+     * Deaktiviert (Default) / kein Provider / Fehler ⇒ null (kein Verhalten).
+     */
+    private function resolveAnkerSemantically(string $name): ?int
+    {
+        if (trim($name) === '' || ! config('foodalchemist.semantic_search.enabled', false)) {
+            return null;
+        }
+        try {
+            return app(\Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService::class)->resolveAnkerId($name);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * resolve_recipe_anchors (Tabelle 4): pro Zutaten-Zeile GENAU EIN Kern
      * (+ Prozess-Anker nur bei Sub-Rezepten).
      *
@@ -172,6 +189,17 @@ class PairingService
             } else {
                 $kern = $this->resolveByName($z->raw_text);
                 $via = $kern !== null ? 'name_match' : 'unresolved';
+            }
+
+            // B: semantischer Fallback NUR für sonst unauflösbare Zeilen (opt-in,
+            // hinter foodalchemist.semantic_search.enabled). Überschreibt NIE
+            // explizite gp/recipe-Mappings; markiert via='embedding' für Provenienz.
+            if ($kern === null && $via === 'unresolved') {
+                $semId = $this->resolveAnkerSemantically($label);
+                if ($semId !== null) {
+                    $kern = $semId;
+                    $via = 'embedding';
+                }
             }
 
             $out[] = ['label' => $label, 'kern' => $kern, 'prozess' => $prozess, 'via' => $via];
@@ -482,9 +510,10 @@ class PairingService
     }
 
     /**
-     * Gericht/Basisrezept: Kohäsion + Kern-Anker + »komplettiert den Teller« (klassisch) +
-     * Kontrast (kontrast-Kanten — kulinarischer Gegenpol, wie die cyan-Ebene im Aroma-Netz).
-     * Spiegelt die Editor-Sicht — keine Schreibpfade, keine KI.
+     * Pairing-Panel (read-only, keine KI). Immer: Kohäsion + Kern-Anker + Kontrast.
+     * GERICHT zusätzlich: »komplettiert den Teller« (klassiker) + »macht den Teller
+     * eigen« (signature) — Teller-Logik. BASISREZEPT (Komponente) stattdessen die
+     * Graph-Sicht: klassische Aroma-Nachbarn + verwandte Basisrezepte.
      */
     public function panelRecipe(FoodAlchemistRecipe $recipe): array
     {
@@ -493,8 +522,32 @@ class PairingService
         $slugs = $ankerRows->pluck('slug')->all();
         $eigene = $ankerRows->pluck('id')->map(fn ($i) => (int) $i)->all();
 
+        // Teller-Logik (»komplettiert den Teller« + »macht den Teller eigen«) ergibt
+        // NUR fürs GERICHT Sinn — ein Basisrezept ist eine Komponente, kein Teller.
+        // Basisrezept ⇒ stattdessen die Graph-Sicht: klassische Aroma-Nachbarn +
+        // verwandte Basisrezepte (geteilte Pairing-Anker).
+        $istGericht = (bool) $recipe->ist_verkaufsrezept;
+        $vorschlaege = $signature = $nachbarn = $verwandte = [];
+
+        if ($istGericht) {
+            $sug = $this->componentSuggestions($recipe, 6);
+            $mapV = fn ($v) => [
+                'slug' => $v['slug'], 'cover' => $v['cover'], 'dish_n' => $v['dish_n'],
+                'mean_w' => $v['mean_w'], 'allrounder' => $v['allrounder'],
+            ];
+            $vorschlaege = collect($sug['klassiker'])->map($mapV)->all();
+            $signature = collect($sug['signature'])->map($mapV)->all();
+        } else {
+            $nachbarn = $this->ankerNachbarnAggregiert($slugs, $eigene, 'klassisch');
+            $team = Team::find((int) $recipe->team_id);
+            $verwandte = $team !== null
+                ? $this->recipesSharingPairings($team, $recipe->id)->all()
+                : [];
+        }
+
         return [
             'typ' => 'recipe',
+            'ist_gericht' => $istGericht,
             'score' => $k['score'],
             'coverage_pct' => $k['coverage_pct'],
             'rated_pairs' => $k['rated_pairs'],
@@ -506,11 +559,10 @@ class PairingService
             )),
             'anker' => $ankerRows
                 ->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'quelle' => $a->quelle])->all(),
-            'vorschlaege' => collect($this->componentSuggestions($recipe, 6)['klassiker'])
-                ->map(fn ($v) => [
-                    'slug' => $v['slug'], 'cover' => $v['cover'], 'dish_n' => $v['dish_n'],
-                    'mean_w' => $v['mean_w'], 'allrounder' => $v['allrounder'],
-                ])->all(),
+            'vorschlaege' => $vorschlaege,
+            'signature' => $signature,
+            'nachbarn' => $nachbarn,
+            'verwandte' => $verwandte,
             'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
         ];
     }

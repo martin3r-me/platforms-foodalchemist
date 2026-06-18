@@ -34,6 +34,30 @@
                     <span class="{{ $dt }}">Allergen-Konf.</span>
                     <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergene_konfidenz) }}</p>
                 </div>
+
+                {{-- VK-Seite (2. Reihe): Verkaufspreis + Portion + Marge/Wareneinsatz.
+                     Quelle = SalesRecipeService::cockpit() (MargeService). „—" wenn keine
+                     Aufschlagsklasse/Portionsgröße gepflegt ist. --}}
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">VK netto</span>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['vk']['vk_netto'] ?? null) !== null ? number_format((float) $cockpit['vk']['vk_netto'], 2, ',', '.') . ' €' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">VK brutto</span>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['vk_brutto'] ?? null) !== null ? number_format((float) $cockpit['vk_brutto'], 2, ',', '.') . ' €' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-2">
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">VK / Portion</span>
+                    <p class="text-xs font-bold text-emerald-700 dark:text-emerald-300">{{ ($cockpit['pro_einheit']['vk_netto_pro_einheit'] ?? null) !== null ? number_format((float) $cockpit['pro_einheit']['vk_netto_pro_einheit'], 2, ',', '.') . ' €' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">Wareneinsatz</span>
+                    <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ ($cockpit['marge']['wareneinsatz_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Marge</span>
+                    <p class="text-xs font-semibold text-green-600 dark:text-green-400">{{ ($cockpit['marge']['marge_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['marge_pct'], 1, ',', '.') . ' %' : '—' }}</p>
+                </div>
             </div>
         </x-slot:kpiHeader>
     @endif

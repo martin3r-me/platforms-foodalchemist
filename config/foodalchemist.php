@@ -274,6 +274,9 @@ return [
         'provider'       => env('FOODALCHEMIST_EMBEDDING_PROVIDER'),     // null = Core-Default
         'global_team_id' => (int) env('FOODALCHEMIST_SEMANTIC_GLOBAL_TEAM_ID', 0),
         'min_score'      => (float) env('FOODALCHEMIST_SEMANTIC_MIN_SCORE', 0.30),
+        // Anker-Auflösung (B): höhere Schwelle — eine FALSCHE Anker-Auflösung
+        // injiziert falsche Pairing-Kanten, das ist schlimmer als „unbekannt".
+        'anker_min_score' => (float) env('FOODALCHEMIST_SEMANTIC_ANKER_MIN_SCORE', 0.55),
     ],
 
     /*

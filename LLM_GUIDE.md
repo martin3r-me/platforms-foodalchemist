@@ -383,3 +383,31 @@ bleibt führend (GL-13 Invariante 6).
 > Live-OpenAI prüfen, bevor `#4`/`#8` mit Verweis auf `32b66074` geschlossen werden.
 > Der `FakeEmbeddingProvider` in den Tests prüft nur die Verdrahtung, nicht die
 > echte semantische Qualität.
+
+### Semantische Anker-Auflösung (B)
+
+Zweiter Embedding-Hebel, getrennt von der Doc-Discovery: löst Freitext-Zutaten,
+die `PairingService::resolveByName()` lexikalisch NICHT trifft (z. B. „Portwein
+weiss"), semantisch auf einen Anker auf → hebt die Pairing-Coverage + die
+Completion-Mathematik.
+
+- `KnowledgeEmbeddingService::embedAnkers()` indiziert `vocab_pairing_ankers`
+  (entity_type `foodalchemist_pairing_anker`, ohne `neutral`). Läuft im
+  `foodalchemist:knowledge-embed`-Command mit.
+- `KnowledgeEmbeddingService::resolveAnkerId($name)` → Anker-ID des besten Treffers
+  über `semantic_search.anker_min_score` (Default **0.55**, höher als die Doc-Suche).
+- Einsprung: `PairingService::resolveRecipeAnchors()` ruft den Fallback **nur** für
+  sonst `unresolved`-Zeilen, gegated, markiert `via='embedding'`, überschreibt **nie**
+  explizite gp/recipe-Mappings. Falsch-Auflösung > Risiko → hohe Schwelle.
+
+### Pairing-Panel: Teller-Logik vs. Komponenten-Graph
+
+`PairingService::panelRecipe()` verzweigt auf `ist_verkaufsrezept`:
+
+- **Gericht (Teller):** „Komplettiert den Teller" (klassiker, breite Abdeckung) +
+  „Macht den Teller eigen" (signature = `cover×w/√degree`, Allrounder rausgerechnet).
+- **Basisrezept (Komponente):** keine Teller-Blöcke — stattdessen „Passt klassisch
+  zu" (Aroma-Graph-Nachbarn) + „Verwandte Basisrezepte" (`recipesSharingPairings`).
+
+Immer (beide): Aroma-Kohäsion, Kern-Anker, Kontrast. Ein Basisrezept „komplettiert
+keinen Teller" — daher die Graph-Sicht statt der Teller-Vorschläge.
