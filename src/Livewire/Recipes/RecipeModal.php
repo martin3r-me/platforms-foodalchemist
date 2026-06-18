@@ -112,10 +112,25 @@ class RecipeModal extends Component
         }
 
         try {
+            // Numerik-Guard (wie Preis-Anlage): leer = automatische Yield-Berechnung (A-3 COALESCE),
+            // aber ein Tippfehler darf nicht still als 0 landen — yield_kg_manual=0 macht ek_per_kg_eur
+            // null und vergiftet die Kalkulation (GL-02). 0/negativ ist als Yield/Ertrag nie gültig.
+            $rohYield = trim(str_replace(',', '.', (string) ($this->form['yield_kg_manual'] ?? '')));
+            $rohStk = trim(str_replace(',', '.', (string) ($this->form['ertrag_stueck'] ?? '')));
+            if ($rohYield !== '' && (! is_numeric($rohYield) || (float) $rohYield <= 0)) {
+                $this->fehler = 'Manuelles Yield braucht eine Zahl > 0 (oder leer lassen für die automatische Berechnung).';
+
+                return;
+            }
+            if ($rohStk !== '' && (! is_numeric($rohStk) || (float) $rohStk <= 0)) {
+                $this->fehler = 'Ertrag (Stück) braucht eine Zahl > 0 (oder leer lassen).';
+
+                return;
+            }
             $in = [...$this->form,
                 'arbeitszeit_min' => $this->form['arbeitszeit_min'] !== null && $this->form['arbeitszeit_min'] !== '' ? (int) $this->form['arbeitszeit_min'] : null,
-                'yield_kg_manual' => $this->form['yield_kg_manual'] !== null && $this->form['yield_kg_manual'] !== '' ? (float) str_replace(',', '.', (string) $this->form['yield_kg_manual']) : null,
-                'ertrag_stueck' => $this->form['ertrag_stueck'] !== null && $this->form['ertrag_stueck'] !== '' ? (float) str_replace(',', '.', (string) $this->form['ertrag_stueck']) : null,
+                'yield_kg_manual' => $rohYield !== '' ? (float) $rohYield : null,
+                'ertrag_stueck' => $rohStk !== '' ? (float) $rohStk : null,
             ];
             $recipe = $this->recipeId === null
                 ? $recipes->create($team, $in)
