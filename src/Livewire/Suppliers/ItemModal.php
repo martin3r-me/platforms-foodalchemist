@@ -115,8 +115,16 @@ class ItemModal extends Component
     public function preisAnlegen(): void
     {
         try {
-            $preis = (float) str_replace(',', '.', (string) $this->preisNeu['preis']);
-            app(PriceService::class)->createFor($this->team(), $this->item($this->itemId), $preis, $this->preisNeu['status']);
+            // Numerik-Guard wie in preisUpdate() — sonst castet (float) einen Tippfehler
+            // still auf 0,00 € (0 < 0 ist false → rutscht durch createFor) und vergiftet
+            // den GP-Leitpreis an der Wurzel der Kostenkette.
+            $roh = str_replace(',', '.', trim((string) $this->preisNeu['preis']));
+            if ($roh === '' || ! is_numeric($roh) || (float) $roh < 0) {
+                $this->fehler = 'Preis braucht eine Zahl ≥ 0.';
+
+                return;
+            }
+            app(PriceService::class)->createFor($this->team(), $this->item($this->itemId), (float) $roh, $this->preisNeu['status']);
             $this->preisNeu = ['preis' => '', 'status' => '0'];
             $this->fehler = null;
         } catch (RuntimeException $e) {
