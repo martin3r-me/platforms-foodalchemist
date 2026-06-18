@@ -26,6 +26,24 @@ it('legt an, normalisiert Dezimal-Komma und listet je Team-Kette', function () {
         ->and($this->vocab->listEinheiten($this->childB)->pluck('slug'))->toContain('stk');
 });
 
+it('default_in_g/ml: Tippfehler/negativ wird null statt stiller 0 (kein vergifteter Gramm-Faktor)', function () {
+    $bad = $this->vocab->createEinheit($this->rootTeam, [
+        'slug' => 'kiste', 'display_de' => 'Kiste', 'dimension' => 'count', 'default_in_g' => 'abc',
+    ]);
+    expect($bad->default_in_g)->toBeNull();
+
+    $neg = $this->vocab->createEinheit($this->rootTeam, [
+        'slug' => 'palette', 'display_de' => 'Palette', 'dimension' => 'count', 'default_in_g' => '-5',
+    ]);
+    expect($neg->default_in_g)->toBeNull();
+
+    // gültige Werte (inkl. Komma) bleiben erhalten
+    $ok = $this->vocab->createEinheit($this->rootTeam, [
+        'slug' => 'becher', 'display_de' => 'Becher', 'dimension' => 'volume', 'default_in_ml' => '250,5',
+    ]);
+    expect((float) $ok->default_in_ml)->toBe(250.5);
+});
+
 it('verweigert Slug-Kollision in der Team-Kette (V-06)', function () {
     expect(fn () => $this->vocab->createEinheit($this->rootTeam, ['slug' => 'stk', 'display_de' => 'Doppelt']))
         ->toThrow(RuntimeException::class, 'existiert bereits');
