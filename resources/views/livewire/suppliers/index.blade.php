@@ -207,7 +207,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-400">Keine Artikel gefunden.</td></tr>
+                        <tr><td colspan="{{ $globaleSuche ? 10 : 9 }}" class="px-5 py-10 text-center text-gray-400">Keine Artikel gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>
