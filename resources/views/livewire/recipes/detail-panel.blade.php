@@ -127,6 +127,9 @@
                 </div>
             </div>
         @endif
+        {{-- G/H: im Modal-Details-Tab redundant (Equipment → Zubereitung-Tab; Kern-Anker/Pairings/Nachbarn → Aromen/Pairing-Panel).
+             Nur in der Browser-Sidebar (standalone) zeigen — dort bleibt auch das Anker-Verknüpfen/-Lösen verfügbar. --}}
+        @unless($embedded ?? false)
         @if($rezept->equipment->isNotEmpty())
             <div data-equipment>
                 <p class="{{ $dt }} mb-1">Equipment</p>
@@ -232,6 +235,7 @@
                 @endforeach
             @endif
         </div>
+        @endunless
 
         {{-- M4-12: Workflow-Aktionen --}}
         <div class="flex flex-wrap items-center gap-1.5 border-t border-black/5 dark:border-white/10 pt-2" data-workflow>

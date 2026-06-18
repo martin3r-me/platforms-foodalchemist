@@ -30,6 +30,7 @@
             browseQ: '',                                             // zentrales Suchfeld → filtert BEIDE Listen
             gpListe: [], gpTotal: 0, rezListe: [], rezTotal: 0,
             geparkt: null,                                           // [+]-Klick parkt das Ziel in der Anzeigezeile
+            tauschIdx: null,                                         // ⇄: Index der Zeile, deren Produkt getauscht wird (null = normaler Add-Flow)
 
             async browse() {
                 const r = await this.$wire.browseKatalog(
@@ -55,6 +56,7 @@
             },
             // Spec-Flow: [+] parkt das Ziel, Einheit kommt vom Produkt, Cursor springt in die Menge
             parke(ziel) {
+                if (this.tauschIdx != null) { this.tauscheAus(ziel); return; }   // ⇄ Tausch-Modus (loose: undefined zählt als „aus")
                 this.geparkt = ziel;
                 this.neu.menge = '';
                 this.neu.einheit_vocab_id = this.einheitIdFuerSlug(ziel.einheit_slug ?? 'g');
@@ -77,6 +79,32 @@
             sucheGetippt() {
                 if (this.geparkt !== null) this.geparkt = null;
                 this.browse();
+            },
+
+            // ── ⇄ Tausch: Produkt einer bestehenden Zeile ersetzen (Menge/Einheit/Rolle/Note/Position bleiben) ──
+            starteTausch(i) {
+                this.tauschIdx = i;
+                this.geparkt = null;                                 // evtl. laufenden Park-Flow abbrechen
+                this.$nextTick(() => this.$root.querySelector('[data-browse-suche]')?.focus());
+            },
+            tauscheAus(ziel) {
+                const i = this.tauschIdx;
+                if (i === null || !this.rows[i]) { this.tauschIdx = null; return; }
+                const z = this.rows[i];
+                z.gp_id = ziel.typ === 'gp' ? ziel.id : null;        // löschen bleibt unangetastet — hier wird NUR ersetzt
+                z.referenced_recipe_id = ziel.typ === 'sub' ? ziel.id : null;
+                z.ziel_name = ziel.name;
+                z.ziel_url = ziel.url ?? null;
+                z.display_name = ziel.name;
+                z.raw_text = (this.zahl(z.menge) ?? '') + ' ' + ziel.name;
+                z.lineage = ziel.typ === 'sub' ? 'recipe_ref' : 'manual';
+                z.ek_pro_g = ziel.ek_pro_g ?? null;
+                z.ek_pro_g_min = null; z.ek_pro_g_avg = null;        // alte Min/Ø verwerfen — Save rechnet präzise nach
+                z._peek = null;
+                z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
+                this.$wire.ekFuerZiel(ziel.typ, ziel.id).then(ek => { if (ek !== null) z.ek_pro_g = ek; });
+                this.tauschIdx = null;
+                this.$nextTick(() => this.$root.querySelector('[data-browse-suche]')?.focus());
             },
 
             dragIdx: null,

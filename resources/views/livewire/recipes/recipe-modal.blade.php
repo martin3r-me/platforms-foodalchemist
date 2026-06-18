@@ -346,7 +346,13 @@
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Funktion</label>
-                <input type="text" wire:model="form.funktion" placeholder="z. B. Sauce, Bindung, Topping" class="{{ $input }}" />
+                {{-- Dropdown-Vorschläge via datalist — freie Eingabe bleibt möglich (bestehende Freitext-Werte gehen nicht verloren). --}}
+                <input type="text" wire:model="form.funktion" list="fa-funktion-optionen" placeholder="z. B. Komponente, Sauce, Bindung …" class="{{ $input }}" />
+                <datalist id="fa-funktion-optionen">
+                    @foreach(['Komponente', 'Hauptkomponente', 'Sauce', 'Bindung', 'Topping', 'Beilage', 'Garnitur', 'Fond / Basis', 'Marinade', 'Dekor', 'Füllung', 'Teig'] as $opt)
+                        <option value="{{ $opt }}"></option>
+                    @endforeach
+                </datalist>
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Geschmacksrichtung <span class="normal-case text-gray-400">(via ✨ oder manuell)</span></label>
