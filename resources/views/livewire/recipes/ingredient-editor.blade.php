@@ -129,11 +129,11 @@
                 return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
             },
             init() {
-                // Modal-Footer liegt außerhalb des x-data-Scopes → Window-Event;
-                // NUR die Standalone-(Modal-)Instanz lauscht (eingebettete hat eigenen Button)
-                if (standalone) {
-                    window.addEventListener('zutaten-speichern', () => this.$wire.speichern(this.payload()));
-                }
+                // Window-Event: der Haupt-"Speichern" des Rezept-Modals (UND der Standalone-Modal-Footer)
+                // stoßen damit das Zutaten-Speichern an. Auch die EINGEBETTETE Instanz lauscht jetzt —
+                // sonst gehen Zutaten-Edits (Garverlust/Menge/Tausch) verloren, wenn man "Speichern"
+                // statt des separaten "Zutaten speichern" klickt.
+                window.addEventListener('zutaten-speichern', () => this.$wire.speichern(this.payload()));
                 this.browse();                                       // R18: Seitenspalten initial füllen
             },
             zahl(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; },

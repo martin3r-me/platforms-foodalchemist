@@ -68,14 +68,14 @@
 
     @if($rezept === null)
         {{-- Anlage-Modus (DoD: VK aus Basisrezept manuell) --}}
-        <x-foodalchemist::modal-section title="VK aus Basisrezept anlegen">
+        <x-foodalchemist::modal-section title="Gericht anlegen">
             <div class="space-y-3" data-vk-anlage>
                 <div>
                     <label class="block {{ $label }} mb-1">Name* (Pipe-Syntax §4.4: »HG: Hauptkomponente | Komponente | …«)</label>
                     <input type="text" wire:model="neuName" class="{{ $input }}" placeholder="HG: Rinderfilet | Rotwein-Jus | Kartoffelgratin" data-vk-neu-name />
                 </div>
                 <div>
-                    <label class="block {{ $label }} mb-1">Basisrezept als erste Komponente</label>
+                    <label class="block {{ $label }} mb-1">Basisrezept als erste Komponente <span class="normal-case text-gray-400">(optional)</span></label>
                     <input type="search" wire:model.live.debounce.300ms="basisSuche" class="{{ $input }}" placeholder="Basisrezept suchen …" data-vk-basis-suche />
                     @foreach($basisTreffer as $b)
                         <button type="button" wire:key="bt-{{ $b->id }}" wire:click="$set('basisId', {{ $b->id }})"
@@ -86,7 +86,7 @@
                     @endforeach
                 </div>
                 <button type="button" wire:click="anlegen" class="{{ $btnPrimary }}" data-vk-anlegen>Anlegen</button>
-                <p class="text-[10px] text-gray-400">Die ganze Charge des Basisrezepts wird als erste Komponente übernommen (Menge = Yield) — danach Komponenten & VK-Daten pflegen.</p>
+                <p class="text-[10px] text-gray-400">Mit Basisrezept: dessen ganze Charge wird erste Komponente (Menge = Yield). Ohne: leeres Gericht — Komponenten danach im Editor hinzufügen.</p>
             </div>
         </x-foodalchemist::modal-section>
     @else

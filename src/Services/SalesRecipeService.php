@@ -169,6 +169,12 @@ class SalesRecipeService
         });
     }
 
+    /** Leeres Verkaufsrezept (Gericht) ohne erste Komponente — Komponenten/Stück-Basisrezepte kommen im Editor dazu. */
+    public function createLeer(Team $team, string $name): FoodAlchemistRecipe
+    {
+        return app(RecipeService::class)->create($team, ['name' => $name, 'ist_verkaufsrezept' => true]);
+    }
+
     // V-19: Regen-Programme (zeilenbasiert)
 
     public function upsertRegeneration(Team $team, int $recipeId, array $in, ?int $id = null): void
