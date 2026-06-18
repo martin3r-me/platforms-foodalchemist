@@ -188,7 +188,16 @@ class GeschirrService
     private function itemFelder(array $in): array
     {
         $str = fn (string $k) => isset($in[$k]) && trim((string) $in[$k]) !== '' ? trim((string) $in[$k]) : null;
-        $num = fn (string $k) => isset($in[$k]) && trim((string) $in[$k]) !== '' ? (float) str_replace(',', '.', (string) $in[$k]) : null;
+        // is_numeric/≥0-Guard (analog VocabularyService::dezimalOrNull): ein Tippfehler darf
+        // nicht still als 0 landen — 0,00 € Leihpreis/Pfand bzw. 0 mm/g sind irreführend.
+        $num = function (string $k) use ($in) {
+            if (! isset($in[$k]) || trim((string) $in[$k]) === '') {
+                return null;
+            }
+            $clean = str_replace(',', '.', trim((string) $in[$k]));
+
+            return is_numeric($clean) && (float) $clean >= 0 ? (float) $clean : null;
+        };
 
         return [
             'artikel_nr' => $str('artikel_nr'),
