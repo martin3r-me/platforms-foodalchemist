@@ -309,3 +309,77 @@ Nach dem Erstellen des Basis-Moduls:
 3. **Dokumentation** - Kommentiere wichtige Stellen
 4. **Beispiele** - Sieh dir HCM/Planner für komplexere Beispiele an
 5. **Testen** - Teste nach jeder Änderung
+
+---
+
+## 🔎 Semantische Pairing-/Domain-Suche (Embeddings)
+
+Hybrid-Recall **über** der deterministischen Lexik in `KnowledgeContextService`
+— **kein** Ersatz. Nutzt Cores Embedding-Infrastruktur (Commit `32b66074`,
+`EmbeddingProviderContract` + `EmbeddingStoreContract` getrennt). Discussions
+`#4`/`#8` im Package `platforms-food-alchemist`.
+
+### Warum
+
+`discoverDomains()` und `pairingBlock()` matchen heute rein lexikalisch
+(258er-Alias-Map + Jaccard/Substring gegen **Slug/Titel**). Das verfehlt
+Synonyme, die nicht in der Alias-Map stehen ("Topinambur", "Erdapfel" …). Die
+Semantik findet das passende Domain-/Pairing-Doc, **wenn die Lexik dünn bleibt**.
+Der präzise Anker-Edge-Graph (`foodalchemist_pairing_anker_edges`) bleibt
+unangetastet: Semantik löst Freitext → Doc-/Stem-Slug auf, der Graph paart.
+
+### Bausteine (alles im Modul)
+
+| Datei | Rolle |
+|---|---|
+| `Services/Ai/KnowledgeEmbeddingService` | Fassade: `embedCorpus()`, `searchSlugs()`, `searchEnabled()` |
+| `Console/KnowledgeEmbedCommand` | `php artisan foodalchemist:knowledge-embed` — indiziert den Korpus |
+| `KnowledgeContextService::semanticSlugs()` | Hybrid-Einsprung in `discoverDomains()` + `pairingBlock()` |
+| `config/foodalchemist.php` → `semantic_search` | Flag + Provider + Sentinel + Score |
+
+### Core-API (nur **genutzt**, nie verändert)
+
+```php
+app(\Platform\Core\Services\EmbeddingService::class)
+    ->embedAndStoreBatch(teamId, entityType, entries, providerName);   // Index
+    ->search(teamId, queryText, entityTypes, limit, minScore, providerName); // Suche
+```
+
+- **entity_type:** `foodalchemist_knowledge_document` (polymorph, kein Vektor-Feld in unseren Tabellen).
+- **Provider:** Default `null` ⇒ Core-Default = OpenAI `text-embedding-3-large` (3072d). `EMBEDDING_GEMINI_ENABLED=true` für Cooking-Jarvis-Kontinuität (768d, L2-norm.).
+- **Skip-if-unchanged:** Cores `source_hash` (sha256) — unveränderter Text ⇒ kein API-Call.
+
+### Was wird embeddet (die Qualitäts-Stellschraube)
+
+- **domain:** Titel + Lead (erste ~2000 Zeichen) → Doc-Level-Relevanz reicht.
+- **pairing:** Stem + **verifizierte Partner-Namen** (`extractPairingNames()`), **nicht** die molekulare Prosa — die Zutaten-Oberfläche soll zur Gericht-Beschreibung matchen.
+- **cross_cutting:** wird **nicht** indiziert (always-load, kein Discovery).
+
+### Globaler Korpus — `team_id`-Sentinel ⚠
+
+`knowledge_documents.team_id` ist **NULL** (BHG-kuratiert, D1). Cores
+`EmbeddingService` verlangt aber `team_id:int`. Wir mappen NULL →
+`semantic_search.global_team_id` (Default `0`). Gefahrlos, weil
+`core_embeddings.team_id` nur ein indizierter `bigint` ist (kein FK).
+**Offener Core-Wunsch an Martin:** nativer Global-/Shared-Scope + global∪team-OR
+in `search()` — bis dahin sucht das Modul ausschließlich in der Sentinel-Partition.
+
+### Aktivierung (zweistufig, default AUS)
+
+```bash
+# 1. Korpus indizieren (idempotent; nach foodalchemist:knowledge-import laufen lassen)
+php artisan foodalchemist:knowledge-embed
+
+# 2. Hybrid-Fallback scharf schalten
+FOODALCHEMIST_SEMANTIC_SEARCH=true
+```
+
+`enabled=false` (Default) = **exakt** das bisherige Lexik-Verhalten: kein
+API-Call, keine Latenz im Generator-Hot-Path, keine Verhaltensänderung. Fehlender
+Provider (Sandbox ohne Key) ⇒ alle Methoden degradieren still auf leer ⇒ Lexik
+bleibt führend (GL-13 Invariante 6).
+
+> **Noch offen:** Retrieval-Qualität gegen echte Pairing-Fälle auf `demo` mit
+> Live-OpenAI prüfen, bevor `#4`/`#8` mit Verweis auf `32b66074` geschlossen werden.
+> Der `FakeEmbeddingProvider` in den Tests prüft nur die Verdrahtung, nicht die
+> echte semantische Qualität.

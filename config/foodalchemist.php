@@ -254,6 +254,29 @@ return [
     ],
 
     /*
+     * Semantische Pairing-/Domain-Suche (Embeddings) — Hybrid-Recall ÜBER der
+     * deterministischen Lexik in KnowledgeContextService. Nutzt Cores
+     * EmbeddingService (Commit 32b66074, Provider/Store-Trennung).
+     *
+     * 'enabled' = DEFAULT FALSE: semantischer Fallback bleibt aus, bis der
+     *   Korpus indiziert (`php artisan foodalchemist:knowledge-embed`) UND die
+     *   Retrieval-Qualität gegen echte Pairing-Fälle validiert ist. Aus = exakt
+     *   das bisherige Lexik-Verhalten, kein Hot-Path-Risiko, keine API-Latenz.
+     * 'provider' = null ⇒ Core-Default (openai / text-embedding-3-large, 3072d).
+     *   'gemini' nur falls Cooking-Jarvis-Kontinuität gewünscht (768d, L2-norm.).
+     * 'global_team_id' = Sentinel für den globalen BHG-Korpus (knowledge_documents
+     *   .team_id NULL): Cores Store verlangt team_id:int, darum mappen wir NULL→0
+     *   (core_embeddings.team_id ist nur indizierter bigint, kein FK).
+     * 'min_score' = Cosine-Schwelle; darunter gilt ein Treffer als irrelevant.
+     */
+    'semantic_search' => [
+        'enabled'        => (bool) env('FOODALCHEMIST_SEMANTIC_SEARCH', false),
+        'provider'       => env('FOODALCHEMIST_EMBEDDING_PROVIDER'),     // null = Core-Default
+        'global_team_id' => (int) env('FOODALCHEMIST_SEMANTIC_GLOBAL_TEAM_ID', 0),
+        'min_score'      => (float) env('FOODALCHEMIST_SEMANTIC_MIN_SCORE', 0.30),
+    ],
+
+    /*
      * V-16: Nutzungsbasierte Plattform-Abrechnung (billables) — Struktur nach
      * CLAUDE.md/planner-Vorbild. WAS abgerechnet wird (Rezepte? GPs? KI-Calls?)
      * ist ein Dominique/Martin-Entscheid — bis dahin bewusst leer.
