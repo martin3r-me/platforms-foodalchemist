@@ -197,10 +197,25 @@
             @if($pairings !== null)
                 <div class="flex flex-wrap gap-1 mt-1" data-pairing-chips>
                     @foreach($pairings as $p)
-                        <span wire:key="pp-{{ $loop->index }}" class="{{ $pill }} {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->typ] ?? $variantPill['secondary'] }}"
-                              title="{{ $p->typ }} · {{ $p->konfidenz }}">{{ $p->display_de }}</span>
+                        <span wire:key="pp-{{ $p->id }}-{{ $p->typ }}" class="{{ $pill }} group {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->typ] ?? $variantPill['secondary'] }}"
+                              title="{{ $p->typ }} · {{ $p->konfidenz }}{{ $p->created_via === 'manual' ? ' · manuell' : '' }}">{{ $p->display_de }}@if($p->created_via === 'manual')<span class="opacity-60"> ✎</span>@endif
+                            <button type="button" wire:click="pairingLoesen({{ $p->id }}, '{{ $p->typ }}')" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
+                        </span>
                     @endforeach
                 </div>
+                {{-- manuelles Pairing verknüpfen (Typ wählbar, created_via='manual') --}}
+                <div class="mt-1.5 flex items-center gap-1" data-pairing-add>
+                    <select wire:model="pairingTyp" class="{{ $input }} !py-0.5 !text-[11px] !w-24 shrink-0">
+                        <option value="klassisch">klassisch</option>
+                        <option value="modern">modern</option>
+                        <option value="kontrast">kontrast</option>
+                    </select>
+                    <input type="search" wire:model.live.debounce.300ms="pairingSuche" placeholder="Pairing verknüpfen …" class="{{ $input }} !py-1 flex-1" data-pairing-suche />
+                </div>
+                @foreach($pairingKandidaten as $kandidat)
+                    <button type="button" wire:key="pk-{{ $kandidat->id }}" wire:click="pairingVerknuepfen({{ $kandidat->id }})"
+                            class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-emerald-500/10" data-pairing-kandidat="{{ $kandidat->id }}">{{ $kandidat->display_de }} <span class="text-gray-400">{{ $kandidat->slug }}</span></button>
+                @endforeach
                 @if($verwandte->isNotEmpty())
                     <p class="{{ $dt }} mt-2 mb-1">Verwandte Rezepte</p>
                     <div class="space-y-0.5" data-verwandte>

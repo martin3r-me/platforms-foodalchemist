@@ -33,6 +33,10 @@ class DetailPanel extends Component
 
     public string $ankerSuche = '';
 
+    public string $pairingSuche = '';
+
+    public string $pairingTyp = 'klassisch';
+
     #[On('recipe-selected')]
     public function zeige(int $id): void
     {
@@ -41,6 +45,28 @@ class DetailPanel extends Component
         }
         $this->recipeId = $id;
         $this->ankerSuche = '';
+        $this->pairingSuche = '';
+    }
+
+    // ── Manuelle Pairings (recipe_pairings, created_via='manual') ──
+    public function pairingVerknuepfen(int $ankerId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        app(\Platform\FoodAlchemist\Services\PairingService::class)
+            ->setRecipePairing($team, $this->recipeId, $ankerId, $this->pairingTyp);
+        $this->pairingSuche = '';
+    }
+
+    public function pairingLoesen(int $ankerId, ?string $typ = null): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && $this->recipeId !== null) {
+            app(\Platform\FoodAlchemist\Services\PairingService::class)
+                ->removeRecipePairing($team, $this->recipeId, $ankerId, $typ);
+        }
     }
 
     public function toggleSektion(string $sektion): void
@@ -153,6 +179,11 @@ class DetailPanel extends Component
             'ankerKandidaten' => $this->ankerSuche !== ''
                 ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_ankers')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
+                    ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
+                : collect(),
+            'pairingKandidaten' => $this->pairingSuche !== '' && ($this->offen['pairing'] ?? false)
+                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_ankers')
+                    ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->pairingSuche) . '%'])
                     ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),
         ]);

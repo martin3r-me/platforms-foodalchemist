@@ -467,7 +467,29 @@ class PairingService
             ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
             ->orderByRaw("CASE rp.typ WHEN 'klassisch' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
             ->orderBy('a.slug')
-            ->get(['a.slug', 'a.display_de', 'rp.typ', 'rp.konfidenz']);
+            ->get(['a.id', 'a.slug', 'a.display_de', 'rp.typ', 'rp.konfidenz', 'rp.created_via']);
+    }
+
+    /** Manuelles Pairing setzen (recipe_pairings, created_via='manual' — bewusst gesetzt, gewinnt). */
+    public function setRecipePairing(Team $team, int $recipeId, int $ankerId, string $typ = 'klassisch'): void
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        $typ = in_array($typ, ['klassisch', 'modern', 'kontrast', 'verbund', 'trinitas'], true) ? $typ : 'klassisch';
+        DB::table('foodalchemist_recipe_pairings')->updateOrInsert(
+            ['recipe_id' => $recipe->id, 'anker_id' => $ankerId, 'typ' => $typ],
+            ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
+                'konfidenz' => 'hoch', 'created_via' => 'manual', 'note' => null,
+                'deleted_at' => null, 'updated_at' => now(), 'created_at' => now()],
+        );
+    }
+
+    public function removeRecipePairing(Team $team, int $recipeId, int $ankerId, ?string $typ = null): void
+    {
+        FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        DB::table('foodalchemist_recipe_pairings')
+            ->where('recipe_id', $recipeId)->where('anker_id', $ankerId)
+            ->when($typ !== null, fn ($q) => $q->where('typ', $typ))
+            ->update(['deleted_at' => now()]);
     }
 
     /** Kern-Aroma-Anker eines GP inkl. Slug/Quelle (GP-Pairing-Panel). */
