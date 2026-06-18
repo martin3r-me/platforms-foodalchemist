@@ -33,8 +33,41 @@ class RecipeModal extends Component
 
     public ?string $fehler = null;
 
+    /** Navigations-Stack: aus Rezept A ein Sub-Rezept B öffnen → A wird gemerkt; ✕ springt zurück zu A. */
+    public array $navStack = [];
+
+    public bool $istOffen = false;
+
     #[On('recipe-modal.oeffnen')]
     public function oeffnen(?int $id = null): void
+    {
+        // Sub-Navigation: aus einem bereits OFFENEN Rezept ein anderes öffnen → Eltern auf den Stack.
+        if ($this->istOffen && $this->recipeId !== null && $id !== null && $this->recipeId !== $id) {
+            $this->navStack[] = $this->recipeId;
+        }
+        $this->ladeRezept($id);
+    }
+
+    /** ✕ am Rezept-Modal: bei Sub-Navigation zurück zum Eltern-Rezept, sonst hart schließen. */
+    public function schliessenOderZurueck(): void
+    {
+        if (! empty($this->navStack)) {
+            $this->ladeRezept((int) array_pop($this->navStack));   // zurück — KEIN erneuter Push
+            return;
+        }
+        $this->dispatch('modal.close', name: 'recipe-modal');
+    }
+
+    #[On('modal.closed')]
+    public function beiModalClosed(?string $name = null): void
+    {
+        if ($name === 'recipe-modal') {                            // hartes Schließen (Backdrop/Escape/✕ ohne Stack) → Stack leeren
+            $this->istOffen = false;
+            $this->navStack = [];
+        }
+    }
+
+    private function ladeRezept(?int $id): void
     {
         $this->reset('fehler');
         $this->recipeId = $id;
@@ -66,6 +99,7 @@ class RecipeModal extends Component
             }
         }
 
+        $this->istOffen = true;
         $this->dispatch('modal.open', name: 'recipe-modal');
     }
 

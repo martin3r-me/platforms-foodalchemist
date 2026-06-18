@@ -27,6 +27,7 @@
     'title' => null,
     'size' => 'max-w-4xl',
     'fullscreen' => false,                                            {{-- Editor-Parität R4: Voll-Editor nimmt den ganzen Viewport --}}
+    'closeVia' => null,                                               {{-- optional: Livewire-Methode für das ✕ (z.B. Nav-Stack-Zurück) statt Alpine-close(); Backdrop/Escape bleiben hartes Schließen --}}
 ])
 
 @php
@@ -66,7 +67,7 @@
         <div class="shrink-0 border-b border-black/5 dark:border-white/5">
             <div class="px-6 pt-4 pb-3 flex items-center justify-between gap-4">
                 <h2 class="font-medium tracking-tight text-gray-900 dark:text-gray-100 truncate">{{ $title }}</h2>
-                <button type="button" @click="close()"
+                <button type="button" @click="{{ $closeVia ? '$wire.' . $closeVia . '()' : 'close()' }}"
                         class="p-1.5 rounded-md text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-150"
                         aria-label="Schließen">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
