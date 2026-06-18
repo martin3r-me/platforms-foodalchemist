@@ -221,7 +221,8 @@
             <tfoot>
                 <tr class="border-t border-black/10 dark:border-white/10">
                     <td colspan="{{ $vkKontext ? 6 : 5 }}" class="{{ $td }} !px-2 text-right text-[11px] text-gray-400">
-                        Σ live (Näherung — count-Einheiten & Brücken rechnet der Save-Recompute)
+                        <span data-yield-live>Yield ≈ <span class="font-medium text-gray-700 dark:text-gray-200" x-text="yieldLive()"></span></span>
+                        · Σ live (Näherung — Putzverlust-Defaults & Brücken rechnet der Save-Recompute)
                     </td>
                     <td class="{{ $td }} !px-2 text-right font-medium tabular-nums text-gray-900 dark:text-gray-100" data-summe-live>
                         <span x-text="summe()"></span>

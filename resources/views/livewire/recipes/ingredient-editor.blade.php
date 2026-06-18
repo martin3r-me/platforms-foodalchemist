@@ -99,6 +99,7 @@
                 z.raw_text = (this.zahl(z.menge) ?? '') + ' ' + ziel.name;
                 z.lineage = ziel.typ === 'sub' ? 'recipe_ref' : 'manual';
                 z.ek_pro_g = ziel.ek_pro_g ?? null;
+                z.g_pro_stueck = ziel.g_pro_stueck ?? null;          // Stück-Sub: g/Stück fürs Live-Rechnen
                 z.ek_pro_g_min = null; z.ek_pro_g_avg = null;        // alte Min/Ø verwerfen — Save rechnet präzise nach
                 z._peek = null;
                 z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
@@ -141,9 +142,11 @@
                 const m = this.zahl(z.menge); const mx = this.zahl(z.menge_max);
                 return m === null ? null : (mx !== null ? (m + mx) / 2 : m);
             },
+            // g-Faktor je Zeile: g/ml-Einheit ODER (Stück-Sub) g/Stück = Yield÷ertrag_stueck (spiegelt Server-grammFaktor)
+            gFaktor(z) { return this.einheiten[z.einheit_vocab_id]?.g ?? z.g_pro_stueck ?? null; },
             zeilenEk(z, feld = 'ek_pro_g') {  // Live-Näherung: menge_g × €/g; R5: feld wählt Lead | min | Ø
                 if (z.is_optional || z[feld] === null || z[feld] === undefined) return null;
-                const avg = this.mengeAvg(z); const f = this.einheiten[z.einheit_vocab_id]?.g;
+                const avg = this.mengeAvg(z); const f = this.gFaktor(z);
                 if (avg === null || !f) return null;
                 return (avg * f * z[feld]).toFixed(2).replace('.', ',') + ' €';
             },
@@ -154,6 +157,20 @@
                     if (w) s += parseFloat(w.replace(',', '.'));
                 }
                 return s.toFixed(2).replace('.', ',') + ' €';
+            },
+            // Live-Yield (Näherung): Σ menge_g × (1−putz) × (1−garv) — reagiert sofort auf Garverlust/Stück,
+            // ohne Save. Putzverlust-DEFAULTS (GP/Team) kennt der Client nicht → präzise erst beim Save-Recompute.
+            yieldLive() {
+                let g = 0;
+                for (const z of this.rows) {
+                    if (z.is_optional) continue;
+                    const f = this.gFaktor(z); const avg = this.mengeAvg(z);
+                    if (avg === null || !f) continue;
+                    const garv = (this.zahl(z.garverlust_pct) ?? 0) / 100;
+                    const putz = (this.zahl(z.putzverlust_pct) ?? 0) / 100;
+                    g += avg * f * (1 - putz) * (1 - garv);
+                }
+                return g > 0 ? (g / 1000).toFixed(3).replace('.', ',') + ' kg' : '—';
             },
             hoch(i) { if (i > 0) this.rows.splice(i - 1, 0, this.rows.splice(i, 1)[0]); },
             runter(i) { if (i < this.rows.length - 1) this.rows.splice(i + 1, 0, this.rows.splice(i, 1)[0]); },
@@ -183,6 +200,7 @@
                     note: '', rolle: null, ist_wertgebend: false,
                     lineage: ziel.typ === 'sub' ? 'recipe_ref' : 'manual',
                     ek_pro_g: ziel.ek_pro_g,
+                    g_pro_stueck: ziel.g_pro_stueck ?? null,          // Stück-Sub: g/Stück fürs Live-Rechnen
                 });
                 this.neu.menge = ''; this.neu.is_optional = false;
             },

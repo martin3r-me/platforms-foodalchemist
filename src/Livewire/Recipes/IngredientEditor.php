@@ -223,14 +223,20 @@ class IngredientEditor extends Component
             ->when(($rezFilter['niveau'] ?? '') !== '', fn ($w) => $w->whereHas('niveauEignungen', fn ($n) => $n->where('niveau_slug', $rezFilter['niveau'])));
         $rezTotal = (clone $rezQuery)->count();
         $rezepte = $rezQuery->with('niveauEignungen:id,recipe_id,niveau_slug')->orderBy('name')->limit(200)
-            ->get(['id', 'name', 'ek_per_kg_eur'])
-            ->map(fn ($r) => [
-                'typ' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
-                'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
-                'preis_label' => $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : null,
-                'einheit_slug' => 'g',
-                'niveaus' => $r->niveauEignungen->pluck('niveau_slug')->values()->all(),
-            ])->values()->all();
+            ->get(['id', 'name', 'ek_per_kg_eur', 'yield_kg', 'ertrag_stueck'])
+            ->map(function ($r) {
+                $hatStueck = $r->ertrag_stueck !== null && (float) $r->ertrag_stueck > 0 && $r->yield_kg !== null;
+
+                return [
+                    'typ' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
+                    'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
+                    'preis_label' => $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : null,
+                    // Stück-Ertrag → Einheit beim Einfügen auf „stk" vorbelegen + g/Stück fürs Live-Rechnen
+                    'einheit_slug' => $hatStueck ? 'stk' : 'g',
+                    'g_pro_stueck' => $hatStueck ? (float) $r->yield_kg * 1000 / (float) $r->ertrag_stueck : null,
+                    'niveaus' => $r->niveauEignungen->pluck('niveau_slug')->values()->all(),
+                ];
+            })->values()->all();
 
         return [
             'gps' => ['items' => $gps, 'total' => $gpTotal],
