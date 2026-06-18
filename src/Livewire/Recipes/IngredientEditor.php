@@ -185,7 +185,7 @@ class IngredientEditor extends Component
             ->when((bool) ($gpFilter['bio'] ?? false), fn ($w) => $w->where('is_organic', true))
             ->when((bool) ($gpFilter['regional'] ?? false), fn ($w) => $w->where('is_regional', true));
         $gpTotal = (clone $gpQuery)->count();
-        $gpModels = $gpQuery->orderBy('name')->limit(30)
+        $gpModels = $gpQuery->orderBy('name')->limit(200)
             ->get(['id', 'name', 'zustand', 'lead_la_supplier_item_id', 'stk_default_g', 'team_id']);
         // Performance: 30× preisProGrammPublic wären ~60 Queries je Tipper — stattdessen EINE
         // Bulk-Query (Ø €/g über aktive kg/l-LAs). Der präzise Lead-Wert kommt beim Parken nach.
@@ -222,7 +222,7 @@ class IngredientEditor extends Component
             ->when(($rezFilter['kat'] ?? '') !== '', fn ($w) => $w->where('kategorie_id', (int) $rezFilter['kat']))
             ->when(($rezFilter['niveau'] ?? '') !== '', fn ($w) => $w->whereHas('niveauEignungen', fn ($n) => $n->where('niveau_slug', $rezFilter['niveau'])));
         $rezTotal = (clone $rezQuery)->count();
-        $rezepte = $rezQuery->with('niveauEignungen:id,recipe_id,niveau_slug')->orderBy('name')->limit(30)
+        $rezepte = $rezQuery->with('niveauEignungen:id,recipe_id,niveau_slug')->orderBy('name')->limit(200)
             ->get(['id', 'name', 'ek_per_kg_eur'])
             ->map(fn ($r) => [
                 'typ' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,

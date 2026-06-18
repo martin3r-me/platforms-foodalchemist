@@ -60,7 +60,7 @@
                     </div>
                 </template>
                 <p x-show="gpListe.length === 0" class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
-                <p x-show="gpTotal > 30" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (gpTotal - 30) + ' weitere — Filter verengen'"></p>
+                <p x-show="gpTotal > 200" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (gpTotal - 200) + ' weitere — Filter verengen'"></p>
             </div>
         </aside>
         <div class="flex-1 min-w-0">
@@ -287,7 +287,7 @@
                     </div>
                 </template>
                 <p x-show="rezListe.length === 0" class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
-                <p x-show="rezTotal > 30" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (rezTotal - 30) + ' weitere — Filter verengen'"></p>
+                <p x-show="rezTotal > 200" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (rezTotal - 200) + ' weitere — Filter verengen'"></p>
             </div>
         </aside>
         </div>{{-- /Drei-Spalten-Flex --}}

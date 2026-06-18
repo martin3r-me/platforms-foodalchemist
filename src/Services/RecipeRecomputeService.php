@@ -542,6 +542,9 @@ class RecipeRecomputeService
             if ($mengeG > 0 && $pG !== null) {                     // count→mass-Brücke
                 return [$mengeG * $pG, true];
             }
+            if ($mengeG > 0 && $pSub !== null) {                   // Sub-Rezept per Stück: g/Stück (s. grammFaktor) × €/g des Sub
+                return [$mengeG * $pSub, true];
+            }
 
             return [0.0, false];
         }
@@ -592,6 +595,15 @@ class RecipeRecomputeService
     private function grammFaktor(FoodAlchemistRecipeIngredient $z): float
     {
         $einheit = $z->einheit;
+        // Sub-Rezept per Stück (count): IMMER über den eigenen Stück-Ertrag (Yield ÷ ertrag_stueck),
+        // auch wenn die Einheit einen generischen g/Stück-Default trägt. Bsp Asia-Suppe: 4,579 kg / 100 ⇒ 45,8 g.
+        if ($einheit?->dimension === 'count' && $z->referenced_recipe_id !== null) {
+            $sub = $z->referencedRecipe;
+            $ertrag = $sub?->ertrag_stueck !== null ? (float) $sub->ertrag_stueck : 0.0;
+            if ($ertrag > 0 && $sub?->yield_kg !== null) {
+                return (float) $sub->yield_kg * 1000 / $ertrag;
+            }
+        }
         if ($einheit?->default_in_g !== null) {
             return (float) $einheit->default_in_g;
         }
