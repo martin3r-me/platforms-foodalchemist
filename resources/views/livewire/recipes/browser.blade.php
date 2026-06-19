@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="Basisrezepte" icon="heroicon-o-book-open" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Basisrezepte'],
+        ]" />
+    </x-slot>
+
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Hauptgruppen" width="w-80">
             <div class="p-3 space-y-2" data-rezept-baum>

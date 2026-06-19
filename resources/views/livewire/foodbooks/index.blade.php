@@ -8,6 +8,13 @@
         <x-ui-page-navbar title="Foodbook / Portfolio" icon="heroicon-o-book-open" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Foodbook / Portfolio'],
+        ]" />
+    </x-slot>
+
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Foodbooks" width="w-80">
             <div class="p-3 space-y-2">

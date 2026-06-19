@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="Lieferanten" icon="heroicon-o-truck" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Lieferanten'],
+        ]" />
+    </x-slot>
+
     {{-- Zone links: Lieferanten-Liste mit P-7-Zählern --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Lieferanten" width="w-96" storeKey="faSuppliersOpen">

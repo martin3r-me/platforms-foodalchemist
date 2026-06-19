@@ -10,6 +10,13 @@
         <x-ui-page-navbar title="Concepter" icon="heroicon-o-square-3-stack-3d" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Concepter'],
+        ]" />
+    </x-slot>
+
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Concepter" width="w-80">
             <div class="p-3 space-y-3">

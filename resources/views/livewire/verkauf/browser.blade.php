@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="Gerichte" icon="heroicon-o-banknotes" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Gerichte'],
+        ]" />
+    </x-slot>
+
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="VK-Hauptgruppen" width="w-80">
             <div class="p-3 space-y-2" data-vk-baum>

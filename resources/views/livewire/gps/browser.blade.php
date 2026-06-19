@@ -6,6 +6,14 @@
         <x-ui-page-navbar title="Grundprodukte" icon="heroicon-o-cube" />
     </x-slot:navbar>
 
+    {{-- Kontext-Pfad (Prototyp #breadcrumbs): Food Alchemist › Grundprodukte --}}
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Grundprodukte'],
+        ]" />
+    </x-slot>
+
     {{-- Zone links: Suche · Status · WG-Baum mit Counts · Sub-Kategorien (Platzierungs-Entscheid) --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Warengruppen" width="w-80">

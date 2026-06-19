@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="Einstellungen" icon="heroicon-o-cog-6-tooth" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Einstellungen'],
+        ]" />
+    </x-slot>
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-5">
 
         @if($istKindTeam)
