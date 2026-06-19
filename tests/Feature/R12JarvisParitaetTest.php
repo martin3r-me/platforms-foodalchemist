@@ -46,6 +46,18 @@ it('Artikel-Tabelle: ★-Klick setzt den globalen Lead am gemappten GP, ohne Map
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'keinem GP zugeordnet'));
 });
 
+it('#393: Banner-Zähler offeneMatches ist team-scoped (aktuelles Team), nicht teamübergreifend', function () {
+    $mk = fn (int $teamId) => \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::create([
+        'team_id' => $teamId, 'supplier_item_id' => $this->la->id, 'gp_id' => $this->gp->id,
+        'score' => 0.9, 'band' => 'exact', 'methode' => 'exact_ean', 'status' => 'offen',
+    ]);
+    $mk($this->rootTeam->id);   // eigenes Team → zählt
+    $mk($this->childA->id);     // anderes Team → darf NICHT mitzählen
+    $mk($this->childA->id);
+
+    Livewire::test(Index::class)->assertViewHas('offeneMatches', 1);
+});
+
 it('LA-Modal: ✎ Preis-Inline-Edit ändert Preis/Gültig-bis/Notiz (Komma-Parsing), Unsinn blockt', function () {
     $p = app(\Platform\FoodAlchemist\Services\PriceService::class)->createFor($this->rootTeam, $this->la, 20.00);
 
