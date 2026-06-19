@@ -8,6 +8,13 @@
         <x-ui-page-navbar title="Kalkulator" icon="heroicon-o-calculator" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Kalkulator'],
+        ]" />
+    </x-slot>
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="grid grid-cols-1 lg:grid-cols-[18rem_1fr] gap-4 pt-1">
 

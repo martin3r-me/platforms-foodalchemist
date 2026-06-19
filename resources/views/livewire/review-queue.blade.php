@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="Signale" icon="heroicon-o-bell-alert" />
     </x-slot>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Signale'],
+        ]" />
+    </x-slot>
+
     {{-- Klick-Ziele der Rezept-Listen --}}
     <livewire:foodalchemist.recipes.recipe-modal />
     <livewire:foodalchemist.verkauf.vk-modal />

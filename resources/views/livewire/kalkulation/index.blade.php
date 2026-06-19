@@ -8,6 +8,13 @@
         <x-ui-page-navbar title="Kalkulations-Werkstatt" icon="heroicon-o-calculator" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Kalkulations-Werkstatt'],
+        ]" />
+    </x-slot>
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         {{-- Cockpit: die rolled-up Kosten-Wahrheit, die auf alle Kalkulationen ausrollt --}}
         <div class="relative overflow-hidden {{ $card }} px-5 py-4">
