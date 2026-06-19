@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="Food DNA" icon="heroicon-o-finger-print" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Food DNA'],
+        ]" />
+    </x-slot>
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="max-w-3xl space-y-4">
             <p class="text-[11px] text-gray-400">

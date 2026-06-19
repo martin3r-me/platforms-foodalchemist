@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="In Planung" icon="heroicon-o-light-bulb" />
     </x-slot>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'In Planung'],
+        ]" />
+    </x-slot>
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div>
             <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Kommende Domänen</h3>

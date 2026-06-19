@@ -10,6 +10,13 @@
         <x-ui-page-navbar title="Speiseplan" icon="heroicon-o-calendar-days" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Speiseplan'],
+        ]" />
+    </x-slot>
+
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Speisepläne" width="w-72">
             <div class="p-3 space-y-2">

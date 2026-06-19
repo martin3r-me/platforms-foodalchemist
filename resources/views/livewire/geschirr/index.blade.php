@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="Geschirr" icon="heroicon-o-square-2-stack" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Geschirr'],
+        ]" />
+    </x-slot>
+
     {{-- Zone links: Leih-Lieferanten + Artikel-Zähler --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Leih-Lieferanten" width="w-96" storeKey="faGeschirrOpen">
