@@ -157,15 +157,16 @@
                                 @endif
                             </td>
                             <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $gp->rezepte_count ?? '—' }}</td>
-                            <td class="{{ $td }}" data-allergen-badges>
-                                {{-- GL-01-Effektivwerte (Override > Mutter > LA-MAX), Bulk aus paginateBrowser --}}
-                                @forelse(array_slice($gp->allergen_badges, 0, 3) as $feld)
-                                    <span class="{{ $pill }} {{ $variantPill['danger'] }} mr-1"
-                                          title="{{ \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$feld] ?? $feld }}">{{ ucfirst(explode('_', $feld)[0]) }}</span>
-                                @empty
-                                    <span class="text-gray-400">—</span>
-                                @endforelse
-                                @if(count($gp->allergen_badges) > 3)<span class="text-[11px] text-gray-400">+{{ count($gp->allergen_badges) - 3 }}</span>@endif
+                            {{-- 3-Status-Symbol (fixe Zeilenhöhe): vorhanden · frei · keine Daten. Effektivwerte (Override>Mutter>LA-MAX), read-only (Quelle = LA). --}}
+                            <td class="{{ $td }} whitespace-nowrap" data-allergen-status="{{ $gp->allergen_status ?? 'keine_daten' }}">
+                                @if(($gp->allergen_status ?? 'keine_daten') === 'vorhanden')
+                                    <span class="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 text-[11px] font-medium"
+                                          title="Allergene enthalten: {{ collect($gp->allergen_badges)->map(fn ($f) => explode(' ', \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$f] ?? $f)[0])->implode(', ') ?: 'inkl. Spuren' }}">⚠ enthält</span>
+                                @elseif($gp->allergen_status === 'frei')
+                                    <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-[11px]" title="Keine der 14 EU-Allergene deklariert (allergenfrei)">✓ frei</span>
+                                @else
+                                    <span class="inline-flex items-center gap-1 text-gray-400 text-[11px]" title="Keine Allergen-Angaben in den Lieferantenartikeln — nicht als frei werten">– keine Daten</span>
+                                @endif
                             </td>
                         </tr>
                     @empty
