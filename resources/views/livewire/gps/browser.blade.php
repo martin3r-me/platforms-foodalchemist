@@ -42,7 +42,7 @@
                                     class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $warengruppe === $wg->code
                                         ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                                         : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                                <span class="min-w-0 truncate">{{ $wg->code }} {{ $wg->name }}</span>
+                                <span class="min-w-0 truncate">{{ $wg->codedLabel() }}</span>
                                 <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $wgCounts[$wg->code] ?? 0 }}</span>
                             </button>
                             @if($warengruppe === $wg->code && count($subCounts) > 0)
@@ -80,6 +80,8 @@
     {{-- R9/M9-05: Verwendungs-Klicks aus dem Panel öffnen die Rezept-Editoren als Modal --}}
     <livewire:foodalchemist.recipes.recipe-modal />
     <livewire:foodalchemist.verkauf.vk-modal />
+    {{-- LA-Sprung: Klick auf einen Lieferantenartikel im Panel öffnet dessen Item-Modal (Allergene/Preise dort pflegen) --}}
+    <livewire:foodalchemist.suppliers.item-modal />
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between pt-1">
@@ -125,7 +127,21 @@
                                 @if($gp->is_derivat)<span class="ml-1.5 {{ $pill }} {{ $variantPill['info'] }}">Derivat</span>@endif
                             </td>
                             <td class="{{ $td }} text-[11px] italic text-gray-500 whitespace-nowrap max-w-36 truncate" title="{{ $gp->warengruppe?->name ?? '' }}">{{ $gp->warengruppe?->name ?? $gp->warengruppe_code ?? '—' }}</td>
-                            <td class="{{ $td }} whitespace-nowrap"><span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span></td>
+                            {{-- Inline-Status-Pflege: Kuratoren editieren direkt (Beschleuniger), sonst Badge (D1) --}}
+                            <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
+                                @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp) && $gp->status !== \Platform\FoodAlchemist\Enums\GpStatus::Merged)
+                                    <select wire:key="st-{{ $gp->id }}-{{ $gp->status->value }}"
+                                            wire:change="statusSetzen({{ $gp->id }}, $event.target.value)"
+                                            class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-5"
+                                            title="Status ändern" data-status-select>
+                                        @foreach([\Platform\FoodAlchemist\Enums\GpStatus::Approved, \Platform\FoodAlchemist\Enums\GpStatus::Tentative, \Platform\FoodAlchemist\Enums\GpStatus::Rejected] as $fall)
+                                            <option value="{{ $fall->value }}" @selected($gp->status === $fall)>{{ $fall->label() }}</option>
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
+                                @endif
+                            </td>
                             <td class="{{ $td }} text-right tabular-nums">
                                 @if($gp->n_las_total > 0)<span class="text-gray-500">{{ $gp->n_las_total }}</span>
                                 @elseif(!$gp->requires_la)<span class="text-gray-400" title="bewusst LA-frei">n/a</span>

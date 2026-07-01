@@ -203,6 +203,23 @@ class GpService
             ->get(['code', 'name']);
     }
 
+    /**
+     * GP-Kurationsstatus setzen (GL-05/GL-07). Autorisierung (Curate/D1) liegt beim
+     * Aufrufer (Livewire prüft canCurate); der Service mutiert nur. Merged bleibt
+     * System-Zustand (Merge-Tool) und ist im Editor nicht wählbar.
+     */
+    public function setStatus(FoodAlchemistGp $gp, GpStatus $status): FoodAlchemistGp
+    {
+        if ($status === GpStatus::Merged) {
+            throw new \RuntimeException('Status „Zusammengeführt" wird nur durch das Merge-Werkzeug gesetzt.');
+        }
+        if ($gp->status !== $status) {
+            $gp->update(['status' => $status]);
+        }
+
+        return $gp;
+    }
+
     /** Status-Zähler für Dashboard-Tiles / Filter-Badges. */
     public function statusCounts(?Team $team): array
     {

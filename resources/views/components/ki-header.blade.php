@@ -57,9 +57,7 @@
                     Reset
                 </button>
             @endif
-            <button type="button" wire:click="manual_{{ $field }}" class="{{ $ghostBtn }}" title="Manuell pflegen (setzt Quelle auf manual)">
-                Manuell
-            </button>
+            {{-- „Manuell" entfernt (Dominique 2026-07-01): redundant — Editieren+Speichern setzt quelle=manual ohnehin. --}}
             <button type="button" wire:click="ai_{{ $field }}" class="{{ $ghostBtn }} text-violet-600 dark:text-violet-400" title="KI-Vorschlag anfordern (persistiert nichts)">
                 ✨ Autopilot
             </button>

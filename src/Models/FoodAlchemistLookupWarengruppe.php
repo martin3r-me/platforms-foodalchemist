@@ -29,4 +29,19 @@ class FoodAlchemistLookupWarengruppe extends Model
     {
         return $this->hasMany(FoodAlchemistGp::class, 'warengruppe_code', 'code');
     }
+
+    /**
+     * Anzeige-Label „<Code> <Name>" ohne Doppel-Code: trägt der Name den Code
+     * schon (Seed-Altlast: name = "02 Obst"), wird er unverändert gezeigt.
+     * Fixt die Baum-/Dropdown-Doppelung „02 02 Obst" (Detail-Panel nutzt nur name).
+     */
+    public function codedLabel(): string
+    {
+        $name = trim((string) $this->name);
+        $code = trim((string) $this->code);
+
+        return ($code === '' || \Illuminate\Support\Str::startsWith($name, $code))
+            ? $name
+            : trim("{$code} {$name}");
+    }
 }
