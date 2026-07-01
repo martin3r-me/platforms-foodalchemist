@@ -37,6 +37,9 @@ class DetailPanel extends Component
 
     public string $pairingTyp = 'klassisch';
 
+    /** Ersatz-Logik: Suchtext für die Gegenseite (GP/Rezept) im Verknüpfen-Feld. */
+    public string $ersatzSuche = '';
+
     #[On('recipe-selected')]
     public function zeige(int $id): void
     {
@@ -46,6 +49,32 @@ class DetailPanel extends Component
         $this->recipeId = $id;
         $this->ankerSuche = '';
         $this->pairingSuche = '';
+        $this->ersatzSuche = '';
+    }
+
+    // ── Ersatz-Logik (make-or-buy): dieses Rezept ↔ Fertig-GP / Alternativ-Rezept ──
+
+    public function ersatzVerknuepfen(string $kind, int $id): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)
+                ->verknuepfe($team, 'recipe', $this->recipeId, $kind, $id);
+            $this->ersatzSuche = '';
+        } catch (\RuntimeException $e) {
+            $this->fehlerAnker = $e->getMessage();
+        }
+    }
+
+    public function ersatzLoesen(int $equivId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null) {
+            app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->loese($team, $equivId);
+        }
     }
 
     // ── Manuelle Pairings (recipe_pairings, created_via='manual') ──
@@ -155,8 +184,14 @@ class DetailPanel extends Component
             ? $recipes->detail($team, $this->recipeId)
             : null;
 
+        $equivSvc = app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class);
+
         return view('foodalchemist::livewire.recipes.detail-panel', [
             'rezept' => $rezept,
+            // Ersatz-Logik: Äquivalenzen dieses Rezepts + Such-Kandidaten fürs Verknüpfen
+            'ersatz' => $rezept !== null && $team !== null ? $equivSvc->fuer($team, 'recipe', $rezept->id) : collect(),
+            'ersatzKandidaten' => $rezept !== null && $team !== null && $this->ersatzSuche !== ''
+                ? $equivSvc->sucheZiele($team, $this->ersatzSuche, 'recipe', $rezept->id) : collect(),
             // R6: Step-by-Step-Fotos (gruppiert nach Schritt)
             'schrittFotos' => $rezept !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $rezept->id)

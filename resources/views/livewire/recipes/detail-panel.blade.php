@@ -127,6 +127,33 @@
                 </div>
             </div>
         @endif
+
+        {{-- Ersatz-Logik: make-or-buy — dieses Rezept ↔ Fertig-GP / Alternativ-Rezept --}}
+        <div data-sektion="ersatz">
+            <p class="{{ $dt }} mb-1">Ersatz <span class="normal-case">(make-or-buy · fertig ↔ selbst)</span></p>
+            <div class="space-y-1">
+                @forelse($ersatz as $e)
+                    <div class="flex items-center gap-2 text-[11px]" wire:key="rq-equiv-{{ $e->id }}">
+                        <span class="{{ $pill }} {{ $e->gegen_kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }} shrink-0">{{ $e->gegen_kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
+                        <span class="min-w-0 flex-1 truncate text-gray-900 dark:text-gray-100" title="{{ $e->gegen_name }}">{{ $e->gegen_name }}</span>
+                        @if((float) $e->umrechnungsfaktor !== 1.0)<span class="text-gray-400 tabular-nums shrink-0">×{{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
+                        <button type="button" wire:click="ersatzLoesen({{ $e->id }})" class="{{ $btnGhostXs }} text-rose-500 shrink-0" title="Ersatz-Verknüpfung lösen">✕</button>
+                    </div>
+                @empty
+                    <p class="text-[11px] text-gray-400" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
+                @endforelse
+                <div class="pt-1" data-ersatz-verknuepfen>
+                    <input type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="+ Ersatz verknüpfen — Fertig-GP/Rezept suchen …" class="{{ $input }} !py-1" data-ersatz-suche />
+                    @foreach($ersatzKandidaten as $k)
+                        <button type="button" wire:key="rq-ersk-{{ $k->kind }}-{{ $k->id }}" wire:click="ersatzVerknuepfen('{{ $k->kind }}', {{ $k->id }})"
+                                class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150 flex items-center gap-1.5">
+                            <span class="{{ $pill }} {{ $k->kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $k->kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
+                            <span class="min-w-0 flex-1 truncate">{{ $k->name }}</span>
+                        </button>
+                    @endforeach
+                </div>
+            </div>
+        </div>
         {{-- G/H: im Modal-Details-Tab redundant (Equipment → Zubereitung-Tab; Kern-Anker/Pairings/Nachbarn → Aromen/Pairing-Panel).
              Nur in der Browser-Sidebar (standalone) zeigen — dort bleibt auch das Anker-Verknüpfen/-Lösen verfügbar. --}}
         @unless($embedded ?? false)
