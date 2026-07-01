@@ -203,7 +203,19 @@
                             <td class="{{ $td }} text-[11px] italic text-gray-500 truncate max-w-[12rem] whitespace-nowrap">{{ $r->kategorie?->bezeichnung ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->geschmacksrichtung ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->fertigungstiefe ?? '—' }}</td>
-                            <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $statusPill['merged'] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span></td>
+                            {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge — Auto-Zustand) --}}
+                            <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
+                                @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
+                                    <select wire:key="rst-{{ $r->id }}-{{ $r->status->value }}" wire:change="statusSetzen({{ $r->id }}, $event.target.value)"
+                                            class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6" data-status-select>
+                                        @foreach([\Platform\FoodAlchemist\Enums\RecipeStatus::Draft, \Platform\FoodAlchemist\Enums\RecipeStatus::Review, \Platform\FoodAlchemist\Enums\RecipeStatus::Approved, \Platform\FoodAlchemist\Enums\RecipeStatus::Deprecated] as $fall)
+                                            <option value="{{ $fall->value }}" @selected($r->status === $fall)>{{ $fall->label() }}</option>
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span>
+                                @endif
+                            </td>
                             <td class="{{ $td }} text-gray-500 text-right tabular-nums whitespace-nowrap">
                                 {{ $r->n_zutaten_total }}
                                 @if($r->n_zutaten_ungemappt > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }} ml-1" title="ungemappte Zutaten — F7.1: Allergene unbekannt">{{ $r->n_zutaten_ungemappt }}?</span>@endif

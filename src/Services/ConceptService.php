@@ -79,6 +79,15 @@ class ConceptService
         ]);
     }
 
+    /** Concept-Status setzen (draft|aktiv|archiviert) — Inline-Pflege aus dem Browser. */
+    public function setStatus(Team $team, int $id, string $status): void
+    {
+        if (! in_array($status, ['draft', 'aktiv', 'archiviert'], true)) {
+            throw new \RuntimeException("Unbekannter Concept-Status [{$status}].");
+        }
+        FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id)->update(['status' => $status]);
+    }
+
     // M10R-1/3: VK-Parität-Metadaten + Konsumenten-Felder + KI-Brief am Concept editierbar.
     private const FELDER = [
         'name', 'konsumenten_name', 'anlass', 'niveau', 'klasse', 'geschmacksrichtung',
