@@ -22,10 +22,14 @@ class DetailPanel extends Component
     /** Eingebettet als Editor-Kartei: blendet die im Editor redundante KPI/Beschreibung/Zutaten aus. */
     public bool $embedded = false;
 
-    public function mount(?int $recipeId = null, bool $embedded = false): void
+    /** GP-Modal-Muster: section = genau EINE Kartei rendern (z.B. 'ersatz' als eigener Tab). */
+    public ?string $section = null;
+
+    public function mount(?int $recipeId = null, bool $embedded = false, ?string $section = null): void
     {
         $this->recipeId = $recipeId;
         $this->embedded = $embedded;
+        $this->section = $section;
     }
 
     /** @var array<string, bool> M5-04/05: lazy Pairing-Sektionen (Kontext-Erhalt beim Wechsel) */

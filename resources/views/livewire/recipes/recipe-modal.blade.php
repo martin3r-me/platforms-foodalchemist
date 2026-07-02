@@ -389,6 +389,15 @@
         @endif
         @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['beschreibung'] }}</p>@endif
     </x-foodalchemist::modal-section>
+
+    {{-- ERSATZ (make-or-buy / Artikel-Ersatz) — Detail-Panel-Kartei via section-Prop (eine Quelle, keine Duplikation) --}}
+    <x-foodalchemist::modal-section title="Ersatz (make-or-buy · fertig ↔ selbst)">
+        @if($recipeId !== null)
+            <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" section="ersatz" wire:key="rersatz-{{ $recipeId }}" />
+        @else
+            <p class="text-xs text-gray-400">Ersatz lässt sich nach dem ersten Speichern verknüpfen.</p>
+        @endif
+    </x-foodalchemist::modal-section>
     </div>{{-- /Tab EIGENSCHAFTEN --}}
 
     {{-- ── Tab: DETAILS — Detail-Panel-Inhalte als Kartei (geteilte Render-Quelle, eingebettet) ── --}}

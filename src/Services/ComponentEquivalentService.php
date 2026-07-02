@@ -84,7 +84,11 @@ class ComponentEquivalentService
             });
     }
 
-    /** Such-Kandidaten für die Gegenseite (GPs + Rezepte, team-sichtbar), ohne den Ausgangs-Baustein selbst. */
+    /**
+     * Such-Kandidaten für die Gegenseite (GPs + Rezepte, team-sichtbar), ohne den Ausgangs-
+     * Baustein selbst. Slots werden FAIR verteilt (min. die Hälfte für Rezepte, wenn Treffer
+     * da sind) — vorher füllten 6 GP-Treffer die Liste und Alternativ-Rezepte verhungerten.
+     */
     public function sucheZiele(Team $team, string $suche, string $exceptKind, int $exceptId, int $limit = 6): Collection
     {
         $such = mb_strtolower(trim($suche));
@@ -103,7 +107,9 @@ class ComponentEquivalentService
             ->orderBy('name')->limit($limit)->get(['id', 'name'])
             ->map(fn ($r) => (object) ['kind' => Equiv::KIND_RECIPE, 'id' => (int) $r->id, 'name' => $r->name]);
 
-        return $gps->concat($rez)->take($limit);
+        $gpSlots = min($gps->count(), max((int) ceil($limit / 2), $limit - $rez->count()));
+
+        return $gps->take($gpSlots)->concat($rez->take($limit - $gpSlots));
     }
 
     /**

@@ -1,7 +1,9 @@
 {{-- M4-05: Rezept-DetailPanel — KPI-Karte, Beschreibung, Zutaten read-only mit GP-Links + EK je Zeile, Diät-Sektion, Eignungen, Equipment --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- GP-Modal-Muster: section='ersatz' rendert NUR die Ersatz-Kartei (Eigenschaften-Tab im Modal) — ohne Panel-Chrome --}}
+@php($nurErsatz = ($section ?? null) === 'ersatz')
 
-<div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]" data-rezept-panel>
+<div class="{{ $nurErsatz ? 'space-y-2' : 'p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]' }}" data-rezept-panel>
     @if($rezept === null)
         <div class="text-center text-xs text-gray-400 py-12">
             <div class="text-2xl mb-2">⌘</div>
@@ -92,6 +94,7 @@
         @endif
 
         @endunless
+        @unless($nurErsatz)
         {{-- R6: Diät · Allergene · Zusatzstoffe — geteiltes Partial (auch im VK-Panel) --}}
         @include('foodalchemist::livewire.recipes.partials.deklaration')
 
@@ -128,9 +131,15 @@
             </div>
         @endif
 
-        {{-- Ersatz-Logik: make-or-buy — dieses Rezept ↔ Fertig-GP / Alternativ-Rezept --}}
+        @endunless
+        {{-- Ersatz-Logik: make-or-buy — dieses Rezept ↔ Fertig-GP / Alternativ-Rezept.
+             Im Modal lebt die Kartei im Eigenschaften-Tab (section='ersatz'); im Details-Embed
+             darum ausgeblendet. Standalone (Browser-Sidebar) bleibt sie inline. --}}
+        @if($nurErsatz || ! ($embedded ?? false))
         <div data-sektion="ersatz">
+            @unless($nurErsatz){{-- im Eigenschaften-Tab liefert die modal-section den Titel --}}
             <p class="{{ $dt }} mb-1">Ersatz <span class="normal-case">(make-or-buy · fertig ↔ selbst)</span></p>
+            @endunless
             <div class="space-y-1">
                 @forelse($ersatz as $e)
                     <div class="flex items-center gap-2 text-[11px]" wire:key="rq-equiv-{{ $e->id }}">
@@ -154,6 +163,7 @@
                 </div>
             </div>
         </div>
+        @endif
         {{-- G/H: im Modal-Details-Tab redundant (Equipment → Zubereitung-Tab; Kern-Anker/Pairings/Nachbarn → Aromen/Pairing-Panel).
              Nur in der Browser-Sidebar (standalone) zeigen — dort bleibt auch das Anker-Verknüpfen/-Lösen verfügbar. --}}
         @unless($embedded ?? false)
@@ -280,6 +290,7 @@
         @endunless
 
         {{-- M4-12: Workflow-Aktionen --}}
+        @unless($nurErsatz)
         <div class="flex flex-wrap items-center gap-1.5 border-t border-black/5 dark:border-white/10 pt-2" data-workflow>
             @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
                 @if($rezept->status->value !== $wert)
@@ -296,5 +307,6 @@
             Nährwerte {{ $rezept->nutri_kcal_per_100g !== null ? number_format((float) $rezept->nutri_kcal_per_100g, 0, ',', '.') . ' kcal/100 g (' . $rezept->nutri_konfidenz . ')' : '—' }}
             · v{{ $rezept->version }}{{ $rezept->arbeitszeit_min ? ' · ' . $rezept->arbeitszeit_min . ' min' : '' }}
         </p>
+        @endunless
     @endif
 </div>
