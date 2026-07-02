@@ -10,28 +10,36 @@ use RuntimeException;
 
 /**
  * Konzept-Taxonomie — Pflege der zwei Klassifikations-Bäume über den Concepts:
- * KATEGORIE (FoodAlchemistConceptCategory, self-parent) und KLASSE (vocab_klassen,
- * seit 2026-06-14 self-parent). Beide rein organisatorisch (Filter-/Gruppier-Achse
- * im Concept-Browser, später Foodbook-Concept-Picker) — keine Preis-/Kalkulationslogik.
+ * KATEGORIE (FoodAlchemistConceptCategory, self-parent) und KLASSE (vocab_klassen).
+ * Beide rein organisatorisch (Filter-/Gruppier-Achse im Concept-Browser + Foodbook-/
+ * Angebots-Picker) — keine Preis-/Kalkulationslogik.
  *
- * Gleiche CRUD-Mechanik wie der Inline-Baum im Concept-Browser; gerendert über die
- * wiederverwendbare <x-foodalchemist::tree>-Komponente (Basisrezepte-Look).
+ * UI = Master-Detail wie Rezept-/VK-Taxonomie (2026-06-17, Dominique): oberste Knoten
+ * links wählbar → deren direkte Kinder rechts. 2 Ebenen (Ober → Unter); keine flache
+ * Gesamttabelle mehr (wurde mit Verschachtelung zu lang).
  */
 class KonzeptTaxonomie extends Component
 {
-    // Kategorie-Baum
-    public ?int $katParent = null;          // gewählter Knoten = Eltern für „neu"
+    /** Achse der Master-Detail-Ansicht: kategorie|klasse. */
+    public string $achse = 'kategorie';
 
-    public string $neueKategorie = '';
+    // ── Kategorie ──
+    public ?int $katSelectedId = null;     // gewählte Ober-Kategorie (zeigt ihre Kinder)
+
+    public string $neuTopKat = '';
+
+    public string $neuSubKat = '';
 
     public ?int $editKatId = null;
 
     public string $editKatName = '';
 
-    // Klasse-Baum
-    public ?int $klasseParent = null;
+    // ── Klasse ──
+    public ?int $klasseSelectedId = null;
 
-    public string $neueKlasse = '';
+    public string $neuTopKlasse = '';
+
+    public string $neuSubKlasse = '';
 
     public ?int $editKlasseId = null;
 
@@ -39,30 +47,42 @@ class KonzeptTaxonomie extends Component
 
     public ?string $fehler = null;
 
-    /** Achse für die Detail-Tabelle (Master-Detail wie Rezept-Taxonomie): kategorie|klasse. */
-    public string $achse = 'kategorie';
-
     public function setAchse(string $achse): void
     {
         $this->achse = $achse === 'klasse' ? 'klasse' : 'kategorie';
         $this->reset('editKatId', 'editKlasseId', 'fehler');
     }
 
-    // ── Kategorie ──────────────────────────────────────────────────────────
+    // ── Kategorie ────────────────────────────────────────────────────────────
 
     public function katWaehlen(int $id): void
     {
-        $this->katParent = $this->katParent === $id ? null : $id;
+        $this->katSelectedId = $id;
+        $this->editKatId = null;
     }
 
-    public function katNeu(ConceptService $svc): void
+    public function katNeuTop(ConceptService $svc): void
     {
-        if (trim($this->neueKategorie) === '') {
+        $this->kategorieAnlegen($svc, $this->neuTopKat, null);
+        $this->neuTopKat = '';
+    }
+
+    public function katNeuSub(ConceptService $svc): void
+    {
+        if ($this->katSelectedId === null) {
+            return;
+        }
+        $this->kategorieAnlegen($svc, $this->neuSubKat, $this->katSelectedId);
+        $this->neuSubKat = '';
+    }
+
+    private function kategorieAnlegen(ConceptService $svc, string $name, ?int $parent): void
+    {
+        if (trim($name) === '') {
             return;
         }
         try {
-            $svc->createCategory($this->team(), $this->neueKategorie, $this->katParent);
-            $this->neueKategorie = '';
+            $svc->createCategory($this->team(), $name, $parent);
             $this->fehler = null;
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -93,8 +113,8 @@ class KonzeptTaxonomie extends Component
     {
         try {
             $svc->deleteCategory($this->team(), $id);
-            if ($this->katParent === $id) {
-                $this->katParent = null;
+            if ($this->katSelectedId === $id) {
+                $this->katSelectedId = null;
             }
             $this->fehler = null;
         } catch (RuntimeException $e) {
@@ -102,21 +122,36 @@ class KonzeptTaxonomie extends Component
         }
     }
 
-    // ── Klasse ─────────────────────────────────────────────────────────────
+    // ── Klasse ───────────────────────────────────────────────────────────────
 
     public function klasseWaehlen(int $id): void
     {
-        $this->klasseParent = $this->klasseParent === $id ? null : $id;
+        $this->klasseSelectedId = $id;
+        $this->editKlasseId = null;
     }
 
-    public function klasseNeu(ConceptService $svc): void
+    public function klasseNeuTop(ConceptService $svc): void
     {
-        if (trim($this->neueKlasse) === '') {
+        $this->klasseAnlegen($svc, $this->neuTopKlasse, null);
+        $this->neuTopKlasse = '';
+    }
+
+    public function klasseNeuSub(ConceptService $svc): void
+    {
+        if ($this->klasseSelectedId === null) {
+            return;
+        }
+        $this->klasseAnlegen($svc, $this->neuSubKlasse, $this->klasseSelectedId);
+        $this->neuSubKlasse = '';
+    }
+
+    private function klasseAnlegen(ConceptService $svc, string $name, ?int $parent): void
+    {
+        if (trim($name) === '') {
             return;
         }
         try {
-            $svc->createKlasse($this->team(), $this->neueKlasse, $this->klasseParent);
-            $this->neueKlasse = '';
+            $svc->createKlasse($this->team(), $name, $parent);
             $this->fehler = null;
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -147,8 +182,8 @@ class KonzeptTaxonomie extends Component
     {
         try {
             $svc->deleteKlasse($this->team(), $id);
-            if ($this->klasseParent === $id) {
-                $this->klasseParent = null;
+            if ($this->klasseSelectedId === $id) {
+                $this->klasseSelectedId = null;
             }
             $this->fehler = null;
         } catch (RuntimeException $e) {
@@ -164,7 +199,6 @@ class KonzeptTaxonomie extends Component
             ->whereNotNull('category_id')->selectRaw('category_id, COUNT(*) AS n')
             ->groupBy('category_id')->pluck('n', 'category_id');
 
-        // Klasse ist ein freier String am Concept → Count je Klasse-NAME.
         $klasseCounts = FoodAlchemistConcept::visibleToTeam($team)
             ->whereNotNull('klasse')->selectRaw('klasse, COUNT(*) AS n')
             ->groupBy('klasse')->pluck('n', 'klasse');

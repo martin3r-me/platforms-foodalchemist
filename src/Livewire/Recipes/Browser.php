@@ -8,7 +8,9 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Enums\RecipeStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeService;
+use Platform\FoodAlchemist\Support\Curate;
 
 /**
  * M4-04 / P-1 + Screen 4: Basisrezept-Browser — Hauptgruppen-Baum in linker
@@ -86,6 +88,24 @@ class Browser extends Component
     {
         $this->recipeId = $id;
         $this->dispatch('recipe-selected', id: $id);
+    }
+
+    /** Inline-Status-Pflege aus der Liste (canCurate-Gate, D1) — Setter existiert im Service. */
+    public function statusSetzen(int $id, string $status, RecipeService $svc): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $recipe = $team !== null ? FoodAlchemistRecipe::visibleToTeam($team)->find($id) : null;
+        if ($recipe === null || ! Curate::canCurate(Auth::user(), $recipe)) {
+            return;
+        }
+        if (RecipeStatus::tryFrom($status) === null) {
+            return;
+        }
+        try {
+            $svc->setStatus($team, $id, $status);
+        } catch (\RuntimeException) {
+            // ungültig — still ignorieren
+        }
     }
 
     public function updatedSearch(): void

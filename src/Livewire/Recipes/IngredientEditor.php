@@ -149,6 +149,40 @@ class IngredientEditor extends Component
         ];
     }
 
+    /**
+     * Ersatz-Hinweis für eine client-seitig neue/getauschte Zeile (Katalog-Äquivalenz,
+     * GP↔Rezept / GP↔GP) — die initialen Zeilen bekommen ihn gebündelt in render().
+     * Faktor ist richtungsaufgelöst (neue Menge = Menge × faktor).
+     */
+    #[Renderless]
+    public function ersatzFuer(?int $gpId, ?int $subId): ?array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $kind = $gpId !== null ? 'gp' : ($subId !== null ? 'recipe' : null);
+        if ($team === null || $kind === null) {
+            return null;
+        }
+        $id = (int) ($gpId ?? $subId);
+        $treffer = app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)
+            ->ersatzHinweise($team, [[$kind, $id]])[$kind . ':' . $id] ?? null;
+
+        return $treffer !== null ? $this->ersatzPayload($treffer) : null;
+    }
+
+    /** Ersatz-Hinweis fürs Client-row-Format (inkl. Sprung-URL der Gegenseite). */
+    private function ersatzPayload(object $treffer): array
+    {
+        return [
+            'kind' => $treffer->kind,
+            'id' => $treffer->id,
+            'name' => $treffer->kind === 'recipe' ? '↳ ' . $treffer->name : $treffer->name,
+            'faktor' => $treffer->faktor,
+            'url' => $treffer->kind === 'gp'
+                ? \Platform\FoodAlchemist\Support\Sprungziel::gp($treffer->id)
+                : \Platform\FoodAlchemist\Support\Sprungziel::rezept($treffer->id),
+        ];
+    }
+
     /** GP-/Sub-Picker (M4-08): liefert Auto-Fill-Daten inkl. ek_pro_g. */
     #[Renderless]
     public function sucheZiel(string $suche): array
@@ -185,7 +219,7 @@ class IngredientEditor extends Component
             ->when((bool) ($gpFilter['bio'] ?? false), fn ($w) => $w->where('is_organic', true))
             ->when((bool) ($gpFilter['regional'] ?? false), fn ($w) => $w->where('is_regional', true));
         $gpTotal = (clone $gpQuery)->count();
-        $gpModels = $gpQuery->orderBy('name')->limit(30)
+        $gpModels = $gpQuery->orderBy('name')->limit(200)
             ->get(['id', 'name', 'zustand', 'lead_la_supplier_item_id', 'stk_default_g', 'team_id']);
         // Performance: 30× preisProGrammPublic wären ~60 Queries je Tipper — stattdessen EINE
         // Bulk-Query (Ø €/g über aktive kg/l-LAs). Der präzise Lead-Wert kommt beim Parken nach.
@@ -222,15 +256,21 @@ class IngredientEditor extends Component
             ->when(($rezFilter['kat'] ?? '') !== '', fn ($w) => $w->where('kategorie_id', (int) $rezFilter['kat']))
             ->when(($rezFilter['niveau'] ?? '') !== '', fn ($w) => $w->whereHas('niveauEignungen', fn ($n) => $n->where('niveau_slug', $rezFilter['niveau'])));
         $rezTotal = (clone $rezQuery)->count();
-        $rezepte = $rezQuery->with('niveauEignungen:id,recipe_id,niveau_slug')->orderBy('name')->limit(30)
-            ->get(['id', 'name', 'ek_per_kg_eur'])
-            ->map(fn ($r) => [
-                'typ' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
-                'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
-                'preis_label' => $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : null,
-                'einheit_slug' => 'g',
-                'niveaus' => $r->niveauEignungen->pluck('niveau_slug')->values()->all(),
-            ])->values()->all();
+        $rezepte = $rezQuery->with('niveauEignungen:id,recipe_id,niveau_slug')->orderBy('name')->limit(200)
+            ->get(['id', 'name', 'ek_per_kg_eur', 'yield_kg', 'ertrag_stueck'])
+            ->map(function ($r) {
+                $hatStueck = $r->ertrag_stueck !== null && (float) $r->ertrag_stueck > 0 && $r->yield_kg !== null;
+
+                return [
+                    'typ' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
+                    'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
+                    'preis_label' => $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : null,
+                    // Stück-Ertrag → Einheit beim Einfügen auf „stk" vorbelegen + g/Stück fürs Live-Rechnen
+                    'einheit_slug' => $hatStueck ? 'stk' : 'g',
+                    'g_pro_stueck' => $hatStueck ? (float) $r->yield_kg * 1000 / (float) $r->ertrag_stueck : null,
+                    'niveaus' => $r->niveauEignungen->pluck('niveau_slug')->values()->all(),
+                ];
+            })->values()->all();
 
         return [
             'gps' => ['items' => $gps, 'total' => $gpTotal],
@@ -299,8 +339,25 @@ class IngredientEditor extends Component
                     'ek_pro_g' => $ekProG,
                     'ek_pro_g_min' => $varianten['min'],
                     'ek_pro_g_avg' => $varianten['avg'],
+                    'ersatz' => null,                                 // Äquivalenz-Katalog — gebündelt unten
                 ];
             }
+
+            // Ersatz-Hinweise (⇄ make-or-buy / Artikel-Ersatz) für ALLE Zeilen in einer Query
+            $paare = collect($zeilen)
+                ->map(fn ($z) => $z['gp_id'] !== null
+                    ? ['gp', (int) $z['gp_id']]
+                    : ($z['referenced_recipe_id'] !== null ? ['recipe', (int) $z['referenced_recipe_id']] : null))
+                ->filter()->values()->all();
+            $hinweise = $team !== null && $paare !== []
+                ? app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->ersatzHinweise($team, $paare)
+                : [];
+            foreach ($zeilen as &$z) {
+                $kind = $z['gp_id'] !== null ? 'gp' : ($z['referenced_recipe_id'] !== null ? 'recipe' : null);
+                $treffer = $kind !== null ? ($hinweise[$kind . ':' . (int) ($z['gp_id'] ?? $z['referenced_recipe_id'])] ?? null) : null;
+                $z['ersatz'] = $treffer !== null ? $this->ersatzPayload($treffer) : null;
+            }
+            unset($z);
         }
 
         $einheiten = $team !== null

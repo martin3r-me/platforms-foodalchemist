@@ -36,6 +36,9 @@ class ItemModal extends Component
     /** M2-15: 18 LMIV-Deklarationen (ja|nein|unbekannt, GL-09) */
     public array $deklarationen = [];
 
+    /** Kern-Nährwerte je 100 g (speisen die GP-Aggregation, GL-08) */
+    public array $naehrwerte = [];
+
     public ?string $fehler = null;
 
     #[On('item-modal.oeffnen')]
@@ -49,6 +52,7 @@ class ItemModal extends Component
         $this->eigenschaften = $item->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder', 'vat', 'origin_country', 'organic_control_number', 'preorder_days', 'ingredients_lieferant']);
         $this->allergene = app(SupplierItemService::class)->getAllergens($item);
         $this->deklarationen = app(SupplierItemService::class)->getDeclarations($item);
+        $this->naehrwerte = app(SupplierItemService::class)->getNutrition($item);
         $this->dispatch('modal.open', name: 'item-modal');
     }
 
@@ -112,11 +116,30 @@ class ItemModal extends Component
         }
     }
 
+    public function naehrwerteSpeichern(): void
+    {
+        try {
+            app(SupplierItemService::class)->setNutrition($this->team(), $this->item($this->itemId), $this->naehrwerte);
+            $this->fehler = null;
+            $this->dispatch('item-gespeichert');
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function preisAnlegen(): void
     {
         try {
-            $preis = (float) str_replace(',', '.', (string) $this->preisNeu['preis']);
-            app(PriceService::class)->createFor($this->team(), $this->item($this->itemId), $preis, $this->preisNeu['status']);
+            // Numerik-Guard wie in preisUpdate() — sonst castet (float) einen Tippfehler
+            // still auf 0,00 € (0 < 0 ist false → rutscht durch createFor) und vergiftet
+            // den GP-Leitpreis an der Wurzel der Kostenkette.
+            $roh = str_replace(',', '.', trim((string) $this->preisNeu['preis']));
+            if ($roh === '' || ! is_numeric($roh) || (float) $roh < 0) {
+                $this->fehler = 'Preis braucht eine Zahl ≥ 0.';
+
+                return;
+            }
+            app(PriceService::class)->createFor($this->team(), $this->item($this->itemId), (float) $roh, $this->preisNeu['status']);
             $this->preisNeu = ['preis' => '', 'status' => '0'];
             $this->fehler = null;
         } catch (RuntimeException $e) {
@@ -263,6 +286,7 @@ class ItemModal extends Component
             'darfEdit' => $item !== null && Curate::canCurate(Auth::user(), $item),
             'historie' => $item !== null ? $preise->historyFor($item->id) : collect(),
             'allergenLabels' => FoodAlchemistItemAllergen::ALLERGENE,
+            'naehrwertFelder' => SupplierItemService::NAEHRWERT_FELDER,
             'deklarationLabels' => FoodAlchemistItemDeclaration::STOFFE,
             'deklarationQuelle' => $item?->declarations?->quelle,
             'allergenQuelle' => $item?->allergens?->quelle,

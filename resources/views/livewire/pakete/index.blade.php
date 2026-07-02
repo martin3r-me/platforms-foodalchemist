@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="Pakete" icon="heroicon-o-puzzle-piece" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Pakete'],
+        ]" />
+    </x-slot>
+
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Rollen" width="w-72">
             <div class="p-3 space-y-2">

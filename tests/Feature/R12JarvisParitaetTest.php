@@ -46,6 +46,18 @@ it('Artikel-Tabelle: ★-Klick setzt den globalen Lead am gemappten GP, ohne Map
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'keinem GP zugeordnet'));
 });
 
+it('#393: Banner-Zähler offeneMatches ist team-scoped (aktuelles Team), nicht teamübergreifend', function () {
+    $mk = fn (int $teamId) => \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::create([
+        'team_id' => $teamId, 'supplier_item_id' => $this->la->id, 'gp_id' => $this->gp->id,
+        'score' => 0.9, 'band' => 'exact', 'methode' => 'exact_ean', 'status' => 'offen',
+    ]);
+    $mk($this->rootTeam->id);   // eigenes Team → zählt
+    $mk($this->childA->id);     // anderes Team → darf NICHT mitzählen
+    $mk($this->childA->id);
+
+    Livewire::test(Index::class)->assertViewHas('offeneMatches', 1);
+});
+
 it('LA-Modal: ✎ Preis-Inline-Edit ändert Preis/Gültig-bis/Notiz (Komma-Parsing), Unsinn blockt', function () {
     $p = app(\Platform\FoodAlchemist\Services\PriceService::class)->createFor($this->rootTeam, $this->la, 20.00);
 
@@ -71,6 +83,23 @@ it('LA-Modal: ✎ Preis-Inline-Edit ändert Preis/Gültig-bis/Notiz (Komma-Parsi
         ->call('preisUpdate')
         ->assertSet('fehler', 'Preis braucht eine Zahl ≥ 0.');
     expect((float) $p->fresh()->price)->toBe(21.5);
+});
+
+it('LA-Modal: + Preis anlegen blockt nicht-numerische Eingabe — kein stiller 0,00-€-Preis an der Wurzel der Kostenkette', function () {
+    Livewire::test(ItemModal::class)
+        ->call('oeffnen', $this->la->id)
+        ->set('preisNeu.preis', 'abc')
+        ->call('preisAnlegen')
+        ->assertSet('fehler', 'Preis braucht eine Zahl ≥ 0.');
+    expect(FoodAlchemistPrice::where('supplier_item_id', $this->la->id)->count())->toBe(0);
+
+    // gültige Eingabe (Komma-Parsing) legt den Preis weiterhin an
+    Livewire::test(ItemModal::class)
+        ->call('oeffnen', $this->la->id)
+        ->set('preisNeu.preis', '12,50')
+        ->call('preisAnlegen')
+        ->assertSet('fehler', null);
+    expect((float) FoodAlchemistPrice::where('supplier_item_id', $this->la->id)->latest('id')->first()->price)->toBe(12.5);
 });
 
 it('GP-Panel: ✨ KI-Vorschlag findet unverknüpfte Token-Treffer, Klick verknüpft', function () {

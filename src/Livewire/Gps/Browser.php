@@ -7,9 +7,11 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Enums\GpStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Services\GpService;
 use Platform\FoodAlchemist\Services\KpiService;
 use Platform\FoodAlchemist\Services\VocabularyService;
+use Platform\FoodAlchemist\Support\Curate;
 
 /**
  * M3-01/02 / P-1 + Screen 1: GP-Browser-Neubau.
@@ -63,6 +65,29 @@ class Browser extends Component
     {
         $this->gpId = $id;
         $this->dispatch('gp-selected', id: $id); // M3-03: Panel hört zu — KEIN Seitenwechsel
+    }
+
+    /**
+     * Inline-Status-Pflege direkt aus der Tabelle (Kuratierungs-Beschleuniger).
+     * canCurate-Gate (D1) — der Select wird ohnehin nur für Kuratoren gerendert;
+     * hier zusätzlich serverseitig abgesichert.
+     */
+    public function statusSetzen(int $id, string $status, GpService $gps): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $gp = $team !== null ? FoodAlchemistGp::visibleToTeam($team)->find($id) : null;
+        if ($gp === null || ! Curate::canCurate(Auth::user(), $gp)) {
+            return;
+        }
+        $fall = GpStatus::tryFrom($status);
+        if ($fall === null) {
+            return;
+        }
+        try {
+            $gps->setStatus($gp, $fall);
+        } catch (\RuntimeException) {
+            // Merged o. Ä. — im Inline-Select nicht anwählbar, still ignorieren.
+        }
     }
 
     public function updatedSearch(): void

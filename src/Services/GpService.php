@@ -203,6 +203,23 @@ class GpService
             ->get(['code', 'name']);
     }
 
+    /**
+     * GP-Kurationsstatus setzen (GL-05/GL-07). Autorisierung (Curate/D1) liegt beim
+     * Aufrufer (Livewire prüft canCurate); der Service mutiert nur. Merged bleibt
+     * System-Zustand (Merge-Tool) und ist im Editor nicht wählbar.
+     */
+    public function setStatus(FoodAlchemistGp $gp, GpStatus $status): FoodAlchemistGp
+    {
+        if ($status === GpStatus::Merged) {
+            throw new \RuntimeException('Status „Zusammengeführt" wird nur durch das Merge-Werkzeug gesetzt.');
+        }
+        if ($gp->status !== $status) {
+            $gp->update(['status' => $status]);
+        }
+
+        return $gp;
+    }
+
     /** Status-Zähler für Dashboard-Tiles / Filter-Badges. */
     public function statusCounts(?Team $team): array
     {
@@ -299,18 +316,27 @@ class GpService
             $gp->setAttribute('rezepte_count', $rezepteAktiv ? (int) ($rezeptCounts[$gp->id] ?? 0) : null);
 
             $mutter = $gp->is_derivat ? $muetter->get($gp->derivat_von_gp_id) : null;
+            $rangVon = ['enthalten' => 3, 'spuren' => 2, 'nicht_enthalten' => 1, 'unbekannt' => 0];
             $badges = [];
+            $maxRang = 0;
             foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
-                $effektiv = $gp->getAttribute("allergen_{$feld}")                     // Prio 1: Override
-                    ?? ($mutter !== null
-                        ? ($mutter->getAttribute("allergen_{$feld}")                  // Prio 2: Derivat → Mutter (Override > LA-MAX)
-                            ?? ((($raenge[$mutter->id][$feld] ?? 0) === 3) ? 'enthalten' : null))
-                        : ((($raenge[$gp->id][$feld] ?? 0) === 3) ? 'enthalten' : null)); // Prio 3: LA-MAX
-                if ($effektiv === 'enthalten') {
+                $override = $gp->getAttribute("allergen_{$feld}");                     // Prio 1: Override
+                if ($override !== null) {
+                    $r = $rangVon[$override] ?? 0;
+                } elseif ($mutter !== null) {                                          // Prio 2: Derivat → Mutter
+                    $mo = $mutter->getAttribute("allergen_{$feld}");
+                    $r = $mo !== null ? ($rangVon[$mo] ?? 0) : (int) ($raenge[$mutter->id][$feld] ?? 0);
+                } else {                                                               // Prio 3: LA-MAX
+                    $r = (int) ($raenge[$gp->id][$feld] ?? 0);
+                }
+                $maxRang = max($maxRang, $r);
+                if ($r === 3) {
                     $badges[] = $feld;
                 }
             }
             $gp->setAttribute('allergen_badges', $badges);
+            // 3-Status für die Liste: vorhanden (enthalten/Spuren) · frei (nur nicht_enthalten) · keine_daten (alles unbekannt)
+            $gp->setAttribute('allergen_status', $maxRang >= 2 ? 'vorhanden' : ($maxRang === 1 ? 'frei' : 'keine_daten'));
         });
 
         return $seite;

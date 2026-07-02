@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemNutritional;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 
@@ -89,6 +90,55 @@ class SupplierItemService
         return FoodAlchemistItemAllergen::updateOrCreate(
             ['supplier_item_id' => $item->id],
             [...$attribute, 'team_id' => $item->team_id, 'quelle' => 'manual'],
+        );
+    }
+
+    // ── LA-Nährwerte (je 100 g) — speisen die GP-Aggregation (GL-08) ────
+
+    /** Kern-Nährwerte fürs Item-Modal: Feld → [Label, Einheit] (je 100 g). */
+    public const NAEHRWERT_FELDER = [
+        'energy_kcal' => ['Energie', 'kcal'],
+        'energy_kj' => ['Energie', 'kJ'],
+        'protein' => ['Eiweiß', 'g'],
+        'fat' => ['Fett', 'g'],
+        'carbs_absorbable' => ['Kohlenhydrate', 'g'],
+        'sodium' => ['Natrium', 'g'],
+    ];
+
+    /** Kern-Nährwerte des LA als UI-Form (Strings, leer = kein Wert). */
+    public function getNutrition(FoodAlchemistSupplierItem $item): array
+    {
+        $zeile = $item->nutritionals;
+
+        return collect(array_keys(self::NAEHRWERT_FELDER))
+            ->mapWithKeys(fn (string $k) => [$k => $zeile?->{$k} !== null ? (string) (float) $zeile->{$k} : ''])
+            ->all();
+    }
+
+    /** Edit nur Besitzer-Team (D1). Leer ⇒ NULL; negativ/nicht-numerisch ⇒ NULL (kein stiller 0). */
+    public function setNutrition(Team $team, FoodAlchemistSupplierItem $item, array $werte): FoodAlchemistItemNutritional
+    {
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Artikel — Nährwert-Pflege nur durch das Besitzer-Team (D1).');
+        }
+
+        $num = function ($v) {
+            $roh = trim((string) $v);
+            if ($roh === '') {
+                return null;
+            }
+            $f = (float) str_replace(',', '.', $roh);
+
+            return $f >= 0 ? $f : null;
+        };
+        $attribute = [];
+        foreach (array_keys(self::NAEHRWERT_FELDER) as $k) {
+            $attribute[$k] = $num($werte[$k] ?? '');
+        }
+
+        return FoodAlchemistItemNutritional::updateOrCreate(
+            ['supplier_item_id' => $item->id],
+            [...$attribute, 'team_id' => $item->team_id],
         );
     }
 

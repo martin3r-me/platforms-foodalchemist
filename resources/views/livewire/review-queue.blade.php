@@ -3,7 +3,14 @@
 
 <x-ui-page>
     <x-slot name="navbar">
-        <x-ui-page-navbar title="Zu prüfen" icon="heroicon-o-clipboard-document-check" />
+        <x-ui-page-navbar title="Signale" icon="heroicon-o-bell-alert" />
+    </x-slot>
+
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Signale'],
+        ]" />
     </x-slot>
 
     {{-- Klick-Ziele der Rezept-Listen --}}
@@ -13,6 +20,61 @@
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-5">
         @if($meldung !== null)<p class="text-xs text-emerald-600 dark:text-emerald-400" data-rq-meldung>{{ $meldung }}</p>@endif
         @if($fehler !== null)<p class="text-xs text-rose-600 dark:text-rose-400" data-rq-fehler>{{ $fehler }}</p>@endif
+
+        {{-- Klasse B: Signale (#378) — vom System detektierte Auffälligkeiten --}}
+        <div class="relative overflow-hidden {{ $card }} px-5 py-4" data-rq-signale>
+            <div class="{{ $cardAccent }}"></div>
+            <div class="flex items-center justify-between gap-2 mb-1">
+                <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">
+                    Signale <span class="{{ $pill }} {{ $signalOffen > 0 ? $variantPill['warning'] : $variantPill['secondary'] }} ml-1">{{ $signalOffen }} offen</span>
+                </h3>
+                <button type="button" wire:click="detektorLaufen" wire:target="detektorLaufen" wire:loading.attr="disabled" class="{{ $btnGhostXs }} disabled:opacity-60" title="Detektor jetzt laufen lassen">
+                    <span wire:loading.remove wire:target="detektorLaufen">↻ Prüfen</span>
+                    <span wire:loading wire:target="detektorLaufen">↻ Prüfe …</span>
+                </button>
+            </div>
+            <p class="text-[11px] text-gray-400 mb-2">Vom System erkannte Auffälligkeiten (Preise, Daten, Marge). „Erledigt" = behoben, „Ignorieren" = bewusst akzeptiert.</p>
+
+            <div class="flex flex-wrap items-center gap-1 mb-2">
+                @foreach($signalStatusWerte as $sw)
+                    <button type="button" wire:key="sigst-{{ $sw['value'] }}" wire:click="setSignalStatus('{{ $sw['value'] }}')"
+                            class="{{ $pill }} {{ $signalStatus === $sw['value'] ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sw['label'] }}</button>
+                @endforeach
+                <span class="mx-1 text-gray-300">·</span>
+                <button type="button" wire:click="setSignalTyp('')" class="{{ $pill }} {{ $signalTyp === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle Typen</button>
+                @foreach($signalTypWerte as $tw)
+                    <button type="button" wire:key="sigtyp-{{ $tw['value'] }}" wire:click="setSignalTyp('{{ $tw['value'] }}')"
+                            class="{{ $pill }} {{ $signalTyp === $tw['value'] ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $tw['label'] }}@if(($signalNachTyp[$tw['value']] ?? 0) > 0) ({{ $signalNachTyp[$tw['value']] }})@endif</button>
+                @endforeach
+            </div>
+
+            @forelse($signale as $sig)
+                <div class="flex items-start gap-2 py-1.5 border-t border-black/5 dark:border-white/5 text-[11px]" wire:key="sig-{{ $sig->id }}">
+                    <span class="{{ $pill }} {{ $variantPill[$sig->severity->badgeVariant()] ?? $variantPill['secondary'] }} shrink-0">{{ $sig->severity->label() }}</span>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-gray-400 shrink-0">{{ $sig->typ->label() }}</span>
+                            <span class="font-medium text-gray-900 dark:text-gray-100 truncate">{{ $sig->titel }}</span>
+                        </div>
+                        @if($sig->beschreibung)<p class="text-gray-500 mt-0.5">{{ \Illuminate\Support\Str::limit($sig->beschreibung, 140) }}</p>@endif
+                    </div>
+                    <span class="shrink-0 flex gap-1">
+                        @if($sig->status->istOffen())
+                            <button type="button" wire:click="signalErledigt({{ $sig->id }})" class="{{ $btnGhostXs }} text-emerald-600">Erledigt</button>
+                            <button type="button" wire:click="signalIgnorieren({{ $sig->id }})" class="{{ $btnGhostXs }}">Ignorieren</button>
+                        @else
+                            <span class="{{ $pill }} {{ $variantPill[$sig->status->badgeVariant()] }}">{{ $sig->status->label() }}</span>
+                            <button type="button" wire:click="signalWiederOeffnen({{ $sig->id }})" class="{{ $btnGhostXs }}">Wieder öffnen</button>
+                        @endif
+                    </span>
+                </div>
+            @empty
+                <p class="text-[11px] text-gray-400">— keine Signale ({{ $signalStatus }}) —</p>
+            @endforelse
+            <div class="mt-2">{{ $signale->links() }}</div>
+        </div>
+
+        <h3 class="text-[11px] font-medium uppercase tracking-wider text-gray-400 pt-1">Entscheidungen</h3>
 
         {{-- 1. LA→GP-Match-Vorschläge (M3-11, tentative Queue) --}}
         <div class="relative overflow-hidden {{ $card }} px-5 py-4" data-rq-matches>

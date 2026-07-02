@@ -581,7 +581,11 @@ class VocabularyService
         if ($wert === null || $wert === '') {
             return null;
         }
+        $clean = str_replace(',', '.', (string) $wert);
 
-        return (float) str_replace(',', '.', (string) $wert);
+        // Nicht-numerisch/negativ → null statt stiller 0: default_in_g/_ml ist Multiplikator
+        // im Recompute (RecipeRecomputeService) — ein Tippfehler hier würde sonst jedes Rezept
+        // mit dieser Einheit still auf 0 g/Kosten ziehen. Legitime 0 bleibt erhalten.
+        return is_numeric($clean) && (float) $clean >= 0 ? (float) $clean : null;
     }
 }

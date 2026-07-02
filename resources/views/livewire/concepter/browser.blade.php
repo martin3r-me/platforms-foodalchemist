@@ -10,6 +10,13 @@
         <x-ui-page-navbar title="Concepter" icon="heroicon-o-square-3-stack-3d" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Concepter'],
+        ]" />
+    </x-slot>
+
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Concepter" width="w-80">
             <div class="p-3 space-y-3">
@@ -132,8 +139,19 @@
                             @else
                                 <td class="{{ $td }} text-gray-500">{{ $it->klasse ?: '—' }}</td>
                                 <td class="{{ $td }} text-gray-500">{{ $it->category_id !== null ? ($katById[$it->category_id]['name'] ?? '—') : '—' }}</td>
-                                <td class="{{ $td }}">
-                                    <span class="{{ $pill }} {{ ['draft' => $variantPill['secondary'], 'aktiv' => $variantPill['success'], 'archiviert' => $variantPill['warning']][$it->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiv'][$it->status] ?? $it->status }}</span>
+                                {{-- Inline-Status-Pflege wie bei GP (Concepts; Server gated canCurate/D1) --}}
+                                <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
+                                    @php($stMap = ['draft' => $variantPill['secondary'], 'aktiv' => $variantPill['success'], 'archiviert' => $variantPill['warning']])
+                                    @if(! isset($it->team_id) || \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $it))
+                                        <select wire:key="cst-{{ $it->id }}-{{ $it->status }}" wire:change="statusSetzen({{ $it->id }}, $event.target.value)"
+                                                class="{{ $pill }} font-medium {{ $stMap[$it->status] ?? $variantPill['secondary'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6" data-status-select>
+                                            @foreach(['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiv'] as $val => $lbl)
+                                                <option value="{{ $val }}" @selected($it->status === $val)>{{ $lbl }}</option>
+                                            @endforeach
+                                        </select>
+                                    @else
+                                        <span class="{{ $pill }} {{ $stMap[$it->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiv'][$it->status] ?? $it->status }}</span>
+                                    @endif
                                 </td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->slots_count }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $it->preis_pro_person_cache !== null ? number_format((float) $it->preis_pro_person_cache, 2, ',', '.') . ' €' : '—' }}</td>

@@ -51,6 +51,55 @@ class PriceService
             ->limit(1);
     }
 
+    /**
+     * Preis-Trend je Item: aktuell vs. vorheriger aktiver Preis (gleiche Aktiv-Ordnung
+     * wie activeFor, Offset 1 — Append-only stempelt den Vorgänger mit valid_to). Bulk
+     * gegen N+1. Nur Items MIT Vorgänger und positivem Vorpreis (Delta% berechenbar).
+     *
+     * `plausibel=false`, wenn Vorpreis/aktuell um Faktor ≥10 auseinanderliegen — dann
+     * ist der Vorpreis fast sicher ein Platzhalter/Dummy (z.B. 999). Der Aufrufer zeigt
+     * dann ein ⚠-Flag statt eines irreführenden Delta-% (Hybrid: Datenmüll sichtbar,
+     * Anzeige sauber).
+     *
+     * @param array<int> $itemIds
+     * @return array<int, array{aktuell: float, vorher: float, delta_pct: float, plausibel: bool}>
+     */
+    public function preisTrendBulk(array $itemIds): array
+    {
+        $itemIds = array_values(array_unique(array_map('intval', $itemIds)));
+        if ($itemIds === []) {
+            return [];
+        }
+
+        $rows = $this->scopeAktiv(FoodAlchemistPrice::query())
+            ->whereIn('supplier_item_id', $itemIds)
+            ->orderBy('supplier_item_id')
+            ->orderByRaw('valid_to IS NULL DESC')
+            ->orderByDesc('valid_to')
+            ->orderByDesc('id')
+            ->get(['supplier_item_id', 'price']);
+
+        $proItem = [];
+        foreach ($rows as $r) {
+            $proItem[(int) $r->supplier_item_id][] = (float) $r->price;
+        }
+
+        $out = [];
+        foreach ($proItem as $id => $preise) {
+            if (count($preise) >= 2 && $preise[1] > 0 && $preise[0] > 0) {
+                $faktor = max($preise[0], $preise[1]) / min($preise[0], $preise[1]);
+                $out[$id] = [
+                    'aktuell' => $preise[0],
+                    'vorher' => $preise[1],
+                    'delta_pct' => round(($preise[0] - $preise[1]) / $preise[1] * 100, 1),
+                    'plausibel' => $faktor < 10,       // Faktor ≥10 ⇒ Vorpreis fast sicher Platzhalter
+                ];
+            }
+        }
+
+        return $out;
+    }
+
     /** Historie eines LA (alle Zeilen, neueste zuerst) inkl. abgeleiteter Kategorie (I2). */
     public function historyFor(int $supplierItemId): Collection
     {

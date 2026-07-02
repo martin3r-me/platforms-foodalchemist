@@ -33,8 +33,41 @@ class RecipeModal extends Component
 
     public ?string $fehler = null;
 
+    /** Navigations-Stack: aus Rezept A ein Sub-Rezept B öffnen → A wird gemerkt; ✕ springt zurück zu A. */
+    public array $navStack = [];
+
+    public bool $istOffen = false;
+
     #[On('recipe-modal.oeffnen')]
     public function oeffnen(?int $id = null): void
+    {
+        // Sub-Navigation: aus einem bereits OFFENEN Rezept ein anderes öffnen → Eltern auf den Stack.
+        if ($this->istOffen && $this->recipeId !== null && $id !== null && $this->recipeId !== $id) {
+            $this->navStack[] = $this->recipeId;
+        }
+        $this->ladeRezept($id);
+    }
+
+    /** ✕ am Rezept-Modal: bei Sub-Navigation zurück zum Eltern-Rezept, sonst hart schließen. */
+    public function schliessenOderZurueck(): void
+    {
+        if (! empty($this->navStack)) {
+            $this->ladeRezept((int) array_pop($this->navStack));   // zurück — KEIN erneuter Push
+            return;
+        }
+        $this->dispatch('modal.close', name: 'recipe-modal');
+    }
+
+    #[On('modal.closed')]
+    public function beiModalClosed(?string $name = null): void
+    {
+        if ($name === 'recipe-modal') {                            // hartes Schließen (Backdrop/Escape/✕ ohne Stack) → Stack leeren
+            $this->istOffen = false;
+            $this->navStack = [];
+        }
+    }
+
+    private function ladeRezept(?int $id): void
     {
         $this->reset('fehler');
         $this->recipeId = $id;
@@ -66,6 +99,7 @@ class RecipeModal extends Component
             }
         }
 
+        $this->istOffen = true;
         $this->dispatch('modal.open', name: 'recipe-modal');
     }
 
@@ -78,10 +112,25 @@ class RecipeModal extends Component
         }
 
         try {
+            // Numerik-Guard (wie Preis-Anlage): leer = automatische Yield-Berechnung (A-3 COALESCE),
+            // aber ein Tippfehler darf nicht still als 0 landen — yield_kg_manual=0 macht ek_per_kg_eur
+            // null und vergiftet die Kalkulation (GL-02). 0/negativ ist als Yield/Ertrag nie gültig.
+            $rohYield = trim(str_replace(',', '.', (string) ($this->form['yield_kg_manual'] ?? '')));
+            $rohStk = trim(str_replace(',', '.', (string) ($this->form['ertrag_stueck'] ?? '')));
+            if ($rohYield !== '' && (! is_numeric($rohYield) || (float) $rohYield <= 0)) {
+                $this->fehler = 'Manuelles Yield braucht eine Zahl > 0 (oder leer lassen für die automatische Berechnung).';
+
+                return;
+            }
+            if ($rohStk !== '' && (! is_numeric($rohStk) || (float) $rohStk <= 0)) {
+                $this->fehler = 'Ertrag (Stück) braucht eine Zahl > 0 (oder leer lassen).';
+
+                return;
+            }
             $in = [...$this->form,
                 'arbeitszeit_min' => $this->form['arbeitszeit_min'] !== null && $this->form['arbeitszeit_min'] !== '' ? (int) $this->form['arbeitszeit_min'] : null,
-                'yield_kg_manual' => $this->form['yield_kg_manual'] !== null && $this->form['yield_kg_manual'] !== '' ? (float) str_replace(',', '.', (string) $this->form['yield_kg_manual']) : null,
-                'ertrag_stueck' => $this->form['ertrag_stueck'] !== null && $this->form['ertrag_stueck'] !== '' ? (float) str_replace(',', '.', (string) $this->form['ertrag_stueck']) : null,
+                'yield_kg_manual' => $rohYield !== '' ? (float) $rohYield : null,
+                'ertrag_stueck' => $rohStk !== '' ? (float) $rohStk : null,
             ];
             $recipe = $this->recipeId === null
                 ? $recipes->create($team, $in)
@@ -537,6 +586,14 @@ class RecipeModal extends Component
         }
     }
 
+    /** ✨ Sensorik: KI bewertet das GEGARTE Rezept (Zutaten + Zubereitung) → Recipe-Sensorik-Tabellen. */
+    public function sensorikBewerten(): void
+    {
+        if ($this->recipeId !== null) {
+            app(\Platform\FoodAlchemist\Services\SensorikService::class)->bewerteRezept($this->recipeId, true);
+        }
+    }
+
     // ── ✨ Alles anreichern (D-5 §4.4 auf EIN Rezept — Bulk-Mechanik M7-06) ──
 
     public ?int $bulkRunId = null;
@@ -631,6 +688,8 @@ class RecipeModal extends Component
                 ? FoodAlchemistRecipeCategory::where('main_group_id', $this->form['hauptgruppe_id'])->orderBy('sort_order')->get()
                 : collect(),
             'keyVorschau' => trim($this->form['name']) !== '' ? $recipes->rezeptKey($this->form['name']) : '',
+            'sensorik' => $this->recipeId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($this->recipeId) : null,
+            'pairing' => $r !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($r) : null,
         ]);
     }
 }

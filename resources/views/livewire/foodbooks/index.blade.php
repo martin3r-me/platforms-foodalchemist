@@ -8,6 +8,13 @@
         <x-ui-page-navbar title="Foodbook / Portfolio" icon="heroicon-o-book-open" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Foodbook / Portfolio'],
+        ]" />
+    </x-slot>
+
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Foodbooks" width="w-80">
             <div class="p-3 space-y-2">
@@ -49,17 +56,13 @@
     </x-slot>
 
     <x-slot name="activity">
-        <x-ui-page-sidebar title="Angebot" width="w-80" :maxWidth="520" storeKey="activityOpen" side="right">
+        <x-ui-page-sidebar title="Portfolio (pro Person)" width="w-80" :maxWidth="520" storeKey="activityOpen" side="right">
             @if($fb && $gesamt)
                 <div class="p-4 space-y-3">
                     <div class="text-center py-2">
-                        @if($gesamt['personen'])
-                            <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($gesamt['gesamt_vk'], 2, ',', '.') }} €</div>
-                            <div class="{{ $label }}">gesamt für {{ $gesamt['personen'] }} Pers. · {{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €/Person{{ $gesamt['pauschal'] > 0 ? ' + ' . number_format($gesamt['pauschal'], 2, ',', '.') . ' € pauschal' : '' }}</div>
-                        @else
-                            <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</div>
-                            <div class="{{ $label }}">pro Person · EK {{ number_format($gesamt['ek_pro_person'], 2, ',', '.') }} € · Pax am Foodbook setzen</div>
-                        @endif
+                        <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</div>
+                        <div class="{{ $label }}">pro Person · EK {{ number_format($gesamt['ek_pro_person'], 2, ',', '.') }} €</div>
+                        <div class="text-[11px] text-gray-400 mt-1">Portfolio — person-unabhängig. Pax + Gesamtpreis liegen im Angebot.</div>
                     </div>
                     @if($kapitel && $kapitelAgg)
                         <div class="pt-2 border-t border-black/5 dark:border-white/10 text-xs space-y-1">
@@ -81,14 +84,51 @@
             {{-- Foodbook-Stammdaten --}}
             <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbhdr-{{ $fb->id }}">
                 <div class="{{ $cardAccent }}"></div>
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div class="md:col-span-2"><label class="{{ $label }}">Bezeichnung</label><input type="text" wire:model="form.bezeichnung" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Kunde</label><input type="text" wire:model="form.kunde" class="{{ $input }}" /></div>
-                    <div><label class="{{ $label }}">Personen (Pax)</label><input type="number" min="1" wire:model.live="form.personen" wire:change="speichern" class="{{ $input }} text-right tabular-nums" /></div>
                     <div><label class="{{ $label }}">Status</label>
                         <select wire:model="form.status" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
                     </div>
                 </div>
+                {{-- #369: CRM-Kunde-Link (MVP, nur verlinken) — ergänzt das Freitext-Feld „Kunde" --}}
+                <div class="space-y-2 pt-1 border-t border-black/5 dark:border-white/10">
+                    <span class="{{ $label }}">Kunde (CRM)</span>
+                    @if(! $crmVerfuegbar)
+                        <p class="text-[11px] text-gray-400">CRM-Modul nicht verfügbar — Freitext-Feld „Kunde" oben nutzen.</p>
+                    @else
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+                            <div>Firma: <span class="font-medium text-gray-900 dark:text-gray-100">{{ $fb->crmCompany?->display_name ?? '—' }}</span></div>
+                            <div>Kontakt: <span class="font-medium text-gray-900 dark:text-gray-100">{{ $fb->crmContact?->display_name ?? '—' }}</span></div>
+                            @if($fb->crm_company_id || $fb->crm_contact_id)
+                                <button type="button" wire:click="loeseKunde" class="{{ $btnGhostXs }}">Verknüpfung lösen</button>
+                            @endif
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div>
+                                <input type="search" wire:model.live.debounce.300ms="firmaSuche" placeholder="Firma suchen …" class="{{ $input }}" />
+                                @if($firmen->isNotEmpty())
+                                    <div class="space-y-0.5 mt-1">
+                                        @foreach($firmen as $f)
+                                            <button type="button" wire:key="fbfi-{{ $f->id }}" wire:click="verknuepfeFirma({{ $f->id }})" class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $f->display_name }}</button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                            <div>
+                                <input type="search" wire:model.live.debounce.300ms="kontaktSuche" placeholder="Kontakt suchen …" class="{{ $input }}" />
+                                @if($kontakte->isNotEmpty())
+                                    <div class="space-y-0.5 mt-1">
+                                        @foreach($kontakte as $k)
+                                            <button type="button" wire:key="fbko-{{ $k->id }}" wire:click="verknuepfeKontakt({{ $k->id }})" class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $k->display_name }}</button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
                 <div>
                     <div class="flex items-center justify-between">
                         <label class="{{ $label }}">Briefing / Einleitung (Kundentext)</label>
@@ -98,9 +138,22 @@
                 </div>
                 <div class="flex gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
+                    <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Versendbares Foodbook-Dokument (Druck/PDF)">Dokument</a>
                     <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhost }} text-red-600 dark:text-red-400">Löschen</button>
                 </div>
             </div>
+
+            {{-- #389/Canvas: Foodbook-Leitidee — auf Klick im Modal (Dominique 2026-06-17) --}}
+            <button type="button" @click="$dispatch('modal.open', { name: 'fb-leitidee' })"
+                    class="{{ $btnGhost }} w-full justify-center" wire:key="fbcanvas-btn-{{ $fb->id }}">
+                Leitidee-Canvas — was muss rein · welche Konzepte · was es erfüllen muss
+            </button>
+            <x-foodalchemist::modal name="fb-leitidee" title="Foodbook-Leitidee (Canvas)" size="max-w-3xl">
+                @include('foodalchemist::livewire.canvas.partials.board')
+                <x-slot:footer>
+                    <button type="button" @click="$dispatch('modal.close', { name: 'fb-leitidee' })" class="{{ $btnGhost }}">Schließen</button>
+                </x-slot:footer>
+            </x-foodalchemist::modal>
 
             @if($kapitel)
                 {{-- Kapitel-Kopf --}}
@@ -122,6 +175,7 @@
                             @if(count($markiert) >= 2)
                                 <button type="button" wire:click="wahlGruppeBilden" class="{{ $btnGhostXs }} text-amber-600">Wahl-Gruppe ({{ count($markiert) }})</button>
                             @endif
+                            <button type="button" @click="$dispatch('modal.open', { name: 'fb-concept' })" class="{{ $btnPrimary }}">+ Concept einfügen</button>
                             <button type="button" wire:click="blockBasis('text')" class="{{ $btnGhostXs }}">+ Text</button>
                             <button type="button" wire:click="blockBasis('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>
                             <div class="relative">
@@ -142,31 +196,6 @@
                         </div>
                     </div>
 
-                    {{-- Concept-Picker (KEIN Gericht-Picker — der Concepter ist der Kern); FB-1: Filter nach Concept-Kategorie --}}
-                    <div class="space-y-1">
-                        <div class="flex items-center gap-1.5">
-                            <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen + einfügen …" class="{{ $input }} flex-1" />
-                            <select wire:model.live="conceptKategorie" class="{{ $input }} w-44" title="nach Concept-Kategorie filtern">
-                                <option value="">Alle Kategorien</option>
-                                @foreach($conceptKategorien as $kat)
-                                    <option value="{{ $kat['id'] }}">{{ $kat['label'] ?? $kat['name'] }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        @if(($conceptSuche !== '' || $conceptKategorie !== null) && $conceptKandidaten->isNotEmpty())
-                            <div class="space-y-0.5 max-h-44 overflow-y-auto">
-                                @foreach($conceptKandidaten as $ck)
-                                    <button type="button" wire:key="ck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})"
-                                            class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                        <span class="truncate">{{ $ck->name }}</span>
-                                        <span class="text-gray-400 tabular-nums shrink-0">{{ $ck->preis_pro_person_cache !== null ? number_format((float) $ck->preis_pro_person_cache, 2, ',', '.') . ' €' : '' }}</span>
-                                    </button>
-                                @endforeach
-                            </div>
-                        @elseif($conceptSuche !== '' || $conceptKategorie !== null)
-                            <p class="text-[11px] text-gray-400 px-2 py-1">Keine Concepts für diese Auswahl.</p>
-                        @endif
-                    </div>
 
                     <div class="space-y-1">
                         @forelse($kapitel->blocks as $block)
@@ -236,16 +265,58 @@
                                 @endif
                             </div>
                         @empty
-                            <p class="text-xs text-gray-400 py-4 text-center">Noch kein Inhalt. Oben ein Concept suchen + einfügen, oder Header/Text/Preis-Block hinzufügen.</p>
+                            <p class="text-xs text-gray-400 py-4 text-center">Noch kein Inhalt. Oben „+ Concept einfügen" oder Header/Text/Preis-Block hinzufügen.</p>
                         @endforelse
                     </div>
+
+                    {{-- FB: Concept-Einfüge-Picker (Modal, Livewire-sicher). Angebot bleibt unberührt (hat eigenen Concepter-Editor).
+                         Concepter-Such-Wissen: Suche + collapsible Kategorie-Tree + Concept-Liste; bleibt offen für Mehrfach-Einfügen.
+                         Modal statt x-teleport-Drawer: Teleport entkoppelt das DOM vom Livewire-Morph → wire:model/click toter. --}}
+                    <x-foodalchemist::modal name="fb-concept" title="Concept einfügen" size="max-w-3xl">
+                        <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-3" />
+                        <div class="flex gap-3 min-h-[20rem]">
+                            {{-- Kategorie-Tree (collapsible, wie Concepter-Browser) --}}
+                            <div class="w-44 shrink-0 overflow-y-auto border-r border-black/5 dark:border-white/10 pr-2 space-y-0.5 max-h-[26rem]">
+                                <button type="button" wire:click="$set('conceptKategorie', null)"
+                                        class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $conceptKategorie === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">Alle Kategorien</button>
+                                <x-foodalchemist::tree :initial-collapsed="collect($conceptKategorien)->where('has_children', true)->pluck('id')->all()">
+                                    @foreach($conceptKategorien as $kat)
+                                        <x-foodalchemist::tree-node :node-id="$kat['id']" :depth="$kat['depth']" :ancestors="$kat['ancestors'] ?? []"
+                                            :has-children="$kat['has_children'] ?? false" :active="$conceptKategorie === $kat['id']">
+                                            <button type="button" wire:click="$set('conceptKategorie', {{ $kat['id'] }})" class="flex-1 min-w-0 truncate text-left text-xs px-1 py-0.5">{{ $kat['name'] }}</button>
+                                        </x-foodalchemist::tree-node>
+                                    @endforeach
+                                </x-foodalchemist::tree>
+                            </div>
+                            {{-- Concept-Liste --}}
+                            <div class="flex-1 min-w-0 overflow-y-auto space-y-0.5 max-h-[26rem]">
+                                @if($conceptKandidaten->isNotEmpty())
+                                    @foreach($conceptKandidaten as $ck)
+                                        <button type="button" wire:key="dck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})"
+                                                class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                            <span class="truncate text-gray-900 dark:text-gray-100">+ {{ $ck->name }}</span>
+                                            <span class="text-gray-400 tabular-nums shrink-0">{{ $ck->preis_pro_person_cache !== null ? number_format((float) $ck->preis_pro_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                        </button>
+                                    @endforeach
+                                @elseif($conceptSuche !== '' || $conceptKategorie !== null)
+                                    <p class="text-[11px] text-gray-400 px-2 py-2">Keine Concepts für diese Auswahl.</p>
+                                @else
+                                    <p class="text-[11px] text-gray-400 px-2 py-2">Kategorie wählen oder oben suchen.</p>
+                                @endif
+                            </div>
+                        </div>
+                        <x-slot:footer>
+                            <span class="text-[10px] text-gray-400 mr-auto">Eingefügte Concepts erscheinen links im Inhalt. Bleibt offen für mehrere.</span>
+                            <button type="button" @click="$dispatch('modal.close', { name: 'fb-concept' })" class="{{ $btnGhost }}">Schließen</button>
+                        </x-slot:footer>
+                    </x-foodalchemist::modal>
                 </div>
             @else
                 <div class="{{ $card }} p-8 text-center text-sm text-gray-400">Links ein Kapitel wählen oder anlegen.</div>
             @endif
         @else
             <div class="{{ $card }} p-10 text-center text-sm text-gray-400">
-                Links ein Foodbook wählen oder „+ Neues Foodbook". Das Foodbook stellt fertige <strong>Concepts</strong> zu einem Kunden-Angebot zusammen (Kapitel, Pax, Angebots-Preise) — Einzel-Gerichte baust du im Concepter.
+                Links ein Foodbook wählen oder „+ Neues Foodbook". Das Foodbook bündelt fertige <strong>Concepts</strong> zu einem <strong>person-unabhängigen Portfolio</strong> (Kapitel, €/Person) — Pax &amp; Gesamtpreis liegen im <strong>Angebot</strong>, Einzel-Gerichte im Concepter.
             </div>
         @endif
     </x-ui-page-container>

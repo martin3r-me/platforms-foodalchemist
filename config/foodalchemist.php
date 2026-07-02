@@ -76,9 +76,16 @@ return [
                     'icon'  => 'heroicon-o-home',
                 ],
                 [
-                    'label' => 'Zu prüfen',
+                    // #378: „Zu prüfen" → „Signale" — Aufmerksamkeits-Inbox (Klasse A Entscheidungs-Queues + Klasse B detektierte Signale)
+                    'label' => 'Signale',
                     'route' => 'foodalchemist.review',
-                    'icon'  => 'heroicon-o-clipboard-document-check',
+                    'icon'  => 'heroicon-o-bell-alert',
+                ],
+                [
+                    // #389: Food DNA — „Markenkern Küche", stehende KI-Referenz für alle Generatoren
+                    'label' => 'Food DNA',
+                    'route' => 'foodalchemist.food-dna.index',
+                    'icon'  => 'heroicon-o-finger-print',
                 ],
             ],
         ],
@@ -94,6 +101,11 @@ return [
                     'label' => 'Lieferanten',
                     'route' => 'foodalchemist.suppliers.index',
                     'icon'  => 'heroicon-o-truck',
+                ],
+                [
+                    'label' => 'Geschirr',
+                    'route' => 'foodalchemist.geschirr.index',
+                    'icon'  => 'heroicon-o-square-2-stack',
                 ],
             ],
         ],
@@ -142,20 +154,28 @@ return [
             ],
         ],
         [
+            // #380: Angebote — brief-getriebene Kunden-Angebote (individuelle Anfrage
+            // → maßgeschneidertes Angebot). Eigenständig neben Foodbook (Portfolio):
+            // gebaut wird im Concepter, hier kommt der Kunden-/Vertriebs-Mantel dazu.
+            'group' => 'Angebote',
+            'items' => [
+                [
+                    'label' => 'Angebote',
+                    'route' => 'foodalchemist.angebote.index',
+                    'icon'  => 'heroicon-o-document-text',
+                ],
+            ],
+        ],
+        [
             // M12 GEBAUT: Kalkulations-Übersicht (HK1 Wareneinsatz → HK2 Vollkosten + Deckungsbeitrag).
             'group' => 'Kalkulation',
             'items' => [
                 [
-                    'label' => 'Kalkulation (HK2)',
+                    // #379: „Kalkulation (HK2)" → Werkstatt (Regel-Cockpit + HK2-Ergebnis-Übersicht).
+                    // Kalkulator (Scratchpad) entfernt — Ad-hoc-Rechnen lebt im Angebote-Modul.
+                    'label' => 'Kalkulations-Werkstatt',
                     'route' => 'foodalchemist.kalkulation.index',
                     'icon'  => 'heroicon-o-calculator',
-                ],
-                [
-                    // M-K10 / Doc 16 §11: standalone Composer — Positionen (Gericht/
-                    // Basisrezept/GP/frei) zusammenstellen → HK1/HK2/VK. Entkoppelt (Prüfung).
-                    'label' => 'Kalkulator',
-                    'route' => 'foodalchemist.kalkulator.index',
-                    'icon'  => 'heroicon-o-squares-plus',
                 ],
             ],
         ],
@@ -231,6 +251,32 @@ return [
             'C' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_C_IN', 2.80), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_C_OUT', 14.00)],
             'D' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_D_IN', 2.80), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_D_OUT', 14.00)],
         ],
+    ],
+
+    /*
+     * Semantische Pairing-/Domain-Suche (Embeddings) — Hybrid-Recall ÜBER der
+     * deterministischen Lexik in KnowledgeContextService. Nutzt Cores
+     * EmbeddingService (Commit 32b66074, Provider/Store-Trennung).
+     *
+     * 'enabled' = DEFAULT FALSE: semantischer Fallback bleibt aus, bis der
+     *   Korpus indiziert (`php artisan foodalchemist:knowledge-embed`) UND die
+     *   Retrieval-Qualität gegen echte Pairing-Fälle validiert ist. Aus = exakt
+     *   das bisherige Lexik-Verhalten, kein Hot-Path-Risiko, keine API-Latenz.
+     * 'provider' = null ⇒ Core-Default (openai / text-embedding-3-large, 3072d).
+     *   'gemini' nur falls Cooking-Jarvis-Kontinuität gewünscht (768d, L2-norm.).
+     * 'global_team_id' = Sentinel für den globalen BHG-Korpus (knowledge_documents
+     *   .team_id NULL): Cores Store verlangt team_id:int, darum mappen wir NULL→0
+     *   (core_embeddings.team_id ist nur indizierter bigint, kein FK).
+     * 'min_score' = Cosine-Schwelle; darunter gilt ein Treffer als irrelevant.
+     */
+    'semantic_search' => [
+        'enabled'        => (bool) env('FOODALCHEMIST_SEMANTIC_SEARCH', false),
+        'provider'       => env('FOODALCHEMIST_EMBEDDING_PROVIDER'),     // null = Core-Default
+        'global_team_id' => (int) env('FOODALCHEMIST_SEMANTIC_GLOBAL_TEAM_ID', 0),
+        'min_score'      => (float) env('FOODALCHEMIST_SEMANTIC_MIN_SCORE', 0.30),
+        // Anker-Auflösung (B): höhere Schwelle — eine FALSCHE Anker-Auflösung
+        // injiziert falsche Pairing-Kanten, das ist schlimmer als „unbekannt".
+        'anker_min_score' => (float) env('FOODALCHEMIST_SEMANTIC_ANKER_MIN_SCORE', 0.55),
     ],
 
     /*
@@ -408,6 +454,20 @@ return [
             'tier' => 'B',                                            // Auto-Apply-Ausnahme (GL-07 §4.3)
             'task' => 'Bestimme die grobe Geschmacksrichtung fuer die Menueplanung '
                 . '(suess|herzhaft|neutral): werte = {geschmacksrichtung}.',
+        ],
+        'recipe.sensorik' => [
+            'tier' => 'B',
+            'task' => 'Bewerte das FERTIG ZUBEREITETE Gericht sensorisch — wie es nach der Zubereitung auf dem '
+                . 'Teller schmeckt/sich anfuehlt, NICHT die rohen Zutaten. Der Kontext liefert zu jeder Zutat ihr '
+                . 'ROH-Profil + Menge (g) + %-Anteil — nimm das als FAKTEN-Anker und wende die ZUBEREITUNG als '
+                . 'Transformation an: (a) NUR wenn tatsaechlich erhitzt Schaerfe mildern und Suesse/Umami/Roest '
+                . 'aufbauen — roh/kalt erhaelt Schaerfe und Frische voll; (b) Menge zaehlt — eine Spur (<0.3 %) '
+                . 'kaum spuerbar, gut gewuerzt ~0.8-1 %; Salz und Saeure SAETTIGEN (oben flacht die Wahrnehmung ab); '
+                . '(c) spaet zugegebene oder kalte Saeure/Salz bleiben erhalten. Jede Geschmacks-Dimension 0.0-1.0 '
+                . '(konservativ, meist 1-3 Dimensionen deutlich >0); texturen-slugs NUR aus: knusprig,cremig,saftig,'
+                . 'zaeh,gel,fluessig,koernig,weich,schnittfest,pastoes,kalt_fest,kuehlend,waermend (intensitaet '
+                . '0.0-1.0, 1-3 Eintraege): werte = {geschmack: {suess,salzig,sauer,bitter,umami,fettig,scharf}, '
+                . 'texturen: [{slug, intensitaet}]}.',
         ],
         'recipe.review' => [
             'tier' => 'A',

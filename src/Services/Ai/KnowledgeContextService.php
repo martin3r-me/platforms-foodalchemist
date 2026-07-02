@@ -123,6 +123,32 @@ class KnowledgeContextService
         return $union === 0 ? 0.0 : $intersect / $union;
     }
 
+    /**
+     * Hybrid-Recall: semantische Slugs aus dem Embedding-Store, opt-in über
+     * config foodalchemist.semantic_search.enabled. Leerer Rückgabewert wenn
+     * deaktiviert (Default) / kein Provider — die Lexik bleibt führend, Fehler
+     * werden geschluckt (Invariante 6: fehlende Quelle = leerer Kontext, nie Fehler).
+     *
+     * @param  list<string>  $kategorien
+     * @return list<string>
+     */
+    private function semanticSlugs(string $beschreibung, array $kategorien, int $limit): array
+    {
+        if ($limit <= 0 || ! config('foodalchemist.semantic_search.enabled', false)) {
+            return [];
+        }
+        try {
+            $svc = app(KnowledgeEmbeddingService::class);
+            if (! $svc->searchEnabled()) {
+                return [];
+            }
+
+            return $svc->searchSlugs($beschreibung, $kategorien, $limit);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
     /** Invariante 3: hartes Per-Dokument-Budget mit wörtlichem Kürzungs-Marker. */
     public function truncate(string $text, int $maxChars): string
     {
@@ -265,6 +291,14 @@ class KnowledgeContextService
             }
         }
 
+        // 2c. Semantischer Recall (Hybrid, opt-in): füllt auf, wenn die Lexik
+        // < TOP_K Domains liefert. Deaktiviert (Default) = unverändertes Verhalten.
+        if (count($slugs) < self::DOMAIN_TOP_K) {
+            foreach ($this->semanticSlugs($beschreibung, ['domain'], self::DOMAIN_TOP_K - count($slugs)) as $slug) {
+                $slugs[$slug] = true;
+            }
+        }
+
         $slugList = array_map('strval', array_keys($slugs));
         sort($slugList);
         $docs = $this->domainDocs();
@@ -322,6 +356,17 @@ class KnowledgeContextService
                 }
             }
         }
+
+        // Semantischer Recall (Hybrid, opt-in): ergänzt eine dünne/leere Lexik um
+        // semantisch passende Pairing-Stems. Deaktiviert (Default) = no-op.
+        if (count($matched) < self::PAIRING_TOP_K) {
+            foreach ($this->semanticSlugs($beschreibung, ['pairing'], self::PAIRING_TOP_K) as $stem) {
+                if (! in_array($stem, $matched, true)) {
+                    $matched[] = $stem;
+                }
+            }
+        }
+
         if ($matched === []) {
             return null;
         }

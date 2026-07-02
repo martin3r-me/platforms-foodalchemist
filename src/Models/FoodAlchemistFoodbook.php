@@ -40,4 +40,16 @@ class FoodAlchemistFoodbook extends Model
     {
         return $this->belongsTo(FoodAlchemistWritingStyle::class, 'schreibstil_id');
     }
+
+    /** #369: CRM-Firma (verlinkt, MVP — kein Rücksync). */
+    public function crmCompany(): BelongsTo
+    {
+        return $this->belongsTo(\Platform\Crm\Models\CrmCompany::class, 'crm_company_id');
+    }
+
+    /** #369: CRM-Kontakt (verlinkt, MVP). */
+    public function crmContact(): BelongsTo
+    {
+        return $this->belongsTo(\Platform\Crm\Models\CrmContact::class, 'crm_contact_id');
+    }
 }

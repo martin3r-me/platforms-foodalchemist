@@ -110,13 +110,17 @@ class VkModal extends Component
     public function anlegen(): void
     {
         $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || trim($this->neuName) === '' || $this->basisId === null) {
-            $this->fehler = 'Name und Basisrezept wählen.';
+        if ($team === null || trim($this->neuName) === '') {
+            $this->fehler = 'Bitte einen Namen eingeben.';
 
             return;
         }
         try {
-            $vk = app(SalesRecipeService::class)->createFromBasis($team, $this->basisId, trim($this->neuName));
+            // Basisrezept ist OPTIONAL: mit → ganze Charge als erste Komponente; ohne → leeres Gericht.
+            $svc = app(SalesRecipeService::class);
+            $vk = $this->basisId !== null
+                ? $svc->createFromBasis($team, $this->basisId, trim($this->neuName))
+                : $svc->createLeer($team, trim($this->neuName));
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
 
@@ -406,6 +410,14 @@ class VkModal extends Component
         }
     }
 
+    /** ✨ Sensorik: KI bewertet das GEGARTE Gericht (Zutaten + Zubereitung) → Recipe-Sensorik-Tabellen. */
+    public function sensorikBewerten(): void
+    {
+        if ($this->recipeId !== null) {
+            app(\Platform\FoodAlchemist\Services\SensorikService::class)->bewerteRezept($this->recipeId, true);
+        }
+    }
+
     public function render(SalesRecipeService $verkauf)
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -466,6 +478,9 @@ class VkModal extends Component
                     ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($this->basisSuche)) . '%'])
                     ->orderBy('name')->limit(6)->get(['id', 'name', 'yield_kg', 'ek_total_eur'])
                 : collect(),
+            'sensorik' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($rezept->id) : null,
+            'komposition' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->gerichtKomposition($rezept->id) : null,
+            'pairing' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($rezept) : null,
         ]);
     }
 }

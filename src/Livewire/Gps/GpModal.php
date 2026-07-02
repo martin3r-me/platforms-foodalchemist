@@ -5,9 +5,12 @@ namespace Platform\FoodAlchemist\Livewire\Gps;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\GpStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\BulkEnrichService;
 use Platform\FoodAlchemist\Services\GpNamingService;
+use Platform\FoodAlchemist\Services\GpService;
 use Platform\FoodAlchemist\Services\VocabularyService;
 use Platform\FoodAlchemist\Support\Curate;
 
@@ -55,10 +58,16 @@ class GpModal extends Component
 
     public string $derivatSuche = '';
 
+    /** Namensvorschlag aus der Lead-LA (Override-First: erst Vorschlag, dann Übernehmen). */
+    public ?string $nameVorschlag = null;
+
+    /** Laufender Bulk-Autopilot-Run (Zustand+Tags+Allergene+Nährwerte in einem Rutsch). */
+    public ?int $bulkRunId = null;
+
     #[On('gp-modal.oeffnen')]
     public function oeffnen(?int $id = null): void
     {
-        $this->reset('fehler', 'force', 'kiVorschlag', 'kiRohtext', 'manuellerName', 'derivatSuche');
+        $this->reset('fehler', 'force', 'kiVorschlag', 'kiRohtext', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'bulkRunId');
         $this->gpId = $id;
         $this->builder = self::BUILDER_LEER;
         $this->tags = array_fill_keys(FoodAlchemistGp::TAG_FIELDS, '');
@@ -138,6 +147,65 @@ class GpModal extends Component
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    /** Status-Regler im Modal-Kopf (Kurations-Pflege, D1-Gate). */
+    public function statusSetzen(GpService $gps, string $status): void
+    {
+        $this->fehler = null;
+        $gp = $this->gp();
+        if ($gp === null) {
+            return;
+        }
+        if (! Curate::canCurate(Auth::user(), $gp)) {
+            $this->fehler = 'Status ist Katalog-Pflege — nur fürs Besitzer-Team (D1).';
+
+            return;
+        }
+        $fall = GpStatus::tryFrom($status);
+        if ($fall === null) {
+            return;
+        }
+        try {
+            $gps->setStatus($gp, $fall);
+            $this->dispatch('gp-gespeichert'); // Browser-Tabelle (Status-Spalte) aktualisieren
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    // ── ✨ Alles anreichern (GP-Bulk-Autopilot: Zustand+Tags+Allergene+Nährwerte) ──
+
+    public function allesAnreichern(): void
+    {
+        $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        $gp = $this->gp();
+        if ($team === null || $gp === null) {
+            return;
+        }
+        if (! Curate::canCurate(Auth::user(), $gp)) {
+            $this->fehler = 'Anreichern ist Katalog-Pflege — nur fürs Besitzer-Team (D1).';
+
+            return;
+        }
+        $this->bulkRunId = app(BulkEnrichService::class)->starteGp($team, [$gp->id]);
+    }
+
+    public function bulkAlleUebernehmen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && $this->bulkRunId !== null) {
+            app(BulkEnrichService::class)->alleUebernehmenGp($team, $this->bulkRunId);
+            $this->bulkRunId = null;
+            $this->oeffnen($this->gpId);                              // Werte neu laden (Builder/Tags)
+            $this->dispatch('gp-gespeichert');
+        }
+    }
+
+    public function bulkVerwerfen(): void
+    {
+        $this->bulkRunId = null;                                      // Run-Box schließen; Vorschläge bleiben offen (verwerfbar via Review)
     }
 
     // ── M3-10: GL-07-Lebenszyklus zustand ───────────────────────────────
@@ -292,6 +360,59 @@ class GpModal extends Component
         }
     }
 
+    // ── Name aus Lead-LA ableiten (Wording kommt aus dem Lieferantenartikel) ──
+
+    public function nameAusLeadLa(AiGatewayService $ki): void
+    {
+        $this->fehler = null;
+        $this->nameVorschlag = null;
+        $gp = $this->gp();
+        if ($gp === null) {
+            return;
+        }
+
+        $designation = $gp->lead_la_supplier_item_id !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::find($gp->lead_la_supplier_item_id)?->designation
+            : null;
+        if ($designation === null) {                                   // Fallback: irgendeine verknüpfte LA
+            $designation = $gp->structures()->with('item')->get()->pluck('item.designation')->filter()->first();
+        }
+        if ($designation === null || trim($designation) === '') {
+            $this->fehler = 'Kein verknüpfter Lieferantenartikel — kein Namens-Quelltext vorhanden.';
+
+            return;
+        }
+
+        $vorschlag = $ki->propose('gp.suggest', ['bezeichnung' => trim($designation)]);
+        $builder = $this->builder;
+        foreach (['hauptzutat', 'zustand', 'verarbeitung', 'form', 'pflichtangabe'] as $feld) {
+            if (! empty($vorschlag->werte[$feld]) && is_string($vorschlag->werte[$feld])) {
+                $builder[$feld] = $vorschlag->werte[$feld];
+            }
+        }
+        $name = trim(app(GpNamingService::class)->renderGpName($builder));
+        if ($name === '') {
+            $this->fehler = 'KI lieferte keinen verwertbaren Namensvorschlag aus der LA-Bezeichnung.';
+
+            return;
+        }
+        $this->nameVorschlag = $name;
+    }
+
+    /** Vorschlag übernehmen = der EINE Schreib-Moment (Override-First, GL-07). */
+    public function nameVorschlagUebernehmen(): void
+    {
+        if ($this->nameVorschlag !== null) {
+            $this->manuellerName = $this->nameVorschlag;
+            $this->nameVorschlag = null;
+        }
+    }
+
+    public function nameVorschlagVerwerfen(): void
+    {
+        $this->nameVorschlag = null;
+    }
+
     public function render(GpNamingService $naming, VocabularyService $vocab)
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -316,10 +437,19 @@ class GpModal extends Component
             'warnungen' => $pruefung['warnings'],
             'liveFehler' => $pruefung['errors'],
             'warengruppen' => $team !== null ? $vocab->listWarengruppen($team) : collect(),
+            // Punkt C: WG-gescopetes Sub-Kategorie-Dropdown (verwaltet + GP-Freitext gemerged, #371)
+            'subKategorien' => $team !== null && ($this->builder['warengruppe_code'] ?? '') !== ''
+                ? $vocab->listSubCategories($team, $this->builder['warengruppe_code'])
+                : collect(),
+            'statusFaelle' => [GpStatus::Approved, GpStatus::Tentative, GpStatus::Rejected],
+            'bulkRun' => $this->bulkRunId !== null && $team !== null ? app(BulkEnrichService::class)->status($team, $this->bulkRunId) : null,
+            'bulkOffen' => $this->bulkRunId !== null && $team !== null ? app(BulkEnrichService::class)->offeneGpVorschlaege($team, $this->bulkRunId) : 0,
             'zustandVocab' => GpNamingService::ZUSTAND_VOCAB,
             'derivatKandidaten' => $this->derivatSuche !== '' && $team !== null
                 ? FoodAlchemistGp::visibleToTeam($team)->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($this->derivatSuche) . '%'])->orderBy('name')->limit(6)->get()
                 : collect(),
+            'sensorik' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerGp($this->gpId) : null,
+            'pairing' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelGp($this->gpId) : null,
         ]);
     }
 

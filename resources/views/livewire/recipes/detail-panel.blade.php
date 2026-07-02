@@ -1,7 +1,11 @@
 {{-- M4-05: Rezept-DetailPanel — KPI-Karte, Beschreibung, Zutaten read-only mit GP-Links + EK je Zeile, Diät-Sektion, Eignungen, Equipment --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- GP-Modal-Muster: section='ersatz'|'eignung' rendert NUR die eine Kartei (Eigenschaften-Tab im Modal) — ohne Panel-Chrome --}}
+@php($nurErsatz = ($section ?? null) === 'ersatz')
+@php($nurEignung = ($section ?? null) === 'eignung')
+@php($nurSektion = $nurErsatz || $nurEignung)
 
-<div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]" data-rezept-panel>
+<div class="{{ $nurSektion ? 'space-y-2' : 'p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]' }}" data-rezept-panel>
     @if($rezept === null)
         <div class="text-center text-xs text-gray-400 py-12">
             <div class="text-2xl mb-2">⌘</div>
@@ -92,6 +96,7 @@
         @endif
 
         @endunless
+        @unless($nurSektion)
         {{-- R6: Diät · Allergene · Zusatzstoffe — geteiltes Partial (auch im VK-Panel) --}}
         @include('foodalchemist::livewire.recipes.partials.deklaration')
 
@@ -113,20 +118,75 @@
             </div>
         @endif
 
-        {{-- Eignungen + Equipment --}}
-        @if($rezept->niveauEignungen->isNotEmpty() || $rezept->sektorEignungen->isNotEmpty())
-            <div data-eignungen>
-                <p class="{{ $dt }} mb-1">Eignung</p>
-                <div class="flex flex-wrap gap-1">
-                    @foreach($rezept->niveauEignungen as $e)
-                        <span class="{{ $pill }} {{ $variantPill['info'] }}" title="Niveau · {{ $e->quelle }}{{ $e->ai_confidence !== null ? ' ' . round($e->ai_confidence * 100) . '%' : '' }}">{{ $e->niveau_slug }}</span>
-                    @endforeach
-                    @foreach($rezept->sektorEignungen as $e)
-                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="Sektor · {{ $e->quelle }}">{{ $e->sektor_slug }}</span>
+        @endunless
+        {{-- Eignung — klickbare Toggle-Chips (M9-01k-Service). Im Modal lebt die Kartei im
+             Eigenschaften-Tab (section='eignung'), standalone (Sidebar) bleibt sie inline. --}}
+        @if($nurEignung || ! ($embedded ?? false))
+        @php($eignungVokab = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular())
+        @php($eignungAktiv = [
+            'niveau' => $rezept->niveauEignungen->keyBy('niveau_slug'),
+            'sektor' => $rezept->sektorEignungen->keyBy('sektor_slug'),
+        ])
+        <div data-eignungen>
+            @unless($nurEignung){{-- im Eigenschaften-Tab liefert die modal-section den Titel --}}
+            <p class="{{ $dt }} mb-1">Eignung</p>
+            @endunless
+            @if($fehlerEignung !== null)<p class="text-[11px] text-rose-500 mb-1" data-eignung-fehler>{{ $fehlerEignung }}</p>@endif
+            <div class="space-y-1.5">
+                @foreach(['niveau' => 'Niveau', 'sektor' => 'Sektor'] as $typ => $typLabel)
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <span class="text-[10px] uppercase tracking-wider text-gray-400 w-12 shrink-0">{{ $typLabel }}</span>
+                        @foreach($eignungVokab[$typ]['slugs'] as $slug)
+                            @php($eintrag = $eignungAktiv[$typ][$slug] ?? null)
+                            <button type="button" wire:key="eig-{{ $typ }}-{{ $slug }}" wire:click="eignungToggle('{{ $typ }}', '{{ $slug }}')"
+                                    class="{{ $pill }} transition-colors {{ $eintrag !== null
+                                        ? ($typ === 'niveau' ? $variantPill['info'] : $variantPill['primary'])
+                                        : 'border border-black/10 dark:border-white/15 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300' }}"
+                                    title="{{ $eintrag !== null
+                                        ? 'geeignet · ' . $eintrag->quelle . ($eintrag->ai_confidence !== null ? ' ' . round($eintrag->ai_confidence * 100) . '%' : '') . ' — Klick entfernt'
+                                        : 'Klick markiert als geeignet' }}"
+                                    data-eignung-chip="{{ $typ }}-{{ $slug }}">{{ $slug }}</button>
+                        @endforeach
+                    </div>
+                @endforeach
+            </div>
+        </div>
+        @endif
+        {{-- Ersatz-Logik: make-or-buy — dieses Rezept ↔ Fertig-GP / Alternativ-Rezept.
+             Im Modal lebt die Kartei im Eigenschaften-Tab (section='ersatz'); im Details-Embed
+             darum ausgeblendet. Standalone (Browser-Sidebar) bleibt sie inline. --}}
+        @if($nurErsatz || ! ($embedded ?? false))
+        <div data-sektion="ersatz">
+            @unless($nurErsatz){{-- im Eigenschaften-Tab liefert die modal-section den Titel --}}
+            <p class="{{ $dt }} mb-1">Ersatz <span class="normal-case">(make-or-buy · fertig ↔ selbst)</span></p>
+            @endunless
+            <div class="space-y-1">
+                @forelse($ersatz as $e)
+                    <div class="flex items-center gap-2 text-[11px]" wire:key="rq-equiv-{{ $e->id }}">
+                        <span class="{{ $pill }} {{ $e->gegen_kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }} shrink-0">{{ $e->gegen_kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
+                        <span class="min-w-0 flex-1 truncate text-gray-900 dark:text-gray-100" title="{{ $e->gegen_name }}">{{ $e->gegen_name }}</span>
+                        @if((float) $e->umrechnungsfaktor !== 1.0)<span class="text-gray-400 tabular-nums shrink-0">×{{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
+                        <button type="button" wire:click="ersatzLoesen({{ $e->id }})" class="{{ $btnGhostXs }} text-rose-500 shrink-0" title="Ersatz-Verknüpfung lösen">✕</button>
+                    </div>
+                @empty
+                    <p class="text-[11px] text-gray-400" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
+                @endforelse
+                <div class="pt-1" data-ersatz-verknuepfen>
+                    <input type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="+ Ersatz verknüpfen — Fertig-GP/Rezept suchen …" class="{{ $input }} !py-1" data-ersatz-suche />
+                    @foreach($ersatzKandidaten as $k)
+                        <button type="button" wire:key="rq-ersk-{{ $k->kind }}-{{ $k->id }}" wire:click="ersatzVerknuepfen('{{ $k->kind }}', {{ $k->id }})"
+                                class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150 flex items-center gap-1.5">
+                            <span class="{{ $pill }} {{ $k->kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $k->kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
+                            <span class="min-w-0 flex-1 truncate">{{ $k->name }}</span>
+                        </button>
                     @endforeach
                 </div>
             </div>
+        </div>
         @endif
+        {{-- G/H: im Modal-Details-Tab redundant (Equipment → Zubereitung-Tab; Kern-Anker/Pairings/Nachbarn → Aromen/Pairing-Panel).
+             Nur in der Browser-Sidebar (standalone) zeigen — dort bleibt auch das Anker-Verknüpfen/-Lösen verfügbar. --}}
+        @unless($embedded ?? false)
         @if($rezept->equipment->isNotEmpty())
             <div data-equipment>
                 <p class="{{ $dt }} mb-1">Equipment</p>
@@ -194,10 +254,25 @@
             @if($pairings !== null)
                 <div class="flex flex-wrap gap-1 mt-1" data-pairing-chips>
                     @foreach($pairings as $p)
-                        <span wire:key="pp-{{ $loop->index }}" class="{{ $pill }} {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->typ] ?? $variantPill['secondary'] }}"
-                              title="{{ $p->typ }} · {{ $p->konfidenz }}">{{ $p->display_de }}</span>
+                        <span wire:key="pp-{{ $p->id }}-{{ $p->typ }}" class="{{ $pill }} group {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->typ] ?? $variantPill['secondary'] }}"
+                              title="{{ $p->typ }} · {{ $p->konfidenz }}{{ $p->created_via === 'manual' ? ' · manuell' : '' }}">{{ $p->display_de }}@if($p->created_via === 'manual')<span class="opacity-60"> ✎</span>@endif
+                            <button type="button" wire:click="pairingLoesen({{ $p->id }}, '{{ $p->typ }}')" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
+                        </span>
                     @endforeach
                 </div>
+                {{-- manuelles Pairing verknüpfen (Typ wählbar, created_via='manual') --}}
+                <div class="mt-1.5 flex items-center gap-1" data-pairing-add>
+                    <select wire:model="pairingTyp" class="{{ $input }} !py-0.5 !text-[11px] !w-24 shrink-0">
+                        <option value="klassisch">klassisch</option>
+                        <option value="modern">modern</option>
+                        <option value="kontrast">kontrast</option>
+                    </select>
+                    <input type="search" wire:model.live.debounce.300ms="pairingSuche" placeholder="Pairing verknüpfen …" class="{{ $input }} !py-1 flex-1" data-pairing-suche />
+                </div>
+                @foreach($pairingKandidaten as $kandidat)
+                    <button type="button" wire:key="pk-{{ $kandidat->id }}" wire:click="pairingVerknuepfen({{ $kandidat->id }})"
+                            class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-emerald-500/10" data-pairing-kandidat="{{ $kandidat->id }}">{{ $kandidat->display_de }} <span class="text-gray-400">{{ $kandidat->slug }}</span></button>
+                @endforeach
                 @if($verwandte->isNotEmpty())
                     <p class="{{ $dt }} mt-2 mb-1">Verwandte Rezepte</p>
                     <div class="space-y-0.5" data-verwandte>
@@ -232,8 +307,10 @@
                 @endforeach
             @endif
         </div>
+        @endunless
 
         {{-- M4-12: Workflow-Aktionen --}}
+        @unless($nurSektion)
         <div class="flex flex-wrap items-center gap-1.5 border-t border-black/5 dark:border-white/10 pt-2" data-workflow>
             @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
                 @if($rezept->status->value !== $wert)
@@ -250,5 +327,6 @@
             Nährwerte {{ $rezept->nutri_kcal_per_100g !== null ? number_format((float) $rezept->nutri_kcal_per_100g, 0, ',', '.') . ' kcal/100 g (' . $rezept->nutri_konfidenz . ')' : '—' }}
             · v{{ $rezept->version }}{{ $rezept->arbeitszeit_min ? ' · ' . $rezept->arbeitszeit_min . ' min' : '' }}
         </p>
+        @endunless
     @endif
 </div>

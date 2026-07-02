@@ -30,6 +30,7 @@
             browseQ: '',                                             // zentrales Suchfeld → filtert BEIDE Listen
             gpListe: [], gpTotal: 0, rezListe: [], rezTotal: 0,
             geparkt: null,                                           // [+]-Klick parkt das Ziel in der Anzeigezeile
+            tauschIdx: null,                                         // ⇄: Index der Zeile, deren Produkt getauscht wird (null = normaler Add-Flow)
 
             async browse() {
                 const r = await this.$wire.browseKatalog(
@@ -55,6 +56,7 @@
             },
             // Spec-Flow: [+] parkt das Ziel, Einheit kommt vom Produkt, Cursor springt in die Menge
             parke(ziel) {
+                if (this.tauschIdx != null) { this.tauscheAus(ziel); return; }   // ⇄ Tausch-Modus (loose: undefined zählt als „aus")
                 this.geparkt = ziel;
                 this.neu.menge = '';
                 this.neu.einheit_vocab_id = this.einheitIdFuerSlug(ziel.einheit_slug ?? 'g');
@@ -79,6 +81,73 @@
                 this.browse();
             },
 
+            // ── ♻ Ersatz-Tausch (Äquivalenz-Katalog): 1 Klick tauscht auf die hinterlegte
+            //    Gegenseite (make-or-buy / Artikel-Ersatz), Menge × faktor. Der inverse
+            //    Hinweis wird direkt gesetzt — nochmal klicken tauscht zurück. ──
+            ersatzTausch(i) {
+                const z = this.rows[i];
+                const e = z?.ersatz;
+                if (!e) return;
+                const zurueck = {                                    // Rückweg aus dem alten Stand bauen
+                    kind: z.gp_id ? 'gp' : 'recipe',
+                    id: z.gp_id ?? z.referenced_recipe_id,
+                    name: z.ziel_name, url: z.ziel_url,
+                    faktor: e.faktor ? Math.round(10000 / e.faktor) / 10000 : 1,
+                };
+                const m = this.zahl(z.menge);
+                if (m !== null) z.menge = Math.round(m * (e.faktor || 1) * 100) / 100;
+                const mx = this.zahl(z.menge_max);
+                if (mx !== null) z.menge_max = Math.round(mx * (e.faktor || 1) * 100) / 100;
+                z.gp_id = e.kind === 'gp' ? e.id : null;
+                z.referenced_recipe_id = e.kind === 'recipe' ? e.id : null;
+                z.ziel_name = e.name; z.display_name = e.name.replace('↳ ', '');
+                z.ziel_url = e.url ?? null;
+                z.raw_text = (this.zahl(z.menge) ?? '') + ' ' + e.name.replace('↳ ', '');
+                z.lineage = e.kind === 'recipe' ? 'recipe_ref' : 'manual';
+                z.ek_pro_g = null; z.ek_pro_g_min = null; z.ek_pro_g_avg = null;
+                z.g_pro_stueck = null;                               // Stück-Faktor kennt nur der Save-Recompute präzise
+                z._peek = null;
+                z.ersatz = zurueck;
+                z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
+                this.$wire.ekFuerZiel(e.kind === 'gp' ? 'gp' : 'sub', e.id).then(ek => { if (ek !== null) z.ek_pro_g = ek; });
+            },
+            ladeErsatz(z) {                                          // neue/gebrowste Zeile: Hinweis leise nachladen
+                this.$wire.ersatzFuer(z.gp_id, z.referenced_recipe_id).then(e => { z.ersatz = e; });
+            },
+            ersatzTitel(z) {
+                if (!z.ersatz) return '';
+                const f = z.ersatz.faktor;
+                return 'Ersatz: ' + z.ersatz.name + (f && f !== 1 ? ' (Menge ×' + String(f).replace('.', ',') + ')' : '') + ' — Klick tauscht um';
+            },
+
+            // ── ⇄ Tausch: Produkt einer bestehenden Zeile ersetzen (Menge/Einheit/Rolle/Note/Position bleiben) ──
+            starteTausch(i) {
+                this.tauschIdx = i;
+                this.geparkt = null;                                 // evtl. laufenden Park-Flow abbrechen
+                this.$nextTick(() => this.$root.querySelector('[data-browse-suche]')?.focus());
+            },
+            tauscheAus(ziel) {
+                const i = this.tauschIdx;
+                if (i === null || !this.rows[i]) { this.tauschIdx = null; return; }
+                const z = this.rows[i];
+                z.gp_id = ziel.typ === 'gp' ? ziel.id : null;        // löschen bleibt unangetastet — hier wird NUR ersetzt
+                z.referenced_recipe_id = ziel.typ === 'sub' ? ziel.id : null;
+                z.ziel_name = ziel.name;
+                z.ziel_url = ziel.url ?? null;
+                z.display_name = ziel.name;
+                z.raw_text = (this.zahl(z.menge) ?? '') + ' ' + ziel.name;
+                z.lineage = ziel.typ === 'sub' ? 'recipe_ref' : 'manual';
+                z.ek_pro_g = ziel.ek_pro_g ?? null;
+                z.g_pro_stueck = ziel.g_pro_stueck ?? null;          // Stück-Sub: g/Stück fürs Live-Rechnen
+                z.ek_pro_g_min = null; z.ek_pro_g_avg = null;        // alte Min/Ø verwerfen — Save rechnet präzise nach
+                z._peek = null;
+                z.ersatz = null; this.ladeErsatz(z);                 // ♻-Hinweis fürs neue Produkt nachladen
+                z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
+                this.$wire.ekFuerZiel(ziel.typ, ziel.id).then(ek => { if (ek !== null) z.ek_pro_g = ek; });
+                this.tauschIdx = null;
+                this.$nextTick(() => this.$root.querySelector('[data-browse-suche]')?.focus());
+            },
+
             dragIdx: null,
             verschiebe(i, dir) {                                  // R15: Jarvis moveUpDown — DnD-unabhängig
                 const ziel = i + dir;
@@ -98,14 +167,14 @@
                 zeile._peek = await this.$wire.gpArtikel(zeile.gp_id);
             },
             payload() {
-                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
+                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, ersatz, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
             },
             init() {
-                // Modal-Footer liegt außerhalb des x-data-Scopes → Window-Event;
-                // NUR die Standalone-(Modal-)Instanz lauscht (eingebettete hat eigenen Button)
-                if (standalone) {
-                    window.addEventListener('zutaten-speichern', () => this.$wire.speichern(this.payload()));
-                }
+                // Window-Event: der Haupt-"Speichern" des Rezept-Modals (UND der Standalone-Modal-Footer)
+                // stoßen damit das Zutaten-Speichern an. Auch die EINGEBETTETE Instanz lauscht jetzt —
+                // sonst gehen Zutaten-Edits (Garverlust/Menge/Tausch) verloren, wenn man "Speichern"
+                // statt des separaten "Zutaten speichern" klickt.
+                window.addEventListener('zutaten-speichern', () => this.$wire.speichern(this.payload()));
                 this.browse();                                       // R18: Seitenspalten initial füllen
             },
             zahl(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; },
@@ -113,9 +182,11 @@
                 const m = this.zahl(z.menge); const mx = this.zahl(z.menge_max);
                 return m === null ? null : (mx !== null ? (m + mx) / 2 : m);
             },
+            // g-Faktor je Zeile: g/ml-Einheit ODER (Stück-Sub) g/Stück = Yield÷ertrag_stueck (spiegelt Server-grammFaktor)
+            gFaktor(z) { return this.einheiten[z.einheit_vocab_id]?.g ?? z.g_pro_stueck ?? null; },
             zeilenEk(z, feld = 'ek_pro_g') {  // Live-Näherung: menge_g × €/g; R5: feld wählt Lead | min | Ø
                 if (z.is_optional || z[feld] === null || z[feld] === undefined) return null;
-                const avg = this.mengeAvg(z); const f = this.einheiten[z.einheit_vocab_id]?.g;
+                const avg = this.mengeAvg(z); const f = this.gFaktor(z);
                 if (avg === null || !f) return null;
                 return (avg * f * z[feld]).toFixed(2).replace('.', ',') + ' €';
             },
@@ -126,6 +197,20 @@
                     if (w) s += parseFloat(w.replace(',', '.'));
                 }
                 return s.toFixed(2).replace('.', ',') + ' €';
+            },
+            // Live-Yield (Näherung): Σ menge_g × (1−putz) × (1−garv) — reagiert sofort auf Garverlust/Stück,
+            // ohne Save. Putzverlust-DEFAULTS (GP/Team) kennt der Client nicht → präzise erst beim Save-Recompute.
+            yieldLive() {
+                let g = 0;
+                for (const z of this.rows) {
+                    if (z.is_optional) continue;
+                    const f = this.gFaktor(z); const avg = this.mengeAvg(z);
+                    if (avg === null || !f) continue;
+                    const garv = (this.zahl(z.garverlust_pct) ?? 0) / 100;
+                    const putz = (this.zahl(z.putzverlust_pct) ?? 0) / 100;
+                    g += avg * f * (1 - putz) * (1 - garv);
+                }
+                return g > 0 ? (g / 1000).toFixed(3).replace('.', ',') + ' kg' : '—';
             },
             hoch(i) { if (i > 0) this.rows.splice(i - 1, 0, this.rows.splice(i, 1)[0]); },
             runter(i) { if (i < this.rows.length - 1) this.rows.splice(i + 1, 0, this.rows.splice(i, 1)[0]); },
@@ -155,7 +240,10 @@
                     note: '', rolle: null, ist_wertgebend: false,
                     lineage: ziel.typ === 'sub' ? 'recipe_ref' : 'manual',
                     ek_pro_g: ziel.ek_pro_g,
+                    g_pro_stueck: ziel.g_pro_stueck ?? null,          // Stück-Sub: g/Stück fürs Live-Rechnen
+                    ersatz: null,
                 });
+                this.ladeErsatz(this.rows[this.rows.length - 1]);     // ♻-Hinweis leise nachladen
                 this.neu.menge = ''; this.neu.is_optional = false;
             },
         };

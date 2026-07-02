@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="Gerichte" icon="heroicon-o-banknotes" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Gerichte'],
+        ]" />
+    </x-slot>
+
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="VK-Hauptgruppen" width="w-80">
             <div class="p-3 space-y-2" data-vk-baum>
@@ -120,7 +127,19 @@
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->speisenKlasse?->hauptgruppe?->code ?? '—' }}</td>
                             <td class="{{ $td }} text-[11px] italic text-gray-500 truncate max-w-[10rem] whitespace-nowrap">{{ $r->speisenKlasse?->bezeichnung ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->geschmacksrichtung ?? '—' }}</td>
-                            <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span></td>
+                            {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge) --}}
+                            <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
+                                @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
+                                    <select wire:key="vst-{{ $r->id }}-{{ $r->status->value }}" wire:change="statusSetzen({{ $r->id }}, $event.target.value)"
+                                            class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6" data-status-select>
+                                        @foreach([\Platform\FoodAlchemist\Enums\RecipeStatus::Draft, \Platform\FoodAlchemist\Enums\RecipeStatus::Review, \Platform\FoodAlchemist\Enums\RecipeStatus::Approved, \Platform\FoodAlchemist\Enums\RecipeStatus::Deprecated] as $fall)
+                                            <option value="{{ $fall->value }}" @selected($r->status === $fall)>{{ $fall->label() }}</option>
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span>
+                                @endif
+                            </td>
                             <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap text-right tabular-nums">{{ $r->vk_netto !== null ? number_format((float) $r->vk_netto, 2, ',', '.') . ' €' : '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums">{{ $r->ek_total_eur !== null ? number_format((float) $r->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</td>
                             <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $r->n_zutaten_total }}</td>

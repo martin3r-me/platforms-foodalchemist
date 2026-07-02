@@ -58,6 +58,19 @@ Route::get('/lieferanten', \Platform\FoodAlchemist\Livewire\Suppliers\Index::cla
     ->name('foodalchemist.suppliers.index');
 
 /**
+ * #388 Geschirr-Datenbank (non-food) — Leih-Lieferant → Geschirr-Artikel,
+ * Master-Detail nach Lieferanten-Vorbild. Auswahl/Suche in der URL (V-17).
+ */
+Route::get('/geschirr', \Platform\FoodAlchemist\Livewire\Geschirr\Index::class)
+    ->name('foodalchemist.geschirr.index');
+
+/**
+ * #389 Food DNA — Team-Canvas „Markenkern Küche" (stehende KI-Referenz für alle Generatoren).
+ */
+Route::get('/food-dna', \Platform\FoodAlchemist\Livewire\FoodDna\Index::class)
+    ->name('foodalchemist.food-dna.index');
+
+/**
  * Einstellungen (M1-01, D-1 §4) — Sektion in der URL (V-17: kein Tab-State-Verlust).
  */
 Route::get('/einstellungen/{sektion?}', \Platform\FoodAlchemist\Livewire\Settings\Index::class)
@@ -95,6 +108,46 @@ Route::get('/foodbooks', \Platform\FoodAlchemist\Livewire\Foodbooks\Index::class
     ->name('foodalchemist.foodbooks.index');
 
 /**
+ * #384-Folge: Versendbares Foodbook/Portfolio-Dokument — Druck-HTML; ?pdf=1 = PDF (DomPDF, guarded).
+ */
+Route::get('/foodbooks/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\FoodbookService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $fb = $svc->detail($team, $id) ?? abort(404);
+    $data = $svc->dokumentDaten($team, $fb);
+
+    if (request()->boolean('pdf') && class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.foodbook', $data + ['istPdf' => true])
+            ->download('Foodbook-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.foodbook', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.foodbooks.dokument');
+
+/**
+ * #380: Angebote — individuelle Anfrage → maßgeschneidertes Angebot (CRM + Concepter).
+ * Eigenständig neben Foodbook (Portfolio); 3-Panel-Browser am Concepter orientiert.
+ */
+Route::get('/angebote', \Platform\FoodAlchemist\Livewire\Angebote\Index::class)
+    ->name('foodalchemist.angebote.index');
+
+/**
+ * #384: Versendbares Angebots-Dokument — Druck-HTML; ?pdf=1 = PDF-Download (DomPDF, guarded).
+ * Team-scoped via AngebotService::detail.
+ */
+Route::get('/angebote/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\AngebotService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $angebot = $svc->detail($team, $id) ?? abort(404);
+    $data = $svc->dokumentDaten($team, $angebot);
+
+    if (request()->boolean('pdf') && class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.angebot', $data + ['istPdf' => true])
+            ->download('Angebot-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.angebot', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.angebote.dokument');
+
+/**
  * M12: Kalkulations-Übersicht (HK1/HK2/Vollkosten-DB).
  */
 Route::get('/kalkulation', \Platform\FoodAlchemist\Livewire\Kalkulation\Index::class)
@@ -104,7 +157,11 @@ Route::get('/kalkulation', \Platform\FoodAlchemist\Livewire\Kalkulation\Index::c
  * M-K10 / Doc 16 §11: Kalkulator — standalone Composer (Positionen aus Gericht/
  * Basisrezept/GP/frei → HK1/HK2/VK), entkoppelt vom Concepter (Prüfung).
  */
-Route::get('/kalkulator', \Platform\FoodAlchemist\Livewire\Kalkulator\Index::class)
+/**
+ * #379: Kalkulator (Scratchpad) entfällt — Ad-hoc-Rechnen lebt im Angebote-Modul.
+ * Route bleibt als Redirect auf die Kalkulations-Werkstatt (keine toten Deep-Links).
+ */
+Route::get('/kalkulator', fn () => redirect()->route('foodalchemist.kalkulation.index'))
     ->name('foodalchemist.kalkulator.index');
 
 /**

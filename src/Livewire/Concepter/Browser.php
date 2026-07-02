@@ -7,8 +7,10 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Support\Curate;
 
 /**
  * M10R-2 / Doc 15 §10.2+§10.4: vereinheitlichter Concepter-Browser — EIN Screen
@@ -81,6 +83,20 @@ class Browser extends Component
     {
         $this->selectedId = $id;
         $this->dispatch('concepter-selected', type: $this->tab, id: $id);
+    }
+
+    /** Inline-Status-Pflege im Concepts-Tab (canCurate-Gate, D1). */
+    public function statusSetzen(int $id, string $status, ConceptService $concepts): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $concept = $team !== null ? FoodAlchemistConcept::visibleToTeam($team)->find($id) : null;
+        if ($concept === null || ! Curate::canCurate(Auth::user(), $concept)) {
+            return;
+        }
+        try {
+            $concepts->setStatus($team, $id, $status);
+        } catch (\RuntimeException) {
+        }
     }
 
     public function waehleKlasse(string $wert): void

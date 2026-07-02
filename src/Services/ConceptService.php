@@ -32,6 +32,7 @@ class ConceptService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistConcept::visibleToTeam($team)
+            ->standardisiert()   // #380: angebots-lokale Entwürfe gehören nicht in den Katalog
             ->withCount('slots')
             ->when(($filters['vorlagen'] ?? false), fn ($q) => $q->vorlagen(), fn ($q) => $q->echte())
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
@@ -58,6 +59,8 @@ class ConceptService
                 'slots.gericht:id,name,vk_netto,ek_total_eur,speisen_klasse_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergene_konfidenz',
                 'slots.gericht.speisenKlasse:id,bezeichnung',
                 'slots.einheit:id,slug,display_de',
+                'slots.geschirrItem:id,bezeichnung,leihpreis,einheit',
+                'slots.geschirrAltItem:id,bezeichnung,leihpreis,einheit',
                 'vorlageQuelle:id,name',
             ])
             ->find($id);
@@ -74,6 +77,15 @@ class ConceptService
             'status' => $in['status'] ?? 'draft',
             'is_vorlage' => (bool) ($in['is_vorlage'] ?? false),
         ]);
+    }
+
+    /** Concept-Status setzen (draft|aktiv|archiviert) — Inline-Pflege aus dem Browser. */
+    public function setStatus(Team $team, int $id, string $status): void
+    {
+        if (! in_array($status, ['draft', 'aktiv', 'archiviert'], true)) {
+            throw new \RuntimeException("Unbekannter Concept-Status [{$status}].");
+        }
+        FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id)->update(['status' => $status]);
     }
 
     // M10R-1/3: VK-Parität-Metadaten + Konsumenten-Felder + KI-Brief am Concept editierbar.
@@ -290,6 +302,22 @@ class ConceptService
         return $slot->refresh();
     }
 
+    /**
+     * #388: Geschirr-Zuordnung je Gericht-Slot. $rolle ∈ haupt|alt; $itemId=null = entfernen.
+     * Item muss team-sichtbar sein (FoodAlchemistGeschirrItem::visibleToTeam).
+     */
+    public function setSlotGeschirr(Team $team, int $slotId, string $rolle, ?int $itemId): FoodAlchemistConceptSlot
+    {
+        $slot = $this->ownedSlot($team, $slotId);
+        if ($itemId !== null && ! \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::visibleToTeam($team)->whereKey($itemId)->exists()) {
+            throw new \RuntimeException('Geschirr-Artikel nicht sichtbar.');
+        }
+        $spalte = $rolle === 'alt' ? 'geschirr_alt_item_id' : 'geschirr_item_id';
+        $slot->update([$spalte => $itemId]);
+
+        return $slot->refresh();
+    }
+
     /** Inline-Pflege Menge + Einheit einer Gericht-/Basisrezept-Position (Zeilen-Editor). */
     public function setSlotMengeEinheit(Team $team, int $slotId, ?float $menge, ?int $einheitId = null): FoodAlchemistConceptSlot
     {
@@ -416,7 +444,7 @@ class ConceptService
                 $vk = (float) ($slot->paket->preis_pro_person ?? 0);
                 $ek = (float) ($slot->paket->ek_pro_person ?? 0);
                 $hatStale = $hatStale || (bool) $slot->paket->preis_stale;
-                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'paket', 'rolle' => $slot->rolle,
+                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'paket', 'rolle' => $slot->rolle, 'wording' => $slot->wording,
                     'label' => $slot->paket->name, 'preis' => $vk, 'ek' => round($ek, 2), 'ek_fehlt' => false, 'stale' => (bool) $slot->paket->preis_stale];
             } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
                 // Einheit-abhängige Mengen-Umrechnung — EINE Stelle (Konsistenz zu ConcepterAggregate/Paket).
@@ -433,7 +461,7 @@ class ConceptService
                 $vk = $ekFehlt ? 0.0 : (float) ($slot->gericht->vk_netto ?? 0) * $pae;
                 $ek = $ekFehlt ? 0.0 : (float) ($slot->gericht->ek_total_eur ?? 0) / $anzahl * $pae;
                 $hatEkLuecke = $hatEkLuecke || $ekFehlt;
-                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'gericht', 'rolle' => $slot->rolle,
+                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'gericht', 'rolle' => $slot->rolle, 'wording' => $slot->wording,
                     'label' => $slot->gericht->name, 'preis' => round($vk, 2),
                     'ek' => $ekFehlt ? null : round($ek, 2), 'ek_fehlt' => $ekFehlt, 'stale' => false];
             } else {

@@ -60,12 +60,16 @@
                     </div>
                 </template>
                 <p x-show="gpListe.length === 0" class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
-                <p x-show="gpTotal > 30" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (gpTotal - 30) + ' weitere — Filter verengen'"></p>
+                <p x-show="gpTotal > 200" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (gpTotal - 200) + ' weitere — Filter verengen'"></p>
             </div>
         </aside>
         <div class="flex-1 min-w-0">
         {{-- Such-/Park-Zeile FIX oben (sticky) — filtert beide Seitenspalten; die Tabelle scrollt darunter --}}
         <div class="sticky top-0 z-10 mb-3 rounded-lg bg-white/90 dark:bg-gray-900/90 backdrop-blur border border-black/5 dark:border-white/10 px-3 py-2" data-add-zeile>
+            <div x-show="tauschIdx !== null" x-cloak class="flex items-center gap-2 mb-2 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300" data-tausch-banner>
+                <span>⇄ Tausch-Modus — Ersatz für Zeile <span class="font-semibold" x-text="(tauschIdx ?? 0) + 1"></span> per <span class="font-semibold">+</span> in den Spalten wählen. Menge &amp; Einheit bleiben.</span>
+                <button type="button" @click="tauschIdx = null" class="{{ $btnGhostXs }} shrink-0 ml-auto" data-tausch-abbrechen>Abbrechen</button>
+            </div>
             <div x-show="geparkt === null" class="flex items-center gap-2">
                 <input type="search" x-model="browseQ" @input.debounce.300ms="sucheGetippt()"
                        placeholder="Suchen — filtert Produkte UND Rezepte … (Übernehmen per [+] in den Spalten)"
@@ -176,6 +180,10 @@
                             <label class="inline-flex items-center gap-1 text-[10px] text-gray-400 mr-1" title="optional: zählt nicht in Yield/Kosten">
                                 <input type="checkbox" x-model="zeile.is_optional" class="rounded border-gray-300 !w-3 !h-3" />opt
                             </label>
+                            {{-- ♻ Ersatz (Äquivalenz-Katalog): nur sichtbar wenn hinterlegt — 1 Klick tauscht um, Menge × Faktor --}}
+                            <button type="button" x-show="zeile.ersatz" x-cloak class="text-emerald-500/60 hover:text-emerald-600 mr-1"
+                                    :title="ersatzTitel(zeile)" @click="ersatzTausch(i)" data-zeile-ersatz>♻</button>
+                            <button type="button" class="hover:text-violet-600 mr-1" :class="tauschIdx === i ? 'text-violet-600' : 'text-gray-300'" @click="starteTausch(i)" title="Zutat tauschen — Menge & Einheit bleiben" data-zeile-tausch>⇄</button>
                             <button type="button" class="text-rose-400 hover:text-rose-600" @click="rows.splice(i, 1)" title="Zeile entfernen" data-zeile-entfernen>✕</button>
                         </td>
                     </tr>
@@ -216,7 +224,8 @@
             <tfoot>
                 <tr class="border-t border-black/10 dark:border-white/10">
                     <td colspan="{{ $vkKontext ? 6 : 5 }}" class="{{ $td }} !px-2 text-right text-[11px] text-gray-400">
-                        Σ live (Näherung — count-Einheiten & Brücken rechnet der Save-Recompute)
+                        <span data-yield-live>Yield ≈ <span class="font-medium text-gray-700 dark:text-gray-200" x-text="yieldLive()"></span></span>
+                        · Σ live (Näherung — Putzverlust-Defaults & Brücken rechnet der Save-Recompute)
                     </td>
                     <td class="{{ $td }} !px-2 text-right font-medium tabular-nums text-gray-900 dark:text-gray-100" data-summe-live>
                         <span x-text="summe()"></span>
@@ -282,7 +291,7 @@
                     </div>
                 </template>
                 <p x-show="rezListe.length === 0" class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
-                <p x-show="rezTotal > 30" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (rezTotal - 30) + ' weitere — Filter verengen'"></p>
+                <p x-show="rezTotal > 200" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (rezTotal - 200) + ' weitere — Filter verengen'"></p>
             </div>
         </aside>
         </div>{{-- /Drei-Spalten-Flex --}}

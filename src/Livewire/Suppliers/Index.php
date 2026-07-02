@@ -305,6 +305,10 @@ class Index extends Component
 
         return view('foodalchemist::livewire.suppliers.index', [
             'team' => $team,
+            // #393: Banner-Zähler team-scoped (aktuelles Team) statt teamübergreifend (Multi-Tenancy-Leak).
+            // Model hat SoftDeletes → deleted_at automatisch raus. ReviewQueue-Seite folgt mit #378.
+            'offeneMatches' => \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::where('team_id', $team->id)
+                ->where('status', 'offen')->count(),
             'lieferanten' => $liste,
             'artikel' => $artikel,
             'globaleSuche' => $globaleSuche,

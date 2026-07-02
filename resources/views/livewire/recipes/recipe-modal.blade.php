@@ -3,10 +3,10 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 {{-- R4 (Dominique): Voll-Editor nimmt den ganzen Bildschirm — 19-Zutaten-Rezepte brauchen die Fläche --}}
-<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten: ' . $form['name']" size="{{ $neu ? 'max-w-3xl' : 'max-w-[100rem]' }}">
+<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten: ' . $form['name']" size="max-w-3xl" :fullscreen="! $neu" :close-via="'schliessenOderZurueck'">
     {{-- Aktionsleiste (D-5 §4.2.1) --}}
     <x-slot:actions>
-        <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
+        <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern')" class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
         @if(!$neu)
             <button type="button" wire:click="loeschen" wire:confirm="Rezept wirklich löschen? (Als Sub-Rezept referenzierte Rezepte sind geschützt)"
                     class="{{ $btnGhostXs }} text-rose-600 dark:text-rose-400" data-rezept-loeschen>Löschen</button>
@@ -72,7 +72,10 @@
          bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
     <div x-data="{ tab: 'aufbau' }" data-rezept-tabs>
         <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
-            @foreach(['aufbau' => 'Aufbau', 'zubereitung' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'details' => 'Details', 'notizen' => 'Notizen'] as $tabKey => $tabLabel)
+            @php($rezTabs = ['aufbau' => 'Aufbau', 'zubereitung' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'details' => 'Details'])
+            @if(! $neu)@php($rezTabs['sensorik'] = 'Sensorik & Pairing')@endif
+            @php($rezTabs['notizen'] = 'Notizen')
+            @foreach($rezTabs as $tabKey => $tabLabel)
                 <button type="button" @click="tab = '{{ $tabKey }}'"
                         :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
                         class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors" data-rezept-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
@@ -343,7 +346,13 @@
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Funktion</label>
-                <input type="text" wire:model="form.funktion" placeholder="z. B. Sauce, Bindung, Topping" class="{{ $input }}" />
+                {{-- Dropdown-Vorschläge via datalist — freie Eingabe bleibt möglich (bestehende Freitext-Werte gehen nicht verloren). --}}
+                <input type="text" wire:model="form.funktion" list="fa-funktion-optionen" placeholder="z. B. Komponente, Sauce, Bindung …" class="{{ $input }}" />
+                <datalist id="fa-funktion-optionen">
+                    @foreach(['Komponente', 'Hauptkomponente', 'Sauce', 'Bindung', 'Topping', 'Beilage', 'Garnitur', 'Fond / Basis', 'Marinade', 'Dekor', 'Füllung', 'Teig'] as $opt)
+                        <option value="{{ $opt }}"></option>
+                    @endforeach
+                </datalist>
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Geschmacksrichtung <span class="normal-case text-gray-400">(via ✨ oder manuell)</span></label>
@@ -360,6 +369,42 @@
                 </select>
             </div>
         </div>
+    </x-foodalchemist::modal-section>
+
+    {{-- EIGNUNG (M9-01k) — klickbare Toggle-Chips, Detail-Panel-Kartei via section-Prop --}}
+    <x-foodalchemist::modal-section title="Eignung (Niveau · Sektor)">
+        @if($recipeId !== null)
+            <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" section="eignung" wire:key="reignung-{{ $recipeId }}" />
+        @else
+            <p class="text-xs text-gray-400">Eignung lässt sich nach dem ersten Speichern pflegen.</p>
+        @endif
+    </x-foodalchemist::modal-section>
+
+    {{-- NÄHRWERTE (GL-08-Aggregat, read-only — Quelle: Zutaten-Recompute) --}}
+    <x-foodalchemist::modal-section title="Nährwerte (pro 100 g)">
+        @if($voll?->nutri_kcal_per_100g === null)
+            <p class="text-[11px] text-gray-400" data-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
+        @else
+            <div class="grid grid-cols-5 gap-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-naehrwerte>
+                @foreach([
+                    ['Brennwert', $voll->nutri_kcal_per_100g, 'kcal', 0],
+                    ['Eiweiß', $voll->nutri_protein_g_per_100g, 'g', 1],
+                    ['Fett', $voll->nutri_fat_g_per_100g, 'g', 1],
+                    ['Kohlenhydrate', $voll->nutri_carbs_g_per_100g, 'g', 1],
+                    ['Salz', $voll->nutri_salt_g_per_100g, 'g', 2],
+                ] as [$lbl, $wert, $einheit, $dez])
+                    <div class="text-center" wire:key="rn-{{ $lbl }}">
+                        <p class="text-[10px] uppercase tracking-wider text-gray-400">{{ $lbl }}</p>
+                        <p class="text-xs font-medium text-gray-900 dark:text-gray-100 tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $einheit : '—' }}</p>
+                    </div>
+                @endforeach
+            </div>
+            <p class="text-[10px] text-gray-400 mt-1">
+                Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$voll->nutri_konfidenz] ?? '' }}">{{ strtoupper($voll->nutri_konfidenz ?? '—') }}</span>
+                · {{ $voll->nutri_n_ingredients_mapped ?? 0 }}/{{ $voll->nutri_n_ingredients_total ?? 0 }} Zutaten mit Nährwert-Daten
+                — BLS-Rohwerte, Garverlust/Putzverlust nicht angewendet (GL-08)
+            </p>
+        @endif
     </x-foodalchemist::modal-section>
 
     {{-- BESCHREIBUNG (§8) --}}
@@ -380,6 +425,15 @@
         @endif
         @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['beschreibung'] }}</p>@endif
     </x-foodalchemist::modal-section>
+
+    {{-- ERSATZ (make-or-buy / Artikel-Ersatz) — Detail-Panel-Kartei via section-Prop (eine Quelle, keine Duplikation) --}}
+    <x-foodalchemist::modal-section title="Ersatz (make-or-buy · fertig ↔ selbst)">
+        @if($recipeId !== null)
+            <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" section="ersatz" wire:key="rersatz-{{ $recipeId }}" />
+        @else
+            <p class="text-xs text-gray-400">Ersatz lässt sich nach dem ersten Speichern verknüpfen.</p>
+        @endif
+    </x-foodalchemist::modal-section>
     </div>{{-- /Tab EIGENSCHAFTEN --}}
 
     {{-- ── Tab: DETAILS — Detail-Panel-Inhalte als Kartei (geteilte Render-Quelle, eingebettet) ── --}}
@@ -389,6 +443,22 @@
         @else
             <p class="text-xs text-gray-400 py-6 text-center">Details erscheinen nach dem ersten Speichern.</p>
         @endif
+    </div>
+
+    {{-- ── Tab: SENSORIK & PAIRING (Geschmacks-Balance + Textur + Aroma-Kohäsion über die Zutaten-GPs) ── --}}
+    <div x-show="tab === 'sensorik'" x-cloak class="pt-4">
+        @unless($neu)
+            <div class="flex items-center justify-between gap-2 mb-2">
+                <span class="text-[11px] text-gray-400">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
+                <button type="button" wire:click="sensorikBewerten" wire:loading.attr="disabled" wire:target="sensorikBewerten" class="{{ $btnGhostXs }}">
+                    <span wire:loading.remove wire:target="sensorikBewerten">✨ Sensorik neu bewerten</span>
+                    <span wire:loading wire:target="sensorikBewerten">… bewertet</span>
+                </button>
+            </div>
+        @endunless
+        @include('foodalchemist::livewire.concepter.partials.sensorik')
+        <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mt-5 mb-2">Pairing</h3>
+        @include('foodalchemist::livewire.concepter.partials.pairing')
     </div>
 
     {{-- ── Tab: NOTIZEN ──────────────────────────────────────────────── --}}
@@ -404,6 +474,6 @@
 
     <x-slot:footer>
         <button type="button" wire:click="$dispatch('modal.close', { name: 'recipe-modal' })" class="{{ $btnGhost }}">Abbrechen</button>
-        <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-rezept-speichern-footer>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
+        <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern')" class="{{ $btnPrimary }}" data-rezept-speichern-footer>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
     </x-slot:footer>
 </x-foodalchemist::modal>

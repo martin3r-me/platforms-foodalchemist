@@ -34,6 +34,18 @@ class AiGatewayService
      * @param array<string, mixed> $options knowledge (GL-13-Block) · knowledge_used (Audit-Slugs)
      *                                      · tier (Override) · target_table/target_id · Provider-Optionen
      */
+    /**
+     * #389 Food DNA: kreative/geschmackliche Prompt-Keys, die die Marken-/Küchen-DNA als
+     * STEHENDEN Kontext erhalten (Team-Basis + optional Concept-Override via Option
+     * 'food_dna_concept_id'). Klassifikatoren (kategorie/eigenschaften/geschmack/zustand/…)
+     * bleiben bewusst AUSSEN vor — DNA würde dort die strukturelle Klassifikation verzerren.
+     */
+    public const FOOD_DNA_KEYS = [
+        'recipe.generator', 'recipe.beschreibung', 'recipe.zubereitung', 'recipe.ueberarbeiten', 'recipe.pairing', 'recipe.review',
+        'vk.generator', 'vk.wording', 'vk.marketing', 'vk.plating', 'vk.servier_vehikel', 'vk.behaelter', 'vk.regeneration', 'vk.kohaerenz', 'vk.teller_heber', 'vk.review',
+        'concept.wording',
+    ];
+
     public function propose(string $promptKey, array $context = [], array $options = []): AiProposal
     {
         // M7-08: Kill-Switch — Team-Schalter stoppt jeden Call VOR dem Provider
@@ -75,7 +87,22 @@ class AiGatewayService
             'target_table' => $options['target_table'] ?? null,
             'target_id' => $options['target_id'] ?? null,
         ];
-        unset($options['knowledge'], $options['knowledge_used'], $options['tier'], $options['target_table'], $options['target_id']);
+        $cidFoodDna = $options['food_dna_concept_id'] ?? null;     // #389 → zentraler Canvas
+        $fbFoodDna = $options['food_dna_foodbook_id'] ?? null;
+        $agFoodDna = $options['food_dna_angebot_id'] ?? null;
+        unset($options['knowledge'], $options['knowledge_used'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id']);
+
+        // #389/Canvas: stehenden Marken-/Brief-Kontext NUR in kreative Prompts mergen
+        // (Klassifikatoren ausgenommen). Kaskade Team-DNA → Angebot → Foodbook → Concept (CanvasService).
+        if ($team !== null && in_array($promptKey, self::FOOD_DNA_KEYS, true)) {
+            $context = app(\Platform\FoodAlchemist\Services\CanvasService::class)->cascadeKontext(
+                $team,
+                $cidFoodDna !== null ? (int) $cidFoodDna : null,
+                $fbFoodDna !== null ? (int) $fbFoodDna : null,
+                $agFoodDna !== null ? (int) $agFoodDna : null,
+            ) + $context;
+        }
+
         $userContent = $wissen . $prompt['task'] . "\n\nKontext:\n" . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         $messages[] = ['role' => 'user', 'content' => $userContent];
 

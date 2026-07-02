@@ -25,11 +25,22 @@ class DetailPanel extends Component
 
     public string $laSuche = '';
 
+    /** Ersatz-Logik: Suchtext für die Gegenseite (GP/Rezept) im Verknüpfen-Feld. */
+    public string $ersatzSuche = '';
+
     public ?string $fehler = null;
 
-    public function mount(?int $gpId = null): void
+    /** Eingebettet im GP-Modal (recipe-modal-Muster): ohne Panel-Chrome, section = eine Kartei. */
+    public bool $embedded = false;
+
+    /** Nur diese Sektion rendern (null = alle, Sidebar-Vollansicht): las|allergene|zusatzstoffe|naehrwerte. */
+    public ?string $section = null;
+
+    public function mount(?int $gpId = null, bool $embedded = false, ?string $section = null): void
     {
         $this->gpId = $gpId;
+        $this->embedded = $embedded;
+        $this->section = $section;
     }
 
     #[On('gp-selected')]
@@ -37,9 +48,37 @@ class DetailPanel extends Component
     {
         $this->gpId = $id;
         $this->laSuche = '';
+        $this->ersatzSuche = '';
         $this->fehler = null;
         $this->kiVorschlag = null;
         $this->laKandidaten = null;
+    }
+
+    // ── Ersatz-Logik (make-or-buy + Artikel-Ersatz): Katalog am GP pflegen ──
+
+    public function ersatzVerknuepfen(string $kind, int $id): void
+    {
+        $gp = $this->kuratierbaresGp();
+        if ($gp === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)
+                ->verknuepfe(Auth::user()->currentTeamRelation, 'gp', $gp->id, $kind, $id);
+            $this->ersatzSuche = '';
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function ersatzLoesen(int $equivId): void
+    {
+        $gp = $this->kuratierbaresGp();
+        if ($gp === null) {
+            return;
+        }
+        app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)
+            ->loese(Auth::user()->currentTeamRelation, $equivId);
     }
 
     // ── M3-07: LA-Aktionen ──────────────────────────────────────────────
@@ -245,6 +284,36 @@ class DetailPanel extends Component
         }
     }
 
+    /**
+     * Preis-Band über die LAs: min/max des Vergleichspreises in der DOMINANTEN Einheit
+     * (Einheiten nie mischen — €/kg ≠ €/l ≠ €/Stk). Gesperrte LAs zählen nicht.
+     *
+     * @return array{min:float,max:float,einheit:string,n:int,lead:?float}|null
+     */
+    private function preisBand(?\Illuminate\Support\Collection $kette, ?int $leadId): ?array
+    {
+        if ($kette === null) {
+            return null;
+        }
+        $mitVp = $kette->filter(fn ($la) => $la->vergleichspreis !== null && ! $la->gesperrt);
+        if ($mitVp->isEmpty()) {
+            return null;
+        }
+        $einheit = $mitVp->groupBy(fn ($la) => $la->vergleichspreis['einheit'])
+            ->sortByDesc(fn ($g) => $g->count())->keys()->first();
+        $inEinheit = $mitVp->filter(fn ($la) => $la->vergleichspreis['einheit'] === $einheit);
+        $werte = $inEinheit->map(fn ($la) => (float) $la->vergleichspreis['wert']);
+        $lead = $inEinheit->firstWhere('id', $leadId);
+
+        return [
+            'min' => (float) $werte->min(),
+            'max' => (float) $werte->max(),
+            'einheit' => (string) $einheit,
+            'n' => $werte->count(),
+            'lead' => $lead !== null ? (float) $lead->vergleichspreis['wert'] : null,
+        ];
+    }
+
     public function render(GpAggregateService $aggregate, LeadLaService $leads)
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -258,6 +327,9 @@ class DetailPanel extends Component
         // R9 (Dominique: «Anzeige komplett Bug»): Sektionen IMMER sichtbar — die
         // Lazy-Klapperei der Ist-Abnahme versteckte alle Inhalte und Aktionen.
         // Aggregate sind DB-MAX/Ø-Queries über die LAs (M8-04: Panels 2–16 ms).
+        $kette = $gp !== null ? $leads->rangliste($gp, $team) : null;
+        $effektiverLeadId = $gp !== null ? $leads->effektiverLead($gp, $team)?->id : null;
+
         return view('foodalchemist::livewire.gps.detail-panel', [
             'gp' => $gp,
             'team' => $team,
@@ -266,8 +338,19 @@ class DetailPanel extends Component
             'allergenKonfidenz' => $gp !== null ? $aggregate->allergenKonfidenz($gp) : null,
             'zusatzstoffe' => $gp !== null ? $aggregate->zusatzstoffe($gp) : null,
             'naehrwerte' => $gp !== null ? $aggregate->naehrwerte($gp, mitKiFallback: true) : null,
-            'kette' => $gp !== null ? $leads->rangliste($gp, $team) : null,
-            'effektiverLeadId' => $gp !== null ? $leads->effektiverLead($gp, $team)?->id : null,
+            'kette' => $kette,
+            'effektiverLeadId' => $effektiverLeadId,
+            'preisBand' => $this->preisBand($kette, $effektiverLeadId),
+            'preisTrend' => $kette !== null
+                ? app(\Platform\FoodAlchemist\Services\PriceService::class)->preisTrendBulk($kette->pluck('id')->all())
+                : [],
+            // Ersatz-Logik: Äquivalenzen dieses GP + Such-Kandidaten fürs Verknüpfen
+            'ersatz' => $gp !== null && $team !== null
+                ? app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->fuer($team, 'gp', $gp->id)
+                : collect(),
+            'ersatzKandidaten' => $gp !== null && $team !== null && $this->ersatzSuche !== ''
+                ? app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->sucheZiele($team, $this->ersatzSuche, 'gp', $gp->id)
+                : collect(),
             'verknuepfbare' => $gp !== null && $this->laSuche !== '' ? $leads->sucheVerknuepfbare($team, $this->laSuche) : collect(),
             // M9-05 (GP-Blickwinkel): in welchen Rezepten eingesetzt — klickbar
             'verwendungen' => $gp !== null

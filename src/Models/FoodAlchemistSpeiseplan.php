@@ -31,6 +31,12 @@ class FoodAlchemistSpeiseplan extends Model
     public function eintraege(): HasMany
     {
         return $this->hasMany(FoodAlchemistSpeiseplanEintrag::class, 'speiseplan_id')
-            ->orderBy('woche')->orderBy('wochentag')->orderBy('position');
+            ->orderBy('datum')->orderBy('woche')->orderBy('wochentag')->orderBy('position');
+    }
+
+    public function linien(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistSpeiseplanLinie::class, 'speiseplan_id')
+            ->orderBy('sort_order')->orderBy('id');
     }
 }

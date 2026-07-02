@@ -93,6 +93,24 @@
                     <textarea wire:model="eigenschaften.ingredients_lieferant" rows="3" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60"></textarea></div>
             </x-foodalchemist::modal-section>
 
+            <x-foodalchemist::modal-section title="Nährwerte (je 100 g)">
+                <div class="flex items-center justify-between mb-2">
+                    <p class="text-[11px] text-gray-400">Fließen in die GP-Nährwert-Aggregation (Ø über die LAs, GL-08).</p>
+                    @if($darfEdit)
+                        <button type="button" wire:click="naehrwerteSpeichern" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">Nährwerte speichern</button>
+                    @endif
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3" data-naehrwerte>
+                    @foreach($naehrwertFelder as $feld => $meta)
+                        <div>
+                            <label class="block {{ $label }} mb-1">{{ $meta[0] }} ({{ $meta[1] }})</label>
+                            <input type="text" inputmode="decimal" wire:model="naehrwerte.{{ $feld }}" placeholder="—"
+                                   @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" data-naehr-{{ $feld }} />
+                        </div>
+                    @endforeach
+                </div>
+            </x-foodalchemist::modal-section>
+
             <x-foodalchemist::modal-section title="Allergene (14 EU-Pflichtangaben)">
                 <div class="flex items-center justify-between mb-2" data-allergen-kopf>
                     <p class="text-[11px] text-gray-400">− nicht enthalten · ≈ Spuren · ✓ enthalten · ungesetzt = unbekannt (GL-01). Quelle:

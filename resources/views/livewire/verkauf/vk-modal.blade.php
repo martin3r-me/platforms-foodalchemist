@@ -2,7 +2,7 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 {{-- R5 (Dominique): VK-Editor nimmt wie der Basis-Editor den ganzen Bildschirm --}}
-<x-foodalchemist::modal name="vk-modal" title="{{ $rezept !== null ? 'Gericht bearbeiten' : 'Neues Gericht' }}" size="{{ $rezept !== null ? 'max-w-[100rem]' : 'max-w-3xl' }}">
+<x-foodalchemist::modal name="vk-modal" title="{{ $rezept !== null ? 'Gericht bearbeiten' : 'Neues Gericht' }}" size="max-w-3xl" :fullscreen="$rezept !== null">
     @if($rezept !== null)
         <x-slot:actions>
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-vk-speichern>Speichern</button>
@@ -34,6 +34,30 @@
                     <span class="{{ $dt }}">Allergen-Konf.</span>
                     <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergene_konfidenz) }}</p>
                 </div>
+
+                {{-- VK-Seite (2. Reihe): Verkaufspreis + Portion + Marge/Wareneinsatz.
+                     Quelle = SalesRecipeService::cockpit() (MargeService). „—" wenn keine
+                     Aufschlagsklasse/Portionsgröße gepflegt ist. --}}
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">VK netto</span>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['vk']['vk_netto'] ?? null) !== null ? number_format((float) $cockpit['vk']['vk_netto'], 2, ',', '.') . ' €' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">VK brutto</span>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['vk_brutto'] ?? null) !== null ? number_format((float) $cockpit['vk_brutto'], 2, ',', '.') . ' €' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-2">
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">VK / Portion</span>
+                    <p class="text-xs font-bold text-emerald-700 dark:text-emerald-300">{{ ($cockpit['pro_einheit']['vk_netto_pro_einheit'] ?? null) !== null ? number_format((float) $cockpit['pro_einheit']['vk_netto_pro_einheit'], 2, ',', '.') . ' €' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">Wareneinsatz</span>
+                    <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ ($cockpit['marge']['wareneinsatz_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <span class="{{ $dt }}">Marge</span>
+                    <p class="text-xs font-semibold text-green-600 dark:text-green-400">{{ ($cockpit['marge']['marge_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['marge_pct'], 1, ',', '.') . ' %' : '—' }}</p>
+                </div>
             </div>
         </x-slot:kpiHeader>
     @endif
@@ -44,14 +68,14 @@
 
     @if($rezept === null)
         {{-- Anlage-Modus (DoD: VK aus Basisrezept manuell) --}}
-        <x-foodalchemist::modal-section title="VK aus Basisrezept anlegen">
+        <x-foodalchemist::modal-section title="Gericht anlegen">
             <div class="space-y-3" data-vk-anlage>
                 <div>
                     <label class="block {{ $label }} mb-1">Name* (Pipe-Syntax §4.4: »HG: Hauptkomponente | Komponente | …«)</label>
                     <input type="text" wire:model="neuName" class="{{ $input }}" placeholder="HG: Rinderfilet | Rotwein-Jus | Kartoffelgratin" data-vk-neu-name />
                 </div>
                 <div>
-                    <label class="block {{ $label }} mb-1">Basisrezept als erste Komponente</label>
+                    <label class="block {{ $label }} mb-1">Basisrezept als erste Komponente <span class="normal-case text-gray-400">(optional)</span></label>
                     <input type="search" wire:model.live.debounce.300ms="basisSuche" class="{{ $input }}" placeholder="Basisrezept suchen …" data-vk-basis-suche />
                     @foreach($basisTreffer as $b)
                         <button type="button" wire:key="bt-{{ $b->id }}" wire:click="$set('basisId', {{ $b->id }})"
@@ -62,7 +86,7 @@
                     @endforeach
                 </div>
                 <button type="button" wire:click="anlegen" class="{{ $btnPrimary }}" data-vk-anlegen>Anlegen</button>
-                <p class="text-[10px] text-gray-400">Die ganze Charge des Basisrezepts wird als erste Komponente übernommen (Menge = Yield) — danach Komponenten & VK-Daten pflegen.</p>
+                <p class="text-[10px] text-gray-400">Mit Basisrezept: dessen ganze Charge wird erste Komponente (Menge = Yield). Ohne: leeres Gericht — Komponenten danach im Editor hinzufügen.</p>
             </div>
         </x-foodalchemist::modal-section>
     @else
@@ -72,7 +96,10 @@
              bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
         <div x-data="{ tab: 'aufbau' }" data-vk-tabs>
             <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
-                @foreach(['aufbau' => 'Aufbau', 'naehrwerte' => 'Nährwerte', 'allergene' => 'Allergene & Diät', 'kalkulation' => 'Kalkulation', 'service' => 'Service', 'notizen' => 'Notizen'] as $tabKey => $tabLabel)
+                @php($vkTabs = ['aufbau' => 'Aufbau', 'naehrwerte' => 'Nährwerte', 'allergene' => 'Allergene & Diät', 'kalkulation' => 'Kalkulation', 'service' => 'Service'])
+                @if($rezept !== null)@php($vkTabs['sensorik'] = 'Sensorik & Pairing')@endif
+                @php($vkTabs['notizen'] = 'Notizen')
+                @foreach($vkTabs as $tabKey => $tabLabel)
                     <button type="button" @click="tab = '{{ $tabKey }}'"
                             :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
                             class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors" data-vk-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
@@ -416,6 +443,26 @@
             </div>
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab SERVICE --}}
+
+        {{-- ── Tab: SENSORIK & PAIRING (Geschmacks-Balance + Textur + Aroma-Kohäsion über die Zutaten-GPs) ── --}}
+        <div x-show="tab === 'sensorik'" x-cloak class="pt-4">
+            @if($rezept !== null)
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <span class="text-[11px] text-gray-400">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
+                    <button type="button" wire:click="sensorikBewerten" wire:loading.attr="disabled" wire:target="sensorikBewerten" class="{{ $btnGhostXs }}">
+                        <span wire:loading.remove wire:target="sensorikBewerten">✨ Sensorik neu bewerten</span>
+                        <span wire:loading wire:target="sensorikBewerten">… bewertet</span>
+                    </button>
+                </div>
+            @endif
+            @if(($komposition ?? null) && ! ($komposition['leer'] ?? true))
+                @include('foodalchemist::livewire.concepter.partials.sensorik_komposition')
+            @else
+                @include('foodalchemist::livewire.concepter.partials.sensorik')
+            @endif
+            <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mt-5 mb-2">Pairing</h3>
+            @include('foodalchemist::livewire.concepter.partials.pairing')
+        </div>
 
         {{-- ── Tab: NOTIZEN (Notizen + Verwendungsnachweise) ───────────── --}}
         <div x-show="tab === 'notizen'" x-cloak class="pt-4 space-y-4">

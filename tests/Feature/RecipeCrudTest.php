@@ -113,6 +113,35 @@ it('Modal-Roundtrip: Anlage validiert, Edit mit yield_kg_manual triggert Recompu
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Pflicht'));
 });
 
+it('Yield-Guard: Tippfehler/0 im manuellen Yield wird abgewiesen statt still als 0 kg gespeichert', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
+    $r = $this->svc->create($this->rootTeam, ['name' => 'Fond: Yield-Guard']);
+
+    // nicht-numerisch ⇒ Fehler, yield_kg_manual bleibt null (kein stilles 0,0 → ek_per_kg-Vergiftung)
+    Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $r->id)
+        ->set('form.yield_kg_manual', 'abc')
+        ->call('speichern')
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Yield braucht eine Zahl'));
+    expect($r->fresh()->yield_kg_manual)->toBeNull();
+
+    // 0 ⇒ ebenfalls Fehler (0 kg Yield ist nie gültig)
+    Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $r->id)
+        ->set('form.yield_kg_manual', '0')
+        ->call('speichern')
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Yield braucht eine Zahl'));
+    expect($r->fresh()->yield_kg_manual)->toBeNull();
+
+    // gültige Komma-Eingabe wird weiterhin gespeichert
+    Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $r->id)
+        ->set('form.yield_kg_manual', '1,25')
+        ->call('speichern')
+        ->assertSet('fehler', null);
+    expect((float) $r->fresh()->yield_kg_manual)->toBe(1.25);
+});
+
 it('UI-Audit: update pflegt die §4.2-Editor-Felder (Status/Zubereitung/Eigenschaften/Notizen/Equipment)', function () {
     // KEIN zweiter seedTeamHierarchy — beforeEach seedet schon; ein Doppel-Seed
     // vergiftet den statischen Ancestry-Cache für nachfolgende Tests (Team-Id-Kollision)

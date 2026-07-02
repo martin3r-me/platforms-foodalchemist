@@ -51,13 +51,14 @@ class FoodbookService
             ->with(['kapitel' => fn ($q) => $q->orderBy('position'),
                 'kapitel.blocks' => fn ($q) => $q->orderBy('position'),
                 'kapitel.blocks.concept:id,name,preis_pro_person_cache',
-                'kapitel.blocks.gericht:id,name,vk_netto'])
+                'kapitel.blocks.gericht:id,name,vk_netto',
+                'crmCompany', 'crmContact'])   // #369: CRM-Kunde-Link
             ->find($id);
     }
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'bezeichnung', 'jahr', 'kunde', 'personen', 'status', 'beschreibung', 'note'];
+    private const FELDER = ['code', 'bezeichnung', 'jahr', 'kunde', 'personen', 'status', 'beschreibung', 'note', 'crm_company_id', 'crm_contact_id'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
@@ -79,6 +80,38 @@ class FoodbookService
         $fb->update(array_intersect_key($in, array_flip(self::FELDER)));
 
         return $fb->refresh();
+    }
+
+    // ── #369: CRM-Kunde-Link (MVP, nur verlinken) — class_exists-geschützt (Modul läuft ohne crm) ──
+
+    public function verknuepfeKunde(Team $team, int $id, ?int $companyId, ?int $contactId): FoodAlchemistFoodbook
+    {
+        return $this->update($team, $id, ['crm_company_id' => $companyId, 'crm_contact_id' => $contactId]);
+    }
+
+    public function crmVerfuegbar(): bool
+    {
+        return class_exists(\Platform\Crm\Services\CompanyLinkService::class);
+    }
+
+    public function sucheFirmen(string $suche, int $limit = 10): Collection
+    {
+        $suche = trim($suche);
+        if ($suche === '' || ! $this->crmVerfuegbar()) {
+            return collect();
+        }
+
+        return app(\Platform\Crm\Services\CompanyLinkService::class)->searchCompanies($suche, $limit);
+    }
+
+    public function sucheKontakte(string $suche, int $limit = 10): Collection
+    {
+        $suche = trim($suche);
+        if ($suche === '' || ! class_exists(\Platform\Crm\Services\ContactLinkService::class)) {
+            return collect();
+        }
+
+        return app(\Platform\Crm\Services\ContactLinkService::class)->searchContacts($suche, $limit);
     }
 
     public function delete(Team $team, int $id): void
@@ -425,6 +458,76 @@ class FoodbookService
             'gesamt_vk' => $pax !== null ? round($vk * $pax + $pauschal, 2) : null,
             'gesamt_ek' => $pax !== null ? round($ek * $pax, 2) : null,
         ];
+    }
+
+    // ── #384/Folge: versendbares Foodbook/Portfolio-Dokument ───────────────────
+
+    /**
+     * Daten fürs versendbare Foodbook-Dokument (Druck/PDF): Kapitel-Baum (Pre-Order,
+     * Tiefe) mit NUR sichtbaren Blöcken (Export-Filter `sichtbar`) + Kunden-Labels
+     * (konsumententitel/kundentext), pro Kapitel der Per-Person-Preis, + Gesamt.
+     * interne_bemerkung wird NIE ausgegeben (Kundensicht).
+     *
+     * @return array{fb:FoodAlchemistFoodbook, kapitel:list<array>, gesamt:array, kunde:?string}
+     */
+    public function dokumentDaten(Team $team, FoodAlchemistFoodbook $fb): array
+    {
+        $fb->loadMissing([
+            'kapitel' => fn ($q) => $q->orderBy('position'),
+            'kapitel.blocks' => fn ($q) => $q->where('sichtbar', true)->orderBy('position'),
+            'kapitel.blocks.concept:id,name',
+            'kapitel.blocks.gericht:id,name',
+            'crmCompany', 'crmContact',
+        ]);
+        $pax = $fb->personen;
+        $byParent = $fb->kapitel->groupBy(fn ($k) => $k->parent_id ?? 0);
+
+        $rows = [];
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax) {
+            foreach ($byParent[$parentId] ?? [] as $k) {
+                $bloecke = [];
+                foreach ($k->blocks as $b) {
+                    $label = $this->dokBlockLabel($b);
+                    if ($label === null || $label === '') {
+                        continue; // spacer/image/leerer Header
+                    }
+                    $bloecke[] = ['typ' => $b->type, 'label' => $label, 'ist_header' => str_starts_with((string) $b->type, 'header')];
+                }
+                $agg = $this->kapitelAggregat($team, $k, $pax);
+                $rows[] = [
+                    'titel' => $k->konsumententitel ?: $k->titel,
+                    'depth' => $depth,
+                    'bloecke' => $bloecke,
+                    'vk_pro_person' => $agg['vk_pro_person'],
+                ];
+                $walk((int) $k->id, $depth + 1);
+            }
+        };
+        $walk(0, 0);
+
+        return [
+            'fb' => $fb,
+            'kapitel' => $rows,
+            'gesamt' => $this->gesamt($team, $fb),
+            // #369: CRM-Firma bevorzugt, sonst Freitext-kunde; Kontaktperson separat.
+            'kunde' => $fb->crmCompany?->display_name ?: $fb->kunde,
+            'kontakt' => $fb->crmContact?->display_name,
+            // Kundendokument-Vollständigkeit: gesetzlicher MwSt-Satz + Stand-Datum.
+            'mwst' => app(TeamSettingsService::class)->mwst($team),
+            'stand' => $fb->updated_at,
+        ];
+    }
+
+    /** Kunden-Label eines Blocks (kundentext bevorzugt); spacer/image => null. */
+    private function dokBlockLabel(FoodAlchemistFoodbookBlock $b): ?string
+    {
+        return match (true) {
+            $b->type === 'concept_ref' => $b->kundentext ?: ($b->concept?->name ?? '—'),
+            $b->type === 'recipe_ref' => $b->kundentext ?: ($b->gericht?->name ?? '—'),
+            str_starts_with((string) $b->type, 'header') => $b->kundentext ?: null,
+            $b->type === 'text' => $b->kundentext ?: null,
+            default => null,
+        };
     }
 
     // ── Picker (für den Editor) ─────────────────────────────────────────────

@@ -49,7 +49,9 @@ class KalkulationService
         $schema = $this->fixkosten->aufgeloestesSchema($team);
         $aktiv = array_values(array_filter($schema, fn ($b) => $b['aktiv']));
 
-        $rate = fn (array $b) => $b['wert'] > 0 ? $b['wert'] : $stundensatz;
+        // #379+: Lohnnebenkosten-Zuschlag (AG-Anteil) → effektiver Lohnsatz statt Brutto.
+        $lnkFaktor = 1 + $this->settings->lohnnebenkostenPct($team) / 100;
+        $rate = fn (array $b) => ($b['wert'] > 0 ? $b['wert'] : $stundensatz) * $lnkFaktor;
 
         // ── Stufe A: Basisgrößen (reihenfolge-unabhängig) ───────────────────
         $mek = max(0.0, $we);

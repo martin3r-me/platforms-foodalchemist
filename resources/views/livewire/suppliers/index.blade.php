@@ -6,6 +6,13 @@
         <x-ui-page-navbar title="Lieferanten" icon="heroicon-o-truck" />
     </x-slot:navbar>
 
+    <x-slot name="actionbar">
+        <x-ui-page-actionbar :breadcrumbs="[
+            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
+            ['label' => 'Lieferanten'],
+        ]" />
+    </x-slot>
+
     {{-- Zone links: Lieferanten-Liste mit P-7-Zählern --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Lieferanten" width="w-96" storeKey="faSuppliersOpen">
@@ -38,8 +45,7 @@
     </x-slot>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        {{-- M9-06: offene Match-Vorschläge → Review-Queue --}}
-        @php($offeneMatches = \Illuminate\Support\Facades\DB::table('foodalchemist_match_proposals')->where('status', 'offen')->whereNull('deleted_at')->count())
+        {{-- M9-06/#393: offene Match-Vorschläge (team-scoped in Index::render) → Review-Queue --}}
         @if($offeneMatches > 0)
             <a href="{{ \Illuminate\Support\Facades\Route::has('foodalchemist.review') ? route('foodalchemist.review') : '/foodalchemist/zu-pruefen' }}" class="block rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200 hover:border-amber-500/60 transition-colors" data-zu-pruefen-hinweis>
                 ⏳ {{ number_format($offeneMatches, 0, ',', '.') }} LA→GP-Match-Vorschläge warten auf Review → <span class="underline">Zu prüfen</span>
@@ -207,7 +213,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-400">Keine Artikel gefunden.</td></tr>
+                        <tr><td colspan="{{ $globaleSuche ? 10 : 9 }}" class="px-5 py-10 text-center text-gray-400">Keine Artikel gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>

@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Recipes;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Services\RecipeService;
 
@@ -22,16 +23,27 @@ class DetailPanel extends Component
     /** Eingebettet als Editor-Kartei: blendet die im Editor redundante KPI/Beschreibung/Zutaten aus. */
     public bool $embedded = false;
 
-    public function mount(?int $recipeId = null, bool $embedded = false): void
+    /** GP-Modal-Muster: section = genau EINE Kartei rendern (z.B. 'ersatz' als eigener Tab). */
+    public ?string $section = null;
+
+    public function mount(?int $recipeId = null, bool $embedded = false, ?string $section = null): void
     {
         $this->recipeId = $recipeId;
         $this->embedded = $embedded;
+        $this->section = $section;
     }
 
     /** @var array<string, bool> M5-04/05: lazy Pairing-Sektionen (Kontext-Erhalt beim Wechsel) */
     public array $offen = [];
 
     public string $ankerSuche = '';
+
+    public string $pairingSuche = '';
+
+    public string $pairingTyp = 'klassisch';
+
+    /** Ersatz-Logik: Suchtext für die Gegenseite (GP/Rezept) im Verknüpfen-Feld. */
+    public string $ersatzSuche = '';
 
     #[On('recipe-selected')]
     public function zeige(int $id): void
@@ -41,6 +53,78 @@ class DetailPanel extends Component
         }
         $this->recipeId = $id;
         $this->ankerSuche = '';
+        $this->pairingSuche = '';
+        $this->ersatzSuche = '';
+    }
+
+    // ── Ersatz-Logik (make-or-buy): dieses Rezept ↔ Fertig-GP / Alternativ-Rezept ──
+
+    public function ersatzVerknuepfen(string $kind, int $id): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)
+                ->verknuepfe($team, 'recipe', $this->recipeId, $kind, $id);
+            $this->ersatzSuche = '';
+        } catch (\RuntimeException $e) {
+            $this->fehlerAnker = $e->getMessage();
+        }
+    }
+
+    public function ersatzLoesen(int $equivId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null) {
+            app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->loese($team, $equivId);
+        }
+    }
+
+    public ?string $fehlerEignung = null;
+
+    /** Eignung-Chips klickbar (M9-01k-Service): aktiv → entfernen, inaktiv → als manual setzen. */
+    public function eignungToggle(string $typ, string $slug): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->fehlerEignung = null;
+        $svc = app(\Platform\FoodAlchemist\Services\RecipeService::class);
+        try {
+            $spalte = $typ === 'niveau' ? 'niveau_slug' : 'sektor_slug';
+            $relation = $typ === 'niveau' ? 'niveauEignungen' : 'sektorEignungen';
+            $aktiv = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($this->recipeId)
+                ->{$relation}->pluck($spalte)->contains($slug);
+            $aktiv
+                ? $svc->entferneEignung($team, $this->recipeId, $typ, $slug)
+                : $svc->setzeEignung($team, $this->recipeId, $typ, $slug);
+        } catch (\RuntimeException $e) {
+            $this->fehlerEignung = $e->getMessage();
+        }
+    }
+
+    // ── Manuelle Pairings (recipe_pairings, created_via='manual') ──
+    public function pairingVerknuepfen(int $ankerId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        app(\Platform\FoodAlchemist\Services\PairingService::class)
+            ->setRecipePairing($team, $this->recipeId, $ankerId, $this->pairingTyp);
+        $this->pairingSuche = '';
+    }
+
+    public function pairingLoesen(int $ankerId, ?string $typ = null): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && $this->recipeId !== null) {
+            app(\Platform\FoodAlchemist\Services\PairingService::class)
+                ->removeRecipePairing($team, $this->recipeId, $ankerId, $typ);
+        }
     }
 
     public function toggleSektion(string $sektion): void
@@ -129,8 +213,14 @@ class DetailPanel extends Component
             ? $recipes->detail($team, $this->recipeId)
             : null;
 
+        $equivSvc = app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class);
+
         return view('foodalchemist::livewire.recipes.detail-panel', [
             'rezept' => $rezept,
+            // Ersatz-Logik: Äquivalenzen dieses Rezepts + Such-Kandidaten fürs Verknüpfen
+            'ersatz' => $rezept !== null && $team !== null ? $equivSvc->fuer($team, 'recipe', $rezept->id) : collect(),
+            'ersatzKandidaten' => $rezept !== null && $team !== null && $this->ersatzSuche !== ''
+                ? $equivSvc->sucheZiele($team, $this->ersatzSuche, 'recipe', $rezept->id) : collect(),
             // R6: Step-by-Step-Fotos (gruppiert nach Schritt)
             'schrittFotos' => $rezept !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $rezept->id)
@@ -153,6 +243,11 @@ class DetailPanel extends Component
             'ankerKandidaten' => $this->ankerSuche !== ''
                 ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_ankers')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
+                    ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
+                : collect(),
+            'pairingKandidaten' => $this->pairingSuche !== '' && ($this->offen['pairing'] ?? false)
+                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_ankers')
+                    ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->pairingSuche) . '%'])
                     ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),
         ]);

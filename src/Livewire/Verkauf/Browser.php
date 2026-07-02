@@ -9,7 +9,10 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Enums\RecipeStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\RecipeService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
+use Platform\FoodAlchemist\Support\Curate;
 
 /**
  * M6-03 / D-6 §4.1 + 13_REFERENZ: VK-Browser — VK-Hauptgruppen mit Codes
@@ -72,6 +75,23 @@ class Browser extends Component
     {
         $this->recipeId = $id;
         $this->dispatch('vk-recipe-selected', id: $id);
+    }
+
+    /** Inline-Status-Pflege aus der Gerichte-Liste (canCurate-Gate, D1) — Setter im RecipeService. */
+    public function statusSetzen(int $id, string $status, RecipeService $svc): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $recipe = $team !== null ? FoodAlchemistRecipe::visibleToTeam($team)->find($id) : null;
+        if ($recipe === null || ! Curate::canCurate(Auth::user(), $recipe)) {
+            return;
+        }
+        if (RecipeStatus::tryFrom($status) === null) {
+            return;
+        }
+        try {
+            $svc->setStatus($team, $id, $status);
+        } catch (\RuntimeException) {
+        }
     }
 
     public function updatedSearch(): void
