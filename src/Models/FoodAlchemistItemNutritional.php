@@ -17,8 +17,9 @@ class FoodAlchemistItemNutritional extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    /** GL-08-Kernwerte für die Ø-Aggregation (GP) bzw. Summen (Rezept). */
-    public const KERNWERTE = ['energy_kcal', 'protein', 'fat', 'carbs_absorbable', 'sodium'];
+    /** GL-08-Kernwerte für die Ø-Aggregation (GP) bzw. Summen (Rezept).
+     *  sugar + saturated_fat = EU-Label-Unterzeilen (direkte g-Werte wie protein/fat). */
+    public const KERNWERTE = ['energy_kcal', 'protein', 'fat', 'carbs_absorbable', 'sodium', 'sugar', 'saturated_fat'];
 
     protected $table = 'foodalchemist_item_nutritionals';
 

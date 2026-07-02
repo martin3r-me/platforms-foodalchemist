@@ -41,6 +41,7 @@ class ConcepterAggregateService
             'yield_kg', 'ertrag_stueck',                     // Stück-Modus (kg↔Stück): Teiler/Gramm aus Ertrag+Yield
             'nutri_kcal_per_100g', 'nutri_protein_g_per_100g', 'nutri_fat_g_per_100g',
             'nutri_carbs_g_per_100g', 'nutri_salt_g_per_100g', 'nutri_konfidenz',
+            'nutri_sugar_g_per_100g', 'nutri_saturated_fat_g_per_100g',
             'spec_is_vegan', 'spec_is_vegetarian', 'spec_is_halal', 'spec_is_gluten_free',
             'spec_is_lactose_free', 'spec_contains_pork', 'spec_contains_beef', 'allergene_konfidenz',
         ];
@@ -255,6 +256,7 @@ class ConcepterAggregateService
      *
      * @param  Collection<int, array{gericht: object, menge: ?float}>  $mitMenge
      * @return array{kcal:?float, protein_g:?float, fett_g:?float, kh_g:?float, salz_g:?float,
+     *               zucker_g:?float, gesfett_g:?float,
      *               n_gerichte:int, n_mit_naehrwerten:int, vollstaendig:bool, konfidenz:string}
      */
     public function naehrwertAggregat(Collection $mitMenge): array
@@ -263,8 +265,9 @@ class ConcepterAggregateService
             'kcal' => 'nutri_kcal_per_100g', 'protein' => 'nutri_protein_g_per_100g',
             'fett' => 'nutri_fat_g_per_100g', 'kh' => 'nutri_carbs_g_per_100g',
             'salz' => 'nutri_salt_g_per_100g',
+            'zucker' => 'nutri_sugar_g_per_100g', 'gesfett' => 'nutri_saturated_fat_g_per_100g',
         ];
-        $summe = ['kcal' => 0.0, 'protein' => 0.0, 'fett' => 0.0, 'kh' => 0.0, 'salz' => 0.0];
+        $summe = ['kcal' => 0.0, 'protein' => 0.0, 'fett' => 0.0, 'kh' => 0.0, 'salz' => 0.0, 'zucker' => 0.0, 'gesfett' => 0.0];
         $nTotal = 0;
         $nOk = 0;
         $minKonf = null;
@@ -330,6 +333,8 @@ class ConcepterAggregateService
             'fett_g' => $nOk ? round($summe['fett'], 1) : null,
             'kh_g' => $nOk ? round($summe['kh'], 1) : null,
             'salz_g' => $nOk ? round($summe['salz'], 2) : null,
+            'zucker_g' => $nOk ? round($summe['zucker'], 1) : null,
+            'gesfett_g' => $nOk ? round($summe['gesfett'], 1) : null,
             'n_gerichte' => $nTotal,
             'n_mit_naehrwerten' => $nOk,
             'vollstaendig' => $vollstaendig,

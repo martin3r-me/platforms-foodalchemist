@@ -120,20 +120,22 @@ it('Settings/Kalkulation: Gar-/Putzverlust-Defaults speichern (HK ist ausgelager
         ->and($svc->putzverlustDefault($this->rootTeam))->toBe(4.0);
 });
 
-it('Kalkulation-Browser: Zeile wählen zeigt HK2-Wasserfall im Detail', function () {
-    $this->actingAs($this->makeUser($this->rootTeam));
-    FoodAlchemistRecipe::create([
+it('recipeHk: kompletter Wasserfall (DB, Food-Cost-Quote, VK-Vorschlag)', function () {
+    // Der frühere Kalkulation-Browser (waehle/Detail) ist mit dem Werkstatt-Umbau (#379+)
+    // entfallen — der Screen zeigt Regeln; die per-Gericht-Rechnung liefert recipeHk.
+    $r = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'hk', 'name' => 'HG: Filet', 'status' => 'approved',
         'ist_verkaufsrezept' => true, 'ek_total_eur' => 8.00, 'vk_anzahl_einheiten' => 1, 'vk_netto' => 25.00,
     ]);
-    $id = FoodAlchemistRecipe::where('recipe_key', 'hk')->value('id');
 
-    Livewire::test(KalkulationBrowser::class)
-        ->call('waehle', $id)
-        ->assertSet('selectedId', $id)
-        ->assertSee('HK2')
-        ->assertSee('VK-Vorschlag')
-        ->assertSee('Wareneinsatz');
+    $hk = $this->kalk->recipeHk($this->rootTeam, $r);
+
+    expect((float) $hk['hk1_pro_portion'])->toBe(8.0)
+        ->and((float) $hk['hk2_pro_portion'])->toBe(9.6)              // + Material-GK 20 %
+        ->and((float) $hk['db_eur'])->toBe(15.4)                      // 25 − 9,60
+        ->and((float) $hk['wareneinsatz_pct'])->toBe(32.0)            // 8 ÷ 25
+        ->and((float) $hk['vk_vorschlag'])->toBe(11.04)               // 9,60 × 1,15
+        ->and($hk['bloecke'])->not->toBeEmpty();
 });
 
 it('Settings/Herstellkosten: Fixkosten anlegen/löschen + Bezugsbasen speichern (UI)', function () {
@@ -156,24 +158,24 @@ it('Settings/Herstellkosten: Fixkosten anlegen/löschen + Bezugsbasen speichern 
     expect(FoodAlchemistFixkosten::where('bezeichnung', 'LKW Logistik')->exists())->toBeFalse();
 });
 
-it('Kalkulation-Browser: direkte Einzelkosten am Gericht eintragen (M-K8)', function () {
-    $this->actingAs($this->makeUser($this->rootTeam));
-    FoodAlchemistRecipe::create([
-        'team_id' => $this->rootTeam->id, 'recipe_key' => 'e', 'name' => 'HG: Edit', 'status' => 'approved',
+it('M-K8-Mathe: direkte Einzelkosten (nebenkosten_eur) fließen in HK2 — Pflege-UI seit Werkstatt-Umbau offen', function () {
+    // Der M-K8-Editor (waehle → editArbeitszeit/editNebenkosten) fiel mit dem Werkstatt-
+    // Umbau weg; die RECHNUNG muss trotzdem stimmen. UI-Lücke ist in #379 vermerkt.
+    $ohne = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'e0', 'name' => 'HG: Ohne', 'status' => 'approved',
         'ist_verkaufsrezept' => true, 'ek_total_eur' => 8.00, 'vk_anzahl_einheiten' => 1, 'vk_netto' => 25.00,
     ]);
-    $id = FoodAlchemistRecipe::where('recipe_key', 'e')->value('id');
+    $mit = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'e1', 'name' => 'HG: Mit', 'status' => 'approved',
+        'ist_verkaufsrezept' => true, 'ek_total_eur' => 8.00, 'vk_anzahl_einheiten' => 1, 'vk_netto' => 25.00,
+        'nebenkosten_eur' => 1.50,
+    ]);
 
-    Livewire::test(KalkulationBrowser::class)
-        ->call('waehle', $id)
-        ->set('editArbeitszeit', '20')
-        ->set('editNebenkosten', '1.50')
-        ->call('speichereGericht')
-        ->assertSee('Gespeichert');
+    $hkOhne = $this->kalk->recipeHk($this->rootTeam, $ohne);
+    $hkMit = $this->kalk->recipeHk($this->rootTeam, $mit);
 
-    $r = FoodAlchemistRecipe::find($id);
-    expect((int) $r->arbeitszeit_min)->toBe(20)
-        ->and((float) $r->nebenkosten_eur)->toBe(1.5);
+    expect((float) $hkMit['nebenkosten'])->toBe(1.5)
+        ->and(round($hkMit['hk2_pro_portion'] - $hkOhne['hk2_pro_portion'], 2))->toBe(1.5);
 });
 
 it('Concepter-Editor: Kalkulation-Tab zeigt den HK2-Wasserfall', function () {

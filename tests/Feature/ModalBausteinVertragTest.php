@@ -12,7 +12,9 @@ uses(TestCase::class);
  * dieser Vertrag verhindert die Rückkehr der @-Syntax mit Punkt-Events.
  */
 it('Modal-Baustein: addEventListener-Brücke statt .dot-Listener (Alpine-3.15-Falle)', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/components/modal.blade.php');
+    // Modul-Root über die Klasse auflösen — __DIR__ bricht im Sandbox-Copy-Loop (_SANDBOX_NOTES)
+    $modulRoot = dirname((new ReflectionClass(\Platform\FoodAlchemist\FoodAlchemistServiceProvider::class))->getFileName(), 2);
+    $blade = file_get_contents($modulRoot . '/resources/views/components/modal.blade.php');
 
     expect($blade)->not->toContain('@modal-open.dot')
         ->and($blade)->not->toContain('@modal-close.dot')
@@ -22,7 +24,8 @@ it('Modal-Baustein: addEventListener-Brücke statt .dot-Listener (Alpine-3.15-Fa
 
 it('keine View nutzt .dot-Event-Listener (gleiches Muster, gleiche Falle)', function () {
     $treffer = [];
-    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(__DIR__ . '/../../resources/views'));
+    $modulRoot = dirname((new ReflectionClass(\Platform\FoodAlchemist\FoodAlchemistServiceProvider::class))->getFileName(), 2);
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($modulRoot . '/resources/views'));
     foreach ($it as $datei) {
         if ($datei->isFile() && str_ends_with($datei->getFilename(), '.blade.php')
             && preg_match('/@[\w-]+\.dot/', file_get_contents($datei->getPathname()))) {

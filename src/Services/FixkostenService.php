@@ -33,7 +33,7 @@ class FixkostenService
             'team_id' => $team->id,
             'bezeichnung' => trim((string) ($in['bezeichnung'] ?? 'Fixkosten')) ?: 'Fixkosten',
             'betrag' => max(0, (float) str_replace(',', '.', (string) ($in['betrag'] ?? 0))),
-            'periode' => in_array($in['periode'] ?? 'monatlich', ['monatlich', 'jaehrlich'], true) ? $in['periode'] : 'monatlich',
+            'periode' => in_array($p = $in['periode'] ?? 'monatlich', ['monatlich', 'jaehrlich'], true) ? $p : 'monatlich',
             'block_key' => (string) ($in['block_key'] ?? 'gemeinkosten'),
         ]);
     }

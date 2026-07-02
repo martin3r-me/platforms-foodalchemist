@@ -27,7 +27,7 @@ beforeEach(function () {
     app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $paket->id]);
 });
 
-it('Foodbook-Editor: anlegen, Kapitel, Concept einfügen, Pax-Gesamtpreis im Cockpit', function () {
+it('Foodbook-Editor: anlegen, Kapitel, Concept einfügen, €/Person im Cockpit', function () {
     Livewire::test(FoodbooksIndex::class)->assertOk()->call('neu');
     $fb = FoodAlchemistFoodbook::first();
     expect($fb)->not->toBeNull();
@@ -44,13 +44,14 @@ it('Foodbook-Editor: anlegen, Kapitel, Concept einfügen, Pax-Gesamtpreis im Coc
     $kap = $fb->kapitel()->first();
     expect($kap)->not->toBeNull();
 
-    // Concept einfügen (KEIN Gericht-Picker) → Cockpit zeigt 100 × 4,50 = 450 €
+    // Concept einfügen (KEIN Gericht-Picker) → Cockpit zeigt €/Person: das Foodbook ist
+    // seit dem Angebote-Umbau person-unabhängiges Portfolio (Pax × Gesamt lebt im ANGEBOT)
     $comp->call('conceptHinzu', $this->concept->id)
         ->assertSee('Grill-Buffet')
-        ->assertSee('450,00');
+        ->assertSee('4,50');
 
     expect($kap->blocks()->where('type', 'concept_ref')->count())->toBe(1)
-        ->and((int) $fb->refresh()->personen)->toBe(100);
+        ->and((int) $fb->refresh()->personen)->toBe(100);             // Pax bleibt gespeichert (Staffel/Angebot)
 });
 
 it('Foodbook-Editor: kapitelNeu(parentId) legt ein Unterkapitel unter dem Eltern-Kapitel an', function () {
@@ -69,7 +70,7 @@ it('Foodbook-Editor: kapitelNeu(parentId) legt ein Unterkapitel unter dem Eltern
         ->and($sub->parent_id)->toBe($top->id);                            // nicht flach → echtes Unterkapitel
 });
 
-it('Foodbook-Editor: Header-Preis-Block (person) addiert pro Person', function () {
+it('Foodbook-Editor: Header-Preis-Block (person) erscheint mit €/Person im Cockpit', function () {
     Livewire::test(FoodbooksIndex::class)->call('neu');
     $fb = FoodAlchemistFoodbook::first();
     $comp = Livewire::test(FoodbooksIndex::class)
@@ -87,7 +88,7 @@ it('Foodbook-Editor: Header-Preis-Block (person) addiert pro Person', function (
         ->set('blockForm.preis_wert', 38)
         ->set('blockForm.preis_basis', 'person')
         ->call('blockSpeichern')
-        ->assertSee('1.900,00');                                      // 38 × 50
+        ->assertSee('38,00');                                         // €/Person — Pax-Gesamt lebt im Angebot
 
     expect((float) $block->refresh()->preis_wert)->toBe(38.0);
 });

@@ -117,9 +117,11 @@ class ReviewQueue extends Component
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $kette = FoodAlchemistGp::teamAncestryIds($team);
 
+        // #393-Rest: Scope = AKTUELLES Team (Entscheid Dominique 06-19) — vorher Cross-Team-Leak
         $matchOffen = DB::table('foodalchemist_match_proposals AS p')
             ->join('foodalchemist_supplier_items AS i', 'i.id', '=', 'p.supplier_item_id')
             ->join('foodalchemist_gps AS g', 'g.id', '=', 'p.gp_id')
+            ->where('p.team_id', $team->id)
             ->where('p.status', 'offen')->whereNull('p.deleted_at');
 
         $bulkOffen = DB::table('foodalchemist_bulk_proposals AS b')

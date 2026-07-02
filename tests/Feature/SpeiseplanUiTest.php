@@ -22,15 +22,18 @@ beforeEach(function () {
     ]);
 });
 
-it('Speiseplan-Raster: anlegen, Zelle (Mo Mittag) mit Gericht belegen', function () {
+it('Speiseplan-Raster: anlegen, Zelle (Datum × Mittag) mit Gericht belegen', function () {
     Livewire::test(SpeiseplanIndex::class)->assertOk()->call('neu');
     $sp = FoodAlchemistSpeiseplan::first();
     expect($sp)->not->toBeNull();
 
+    // Speiseplan v2: Zelle = echtes Datum × Linie (null = »Ohne Linie«) × Mahlzeit-State.
+    // Datum in der sichtbaren Woche wählen, sonst zeigt das Raster den Eintrag nicht.
+    $montag = now()->startOfWeek()->format('Y-m-d');
     Livewire::test(SpeiseplanIndex::class)
         ->call('waehle', $sp->id)
-        ->set('form.name', 'KW 24')->call('speichern')
-        ->call('zelleOeffnen', 1, 'mittag')
+        ->set('form.name', 'KW aktuell')->call('speichern')
+        ->call('zelleOeffnen', $montag, null)
         ->set('pickerTyp', 'gericht')
         ->set('pickerSuche', 'Kürbis')
         ->call('inhaltHinzu', 'gericht', $this->gericht->id)
@@ -38,6 +41,7 @@ it('Speiseplan-Raster: anlegen, Zelle (Mo Mittag) mit Gericht belegen', function
 
     $e = $sp->eintraege()->first();
     expect($e)->not->toBeNull()
-        ->and($e->wochentag)->toBe(1)->and($e->mahlzeit)->toBe('mittag')
+        ->and($e->datum->format('Y-m-d'))->toBe($montag)
+        ->and($e->mahlzeit)->toBe('mittag')
         ->and($e->vk_recipe_id)->toBe($this->gericht->id);
 });

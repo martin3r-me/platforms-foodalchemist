@@ -87,6 +87,14 @@ trait SeedsTeamHierarchy
         \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistComponentEquivalent::flushTeamAncestryCache();
+
+        // Modul-Routen für Full-Page-Komponenten: der ServiceProvider registriert sie nur
+        // hinter PlatformCore/ModuleRouter (modules-Tabelle beim Boot noch leer) — ohne sie
+        // crasht jede View mit route('foodalchemist.*') (Breadcrumbs/Sidebar) im Test-Env.
+        if (! \Illuminate\Support\Facades\Route::has('foodalchemist.dashboard')) {
+            \Illuminate\Support\Facades\Route::middleware('web')->prefix('foodalchemist')
+                ->group(\dirname(__DIR__, 2) . '/routes/web.php');
+        }
     }
 
     /** User mit current_team_id im gegebenen Team (für UI-/Curate-Gating-Tests, M1-08). */

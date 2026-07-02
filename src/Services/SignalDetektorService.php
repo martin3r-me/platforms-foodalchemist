@@ -36,7 +36,8 @@ class SignalDetektorService
      */
     public function datenqualitaetGpLa(Team $team): int
     {
-        $q = FoodAlchemistGp::query()
+        // Scope = Team-Kette (GPs sind vererbt, wie margeUnterZiel) — vorher ungescoped über ALLE Teams
+        $q = FoodAlchemistGp::visibleToTeam($team)
             ->where('requires_la', true)
             ->where(fn ($w) => $w->whereNull('lead_la_supplier_item_id')->orWhere('n_las_total', 0));
 
@@ -76,6 +77,7 @@ class SignalDetektorService
             })
             ->whereNotNull('g.lead_la_supplier_item_id')
             ->whereNull('g.deleted_at')
+            ->whereIn('g.team_id', FoodAlchemistGp::teamAncestryIds($team))
             ->groupBy('g.id')
             ->havingRaw('MAX(p.status_valid_from) < ? OR MAX(p.status_valid_from) IS NULL', [$grenze])
             ->get(['g.id'])
@@ -115,6 +117,7 @@ class SignalDetektorService
             ->join('foodalchemist_supplier_items as i', 'i.id', '=', 's.supplier_item_id')
             ->join('foodalchemist_gps as g', 'g.id', '=', 's.gp_id')
             ->whereNull('s.deleted_at')->whereNull('i.deleted_at')->whereNull('g.deleted_at')
+            ->whereIn('g.team_id', FoodAlchemistGp::teamAncestryIds($team))
             ->where('g.n_las_total', '>=', 3)
             ->select('s.gp_id', 'g.name as gp_name', 'i.id as item_id', 'i.unit_code', 'i.qty')
             ->selectSub($ps->activePriceSubquery('i.id'), 'aktiv_preis')

@@ -457,7 +457,7 @@ class RecipeRecomputeService
             && $this->istGemappt($z));
 
         $totalG = 0.0;
-        $summen = ['kcal' => 0.0, 'protein' => 0.0, 'fat' => 0.0, 'carbs' => 0.0, 'salt' => 0.0];
+        $summen = ['kcal' => 0.0, 'protein' => 0.0, 'fat' => 0.0, 'carbs' => 0.0, 'salt' => 0.0, 'sugar' => 0.0, 'satfat' => 0.0];
         $nMapped = 0;
 
         foreach ($relevant as $z) {
@@ -474,6 +474,8 @@ class RecipeRecomputeService
                         'fat' => (float) ($sub->nutri_fat_g_per_100g ?? 0),
                         'carbs' => (float) ($sub->nutri_carbs_g_per_100g ?? 0),
                         'salt' => (float) ($sub->nutri_salt_g_per_100g ?? 0),
+                        'sugar' => (float) ($sub->nutri_sugar_g_per_100g ?? 0),
+                        'satfat' => (float) ($sub->nutri_saturated_fat_g_per_100g ?? 0),
                     ];
                 }
             } elseif ($z->gp !== null) {
@@ -485,6 +487,8 @@ class RecipeRecomputeService
                         'fat' => $n['fat']['avg'] ?? 0.0,
                         'carbs' => $n['carbs_absorbable']['avg'] ?? 0.0,
                         'salt' => $n['salt_g']['avg'] ?? 0.0,      // sodium×0.0025 (GL-08 §4.2)
+                        'sugar' => $n['sugar']['avg'] ?? 0.0,
+                        'satfat' => $n['saturated_fat']['avg'] ?? 0.0,
                     ];
                 }
             }
@@ -505,12 +509,16 @@ class RecipeRecomputeService
             $recipe->nutri_fat_g_per_100g = round($summen['fat'] * 100 / $totalG, 2);
             $recipe->nutri_carbs_g_per_100g = round($summen['carbs'] * 100 / $totalG, 2);
             $recipe->nutri_salt_g_per_100g = round($summen['salt'] * 100 / $totalG, 3);
+            $recipe->nutri_sugar_g_per_100g = round($summen['sugar'] * 100 / $totalG, 2);
+            $recipe->nutri_saturated_fat_g_per_100g = round($summen['satfat'] * 100 / $totalG, 2);
         } else {
             $recipe->nutri_kcal_per_100g = null;
             $recipe->nutri_protein_g_per_100g = null;
             $recipe->nutri_fat_g_per_100g = null;
             $recipe->nutri_carbs_g_per_100g = null;
             $recipe->nutri_salt_g_per_100g = null;
+            $recipe->nutri_sugar_g_per_100g = null;
+            $recipe->nutri_saturated_fat_g_per_100g = null;
         }
         $recipe->nutri_n_ingredients_total = $nTotal;
         $recipe->nutri_n_ingredients_mapped = $nMapped;
