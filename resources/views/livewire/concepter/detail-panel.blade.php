@@ -103,8 +103,8 @@
                     <span class="{{ $pill }} {{ $konfPill[$aggregat['naehrwerte']['konfidenz']] ?? $variantPill['secondary'] }}">{{ $aggregat['naehrwerte']['konfidenz'] }}</span>
                 </div>
                 @if($aggregat['naehrwerte']['kcal'] !== null)
-                    <div class="grid grid-cols-5 gap-1 text-center">
-                        @foreach(['kcal' => 'kcal', 'protein_g' => 'Eiweiß', 'fett_g' => 'Fett', 'kh_g' => 'KH', 'salz_g' => 'Salz'] as $k => $lbl)
+                    <div class="grid grid-cols-7 gap-1 text-center">
+                        @foreach(['kcal' => 'kcal', 'protein_g' => 'Eiweiß', 'fett_g' => 'Fett', 'gesfett_g' => 'dav. ges.', 'kh_g' => 'KH', 'zucker_g' => 'dav. Zucker', 'salz_g' => 'Salz'] as $k => $lbl)
                             <div class="rounded-md bg-black/[0.03] dark:bg-white/5 py-1">
                                 <p class="text-xs font-semibold tabular-nums">{{ $aggregat['naehrwerte'][$k] !== null ? rtrim(rtrim(number_format((float) $aggregat['naehrwerte'][$k], $k === 'kcal' ? 0 : 1, ',', '.'), '0'), ',') : '—' }}</p>
                                 <p class="text-[9px] text-gray-400 uppercase">{{ $lbl }}</p>

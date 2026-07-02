@@ -387,15 +387,18 @@
         @else
             <div class="grid grid-cols-5 gap-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-naehrwerte>
                 @foreach([
-                    ['Brennwert', $voll->nutri_kcal_per_100g, 'kcal', 0],
-                    ['Eiweiß', $voll->nutri_protein_g_per_100g, 'g', 1],
-                    ['Fett', $voll->nutri_fat_g_per_100g, 'g', 1],
-                    ['Kohlenhydrate', $voll->nutri_carbs_g_per_100g, 'g', 1],
-                    ['Salz', $voll->nutri_salt_g_per_100g, 'g', 2],
-                ] as [$lbl, $wert, $einheit, $dez])
+                    ['Brennwert', $voll->nutri_kcal_per_100g, 'kcal', 0, null, null],
+                    ['Eiweiß', $voll->nutri_protein_g_per_100g, 'g', 1, null, null],
+                    ['Fett', $voll->nutri_fat_g_per_100g, 'g', 1, 'davon gesättigt', $voll->nutri_saturated_fat_g_per_100g],
+                    ['Kohlenhydrate', $voll->nutri_carbs_g_per_100g, 'g', 1, 'davon Zucker', $voll->nutri_sugar_g_per_100g],
+                    ['Salz', $voll->nutri_salt_g_per_100g, 'g', 2, null, null],
+                ] as [$lbl, $wert, $einheit, $dez, $subLbl, $subWert])
                     <div class="text-center" wire:key="rn-{{ $lbl }}">
                         <p class="text-[10px] uppercase tracking-wider text-gray-400">{{ $lbl }}</p>
                         <p class="text-xs font-medium text-gray-900 dark:text-gray-100 tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $einheit : '—' }}</p>
+                        @if($subLbl !== null)
+                            <p class="text-[10px] text-gray-400 tabular-nums" data-naehrwert-sub="{{ $subLbl }}">{{ $subLbl }} {{ $subWert !== null ? number_format((float) $subWert, 1, ',', '.') . ' g' : '—' }}</p>
+                        @endif
                     </div>
                 @endforeach
             </div>

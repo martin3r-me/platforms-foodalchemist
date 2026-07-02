@@ -213,7 +213,9 @@
                             ['Brennwert', $rezept->nutri_kcal_per_100g, 'kcal', 0],
                             ['Eiweiß', $rezept->nutri_protein_g_per_100g, 'g', 1],
                             ['Fett', $rezept->nutri_fat_g_per_100g, 'g', 1],
+                            ['— davon gesättigte Fettsäuren', $rezept->nutri_saturated_fat_g_per_100g, 'g', 1],
                             ['Kohlenhydrate', $rezept->nutri_carbs_g_per_100g, 'g', 1],
+                            ['— davon Zucker', $rezept->nutri_sugar_g_per_100g, 'g', 1],
                             ['Salz', $rezept->nutri_salt_g_per_100g, 'g', 2],
                         ] as [$lbl, $wert, $einheit, $dez])
                             <tr class="{{ $tr }}" wire:key="vkn-{{ $lbl }}">

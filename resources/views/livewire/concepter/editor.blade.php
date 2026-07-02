@@ -529,8 +529,8 @@
                         <span class="{{ $label }}">Nährwerte / Person (aus den Gerichten · Portionsgramm)</span>
                         <span class="{{ $pill }} {{ $konfPill[$aggregat['naehrwerte']['konfidenz']] ?? $variantPill['secondary'] }}">Konf. {{ $aggregat['naehrwerte']['konfidenz'] }}</span>
                     </div>
-                    <div class="grid grid-cols-5 gap-2">
-                        @foreach(['kcal' => 'kcal', 'protein_g' => 'Eiweiß (g)', 'fett_g' => 'Fett (g)', 'kh_g' => 'KH (g)', 'salz_g' => 'Salz (g)'] as $k => $l)
+                    <div class="grid grid-cols-7 gap-2">
+                        @foreach(['kcal' => 'kcal', 'protein_g' => 'Eiweiß (g)', 'fett_g' => 'Fett (g)', 'gesfett_g' => 'dav. ges. (g)', 'kh_g' => 'KH (g)', 'zucker_g' => 'dav. Zucker (g)', 'salz_g' => 'Salz (g)'] as $k => $l)
                             <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 text-center">
                                 <p class="text-base font-semibold tabular-nums">{{ $aggregat['naehrwerte'][$k] !== null ? number_format((float) $aggregat['naehrwerte'][$k], $k === 'kcal' ? 0 : 1, ',', '.') : '—' }}</p>
                                 <p class="text-[10px] text-gray-400 uppercase">{{ $l }}</p>
