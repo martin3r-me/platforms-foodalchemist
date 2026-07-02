@@ -72,7 +72,8 @@
          bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
     <div x-data="{ tab: 'aufbau' }" data-rezept-tabs>
         <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
-            @php($rezTabs = ['aufbau' => 'Aufbau', 'zubereitung' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'details' => 'Details'])
+            {{-- 'details'-Key bleibt stabil (Marker/Alpine), Label seit 2026-07-02 „Deklaration" (Allergene · Zusatzstoffe · Nährwerte) --}}
+            @php($rezTabs = ['aufbau' => 'Aufbau', 'zubereitung' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'details' => 'Deklaration'])
             @if(! $neu)@php($rezTabs['sensorik'] = 'Sensorik & Pairing')@endif
             @php($rezTabs['notizen'] = 'Notizen')
             @foreach($rezTabs as $tabKey => $tabLabel)
@@ -380,36 +381,6 @@
         @endif
     </x-foodalchemist::modal-section>
 
-    {{-- NÄHRWERTE (GL-08-Aggregat, read-only — Quelle: Zutaten-Recompute) --}}
-    <x-foodalchemist::modal-section title="Nährwerte (pro 100 g)">
-        @if($voll?->nutri_kcal_per_100g === null)
-            <p class="text-[11px] text-gray-400" data-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
-        @else
-            <div class="grid grid-cols-5 gap-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-naehrwerte>
-                @foreach([
-                    ['Brennwert', $voll->nutri_kcal_per_100g, 'kcal', 0, null, null],
-                    ['Eiweiß', $voll->nutri_protein_g_per_100g, 'g', 1, null, null],
-                    ['Fett', $voll->nutri_fat_g_per_100g, 'g', 1, 'davon gesättigt', $voll->nutri_saturated_fat_g_per_100g],
-                    ['Kohlenhydrate', $voll->nutri_carbs_g_per_100g, 'g', 1, 'davon Zucker', $voll->nutri_sugar_g_per_100g],
-                    ['Salz', $voll->nutri_salt_g_per_100g, 'g', 2, null, null],
-                ] as [$lbl, $wert, $einheit, $dez, $subLbl, $subWert])
-                    <div class="text-center" wire:key="rn-{{ $lbl }}">
-                        <p class="text-[10px] uppercase tracking-wider text-gray-400">{{ $lbl }}</p>
-                        <p class="text-xs font-medium text-gray-900 dark:text-gray-100 tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $einheit : '—' }}</p>
-                        @if($subLbl !== null)
-                            <p class="text-[10px] text-gray-400 tabular-nums" data-naehrwert-sub="{{ $subLbl }}">{{ $subLbl }} {{ $subWert !== null ? number_format((float) $subWert, 1, ',', '.') . ' g' : '—' }}</p>
-                        @endif
-                    </div>
-                @endforeach
-            </div>
-            <p class="text-[10px] text-gray-400 mt-1">
-                Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$voll->nutri_konfidenz] ?? '' }}">{{ strtoupper($voll->nutri_konfidenz ?? '—') }}</span>
-                · {{ $voll->nutri_n_ingredients_mapped ?? 0 }}/{{ $voll->nutri_n_ingredients_total ?? 0 }} Zutaten mit Nährwert-Daten
-                — BLS-Rohwerte, Garverlust/Putzverlust nicht angewendet (GL-08)
-            </p>
-        @endif
-    </x-foodalchemist::modal-section>
-
     {{-- BESCHREIBUNG (§8) --}}
     <x-foodalchemist::modal-section title="Beschreibung (§8.3 — 3-5 Sätze nüchtern)">
         <x-slot:actions>
@@ -439,12 +410,42 @@
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab EIGENSCHAFTEN --}}
 
-    {{-- ── Tab: DETAILS — Detail-Panel-Inhalte als Kartei (geteilte Render-Quelle, eingebettet) ── --}}
-    <div x-show="tab === 'details'" x-cloak class="pt-4">
+    {{-- ── Tab: DEKLARATION — Allergene · Zusatzstoffe (Detail-Panel-Embed) + Nährwerte ── --}}
+    <div x-show="tab === 'details'" x-cloak class="pt-4 space-y-4">
         @if($recipeId !== null)
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" wire:key="rdetail-{{ $recipeId }}" />
+
+            {{-- NÄHRWERTE (GL-08-Aggregat, read-only — Quelle: Zutaten-Recompute; hierher verschoben 2026-07-02, gehört zur Deklaration) --}}
+            <x-foodalchemist::modal-section title="Nährwerte (pro 100 g)">
+                @if($voll?->nutri_kcal_per_100g === null)
+                    <p class="text-[11px] text-gray-400" data-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
+                @else
+                    <div class="grid grid-cols-5 gap-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-naehrwerte>
+                        @foreach([
+                            ['Brennwert', $voll->nutri_kcal_per_100g, 'kcal', 0, null, null],
+                            ['Eiweiß', $voll->nutri_protein_g_per_100g, 'g', 1, null, null],
+                            ['Fett', $voll->nutri_fat_g_per_100g, 'g', 1, 'davon gesättigt', $voll->nutri_saturated_fat_g_per_100g],
+                            ['Kohlenhydrate', $voll->nutri_carbs_g_per_100g, 'g', 1, 'davon Zucker', $voll->nutri_sugar_g_per_100g],
+                            ['Salz', $voll->nutri_salt_g_per_100g, 'g', 2, null, null],
+                        ] as [$lbl, $wert, $einheit, $dez, $subLbl, $subWert])
+                            <div class="text-center" wire:key="rn-{{ $lbl }}">
+                                <p class="text-[10px] uppercase tracking-wider text-gray-400">{{ $lbl }}</p>
+                                <p class="text-xs font-medium text-gray-900 dark:text-gray-100 tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $einheit : '—' }}</p>
+                                @if($subLbl !== null)
+                                    <p class="text-[10px] text-gray-400 tabular-nums" data-naehrwert-sub="{{ $subLbl }}">{{ $subLbl }} {{ $subWert !== null ? number_format((float) $subWert, 1, ',', '.') . ' g' : '—' }}</p>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                    <p class="text-[10px] text-gray-400 mt-1">
+                        Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$voll->nutri_konfidenz] ?? '' }}">{{ strtoupper($voll->nutri_konfidenz ?? '—') }}</span>
+                        · {{ $voll->nutri_n_ingredients_mapped ?? 0 }}/{{ $voll->nutri_n_ingredients_total ?? 0 }} Zutaten mit Nährwert-Daten
+                        — BLS-Rohwerte, Garverlust/Putzverlust nicht angewendet (GL-08)
+                    </p>
+                @endif
+            </x-foodalchemist::modal-section>
         @else
-            <p class="text-xs text-gray-400 py-6 text-center">Details erscheinen nach dem ersten Speichern.</p>
+            <p class="text-xs text-gray-400 py-6 text-center">Deklaration erscheint nach dem ersten Speichern.</p>
         @endif
     </div>
 
