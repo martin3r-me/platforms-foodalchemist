@@ -54,6 +54,7 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         'FoodAlchemistGpCountUnitDefault', 'FoodAlchemistGpLaPreference', 'FoodAlchemistMatchProposal',
         'FoodAlchemistRecipeIngredient', 'FoodAlchemistRecipeNiveauEignung', 'FoodAlchemistRecipeSektorEignung',
         'FoodAlchemistConceptSektorEignung', 'FoodAlchemistTeamSetting',
+        'FoodAlchemistCanvasEntry',                                    // Zugriff nur via Canvas-Aggregat (CanvasService)
     ];
     $modelDir = dirname((new ReflectionClass(FoodAlchemistRecipe::class))->getFileName());
     $fehlend = [];

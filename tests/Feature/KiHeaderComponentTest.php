@@ -9,13 +9,14 @@ uses(TestCase::class);
  * M0-09: Baustein ki-header (P-3) — rendert alle 3 Quellen-Zustände (GL-07 §4.1)
  * und verdrahtet das GL-07-Quadrupel als wire:click-Vertrag (ai_/accept_/clear_/manual_).
  */
-it('rendert Zustand unbefüllt: kein Reset, keine Konfidenz, Autopilot + Manuell verdrahtet', function () {
+it('rendert Zustand unbefüllt: kein Reset, keine Konfidenz, Autopilot verdrahtet', function () {
+    // „Manuell"-Button entfernt (Dominique 2026-07-01): redundant — Editieren+Speichern setzt quelle=manual ohnehin
     $html = Blade::render('<x-foodalchemist::ki-header label="Tags" field="tags" />');
 
     expect($html)->toContain('data-quelle="leer"')
         ->and($html)->toContain('unbefüllt')
         ->and($html)->toContain('wire:click="ai_tags"')
-        ->and($html)->toContain('wire:click="manual_tags"')
+        ->and($html)->not->toContain('wire:click="manual_tags"')
         ->and($html)->not->toContain('wire:click="clear_tags"')
         ->and($html)->not->toContain('data-ki-confidence');
 });

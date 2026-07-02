@@ -65,7 +65,7 @@ class ComponentEquivalentService
      */
     public function fuer(Team $team, string $kind, int $id): Collection
     {
-        return Equiv::where('team_id', $team->id)
+        return Equiv::visibleToTeam($team)
             ->where(fn ($q) => $q
                 ->where(fn ($w) => $w->where('source_kind', $kind)->where('source_id', $id))
                 ->orWhere(fn ($w) => $w->where('alt_kind', $kind)->where('alt_id', $id)))
@@ -128,7 +128,7 @@ class ComponentEquivalentService
             return [];
         }
 
-        $equivs = Equiv::where('team_id', $team->id)
+        $equivs = Equiv::visibleToTeam($team)
             ->where(fn ($q) => $q
                 ->where(fn ($w) => $w->where('source_kind', Equiv::KIND_GP)->whereIn('source_id', $gpIds))
                 ->orWhere(fn ($w) => $w->where('alt_kind', Equiv::KIND_GP)->whereIn('alt_id', $gpIds))
@@ -195,7 +195,7 @@ class ComponentEquivalentService
             throw new \RuntimeException('Kein Ersatz für diese Zutat hinterlegt.');
         }
 
-        $e = Equiv::where('team_id', $team->id)->findOrFail($treffer->id);
+        $e = Equiv::visibleToTeam($team)->findOrFail($treffer->id);
         $gegen = $e->counterpartOf($kind, $id);
         $neueMenge = $e->convertMenge($zutat->menge !== null ? (float) $zutat->menge : 0.0, $gegen['von']);
 

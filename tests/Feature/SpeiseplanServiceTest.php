@@ -25,29 +25,33 @@ beforeEach(function () {
     $this->pakete->update($this->rootTeam, $this->paket->id, ['preis_pro_person' => 2.50, 'ek_pro_person' => 0.80]);
 });
 
-it('M14: Eintrag belegt Zelle mit GENAU EINEM Inhalt; Raster + Kosten pro Tag', function () {
-    $sp = $this->plan->create($this->rootTeam, ['name' => 'KW 24', 'zyklus_wochen' => 1]);
+it('M14/v2: Eintrag belegt Zelle mit GENAU EINEM Inhalt; Wochen-Raster + Kosten pro Tag', function () {
+    // Speiseplan v2: echtes Datum × Linie × Mahlzeit statt woche/wochentag
+    $sp = $this->plan->create($this->rootTeam, ['name' => 'KW 28', 'zyklus_wochen' => 1, 'start_datum' => '2026-07-06']);
+    $mo = '2026-07-06';                                             // Montag
+    $di = '2026-07-07';
     // Mo Mittag: Gericht (3,50) + Paket (2,50)
-    $this->plan->addEintrag($this->rootTeam, $sp->id, ['woche' => 1, 'wochentag' => 1, 'mahlzeit' => 'mittag', 'vk_recipe_id' => $this->gericht->id]);
-    $this->plan->addEintrag($this->rootTeam, $sp->id, ['woche' => 1, 'wochentag' => 1, 'mahlzeit' => 'mittag', 'paket_id' => $this->paket->id]);
-    // Eintrag mit BEIDEN gesetzt → nur concept gewinnt (genau eines)
-    $beide = $this->plan->addEintrag($this->rootTeam, $sp->id, ['woche' => 1, 'wochentag' => 2, 'mahlzeit' => 'mittag', 'paket_id' => $this->paket->id, 'vk_recipe_id' => $this->gericht->id]);
+    $this->plan->addEintrag($this->rootTeam, $sp->id, ['datum' => $mo, 'mahlzeit' => 'mittag', 'vk_recipe_id' => $this->gericht->id]);
+    $this->plan->addEintrag($this->rootTeam, $sp->id, ['datum' => $mo, 'mahlzeit' => 'mittag', 'paket_id' => $this->paket->id]);
+    // Eintrag mit BEIDEN gesetzt → nur paket gewinnt (genau eines)
+    $beide = $this->plan->addEintrag($this->rootTeam, $sp->id, ['datum' => $di, 'mahlzeit' => 'mittag', 'paket_id' => $this->paket->id, 'vk_recipe_id' => $this->gericht->id]);
     expect($beide->paket_id)->toBe($this->paket->id)->and($beide->vk_recipe_id)->toBeNull();
 
-    $raster = $this->plan->raster($sp->refresh());
-    expect($raster[1][1]['mittag'])->toHaveCount(2);
+    $montag = \Illuminate\Support\Carbon::parse($mo);
+    $raster = $this->plan->wochenRaster($sp->refresh(), 'mittag', $montag);
+    expect($raster[0][$mo])->toHaveCount(2);                        // ohne Linie → Key 0
 
-    $kosten = $this->plan->kosten($sp);
-    expect($kosten['pro_tag'][1][1]['vk'])->toBe(6.0)               // 3,50 + 2,50
-        ->and($kosten['pro_tag'][1][1]['ek'])->toBe(1.8)            // 1,00 + 0,80
-        ->and($kosten['gesamt']['vk'])->toBe(8.5);                  // + Di 2,50
+    $kosten = $this->plan->wochenKosten($sp, 'mittag', $montag);
+    expect($kosten['pro_tag'][$mo]['vk'])->toBe(6.0)                // 3,50 + 2,50
+        ->and($kosten['pro_tag'][$mo]['ek'])->toBe(1.8)             // 1,00 + 0,80
+        ->and($kosten['woche']['vk'])->toBe(8.5);                   // + Di 2,50
 });
 
-it('M14: Wiederholungs-Check flaggt zu engen Abstand', function () {
-    $sp = $this->plan->create($this->rootTeam, ['name' => 'Zyklus', 'zyklus_wochen' => 2, 'min_abstand_tage' => 5]);
-    // Tagessuppe Mo (Tag 1) und Mi (Tag 3) → Abstand 2 < 5 → Konflikt
-    $this->plan->addEintrag($this->rootTeam, $sp->id, ['woche' => 1, 'wochentag' => 1, 'mahlzeit' => 'mittag', 'vk_recipe_id' => $this->gericht->id]);
-    $this->plan->addEintrag($this->rootTeam, $sp->id, ['woche' => 1, 'wochentag' => 3, 'mahlzeit' => 'mittag', 'vk_recipe_id' => $this->gericht->id]);
+it('M14/v2: Wiederholungs-Check flaggt zu engen Abstand (echte Tages-Abstände)', function () {
+    $sp = $this->plan->create($this->rootTeam, ['name' => 'Zyklus', 'zyklus_wochen' => 2, 'min_abstand_tage' => 5, 'start_datum' => '2026-07-06']);
+    // Tagessuppe Mo (06.07.) und Mi (08.07.) → Abstand 2 < 5 → Konflikt
+    $this->plan->addEintrag($this->rootTeam, $sp->id, ['datum' => '2026-07-06', 'mahlzeit' => 'mittag', 'vk_recipe_id' => $this->gericht->id]);
+    $this->plan->addEintrag($this->rootTeam, $sp->id, ['datum' => '2026-07-08', 'mahlzeit' => 'mittag', 'vk_recipe_id' => $this->gericht->id]);
 
     $w = collect($this->plan->wiederholungen($sp->refresh()))->firstWhere('key', 'g' . $this->gericht->id);
     expect($w['vorkommen'])->toBe(2)->and($w['min_abstand'])->toBe(2)->and($w['konflikt'])->toBeTrue();

@@ -175,9 +175,11 @@ class ConcepterAggregateService
             $ekPositionen++;
 
             // Basisrezept-Posten (Paket/Concept): Menge = GRAMM/Person → Beitrag als Batch-Bruchteil
-            // (g/Person ÷ Batch-Gramm) für EK/Zeit/Gewicht; kein Einzel-VK. Zweig nur bei
-            // ist_verkaufsrezept=0 → der Gericht-Pfad (Portion/Stück) bleibt unverändert.
-            if (! (bool) ($r['gericht']->ist_verkaufsrezept ?? true)) {
+            // (g/Person ÷ Batch-Gramm) für EK/Zeit/Gewicht; kein Einzel-VK. Stück-Modus hat
+            // VORRANG: Basisrezept mit Zähl-Einheit + ertrag_stueck (Törtchen) rechnet weiter
+            // über den Portion/Stück-Pfad — sonst würde die Stückzahl als Gramm verrechnet.
+            if (! (bool) ($r['gericht']->ist_verkaufsrezept ?? true)
+                && ! self::stueckModus($r['einheit'] ?? null, $r['gericht'])) {
                 $yieldG = (float) ($r['gericht']->yield_kg ?? 0) * 1000;
                 $mengeG = $r['menge'] !== null ? (float) $r['menge'] : null;
                 if ($mengeG === null || $mengeG <= 0 || $yieldG <= 0) {

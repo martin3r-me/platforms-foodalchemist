@@ -47,14 +47,15 @@ it('rendert den Schirm mit beiden Bäumen', function () {
 });
 
 it('Kategorie-Baum: anlegen, verschachteln (markierter Knoten = Eltern), umbenennen, löschen reparented', function () {
+    // Settings-Umbau (#371): getrennte Top-/Sub-Anlage (neuTopKat/katNeuTop + neuSubKat/katNeuSub)
     $comp = Livewire::test(KonzeptTaxonomie::class)
-        ->set('neueKategorie', 'Buffets')->call('katNeu');
+        ->set('neuTopKat', 'Buffets')->call('katNeuTop');
 
     $eltern = FoodAlchemistConceptCategory::where('name', 'Buffets')->firstOrFail();
 
     // markierter Knoten wird Eltern für den nächsten Eintrag
     $comp->call('katWaehlen', $eltern->id)
-        ->set('neueKategorie', 'Lunchbuffet')->call('katNeu');
+        ->set('neuSubKat', 'Lunchbuffet')->call('katNeuSub');
     $kind = FoodAlchemistConceptCategory::where('name', 'Lunchbuffet')->firstOrFail();
     expect((int) $kind->parent_id)->toBe($eltern->id);
 
@@ -71,13 +72,13 @@ it('Kategorie-Baum: anlegen, verschachteln (markierter Knoten = Eltern), umbenen
 
 it('Klasse-Baum: anlegen + verschachteln als Vokabular-Baum', function () {
     $comp = Livewire::test(KonzeptTaxonomie::class)
-        ->set('neueKlasse', 'Buffet')->call('klasseNeu');
+        ->set('neuTopKlasse', 'Buffet')->call('klasseNeuTop');
 
     $eltern = FoodAlchemistVocabKlasse::where('name', 'Buffet')->firstOrFail();
     expect($eltern->slug)->toBe('buffet');
 
     $comp->call('klasseWaehlen', $eltern->id)
-        ->set('neueKlasse', 'Flying Buffet')->call('klasseNeu');
+        ->set('neuSubKlasse', 'Flying Buffet')->call('klasseNeuSub');
     $kind = FoodAlchemistVocabKlasse::where('name', 'Flying Buffet')->firstOrFail();
     expect((int) $kind->parent_id)->toBe($eltern->id);
 

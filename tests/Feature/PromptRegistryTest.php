@@ -23,6 +23,7 @@ const REGISTRY_SOLL = [
     'recipe.review' => 'A', 'recipe.pairing' => 'A', 'recipe.anker' => 'B',
     'recipe.equipment' => 'B', 'recipe.extract' => 'C',
     'recipe.ueberarbeiten' => 'A',                                    // R6: KI-Überarbeiten (freie Anweisung, Ist-Button)
+    'recipe.sensorik' => 'B',                                         // Sensorik-Bewertung des fertigen Gerichts (recipe_sensorik)
     'gp.naehrwerte' => 'B',                                           // R10: Nährwert-Fallback ohne LA-Daten (Ist-Feature)
     // VK-Welt
     'vk.generator' => 'B', 'vk.speisen_klasse' => 'B', 'vk.rollen' => 'B',
