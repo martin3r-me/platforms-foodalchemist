@@ -14,6 +14,7 @@ enum SignalTyp: string
     case MargeUnterZiel = 'marge_unter_ziel';
     case WareneinsatzUeberZiel = 'wareneinsatz_ueber_ziel';
     case DatenqualitaetGpLa = 'datenqualitaet_gp_la';
+    case NaehrwertPlausi = 'naehrwert_plausi';
 
     public function label(): string
     {
@@ -23,6 +24,7 @@ enum SignalTyp: string
             self::MargeUnterZiel => 'Marge unter Ziel',
             self::WareneinsatzUeberZiel => 'Wareneinsatz über Ziel',
             self::DatenqualitaetGpLa => 'Datenqualität GP/LA',
+            self::NaehrwertPlausi => 'Nährwert-Plausibilität',
         };
     }
 
@@ -35,6 +37,7 @@ enum SignalTyp: string
             self::MargeUnterZiel => 'heroicon-o-scale',
             self::WareneinsatzUeberZiel => 'heroicon-o-shopping-cart',
             self::DatenqualitaetGpLa => 'heroicon-o-exclamation-triangle',
+            self::NaehrwertPlausi => 'heroicon-o-beaker',
         };
     }
 }

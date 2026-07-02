@@ -27,7 +27,49 @@ class SignalDetektorService
             + $this->veraltetePreise($team)
             + $this->preisAnomalie($team)
             + $this->margeUnterZiel($team)
-            + $this->wareneinsatzUeberZiel($team);
+            + $this->wareneinsatzUeberZiel($team)
+            + $this->naehrwertPlausi($team);
+    }
+
+    /**
+     * Nährwert-Plausibilität: „davon"-Werte über ihrem Oberwert (Zucker > KH bzw.
+     * gesättigte > Gesamt-Fett). Entsteht, wenn die LA-Abdeckung je Nährstoff
+     * unterschiedlich ist (Ø über verschiedene LA-Mengen) — auf einem Label wäre
+     * das ein Fehler. KEIN stilles Clampen (Ehrlichkeits-Prinzip): Summen-Signal.
+     */
+    public function naehrwertPlausi(Team $team, float $toleranzG = 0.1): int
+    {
+        $q = FoodAlchemistRecipe::visibleToTeam($team)
+            ->whereNotNull('nutri_kcal_per_100g')
+            ->where(fn ($w) => $w
+                ->whereRaw('nutri_sugar_g_per_100g > nutri_carbs_g_per_100g + ?', [$toleranzG])
+                ->orWhereRaw('nutri_saturated_fat_g_per_100g > nutri_fat_g_per_100g + ?', [$toleranzG]));
+
+        $anzahl = (clone $q)->count();
+        if ($anzahl === 0) {
+            return 0;
+        }
+        $beispiele = (clone $q)->orderBy('id')->limit(10)
+            ->get(['id', 'name', 'nutri_carbs_g_per_100g', 'nutri_sugar_g_per_100g', 'nutri_fat_g_per_100g', 'nutri_saturated_fat_g_per_100g'])
+            ->map(fn ($r) => [
+                'id' => (int) $r->id, 'name' => $r->name,
+                'kh' => (float) $r->nutri_carbs_g_per_100g, 'zucker' => (float) $r->nutri_sugar_g_per_100g,
+                'fett' => (float) $r->nutri_fat_g_per_100g, 'gesfett' => (float) $r->nutri_saturated_fat_g_per_100g,
+            ])->all();
+
+        $this->signals->erzeuge(
+            $team,
+            SignalTyp::NaehrwertPlausi,
+            SignalSeverity::Warnung,
+            $anzahl . ' Rezepte mit unplausiblen Nährwerten (Zucker > KH / gesättigte > Fett)',
+            [
+                'dedup_key' => 'naehrwert-plausi',
+                'beschreibung' => '„davon"-Wert liegt über dem Oberwert — Ursache ist meist ungleiche Nährwert-Abdeckung der Lieferantenartikel je GP (Ø über verschiedene LA-Mengen). Auf Labels/Foodbooks wäre das ein Deklarationsfehler — betroffene GP-Daten prüfen.',
+                'payload' => ['anzahl' => $anzahl, 'beispiele' => $beispiele],
+            ]
+        );
+
+        return 1;
     }
 
     /**

@@ -130,3 +130,25 @@ it('#393-Rest: ReviewQueue-Match-Zähler ist team-scoped (aktuelles Team), nicht
     $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
     Livewire::test(ReviewQueue::class)->assertViewHas('matchZahl', 1);
 });
+
+it('Detektor naehrwertPlausi: flaggt Zucker>KH bzw. gesFett>Fett, Toleranz schützt Rundungs-Rauschen', function () {
+    $mk = fn (string $key, array $nutri) => \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => $key, 'name' => 'R-' . $key, 'status' => 'approved',
+        'nutri_kcal_per_100g' => 100,
+    ] + $nutri);
+    $mk('zucker-hoch', ['nutri_carbs_g_per_100g' => 3.4, 'nutri_sugar_g_per_100g' => 3.9, 'nutri_fat_g_per_100g' => 4.0, 'nutri_saturated_fat_g_per_100g' => 1.0]);
+    $mk('gesfett-hoch', ['nutri_carbs_g_per_100g' => 10, 'nutri_sugar_g_per_100g' => 2, 'nutri_fat_g_per_100g' => 2.0, 'nutri_saturated_fat_g_per_100g' => 2.5]);
+    $mk('plausibel', ['nutri_carbs_g_per_100g' => 10, 'nutri_sugar_g_per_100g' => 4, 'nutri_fat_g_per_100g' => 5.0, 'nutri_saturated_fat_g_per_100g' => 2.0]);
+    $mk('rundung', ['nutri_carbs_g_per_100g' => 3.40, 'nutri_sugar_g_per_100g' => 3.45, 'nutri_fat_g_per_100g' => 5.0, 'nutri_saturated_fat_g_per_100g' => 2.0]); // < Toleranz 0,1
+
+    expect($this->detektor->naehrwertPlausi($this->rootTeam))->toBe(1);
+
+    $signal = FoodAlchemistSignal::where('typ', 'naehrwert_plausi')->firstOrFail();
+    expect($signal->payload['anzahl'])->toBe(2)
+        ->and(collect($signal->payload['beispiele'])->pluck('name')->sort()->values()->all())
+        ->toBe(['R-gesfett-hoch', 'R-zucker-hoch']);
+
+    // Idempotenz: zweiter Lauf aktualisiert statt dupliziert
+    $this->detektor->naehrwertPlausi($this->rootTeam);
+    expect(FoodAlchemistSignal::where('typ', 'naehrwert_plausi')->count())->toBe(1);
+});

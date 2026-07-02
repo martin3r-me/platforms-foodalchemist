@@ -13,8 +13,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /**
  * R10 (Ist-Feature): ✨ Allergene/Nährwerte per KI schätzen, wenn keine
  * LA-Daten — GL-07 (Vorschlag → Übernehmen schreibt Override bzw. Fallback-
- * Schicht); der Fallback gilt NUR der Panel-Anzeige, nie der GL-08-Rezept-
- * Aggregation.
+ * Schicht). KI-Fallback gilt NUR der Panel-Anzeige; KURATIERTE Werte
+ * (nutri_quelle='manual') fließen seit dem Salz-Fix auch in die GL-08-
+ * Rezept-Aggregation (LA-Lücken wie Speisesalz ohne kcal-Label).
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -81,4 +82,40 @@ it('FakeProvider-Echo ⇒ ehrlicher Fehler, nichts geschrieben; Kind-Team blockt
     Livewire::test(DetailPanel::class, ['gpId' => $this->gp->id])
         ->call('kiAllergene')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Kurations-Team'));
+});
+
+it('Salz-Fix: manual-kuratierte GP-Werte fließen in die Rezept-Aggregation, KI-Werte nicht', function () {
+    $g = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
+    $svc = app(\Platform\FoodAlchemist\Services\RecipeService::class);
+
+    // Speisesalz-Muster: LA hat sodium, aber KEIN kcal → Leit-Indikator schlug bisher fehl
+    $salz = $this->makeGp($this->rootTeam, 'Speisesalz');
+    $supplier = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);
+    $la = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id, 'designation' => 'Speisesalz 10 kg', 'qty' => 10, 'unit_code' => 'kg',
+    ]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => $salz->id]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistItemNutritional::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'sodium' => 39480]);
+
+    // Kuratierung wie beim echten Salz-GP: 0 kcal/Makros, 100 g Salz, quelle=manual
+    $salz->update(['nutri_kcal_per_100g' => 0, 'nutri_protein_g_per_100g' => 0, 'nutri_fat_g_per_100g' => 0,
+        'nutri_carbs_g_per_100g' => 0, 'nutri_salt_g_per_100g' => 100, 'nutri_quelle' => 'manual']);
+
+    $wasser = $this->makeGp($this->rootTeam, 'Wasser still');       // ohne Daten → verdünnt nur
+    $rezept = $svc->create($this->rootTeam, ['name' => 'Sole: Test']);
+    $rezept = $svc->syncIngredients($this->rootTeam, $rezept->id, [
+        ['gp_id' => $salz->id, 'raw_text' => '10 g Salz', 'menge' => '10', 'einheit_vocab_id' => $g->id],
+        ['gp_id' => $wasser->id, 'raw_text' => '990 g Wasser', 'menge' => '990', 'einheit_vocab_id' => $g->id],
+    ]);
+
+    // 10 g Salz × 100 g/100g ÷ 1000 g Gesamt = 1,0 g Salz/100 g — kcal ehrlich 0
+    expect((float) $rezept->nutri_salt_g_per_100g)->toBe(1.0)
+        ->and((float) $rezept->nutri_kcal_per_100g)->toBe(0.0);
+
+    // Gegenprobe: gleiche Lage mit quelle=ki → Aggregation ignoriert den Fallback weiter
+    $salz->update(['nutri_quelle' => 'ki']);
+    $rezept = $svc->syncIngredients($this->rootTeam, $rezept->id, [
+        ['gp_id' => $salz->id, 'raw_text' => '10 g Salz', 'menge' => '10', 'einheit_vocab_id' => $g->id],
+    ]);
+    expect($rezept->nutri_kcal_per_100g)->toBeNull();
 });

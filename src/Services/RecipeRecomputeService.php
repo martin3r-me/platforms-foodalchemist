@@ -479,7 +479,11 @@ class RecipeRecomputeService
                     ];
                 }
             } elseif ($z->gp !== null) {
-                $n = $this->gpAggregate->naehrwerte($z->gp);
+                // GL-08-Verfeinerung (Salz-Fall): KURATIERTE GP-Werte (nutri_quelle='manual')
+                // dürfen LA-Lücken füllen — z.B. Speisesalz-LAs mit sodium, aber ohne kcal
+                // (Leit-Indikator schlug fehl → Salz trug 0 bei). KI-Schätzungen bleiben
+                // weiterhin Panel-only und verfälschen keine Rezept-Nährwerte.
+                $n = $this->gpAggregate->naehrwerte($z->gp, mitKiFallback: $z->gp->nutri_quelle === 'manual');
                 if ($n['energy_kcal']['avg'] !== null) {           // kcal = Leit-Indikator
                     $werte = [
                         'kcal' => $n['energy_kcal']['avg'],
