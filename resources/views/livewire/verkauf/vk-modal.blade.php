@@ -96,7 +96,8 @@
              bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
         <div x-data="{ tab: 'aufbau' }" data-vk-tabs>
             <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
-                @php($vkTabs = ['aufbau' => 'Aufbau', 'naehrwerte' => 'Nährwerte', 'allergene' => 'Allergene & Diät', 'kalkulation' => 'Kalkulation', 'service' => 'Service'])
+                {{-- 'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" — bündelt Allergene · Zusatzstoffe · Nährwerte · Spezifikation (Rezept-Modal-Parität) --}}
+                @php($vkTabs = ['aufbau' => 'Aufbau', 'allergene' => 'Deklaration', 'kalkulation' => 'Kalkulation', 'service' => 'Service'])
                 @if($rezept !== null)@php($vkTabs['sensorik'] = 'Sensorik & Pairing')@endif
                 @php($vkTabs['notizen'] = 'Notizen')
                 @foreach($vkTabs as $tabKey => $tabLabel)
@@ -195,9 +196,14 @@
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab AUFBAU --}}
 
-        {{-- ── Tab: NÄHRWERTE (Nährwerte + Spezifikation) ──────────────── --}}
-        <div x-show="tab === 'naehrwerte'" x-cloak class="pt-4 space-y-4">
-        {{-- M9-01d: Nährwerte (GL-08-Aggregate — pro 100 g + pro Stück) --}}
+        {{-- ── Tab: DEKLARATION (Allergene · Zusatzstoffe · Nährwerte · Spezifikation) ── --}}
+        <div x-show="tab === 'allergene'" x-cloak class="pt-4 space-y-4">
+        {{-- M9-01c: Allergene · Zusatzstoffe · Diät (geteiltes R6-Partial) --}}
+        <x-foodalchemist::modal-section title="Deklaration">
+            @include('foodalchemist::livewire.recipes.partials.deklaration', ['rezept' => $rezept])
+        </x-foodalchemist::modal-section>
+
+        {{-- M9-01d: Nährwerte (GL-08-Aggregate — pro 100 g + pro Stück; seit 2026-07-02 hier statt im eigenen Tab) --}}
         <x-foodalchemist::modal-section title="Nährwerte">
             @if($rezept->nutri_kcal_per_100g === null)
                 <p class="text-[11px] text-gray-400" data-vk-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
@@ -248,15 +254,7 @@
                 </div>
             </div>
         </x-foodalchemist::modal-section>
-        </div>{{-- /Tab NÄHRWERTE --}}
-
-        {{-- ── Tab: ALLERGENE & DIÄT (Deklaration) ─────────────────────── --}}
-        <div x-show="tab === 'allergene'" x-cloak class="pt-4 space-y-4">
-        {{-- M9-01c: Allergene · Zusatzstoffe · Diät (geteiltes R6-Partial) --}}
-        <x-foodalchemist::modal-section title="Deklaration">
-            @include('foodalchemist::livewire.recipes.partials.deklaration', ['rezept' => $rezept])
-        </x-foodalchemist::modal-section>
-        </div>{{-- /Tab ALLERGENE --}}
+        </div>{{-- /Tab DEKLARATION --}}
 
         {{-- ── Tab: KALKULATION (Verkaufseinheit + Verkaufs-Block) ──────── --}}
         <div x-show="tab === 'kalkulation'" x-cloak class="pt-4 space-y-4">
