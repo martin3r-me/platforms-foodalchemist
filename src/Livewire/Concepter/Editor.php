@@ -34,7 +34,7 @@ class Editor extends Component
 
     public ?int $id = null;
 
-    public string $tab = 'aufbau';       // aufbau | naehrwerte | allergene | kalkulation | geschirr | notizen
+    public string $tab = 'aufbau';       // aufbau | allergene (Label „Deklaration": Diät + Nährwerte) | kalkulation | geschirr | notizen
 
     /** @var array<string, mixed> */
     public array $form = [];
@@ -176,7 +176,7 @@ class Editor extends Component
 
     public function setTab(string $tab): void
     {
-        if (in_array($tab, ['aufbau', 'konzept', 'naehrwerte', 'allergene', 'kalkulation', 'geschirr', 'sensorik', 'notizen'], true)) {
+        if (in_array($tab, ['aufbau', 'konzept', 'allergene', 'kalkulation', 'geschirr', 'sensorik', 'notizen'], true)) {
             $this->tab = $tab;
         }
     }

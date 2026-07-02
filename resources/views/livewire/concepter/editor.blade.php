@@ -130,8 +130,8 @@
             <div class="flex gap-4 border-b border-black/5 dark:border-white/10 mt-1">
                 @php($editorTabs = ['aufbau' => 'Aufbau'])
                 @if($concept)@php($editorTabs['konzept'] = 'Konzept')@endif
-                @php($editorTabs['naehrwerte'] = 'Nährwerte')
-                @php($editorTabs['allergene'] = 'Allergene & Diät')
+                {{-- 'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" (Diät-Rollup + Nährwerte/Person — Parität zu Rezept-/VK-Modal) --}}
+                @php($editorTabs['allergene'] = 'Deklaration')
                 @php($editorTabs['kalkulation'] = 'Kalkulation')
                 @if($concept)@php($editorTabs['geschirr'] = 'Geschirr')@endif
                 @if($concept)@php($editorTabs['sensorik'] = 'Sensorik')@endif
@@ -522,8 +522,25 @@
                 @endif
             @endif
 
-            {{-- ── Tab: NÄHRWERTE ────────────────────────────────────────── --}}
-            @if($tab === 'naehrwerte')
+            {{-- ── Tab: DEKLARATION (Diät-Rollup + Nährwerte/Person — zusammengelegt 2026-07-02, Parität zu Rezept-/VK-Modal) ── --}}
+            @if($tab === 'allergene')
+                @if($aggregat && $aggregat['allergene']['n_gerichte'] > 0)
+                    <span class="{{ $label }}">Aggregiert aus {{ $aggregat['allergene']['n_gerichte'] }} Gerichten (kein manuelles Gruppieren)</span>
+                    <div class="flex flex-wrap gap-1.5">
+                        @if($aggregat['allergene']['is_vegan'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>
+                        @elseif($aggregat['allergene']['is_vegetarian'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegetarisch</span>@endif
+                        @if($aggregat['allergene']['is_gluten_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">glutenfrei</span>@endif
+                        @if($aggregat['allergene']['is_lactose_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">laktosefrei</span>@endif
+                        @if($aggregat['allergene']['is_halal'])<span class="{{ $pill }} {{ $variantPill['info'] }}">halal</span>@endif
+                        @if($aggregat['allergene']['contains_pork'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Schwein</span>@endif
+                        @if($aggregat['allergene']['contains_beef'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Rind</span>@endif
+                        <span class="{{ $pill }} {{ $konfPill[$aggregat['allergene']['konfidenz']] ?? $variantPill['secondary'] }}">Konf. {{ $aggregat['allergene']['konfidenz'] }}</span>
+                    </div>
+                @else
+                    <p class="text-sm text-gray-400 py-6 text-center">Noch keine Gerichte für den Allergen-Rollup.</p>
+                @endif
+
+                <div class="border-t border-black/5 dark:border-white/10 mt-4 pt-3 space-y-2">
                 @if($aggregat && $aggregat['naehrwerte']['kcal'] !== null)
                     <div class="flex items-center justify-between">
                         <span class="{{ $label }}">Nährwerte / Person (aus den Gerichten · Portionsgramm)</span>
@@ -543,25 +560,7 @@
                 @else
                     <p class="text-sm text-gray-400 py-6 text-center">Keine Nährwerte — den Gerichten fehlen Werte oder Portionsgramm.</p>
                 @endif
-            @endif
-
-            {{-- ── Tab: ALLERGENE & DIÄT ─────────────────────────────────── --}}
-            @if($tab === 'allergene')
-                @if($aggregat && $aggregat['allergene']['n_gerichte'] > 0)
-                    <span class="{{ $label }}">Aggregiert aus {{ $aggregat['allergene']['n_gerichte'] }} Gerichten (kein manuelles Gruppieren)</span>
-                    <div class="flex flex-wrap gap-1.5">
-                        @if($aggregat['allergene']['is_vegan'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>
-                        @elseif($aggregat['allergene']['is_vegetarian'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegetarisch</span>@endif
-                        @if($aggregat['allergene']['is_gluten_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">glutenfrei</span>@endif
-                        @if($aggregat['allergene']['is_lactose_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">laktosefrei</span>@endif
-                        @if($aggregat['allergene']['is_halal'])<span class="{{ $pill }} {{ $variantPill['info'] }}">halal</span>@endif
-                        @if($aggregat['allergene']['contains_pork'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Schwein</span>@endif
-                        @if($aggregat['allergene']['contains_beef'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Rind</span>@endif
-                        <span class="{{ $pill }} {{ $konfPill[$aggregat['allergene']['konfidenz']] ?? $variantPill['secondary'] }}">Konf. {{ $aggregat['allergene']['konfidenz'] }}</span>
-                    </div>
-                @else
-                    <p class="text-sm text-gray-400 py-6 text-center">Noch keine Gerichte für den Allergen-Rollup.</p>
-                @endif
+                </div>
             @endif
 
             {{-- ── Tab: KALKULATION ──────────────────────────────────────── --}}
