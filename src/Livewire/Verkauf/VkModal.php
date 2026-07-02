@@ -84,6 +84,7 @@ class VkModal extends Component
                 'marketing_text' => $r->marketing_text,
                 'beschreibung' => $r->beschreibung,
                 'arbeitszeit_min' => $r->arbeitszeit_min,
+                'nebenkosten_eur' => $r->nebenkosten_eur,             // M-K8: direkte Einzelkosten → HK2 (#379)
                 'temperatur' => $r->temperatur,
                 'funktion' => $r->funktion,
                 'fertigungstiefe' => $r->fertigungstiefe,

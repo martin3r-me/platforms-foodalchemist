@@ -406,6 +406,10 @@
                     <input type="number" min="0" wire:model="form.arbeitszeit_min" class="{{ $input }}" />
                 </div>
                 <div>
+                    <label class="block {{ $label }} mb-1" title="M-K8: direkte Einzelkosten je Portion (Energie, Verpackung …) — fließen als Block in HK2">Nebenkosten (€/Portion)</label>
+                    <input type="number" min="0" step="0.01" wire:model="form.nebenkosten_eur" class="{{ $input }}" data-vk-nebenkosten />
+                </div>
+                <div>
                     <label class="block {{ $label }} mb-1">Temperatur</label>
                     <input type="text" wire:model="form.temperatur" placeholder="z. B. 75 °C Kerntemperatur · gekühlt" class="{{ $input }}" />
                 </div>

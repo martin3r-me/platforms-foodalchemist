@@ -41,6 +41,7 @@ it('M9-Felder speichern über die Whitelist; Plating/Marketing manuell ⇒ Linea
         ->set('form.marketing_text', 'Knuspriger Klassiker.')
         ->set('form.plating_text', '## Aufbau\n1. Bun setzen.')
         ->set('form.arbeitszeit_min', 8)
+        ->set('form.nebenkosten_eur', '1.50')
         ->set('form.funktion', 'Fingerfood')
         ->set('form.fertigungstiefe', 'teilfertig')
         ->set('form.notizen_manual', 'Catering-Notiz')
@@ -52,6 +53,7 @@ it('M9-Felder speichern über die Whitelist; Plating/Marketing manuell ⇒ Linea
         ->and($r->marketing_text_quelle)->toBe('manual')
         ->and($r->plating_quelle)->toBe('manual')
         ->and($r->arbeitszeit_min)->toBe(8)
+        ->and((float) $r->nebenkosten_eur)->toBe(1.5)                 // M-K8-Pflege zurück (#379)
         ->and($r->funktion)->toBe('Fingerfood')
         ->and($r->fertigungstiefe)->toBe('teilfertig')
         ->and($r->notizen_manual)->toBe('Catering-Notiz');
