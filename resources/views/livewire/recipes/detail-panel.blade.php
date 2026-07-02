@@ -1,9 +1,11 @@
 {{-- M4-05: Rezept-DetailPanel — KPI-Karte, Beschreibung, Zutaten read-only mit GP-Links + EK je Zeile, Diät-Sektion, Eignungen, Equipment --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-{{-- GP-Modal-Muster: section='ersatz' rendert NUR die Ersatz-Kartei (Eigenschaften-Tab im Modal) — ohne Panel-Chrome --}}
+{{-- GP-Modal-Muster: section='ersatz'|'eignung' rendert NUR die eine Kartei (Eigenschaften-Tab im Modal) — ohne Panel-Chrome --}}
 @php($nurErsatz = ($section ?? null) === 'ersatz')
+@php($nurEignung = ($section ?? null) === 'eignung')
+@php($nurSektion = $nurErsatz || $nurEignung)
 
-<div class="{{ $nurErsatz ? 'space-y-2' : 'p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]' }}" data-rezept-panel>
+<div class="{{ $nurSektion ? 'space-y-2' : 'p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]' }}" data-rezept-panel>
     @if($rezept === null)
         <div class="text-center text-xs text-gray-400 py-12">
             <div class="text-2xl mb-2">⌘</div>
@@ -94,7 +96,7 @@
         @endif
 
         @endunless
-        @unless($nurErsatz)
+        @unless($nurSektion)
         {{-- R6: Diät · Allergene · Zusatzstoffe — geteiltes Partial (auch im VK-Panel) --}}
         @include('foodalchemist::livewire.recipes.partials.deklaration')
 
@@ -116,22 +118,40 @@
             </div>
         @endif
 
-        {{-- Eignungen + Equipment --}}
-        @if($rezept->niveauEignungen->isNotEmpty() || $rezept->sektorEignungen->isNotEmpty())
-            <div data-eignungen>
-                <p class="{{ $dt }} mb-1">Eignung</p>
-                <div class="flex flex-wrap gap-1">
-                    @foreach($rezept->niveauEignungen as $e)
-                        <span class="{{ $pill }} {{ $variantPill['info'] }}" title="Niveau · {{ $e->quelle }}{{ $e->ai_confidence !== null ? ' ' . round($e->ai_confidence * 100) . '%' : '' }}">{{ $e->niveau_slug }}</span>
-                    @endforeach
-                    @foreach($rezept->sektorEignungen as $e)
-                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="Sektor · {{ $e->quelle }}">{{ $e->sektor_slug }}</span>
-                    @endforeach
-                </div>
-            </div>
-        @endif
-
         @endunless
+        {{-- Eignung — klickbare Toggle-Chips (M9-01k-Service). Im Modal lebt die Kartei im
+             Eigenschaften-Tab (section='eignung'), standalone (Sidebar) bleibt sie inline. --}}
+        @if($nurEignung || ! ($embedded ?? false))
+        @php($eignungVokab = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular())
+        @php($eignungAktiv = [
+            'niveau' => $rezept->niveauEignungen->keyBy('niveau_slug'),
+            'sektor' => $rezept->sektorEignungen->keyBy('sektor_slug'),
+        ])
+        <div data-eignungen>
+            @unless($nurEignung){{-- im Eigenschaften-Tab liefert die modal-section den Titel --}}
+            <p class="{{ $dt }} mb-1">Eignung</p>
+            @endunless
+            @if($fehlerEignung !== null)<p class="text-[11px] text-rose-500 mb-1" data-eignung-fehler>{{ $fehlerEignung }}</p>@endif
+            <div class="space-y-1.5">
+                @foreach(['niveau' => 'Niveau', 'sektor' => 'Sektor'] as $typ => $typLabel)
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <span class="text-[10px] uppercase tracking-wider text-gray-400 w-12 shrink-0">{{ $typLabel }}</span>
+                        @foreach($eignungVokab[$typ]['slugs'] as $slug)
+                            @php($eintrag = $eignungAktiv[$typ][$slug] ?? null)
+                            <button type="button" wire:key="eig-{{ $typ }}-{{ $slug }}" wire:click="eignungToggle('{{ $typ }}', '{{ $slug }}')"
+                                    class="{{ $pill }} transition-colors {{ $eintrag !== null
+                                        ? ($typ === 'niveau' ? $variantPill['info'] : $variantPill['primary'])
+                                        : 'border border-black/10 dark:border-white/15 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300' }}"
+                                    title="{{ $eintrag !== null
+                                        ? 'geeignet · ' . $eintrag->quelle . ($eintrag->ai_confidence !== null ? ' ' . round($eintrag->ai_confidence * 100) . '%' : '') . ' — Klick entfernt'
+                                        : 'Klick markiert als geeignet' }}"
+                                    data-eignung-chip="{{ $typ }}-{{ $slug }}">{{ $slug }}</button>
+                        @endforeach
+                    </div>
+                @endforeach
+            </div>
+        </div>
+        @endif
         {{-- Ersatz-Logik: make-or-buy — dieses Rezept ↔ Fertig-GP / Alternativ-Rezept.
              Im Modal lebt die Kartei im Eigenschaften-Tab (section='ersatz'); im Details-Embed
              darum ausgeblendet. Standalone (Browser-Sidebar) bleibt sie inline. --}}
@@ -290,7 +310,7 @@
         @endunless
 
         {{-- M4-12: Workflow-Aktionen --}}
-        @unless($nurErsatz)
+        @unless($nurSektion)
         <div class="flex flex-wrap items-center gap-1.5 border-t border-black/5 dark:border-white/10 pt-2" data-workflow>
             @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
                 @if($rezept->status->value !== $wert)

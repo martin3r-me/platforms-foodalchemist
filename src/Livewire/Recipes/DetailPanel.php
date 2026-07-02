@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Recipes;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Services\RecipeService;
 
@@ -78,6 +79,30 @@ class DetailPanel extends Component
         $team = Auth::user()?->currentTeamRelation;
         if ($team !== null) {
             app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->loese($team, $equivId);
+        }
+    }
+
+    public ?string $fehlerEignung = null;
+
+    /** Eignung-Chips klickbar (M9-01k-Service): aktiv → entfernen, inaktiv → als manual setzen. */
+    public function eignungToggle(string $typ, string $slug): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->fehlerEignung = null;
+        $svc = app(\Platform\FoodAlchemist\Services\RecipeService::class);
+        try {
+            $spalte = $typ === 'niveau' ? 'niveau_slug' : 'sektor_slug';
+            $relation = $typ === 'niveau' ? 'niveauEignungen' : 'sektorEignungen';
+            $aktiv = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($this->recipeId)
+                ->{$relation}->pluck($spalte)->contains($slug);
+            $aktiv
+                ? $svc->entferneEignung($team, $this->recipeId, $typ, $slug)
+                : $svc->setzeEignung($team, $this->recipeId, $typ, $slug);
+        } catch (\RuntimeException $e) {
+            $this->fehlerEignung = $e->getMessage();
         }
     }
 
