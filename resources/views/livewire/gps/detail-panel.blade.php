@@ -359,7 +359,9 @@
                         ['energy_kcal', 'Energie', 'kcal', 1],
                         ['protein', 'Eiweiß', 'g', 2],
                         ['fat', 'Fett', 'g', 2],
+                        ['saturated_fat', '— davon gesättigte Fettsäuren', 'g', 2],
                         ['carbs_absorbable', 'Kohlenhydrate', 'g', 2],
+                        ['sugar', '— davon Zucker', 'g', 2],
                         ['salt_g', 'Salz', 'g', 3],
                     ] as [$key, $label, $einheit, $stellen])
                         <div class="flex items-baseline justify-between">

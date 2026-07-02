@@ -101,7 +101,9 @@ class SupplierItemService
         'energy_kj' => ['Energie', 'kJ'],
         'protein' => ['Eiweiß', 'g'],
         'fat' => ['Fett', 'g'],
+        'saturated_fat' => ['davon ges. Fettsäuren', 'g'],
         'carbs_absorbable' => ['Kohlenhydrate', 'g'],
+        'sugar' => ['davon Zucker', 'g'],
         'sodium' => ['Natrium', 'g'],
     ];
 
