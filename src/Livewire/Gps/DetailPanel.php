@@ -28,7 +28,13 @@ class DetailPanel extends Component
     /** Ersatz-Logik: Suchtext für die Gegenseite (GP/Rezept) im Verknüpfen-Feld. */
     public string $ersatzSuche = '';
 
+    /** Verwaltung: Suchtext für das Ersetzungsziel („GP in allen Rezepten tauschen"). */
+    public string $tauschSuche = '';
+
     public ?string $fehler = null;
+
+    /** Erfolgs-Feedback (z.B. nach Rezept-Ersetzung) — grünes Pendant zu $fehler. */
+    public ?string $hinweis = null;
 
     /** Eingebettet im GP-Modal (recipe-modal-Muster): ohne Panel-Chrome, section = eine Kartei. */
     public bool $embedded = false;
@@ -49,7 +55,9 @@ class DetailPanel extends Component
         $this->gpId = $id;
         $this->laSuche = '';
         $this->ersatzSuche = '';
+        $this->tauschSuche = '';
         $this->fehler = null;
+        $this->hinweis = null;
         $this->kiVorschlag = null;
         $this->laKandidaten = null;
     }
@@ -219,6 +227,7 @@ class DetailPanel extends Component
             foreach ($this->kiVorschlag['werte'] as $feld => $wert) {
                 $update["allergen_{$feld}"] = $wert;             // GL-01 Prio 1: Override
             }
+            $update['allergene_quelle'] = 'ki';                  // Quelle sichtbar machen (✨-Marker, 2026-07-02)
             $update['allergene_ki_confidence'] = $this->kiVorschlag['confidence'];
             $gp->update($update);
         } else {
@@ -239,6 +248,52 @@ class DetailPanel extends Component
     public function kiVerwerfen(): void
     {
         $this->kiVorschlag = null;                                 // reject lässt Fachdaten unberührt (GL-07)
+    }
+
+    // ── Verwaltung (2026-07-02): GP ersetzen & löschen — Löschen nur ohne Referenzen ──
+
+    /** GP in allen Rezept-Zeilen durch $zielId ersetzen (Vorstufe zum Löschen). */
+    public function gpErsetzen(int $zielId): void
+    {
+        $gp = $this->kuratierbaresGp();
+        if ($gp === null) {
+            return;
+        }
+        $team = Auth::user()?->currentTeamRelation;
+        $ziel = $team !== null ? FoodAlchemistGp::visibleToTeam($team)->find($zielId) : null;
+        if ($ziel === null) {
+            $this->fehler = 'Ziel-GP nicht gefunden.';
+
+            return;
+        }
+        try {
+            $ergebnis = app(\Platform\FoodAlchemist\Services\GpService::class)->ersetzeInRezepten($gp, $ziel);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->tauschSuche = '';
+        $this->hinweis = "{$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en) auf „{$ziel->name}\" umgehängt — Rezepte neu berechnet.";
+        $this->dispatch('gp-gespeichert'); // Browser: Rezept-Zähler/Zeile aktualisieren
+    }
+
+    /** GP löschen (Soft-Delete) — Service blockt bei Referenzen. */
+    public function gpLoeschen(): void
+    {
+        $gp = $this->kuratierbaresGp();
+        if ($gp === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\GpService::class)->deleteGp($gp);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->gpId = null;
+        $this->dispatch('gp-geloescht');
     }
 
     /** Curate-Gate + frisches GP — KI-Schätzung ist eine globale Katalog-Aktion (D1). */
@@ -352,6 +407,16 @@ class DetailPanel extends Component
                 ? app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->sucheZiele($team, $this->ersatzSuche, 'gp', $gp->id)
                 : collect(),
             'verknuepfbare' => $gp !== null && $this->laSuche !== '' ? $leads->sucheVerknuepfbare($team, $this->laSuche) : collect(),
+            // Verwaltung (2026-07-02): Referenz-Zähler fürs Lösch-Gate + Kandidaten für den Rezept-Tausch
+            'referenzen' => $gp !== null ? app(\Platform\FoodAlchemist\Services\GpService::class)->referenzen($gp) : null,
+            'tauschKandidaten' => $gp !== null && $team !== null && $this->tauschSuche !== ''
+                ? FoodAlchemistGp::visibleToTeam($team)
+                    ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($this->tauschSuche)) . '%'])
+                    ->whereNotIn('status', ['merged', 'rejected'])
+                    ->where('id', '!=', $gp->id)
+                    ->where('is_platzhalter', false)
+                    ->orderBy('name')->limit(8)->get(['id', 'name', 'status'])
+                : collect(),
             // M9-05 (GP-Blickwinkel): in welchen Rezepten eingesetzt — klickbar
             'verwendungen' => $gp !== null
                 ? \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients AS ri')

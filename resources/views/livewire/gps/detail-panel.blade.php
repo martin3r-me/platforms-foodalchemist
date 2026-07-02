@@ -30,6 +30,9 @@
         @if($fehler !== null)
             <p class="text-[11px] text-rose-600 dark:text-rose-400" data-la-fehler>{{ $fehler }}</p>
         @endif
+        @if($hinweis !== null)
+            <p class="text-[11px] text-emerald-600 dark:text-emerald-400" data-hinweis>{{ $hinweis }}</p>
+        @endif
 
         {{-- Stammdaten-Raster: Label + Wert je Zelle LINKS-bündig (R9: das alte rechtsbündige Raster wirkte zerrissen) --}}
         @if($section === null)
@@ -239,8 +242,18 @@
         {{-- ALLERGENE (effektiv, GL-01) — immer sichtbar --}}
         @if($section === null || $section === 'allergene')
         <div class="border-t border-black/5 dark:border-white/10 pt-2" data-sektion="allergene">
+            {{-- KI-Transparenz (2026-07-02): Werte, die NUR aus KI-geschätzten Overrides stammen
+                 (0 LAs mit Daten), bekommen den ✨-Marker statt des irreführenden „NONE aus 0/0 LAs". --}}
+            @php($allergKiConf = $gp->allergene_ki_confidence ?? $gp->allergene_ai_confidence)
+            @php($nurKiOverride = $allergene !== null
+                && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0
+                && ($gp->allergene_quelle === 'ki' || $gp->allergene_ki_confidence !== null)
+                && collect($allergene)->contains(fn ($a) => $a['quelle'] === 'override'))
             <p class="{{ $dt }} mb-1 flex items-center gap-2">Allergene <span class="normal-case">(effektiv)</span>
-                @if($allergenKonfidenz !== null)
+                @if($nurKiOverride)
+                    <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case ml-1" title="KI-geschätzt — keine LA-Daten{{ $allergKiConf !== null ? ' · ' . round($allergKiConf * 100) . ' %' : '' }}" data-allergene-ki-marker>✨ KI</span>
+                    <span class="normal-case text-gray-400 font-normal"> · aus 0/{{ $gp->n_las_total }} LAs</span>
+                @elseif($allergenKonfidenz !== null)
                     <span class="ml-1 font-semibold normal-case {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$allergenKonfidenz['konfidenz']] ?? 'text-gray-400' }}">{{ strtoupper($allergenKonfidenz['konfidenz']) }}</span>
                     <span class="normal-case text-gray-400 font-normal"> · aus {{ $allergenKonfidenz['n_las_mit_daten'] }}/{{ $gp->n_las_total }} LAs</span>
                     @if($allergenKonfidenz['needs_review'])<span class="{{ $pill }} {{ $variantPill['danger'] }} ml-1" title="enthalten ↔ nicht_enthalten ohne spuren-Mittelweg: {{ implode(', ', $allergenKonfidenz['konflikt_felder']) }}">Review nötig</span>@endif
@@ -260,7 +273,7 @@
                 @php($unbekannt = collect($allergene)->filter(fn ($a) => $a['wert']->value === 'unbekannt'))
                 @php($freiAnzahl = collect($allergene)->filter(fn ($a) => $a['wert']->value === 'nicht_enthalten')->count())
                 @if($enthalten->isEmpty() && $spuren->isEmpty() && $unbekannt->isEmpty())
-                    <p class="text-xs text-emerald-600 dark:text-emerald-400" data-allergene-frei>✓ Keine der 14 EU-Allergene deklariert.</p>
+                    <p class="text-xs text-emerald-600 dark:text-emerald-400" data-allergene-frei>✓ Keine der 14 EU-Allergene deklariert.@if($nurKiOverride) <span class="text-violet-500 dark:text-violet-400" title="Schätzung ohne Lieferantenartikel-Beleg — für LMIV-Deklaration LA-Daten ergänzen">✨ KI-geschätzt, nicht LA-belegt</span>@endif</p>
                 @else
                     <div class="space-y-1.5" data-allergen-grid>
                         @if($enthalten->isNotEmpty())
@@ -412,6 +425,44 @@
             @empty
                 <p class="text-[11px] text-gray-400" data-verwendungen-leer>— in keinem Rezept eingesetzt —</p>
             @endforelse
+        </div>
+        @endif
+
+        {{-- Verwaltung (2026-07-02): GP ersetzen & löschen — Löschen nur ohne Referenzen --}}
+        @if($section === null && $kannKuratieren && ! $gp->is_platzhalter && $referenzen !== null)
+        <div class="border-t border-black/5 dark:border-white/10 pt-2" data-sektion="verwaltung">
+            <p class="{{ $dt }} mb-1">Verwaltung</p>
+            @if($referenzen['summe'] === 0)
+                <button type="button" wire:click="gpLoeschen"
+                        wire:confirm="„{{ $gp->name }}“ endgültig löschen? (Keine Referenzen vorhanden)"
+                        class="{{ $btnGhostXs }} text-rose-600 dark:text-rose-400" data-gp-loeschen>🗑 GP löschen</button>
+                <p class="text-[11px] text-gray-400 mt-1">Keine Referenzen — Löschen möglich (Soft-Delete).</p>
+            @else
+                <p class="text-[11px] text-gray-500 dark:text-gray-400" data-ref-zusammenfassung>
+                    Löschen blockiert — wird referenziert:
+                    {{ implode(' · ', array_filter([
+                        $referenzen['las'] > 0 ? $referenzen['las'] . ' LA(s)' : null,
+                        $referenzen['rezept_zeilen'] > 0 ? $referenzen['rezept_zeilen'] . ' Zeile(n) in ' . $referenzen['rezepte'] . ' Rezept(en)' : null,
+                        $referenzen['derivate'] > 0 ? $referenzen['derivate'] . ' Derivat(e)' : null,
+                        $referenzen['merge_quellen'] > 0 ? $referenzen['merge_quellen'] . ' Merge-Verweis(e)' : null,
+                        $referenzen['ersatz'] > 0 ? $referenzen['ersatz'] . ' Ersatz-Verknüpfung(en)' : null,
+                    ])) }}
+                </p>
+                @if($referenzen['rezept_zeilen'] > 0)
+                    <div class="pt-1.5" data-gp-tausch>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-1">In allen Rezepten ersetzen durch …</p>
+                        <input type="search" wire:model.live.debounce.300ms="tauschSuche" placeholder="Ersatz-GP suchen …" class="{{ $input }} !py-1" data-tausch-suche />
+                        @foreach($tauschKandidaten as $k)
+                            <button type="button" wire:key="tausch-{{ $k->id }}" wire:click="gpErsetzen({{ $k->id }})"
+                                    wire:confirm="„{{ $gp->name }}“ in {{ $referenzen['rezepte'] }} Rezept(en) durch „{{ $k->name }}“ ersetzen? Die Rezepte werden neu berechnet."
+                                    class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150 flex items-center gap-1.5">
+                                <span class="{{ $pill }} {{ $variantPill[$k->status->badgeVariant()] ?? $variantPill['secondary'] }} shrink-0">{{ $k->status->label() }}</span>
+                                <span class="min-w-0 flex-1 truncate">{{ $k->name }}</span>
+                            </button>
+                        @endforeach
+                    </div>
+                @endif
+            @endif
         </div>
         @endif
 

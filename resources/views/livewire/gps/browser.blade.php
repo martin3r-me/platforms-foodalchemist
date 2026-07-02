@@ -159,11 +159,12 @@
                             <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $gp->rezepte_count ?? '—' }}</td>
                             {{-- 3-Status-Symbol (fixe Zeilenhöhe): vorhanden · frei · keine Daten. Effektivwerte (Override>Mutter>LA-MAX), read-only (Quelle = LA). --}}
                             <td class="{{ $td }} whitespace-nowrap" data-allergen-status="{{ $gp->allergen_status ?? 'keine_daten' }}">
+                                @php($kiSuffix = $gp->allergen_ki ? ' — ✨ KI-geschätzt' . ($gp->allergen_ki_conf !== null ? ' (' . round($gp->allergen_ki_conf * 100) . ' %)' : '') . ', nicht durch Lieferantenartikel belegt' : '')
                                 @if(($gp->allergen_status ?? 'keine_daten') === 'vorhanden')
                                     <span class="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 text-[11px] font-medium"
-                                          title="Allergene enthalten: {{ collect($gp->allergen_badges)->map(fn ($f) => explode(' ', \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$f] ?? $f)[0])->implode(', ') ?: 'inkl. Spuren' }}">⚠ enthält</span>
+                                          title="Allergene enthalten: {{ collect($gp->allergen_badges)->map(fn ($f) => explode(' ', \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$f] ?? $f)[0])->implode(', ') ?: 'inkl. Spuren' }}{{ $kiSuffix }}">⚠ enthält @if($gp->allergen_ki)<span class="text-violet-500 dark:text-violet-400 font-normal" data-allergen-ki>✨ KI</span>@endif</span>
                                 @elseif($gp->allergen_status === 'frei')
-                                    <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-[11px]" title="Keine der 14 EU-Allergene deklariert (allergenfrei)">✓ frei</span>
+                                    <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-[11px]" title="Keine der 14 EU-Allergene deklariert (allergenfrei){{ $kiSuffix }}">✓ frei @if($gp->allergen_ki)<span class="text-violet-500 dark:text-violet-400" data-allergen-ki>✨ KI</span>@endif</span>
                                 @else
                                     <span class="inline-flex items-center gap-1 text-gray-400 text-[11px]" title="Keine Allergen-Angaben in den Lieferantenartikeln — nicht als frei werten">– keine Daten</span>
                                 @endif

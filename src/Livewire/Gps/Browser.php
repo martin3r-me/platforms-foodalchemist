@@ -112,6 +112,12 @@ class Browser extends Component
         // M3-09: Neuanlage/Edit → Tabelle + Baum-Counts neu rendern (Kontext bleibt)
     }
 
+    #[\Livewire\Attributes\On('gp-geloescht')]
+    public function gpGeloescht(): void
+    {
+        $this->gpId = null; // Auswahl aufheben — die Zeile existiert nicht mehr
+    }
+
     public function mount(): void
     {
         if ($this->gpId !== null) {
@@ -135,7 +141,8 @@ class Browser extends Component
             'warengruppen' => $team !== null ? $vocab->listWarengruppen($team) : collect(),
             'wgCounts' => $gps->wgCounts($team, $filters),
             'subCounts' => $this->warengruppe !== '' ? $gps->subKategorieCounts($team, $this->warengruppe) : [],
-            'statusFaelle' => GpStatus::cases(),
+            // Merged = System-Tombstone, komplett unsichtbar (2026-07-02) — weder Filter noch Zeilen
+            'statusFaelle' => array_values(array_filter(GpStatus::cases(), fn (GpStatus $f) => $f !== GpStatus::Merged)),
             'statusCounts' => $gps->statusCounts($team),
             'kpis' => $kpis->forTeam($team),
         ])->layout('platform::layouts.app');

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\GpStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistComponentEquivalent;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistLookupWarengruppe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
@@ -317,15 +318,23 @@ class GpService
 
             $mutter = $gp->is_derivat ? $muetter->get($gp->derivat_von_gp_id) : null;
             $rangVon = ['enthalten' => 3, 'spuren' => 2, 'nicht_enthalten' => 1, 'unbekannt' => 0];
+            $kiQuelle = fn (FoodAlchemistGp $g): bool => $g->allergene_quelle === 'ki' || $g->allergene_ki_confidence !== null;
+            // LA-belegt = irgendein Allergen hat konkrete LA-Daten (eigene bzw. Mutter-LAs bei Derivaten)
+            // — unabhängig davon, ob ein Override die Prio gewinnt (Override + LA-Bestätigung ≠ reine Schätzung).
+            $laBelegt = collect($raenge[$gp->id] ?? [])->max() > 0
+                || ($mutter !== null && collect($raenge[$mutter->id] ?? [])->max() > 0);
             $badges = [];
             $maxRang = 0;
+            $ausKiOverride = false; // mind. ein konkreter Wert stammt aus einem KI-geschätzten Override
             foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
                 $override = $gp->getAttribute("allergen_{$feld}");                     // Prio 1: Override
                 if ($override !== null) {
                     $r = $rangVon[$override] ?? 0;
+                    $ausKiOverride = $ausKiOverride || ($r > 0 && $kiQuelle($gp));
                 } elseif ($mutter !== null) {                                          // Prio 2: Derivat → Mutter
                     $mo = $mutter->getAttribute("allergen_{$feld}");
                     $r = $mo !== null ? ($rangVon[$mo] ?? 0) : (int) ($raenge[$mutter->id][$feld] ?? 0);
+                    $ausKiOverride = $ausKiOverride || ($mo !== null && $r > 0 && $kiQuelle($mutter));
                 } else {                                                               // Prio 3: LA-MAX
                     $r = (int) ($raenge[$gp->id][$feld] ?? 0);
                 }
@@ -337,6 +346,10 @@ class GpService
             $gp->setAttribute('allergen_badges', $badges);
             // 3-Status für die Liste: vorhanden (enthalten/Spuren) · frei (nur nicht_enthalten) · keine_daten (alles unbekannt)
             $gp->setAttribute('allergen_status', $maxRang >= 2 ? 'vorhanden' : ($maxRang === 1 ? 'frei' : 'keine_daten'));
+            // ✨-Marker (LMIV-Transparenz, 2026-07-02): Urteil beruht NUR auf KI-geschätzten
+            // Overrides ohne jede LA-Untermauerung — in der Liste sichtbar kennzeichnen.
+            $gp->setAttribute('allergen_ki', $maxRang >= 1 && ! $laBelegt && $ausKiOverride);
+            $gp->setAttribute('allergen_ki_conf', $gp->allergene_ki_confidence ?? $gp->allergene_ai_confidence);
         });
 
         return $seite;
@@ -346,6 +359,9 @@ class GpService
     private function browserQuery(?Team $team, array $filters): Builder
     {
         return $this->scoped(FoodAlchemistGp::query(), $team)
+            // Merged-GPs sind System-Tombstones des Merge-Werkzeugs — im Browser
+            // komplett unsichtbar (User-Entscheidung 2026-07-02): kein Filter, keine Zeilen.
+            ->where('foodalchemist_gps.status', '!=', GpStatus::Merged->value)
             ->when(($filters['search'] ?? '') !== '', function (Builder $q) use ($filters) {
                 $such = mb_strtolower(trim($filters['search']));
                 $q->where(fn (Builder $w) => $w
@@ -355,5 +371,82 @@ class GpService
             ->when(($filters['warengruppe'] ?? '') !== '', fn (Builder $q) => $q->where('warengruppe_code', $filters['warengruppe']))
             ->when(($filters['sub_kategorie'] ?? '') !== '', fn (Builder $q) => $q->where('sub_kategorie', $filters['sub_kategorie']))
             ->when(($filters['status'] ?? '') !== '', fn (Builder $q) => $q->where('status', $filters['status']));
+    }
+
+    // ── Lösch- & Ersetzungs-Pfad (User-Entscheidung 2026-07-02: Löschen nur ohne Referenzen) ──
+
+    /**
+     * Alle Referenzen, die ein Löschen blockieren — bewusst UNGESCOPED: der Katalog
+     * ist global (D1), auch Rezept-Zeilen fremder Teams zählen.
+     *
+     * @return array{las: int, rezept_zeilen: int, rezepte: int, derivate: int, merge_quellen: int, ersatz: int, summe: int}
+     */
+    public function referenzen(FoodAlchemistGp $gp): array
+    {
+        $zeilen = FoodAlchemistRecipeIngredient::where('gp_id', $gp->id);
+        $ref = [
+            'las' => $gp->structures()->count(),
+            'rezept_zeilen' => (clone $zeilen)->count(),
+            'rezepte' => (clone $zeilen)->distinct()->count('recipe_id'),
+            'derivate' => FoodAlchemistGp::where('derivat_von_gp_id', $gp->id)->count(),
+            'merge_quellen' => FoodAlchemistGp::where('merged_into_id', $gp->id)->count(),
+            'ersatz' => FoodAlchemistComponentEquivalent::where(fn (Builder $w) => $w
+                ->where(fn (Builder $q) => $q->where('source_kind', FoodAlchemistComponentEquivalent::KIND_GP)->where('source_id', $gp->id))
+                ->orWhere(fn (Builder $q) => $q->where('alt_kind', FoodAlchemistComponentEquivalent::KIND_GP)->where('alt_id', $gp->id)))
+                ->count(),
+        ];
+        $ref['summe'] = $ref['las'] + $ref['rezept_zeilen'] + $ref['derivate'] + $ref['merge_quellen'] + $ref['ersatz'];
+
+        return $ref;
+    }
+
+    /** GP löschen (Soft-Delete) — nur ohne jede Referenz; Platzhalter haben ihren eigenen Pfad (D-5). */
+    public function deleteGp(FoodAlchemistGp $gp): void
+    {
+        if ($gp->is_platzhalter) {
+            throw new \RuntimeException('Platzhalter werden über die Platzhalter-Verwaltung gelöscht.');
+        }
+        $ref = $this->referenzen($gp);
+        if ($ref['summe'] > 0) {
+            $teile = array_filter([
+                $ref['las'] > 0 ? "{$ref['las']} Lieferantenartikel" : null,
+                $ref['rezept_zeilen'] > 0 ? "{$ref['rezept_zeilen']} Rezept-Zeile(n) in {$ref['rezepte']} Rezept(en)" : null,
+                $ref['derivate'] > 0 ? "{$ref['derivate']} Derivat(e)" : null,
+                $ref['merge_quellen'] > 0 ? "{$ref['merge_quellen']} Merge-Verweis(e)" : null,
+                $ref['ersatz'] > 0 ? "{$ref['ersatz']} Ersatz-Verknüpfung(en)" : null,
+            ]);
+            throw new \RuntimeException('Löschen blockiert — wird referenziert: ' . implode(', ', $teile) . '.');
+        }
+        $gp->delete();
+    }
+
+    /**
+     * GP in ALLEN Rezept-Zeilen durch einen anderen ersetzen (Vorstufe zum Löschen:
+     * Referenzen umhängen). Global wie der Katalog selbst; alle betroffenen Rezepte
+     * werden anschließend neu berechnet (Yield/Allergene/Kosten + Propagation).
+     *
+     * @return array{zeilen: int, rezepte: int}
+     */
+    public function ersetzeInRezepten(FoodAlchemistGp $von, FoodAlchemistGp $nach): array
+    {
+        if ($von->id === $nach->id) {
+            throw new \RuntimeException('Quelle und Ziel sind identisch.');
+        }
+        if (in_array($nach->status, [GpStatus::Merged, GpStatus::Rejected], true)) {
+            throw new \RuntimeException("Ziel-GP ist „{$nach->status->label()}\" — kein gültiges Ersetzungsziel.");
+        }
+
+        $recipeIds = FoodAlchemistRecipeIngredient::where('gp_id', $von->id)
+            ->distinct()->pluck('recipe_id');
+        $zeilen = \Illuminate\Support\Facades\DB::transaction(
+            fn () => FoodAlchemistRecipeIngredient::where('gp_id', $von->id)->update(['gp_id' => $nach->id])
+        );
+
+        $recompute = app(RecipeRecomputeService::class);
+        foreach ($recipeIds as $recipeId) {
+            $recompute->recomputeAndPropagate((int) $recipeId);
+        }
+
+        return ['zeilen' => (int) $zeilen, 'rezepte' => $recipeIds->count()];
     }
 }
