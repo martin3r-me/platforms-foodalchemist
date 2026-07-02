@@ -81,6 +81,45 @@
                 this.browse();
             },
 
+            // ── ♻ Ersatz-Tausch (Äquivalenz-Katalog): 1 Klick tauscht auf die hinterlegte
+            //    Gegenseite (make-or-buy / Artikel-Ersatz), Menge × faktor. Der inverse
+            //    Hinweis wird direkt gesetzt — nochmal klicken tauscht zurück. ──
+            ersatzTausch(i) {
+                const z = this.rows[i];
+                const e = z?.ersatz;
+                if (!e) return;
+                const zurueck = {                                    // Rückweg aus dem alten Stand bauen
+                    kind: z.gp_id ? 'gp' : 'recipe',
+                    id: z.gp_id ?? z.referenced_recipe_id,
+                    name: z.ziel_name, url: z.ziel_url,
+                    faktor: e.faktor ? Math.round(10000 / e.faktor) / 10000 : 1,
+                };
+                const m = this.zahl(z.menge);
+                if (m !== null) z.menge = Math.round(m * (e.faktor || 1) * 100) / 100;
+                const mx = this.zahl(z.menge_max);
+                if (mx !== null) z.menge_max = Math.round(mx * (e.faktor || 1) * 100) / 100;
+                z.gp_id = e.kind === 'gp' ? e.id : null;
+                z.referenced_recipe_id = e.kind === 'recipe' ? e.id : null;
+                z.ziel_name = e.name; z.display_name = e.name.replace('↳ ', '');
+                z.ziel_url = e.url ?? null;
+                z.raw_text = (this.zahl(z.menge) ?? '') + ' ' + e.name.replace('↳ ', '');
+                z.lineage = e.kind === 'recipe' ? 'recipe_ref' : 'manual';
+                z.ek_pro_g = null; z.ek_pro_g_min = null; z.ek_pro_g_avg = null;
+                z.g_pro_stueck = null;                               // Stück-Faktor kennt nur der Save-Recompute präzise
+                z._peek = null;
+                z.ersatz = zurueck;
+                z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
+                this.$wire.ekFuerZiel(e.kind === 'gp' ? 'gp' : 'sub', e.id).then(ek => { if (ek !== null) z.ek_pro_g = ek; });
+            },
+            ladeErsatz(z) {                                          // neue/gebrowste Zeile: Hinweis leise nachladen
+                this.$wire.ersatzFuer(z.gp_id, z.referenced_recipe_id).then(e => { z.ersatz = e; });
+            },
+            ersatzTitel(z) {
+                if (!z.ersatz) return '';
+                const f = z.ersatz.faktor;
+                return 'Ersatz: ' + z.ersatz.name + (f && f !== 1 ? ' (Menge ×' + String(f).replace('.', ',') + ')' : '') + ' — Klick tauscht um';
+            },
+
             // ── ⇄ Tausch: Produkt einer bestehenden Zeile ersetzen (Menge/Einheit/Rolle/Note/Position bleiben) ──
             starteTausch(i) {
                 this.tauschIdx = i;
@@ -102,6 +141,7 @@
                 z.g_pro_stueck = ziel.g_pro_stueck ?? null;          // Stück-Sub: g/Stück fürs Live-Rechnen
                 z.ek_pro_g_min = null; z.ek_pro_g_avg = null;        // alte Min/Ø verwerfen — Save rechnet präzise nach
                 z._peek = null;
+                z.ersatz = null; this.ladeErsatz(z);                 // ♻-Hinweis fürs neue Produkt nachladen
                 z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
                 this.$wire.ekFuerZiel(ziel.typ, ziel.id).then(ek => { if (ek !== null) z.ek_pro_g = ek; });
                 this.tauschIdx = null;
@@ -127,7 +167,7 @@
                 zeile._peek = await this.$wire.gpArtikel(zeile.gp_id);
             },
             payload() {
-                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
+                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, ersatz, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
             },
             init() {
                 // Window-Event: der Haupt-"Speichern" des Rezept-Modals (UND der Standalone-Modal-Footer)
@@ -201,7 +241,9 @@
                     lineage: ziel.typ === 'sub' ? 'recipe_ref' : 'manual',
                     ek_pro_g: ziel.ek_pro_g,
                     g_pro_stueck: ziel.g_pro_stueck ?? null,          // Stück-Sub: g/Stück fürs Live-Rechnen
+                    ersatz: null,
                 });
+                this.ladeErsatz(this.rows[this.rows.length - 1]);     // ♻-Hinweis leise nachladen
                 this.neu.menge = ''; this.neu.is_optional = false;
             },
         };

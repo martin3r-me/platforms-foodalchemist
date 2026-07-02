@@ -107,6 +107,69 @@ class ComponentEquivalentService
     }
 
     /**
+     * Erster hinterlegter Ersatz je Baustein — EINE Query für alle (kind,id)-Paare der
+     * Editor-Zeilen. Faktor ist richtungsaufgelöst: neue Menge = Menge × faktor. Gegenseiten,
+     * die gelöscht oder nicht team-sichtbar sind, fallen raus (Tausch dorthin würde am Save scheitern).
+     *
+     * @param array<int, array{0: string, 1: int}> $paare [[kind, id], …]
+     * @return array<string, object{kind: string, id: int, name: string, faktor: float}> Key "kind:id"
+     */
+    public function ersatzHinweise(Team $team, array $paare): array
+    {
+        $gpIds = collect($paare)->filter(fn ($p) => $p[0] === Equiv::KIND_GP)->pluck(1)->unique()->values();
+        $rezIds = collect($paare)->filter(fn ($p) => $p[0] === Equiv::KIND_RECIPE)->pluck(1)->unique()->values();
+        if ($gpIds->isEmpty() && $rezIds->isEmpty()) {
+            return [];
+        }
+
+        $equivs = Equiv::where('team_id', $team->id)
+            ->where(fn ($q) => $q
+                ->where(fn ($w) => $w->where('source_kind', Equiv::KIND_GP)->whereIn('source_id', $gpIds))
+                ->orWhere(fn ($w) => $w->where('alt_kind', Equiv::KIND_GP)->whereIn('alt_id', $gpIds))
+                ->orWhere(fn ($w) => $w->where('source_kind', Equiv::KIND_RECIPE)->whereIn('source_id', $rezIds))
+                ->orWhere(fn ($w) => $w->where('alt_kind', Equiv::KIND_RECIPE)->whereIn('alt_id', $rezIds)))
+            ->orderBy('id')->get();
+        if ($equivs->isEmpty()) {
+            return [];
+        }
+
+        // Namen der Gegenseiten in max. 2 Queries — nur existente + team-sichtbare Ziele
+        $gegenGp = $equivs->flatMap(fn (Equiv $e) => [[$e->source_kind, (int) $e->source_id], [$e->alt_kind, (int) $e->alt_id]])
+            ->filter(fn ($p) => $p[0] === Equiv::KIND_GP)->pluck(1)->unique()->values();
+        $gegenRez = $equivs->flatMap(fn (Equiv $e) => [[$e->source_kind, (int) $e->source_id], [$e->alt_kind, (int) $e->alt_id]])
+            ->filter(fn ($p) => $p[0] === Equiv::KIND_RECIPE)->pluck(1)->unique()->values();
+        $namen = [
+            Equiv::KIND_GP => FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $gegenGp)->pluck('name', 'id'),
+            Equiv::KIND_RECIPE => FoodAlchemistRecipe::visibleToTeam($team)->whereIn('foodalchemist_recipes.id', $gegenRez)->pluck('name', 'id'),
+        ];
+
+        $hinweise = [];
+        foreach ($paare as [$kind, $id]) {
+            $key = $kind . ':' . (int) $id;
+            if (isset($hinweise[$key])) {
+                continue;
+            }
+            foreach ($equivs as $e) {
+                $gegen = $e->counterpartOf($kind, (int) $id);
+                $name = $gegen !== null ? ($namen[$gegen['kind']][$gegen['id']] ?? null) : null;
+                if ($name === null) {
+                    continue;                                        // Ziel weg/unsichtbar → nächste Äquivalenz
+                }
+                $f = (float) $e->umrechnungsfaktor ?: 1.0;
+                $hinweise[$key] = (object) [
+                    'kind' => $gegen['kind'],
+                    'id' => $gegen['id'],
+                    'name' => $name,
+                    'faktor' => $gegen['von'] === Equiv::SEITE_SOURCE ? $f : round(1 / $f, 4),
+                ];
+                break;
+            }
+        }
+
+        return $hinweise;
+    }
+
+    /**
      * Tausch einer Rezept-Zutat auf ihre Ersatz-Gegenseite (Fertig↔Selbst / Artikel↔Artikel)
      * + Recompute. Menge wird über umrechnungsfaktor richtungsabhängig umgerechnet.
      */

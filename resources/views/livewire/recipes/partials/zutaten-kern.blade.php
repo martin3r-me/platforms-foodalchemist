@@ -180,6 +180,9 @@
                             <label class="inline-flex items-center gap-1 text-[10px] text-gray-400 mr-1" title="optional: zählt nicht in Yield/Kosten">
                                 <input type="checkbox" x-model="zeile.is_optional" class="rounded border-gray-300 !w-3 !h-3" />opt
                             </label>
+                            {{-- ♻ Ersatz (Äquivalenz-Katalog): nur sichtbar wenn hinterlegt — 1 Klick tauscht um, Menge × Faktor --}}
+                            <button type="button" x-show="zeile.ersatz" x-cloak class="text-emerald-500/60 hover:text-emerald-600 mr-1"
+                                    :title="ersatzTitel(zeile)" @click="ersatzTausch(i)" data-zeile-ersatz>♻</button>
                             <button type="button" class="hover:text-violet-600 mr-1" :class="tauschIdx === i ? 'text-violet-600' : 'text-gray-300'" @click="starteTausch(i)" title="Zutat tauschen — Menge & Einheit bleiben" data-zeile-tausch>⇄</button>
                             <button type="button" class="text-rose-400 hover:text-rose-600" @click="rows.splice(i, 1)" title="Zeile entfernen" data-zeile-entfernen>✕</button>
                         </td>

@@ -149,6 +149,40 @@ class IngredientEditor extends Component
         ];
     }
 
+    /**
+     * Ersatz-Hinweis für eine client-seitig neue/getauschte Zeile (Katalog-Äquivalenz,
+     * GP↔Rezept / GP↔GP) — die initialen Zeilen bekommen ihn gebündelt in render().
+     * Faktor ist richtungsaufgelöst (neue Menge = Menge × faktor).
+     */
+    #[Renderless]
+    public function ersatzFuer(?int $gpId, ?int $subId): ?array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $kind = $gpId !== null ? 'gp' : ($subId !== null ? 'recipe' : null);
+        if ($team === null || $kind === null) {
+            return null;
+        }
+        $id = (int) ($gpId ?? $subId);
+        $treffer = app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)
+            ->ersatzHinweise($team, [[$kind, $id]])[$kind . ':' . $id] ?? null;
+
+        return $treffer !== null ? $this->ersatzPayload($treffer) : null;
+    }
+
+    /** Ersatz-Hinweis fürs Client-row-Format (inkl. Sprung-URL der Gegenseite). */
+    private function ersatzPayload(object $treffer): array
+    {
+        return [
+            'kind' => $treffer->kind,
+            'id' => $treffer->id,
+            'name' => $treffer->kind === 'recipe' ? '↳ ' . $treffer->name : $treffer->name,
+            'faktor' => $treffer->faktor,
+            'url' => $treffer->kind === 'gp'
+                ? \Platform\FoodAlchemist\Support\Sprungziel::gp($treffer->id)
+                : \Platform\FoodAlchemist\Support\Sprungziel::rezept($treffer->id),
+        ];
+    }
+
     /** GP-/Sub-Picker (M4-08): liefert Auto-Fill-Daten inkl. ek_pro_g. */
     #[Renderless]
     public function sucheZiel(string $suche): array
@@ -305,8 +339,25 @@ class IngredientEditor extends Component
                     'ek_pro_g' => $ekProG,
                     'ek_pro_g_min' => $varianten['min'],
                     'ek_pro_g_avg' => $varianten['avg'],
+                    'ersatz' => null,                                 // Äquivalenz-Katalog — gebündelt unten
                 ];
             }
+
+            // Ersatz-Hinweise (⇄ make-or-buy / Artikel-Ersatz) für ALLE Zeilen in einer Query
+            $paare = collect($zeilen)
+                ->map(fn ($z) => $z['gp_id'] !== null
+                    ? ['gp', (int) $z['gp_id']]
+                    : ($z['referenced_recipe_id'] !== null ? ['recipe', (int) $z['referenced_recipe_id']] : null))
+                ->filter()->values()->all();
+            $hinweise = $team !== null && $paare !== []
+                ? app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->ersatzHinweise($team, $paare)
+                : [];
+            foreach ($zeilen as &$z) {
+                $kind = $z['gp_id'] !== null ? 'gp' : ($z['referenced_recipe_id'] !== null ? 'recipe' : null);
+                $treffer = $kind !== null ? ($hinweise[$kind . ':' . (int) ($z['gp_id'] ?? $z['referenced_recipe_id'])] ?? null) : null;
+                $z['ersatz'] = $treffer !== null ? $this->ersatzPayload($treffer) : null;
+            }
+            unset($z);
         }
 
         $einheiten = $team !== null
