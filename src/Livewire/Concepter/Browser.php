@@ -47,6 +47,19 @@ class Browser extends Component
     #[Url(as: 'rolle')]
     public string $rolleFilter = '';
 
+    /** Concepts: Facetten-Filter (Umbau-Spec Phase 4b) — '' alle · ID. */
+    #[Url(as: 'form')]
+    public string $servierformFilter = '';
+
+    #[Url(as: 'event')]
+    public string $eventtypFilter = '';
+
+    #[Url(as: 'moment')]
+    public string $momentFilter = '';
+
+    #[Url(as: 'saison')]
+    public string $saisonFilter = '';
+
     #[Url(as: 'sel')]
     public ?int $selectedId = null;
 
@@ -75,6 +88,10 @@ class Browser extends Component
         $this->klasse = '';
         $this->categoryFilter = '';
         $this->rolleFilter = '';
+        $this->servierformFilter = '';
+        $this->eventtypFilter = '';
+        $this->momentFilter = '';
+        $this->saisonFilter = '';
         $this->resetPage();
         $this->dispatch('concepter-selected', type: $this->tab, id: null);
     }
@@ -114,6 +131,16 @@ class Browser extends Component
     public function waehleRolle(string $wert): void
     {
         $this->rolleFilter = $this->rolleFilter === $wert ? '' : $wert;
+        $this->resetPage();
+    }
+
+    /** Facetten-Pill togglen (Klick auf aktive = deselect). */
+    public function waehleFacette(string $feld, string $wert): void
+    {
+        if (! in_array($feld, ['servierformFilter', 'eventtypFilter', 'momentFilter', 'saisonFilter'], true)) {
+            return;
+        }
+        $this->{$feld} = $this->{$feld} === $wert ? '' : $wert;
         $this->resetPage();
     }
 
@@ -185,6 +212,10 @@ class Browser extends Component
                 'klasse' => $this->klasse,
                 'vorlagen' => $this->showVorlagen,
                 'category' => $this->categoryFilter !== '' ? $this->categoryFilter : null,
+                'servierform' => $this->servierformFilter !== '' ? $this->servierformFilter : null,
+                'eventtyp' => $this->eventtypFilter !== '' ? $this->eventtypFilter : null,
+                'einsatzmoment' => $this->momentFilter !== '' ? $this->momentFilter : null,
+                'saison' => $this->saisonFilter !== '' ? $this->saisonFilter : null,
             ], $team);
             $klassen = $concepts->klassen($team);
             $rollen = [];
@@ -198,6 +229,15 @@ class Browser extends Component
             'rollen' => $rollen,
             'kategorienFlat' => $kategorienFlat,
             'kategorienCounts' => $kategorienCounts ?? [],
+            // Facetten-Vokabulare (nur Concepts-Tab relevant)
+            'facetteServierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
+                ->orderBy('sort_order')->get(['id', 'code', 'bezeichnung']),
+            'facetteEventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'facetteMomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'facetteSaisons' => \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
         ])->layout('platform::layouts.app');
     }
 

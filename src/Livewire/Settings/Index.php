@@ -23,6 +23,7 @@ class Index extends Component
         'warengruppen' => ['label' => 'Warengruppen & Sub-Kategorien', 'hint' => '§3-Codes fix · Sub-Kategorien-Housekeeping'],
         'taxonomie' => ['label' => 'Rezept-Taxonomie', 'hint' => 'Hauptgruppen + Kategorien (M4-Browser-Bäume)'],
         'konzept-taxonomie' => ['label' => 'Konzept-Taxonomie', 'hint' => 'Kategorie- + Klasse-Baum über den Concepts (Filter-Achse, Foodbook-Picker)'],
+        'concepter-dimensionen' => ['label' => 'Concepter-Dimensionen', 'hint' => 'Facetten: Einsatzmoment · Eventtyp · Saison · Servierform (Darreichungs-Scharnier)'],
         'einkauf' => ['label' => 'Einkauf & Lead-LA', 'hint' => 'Lead-Strategie (V-27) · Stamm-Lieferanten-Matrix'],
         'kalkulation' => ['label' => 'Kalkulation', 'hint' => 'Gar-/Putzverlust-, MwSt-Defaults, Rundung (GL-02)'],
         // #379+ (2026-06-16): 'herstellkosten' zog ins Controlling-Zentrum (Kalkulations-Werkstatt) um.

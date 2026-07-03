@@ -46,6 +46,13 @@ class ConceptService
             ->when(($filters['category'] ?? null) === 'none', fn ($q) => $q->whereNull('category_id'))
             ->when(is_numeric($filters['category'] ?? null), fn ($q) => $q
                 ->whereIn('category_id', $this->descendantIds($team, (int) $filters['category'])))
+            // Facetten-Filter (Umbau-Spec Phase 4b)
+            ->when(is_numeric($filters['servierform'] ?? null), fn ($q) => $q->where('servierform_id', (int) $filters['servierform']))
+            ->when(is_numeric($filters['eventtyp'] ?? null), fn ($q) => $q->where('eventtyp_id', (int) $filters['eventtyp']))
+            ->when(is_numeric($filters['einsatzmoment'] ?? null), fn ($q) => $q
+                ->whereHas('einsatzmomente', fn ($w) => $w->where('foodalchemist_einsatzmomente.id', (int) $filters['einsatzmoment'])))
+            ->when(is_numeric($filters['saison'] ?? null), fn ($q) => $q
+                ->whereHas('saisons', fn ($w) => $w->where('foodalchemist_saisons.id', (int) $filters['saison'])))
             ->orderBy('name')
             ->paginate($perPage);
     }
@@ -94,10 +101,14 @@ class ConceptService
         'schreibstil_id', 'category_id', 'status', 'beschreibung', 'zusatztext', 'note',
         'brief', 'zielpreis_pro_person', 'diaet_vorgabe', 'struktur_vorgabe', 'saison', 'zielgruppe',
         'preis_modus', 'preis_pro_person_manuell',
+        'servierform_id', 'eventtyp_id', // Facetten (Umbau-Spec Phase 4)
     ];
 
     /** Felder, die leer („" / 0) als NULL gespeichert werden (FK/optional). */
-    private const FELDER_NULLBAR = ['category_id', 'schreibstil_id', 'zielpreis_pro_person', 'preis_pro_person_manuell'];
+    private const FELDER_NULLBAR = [
+        'category_id', 'schreibstil_id', 'zielpreis_pro_person', 'preis_pro_person_manuell',
+        'servierform_id', 'eventtyp_id',
+    ];
 
     public function update(Team $team, int $id, array $in): FoodAlchemistConcept
     {
@@ -116,6 +127,24 @@ class ConceptService
         $concept->update($update);
 
         return $concept->refresh();
+    }
+
+    // ── Facetten: Mehrfach-Dimensionen (Umbau-Spec Phase 4) ─────────────────
+
+    /** @param  list<int>  $ids */
+    public function syncEinsatzmomente(Team $team, int $id, array $ids): void
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
+        $this->guardOwner($concept, $team);
+        $concept->einsatzmomente()->sync(array_map('intval', $ids));
+    }
+
+    /** @param  list<int>  $ids */
+    public function syncSaisons(Team $team, int $id, array $ids): void
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
+        $this->guardOwner($concept, $team);
+        $concept->saisons()->sync(array_map('intval', $ids));
     }
 
     // ── Sektor-Eignung (Politur · VK-Parität §10.8, mehrwertig wie Rezept) ───

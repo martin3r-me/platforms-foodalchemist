@@ -69,6 +69,45 @@
                 @endif
 
                 @if($tab === 'concepts')
+                    {{-- Facetten-Filter (Umbau-Spec Phase 4b): Eventtyp · Servierform · Einsatzmoment · Saison --}}
+                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                        <span class="{{ $label }}">Eventtyp</span>
+                        <div class="flex flex-wrap gap-1">
+                            <button type="button" wire:click="waehleFacette('eventtypFilter', '')" class="{{ $pill }} {{ $eventtypFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
+                            @foreach($facetteEventtypen as $et)
+                                <button type="button" wire:key="fev-{{ $et->id }}" wire:click="waehleFacette('eventtypFilter', '{{ $et->id }}')"
+                                        class="{{ $pill }} {{ $eventtypFilter === (string) $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>
+                            @endforeach
+                        </div>
+                    </div>
+                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                        <span class="{{ $label }}">Servierform</span>
+                        <div class="flex flex-wrap gap-1">
+                            @foreach($facetteServierformen as $sf)
+                                <button type="button" wire:key="fsf-{{ $sf->id }}" wire:click="waehleFacette('servierformFilter', '{{ $sf->id }}')"
+                                        class="{{ $pill }} {{ $servierformFilter === (string) $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->bezeichnung }}</button>
+                            @endforeach
+                        </div>
+                    </div>
+                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                        <span class="{{ $label }}">Einsatzmoment</span>
+                        <div class="flex flex-wrap gap-1">
+                            @foreach($facetteMomente as $em)
+                                <button type="button" wire:key="fem-{{ $em->id }}" wire:click="waehleFacette('momentFilter', '{{ $em->id }}')"
+                                        class="{{ $pill }} {{ $momentFilter === (string) $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
+                            @endforeach
+                        </div>
+                    </div>
+                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                        <span class="{{ $label }}">Saison</span>
+                        <div class="flex flex-wrap gap-1">
+                            @foreach($facetteSaisons as $sa)
+                                <button type="button" wire:key="fsa-{{ $sa->id }}" wire:click="waehleFacette('saisonFilter', '{{ $sa->id }}')"
+                                        class="{{ $pill }} {{ $saisonFilter === (string) $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
+                            @endforeach
+                        </div>
+                    </div>
+
                     {{-- Kategorie-Baum (Filter; Pflege im Concept-Screen / Einstellungen) --}}
                     <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
                         <span class="{{ $label }}">Kategorien</span>

@@ -105,6 +105,20 @@
                         </select>
                     </div>
                     <div>
+                        <label class="{{ $label }}">Servierform</label>
+                        <select wire:model="form.servierform_id" class="{{ $input }}" title="Steuert die Darreichungs-Auflösung der Gerichte (Slot → passende Variante)">
+                            <option value="">—</option>
+                            @foreach($servierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->bezeichnung }}</option>@endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="{{ $label }}">Eventtyp</label>
+                        <select wire:model="form.eventtyp_id" class="{{ $input }}">
+                            <option value="">—</option>
+                            @foreach($eventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
+                        </select>
+                    </div>
+                    <div>
                         <label class="{{ $label }}">Status</label>
                         <select wire:model="form.status" class="{{ $input }}">
                             @foreach(['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
@@ -125,6 +139,26 @@
                     </div>
                 @endif
             </div>
+
+            @if($concept)
+                {{-- Facetten: Einsatzmomente + Saisons (mehrfach, Umbau-Spec Phase 4b) --}}
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="{{ $label }} !mb-0 mr-1">Einsatzmoment</span>
+                        @foreach($einsatzmomente as $em)
+                            <button type="button" wire:click="toggleFacette('einsatzmoment_ids', {{ $em->id }})"
+                                class="{{ $pill }} {{ in_array($em->id, $form['einsatzmoment_ids'] ?? []) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
+                        @endforeach
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="{{ $label }} !mb-0 mr-1">Saison</span>
+                        @foreach($saisons as $sa)
+                            <button type="button" wire:click="toggleFacette('saison_ids', {{ $sa->id }})"
+                                class="{{ $pill }} {{ in_array($sa->id, $form['saison_ids'] ?? []) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
 
             {{-- ── Tab-Nav ───────────────────────────────────────────────── --}}
             <div class="flex gap-4 border-b border-black/5 dark:border-white/10 mt-1">

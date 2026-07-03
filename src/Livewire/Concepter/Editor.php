@@ -161,6 +161,10 @@ class Editor extends Component
                 'zielgruppe' => $c->zielgruppe ?? '', 'zielpreis_pro_person' => $c->zielpreis_pro_person,
                 'preis_modus' => $c->preis_modus ?? 'auto', 'preis_pro_person_manuell' => $c->preis_pro_person_manuell,
                 'note' => $c->note ?? '',
+                // Facetten (Umbau-Spec Phase 4b)
+                'servierform_id' => $c->servierform_id, 'eventtyp_id' => $c->eventtyp_id,
+                'einsatzmoment_ids' => $c->einsatzmomente()->pluck('foodalchemist_einsatzmomente.id')->all(),
+                'saison_ids' => $c->saisons()->pluck('foodalchemist_saisons.id')->all(),
             ];
             $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id, 'wording' => $s->wording ?? '']])->all();
             $this->blockForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => [
@@ -215,7 +219,11 @@ class Editor extends Component
             if ($this->type === 'pakete') {
                 app(PaketService::class)->update($team, $this->id, $this->normForm());
             } else {
-                app(ConceptService::class)->update($team, $this->id, $this->normForm());
+                $svc = app(ConceptService::class);
+                $svc->update($team, $this->id, $this->normForm());
+                // Facetten-Mehrfachdimensionen (Umbau-Spec Phase 4b)
+                $svc->syncEinsatzmomente($team, $this->id, $this->form['einsatzmoment_ids'] ?? []);
+                $svc->syncSaisons($team, $this->id, $this->form['saison_ids'] ?? []);
             }
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
@@ -224,6 +232,19 @@ class Editor extends Component
         }
         $this->fehler = null;
         $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    /** Facetten-Pill togglen (einsatzmoment_ids | saison_ids) und sofort sichern. */
+    public function toggleFacette(string $feld, int $wert): void
+    {
+        if (! in_array($feld, ['einsatzmoment_ids', 'saison_ids'], true)) {
+            return;
+        }
+        $ids = collect($this->form[$feld] ?? []);
+        $this->form[$feld] = $ids->contains($wert)
+            ? $ids->reject(fn ($v) => (int) $v === $wert)->values()->all()
+            : $ids->push($wert)->values()->all();
+        $this->speichern();
     }
 
     /** Concept-VK auto ⇄ manuell umschalten (und sofort sichern, damit Cockpit/KPI folgen). */
@@ -885,6 +906,15 @@ class Editor extends Component
             'paketKandidaten' => $paketKandidaten,
             'sektorSlugs' => $concept !== null ? $concepts->sektorEignungSlugs($concept) : [],
             'kategorienFlat' => $this->type === 'concepts' ? $concepts->categoriesFlat($team) : [],
+            // Facetten-Vokabulare (Umbau-Spec Phase 4b)
+            'servierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
+                ->orderBy('sort_order')->get(['id', 'code', 'bezeichnung']),
+            'eventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'einsatzmomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'saisons' => \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
             'klassen' => $this->type === 'pakete' ? $pakete->klassen($team) : $concepts->klassen($team),
             'rollen' => $pakete->rollen($team),
             'schreibstile' => FoodAlchemistWritingStyle::visibleToTeam($team)->where('is_inactive', false)
