@@ -36,28 +36,28 @@
                         <span class="text-[10px] uppercase tracking-wider text-violet-600 dark:text-violet-400">VK €/Person</span>
                         <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ $stripVk !== null ? number_format((float) $stripVk, 2, ',', '.') . ' €' : '—' }}</p>
                     </div>
-                    <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                         <span class="{{ $dt }}">Wareneinsatz/Pers.</span>
                         <p class="text-sm font-semibold tabular-nums">{{ number_format($stripEk, 2, ',', '.') }} €</p>
                     </div>
-                    <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                         <span class="{{ $dt }}">Wareneinsatz %</span>
                         <p class="text-sm font-semibold tabular-nums">{{ $stripWpct !== null ? number_format($stripWpct, 1, ',', '.') . ' %' : '—' }}</p>
                     </div>
-                    <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                         <span class="{{ $dt }}">HK2 (Vollkosten)</span>
                         <p class="text-sm font-semibold tabular-nums">{{ number_format((float) ($kalkulation['hk2_pro_person'] ?? 0), 2, ',', '.') }} €</p>
                     </div>
-                    <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                         <span class="{{ $dt }}">VK-Vorschlag</span>
                         <p class="text-sm font-semibold tabular-nums text-violet-700 dark:text-violet-300">{{ number_format((float) ($kalkulation['vk_vorschlag'] ?? 0), 2, ',', '.') }} €</p>
                     </div>
-                    <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                    <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                         <span class="{{ $dt }}">Deckungsbeitrag</span>
                         <p class="text-sm font-semibold tabular-nums {{ ($kalkulation['db_eur'] ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400' }}">{{ $kalkulation['db_eur'] !== null ? number_format((float) $kalkulation['db_eur'], 2, ',', '.') . ' €' : '—' }}</p>
                     </div>
                     @isset($aggregat['gewicht_pro_person_g'])
-                        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-kpi-gewicht>
+                        <div class="{{ $kpiTile }}" data-kpi-gewicht><div class="{{ $kpiTileAccent }}"></div>
                             <span class="{{ $dt }}">Gewicht/P</span>
                             <p class="text-sm font-semibold tabular-nums">{{ number_format((float) $aggregat['gewicht_pro_person_g'], 0, ',', '.') }} g{!! ($aggregat['gewicht_vollstaendig'] ?? true) ? '' : ' <span class="text-amber-500 font-normal" title="≥1 Position ohne Portionsgewicht — Gewicht unvollständig">~</span>' !!}</p>
                         </div>
@@ -174,10 +174,12 @@
             @if($tab === 'aufbau')
                 {{-- Live-Kosten-Streifen ist jetzt fix im Modal-Kopf (Phase 1, x-slot:kpiHeader). --}}
                 @if($concept)
-                {{-- x-data hält den Drag-Zustand: dragTyp/dragId = Liste→einfügen, dragSlotId = Position umsortieren. --}}
-                <div class="flex gap-3 items-start" x-data="{ dragTyp: null, dragId: null, dragSlotId: null }">
+                {{-- x-data hält den Drag-Zustand: dragTyp/dragId = Liste→einfügen, dragSlotId = Position umsortieren.
+                     bauModus schaltet zwischen Bearbeiten (Tabelle + Einfüge-Listen) und Menü-Ansicht (Gäste-Sicht,
+                     UX-Umbau 2026-07-03) — Alpine statt Livewire: kein Re-Mount, ungespeicherte Eingaben bleiben. --}}
+                <div class="flex gap-3 items-start w-full" x-data="{ dragTyp: null, dragId: null, dragSlotId: null, bauModus: true }">
                 {{-- Phase 3: linke Spalte — Basisrezepte als Position einfügen (sticky Panel wie zutaten-kern) --}}
-                <aside class="w-72 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] dark:bg-white/[0.05] border border-black/5 dark:border-white/10 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-basisliste>
+                <aside x-show="bauModus" x-cloak class="w-72 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] dark:bg-white/[0.05] border border-black/5 dark:border-white/10 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-basisliste>
                     {{-- Umschalter: Basisrezept ⇄ Paket (Pakete bei 300+ über Such-/Filter-Liste einfügen) --}}
                     <div class="flex gap-1 mb-1.5" data-linke-liste-umschalter>
                         <button type="button" wire:click="$set('linkeListe', 'basisrezept')" class="{{ $pill }} {{ $linkeListe === 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Basisrezept</button>
@@ -236,17 +238,112 @@
                 </aside>
                 <div class="flex-1 min-w-0 space-y-4">
                     <div class="flex items-center justify-between">
-                        <h3 class="font-medium text-gray-900 dark:text-gray-100">Positionen</h3>
+                        <h3 class="font-medium text-gray-900 dark:text-gray-100" x-text="bauModus ? 'Positionen' : 'Menü-Ansicht'">Positionen</h3>
                         <div class="flex items-center gap-2">
                             {{-- Einfügen läuft über die Listen links/rechts (wie im Gerichte-Editor) + „+ Paket"/Struktur oben. --}}
                             @if($einfuegenNachId !== null)
-                                <span class="inline-flex items-center gap-1 text-[11px] text-violet-600 dark:text-violet-400" data-einfuege-ziel>
+                                <span x-show="bauModus" class="inline-flex items-center gap-1 text-[11px] text-violet-600 dark:text-violet-400" data-einfuege-ziel>
                                     📍 Einfügen unter markierter Zeile
                                     <button type="button" wire:click="$set('einfuegenNachId', null)" class="underline decoration-dotted hover:text-violet-800">ans Ende</button>
                                 </span>
                             @endif
+                            {{-- UX-Umbau 2026-07-03: Toggle Bearbeiten ⇄ Menü (Gäste-Perspektive mit aufgelöstem Wording) --}}
+                            <div class="inline-flex rounded-lg bg-black/[0.05] dark:bg-white/[0.06] p-0.5" role="group" aria-label="Ansicht" data-konzept-ansicht-toggle>
+                                <button type="button" @click="bauModus = true" :class="bauModus ? 'bg-white dark:bg-white/10 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-ansicht-bearbeiten>⚙ Bearbeiten</button>
+                                <button type="button" @click="bauModus = false" :class="!bauModus ? 'bg-white dark:bg-white/10 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-ansicht-menue>🍽 Menü</button>
+                            </div>
                         </div>
                     </div>
+
+                    {{-- ═══ MENÜ-ANSICHT (Gäste-Perspektive, read-only) — UX-Umbau 2026-07-03 ═══ --}}
+                    <div x-show="!bauModus" x-cloak class="space-y-5" data-konzept-menue>
+                        @php($menueGruppen = [])
+                        @php($aktuelleGruppe = ['typ' => 'sektion', 'titel' => null, 'slots' => []])
+                        @foreach($concept->slots as $s)
+                            @if(in_array($s->type, ['header', 'header_preis'], true))
+                                @php($menueGruppen[] = $aktuelleGruppe)
+                                @php($aktuelleGruppe = ['typ' => 'header', 'titel' => $s->titel ?: '(Überschrift)', 'slots' => []])
+                            @elseif($s->paket_id && $s->paket)
+                                @php($menueGruppen[] = $aktuelleGruppe)
+                                @php($menueGruppen[] = ['typ' => 'paket', 'titel' => $s->paket->name, 'preis' => $s->paket->preis_pro_person, 'slots' => [], 'paket' => $s->paket])
+                                @php($aktuelleGruppe = ['typ' => 'sektion', 'titel' => null, 'slots' => []])
+                            @elseif($s->vk_recipe_id && $s->gericht)
+                                @php($aktuelleGruppe['slots'][] = $s)
+                            @endif
+                        @endforeach
+                        @php($menueGruppen[] = $aktuelleGruppe)
+
+                        @php($quelleBadge = ['konzept' => ['Konzept-Wording', 'text-violet-600 dark:text-violet-400', 'bg-violet-500'], 'standard' => ['VK-Wording (Standard)', 'text-gray-400', 'bg-gray-400'], 'name' => ['Wording fehlt — interner Name', 'text-amber-600 dark:text-amber-400', 'bg-amber-500']])
+
+                        @forelse(collect($menueGruppen)->filter(fn ($g) => count($g['slots']) > 0 || $g['typ'] === 'paket') as $g)
+                            <section wire:key="menue-{{ $loop->index }}">
+                                @if($g['typ'] !== 'sektion' || $g['titel'])
+                                    <div class="flex items-baseline gap-2 pb-2">
+                                        @if($g['typ'] === 'paket')<span class="{{ $pill }} {{ $variantPill['primary'] }}">📦 Paket{{ isset($g['preis']) && $g['preis'] !== null ? ' · ' . number_format((float) $g['preis'], 2, ',', '.') . ' €/P' : '' }}</span>@else<span class="{{ $pill }} {{ $variantPill['info'] }}">Sektion</span>@endif
+                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['titel'] }}</h4>
+                                        @php($gsum = $sektionSumme['h' . ($g['slots'][0]->id ?? '')] ?? null)
+                                    </div>
+                                @endif
+                                <div class="grid gap-2.5" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
+                                    @if($g['typ'] === 'paket')
+                                        @foreach($g['paket']->gerichte as $pg)
+                                            @php($pw = app(\Platform\FoodAlchemist\Services\WordingResolver::class)->fuerGericht($pg->gericht))
+                                            <article class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 px-3.5 py-3">
+                                                @php($qb = $quelleBadge[$pw['quelle']] ?? $quelleBadge['name'])
+                                                <span class="inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-wider {{ $qb[1] }} mb-1.5"><span class="w-1.5 h-1.5 rounded-full {{ $qb[2] }}"></span>{{ $qb[0] }}</span>
+                                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug {{ $pw['quelle'] === 'name' ? 'italic text-amber-700 dark:text-amber-300 font-medium' : '' }}">{{ $pw['text'] }}</p>
+                                            </article>
+                                        @endforeach
+                                    @else
+                                        @foreach($g['slots'] as $s)
+                                            @php($g0 = $s->gericht)
+                                            @php($w = $slotWording[$s->id] ?? ['text' => $g0->name, 'quelle' => 'name'])
+                                            @php($qb = $quelleBadge[$w['quelle']] ?? $quelleBadge['name'])
+                                            @php($enthaelt = collect(['Schwein' => $g0->spec_contains_pork, 'Rind' => $g0->spec_contains_beef])->filter()->keys()->all())
+                                            @php($ekz = $cockpitZeilen[$s->id]['ek'] ?? null)
+                                            @php($vkz = $cockpitZeilen[$s->id]['preis'] ?? null)
+                                            @php($wpct = ($vkz && (float) $vkz > 0 && $ekz !== null) ? ((float) $ekz / (float) $vkz * 100) : null)
+                                            <article wire:key="mcard-{{ $s->id }}" class="group relative rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 px-3.5 py-3 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <span class="inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-wider {{ $qb[1] }}"><span class="w-1.5 h-1.5 rounded-full {{ $qb[2] }}"></span>{{ $qb[0] }}</span>
+                                                    <button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $s->vk_recipe_id }} })" class="text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Gericht öffnen">🍽️</button>
+                                                </div>
+                                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug mt-1 {{ $w['quelle'] === 'name' ? 'italic text-amber-700 dark:text-amber-300 font-medium' : '' }}">{{ $w['text'] }}</p>
+                                                <p class="text-[10.5px] text-gray-400 font-mono truncate mt-0.5" title="{{ $g0->name }}">{{ $g0->name }}</p>
+                                                <div class="flex flex-wrap gap-1.5 mt-2">
+                                                    @if(isset($darreichungInfo[$s->id]))
+                                                        <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$s->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}">🍴 {{ $darreichungInfo[$s->id] }}</span>
+                                                    @endif
+                                                    @if($g0->speisenKlasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g0->speisenKlasse->bezeichnung }}</span>@endif
+                                                    @if($g0->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($g0->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
+                                                    <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="Allergene / Diät{{ count($enthaelt) ? ' — enthält ' . implode(', ', $enthaelt) : '' }} · Konfidenz {{ $g0->allergene_konfidenz ?? 'unbekannt' }}">A</span>
+                                                    @if(isset($varianteFehlt[$s->id]))<button type="button" wire:click="varianteAnlegen({{ $s->id }})" class="{{ $pill }} {{ $variantPill['warning'] }}" title="Konzept-Servierform fehlt als Darreichung — anlegen">⚠ Form fehlt</button>@endif
+                                                    @if($w['quelle'] === 'name')<button type="button" @click="bauModus = true" class="{{ $pill }} {{ $variantPill['warning'] }}" title="In der Bearbeiten-Ansicht Wording ergänzen">✎ Wording ergänzen</button>@endif
+                                                </div>
+                                                <div class="flex gap-3 mt-2.5 pt-2 border-t border-black/5 dark:border-white/10 tabular-nums">
+                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">VK/P</span><span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</span></span>
+                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">EK</span><span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{{ $ekz !== null ? number_format((float) $ekz, 2, ',', '.') . ' €' : '—' }}</span></span>
+                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">W%</span><span class="text-xs font-semibold {{ $wpct !== null && $wpct > 35 ? 'text-rose-500' : 'text-gray-700 dark:text-gray-200' }}">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</span></span>
+                                                </div>
+                                            </article>
+                                        @endforeach
+                                    @endif
+                                </div>
+                            </section>
+                        @empty
+                            <p class="text-xs text-gray-400 py-8 text-center">Noch keine Gerichte im Konzept — links in der Bearbeiten-Ansicht einfügen.</p>
+                        @endforelse
+
+                        <div class="flex flex-wrap gap-3 text-[11px] text-gray-500 dark:text-gray-400 pt-1 border-t border-black/5 dark:border-white/10">
+                            <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>Konzept-Wording</span>
+                            <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>VK-Wording Standard</span>
+                            <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>kein Wording — Handlungsbedarf</span>
+                            <span class="ml-auto italic">Kette: Foodbook-Override → Konzept → Standard → Name</span>
+                        </div>
+                    </div>
+
+                    {{-- ═══ BEARBEITEN-ANSICHT (Tabelle + Struktur + Paket-Bilden) ═══ --}}
+                    <div x-show="bauModus" x-cloak class="space-y-4">
                     {{-- Kombi-Suche (wie Gerichte-Editor): filtert BEIDE Seiten-Listen; Übernehmen per „+"/Drag in den Spalten. --}}
                     <input type="search" wire:model.live.debounce.300ms="kombiSuche" data-konzept-kombisuche
                            placeholder="Suchen — filtert Basisrezepte/Pakete UND Gerichte … (Übernehmen per + in den Spalten)"
@@ -472,9 +569,10 @@
                         </tbody>
                     </table>
                     </div>
+                    </div>{{-- /BEARBEITEN-ANSICHT (x-show bauModus) --}}
                 </div>{{-- /mittlere Spalte --}}
                 {{-- Phase 3: rechte Spalte — VK-Gerichte als Position einfügen (VK-Baum-Filter + Liste) --}}
-                <aside class="w-72 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] dark:bg-white/[0.05] border border-black/5 dark:border-white/10 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-gerichtliste>
+                <aside x-show="bauModus" x-cloak class="w-72 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] dark:bg-white/[0.05] border border-black/5 dark:border-white/10 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-gerichtliste>
                     <p class="{{ $dt }} mb-1">VK-Gerichte ({{ $gerichtListe->count() }})</p>
                     @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'gerichtSuche'])
                     <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1 mt-1.5">

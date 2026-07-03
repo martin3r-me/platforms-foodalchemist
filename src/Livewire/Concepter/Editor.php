@@ -989,6 +989,12 @@ class Editor extends Component
             'cockpit' => $cockpit,
             'cockpitZeilen' => $cockpit ? collect($cockpit['zeilen'])->keyBy('slot_id') : collect(),
             'sektionSumme' => $sektionSumme,
+            // B (UX-Umbau): aufgelöstes Wording je Gericht-Slot für die Menü-Ansicht
+            // (Kette Konzept-Wording → VK-Wording-Standard → Name; Quelle für die Herkunft-Badge)
+            'slotWording' => $concept
+                ? collect($concept->slots)->filter(fn ($s) => $s->vk_recipe_id !== null)
+                    ->mapWithKeys(fn ($s) => [$s->id => app(\Platform\FoodAlchemist\Services\WordingResolver::class)->fuerSlot($s)])->all()
+                : [],
             'einheiten' => app(\Platform\FoodAlchemist\Services\VocabularyService::class)->listEinheiten($team),
             'aggregat' => $aggregat,
             'bewertung' => $bewertet,
