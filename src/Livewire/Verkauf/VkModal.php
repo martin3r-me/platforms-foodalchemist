@@ -588,7 +588,7 @@ class VkModal extends Component
             'servierformenAlle' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
                 ->orderBy('sort_order')->get(['id', 'code', 'bezeichnung']),
             'darZeilen' => ($rezept !== null && $this->darDeltaOffen !== null)
-                ? app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->zeilenKostenUndMassen($rezept)
+                ? app(\Platform\FoodAlchemist\Services\DarreichungService::class)->standardProEinheit($rezept)
                 : [],
             'sensorik' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($rezept->id) : null,
             'komposition' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->gerichtKomposition($rezept->id) : null,

@@ -145,12 +145,44 @@ class DarreichungService
     public function recomputePreise(FoodAlchemistRecipeDarreichung $darreichung): void
     {
         $recipe = $darreichung->recipe()->with('ingredients.einheit', 'ingredients.gp', 'ingredients.referencedRecipe')->first();
-        $ekProG = $this->ekProGramm($recipe, $darreichung);
+        $deltas = $darreichung->deltas()->get();
 
-        $ekPortion = null;
-        if ($ekProG !== null && (float) $darreichung->menge_pro_einheit_g > 0) {
-            $ekPortion = round($ekProG * (float) $darreichung->menge_pro_einheit_g
-                * (float) ($darreichung->anzahl_einheiten ?: 1), 4);
+        if ($deltas->isEmpty()) {
+            // Stufe 1: proportional — EK/g des Rezepts × Grammatur × Anzahl
+            $ekProG = $recipe->ek_per_kg_eur !== null ? (float) $recipe->ek_per_kg_eur / 1000.0 : null;
+            $ekPortion = ($ekProG !== null && (float) $darreichung->menge_pro_einheit_g > 0)
+                ? round($ekProG * (float) $darreichung->menge_pro_einheit_g
+                    * (float) ($darreichung->anzahl_einheiten ?: 1), 4)
+                : null;
+        } else {
+            // Stufe 2: Overrides sind ECHTE Gramm je Einheit dieser Form (User-Entscheid
+            // 2026-07-03) — die Grammatur der Form ergibt sich aus der Komponenten-Summe,
+            // der EK direkt aus Σ (Preis/g × Gramm). Kein Verhältnis-Umweg mehr.
+            $proEinheit = $this->standardProEinheit($recipe);
+            $deltaMap = $deltas->keyBy('recipe_ingredient_id');
+            $kosten = 0.0;
+            $masse = 0.0;
+            $nBepreist = 0;
+            foreach ($proEinheit as $ingId => $zeile) {
+                $delta = $deltaMap->get($ingId);
+                if ($delta !== null && $delta->weggelassen) {
+                    continue;
+                }
+                $m = $delta?->menge_override_g !== null ? (float) $delta->menge_override_g : $zeile['masse_g'];
+                if ($zeile['kosten_pro_g'] !== null) {
+                    $nBepreist++;
+                    $kosten += $zeile['kosten_pro_g'] * $m;
+                }
+                $masse += $m;
+            }
+            // Auto-Grammatur: g/Einheit = Summe der Komponenten dieser Form
+            $darreichung->menge_pro_einheit_g = $masse > 0 ? round($masse, 1) : $darreichung->menge_pro_einheit_g;
+            $ekPortion = $nBepreist > 0
+                ? round($kosten * (float) ($darreichung->anzahl_einheiten ?: 1), 4)
+                : ($recipe->ek_per_kg_eur !== null && $masse > 0
+                    ? round((float) $recipe->ek_per_kg_eur / 1000.0 * $masse
+                        * (float) ($darreichung->anzahl_einheiten ?: 1), 4)
+                    : null);
         }
 
         $klasse = $darreichung->aufschlagsklasse;
@@ -163,7 +195,8 @@ class DarreichungService
             ? round((float) $vkNetto * (1 + ((float) $klasse->mwst_satz) / 100), 2)
             : null;
 
-        $darreichung->update(['ek_portion' => $ekPortion, 'vk_netto' => $vkNetto, 'vk_brutto' => $vkBrutto]);
+        $darreichung->update(['menge_pro_einheit_g' => $darreichung->menge_pro_einheit_g,
+            'ek_portion' => $ekPortion, 'vk_netto' => $vkNetto, 'vk_brutto' => $vkBrutto]);
 
         if ($darreichung->ist_standard) {
             $this->spiegleStandardVk($recipe);
@@ -178,41 +211,32 @@ class DarreichungService
         }
     }
 
-    /** EK/g: ohne Deltas = ek_per_kg/1000; mit Deltas = Misch-Preis über Komponenten nach Delta. */
-    private function ekProGramm(FoodAlchemistRecipe $recipe, FoodAlchemistRecipeDarreichung $darreichung): ?float
+    /**
+     * Standard-Komposition JE EINHEIT: Batch-Massen der Zutaten skaliert auf die
+     * Grammatur der Standard-Darreichung (Fallback: ganze Charge = eine Einheit).
+     * Referenz für Delta-Editor (Anzeige „Standard (g)") und Delta-Preisrechnung.
+     *
+     * @return array<int, array{masse_g: float, kosten_pro_g: ?float}>
+     */
+    public function standardProEinheit(FoodAlchemistRecipe $recipe): array
     {
-        $basis = $recipe->ek_per_kg_eur !== null ? (float) $recipe->ek_per_kg_eur / 1000.0 : null;
-        $deltas = $darreichung->deltas()->get();
-        if ($deltas->isEmpty()) {
-            return $basis;
-        }
-
         $zeilen = $this->recompute->zeilenKostenUndMassen($recipe);
-        $deltaMap = $deltas->keyBy('recipe_ingredient_id');
-        $kosten = 0.0;
-        $masse = 0.0;
-        $nBepreist = 0;
-        foreach ($zeilen as $ingId => $zeile) {
-            $delta = $deltaMap->get($ingId);
-            if ($delta !== null && $delta->weggelassen) {
-                continue;
-            }
-            $m = $delta?->menge_override_g !== null ? (float) $delta->menge_override_g : $zeile['masse_g'];
-            $skala = ($delta?->menge_override_g !== null && $zeile['masse_g'] > 0)
-                ? $m / $zeile['masse_g'] : 1.0;
-            if ($zeile['kosten'] !== null) {
-                $nBepreist++;
-            }
-            $kosten += ((float) ($zeile['kosten'] ?? 0)) * $skala;
-            $masse += $m;
+        $batchG = array_sum(array_map(fn ($z) => $z['masse_g'], $zeilen));
+        // Referenz = Grammatur der Standard-Form — aber nur, wenn diese selbst delta-frei
+        // ist (sonst wäre die Referenz zirkulär, weil ihre Grammatur aus Deltas entsteht).
+        $standard = $recipe->standardDarreichung()->first();
+        $stdG = ($standard !== null && ! $standard->deltas()->exists()) ? $standard->menge_pro_einheit_g : null;
+        $faktor = ($batchG > 0 && $stdG !== null && (float) $stdG > 0) ? (float) $stdG / $batchG : 1.0;
+
+        $out = [];
+        foreach ($zeilen as $ingId => $z) {
+            $out[$ingId] = [
+                'masse_g' => $z['masse_g'] * $faktor,
+                'kosten_pro_g' => ($z['kosten'] !== null && $z['masse_g'] > 0) ? $z['kosten'] / $z['masse_g'] : null,
+            ];
         }
 
-        // Keine einzige bepreiste Komponente → EK ehrlich unbekannt (nicht 0,00 €)
-        if ($nBepreist === 0) {
-            return $basis;
-        }
-
-        return $masse > 0 ? $kosten / $masse : $basis;
+        return $out;
     }
 
     /** recipes.vk_netto = Anzeige-Cache der Standard-Darreichung (Preis-Wahrheit = Darreichung). */

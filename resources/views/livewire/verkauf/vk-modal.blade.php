@@ -340,8 +340,12 @@
                                    wire:click="darreichungStandard({{ $d->id }})" title="Als Standard setzen" />
                         </td>
                         <td class="py-1.5 pr-2 text-right">
-                            <input type="text" wire:model.blur="darForm.{{ $d->id }}.menge_pro_einheit_g"
-                                   wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
+                            @if($d->deltas->count() > 0)
+                                <span class="tabular-nums text-gray-500" title="Ergibt sich automatisch aus der Komponenten-Summe (⚙)">{{ $d->menge_pro_einheit_g !== null ? number_format($d->menge_pro_einheit_g, 0, ',', '.') : '—' }} <span class="text-[10px] text-gray-400">Σ</span></span>
+                            @else
+                                <input type="text" wire:model.blur="darForm.{{ $d->id }}.menge_pro_einheit_g"
+                                       wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
+                            @endif
                         </td>
                         <td class="py-1.5 pr-2 text-right">
                             <input type="text" wire:model.blur="darForm.{{ $d->id }}.anzahl_einheiten"
@@ -395,7 +399,7 @@
                         <tr wire:key="dar-delta-{{ $d->id }}">
                             <td colspan="11" class="pb-2">
                                 <div class="rounded-lg bg-violet-500/[0.04] border border-violet-500/10 p-2 mt-1" data-dar-delta="{{ $d->id }}">
-                                    <p class="text-[11px] text-gray-400 mb-1.5">Komponenten in dieser Form — Menge überschreiben (g, Charge) oder weglassen. Leer = Standard. Neue Zutaten sind bewusst nicht möglich.</p>
+                                    <p class="text-[11px] text-gray-400 mb-1.5">Komponenten in dieser Form — echte Gramm <strong>je Einheit</strong> eintragen oder weglassen (leer = Standard). g/Einheit der Form ergibt sich automatisch aus der Summe. Neue Zutaten sind bewusst nicht möglich.</p>
                                     @php($deltaMap = $d->deltas->keyBy('recipe_ingredient_id'))
                                     <table class="w-full text-xs">
                                         <thead><tr class="text-left text-gray-400">
