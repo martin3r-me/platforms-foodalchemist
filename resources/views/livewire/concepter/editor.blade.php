@@ -256,42 +256,70 @@
                     </div>
 
                     {{-- ═══ MENÜ-ANSICHT (Gäste-Perspektive, read-only) — UX-Umbau 2026-07-03 ═══ --}}
-                    <div x-show="!bauModus" x-cloak class="space-y-5" data-konzept-menue>
+                    <div x-show="!bauModus" x-cloak class="space-y-3" data-konzept-menue>
                         @php($menueGruppen = [])
-                        @php($aktuelleGruppe = ['typ' => 'sektion', 'titel' => null, 'slots' => []])
+                        @php($aktuelleGruppe = ['typ' => 'sektion', 'titel' => null, 'headerSlotId' => null, 'slots' => []])
                         @foreach($concept->slots as $s)
                             @if(in_array($s->type, ['header', 'header_preis'], true))
                                 @php($menueGruppen[] = $aktuelleGruppe)
-                                @php($aktuelleGruppe = ['typ' => 'header', 'titel' => $s->titel ?: '(Überschrift)', 'slots' => []])
+                                @php($aktuelleGruppe = ['typ' => 'header', 'titel' => $s->titel ?: '(Überschrift)', 'headerSlotId' => $s->id, 'slots' => []])
                             @elseif($s->paket_id && $s->paket)
                                 @php($menueGruppen[] = $aktuelleGruppe)
-                                @php($menueGruppen[] = ['typ' => 'paket', 'titel' => $s->paket->name, 'preis' => $s->paket->preis_pro_person, 'slots' => [], 'paket' => $s->paket])
-                                @php($aktuelleGruppe = ['typ' => 'sektion', 'titel' => null, 'slots' => []])
+                                @php($menueGruppen[] = ['typ' => 'paket', 'titel' => $s->paket->name, 'preis' => $s->paket->preis_pro_person, 'headerSlotId' => null, 'slots' => [], 'paket' => $s->paket])
+                                @php($aktuelleGruppe = ['typ' => 'sektion', 'titel' => null, 'headerSlotId' => null, 'slots' => []])
                             @elseif($s->vk_recipe_id && $s->gericht)
                                 @php($aktuelleGruppe['slots'][] = $s)
                             @endif
                         @endforeach
                         @php($menueGruppen[] = $aktuelleGruppe)
+                        {{-- Gäste-Sicht: leere Gruppen (Paket ohne Gerichte, Header ohne Positionen) sind unsichtbar --}}
+                        @php($menueGruppen = collect($menueGruppen)->filter(fn ($g) => $g['typ'] === 'paket' ? $g['paket']->gerichte->isNotEmpty() : count($g['slots']) > 0)->values())
 
                         @php($quelleBadge = ['konzept' => ['Konzept-Wording', 'text-violet-600 dark:text-violet-400', 'bg-violet-500'], 'standard' => ['VK-Wording (Standard)', 'text-gray-400', 'bg-gray-400'], 'name' => ['Wording fehlt — interner Name', 'text-amber-600 dark:text-amber-400', 'bg-amber-500']])
+                        @php($wres = app(\Platform\FoodAlchemist\Services\WordingResolver::class))
 
-                        @forelse(collect($menueGruppen)->filter(fn ($g) => count($g['slots']) > 0 || $g['typ'] === 'paket') as $g)
-                            <section wire:key="menue-{{ $loop->index }}">
-                                @if($g['typ'] !== 'sektion' || $g['titel'])
-                                    <div class="flex items-baseline gap-2 pb-2">
-                                        @if($g['typ'] === 'paket')<span class="{{ $pill }} {{ $variantPill['primary'] }}">📦 Paket{{ isset($g['preis']) && $g['preis'] !== null ? ' · ' . number_format((float) $g['preis'], 2, ',', '.') . ' €/P' : '' }}</span>@else<span class="{{ $pill }} {{ $variantPill['info'] }}">Sektion</span>@endif
+                        @forelse($menueGruppen as $g)
+                            {{-- Gruppen-Container: subtile Klammer um Kopf + Karten (gleiche Fläche wie die Seiten-Listen) --}}
+                            <section wire:key="menue-{{ $loop->index }}" class="rounded-xl bg-gray-500/[0.05] dark:bg-white/[0.03] border border-black/5 dark:border-white/10 p-3">
+                                @php($slotEks = collect($g['slots'])->map(fn ($sx) => $cockpitZeilen[$sx->id]['ek'] ?? null)->filter())
+                                @php($slotVks = collect($g['slots'])->map(fn ($sx) => $cockpitZeilen[$sx->id]['preis'] ?? null)->filter())
+                                <div class="flex items-baseline gap-2 pb-2.5">
+                                    @if($g['typ'] === 'paket')
+                                        <span class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0">📦 Paket</span>
                                         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['titel'] }}</h4>
-                                        @php($gsum = $sektionSumme['h' . ($g['slots'][0]->id ?? '')] ?? null)
-                                    </div>
-                                @endif
-                                <div class="grid gap-2.5" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
+                                        <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ $g['paket']->gerichte->count() }} {{ $g['paket']->gerichte->count() === 1 ? 'Gericht' : 'Gerichte' }}{{ $g['preis'] !== null ? ' · ' . number_format((float) $g['preis'], 2, ',', '.') . ' €/P fix' : '' }}</span>
+                                    @elseif($g['titel'])
+                                        <span class="{{ $pill }} {{ $variantPill['info'] }} shrink-0">Sektion</span>
+                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['titel'] }}</h4>
+                                        <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ $slotVks->isNotEmpty() ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}{{ $slotEks->isNotEmpty() ? ' · Σ EK ' . number_format($slotEks->sum(), 2, ',', '.') . ' €' : '' }}</span>
+                                    @else
+                                        <h4 class="text-[11px] font-medium uppercase tracking-wider text-gray-400">Gerichte</h4>
+                                        <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ $slotVks->isNotEmpty() ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}</span>
+                                    @endif
+                                </div>
+                                <div class="grid gap-2.5" style="grid-template-columns:repeat(auto-fill,minmax(270px,1fr))">
                                     @if($g['typ'] === 'paket')
                                         @foreach($g['paket']->gerichte as $pg)
-                                            @php($pw = app(\Platform\FoodAlchemist\Services\WordingResolver::class)->fuerGericht($pg->gericht))
-                                            <article class="rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 px-3.5 py-3">
-                                                @php($qb = $quelleBadge[$pw['quelle']] ?? $quelleBadge['name'])
-                                                <span class="inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-wider {{ $qb[1] }} mb-1.5"><span class="w-1.5 h-1.5 rounded-full {{ $qb[2] }}"></span>{{ $qb[0] }}</span>
-                                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug {{ $pw['quelle'] === 'name' ? 'italic text-amber-700 dark:text-amber-300 font-medium' : '' }}">{{ $pw['text'] }}</p>
+                                            @php($pgG = $pg->gericht)
+                                            @php($pw = $wres->fuerGericht($pgG))
+                                            @php($qb = $quelleBadge[$pw['quelle']] ?? $quelleBadge['name'])
+                                            @php($pgEnthaelt = collect(['Schwein' => $pgG?->spec_contains_pork, 'Rind' => $pgG?->spec_contains_beef])->filter()->keys()->all())
+                                            <article wire:key="mpcard-{{ $pg->id }}" class="group relative rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 px-3.5 py-3 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <span class="inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-wider {{ $qb[1] }}"><span class="w-1.5 h-1.5 rounded-full {{ $qb[2] }}"></span>{{ $qb[0] }}</span>
+                                                    @if($pg->vk_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->vk_recipe_id }} })" class="text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Gericht öffnen">🍽️</button>@endif
+                                                </div>
+                                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug mt-1 {{ $pw['quelle'] === 'name' ? 'italic text-amber-700 dark:text-amber-300 font-medium' : '' }}">{{ $pw['text'] }}</p>
+                                                <p class="text-[10.5px] text-gray-400 font-mono truncate mt-0.5" title="{{ $pgG?->name }}">{{ $pgG?->name }}</p>
+                                                <div class="flex flex-wrap items-center gap-1.5 mt-2">
+                                                    @if($pgG?->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($pgG?->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
+                                                    <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($pgEnthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="Allergene / Diät{{ count($pgEnthaelt) ? ' — enthält ' . implode(', ', $pgEnthaelt) : '' }} · Konfidenz {{ $pgG?->allergene_konfidenz ?? 'unbekannt' }}">A</span>
+                                                    @if($pw['quelle'] === 'name')<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->vk_recipe_id }} })" class="{{ $pill }} {{ $variantPill['warning'] }}" title="VK-Wording am Gericht ergänzen">✎ Wording ergänzen</button>@endif
+                                                </div>
+                                                <div class="flex gap-3 mt-2.5 pt-2 border-t border-black/5 dark:border-white/10 tabular-nums">
+                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">VK/P</span><span class="text-xs font-semibold text-gray-500 dark:text-gray-400">im Paket</span></span>
+                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">EK</span><span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{{ $pgG?->ek_total_eur !== null ? number_format((float) $pgG->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</span></span>
+                                                </div>
                                             </article>
                                         @endforeach
                                     @else
