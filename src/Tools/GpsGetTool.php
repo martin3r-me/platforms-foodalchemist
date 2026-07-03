@@ -3,13 +3,14 @@
 namespace Platform\FoodAlchemist\Tools;
 
 use Platform\Core\Contracts\ToolContract;
+use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\GpAggregateService;
 use Platform\FoodAlchemist\Services\GpService;
 
 /** M8-01: GP-Detail inkl. GL-01-Allergen-Aggregat — Tool → Services. */
-class GpsGetTool extends FoodAlchemistTool implements ToolContract
+class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
@@ -48,5 +49,20 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract
             'lead_la_supplier_item_id' => $gp->lead_la_supplier_item_id,
             'allergene' => app(GpAggregateService::class)->allergene($gp),
         ]);
+    }
+
+    public function getMetadata(): array
+    {
+        return [
+            'category' => 'query',
+            'read_only' => true,
+            'idempotent' => true,
+            'risk_level' => 'safe',
+            'requires_auth' => true,
+            'requires_team' => true,
+            'cost_class' => 'local_db',
+            'tags' => ['foodalchemist', 'gp', 'grundprodukt', 'detail', 'allergene', 'preis'],
+            'examples' => ['Zeig mir Details zu GP 123', 'Welche Allergene hat das Zanderfilet-GP?'],
+        ];
     }
 }

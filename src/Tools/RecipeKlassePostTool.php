@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Tools;
 
 use Platform\Core\Contracts\ToolContract;
+use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\SpeisenKlassenService;
@@ -13,7 +14,7 @@ use Platform\FoodAlchemist\Services\SpeisenKlassenService;
  * mit accept=true über den Accept-Pfad (Lineage ki + Audit-Stempel,
  * Override-First-Guard inklusive). Vorbild für alle weiteren POST/PUT-Tools.
  */
-class RecipeKlassePostTool extends FoodAlchemistTool implements ToolContract
+class RecipeKlassePostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
@@ -64,5 +65,22 @@ class RecipeKlassePostTool extends FoodAlchemistTool implements ToolContract
         }
 
         return ToolResult::success($vorschlag + ['accepted' => $angenommen]);
+    }
+
+    public function getMetadata(): array
+    {
+        return [
+            'category' => 'action',
+            'tags' => ['foodalchemist', 'verkaufsrezept', 'speisen-klasse', 'classify', 'ki'],
+            'read_only' => false,
+            'idempotent' => false,
+            'risk_level' => 'write',
+            'requires_auth' => true,
+            'requires_team' => true,
+            'side_effects' => ['updates'],
+            'cost_class' => 'external_api_paid',
+            'confirmation_required' => false,
+            'examples' => ['Welche Speisen-Klasse passt zu Rezept 456?', 'Klassifiziere Rezept 456 und übernimm den Vorschlag'],
+        ];
     }
 }

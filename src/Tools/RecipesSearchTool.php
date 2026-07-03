@@ -3,12 +3,13 @@
 namespace Platform\FoodAlchemist\Tools;
 
 use Platform\Core\Contracts\ToolContract;
+use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\RecipeService;
 
 /** M8-01: Basisrezepte durchsuchen (D-5, basis()-Scope). */
-class RecipesSearchTool extends FoodAlchemistTool implements ToolContract
+class RecipesSearchTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
@@ -52,5 +53,20 @@ class RecipesSearchTool extends FoodAlchemistTool implements ToolContract
                 'yield_kg' => $r->yield_kg, 'ek_total_eur' => $r->ek_total_eur,
             ])->all(),
         ]);
+    }
+
+    public function getMetadata(): array
+    {
+        return [
+            'category' => 'query',
+            'read_only' => true,
+            'idempotent' => true,
+            'risk_level' => 'safe',
+            'requires_auth' => true,
+            'requires_team' => true,
+            'cost_class' => 'local_db',
+            'tags' => ['foodalchemist', 'recipe', 'rezept', 'basisrezept', 'search'],
+            'examples' => ['Suche Rezepte mit Sauce Hollandaise'],
+        ];
     }
 }

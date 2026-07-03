@@ -3,12 +3,13 @@
 namespace Platform\FoodAlchemist\Tools;
 
 use Platform\Core\Contracts\ToolContract;
+use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\FoodbookService;
 
 /** M11-11: Foodbook-Detail (Kopf + Kapitel-Baum + Blöcke + aggregierter Angebotspreis). Read-only. */
-class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract
+class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
@@ -61,5 +62,20 @@ class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract
                 ])->values()->all(),
             ])->values()->all(),
         ]);
+    }
+
+    public function getMetadata(): array
+    {
+        return [
+            'category' => 'query',
+            'read_only' => true,
+            'idempotent' => true,
+            'risk_level' => 'safe',
+            'requires_auth' => true,
+            'requires_team' => true,
+            'cost_class' => 'local_db',
+            'tags' => ['foodalchemist', 'foodbook', 'detail'],
+            'examples' => ['Zeig mir das Foodbook 7'],
+        ];
     }
 }

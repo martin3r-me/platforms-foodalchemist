@@ -3,12 +3,13 @@
 namespace Platform\FoodAlchemist\Tools;
 
 use Platform\Core\Contracts\ToolContract;
+use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\GpService;
 
 /** M8-01: Grundprodukte durchsuchen (D-3) — Tool → Service, team-scoped. */
-class GpsSearchTool extends FoodAlchemistTool implements ToolContract
+class GpsSearchTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
@@ -50,5 +51,20 @@ class GpsSearchTool extends FoodAlchemistTool implements ToolContract
                 'hauptzutat_slug' => $gp->hauptzutat_slug,
             ])->all(),
         ]);
+    }
+
+    public function getMetadata(): array
+    {
+        return [
+            'category' => 'query',
+            'read_only' => true,
+            'idempotent' => true,
+            'risk_level' => 'safe',
+            'requires_auth' => true,
+            'requires_team' => true,
+            'cost_class' => 'local_db',
+            'tags' => ['foodalchemist', 'gp', 'grundprodukt', 'search'],
+            'examples' => ['Suche Grundprodukte mit Zander', 'Welche GPs gibt es zu Kartoffel?'],
+        ];
     }
 }

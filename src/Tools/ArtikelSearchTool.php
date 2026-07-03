@@ -3,12 +3,13 @@
 namespace Platform\FoodAlchemist\Tools;
 
 use Platform\Core\Contracts\ToolContract;
+use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\SupplierItemService;
 
 /** M8-01: Lieferanten-Artikel global durchsuchen (D-2). */
-class ArtikelSearchTool extends FoodAlchemistTool implements ToolContract
+class ArtikelSearchTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
@@ -51,5 +52,20 @@ class ArtikelSearchTool extends FoodAlchemistTool implements ToolContract
                 'supplier' => $i->supplier?->name ?? null,
             ])->all(),
         ]);
+    }
+
+    public function getMetadata(): array
+    {
+        return [
+            'category' => 'query',
+            'read_only' => true,
+            'idempotent' => true,
+            'risk_level' => 'safe',
+            'requires_auth' => true,
+            'requires_team' => true,
+            'cost_class' => 'local_db',
+            'tags' => ['foodalchemist', 'artikel', 'lieferantenartikel', 'lieferant', 'search'],
+            'examples' => ['Suche Lieferantenartikel zu Zander'],
+        ];
     }
 }

@@ -3,12 +3,13 @@
 namespace Platform\FoodAlchemist\Tools;
 
 use Platform\Core\Contracts\ToolContract;
+use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\RecipeService;
 
 /** M8-01: Basisrezept-Detail inkl. Zutaten + GL-02-Aggregate. */
-class RecipesGetTool extends FoodAlchemistTool implements ToolContract
+class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
@@ -52,5 +53,20 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract
                 'gp_id' => $z->gp_id, 'sub_recipe_id' => $z->referenced_recipe_id,
             ])->all(),
         ]);
+    }
+
+    public function getMetadata(): array
+    {
+        return [
+            'category' => 'query',
+            'read_only' => true,
+            'idempotent' => true,
+            'risk_level' => 'safe',
+            'requires_auth' => true,
+            'requires_team' => true,
+            'cost_class' => 'local_db',
+            'tags' => ['foodalchemist', 'recipe', 'rezept', 'detail', 'zutaten', 'allergene'],
+            'examples' => ['Zeig mir Rezept 456 mit Zutaten'],
+        ];
     }
 }

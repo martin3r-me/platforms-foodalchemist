@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Tools;
 
 use Platform\Core\Contracts\ToolContract;
+use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -11,7 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  * M7-10: UI-Aktions-Tool (kein DB-Write) — der Voice-Loop signalisiert damit
  * »öffne Datensatz X«; das Frontend setzt die Aktion um (recipe-selected).
  */
-class UiOpenTool extends FoodAlchemistTool implements ToolContract
+class UiOpenTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
@@ -53,5 +54,20 @@ class UiOpenTool extends FoodAlchemistTool implements ToolContract
         }
 
         return ToolResult::success(['open' => ['typ' => $arguments['typ'], 'id' => (int) $arguments['id']]]);
+    }
+
+    public function getMetadata(): array
+    {
+        return [
+            'category' => 'utility',
+            'tags' => ['foodalchemist', 'ui', 'navigation', 'open', 'voice'],
+            'read_only' => true,
+            'idempotent' => true,
+            'risk_level' => 'safe',
+            'requires_auth' => true,
+            'requires_team' => true,
+            'cost_class' => 'local_db',
+            'examples' => ['Öffne Rezept 456 in der Oberfläche'],
+        ];
     }
 }

@@ -3,12 +3,13 @@
 namespace Platform\FoodAlchemist\Tools;
 
 use Platform\Core\Contracts\ToolContract;
+use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 
 /** M8-01: Verkaufsrezepte durchsuchen (D-6, verkauf()-Scope inkl. Marge-Kopf). */
-class VerkaufsrezepteSearchTool extends FoodAlchemistTool implements ToolContract
+class VerkaufsrezepteSearchTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
@@ -51,5 +52,20 @@ class VerkaufsrezepteSearchTool extends FoodAlchemistTool implements ToolContrac
                 'speisen_klasse' => $r->speisenKlasse?->bezeichnung,
             ])->all(),
         ]);
+    }
+
+    public function getMetadata(): array
+    {
+        return [
+            'category' => 'query',
+            'read_only' => true,
+            'idempotent' => true,
+            'risk_level' => 'safe',
+            'requires_auth' => true,
+            'requires_team' => true,
+            'cost_class' => 'local_db',
+            'tags' => ['foodalchemist', 'verkaufsrezept', 'rezept', 'verkauf', 'search'],
+            'examples' => ['Suche Verkaufsrezepte mit Lachs'],
+        ];
     }
 }
