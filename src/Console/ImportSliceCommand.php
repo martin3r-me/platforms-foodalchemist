@@ -1239,10 +1239,15 @@ class ImportSliceCommand extends Command
         if ($mapped >= $total && $total > 0) {
             return ['source' => $total, 'imported' => 0, 'skipped' => $total];
         }
+        // Delta-Modus: bei Teilstand nur die fehlenden legacy_ids importieren (Anlage-Sync
+        // für nachträglich in der WaWi entstandene Zeilen, z. B. fb2027-Rezepte).
+        $existing = [];
         if ($mapped > 0) {
-            $this->warn("{$sourceTable}: Teilstand ({$mapped}/{$total}) — für sauberen Re-Import --fresh nutzen. Phase übersprungen.");
-
-            return ['source' => $total, 'imported' => 0, 'skipped' => $mapped];
+            // Skip-Set aus der ZIELTABELLE (nicht der Map): Sync-Skripte (z. B. 235) legen
+            // Zeilen mit legacy_id an der Map vorbei an; die Map wird unten ohnehin nachgezogen.
+            $existing = DB::table($targetTable)->whereNotNull('legacy_id')
+                ->pluck('legacy_id')->flip()->all();
+            $this->info("{$sourceTable}: Delta-Modus (".count($existing)."/{$total} vorhanden) — importiere nur Fehlende.");
         }
 
         $stmt = $pdo->query("SELECT * FROM {$sourceTable} ORDER BY {$sourcePk}");
@@ -1261,6 +1266,9 @@ class ImportSliceCommand extends Command
         };
 
         while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+            if ($existing !== [] && isset($existing[(int) $row[$sourcePk]])) {
+                continue; // Delta: bereits importiert
+            }
             if ($skipRow !== null && $skipRow($row)) {
                 $skippedRows++;
 
