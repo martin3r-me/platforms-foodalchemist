@@ -26,6 +26,13 @@ final class Ui
             // ── Flächen
             'card' => 'rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5',
             'cardAccent' => 'absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent',
+            // Modal-Sektion als frosted Card (UX-Umbau 2026-07-03): hebt die borderless Inputs
+            // vom Modal-Grund ab → Kontrast statt Grau-auf-Grau. Von <x-foodalchemist::modal-section> genutzt.
+            'sectionCard' => 'rounded-xl bg-white/55 dark:bg-white/[0.04] border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 p-4',
+            // Neutrale KPI-Kachel (frosted White-Card + Accent-Haarlinie) — löst das flächige
+            // bg-black/[0.03]-Grau in den Modal-Köpfen ab; Lead-KPIs bleiben orange/emerald.
+            'kpiTile' => 'relative overflow-hidden rounded-lg bg-white/60 dark:bg-white/5 border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 px-3 py-2',
+            'kpiTileAccent' => 'absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/40 to-transparent',
 
             // ── Formulare
             'input' => 'w-full px-3 py-1.5 text-xs bg-black/[0.03] dark:bg-white/5 rounded-lg border-0 placeholder-gray-400 focus:ring-2 focus:ring-violet-500/20 focus:bg-white dark:focus:bg-white/10 transition-all duration-150',
