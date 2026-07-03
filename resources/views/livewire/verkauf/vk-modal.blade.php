@@ -323,6 +323,7 @@
                         <th class="py-1 pr-2 font-medium">Preis</th>
                         <th class="py-1 pr-2 font-medium text-right">EK/Portion</th>
                         <th class="py-1 pr-2 font-medium text-right">VK netto</th>
+                        <th class="py-1 pr-2 font-medium text-right" title="Wareneinsatz: EK ÷ VK netto">W%</th>
                         <th class="py-1 pr-2 font-medium text-right">VK brutto</th>
                         <th class="py-1 font-medium"></th>
                     </tr>
@@ -371,6 +372,12 @@
                                 <span class="text-emerald-600 dark:text-emerald-400">{{ $d->vk_netto !== null ? number_format($d->vk_netto, 2, ',', '.') . ' €' : '—' }}</span>
                             @endif
                         </td>
+                        @php($darVkNetto = ($darForm[$d->id]['preis_modus'] ?? 'auto') === 'manuell'
+                            ? (is_numeric(str_replace(',', '.', (string) ($darForm[$d->id]['vk_netto'] ?? ''))) ? (float) str_replace(',', '.', (string) $darForm[$d->id]['vk_netto']) : null)
+                            : $d->vk_netto)
+                        @php($darWpct = ($d->ek_portion !== null && $darVkNetto !== null && $darVkNetto > 0) ? 100 * $d->ek_portion / $darVkNetto : null)
+                        <td class="py-1.5 pr-2 text-right tabular-nums {{ $darWpct !== null && $darWpct > 35 ? 'text-rose-500' : 'text-gray-400' }}"
+                            title="Wareneinsatz dieser Form">{{ $darWpct !== null ? number_format($darWpct, 0) . ' %' : '—' }}</td>
                         <td class="py-1.5 pr-2 text-right tabular-nums text-gray-400">
                             {{ $d->vk_brutto !== null ? number_format($d->vk_brutto, 2, ',', '.') . ' €' : '—' }}
                         </td>
@@ -386,7 +393,7 @@
                     </tr>
                     @if($darDeltaOffen === $d->id && $rezept !== null)
                         <tr wire:key="dar-delta-{{ $d->id }}">
-                            <td colspan="10" class="pb-2">
+                            <td colspan="11" class="pb-2">
                                 <div class="rounded-lg bg-violet-500/[0.04] border border-violet-500/10 p-2 mt-1" data-dar-delta="{{ $d->id }}">
                                     <p class="text-[11px] text-gray-400 mb-1.5">Komponenten in dieser Form — Menge überschreiben (g, Charge) oder weglassen. Leer = Standard. Neue Zutaten sind bewusst nicht möglich.</p>
                                     @php($deltaMap = $d->deltas->keyBy('recipe_ingredient_id'))
@@ -422,7 +429,7 @@
                         </tr>
                     @endif
                 @empty
-                    <tr><td colspan="10" class="py-3 text-center text-gray-400">Noch keine Darreichung — beim Speichern der VK-Daten entsteht automatisch die Standard-Form.</td></tr>
+                    <tr><td colspan="11" class="py-3 text-center text-gray-400">Noch keine Darreichung — beim Speichern der VK-Daten entsteht automatisch die Standard-Form.</td></tr>
                 @endforelse
                 </tbody>
             </table>
