@@ -224,7 +224,7 @@ class FoodbookService
      */
     public const BLOCK_TYPES = ['concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text', 'image'];
 
-    private const BLOCK_FELDER = ['type', 'ebene', 'sichtbar', 'bezeichnung', 'kundentext', 'interne_bemerkung',
+    private const BLOCK_FELDER = ['type', 'ebene', 'sichtbar', 'bezeichnung', 'wording', 'kundentext', 'interne_bemerkung',
         'variant_group_id', 'concept_id', 'vk_recipe_id', 'menge', 'einheit_vocab_id', 'preis_wert', 'preis_basis', 'hoehe', 'header_quelle', 'payload_json'];
 
     public function addBlock(Team $team, int $kapitelId, array $in): FoodAlchemistFoodbookBlock
@@ -242,6 +242,28 @@ class FoodbookService
     {
         $block = $this->ownedBlock($team, $blockId);
         $block->update(array_intersect_key($in, array_flip(self::BLOCK_FELDER)));
+
+        return $block->refresh();
+    }
+
+    /**
+     * Wording-Kette: Per-Gericht-Override eines concept_ref-Blocks
+     * (payload_json['wording_overrides'][slot_id]) setzen/löschen — die oberste
+     * Stufe der Kette Foodbook → Konzept → Standard → Name.
+     */
+    public function setBlockSlotWording(Team $team, int $blockId, int $slotId, ?string $text): FoodAlchemistFoodbookBlock
+    {
+        $block = $this->ownedBlock($team, $blockId);
+        $payload = $block->payload_json ?? [];
+        $overrides = $payload['wording_overrides'] ?? [];
+        $text = trim((string) $text);
+        if ($text === '') {
+            unset($overrides[(string) $slotId], $overrides[$slotId]);
+        } else {
+            $overrides[(string) $slotId] = $text;
+        }
+        $payload['wording_overrides'] = $overrides;
+        $block->update(['payload_json' => $payload]);
 
         return $block->refresh();
     }
@@ -475,15 +497,18 @@ class FoodbookService
         $fb->loadMissing([
             'kapitel' => fn ($q) => $q->orderBy('position'),
             'kapitel.blocks' => fn ($q) => $q->where('sichtbar', true)->orderBy('position'),
-            'kapitel.blocks.concept:id,name',
-            'kapitel.blocks.gericht:id,name',
+            // Wording-Kette: Slots (inkl. Paket-Gerichte) fürs Auflösen der Gericht-Zeilen
+            'kapitel.blocks.concept.slots.gericht:id,name,vk_wording_standard',
+            'kapitel.blocks.concept.slots.paket.gerichte.gericht:id,name,vk_wording_standard',
+            'kapitel.blocks.gericht:id,name,vk_wording_standard',
             'crmCompany', 'crmContact',
         ]);
         $pax = $fb->personen;
         $byParent = $fb->kapitel->groupBy(fn ($k) => $k->parent_id ?? 0);
+        $wording = app(WordingResolver::class);
 
         $rows = [];
-        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax) {
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax, $wording) {
             foreach ($byParent[$parentId] ?? [] as $k) {
                 $bloecke = [];
                 foreach ($k->blocks as $b) {
@@ -491,7 +516,15 @@ class FoodbookService
                     if ($label === null || $label === '') {
                         continue; // spacer/image/leerer Header
                     }
-                    $bloecke[] = ['typ' => $b->type, 'label' => $label, 'ist_header' => str_starts_with((string) $b->type, 'header')];
+                    // Untertitel: kundentext zusätzlich, wenn er nicht schon das Label ist (Legacy-Doppelrolle)
+                    $untertitel = trim((string) $b->kundentext);
+                    $untertitel = ($untertitel !== '' && $untertitel !== $label) ? $untertitel : null;
+                    // concept_ref: Gerichte des Concepts mit aufgelöster Wording-Kette als Kundenzeilen
+                    $gerichte = ($b->type === 'concept_ref' && $b->concept !== null)
+                        ? $wording->gerichtZeilen($b->concept, $b)
+                        : [];
+                    $bloecke[] = ['typ' => $b->type, 'label' => $label, 'untertitel' => $untertitel,
+                        'gerichte' => $gerichte, 'ist_header' => str_starts_with((string) $b->type, 'header')];
                 }
                 $agg = $this->kapitelAggregat($team, $k, $pax);
                 $rows[] = [
@@ -518,12 +551,15 @@ class FoodbookService
         ];
     }
 
-    /** Kunden-Label eines Blocks (kundentext bevorzugt); spacer/image => null. */
+    /**
+     * Kunden-Label eines Blocks — concept_ref/recipe_ref über die Wording-Kette
+     * (WordingResolver: wording → kundentext-Legacy → Standard → Name);
+     * header/text behalten kundentext als Inhalt; spacer/image => null.
+     */
     private function dokBlockLabel(FoodAlchemistFoodbookBlock $b): ?string
     {
         return match (true) {
-            $b->type === 'concept_ref' => $b->kundentext ?: ($b->concept?->name ?? '—'),
-            $b->type === 'recipe_ref' => $b->kundentext ?: ($b->gericht?->name ?? '—'),
+            in_array($b->type, ['concept_ref', 'recipe_ref'], true) => app(WordingResolver::class)->blockTitel($b)['text'],
             str_starts_with((string) $b->type, 'header') => $b->kundentext ?: null,
             $b->type === 'text' => $b->kundentext ?: null,
             default => null,

@@ -59,6 +59,17 @@
             </h2>
             @forelse($k['bloecke'] as $b)
                 <div class="pos {{ $b['ist_header'] ? 'header' : '' }}">{{ $b['label'] }}</div>
+                @if($b['untertitel'] ?? null)
+                    <div class="pos" style="color:#6b7280; font-size:11px">{{ $b['untertitel'] }}</div>
+                @endif
+                {{-- Wording-Kette: Gerichte eines Concepts als Kundenzeilen (Foodbook-Override → Konzept → Standard → Name) --}}
+                @foreach($b['gerichte'] ?? [] as $g)
+                    @if($g['typ'] === 'paket' || $g['typ'] === 'header')
+                        <div class="pos" style="margin-left:12px; font-weight:bold; color:#374151">{{ $g['text'] }}</div>
+                    @else
+                        <div class="pos" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}</div>
+                    @endif
+                @endforeach
             @empty
                 <div class="pos" style="color:#9ca3af">—</div>
             @endforelse

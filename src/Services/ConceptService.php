@@ -64,7 +64,9 @@ class ConceptService
             ->with([
                 'slots' => fn ($q) => $q->orderBy('position'),
                 'slots.paket:id,name,rolle,klasse,preis_pro_person,ek_pro_person,wareneinsatz_prozent,preis_modus,preis_stale',
-                'slots.gericht:id,name,vk_netto,ek_total_eur,speisen_klasse_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergene_konfidenz',
+                // Menü-Ansicht: Paket-Gerichte mit Wording-Feldern (Wording-Kette)
+                'slots.paket.gerichte.gericht:id,name,vk_wording_standard',
+                'slots.gericht:id,name,vk_wording_standard,vk_netto,ek_total_eur,speisen_klasse_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergene_konfidenz',
                 'slots.gericht.speisenKlasse:id,bezeichnung',
                 'slots.einheit:id,slug,display_de',
                 'slots.geschirrItem:id,bezeichnung,leihpreis,einheit',
