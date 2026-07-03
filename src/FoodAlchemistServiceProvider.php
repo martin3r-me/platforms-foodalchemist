@@ -250,6 +250,22 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\FoodbooksPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookKapitelPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksPostTool::class,
+                    // Phase C: Concepter, Angebote, Kalkulation, Settings, Signale, Food DNA, Speiseplan
+                    \Platform\FoodAlchemist\Tools\ConceptsSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptSlotsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\AngeboteSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\AngeboteGetTool::class,
+                    \Platform\FoodAlchemist\Tools\AngebotePostTool::class,
+                    \Platform\FoodAlchemist\Tools\KalkulationGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SettingsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SignaleSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\SignalePutTool::class,
+                    \Platform\FoodAlchemist\Tools\CanvasGetTool::class,
+                    \Platform\FoodAlchemist\Tools\CanvasPutTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplaenePostTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanEintraegePostTool::class,
                 ] as $toolClass) {
                     try {
                         $tool = new $toolClass();
