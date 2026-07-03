@@ -36,6 +36,23 @@ class VocabularyService
             ->get();
     }
 
+    /**
+     * Phase A (MCP): Einheit per Slug ODER Anzeige-Name auflösen (case-insensitiv,
+     * aktive zuerst) — LLM-Clients kennen keine vocab_ids.
+     */
+    public function findEinheit(Team $team, string $slugOderName): ?FoodAlchemistVocabEinheit
+    {
+        $gesucht = mb_strtolower(trim($slugOderName));
+        if ($gesucht === '') {
+            return null;
+        }
+
+        return $this->listEinheiten($team, includeInactive: true)
+            ->sortBy('is_inactive')
+            ->first(fn ($e) => mb_strtolower($e->slug) === $gesucht
+                || mb_strtolower((string) $e->display_de) === $gesucht);
+    }
+
     public function createEinheit(Team $team, array $input): FoodAlchemistVocabEinheit
     {
         $slug = Str::slug($input['slug'] ?? $input['display_de'] ?? '');

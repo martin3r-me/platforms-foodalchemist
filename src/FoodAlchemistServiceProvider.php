@@ -242,6 +242,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeGetTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsSuggestTool::class,
+                    // Phase A: Rezept-Schreibkaskade (Weg-A-Ausnahme, Draft-Quarantäne)
+                    \Platform\FoodAlchemist\Tools\RecipesPostTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesPutTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeIngredientsPutTool::class,
                 ] as $toolClass) {
                     try {
                         $tool = new $toolClass();

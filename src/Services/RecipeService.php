@@ -152,6 +152,7 @@ class RecipeService
             'yield_kg_manual' => $in['yield_kg_manual'] ?? null,
             'beschreibung' => ($in['beschreibung'] ?? '') ?: null,
             'last_modified_by' => 'editor',
+            'created_via' => ($in['created_via'] ?? '') ?: null,     // Phase A: mcp | editor | import | generator
         ]);
         app(RecipeRecomputeService::class)->recomputePipeline($recipe->id);
 
