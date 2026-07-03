@@ -191,6 +191,7 @@ class DarreichungService
         $deltaMap = $deltas->keyBy('recipe_ingredient_id');
         $kosten = 0.0;
         $masse = 0.0;
+        $nBepreist = 0;
         foreach ($zeilen as $ingId => $zeile) {
             $delta = $deltaMap->get($ingId);
             if ($delta !== null && $delta->weggelassen) {
@@ -199,8 +200,16 @@ class DarreichungService
             $m = $delta?->menge_override_g !== null ? (float) $delta->menge_override_g : $zeile['masse_g'];
             $skala = ($delta?->menge_override_g !== null && $zeile['masse_g'] > 0)
                 ? $m / $zeile['masse_g'] : 1.0;
+            if ($zeile['kosten'] !== null) {
+                $nBepreist++;
+            }
             $kosten += ((float) ($zeile['kosten'] ?? 0)) * $skala;
             $masse += $m;
+        }
+
+        // Keine einzige bepreiste Komponente → EK ehrlich unbekannt (nicht 0,00 €)
+        if ($nBepreist === 0) {
+            return $basis;
         }
 
         return $masse > 0 ? $kosten / $masse : $basis;
