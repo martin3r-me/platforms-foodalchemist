@@ -459,4 +459,60 @@ class KnowledgeContextService
             ->whereIn('slug', ["pairing.{$stem}", $stem])
             ->first(['slug', 'inhalt_md', 'version']);
     }
+
+    // ── MCP-Discovery (Phase K): Wissens-Suche für externe LLM-Clients ──────
+
+    /**
+     * Volltext-leichte Suche über den Wissens-Bestand: Token-Treffer in
+     * slug/titel + Alias-Treffer (gewichtet). Kein Team-Filter — der
+     * Wissens-Bestand ist global (wie crossCuttingDocs/discoverDomains).
+     *
+     * @return list<array{slug: string, titel: string, kategorie: string, version: int, char_count: int, score: float}>
+     */
+    public function searchDocuments(string $q, ?string $kategorie = null, int $limit = 10): array
+    {
+        $tokens = $this->tokenize($q);
+        if ($tokens === []) {
+            return [];
+        }
+        $limit = max(1, min(50, $limit));
+
+        // Alias-Treffer: exakte Token-Übereinstimmung zählt doppelt
+        $aliasHits = DB::table('foodalchemist_knowledge_aliases')
+            ->whereIn('alias_slug', $tokens)
+            ->pluck('knowledge_document_id')
+            ->countBy()->all();
+
+        $scored = [];
+        $docs = DB::table('foodalchemist_knowledge_documents')
+            ->where('aktiv', 1)->whereNull('deleted_at')
+            ->when($kategorie !== null, fn ($query) => $query->where('kategorie', $kategorie))
+            ->get(['id', 'slug', 'titel', 'kategorie', 'version', 'char_count']);
+        foreach ($docs as $doc) {
+            $haystack = $this->tokenize($doc->slug . ' ' . $doc->titel);
+            $score = count(array_intersect($tokens, $haystack))
+                + 2.0 * ($aliasHits[$doc->id] ?? 0);
+            if ($score > 0) {
+                $scored[] = ['doc' => $doc, 'score' => $score];
+            }
+        }
+        usort($scored, fn ($a, $b) => ($b['score'] <=> $a['score']) ?: strcmp($a['doc']->slug, $b['doc']->slug));
+
+        return array_map(fn ($item) => [
+            'slug' => $item['doc']->slug,
+            'titel' => $item['doc']->titel,
+            'kategorie' => $item['doc']->kategorie,
+            'version' => (int) $item['doc']->version,
+            'char_count' => (int) $item['doc']->char_count,
+            'score' => $item['score'],
+        ], array_slice($scored, 0, $limit));
+    }
+
+    /** Einzelnes Wissens-Dokument per Slug (aktiv, nicht gelöscht). */
+    public function getDocument(string $slug): ?object
+    {
+        return DB::table('foodalchemist_knowledge_documents')
+            ->where('slug', $slug)->where('aktiv', 1)->whereNull('deleted_at')
+            ->first(['slug', 'titel', 'kategorie', 'version', 'char_count', 'inhalt_md']);
+    }
 }

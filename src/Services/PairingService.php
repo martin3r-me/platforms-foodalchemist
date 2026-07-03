@@ -703,4 +703,32 @@ class PairingService
 
         return $out;
     }
+
+    /**
+     * MCP-Discovery (Phase K): Pairing-Partner für einen Zutat-NAMEN oder
+     * Anker-Slug. Auflösung: exakter/normalisierter Slug → resolveByName
+     * (Anker-Index). Liefert den aufgelösten Anker mit, damit der Client
+     * sieht, worauf gematcht wurde.
+     *
+     * @return array{anker: ?array{id: int, slug: string, display_de: ?string}, partner: list<object>}
+     */
+    public function neighborsForName(string $name, ?string $typ = null, int $limit = 30): array
+    {
+        $anker = DB::table('foodalchemist_vocab_pairing_ankers')
+            ->whereIn('slug', array_unique([trim($name), $this->normalizeAnkerSlug($name)]))
+            ->first(['id', 'slug', 'display_de']);
+
+        if ($anker === null && ($ankerId = $this->resolveByName($name)) !== null) {
+            $anker = DB::table('foodalchemist_vocab_pairing_ankers')
+                ->where('id', $ankerId)->first(['id', 'slug', 'display_de']);
+        }
+        if ($anker === null) {
+            return ['anker' => null, 'partner' => []];
+        }
+
+        return [
+            'anker' => ['id' => (int) $anker->id, 'slug' => $anker->slug, 'display_de' => $anker->display_de],
+            'partner' => $this->ankerNeighbors($anker->slug, $typ, $limit)->all(),
+        ];
+    }
 }

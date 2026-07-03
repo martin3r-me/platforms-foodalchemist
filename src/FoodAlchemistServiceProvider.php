@@ -234,6 +234,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ArtikelSearchTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeKlassePostTool::class,
                     \Platform\FoodAlchemist\Tools\UiOpenTool::class,
+                    // Phase 0: GP-Ground-Truth (Match + NEW-GP-Staging, LA-First-konform)
+                    \Platform\FoodAlchemist\Tools\GpsMatchTool::class,
+                    \Platform\FoodAlchemist\Tools\GpProposalsPostTool::class,
+                    // Phase K: Wissen + Pairing-Graph für externe LLM-Clients
+                    \Platform\FoodAlchemist\Tools\KnowledgeSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PairingsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PairingsSuggestTool::class,
                 ] as $toolClass) {
                     try {
                         $tool = new $toolClass();
