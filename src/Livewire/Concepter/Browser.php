@@ -205,7 +205,7 @@ class Browser extends Component
             ], $team);
             $klassen = $pakete->klassen($team);
             $rollen = $pakete->rollen($team);
-            $kategorienFlat = [];
+
         } else {
             $items = $concepts->paginateBrowser([
                 'search' => $this->search,
@@ -219,16 +219,13 @@ class Browser extends Component
             ], $team);
             $klassen = $concepts->klassen($team);
             $rollen = [];
-            $kategorienFlat = $concepts->categoriesFlat($team);
-            $kategorienCounts = $concepts->categoryCounts($team, $this->showVorlagen);
+            // 4c: Kategorien-Baum abgelöst (Facetten) — categoryFilter bleibt als URL-Back-Compat wirksam
         }
 
         return view('foodalchemist::livewire.concepter.browser', [
             'items' => $items,
             'klassen' => $klassen,
             'rollen' => $rollen,
-            'kategorienFlat' => $kategorienFlat,
-            'kategorienCounts' => $kategorienCounts ?? [],
             // Facetten-Vokabulare (nur Concepts-Tab relevant)
             'facetteServierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
                 ->orderBy('sort_order')->get(['id', 'code', 'bezeichnung']),

@@ -1011,7 +1011,7 @@ class Editor extends Component
             'typFarben' => app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->typFarben($team),
             'paketKandidaten' => $paketKandidaten,
             'sektorSlugs' => $concept !== null ? $concepts->sektorEignungSlugs($concept) : [],
-            'kategorienFlat' => $this->type === 'concepts' ? $concepts->categoriesFlat($team) : [],
+            // 4c: Kategorie-Feld abgelöst — kategorienFlat nicht mehr benötigt
             // Facetten-Vokabulare (Umbau-Spec Phase 4b)
             'servierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
                 ->orderBy('sort_order')->get(['id', 'code', 'bezeichnung']),

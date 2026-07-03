@@ -1,6 +1,5 @@
 {{-- M10R-2 / Doc 15 §10.2+§10.4: vereinheitlichter Concepter-Browser (Concepts | Pakete in einem Screen) --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($katById = collect($kategorienFlat)->keyBy('id'))
 @php($tabAktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300')
 @php($filterHover = 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5')
 @php($niveauDot = ['klassisch' => 'bg-sky-400', 'gehoben' => 'bg-amber-400', 'haute' => 'bg-violet-500'])
@@ -108,20 +107,9 @@
                         </div>
                     </div>
 
-                    {{-- Kategorie-Baum (Filter; Pflege im Concept-Screen / Einstellungen) --}}
-                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
-                        <span class="{{ $label }}">Kategorien</span>
-                        <button type="button" wire:click="waehleKategorie('')" class="w-full text-left text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === '' ? $tabAktiv : $filterHover }}">Alle</button>
-                        <button type="button" wire:click="waehleKategorie('none')" class="w-full text-left text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === 'none' ? $tabAktiv : $filterHover }}">Ohne Kategorie</button>
-                        <x-foodalchemist::tree :initial-collapsed="collect($kategorienFlat)->where('has_children', true)->pluck('id')->all()">
-                            @foreach($kategorienFlat as $kat)
-                                <x-foodalchemist::tree-node :node-id="$kat['id']" :depth="$kat['depth']" :ancestors="$kat['ancestors'] ?? []"
-                                    :has-children="$kat['has_children'] ?? false" :count="$kategorienCounts[$kat['id']] ?? null" :active="$categoryFilter === (string) $kat['id']">
-                                    <button type="button" wire:click="waehleKategorie('{{ $kat['id'] }}')" class="flex-1 min-w-0 text-left truncate text-xs px-1 py-0.5">{{ $kat['name'] }}</button>
-                                </x-foodalchemist::tree-node>
-                            @endforeach
-                        </x-foodalchemist::tree>
-                    </div>
+                    {{-- 4c (Umbau-Spec F6, 2026-07-03): Kategorie-Baum abgelöst — Eventtyp/Servierform/
+                         Einsatzmoment/Saison-Facetten übernehmen die Filter-Achse. Daten + Settings-Pflege
+                         (konzept-taxonomie) bleiben; Foodbook-Picker unberührt. --}}
                 @endif
 
                 <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">
@@ -152,7 +140,7 @@
                             <th class="{{ $th }} text-right">W%</th>
                         @else
                             <th class="{{ $th }} text-left">Klasse</th>
-                            <th class="{{ $th }} text-left">Kategorie</th>
+                            <th class="{{ $th }} text-left">Eventtyp · Servierform</th>
                             <th class="{{ $th }} text-left">Status</th>
                             <th class="{{ $th }} text-right">Slots</th>
                             <th class="{{ $th }} text-right">€/Person</th>
@@ -177,7 +165,7 @@
                                 <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->wareneinsatz_prozent !== null ? number_format((float) $it->wareneinsatz_prozent, 1, ',', '.') . ' %' : '—' }}</td>
                             @else
                                 <td class="{{ $td }} text-gray-500">{{ $it->klasse ?: '—' }}</td>
-                                <td class="{{ $td }} text-gray-500">{{ $it->category_id !== null ? ($katById[$it->category_id]['name'] ?? '—') : '—' }}</td>
+                                <td class="{{ $td }} text-gray-500">{{ collect([$it->eventtyp?->name, $it->servierform?->bezeichnung])->filter()->join(' · ') ?: '—' }}</td>
                                 {{-- Inline-Status-Pflege wie bei GP (Concepts; Server gated canCurate/D1) --}}
                                 <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                     @php($stMap = ['draft' => $variantPill['secondary'], 'aktiv' => $variantPill['success'], 'archiviert' => $variantPill['warning']])

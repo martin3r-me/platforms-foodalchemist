@@ -33,6 +33,7 @@ class ConceptService
     {
         return FoodAlchemistConcept::visibleToTeam($team)
             ->standardisiert()   // #380: angebots-lokale Entwürfe gehören nicht in den Katalog
+            ->with(['eventtyp:id,name', 'servierform:id,bezeichnung']) // 4c: Facetten-Spalte im Browser
             ->withCount('slots')
             ->when(($filters['vorlagen'] ?? false), fn ($q) => $q->vorlagen(), fn ($q) => $q->echte())
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {

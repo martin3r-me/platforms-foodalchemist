@@ -97,13 +97,7 @@
                         <label class="{{ $label }}">Anlass</label>
                         <input type="text" wire:model="form.anlass" class="{{ $input }}" placeholder="z. B. Sommerfest" />
                     </div>
-                    <div>
-                        <label class="{{ $label }}">Kategorie</label>
-                        <select wire:model="form.category_id" class="{{ $input }}">
-                            <option value="">— ohne —</option>
-                            @foreach($kategorienFlat as $kat)<option value="{{ $kat['id'] }}">{{ $kat['label'] }}</option>@endforeach
-                        </select>
-                    </div>
+                    {{-- 4c: Kategorie-Feld abgelöst — Facetten (Servierform/Eventtyp/Momente/Saison) übernehmen --}}
                     <div>
                         <label class="{{ $label }}">Servierform</label>
                         <select wire:model="form.servierform_id" wire:change="speichern" class="{{ $input }}" title="Steuert die Darreichungs-Auflösung der Gerichte (Slot → passende Variante) — speichert sofort">
