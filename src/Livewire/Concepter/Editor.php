@@ -845,6 +845,7 @@ class Editor extends Component
         $kalkulation = null;
         $tauschbar = [];
         $varianteFehlt = [];
+        $darreichungInfo = [];
         $sektionSumme = [];
         $kandidaten = collect();
         $paketKandidaten = collect();
@@ -864,12 +865,23 @@ class Editor extends Component
                 foreach ($concept->slots as $slot) {
                     $tauschbar[$slot->id] = $concepts->tauschbarePakete($team, $slot);
                 }
-                // Umbau-Spec Phase 5: „Variante fehlt" — Konzept-Servierform ohne passende Darreichung
-                if ($concept->servierform_id !== null) {
-                    foreach ($concept->slots as $slot) {
-                        if ($slot->vk_recipe_id === null) {
-                            continue;
-                        }
+                // Umbau-Spec Phase 5: aufgelöste Darreichung je Position sichtbar machen +
+                // „Variante fehlt", wenn die Konzept-Servierform keine passende Form findet
+                $resolver = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class);
+                foreach ($concept->slots as $slot) {
+                    if ($slot->vk_recipe_id === null) {
+                        continue;
+                    }
+                    $slot->setRelation('concept', $concept);
+                    $dar = $resolver->fuerSlot($slot);
+                    if ($dar !== null) {
+                        $passtZurKonzeptForm = $concept->servierform_id !== null
+                            && (int) $dar->servierform_id === (int) $concept->servierform_id;
+                        $darreichungInfo[$slot->id] = ($passtZurKonzeptForm || $concept->servierform_id === null)
+                            ? ($dar->servierform?->bezeichnung ?? '—')
+                            : 'Standard: ' . ($dar->servierform?->bezeichnung ?? '—');
+                    }
+                    if ($concept->servierform_id !== null) {
                         $hatForm = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $slot->vk_recipe_id)
                             ->where('servierform_id', $concept->servierform_id)->exists();
                         if (! $hatForm) {
@@ -931,6 +943,7 @@ class Editor extends Component
             'kalkulation' => $kalkulation,
             'tauschbar' => $tauschbar,
             'varianteFehlt' => $varianteFehlt,
+            'darreichungInfo' => $darreichungInfo,
             'kandidaten' => $kandidaten,
             'basisListe' => $basisListe ?? collect(),
             'paketListe' => $paketListe ?? collect(),

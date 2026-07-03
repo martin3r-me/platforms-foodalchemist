@@ -106,14 +106,14 @@
                     </div>
                     <div>
                         <label class="{{ $label }}">Servierform</label>
-                        <select wire:model="form.servierform_id" class="{{ $input }}" title="Steuert die Darreichungs-Auflösung der Gerichte (Slot → passende Variante)">
+                        <select wire:model="form.servierform_id" wire:change="speichern" class="{{ $input }}" title="Steuert die Darreichungs-Auflösung der Gerichte (Slot → passende Variante) — speichert sofort">
                             <option value="">—</option>
                             @foreach($servierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->bezeichnung }}</option>@endforeach
                         </select>
                     </div>
                     <div>
                         <label class="{{ $label }}">Eventtyp</label>
-                        <select wire:model="form.eventtyp_id" class="{{ $input }}">
+                        <select wire:model="form.eventtyp_id" wire:change="speichern" class="{{ $input }}">
                             <option value="">—</option>
                             @foreach($eventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
                         </select>
@@ -359,6 +359,10 @@
                                             <span class="{{ $pill }} font-medium" style="{{ $typStyle($slot->type === 'basisrezept' ? 'basisrezept' : 'gericht') }}">{{ $slot->type === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
                                             <span class="text-sm font-medium">{{ $g->name }}</span>
                                             @if($g->speisenKlasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g->speisenKlasse->bezeichnung }}</span>@endif
+                                            @if(isset($darreichungInfo[$slot->id]))
+                                                <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$slot->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}"
+                                                      title="Aufgelöste Darreichung dieser Position (explizit → Konzept-Servierform → Standard)" data-darreichung-pill>🍴 {{ $darreichungInfo[$slot->id] }}</span>
+                                            @endif
                                             @if($g->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($g->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
                                             <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium align-middle {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="{{ $allTitle }}">A</span>
                                             {{-- Phase 6: einsehen — Basisrezept → Rezept-Fenster, VK-Gericht → Gericht-Fenster (über dem Editor) --}}
