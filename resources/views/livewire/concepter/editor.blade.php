@@ -974,6 +974,11 @@
                                             </div>
                                         @else
                                             <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $rolle }}')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">+ Geschirr wählen</button>
+                                            @if($rolle === 'haupt' && isset($geschirrVorschlag[$slot->id]))
+                                                <button type="button" wire:click="geschirrWaehle({{ $slot->id }}, 'haupt', {{ $geschirrVorschlag[$slot->id]['id'] }})"
+                                                        class="{{ $pill }} {{ $variantPill['primary'] }} mt-0.5" data-geschirr-vorschlag
+                                                        title="Default-Geschirr der aufgelösten Darreichung ({{ $geschirrVorschlag[$slot->id]['form'] }}) — Klick übernimmt">💡 {{ $geschirrVorschlag[$slot->id]['bezeichnung'] }} übernehmen</button>
+                                            @endif
                                         @endif
 
                                         @if($geschirrPickSlotId === $slot->id && $geschirrPickRolle === $rolle)

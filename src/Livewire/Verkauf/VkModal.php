@@ -123,6 +123,7 @@ class VkModal extends Component
                 'aufschlagsklasse_id' => $d->aufschlagsklasse_id,
                 'preis_modus' => $d->preis_modus,
                 'vk_netto' => $d->vk_netto,
+                'geschirr_item_id' => $d->geschirr_item_id,
             ];
         }
     }
@@ -587,6 +588,10 @@ class VkModal extends Component
                 : collect(),
             'servierformenAlle' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
                 ->orderBy('sort_order')->get(['id', 'code', 'bezeichnung']),
+            'geschirrItems' => $team !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::visibleToTeam($team)
+                    ->orderBy('bezeichnung')->get(['id', 'bezeichnung', 'leihpreis'])
+                : collect(),
             'darZeilen' => ($rezept !== null && $this->darDeltaOffen !== null)
                 ? app(\Platform\FoodAlchemist\Services\DarreichungService::class)->standardProEinheit($rezept)
                 : [],

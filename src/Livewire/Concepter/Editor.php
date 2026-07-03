@@ -846,6 +846,7 @@ class Editor extends Component
         $tauschbar = [];
         $varianteFehlt = [];
         $darreichungInfo = [];
+        $geschirrVorschlag = [];
         $sektionSumme = [];
         $kandidaten = collect();
         $paketKandidaten = collect();
@@ -880,6 +881,14 @@ class Editor extends Component
                         $darreichungInfo[$slot->id] = ($passtZurKonzeptForm || $concept->servierform_id === null)
                             ? ($dar->servierform?->bezeichnung ?? '—')
                             : 'Standard: ' . ($dar->servierform?->bezeichnung ?? '—');
+                        // Default-Geschirr der Form → Vorschlag am Slot (nur wenn dort noch keins gesetzt)
+                        if ($dar->geschirr_item_id !== null && $slot->geschirr_item_id === null && $dar->geschirrItem !== null) {
+                            $geschirrVorschlag[$slot->id] = [
+                                'id' => $dar->geschirr_item_id,
+                                'bezeichnung' => $dar->geschirrItem->bezeichnung,
+                                'form' => $dar->servierform?->bezeichnung,
+                            ];
+                        }
                     }
                     if ($concept->servierform_id !== null) {
                         $hatForm = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $slot->vk_recipe_id)
@@ -944,6 +953,7 @@ class Editor extends Component
             'tauschbar' => $tauschbar,
             'varianteFehlt' => $varianteFehlt,
             'darreichungInfo' => $darreichungInfo,
+            'geschirrVorschlag' => $geschirrVorschlag,
             'kandidaten' => $kandidaten,
             'basisListe' => $basisListe ?? collect(),
             'paketListe' => $paketListe ?? collect(),

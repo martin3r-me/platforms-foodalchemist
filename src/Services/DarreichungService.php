@@ -73,6 +73,7 @@ class DarreichungService
         'regeneration_temp_c', 'regeneration_dauer_min', 'regeneration_kerntemp_c',
         'regeneration_geraet_vocab_id', 'servier_vehikel_vocab_id',
         'arbeitszeit_zuschlag_min', 'angebotstext_override', 'note',
+        'geschirr_item_id', // Default-Geschirr der Form (Concepter-Vorschlag)
     ];
 
     public function aktualisieren(Team $team, int $darreichungId, array $attrs): FoodAlchemistRecipeDarreichung

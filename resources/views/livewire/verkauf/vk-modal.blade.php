@@ -321,6 +321,7 @@
                         <th class="py-1 pr-2 font-medium text-right">Anzahl</th>
                         <th class="py-1 pr-2 font-medium">Aufschlagsklasse</th>
                         <th class="py-1 pr-2 font-medium">Preis</th>
+                        <th class="py-1 pr-2 font-medium">Geschirr</th>
                         <th class="py-1 pr-2 font-medium text-right">EK/Portion</th>
                         <th class="py-1 pr-2 font-medium text-right">VK netto</th>
                         <th class="py-1 pr-2 font-medium text-right" title="Wareneinsatz: EK ÷ VK netto">W%</th>
@@ -365,6 +366,14 @@
                                 <option value="manuell">manuell</option>
                             </select>
                         </td>
+                        <td class="py-1.5 pr-2">
+                            <select wire:model="darForm.{{ $d->id }}.geschirr_item_id"
+                                    wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-32"
+                                    title="Default-Geschirr dieser Form — wird im Concepter am Slot vorgeschlagen">
+                                <option value="">—</option>
+                                @foreach($geschirrItems as $gi)<option value="{{ $gi->id }}">{{ $gi->bezeichnung }}</option>@endforeach
+                            </select>
+                        </td>
                         <td class="py-1.5 pr-2 text-right tabular-nums text-orange-600 dark:text-orange-400">
                             {{ $d->ek_portion !== null ? number_format($d->ek_portion, 2, ',', '.') . ' €' : '—' }}
                         </td>
@@ -397,7 +406,7 @@
                     </tr>
                     @if($darDeltaOffen === $d->id && $rezept !== null)
                         <tr wire:key="dar-delta-{{ $d->id }}">
-                            <td colspan="11" class="pb-2">
+                            <td colspan="12" class="pb-2">
                                 <div class="rounded-lg bg-violet-500/[0.04] border border-violet-500/10 p-2 mt-1" data-dar-delta="{{ $d->id }}">
                                     <p class="text-[11px] text-gray-400 mb-1.5">Komponenten in dieser Form — echte Gramm <strong>je Einheit</strong> eintragen oder weglassen (leer = Standard). g/Einheit der Form ergibt sich automatisch aus der Summe. Neue Zutaten sind bewusst nicht möglich.</p>
                                     @php($deltaMap = $d->deltas->keyBy('recipe_ingredient_id'))
@@ -433,7 +442,7 @@
                         </tr>
                     @endif
                 @empty
-                    <tr><td colspan="11" class="py-3 text-center text-gray-400">Noch keine Darreichung — beim Speichern der VK-Daten entsteht automatisch die Standard-Form.</td></tr>
+                    <tr><td colspan="12" class="py-3 text-center text-gray-400">Noch keine Darreichung — beim Speichern der VK-Daten entsteht automatisch die Standard-Form.</td></tr>
                 @endforelse
                 </tbody>
             </table>

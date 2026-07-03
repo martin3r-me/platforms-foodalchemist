@@ -57,4 +57,10 @@ class FoodAlchemistRecipeDarreichung extends Model
     {
         return $this->hasMany(FoodAlchemistRecipeDarreichungDelta::class, 'darreichung_id');
     }
+
+    /** Default-Geschirr der Form — der Concepter schlägt es am Slot vor. */
+    public function geschirrItem()
+    {
+        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'geschirr_item_id');
+    }
 }
