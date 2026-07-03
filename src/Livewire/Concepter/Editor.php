@@ -234,6 +234,30 @@ class Editor extends Component
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
+    /** „Variante fehlt" (Umbau-Spec Phase 5): Darreichung zur Konzept-Servierform per 1-Klick anlegen. */
+    public function varianteAnlegen(int $slotId): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        $team = $this->team();
+        $concept = app(ConceptService::class)->detail($team, $this->id);
+        $slot = $concept?->slots->firstWhere('id', $slotId);
+        if ($concept?->servierform_id === null || $slot === null || $slot->vk_recipe_id === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\DarreichungService::class)
+                ->anlegen($team, $slot->vk_recipe_id, $concept->servierform_id, [], 'fa_ui');
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->fehler = null;
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
     /** Facetten-Pill togglen (einsatzmoment_ids | saison_ids) und sofort sichern. */
     public function toggleFacette(string $feld, int $wert): void
     {
@@ -820,6 +844,7 @@ class Editor extends Component
         $bewertet = null;
         $kalkulation = null;
         $tauschbar = [];
+        $varianteFehlt = [];
         $sektionSumme = [];
         $kandidaten = collect();
         $paketKandidaten = collect();
@@ -838,6 +863,19 @@ class Editor extends Component
                 $kalkulation = $kalk->conceptHk($team, $concept);
                 foreach ($concept->slots as $slot) {
                     $tauschbar[$slot->id] = $concepts->tauschbarePakete($team, $slot);
+                }
+                // Umbau-Spec Phase 5: „Variante fehlt" — Konzept-Servierform ohne passende Darreichung
+                if ($concept->servierform_id !== null) {
+                    foreach ($concept->slots as $slot) {
+                        if ($slot->vk_recipe_id === null) {
+                            continue;
+                        }
+                        $hatForm = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $slot->vk_recipe_id)
+                            ->where('servierform_id', $concept->servierform_id)->exists();
+                        if (! $hatForm) {
+                            $varianteFehlt[$slot->id] = true;
+                        }
+                    }
                 }
                 // Phase 3: persistente Seiten-Listen — links Basisrezepte ODER Pakete (Umschalter), rechts VK-Gerichte.
                 // Kombi-Suche (wie Gerichte-Editor) filtert beide Seiten; sonst die jeweilige Listen-Suche.
@@ -892,6 +930,7 @@ class Editor extends Component
             'bewertung' => $bewertet,
             'kalkulation' => $kalkulation,
             'tauschbar' => $tauschbar,
+            'varianteFehlt' => $varianteFehlt,
             'kandidaten' => $kandidaten,
             'basisListe' => $basisListe ?? collect(),
             'paketListe' => $paketListe ?? collect(),

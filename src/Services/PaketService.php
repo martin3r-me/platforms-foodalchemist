@@ -253,17 +253,23 @@ class PaketService
 
                 continue;
             }
+            // Umbau-Spec Phase 5: geltende Darreichung auflösen (explizit → Standard)
+            $dar = app(DarreichungResolver::class)->fuerPaketGericht($g);
+            $darPortionG = $dar?->menge_pro_einheit_g !== null ? (float) $dar->menge_pro_einheit_g : null;
             $pae = ConcepterAggregateService::portionsAequivalent(
                 $g->menge !== null ? (float) $g->menge : null,
                 $g->einheit,
                 $g->gericht,
+                $darPortionG,
             );
             if ($pae === null) {
                 continue; // Gramm-Position ohne Portionsgewicht → trägt ehrlich nicht bei
             }
             $anzahl = max(1, (int) ($g->gericht->vk_anzahl_einheiten ?? 1));
-            $vkSum += (float) ($g->gericht->vk_netto ?? 0) * $pae;
-            $ekSum += (float) ($g->gericht->ek_total_eur ?? 0) / $anzahl * $pae;
+            $vkSum += (float) ($dar?->vk_netto ?? $g->gericht->vk_netto ?? 0) * $pae;
+            $ekSum += ($dar?->ek_portion !== null
+                ? (float) $dar->ek_portion * $pae
+                : (float) ($g->gericht->ek_total_eur ?? 0) / $anzahl * $pae);
         }
 
         $vkBezug = $auto ? ($vkSum > 0 ? $vkSum : null)

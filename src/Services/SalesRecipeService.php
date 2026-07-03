@@ -119,7 +119,7 @@ class SalesRecipeService
             throw new \RuntimeException('Geerbtes Rezept — VK-Pflege nur durchs Besitzer-Team (D1).');
         }
 
-        return DB::transaction(function () use ($recipe, $in) {
+        return DB::transaction(function () use ($team, $recipe, $in) {
             $update = array_intersect_key($in, array_flip(self::VK_FELDER));
             // Wording/Marketing/Plating manuell editiert → Lineage auf manual (GL-07)
             foreach (['vk_wording_standard' => 'vk_wording', 'marketing_text' => 'marketing_text', 'plating_text' => 'plating'] as $feld => $praefix) {
@@ -139,8 +139,56 @@ class SalesRecipeService
             $update['last_modified_by'] = 'vk_editor';
             $recipe->update($update);
 
+            // Umbau-Spec Phase 5: Standard-Darreichung synchron halten — Preis-Wahrheit
+            // liegt an der Darreichung, die Legacy-Spalten sind Anzeige-/Kompat-Schicht.
+            $this->syncStandardDarreichung($team, $recipe->refresh(), $update);
+
             return $recipe->refresh();
         });
+    }
+
+    /** VK-Felder des Legacy-Editors in die Standard-Darreichung spiegeln (eine Wahrheit). */
+    private function syncStandardDarreichung(Team $team, FoodAlchemistRecipe $recipe, array $update): void
+    {
+        $standard = $recipe->standardDarreichung()->first();
+        if ($standard === null && $recipe->darreichungen()->exists()) {
+            return; // Varianten ohne Standard-Flag: nichts raten
+        }
+        if ($standard === null) {
+            // Selbstheilung: VK-Gericht ohne Darreichung (z. B. createFromBasis-Altbestand)
+            $unbestimmt = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('code', 'unbestimmt')->value('id');
+            if ($unbestimmt === null) {
+                return;
+            }
+            $standard = app(DarreichungService::class)->anlegen($team, $recipe->id, (int) $unbestimmt, [
+                'menge_pro_einheit_g' => $update['vk_menge_pro_einheit_g'] ?? $recipe->vk_menge_pro_einheit_g,
+                'einheit_vocab_id' => $update['vk_einheit_vocab_id'] ?? $recipe->vk_einheit_vocab_id,
+                'anzahl_einheiten' => $update['vk_anzahl_einheiten'] ?? $recipe->vk_anzahl_einheiten,
+                'aufschlagsklasse_id' => $update['aufschlagsklasse_id'] ?? $recipe->aufschlagsklasse_id,
+            ], 'fa_ui');
+        }
+        $map = [
+            'vk_menge_pro_einheit_g' => 'menge_pro_einheit_g',
+            'vk_einheit_vocab_id' => 'einheit_vocab_id',
+            'vk_anzahl_einheiten' => 'anzahl_einheiten',
+            'aufschlagsklasse_id' => 'aufschlagsklasse_id',
+            'behaelter_warm_vocab_id' => 'behaelter_warm_vocab_id',
+            'behaelter_kalt_vocab_id' => 'behaelter_kalt_vocab_id',
+            'servier_vehikel_vocab_id' => 'servier_vehikel_vocab_id',
+        ];
+        $dUpdate = [];
+        foreach ($map as $von => $nach) {
+            if (array_key_exists($von, $update)) {
+                $dUpdate[$nach] = $update[$von];
+            }
+        }
+        if (array_key_exists('vk_netto', $update)) {
+            $dUpdate['vk_netto'] = $update['vk_netto'];
+            $dUpdate['preis_modus'] = $update['vk_netto'] !== null ? 'manuell' : 'auto';
+        }
+        if ($dUpdate !== []) {
+            app(DarreichungService::class)->aktualisieren($team, $standard->id, $dUpdate);
+        }
     }
 
     /**

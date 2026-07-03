@@ -97,7 +97,7 @@
         <div x-data="{ tab: 'aufbau' }" data-vk-tabs>
             <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
                 {{-- 'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" — bündelt Allergene · Zusatzstoffe · Nährwerte · Spezifikation (Rezept-Modal-Parität) --}}
-                @php($vkTabs = ['aufbau' => 'Aufbau', 'allergene' => 'Deklaration', 'kalkulation' => 'Kalkulation', 'service' => 'Service'])
+                @php($vkTabs = ['aufbau' => 'Aufbau', 'allergene' => 'Deklaration', 'kalkulation' => 'Kalkulation', 'darreichungen' => 'Darreichungen', 'service' => 'Service'])
                 @if($rezept !== null)@php($vkTabs['sensorik'] = 'Sensorik & Pairing')@endif
                 @php($vkTabs['notizen'] = 'Notizen')
                 @foreach($vkTabs as $tabKey => $tabLabel)
@@ -307,6 +307,139 @@
             @endif
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab KALKULATION --}}
+
+        {{-- ── Tab: DARREICHUNGEN (Umbau-Spec Phase 5 — Varianten je Servierform) ── --}}
+        <div x-show="tab === 'darreichungen'" x-cloak class="pt-4 space-y-4" data-vk-darreichungen>
+        <x-foodalchemist::modal-section title="Darreichungen">
+            <p class="text-[11px] text-gray-400 mb-2">Ein Gericht = ein kulinarischer Kern; je Servierform eine Variante mit eigener Grammatur und eigenem EK/VK. Varianten entstehen nachfragegetrieben — meist per Klick aus dem Concepter. Komponenten dürfen nur reduziert oder weggelassen werden (neue Zutaten = neues Gericht).</p>
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="text-left text-gray-400">
+                        <th class="py-1 pr-2 font-medium">Servierform</th>
+                        <th class="py-1 pr-2 font-medium text-center">Standard</th>
+                        <th class="py-1 pr-2 font-medium text-right">g/Einheit</th>
+                        <th class="py-1 pr-2 font-medium text-right">Anzahl</th>
+                        <th class="py-1 pr-2 font-medium">Aufschlagsklasse</th>
+                        <th class="py-1 pr-2 font-medium">Preis</th>
+                        <th class="py-1 pr-2 font-medium text-right">EK/Portion</th>
+                        <th class="py-1 pr-2 font-medium text-right">VK netto</th>
+                        <th class="py-1 pr-2 font-medium text-right">VK brutto</th>
+                        <th class="py-1 font-medium"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @forelse($darreichungen as $d)
+                    <tr wire:key="dar-{{ $d->id }}" class="border-t border-black/5 dark:border-white/10 align-top">
+                        <td class="py-1.5 pr-2">
+                            <span class="font-medium">{{ $d->servierform?->bezeichnung ?? '—' }}</span>
+                            @if($d->created_via)<span class="block text-[10px] text-gray-400">{{ $d->created_via }}</span>@endif
+                        </td>
+                        <td class="py-1.5 pr-2 text-center">
+                            <input type="radio" name="dar-standard" @checked($d->ist_standard)
+                                   wire:click="darreichungStandard({{ $d->id }})" title="Als Standard setzen" />
+                        </td>
+                        <td class="py-1.5 pr-2 text-right">
+                            <input type="text" wire:model.blur="darForm.{{ $d->id }}.menge_pro_einheit_g"
+                                   wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
+                        </td>
+                        <td class="py-1.5 pr-2 text-right">
+                            <input type="text" wire:model.blur="darForm.{{ $d->id }}.anzahl_einheiten"
+                                   wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-12 text-right" />
+                        </td>
+                        <td class="py-1.5 pr-2">
+                            <select wire:model="darForm.{{ $d->id }}.aufschlagsklasse_id"
+                                    wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-28">
+                                <option value="">—</option>
+                                @foreach($aufschlagsklassen as $ak)<option value="{{ $ak->id }}">{{ $ak->code }}</option>@endforeach
+                            </select>
+                        </td>
+                        <td class="py-1.5 pr-2">
+                            <select wire:model="darForm.{{ $d->id }}.preis_modus"
+                                    wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-20">
+                                <option value="auto">auto</option>
+                                <option value="manuell">manuell</option>
+                            </select>
+                        </td>
+                        <td class="py-1.5 pr-2 text-right tabular-nums text-orange-600 dark:text-orange-400">
+                            {{ $d->ek_portion !== null ? number_format($d->ek_portion, 2, ',', '.') . ' €' : '—' }}
+                        </td>
+                        <td class="py-1.5 pr-2 text-right tabular-nums">
+                            @if(($darForm[$d->id]['preis_modus'] ?? 'auto') === 'manuell')
+                                <input type="text" wire:model.blur="darForm.{{ $d->id }}.vk_netto"
+                                       wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
+                            @else
+                                <span class="text-emerald-600 dark:text-emerald-400">{{ $d->vk_netto !== null ? number_format($d->vk_netto, 2, ',', '.') . ' €' : '—' }}</span>
+                            @endif
+                        </td>
+                        <td class="py-1.5 pr-2 text-right tabular-nums text-gray-400">
+                            {{ $d->vk_brutto !== null ? number_format($d->vk_brutto, 2, ',', '.') . ' €' : '—' }}
+                        </td>
+                        <td class="py-1.5 text-right whitespace-nowrap">
+                            <button type="button" wire:click="darDeltaToggle({{ $d->id }})"
+                                    class="{{ $btnGhostXs }} {{ $d->deltas->count() > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-gray-400' }}"
+                                    title="Komponenten dieser Form anpassen (weglassen/reduzieren)">⚙ {{ $d->deltas->count() ?: '' }}</button>
+                            @unless($d->ist_standard)
+                                <button type="button" wire:click="darreichungLoeschen({{ $d->id }})" wire:confirm="Diese Darreichung löschen?"
+                                        class="{{ $btnGhostXs }} text-rose-500" title="löschen">🗑</button>
+                            @endunless
+                        </td>
+                    </tr>
+                    @if($darDeltaOffen === $d->id && $rezept !== null)
+                        <tr wire:key="dar-delta-{{ $d->id }}">
+                            <td colspan="10" class="pb-2">
+                                <div class="rounded-lg bg-violet-500/[0.04] border border-violet-500/10 p-2 mt-1" data-dar-delta="{{ $d->id }}">
+                                    <p class="text-[11px] text-gray-400 mb-1.5">Komponenten in dieser Form — Menge überschreiben (g, Charge) oder weglassen. Leer = Standard. Neue Zutaten sind bewusst nicht möglich.</p>
+                                    @php($deltaMap = $d->deltas->keyBy('recipe_ingredient_id'))
+                                    <table class="w-full text-xs">
+                                        <thead><tr class="text-left text-gray-400">
+                                            <th class="py-0.5 pr-2 font-medium">Komponente</th>
+                                            <th class="py-0.5 pr-2 font-medium text-right">Standard (g)</th>
+                                            <th class="py-0.5 pr-2 font-medium text-right">Override (g)</th>
+                                            <th class="py-0.5 font-medium text-center">weglassen</th>
+                                        </tr></thead>
+                                        <tbody>
+                                        @foreach($rezept->ingredients as $z)
+                                            @continue(! isset($darZeilen[$z->id]))
+                                            @php($delta = $deltaMap->get($z->id))
+                                            <tr wire:key="delta-{{ $d->id }}-{{ $z->id }}" class="border-t border-black/5 dark:border-white/5 {{ $delta?->weggelassen ? 'opacity-40 line-through' : '' }}">
+                                                <td class="py-1 pr-2">{{ $z->display_name ?? $z->gp?->gp_name ?? $z->referencedRecipe?->name ?? $z->raw_text }}</td>
+                                                <td class="py-1 pr-2 text-right tabular-nums text-gray-400">{{ number_format($darZeilen[$z->id]['masse_g'], 0, ',', '.') }}</td>
+                                                <td class="py-1 pr-2 text-right">
+                                                    <input type="text" value="{{ $delta?->menge_override_g }}"
+                                                           wire:change="darDeltaMenge({{ $d->id }}, {{ $z->id }}, $event.target.value)"
+                                                           class="{{ $input }} !py-0.5 !w-20 text-right" placeholder="—" />
+                                                </td>
+                                                <td class="py-1 text-center">
+                                                    <input type="checkbox" @checked($delta?->weggelassen)
+                                                           wire:click="darDeltaWeg({{ $d->id }}, {{ $z->id }})" />
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                    @endif
+                @empty
+                    <tr><td colspan="10" class="py-3 text-center text-gray-400">Noch keine Darreichung — beim Speichern der VK-Daten entsteht automatisch die Standard-Form.</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+
+            @php($belegte = $darreichungen->pluck('servierform_id')->all())
+            <div class="flex items-center gap-2 mt-2" data-dar-anlegen>
+                <select wire:model="darNeueForm" class="{{ $input }} !py-1 w-52">
+                    <option value="">Neue Darreichung: Servierform …</option>
+                    @foreach($servierformenAlle as $sf)
+                        @continue(in_array($sf->id, $belegte))
+                        <option value="{{ $sf->id }}">{{ $sf->bezeichnung }}</option>
+                    @endforeach
+                </select>
+                <button type="button" wire:click="darreichungNeu" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">+ Anlegen</button>
+            </div>
+        </x-foodalchemist::modal-section>
+        </div>{{-- /Tab DARREICHUNGEN --}}
 
         {{-- ── Tab: SERVICE (Behälter + Regeneration + Eigenschaften + Plating) ── --}}
         <div x-show="tab === 'service'" x-cloak class="pt-4 space-y-4">

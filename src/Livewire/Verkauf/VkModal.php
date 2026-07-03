@@ -52,6 +52,14 @@ class VkModal extends Component
 
     public ?string $fehler = null;
 
+    // Darreichungen-Tab (Umbau-Spec Phase 5)
+    /** @var array<int, array<string, mixed>> */
+    public array $darForm = [];
+
+    public ?int $darDeltaOffen = null;                               // Darreichung mit offenem Komponenten-Editor
+
+    public string $darNeueForm = '';                                 // servierform_id für Anlage
+
     #[On('vk-modal.oeffnen')]
     public function oeffnen(?int $id = null): void
     {
@@ -93,7 +101,100 @@ class VkModal extends Component
             ];
             $this->hauptgruppeId = $r->speisenKlasse?->dish_main_group_id;
         }
+        $this->ladeDarreichungen();
         $this->dispatch('modal.open', name: 'vk-modal');
+    }
+
+    // ── Darreichungen (Umbau-Spec Phase 5) ──────────────────────────────
+
+    private function ladeDarreichungen(): void
+    {
+        $this->darForm = [];
+        $this->darDeltaOffen = null;
+        $this->darNeueForm = '';
+        if ($this->recipeId === null) {
+            return;
+        }
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $this->recipeId)->get() as $d) {
+            $this->darForm[$d->id] = [
+                'menge_pro_einheit_g' => $d->menge_pro_einheit_g,
+                'anzahl_einheiten' => $d->anzahl_einheiten,
+                'einheit_vocab_id' => $d->einheit_vocab_id,
+                'aufschlagsklasse_id' => $d->aufschlagsklasse_id,
+                'preis_modus' => $d->preis_modus,
+                'vk_netto' => $d->vk_netto,
+            ];
+        }
+    }
+
+    private function darServiceCall(\Closure $aktion): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        try {
+            $aktion(app(\Platform\FoodAlchemist\Services\DarreichungService::class), $team);
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $offen = $this->darDeltaOffen;
+        $this->ladeDarreichungen();
+        $this->darDeltaOffen = $offen;
+        $this->dispatch('recipe-gespeichert');
+    }
+
+    public function darreichungSpeichern(int $id): void
+    {
+        $this->darServiceCall(fn ($svc, $team) => $svc->aktualisieren($team, $id, $this->darForm[$id] ?? []));
+    }
+
+    public function darreichungNeu(): void
+    {
+        if ($this->recipeId === null || ! ctype_digit($this->darNeueForm)) {
+            return;
+        }
+        $formId = (int) $this->darNeueForm;
+        $this->darServiceCall(fn ($svc, $team) => $svc->anlegen($team, $this->recipeId, $formId, [], 'fa_ui'));
+    }
+
+    public function darreichungLoeschen(int $id): void
+    {
+        $this->darServiceCall(fn ($svc, $team) => $svc->loeschen($team, $id));
+    }
+
+    public function darreichungStandard(int $id): void
+    {
+        $this->darServiceCall(fn ($svc, $team) => $svc->setzeStandard($team, $id));
+    }
+
+    public function darDeltaToggle(int $id): void
+    {
+        $this->darDeltaOffen = $this->darDeltaOffen === $id ? null : $id;
+    }
+
+    public function darDeltaMenge(int $darId, int $ingId, ?string $wert): void
+    {
+        $menge = is_numeric(str_replace(',', '.', (string) $wert)) ? (float) str_replace(',', '.', (string) $wert) : null;
+        $this->darServiceCall(function ($svc, $team) use ($darId, $ingId, $menge) {
+            $weg = (bool) \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungDelta::where('darreichung_id', $darId)
+                ->where('recipe_ingredient_id', $ingId)->value('weggelassen');
+            $svc->setzeDelta($team, $darId, $ingId, $menge, $weg);
+        });
+    }
+
+    public function darDeltaWeg(int $darId, int $ingId): void
+    {
+        $this->darServiceCall(function ($svc, $team) use ($darId, $ingId) {
+            $delta = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungDelta::where('darreichung_id', $darId)
+                ->where('recipe_ingredient_id', $ingId)->first();
+            $svc->setzeDelta($team, $darId, $ingId,
+                $delta?->menge_override_g !== null ? (float) $delta->menge_override_g : null,
+                ! (bool) ($delta?->weggelassen ?? false));
+        });
     }
 
     // P-2-State-Leak-Schutz wie RecipeModal/GeneratorModal: Reset beim ÖFFNEN
@@ -479,6 +580,16 @@ class VkModal extends Component
                     ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($this->basisSuche)) . '%'])
                     ->orderBy('name')->limit(6)->get(['id', 'name', 'yield_kg', 'ek_total_eur'])
                 : collect(),
+            // Darreichungen-Tab (Umbau-Spec Phase 5)
+            'darreichungen' => $this->recipeId !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servierform', 'deltas')
+                    ->where('recipe_id', $this->recipeId)->orderByDesc('ist_standard')->orderBy('id')->get()
+                : collect(),
+            'servierformenAlle' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
+                ->orderBy('sort_order')->get(['id', 'code', 'bezeichnung']),
+            'darZeilen' => ($rezept !== null && $this->darDeltaOffen !== null)
+                ? app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->zeilenKostenUndMassen($rezept)
+                : [],
             'sensorik' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($rezept->id) : null,
             'komposition' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->gerichtKomposition($rezept->id) : null,
             'pairing' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($rezept) : null,

@@ -476,19 +476,28 @@ class ConceptService
                 $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'paket', 'rolle' => $slot->rolle, 'wording' => $slot->wording,
                     'label' => $slot->paket->name, 'preis' => $vk, 'ek' => round($ek, 2), 'ek_fehlt' => false, 'stale' => (bool) $slot->paket->preis_stale];
             } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
+                // Umbau-Spec Phase 5: geltende Darreichung auflösen (explizit → Konzept-Form → Standard)
+                $slot->setRelation('concept', $concept);
+                $dar = app(DarreichungResolver::class)->fuerSlot($slot);
+                $darPortionG = $dar?->menge_pro_einheit_g !== null ? (float) $dar->menge_pro_einheit_g : null;
                 // Einheit-abhängige Mengen-Umrechnung — EINE Stelle (Konsistenz zu ConcepterAggregate/Paket).
                 $pae = ConcepterAggregateService::portionsAequivalent(
                     $slot->menge !== null ? (float) $slot->menge : null,
                     $slot->einheit,
                     $slot->gericht,
+                    $darPortionG,
                 );
                 $ekFehlt = $pae === null;       // Gramm-Position ohne Portionsgewicht → ehrlich „unbekannt"
                 // Teiler von ek_total: Stück-Modus (kg↔Stück) → ertrag_stueck, sonst Portionszahl.
-                $anzahl = ConcepterAggregateService::stueckModus($slot->einheit, $slot->gericht)
+                $stueck = ConcepterAggregateService::stueckModus($slot->einheit, $slot->gericht);
+                $anzahl = $stueck
                     ? (float) $slot->gericht->ertrag_stueck
                     : max(1, (int) ($slot->gericht->vk_anzahl_einheiten ?? 1));
-                $vk = $ekFehlt ? 0.0 : (float) ($slot->gericht->vk_netto ?? 0) * $pae;
-                $ek = $ekFehlt ? 0.0 : (float) ($slot->gericht->ek_total_eur ?? 0) / $anzahl * $pae;
+                $vk = $ekFehlt ? 0.0 : (float) ($dar?->vk_netto ?? $slot->gericht->vk_netto ?? 0) * $pae;
+                $ek = $ekFehlt ? 0.0
+                    : (($dar?->ek_portion !== null && ! $stueck)
+                        ? (float) $dar->ek_portion * $pae
+                        : (float) ($slot->gericht->ek_total_eur ?? 0) / $anzahl * $pae);
                 $hatEkLuecke = $hatEkLuecke || $ekFehlt;
                 $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'gericht', 'rolle' => $slot->rolle, 'wording' => $slot->wording,
                     'label' => $slot->gericht->name, 'preis' => round($vk, 2),
@@ -701,7 +710,10 @@ class ConceptService
             if (! empty($kandidaten)) {
                 $slots[] = ['slot_id' => (int) $slot->id, 'current' => $slot->paket_id !== null ? (int) $slot->paket_id : null, 'kandidaten' => $kandidaten];
             } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
-                $fix += (float) ($slot->gericht->vk_netto ?? 0) * ($slot->menge !== null ? (float) $slot->menge : 1.0);
+                // Umbau-Spec Phase 5: aufgelöste Darreichung gewinnt (Fixanteil des Zielpreis-Solvers)
+                $slot->setRelation('concept', $concept);
+                $darVk = app(DarreichungResolver::class)->vkNettoFuerSlot($slot);
+                $fix += (float) ($darVk ?? 0) * ($slot->menge !== null ? (float) $slot->menge : 1.0);
             }
         }
 

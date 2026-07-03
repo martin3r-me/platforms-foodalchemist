@@ -70,6 +70,10 @@ class RecipeRecomputeService
             $this->naehrwerte($recipe, $zutaten);
             $recipe->save();
         });
+
+        // Umbau-Spec Phase 5: Darreichungspreise folgen dem frischen EK (lazy resolved,
+        // kein Konstruktor-Zyklus — DarreichungService hängt seinerseits an diesem Service).
+        app(DarreichungService::class)->recomputeFuerRezept($recipeId);
     }
 
     /** §3.3: Pipeline + alle transitiven Eltern per BFS (best effort, I8). */
@@ -419,6 +423,32 @@ class RecipeRecomputeService
         foreach ($this->aggregationsZutaten($zutaten) as $z) {
             [$kosten, $priced] = $this->zutatKosten($z);
             $out[$z->id] = $priced ? round($kosten, 2) : null;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Zeilen-Kosten + verlustbereinigte Masse je Zutat (Darreichungs-Deltas,
+     * Umbau-Spec §1.3): Kosten = T3-Kaskade wie zeilenKosten(), Masse = derselbe
+     * Raum wie yield (mengeAvg × grammFaktor × Putz-/Garverlust) — damit der
+     * Delta-Mischpreis konsistent zur EK/kg-Referenz des Rezepts rechnet.
+     *
+     * @return array<int, array{kosten: ?float, masse_g: float}>
+     */
+    public function zeilenKostenUndMassen(FoodAlchemistRecipe $recipe): array
+    {
+        $this->laCache = [];
+        $zutaten = $recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored);
+
+        $out = [];
+        foreach ($this->aggregationsZutaten($zutaten) as $z) {
+            [$kosten, $priced] = $this->zutatKosten($z);
+            $masseG = ($z->is_optional || $z->einheit?->slug === 'qs') ? 0.0
+                : $this->mengeAvg($z) * $this->grammFaktor($z)
+                    * (1 - $this->effektiverPutzverlust($z) / 100)
+                    * (1 - $this->effektiverGarverlust($z) / 100);
+            $out[$z->id] = ['kosten' => $priced ? $kosten : null, 'masse_g' => $masseG];
         }
 
         return $out;

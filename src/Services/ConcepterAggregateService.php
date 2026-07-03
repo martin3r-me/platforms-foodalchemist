@@ -32,6 +32,9 @@ class ConcepterAggregateService
 {
     private const KONF_RANG = ['unknown' => 0, 'low' => 1, 'medium' => 2, 'high' => 3];
 
+    /** Umbau-Spec Phase 5: löst je Position die geltende Darreichung auf (Preis-Wahrheit). */
+    public function __construct(private DarreichungResolver $darreichungen) {}
+
     /** Recipe-Spalten, die alle Rollups brauchen (ein Select, kein N+1). */
     private function recipeCols(): array
     {
@@ -63,7 +66,7 @@ class ConcepterAggregateService
      * - Gramm gewählt, aber Portionsgewicht (vk_menge_pro_einheit_g) fehlt → null
      *   (Position trägt ehrlich NICHT bei, statt eine erfundene Zahl).
      */
-    public static function portionsAequivalent(?float $menge, ?object $einheit, ?object $gericht): ?float
+    public static function portionsAequivalent(?float $menge, ?object $einheit, ?object $gericht, ?float $portionGOverride = null): ?float
     {
         $istGramm = $einheit !== null
             && $einheit->dimension === 'mass'
@@ -77,7 +80,8 @@ class ConcepterAggregateService
         if ($menge === null) {
             return null;
         }
-        $portionG = $gericht?->vk_menge_pro_einheit_g;
+        // Umbau-Spec Phase 5: Grammatur der aufgelösten Darreichung gewinnt gegen die Legacy-Spalte
+        $portionG = $portionGOverride ?? $gericht?->vk_menge_pro_einheit_g;
         if ($portionG === null || (float) $portionG <= 0) {
             return null;
         }
@@ -117,7 +121,8 @@ class ConcepterAggregateService
         ]);
 
         $mitMenge = $paket->gerichte
-            ->map(fn ($pg) => ['gericht' => $pg->gericht, 'menge' => $pg->menge, 'einheit' => $pg->einheit])
+            ->map(fn ($pg) => ['gericht' => $pg->gericht, 'menge' => $pg->menge, 'einheit' => $pg->einheit,
+                'darreichung' => $pg->gericht !== null ? $this->darreichungen->fuerPaketGericht($pg) : null])
             ->filter(fn ($r) => $r['gericht'] !== null)->values();
 
         return $this->aggregat($mitMenge);
@@ -144,14 +149,17 @@ class ConcepterAggregateService
 
         $mitMenge = collect();
         foreach ($concept->slots as $slot) {
+            $slot->setRelation('concept', $concept); // Resolver braucht die Konzept-Servierform ohne Lazy-Load
             if ($slot->paket) {
                 foreach ($slot->paket->gerichte as $pg) {
                     if ($pg->gericht) {
-                        $mitMenge->push(['gericht' => $pg->gericht, 'menge' => $pg->menge, 'einheit' => $pg->einheit]);
+                        $mitMenge->push(['gericht' => $pg->gericht, 'menge' => $pg->menge, 'einheit' => $pg->einheit,
+                            'darreichung' => $this->darreichungen->fuerPaketGericht($pg)]);
                     }
                 }
             } elseif ($slot->gericht) {
-                $mitMenge->push(['gericht' => $slot->gericht, 'menge' => $slot->menge, 'einheit' => $slot->einheit]);
+                $mitMenge->push(['gericht' => $slot->gericht, 'menge' => $slot->menge, 'einheit' => $slot->einheit,
+                    'darreichung' => $this->darreichungen->fuerSlot($slot)]);
             }
         }
 
@@ -197,10 +205,13 @@ class ConcepterAggregateService
                 continue;
             }
 
+            $dar = $r['darreichung'] ?? null;
+            $darPortionG = $dar?->menge_pro_einheit_g !== null ? (float) $dar->menge_pro_einheit_g : null;
             $pae = self::portionsAequivalent(
                 $r['menge'] !== null ? (float) $r['menge'] : null,
                 $r['einheit'] ?? null,
                 $r['gericht'],
+                $darPortionG,
             );
             if ($pae === null) {
                 $gewichtVollstaendig = false; // unbekannte Menge → auch Gewicht unvollständig
@@ -210,8 +221,14 @@ class ConcepterAggregateService
             $stueck = self::stueckModus($r['einheit'] ?? null, $r['gericht']);
             // Teiler von ek_total: Stück-Modus → ertrag_stueck, sonst Portionszahl (Batch→Portion).
             $anzahl = $stueck ? (float) $r['gericht']->ertrag_stueck : max(1, (int) ($r['gericht']->vk_anzahl_einheiten ?? 1));
-            $ek += (float) ($r['gericht']->ek_total_eur ?? 0) / $anzahl * $pae;
-            $vk += (float) ($r['gericht']->vk_netto ?? 0) * $pae;
+            // Umbau-Spec Phase 5: EK/VK der aufgelösten Darreichung gewinnt (exakt je Form,
+            // inkl. Komponenten-Deltas); Legacy-Spalten nur noch Fallback.
+            if ($dar?->ek_portion !== null && ! $stueck) {
+                $ek += (float) $dar->ek_portion * $pae;
+            } else {
+                $ek += (float) ($r['gericht']->ek_total_eur ?? 0) / $anzahl * $pae;
+            }
+            $vk += (float) ($dar?->vk_netto ?? $r['gericht']->vk_netto ?? 0) * $pae;
             // M-K2: Arbeitszeit/Person = Rezept-Arbeitszeit ÷ Teiler × Portions-Äquivalent.
             $zeitProPortion += (float) ($r['gericht']->arbeitszeit_min ?? 0) / $anzahl * $pae;
             // Gewicht/Person = Portions-Äquivalent × Gramm je Einheit. Stück-Modus: yield_g / ertrag_stueck;
@@ -224,7 +241,7 @@ class ConcepterAggregateService
                     $gewichtVollstaendig = false;
                 }
             } else {
-                $portionG = $r['gericht']->vk_menge_pro_einheit_g;
+                $portionG = $darPortionG ?? $r['gericht']->vk_menge_pro_einheit_g;
                 if ($portionG !== null && (float) $portionG > 0) {
                     $gewicht += $pae * (float) $portionG;
                 } else {
