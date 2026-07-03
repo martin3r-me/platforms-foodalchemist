@@ -94,6 +94,42 @@ class FoodAlchemistConcept extends Model
         return $this->belongsTo(FoodAlchemistWritingStyle::class, 'schreibstil_id');
     }
 
+    // ── Facetten-Dimensionen (Umbau-Spec Phase 4) ────────────────────────
+
+    /** Servierform (einfach) — Scharnier zur Darreichungs-Auflösung der Slots. */
+    public function servierform(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistServierform::class, 'servierform_id');
+    }
+
+    /** Eventtyp (einfach). */
+    public function eventtyp(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistEventtyp::class, 'eventtyp_id');
+    }
+
+    /** Einsatzmomente (mehrfach): Frühstück/Lunch/Apéro/…. */
+    public function einsatzmomente()
+    {
+        return $this->belongsToMany(
+            FoodAlchemistEinsatzmoment::class,
+            'foodalchemist_concept_einsatzmomente',
+            'concept_id',
+            'einsatzmoment_id'
+        );
+    }
+
+    /** Saisons (mehrfach). */
+    public function saisons()
+    {
+        return $this->belongsToMany(
+            FoodAlchemistSaison::class,
+            'foodalchemist_concept_saisons',
+            'concept_id',
+            'saison_id'
+        );
+    }
+
     /** Mehrwertige Sektor-Eignung (M10R-1, §10.8 — VK-Parität). */
     public function sektorEignungen(): HasMany
     {

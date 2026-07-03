@@ -26,10 +26,22 @@ class DarreichungResolver
             return $slot->darreichung;
         }
 
-        // Phase 4: hier Konzept-Servierform → passende Darreichung auflösen,
-        // sobald concepts eine servierform_id trägt.
+        if ($slot->gericht === null) {
+            return null;
+        }
 
-        return $slot->gericht !== null ? $this->standardFuer($slot->gericht) : null;
+        // Phase 4: Servierform des Konzepts → passende Darreichung des Gerichts
+        $konzeptServierformId = $slot->concept?->servierform_id;
+        if ($konzeptServierformId !== null) {
+            $passend = $slot->gericht->darreichungen()
+                ->where('servierform_id', $konzeptServierformId)
+                ->first();
+            if ($passend !== null) {
+                return $passend;
+            }
+        }
+
+        return $this->standardFuer($slot->gericht);
     }
 
     public function fuerPaketGericht(FoodAlchemistPaketGericht $pg): ?FoodAlchemistRecipeDarreichung
