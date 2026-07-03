@@ -1,0 +1,33 @@
+<?php
+
+namespace Platform\FoodAlchemist\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\ActivityLog\Traits\LogsActivity;
+use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
+use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
+
+/**
+ * @ai.description Servierform-Vokabular (Umbau-Spec Darreichungen, Phase 3) —
+ * Scharnier zwischen Gericht-Darreichung und (Phase 4) Konzept-Dimension:
+ * teller/buffet/flying/fingerfood/station/… + 'unbestimmt' als Review-Queue.
+ * WaWi-Master, Spiegel via ImportSliceCommand.
+ */
+class FoodAlchemistServierform extends Model
+{
+    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+
+    protected $table = 'foodalchemist_servierformen';
+
+    protected $guarded = ['id'];
+
+    protected $casts = [
+        'is_inactive' => 'bool',
+    ];
+
+    public function darreichungen()
+    {
+        return $this->hasMany(FoodAlchemistRecipeDarreichung::class, 'servierform_id');
+    }
+}

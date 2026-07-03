@@ -42,4 +42,10 @@ class FoodAlchemistPaketGericht extends Model
     {
         return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
     }
+
+    /** Optional: explizit gewählte Darreichung des Gerichts (Umbau-Spec Phase 3). */
+    public function darreichung(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'darreichung_id');
+    }
 }

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Enums\RecipeStatus;
@@ -118,6 +119,19 @@ class FoodAlchemistRecipe extends Model
     public function vkEinheit(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'vk_einheit_vocab_id');
+    }
+
+    /** Darreichungs-Varianten des Gerichts (Umbau-Spec Phase 3). */
+    public function darreichungen(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistRecipeDarreichung::class, 'recipe_id');
+    }
+
+    /** Die Standard-Darreichung (genau eine pro Gericht; Preis-Wahrheit). */
+    public function standardDarreichung(): HasOne
+    {
+        return $this->hasOne(FoodAlchemistRecipeDarreichung::class, 'recipe_id')
+            ->where('ist_standard', true);
     }
 
     public function customerNames(): HasMany

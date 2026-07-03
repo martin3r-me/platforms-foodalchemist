@@ -901,9 +901,84 @@ class ImportSliceCommand extends Command
                 'note' => self::nullIfBlank($r['note'] ?? null),
             ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]));
 
+        // ── Darreichungen (Umbau-Spec Phase 3): Servierformen + Varianten + Deltas ──
+        $stats['servierformen'] = $this->importBulk($pdo, $dryRun, 'vocab_servierform', 'foodalchemist_servierformen', 'servierform_id',
+            fn (array $r) => [
+                'legacy_id' => $r['servierform_id'],
+                'code' => $r['code'],
+                'bezeichnung' => $r['bezeichnung'],
+                'sort_order' => (int) ($r['sort_order'] ?? 100),
+                'is_inactive' => (bool) ($r['is_inactive'] ?? 0),
+            ]);
+
+        $servierformMap = $this->targetMap('foodalchemist_servierformen');
+        $einheitMapDar = $this->targetMap('foodalchemist_vocab_einheiten', 'vocab_einheit');
+        $akMapDar = $this->targetMap('foodalchemist_markup_classes');
+        $behMapDar = $this->targetMap('foodalchemist_vocab_behaelter');
+        $regenMapDar = $this->targetMap('foodalchemist_vocab_regen_geraete');
+        $vehikelMapDar = $this->targetMap('foodalchemist_vocab_serviervehikel');
+        $stats['recipe_darreichungen'] = $this->importBulk($pdo, $dryRun, 'recipe_darreichungen', 'foodalchemist_recipe_darreichungen', 'darreichung_id',
+            fn (array $r) => [
+                'legacy_id' => $r['darreichung_id'],
+                'recipe_id' => $recipeMap[(int) $r['recipe_id']] ?? null,
+                'servierform_id' => $servierformMap[(int) $r['servierform_vocab_id']] ?? null,
+                'ist_standard' => (bool) $r['ist_standard'],
+                'menge_pro_einheit_g' => $r['menge_pro_einheit_g'],
+                'einheit_vocab_id' => $r['einheit_vocab_id'] !== null ? ($einheitMapDar[(int) $r['einheit_vocab_id']] ?? null) : null,
+                'anzahl_einheiten' => $r['anzahl_einheiten'],
+                'ek_portion' => $r['ek_portion'],
+                'aufschlagsklasse_id' => $r['aufschlagsklasse_id'] !== null ? ($akMapDar[(int) $r['aufschlagsklasse_id']] ?? null) : null,
+                'vk_netto' => $r['vk_netto'],
+                'vk_brutto' => $r['vk_brutto'],
+                'preis_modus' => $r['preis_modus'] ?? 'auto',
+                'behaelter_warm_vocab_id' => $r['behaelter_warm_vocab_id'] !== null ? ($behMapDar[(int) $r['behaelter_warm_vocab_id']] ?? null) : null,
+                'behaelter_kalt_vocab_id' => $r['behaelter_kalt_vocab_id'] !== null ? ($behMapDar[(int) $r['behaelter_kalt_vocab_id']] ?? null) : null,
+                'regeneration_temp_c' => $r['regeneration_temp_c'],
+                'regeneration_dauer_min' => $r['regeneration_dauer_min'],
+                'regeneration_kerntemp_c' => $r['regeneration_kerntemp_c'],
+                'regeneration_geraet_vocab_id' => $r['regeneration_geraet_vocab_id'] !== null ? ($regenMapDar[(int) $r['regeneration_geraet_vocab_id']] ?? null) : null,
+                'servier_vehikel_vocab_id' => $r['servier_vehikel_vocab_id'] !== null ? ($vehikelMapDar[(int) $r['servier_vehikel_vocab_id']] ?? null) : null,
+                'arbeitszeit_zuschlag_min' => $r['arbeitszeit_zuschlag_min'],
+                'angebotstext_override' => self::nullIfBlank($r['angebotstext_override'] ?? null),
+                'note' => self::nullIfBlank($r['note'] ?? null),
+            ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']])
+                || ! isset($servierformMap[(int) $r['servierform_vocab_id']]));
+
+        $darreichungMap = $this->targetMap('foodalchemist_recipe_darreichungen');
+        $ingredientMap = $this->targetMap('foodalchemist_recipe_ingredients', 'recipe_ingredients');
+        $stats['recipe_darreichung_deltas'] = $this->importBulk($pdo, $dryRun, 'recipe_darreichung_deltas', 'foodalchemist_recipe_darreichung_deltas', 'delta_id',
+            fn (array $r) => [
+                'legacy_id' => $r['delta_id'],
+                'darreichung_id' => $darreichungMap[(int) $r['darreichung_id']] ?? null,
+                'recipe_ingredient_id' => $ingredientMap[(int) $r['recipe_ingredient_id']] ?? null,
+                'menge_override_g' => $r['menge_override_g'],
+                'weggelassen' => (bool) $r['weggelassen'],
+                'note' => self::nullIfBlank($r['note'] ?? null),
+            ], skipRow: fn (array $r) => ! isset($darreichungMap[(int) $r['darreichung_id']])
+                || ! isset($ingredientMap[(int) $r['recipe_ingredient_id']]));
+
         if ($dryRun) {
             return $stats;
         }
+
+        // VK-Spiegel (Phase 3): recipes.vk_netto = Anzeige-Cache der Standard-Darreichung,
+        // fill-only — kuratierte FA-Werte bleiben. Preis-Wahrheit liegt an der Darreichung.
+        $gespiegelt = DB::update('
+            UPDATE foodalchemist_recipes
+            SET vk_netto = (
+                SELECT d.vk_netto FROM foodalchemist_recipe_darreichungen d
+                WHERE d.recipe_id = foodalchemist_recipes.id
+                  AND d.ist_standard = 1 AND d.deleted_at IS NULL
+            )
+            WHERE vk_netto IS NULL
+              AND EXISTS (
+                SELECT 1 FROM foodalchemist_recipe_darreichungen d
+                WHERE d.recipe_id = foodalchemist_recipes.id
+                  AND d.ist_standard = 1 AND d.deleted_at IS NULL
+                  AND d.vk_netto IS NOT NULL
+              )
+        ');
+        $stats['vk_mirror'] = ['source' => '—', 'imported' => $gespiegelt, 'skipped' => '—'];
 
         // FK-Resolve: M4-01-Rohwerte → echte FKs (idempotent, nur 1.407 Rezepte)
         $klasseMap = $this->targetMap('foodalchemist_dish_classes');
@@ -976,6 +1051,12 @@ class ImportSliceCommand extends Command
             'speisen_klasse_id' => null, 'aufschlagsklasse_id' => null, 'behaelter_warm_vocab_id' => null,
             'behaelter_kalt_vocab_id' => null, 'servier_vehikel_vocab_id' => null,
         ]);
+        // Darreichungen (Phase 3): FK-Ketten zuerst lösen, dann Kinder → Eltern
+        DB::table('foodalchemist_concept_slots')->update(['darreichung_id' => null]);
+        DB::table('foodalchemist_paket_gerichte')->update(['darreichung_id' => null]);
+        DB::table('foodalchemist_recipe_darreichung_deltas')->delete();
+        DB::table('foodalchemist_recipe_darreichungen')->delete();
+        DB::table('foodalchemist_servierformen')->delete();
         DB::table('foodalchemist_recipe_regenerations')->delete();
         DB::table('foodalchemist_recipe_customer_names')->delete();
         DB::table('foodalchemist_vocab_serviervehikel')->delete();
