@@ -130,7 +130,7 @@ class GeschirrService
     }
 
     /** Leichtgewichtige Suche für den Geschirr-Picker im Concepter (Gericht-Slot). */
-    public function searchItems(Team $team, string $q, int $limit = 12): Collection
+    public function searchItems(Team $team, string $q, int $limit = 12, ?int $bevorzugtVehikelId = null): Collection
     {
         return FoodAlchemistGeschirrItem::visibleToTeam($team)
             ->with('supplier:id,name')
@@ -138,6 +138,10 @@ class GeschirrService
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x
                 ->whereRaw('LOWER(bezeichnung) LIKE ?', ['%' . mb_strtolower($q) . '%'])
                 ->orWhereRaw('LOWER(kategorie) LIKE ?', ['%' . mb_strtolower($q) . '%'])))
+            // A2: Teile mit passendem Servier-Vehikel-Typ zuerst (weiches Ranking, kein
+            // Hard-Filter — ungemappte Kataloge bleiben voll benutzbar)
+            ->when($bevorzugtVehikelId !== null, fn ($w) => $w
+                ->orderByRaw('CASE WHEN vehikel_vocab_id = ? THEN 0 ELSE 1 END', [$bevorzugtVehikelId]))
             ->orderBy('bezeichnung')
             ->limit($limit)
             ->get();
@@ -215,6 +219,9 @@ class GeschirrService
             'pfand' => $num('pfand'),
             'einheit' => $str('einheit') ?? 'Stk',
             'note' => $str('note'),
+            // A2: Servier-Vehikel-Typ (abstrakte Präsentationsform ↔ konkretes Mietteil)
+            'vehikel_vocab_id' => isset($in['vehikel_vocab_id']) && $in['vehikel_vocab_id'] !== ''
+                ? (int) $in['vehikel_vocab_id'] : null,
         ];
     }
 }

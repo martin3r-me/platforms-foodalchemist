@@ -234,6 +234,41 @@ class Editor extends Component
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
+    /** A1: explizite Form je Position setzen ('' = auto → Konzept-Form/Standard). */
+    public function slotDarreichungSetzen(int $slotId, ?string $wert): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        try {
+            app(ConceptService::class)->setSlotDarreichung(
+                $this->team(), $slotId, ctype_digit((string) $wert) ? (int) $wert : null,
+            );
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->fehler = null;
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    /** A2: Servier-Vehikel der aufgelösten Darreichung des Picker-Slots (Geschirr-Ranking). */
+    private function geschirrVehikelBevorzugt($concept): ?int
+    {
+        if ($concept === null || $this->geschirrPickSlotId === null) {
+            return null;
+        }
+        $slot = $concept->slots->firstWhere('id', $this->geschirrPickSlotId);
+        if ($slot === null || $slot->vk_recipe_id === null) {
+            return null;
+        }
+        $slot->setRelation('concept', $concept);
+        $dar = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->fuerSlot($slot);
+
+        return $dar?->servier_vehikel_vocab_id !== null ? (int) $dar->servier_vehikel_vocab_id : null;
+    }
+
     /** „Variante fehlt" (Umbau-Spec Phase 5): Darreichung zur Konzept-Servierform per 1-Klick anlegen. */
     public function varianteAnlegen(int $slotId): void
     {
@@ -846,6 +881,7 @@ class Editor extends Component
         $tauschbar = [];
         $varianteFehlt = [];
         $darreichungInfo = [];
+        $darreichungOptionen = [];
         $geschirrVorschlag = [];
         $sektionSumme = [];
         $kandidaten = collect();
@@ -874,6 +910,13 @@ class Editor extends Component
                         continue;
                     }
                     $slot->setRelation('concept', $concept);
+                    $formen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servierform')
+                        ->where('recipe_id', $slot->vk_recipe_id)->orderByDesc('ist_standard')->get();
+                    if ($formen->count() > 1) {
+                        // A1: Form-Picker je Position (nur sinnvoll bei mehreren Formen)
+                        $darreichungOptionen[$slot->id] = $formen
+                            ->map(fn ($f) => ['id' => $f->id, 'label' => $f->servierform?->bezeichnung ?? '—'])->all();
+                    }
                     $dar = $resolver->fuerSlot($slot);
                     if ($dar !== null) {
                         $passtZurKonzeptForm = $concept->servierform_id !== null
@@ -953,6 +996,7 @@ class Editor extends Component
             'tauschbar' => $tauschbar,
             'varianteFehlt' => $varianteFehlt,
             'darreichungInfo' => $darreichungInfo,
+            'darreichungOptionen' => $darreichungOptionen,
             'geschirrVorschlag' => $geschirrVorschlag,
             'kandidaten' => $kandidaten,
             'basisListe' => $basisListe ?? collect(),
@@ -983,7 +1027,8 @@ class Editor extends Component
                 ->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
             // #388 Geschirr-Tab: Kandidaten nur wenn ein Picker offen ist (sonst leer = günstig).
             'geschirrKandidaten' => ($this->tab === 'geschirr' && $this->geschirrPickSlotId !== null)
-                ? app(\Platform\FoodAlchemist\Services\GeschirrService::class)->searchItems($team, $this->geschirrSuche, 12)
+                ? app(\Platform\FoodAlchemist\Services\GeschirrService::class)->searchItems(
+                    $team, $this->geschirrSuche, 12, $this->geschirrVehikelBevorzugt($concept))
                 : collect(),
             // Sensorik-Tab: Geschmacks-Balance + Textur über die Concept-Gerichte (nur wenn Tab aktiv).
             'sensorik' => ($this->tab === 'sensorik' && $concept !== null)

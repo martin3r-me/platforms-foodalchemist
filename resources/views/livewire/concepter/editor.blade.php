@@ -363,6 +363,17 @@
                                                 <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$slot->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}"
                                                       title="Aufgelöste Darreichung dieser Position (explizit → Konzept-Servierform → Standard)" data-darreichung-pill>🍴 {{ $darreichungInfo[$slot->id] }}</span>
                                             @endif
+                                            @if(isset($darreichungOptionen[$slot->id]))
+                                                {{-- A1: explizite Form nur für diese Position (auto = Konzept-Form/Standard) --}}
+                                                <select wire:change="slotDarreichungSetzen({{ $slot->id }}, $event.target.value)"
+                                                        class="{{ $input }} !py-0 !text-[10px] !w-auto inline-block align-middle" data-slot-form-picker
+                                                        title="Form dieser Position übersteuern — auto folgt der Konzept-Servierform bzw. dem Standard">
+                                                    <option value="" @selected($slot->darreichung_id === null)>auto</option>
+                                                    @foreach($darreichungOptionen[$slot->id] as $opt)
+                                                        <option value="{{ $opt['id'] }}" @selected((int) $slot->darreichung_id === (int) $opt['id'])>{{ $opt['label'] }}</option>
+                                                    @endforeach
+                                                </select>
+                                            @endif
                                             @if($g->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($g->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
                                             <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium align-middle {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="{{ $allTitle }}">A</span>
                                             {{-- Phase 6: einsehen — Basisrezept → Rezept-Fenster, VK-Gericht → Gericht-Fenster (über dem Editor) --}}

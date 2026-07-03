@@ -347,6 +347,22 @@ class ConceptService
         return $slot->refresh();
     }
 
+    /** A1 (Umbau-Spec 5b): explizite Darreichung je Position — null = auto (Konzept-Form → Standard). */
+    public function setSlotDarreichung(Team $team, int $slotId, ?int $darreichungId): FoodAlchemistConceptSlot
+    {
+        $slot = $this->ownedSlot($team, $slotId);
+        if ($darreichungId !== null) {
+            $gehoertZumGericht = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::whereKey($darreichungId)
+                ->where('recipe_id', $slot->vk_recipe_id)->exists();
+            if (! $gehoertZumGericht) {
+                throw new \RuntimeException('Darreichung gehört nicht zum Gericht dieser Position.');
+            }
+        }
+        $slot->update(['darreichung_id' => $darreichungId]);
+
+        return $slot->refresh();
+    }
+
     /** Inline-Pflege Menge + Einheit einer Gericht-/Basisrezept-Position (Zeilen-Editor). */
     public function setSlotMengeEinheit(Team $team, int $slotId, ?float $menge, ?int $einheitId = null): FoodAlchemistConceptSlot
     {

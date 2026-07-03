@@ -195,6 +195,11 @@
                     <div><label class="block {{ $label }} mb-1">Kategorie</label>
                         <input type="text" list="g-kategorie" wire:model="artikelForm.kategorie" class="{{ $input }}" placeholder="Teller / Glas / Besteck …" />
                         <datalist id="g-kategorie"><option>Teller</option><option>Schale</option><option>Platte</option><option>Glas</option><option>Tasse</option><option>Besteck</option><option>Schüssel</option><option>Deko</option></datalist></div>
+                    <div><label class="block {{ $label }} mb-1">Servier-Vehikel-Typ</label>
+                        <select wire:model="artikelForm.vehikel_vocab_id" class="{{ $input }}" title="Ordnet den Artikel der abstrakten Präsentationsform zu — der Concepter-Picker bevorzugt dann passende Teile (Darreichungs-Scharnier)">
+                            <option value="">—</option>
+                            @foreach($vehikelListe as $v)<option value="{{ $v->id }}">{{ $v->gruppe ? $v->gruppe . ' · ' : '' }}{{ $v->name }}</option>@endforeach
+                        </select></div>
                     <div><label class="block {{ $label }} mb-1">Material</label>
                         <input type="text" list="g-material" wire:model="artikelForm.material" class="{{ $input }}" placeholder="Porzellan / Glas …" />
                         <datalist id="g-material"><option>Porzellan</option><option>Glas</option><option>Edelstahl</option><option>Holz</option><option>Schiefer</option><option>Keramik</option><option>Kunststoff</option></datalist></div>
