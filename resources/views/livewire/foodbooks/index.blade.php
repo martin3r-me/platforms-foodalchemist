@@ -155,6 +155,56 @@
                 </x-slot:footer>
             </x-foodalchemist::modal>
 
+            {{-- UX-Umbau 2026-07-03: Toggle Bearbeiten ⇄ Menü — Kunden-Vorschau mit aufgelöster Wording-Kette (dieselbe Quelle wie das Druck-Dokument) --}}
+            <div x-data="{ fbMenue: false }">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100" x-text="fbMenue ? 'Menü-Vorschau (Kundensicht)' : 'Inhalt bearbeiten'">Inhalt bearbeiten</h3>
+                <div class="inline-flex rounded-lg bg-black/[0.05] dark:bg-white/[0.06] p-0.5" role="group" aria-label="Ansicht" data-fb-ansicht-toggle>
+                    <button type="button" @click="fbMenue = false" :class="!fbMenue ? 'bg-white dark:bg-white/10 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-fb-bearbeiten>⚙ Bearbeiten</button>
+                    <button type="button" @click="fbMenue = true" :class="fbMenue ? 'bg-white dark:bg-white/10 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-fb-menue>🍽 Menü</button>
+                </div>
+            </div>
+
+            {{-- ═══ MENÜ-VORSCHAU (Kundensicht, read-only) ═══ --}}
+            <div x-show="fbMenue" x-cloak class="relative overflow-hidden {{ $card }} p-6 space-y-5 mt-3" data-fb-menue-vorschau>
+                <div class="{{ $cardAccent }}"></div>
+                <div class="flex items-baseline justify-between border-b border-black/5 dark:border-white/10 pb-3">
+                    <div>
+                        <h2 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">{{ $fb->bezeichnung }}</h2>
+                        @if($menue['kunde'] ?? null)<p class="text-xs text-gray-400">{{ $menue['kunde'] }}@if(($menue['kontakt'] ?? null) && $menue['kontakt'] !== $menue['kunde']) · {{ $menue['kontakt'] }}@endif</p>@endif
+                    </div>
+                    @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)<span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
+                </div>
+                @forelse($menue['kapitel'] ?? [] as $k)
+                    <section style="margin-left: {{ $k['depth'] * 16 }}px">
+                        <div class="flex items-baseline gap-2 border-b border-black/5 dark:border-white/10 pb-1 mb-2">
+                            <h3 class="text-sm font-semibold text-violet-700 dark:text-violet-300">{{ $k['titel'] }}</h3>
+                            @if($k['vk_pro_person'] > 0)<span class="ml-auto text-[11px] text-gray-400 tabular-nums">{{ number_format((float) $k['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
+                        </div>
+                        @forelse($k['bloecke'] as $b)
+                            <div class="py-0.5">
+                                <p class="text-sm {{ $b['ist_header'] ? 'font-semibold text-gray-700 dark:text-gray-200 mt-2' : 'text-gray-900 dark:text-gray-100' }}">{{ $b['label'] }}</p>
+                                @if($b['untertitel'] ?? null)<p class="text-[11px] text-gray-400 italic">{{ $b['untertitel'] }}</p>@endif
+                                @foreach($b['gerichte'] ?? [] as $g)
+                                    @if($g['typ'] === 'paket' || $g['typ'] === 'header')
+                                        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 ml-3 mt-1">{{ $g['text'] }}</p>
+                                    @else
+                                        <p class="text-xs text-gray-600 dark:text-gray-300 {{ $g['quelle'] === 'name' ? 'italic text-amber-600 dark:text-amber-400' : '' }}" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}@if($g['quelle'] === 'name')<span class="ml-1 text-[10px]">· Wording fehlt</span>@endif</p>
+                                    @endif
+                                @endforeach
+                            </div>
+                        @empty
+                            <p class="text-xs text-gray-400">—</p>
+                        @endforelse
+                    </section>
+                @empty
+                    <p class="text-xs text-gray-400 py-6 text-center">Noch keine Kapitel — links anlegen und Concepts einfügen.</p>
+                @endforelse
+                <p class="text-[11px] text-gray-400 pt-2 border-t border-black/5 dark:border-white/10">Gericht-Namen aus der Wording-Kette: Foodbook-Override → Konzept-Wording → VK-Standard → interner Name. Amber = kein Wording gepflegt.</p>
+            </div>
+
+            {{-- ═══ BEARBEITEN (Kapitel + Blöcke) ═══ --}}
+            <div x-show="!fbMenue" x-cloak>
             @if($kapitel)
                 {{-- Kapitel-Kopf --}}
                 <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="kaphdr-{{ $kapitel->id }}">
@@ -217,6 +267,7 @@
                                             @case('concept_ref')
                                                 <span class="{{ $pill }} {{ $variantPill['primary'] }} mr-1">Concept</span>{{ $block->concept?->name ?? '—' }}
                                                 <span class="text-gray-400 tabular-nums">{{ $block->concept?->preis_pro_person_cache !== null ? '· ' . number_format((float) $block->concept->preis_pro_person_cache, 2, ',', '.') . ' €/P' : '' }}</span>
+                                                @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600 dark:text-violet-400">· „{{ $block->wording }}“</span>@endif
                                                 @break
                                             @case('header_neutral') @case('header_frei')
                                                 <span class="font-semibold">{{ $block->bezeichnung ?: '(Header)' }}</span>
@@ -251,10 +302,19 @@
                                                 <input type="number" step="0.01" wire:model="blockForm.preis_wert" class="{{ $input }} w-28 text-right tabular-nums" placeholder="0,00 €" />
                                             </div>
                                         @endif
+                                        @if($block->type === 'concept_ref')
+                                            {{-- Wording-Kette, oberste Stufe: Foodbook-Override → Konzept-Wording → VK-Wording-Standard → Name --}}
+                                            <input type="text" wire:model="blockForm.wording" class="{{ $input }}" placeholder="Anzeigename (Kunde) — leer = Wording-Kette (Konzept → Standard → Name)" data-fb-block-wording />
+                                        @endif
                                         @if($block->type === 'text')
                                             <textarea wire:model="blockForm.kundentext" rows="3" class="{{ $input }}" placeholder="Marketing-Text (kundensichtbar)"></textarea>
                                         @else
-                                            <input type="text" wire:model="blockForm.kundentext" class="{{ $input }}" placeholder="Kundentext / Untertitel (optional)" />
+                                            <div class="flex gap-1.5 items-start">
+                                                <textarea wire:model="blockForm.kundentext" rows="2" class="{{ $input }}" placeholder="Beschreibungstext / Untertitel (kundensichtbar, optional)"></textarea>
+                                                @if($block->type === 'concept_ref')
+                                                    <button type="button" wire:click="kiKundentext" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" data-fb-ki-kundentext>✨</button>
+                                                @endif
+                                            </div>
                                         @endif
                                         <input type="text" wire:model="blockForm.interne_bemerkung" class="{{ $input }}" placeholder="Interne Notiz (nicht kundensichtbar)" />
                                         <div class="flex gap-2">
@@ -314,6 +374,8 @@
             @else
                 <div class="{{ $card }} p-8 text-center text-sm text-gray-400">Links ein Kapitel wählen oder anlegen.</div>
             @endif
+            </div>{{-- /BEARBEITEN (x-show !fbMenue) --}}
+            </div>{{-- /x-data fbMenue --}}
         @else
             <div class="{{ $card }} p-10 text-center text-sm text-gray-400">
                 Links ein Foodbook wählen oder „+ Neues Foodbook". Das Foodbook bündelt fertige <strong>Concepts</strong> zu einem <strong>person-unabhängigen Portfolio</strong> (Kapitel, €/Person) — Pax &amp; Gesamtpreis liegen im <strong>Angebot</strong>, Einzel-Gerichte im Concepter.

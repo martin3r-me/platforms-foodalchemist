@@ -132,25 +132,8 @@
                 <p class="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{{ $rezept->beschreibung }}</p>
             </div>
         @endif
-        <div data-vk-marketing>
-            <p class="{{ $dt }} mb-1 flex items-center gap-2">Marketing
-                <button type="button" wire:click="kiMarketing" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 ml-auto normal-case" title="vk.marketing — Vorschlag, Übernehmen schreibt mit Lineage ki (manual blockt)" data-ki-marketing-panel>✨ Marketing</button>
-            </p>
-            @if($marketingVorschlag !== null)
-                <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs mb-1" data-marketing-vorschlag>
-                    <p class="text-[11px] text-gray-600 dark:text-gray-300">{{ $marketingVorschlag['text'] }}</p>
-                    <div class="flex gap-1.5 mt-1.5">
-                        <button type="button" wire:click="marketingUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-marketing-uebernehmen>Übernehmen ({{ round($marketingVorschlag['confidence'] * 100) }} %)</button>
-                        <button type="button" wire:click="marketingVerwerfen" class="{{ $btnGhostXs }}">Verwerfen</button>
-                    </div>
-                </div>
-            @endif
-            @if($rezept->marketing_text !== null)
-                <p class="text-xs italic text-gray-600 dark:text-gray-300 leading-relaxed">{{ $rezept->marketing_text }}</p>
-            @else
-                <p class="text-[11px] text-gray-400">— noch kein Marketing-Text —</p>
-            @endif
-        </div>
+        {{-- Marketing-Text entfällt hier (UX-Umbau 2026-07-03): kundenspezifischer
+             Marketing-/Beschreibungstext wird am Foodbook-Block gepflegt, nicht am Gericht. --}}
 
         {{-- M9-01k: Sektor-/Niveau-Eignung — Chips mit ✕, +manuell-Select, ✨ Eignung --}}
         <div data-vk-eignung>

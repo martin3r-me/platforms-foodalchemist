@@ -184,9 +184,6 @@ class DetailPanel extends Component
     /** @var ?array{typ: string, slugs: array<string, string>, confidence: float} */
     public ?array $eignungVorschlag = null;
 
-    /** @var ?array{text: string, confidence: float} */
-    public ?array $marketingVorschlag = null;
-
     public function eignungSetzen(string $typ, string $slug): void
     {
         $this->fachAktion(fn ($team) => app(\Platform\FoodAlchemist\Services\RecipeService::class)
@@ -255,63 +252,8 @@ class DetailPanel extends Component
         $this->eignungVorschlag = null;
     }
 
-    public function kiMarketing(): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || $this->recipeId === null) {
-            return;
-        }
-        $this->kiFehler = null;
-        $r = app(SalesRecipeService::class)->detail($team, $this->recipeId);
-        try {
-            $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.marketing', [
-                'name' => $r->name, 'vk_wording_standard' => $r->vk_wording_standard,
-                'komponenten' => $r->ingredients->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all(),
-            ]);
-        } catch (\RuntimeException $e) {
-            $this->kiFehler = $e->getMessage();
-
-            return;
-        }
-        $text = $v->werte['marketing_text'] ?? null;
-        if (! is_string($text) || trim($text) === '') {
-            $this->kiFehler = 'KI lieferte keinen Marketing-Text — echter Provider nötig.';
-
-            return;
-        }
-        $this->marketingVorschlag = ['text' => trim($text), 'confidence' => max(0.0, min(1.0, $v->confidence))];
-    }
-
-    public function marketingUebernehmen(): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || $this->recipeId === null || $this->marketingVorschlag === null) {
-            return;
-        }
-        $r = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId);
-        if ($r === null || ! $r->isOwnedBy($team)) {
-            $this->kiFehler = 'Geerbtes Rezept — Pflege nur durchs Besitzer-Team (D1).';
-
-            return;
-        }
-        if ($r->marketing_text_quelle === 'manual') {                // GL-07 Override-First
-            $this->kiFehler = 'Marketing-Text ist manuell gepflegt — erst im Editor zurücksetzen.';
-
-            return;
-        }
-        $r->update([
-            'marketing_text' => $this->marketingVorschlag['text'],
-            'marketing_text_quelle' => 'ki',
-            'marketing_text_ai_confidence' => $this->marketingVorschlag['confidence'],
-        ]);
-        $this->marketingVorschlag = null;
-        $this->dispatch('recipe-gespeichert');
-    }
-
-    public function marketingVerwerfen(): void
-    {
-        $this->marketingVorschlag = null;
-    }
+    // Marketing-Text-Pflege am Gericht entfällt (UX-Umbau 2026-07-03): der
+    // kundenspezifische Text wird am Foodbook-Block gepflegt (Livewire\Foodbooks\Index::kiKundentext).
 
     private function fachAktion(\Closure $tu): void
     {

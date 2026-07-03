@@ -88,8 +88,9 @@ class VkModal extends Component
                 'behaelter_kalt_vocab_id' => $r->behaelter_kalt_vocab_id,
                 'behaelter_kalt_anzahl' => $r->behaelter_kalt_anzahl,
                 'servier_vehikel_vocab_id' => $r->servier_vehikel_vocab_id,
-                // M9-01: Voll-Editor-Parität (Texte/Eigenschaften/Plating/Notizen)
-                'marketing_text' => $r->marketing_text,
+                // M9-01: Voll-Editor-Parität (Texte/Eigenschaften/Plating/Notizen).
+                // marketing_text ist seit dem UX-Umbau 2026-07-03 raus: der Text lebt
+                // kundenspezifisch am Foodbook-Block (Spalte bleibt als WaWi-Import-Spiegel).
                 'beschreibung' => $r->beschreibung,
                 'arbeitszeit_min' => $r->arbeitszeit_min,
                 'nebenkosten_eur' => $r->nebenkosten_eur,             // M-K8: direkte Einzelkosten → HK2 (#379)
@@ -280,7 +281,6 @@ class VkModal extends Component
         try {
             match ($aktion) {
                 'wording' => $this->uebernehmeText('vk_wording_standard', $gateway->propose('vk.wording', $kontext)),
-                'marketing' => $this->uebernehmeText('marketing_text', $gateway->propose('vk.marketing', $kontext)),
                 'plating' => $this->uebernehmePlating($gateway->propose('vk.plating', $kontext + ['portion_g' => $this->form['vk_menge_pro_einheit_g'] ?? null])),
                 'eigenschaften' => $this->uebernehmeEigenschaften($gateway, $kontext),
                 'behaelter' => $this->uebernehmeBehaelter($gateway->propose('vk.behaelter', $kontext + [

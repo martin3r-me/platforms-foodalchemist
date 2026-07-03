@@ -14,11 +14,11 @@
     @if($rezept !== null)
         <x-slot:kpiHeader>
             <div class="grid grid-cols-2 md:grid-cols-5 gap-2" data-vk-editor-kpis>
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">Yield</span>
                     <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
                 </div>
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">EK gesamt</span>
                     <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
@@ -26,11 +26,11 @@
                     <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">EK / kg</span>
                     <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
                 </div>
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">Mit Preis</span>
                     <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_n_ingredients_priced ?? 0 }}/{{ $rezept->ek_n_ingredients_total ?? 0 }}</p>
                 </div>
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">Allergen-Konf.</span>
                     <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergene_konfidenz) }}</p>
                 </div>
@@ -38,11 +38,11 @@
                 {{-- VK-Seite (2. Reihe): Verkaufspreis + Portion + Marge/Wareneinsatz.
                      Quelle = SalesRecipeService::cockpit() (MargeService). „—" wenn keine
                      Aufschlagsklasse/Portionsgröße gepflegt ist. --}}
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">VK netto</span>
                     <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['vk']['vk_netto'] ?? null) !== null ? number_format((float) $cockpit['vk']['vk_netto'], 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">VK brutto</span>
                     <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['vk_brutto'] ?? null) !== null ? number_format((float) $cockpit['vk_brutto'], 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
@@ -54,7 +54,7 @@
                     <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">Wareneinsatz</span>
                     <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ ($cockpit['marge']['wareneinsatz_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—' }}</p>
                 </div>
-                <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">Marge</span>
                     <p class="text-xs font-semibold text-green-600 dark:text-green-400">{{ ($cockpit['marge']['marge_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['marge_pct'], 1, ',', '.') . ' %' : '—' }}</p>
                 </div>
@@ -110,10 +110,10 @@
         {{-- ── Tab: AUFBAU (Stammdaten + Klassifikation + Zutaten) ──────── --}}
         <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
         <x-foodalchemist::modal-section title="Stammdaten">
-            {{-- M9-01i: ✨-Vorschläge in die Form-Felder (Save = Accept) --}}
+            {{-- M9-01i: ✨-Vorschläge in die Form-Felder (Save = Accept).
+                 ✨ Marketing ist raus (UX-Umbau 2026-07-03): Marketing-Text lebt am Foodbook-Block. --}}
             <x-slot:actions>
                 <button type="button" wire:click="ki('wording')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.wording: kanonischer Marketing-Name, stil-neutral" data-ki-wording>✨ Wording</button>
-                <button type="button" wire:click="ki('marketing')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.marketing: verkäuferischer Foodbook-Text" data-ki-marketing>✨ Marketing</button>
             </x-slot:actions>
             <div class="grid grid-cols-2 gap-3">
                 <div class="col-span-2">
@@ -121,13 +121,9 @@
                     <input type="text" wire:model="form.name" class="{{ $input }}" data-vk-name />
                 </div>
                 <div class="col-span-2">
-                    <label class="block {{ $label }} mb-1">VK-Wording (kanonischer Marketing-Name, stil-neutral)</label>
+                    <label class="block {{ $label }} mb-1">VK-Wording (neutraler Standard — Fallback für Concepter &amp; Foodbook)</label>
                     <input type="text" wire:model="form.vk_wording_standard" class="{{ $input }}" data-vk-wording />
-                    <p class="text-[10px] text-gray-400 mt-0.5">Schreibstile (Foodbook, M10) transformieren später diesen Standard in Brand-Voice-Varianten.</p>
-                </div>
-                <div class="col-span-2">
-                    <label class="block {{ $label }} mb-1">Marketing-Text (Foodbook)</label>
-                    <textarea wire:model="form.marketing_text" rows="2" class="{{ $input }}" data-vk-marketing-text></textarea>
+                    <p class="text-[10px] text-gray-400 mt-0.5">Wording-Kette: Foodbook-Override → Konzept-Wording → dieser Standard → interner Name. Marketing-Texte werden am Foodbook-Block gepflegt.</p>
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Geschmack</label>

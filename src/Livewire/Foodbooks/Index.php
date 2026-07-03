@@ -250,10 +250,46 @@ class Index extends Component
         }
         $this->editBlockId = $id;
         $this->blockForm = [
-            'bezeichnung' => $block->bezeichnung ?? '', 'kundentext' => $block->kundentext ?? '',
+            'bezeichnung' => $block->bezeichnung ?? '', 'wording' => $block->wording ?? '',
+            'kundentext' => $block->kundentext ?? '',
             'preis_wert' => $block->preis_wert, 'preis_basis' => $block->preis_basis ?? 'person',
             'hoehe' => $block->hoehe ?? 'mittel', 'interne_bemerkung' => $block->interne_bemerkung ?? '',
         ];
+    }
+
+    /**
+     * ✨ Kundentext-Vorschlag für den gerade editierten concept_ref-Block —
+     * der Marketing-Text lebt seit dem UX-Umbau 2026-07-03 HIER (kundenspezifisch)
+     * statt am Gericht (recipes.marketing_text = Alt-Feld, nur noch Import-Spiegel).
+     */
+    public function kiKundentext(): void
+    {
+        if ($this->editBlockId === null) {
+            return;
+        }
+        $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::with('concept.slots.gericht:id,name,vk_wording_standard')->find($this->editBlockId);
+        if ($block === null || $block->concept === null) {
+            return;
+        }
+        $wording = app(\Platform\FoodAlchemist\Services\WordingResolver::class);
+        $kontext = [
+            'concept' => $block->concept->name,
+            'anzeigename' => trim((string) ($this->blockForm['wording'] ?? '')) !== '' ? $this->blockForm['wording'] : null,
+            'gerichte' => collect($wording->gerichtZeilen($block->concept, $block))
+                ->where('typ', 'gericht')->pluck('text')->values()->all(),
+        ];
+        try {
+            $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.marketing', $kontext, [
+                'food_dna_foodbook_id' => $this->selectedId,
+                'target_table' => 'foodalchemist_foodbook_blocks', 'target_id' => $block->id,
+            ]);
+            $text = $v->werte['marketing_text'] ?? null;
+            if (is_string($text) && trim($text) !== '') {
+                $this->blockForm['kundentext'] = trim($text);
+            }
+        } catch (\Throwable $e) {
+            // still — Feld bleibt unverändert (Kill-Switch/Provider-Fehler); kein Crash im Editor
+        }
     }
 
     public function blockSpeichern(FoodbookService $svc): void
@@ -350,6 +386,8 @@ class Index extends Component
         return view('foodalchemist::livewire.foodbooks.index', [
             'foodbooks' => $svc->paginateBrowser(['search' => $this->search], $team),
             'fb' => $fb,
+            // D (UX-Umbau): Kunden-Vorschau (Menü-Ansicht) mit aufgelöster Wording-Kette — dieselbe Quelle wie das Druck-Dokument
+            'menue' => $fb !== null ? $svc->dokumentDaten($team, $fb) : null,
             'kapitelTree' => $fb !== null ? $svc->kapitelTree($team, $fb->id) : [],
             'kapitel' => $kapitel,
             'kapitelAgg' => $kapitel !== null ? $svc->kapitelAggregat($team, $kapitel, $fb?->personen) : null,
