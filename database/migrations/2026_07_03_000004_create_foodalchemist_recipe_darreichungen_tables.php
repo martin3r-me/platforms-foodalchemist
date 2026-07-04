@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\Schema;
  * Darreichungen = dünne Varianten-Zeilen (Grammatur, Behälter, Regeneration,
  * EK/VK je Form). Grenzregel E5: Deltas dürfen nur reduzieren/weglassen —
  * nie neue Zutaten (Service-seitig erzwungen).
+ *
+ * Idempotent: `hasTable` + `hasForeign` schützen vor halb-gelaufener Migration
+ * (MySQL hat kein transaktionales DDL — die ersten kurzen FKs landen per ALTER,
+ * dann scheitert der erste FK-Name >64 Zeichen und hinterlässt eine partielle Tabelle).
  */
 return new class extends Migration
 {
@@ -33,13 +37,22 @@ return new class extends Migration
                 $table->decimal('vk_netto', 12, 2)->nullable();
                 $table->decimal('vk_brutto', 12, 2)->nullable();
                 $table->string('preis_modus', 12)->default('auto');        // auto | manuell
-                $table->foreignId('behaelter_warm_vocab_id')->nullable()->constrained('foodalchemist_vocab_behaelter')->nullOnDelete();
-                $table->foreignId('behaelter_kalt_vocab_id')->nullable()->constrained('foodalchemist_vocab_behaelter')->nullOnDelete();
+                // MySQL-Identifier-Limit (64): FK-Namen für lange Spalten explizit gekürzt.
+                $table->foreignId('behaelter_warm_vocab_id')->nullable();
+                $table->foreign('behaelter_warm_vocab_id', 'fa_recipe_darreichungen_behaelter_warm_fk')
+                    ->references('id')->on('foodalchemist_vocab_behaelter')->nullOnDelete();
+                $table->foreignId('behaelter_kalt_vocab_id')->nullable();
+                $table->foreign('behaelter_kalt_vocab_id', 'fa_recipe_darreichungen_behaelter_kalt_fk')
+                    ->references('id')->on('foodalchemist_vocab_behaelter')->nullOnDelete();
                 $table->integer('regeneration_temp_c')->nullable();
                 $table->integer('regeneration_dauer_min')->nullable();
                 $table->integer('regeneration_kerntemp_c')->nullable();
-                $table->foreignId('regeneration_geraet_vocab_id')->nullable()->constrained('foodalchemist_vocab_regen_geraete')->nullOnDelete();
-                $table->foreignId('servier_vehikel_vocab_id')->nullable()->constrained('foodalchemist_vocab_serviervehikel')->nullOnDelete();
+                $table->foreignId('regeneration_geraet_vocab_id')->nullable();
+                $table->foreign('regeneration_geraet_vocab_id', 'fa_recipe_darreichungen_regen_geraet_fk')
+                    ->references('id')->on('foodalchemist_vocab_regen_geraete')->nullOnDelete();
+                $table->foreignId('servier_vehikel_vocab_id')->nullable();
+                $table->foreign('servier_vehikel_vocab_id', 'fa_recipe_darreichungen_servier_vehikel_fk')
+                    ->references('id')->on('foodalchemist_vocab_serviervehikel')->nullOnDelete();
                 $table->integer('arbeitszeit_zuschlag_min')->nullable();
                 $table->text('angebotstext_override')->nullable();          // NULL = erbt vom Kerngericht
                 $table->text('note')->nullable();
@@ -60,6 +73,25 @@ return new class extends Migration
             }
         }
 
+        // Recovery: failed Prod-Deploy hinterließ Tabelle mit den ersten kurzen FKs,
+        // scheiterte bei `behaelter_warm_vocab_id_foreign` (66 chars). Fehlende FKs nachziehen.
+        $this->ensureForeign('foodalchemist_recipe_darreichungen', 'fa_recipe_darreichungen_behaelter_warm_fk', function (Blueprint $t) {
+            $t->foreign('behaelter_warm_vocab_id', 'fa_recipe_darreichungen_behaelter_warm_fk')
+                ->references('id')->on('foodalchemist_vocab_behaelter')->nullOnDelete();
+        });
+        $this->ensureForeign('foodalchemist_recipe_darreichungen', 'fa_recipe_darreichungen_behaelter_kalt_fk', function (Blueprint $t) {
+            $t->foreign('behaelter_kalt_vocab_id', 'fa_recipe_darreichungen_behaelter_kalt_fk')
+                ->references('id')->on('foodalchemist_vocab_behaelter')->nullOnDelete();
+        });
+        $this->ensureForeign('foodalchemist_recipe_darreichungen', 'fa_recipe_darreichungen_regen_geraet_fk', function (Blueprint $t) {
+            $t->foreign('regeneration_geraet_vocab_id', 'fa_recipe_darreichungen_regen_geraet_fk')
+                ->references('id')->on('foodalchemist_vocab_regen_geraete')->nullOnDelete();
+        });
+        $this->ensureForeign('foodalchemist_recipe_darreichungen', 'fa_recipe_darreichungen_servier_vehikel_fk', function (Blueprint $t) {
+            $t->foreign('servier_vehikel_vocab_id', 'fa_recipe_darreichungen_servier_vehikel_fk')
+                ->references('id')->on('foodalchemist_vocab_serviervehikel')->nullOnDelete();
+        });
+
         if (! Schema::hasTable('foodalchemist_recipe_darreichung_deltas')) {
             Schema::create('foodalchemist_recipe_darreichung_deltas', function (Blueprint $table) {
                 $table->id();
@@ -67,7 +99,10 @@ return new class extends Migration
                 $table->unsignedBigInteger('team_id')->index();
                 $table->unsignedBigInteger('legacy_id')->nullable()->unique();
                 $table->foreignId('darreichung_id')->constrained('foodalchemist_recipe_darreichungen')->cascadeOnDelete();
-                $table->foreignId('recipe_ingredient_id')->constrained('foodalchemist_recipe_ingredients')->cascadeOnDelete();
+                // MySQL-Identifier-Limit (64): expliziter kurzer FK-Name.
+                $table->foreignId('recipe_ingredient_id');
+                $table->foreign('recipe_ingredient_id', 'fa_darreichung_deltas_recipe_zutat_fk')
+                    ->references('id')->on('foodalchemist_recipe_ingredients')->cascadeOnDelete();
                 $table->decimal('menge_override_g', 12, 3)->nullable();     // NULL = Menge unverändert
                 $table->boolean('weggelassen')->default(false);
                 $table->text('note')->nullable();
@@ -82,5 +117,16 @@ return new class extends Migration
     {
         Schema::dropIfExists('foodalchemist_recipe_darreichung_deltas');
         Schema::dropIfExists('foodalchemist_recipe_darreichungen');
+    }
+
+    private function ensureForeign(string $table, string $name, Closure $add): void
+    {
+        if (! Schema::hasTable($table)) {
+            return;
+        }
+        $exists = collect(Schema::getForeignKeys($table))->pluck('name')->contains($name);
+        if (! $exists) {
+            Schema::table($table, $add);
+        }
     }
 };
