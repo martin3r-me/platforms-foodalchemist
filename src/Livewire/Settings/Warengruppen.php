@@ -10,7 +10,7 @@ use RuntimeException;
 /**
  * M1-03 / Regelwerk GP §3 (v3.4): Warengruppen voll editierbar — die 15 kanonischen
  * sind nur noch Seed/Empfehlung. Anlegen + Umbenennen (Code stabil) + Löschen (hart
- * wenn unbenutzt, sonst per GP-Referenz gesperrt). Plus Sub-Kategorien-Housekeeping.
+ * wenn unbenutzt, sonst per GP-Referenz locked). Plus Sub-Kategorien-Housekeeping.
  */
 class Warengruppen extends Component
 {
@@ -77,7 +77,7 @@ class Warengruppen extends Component
             app(VocabularyService::class)->deleteWarengruppe($this->team(), $id);
             $this->meldung = 'Warengruppe gelöscht.';
         } catch (RuntimeException $e) {
-            $this->fehler = $e->getMessage(); // genutzte WG werden durch den GP-Referenz-Guard gesperrt
+            $this->fehler = $e->getMessage(); // genutzte WG werden durch den GP-Referenz-Guard locked
         }
     }
 

@@ -43,7 +43,7 @@ class VoiceCommandService
                 $aktionen[] = $lauf['data']['open'];
             }
             if ($lauf['name'] === 'foodalchemist.recipe_klasse.POST' && $lauf['success'] && ! ($lauf['data']['accepted'] ?? false)) {
-                $proposals[] = ['typ' => 'speisen_klasse', 'recipe_id' => $lauf['arguments']['recipe_id'] ?? null] + $lauf['data'];
+                $proposals[] = ['type' => 'speisen_klasse', 'recipe_id' => $lauf['arguments']['recipe_id'] ?? null] + $lauf['data'];
             }
         }
 

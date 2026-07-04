@@ -87,7 +87,7 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
             'recipe' => [
                 'id' => $recipe->id, 'name' => $recipe->name, 'status' => $this->statusWert($recipe),
                 'yield_kg' => $recipe->yield_kg, 'ek_total_eur' => $recipe->ek_total_eur,
-                'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_ungemappt' => $recipe->n_ingredients_ungemappt,
+                'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_unmapped' => $recipe->n_ingredients_unmapped,
             ],
         ]);
     }

@@ -17,7 +17,7 @@
                     EK: {{ $aktiverPreis?->price !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}
                 </span>
                 <span class="text-xs text-gray-500" data-vergleichspreis-kopf>
-                    {{ $vergleichspreis ? number_format($vergleichspreis['wert'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : 'kein Vergleichspreis' }}
+                    {{ $vergleichspreis ? number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : 'kein Vergleichspreis' }}
                 </span>
                 @if($item->structure?->gp)
                     <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ $item->structure->gp->name }}</span>
@@ -208,7 +208,7 @@
                 <div class="flex items-center justify-end gap-3 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 mb-2" data-ek-aktuell>
                     <p class="text-xs text-gray-900 dark:text-gray-100">EK aktuell:
                         <span class="font-semibold {{ $aktiverPreis !== null ? 'text-green-600 dark:text-green-400' : 'text-gray-400' }}">{{ $aktiverPreis !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}</span>
-                        <span class="text-gray-400">pro {{ $item->ordering_unit ?? $item->unit_code ?? 'Einheit' }}{{ $vergleichspreis !== null ? ' · ' . number_format($vergleichspreis['wert'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : '' }}</span>
+                        <span class="text-gray-400">pro {{ $item->ordering_unit ?? $item->unit_code ?? 'Einheit' }}{{ $vergleichspreis !== null ? ' · ' . number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : '' }}</span>
                     </p>
                     @if($darfEdit)
                         <button type="button" x-data @click="$el.closest('[data-modal]').querySelector('[data-preis-neu]')?.classList.toggle('hidden')" class="{{ $btnPrimary }}" data-preis-neu-toggle>+ Neuer Preis</button>
@@ -237,7 +237,7 @@
                                     <td class="{{ $td }} !px-2 text-gray-500" colspan="2">
                                         bis: <input type="date" wire:model="preisEdit.valid_to" class="{{ $input }} !py-1 !w-36 inline-block" />
                                     </td>
-                                    <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $p->kategorie->label() }}</span></td>
+                                    <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $p->category->label() }}</span></td>
                                     <td class="{{ $td }} !px-2 text-right"><input type="text" wire:model="preisEdit.preis" class="{{ $input }} !py-1 !w-24 text-right" /></td>
                                     <td class="{{ $td }} !px-2"><input type="text" wire:model="preisEdit.note" placeholder="Notiz" class="{{ $input }} !py-1 !w-32" /></td>
                                     <td class="{{ $td }} !px-2 text-right whitespace-nowrap">
@@ -247,7 +247,7 @@
                                 @else
                                     <td class="{{ $td }} !px-2 text-gray-500">{{ $p->status_valid_from ? \Illuminate\Support\Carbon::parse($p->status_valid_from)->format('Y-m-d') : ($p->creation_date ? \Illuminate\Support\Carbon::parse($p->creation_date)->format('Y-m-d') : '—') }}</td>
                                     <td class="{{ $td }} !px-2 text-gray-500">{{ $p->valid_to ? \Illuminate\Support\Carbon::parse($p->valid_to)->format('Y-m-d') : '—' }}</td>
-                                    <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $p->kategorie->istAktiv() ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $p->kategorie->label() }}</span></td>
+                                    <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $p->category->istAktiv() ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $p->category->label() }}</span></td>
                                     <td class="{{ $td }} !px-2 text-right">
                                         <span class="text-gray-900 dark:text-gray-100 font-medium tabular-nums">{{ $p->price !== null ? number_format((float) $p->price, 2, ',', '.') . ' €' : '—' }}</span>
                                         @if($p->price !== null && $item->qty !== null && in_array($item->unit_code, ['kg', 'l', 'Stk'], true))

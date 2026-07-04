@@ -22,7 +22,7 @@ class DetailPanel extends Component
 
     public array $form = [
         'name' => '', 'status' => 'anfrage', 'anlass' => '', 'personen' => null,
-        'budget' => null, 'event_datum' => null, 'location' => '', 'diaet_vorgabe' => '',
+        'budget' => null, 'event_date' => null, 'location' => '', 'diaet_vorgabe' => '',
         'brief' => '', 'gesamtpreis' => null, 'valid_until' => null, 'preis_modus' => 'auto',
     ];
 
@@ -63,7 +63,7 @@ class DetailPanel extends Component
             'anlass' => $a->anlass,
             'personen' => $a->personen,
             'budget' => $a->budget,
-            'event_datum' => $a->event_datum?->format('Y-m-d'),
+            'event_date' => $a->event_date?->format('Y-m-d'),
             'location' => $a->location,
             'diaet_vorgabe' => $a->diaet_vorgabe,
             'brief' => $a->brief,

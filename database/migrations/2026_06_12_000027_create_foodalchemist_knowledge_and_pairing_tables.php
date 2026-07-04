@@ -26,7 +26,7 @@ return new class extends Migration
             $table->string('content_hash', 64)->comment('sha256 — unverändert ⇒ skip (idempotent)');
             $table->unsignedInteger('char_count');
             $table->boolean('aktiv')->default(true);
-            $table->string('source_pfad')->nullable();
+            $table->string('source_path')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -59,7 +59,7 @@ return new class extends Migration
             $table->string('display_de');
             $table->foreignId('knowledge_document_id')->nullable()->constrained('foodalchemist_knowledge_documents')->nullOnDelete()
                 ->comment('ersetzt file_path (D4/GL-13 §4.3)');
-            $table->string('source_pfad')->nullable()->comment('Vault-file_path bis zum Knowledge-Link');
+            $table->string('source_path')->nullable()->comment('Vault-file_path bis zum Knowledge-Link');
             $table->text('note')->nullable();
             $table->timestamps();
             $table->softDeletes();

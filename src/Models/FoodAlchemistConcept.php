@@ -15,7 +15,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  * @ai.description Concept (M10-01) — die verkäufliche Komposition über mehrere
  * Rollen-Slots (z. B. „Grill-Buffet" = Vorspeise + Hauptgang + Dessert). Jeder
  * Slot ist mit einem Paket oder einem festen Gericht gefüllt; der Concept-Preis
- * = Σ der Slot-Preise. `is_vorlage` markiert ein gespeichertes Slot-Gerüst
+ * = Σ der Slot-Preise. `is_template` markiert ein gespeichertes Slot-Gerüst
  * (Vorlage = Kopie-Quelle, Fork beim Start — D-CON-7). team-eigen.
  */
 class FoodAlchemistConcept extends Model
@@ -28,7 +28,7 @@ class FoodAlchemistConcept extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'is_vorlage' => 'boolean',
+        'is_template' => 'boolean',
         'preis_pro_person_cache' => 'decimal:2',
         'preis_pro_person_manuell' => 'decimal:2',   // manueller Concept-VK (preis_modus=manuell)
         // M10R-1: VK-Parität + KI-Brief + Aggregat-Caches
@@ -41,12 +41,12 @@ class FoodAlchemistConcept extends Model
 
     public function scopeVorlagen(Builder $q): Builder
     {
-        return $q->where('is_vorlage', true);
+        return $q->where('is_template', true);
     }
 
     public function scopeEchte(Builder $q): Builder
     {
-        return $q->where('is_vorlage', false);
+        return $q->where('is_template', false);
     }
 
     /**
@@ -91,7 +91,7 @@ class FoodAlchemistConcept extends Model
     /** Schreibstil am Concept (M10R-1, §10.8) — Foodbook kann ihn überschreiben. */
     public function schreibstil(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistWritingStyle::class, 'schreibstil_id');
+        return $this->belongsTo(FoodAlchemistWritingStyle::class, 'writing_style_id');
     }
 
     // ── Facetten-Dimensionen (Umbau-Spec Phase 4) ────────────────────────

@@ -94,8 +94,8 @@ class DetailPanel extends Component
         $this->fehlerEignung = null;
         $svc = app(\Platform\FoodAlchemist\Services\RecipeService::class);
         try {
-            $spalte = $typ === 'niveau' ? 'level_slug' : 'sektor_slug';
-            $relation = $typ === 'niveau' ? 'niveauEignungen' : 'sektorEignungen';
+            $spalte = $typ === 'level' ? 'level_slug' : 'sector_slug';
+            $relation = $typ === 'level' ? 'niveauEignungen' : 'sektorEignungen';
             $aktiv = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($this->recipeId)
                 ->{$relation}->pluck($spalte)->contains($slug);
             $aktiv

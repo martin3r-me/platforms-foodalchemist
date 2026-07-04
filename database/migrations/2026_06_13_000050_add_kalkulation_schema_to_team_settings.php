@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
  * M-K1 / Doc 16: Kalkulations-Block-Schema statt einem opaken Prozent (M12).
  * HK2 = Wareneinsatz + Σ benannte Kostenblöcke (Lohn/Verpackung/Schwund/Lager/
  * Gemeinkosten); VK-Vorschlag = HK2 × (1 + Marge). Additiv — der bestehende
- * hk2_zuschlag_pct bleibt als Default-Wert des Gemeinkosten-Blocks (rückwärtskompatibel).
+ * hk2_surcharge_pct bleibt als Default-Wert des Gemeinkosten-Blocks (rückwärtskompatibel).
  */
 return new class extends Migration
 {

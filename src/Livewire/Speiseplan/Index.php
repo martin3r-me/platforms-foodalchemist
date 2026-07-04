@@ -26,7 +26,7 @@ class Index extends Component
     #[Url(as: 'sp')]
     public ?int $selectedId = null;
 
-    public array $form = ['name' => '', 'start_datum' => null, 'zyklus_wochen' => 4, 'min_abstand_tage' => 0, 'status' => 'draft'];
+    public array $form = ['name' => '', 'start_date' => null, 'zyklus_wochen' => 4, 'min_abstand_tage' => 0, 'status' => 'draft'];
 
     public string $mahlzeit = 'mittag';
 
@@ -43,7 +43,7 @@ class Index extends Component
 
     public ?int $editLinieId = null;
 
-    public array $linieForm = ['name' => '', 'farbe' => '', 'ist_vegetarisch' => false];
+    public array $linieForm = ['name' => '', 'color' => '', 'ist_vegetarisch' => false];
 
     // Zellen-Picker
     public ?string $cellDatum = null;
@@ -86,12 +86,12 @@ class Index extends Component
         $this->selectedId = $id;
         $this->form = [
             'name' => $sp->name,
-            'start_datum' => optional($sp->start_datum)->format('Y-m-d'),
+            'start_date' => optional($sp->start_date)->format('Y-m-d'),
             'zyklus_wochen' => $sp->zyklus_wochen,
             'min_abstand_tage' => $sp->min_abstand_tage,
             'status' => $sp->status,
         ];
-        $start = $sp->start_datum ?? Carbon::now();
+        $start = $sp->start_date ?? Carbon::now();
         $this->montag = $start->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
         $this->monatStr = $start->copy()->startOfMonth()->format('Y-m-d');
         $this->ausrollenBis = $start->copy()->addMonths(3)->format('Y-m-d');
@@ -171,7 +171,7 @@ class Index extends Component
             return;
         }
         $this->editLinieId = $id;
-        $this->linieForm = ['name' => $linie->name, 'farbe' => $linie->farbe ?? '', 'ist_vegetarisch' => (bool) $linie->ist_vegetarisch];
+        $this->linieForm = ['name' => $linie->name, 'color' => $linie->color ?? '', 'ist_vegetarisch' => (bool) $linie->ist_vegetarisch];
     }
 
     public function linieSpeichern(SpeiseplanService $svc): void
@@ -216,9 +216,9 @@ class Index extends Component
         if ($this->selectedId === null || $this->cellDatum === null) {
             return;
         }
-        $feld = ['concept' => 'concept_id', 'paket' => 'package_id', 'gericht' => 'vk_recipe_id'][$typ] ?? 'vk_recipe_id';
+        $feld = ['concept' => 'concept_id', 'paket' => 'package_id', 'gericht' => 'sales_recipe_id'][$typ] ?? 'sales_recipe_id';
         $svc->addEintrag($this->team(), $this->selectedId, [
-            'datum' => $this->cellDatum, 'line_id' => $this->cellLinie, 'mahlzeit' => $this->mahlzeit, $feld => $id,
+            'entry_date' => $this->cellDatum, 'line_id' => $this->cellLinie, 'mahlzeit' => $this->mahlzeit, $feld => $id,
         ]);
         $this->pickerSuche = '';
     }
@@ -243,7 +243,7 @@ class Index extends Component
         $sp = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
 
         if ($sp !== null && $this->montag === null) {
-            $start = $sp->start_datum ?? Carbon::now();
+            $start = $sp->start_date ?? Carbon::now();
             $this->montag = $start->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
             $this->monatStr = $start->copy()->startOfMonth()->format('Y-m-d');
         }

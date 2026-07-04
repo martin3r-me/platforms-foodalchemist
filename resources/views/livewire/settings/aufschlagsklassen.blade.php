@@ -4,7 +4,7 @@
 <div class="space-y-5" data-settings-aufschlagsklassen>
     <div>
         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Aufschlagsklassen</h3>
-        <p class="text-[11px] text-gray-400 mt-0.5">Rohaufschlag · Bedienung · Profit · MwSt fließen direkt in die Marge-Rechnung (GT-8). Formel «deckungsbeitrag» bleibt W-1-gesperrt, bis die Formel entschieden ist.</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Rohaufschlag · Bedienung · Profit · MwSt fließen direkt in die Marge-Rechnung (GT-8). Formel «deckungsbeitrag» bleibt W-1-locked, bis die Formel entschieden ist.</p>
     </div>
     @if($fehler !== null)<p class="text-xs text-rose-600 dark:text-rose-400" data-ak-fehler>{{ $fehler }}</p>@endif
 
@@ -16,11 +16,11 @@
                     @if($editId === $ak->id)
                         <td class="{{ $td }} !px-2 font-mono text-[11px]">{{ $ak->code }}</td>
                         <td class="{{ $td }} !px-2"><input type="text" wire:model="form.label" class="{{ $input }} !py-1" /></td>
-                        @foreach(['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'] as $feld)
+                        @foreach(['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'vat_rate'] as $feld)
                             <td class="{{ $td }} !px-2"><input type="text" wire:model="form.{{ $feld }}" class="{{ $input }} !py-1 !w-16 text-right" /></td>
                         @endforeach
                         <td class="{{ $td }} !px-2">
-                            <select wire:model="form.formel_typ" class="{{ $input }} !py-1">
+                            <select wire:model="form.formula_type" class="{{ $input }} !py-1">
                                 <option value="aufschlag">aufschlag</option>
                                 <option value="deckungsbeitrag">deckungsbeitrag (W-1)</option>
                             </select>
@@ -33,11 +33,11 @@
                     @else
                         <td class="{{ $td }} !px-2 font-mono text-[11px]">{{ $ak->code }}</td>
                         <td class="{{ $td }} !px-2">{{ $ak->label }}</td>
-                        @foreach(['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'] as $feld)
+                        @foreach(['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'vat_rate'] as $feld)
                             <td class="{{ $td }} !px-2 text-right tabular-nums">{{ rtrim(rtrim(number_format((float) $ak->{$feld}, 2, ',', '.'), '0'), ',') }}</td>
                         @endforeach
                         <td class="{{ $td }} !px-2">
-                            @if($ak->formel_typ === 'deckungsbeitrag')
+                            @if($ak->formula_type === 'deckungsbeitrag')
                                 <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="W-1: Formel nicht definiert — Entscheid bei Dominique">deckungsbeitrag ⚠</span>
                             @else
                                 <span class="{{ $pill }} {{ $variantPill['secondary'] }}">aufschlag</span>
@@ -66,7 +66,7 @@
             <input type="text" wire:model="neu.raw_markup_pct" placeholder="Rohaufschlag %" class="{{ $input }} !py-1 w-28 text-right" />
             <input type="text" wire:model="neu.bedienung_pct" placeholder="Bedienung %" class="{{ $input }} !py-1 w-24 text-right" />
             <input type="text" wire:model="neu.profit_pct" placeholder="Profit %" class="{{ $input }} !py-1 w-20 text-right" />
-            <input type="text" wire:model="neu.mwst_satz" placeholder="MwSt %" class="{{ $input }} !py-1 w-20 text-right" />
+            <input type="text" wire:model="neu.vat_rate" placeholder="MwSt %" class="{{ $input }} !py-1 w-20 text-right" />
             <button type="button" wire:click="create" class="{{ $btnPrimary }}" data-ak-neu-anlegen>+ Anlegen</button>
         </div>
     </div>

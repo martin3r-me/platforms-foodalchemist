@@ -29,8 +29,8 @@ class Index extends Component
 
     /** Editierbare Felder des gewählten Pakets. */
     public array $form = [
-        'name' => '', 'role' => '', 'niveau' => '', 'preis_modus' => 'manuell',
-        'preis_pro_person' => null, 'ek_pro_person' => null, 'wareneinsatz_prozent' => null,
+        'name' => '', 'role' => '', 'level' => '', 'preis_modus' => 'manuell',
+        'preis_pro_person' => null, 'ek_pro_person' => null, 'food_cost_percent' => null,
         'description' => '',
     ];
 
@@ -59,9 +59,9 @@ class Index extends Component
         }
         $this->selectedId = $id;
         $this->form = [
-            'name' => $b->name, 'role' => $b->role ?? '', 'niveau' => $b->niveau ?? '',
+            'name' => $b->name, 'role' => $b->role ?? '', 'level' => $b->level ?? '',
             'preis_modus' => $b->preis_modus, 'preis_pro_person' => $b->preis_pro_person,
-            'ek_pro_person' => $b->ek_pro_person, 'wareneinsatz_prozent' => $b->wareneinsatz_prozent,
+            'ek_pro_person' => $b->ek_pro_person, 'food_cost_percent' => $b->food_cost_percent,
             'description' => $b->description ?? '',
         ];
         $this->mengeForm = $b->gerichte->mapWithKeys(fn ($g) => [$g->id => $g->quantity !== null ? (float) $g->quantity : null])->all();
@@ -127,8 +127,8 @@ class Index extends Component
             return;
         }
         $b = $svc->detail($this->team(), $this->selectedId);
-        $ids = $b->gerichte->pluck('vk_recipe_id')->push($vkRecipeId)->unique()->values();
-        $svc->syncGerichte($this->team(), $this->selectedId, $ids->map(fn ($id) => ['vk_recipe_id' => (int) $id])->all());
+        $ids = $b->gerichte->pluck('sales_recipe_id')->push($vkRecipeId)->unique()->values();
+        $svc->syncGerichte($this->team(), $this->selectedId, $ids->map(fn ($id) => ['sales_recipe_id' => (int) $id])->all());
         $this->gerichtSuche = '';
         $this->waehle($this->selectedId, $svc);
     }
@@ -139,8 +139,8 @@ class Index extends Component
             return;
         }
         $b = $svc->detail($this->team(), $this->selectedId);
-        $ids = $b->gerichte->pluck('vk_recipe_id')->reject(fn ($id) => (int) $id === $vkRecipeId)->values();
-        $svc->syncGerichte($this->team(), $this->selectedId, $ids->map(fn ($id) => ['vk_recipe_id' => (int) $id])->all());
+        $ids = $b->gerichte->pluck('sales_recipe_id')->reject(fn ($id) => (int) $id === $vkRecipeId)->values();
+        $svc->syncGerichte($this->team(), $this->selectedId, $ids->map(fn ($id) => ['sales_recipe_id' => (int) $id])->all());
         $this->waehle($this->selectedId, $svc);
     }
 
@@ -165,7 +165,7 @@ class Index extends Component
             'selected' => $selected,
             'kandidaten' => $selected !== null
                 ? $svc->gerichtKandidaten($team, $this->gerichtSuche)->reject(
-                    fn ($r) => $selected->gerichte->pluck('vk_recipe_id')->contains($r->id))
+                    fn ($r) => $selected->gerichte->pluck('sales_recipe_id')->contains($r->id))
                 : collect(),
         ])->layout('platform::layouts.app');
     }

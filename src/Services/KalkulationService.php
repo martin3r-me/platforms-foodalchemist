@@ -18,7 +18,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  *
  * Block-Typen: pct_we (% auf WE) · pct_hk (% auf laufende HK) · eur_pro_portion
  * (Fixbetrag) · arbeitszeit (min/60 × Stundensatz). Ersetzt den einen M12-Regler;
- * der bestehende hk2_zuschlag_pct lebt als Default-Wert des Gemeinkosten-Blocks weiter.
+ * der bestehende hk2_surcharge_pct lebt als Default-Wert des Gemeinkosten-Blocks weiter.
  */
 class KalkulationService
 {
@@ -47,53 +47,53 @@ class KalkulationService
         $stundensatz = $this->settings->stundensatz($team);
         // M-K6: Schema mit aus Fixkosten abgeleiteten %-Sätzen (abgeleitete Blöcke).
         $schema = $this->fixkosten->aufgeloestesSchema($team);
-        $aktiv = array_values(array_filter($schema, fn ($b) => $b['aktiv']));
+        $aktiv = array_values(array_filter($schema, fn ($b) => $b['active']));
 
         // #379+: Lohnnebenkosten-Zuschlag (AG-Anteil) → effektiver Lohnsatz statt Brutto.
         $lnkFaktor = 1 + $this->settings->lohnnebenkostenPct($team) / 100;
-        $rate = fn (array $b) => ($b['wert'] > 0 ? $b['wert'] : $stundensatz) * $lnkFaktor;
+        $rate = fn (array $b) => ($b['value'] > 0 ? $b['value'] : $stundensatz) * $lnkFaktor;
 
         // ── Stufe A: Basisgrößen (reihenfolge-unabhängig) ───────────────────
         $mek = max(0.0, $we);
         $fek = 0.0;
         $direkt = abs($nebenkosten) > 1e-9 ? $nebenkosten : 0.0;
         foreach ($aktiv as $b) {
-            if ($b['typ'] === 'arbeitszeit') {
+            if ($b['type'] === 'arbeitszeit') {
                 $fek += $arbeitszeitMin / 60 * $rate($b);
-            } elseif ($b['typ'] === 'eur_pro_portion') {
-                $direkt += (float) $b['wert'];
+            } elseif ($b['type'] === 'eur_pro_portion') {
+                $direkt += (float) $b['value'];
             }
         }
         $mgkTotal = 0.0;
         $fgkTotal = 0.0;
         foreach ($aktiv as $b) {
-            if ($b['typ'] === 'pct_mek') {
-                $mgkTotal += $mek * ($b['wert'] / 100);
-            } elseif ($b['typ'] === 'pct_fek') {
-                $fgkTotal += $fek * ($b['wert'] / 100);
+            if ($b['type'] === 'pct_mek') {
+                $mgkTotal += $mek * ($b['value'] / 100);
+            } elseif ($b['type'] === 'pct_fek') {
+                $fgkTotal += $fek * ($b['value'] / 100);
             }
         }
         $hk = $mek + $fek + $direkt + $mgkTotal + $fgkTotal;   // Herstellkosten
 
         // ── Stufe B: Wasserfall-Blöcke in Sort-Reihenfolge (Anzeige) ────────
-        $bloecke = [['key' => 'we', 'label' => 'Wareneinsatz (MEK)', 'typ' => 'basis', 'betrag' => round($mek, 4)]];
+        $bloecke = [['key' => 'we', 'label' => 'Wareneinsatz (MEK)', 'type' => 'basis', 'betrag' => round($mek, 4)]];
         $hkgkTotal = 0.0;
         foreach ($aktiv as $b) {
-            $betrag = match ($b['typ']) {
+            $betrag = match ($b['type']) {
                 'arbeitszeit' => $arbeitszeitMin / 60 * $rate($b),
-                'eur_pro_portion' => (float) $b['wert'],
-                'pct_mek' => $mek * ($b['wert'] / 100),
-                'pct_fek' => $fek * ($b['wert'] / 100),
-                'pct_hk' => $hk * ($b['wert'] / 100),
+                'eur_pro_portion' => (float) $b['value'],
+                'pct_mek' => $mek * ($b['value'] / 100),
+                'pct_fek' => $fek * ($b['value'] / 100),
+                'pct_hk' => $hk * ($b['value'] / 100),
                 default => 0.0,
             };
-            if ($b['typ'] === 'pct_hk') {
+            if ($b['type'] === 'pct_hk') {
                 $hkgkTotal += $betrag;
             }
-            $bloecke[] = ['key' => $b['key'], 'label' => $b['label'], 'typ' => $b['typ'], 'betrag' => round($betrag, 4)];
+            $bloecke[] = ['key' => $b['key'], 'label' => $b['label'], 'type' => $b['type'], 'betrag' => round($betrag, 4)];
         }
         if (abs($nebenkosten) > 1e-9) {
-            $bloecke[] = ['key' => 'nebenkosten', 'label' => 'Nebenkosten (Rezept)', 'typ' => 'eur_pro_portion', 'betrag' => round($nebenkosten, 4)];
+            $bloecke[] = ['key' => 'nebenkosten', 'label' => 'Nebenkosten (Rezept)', 'type' => 'eur_pro_portion', 'betrag' => round($nebenkosten, 4)];
         }
 
         $hk2 = round($hk + $hkgkTotal, 4);   // Selbstkosten
@@ -120,22 +120,22 @@ class KalkulationService
      * Gericht-Kalkulation pro Portion (Block-Wasserfall + Vollkosten-Marge gegen VK netto).
      *
      * @return array{hk1_total: float, hk2_total: float, hk1_pro_portion: float, hk2_pro_portion: float,
-     *               zuschlag_pct: float, nebenkosten: float, anzahl_portionen: int, vk_netto: ?float,
+     *               zuschlag_pct: float, nebenkosten: float, anzahl_portionen: int, sales_net: ?float,
      *               db_eur: ?float, db_pct: ?float, wareneinsatz_pct: ?float,
      *               bloecke: list<array>, marge_pct: float, vk_vorschlag: float}
      */
     public function recipeHk(Team $team, FoodAlchemistRecipe $recipe): array
     {
-        $anzahl = max(1, (int) ($recipe->vk_unit_count ?? 1));
+        $anzahl = max(1, (int) ($recipe->sales_unit_count ?? 1));
         $hk1Total = (float) ($recipe->ek_total_eur ?? 0);
-        $nebenTotal = (float) ($recipe->nebenkosten_eur ?? 0);
+        $nebenTotal = (float) ($recipe->additional_costs_eur ?? 0);
         $azTotal = (float) ($recipe->work_time_min ?? 0);
 
         // Pro Portion rechnen (Wasserfall), dann auf Total skalieren.
         $r = $this->berechne($team, $hk1Total / $anzahl, $azTotal / $anzahl, $nebenTotal / $anzahl);
         $hk1Pp = round($hk1Total / $anzahl, 4);
         $hk2Pp = $r['hk2'];
-        $vk = $recipe->vk_netto !== null ? (float) $recipe->vk_netto : null;
+        $vk = $recipe->sales_net !== null ? (float) $recipe->sales_net : null;
 
         return [
             'hk1_total' => round($hk1Total, 4),
@@ -145,7 +145,7 @@ class KalkulationService
             'zuschlag_pct' => $this->settings->hk2Zuschlag($team),
             'nebenkosten' => round($nebenTotal, 4),
             'anzahl_portionen' => $anzahl,
-            'vk_netto' => $vk,
+            'sales_net' => $vk,
             'db_eur' => $vk !== null ? round($vk - $hk2Pp, 2) : null,
             'db_pct' => $vk !== null && $vk > 0 ? round(($vk - $hk2Pp) / $vk * 100, 1) : null,
             'wareneinsatz_pct' => $vk !== null && $vk > 0 ? round($hk1Pp / $vk * 100, 1) : null,

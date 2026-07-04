@@ -211,7 +211,7 @@ class DetailPanel extends Component
         try {
             $slugs = [];
             $conf = 0.0;
-            foreach (['sektor' => ['recipe.sektor', 'sektoren'], 'niveau' => ['recipe.niveau', 'niveaus']] as $typ => [$prompt, $schluessel]) {
+            foreach (['sektor' => ['recipe.sektor', 'sektoren'], 'level' => ['recipe.level', 'niveaus']] as $typ => [$prompt, $schluessel]) {
                 $v = $gateway->propose($prompt, $kontext + ['vokabular' => $vokabular[$typ]['slugs']]);
                 $conf = max($conf, $v->confidence);
                 foreach ((array) ($v->werte[$schluessel] ?? []) as $slug => $urteil) {

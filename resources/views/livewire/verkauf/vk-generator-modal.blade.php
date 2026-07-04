@@ -67,7 +67,7 @@
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Niveau</label>
-                    <input type="text" wire:model="parameter.niveau" placeholder="z. B. fine_dining" class="{{ $input }}" />
+                    <input type="text" wire:model="parameter.level" placeholder="z. B. fine_dining" class="{{ $input }}" />
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Sektor</label>

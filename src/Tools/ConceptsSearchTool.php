@@ -29,7 +29,7 @@ class ConceptsSearchTool extends FoodAlchemistTool implements ToolContract, Tool
             'type' => 'object',
             'properties' => [
                 'q' => ['type' => 'string', 'description' => 'Suchbegriff (Name/Anlass), leer = alle'],
-                'status' => ['type' => 'string', 'enum' => ['draft', 'aktiv', 'archiviert']],
+                'status' => ['type' => 'string', 'enum' => ['draft', 'active', 'archiviert']],
                 'vorlagen' => ['type' => 'boolean', 'default' => false, 'description' => 'true = nur Vorlagen'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 15],
             ],
@@ -51,8 +51,8 @@ class ConceptsSearchTool extends FoodAlchemistTool implements ToolContract, Tool
         return ToolResult::success([
             'total' => $treffer->total(),
             'concepts' => collect($treffer->items())->map(fn ($c) => [
-                'id' => $c->id, 'name' => $c->name, 'status' => $c->status, 'klasse' => $c->klasse,
-                'anlass' => $c->anlass, 'niveau' => $c->niveau, 'slots' => $c->slots_count,
+                'id' => $c->id, 'name' => $c->name, 'status' => $c->status, 'class' => $c->class,
+                'anlass' => $c->anlass, 'level' => $c->level, 'slots' => $c->slots_count,
             ])->all(),
         ]);
     }

@@ -24,7 +24,7 @@
                     <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
                 </div>
             </div>
-            <p class="text-[11px] text-gray-400 mt-0.5">{{ $rezept->kategorie?->label ?? '—' }} · {{ $rezept->recipe_key }}</p>
+            <p class="text-[11px] text-gray-400 mt-0.5">{{ $rezept->category?->label ?? '—' }} · {{ $rezept->recipe_key }}</p>
         </div>
 
         {{-- KPI-Karte (EK/kg · EK · Yield · Konfidenz) --}}
@@ -33,7 +33,7 @@
                 ['EK/kg', $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €' : '—'],
                 ['EK', $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—'],
                 ['Yield', $rezept->yield_kg !== null ? number_format((float) ($rezept->yield_kg_manual ?? $rezept->yield_kg), 3, ',', '.') . ' kg' : '—'],
-                ['Konfidenz', $rezept->allergene_konfidenz],
+                ['Konfidenz', $rezept->allergens_confidence],
                 ['mit Preis', ($rezept->ek_n_ingredients_priced ?? '—') . '/' . ($rezept->ek_n_ingredients_total ?? '—')],
             ] as [$lbl, $wert])
                 <div class="text-center">
@@ -124,8 +124,8 @@
         @if($nurEignung || ! ($embedded ?? false))
         @php($eignungVokab = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular())
         @php($eignungAktiv = [
-            'niveau' => $rezept->niveauEignungen->keyBy('level_slug'),
-            'sektor' => $rezept->sektorEignungen->keyBy('sektor_slug'),
+            'level' => $rezept->niveauEignungen->keyBy('level_slug'),
+            'sektor' => $rezept->sektorEignungen->keyBy('sector_slug'),
         ])
         <div data-eignungen>
             @unless($nurEignung){{-- im Eigenschaften-Tab liefert die modal-section den Titel --}}
@@ -133,14 +133,14 @@
             @endunless
             @if($fehlerEignung !== null)<p class="text-[11px] text-rose-500 mb-1" data-eignung-fehler>{{ $fehlerEignung }}</p>@endif
             <div class="space-y-1.5">
-                @foreach(['niveau' => 'Niveau', 'sektor' => 'Sektor'] as $typ => $typLabel)
+                @foreach(['level' => 'Niveau', 'sektor' => 'Sektor'] as $typ => $typLabel)
                     <div class="flex items-center gap-1 flex-wrap">
                         <span class="text-[10px] uppercase tracking-wider text-gray-400 w-12 shrink-0">{{ $typLabel }}</span>
                         @foreach($eignungVokab[$typ]['slugs'] as $slug)
                             @php($eintrag = $eignungAktiv[$typ][$slug] ?? null)
                             <button type="button" wire:key="eig-{{ $typ }}-{{ $slug }}" wire:click="eignungToggle('{{ $typ }}', '{{ $slug }}')"
                                     class="{{ $pill }} transition-colors {{ $eintrag !== null
-                                        ? ($typ === 'niveau' ? $variantPill['info'] : $variantPill['primary'])
+                                        ? ($typ === 'level' ? $variantPill['info'] : $variantPill['primary'])
                                         : 'border border-black/10 dark:border-white/15 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300' }}"
                                     title="{{ $eintrag !== null
                                         ? 'geeignet · ' . $eintrag->source . ($eintrag->ai_confidence !== null ? ' ' . round($eintrag->ai_confidence * 100) . '%' : '') . ' — Klick entfernt'
@@ -229,7 +229,7 @@
                             @if($kohaesion['coverage_pct'] < 30)<span class="text-amber-500">· dünne Datenlage</span>@endif
                         </p>
                         @if($kohaesion['weakest_pair'] !== null)
-                            <p class="text-gray-400">Schwächstes Glied: {{ $kohaesion['weakest_pair']['a'] }} ↔ {{ $kohaesion['weakest_pair']['b'] }} ({{ $kohaesion['weakest_pair']['score'] }}, {{ $kohaesion['weakest_pair']['typ'] }})</p>
+                            <p class="text-gray-400">Schwächstes Glied: {{ $kohaesion['weakest_pair']['a'] }} ↔ {{ $kohaesion['weakest_pair']['b'] }} ({{ $kohaesion['weakest_pair']['score'] }}, {{ $kohaesion['weakest_pair']['type'] }})</p>
                         @endif
                         @php($orphans = collect($kohaesion['komponenten'])->filter(fn ($k) => $k['is_orphan']))
                         @if($orphans->isNotEmpty())
@@ -254,9 +254,9 @@
             @if($pairings !== null)
                 <div class="flex flex-wrap gap-1 mt-1" data-pairing-chips>
                     @foreach($pairings as $p)
-                        <span wire:key="pp-{{ $p->id }}-{{ $p->typ }}" class="{{ $pill }} group {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->typ] ?? $variantPill['secondary'] }}"
-                              title="{{ $p->typ }} · {{ $p->konfidenz }}{{ $p->created_via === 'manual' ? ' · manuell' : '' }}">{{ $p->display_de }}@if($p->created_via === 'manual')<span class="opacity-60"> ✎</span>@endif
-                            <button type="button" wire:click="pairingLoesen({{ $p->id }}, '{{ $p->typ }}')" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
+                        <span wire:key="pp-{{ $p->id }}-{{ $p->type }}" class="{{ $pill }} group {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->type] ?? $variantPill['secondary'] }}"
+                              title="{{ $p->type }} · {{ $p->confidence }}{{ $p->created_via === 'manual' ? ' · manuell' : '' }}">{{ $p->display_de }}@if($p->created_via === 'manual')<span class="opacity-60"> ✎</span>@endif
+                            <button type="button" wire:click="pairingLoesen({{ $p->id }}, '{{ $p->type }}')" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
                         </span>
                     @endforeach
                 </div>
@@ -324,7 +324,7 @@
         </div>
 
         <p class="text-[11px] text-gray-400 border-t border-black/5 dark:border-white/10 pt-2">
-            Nährwerte {{ $rezept->nutri_kcal_per_100g !== null ? number_format((float) $rezept->nutri_kcal_per_100g, 0, ',', '.') . ' kcal/100 g (' . $rezept->nutri_konfidenz . ')' : '—' }}
+            Nährwerte {{ $rezept->nutri_kcal_per_100g !== null ? number_format((float) $rezept->nutri_kcal_per_100g, 0, ',', '.') . ' kcal/100 g (' . $rezept->nutri_confidence . ')' : '—' }}
             · v{{ $rezept->version }}{{ $rezept->work_time_min ? ' · ' . $rezept->work_time_min . ' min' : '' }}
         </p>
         @endunless

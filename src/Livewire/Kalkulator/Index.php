@@ -139,7 +139,7 @@ class Index extends Component
 
         return view('foodalchemist::livewire.kalkulator.index', [
             'kalkulationen' => $kalkulationen,
-            'aktiv' => $aktiv,
+            'active' => $aktiv,
             'berechnung' => $berechnung,
             'quellen' => $quellen,
         ])->layout('platform::layouts.app');

@@ -110,7 +110,7 @@ class PriceService
             ->orderByDesc('id')
             ->get()
             ->each(fn ($p) => $p->setAttribute(
-                'kategorie',
+                'category',
                 PriceCategory::fuer($p->price !== null ? (float) $p->price : null, $p->status),
             ));
     }
@@ -207,7 +207,7 @@ class PriceService
                     'lieferant' => $i->lieferant,
                     'wg' => $i->wg ?? '–',
                     'unit' => $v['unit'],
-                    'wert' => $v['wert'],
+                    'value' => $v['value'],
                 ];
             })
             ->filter();
@@ -217,14 +217,14 @@ class PriceService
             if ($gruppe->count() < 4) {
                 continue; // zu wenig Daten für einen belastbaren Median
             }
-            $median = $gruppe->pluck('wert')->sort()->values()->get((int) floor($gruppe->count() / 2));
+            $median = $gruppe->pluck('value')->sort()->values()->get((int) floor($gruppe->count() / 2));
             foreach ($gruppe as $k) {
-                $faktor = $median > 0 ? max($k->wert / $median, $median / max($k->wert, 1e-9)) : 0;
+                $faktor = $median > 0 ? max($k->value / $median, $median / max($k->value, 1e-9)) : 0;
                 if ($faktor >= $ausreisserFaktor) {
                     $ausreisser->push((object) [
                         'id' => $k->id, 'label' => $k->label, 'lieferant' => $k->lieferant,
                         'wg' => $k->wg, 'unit' => $k->unit,
-                        'wert' => round($k->wert, 2), 'median' => round($median, 2), 'faktor' => round($faktor, 1),
+                        'value' => round($k->value, 2), 'median' => round($median, 2), 'faktor' => round($faktor, 1),
                     ]);
                 }
             }
@@ -253,9 +253,9 @@ class PriceService
         }
 
         return match ($item->unit_code) {
-            'kg' => ['wert' => $preis / $qty, 'unit' => '€/kg'],
-            'l' => ['wert' => $preis / $qty, 'unit' => '€/l'],
-            'Stk' => ['wert' => $preis / $qty, 'unit' => '€/Stk'],
+            'kg' => ['value' => $preis / $qty, 'unit' => '€/kg'],
+            'l' => ['value' => $preis / $qty, 'unit' => '€/l'],
+            'Stk' => ['value' => $preis / $qty, 'unit' => '€/Stk'],
             default => null,
         };
     }
@@ -266,7 +266,7 @@ class PriceService
         $v = $this->vergleichspreis($item, $preis);
 
         return match ($v['unit'] ?? null) {
-            '€/kg', '€/l' => $v['wert'] / 1000,
+            '€/kg', '€/l' => $v['value'] / 1000,
             default => null,
         };
     }

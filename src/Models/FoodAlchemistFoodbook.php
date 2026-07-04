@@ -38,7 +38,7 @@ class FoodAlchemistFoodbook extends Model
     /** Schreibstil-Override je Kunde/Foodbook (M10R-1, §10.8). */
     public function schreibstil(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistWritingStyle::class, 'schreibstil_id');
+        return $this->belongsTo(FoodAlchemistWritingStyle::class, 'writing_style_id');
     }
 
     /** #369: CRM-Firma (verlinkt, MVP — kein Rücksync). */

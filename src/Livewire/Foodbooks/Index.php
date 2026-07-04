@@ -224,7 +224,7 @@ class Index extends Component
         $svc->addBlock($this->team(), $this->selectedKapitelId, [
             'type' => $type, 'header_source' => $slug, 'label' => $label,
             'preis_basis' => $type === 'header_frei_preis' ? ($preisBasis ?: 'person') : null,
-            'preis_wert' => $type === 'header_frei_preis' ? 0 : null,
+            'price_value' => $type === 'header_frei_preis' ? 0 : null,
             'sichtbar' => $sichtbar,
         ]);
     }
@@ -238,7 +238,7 @@ class Index extends Component
             'type' => $type,
             'hoehe' => $type === 'spacer' ? 'mittel' : null,
             'preis_basis' => $type === 'header_frei_preis' ? 'person' : null,
-            'preis_wert' => $type === 'header_frei_preis' ? 0 : null,
+            'price_value' => $type === 'header_frei_preis' ? 0 : null,
         ]);
     }
 
@@ -252,7 +252,7 @@ class Index extends Component
         $this->blockForm = [
             'label' => $block->label ?? '', 'wording' => $block->wording ?? '',
             'kundentext' => $block->kundentext ?? '',
-            'preis_wert' => $block->preis_wert, 'preis_basis' => $block->preis_basis ?? 'person',
+            'price_value' => $block->price_value, 'preis_basis' => $block->preis_basis ?? 'person',
             'hoehe' => $block->hoehe ?? 'mittel', 'interne_bemerkung' => $block->interne_bemerkung ?? '',
         ];
     }
@@ -267,7 +267,7 @@ class Index extends Component
         if ($this->editBlockId === null) {
             return;
         }
-        $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::with('concept.slots.gericht:id,name,vk_wording_standard')->find($this->editBlockId);
+        $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::with('concept.slots.gericht:id,name,sales_wording_standard')->find($this->editBlockId);
         if ($block === null || $block->concept === null) {
             return;
         }
@@ -276,7 +276,7 @@ class Index extends Component
             'concept' => $block->concept->name,
             'anzeigename' => trim((string) ($this->blockForm['wording'] ?? '')) !== '' ? $this->blockForm['wording'] : null,
             'gerichte' => collect($wording->gerichtZeilen($block->concept, $block))
-                ->where('typ', 'gericht')->pluck('text')->values()->all(),
+                ->where('type', 'gericht')->pluck('text')->values()->all(),
         ];
         try {
             $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.marketing', $kontext, [

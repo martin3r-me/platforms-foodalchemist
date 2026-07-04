@@ -19,7 +19,7 @@ class VerkaufsrezepteSearchTool extends FoodAlchemistTool implements ToolContrac
     public function getDescription(): string
     {
         return 'Durchsucht die Verkaufsrezepte des Teams (auch über Marketing-Namen und '
-            . 'Kunden-Wordings). Liefert id, name, vk_netto, ek_total_eur, speisen_klasse.';
+            . 'Kunden-Wordings). Liefert id, name, sales_net, ek_total_eur, speisen_klasse.';
     }
 
     public function getSchema(): array
@@ -47,7 +47,7 @@ class VerkaufsrezepteSearchTool extends FoodAlchemistTool implements ToolContrac
         return ToolResult::success([
             'total' => $treffer->total(),
             'verkaufsrezepte' => collect($treffer->items())->map(fn ($r) => [
-                'id' => $r->id, 'name' => $r->name, 'vk_netto' => $r->vk_netto,
+                'id' => $r->id, 'name' => $r->name, 'sales_net' => $r->sales_net,
                 'ek_total_eur' => $r->ek_total_eur,
                 'speisen_klasse' => $r->speisenKlasse?->label,
             ])->all(),

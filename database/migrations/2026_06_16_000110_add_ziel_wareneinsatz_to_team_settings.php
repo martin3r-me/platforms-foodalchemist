@@ -14,8 +14,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            if (! Schema::hasColumn('foodalchemist_team_settings', 'ziel_wareneinsatz_pct')) {
-                $table->decimal('ziel_wareneinsatz_pct', 5, 2)->nullable();
+            if (! Schema::hasColumn('foodalchemist_team_settings', 'target_food_cost_pct')) {
+                $table->decimal('target_food_cost_pct', 5, 2)->nullable();
             }
         });
     }
@@ -23,7 +23,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            $table->dropColumn('ziel_wareneinsatz_pct');
+            $table->dropColumn('target_food_cost_pct');
         });
     }
 };

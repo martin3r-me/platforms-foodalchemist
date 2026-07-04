@@ -21,8 +21,8 @@ class RecipeService
     /** Hauptgruppen-Zähler in einer GROUP-BY-Query (Baum links, P-1). */
     public function hauptgruppenCounts(Team $team, array $filters = []): array
     {
-        return $this->browserQuery($team, array_diff_key($filters, ['hauptgruppe' => 1, 'kategorie' => 1]))
-            ->join('foodalchemist_recipe_categories AS k', 'k.id', '=', 'foodalchemist_recipes.kategorie_id')
+        return $this->browserQuery($team, array_diff_key($filters, ['hauptgruppe' => 1, 'category' => 1]))
+            ->join('foodalchemist_recipe_categories AS k', 'k.id', '=', 'foodalchemist_recipes.category_id')
             ->selectRaw('k.main_group_id, COUNT(*) AS n')
             ->groupBy('k.main_group_id')
             ->pluck('n', 'k.main_group_id')
@@ -33,11 +33,11 @@ class RecipeService
     public function kategorieCounts(Team $team, int $mainGroupId): array
     {
         return $this->browserQuery($team, [])
-            ->join('foodalchemist_recipe_categories AS k', 'k.id', '=', 'foodalchemist_recipes.kategorie_id')
+            ->join('foodalchemist_recipe_categories AS k', 'k.id', '=', 'foodalchemist_recipes.category_id')
             ->where('k.main_group_id', $mainGroupId)
-            ->selectRaw('foodalchemist_recipes.kategorie_id, COUNT(*) AS n')
-            ->groupBy('foodalchemist_recipes.kategorie_id')
-            ->pluck('n', 'foodalchemist_recipes.kategorie_id')
+            ->selectRaw('foodalchemist_recipes.category_id, COUNT(*) AS n')
+            ->groupBy('foodalchemist_recipes.category_id')
+            ->pluck('n', 'foodalchemist_recipes.category_id')
             ->all();
     }
 
@@ -122,7 +122,7 @@ class RecipeService
         if ($name === '') {
             throw new \RuntimeException('Rezept-Name ist Pflicht (§1).');
         }
-        $kategorieId = $in['kategorie_id'] ?? null;
+        $kategorieId = $in['category_id'] ?? null;
 
         $key = $this->rezeptKey($name);
         if ($this->keyVergeben($team, $key)) {                     // §1.8: Kategorie als Diskriminator
@@ -143,7 +143,7 @@ class RecipeService
             'recipe_key' => $key,
             'name' => $name,
             'origin_source' => ($in['origin_source'] ?? '') ?: null,
-            'kategorie_id' => $kategorieId,
+            'category_id' => $kategorieId,
             'is_sales_recipe' => (bool) ($in['is_sales_recipe'] ?? false),
             'status' => 'draft',
             'taste_direction' => ($in['taste_direction'] ?? '') ?: null,
@@ -175,16 +175,16 @@ class RecipeService
         $recipe->update([
             'name' => $name,
             'origin_source' => array_key_exists('origin_source', $in) ? (($in['origin_source'] ?? '') ?: null) : $recipe->origin_source,
-            'kategorie_id' => $in['kategorie_id'] ?? $recipe->kategorie_id,
+            'category_id' => $in['category_id'] ?? $recipe->category_id,
             'taste_direction' => array_key_exists('taste_direction', $in) ? (($in['taste_direction'] ?? '') ?: null) : $recipe->taste_direction,
             'production_depth' => array_key_exists('production_depth', $in) ? (($in['production_depth'] ?? '') ?: null) : $recipe->production_depth,
             'work_time_min' => array_key_exists('work_time_min', $in) ? $in['work_time_min'] : $recipe->work_time_min,
             'yield_kg_manual' => array_key_exists('yield_kg_manual', $in) ? $in['yield_kg_manual'] : $recipe->yield_kg_manual,
-            'ertrag_stueck' => array_key_exists('ertrag_stueck', $in) ? (($in['ertrag_stueck'] ?? '') !== '' ? $in['ertrag_stueck'] : null) : $recipe->ertrag_stueck,
+            'yield_pieces' => array_key_exists('yield_pieces', $in) ? (($in['yield_pieces'] ?? '') !== '' ? $in['yield_pieces'] : null) : $recipe->yield_pieces,
             'description' => array_key_exists('description', $in) ? (($in['description'] ?? '') ?: null) : $recipe->description,
             // UI-Audit (D-5 §4.2): Eigenschaften/Zubereitung/Notizen/Status im Editor pflegbar
-            'temperatur' => array_key_exists('temperatur', $in) ? (($in['temperatur'] ?? '') ?: null) : $recipe->temperatur,
-            'funktion' => array_key_exists('funktion', $in) ? (($in['funktion'] ?? '') ?: null) : $recipe->funktion,
+            'temperature' => array_key_exists('temperature', $in) ? (($in['temperature'] ?? '') ?: null) : $recipe->temperature,
+            'function' => array_key_exists('function', $in) ? (($in['function'] ?? '') ?: null) : $recipe->function,
             'preparation' => array_key_exists('preparation', $in) ? (($in['preparation'] ?? '') ?: null) : $recipe->preparation,
             'notes_manual' => array_key_exists('notes_manual', $in) ? (($in['notes_manual'] ?? '') ?: null) : $recipe->notes_manual,
             'status' => array_key_exists('status', $in) && in_array($in['status'], ['stub', 'draft', 'review', 'approved', 'archived'], true)
@@ -211,7 +211,7 @@ class RecipeService
         return DB::transaction(function () use ($team, $original, $neuerName) {
             $kopie = $this->create($team, [
                 'name' => $neuerName,
-                'kategorie_id' => $original->kategorie_id,
+                'category_id' => $original->category_id,
                 'origin_source' => $original->origin_source,
                 'taste_direction' => $original->taste_direction,
                 'production_depth' => $original->production_depth,
@@ -362,8 +362,8 @@ class RecipeService
     // ── M9-01k: Sektor-/Niveau-Eignung pflegen (Zeile = geeignet; unique recipe+slug) ──
 
     private const EIGNUNG_TABELLEN = [
-        'niveau' => ['tabelle' => 'foodalchemist_recipe_level_suitability', 'spalte' => 'level_slug', 'slugs' => ['haute_cuisine', 'gehoben', 'klassisch']],
-        'sektor' => ['tabelle' => 'foodalchemist_recipe_sector_suitability', 'spalte' => 'sektor_slug', 'slugs' => ['business', 'care', 'crew', 'event_privat', 'kita_schule', 'restaurant']],
+        'level' => ['tabelle' => 'foodalchemist_recipe_level_suitability', 'spalte' => 'level_slug', 'slugs' => ['haute_cuisine', 'gehoben', 'klassisch']],
+        'sektor' => ['tabelle' => 'foodalchemist_recipe_sector_suitability', 'spalte' => 'sector_slug', 'slugs' => ['business', 'care', 'crew', 'event_privat', 'kita_schule', 'restaurant']],
     ];
 
     /** @return array<string, array> Vokabular fürs UI */
@@ -503,7 +503,7 @@ class RecipeService
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'lead_la_supplier_item_id', 'piece_default_g', 'team_id'])
             ->map(fn ($gp) => [
-                'typ' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
+                'type' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
                 'ek_pro_g' => $recompute->preisProGrammPublic($gp),
                 'url' => \Platform\FoodAlchemist\Support\Sprungziel::gp($gp->id),  // R5: Sprung-Ziel
             ]);
@@ -514,7 +514,7 @@ class RecipeService
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'ek_per_kg_eur'])
             ->map(fn ($r) => [
-                'typ' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
+                'type' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
                 'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
                 'url' => \Platform\FoodAlchemist\Support\Sprungziel::rezept($r->id),
             ]);
@@ -537,10 +537,10 @@ class RecipeService
                     ->orWhereRaw('LOWER(foodalchemist_recipes.recipe_key) LIKE ?', ['%' . $such . '%']));
             })
             ->when(($filters['hauptgruppe'] ?? null) !== null && $filters['hauptgruppe'] !== '', fn (Builder $q) => $q
-                ->whereIn('kategorie_id', DB::table('foodalchemist_recipe_categories')
+                ->whereIn('category_id', DB::table('foodalchemist_recipe_categories')
                     ->where('main_group_id', (int) $filters['hauptgruppe'])->pluck('id')))
-            ->when(($filters['kategorie'] ?? null) !== null && $filters['kategorie'] !== '', fn (Builder $q) => $q
-                ->where('kategorie_id', (int) $filters['kategorie']))
+            ->when(($filters['category'] ?? null) !== null && $filters['category'] !== '', fn (Builder $q) => $q
+                ->where('category_id', (int) $filters['category']))
             ->when(($filters['status'] ?? '') !== '', fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(($filters['geschmack'] ?? '') !== '', fn (Builder $q) => $q->where('taste_direction', $filters['geschmack']))
             ->when(($filters['fertigung'] ?? '') !== '', fn (Builder $q) => $q->where('production_depth', $filters['fertigung']))

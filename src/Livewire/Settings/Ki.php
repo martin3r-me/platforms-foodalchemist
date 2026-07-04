@@ -32,7 +32,7 @@ class Ki extends Component
             return;
         }
         $this->kiAktiv = ! $this->kiAktiv;
-        app(TeamSettingsService::class)->update($team, ['ki_aktiv' => $this->kiAktiv]);
+        app(TeamSettingsService::class)->update($team, ['ai_active' => $this->kiAktiv]);
         $this->meldung = $this->kiAktiv
             ? 'KI aktiviert — Autopilot-Buttons sind wieder nutzbar.'
             : 'Kill-Switch AKTIV — alle KI-Calls dieses Teams werden im Gateway gestoppt.';

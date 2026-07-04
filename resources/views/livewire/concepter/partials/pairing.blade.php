@@ -3,7 +3,7 @@
 
 @if(! $pairing)
     <p class="text-xs text-gray-400 py-4">Noch keine Pairing-Daten.</p>
-@elseif(($pairing['typ'] ?? null) === 'recipe')
+@elseif(($pairing['type'] ?? null) === 'recipe')
     @php($score = (int) ($pairing['score'] ?? 0))
     @php($cov = (int) ($pairing['coverage_pct'] ?? 0))
     @php($scoreFarbe = $score >= 70 ? 'success' : ($score >= 45 ? 'warning' : 'danger'))
@@ -117,7 +117,7 @@
             </div>
         @endif
     @endif
-@elseif(($pairing['typ'] ?? null) === 'gp')
+@elseif(($pairing['type'] ?? null) === 'gp')
     @if(count($pairing['anker']) === 0)
         <p class="text-xs text-gray-400 py-4">Noch keine Pairing-Daten (kein Aroma-Anker auf diesem GP).</p>
     @else

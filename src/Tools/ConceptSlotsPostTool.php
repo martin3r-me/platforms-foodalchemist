@@ -13,7 +13,7 @@ use Platform\FoodAlchemist\Services\VocabularyService;
 
 /**
  * Phase C: Slot in einem draft-Konzept anlegen und optional direkt befüllen
- * (Gericht via vk_recipe_id ODER Paket via package_id) + Wording setzen.
+ * (Gericht via sales_recipe_id ODER Paket via package_id) + Wording setzen.
  */
 class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -25,7 +25,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
     public function getDescription(): string
     {
         return 'Legt einen Slot in einem draft-Konzept an (Position ans Ende) und befüllt ihn optional: '
-            . 'vk_recipe_id = Gericht (via verkaufsrezepte.SEARCH), package_id = Paket (XOR). role z. B. '
+            . 'sales_recipe_id = Gericht (via verkaufsrezepte.SEARCH), package_id = Paket (XOR). role z. B. '
             . 'vorspeise/hauptgang/dessert, wording = kundenseitiger Anzeigename.';
     }
 
@@ -38,7 +38,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
                 'role' => ['type' => 'string', 'description' => 'z. B. vorspeise, hauptgang, dessert, snack'],
                 'titel' => ['type' => 'string'],
                 'is_pflicht' => ['type' => 'boolean', 'default' => true],
-                'vk_recipe_id' => ['type' => 'integer'],
+                'sales_recipe_id' => ['type' => 'integer'],
                 'package_id' => ['type' => 'integer'],
                 'quantity' => ['type' => 'number'],
                 'unit' => ['type' => 'string', 'description' => 'Einheiten-Slug, z. B. stk, portion'],
@@ -61,12 +61,12 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
         if ((string) $concept->status !== 'draft') {
             return ToolResult::error("Konzept hat Status \"{$concept->status}\" — via MCP ist nur draft editierbar.", 'ACCESS_DENIED');
         }
-        if (isset($arguments['vk_recipe_id'], $arguments['package_id'])) {
-            return ToolResult::error('vk_recipe_id und package_id sind XOR — nur eines angeben.', 'VALIDATION_ERROR');
+        if (isset($arguments['sales_recipe_id'], $arguments['package_id'])) {
+            return ToolResult::error('sales_recipe_id und package_id sind XOR — nur eines angeben.', 'VALIDATION_ERROR');
         }
-        if (isset($arguments['vk_recipe_id'])
-            && ! FoodAlchemistRecipe::visibleToTeam($team)->whereKey((int) $arguments['vk_recipe_id'])->exists()) {
-            return ToolResult::error('vk_recipe_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        if (isset($arguments['sales_recipe_id'])
+            && ! FoodAlchemistRecipe::visibleToTeam($team)->whereKey((int) $arguments['sales_recipe_id'])->exists()) {
+            return ToolResult::error('sales_recipe_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
         $svc = app(ConceptService::class);
 
@@ -76,8 +76,8 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
                 'titel' => $arguments['titel'] ?? null,
                 'is_pflicht' => (bool) ($arguments['is_pflicht'] ?? true),
             ]);
-            if (isset($arguments['vk_recipe_id']) || isset($arguments['package_id'])) {
-                $fill = array_intersect_key($arguments, array_flip(['vk_recipe_id', 'package_id', 'quantity']));
+            if (isset($arguments['sales_recipe_id']) || isset($arguments['package_id'])) {
+                $fill = array_intersect_key($arguments, array_flip(['sales_recipe_id', 'package_id', 'quantity']));
                 if (($arguments['unit'] ?? '') !== '') {
                     $unit = app(VocabularyService::class)->findEinheit($team, (string) $arguments['unit']);
                     if ($unit === null) {
@@ -96,7 +96,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
 
         return ToolResult::success(['slot' => [
             'id' => $slot->id, 'position' => $slot->position, 'type' => $slot->type,
-            'role' => $slot->role, 'vk_recipe_id' => $slot->vk_recipe_id, 'package_id' => $slot->package_id,
+            'role' => $slot->role, 'sales_recipe_id' => $slot->sales_recipe_id, 'package_id' => $slot->package_id,
         ]]);
     }
 

@@ -81,7 +81,7 @@ class FixkostenService
     {
         $summen ??= $this->summeJeBlock($team);
         $basen ??= $this->settings->bezugsbasen($team);
-        $basisTyp = match ($block['typ']) {
+        $basisTyp = match ($block['type']) {
             'pct_mek' => 'mek',
             'pct_fek' => 'fek',
             'pct_hk' => 'hk',
@@ -109,7 +109,7 @@ class FixkostenService
 
         return array_map(function ($b) use ($team, $summen, $basen) {
             if (($b['modus'] ?? 'manuell') === 'abgeleitet') {
-                $b['wert'] = $this->abgeleiteterSatz($team, $b, $summen, $basen);
+                $b['value'] = $this->abgeleiteterSatz($team, $b, $summen, $basen);
             }
 
             return $b;

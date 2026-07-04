@@ -198,7 +198,7 @@ class VocabularyService
     }
 
     /**
-     * WG löschen (v3.4): hart wenn UNBENUTZT, sonst gesperrt. Kein §3-Sonderfall mehr —
+     * WG löschen (v3.4): hart wenn UNBENUTZT, sonst locked. Kein §3-Sonderfall mehr —
      * der GP-Referenz-Guard schützt die genutzten (kanonischen wie custom) automatisch.
      */
     public function deleteWarengruppe(Team $team, int $id): void
@@ -426,7 +426,7 @@ class VocabularyService
         $diaet = in_array($input['diaetform'] ?? '', ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'], true)
             ? $input['diaetform'] : 'neutral';
 
-        $basis = mb_substr(Str::slug($label, '_') ?: 'klasse', 0, 30);
+        $basis = mb_substr(Str::slug($label, '_') ?: 'class', 0, 30);
         $code = $basis;
         $i = 2;
         while (FoodAlchemistDishClass::where('team_id', $team->id)->where('code', $code)->exists()) {
@@ -459,7 +459,7 @@ class VocabularyService
         return $hg;
     }
 
-    /** VK-Hauptgruppe löschen: hart wenn keine Klassen hängen, sonst gesperrt. */
+    /** VK-Hauptgruppe löschen: hart wenn keine Klassen hängen, sonst locked. */
     public function deleteDishMainGroup(Team $team, int $id): void
     {
         $hg = FoodAlchemistDishMainGroup::visibleToTeam($team)->findOrFail($id);
@@ -493,7 +493,7 @@ class VocabularyService
         return $klasse;
     }
 
-    /** VK-Klasse löschen: hart wenn kein Rezept darauf zeigt, sonst gesperrt. */
+    /** VK-Klasse löschen: hart wenn kein Rezept darauf zeigt, sonst locked. */
     public function deleteDishClass(Team $team, int $id): void
     {
         $klasse = FoodAlchemistDishClass::visibleToTeam($team)->findOrFail($id);
@@ -568,7 +568,7 @@ class VocabularyService
         return $hg;
     }
 
-    /** Rezept-Hauptgruppe löschen: hart wenn keine Kategorien hängen, sonst gesperrt. */
+    /** Rezept-Hauptgruppe löschen: hart wenn keine Kategorien hängen, sonst locked. */
     public function deleteMainGroup(Team $team, int $id): void
     {
         $hg = FoodAlchemistRecipeMainGroup::visibleToTeam($team)->findOrFail($id);

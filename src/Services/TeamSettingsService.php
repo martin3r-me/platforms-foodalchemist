@@ -41,9 +41,9 @@ class TeamSettingsService
      * @var array<string, true>
      */
     public const ORG_VERERBT = [
-        'mwst_defaults'  => true,   // MwSt-Sätze: org-weit einheitlich (Dominique-Beispiel)
+        'vat_defaults'  => true,   // MwSt-Sätze: org-weit einheitlich (Dominique-Beispiel)
         'rundungsregeln' => true,   // Rundungs-Konvention: org-weite Buchhaltungsregel
-        'typ_farben'     => true,   // Branding-Farben: org-weit konsistent
+        'type_colors'     => true,   // Branding-Farben: org-weit konsistent
     ];
 
     /**
@@ -104,7 +104,7 @@ class TeamSettingsService
     /** M7-08: Kill-Switch — false stoppt ALLE KI-Calls des Teams (Gateway-Guard). */
     public function kiAktiv(Team $team): bool
     {
-        return (bool) ($this->for($team)->ki_aktiv ?? true);
+        return (bool) ($this->for($team)->ai_active ?? true);
     }
 
     /**
@@ -115,7 +115,7 @@ class TeamSettingsService
      */
     public function typFarben(Team $team): array
     {
-        $gespeichert = $this->rohWert($team, 'typ_farben') ?? [];   // #390: org-vererbt
+        $gespeichert = $this->rohWert($team, 'type_colors') ?? [];   // #390: org-vererbt
         $farben = self::TYP_FARBEN_DEFAULTS;
         foreach (array_keys($farben) as $key) {
             $wert = $gespeichert[$key] ?? null;
@@ -129,7 +129,7 @@ class TeamSettingsService
 
     public function kuechenTyp(Team $team): ?string
     {
-        $typ = $this->for($team)->kuechen_typ;
+        $typ = $this->for($team)->kitchen_type;
 
         return isset(self::KUECHEN_TYPEN[$typ]) ? $typ : null;
     }
@@ -206,7 +206,7 @@ class TeamSettingsService
     /** @return array{regulaer: float, ermaessigt: float, default_satz: string} */
     public function mwst(Team $team): array
     {
-        return array_replace(self::MWST_DEFAULTS, $this->rohWert($team, 'mwst_defaults') ?? []);   // #390: org-vererbt
+        return array_replace(self::MWST_DEFAULTS, $this->rohWert($team, 'vat_defaults') ?? []);   // #390: org-vererbt
     }
 
     /** @return array{nachkommastellen: int, modus: string} */
@@ -218,7 +218,7 @@ class TeamSettingsService
     /** M12: Gemeinkosten-Zuschlag % auf den Wareneinsatz (HK1 → HK2, D-HK-1). */
     public function hk2Zuschlag(Team $team): float
     {
-        return (float) ($this->for($team)->hk2_zuschlag_pct ?? 0);
+        return (float) ($this->for($team)->hk2_surcharge_pct ?? 0);
     }
 
     // ── M-K1 / Doc 16: Kalkulations-Block-Schema ─────────────────────────────
@@ -249,14 +249,14 @@ class TeamSettingsService
     public function defaultSchema(Team $team): array
     {
         return [
-            ['key' => 'lohn', 'label' => 'Lohn / Produktion (FEK)', 'typ' => 'arbeitszeit', 'wert' => 0.0, 'aktiv' => true, 'sort' => 10, 'modus' => 'manuell'],
-            ['key' => 'verpackung', 'label' => 'Verpackung (direkt)', 'typ' => 'eur_pro_portion', 'wert' => 0.25, 'aktiv' => false, 'sort' => 20, 'modus' => 'manuell'],
-            ['key' => 'schwund', 'label' => 'Schwund (auf Wareneinsatz)', 'typ' => 'pct_mek', 'wert' => 0.0, 'aktiv' => true, 'sort' => 30, 'modus' => 'manuell'],
+            ['key' => 'lohn', 'label' => 'Lohn / Produktion (FEK)', 'type' => 'arbeitszeit', 'value' => 0.0, 'active' => true, 'sort' => 10, 'modus' => 'manuell'],
+            ['key' => 'verpackung', 'label' => 'Verpackung (direkt)', 'type' => 'eur_pro_portion', 'value' => 0.25, 'active' => false, 'sort' => 20, 'modus' => 'manuell'],
+            ['key' => 'schwund', 'label' => 'Schwund (auf Wareneinsatz)', 'type' => 'pct_mek', 'value' => 0.0, 'active' => true, 'sort' => 30, 'modus' => 'manuell'],
             // „gemeinkosten" = Material-GK; erbt den M12-Wert (rückwärtskompatibel: % auf MEK).
-            ['key' => 'gemeinkosten', 'label' => 'Material-Gemeinkosten (Einkauf/Lager/Warenannahme)', 'typ' => 'pct_mek', 'wert' => $this->hk2Zuschlag($team), 'aktiv' => true, 'sort' => 40, 'modus' => 'manuell'],
-            ['key' => 'fertigungs_gk', 'label' => 'Fertigungs-Gemeinkosten (Spüle/Energie/Maschinen)', 'typ' => 'pct_fek', 'wert' => 0.0, 'aktiv' => true, 'sort' => 50, 'modus' => 'manuell'],
-            ['key' => 'verwaltung', 'label' => 'Verwaltung & Vertrieb', 'typ' => 'pct_hk', 'wert' => 0.0, 'aktiv' => true, 'sort' => 60, 'modus' => 'manuell'],
-            ['key' => 'logistik', 'label' => 'Logistik', 'typ' => 'pct_hk', 'wert' => 0.0, 'aktiv' => true, 'sort' => 70, 'modus' => 'manuell'],
+            ['key' => 'gemeinkosten', 'label' => 'Material-Gemeinkosten (Einkauf/Lager/Warenannahme)', 'type' => 'pct_mek', 'value' => $this->hk2Zuschlag($team), 'active' => true, 'sort' => 40, 'modus' => 'manuell'],
+            ['key' => 'fertigungs_gk', 'label' => 'Fertigungs-Gemeinkosten (Spüle/Energie/Maschinen)', 'type' => 'pct_fek', 'value' => 0.0, 'active' => true, 'sort' => 50, 'modus' => 'manuell'],
+            ['key' => 'verwaltung', 'label' => 'Verwaltung & Vertrieb', 'type' => 'pct_hk', 'value' => 0.0, 'active' => true, 'sort' => 60, 'modus' => 'manuell'],
+            ['key' => 'logistik', 'label' => 'Logistik', 'type' => 'pct_hk', 'value' => 0.0, 'active' => true, 'sort' => 70, 'modus' => 'manuell'],
         ];
     }
 
@@ -276,17 +276,17 @@ class TeamSettingsService
         }
         $norm = [];
         foreach ($schema as $b) {
-            if (! is_array($b) || ! in_array($b['typ'] ?? '', $erlaubteTypen, true)) {
+            if (! is_array($b) || ! in_array($b['type'] ?? '', $erlaubteTypen, true)) {
                 continue;
             }
-            $typ = $b['typ'] === 'pct_we' ? 'pct_mek' : $b['typ'];   // Legacy-Alias
+            $typ = $b['type'] === 'pct_we' ? 'pct_mek' : $b['type'];   // Legacy-Alias
             $modus = $b['modus'] ?? 'manuell';
             $norm[] = [
                 'key' => (string) ($b['key'] ?? ''),
                 'label' => (string) ($b['label'] ?? ($b['key'] ?? 'Block')),
-                'typ' => $typ,
-                'wert' => (float) ($b['wert'] ?? 0),
-                'aktiv' => (bool) ($b['aktiv'] ?? true),
+                'type' => $typ,
+                'value' => (float) ($b['value'] ?? 0),
+                'active' => (bool) ($b['active'] ?? true),
                 'sort' => (int) ($b['sort'] ?? 100),
                 'modus' => in_array($modus, ['manuell', 'abgeleitet'], true) ? $modus : 'manuell',
             ];
@@ -315,7 +315,7 @@ class TeamSettingsService
     /** #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — Controlling-Ziel + Break-even-Treiber. */
     public function zielWareneinsatzPct(Team $team): float
     {
-        $v = $this->for($team)->ziel_wareneinsatz_pct;
+        $v = $this->for($team)->target_food_cost_pct;
 
         return $v !== null && (float) $v > 0 ? (float) $v : self::ZIEL_WARENEINSATZ_DEFAULT;
     }
@@ -323,7 +323,7 @@ class TeamSettingsService
     /** #379+: Lohnnebenkosten-Zuschlag % auf den Produktionslohn (AG-/Sozialabgaben). */
     public function lohnnebenkostenPct(Team $team): float
     {
-        $v = $this->for($team)->lohnnebenkosten_pct;
+        $v = $this->for($team)->labor_overhead_pct;
 
         return $v !== null && (float) $v >= 0 ? (float) $v : self::LOHNNEBENKOSTEN_DEFAULT;
     }
@@ -337,7 +337,7 @@ class TeamSettingsService
      */
     public function bezugsbasen(Team $team): array
     {
-        $b = $this->for($team)->calculation_bezugsbasen ?? [];
+        $b = $this->for($team)->calculation_reference_bases ?? [];
 
         return [
             'mek' => (float) ($b['mek'] ?? 0),

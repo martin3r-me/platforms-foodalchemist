@@ -30,13 +30,13 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'properties' => [
                 'name' => ['type' => 'string'],
                 'anlass' => ['type' => 'string'],
-                'niveau' => ['type' => 'string'],
-                'klasse' => ['type' => 'string'],
+                'level' => ['type' => 'string'],
+                'class' => ['type' => 'string'],
                 'description' => ['type' => 'string'],
                 'brief' => ['type' => 'string', 'description' => 'KI-Brief: was soll das Konzept leisten'],
                 'zielpreis_pro_person' => ['type' => 'number'],
                 'season' => ['type' => 'string'],
-                'zielgruppe' => ['type' => 'string'],
+                'target_group' => ['type' => 'string'],
                 'diaet_vorgabe' => ['type' => 'string'],
             ],
             'required' => ['name'],
@@ -55,12 +55,12 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             $c = $svc->create($team, [
                 'name' => (string) $arguments['name'],
                 'anlass' => $arguments['anlass'] ?? null,
-                'niveau' => $arguments['niveau'] ?? null,
-                'klasse' => $arguments['klasse'] ?? null,
+                'level' => $arguments['level'] ?? null,
+                'class' => $arguments['class'] ?? null,
                 'status' => 'draft',
             ]);
             $extras = array_intersect_key($arguments, array_flip([
-                'description', 'brief', 'zielpreis_pro_person', 'season', 'zielgruppe', 'diaet_vorgabe',
+                'description', 'brief', 'zielpreis_pro_person', 'season', 'target_group', 'diaet_vorgabe',
             ]));
             if ($extras !== []) {
                 $c = $svc->update($team, $c->id, $extras);
@@ -71,7 +71,7 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
         return ToolResult::success([
             'concept' => ['id' => $c->id, 'name' => $c->name, 'status' => $c->status],
-            'hinweis' => 'Entwurf: aktiv setzen macht ein Mensch im Concepter.',
+            'note' => 'Entwurf: aktiv setzen macht ein Mensch im Concepter.',
         ]);
     }
 

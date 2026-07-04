@@ -45,8 +45,8 @@ class Dashboard extends Component
             'review' => (clone $rezept())->where('status', 'review')->count(),
             'draft' => (clone $rezept())->where('status', 'draft')->count(),
             'approved' => (clone $rezept())->where('status', 'approved')->count(),
-            'allergen_low' => (clone $rezept())->whereIn('allergene_konfidenz', ['low', 'unknown'])->count(),
-            'ungemappt' => (clone $rezept())->where('n_ingredients_ungemappt', '>', 0)->count(),
+            'allergen_low' => (clone $rezept())->whereIn('allergens_confidence', ['low', 'unknown'])->count(),
+            'ungemappt' => (clone $rezept())->where('n_ingredients_unmapped', '>', 0)->count(),
             'vk_ohne_klasse' => (clone $rezept())->where('is_sales_recipe', true)->whereNull('dish_class_id')->count(),
         ];
 

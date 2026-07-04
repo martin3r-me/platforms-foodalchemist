@@ -75,10 +75,10 @@ return new class extends Migration
             $table->unsignedInteger('variant_group_id')->nullable();  // Wahl-Gruppe „A|B|C"
             // Typ-spezifisch (Service validiert Konsistenz)
             $table->foreignId('concept_id')->nullable()->constrained('foodalchemist_concepts')->nullOnDelete();
-            $table->foreignId('vk_recipe_id')->nullable()->constrained('foodalchemist_recipes')->nullOnDelete();
+            $table->foreignId('sales_recipe_id')->nullable()->constrained('foodalchemist_recipes')->nullOnDelete();
             $table->decimal('quantity', 12, 3)->nullable();
             $table->foreignId('unit_vocab_id')->nullable()->constrained('foodalchemist_vocab_units')->nullOnDelete();
-            $table->decimal('preis_wert', 10, 2)->nullable();         // header_frei_preis
+            $table->decimal('price_value', 10, 2)->nullable();         // header_frei_preis
             $table->string('preis_basis', 12)->nullable();            // person | pauschal
             $table->string('hoehe', 12)->nullable();                  // spacer: klein|mittel|gross
             $table->json('payload_json')->nullable();                 // image u. a.

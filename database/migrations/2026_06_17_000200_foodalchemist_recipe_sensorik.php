@@ -40,11 +40,11 @@ return new class extends Migration
             Schema::create('foodalchemist_recipe_textures', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('recipe_id')->index();
-                $table->unsignedBigInteger('textur_vocab_id');
+                $table->unsignedBigInteger('texture_vocab_id');
                 $table->decimal('intensitaet', 4, 2)->default(1);
                 $table->string('source')->nullable();
                 $table->timestamps();
-                $table->unique(['recipe_id', 'textur_vocab_id']);
+                $table->unique(['recipe_id', 'texture_vocab_id']);
             });
         }
     }

@@ -26,13 +26,13 @@ class AngebotService
 {
     /** Editierbare Felder (Anfrage/Briefing + kommerziell + CRM-Verknüpfung). */
     private const FELDER = [
-        'name', 'status', 'anlass', 'personen', 'budget', 'event_datum', 'location',
+        'name', 'status', 'anlass', 'personen', 'budget', 'event_date', 'location',
         'diaet_vorgabe', 'brief', 'gesamtpreis', 'valid_until', 'description', 'note',
         'crm_company_id', 'crm_contact_id', 'preis_modus',
     ];
 
     /** Leer („" / null) → NULL (optionale Zahlen/Daten/FKs). */
-    private const FELDER_NULLBAR = ['personen', 'budget', 'event_datum', 'valid_until', 'gesamtpreis', 'crm_company_id', 'crm_contact_id'];
+    private const FELDER_NULLBAR = ['personen', 'budget', 'event_date', 'valid_until', 'gesamtpreis', 'crm_company_id', 'crm_contact_id'];
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
@@ -126,7 +126,7 @@ class AngebotService
             'offer_id' => $angebot->id,
             'name' => trim((string) ($name ?? ($angebot->name . ' – Menü'))) ?: 'Menü',
             'status' => 'draft',
-            'is_vorlage' => false,
+            'is_template' => false,
             'anlass' => $angebot->anlass,
         ]);
     }
@@ -272,14 +272,14 @@ class AngebotService
         foreach ($this->menueConcepts($angebot) as $c) {
             $positionen = [];
             foreach ($conceptSvc->preisCockpit($c)['zeilen'] as $z) {
-                if (($z['typ'] ?? '') === 'leer') {
+                if (($z['type'] ?? '') === 'leer') {
                     continue;
                 }
                 // Kundensicht: Brand-Voice-Wording bevorzugen (Concept-Schreibstil), sonst interner Name.
                 $positionen[] = ['role' => $z['role'] ?? null, 'label' => ($z['wording'] ?? null) ?: ($z['label'] ?? '—')];
             }
             $menues[] = [
-                'name' => $c->konsumenten_name ?: $c->name,
+                'name' => $c->consumer_name ?: $c->name,
                 'positionen' => $positionen,
             ];
         }

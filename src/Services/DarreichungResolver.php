@@ -15,7 +15,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
  *   2. (Phase 4, vorbereitet) Darreichung passend zur Servierform des Konzepts
  *   3. Standard-Darreichung des Gerichts
  *
- * Stateless. Preis-Wahrheit liegt an der Darreichung; recipes.vk_netto ist
+ * Stateless. Preis-Wahrheit liegt an der Darreichung; recipes.sales_net ist
  * nur noch Anzeige-Spiegel der Standard-Form (Import füllt ihn fill-only).
  */
 class DarreichungResolver
@@ -63,10 +63,10 @@ class DarreichungResolver
     {
         $darreichung = $this->fuerSlot($slot);
 
-        if ($darreichung?->vk_netto !== null) {
-            return (float) $darreichung->vk_netto;
+        if ($darreichung?->sales_net !== null) {
+            return (float) $darreichung->sales_net;
         }
 
-        return $slot->gericht?->vk_netto !== null ? (float) $slot->gericht->vk_netto : null;
+        return $slot->gericht?->sales_net !== null ? (float) $slot->gericht->sales_net : null;
     }
 }

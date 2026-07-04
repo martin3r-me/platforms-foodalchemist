@@ -168,7 +168,7 @@ class RecipeTemplateService
         return DB::transaction(function () use ($team, $template, $name, $bindings) {
             $instanz = app(RecipeService::class)->create($team, [
                 'name' => $name,
-                'kategorie_id' => $template->kategorie_id,
+                'category_id' => $template->category_id,
                 'origin_source' => $template->origin_source,
                 'taste_direction' => $template->taste_direction,
                 'production_depth' => $template->production_depth,

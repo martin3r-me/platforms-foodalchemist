@@ -29,9 +29,9 @@ return new class extends Migration
             $table->string('recipe_key')->index();
             $table->string('name');
             $table->string('origin_source')->nullable();
-            $table->foreignId('kategorie_id')->nullable()->constrained('foodalchemist_recipe_categories')->nullOnDelete();
-            $table->unsignedBigInteger('kat_v2_legacy_id')->nullable()->comment('Taxonomie v2 (E5 offen) — FK folgt');
-            $table->unsignedBigInteger('klasse_v2_legacy_id')->nullable();
+            $table->foreignId('category_id')->nullable()->constrained('foodalchemist_recipe_categories')->nullOnDelete();
+            $table->unsignedBigInteger('category_v2_legacy_id')->nullable()->comment('Taxonomie v2 (E5 offen) — FK folgt');
+            $table->unsignedBigInteger('class_v2_legacy_id')->nullable();
             $table->boolean('is_sales_recipe')->default(false)->index();
             $table->string('status', 16)->default('draft')->index()->comment('stub|draft|review|approved|deprecated');
 
@@ -43,7 +43,7 @@ return new class extends Migration
             // ── Inhalt
             $table->text('description')->nullable()->comment('Quelle ki_beschreibung (§8-Stil)');
             $table->string('temperatur', 32)->nullable();
-            $table->string('funktion', 64)->nullable();
+            $table->string('function', 64)->nullable();
             $table->text('preparation')->nullable();
             $table->text('notes')->nullable();
             $table->text('notes_manual')->nullable()->comment('Regelwerk §9.1 — überlebt jede Generierung');
@@ -51,10 +51,10 @@ return new class extends Migration
             $table->string('taste_direction_source', 16)->nullable();
             $table->decimal('taste_direction_ai_confidence', 4, 3)->nullable();
             $table->string('production_depth', 16)->nullable()->comment('from_scratch|teilfertig|convenience');
-            $table->unsignedBigInteger('sub_rezept_typ_legacy_id')->nullable()->comment('vocab_sub_rezept_typ — Tabelle folgt (V-20)');
-            $table->string('sub_rezept_typ_source', 16)->nullable();
-            $table->decimal('sub_rezept_typ_ai_confidence', 4, 3)->nullable();
-            $table->text('sub_rezept_typ_ai_begruendung')->nullable();
+            $table->unsignedBigInteger('sub_recipe_type_legacy_id')->nullable()->comment('vocab_sub_rezept_typ — Tabelle folgt (V-20)');
+            $table->string('sub_recipe_type_source', 16)->nullable();
+            $table->decimal('sub_recipe_type_ai_confidence', 4, 3)->nullable();
+            $table->text('sub_recipe_type_ai_reasoning')->nullable();
             $table->text('context_hooks_json')->nullable();
 
             // ── Allergene (GL-01 — NUR RecipeRecomputeService schreibt)
@@ -64,8 +64,8 @@ return new class extends Migration
             ] as $allergen) {
                 $table->string("allergen_{$allergen}", 16)->default('unbekannt');
             }
-            $table->string('allergene_konfidenz', 16)->default('unknown')->comment('high|medium|low|unknown (GL-01 §4.4)');
-            $table->dateTime('allergene_aggregiert_am')->nullable();
+            $table->string('allergens_confidence', 16)->default('unknown')->comment('high|medium|low|unknown (GL-01 §4.4)');
+            $table->dateTime('allergens_aggregated_at')->nullable();
 
             // ── Zusatzstoffe (GL-09, Roh-Domäne {0,1,3,NULL})
             foreach ([
@@ -77,11 +77,11 @@ return new class extends Migration
             ] as $stoff) {
                 $table->unsignedTinyInteger("zusatz_{$stoff}")->nullable();
             }
-            $table->dateTime('zusatz_aggregiert_am')->nullable();
+            $table->dateTime('additive_aggregated_at')->nullable();
 
             // ── Zähler & Versionierung
             $table->unsignedInteger('n_ingredients_total')->default(0);
-            $table->unsignedInteger('n_ingredients_ungemappt')->default(0);
+            $table->unsignedInteger('n_ingredients_unmapped')->default(0);
             $table->unsignedInteger('version')->default(1);
             $table->string('last_modified_by', 64)->nullable();
 
@@ -97,10 +97,10 @@ return new class extends Migration
             $table->decimal('nutri_fat_g_per_100g', 8, 2)->nullable();
             $table->decimal('nutri_carbs_g_per_100g', 8, 2)->nullable();
             $table->decimal('nutri_salt_g_per_100g', 8, 3)->nullable();
-            $table->string('nutri_konfidenz', 16)->nullable();
+            $table->string('nutri_confidence', 16)->nullable();
             $table->unsignedInteger('nutri_n_ingredients_mapped')->nullable();
             $table->unsignedInteger('nutri_n_ingredients_total')->nullable();
-            $table->dateTime('nutri_aggregiert_am')->nullable();
+            $table->dateTime('nutri_aggregated_at')->nullable();
 
             // ── Spec-Flags (Diät/Herkunft-Aggregation)
             $table->decimal('spec_bio_pct', 5, 1)->nullable();
@@ -108,10 +108,10 @@ return new class extends Migration
             foreach (['is_vegan', 'is_vegetarian', 'is_halal', 'contains_pork', 'contains_beef', 'is_gluten_free', 'is_lactose_free'] as $spec) {
                 $table->boolean("spec_{$spec}")->nullable();
             }
-            $table->string('spec_konfidenz', 16)->nullable();
+            $table->string('spec_confidence', 16)->nullable();
             $table->unsignedInteger('spec_n_mapped')->nullable();
             $table->unsignedInteger('spec_n_total')->nullable();
-            $table->dateTime('spec_aggregiert_am')->nullable();
+            $table->dateTime('spec_aggregated_at')->nullable();
 
             // ── KI-Kuratierung (generisches Trio wie gps)
             $table->decimal('ai_confidence', 4, 3)->nullable();
@@ -120,15 +120,15 @@ return new class extends Migration
             // ── VK-Block (D-6 §2 — UI folgt M6; Import braucht die Spalten jetzt)
             $table->unsignedBigInteger('markup_class_legacy_id')->nullable();
             $table->unsignedBigInteger('dish_class_legacy_id')->nullable();
-            $table->decimal('vk_netto', 10, 2)->nullable();
-            $table->decimal('vk_brutto', 10, 2)->nullable();
-            $table->decimal('mwst_satz', 5, 2)->nullable();
+            $table->decimal('sales_net', 10, 2)->nullable();
+            $table->decimal('sales_gross', 10, 2)->nullable();
+            $table->decimal('vat_rate', 5, 2)->nullable();
             $table->unsignedSmallInteger('regeneration_temp_c')->nullable();
-            $table->unsignedSmallInteger('regeneration_dauer_min')->nullable();
-            $table->unsignedSmallInteger('regeneration_kerntemp_c')->nullable();
-            $table->foreignId('vk_unit_vocab_id')->nullable()->constrained('foodalchemist_vocab_units')->nullOnDelete();
-            $table->decimal('vk_quantity_pro_unit_g', 10, 2)->nullable();
-            $table->decimal('vk_unit_count', 10, 2)->nullable();
+            $table->unsignedSmallInteger('regeneration_duration_min')->nullable();
+            $table->unsignedSmallInteger('regeneration_core_temp_c')->nullable();
+            $table->foreignId('sales_unit_vocab_id')->nullable()->constrained('foodalchemist_vocab_units')->nullOnDelete();
+            $table->decimal('sales_quantity_per_unit_g', 10, 2)->nullable();
+            $table->decimal('sales_unit_count', 10, 2)->nullable();
             $table->unsignedBigInteger('container_warm_legacy_id')->nullable();
             $table->unsignedBigInteger('container_cold_legacy_id')->nullable();
             $table->unsignedBigInteger('regeneration_device_legacy_id')->nullable();
@@ -136,7 +136,7 @@ return new class extends Migration
             $table->text('marketing_text')->nullable();
             $table->string('marketing_text_source', 16)->nullable();
             $table->decimal('marketing_text_ai_confidence', 4, 3)->nullable();
-            $table->string('vk_wording_standard')->nullable();
+            $table->string('sales_wording_standard')->nullable();
             $table->boolean('is_template')->default(false);
             $table->foreignId('instantiated_from_recipe_id')->nullable()->constrained('foodalchemist_recipes')->nullOnDelete();
 

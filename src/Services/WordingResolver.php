@@ -12,7 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  * kundensichtbaren Anzeigenamen (Concepter-Menü-Ansicht, Foodbook-Editor,
  * Foodbook-Kundendokument):
  *
- *     Foodbook-Block-Override → Concept-Slot.wording → Gericht.vk_wording_standard → Gericht.name
+ *     Foodbook-Block-Override → Concept-Slot.wording → Gericht.sales_wording_standard → Gericht.name
  *
  * Jede Stufe liefert neben dem Text die Quelle mit ('foodbook'|'konzept'|
  * 'standard'|'name'), damit die UIs zeigen können, woher ein Name kommt —
@@ -31,7 +31,7 @@ class WordingResolver
         if ($gericht === null) {
             return ['text' => '—', 'source' => 'name'];
         }
-        $std = trim((string) $gericht->vk_wording_standard);
+        $std = trim((string) $gericht->sales_wording_standard);
 
         return $std !== ''
             ? ['text' => $std, 'source' => 'standard']
@@ -104,24 +104,24 @@ class WordingResolver
         $zeilen = [];
         foreach ($concept->slots->sortBy('position') as $slot) {
             if ($slot->package_id !== null && $slot->paket !== null) {
-                $zeilen[] = ['typ' => 'paket', 'text' => (string) $slot->paket->name, 'source' => null, 'einrueckung' => 0];
+                $zeilen[] = ['type' => 'paket', 'text' => (string) $slot->paket->name, 'source' => null, 'einrueckung' => 0];
                 foreach ($slot->paket->gerichte as $pg) {
                     $r = $this->fuerGericht($pg->gericht);
-                    $zeilen[] = ['typ' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 1];
+                    $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 1];
                 }
 
                 continue;
             }
             if (in_array($slot->type, ['header', 'header_preis'], true) && trim((string) $slot->titel) !== '') {
-                $zeilen[] = ['typ' => 'header', 'text' => (string) $slot->titel, 'source' => null, 'einrueckung' => 0];
+                $zeilen[] = ['type' => 'header', 'text' => (string) $slot->titel, 'source' => null, 'einrueckung' => 0];
 
                 continue;
             }
-            if ($slot->vk_recipe_id === null || $slot->gericht === null) {
+            if ($slot->sales_recipe_id === null || $slot->gericht === null) {
                 continue; // spacer/text/leere Slots sind im Kundendokument unsichtbar
             }
             $r = $block !== null ? $this->fuerBlockSlot($block, $slot) : $this->fuerSlot($slot);
-            $zeilen[] = ['typ' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 0, 'slot_id' => $slot->id];
+            $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 0, 'slot_id' => $slot->id];
         }
 
         return $zeilen;

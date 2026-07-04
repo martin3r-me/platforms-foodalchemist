@@ -55,11 +55,11 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
         try {
             $ergebnis = match ($keys[0]) {
                 'recipe_id' => ($m = FoodAlchemistRecipe::visibleToTeam($team)->find((int) $arguments['recipe_id']))
-                    ? ['ziel' => ['typ' => 'recipe', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->recipeHk($team, $m)] : null,
+                    ? ['ziel' => ['type' => 'recipe', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->recipeHk($team, $m)] : null,
                 'concept_id' => ($m = FoodAlchemistConcept::visibleToTeam($team)->find((int) $arguments['concept_id']))
-                    ? ['ziel' => ['typ' => 'concept', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->conceptHk($team, $m)] : null,
+                    ? ['ziel' => ['type' => 'concept', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->conceptHk($team, $m)] : null,
                 'package_id' => ($m = FoodAlchemistPaket::visibleToTeam($team)->find((int) $arguments['package_id']))
-                    ? ['ziel' => ['typ' => 'paket', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->paketHk($team, $m)] : null,
+                    ? ['ziel' => ['type' => 'paket', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->paketHk($team, $m)] : null,
             };
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'EXECUTION_ERROR');

@@ -65,7 +65,7 @@
                             </td>
                             <td class="{{ $td }} text-gray-500">{{ $it->anlass ?: '—' }}</td>
                             <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->personen ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-500">{{ $it->event_datum ? $it->event_datum->format('d.m.Y') : '—' }}</td>
+                            <td class="{{ $td }} text-gray-500">{{ $it->event_date ? $it->event_date->format('d.m.Y') : '—' }}</td>
                             <td class="{{ $td }} text-right tabular-nums">{{ $it->gesamtpreis !== null ? number_format((float) $it->gesamtpreis, 2, ',', '.') . ' €' : '—' }}</td>
                         </tr>
                     @empty

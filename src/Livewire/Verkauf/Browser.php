@@ -30,7 +30,7 @@ class Browser extends Component
     #[Url(as: 'hg')]
     public ?int $hauptgruppe = null;
 
-    #[Url(as: 'klasse')]
+    #[Url(as: 'class')]
     public ?int $klasse = null;
 
     #[Url]
@@ -48,13 +48,13 @@ class Browser extends Component
     public function waehleHauptgruppe(?int $id): void
     {
         $this->hauptgruppe = $this->hauptgruppe === $id ? null : $id;
-        $this->klasse = null;                                        // Kaskade Reset-korrekt (§4.1)
+        $this->class = null;                                        // Kaskade Reset-korrekt (§4.1)
         $this->resetPage();
     }
 
     public function waehleKlasse(int $id): void
     {
-        $this->klasse = $this->klasse === $id ? null : $id;
+        $this->class = $this->class === $id ? null : $id;
         $this->resetPage();
     }
 
@@ -131,7 +131,7 @@ class Browser extends Component
             'rezepte' => $verkauf->paginateBrowser([
                 'search' => $this->search,
                 'hauptgruppe' => $this->hauptgruppe,
-                'klasse' => $this->klasse,
+                'class' => $this->class,
                 'status' => $this->status,
                 'geschmack' => $this->geschmack,
             ], $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100),

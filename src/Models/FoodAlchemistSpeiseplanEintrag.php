@@ -26,7 +26,7 @@ class FoodAlchemistSpeiseplanEintrag extends Model
         'woche' => 'integer',
         'wochentag' => 'integer',
         'position' => 'integer',
-        'datum' => 'date',
+        'entry_date' => 'date',
     ];
 
     public function speiseplan(): BelongsTo
@@ -51,7 +51,7 @@ class FoodAlchemistSpeiseplanEintrag extends Model
 
     public function gericht(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'vk_recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
     }
 
     /** Identitäts-Schlüssel des Inhalts (für Wiederholungs-Check). */
@@ -60,7 +60,7 @@ class FoodAlchemistSpeiseplanEintrag extends Model
         return match (true) {
             $this->concept_id !== null => 'c' . $this->concept_id,
             $this->package_id !== null => 'p' . $this->package_id,
-            $this->vk_recipe_id !== null => 'g' . $this->vk_recipe_id,
+            $this->sales_recipe_id !== null => 'g' . $this->sales_recipe_id,
             default => null,
         };
     }

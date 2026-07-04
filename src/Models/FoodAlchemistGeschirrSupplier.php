@@ -28,6 +28,6 @@ class FoodAlchemistGeschirrSupplier extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(FoodAlchemistGeschirrItem::class, 'geschirr_supplier_id');
+        return $this->hasMany(FoodAlchemistGeschirrItem::class, 'tableware_supplier_id');
     }
 }

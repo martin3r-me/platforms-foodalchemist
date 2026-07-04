@@ -139,7 +139,7 @@ class RecipeGeneratorService
                     'dish_class_id' => $klasse?->id,
                     'dish_class_source' => $klasse !== null ? 'ki' : null,
                     'markup_class_id' => $ak?->id ?? $klasse?->default_markup_class_id,
-                    'mwst_satz' => $ak?->mwst_satz,
+                    'vat_rate' => $ak?->vat_rate,
                 ], fn ($v) => $v !== null));
             }
 

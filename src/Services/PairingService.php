@@ -251,7 +251,7 @@ class PairingService
                     $fit[$j]['sum'] += $w;
                     $fit[$j]['cnt']++;
                     if ($schwaechstes === null || $w < $schwaechstes['w']) {
-                        $schwaechstes = ['w' => $w, 'a' => $aufgeloest[$i]['label'], 'b' => $aufgeloest[$j]['label'], 'typ' => $typ];
+                        $schwaechstes = ['w' => $w, 'a' => $aufgeloest[$i]['label'], 'b' => $aufgeloest[$j]['label'], 'type' => $typ];
                     }
                 } else {
                     $unrated[] = [$aufgeloest[$i]['label'], $aufgeloest[$j]['label']];
@@ -277,7 +277,7 @@ class PairingService
             'total_pairs' => $totalPairs,
             'coverage_pct' => $totalPairs > 0 ? (int) round(100 * count($staerken) / $totalPairs) : 0,
             'weakest_pair' => $schwaechstes !== null
-                ? ['a' => $schwaechstes['a'], 'b' => $schwaechstes['b'], 'score' => (int) round(100 * $schwaechstes['w']), 'typ' => $schwaechstes['typ']]
+                ? ['a' => $schwaechstes['a'], 'b' => $schwaechstes['b'], 'score' => (int) round(100 * $schwaechstes['w']), 'type' => $schwaechstes['type']]
                 : null,
             'unrated_pairs' => $unrated,
             'komponenten' => $komponentenOut,
@@ -308,8 +308,8 @@ class PairingService
         $kandidaten = [];
         foreach (DB::table('foodalchemist_pairing_anchor_edges')->whereIn('anchor_b_id', $dishIds)
             ->whereNotIn('anchor_a_id', $dishIds)
-            ->get(['anchor_a_id', 'anchor_b_id', 'typ']) as $kante) {
-            $w = self::GEWICHTE[$kante->typ] ?? 0.5;
+            ->get(['anchor_a_id', 'anchor_b_id', 'type']) as $kante) {
+            $w = self::GEWICHTE[$kante->type] ?? 0.5;
             $k = &$kandidaten[$kante->anchor_a_id];
             $k['best'][$kante->anchor_b_id] = max($k['best'][$kante->anchor_b_id] ?? 0, $w);
         }
@@ -362,7 +362,7 @@ class PairingService
         $indirekte = DB::table('foodalchemist_pairing_anchor_edges')
             ->whereIn('anchor_a_id', $ankerA)->whereIn('anchor_b_id', $ankerB)
             ->whereColumn('anchor_a_id', '!=', 'anchor_b_id')
-            ->orderByRaw("CASE typ WHEN 'klassisch' THEN 1 WHEN 'modern' THEN 2 ELSE 3 END")
+            ->orderByRaw("CASE type WHEN 'klassisch' THEN 1 WHEN 'modern' THEN 2 ELSE 3 END")
             ->limit(30)->get(['id'])->count();
 
         return [
@@ -417,10 +417,10 @@ class PairingService
         return DB::table('foodalchemist_pairing_anchor_edges AS e')
             ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
             ->where('e.anchor_a_id', $ankerId)
-            ->when($typ !== null, fn ($q) => $q->where('e.typ', $typ))
-            ->orderByRaw("CASE e.typ WHEN 'klassisch' THEN 1 WHEN 'modern' THEN 2 ELSE 3 END")
+            ->when($typ !== null, fn ($q) => $q->where('e.type', $typ))
+            ->orderByRaw("CASE e.type WHEN 'klassisch' THEN 1 WHEN 'modern' THEN 2 ELSE 3 END")
             ->orderBy('a.slug')->limit($limit)
-            ->get(['a.id', 'a.slug', 'a.display_de', 'e.typ', 'e.evidenz']);
+            ->get(['a.id', 'a.slug', 'a.display_de', 'e.type', 'e.evidenz']);
     }
 
     // ── Schreibpfade (Inv. 1/3) ──────────────────────────────────────────
@@ -465,9 +465,9 @@ class PairingService
         return DB::table('foodalchemist_recipe_pairings AS rp')
             ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
             ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
-            ->orderByRaw("CASE rp.typ WHEN 'klassisch' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
+            ->orderByRaw("CASE rp.type WHEN 'klassisch' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
             ->orderBy('a.slug')
-            ->get(['a.id', 'a.slug', 'a.display_de', 'rp.typ', 'rp.konfidenz', 'rp.created_via']);
+            ->get(['a.id', 'a.slug', 'a.display_de', 'rp.type', 'rp.confidence', 'rp.created_via']);
     }
 
     /** Manuelles Pairing setzen (recipe_pairings, created_via='manual' — bewusst gesetzt, gewinnt). */
@@ -476,9 +476,9 @@ class PairingService
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
         $typ = in_array($typ, ['klassisch', 'modern', 'kontrast', 'verbund', 'trinitas'], true) ? $typ : 'klassisch';
         DB::table('foodalchemist_recipe_pairings')->updateOrInsert(
-            ['recipe_id' => $recipe->id, 'anchor_id' => $ankerId, 'typ' => $typ],
+            ['recipe_id' => $recipe->id, 'anchor_id' => $ankerId, 'type' => $typ],
             ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
-                'konfidenz' => 'hoch', 'created_via' => 'manual', 'note' => null,
+                'confidence' => 'hoch', 'created_via' => 'manual', 'note' => null,
                 'deleted_at' => null, 'updated_at' => now(), 'created_at' => now()],
         );
     }
@@ -488,7 +488,7 @@ class PairingService
         FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
         DB::table('foodalchemist_recipe_pairings')
             ->where('recipe_id', $recipeId)->where('anchor_id', $ankerId)
-            ->when($typ !== null, fn ($q) => $q->where('typ', $typ))
+            ->when($typ !== null, fn ($q) => $q->where('type', $typ))
             ->update(['deleted_at' => now()]);
     }
 
@@ -568,7 +568,7 @@ class PairingService
         }
 
         return [
-            'typ' => 'recipe',
+            'type' => 'recipe',
             'ist_gericht' => $istGericht,
             'score' => $k['score'],
             'coverage_pct' => $k['coverage_pct'],
@@ -597,7 +597,7 @@ class PairingService
         $eigene = $anker->pluck('id')->map(fn ($i) => (int) $i)->all();
 
         return [
-            'typ' => 'gp',
+            'type' => 'gp',
             'anker' => $anker->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'source' => $a->source])->all(),
             'nachbarn' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'klassisch'),
             'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
@@ -627,7 +627,7 @@ class PairingService
             ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
             ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
             ->whereNotIn('a.id', $kern->pluck('id'))
-            ->orderByRaw("CASE rp.typ WHEN 'klassisch' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
+            ->orderByRaw("CASE rp.type WHEN 'klassisch' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
             ->orderBy('a.slug')->distinct()
             ->get(['a.id', 'a.slug', 'a.display_de']);
 
@@ -641,7 +641,7 @@ class PairingService
         foreach ($this->edgeBest($ringIds) as $a => $nachbarn) {
             foreach ($nachbarn as $b => [$w, $typ]) {
                 if ($a < $b) {
-                    $kanten[] = ['a' => (int) $a, 'b' => (int) $b, 'typ' => $typ];
+                    $kanten[] = ['a' => (int) $a, 'b' => (int) $b, 'type' => $typ];
                 }
             }
         }
@@ -666,7 +666,7 @@ class PairingService
                 foreach ($neu as $n) {
                     $vorschlaege[] = [
                         'anchor_id' => $a['id'], 'id' => (int) $n->id,
-                        'slug' => $n->slug, 'display_de' => $n->display_de, 'typ' => $n->typ,
+                        'slug' => $n->slug, 'display_de' => $n->display_de, 'type' => $n->type,
                     ];
                 }
             }
@@ -692,11 +692,11 @@ class PairingService
         $out = [];
         foreach (DB::table('foodalchemist_pairing_anchor_edges')
             ->whereIn('anchor_a_id', $ankerIds)->whereIn('anchor_b_id', $ankerIds)
-            ->get(['anchor_a_id', 'anchor_b_id', 'typ']) as $kante) {
-            $w = self::GEWICHTE[$kante->typ] ?? 0.5;                 // unbekannter typ defensiv 0.5
+            ->get(['anchor_a_id', 'anchor_b_id', 'type']) as $kante) {
+            $w = self::GEWICHTE[$kante->type] ?? 0.5;                 // unbekannter typ defensiv 0.5
             foreach ([[$kante->anchor_a_id, $kante->anchor_b_id], [$kante->anchor_b_id, $kante->anchor_a_id]] as [$a, $b]) {
                 if (! isset($out[$a][$b]) || $out[$a][$b][0] < $w) {
-                    $out[$a][$b] = [$w, $kante->typ];
+                    $out[$a][$b] = [$w, $kante->type];
                 }
             }
         }

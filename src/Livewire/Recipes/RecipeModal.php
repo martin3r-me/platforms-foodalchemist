@@ -20,10 +20,10 @@ class RecipeModal extends Component
     use \Livewire\WithFileUploads;
 
     private const LEER = [
-        'name' => '', 'origin_source' => '', 'kategorie_id' => null, 'hauptgruppe_id' => null,
+        'name' => '', 'origin_source' => '', 'category_id' => null, 'hauptgruppe_id' => null,
         'taste_direction' => '', 'production_depth' => '', 'work_time_min' => null,
-        'temperatur' => '', 'funktion' => '', 'status' => 'draft',
-        'yield_kg_manual' => null, 'ertrag_stueck' => null, 'description' => '', 'preparation' => '',
+        'temperature' => '', 'function' => '', 'status' => 'draft',
+        'yield_kg_manual' => null, 'yield_pieces' => null, 'description' => '', 'preparation' => '',
         'notes_manual' => '', 'equipment_ids' => [], 'is_sales_recipe' => false,
     ];
 
@@ -80,16 +80,16 @@ class RecipeModal extends Component
                 $this->form = [
                     'name' => $r->name,
                     'origin_source' => $r->origin_source ?? '',
-                    'kategorie_id' => $r->kategorie_id,
-                    'hauptgruppe_id' => $r->kategorie?->main_group_id,
+                    'category_id' => $r->category_id,
+                    'hauptgruppe_id' => $r->category?->main_group_id,
                     'taste_direction' => $r->taste_direction ?? '',
                     'production_depth' => $r->production_depth ?? '',
                     'work_time_min' => $r->work_time_min,
-                    'temperatur' => $r->temperatur ?? '',
-                    'funktion' => $r->funktion ?? '',
+                    'temperature' => $r->temperature ?? '',
+                    'function' => $r->function ?? '',
                     'status' => $r->status->value,
                     'yield_kg_manual' => $r->yield_kg_manual,
-                    'ertrag_stueck' => $r->ertrag_stueck,
+                    'yield_pieces' => $r->yield_pieces,
                     'description' => $r->description ?? '',
                     'preparation' => $r->preparation ?? '',
                     'notes_manual' => $r->notes_manual ?? '',
@@ -116,7 +116,7 @@ class RecipeModal extends Component
             // aber ein Tippfehler darf nicht still als 0 landen — yield_kg_manual=0 macht ek_per_kg_eur
             // null und vergiftet die Kalkulation (GL-02). 0/negativ ist als Yield/Ertrag nie gültig.
             $rohYield = trim(str_replace(',', '.', (string) ($this->form['yield_kg_manual'] ?? '')));
-            $rohStk = trim(str_replace(',', '.', (string) ($this->form['ertrag_stueck'] ?? '')));
+            $rohStk = trim(str_replace(',', '.', (string) ($this->form['yield_pieces'] ?? '')));
             if ($rohYield !== '' && (! is_numeric($rohYield) || (float) $rohYield <= 0)) {
                 $this->fehler = 'Manuelles Yield braucht eine Zahl > 0 (oder leer lassen für die automatische Berechnung).';
 
@@ -130,7 +130,7 @@ class RecipeModal extends Component
             $in = [...$this->form,
                 'work_time_min' => $this->form['work_time_min'] !== null && $this->form['work_time_min'] !== '' ? (int) $this->form['work_time_min'] : null,
                 'yield_kg_manual' => $rohYield !== '' ? (float) $rohYield : null,
-                'ertrag_stueck' => $rohStk !== '' ? (float) $rohStk : null,
+                'yield_pieces' => $rohStk !== '' ? (float) $rohStk : null,
             ];
             $recipe = $this->recipeId === null
                 ? $recipes->create($team, $in)
@@ -261,14 +261,14 @@ class RecipeModal extends Component
     {
         $r = $this->rezept();
         $team = Auth::user()?->currentTeamRelation;
-        $vorschlag = $ki->propose('recipe.kategorie', [
+        $vorschlag = $ki->propose('recipe.category', [
             'name' => $r?->name ?? $this->form['name'],
-            'kategorie_id' => $this->form['kategorie_id'],
+            'category_id' => $this->form['category_id'],
             'kategorien' => $team !== null
                 ? FoodAlchemistRecipeCategory::orderBy('id')->limit(200)->pluck('label', 'id')->all()
                 : [],
         ]);
-        $this->kiVorschlag['kategorie'] = [
+        $this->kiVorschlag['category'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
             'reasoning' => $vorschlag->reasoning,
@@ -278,16 +278,16 @@ class RecipeModal extends Component
     public function accept_kategorie(): void
     {
         $r = $this->rezept();
-        $vorschlag = $this->kiVorschlag['kategorie'] ?? null;
+        $vorschlag = $this->kiVorschlag['category'] ?? null;
         if ($r === null || $vorschlag === null) {
             return;
         }
-        if ($r->kategorie_source === 'manual') {
+        if ($r->category_source === 'manual') {
             $this->fehler = 'Kategorie ist manuell gepflegt — erst Reset, dann KI übernehmen.';
 
             return;
         }
-        $katId = $vorschlag['werte']['kategorie_id'] ?? null;
+        $katId = $vorschlag['werte']['category_id'] ?? null;
         $kategorie = $katId !== null ? FoodAlchemistRecipeCategory::find((int) $katId) : null;
         if ($kategorie === null) {
             $this->fehler = 'KI-Vorschlag enthält keine gültige Kategorie.';
@@ -295,26 +295,26 @@ class RecipeModal extends Component
             return;
         }
         $r->update([
-            'kategorie_id' => $kategorie->id, 'kategorie_source' => 'ki',
-            'kategorie_ai_confidence' => $vorschlag['confidence'],
-            'kategorie_ai_begruendung' => $vorschlag['reasoning'],
+            'category_id' => $kategorie->id, 'category_source' => 'ki',
+            'category_ai_confidence' => $vorschlag['confidence'],
+            'category_ai_reasoning' => $vorschlag['reasoning'],
         ]);
-        $this->form['kategorie_id'] = $kategorie->id;
+        $this->form['category_id'] = $kategorie->id;
         $this->form['hauptgruppe_id'] = $kategorie->main_group_id;
-        unset($this->kiVorschlag['kategorie']);
+        unset($this->kiVorschlag['category']);
     }
 
     public function clear_kategorie(): void
     {
-        $this->rezept()?->update(['kategorie_id' => null, 'kategorie_source' => null, 'kategorie_ai_confidence' => null, 'kategorie_ai_begruendung' => null]);
-        $this->form['kategorie_id'] = null;
-        unset($this->kiVorschlag['kategorie']);
+        $this->rezept()?->update(['category_id' => null, 'category_source' => null, 'category_ai_confidence' => null, 'category_ai_reasoning' => null]);
+        $this->form['category_id'] = null;
+        unset($this->kiVorschlag['category']);
     }
 
     public function manual_kategorie(): void
     {
-        if ($this->form['kategorie_id'] !== null) {
-            $this->rezept()?->update(['kategorie_id' => $this->form['kategorie_id'], 'kategorie_source' => 'manual', 'kategorie_ai_confidence' => null, 'kategorie_ai_begruendung' => null]);
+        if ($this->form['category_id'] !== null) {
+            $this->rezept()?->update(['category_id' => $this->form['category_id'], 'category_source' => 'manual', 'category_ai_confidence' => null, 'category_ai_reasoning' => null]);
         }
     }
 
@@ -552,10 +552,10 @@ class RecipeModal extends Component
         $eigenschaften = $ki->propose('recipe.eigenschaften', [
             'name' => $this->form['name'],
             'haltbarkeit_tage' => null, 'regenerierbarkeit' => null, 'transportstabilitaet' => null,
-            'work_time_min' => $this->form['work_time_min'], 'temperatur' => $this->form['temperatur'] ?: null,
-            'funktion' => $this->form['funktion'] ?: null, 'zutaten' => $zutaten,
+            'work_time_min' => $this->form['work_time_min'], 'temperature' => $this->form['temperature'] ?: null,
+            'function' => $this->form['function'] ?: null, 'zutaten' => $zutaten,
         ]);
-        foreach (['work_time_min', 'temperatur', 'funktion'] as $feld) {
+        foreach (['work_time_min', 'temperature', 'function'] as $feld) {
             if (! empty($eigenschaften->werte[$feld])) {
                 $this->form[$feld] = $eigenschaften->werte[$feld];
             }
@@ -644,7 +644,7 @@ class RecipeModal extends Component
 
     public function updatedFormHauptgruppeId(): void
     {
-        $this->form['kategorie_id'] = null;                        // Kategorie hängt an der HG
+        $this->form['category_id'] = null;                        // Kategorie hängt an der HG
     }
 
     public function render(RecipeService $recipes)
@@ -680,9 +680,9 @@ class RecipeModal extends Component
             'zustaende' => [
                 'description' => $feldZustand($r?->description, $r?->description_source),
                 'preparation' => $feldZustand($r?->preparation, $r?->preparation_source),
-                'kategorie' => $r?->kategorie_id !== null ? ($r?->kategorie_source ?? 'import') : 'unbefüllt',
+                'category' => $r?->category_id !== null ? ($r?->category_source ?? 'import') : 'unbefüllt',
             ],
-            'equipmentListe' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::orderBy('gruppe')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'gruppe']),
+            'equipmentListe' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'group_name']),
             'hauptgruppen' => $team !== null ? $recipes->mainGroups($team) : collect(),
             'kategorien' => $this->form['hauptgruppe_id'] !== null
                 ? FoodAlchemistRecipeCategory::where('main_group_id', $this->form['hauptgruppe_id'])->orderBy('sort_order')->get()

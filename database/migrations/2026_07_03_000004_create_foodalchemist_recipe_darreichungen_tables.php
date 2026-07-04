@@ -28,14 +28,14 @@ return new class extends Migration
                 $table->unsignedBigInteger('legacy_id')->nullable()->unique();
                 $table->foreignId('recipe_id')->constrained('foodalchemist_recipes')->cascadeOnDelete();
                 $table->foreignId('serving_form_id')->constrained('foodalchemist_serving_forms')->cascadeOnDelete();
-                $table->boolean('ist_standard')->default(false);
+                $table->boolean('is_standard')->default(false);
                 $table->decimal('quantity_pro_unit_g', 12, 3)->nullable();
                 $table->foreignId('unit_vocab_id')->nullable()->constrained('foodalchemist_vocab_units')->nullOnDelete();
                 $table->decimal('unit_count', 12, 3)->nullable();
                 $table->decimal('ek_portion', 12, 4)->nullable();          // berechnet (WaWi Recompute 206 Stufe 4)
                 $table->foreignId('markup_class_id')->nullable()->constrained('foodalchemist_markup_classes')->nullOnDelete();
-                $table->decimal('vk_netto', 12, 2)->nullable();
-                $table->decimal('vk_brutto', 12, 2)->nullable();
+                $table->decimal('sales_net', 12, 2)->nullable();
+                $table->decimal('sales_gross', 12, 2)->nullable();
                 $table->string('preis_modus', 12)->default('auto');        // auto | manuell
                 // MySQL-Identifier-Limit (64): FK-Namen für lange Spalten explizit gekürzt.
                 $table->foreignId('container_warm_vocab_id')->nullable();
@@ -45,15 +45,15 @@ return new class extends Migration
                 $table->foreign('container_cold_vocab_id', 'fa_recipe_darreichungen_behaelter_kalt_fk')
                     ->references('id')->on('foodalchemist_vocab_containers')->nullOnDelete();
                 $table->integer('regeneration_temp_c')->nullable();
-                $table->integer('regeneration_dauer_min')->nullable();
-                $table->integer('regeneration_kerntemp_c')->nullable();
+                $table->integer('regeneration_duration_min')->nullable();
+                $table->integer('regeneration_core_temp_c')->nullable();
                 $table->foreignId('regeneration_device_vocab_id')->nullable();
                 $table->foreign('regeneration_device_vocab_id', 'fa_recipe_darreichungen_regen_geraet_fk')
                     ->references('id')->on('foodalchemist_vocab_regeneration_devices')->nullOnDelete();
                 $table->foreignId('serving_vehicle_vocab_id')->nullable();
                 $table->foreign('serving_vehicle_vocab_id', 'fa_recipe_darreichungen_servier_vehikel_fk')
                     ->references('id')->on('foodalchemist_vocab_serving_vehicles')->nullOnDelete();
-                $table->integer('work_time_zuschlag_min')->nullable();
+                $table->integer('work_time_surcharge_min')->nullable();
                 $table->text('offer_text_override')->nullable();          // NULL = erbt vom Kerngericht
                 $table->text('note')->nullable();
                 $table->string('created_via', 24)->nullable()->index();     // F12: fa_ui | mcp | NULL = Import/WaWi
@@ -68,7 +68,7 @@ return new class extends Migration
                 DB::statement(
                     'CREATE UNIQUE INDEX fa_recipe_darreichungen_ein_standard'
                     .' ON foodalchemist_recipe_presentations (recipe_id)'
-                    .' WHERE ist_standard = 1 AND deleted_at IS NULL'
+                    .' WHERE is_standard = 1 AND deleted_at IS NULL'
                 );
             }
         }

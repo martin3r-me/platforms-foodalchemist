@@ -39,7 +39,7 @@
             </div>
 
             {{-- ── Editor ─────────────────────────────────────────────────── --}}
-            @if($aktiv === null)
+            @if($active === null)
                 <div class="relative overflow-hidden {{ $card }} flex items-center justify-center min-h-[40vh]">
                     <p class="text-sm text-gray-400">Links eine Kalkulation wählen oder <strong>+ Neu</strong> anlegen.</p>
                 </div>
@@ -58,7 +58,7 @@
                                 <input type="number" min="0" step="0.5" wire:model="margeOverride" class="{{ $input }} text-right tabular-nums" placeholder="Team" />
                             </div>
                             <button type="button" wire:click="speichereKopf" class="{{ $btnPrimary }}">Speichern</button>
-                            <button type="button" wire:click="loeschen({{ $aktiv->id }})" wire:confirm="Diese Kalkulation löschen?" class="{{ $btnGhost }} !text-red-500">Löschen</button>
+                            <button type="button" wire:click="loeschen({{ $active->id }})" wire:confirm="Diese Kalkulation löschen?" class="{{ $btnGhost }} !text-red-500">Löschen</button>
                             @if($meldung)<span class="text-[11px] text-emerald-600 dark:text-emerald-400">{{ $meldung }}</span>@endif
                         </div>
                         <div class="mt-3">
@@ -80,7 +80,7 @@
                                 <tbody>
                                     @forelse($berechnung['positionen'] as $p)
                                         <tr wire:key="pos-{{ $p['id'] }}" class="{{ $tr }}">
-                                            <td class="{{ $td }}"><span class="{{ $pill }} {{ $variantPill[$typFarbe[$p['typ']]] }}">{{ $typLabel[$p['typ']] }}</span></td>
+                                            <td class="{{ $td }}"><span class="{{ $pill }} {{ $variantPill[$typFarbe[$p['type']]] }}">{{ $typLabel[$p['type']] }}</span></td>
                                             <td class="{{ $td }} w-full">
                                                 <input type="text" value="{{ $p['label'] }}" wire:change="updatePos({{ $p['id'] }}, 'label', $event.target.value)"
                                                     class="{{ $input }} !py-1" />
@@ -102,7 +102,7 @@
                                             <td class="{{ $td }} text-right tabular-nums font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">{{ number_format($p['wareneinsatz'], 2, ',', '.') }} €</td>
                                             <td class="{{ $td }} text-right tabular-nums text-gray-400">{{ $p['work_time_min'] !== null ? $p['work_time_min'] : '—' }}</td>
                                             <td class="{{ $td }} whitespace-nowrap text-right">
-                                                @if($p['typ'] !== 'frei')
+                                                @if($p['type'] !== 'frei')
                                                     <button type="button" wire:click="aktualisierePos({{ $p['id'] }})" title="Snapshot neu ziehen" class="text-gray-400 hover:text-violet-500 mr-1">↻</button>
                                                 @endif
                                                 <button type="button" wire:click="entfernePos({{ $p['id'] }})" title="Entfernen" class="text-gray-400 hover:text-red-500">✕</button>
@@ -147,7 +147,7 @@
                     {{-- Ergebnis: HK1 → Zuschläge → HK2 → VK --}}
                     <div class="relative overflow-hidden {{ $card }} p-4">
                         <div class="{{ $cardAccent }}"></div>
-                        <p class="{{ $label }} mb-2">Kalkulation · Marge {{ rtrim(rtrim(number_format((float) $berechnung['marge_pct'], 2, ',', '.'), '0'), ',') }} %{{ $aktiv->marge_override_pct !== null ? ' (Override)' : '' }}</p>
+                        <p class="{{ $label }} mb-2">Kalkulation · Marge {{ rtrim(rtrim(number_format((float) $berechnung['marge_pct'], 2, ',', '.'), '0'), ',') }} %{{ $active->marge_override_pct !== null ? ' (Override)' : '' }}</p>
                         <div class="max-w-md space-y-1">
                             <div class="flex items-center justify-between text-xs py-0.5 font-medium text-gray-900 dark:text-gray-100">
                                 <span>HK1 — Wareneinsatz (Σ Positionen)</span>

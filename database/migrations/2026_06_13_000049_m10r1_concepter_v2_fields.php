@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Schema;
  * automatisch, engine-agnostisch (SQLite/Postgres/MySQL).
  *
  * Wording-Kaskade (§10.8, ENTSCHIEDEN): Gericht NEUTRAL → Stil am Concept
- * (schreibstil_id) → Foodbook überschreibt je Kunde (foodbooks.schreibstil_id).
+ * (writing_style_id) → Foodbook überschreibt je Kunde (foodbooks.writing_style_id).
  */
 return new class extends Migration
 {
@@ -42,20 +42,20 @@ return new class extends Migration
         }
 
         // ── Sektor-Eignung am Concept (mehrwertig, wie recipe_sektor_eignung) ──
-        if (! Schema::hasTable('foodalchemist_concept_sektor_eignung')) {
-            Schema::create('foodalchemist_concept_sektor_eignung', function (Blueprint $table) {
+        if (! Schema::hasTable('foodalchemist_concept_sector_suitability')) {
+            Schema::create('foodalchemist_concept_sector_suitability', function (Blueprint $table) {
                 $table->id();
                 $table->uuid('uuid')->unique();
                 $table->unsignedBigInteger('team_id')->index();
                 $table->foreignId('concept_id')->constrained('foodalchemist_concepts')->cascadeOnDelete();
-                $table->string('sektor_slug')->index();
+                $table->string('sector_slug')->index();
                 $table->string('source', 16)->default('manual')->comment('manual|ai_inferred (GL-07)');
                 $table->decimal('ai_confidence', 4, 3)->nullable();
                 $table->text('ai_reasoning')->nullable();
                 $table->timestamps();
                 $table->softDeletes();
 
-                $table->unique(['concept_id', 'sektor_slug'], 'fa_concept_sektor_concept_sektor_unique');
+                $table->unique(['concept_id', 'sector_slug'], 'fa_concept_sektor_concept_sektor_unique');
             });
         }
 
@@ -66,17 +66,17 @@ return new class extends Migration
                 $table->string('klasse')->nullable()->after('niveau')->index();
             }
             // §10.8 Wording: Schreibstil am Concept (effektiver Stil = Foodbook-Override ?? hier)
-            if (! Schema::hasColumn('foodalchemist_concepts', 'schreibstil_id')) {
-                $table->foreignId('schreibstil_id')->nullable()->after('klasse')
+            if (! Schema::hasColumn('foodalchemist_concepts', 'writing_style_id')) {
+                $table->foreignId('writing_style_id')->nullable()->after('klasse')
                     ->constrained('foodalchemist_writing_styles')->nullOnDelete();
             }
             // §10.8 Geschmack (wie VK-Rezept)
             if (! Schema::hasColumn('foodalchemist_concepts', 'taste_direction')) {
-                $table->string('taste_direction', 16)->nullable()->after('schreibstil_id');
+                $table->string('taste_direction', 16)->nullable()->after('writing_style_id');
             }
             // §10.4 Konsumenten-Felder (Menü-Karte / Foodbook-Brücke)
-            if (! Schema::hasColumn('foodalchemist_concepts', 'konsumenten_name')) {
-                $table->string('konsumenten_name')->nullable()->after('name');
+            if (! Schema::hasColumn('foodalchemist_concepts', 'consumer_name')) {
+                $table->string('consumer_name')->nullable()->after('name');
             }
             if (! Schema::hasColumn('foodalchemist_concepts', 'additional_text')) {
                 $table->text('additional_text')->nullable()->after('description');
@@ -97,8 +97,8 @@ return new class extends Migration
             if (! Schema::hasColumn('foodalchemist_concepts', 'season')) {
                 $table->string('season', 32)->nullable()->after('struktur_vorgabe');
             }
-            if (! Schema::hasColumn('foodalchemist_concepts', 'zielgruppe')) {
-                $table->string('zielgruppe')->nullable()->after('season');
+            if (! Schema::hasColumn('foodalchemist_concepts', 'target_group')) {
+                $table->string('target_group')->nullable()->after('season');
             }
             // §10.10 GL-07-Lineage auf der Komposition (manual|ki)
             if (! Schema::hasColumn('foodalchemist_concepts', 'composition_source')) {
@@ -127,8 +127,8 @@ return new class extends Migration
             if (! Schema::hasColumn('foodalchemist_packages', 'klasse')) {
                 $table->string('klasse')->nullable()->after('role')->index();
             }
-            if (! Schema::hasColumn('foodalchemist_packages', 'konsumenten_name')) {
-                $table->string('konsumenten_name')->nullable()->after('name');
+            if (! Schema::hasColumn('foodalchemist_packages', 'consumer_name')) {
+                $table->string('consumer_name')->nullable()->after('name');
             }
             if (! Schema::hasColumn('foodalchemist_packages', 'work_time_min_cache')) {
                 $table->unsignedInteger('work_time_min_cache')->nullable();
@@ -140,8 +140,8 @@ return new class extends Migration
 
         // ── Foodbook: Schreibstil-Override je Kunde/Foodbook (§10.8) ──────────
         Schema::table('foodalchemist_foodbooks', function (Blueprint $table) {
-            if (! Schema::hasColumn('foodalchemist_foodbooks', 'schreibstil_id')) {
-                $table->foreignId('schreibstil_id')->nullable()->after('kunde')
+            if (! Schema::hasColumn('foodalchemist_foodbooks', 'writing_style_id')) {
+                $table->foreignId('writing_style_id')->nullable()->after('kunde')
                     ->constrained('foodalchemist_writing_styles')->nullOnDelete();
             }
         });
@@ -150,13 +150,13 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_foodbooks', function (Blueprint $table) {
-            if (Schema::hasColumn('foodalchemist_foodbooks', 'schreibstil_id')) {
-                $table->dropConstrainedForeignId('schreibstil_id');
+            if (Schema::hasColumn('foodalchemist_foodbooks', 'writing_style_id')) {
+                $table->dropConstrainedForeignId('writing_style_id');
             }
         });
 
         Schema::table('foodalchemist_packages', function (Blueprint $table) {
-            foreach (['klasse', 'konsumenten_name', 'work_time_min_cache', 'naehrwerte_cache'] as $col) {
+            foreach (['klasse', 'consumer_name', 'work_time_min_cache', 'naehrwerte_cache'] as $col) {
                 if (Schema::hasColumn('foodalchemist_packages', $col)) {
                     $table->dropColumn($col);
                 }
@@ -164,12 +164,12 @@ return new class extends Migration
         });
 
         Schema::table('foodalchemist_concepts', function (Blueprint $table) {
-            if (Schema::hasColumn('foodalchemist_concepts', 'schreibstil_id')) {
-                $table->dropConstrainedForeignId('schreibstil_id');
+            if (Schema::hasColumn('foodalchemist_concepts', 'writing_style_id')) {
+                $table->dropConstrainedForeignId('writing_style_id');
             }
             foreach ([
-                'klasse', 'taste_direction', 'konsumenten_name', 'additional_text', 'brief',
-                'zielpreis_pro_person', 'diaet_vorgabe', 'struktur_vorgabe', 'season', 'zielgruppe',
+                'klasse', 'taste_direction', 'consumer_name', 'additional_text', 'brief',
+                'zielpreis_pro_person', 'diaet_vorgabe', 'struktur_vorgabe', 'season', 'target_group',
                 'composition_source', 'ai_confidence', 'ai_reasoning',
                 'naehrwerte_cache', 'work_time_min_cache', 'ek_pro_person_cache',
             ] as $col) {
@@ -179,7 +179,7 @@ return new class extends Migration
             }
         });
 
-        Schema::dropIfExists('foodalchemist_concept_sektor_eignung');
+        Schema::dropIfExists('foodalchemist_concept_sector_suitability');
         Schema::dropIfExists('foodalchemist_vocab_classes');
     }
 };

@@ -64,7 +64,7 @@
                 @endif
                 {{-- Wording-Kette: Gerichte eines Concepts als Kundenzeilen (Foodbook-Override → Konzept → Standard → Name) --}}
                 @foreach($b['gerichte'] ?? [] as $g)
-                    @if($g['typ'] === 'paket' || $g['typ'] === 'header')
+                    @if($g['type'] === 'paket' || $g['type'] === 'header')
                         <div class="pos" style="margin-left:12px; font-weight:bold; color:#374151">{{ $g['text'] }}</div>
                     @else
                         <div class="pos" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}</div>

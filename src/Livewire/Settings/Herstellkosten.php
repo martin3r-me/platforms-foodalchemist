@@ -39,7 +39,7 @@ class Herstellkosten extends Component
     public array $neuFix = ['label' => '', 'betrag' => '', 'periode' => 'monatlich', 'block_key' => ''];
 
     /** Neuer Kostenblock (Phase 4 — vorher gab es nur das feste Default-Set). */
-    public array $neuBlock = ['label' => '', 'typ' => 'pct_mek'];
+    public array $neuBlock = ['label' => '', 'type' => 'pct_mek'];
 
     public ?string $meldung = null;
 
@@ -54,10 +54,10 @@ class Herstellkosten extends Component
 
         $stundensatz = $svc->stundensatz($this->team());
         foreach ($svc->kalkulationSchema($this->team()) as $b) {
-            $wert = $b['typ'] === 'arbeitszeit' && $b['wert'] <= 0 ? $stundensatz : $b['wert'];
+            $wert = $b['type'] === 'arbeitszeit' && $b['value'] <= 0 ? $stundensatz : $b['value'];
             $this->schema[] = [
-                'key' => $b['key'], 'label' => $b['label'], 'typ' => $b['typ'],
-                'aktiv' => $b['aktiv'], 'modus' => $b['modus'], 'wert' => $this->fmt((float) $wert),
+                'key' => $b['key'], 'label' => $b['label'], 'type' => $b['type'],
+                'active' => $b['active'], 'modus' => $b['modus'], 'value' => $this->fmt((float) $wert),
             ];
         }
 
@@ -89,8 +89,8 @@ class Herstellkosten extends Component
     public function blockHinzu(): void
     {
         $label = trim($this->neuBlock['label'] ?? '');
-        $typ = in_array($this->neuBlock['typ'] ?? '', ['pct_mek', 'pct_fek', 'pct_hk', 'eur_pro_portion', 'arbeitszeit'], true)
-            ? $this->neuBlock['typ'] : 'pct_mek';
+        $typ = in_array($this->neuBlock['type'] ?? '', ['pct_mek', 'pct_fek', 'pct_hk', 'eur_pro_portion', 'arbeitszeit'], true)
+            ? $this->neuBlock['type'] : 'pct_mek';
         if ($label === '') {
             $this->fehler = 'Block braucht eine Bezeichnung.';
 
@@ -106,8 +106,8 @@ class Herstellkosten extends Component
         // #379+: Gemeinkosten-Blöcke werden standardmäßig AUTOMATISCH aus den Fixkosten abgeleitet
         // (€ rein → % selbst gerechnet). Nur Direkt-Typen (Lohn/€-Portion) bleiben manuell.
         $istGk = in_array($typ, ['pct_mek', 'pct_fek', 'pct_hk'], true);
-        $this->schema[] = ['key' => $key, 'label' => $label, 'typ' => $typ, 'aktiv' => true, 'modus' => $istGk ? 'abgeleitet' : 'manuell', 'wert' => '0'];
-        $this->neuBlock = ['label' => '', 'typ' => 'pct_mek'];
+        $this->schema[] = ['key' => $key, 'label' => $label, 'type' => $typ, 'active' => true, 'modus' => $istGk ? 'abgeleitet' : 'manuell', 'value' => '0'];
+        $this->neuBlock = ['label' => '', 'type' => 'pct_mek'];
         $this->fehler = null;
     }
 
@@ -115,7 +115,7 @@ class Herstellkosten extends Component
     public function alleAutomatisch(): void
     {
         foreach ($this->schema as $i => $b) {
-            if (in_array($b['typ'], ['pct_mek', 'pct_fek', 'pct_hk'], true)) {
+            if (in_array($b['type'], ['pct_mek', 'pct_fek', 'pct_hk'], true)) {
                 $this->schema[$i]['modus'] = 'abgeleitet';
             }
         }
@@ -155,21 +155,21 @@ class Herstellkosten extends Component
         $stundensatz = $svc->stundensatz($this->team());
         foreach ($this->schema as $b) {
             if ($b['key'] === 'gemeinkosten') {
-                $gemeinWert = $this->num((string) $b['wert']);
+                $gemeinWert = $this->num((string) $b['value']);
             }
-            if ($b['typ'] === 'arbeitszeit') {
-                $stundensatz = $this->num((string) $b['wert']);
+            if ($b['type'] === 'arbeitszeit') {
+                $stundensatz = $this->num((string) $b['value']);
             }
         }
 
         $svc->update($this->team(), [
-            'hk2_zuschlag_pct' => $gemeinWert,                  // Rückwärtskompatibel (= Material-GK manuell)
+            'hk2_surcharge_pct' => $gemeinWert,                  // Rückwärtskompatibel (= Material-GK manuell)
             'stundensatz_eur' => $stundensatz,
             'marge_pct' => $this->num($this->marge),
-            'ziel_wareneinsatz_pct' => $this->num($this->zielWe),
-            'lohnnebenkosten_pct' => $this->num($this->lnk),
+            'target_food_cost_pct' => $this->num($this->zielWe),
+            'labor_overhead_pct' => $this->num($this->lnk),
             'calculation_schema' => $this->baueSchema(),
-            'calculation_bezugsbasen' => [
+            'calculation_reference_bases' => [
                 'mek' => $this->num((string) $this->bezugsbasen['mek']),
                 'fek' => $this->num((string) $this->bezugsbasen['fek']),
                 'hk' => $this->num((string) $this->bezugsbasen['hk']),
@@ -186,9 +186,9 @@ class Herstellkosten extends Component
         $sort = 10;
         foreach ($this->schema as $b) {
             $schema[] = [
-                'key' => $b['key'], 'label' => $b['label'], 'typ' => $b['typ'],
-                'wert' => $this->num((string) $b['wert']),
-                'aktiv' => (bool) ($b['aktiv'] ?? false),
+                'key' => $b['key'], 'label' => $b['label'], 'type' => $b['type'],
+                'value' => $this->num((string) $b['value']),
+                'active' => (bool) ($b['active'] ?? false),
                 'modus' => in_array($b['modus'] ?? 'manuell', ['manuell', 'abgeleitet'], true) ? $b['modus'] : 'manuell',
                 'sort' => $sort,
             ];
@@ -217,7 +217,7 @@ class Herstellkosten extends Component
             }
         }
         $gkBloecke = collect($this->schema)
-            ->filter(fn ($b) => in_array($b['typ'], ['pct_mek', 'pct_fek', 'pct_hk'], true))
+            ->filter(fn ($b) => in_array($b['type'], ['pct_mek', 'pct_fek', 'pct_hk'], true))
             ->map(fn ($b) => ['key' => $b['key'], 'label' => $b['label']])->values()->all();
 
         return view('foodalchemist::livewire.settings.herstellkosten', [

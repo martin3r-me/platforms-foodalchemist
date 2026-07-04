@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\Schema;
  * Text/Leerzeile/Header±Preis), aus dem man Pakete bildet.
  *
  * `type` ∈ gericht | basisrezept | paket | text | spacer | header | header_preis.
- * Backfill: package_id → 'paket', vk_recipe_id → 'gericht' (Alt-Slots hielten nur VK-Gerichte).
- * Struktur-Felder analog Foodbook-Block (text_inhalt/preis_wert/preis_basis/hoehe/ebene).
+ * Backfill: package_id → 'paket', sales_recipe_id → 'gericht' (Alt-Slots hielten nur VK-Gerichte).
+ * Struktur-Felder analog Foodbook-Block (text_inhalt/price_value/preis_basis/hoehe/ebene).
  * Neue Tabelle concept_slot_staffel = Spiegel von foodbook_block_staffel (header_preis-Staffel).
  *
  * Additive Spalten + Backfill via Query-Builder → cross-DB-sicher (vgl. CLAUDE.md Migrations-Fallen).
@@ -31,11 +31,11 @@ return new class extends Migration
             if (! Schema::hasColumn('foodalchemist_concept_slots', 'text_inhalt')) {
                 $table->text('text_inhalt')->nullable()->after('titel');
             }
-            if (! Schema::hasColumn('foodalchemist_concept_slots', 'preis_wert')) {
-                $table->decimal('preis_wert', 10, 2)->nullable()->after('quantity');
+            if (! Schema::hasColumn('foodalchemist_concept_slots', 'price_value')) {
+                $table->decimal('price_value', 10, 2)->nullable()->after('quantity');
             }
             if (! Schema::hasColumn('foodalchemist_concept_slots', 'preis_basis')) {
-                $table->string('preis_basis', 12)->nullable()->after('preis_wert'); // person|pauschal|staffel
+                $table->string('preis_basis', 12)->nullable()->after('price_value'); // person|pauschal|staffel
             }
             if (! Schema::hasColumn('foodalchemist_concept_slots', 'hoehe')) {
                 $table->string('hoehe', 12)->nullable()->after('preis_basis'); // spacer: klein|mittel|gross
@@ -44,7 +44,7 @@ return new class extends Migration
 
         // Backfill type aus der bisherigen Befüllung (genau eines war gesetzt; sonst Default 'gericht').
         DB::table('foodalchemist_concept_slots')->whereNotNull('package_id')->update(['type' => 'paket']);
-        DB::table('foodalchemist_concept_slots')->whereNull('package_id')->whereNotNull('vk_recipe_id')->update(['type' => 'gericht']);
+        DB::table('foodalchemist_concept_slots')->whereNull('package_id')->whereNotNull('sales_recipe_id')->update(['type' => 'gericht']);
 
         if (! Schema::hasTable('foodalchemist_concept_slot_staffel')) {
             Schema::create('foodalchemist_concept_slot_staffel', function (Blueprint $table) {
@@ -67,7 +67,7 @@ return new class extends Migration
 
         // SQLite kann mehrere Spalten nur in EINEM dropColumn-Aufruf droppen (sonst FAIL).
         $cols = array_values(array_filter(
-            ['type', 'ebene', 'text_inhalt', 'preis_wert', 'preis_basis', 'hoehe'],
+            ['type', 'ebene', 'text_inhalt', 'price_value', 'preis_basis', 'hoehe'],
             fn ($c) => Schema::hasColumn('foodalchemist_concept_slots', $c)
         ));
         if ($cols !== []) {

@@ -12,7 +12,7 @@ use Symfony\Component\Uid\UuidV7;
  * + 07.02 pairings/ (767) ; Aliasse (258, aus vault_context.rs) + Routings
  * (GL-13 §4.1) als Seed. Upsert per slug + content_hash (unverändert ⇒ skip,
  * geändert ⇒ version+1). Nachlauf: vocab_pairing_ankers.knowledge_document_id
- * über source_pfad verdrahten (ersetzt file_path, D4).
+ * über source_path verdrahten (ersetzt file_path, D4).
  *
  * 07.03–07.06 werden NICHT importiert (Klasse B Vault-only / Klasse C Phase 2);
  * Niveau_System geht NICHT hierher (→ Hüllen, GL-06/⚠D3).
@@ -51,12 +51,12 @@ class KnowledgeImportCommand extends Command
         // Gates (07 §5-Stil)
         if (! $dryRun) {
             foreach ([['cross_cutting', 33], ['domain', 36], ['pairing', 767]] as [$kategorie, $soll]) {
-                $ist = DB::table('foodalchemist_knowledge_documents')->where('kategorie', $kategorie)->count();
+                $ist = DB::table('foodalchemist_knowledge_documents')->where('category', $kategorie)->count();
                 $this->line(($ist >= $soll ? '✅' : '❌') . " knowledge.{$kategorie}: {$ist} (Soll ≥ {$soll})");
             }
             $aliasIst = DB::table('foodalchemist_knowledge_aliases')->count();
             $this->line(($aliasIst === 258 ? '✅' : '⚠️ ') . " aliases: {$aliasIst} (Soll 258)");
-            $offen = DB::table('foodalchemist_vocab_pairing_anchors')->whereNotNull('source_pfad')->whereNull('knowledge_document_id')->count();
+            $offen = DB::table('foodalchemist_vocab_pairing_anchors')->whereNotNull('source_path')->whereNull('knowledge_document_id')->count();
             $this->line(($offen === 0 ? '✅' : '⚠️ ') . " anker→knowledge-Links: {$offen} offen");
         }
 
@@ -90,11 +90,11 @@ class KnowledgeImportCommand extends Command
             }
 
             // Vault-Dubletten (gleicher Slug, ANDERE Datei — z. B. schwarzer-knoblauch.md vs
-            // schwarzer_knoblauch.md): Identität ist der source_pfad; Kollisionen bekommen _2 (§1.8-Muster)
+            // schwarzer_knoblauch.md): Identität ist der source_path; Kollisionen bekommen _2 (§1.8-Muster)
             $vorhanden = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->first();
-            if ($vorhanden !== null && $vorhanden->source_pfad !== $this->relativ($datei)) {
+            if ($vorhanden !== null && $vorhanden->source_path !== $this->relativ($datei)) {
                 $basisSlug = $slug;
-                for ($n = 2; $vorhanden !== null && $vorhanden->source_pfad !== $this->relativ($datei); $n++) {
+                for ($n = 2; $vorhanden !== null && $vorhanden->source_path !== $this->relativ($datei); $n++) {
                     $slug = "{$basisSlug}_{$n}";
                     $vorhanden = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->first();
                 }
@@ -104,13 +104,13 @@ class KnowledgeImportCommand extends Command
                     'uuid' => (string) UuidV7::generate(),
                     'slug' => $slug,
                     'titel' => $this->titel($inhalt, $basis),
-                    'kategorie' => $kategorie,
+                    'category' => $kategorie,
                     'inhalt_md' => $inhalt,
                     'version' => 1,
                     'content_hash' => $hash,
                     'char_count' => mb_strlen($inhalt),
-                    'aktiv' => true,
-                    'source_pfad' => $this->relativ($datei),
+                    'active' => true,
+                    'source_path' => $this->relativ($datei),
                     'created_at' => $now, 'updated_at' => $now,
                 ]);
                 $neu++;
@@ -121,7 +121,7 @@ class KnowledgeImportCommand extends Command
                     'version' => $vorhanden->version + 1,            // monoton bei Inhalts-Änderung
                     'content_hash' => $hash,
                     'char_count' => mb_strlen($inhalt),
-                    'source_pfad' => $this->relativ($datei),
+                    'source_path' => $this->relativ($datei),
                     'updated_at' => $now,
                 ]);
                 $geaendert++;
@@ -160,7 +160,7 @@ class KnowledgeImportCommand extends Command
                 continue;
             }
             $doc = DB::table('foodalchemist_knowledge_documents')
-                ->where('kategorie', 'domain')->where('slug', $this->slug($domainName))->first();
+                ->where('category', 'domain')->where('slug', $this->slug($domainName))->first();
             if ($doc === null) {
                 $ohneDoc[$domainName] = true;
 
@@ -204,7 +204,7 @@ class KnowledgeImportCommand extends Command
         $now = now()->toDateTimeString();
         foreach ($routings as [$feature, $kategorie, $modus, $maxDocs, $maxChars]) {
             $ok = DB::table('foodalchemist_knowledge_routings')->insertOrIgnore([
-                'feature' => $feature, 'kategorie' => $kategorie, 'modus' => $modus,
+                'feature' => $feature, 'category' => $kategorie, 'modus' => $modus,
                 'max_docs' => $maxDocs, 'max_chars_per_doc' => $maxChars,
                 'created_at' => $now, 'updated_at' => $now,
             ]);
@@ -214,18 +214,18 @@ class KnowledgeImportCommand extends Command
         return ['source' => count($routings), 'neu' => $neu, 'geaendert' => 0, 'skip' => $skip];
     }
 
-    /** Anker → Pairing-Dokument über source_pfad (ersetzt file_path, D4). */
+    /** Anker → Pairing-Dokument über source_path (ersetzt file_path, D4). */
     private function verdrahteAnker(bool $dryRun): array
     {
         if ($dryRun) {
             return ['source' => 0, 'neu' => 0, 'geaendert' => 0, 'skip' => 0];
         }
-        $docs = DB::table('foodalchemist_knowledge_documents')->where('kategorie', 'pairing')
-            ->pluck('id', 'source_pfad');
+        $docs = DB::table('foodalchemist_knowledge_documents')->where('category', 'pairing')
+            ->pluck('id', 'source_path');
         $neu = 0;
         foreach (DB::table('foodalchemist_vocab_pairing_anchors')
-            ->whereNotNull('source_pfad')->whereNull('knowledge_document_id')->get(['id', 'source_pfad']) as $anker) {
-            $docId = $docs[$anker->source_pfad] ?? null;
+            ->whereNotNull('source_path')->whereNull('knowledge_document_id')->get(['id', 'source_path']) as $anker) {
+            $docId = $docs[$anker->source_path] ?? null;
             if ($docId !== null) {
                 DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $anker->id)
                     ->update(['knowledge_document_id' => $docId, 'updated_at' => now()]);

@@ -92,7 +92,7 @@ class Schreibstile extends Component
         }
     }
 
-    /** Phase 5: hart löschen, wenn nicht von Concepts/Foodbooks referenziert (sonst gesperrt). */
+    /** Phase 5: hart löschen, wenn nicht von Concepts/Foodbooks referenziert (sonst locked). */
     public function delete(int $id): void
     {
         $zeile = DB::table('foodalchemist_writing_styles')->where('id', $id)->first(['team_id', 'name']);
@@ -106,9 +106,9 @@ class Schreibstile extends Component
             return;
         }
         $nConcept = \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_concepts')
-            ? DB::table('foodalchemist_concepts')->whereNull('deleted_at')->where('schreibstil_id', $id)->count() : 0;
+            ? DB::table('foodalchemist_concepts')->whereNull('deleted_at')->where('writing_style_id', $id)->count() : 0;
         $nFoodbook = \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_foodbooks')
-            ? DB::table('foodalchemist_foodbooks')->whereNull('deleted_at')->where('schreibstil_id', $id)->count() : 0;
+            ? DB::table('foodalchemist_foodbooks')->whereNull('deleted_at')->where('writing_style_id', $id)->count() : 0;
         if ($nConcept + $nFoodbook > 0) {
             $this->fehler = "Wird von {$nConcept} Concept(s) + {$nFoodbook} Foodbook(s) genutzt — erst umhängen oder deaktivieren.";
 

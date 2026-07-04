@@ -119,9 +119,9 @@ class IngredientEditor extends Component
                         ? rtrim(rtrim(number_format((float) $la->item->qty, 2, ',', '.'), '0'), ',') . ' ' . ($la->item->packaging_unit ?? $la->item->unit_code ?? '')
                         : null,
                     'preis' => $preis !== null ? number_format($preis, 2, ',', '.') . ' €' : null,
-                    'vergleichspreis' => $vergleich !== null ? number_format($vergleich['wert'], 2, ',', '.') . ' ' . $vergleich['unit'] : null,
-                    'match' => $la->structure?->main_ingredient_konfidenz !== null
-                        ? round((float) $la->structure->main_ingredient_konfidenz * 100) . ' %'
+                    'vergleichspreis' => $vergleich !== null ? number_format($vergleich['value'], 2, ',', '.') . ' ' . $vergleich['unit'] : null,
+                    'match' => $la->structure?->main_ingredient_confidence !== null
+                        ? round((float) $la->structure->main_ingredient_confidence * 100) . ' %'
                         : null,
                 ];
             })
@@ -241,7 +241,7 @@ class IngredientEditor extends Component
                 $ek = $ekJeGp[$gp->id] ?? null;
 
                 return [
-                    'typ' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
+                    'type' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
                     'ek_pro_g' => $ek,
                     'preis_label' => $ek !== null ? number_format($ek * 1000, 2, ',', '.') . ' €/kg' : null,
                     // Spec: Einheit hängt am Produkt (Chilipulver→g, Bier→ml) — Override im Dropdown
@@ -252,22 +252,22 @@ class IngredientEditor extends Component
         $rezQuery = FoodAlchemistRecipe::visibleToTeam($team)->basis()
             ->where('id', '!=', (int) $this->recipeId)
             ->when($suche !== '', fn ($w) => $w->whereRaw('LOWER(foodalchemist_recipes.name) LIKE ?', ['%' . $suche . '%']))
-            ->when(($rezFilter['hg'] ?? '') !== '', fn ($w) => $w->whereHas('kategorie', fn ($k) => $k->where('main_group_id', (int) $rezFilter['hg'])))
-            ->when(($rezFilter['kat'] ?? '') !== '', fn ($w) => $w->where('kategorie_id', (int) $rezFilter['kat']))
-            ->when(($rezFilter['niveau'] ?? '') !== '', fn ($w) => $w->whereHas('niveauEignungen', fn ($n) => $n->where('level_slug', $rezFilter['niveau'])));
+            ->when(($rezFilter['hg'] ?? '') !== '', fn ($w) => $w->whereHas('category', fn ($k) => $k->where('main_group_id', (int) $rezFilter['hg'])))
+            ->when(($rezFilter['kat'] ?? '') !== '', fn ($w) => $w->where('category_id', (int) $rezFilter['kat']))
+            ->when(($rezFilter['level'] ?? '') !== '', fn ($w) => $w->whereHas('niveauEignungen', fn ($n) => $n->where('level_slug', $rezFilter['level'])));
         $rezTotal = (clone $rezQuery)->count();
         $rezepte = $rezQuery->with('niveauEignungen:id,recipe_id,level_slug')->orderBy('name')->limit(200)
-            ->get(['id', 'name', 'ek_per_kg_eur', 'yield_kg', 'ertrag_stueck'])
+            ->get(['id', 'name', 'ek_per_kg_eur', 'yield_kg', 'yield_pieces'])
             ->map(function ($r) {
-                $hatStueck = $r->ertrag_stueck !== null && (float) $r->ertrag_stueck > 0 && $r->yield_kg !== null;
+                $hatStueck = $r->yield_pieces !== null && (float) $r->yield_pieces > 0 && $r->yield_kg !== null;
 
                 return [
-                    'typ' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
+                    'type' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
                     'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
                     'preis_label' => $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : null,
                     // Stück-Ertrag → Einheit beim Einfügen auf „stk" vorbelegen + g/Stück fürs Live-Rechnen
                     'einheit_slug' => $hatStueck ? 'stk' : 'g',
-                    'g_pro_stueck' => $hatStueck ? (float) $r->yield_kg * 1000 / (float) $r->ertrag_stueck : null,
+                    'g_pro_stueck' => $hatStueck ? (float) $r->yield_kg * 1000 / (float) $r->yield_pieces : null,
                     'niveaus' => $r->niveauEignungen->pluck('level_slug')->values()->all(),
                 ];
             })->values()->all();

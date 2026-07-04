@@ -58,7 +58,7 @@ class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'blocks' => $k->blocks->map(fn ($b) => [
                     'type' => $b->type,
                     'name' => $b->concept?->name ?? $b->label ?? $b->kundentext,
-                    'preis_pro_person' => $b->concept?->preis_pro_person_cache ?? $b->preis_wert,
+                    'preis_pro_person' => $b->concept?->preis_pro_person_cache ?? $b->price_value,
                 ])->values()->all(),
             ])->values()->all(),
         ]);

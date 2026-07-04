@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
  * Einkaufs- und Kalkulations-Entscheide trifft jedes Team für sich, D1-Overlay-Gedanke).
  *
  * - lead_la_strategie / lead_la_prioritaeten / ausweich_kette_anzeigen → M1-05 (V-27, speist M3-06)
- * - cooking_loss_defaults (je GP-Klasse/Warengruppe, %) · mwst_defaults · rundungsregeln → M1-07 (GL-02)
+ * - cooking_loss_defaults (je GP-Klasse/Warengruppe, %) · vat_defaults · rundungsregeln → M1-07 (GL-02)
  *
  * Fehlende Zeile ⇒ Code-Defaults aus TeamSettingsService (kein Pflicht-Seeding).
  */
@@ -29,7 +29,7 @@ return new class extends Migration
 
             // ── M1-07: Kalkulations-Defaults (GL-02)
             $table->json('cooking_loss_defaults')->nullable()->comment('{commodity_group_code|*: prozent}');
-            $table->json('mwst_defaults')->nullable()->comment('{regulaer, ermaessigt, default_satz}');
+            $table->json('vat_defaults')->nullable()->comment('{regulaer, ermaessigt, default_satz}');
             $table->json('rundungsregeln')->nullable()->comment('{nachkommastellen, modus: kaufmaennisch|auf|ab}');
 
             $table->timestamps();

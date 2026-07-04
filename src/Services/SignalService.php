@@ -25,7 +25,7 @@ class SignalService
         $dedup = $opts['dedup_key'] ?? null;
         if ($dedup !== null) {
             $vorhanden = FoodAlchemistSignal::where('team_id', $team->id)
-                ->where('typ', $typ->value)->where('dedup_key', $dedup)
+                ->where('type', $typ->value)->where('dedup_key', $dedup)
                 ->where('status', SignalStatus::Offen->value)->first();
             if ($vorhanden !== null) {
                 $vorhanden->update([
@@ -41,7 +41,7 @@ class SignalService
 
         return FoodAlchemistSignal::create([
             'team_id' => $team->id,
-            'typ' => $typ->value,
+            'type' => $typ->value,
             'severity' => $severity->value,
             'status' => SignalStatus::Offen->value,
             'titel' => $titel,
@@ -78,7 +78,7 @@ class SignalService
 
         return FoodAlchemistSignal::visibleToTeam($team)
             ->when($status !== '', fn ($q) => $q->where('status', $status))
-            ->when(($filters['typ'] ?? '') !== '', fn ($q) => $q->where('typ', $filters['typ']))
+            ->when(($filters['type'] ?? '') !== '', fn ($q) => $q->where('type', $filters['type']))
             ->orderByDesc('created_at')
             ->paginate($perPage);
     }
@@ -92,7 +92,7 @@ class SignalService
     public function offeneNachTyp(Team $team): array
     {
         return FoodAlchemistSignal::visibleToTeam($team)->offen()
-            ->selectRaw('typ, COUNT(*) as c')->groupBy('typ')->pluck('c', 'typ')->all();
+            ->selectRaw('type, COUNT(*) as c')->groupBy('type')->pluck('c', 'type')->all();
     }
 
     /** @return list<array{value:string,label:string}> */

@@ -14,7 +14,7 @@ use Platform\FoodAlchemist\Services\VocabularyService;
 
 /**
  * Phase B: Block in einem Kapitel anlegen — das inhaltliche Atom des Foodbooks
- * (Gericht via vk_recipe_id, Konzept-Paket via concept_id, oder Text/Header/
+ * (Gericht via sales_recipe_id, Konzept-Paket via concept_id, oder Text/Header/
  * Spacer). Nur solange das Foodbook draft ist. Optional mit Preis-Staffel.
  */
 class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
@@ -27,7 +27,7 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
     public function getDescription(): string
     {
         return 'Legt einen Block in einem Kapitel eines draft-Foodbooks an (Position ans Ende). '
-            . 'type: text (mit vk_recipe_id = Gericht; vorher foodalchemist.verkaufsrezepte.SEARCH) | '
+            . 'type: text (mit sales_recipe_id = Gericht; vorher foodalchemist.verkaufsrezepte.SEARCH) | '
             . 'concept_ref (concept_id = Konzept/Paket) | header_neutral | header_frei | header_frei_preis | spacer. '
             . 'Optional staffel: [{min_personen, preis}] für Pax-abhängige Preise.';
     }
@@ -41,12 +41,12 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
                 'type' => ['type' => 'string', 'enum' => ['text', 'concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer'], 'default' => 'text'],
                 'label' => ['type' => 'string', 'description' => 'Interner Titel des Blocks'],
                 'kundentext' => ['type' => 'string', 'description' => 'Kundenseitiger Angebotstext'],
-                'vk_recipe_id' => ['type' => 'integer', 'description' => 'Verkaufsrezept (Gericht) — via verkaufsrezepte.SEARCH ermitteln'],
+                'sales_recipe_id' => ['type' => 'integer', 'description' => 'Verkaufsrezept (Gericht) — via verkaufsrezepte.SEARCH ermitteln'],
                 'concept_id' => ['type' => 'integer', 'description' => 'Konzept/Paket bei type=concept_ref'],
                 'quantity' => ['type' => 'number'],
                 'unit' => ['type' => 'string', 'description' => 'Einheiten-Slug, z. B. stk, portion'],
-                'preis_wert' => ['type' => 'number'],
-                'preis_basis' => ['type' => 'string', 'enum' => ['pro_person', 'pro_stueck', 'pauschal'], 'description' => 'Basis für preis_wert'],
+                'price_value' => ['type' => 'number'],
+                'preis_basis' => ['type' => 'string', 'enum' => ['pro_person', 'pro_stueck', 'pauschal'], 'description' => 'Basis für price_value'],
                 'sichtbar' => ['type' => 'boolean', 'default' => true],
                 'interne_bemerkung' => ['type' => 'string'],
                 'staffel' => [
@@ -81,14 +81,14 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
         if ((string) $fb->status !== 'draft') {
             return ToolResult::error("Foodbook hat Status \"{$fb->status}\" — via MCP ist nur draft editierbar.", 'ACCESS_DENIED');
         }
-        if (isset($arguments['vk_recipe_id'])
-            && ! FoodAlchemistRecipe::visibleToTeam($team)->whereKey((int) $arguments['vk_recipe_id'])->exists()) {
-            return ToolResult::error('vk_recipe_id nicht sichtbar/vorhanden — via foodalchemist.verkaufsrezepte.SEARCH ermitteln.', 'NOT_FOUND');
+        if (isset($arguments['sales_recipe_id'])
+            && ! FoodAlchemistRecipe::visibleToTeam($team)->whereKey((int) $arguments['sales_recipe_id'])->exists()) {
+            return ToolResult::error('sales_recipe_id nicht sichtbar/vorhanden — via foodalchemist.verkaufsrezepte.SEARCH ermitteln.', 'NOT_FOUND');
         }
 
         $daten = array_intersect_key($arguments, array_flip([
-            'type', 'label', 'kundentext', 'interne_bemerkung', 'vk_recipe_id',
-            'concept_id', 'quantity', 'preis_wert', 'preis_basis', 'sichtbar',
+            'type', 'label', 'kundentext', 'interne_bemerkung', 'sales_recipe_id',
+            'concept_id', 'quantity', 'price_value', 'preis_basis', 'sichtbar',
         ]));
         if (($arguments['unit'] ?? '') !== '') {
             $unit = app(VocabularyService::class)->findEinheit($team, (string) $arguments['unit']);
@@ -110,7 +110,7 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
 
         return ToolResult::success(['block' => [
             'id' => $block->id, 'type' => $block->type, 'position' => $block->position,
-            'label' => $block->label, 'vk_recipe_id' => $block->vk_recipe_id,
+            'label' => $block->label, 'sales_recipe_id' => $block->sales_recipe_id,
             'staffel_zeilen' => count($arguments['staffel'] ?? []),
         ]]);
     }

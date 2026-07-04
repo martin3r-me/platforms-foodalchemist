@@ -140,11 +140,11 @@
                                     <span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span>
                                 @endif
                             </td>
-                            <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap text-right tabular-nums">{{ $r->vk_netto !== null ? number_format((float) $r->vk_netto, 2, ',', '.') . ' €' : '—' }}</td>
+                            <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap text-right tabular-nums">{{ $r->sales_net !== null ? number_format((float) $r->sales_net, 2, ',', '.') . ' €' : '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums">{{ $r->ek_total_eur !== null ? number_format((float) $r->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</td>
                             <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $r->n_ingredients_total }}</td>
                             <td class="{{ $td }}">
-                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergene_konfidenz] ?? $variantPill['secondary'] }}">{{ $r->allergene_konfidenz }}</span>
+                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
                             </td>
                         </tr>
                     @empty

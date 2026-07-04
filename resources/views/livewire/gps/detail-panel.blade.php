@@ -127,7 +127,7 @@
                 @forelse($kette ?? [] as $rang => $la)
                     @php($istLead = $la->id === $effektiverLeadId)
                     <div wire:key="la-{{ $la->id }}"
-                         class="group rounded-lg border px-2.5 py-2 {{ $istLead ? 'bg-orange-500/10 border-orange-500/40' : 'border-black/5 dark:border-white/10 hover:bg-black/[0.03] dark:hover:bg-white/5' }} {{ $la->gesperrt ? 'opacity-50' : '' }}"
+                         class="group rounded-lg border px-2.5 py-2 {{ $istLead ? 'bg-orange-500/10 border-orange-500/40' : 'border-black/5 dark:border-white/10 hover:bg-black/[0.03] dark:hover:bg-white/5' }} {{ $la->locked ? 'opacity-50' : '' }}"
                          data-la-zeile="{{ $la->id }}">
                         <div class="flex items-start gap-2">
                             {{-- R9: ★ direkt klickbar = globalen Lead setzen (vorher nur im Hover-Menü versteckt) --}}
@@ -142,13 +142,13 @@
                                     @if($la->qty !== null && $la->unit_code !== null) · {{ rtrim(rtrim(number_format((float) $la->qty, 3, ',', '.'), '0'), ',') }} {{ $la->unit_code }}@endif
                                     @if($la->order_number !== null) · Art-Nr {{ $la->order_number }}@endif
                                 </p>
-                                @if($gp->lead_la_supplier_item_id === $la->id || $la->ist_stamm || $la->is_discontinued || $la->gepinnt || $la->gesperrt)
+                                @if($gp->lead_la_supplier_item_id === $la->id || $la->ist_stamm || $la->is_discontinued || $la->gepinnt || $la->locked)
                                     <p class="text-[11px] truncate">
                                         @if($gp->lead_la_supplier_item_id === $la->id)<span class="text-orange-500" title="globaler Default-Lead (GL-03)">global ★</span>@endif
                                         {{ $la->ist_stamm ? ' · Stamm' : '' }}
                                         @if($la->is_discontinued) · <span class="text-rose-400">ausgelistet</span>@endif
                                         @if($la->gepinnt) · <span class="text-violet-500">gepinnt</span>@endif
-                                        @if($la->gesperrt) · <span class="text-rose-500">gesperrt</span>@endif
+                                        @if($la->locked) · <span class="text-rose-500">locked</span>@endif
                                     </p>
                                 @endif
                             </div>
@@ -166,7 +166,7 @@
                                         @endisset
                                     </p>
                                     @if($la->vergleichspreis !== null)
-                                        <p class="text-[11px] tabular-nums text-gray-400">{{ number_format($la->vergleichspreis['wert'], 2, ',', '.') }} {{ $la->vergleichspreis['unit'] }}</p>
+                                        <p class="text-[11px] tabular-nums text-gray-400">{{ number_format($la->vergleichspreis['value'], 2, ',', '.') }} {{ $la->vergleichspreis['unit'] }}</p>
                                     @else
                                         <p class="text-[11px] text-gray-400" title="kein Vergleichspreis — qty fehlt (GL-03 A-2)">⚠ ohne €/kg</p>
                                     @endif
@@ -177,7 +177,7 @@
                         </div>
                         <div class="hidden group-hover:flex items-center gap-1 mt-1.5 ml-6" data-la-aktionen>
                             <button type="button" wire:click="pinToggle({{ $la->id }}, {{ $la->gepinnt ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $la->gepinnt ? 'Pin lösen' : 'Pinnen' }}</button>
-                            <button type="button" wire:click="sperreToggle({{ $la->id }}, {{ $la->gesperrt ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $la->gesperrt ? 'Entsperren' : 'Sperren' }}</button>
+                            <button type="button" wire:click="sperreToggle({{ $la->id }}, {{ $la->locked ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $la->locked ? 'Entsperren' : 'Sperren' }}</button>
                             @if($kannKuratieren)
                                 <button type="button" wire:click="loesen({{ $la->id }})" wire:confirm="LA vom GP lösen? War er Lead, wird sofort neu gewählt (GL-03 I4)." class="{{ $btnGhostXs }} text-rose-500">✕ Lösen</button>
                             @endif
@@ -222,13 +222,13 @@
         @endif
 
         {{-- R10: GL-07-Vorschlags-Box für ✨-Schätzungen (Allergene/Nährwerte) — bei der passenden Kartei --}}
-        @if($kiVorschlag !== null && ($section === null || $section === $kiVorschlag['typ']))
+        @if($kiVorschlag !== null && ($section === null || $section === $kiVorschlag['type']))
             <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs" data-gp-ki-vorschlag>
-                <p class="text-gray-900 dark:text-gray-100">✨ {{ $kiVorschlag['typ'] === 'allergene' ? 'Allergen-Schätzung' : 'Nährwert-Schätzung' }}
+                <p class="text-gray-900 dark:text-gray-100">✨ {{ $kiVorschlag['type'] === 'allergene' ? 'Allergen-Schätzung' : 'Nährwert-Schätzung' }}
                     <span class="text-[11px] text-gray-400">· {{ round($kiVorschlag['confidence'] * 100) }} % · schreibt als Override (GL-01 Prio 1)</span></p>
                 <div class="flex flex-wrap gap-1 mt-1">
                     @foreach($kiVorschlag['werte'] as $feld => $wert)
-                        <span class="{{ $pill }} {{ $kiVorschlag['typ'] === 'allergene' ? (['enthalten' => $variantPill['danger'], 'spuren' => $variantPill['warning'], 'nicht_enthalten' => $variantPill['secondary']][$wert] ?? $variantPill['secondary']) : $variantPill['info'] }}"
+                        <span class="{{ $pill }} {{ $kiVorschlag['type'] === 'allergene' ? (['enthalten' => $variantPill['danger'], 'spuren' => $variantPill['warning'], 'nicht_enthalten' => $variantPill['secondary']][$wert] ?? $variantPill['secondary']) : $variantPill['info'] }}"
                               wire:key="kiw-{{ $feld }}">{{ $feld }}: {{ $wert }}</span>
                     @endforeach
                 </div>
@@ -244,17 +244,17 @@
         <div class="border-t border-black/5 dark:border-white/10 pt-2" data-sektion="allergene">
             {{-- KI-Transparenz (2026-07-02): Werte, die NUR aus KI-geschätzten Overrides stammen
                  (0 LAs mit Daten), bekommen den ✨-Marker statt des irreführenden „NONE aus 0/0 LAs". --}}
-            @php($allergKiConf = $gp->allergene_ki_confidence ?? $gp->allergene_ai_confidence)
+            @php($allergKiConf = $gp->allergens_confidence ?? $gp->allergens_confidence)
             @php($nurKiOverride = $allergene !== null
                 && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0
-                && ($gp->allergens_source === 'ki' || $gp->allergene_ki_confidence !== null)
+                && ($gp->allergens_source === 'ki' || $gp->allergens_confidence !== null)
                 && collect($allergene)->contains(fn ($a) => $a['source'] === 'override'))
             <p class="{{ $dt }} mb-1 flex items-center gap-2">Allergene <span class="normal-case">(effektiv)</span>
                 @if($nurKiOverride)
                     <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case ml-1" title="KI-geschätzt — keine LA-Daten{{ $allergKiConf !== null ? ' · ' . round($allergKiConf * 100) . ' %' : '' }}" data-allergene-ki-marker>✨ KI</span>
                     <span class="normal-case text-gray-400 font-normal"> · aus 0/{{ $gp->n_las_total }} LAs</span>
                 @elseif($allergenKonfidenz !== null)
-                    <span class="ml-1 font-semibold normal-case {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$allergenKonfidenz['konfidenz']] ?? 'text-gray-400' }}">{{ strtoupper($allergenKonfidenz['konfidenz']) }}</span>
+                    <span class="ml-1 font-semibold normal-case {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$allergenKonfidenz['confidence']] ?? 'text-gray-400' }}">{{ strtoupper($allergenKonfidenz['confidence']) }}</span>
                     <span class="normal-case text-gray-400 font-normal"> · aus {{ $allergenKonfidenz['n_las_mit_daten'] }}/{{ $gp->n_las_total }} LAs</span>
                     @if($allergenKonfidenz['needs_review'])<span class="{{ $pill }} {{ $variantPill['danger'] }} ml-1" title="enthalten ↔ nicht_enthalten ohne spuren-Mittelweg: {{ implode(', ', $allergenKonfidenz['konflikt_felder']) }}">Review nötig</span>@endif
                 @endif
@@ -268,10 +268,10 @@
                      (statt 14 grauer Zeilen). Quelle-Marker: ✎ Override, ↑ live vom Mutter-GP. --}}
                 @php($labels = \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE)
                 @php($marker = fn ($q) => $q === 'override' ? ' ✎' : ($q === 'mutter' ? ' ↑' : ''))
-                @php($enthalten = collect($allergene)->filter(fn ($a) => $a['wert']->value === 'enthalten'))
-                @php($spuren = collect($allergene)->filter(fn ($a) => $a['wert']->value === 'spuren'))
-                @php($unbekannt = collect($allergene)->filter(fn ($a) => $a['wert']->value === 'unbekannt'))
-                @php($freiAnzahl = collect($allergene)->filter(fn ($a) => $a['wert']->value === 'nicht_enthalten')->count())
+                @php($enthalten = collect($allergene)->filter(fn ($a) => $a['value']->value === 'enthalten'))
+                @php($spuren = collect($allergene)->filter(fn ($a) => $a['value']->value === 'spuren'))
+                @php($unbekannt = collect($allergene)->filter(fn ($a) => $a['value']->value === 'unbekannt'))
+                @php($freiAnzahl = collect($allergene)->filter(fn ($a) => $a['value']->value === 'nicht_enthalten')->count())
                 @if($enthalten->isEmpty() && $spuren->isEmpty() && $unbekannt->isEmpty())
                     <p class="text-xs text-emerald-600 dark:text-emerald-400" data-allergene-frei>✓ Keine der 14 EU-Allergene deklariert.@if($nurKiOverride) <span class="text-violet-500 dark:text-violet-400" title="Schätzung ohne Lieferantenartikel-Beleg — für LMIV-Deklaration LA-Daten ergänzen">✨ KI-geschätzt, nicht LA-belegt</span>@endif</p>
                 @else

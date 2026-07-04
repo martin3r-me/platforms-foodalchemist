@@ -10,7 +10,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description V-27-Overlay (M3-06): team-eigene Lead-LA-Abweichung über der
- * globalen GL-03-Kette — gesperrt (LA fällt für dieses Team aus) / gepinnt
+ * globalen GL-03-Kette — locked (LA fällt für dieses Team aus) / gepinnt
  * (fixiert als effektiver Lead, überlebt Bulk-Neuwahl). Schreibwege über LeadLaService.
  */
 class FoodAlchemistGpLaPreference extends Model
@@ -21,7 +21,7 @@ class FoodAlchemistGpLaPreference extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['gesperrt' => 'boolean', 'gepinnt' => 'boolean'];
+    protected $casts = ['locked' => 'boolean', 'gepinnt' => 'boolean'];
 
     public function gp(): BelongsTo
     {

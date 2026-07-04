@@ -32,7 +32,7 @@ class Kalkulation extends Component
         $settings = app(TeamSettingsService::class)->for($this->team());
         $this->garverlust = array_map(strval(...), $settings->cooking_loss_defaults ?? []);
         $this->putzverlust = array_map(strval(...), $settings->trimming_loss_defaults ?? []);
-        $this->mwst = array_replace(TeamSettingsService::MWST_DEFAULTS, $settings->mwst_defaults ?? []);
+        $this->mwst = array_replace(TeamSettingsService::MWST_DEFAULTS, $settings->vat_defaults ?? []);
         $this->rundung = array_replace(TeamSettingsService::RUNDUNG_DEFAULTS, $settings->rundungsregeln ?? []);
     }
 
@@ -46,7 +46,7 @@ class Kalkulation extends Component
         app(TeamSettingsService::class)->update($this->team(), [
             'cooking_loss_defaults' => $verlustClean($this->garverlust) ?: null,
             'trimming_loss_defaults' => $verlustClean($this->putzverlust) ?: null,
-            'mwst_defaults' => [
+            'vat_defaults' => [
                 'regulaer' => (float) str_replace(',', '.', (string) $this->mwst['regulaer']),
                 'ermaessigt' => (float) str_replace(',', '.', (string) $this->mwst['ermaessigt']),
                 'default_satz' => in_array($this->mwst['default_satz'], ['regulaer', 'ermaessigt'], true) ? $this->mwst['default_satz'] : 'ermaessigt',

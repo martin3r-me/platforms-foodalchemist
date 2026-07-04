@@ -50,7 +50,7 @@ class DetailPanel extends Component
             return;
         }
         $vorlage = $concepts->detail($this->team(), $this->selectedId);
-        if ($vorlage === null || ! $vorlage->is_vorlage) {
+        if ($vorlage === null || ! $vorlage->is_template) {
             return;
         }
         $fork = $concepts->forkVonVorlage($this->team(), $this->selectedId, $vorlage->name . ' – Kopie');

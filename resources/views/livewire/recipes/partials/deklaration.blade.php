@@ -24,7 +24,7 @@
 
 <div data-deklaration-allergene>
     <p class="{{ $dt }} mb-1">Allergene
-        <span class="normal-case ml-1 font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergene_konfidenz) }}</span>
+        <span class="normal-case ml-1 font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergens_confidence] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergens_confidence) }}</span>
     </p>
     <div class="grid grid-cols-2 gap-x-4 gap-y-0.5" data-allergen-grid>
         @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $feld => $lbl)
@@ -43,7 +43,7 @@
     <p class="{{ $dt }} mb-1">Zusatzstoffe (LMIV)</p>
     <div class="grid grid-cols-2 gap-1" data-zusatz-grid>
         @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE as $stoff => $lbl)
-            @php($wert = $rezept->{"zusatz_{$stoff}"})
+            @php($wert = $rezept->{"additive_{$stoff}"})
             <span class="text-[11px] px-1.5 py-0.5 rounded border truncate {{ $wert === null
                     ? 'border-dashed border-black/15 dark:border-white/15 text-gray-400 italic'
                     : ((int) $wert === 3

@@ -47,7 +47,7 @@ class Index extends Component
             'regeln' => [
                 'marge_pct' => $settings->margePct($team),
                 'stundensatz' => $settings->stundensatz($team),
-                'schema' => collect($fix->aufgeloestesSchema($team))->filter(fn ($b) => $b['aktiv'] ?? true)->values()->all(),
+                'schema' => collect($fix->aufgeloestesSchema($team))->filter(fn ($b) => $b['active'] ?? true)->values()->all(),
             ],
             'fixkostenMonat' => $fixMonat,
             'zielWe' => $zielWe,

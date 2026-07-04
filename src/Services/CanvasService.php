@@ -24,50 +24,50 @@ class CanvasService
             'titel' => 'Food DNA (Team)',
             'kontext_label' => 'Küchen-/Marken-DNA des Mandanten (verbindlicher Stil-/Geschmacks-Rahmen)',
             'felder' => [
-                ['key' => 'leitbild', 'label' => 'Leitbild / Positionierung', 'gruppe' => 'Identität', 'typ' => 'longtext'],
-                ['key' => 'signature_stil', 'label' => 'Signature-Stil / Handschrift', 'gruppe' => 'Identität', 'typ' => 'longtext'],
-                ['key' => 'ziel_gaeste', 'label' => 'Ziel-Gäste / Anlässe', 'gruppe' => 'Identität', 'typ' => 'longtext'],
-                ['key' => 'aromatik', 'label' => 'Aromatik / Leit-Aromen', 'gruppe' => 'Aromatik & Tabus', 'typ' => 'longtext'],
-                ['key' => 'no_gos', 'label' => 'No-Gos / Tabus', 'gruppe' => 'Aromatik & Tabus', 'typ' => 'longtext'],
-                ['key' => 'qualitaet_leitlinien', 'label' => 'Qualität / Herkunft', 'gruppe' => 'Qualität & Preis', 'typ' => 'longtext'],
-                ['key' => 'preis_positionierung', 'label' => 'Preis-Positionierung', 'gruppe' => 'Qualität & Preis', 'typ' => 'text'],
-                ['key' => 'default_schreibstil_id', 'label' => 'Default-Schreibstil', 'gruppe' => 'Referenzen', 'typ' => 'ref_schreibstil'],
+                ['key' => 'leitbild', 'label' => 'Leitbild / Positionierung', 'group_name' => 'Identität', 'type' => 'longtext'],
+                ['key' => 'signature_stil', 'label' => 'Signature-Stil / Handschrift', 'group_name' => 'Identität', 'type' => 'longtext'],
+                ['key' => 'ziel_gaeste', 'label' => 'Ziel-Gäste / Anlässe', 'group_name' => 'Identität', 'type' => 'longtext'],
+                ['key' => 'aromatik', 'label' => 'Aromatik / Leit-Aromen', 'group_name' => 'Aromatik & Tabus', 'type' => 'longtext'],
+                ['key' => 'no_gos', 'label' => 'No-Gos / Tabus', 'group_name' => 'Aromatik & Tabus', 'type' => 'longtext'],
+                ['key' => 'qualitaet_leitlinien', 'label' => 'Qualität / Herkunft', 'group_name' => 'Qualität & Preis', 'type' => 'longtext'],
+                ['key' => 'preis_positionierung', 'label' => 'Preis-Positionierung', 'group_name' => 'Qualität & Preis', 'type' => 'text'],
+                ['key' => 'default_schreibstil_id', 'label' => 'Default-Schreibstil', 'group_name' => 'Referenzen', 'type' => 'ref_schreibstil'],
             ],
         ],
         'foodbook' => [
             'titel' => 'Foodbook-Leitidee',
             'kontext_label' => 'Foodbook-Leitidee (was das Foodbook erfüllen muss)',
             'felder' => [
-                ['key' => 'leitidee', 'label' => 'Leitidee / roter Faden', 'gruppe' => 'Idee', 'typ' => 'longtext'],
-                ['key' => 'zweck_anforderungen', 'label' => 'Zweck & Anforderungen', 'gruppe' => 'Idee', 'typ' => 'longtext'],
-                ['key' => 'pflicht_konzepte', 'label' => 'Pflicht-Konzepte & Formate', 'gruppe' => 'Inhalt', 'typ' => 'longtext'],
-                ['key' => 'struktur_kapitel', 'label' => 'Struktur / Kapitel', 'gruppe' => 'Inhalt', 'typ' => 'longtext'],
-                ['key' => 'spektrum', 'label' => 'Spektrum (Anlass / Saison)', 'gruppe' => 'Rahmen', 'typ' => 'longtext'],
-                ['key' => 'umfang_rahmen', 'label' => 'Umfang / Rahmen', 'gruppe' => 'Rahmen', 'typ' => 'longtext'],
+                ['key' => 'leitidee', 'label' => 'Leitidee / roter Faden', 'group_name' => 'Idee', 'type' => 'longtext'],
+                ['key' => 'zweck_anforderungen', 'label' => 'Zweck & Anforderungen', 'group_name' => 'Idee', 'type' => 'longtext'],
+                ['key' => 'pflicht_konzepte', 'label' => 'Pflicht-Konzepte & Formate', 'group_name' => 'Inhalt', 'type' => 'longtext'],
+                ['key' => 'struktur_kapitel', 'label' => 'Struktur / Kapitel', 'group_name' => 'Inhalt', 'type' => 'longtext'],
+                ['key' => 'spektrum', 'label' => 'Spektrum (Anlass / Saison)', 'group_name' => 'Rahmen', 'type' => 'longtext'],
+                ['key' => 'umfang_rahmen', 'label' => 'Umfang / Rahmen', 'group_name' => 'Rahmen', 'type' => 'longtext'],
             ],
         ],
         'concept' => [
             'titel' => 'Konzept-Brief (kreativ)',
             'kontext_label' => 'Kreatives Foodkonzept (Leitidee, Inszenierung, Geschmackswelten)',
             'felder' => [
-                ['key' => 'name_claim', 'label' => 'Name + Claim', 'gruppe' => 'Idee', 'typ' => 'text'],
-                ['key' => 'leitidee', 'label' => 'Leitidee', 'gruppe' => 'Idee', 'typ' => 'longtext'],
-                ['key' => 'usp_eignung', 'label' => 'Vorteil / USP + Eignung', 'gruppe' => 'Verkauf', 'typ' => 'longtext'],
-                ['key' => 'inszenierung', 'label' => 'Inszenierung & Servierform', 'gruppe' => 'Inszenierung', 'typ' => 'longtext'],
-                ['key' => 'intern', 'label' => 'Intern (Constraints / Inklusiv)', 'gruppe' => 'Inszenierung', 'typ' => 'longtext'],
-                ['key' => 'geschmackswelten', 'label' => 'Geschmackswelten', 'gruppe' => 'Geschmackswelten', 'typ' => 'repeatable', 'sub' => ['claim' => 'Claim', 'description' => 'Beschreibung']],
+                ['key' => 'name_claim', 'label' => 'Name + Claim', 'group_name' => 'Idee', 'type' => 'text'],
+                ['key' => 'leitidee', 'label' => 'Leitidee', 'group_name' => 'Idee', 'type' => 'longtext'],
+                ['key' => 'usp_eignung', 'label' => 'Vorteil / USP + Eignung', 'group_name' => 'Verkauf', 'type' => 'longtext'],
+                ['key' => 'inszenierung', 'label' => 'Inszenierung & Servierform', 'group_name' => 'Inszenierung', 'type' => 'longtext'],
+                ['key' => 'intern', 'label' => 'Intern (Constraints / Inklusiv)', 'group_name' => 'Inszenierung', 'type' => 'longtext'],
+                ['key' => 'geschmackswelten', 'label' => 'Geschmackswelten', 'group_name' => 'Geschmackswelten', 'type' => 'repeatable', 'sub' => ['claim' => 'Claim', 'description' => 'Beschreibung']],
             ],
         ],
         'angebot' => [
             'titel' => 'Angebot — Business Case',
             'kontext_label' => 'Kundenprojekt / Business Case dieses Angebots',
             'felder' => [
-                ['key' => 'kunde_beziehung', 'label' => 'Kunde & Beziehung', 'gruppe' => 'Kunde & Ziel', 'typ' => 'longtext'],
-                ['key' => 'ziel_business_case', 'label' => 'Ziel / Business Case', 'gruppe' => 'Kunde & Ziel', 'typ' => 'longtext'],
-                ['key' => 'erfolgskriterien', 'label' => 'Erfolgskriterien', 'gruppe' => 'Kunde & Ziel', 'typ' => 'longtext'],
-                ['key' => 'budget', 'label' => 'Budget-Rahmen', 'gruppe' => 'Rahmen', 'typ' => 'text'],
-                ['key' => 'zielgruppen', 'label' => 'Zielgruppen', 'gruppe' => 'Positionierung', 'typ' => 'longtext'],
-                ['key' => 'rahmen', 'label' => 'Rahmen & Constraints', 'gruppe' => 'Rahmen', 'typ' => 'longtext'],
+                ['key' => 'kunde_beziehung', 'label' => 'Kunde & Beziehung', 'group_name' => 'Kunde & Ziel', 'type' => 'longtext'],
+                ['key' => 'ziel_business_case', 'label' => 'Ziel / Business Case', 'group_name' => 'Kunde & Ziel', 'type' => 'longtext'],
+                ['key' => 'erfolgskriterien', 'label' => 'Erfolgskriterien', 'group_name' => 'Kunde & Ziel', 'type' => 'longtext'],
+                ['key' => 'budget', 'label' => 'Budget-Rahmen', 'group_name' => 'Rahmen', 'type' => 'text'],
+                ['key' => 'zielgruppen', 'label' => 'Zielgruppen', 'group_name' => 'Positionierung', 'type' => 'longtext'],
+                ['key' => 'rahmen', 'label' => 'Rahmen & Constraints', 'group_name' => 'Rahmen', 'type' => 'longtext'],
             ],
         ],
     ];
@@ -101,7 +101,7 @@ class CanvasService
     {
         $out = [];
         foreach ($this->template($canvas->canvas_type)['felder'] as $f) {
-            if (($f['typ'] ?? '') === 'repeatable') {
+            if (($f['type'] ?? '') === 'repeatable') {
                 $out[$f['key']] = $canvas->entries->where('field_key', $f['key'])->sortBy('position')
                     ->map(fn ($e) => ['id' => $e->id, 'value' => $e->value, 'meta' => $e->meta ?? []])->values()->all();
             } else {
@@ -132,7 +132,7 @@ class CanvasService
     public function saveSkalare(FoodAlchemistCanvas $canvas, array $form): void
     {
         foreach ($this->template($canvas->canvas_type)['felder'] as $f) {
-            if (($f['typ'] ?? '') !== 'repeatable' && array_key_exists($f['key'], $form)) {
+            if (($f['type'] ?? '') !== 'repeatable' && array_key_exists($f['key'], $form)) {
                 $this->setSkalar($canvas, $f['key'], is_scalar($form[$f['key']]) ? (string) $form[$f['key']] : null);
             }
         }
@@ -163,7 +163,7 @@ class CanvasService
         $werte = $this->werte($canvas);
         $zeilen = [];
         foreach ($tpl['felder'] as $f) {
-            $typ = $f['typ'] ?? 'text';
+            $typ = $f['type'] ?? 'text';
             if ($typ === 'repeatable') {
                 $items = $werte[$f['key']] ?? [];
                 if ($items) {

@@ -45,7 +45,7 @@ class Index extends Component
 
     /** Formular-Array (Name ≠ View-Variable $artikel = Paginator!). */
     public array $artikelForm = [
-        'label' => '', 'artikel_nr' => '', 'kategorie' => '', 'material' => '', 'form' => '', 'farbe' => '',
+        'label' => '', 'artikel_nr' => '', 'category' => '', 'material' => '', 'form' => '', 'color' => '',
         'durchmesser_mm' => '', 'laenge_mm' => '', 'breite_mm' => '', 'hoehe_mm' => '', 'volumen_ml' => '', 'gewicht_g' => '',
         'leihpreis' => '', 'pfand' => '', 'unit' => 'Stk', 'note' => '',
         'vehicle_vocab_id' => '', // A2: Servier-Vehikel-Typ (Darreichungs-Scharnier)
@@ -204,7 +204,7 @@ class Index extends Component
             // A2: Servier-Vehikel-Typen fürs Artikel-Formular (Darreichungs-Scharnier)
             'vehikelListe' => \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_serving_vehicles')
                 ->whereNull('deleted_at')->where('is_inactive', false)
-                ->orderBy('gruppe')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'gruppe']),
+                ->orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'group_name']),
         ])->layout('platform::layouts.app');
     }
 }

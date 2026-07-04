@@ -29,10 +29,10 @@ class FoodAlchemistSupplierItemStructure extends Model
         'ist_halal' => 'boolean',
         'ist_vegan' => 'boolean',
         'needs_review' => 'boolean',
-        'main_ingredient_konfidenz' => 'decimal:3',
-        'flavor_ingredients_konfidenz' => 'decimal:3',
-        'processing_konfidenz' => 'decimal:3',
-        'commodity_group_konfidenz' => 'decimal:3',
+        'main_ingredient_confidence' => 'decimal:3',
+        'flavor_ingredients_confidence' => 'decimal:3',
+        'processing_confidence' => 'decimal:3',
+        'commodity_group_confidence' => 'decimal:3',
         'classified_at' => 'datetime',
     ];
 

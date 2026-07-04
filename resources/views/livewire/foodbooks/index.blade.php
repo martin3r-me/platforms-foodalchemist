@@ -69,7 +69,7 @@
                             <div class="{{ $label }}">Kapitel „{{ $kapitel->titel }}"</div>
                             <div class="flex justify-between"><span class="text-gray-500">€/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['vk_pro_person'], 2, ',', '.') }} €</span></div>
                             <div class="flex justify-between"><span class="text-gray-500">EK/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['ek_pro_person'], 2, ',', '.') }} €</span></div>
-                            @if($kapitelAgg['wareneinsatz_prozent'] !== null)<div class="flex justify-between"><span class="text-gray-500">Wareneinsatz</span><span class="tabular-nums">{{ number_format($kapitelAgg['wareneinsatz_prozent'], 1, ',', '.') }} %</span></div>@endif
+                            @if($kapitelAgg['food_cost_percent'] !== null)<div class="flex justify-between"><span class="text-gray-500">Wareneinsatz</span><span class="tabular-nums">{{ number_format($kapitelAgg['food_cost_percent'], 1, ',', '.') }} %</span></div>@endif
                         </div>
                     @endif
                 </div>
@@ -88,7 +88,7 @@
                     <div class="md:col-span-2"><label class="{{ $label }}">Bezeichnung</label><input type="text" wire:model="form.label" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Kunde</label><input type="text" wire:model="form.kunde" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Status</label>
-                        <select wire:model="form.status" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
+                        <select wire:model="form.status" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
                     </div>
                 </div>
                 {{-- #369: CRM-Kunde-Link (MVP, nur verlinken) — ergänzt das Freitext-Feld „Kunde" --}}
@@ -186,7 +186,7 @@
                                 <p class="text-sm {{ $b['ist_header'] ? 'font-semibold text-gray-700 dark:text-gray-200 mt-2' : 'text-gray-900 dark:text-gray-100' }}">{{ $b['label'] }}</p>
                                 @if($b['untertitel'] ?? null)<p class="text-[11px] text-gray-400 italic">{{ $b['untertitel'] }}</p>@endif
                                 @foreach($b['gerichte'] ?? [] as $g)
-                                    @if($g['typ'] === 'paket' || $g['typ'] === 'header')
+                                    @if($g['type'] === 'paket' || $g['type'] === 'header')
                                         <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 ml-3 mt-1">{{ $g['text'] }}</p>
                                     @else
                                         <p class="text-xs text-gray-600 dark:text-gray-300 {{ $g['source'] === 'name' ? 'italic text-amber-600 dark:text-amber-400' : '' }}" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}@if($g['source'] === 'name')<span class="ml-1 text-[10px]">· Wording fehlt</span>@endif</p>
@@ -274,7 +274,7 @@
                                                 @break
                                             @case('header_frei_preis')
                                                 <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
-                                                <span class="text-gray-500">· {{ $block->preis_basis === 'staffel' ? 'Staffel' : number_format((float) ($block->preis_wert ?? 0), 2, ',', '.') . ' € ' . ($block->preis_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
+                                                <span class="text-gray-500">· {{ $block->preis_basis === 'staffel' ? 'Staffel' : number_format((float) ($block->price_value ?? 0), 2, ',', '.') . ' € ' . ($block->preis_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
                                                 @break
                                             @case('spacer') <span class="italic text-gray-400">Leerzeile ({{ $block->hoehe ?? 'mittel' }})</span> @break
                                             @case('image') <span class="text-gray-500">🖼 Bild</span> @break
@@ -299,7 +299,7 @@
                                         @if($block->type === 'header_frei_preis')
                                             <div class="flex gap-2">
                                                 <select wire:model="blockForm.preis_basis" class="{{ $input }} w-32"><option value="person">pro Person</option><option value="pauschal">Pauschal</option><option value="staffel">Staffel</option></select>
-                                                <input type="number" step="0.01" wire:model="blockForm.preis_wert" class="{{ $input }} w-28 text-right tabular-nums" placeholder="0,00 €" />
+                                                <input type="number" step="0.01" wire:model="blockForm.price_value" class="{{ $input }} w-28 text-right tabular-nums" placeholder="0,00 €" />
                                             </div>
                                         @endif
                                         @if($block->type === 'concept_ref')

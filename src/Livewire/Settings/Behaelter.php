@@ -32,7 +32,7 @@ class Behaelter extends Component
     public function mount(): void
     {
         foreach (array_keys(self::VOKABULARE) as $key) {
-            $this->neu[$key] = ['name' => '', 'gruppe' => '', 'kapazitaet_kg' => ''];
+            $this->neu[$key] = ['name' => '', 'group_name' => '', 'kapazitaet_kg' => ''];
         }
     }
 
@@ -57,7 +57,7 @@ class Behaelter extends Component
             'team_id' => Auth::user()?->currentTeamRelation?->id,
             'slug' => $slug,
             'name' => $name,
-            'gruppe' => trim($this->neu[$vokabular]['gruppe'] ?? '') ?: null,
+            'group_name' => trim($this->neu[$vokabular]['group_name'] ?? '') ?: null,
             'sort_order' => 100,
             'created_at' => now(), 'updated_at' => now(),
         ];
@@ -67,7 +67,7 @@ class Behaelter extends Component
         }
         DB::table($meta['tabelle'])->insert($zeile);
 
-        $this->neu[$vokabular] = ['name' => '', 'gruppe' => '', 'kapazitaet_kg' => ''];
+        $this->neu[$vokabular] = ['name' => '', 'group_name' => '', 'kapazitaet_kg' => ''];
         $this->fehler = null;
         $this->meldung = "«{$name}» angelegt.";
     }
@@ -87,7 +87,7 @@ class Behaelter extends Component
         }
     }
 
-    /** Phase 5: hart löschen, wenn von keinem Rezept genutzt (sonst gesperrt → deaktivieren). */
+    /** Phase 5: hart löschen, wenn von keinem Rezept genutzt (sonst locked → deaktivieren). */
     public function delete(string $vokabular, int $id): void
     {
         $meta = self::VOKABULARE[$vokabular] ?? null;
@@ -147,7 +147,7 @@ class Behaelter extends Component
         foreach (self::VOKABULARE as $key => $meta) {
             $listen[$key] = $meta + [
                 'zeilen' => DB::table($meta['tabelle'])->whereNull('deleted_at')
-                    ->orderBy('gruppe')->orderBy('sort_order')->orderBy('name')->get(),
+                    ->orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get(),
             ];
         }
 

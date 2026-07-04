@@ -29,7 +29,7 @@ class PairingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'type' => 'object',
             'properties' => [
                 'zutat' => ['type' => 'string', 'description' => 'Zutat-Name oder Anker-Slug, z. B. "Kürbis" oder "kuerbis"'],
-                'typ' => ['type' => 'string', 'enum' => ['klassisch', 'modern'], 'description' => 'Optionaler Kanten-Filter'],
+                'type' => ['type' => 'string', 'enum' => ['klassisch', 'modern'], 'description' => 'Optionaler Kanten-Filter'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'default' => 20],
             ],
             'required' => ['zutat'],
@@ -45,7 +45,7 @@ class PairingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
 
         $ergebnis = app(PairingService::class)->neighborsForName(
             (string) $arguments['zutat'],
-            isset($arguments['typ']) ? (string) $arguments['typ'] : null,
+            isset($arguments['type']) ? (string) $arguments['type'] : null,
             min(100, max(1, (int) ($arguments['limit'] ?? 20))),
         );
         if ($ergebnis['anker'] === null) {

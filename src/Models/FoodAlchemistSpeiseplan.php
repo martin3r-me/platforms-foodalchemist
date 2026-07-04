@@ -23,7 +23,7 @@ class FoodAlchemistSpeiseplan extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'start_datum' => 'date',
+        'start_date' => 'date',
         'zyklus_wochen' => 'integer',
         'min_abstand_tage' => 'integer',
     ];
@@ -31,7 +31,7 @@ class FoodAlchemistSpeiseplan extends Model
     public function eintraege(): HasMany
     {
         return $this->hasMany(FoodAlchemistSpeiseplanEintrag::class, 'menu_plan_id')
-            ->orderBy('datum')->orderBy('woche')->orderBy('wochentag')->orderBy('position');
+            ->orderBy('entry_date')->orderBy('woche')->orderBy('wochentag')->orderBy('position');
     }
 
     public function linien(): HasMany

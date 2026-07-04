@@ -38,7 +38,7 @@ return new class extends Migration
             $table->unique(['recipe_id', 'equipment_id']);
         });
 
-        foreach (['foodalchemist_recipe_level_suitability' => 'level_slug', 'foodalchemist_recipe_sector_suitability' => 'sektor_slug'] as $tabelle => $slugSpalte) {
+        foreach (['foodalchemist_recipe_level_suitability' => 'level_slug', 'foodalchemist_recipe_sector_suitability' => 'sector_slug'] as $tabelle => $slugSpalte) {
             Schema::create($tabelle, function (Blueprint $table) use ($slugSpalte) {
                 $table->id();
                 $table->uuid('uuid')->unique();

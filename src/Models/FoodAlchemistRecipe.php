@@ -37,17 +37,17 @@ class FoodAlchemistRecipe extends Model
         'is_user_stub' => 'boolean',
         'yield_kg' => 'decimal:3',
         'yield_kg_manual' => 'decimal:3',
-        'ertrag_stueck' => 'decimal:2',   // Basisrezept-Ertrag in Stück (kg↔Stück)
+        'yield_pieces' => 'decimal:2',   // Basisrezept-Ertrag in Stück (kg↔Stück)
         'ek_total_eur' => 'decimal:4',
         'ek_per_kg_eur' => 'decimal:4',
-        'nebenkosten_eur' => 'decimal:4',
+        'additional_costs_eur' => 'decimal:4',
         'n_ingredients_total' => 'integer',
-        'n_ingredients_ungemappt' => 'integer',
+        'n_ingredients_unmapped' => 'integer',
         'ai_confidence' => 'decimal:3',
-        'allergene_aggregiert_am' => 'datetime',
-        'zusatz_aggregiert_am' => 'datetime',
-        'nutri_aggregiert_am' => 'datetime',
-        'spec_aggregiert_am' => 'datetime',
+        'allergens_aggregated_at' => 'datetime',
+        'additive_aggregated_at' => 'datetime',
+        'nutri_aggregated_at' => 'datetime',
+        'spec_aggregated_at' => 'datetime',
         'spec_is_vegan' => 'boolean',
         'spec_is_vegetarian' => 'boolean',
         'spec_is_halal' => 'boolean',
@@ -79,7 +79,7 @@ class FoodAlchemistRecipe extends Model
 
     public function kategorie(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipeCategory::class, 'kategorie_id');
+        return $this->belongsTo(FoodAlchemistRecipeCategory::class, 'category_id');
     }
 
     public function equipment(): BelongsToMany
@@ -118,7 +118,7 @@ class FoodAlchemistRecipe extends Model
 
     public function vkEinheit(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'vk_unit_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'sales_unit_vocab_id');
     }
 
     /** Darreichungs-Varianten des Gerichts (Umbau-Spec Phase 3). */
@@ -131,7 +131,7 @@ class FoodAlchemistRecipe extends Model
     public function standardDarreichung(): HasOne
     {
         return $this->hasOne(FoodAlchemistRecipeDarreichung::class, 'recipe_id')
-            ->where('ist_standard', true);
+            ->where('is_standard', true);
     }
 
     public function customerNames(): HasMany

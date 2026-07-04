@@ -11,14 +11,14 @@
 
     {{-- Achsen-Tabs --}}
     <div class="flex items-center gap-1.5">
-        <button type="button" wire:click="setAchse('kategorie')"
-                class="{{ $pill }} {{ $achse === 'kategorie' ? $variantPill['primary'] : $variantPill['secondary'] }}">Kategorien</button>
-        <button type="button" wire:click="setAchse('klasse')"
-                class="{{ $pill }} {{ $achse === 'klasse' ? $variantPill['primary'] : $variantPill['secondary'] }}">Klassen</button>
+        <button type="button" wire:click="setAchse('category')"
+                class="{{ $pill }} {{ $achse === 'category' ? $variantPill['primary'] : $variantPill['secondary'] }}">Kategorien</button>
+        <button type="button" wire:click="setAchse('class')"
+                class="{{ $pill }} {{ $achse === 'class' ? $variantPill['primary'] : $variantPill['secondary'] }}">Klassen</button>
         <span class="text-[10px] text-gray-400 ml-2 leading-snug">Rein organisatorisch — Filter-/Gruppier-Achse im Concept-Browser &amp; Foodbook/Angebots-Picker, ohne Preis-Einfluss.</span>
     </div>
 
-    @if($achse === 'kategorie')
+    @if($achse === 'category')
         @php($topKats = collect($kategorien)->where('depth', 0)->values())
         @php($selKat = collect($kategorien)->firstWhere('id', $katSelectedId))
         @php($subKats = $katSelectedId !== null ? collect($kategorien)->where('parent_id', $katSelectedId)->values() : collect())

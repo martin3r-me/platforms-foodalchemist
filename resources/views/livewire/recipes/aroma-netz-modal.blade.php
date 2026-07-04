@@ -45,9 +45,9 @@
                     @if($pos->has($k['a']) && $pos->has($k['b']))
                         <line x1="{{ $pos[$k['a']]['x'] }}" y1="{{ $pos[$k['a']]['y'] }}"
                               x2="{{ $pos[$k['b']]['x'] }}" y2="{{ $pos[$k['b']]['y'] }}"
-                              data-bruecke="{{ $k['typ'] }}"
+                              data-bruecke="{{ $k['type'] }}"
                               :opacity="(alle || hov === {{ $k['a'] }} || hov === {{ $k['b'] }}) ? 0.85 : 0"
-                              @switch($k['typ'])
+                              @switch($k['type'])
                                   @case('klassisch') stroke="#d6409f" stroke-width="1.8" @break
                                   @case('modern') stroke="#d6409f" stroke-width="1.4" stroke-dasharray="2 4" @break
                                   @case('kontrast') stroke="#06b6d4" stroke-width="1.4" stroke-dasharray="2 4" @break
@@ -63,7 +63,7 @@
                         <line x1="{{ $pos[$s['anchor_id']]['x'] }}" y1="{{ $pos[$s['anchor_id']]['y'] }}" x2="{{ $s['x'] }}" y2="{{ $s['y'] }}"
                               stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.6" />
                         <circle cx="{{ $s['x'] }}" cy="{{ $s['y'] }}" r="6" fill="#fcd34d" stroke="#f59e0b" data-netz-vorschlag="{{ $s['slug'] }}">
-                            <title>{{ $s['display_de'] }} ({{ $s['typ'] }}) — Vorschlag über {{ $pos[$s['anchor_id']]['slug'] }}</title>
+                            <title>{{ $s['display_de'] }} ({{ $s['type'] }}) — Vorschlag über {{ $pos[$s['anchor_id']]['slug'] }}</title>
                         </circle>
                         <text x="{{ $s['x'] }}" y="{{ $s['y'] + 16 }}" text-anchor="middle" font-size="9"
                               style="paint-order: stroke; stroke: rgba(255,255,255,.8); stroke-width: 2px;" class="fill-amber-600 dark:fill-amber-400">{{ $s['slug'] }}</text>

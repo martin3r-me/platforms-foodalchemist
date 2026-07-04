@@ -46,7 +46,7 @@
                         <div class="{{ $label }}">VK/Person · Woche ({{ $mahlzeiten[$mahlzeit] ?? '' }}) · EK {{ number_format($kosten['woche']['ek'], 2, ',', '.') }} €</div>
                     </div>
 
-                    @if($veggie && $veggie['aktiv'])
+                    @if($veggie && $veggie['active'])
                         <div class="pt-2 border-t border-black/5 dark:border-white/10">
                             @if($veggie['erfuellt'])
                                 <p class="text-[11px] {{ $pill }} {{ $variantPill['success'] }} w-full justify-center">✓ Vegetarisch an jedem Werktag</p>
@@ -80,11 +80,11 @@
                 <div class="{{ $cardAccent }}"></div>
                 <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
                     <div class="md:col-span-2"><label class="{{ $label }}">Name</label><input type="text" wire:model="form.name" class="{{ $input }}" /></div>
-                    <div><label class="{{ $label }}">Start (Montag)</label><input type="date" wire:model.live="form.start_datum" wire:change="speichern" class="{{ $input }}" /></div>
+                    <div><label class="{{ $label }}">Start (Montag)</label><input type="date" wire:model.live="form.start_date" wire:change="speichern" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Zyklus (Wochen)</label><input type="number" min="1" wire:model.live="form.zyklus_wochen" wire:change="speichern" class="{{ $input }} text-right tabular-nums" /></div>
                     <div><label class="{{ $label }}">Min. Abstand (T.)</label><input type="number" min="0" wire:model.live="form.min_abstand_tage" wire:change="speichern" class="{{ $input }} text-right tabular-nums" title="0 = keine Wiederholungsregel" /></div>
                     <div><label class="{{ $label }}">Status</label>
-                        <select wire:model="form.status" wire:change="speichern" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select></div>
+                        <select wire:model="form.status" wire:change="speichern" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select></div>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
@@ -106,7 +106,7 @@
                 <div class="flex flex-wrap items-center gap-2">
                     @foreach($linien as $linie)
                         <div wire:key="linie-{{ $linie->id }}" class="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg border border-black/5 dark:border-white/10">
-                            <span class="w-3 h-3 rounded-full shrink-0" style="background: {{ $linie->farbe ?: '#888780' }}"></span>
+                            <span class="w-3 h-3 rounded-full shrink-0" style="background: {{ $linie->color ?: '#888780' }}"></span>
                             <span class="text-xs">{{ $linie->name }}</span>
                             @if($linie->ist_vegetarisch)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg</span>@endif
                             <button type="button" wire:click="linieVerschieben({{ $linie->id }}, -1)" class="text-gray-300 hover:text-violet-500 text-[10px]" title="hoch">▲</button>
@@ -123,7 +123,7 @@
                 @if($editLinieId !== null)
                     <div class="mt-1 pt-2 border-t border-black/5 dark:border-white/10 flex flex-wrap items-end gap-2">
                         <div><label class="{{ $label }}">Name</label><input type="text" wire:model="linieForm.name" class="{{ $input }} w-44 h-8" /></div>
-                        <div><label class="{{ $label }}">Farbe</label><input type="color" wire:model="linieForm.farbe" class="h-8 w-12 rounded border border-black/10 dark:border-white/10 bg-transparent" /></div>
+                        <div><label class="{{ $label }}">Farbe</label><input type="color" wire:model="linieForm.color" class="h-8 w-12 rounded border border-black/10 dark:border-white/10 bg-transparent" /></div>
                         <label class="flex items-center gap-1.5 text-xs pb-1.5"><input type="checkbox" wire:model="linieForm.ist_vegetarisch" /> vegetarisch</label>
                         <button type="button" wire:click="linieSpeichern" class="{{ $btnPrimary }} h-8">OK</button>
                         <button type="button" wire:click="$set('editLinieId', null)" class="{{ $btnGhost }} h-8">Abbrechen</button>
@@ -169,12 +169,12 @@
                                 @endforeach
                             </tr></thead>
                             <tbody>
-                                @php($zeilenLinien = $linien->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'farbe' => $l->farbe])->values())
-                                @if(isset($raster[0]))@php($zeilenLinien->push(['id' => 0, 'name' => 'Ohne Linie', 'farbe' => null]))@endif
+                                @php($zeilenLinien = $linien->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'color' => $l->color])->values())
+                                @if(isset($raster[0]))@php($zeilenLinien->push(['id' => 0, 'name' => 'Ohne Linie', 'color' => null]))@endif
                                 @foreach($zeilenLinien as $zl)
                                     <tr class="border-t border-black/5 dark:border-white/10 align-top">
                                         <td class="{{ $td }} whitespace-nowrap">
-                                            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: {{ $zl['farbe'] ?: '#888780' }}"></span><span class="font-medium text-gray-600 dark:text-gray-300">{{ $zl['name'] }}</span></span>
+                                            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: {{ $zl['color'] ?: '#888780' }}"></span><span class="font-medium text-gray-600 dark:text-gray-300">{{ $zl['name'] }}</span></span>
                                         </td>
                                         @foreach($wochenTage as $tag)
                                             @php($ymd = $tag->format('Y-m-d'))
@@ -183,7 +183,7 @@
                                                 <div class="space-y-0.5">
                                                     @foreach($eintraege as $e)
                                                         <div wire:key="e-{{ $e->id }}" class="group flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px]"
-                                                             style="background: {{ ($zl['farbe'] ?? null) ? $zl['farbe'].'22' : 'rgba(0,0,0,0.04)' }}">
+                                                             style="background: {{ ($zl['color'] ?? null) ? $zl['color'].'22' : 'rgba(0,0,0,0.04)' }}">
                                                             <span class="flex-1 min-w-0 truncate" title="{{ $e->inhaltName() }}">{{ $e->inhaltName() }}</span>
                                                             <button type="button" wire:click="eintragRaus({{ $e->id }})" class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 shrink-0">✕</button>
                                                         </div>

@@ -29,7 +29,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
             'type' => 'object',
             'properties' => [
                 'status' => ['type' => 'string', 'description' => 'offen (Default) | abgeschlossen | ignoriert | leer = alle'],
-                'typ' => ['type' => 'string', 'enum' => ['preis_anomalie', 'veraltete_preise', 'marge_unter_ziel', 'wareneinsatz_ueber_ziel', 'datenqualitaet_gp_la', 'naehrwert_plausi']],
+                'type' => ['type' => 'string', 'enum' => ['preis_anomalie', 'veraltete_preise', 'marge_unter_ziel', 'wareneinsatz_ueber_ziel', 'datenqualitaet_gp_la', 'naehrwert_plausi']],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 20],
             ],
         ];
@@ -44,7 +44,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
         $svc = app(SignalService::class);
         $treffer = $svc->paginate(array_filter([
             'status' => $arguments['status'] ?? null,
-            'typ' => $arguments['typ'] ?? null,
+            'type' => $arguments['type'] ?? null,
         ], fn ($v) => $v !== null), $team, min(50, max(1, (int) ($arguments['limit'] ?? 20))));
 
         return ToolResult::success([
@@ -53,7 +53,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
             'offen_nach_typ' => $svc->offeneNachTyp($team),
             'signale' => collect($treffer->items())->map(fn ($s) => [
                 'id' => $s->id,
-                'typ' => $s->typ instanceof \BackedEnum ? $s->typ->value : $s->typ,
+                'type' => $s->type instanceof \BackedEnum ? $s->type->value : $s->type,
                 'severity' => $s->severity instanceof \BackedEnum ? $s->severity->value : $s->severity,
                 'status' => $s->status instanceof \BackedEnum ? $s->status->value : $s->status,
                 'titel' => $s->titel,

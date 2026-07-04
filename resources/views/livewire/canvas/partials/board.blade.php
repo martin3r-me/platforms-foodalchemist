@@ -16,7 +16,7 @@
                 <p class="text-[11px] uppercase tracking-wider text-gray-400">{{ $gruppe }}</p>
 
                 @foreach($felder as $f)
-                    @if(($f['typ'] ?? 'text') === 'repeatable')
+                    @if(($f['type'] ?? 'text') === 'repeatable')
                         {{-- Repeatable (Geschmackswelten): Liste + Hinzufügen --}}
                         <div>
                             <label class="block {{ $label }} mb-1">{{ $f['label'] }}</label>
@@ -43,7 +43,7 @@
                                 </div>
                             </div>
                         </div>
-                    @elseif(($f['typ'] ?? '') === 'ref_schreibstil')
+                    @elseif(($f['type'] ?? '') === 'ref_schreibstil')
                         @php($schreibstile = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam(auth()->user()->currentTeamRelation)->where('is_inactive', false)->orderBy('name')->get(['id', 'name']))
                         <div>
                             <label class="block {{ $label }} mb-1">{{ $f['label'] }}</label>
@@ -52,7 +52,7 @@
                                 @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
                             </select>
                         </div>
-                    @elseif(($f['typ'] ?? '') === 'text')
+                    @elseif(($f['type'] ?? '') === 'text')
                         <div>
                             <label class="block {{ $label }} mb-1">{{ $f['label'] }}</label>
                             <input type="text" wire:model="canvasForm.{{ $f['key'] }}" class="{{ $input }}" />

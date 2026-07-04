@@ -184,7 +184,7 @@ class Index extends Component
             'spruenge' => $ergebnis['spruenge']->take(50)->all(),
             'ausreisser' => $ergebnis['ausreisser']->take(50)
                 ->map(fn ($a) => ['label' => $a->label, 'lieferant' => $a->lieferant,
-                    'wg' => $a->wg, 'wert' => $a->wert, 'median' => $a->median, 'faktor' => $a->faktor, 'unit' => $a->unit])
+                    'wg' => $a->wg, 'value' => $a->value, 'median' => $a->median, 'faktor' => $a->faktor, 'unit' => $a->unit])
                 ->all(),
         ];
         $this->dispatch('modal.open', name: 'preis-anomalien');

@@ -267,7 +267,7 @@
                         <option :value="k.id" x-text="k.label"></option>
                     </template>
                 </select>
-                <select x-model="rezFilter.niveau" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-niveau>
+                <select x-model="rezFilter.level" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-niveau>
                     <option value="">Jedes Niveau</option>
                     <template x-for="n in (vokabular?.niveaus ?? [])" :key="n.slug">
                         <option :value="n.slug" x-text="n.label"></option>

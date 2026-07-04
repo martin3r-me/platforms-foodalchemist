@@ -53,7 +53,7 @@
                     <span class="{{ $pill }} {{ $variantPill[$sig->severity->badgeVariant()] ?? $variantPill['secondary'] }} shrink-0">{{ $sig->severity->label() }}</span>
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-1.5">
-                            <span class="text-gray-400 shrink-0">{{ $sig->typ->label() }}</span>
+                            <span class="text-gray-400 shrink-0">{{ $sig->type->label() }}</span>
                             <span class="font-medium text-gray-900 dark:text-gray-100 truncate">{{ $sig->titel }}</span>
                         </div>
                         @if($sig->description)<p class="text-gray-500 mt-0.5">{{ \Illuminate\Support\Str::limit($sig->description, 140) }}</p>@endif
@@ -110,7 +110,7 @@
                     <button type="button" wire:click="$dispatch('{{ $b->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $b->rezept_id }} })"
                             class="min-w-0 truncate text-sky-600 dark:text-sky-400 hover:underline text-left" title="{{ $b->rezept_name }}">{{ $b->rezept_name }}</button>
                     <span class="{{ $pill }} {{ $variantPill['info'] }} shrink-0">{{ $b->feld }}</span>
-                    <span class="min-w-0 truncate text-gray-500" title="{{ is_string($b->wert) ? trim($b->wert, '"') : '' }}">{{ \Illuminate\Support\Str::limit(trim((string) $b->wert, '"'), 60) }}</span>
+                    <span class="min-w-0 truncate text-gray-500" title="{{ is_string($b->value) ? trim($b->value, '"') : '' }}">{{ \Illuminate\Support\Str::limit(trim((string) $b->value, '"'), 60) }}</span>
                     @if($b->confidence !== null)<span class="text-gray-400 shrink-0">{{ round($b->confidence * 100) }} %</span>@endif
                     <span class="ml-auto shrink-0 flex gap-1">
                         <button type="button" wire:click="bulkUebernehmen({{ $b->id }})" class="{{ $btnGhostXs }} text-emerald-600" data-rq-bulk-ok>Übernehmen</button>
@@ -150,7 +150,7 @@
                 @forelse($ungemappt as $r)
                     <button type="button" wire:key="rqu-{{ $r->id }}" wire:click="$dispatch('{{ $r->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $r->id }} })"
                             class="flex w-full items-center justify-between text-left text-[11px] text-sky-600 dark:text-sky-400 hover:underline py-0.5">
-                        <span class="min-w-0 truncate">{{ $r->name }}</span><span class="text-gray-400 shrink-0 ml-1">{{ $r->n_ingredients_ungemappt }}?</span>
+                        <span class="min-w-0 truncate">{{ $r->name }}</span><span class="text-gray-400 shrink-0 ml-1">{{ $r->n_ingredients_unmapped }}?</span>
                     </button>
                 @empty
                     <p class="text-[11px] text-gray-400">— keine —</p>

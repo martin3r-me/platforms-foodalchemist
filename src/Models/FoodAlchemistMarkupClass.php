@@ -10,7 +10,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Aufschlagsklasse (M6-01, D-6 §2.2) — VK-Kalkulationsbasis;
- * formel_typ 'deckungsbeitrag' ist anlegbar, rechnet aber nicht (W-1-Guard im MargeService).
+ * formula_type 'deckungsbeitrag' ist anlegbar, rechnet aber nicht (W-1-Guard im MargeService).
  */
 class FoodAlchemistMarkupClass extends Model
 {

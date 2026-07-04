@@ -37,8 +37,8 @@ class Kueche extends Component
             return;
         }
         app(TeamSettingsService::class)->update($team, [
-            'kuechen_typ' => isset(TeamSettingsService::KUECHEN_TYPEN[$this->kuechenTyp]) ? $this->kuechenTyp : null,
-            'typ_farben' => $this->sanitizeFarben(),
+            'kitchen_type' => isset(TeamSettingsService::KUECHEN_TYPEN[$this->kuechenTyp]) ? $this->kuechenTyp : null,
+            'type_colors' => $this->sanitizeFarben(),
         ]);
         $this->meldung = 'Gespeichert — der Generator nutzt das Profil ab dem nächsten Lauf.';
     }

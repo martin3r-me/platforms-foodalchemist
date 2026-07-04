@@ -93,7 +93,7 @@
                             @if($rollup['is_halal'])<span class="{{ $pill }} {{ $variantPill['info'] }}">halal</span>@endif
                             @if($rollup['contains_pork'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Schwein</span>@endif
                             @if($rollup['contains_beef'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Rind</span>@endif
-                            <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$rollup['konfidenz']] ?? $variantPill['secondary'] }}" title="Allergen-Konfidenz (schwächstes Gericht)">Konf. {{ $rollup['konfidenz'] }}</span>
+                            <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$rollup['confidence']] ?? $variantPill['secondary'] }}" title="Allergen-Konfidenz (schwächstes Gericht)">Konf. {{ $rollup['confidence'] }}</span>
                         </div>
                     @endif
                     <div class="space-y-1 pt-1">
@@ -101,13 +101,13 @@
                             <div class="flex items-center justify-between gap-2 text-xs py-1 border-t border-black/5 dark:border-white/10">
                                 <span class="min-w-0 truncate">
                                     <span class="text-[10px] text-gray-400 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
-                                    @if($z['typ'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['typ'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
+                                    @if($z['type'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['type'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
                                 </span>
                                 <span class="shrink-0 tabular-nums {{ $z['preis'] === null ? 'text-gray-300' : 'text-gray-900 dark:text-gray-100' }}">{{ $z['preis'] !== null ? number_format($z['preis'], 2, ',', '.') . ' €' : '—' }}</span>
                             </div>
                         @endforeach
                     </div>
-                    @unless($selected->is_vorlage)
+                    @unless($selected->is_template)
                         <button type="button" wire:click="alsVorlage" class="{{ $btnGhost }} w-full justify-center mt-2">Als Vorlage speichern</button>
                     @endunless
                 </div>
@@ -124,7 +124,7 @@
                 <div class="{{ $cardAccent }}"></div>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div class="md:col-span-2">
-                        <label class="{{ $label }}">Name {{ $selected->is_vorlage ? '(Vorlage)' : '' }}</label>
+                        <label class="{{ $label }}">Name {{ $selected->is_template ? '(Vorlage)' : '' }}</label>
                         <input type="text" wire:model="form.name" class="{{ $input }}" />
                     </div>
                     <div>
@@ -141,7 +141,7 @@
                     <div>
                         <label class="{{ $label }}">Status</label>
                         <select wire:model="form.status" class="{{ $input }}">
-                            @foreach(['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
+                            @foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
                         </select>
                     </div>
                 </div>
@@ -213,14 +213,14 @@
                                     <span class="{{ $pill }} {{ $variantPill['info'] }}">Paket</span>
                                     <span class="text-sm font-medium">{{ $slot->paket->name }}</span>
                                     <span class="text-gray-400 text-xs tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</span>
-                                @elseif($slot->vk_recipe_id && $slot->gericht)
+                                @elseif($slot->sales_recipe_id && $slot->gericht)
                                     <span class="{{ $pill }} {{ $variantPill['secondary'] }}">festes Gericht</span>
                                     <span class="text-sm font-medium">{{ $slot->gericht->name }}</span>
-                                    <span class="text-gray-400 text-xs tabular-nums">{{ $slot->gericht->vk_netto !== null ? number_format((float) $slot->gericht->vk_netto, 2, ',', '.') . ' €' : '—' }}</span>
+                                    <span class="text-gray-400 text-xs tabular-nums">{{ $slot->gericht->sales_net !== null ? number_format((float) $slot->gericht->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
                                 @else
                                     <span class="text-xs text-gray-400">leer — Paket wählen oder festes Gericht setzen</span>
                                 @endif
-                                @if($slot->package_id || $slot->vk_recipe_id)
+                                @if($slot->package_id || $slot->sales_recipe_id)
                                     <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-400 hover:text-red-500">leeren</button>
                                 @endif
                             </div>
@@ -246,7 +246,7 @@
                                                 <button type="button" wire:key="k-{{ $slot->id }}-{{ $k->id }}" wire:click="fuelleGericht({{ $slot->id }}, {{ $k->id }})"
                                                         class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
                                                     <span class="truncate">{{ $k->name }}</span>
-                                                    <span class="text-gray-400 tabular-nums shrink-0">{{ $k->vk_netto !== null ? number_format((float) $k->vk_netto, 2, ',', '.') . ' €' : '' }}</span>
+                                                    <span class="text-gray-400 tabular-nums shrink-0">{{ $k->sales_net !== null ? number_format((float) $k->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                                                 </button>
                                             @endforeach
                                         </div>

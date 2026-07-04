@@ -68,7 +68,7 @@ class AngebotePostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'angebot' => ['id' => $a->id, 'name' => $a->name,
                 'status' => $a->status instanceof \BackedEnum ? $a->status->value : $a->status],
             'concepts' => $concepts,
-            'hinweis' => 'Status-Fortschritt + CRM-Verknüpfung macht ein Mensch.',
+            'note' => 'Status-Fortschritt + CRM-Verknüpfung macht ein Mensch.',
         ]);
     }
 

@@ -45,7 +45,7 @@
                             ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/15 text-orange-700 dark:text-orange-300'
                             : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}" data-templates-toggle>
                     <span class="font-medium">📐 Templates</span>
-                    <span class="text-[11px] {{ $nurTemplates ? 'text-orange-500 font-medium' : 'text-gray-400' }}">{{ $nurTemplates ? 'aktiv' : $templateAnzahl }}</span>
+                    <span class="text-[11px] {{ $nurTemplates ? 'text-orange-500 font-medium' : 'text-gray-400' }}">{{ $nurTemplates ? 'active' : $templateAnzahl }}</span>
                 </button>
 
                 <button type="button" wire:click="waehleHauptgruppe(null)"
@@ -200,7 +200,7 @@
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
                                 @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>📐 Template</span>@endif
                             </td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-500 truncate max-w-[12rem] whitespace-nowrap">{{ $r->kategorie?->label ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-500 truncate max-w-[12rem] whitespace-nowrap">{{ $r->category?->label ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->production_depth ?? '—' }}</td>
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge — Auto-Zustand) --}}
@@ -218,11 +218,11 @@
                             </td>
                             <td class="{{ $td }} text-gray-500 text-right tabular-nums whitespace-nowrap">
                                 {{ $r->n_ingredients_total }}
-                                @if($r->n_ingredients_ungemappt > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }} ml-1" title="ungemappte Zutaten — F7.1: Allergene unbekannt">{{ $r->n_ingredients_ungemappt }}?</span>@endif
+                                @if($r->n_ingredients_unmapped > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }} ml-1" title="ungemappte Zutaten — F7.1: Allergene unbekannt">{{ $r->n_ingredients_unmapped }}?</span>@endif
                             </td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '—' }}</td>
                             <td class="{{ $td }}">
-                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergene_konfidenz] ?? $variantPill['secondary'] }}">{{ $r->allergene_konfidenz }}</span>
+                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
                             </td>
                         </tr>
                     @empty

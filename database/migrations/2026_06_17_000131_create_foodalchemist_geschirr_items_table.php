@@ -27,7 +27,7 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index();
-            $table->foreignId('geschirr_supplier_id')->nullable()
+            $table->foreignId('tableware_supplier_id')->nullable()
                 ->constrained('foodalchemist_tableware_suppliers')->nullOnDelete();
 
             // Identität

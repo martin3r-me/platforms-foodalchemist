@@ -36,7 +36,7 @@ class FoodAlchemistGeschirrItem extends Model
 
     public function supplier(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistGeschirrSupplier::class, 'geschirr_supplier_id');
+        return $this->belongsTo(FoodAlchemistGeschirrSupplier::class, 'tableware_supplier_id');
     }
 
     /** Kurz-Maß-Label für Listen/Detail (Ø / L×B×H / Volumen — je nachdem was gesetzt ist). */

@@ -325,10 +325,10 @@ return [
             'task' => 'Schreibe die Rezept-Beschreibung im §8-Stil (sachlich-appetitlich, 2-4 Sätze, '
                 . 'Textur + Einsatzkontext, keine Marketing-Floskeln): werte = {description}.',
         ],
-        'recipe.kategorie' => [
+        'recipe.category' => [
             'tier' => 'D',
             'task' => 'Ordne das Rezept der passenden Produktions-Kategorie zu (aus der mitgegebenen '
-                . 'Kategorie-Liste): werte = {kategorie_id, kategorie_name}.',
+                . 'Kategorie-Liste): werte = {category_id, kategorie_name}.',
         ],
         'recipe.garverlust' => [
             'tier' => 'C',
@@ -423,7 +423,7 @@ return [
             'task' => 'Beurteile die Eignung des Rezepts je Verpflegungs-Sektor '
                 . '(geeignet|bedingt|ungeeignet + kurze Begruendung): werte = {sektoren: {<slug>: {eignung, grund}}}.',
         ],
-        'recipe.niveau' => [
+        'recipe.level' => [
             'tier' => 'B',
             'task' => 'Beurteile die Eignung des Rezepts je Niveau-Stufe '
                 . '(geeignet|bedingt|ungeeignet + kurze Begruendung): werte = {niveaus: {<slug>: {eignung, grund}}}.',
@@ -523,26 +523,26 @@ return [
         'vk.wording' => [
             'tier' => 'A',
             'task' => 'Generiere den kanonischen Marketing-Namen (VK-Wording-Standard, '
-                . 'stil-neutral — Schreibstile transformieren erst spaeter): werte = {vk_wording_standard}.',
+                . 'stil-neutral — Schreibstile transformieren erst spaeter): werte = {sales_wording_standard}.',
         ],
         'concept.wording' => [
             'tier' => 'A',
             'task' => 'Erzeuge im mitgegebenen Schreibstil ein stimmiges Konzept-Wording ueber ALLE Positionen: '
                 . 'werte = {intro, slots}. intro = kurzer Einleitungs-/Praesentationstext fuer das ganze Konzept. '
-                . 'slots = Map slot_id -> Brand-Voice-Anzeigename je Position (Variante des neutralen vk_wording_standard, '
+                . 'slots = Map slot_id -> Brand-Voice-Anzeigename je Position (Variante des neutralen sales_wording_standard, '
                 . 'ueber das gesamte Menue stimmig und wiedererkennbar).',
         ],
         'vk.behaelter' => [
             'tier' => 'B',
             'task' => 'Schlage Behaelter (warm/kalt getrennt) + Anzahl fuers Catering vor '
                 . '(Kontext: Gesamtgewicht + Speisen-Klasse, Vokabular mitgegeben): '
-                . 'werte = {behaelter_warm_id, container_warm_anzahl, behaelter_kalt_id, container_cold_anzahl}.',
+                . 'werte = {behaelter_warm_id, container_warm_count, behaelter_kalt_id, container_cold_count}.',
         ],
         'vk.regeneration' => [
             'tier' => 'B',
             'task' => 'Schlage die Regenerations-Programme als LISTE vor — eine Zeile pro '
                 . 'erkannter Komponente (V-19; Geraet aus Vokabular, kalt = ohne Geraet): '
-                . 'werte = {programme: [{komponente_label, geraet_id, temp_c, dauer_min, kerntemp_c, hinweis}]}.',
+                . 'werte = {programme: [{component_label, geraet_id, temp_c, duration_min, core_temp_c, hinweis}]}.',
         ],
         'vk.servier_vehikel' => [
             'tier' => 'B',

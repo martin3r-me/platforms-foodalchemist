@@ -18,7 +18,7 @@ class FoodAlchemistConceptSektorEignung extends Model
 {
     use HasUuidV7, LogsActivity, SoftDeletes;
 
-    protected $table = 'foodalchemist_concept_sektor_eignung';
+    protected $table = 'foodalchemist_concept_sector_suitability';
 
     protected $guarded = ['id'];
 

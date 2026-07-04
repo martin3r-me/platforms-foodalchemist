@@ -47,7 +47,7 @@ trait ManagesCanvas
     private function canvasRepeatableKey(): ?string
     {
         foreach (app(CanvasService::class)->template($this->canvasType)['felder'] as $f) {
-            if (($f['typ'] ?? '') === 'repeatable') {
+            if (($f['type'] ?? '') === 'repeatable') {
                 return $f['key'];
             }
         }
@@ -66,7 +66,7 @@ trait ManagesCanvas
         $canvas = $svc->canvasFor($this->canvasTeam(), $this->canvasType, $this->canvasOwnerType, $this->canvasOwnerId);
         $werte = $svc->werte($canvas);
         foreach ($svc->template($this->canvasType)['felder'] as $f) {
-            if (($f['typ'] ?? '') === 'repeatable') {
+            if (($f['type'] ?? '') === 'repeatable') {
                 $this->canvasWelten = array_map(fn ($it) => [
                     'id' => $it['id'], 'value' => (string) $it['value'],
                     'claim' => (string) ($it['meta']['claim'] ?? ''), 'description' => (string) ($it['meta']['description'] ?? ''),
@@ -113,7 +113,7 @@ trait ManagesCanvas
         $tpl = app(CanvasService::class)->template($this->canvasType);
         $gruppen = [];
         foreach ($tpl['felder'] as $f) {
-            $gruppen[$f['gruppe'] ?? 'Felder'][] = $f;
+            $gruppen[$f['group_name'] ?? 'Felder'][] = $f;
         }
         $tpl['gruppen'] = $gruppen;
 

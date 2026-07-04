@@ -16,7 +16,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  * M11-02 / Doc 15 §9.3 + D-8: Foodbook-Service — Mappe + Kapitel-BAUM + Blöcke.
  *
  * Preis-Modell: jeder Block liefert einen Per-Person-Preis (concept_ref = Concept-
- * €/Person [person-unabhängig], recipe_ref = vk_netto × Menge). Ein Kapitel summiert
+ * €/Person [person-unabhängig], recipe_ref = sales_net × Menge). Ein Kapitel summiert
  * rekursiv über Blöcke + Unterkapitel (`kapitelAggregat`). Der **Gesamtpreis** =
  * Σ Top-Kapitel × **Pax am Foodbook** (F-12, D-CON-5) — erst hier wird die
  * Gästezahl bindend, nicht am Concept.
@@ -51,7 +51,7 @@ class FoodbookService
             ->with(['kapitel' => fn ($q) => $q->orderBy('position'),
                 'kapitel.blocks' => fn ($q) => $q->orderBy('position'),
                 'kapitel.blocks.concept:id,name,preis_pro_person_cache',
-                'kapitel.blocks.gericht:id,name,vk_netto',
+                'kapitel.blocks.gericht:id,name,sales_net',
                 'crmCompany', 'crmContact'])   // #369: CRM-Kunde-Link
             ->find($id);
     }
@@ -225,7 +225,7 @@ class FoodbookService
     public const BLOCK_TYPES = ['concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text', 'image'];
 
     private const BLOCK_FELDER = ['type', 'ebene', 'sichtbar', 'label', 'wording', 'kundentext', 'interne_bemerkung',
-        'variant_group_id', 'concept_id', 'vk_recipe_id', 'quantity', 'unit_vocab_id', 'preis_wert', 'preis_basis', 'hoehe', 'header_source', 'payload_json'];
+        'variant_group_id', 'concept_id', 'sales_recipe_id', 'quantity', 'unit_vocab_id', 'price_value', 'preis_basis', 'hoehe', 'header_source', 'payload_json'];
 
     public function addBlock(Team $team, int $kapitelId, array $in): FoodAlchemistFoodbookBlock
     {
@@ -367,7 +367,7 @@ class FoodbookService
     /**
      * Preis-Beitrag eines Blocks (Jarvis-Parität): liefert Per-Person-Anteil (vk/ek)
      * UND einen Pauschal-Anteil (flach, nicht ×Pax).
-     *  - recipe_ref  → vk/ek = vk_netto/ek_total × Menge (Per-Person)
+     *  - recipe_ref  → vk/ek = sales_net/ek_total × Menge (Per-Person)
      *  - concept_ref → Concept-€/Person (person-unabhängig)
      *  - header_frei_preis: person→Per-Person · staffel→Per-Person (nach Pax aufgelöst) · pauschal→flach
      *
@@ -383,14 +383,14 @@ class FoodbookService
         if ($block->type === 'recipe_ref' && $block->gericht) {
             $faktor = $block->quantity !== null ? (float) $block->quantity : 1.0;
 
-            return ['vk_pp' => round((float) ($block->gericht->vk_netto ?? 0) * $faktor, 2),
+            return ['vk_pp' => round((float) ($block->gericht->sales_net ?? 0) * $faktor, 2),
                 'ek_pp' => round((float) ($block->gericht->ek_total_eur ?? 0) * $faktor, 2), 'pauschal' => 0.0];
         }
         if ($block->type === 'header_frei_preis') {
             return match ($block->preis_basis) {
-                'pauschal' => ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => (float) ($block->preis_wert ?? 0)],
+                'pauschal' => ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => (float) ($block->price_value ?? 0)],
                 'staffel' => ['vk_pp' => $this->resolveStaffel($block, $pax), 'ek_pp' => 0.0, 'pauschal' => 0.0],
-                default => ['vk_pp' => (float) ($block->preis_wert ?? 0), 'ek_pp' => 0.0, 'pauschal' => 0.0], // person
+                default => ['vk_pp' => (float) ($block->price_value ?? 0), 'ek_pp' => 0.0, 'pauschal' => 0.0], // person
             };
         }
 
@@ -417,12 +417,12 @@ class FoodbookService
      * getrennt vom Pauschal-Anteil. Manuell gesetzter `preis_pro_person` übersteuert
      * die Per-Person-VK-Summe (EK + Pauschal bleiben gerechnet).
      *
-     * @return array{vk_pro_person: float, ek_pro_person: float, pauschal: float, wareneinsatz_prozent: ?float}
+     * @return array{vk_pro_person: float, ek_pro_person: float, pauschal: float, food_cost_percent: ?float}
      */
     public function kapitelAggregat(Team $team, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null): array
     {
         $kapitel->loadMissing(['blocks' => fn ($q) => $q->where('sichtbar', true),
-            'blocks.concept:id,name,preis_pro_person_cache', 'blocks.gericht:id,vk_netto,ek_total_eur',
+            'blocks.concept:id,name,preis_pro_person_cache', 'blocks.gericht:id,sales_net,ek_total_eur',
             'blocks.staffel', 'children']);
 
         $vk = 0.0;
@@ -449,7 +449,7 @@ class FoodbookService
             'vk_pro_person' => round($vk, 2),
             'ek_pro_person' => round($ek, 2),
             'pauschal' => round($pauschal, 2),
-            'wareneinsatz_prozent' => $vk > 0 ? round($ek / $vk * 100, 1) : null,
+            'food_cost_percent' => $vk > 0 ? round($ek / $vk * 100, 1) : null,
         ];
     }
 
@@ -498,9 +498,9 @@ class FoodbookService
             'kapitel' => fn ($q) => $q->orderBy('position'),
             'kapitel.blocks' => fn ($q) => $q->where('sichtbar', true)->orderBy('position'),
             // Wording-Kette: Slots (inkl. Paket-Gerichte) fürs Auflösen der Gericht-Zeilen
-            'kapitel.blocks.concept.slots.gericht:id,name,vk_wording_standard',
-            'kapitel.blocks.concept.slots.paket.gerichte.gericht:id,name,vk_wording_standard',
-            'kapitel.blocks.gericht:id,name,vk_wording_standard',
+            'kapitel.blocks.concept.slots.gericht:id,name,sales_wording_standard',
+            'kapitel.blocks.concept.slots.paket.gerichte.gericht:id,name,sales_wording_standard',
+            'kapitel.blocks.gericht:id,name,sales_wording_standard',
             'crmCompany', 'crmContact',
         ]);
         $pax = $fb->personen;
@@ -523,7 +523,7 @@ class FoodbookService
                     $gerichte = ($b->type === 'concept_ref' && $b->concept !== null)
                         ? $wording->gerichtZeilen($b->concept, $b)
                         : [];
-                    $bloecke[] = ['typ' => $b->type, 'label' => $label, 'untertitel' => $untertitel,
+                    $bloecke[] = ['type' => $b->type, 'label' => $label, 'untertitel' => $untertitel,
                         'gerichte' => $gerichte, 'ist_header' => str_starts_with((string) $b->type, 'header')];
                 }
                 $agg = $this->kapitelAggregat($team, $k, $pax);
@@ -585,7 +585,7 @@ class FoodbookService
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'vk_netto']);
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
     }
 
     /**

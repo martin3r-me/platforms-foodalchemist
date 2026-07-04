@@ -20,7 +20,7 @@ class SpeiseplaenePostTool extends FoodAlchemistTool implements ToolContract, To
     {
         return 'Legt einen Speiseplan als ENTWURF an (status=draft, Starter-Linien Menü 1/Vegetarisch/Dessert '
             . 'automatisch). Einträge danach via foodalchemist.speiseplan_eintraege.POST. '
-            . 'start_datum = Montag der ersten Woche (YYYY-MM-DD).';
+            . 'start_date = Montag der ersten Woche (YYYY-MM-DD).';
     }
 
     public function getSchema(): array
@@ -29,7 +29,7 @@ class SpeiseplaenePostTool extends FoodAlchemistTool implements ToolContract, To
             'type' => 'object',
             'properties' => [
                 'name' => ['type' => 'string'],
-                'start_datum' => ['type' => 'string', 'description' => 'YYYY-MM-DD, Default: aktueller Wochenstart'],
+                'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD, Default: aktueller Wochenstart'],
                 'zyklus_wochen' => ['type' => 'integer', 'minimum' => 1, 'default' => 4],
                 'min_abstand_tage' => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => 'Wiederholungs-Sperre pro Gericht'],
             ],
@@ -47,7 +47,7 @@ class SpeiseplaenePostTool extends FoodAlchemistTool implements ToolContract, To
         try {
             $plan = app(SpeiseplanService::class)->create($team, [
                 'name' => (string) $arguments['name'],
-                'start_datum' => $arguments['start_datum'] ?? null,
+                'start_date' => $arguments['start_date'] ?? null,
                 'zyklus_wochen' => $arguments['zyklus_wochen'] ?? 4,
                 'min_abstand_tage' => $arguments['min_abstand_tage'] ?? 0,
                 'status' => 'draft',
@@ -59,7 +59,7 @@ class SpeiseplaenePostTool extends FoodAlchemistTool implements ToolContract, To
         return ToolResult::success([
             'speiseplan' => [
                 'id' => $plan->id, 'name' => $plan->name, 'status' => $plan->status,
-                'start_datum' => (string) $plan->start_datum, 'zyklus_wochen' => $plan->zyklus_wochen,
+                'start_date' => (string) $plan->start_date, 'zyklus_wochen' => $plan->zyklus_wochen,
             ],
             'linien' => $plan->linien->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'ist_vegetarisch' => (bool) $l->ist_vegetarisch])->all(),
         ]);

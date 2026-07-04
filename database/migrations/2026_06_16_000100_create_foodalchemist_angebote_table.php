@@ -42,7 +42,7 @@ return new class extends Migration
             $table->string('anlass')->nullable();                     // Hochzeit, Firmenfeier …
             $table->unsignedInteger('personen')->nullable();          // Pax
             $table->decimal('budget', 10, 2)->nullable();             // Kunden-Budget (Richtwert)
-            $table->date('event_datum')->nullable();                  // Veranstaltungsdatum
+            $table->date('event_date')->nullable();                  // Veranstaltungsdatum
             $table->string('location')->nullable();
             $table->string('diaet_vorgabe')->nullable();              // Diät/Allergie-Vorgabe (frei)
             $table->text('brief')->nullable();                        // Freitext-Briefing / Hintergrund

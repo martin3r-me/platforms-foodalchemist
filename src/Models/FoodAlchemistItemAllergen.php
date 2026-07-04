@@ -18,20 +18,20 @@ class FoodAlchemistItemAllergen extends Model
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
     public const ALLERGENE = [
-        'glutenhaltiges_getreide' => 'Glutenhaltiges Getreide',
-        'krebstiere' => 'Krebstiere',
-        'eier' => 'Eier',
-        'fisch' => 'Fisch',
-        'erdnuesse' => 'Erdnüsse',
-        'soja' => 'Soja',
-        'milch' => 'Milch',
-        'schalenfruechte' => 'Schalenfrüchte',
-        'sellerie' => 'Sellerie',
-        'senf' => 'Senf',
-        'sesam' => 'Sesam',
-        'schwefeldioxid' => 'Schwefeldioxid & Sulfite',
-        'lupinen' => 'Lupinen',
-        'weichtiere' => 'Weichtiere',
+        'gluten' => 'Glutenhaltiges Getreide',
+        'crustaceans' => 'Krebstiere',
+        'eggs' => 'Eier',
+        'fish' => 'Fisch',
+        'peanuts' => 'Erdnüsse',
+        'soy' => 'Soja',
+        'milk' => 'Milch',
+        'tree_nuts' => 'Schalenfrüchte',
+        'celery' => 'Sellerie',
+        'mustard' => 'Senf',
+        'sesame' => 'Sesam',
+        'sulphites' => 'Schwefeldioxid & Sulfite',
+        'lupin' => 'Lupinen',
+        'molluscs' => 'Weichtiere',
     ];
 
     protected $table = 'foodalchemist_item_allergens';

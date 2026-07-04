@@ -90,7 +90,7 @@ class KalkulationDokService
 
         $pos = $k->positionen()->create([
             'team_id' => $team->id,
-            'typ' => $typ,
+            'type' => $typ,
             'ref_id' => $typ === 'frei' ? null : $refId,
             'label' => $override['label'] ?? $snap['label'],
             'unit' => $override['unit'] ?? $snap['unit'],
@@ -142,8 +142,8 @@ class KalkulationDokService
     public function refreshPosition(Team $team, int $positionId): FoodAlchemistKalkulationPosition
     {
         $pos = $this->findPosition($team, $positionId);
-        if ($pos->typ !== 'frei' && $pos->ref_id) {
-            $snap = $this->snapshot($team, $pos->typ, (int) $pos->ref_id);
+        if ($pos->type !== 'frei' && $pos->ref_id) {
+            $snap = $this->snapshot($team, $pos->type, (int) $pos->ref_id);
             $pos->update(['einzel_ek' => $snap['einzel_ek'], 'work_time_min' => $snap['work_time_min']]);
             $pos->kalkulation?->touch();
         }
@@ -174,7 +174,7 @@ class KalkulationDokService
             $azTotal += $az;
             $zeilen[] = [
                 'id' => $p->id,
-                'typ' => $p->typ,
+                'type' => $p->type,
                 'ref_id' => $p->ref_id,
                 'label' => $p->label,
                 'unit' => $p->unit,
@@ -266,7 +266,7 @@ class KalkulationDokService
         }
 
         // Gericht (Verkaufsrezept): pro Portion.
-        $anzahl = max(1, (int) ($r->vk_unit_count ?? 1));
+        $anzahl = max(1, (int) ($r->sales_unit_count ?? 1));
 
         return [
             'label' => (string) $r->name,

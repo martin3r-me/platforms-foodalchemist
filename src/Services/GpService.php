@@ -318,7 +318,7 @@ class GpService
 
             $mutter = $gp->is_derivat ? $muetter->get($gp->derivat_von_gp_id) : null;
             $rangVon = ['enthalten' => 3, 'spuren' => 2, 'nicht_enthalten' => 1, 'unbekannt' => 0];
-            $kiQuelle = fn (FoodAlchemistGp $g): bool => $g->allergens_source === 'ki' || $g->allergene_ki_confidence !== null;
+            $kiQuelle = fn (FoodAlchemistGp $g): bool => $g->allergens_source === 'ki' || $g->allergens_confidence !== null;
             // LA-belegt = irgendein Allergen hat konkrete LA-Daten (eigene bzw. Mutter-LAs bei Derivaten)
             // — unabhängig davon, ob ein Override die Prio gewinnt (Override + LA-Bestätigung ≠ reine Schätzung).
             $laBelegt = collect($raenge[$gp->id] ?? [])->max() > 0
@@ -349,7 +349,7 @@ class GpService
             // ✨-Marker (LMIV-Transparenz, 2026-07-02): Urteil beruht NUR auf KI-geschätzten
             // Overrides ohne jede LA-Untermauerung — in der Liste sichtbar kennzeichnen.
             $gp->setAttribute('allergen_ki', $maxRang >= 1 && ! $laBelegt && $ausKiOverride);
-            $gp->setAttribute('allergen_ki_conf', $gp->allergene_ki_confidence ?? $gp->allergene_ai_confidence);
+            $gp->setAttribute('allergen_ki_conf', $gp->allergens_confidence ?? $gp->allergens_confidence);
         });
 
         return $seite;

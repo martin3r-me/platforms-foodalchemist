@@ -244,7 +244,7 @@ class SignalDetektorService
     {
         $kalk = app(KalkulationService::class);
         $gerichte = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->whereNotNull('vk_netto')->where('vk_netto', '>', 0)->get();
+            ->whereNotNull('sales_net')->where('sales_net', '>', 0)->get();
 
         $n = 0;
         foreach ($gerichte as $r) {
@@ -264,7 +264,7 @@ class SignalDetektorService
                     'ref_type' => 'recipe',
                     'ref_id' => $r->id,
                     'description' => 'Deckungsbeitrag unter der Zielmarge — Verkaufspreis erhöhen oder Wareneinsatz/Vollkosten senken.',
-                    'payload' => ['db_pct' => (float) $db, 'ziel_pct' => $ziel, 'vk_netto' => (float) $r->vk_netto],
+                    'payload' => ['db_pct' => (float) $db, 'ziel_pct' => $ziel, 'sales_net' => (float) $r->sales_net],
                 ]
             );
             $n++;
@@ -287,7 +287,7 @@ class SignalDetektorService
             return 0;
         }
         $gerichte = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->whereNotNull('vk_netto')->where('vk_netto', '>', 0)->get();
+            ->whereNotNull('sales_net')->where('sales_net', '>', 0)->get();
 
         $n = 0;
         foreach ($gerichte as $r) {
@@ -306,7 +306,7 @@ class SignalDetektorService
                     'ref_type' => 'recipe',
                     'ref_id' => $r->id,
                     'description' => 'Food-Cost über dem Ziel — günstigeren Lead-LA prüfen, Rezeptur/Portion anpassen oder Verkaufspreis erhöhen.',
-                    'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'vk_netto' => (float) $r->vk_netto],
+                    'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'sales_net' => (float) $r->sales_net],
                 ]
             );
             $n++;

@@ -32,7 +32,7 @@ class Browser extends Component
     public string $search = '';
 
     /** Geteilte Klasse-Dimension (§10.3) — frei/wählbar, gilt für beide Reiter. */
-    #[Url(as: 'klasse')]
+    #[Url(as: 'class')]
     public string $klasse = '';
 
     /** Concepts: Kategorie-Baum-Filter ('' alle · 'none' ohne · ID). */
@@ -85,7 +85,7 @@ class Browser extends Component
         }
         $this->tab = $tab;
         $this->selectedId = null;
-        $this->klasse = '';
+        $this->class = '';
         $this->categoryFilter = '';
         $this->rolleFilter = '';
         $this->servierformFilter = '';
@@ -118,7 +118,7 @@ class Browser extends Component
 
     public function waehleKlasse(string $wert): void
     {
-        $this->klasse = $this->klasse === $wert ? '' : $wert;
+        $this->class = $this->class === $wert ? '' : $wert;
         $this->resetPage();
     }
 
@@ -166,7 +166,7 @@ class Browser extends Component
 
             return;
         }
-        $c = $concepts->create($team, ['name' => 'Neues Concept', 'is_vorlage' => $this->showVorlagen]);
+        $c = $concepts->create($team, ['name' => 'Neues Concept', 'is_template' => $this->showVorlagen]);
         $this->waehle($c->id);
         $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $c->id);
     }
@@ -200,7 +200,7 @@ class Browser extends Component
         if ($this->tab === 'pakete') {
             $items = $pakete->paginateBrowser([
                 'search' => $this->search,
-                'klasse' => $this->klasse,
+                'class' => $this->class,
                 'role' => $this->rolleFilter,
             ], $team);
             $klassen = $pakete->klassen($team);
@@ -209,7 +209,7 @@ class Browser extends Component
         } else {
             $items = $concepts->paginateBrowser([
                 'search' => $this->search,
-                'klasse' => $this->klasse,
+                'class' => $this->class,
                 'vorlagen' => $this->showVorlagen,
                 'category' => $this->categoryFilter !== '' ? $this->categoryFilter : null,
                 'servierform' => $this->servierformFilter !== '' ? $this->servierformFilter : null,

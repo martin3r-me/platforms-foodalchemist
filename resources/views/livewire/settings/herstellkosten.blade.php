@@ -32,11 +32,11 @@
             </tr></thead>
             <tbody>
                 @foreach($schema as $i => $b)
-                    @php($istGk = in_array($b['typ'], ['pct_mek', 'pct_fek', 'pct_hk'], true))
+                    @php($istGk = in_array($b['type'], ['pct_mek', 'pct_fek', 'pct_hk'], true))
                     @php($istAbgeleitet = $istGk && ($b['modus'] ?? 'manuell') === 'abgeleitet')
                     <tr wire:key="kblock-{{ $b['key'] }}" class="{{ $tr }}">
                         <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $b['label'] }}</td>
-                        <td class="{{ $td }}"><span class="{{ $pill }} {{ $basisPill[$b['typ']] ?? $variantPill['secondary'] }}">{{ $basisLabel[$b['typ']] ?? $b['typ'] }}</span></td>
+                        <td class="{{ $td }}"><span class="{{ $pill }} {{ $basisPill[$b['type']] ?? $variantPill['secondary'] }}">{{ $basisLabel[$b['type']] ?? $b['type'] }}</span></td>
                         <td class="{{ $td }} text-center"><input type="checkbox" wire:model="schema.{{ $i }}.aktiv" class="rounded border-gray-300 text-violet-500 focus:ring-violet-500/30" /></td>
                         <td class="{{ $td }}">
                             @if($istGk)
@@ -50,7 +50,7 @@
                         </td>
                         <td class="{{ $td }} text-right">
                             @if($istAbgeleitet)
-                                @php($basisTyp = ['pct_mek' => 'mek', 'pct_fek' => 'fek', 'pct_hk' => 'hk'][$b['typ']] ?? null)
+                                @php($basisTyp = ['pct_mek' => 'mek', 'pct_fek' => 'fek', 'pct_hk' => 'hk'][$b['type']] ?? null)
                                 @php($blockSumme = (float) ($fixSummen[$b['key']] ?? 0))
                                 @php($blockBasis = (float) ($liveBasen[$basisTyp] ?? 0))
                                 @php($basisFehlt = $blockSumme > 0 && $blockBasis <= 0)
@@ -64,7 +64,7 @@
                                 @endif
                             @else
                                 <input type="text" wire:model="schema.{{ $i }}.wert" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="0" />
-                                <span class="text-[10px] text-gray-400">{{ $b['typ'] === 'eur_pro_portion' ? '€' : ($b['typ'] === 'arbeitszeit' ? '€/h' : '%') }}</span>
+                                <span class="text-[10px] text-gray-400">{{ $b['type'] === 'eur_pro_portion' ? '€' : ($b['type'] === 'arbeitszeit' ? '€/h' : '%') }}</span>
                             @endif
                         </td>
                         <td class="{{ $td }} text-right">
@@ -76,7 +76,7 @@
                 <tr class="border-t-2 border-black/5 dark:border-white/10">
                     <td class="{{ $td }}"><input type="text" wire:model="neuBlock.label" wire:keydown.enter="blockHinzu" placeholder="Neuer Block (z. B. Energie)" class="{{ $input }} !py-1" /></td>
                     <td class="{{ $td }}" colspan="3">
-                        <select wire:model="neuBlock.typ" class="{{ $input }} !w-56 !py-1">
+                        <select wire:model="neuBlock.type" class="{{ $input }} !w-56 !py-1">
                             <option value="pct_mek">% auf Wareneinsatz (MEK)</option>
                             <option value="pct_fek">% auf Fertigungslohn (FEK)</option>
                             <option value="pct_hk">% auf Herstellkosten (HK)</option>

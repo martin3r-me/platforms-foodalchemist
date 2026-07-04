@@ -64,7 +64,7 @@ class GpProposalsPostTool extends FoodAlchemistTool implements ToolContract, Too
                 'id' => $p->id, 'name' => $p->name, 'status' => $p->status,
                 'commodity_group' => $p->commodity_group, 'condition' => $p->condition,
             ],
-            'hinweis' => 'Staging-only: Der GP entsteht erst nach Kuration (LA-First, WaWi) und Sync.',
+            'note' => 'Staging-only: Der GP entsteht erst nach Kuration (LA-First, WaWi) und Sync.',
         ]);
     }
 

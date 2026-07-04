@@ -34,7 +34,7 @@
             <div><label class="{{ $label }}">Pax</label><input type="number" min="0" wire:model="form.personen" wire:change="speichern" class="{{ $input }} text-right tabular-nums" title="treibt den Auto-Gesamtpreis" /></div>
             <div><label class="{{ $label }}">Anlass</label><input type="text" wire:model="form.anlass" class="{{ $input }}" placeholder="Hochzeit, Firmenfeier …" /></div>
             <div class="grid grid-cols-2 gap-2">
-                <div><label class="{{ $label }}">Event-Datum</label><input type="date" wire:model="form.event_datum" class="{{ $input }}" /></div>
+                <div><label class="{{ $label }}">Event-Datum</label><input type="date" wire:model="form.event_date" class="{{ $input }}" /></div>
                 <div><label class="{{ $label }}">Budget €</label><input type="number" step="0.01" wire:model="form.budget" class="{{ $input }} text-right tabular-nums" /></div>
             </div>
             <div><label class="{{ $label }}">Location</label><input type="text" wire:model="form.location" class="{{ $input }}" /></div>
@@ -153,7 +153,7 @@
             </div>
             @forelse($angebot->referenzierteConcepts as $rc)
                 <div wire:key="refc-{{ $rc->id }}" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/[0.03] dark:bg-white/5 text-xs">
-                    <span class="flex-1 min-w-0 truncate">{{ $rc->konsumenten_name ?: $rc->name }} <span class="text-gray-400">· {{ $rc->slots_count ?? 0 }} Pos.</span></span>
+                    <span class="flex-1 min-w-0 truncate">{{ $rc->consumer_name ?: $rc->name }} <span class="text-gray-400">· {{ $rc->slots_count ?? 0 }} Pos.</span></span>
                     <button type="button" wire:click="entferneReferenz({{ $rc->id }})" class="text-gray-400 hover:text-red-500 shrink-0" title="Referenz lösen">✕</button>
                 </div>
             @empty

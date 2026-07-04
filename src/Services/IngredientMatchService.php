@@ -308,11 +308,11 @@ class IngredientMatchService
         $this->likeVorfilter($query, $queryTokens, $querySlug, ['name']);
 
         return $query->orderBy('id')->limit(200)
-            ->get(['id', 'name', 'sub_rezept_typ_legacy_id', 'team_id'])
+            ->get(['id', 'name', 'sub_recipe_type_legacy_id', 'team_id'])
             ->each(function ($sub) {
                 // 4.4b — Sub-Typ-Slug über das (Legacy-)Vokabular; Tabelle folgt mit V-20,
                 // bis dahin leerer Tag (Boost greift nur bei gepflegtem Slug)
-                $sub->setAttribute('sub_typ_slug', $this->subTypSlug($sub->sub_rezept_typ_legacy_id));
+                $sub->setAttribute('sub_typ_slug', $this->subTypSlug($sub->sub_recipe_type_legacy_id));
             });
     }
 

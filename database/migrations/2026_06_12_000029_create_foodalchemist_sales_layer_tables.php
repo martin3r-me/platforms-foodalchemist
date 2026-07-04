@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
  * Multi-Komponenten-Regeneration (V-19) + echte FK-Spalten am Rezept
  * (die *_legacy_id-Rohwerte aus M4-01 bleiben Import-Quelle).
  *
- * 07 §7: keine CHECK-Constraints (formel_typ/diaetform als VARCHAR, Enum im
+ * 07 §7: keine CHECK-Constraints (formula_type/diaetform als VARCHAR, Enum im
  * PHP-Layer), Index-Namen automatisch, engine-agnostisch. ⚠D1: Stammdaten
  * global = team_id NULL; recipe_customer_names ist team-eigen (NOT NULL im
  * Service erzwungen, Spalte nullable wegen importBulk-Symmetrie).
@@ -29,8 +29,8 @@ return new class extends Migration
             $table->decimal('raw_markup_pct', 7, 2)->default(0);
             $table->decimal('bedienung_pct', 7, 2)->default(0);
             $table->decimal('profit_pct', 7, 2)->default(0);
-            $table->decimal('mwst_satz', 5, 2)->default(19);
-            $table->string('formel_typ', 24)->default('aufschlag');   // aufschlag | deckungsbeitrag (W-1)
+            $table->decimal('vat_rate', 5, 2)->default(19);
+            $table->string('formula_type', 24)->default('aufschlag');   // aufschlag | deckungsbeitrag (W-1)
             $table->text('note')->nullable();
             $table->boolean('is_inactive')->default(false);
             $table->timestamps();
@@ -139,12 +139,12 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->foreignId('recipe_id')->constrained('foodalchemist_recipes')->cascadeOnDelete();
-            $table->string('komponente_label');
+            $table->string('component_label');
             $table->foreignId('ingredient_id')->nullable()->constrained('foodalchemist_recipe_ingredients')->nullOnDelete();
             $table->foreignId('device_vocab_id')->nullable()->constrained('foodalchemist_vocab_regeneration_devices')->nullOnDelete();
             $table->integer('temp_c')->nullable();
-            $table->integer('dauer_min')->nullable();
-            $table->integer('kerntemp_c')->nullable();
+            $table->integer('duration_min')->nullable();
+            $table->integer('core_temp_c')->nullable();
             $table->text('hinweis')->nullable();
             $table->integer('sort_order')->default(0);
             $table->string('source', 16)->nullable();                 // Lineage-Trio zeilenbasiert (GL-07 §3)
@@ -162,12 +162,12 @@ return new class extends Migration
             $table->text('dish_class_ai_reasoning')->nullable();
             $table->foreignId('markup_class_id')->nullable()->constrained('foodalchemist_markup_classes')->nullOnDelete();
             $table->foreignId('container_warm_vocab_id')->nullable()->constrained('foodalchemist_vocab_containers')->nullOnDelete();
-            $table->integer('container_warm_anzahl')->nullable();
+            $table->integer('container_warm_count')->nullable();
             $table->foreignId('container_cold_vocab_id')->nullable()->constrained('foodalchemist_vocab_containers')->nullOnDelete();
-            $table->integer('container_cold_anzahl')->nullable();
+            $table->integer('container_cold_count')->nullable();
             $table->foreignId('serving_vehicle_vocab_id')->nullable()->constrained('foodalchemist_vocab_serving_vehicles')->nullOnDelete();
-            $table->string('vk_wording_source', 16)->nullable();      // Lineage vk_wording_standard (D-6 §2.1)
-            $table->decimal('vk_wording_ai_confidence', 4, 3)->nullable();
+            $table->string('sales_wording_source', 16)->nullable();      // Lineage sales_wording_standard (D-6 §2.1)
+            $table->decimal('sales_wording_ai_confidence', 4, 3)->nullable();
         });
     }
 
@@ -181,7 +181,7 @@ return new class extends Migration
             $table->dropConstrainedForeignId('serving_vehicle_vocab_id');
             $table->dropColumn([
                 'dish_class_source', 'dish_class_ai_confidence', 'dish_class_ai_reasoning',
-                'container_warm_anzahl', 'container_cold_anzahl', 'vk_wording_source', 'vk_wording_ai_confidence',
+                'container_warm_count', 'container_cold_count', 'sales_wording_source', 'sales_wording_ai_confidence',
             ]);
         });
         Schema::dropIfExists('foodalchemist_recipe_regenerations');

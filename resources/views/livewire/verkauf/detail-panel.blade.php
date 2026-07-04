@@ -11,8 +11,8 @@
         <div>
             {{-- R12 (Dominique): Name braucht die volle Breite — Aktionen als eigene Zeile DARUNTER --}}
             <h3 class="text-[15px] font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-snug">{{ $rezept->name }}</h3>
-            @if($rezept->vk_wording_standard !== null)
-                <p class="text-[11px] italic text-gray-400 mt-0.5">{{ $rezept->vk_wording_standard }}</p>
+            @if($rezept->sales_wording_standard !== null)
+                <p class="text-[11px] italic text-gray-400 mt-0.5">{{ $rezept->sales_wording_standard }}</p>
             @endif
             <div class="flex flex-wrap items-center gap-1.5 mt-2" data-vk-aktionen>
                 <button type="button" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-bearbeiten>Bearbeiten</button>
@@ -90,12 +90,12 @@
                 <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
             </div>
             <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                <span class="{{ $dt }}">VK netto {{ $cockpit['vk']['source'] === 'manuell' ? '(manuell)' : ($cockpit['vk']['source'] === 'klasse' ? '(aus Klasse)' : '') }}</span>
-                <p class="text-xs font-semibold text-gray-900 dark:text-gray-100" data-vk-netto>{{ $cockpit['vk']['vk_netto'] !== null ? number_format($cockpit['vk']['vk_netto'], 2, ',', '.') . ' €' : '—' }}</p>
+                <span class="{{ $dt }}">VK netto {{ $cockpit['vk']['source'] === 'manuell' ? '(manuell)' : ($cockpit['vk']['source'] === 'class' ? '(aus Klasse)' : '') }}</span>
+                <p class="text-xs font-semibold text-gray-900 dark:text-gray-100" data-vk-netto>{{ $cockpit['vk']['sales_net'] !== null ? number_format($cockpit['vk']['sales_net'], 2, ',', '.') . ' €' : '—' }}</p>
             </div>
             <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-vk-brutto>
                 <span class="text-[10px] font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">VK brutto</span>
-                <p class="text-base font-bold text-violet-700 dark:text-violet-300">{{ $cockpit['vk_brutto'] !== null ? number_format($cockpit['vk_brutto'], 2, ',', '.') . ' €' : '—' }}</p>
+                <p class="text-base font-bold text-violet-700 dark:text-violet-300">{{ $cockpit['sales_gross'] !== null ? number_format($cockpit['sales_gross'], 2, ',', '.') . ' €' : '—' }}</p>
             </div>
             <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                 <span class="{{ $dt }}">Wareneinsatz</span>
@@ -138,7 +138,7 @@
         {{-- M9-01k: Sektor-/Niveau-Eignung — Chips mit ✕, +manuell-Select, ✨ Eignung --}}
         <div data-vk-eignung>
             <p class="{{ $dt }} mb-1 flex items-center gap-2">Eignung
-                <button type="button" wire:click="kiEignung" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 ml-auto normal-case" title="recipe.sektor + recipe.niveau — nur «geeignet»-Urteile werden Vorschlag" data-ki-eignung>✨ Eignung</button>
+                <button type="button" wire:click="kiEignung" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 ml-auto normal-case" title="recipe.sektor + recipe.level — nur «geeignet»-Urteile werden Vorschlag" data-ki-eignung>✨ Eignung</button>
             </p>
             @if($eignungVorschlag !== null)
                 <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs mb-1" data-eignung-vorschlag>
@@ -151,7 +151,7 @@
                     </div>
                 </div>
             @endif
-            @foreach(['sektor' => ['Sektor', $sektorEignungen, 'sektor_slug'], 'niveau' => ['Niveau', $niveauEignungen, 'level_slug']] as $typ => [$lbl, $eignungen, $slugSpalte])
+            @foreach(['sektor' => ['Sektor', $sektorEignungen, 'sector_slug'], 'level' => ['Niveau', $niveauEignungen, 'level_slug']] as $typ => [$lbl, $eignungen, $slugSpalte])
                 <div class="flex items-center gap-1.5 flex-wrap py-0.5" data-eignung-zeile="{{ $typ }}">
                     <span class="text-[11px] text-gray-400 w-12 shrink-0">{{ $lbl }}</span>
                     @forelse($eignungen as $e)
@@ -209,7 +209,7 @@
                             @if($kohaesion['coverage_pct'] < 30)<span class="text-amber-500">· dünne Datenlage</span>@endif
                         </p>
                         @if($kohaesion['weakest_pair'] !== null)
-                            <p class="text-gray-400">Schwächstes Glied: {{ $kohaesion['weakest_pair']['a'] }} ↔ {{ $kohaesion['weakest_pair']['b'] }} ({{ $kohaesion['weakest_pair']['score'] }}, {{ $kohaesion['weakest_pair']['typ'] }})</p>
+                            <p class="text-gray-400">Schwächstes Glied: {{ $kohaesion['weakest_pair']['a'] }} ↔ {{ $kohaesion['weakest_pair']['b'] }} ({{ $kohaesion['weakest_pair']['score'] }}, {{ $kohaesion['weakest_pair']['type'] }})</p>
                         @endif
                         @php($orphans = collect($kohaesion['komponenten'])->filter(fn ($k) => $k['is_orphan']))
                         @if($orphans->isNotEmpty())
@@ -230,8 +230,8 @@
             @if($pairings !== null)
                 <div class="flex flex-wrap gap-1 mt-1" data-vk-pairing-chips>
                     @foreach($pairings as $p)
-                        <span wire:key="vkpp-{{ $loop->index }}" class="{{ $pill }} {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->typ] ?? $variantPill['secondary'] }}"
-                              title="{{ $p->typ }} · {{ $p->konfidenz }}">{{ $p->display_de }}</span>
+                        <span wire:key="vkpp-{{ $loop->index }}" class="{{ $pill }} {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->type] ?? $variantPill['secondary'] }}"
+                              title="{{ $p->type }} · {{ $p->confidence }}">{{ $p->display_de }}</span>
                     @endforeach
                 </div>
             @endif
@@ -285,8 +285,8 @@
                 @php($heber = $kohaerenzStatus['cache']?->heber_json)
                 @if($kiFehler !== null)<p class="text-[11px] text-rose-500 mb-1" data-vk-ki-fehler>{{ $kiFehler }}</p>@endif
                 @if($heber !== null && ($heber['vorschlaege'] ?? []) !== [])
-                    @php($typen = collect($heber['vorschlaege'])->countBy('typ'))
-                    <div class="mt-1 space-y-2" x-data="{ typ: '{{ collect($heber['vorschlaege'])->first()['typ'] }}' }" data-vk-heber-vorschlaege>
+                    @php($typen = collect($heber['vorschlaege'])->countBy('type'))
+                    <div class="mt-1 space-y-2" x-data="{ typ: '{{ collect($heber['vorschlaege'])->first()['type'] }}' }" data-vk-heber-vorschlaege>
                         @if(($heber['einschaetzung'] ?? null) !== null)
                             <p class="text-xs font-medium text-gray-900 dark:text-gray-100 leading-relaxed">{{ $heber['einschaetzung'] }}</p>
                         @endif
@@ -300,11 +300,11 @@
                             @endforeach
                         </div>
                         @foreach($heber['vorschlaege'] as $v)
-                            <div x-show="typ === '{{ $v['typ'] }}'" class="flex gap-2 text-xs" wire:key="vkh-{{ $loop->index }}">
+                            <div x-show="typ === '{{ $v['type'] }}'" class="flex gap-2 text-xs" wire:key="vkh-{{ $loop->index }}">
                                 @if($v['confidence'] !== null)<span class="font-semibold text-green-600 dark:text-green-400 shrink-0">{{ round($v['confidence'] * 100) }} %</span>@endif
                                 <div class="min-w-0">
                                     <p class="font-medium text-gray-900 dark:text-gray-100">{{ $v['zutat'] }}
-                                        @if($v['kategorie'] !== null)<span class="text-[11px] font-normal text-gray-400 ml-1">{{ $v['kategorie'] }}</span>@endif
+                                        @if($v['category'] !== null)<span class="text-[11px] font-normal text-gray-400 ml-1">{{ $v['category'] }}</span>@endif
                                     </p>
                                     @if($v['reasoning'] !== null)<p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">{{ $v['reasoning'] }}</p>@endif
                                 </div>

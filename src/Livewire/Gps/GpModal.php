@@ -319,8 +319,8 @@ class GpModal extends Component
         $gp->update([...$update,
             'tag_source' => 'ki',
             'tag_ai_confidence' => $vorschlag['confidence'],
-            'tag_ai_begruendung' => $vorschlag['reasoning'],
-            'tag_aggregiert_am' => now(),
+            'tag_ai_reasoning' => $vorschlag['reasoning'],
+            'tag_aggregated_at' => now(),
         ]);
         unset($this->kiVorschlag['tags']);
     }
@@ -336,7 +336,7 @@ class GpModal extends Component
             $reset["tag_{$tag}"] = null;
             $this->tags[$tag] = '';
         }
-        $gp->update([...$reset, 'tag_source' => null, 'tag_ai_confidence' => null, 'tag_ai_begruendung' => null]);
+        $gp->update([...$reset, 'tag_source' => null, 'tag_ai_confidence' => null, 'tag_ai_reasoning' => null]);
         unset($this->kiVorschlag['tags']);
     }
 
@@ -486,7 +486,7 @@ class GpModal extends Component
             $geaendert = $geaendert || ($alt === null ? $neu !== null : $neu !== (bool) $alt);
         }
         if ($geaendert) {
-            $gp->update([...$update, 'tag_source' => $source, 'tag_ai_confidence' => null, 'tag_ai_begruendung' => null]);
+            $gp->update([...$update, 'tag_source' => $source, 'tag_ai_confidence' => null, 'tag_ai_reasoning' => null]);
         }
     }
 }

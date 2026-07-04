@@ -29,18 +29,18 @@ return new class extends Migration
             });
         }
 
-        if (! Schema::hasColumn('foodalchemist_team_settings', 'calculation_bezugsbasen')) {
+        if (! Schema::hasColumn('foodalchemist_team_settings', 'calculation_reference_bases')) {
             Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-                $table->json('calculation_bezugsbasen')->nullable();   // {mek, fek, hk, periode}
+                $table->json('calculation_reference_bases')->nullable();   // {mek, fek, hk, periode}
             });
         }
     }
 
     public function down(): void
     {
-        if (Schema::hasColumn('foodalchemist_team_settings', 'calculation_bezugsbasen')) {
+        if (Schema::hasColumn('foodalchemist_team_settings', 'calculation_reference_bases')) {
             Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-                $table->dropColumn('calculation_bezugsbasen');
+                $table->dropColumn('calculation_reference_bases');
             });
         }
         Schema::dropIfExists('foodalchemist_fixed_costs');

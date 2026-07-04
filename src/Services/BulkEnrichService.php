@@ -20,7 +20,7 @@ use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
  */
 class BulkEnrichService
 {
-    public const SCHRITTE = ['description', 'kategorie', 'geschmack'];
+    public const SCHRITTE = ['description', 'category', 'geschmack'];
 
     /** GP-Bulk-Autopilot-Schritte (Feld-KIs mit vorhandenem Accept-Pfad). */
     public const SCHRITTE_GP = ['condition', 'tags', 'allergene', 'naehrwerte'];
@@ -36,7 +36,7 @@ class BulkEnrichService
         DB::table('foodalchemist_bulk_runs')->insert([
             'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
             'team_id' => $team->id, 'user_id' => Auth::id(),
-            'typ' => 'enrich', 'status' => 'running', 'total' => count($ids),
+            'type' => 'enrich', 'status' => 'running', 'total' => count($ids),
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $runId = (int) DB::getPdo()->lastInsertId();
@@ -57,11 +57,11 @@ class BulkEnrichService
                 DB::table('foodalchemist_bulk_proposals')->insert([
                     'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
                     'team_id' => $team->id, 'run_id' => $runId, 'recipe_id' => $r->id, 'feld' => $feld,
-                    'wert' => json_encode($vorschlag['wert']),
+                    'value' => json_encode($vorschlag['value']),
                     'confidence' => $vorschlag['confidence'],
                     'reasoning' => $vorschlag['reasoning'],
                     'call_log_id' => $vorschlag['call_log_id'],
-                    'status' => $vorschlag['wert'] === null || $vorschlag['wert'] === '' ? 'leer' : 'offen',
+                    'status' => $vorschlag['value'] === null || $vorschlag['value'] === '' ? 'leer' : 'offen',
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
             } catch (\Throwable $e) {
@@ -91,10 +91,10 @@ class BulkEnrichService
             'description' => ['recipe.description',
                 ['name' => $r->name, 'description' => $r->description, 'zutaten' => $r->ingredients()->whereNull('deleted_at')->pluck('display_name')->all()],
                 fn (array $w) => $w['description'] ?? null],
-            'kategorie' => ['recipe.kategorie',
-                ['name' => $r->name, 'kategorie_id' => $r->kategorie_id,
+            'category' => ['recipe.category',
+                ['name' => $r->name, 'category_id' => $r->category_id,
                     'kategorien' => FoodAlchemistRecipeCategory::orderBy('id')->limit(200)->pluck('label', 'id')->all()],
-                fn (array $w) => $w['kategorie_id'] ?? null],
+                fn (array $w) => $w['category_id'] ?? null],
             'geschmack' => ['recipe.geschmack',
                 ['name' => $r->name, 'taste_direction' => $r->taste_direction],
                 fn (array $w) => $w['taste_direction'] ?? null],
@@ -104,7 +104,7 @@ class BulkEnrichService
         $p = $this->ki->propose($key, $kontext, ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id]);
 
         return [
-            'wert' => $extract($p->werte),
+            'value' => $extract($p->werte),
             'confidence' => $p->confidence,
             'reasoning' => $p->reasoning,
             'call_log_id' => $p->callLogId,
@@ -122,13 +122,13 @@ class BulkEnrichService
         if ($r === null) {
             return false;
         }
-        $wert = json_decode((string) $prop->wert, true);
+        $wert = json_decode((string) $prop->value, true);
 
         $update = match ($prop->feld) {
             'description' => $r->description_source === 'manual' ? null
                 : ['description' => (string) $wert, 'description_source' => 'ki', 'description_ai_confidence' => $prop->confidence],
-            'kategorie' => $r->kategorie_source === 'manual' || FoodAlchemistRecipeCategory::find((int) $wert) === null ? null
-                : ['kategorie_id' => (int) $wert, 'kategorie_source' => 'ki', 'kategorie_ai_confidence' => $prop->confidence],
+            'category' => $r->category_source === 'manual' || FoodAlchemistRecipeCategory::find((int) $wert) === null ? null
+                : ['category_id' => (int) $wert, 'category_source' => 'ki', 'category_ai_confidence' => $prop->confidence],
             'geschmack' => in_array($wert, ['suess', 'herzhaft', 'neutral'], true)
                 ? ['taste_direction' => $wert] : null,             // Auto-Apply-Ausnahme-Feld (GL-07 §4.3), kein Lineage-Trio
             default => null,
@@ -185,7 +185,7 @@ class BulkEnrichService
         DB::table('foodalchemist_bulk_runs')->insert([
             'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
             'team_id' => $team->id, 'user_id' => Auth::id(),
-            'typ' => 'enrich_gp', 'status' => 'running', 'total' => count($ids),
+            'type' => 'enrich_gp', 'status' => 'running', 'total' => count($ids),
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $runId = (int) DB::getPdo()->lastInsertId();
@@ -203,11 +203,11 @@ class BulkEnrichService
         foreach ($gp === null ? [] : $schritte as $feld) {
             try {
                 $vorschlag = $this->proposeGpFeld($team, $gp, $feld);
-                $leer = $vorschlag['wert'] === null || $vorschlag['wert'] === '' || $vorschlag['wert'] === [];
+                $leer = $vorschlag['value'] === null || $vorschlag['value'] === '' || $vorschlag['value'] === [];
                 DB::table('foodalchemist_bulk_gp_proposals')->insert([
                     'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
                     'team_id' => $team->id, 'run_id' => $runId, 'gp_id' => $gp->id, 'feld' => $feld,
-                    'wert' => json_encode($vorschlag['wert']),
+                    'value' => json_encode($vorschlag['value']),
                     'confidence' => $vorschlag['confidence'],
                     'reasoning' => $vorschlag['reasoning'],
                     'call_log_id' => $vorschlag['call_log_id'],
@@ -255,7 +255,7 @@ class BulkEnrichService
         $p = $this->ki->propose($key, $kontext, ['target_table' => 'foodalchemist_gps', 'target_id' => $gp->id]);
 
         return [
-            'wert' => $extract($p->werte),
+            'value' => $extract($p->werte),
             'confidence' => $p->confidence,
             'reasoning' => $p->reasoning,
             'call_log_id' => $p->callLogId,
@@ -273,7 +273,7 @@ class BulkEnrichService
         if ($gp === null || ! $gp->isOwnedBy($team)) {                 // D1: nur eigene GPs
             return false;
         }
-        $wert = json_decode((string) $prop->wert, true);
+        $wert = json_decode((string) $prop->value, true);
         $ok = false;
 
         if ($prop->feld === 'condition') {
@@ -291,7 +291,7 @@ class BulkEnrichService
                 }
             }
             if ($update !== []) {
-                $gp->update([...$update, 'tag_source' => 'ki', 'tag_ai_confidence' => $prop->confidence, 'tag_ai_begruendung' => $prop->reasoning, 'tag_aggregiert_am' => now()]);
+                $gp->update([...$update, 'tag_source' => 'ki', 'tag_ai_confidence' => $prop->confidence, 'tag_ai_reasoning' => $prop->reasoning, 'tag_aggregated_at' => now()]);
                 $ok = true;
             }
         } elseif ($prop->feld === 'allergene' && is_array($wert)) {
@@ -304,7 +304,7 @@ class BulkEnrichService
                 }
             }
             if ($update !== []) {
-                $gp->update([...$update, 'allergene_ki_confidence' => $prop->confidence]);
+                $gp->update([...$update, 'allergens_confidence' => $prop->confidence]);
                 $ok = true;
             }
         } elseif ($prop->feld === 'naehrwerte' && is_array($wert) && $gp->nutri_source !== 'manual') {

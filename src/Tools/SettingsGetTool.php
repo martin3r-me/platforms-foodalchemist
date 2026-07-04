@@ -39,13 +39,13 @@ class SettingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
         $svc = app(TeamSettingsService::class);
 
         return ToolResult::success([
-            'ki_aktiv' => $svc->kiAktiv($team),
-            'kuechen_typ' => $svc->kuechenTyp($team),
+            'ai_active' => $svc->kiAktiv($team),
+            'kitchen_type' => $svc->kuechenTyp($team),
             'lead_la_strategie' => $svc->leadLaStrategie($team)->value ?? (string) $svc->leadLaStrategie($team),
             'lead_la_strategie_pro_wg' => collect($svc->leadLaStrategiePerWg($team))
                 ->map(fn ($s) => $s instanceof \BackedEnum ? $s->value : (string) $s)->all(),
             'cooking_loss_default_pct' => $svc->garverlustDefault($team),
-            'hinweis' => 'Read-only: Einstellungen ändern nur Menschen in der UI.',
+            'note' => 'Read-only: Einstellungen ändern nur Menschen in der UI.',
         ]);
     }
 

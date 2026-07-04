@@ -35,7 +35,7 @@
             async browse() {
                 const r = await this.$wire.browseKatalog(
                     { wg: this.gpFilter.wg, sub: this.gpFilter.sub, condition: this.gpFilter.condition, bio: this.gpFilter.bio, regional: this.gpFilter.regional },
-                    { hg: this.rezFilter.hg, kat: this.rezFilter.kat, niveau: this.rezFilter.niveau },
+                    { hg: this.rezFilter.hg, kat: this.rezFilter.kat, niveau: this.rezFilter.level },
                     this.browseQ
                 );
                 this.gpListe = r.gps.items; this.gpTotal = r.gps.total;
@@ -62,7 +62,7 @@
                 this.neu.unit_vocab_id = this.einheitIdFuerSlug(ziel.einheit_slug ?? 'g');
                 this.$nextTick(() => this.$root.querySelector('[data-park-quantity]')?.focus());
                 // Listen tragen nur den Bulk-Ø — präzisen Lead-€/g (T3) leise nachladen
-                this.$wire.ekFuerZiel(ziel.typ, ziel.id).then(ek => { if (ek !== null && this.geparkt === ziel) ziel.ek_pro_g = ek; });
+                this.$wire.ekFuerZiel(ziel.type, ziel.id).then(ek => { if (ek !== null && this.geparkt === ziel) ziel.ek_pro_g = ek; });
             },
             verwerfen() { this.geparkt = null; this.neu.quantity = ''; },
             // Menge tippen + Enter → Zutat wandert in die Liste und blinkt kurz auf
@@ -130,20 +130,20 @@
                 const i = this.tauschIdx;
                 if (i === null || !this.rows[i]) { this.tauschIdx = null; return; }
                 const z = this.rows[i];
-                z.gp_id = ziel.typ === 'gp' ? ziel.id : null;        // löschen bleibt unangetastet — hier wird NUR ersetzt
-                z.referenced_recipe_id = ziel.typ === 'sub' ? ziel.id : null;
+                z.gp_id = ziel.type === 'gp' ? ziel.id : null;        // löschen bleibt unangetastet — hier wird NUR ersetzt
+                z.referenced_recipe_id = ziel.type === 'sub' ? ziel.id : null;
                 z.ziel_name = ziel.name;
                 z.ziel_url = ziel.url ?? null;
                 z.display_name = ziel.name;
                 z.raw_text = (this.zahl(z.quantity) ?? '') + ' ' + ziel.name;
-                z.lineage = ziel.typ === 'sub' ? 'recipe_ref' : 'manual';
+                z.lineage = ziel.type === 'sub' ? 'recipe_ref' : 'manual';
                 z.ek_pro_g = ziel.ek_pro_g ?? null;
                 z.g_pro_stueck = ziel.g_pro_stueck ?? null;          // Stück-Sub: g/Stück fürs Live-Rechnen
                 z.ek_pro_g_min = null; z.ek_pro_g_avg = null;        // alte Min/Ø verwerfen — Save rechnet präzise nach
                 z._peek = null;
                 z.ersatz = null; this.ladeErsatz(z);                 // ♻-Hinweis fürs neue Produkt nachladen
                 z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
-                this.$wire.ekFuerZiel(ziel.typ, ziel.id).then(ek => { if (ek !== null) z.ek_pro_g = ek; });
+                this.$wire.ekFuerZiel(ziel.type, ziel.id).then(ek => { if (ek !== null) z.ek_pro_g = ek; });
                 this.tauschIdx = null;
                 this.$nextTick(() => this.$root.querySelector('[data-browse-suche]')?.focus());
             },
@@ -182,7 +182,7 @@
                 const m = this.zahl(z.quantity); const mx = this.zahl(z.quantity_max);
                 return m === null ? null : (mx !== null ? (m + mx) / 2 : m);
             },
-            // g-Faktor je Zeile: g/ml-Einheit ODER (Stück-Sub) g/Stück = Yield÷ertrag_stueck (spiegelt Server-grammFaktor)
+            // g-Faktor je Zeile: g/ml-Einheit ODER (Stück-Sub) g/Stück = Yield÷yield_pieces (spiegelt Server-grammFaktor)
             gFaktor(z) { return this.einheiten[z.unit_vocab_id]?.g ?? z.g_pro_stueck ?? null; },
             zeilenEk(z, feld = 'ek_pro_g') {  // Live-Näherung: menge_g × €/g; R5: feld wählt Lead | min | Ø
                 if (z.is_optional || z[feld] === null || z[feld] === undefined) return null;
@@ -226,8 +226,8 @@
                 this.rows.push({
                     _key: 'n' + (++this._n),
                     id: null,
-                    gp_id: ziel.typ === 'gp' ? ziel.id : null,
-                    referenced_recipe_id: ziel.typ === 'sub' ? ziel.id : null,
+                    gp_id: ziel.type === 'gp' ? ziel.id : null,
+                    referenced_recipe_id: ziel.type === 'sub' ? ziel.id : null,
                     ziel_name: ziel.name,
                     ziel_url: ziel.url ?? null,
                     raw_text: (this.neu.quantity || '') + ' ' + ziel.name,
@@ -238,7 +238,7 @@
                     cooking_loss_pct: null, trimming_loss_pct: null,
                     is_optional: this.neu.is_optional,
                     note: '', role: null, is_value_relevant: false,
-                    lineage: ziel.typ === 'sub' ? 'recipe_ref' : 'manual',
+                    lineage: ziel.type === 'sub' ? 'recipe_ref' : 'manual',
                     ek_pro_g: ziel.ek_pro_g,
                     g_pro_stueck: ziel.g_pro_stueck ?? null,          // Stück-Sub: g/Stück fürs Live-Rechnen
                     ersatz: null,

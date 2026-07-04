@@ -65,8 +65,8 @@ class VoiceModal extends Component
             return;
         }
         foreach ($this->ergebnis['aktionen'] as $aktion) {
-            if (in_array($aktion['typ'], ['recipe', 'verkaufsrezept'], true)) {
-                $this->dispatch($aktion['typ'] === 'recipe' ? 'recipe-selected' : 'vk-recipe-selected', id: $aktion['id']);
+            if (in_array($aktion['type'], ['recipe', 'verkaufsrezept'], true)) {
+                $this->dispatch($aktion['type'] === 'recipe' ? 'recipe-selected' : 'vk-recipe-selected', id: $aktion['id']);
             }
         }
     }

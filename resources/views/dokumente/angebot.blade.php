@@ -47,7 +47,7 @@
     <table class="meta">
         @if($kunde)<tr><td class="k">Kunde</td><td>{{ $kunde }}@if($kontakt && $kontakt !== $kunde) · {{ $kontakt }}@endif</td></tr>@endif
         @if($angebot->anlass)<tr><td class="k">Anlass</td><td>{{ $angebot->anlass }}</td></tr>@endif
-        @if($angebot->event_datum)<tr><td class="k">Datum</td><td>{{ $angebot->event_datum->format('d.m.Y') }}</td></tr>@endif
+        @if($angebot->event_date)<tr><td class="k">Datum</td><td>{{ $angebot->event_date->format('d.m.Y') }}</td></tr>@endif
         @if($angebot->location)<tr><td class="k">Location</td><td>{{ $angebot->location }}</td></tr>@endif
         <tr><td class="k">Personen</td><td>{{ $kalk['pax'] ?: '—' }}</td></tr>
         @if($angebot->diaet_vorgabe)<tr><td class="k">Diät / Allergien</td><td>{{ $angebot->diaet_vorgabe }}</td></tr>@endif

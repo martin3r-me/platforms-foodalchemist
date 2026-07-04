@@ -62,7 +62,7 @@ return new class extends Migration
             $table->decimal('piece_default_g', 8, 2)->nullable();
             $table->string('piece_default_g_source', 16)->nullable()->comment('manual|ki|auto (GL-07)');
             $table->decimal('stk_default_g_ai_confidence', 4, 3)->nullable();
-            $table->text('stk_default_g_ai_begruendung')->nullable();
+            $table->text('piece_default_g_ai_reasoning')->nullable();
             $table->foreignId('preferred_count_unit_id')->nullable()->constrained('foodalchemist_vocab_units')->nullOnDelete();
 
             // ── Allergen-Override-Layer: 14 EU-Allergene, 4-Wert (GL-01; NULL = kein Override → LA-Aggregation)
@@ -73,8 +73,8 @@ return new class extends Migration
                 $table->string("allergen_{$allergen}", 16)->nullable();
             }
             $table->string('allergens_source', 16)->nullable()->comment('manual|ki|auto (GL-07)');
-            $table->decimal('allergene_ai_confidence', 4, 3)->nullable();
-            $table->dateTime('allergene_aggregiert_am')->nullable();
+            $table->decimal('allergens_confidence', 4, 3)->nullable();
+            $table->dateTime('allergens_aggregated_at')->nullable();
 
             // ── Eigenschafts-Tags (tri-state: NULL = unbewertet)
             foreach ([
@@ -86,15 +86,15 @@ return new class extends Migration
             }
             $table->string('tag_source', 16)->nullable();
             $table->decimal('tag_ai_confidence', 4, 3)->nullable();
-            $table->text('tag_ai_begruendung')->nullable();
-            $table->dateTime('tag_aggregiert_am')->nullable();
+            $table->text('tag_ai_reasoning')->nullable();
+            $table->dateTime('tag_aggregated_at')->nullable();
 
             // ── Food-Domain (Wissens-Routing GL-13) — Legacy-Ref bis Knowledge-Import (⚠D4)
             $table->unsignedBigInteger('primary_food_domain_legacy_id')->nullable()->comment('FK auf vocab_food_domain folgt mit Knowledge-Import');
             $table->string('food_domain_source', 16)->nullable();
             $table->decimal('food_domain_ai_confidence', 4, 3)->nullable();
-            $table->text('food_domain_ai_begruendung')->nullable();
-            $table->dateTime('food_domain_aggregiert_am')->nullable();
+            $table->text('food_domain_ai_reasoning')->nullable();
+            $table->dateTime('food_domain_aggregated_at')->nullable();
 
             $table->timestamps();
             $table->softDeletes();

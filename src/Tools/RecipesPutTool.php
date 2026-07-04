@@ -24,9 +24,9 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
     public function getDescription(): string
     {
         return 'Aktualisiert ein Rezept im Status stub/draft (Felder: name, description, preparation, '
-            . 'taste_direction, work_time_min, yield_kg_manual, kategorie_id). status="review" reicht '
+            . 'taste_direction, work_time_min, yield_kg_manual, category_id). status="review" reicht '
             . 'den Entwurf zum menschlichen Review ein (einzige erlaubte Transition). Gepflegte Rezepte '
-            . '(review/approved/archived) sind für den MCP-Pfad gesperrt.';
+            . '(review/approved/archived) sind für den MCP-Pfad locked.';
     }
 
     public function getSchema(): array
@@ -41,7 +41,7 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'taste_direction' => ['type' => 'string'],
                 'work_time_min' => ['type' => 'integer'],
                 'yield_kg_manual' => ['type' => 'number'],
-                'kategorie_id' => ['type' => 'integer'],
+                'category_id' => ['type' => 'integer'],
                 'status' => ['type' => 'string', 'enum' => ['review'], 'description' => 'Nur draft→review erlaubt'],
             ],
             'required' => ['recipe_id'],
@@ -64,7 +64,7 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
         $in = array_intersect_key($arguments, array_flip([
             'name', 'description', 'preparation', 'taste_direction',
-            'work_time_min', 'yield_kg_manual', 'kategorie_id',
+            'work_time_min', 'yield_kg_manual', 'category_id',
         ]));
         if (($arguments['status'] ?? null) === 'review') {
             $in['status'] = 'review';

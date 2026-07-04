@@ -30,7 +30,7 @@ class SalesRecipeService
                 $s = '%' . mb_strtolower($filters['search']) . '%';
                 $q->where(fn ($w) => $w
                     ->whereRaw('LOWER(name) LIKE ?', [$s])
-                    ->orWhereRaw('LOWER(COALESCE(vk_wording_standard, \'\')) LIKE ?', [$s])
+                    ->orWhereRaw('LOWER(COALESCE(sales_wording_standard, \'\')) LIKE ?', [$s])
                     ->orWhereRaw('LOWER(COALESCE(marketing_text, \'\')) LIKE ?', [$s])
                     ->orWhereExists(fn ($e) => $e->from('foodalchemist_recipe_customer_names AS cn')
                         ->whereColumn('cn.recipe_id', 'foodalchemist_recipes.id')->whereNull('cn.deleted_at')
@@ -38,7 +38,7 @@ class SalesRecipeService
             })
             ->when($filters['hauptgruppe'] ?? null, fn ($q, $hg) => $q
                 ->whereIn('dish_class_id', FoodAlchemistDishClass::where('dish_main_group_id', $hg)->pluck('id')))
-            ->when($filters['klasse'] ?? null, fn ($q, $k) => $q->where('dish_class_id', $k))
+            ->when($filters['class'] ?? null, fn ($q, $k) => $q->where('dish_class_id', $k))
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
             ->when(($filters['geschmack'] ?? '') !== '', fn ($q) => $q->where('taste_direction', $filters['geschmack']))
             ->orderBy('name')
@@ -102,14 +102,14 @@ class SalesRecipeService
 
     /** Erlaubte VK-Feldgruppen (V-12: Policy-Grenze mitten durchs geteilte Modell). */
     private const VK_FELDER = [
-        'name', 'vk_wording_standard', 'dish_class_id', 'markup_class_id', 'mwst_satz',
-        'vk_netto', 'vk_unit_vocab_id', 'vk_unit_count', 'vk_quantity_pro_unit_g',
-        'container_warm_vocab_id', 'container_warm_anzahl', 'container_cold_vocab_id', 'container_cold_anzahl',
+        'name', 'sales_wording_standard', 'dish_class_id', 'markup_class_id', 'vat_rate',
+        'sales_net', 'sales_unit_vocab_id', 'sales_unit_count', 'sales_quantity_per_unit_g',
+        'container_warm_vocab_id', 'container_warm_count', 'container_cold_vocab_id', 'container_cold_count',
         'serving_vehicle_vocab_id', 'taste_direction',
         // M9-01: Voll-Editor-Parität — Eigenschaften, Texte, Plating, Notizen
-        'marketing_text', 'description', 'work_time_min', 'temperatur', 'funktion',
+        'marketing_text', 'description', 'work_time_min', 'temperature', 'function',
         'production_depth', 'plating_text', 'notes_manual',
-        'nebenkosten_eur',                                            // M12: Energie/Nebenkosten je Charge (HK2)
+        'additional_costs_eur',                                            // M12: Energie/Nebenkosten je Charge (HK2)
     ];
 
     public function updateVk(Team $team, int $id, array $in): FoodAlchemistRecipe
@@ -122,19 +122,19 @@ class SalesRecipeService
         return DB::transaction(function () use ($team, $recipe, $in) {
             $update = array_intersect_key($in, array_flip(self::VK_FELDER));
             // Wording/Marketing/Plating manuell editiert → Lineage auf manual (GL-07)
-            foreach (['vk_wording_standard' => 'vk_wording', 'marketing_text' => 'marketing_text', 'plating_text' => 'plating'] as $feld => $praefix) {
+            foreach (['sales_wording_standard' => 'vk_wording', 'marketing_text' => 'marketing_text', 'plating_text' => 'plating'] as $feld => $praefix) {
                 if (array_key_exists($feld, $update) && $update[$feld] !== $recipe->{$feld}) {
                     $update["{$praefix}_quelle"] = 'manual';
                     $update["{$praefix}_ai_confidence"] = null;
                 }
             }
             // brutto konsistent halten, wenn netto/mwst manuell gesetzt werden (User-Hoheit, I9)
-            $netto = array_key_exists('vk_netto', $update) ? $update['vk_netto'] : $recipe->vk_netto;
-            $mwst = array_key_exists('mwst_satz', $update) ? $update['mwst_satz'] : $recipe->mwst_satz;
+            $netto = array_key_exists('sales_net', $update) ? $update['sales_net'] : $recipe->sales_net;
+            $mwst = array_key_exists('vat_rate', $update) ? $update['vat_rate'] : $recipe->vat_rate;
             if ($netto !== null && $mwst !== null) {
-                $update['vk_brutto'] = round((float) $netto * (1 + (float) $mwst / 100), 2);
+                $update['sales_gross'] = round((float) $netto * (1 + (float) $mwst / 100), 2);
             } elseif ($netto === null) {
-                $update['vk_brutto'] = null;
+                $update['sales_gross'] = null;
             }
             $update['last_modified_by'] = 'vk_editor';
             $recipe->update($update);
@@ -161,16 +161,16 @@ class SalesRecipeService
                 return;
             }
             $standard = app(DarreichungService::class)->anlegen($team, $recipe->id, (int) $unbestimmt, [
-                'quantity_pro_unit_g' => $update['vk_quantity_pro_unit_g'] ?? $recipe->vk_quantity_pro_unit_g,
-                'unit_vocab_id' => $update['vk_unit_vocab_id'] ?? $recipe->vk_unit_vocab_id,
-                'unit_count' => $update['vk_unit_count'] ?? $recipe->vk_unit_count,
+                'quantity_pro_unit_g' => $update['sales_quantity_per_unit_g'] ?? $recipe->sales_quantity_per_unit_g,
+                'unit_vocab_id' => $update['sales_unit_vocab_id'] ?? $recipe->sales_unit_vocab_id,
+                'unit_count' => $update['sales_unit_count'] ?? $recipe->sales_unit_count,
                 'markup_class_id' => $update['markup_class_id'] ?? $recipe->markup_class_id,
             ], 'fa_ui');
         }
         $map = [
-            'vk_quantity_pro_unit_g' => 'quantity_pro_unit_g',
-            'vk_unit_vocab_id' => 'unit_vocab_id',
-            'vk_unit_count' => 'unit_count',
+            'sales_quantity_per_unit_g' => 'quantity_pro_unit_g',
+            'sales_unit_vocab_id' => 'unit_vocab_id',
+            'sales_unit_count' => 'unit_count',
             'markup_class_id' => 'markup_class_id',
             'container_warm_vocab_id' => 'container_warm_vocab_id',
             'container_cold_vocab_id' => 'container_cold_vocab_id',
@@ -182,9 +182,9 @@ class SalesRecipeService
                 $dUpdate[$nach] = $update[$von];
             }
         }
-        if (array_key_exists('vk_netto', $update)) {
-            $dUpdate['vk_netto'] = $update['vk_netto'];
-            $dUpdate['preis_modus'] = $update['vk_netto'] !== null ? 'manuell' : 'auto';
+        if (array_key_exists('sales_net', $update)) {
+            $dUpdate['sales_net'] = $update['sales_net'];
+            $dUpdate['preis_modus'] = $update['sales_net'] !== null ? 'manuell' : 'auto';
         }
         if ($dUpdate !== []) {
             app(DarreichungService::class)->aktualisieren($team, $standard->id, $dUpdate);
@@ -229,12 +229,12 @@ class SalesRecipeService
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
         $werte = [
-            'komponente_label' => trim((string) ($in['komponente_label'] ?? '')) ?: 'Gesamt',
+            'component_label' => trim((string) ($in['component_label'] ?? '')) ?: 'Gesamt',
             'device_vocab_id' => $in['device_vocab_id'] ?? null,
             'temp_c' => $in['temp_c'] ?? null,
-            'dauer_min' => $in['dauer_min'] ?? null,
-            'kerntemp_c' => $in['kerntemp_c'] ?? null,
-            'hinweis' => $in['hinweis'] ?? null,
+            'duration_min' => $in['duration_min'] ?? null,
+            'core_temp_c' => $in['core_temp_c'] ?? null,
+            'note' => $in['note'] ?? null,
             'source' => 'manual', 'ai_confidence' => null, 'ai_reasoning' => null,      // manual gewinnt (GL-07)
             'updated_at' => now(),
         ];
@@ -308,9 +308,9 @@ class SalesRecipeService
      */
     public function cockpit(FoodAlchemistRecipe $r): array
     {
-        $anzahl = $r->vk_unit_count !== null ? (int) $r->vk_unit_count : null;
-        $mengeProEinheitG = $r->vk_quantity_pro_unit_g !== null
-            ? (float) $r->vk_quantity_pro_unit_g
+        $anzahl = $r->sales_unit_count !== null ? (int) $r->sales_unit_count : null;
+        $mengeProEinheitG = $r->sales_quantity_per_unit_g !== null
+            ? (float) $r->sales_quantity_per_unit_g
             : ($r->yield_kg !== null && $anzahl !== null && $anzahl > 0 ? round((float) $r->yield_kg * 1000 / $anzahl, 1) : null);
 
         $verkauftAls = $anzahl !== null || $mengeProEinheitG !== null ? [
@@ -321,31 +321,31 @@ class SalesRecipeService
         ] : null;
 
         $formelFehlt = false;
-        $vk = ['vk_netto' => null, 'source' => 'leer', 'vorschlag' => null];
+        $vk = ['sales_net' => null, 'source' => 'leer', 'vorschlag' => null];
         try {
             $vk = $this->marge->effektiverVk(
-                $r->vk_netto !== null ? (float) $r->vk_netto : null,
+                $r->sales_net !== null ? (float) $r->sales_net : null,
                 $r->ek_per_kg_eur !== null ? (float) $r->ek_per_kg_eur : null,
                 $mengeProEinheitG,
                 $r->aufschlagsklasse,
-                $r->mwst_satz !== null ? (float) $r->mwst_satz : null,
+                $r->vat_rate !== null ? (float) $r->vat_rate : null,
             );
         } catch (\Platform\FoodAlchemist\Exceptions\FormelNichtDefiniertException) {
             $formelFehlt = true;                                     // W-1: UI kennzeichnet, kein Crash
-            if ($r->vk_netto !== null) {
-                $vk = ['vk_netto' => (float) $r->vk_netto, 'source' => 'manuell', 'vorschlag' => null];
+            if ($r->sales_net !== null) {
+                $vk = ['sales_net' => (float) $r->sales_net, 'source' => 'manuell', 'vorschlag' => null];
             }
         }
 
-        $mwst = $r->mwst_satz !== null ? (float) $r->mwst_satz : (float) ($r->aufschlagsklasse->mwst_satz ?? 19);
+        $mwst = $r->vat_rate !== null ? (float) $r->vat_rate : (float) ($r->aufschlagsklasse->vat_rate ?? 19);
 
         return [
             'verkauft_als' => $verkauftAls,
             'vk' => $vk,
-            'vk_brutto' => $vk['vk_netto'] !== null ? round($vk['vk_netto'] * (1 + $mwst / 100), 2) : null,
-            'mwst_satz' => $mwst,
-            'marge' => $this->marge->marge($vk['vk_netto'], $r->ek_total_eur !== null ? (float) $r->ek_total_eur : null),
-            'pro_einheit' => $this->marge->proEinheit($vk['vk_netto'], $anzahl, $mwst),
+            'sales_gross' => $vk['sales_net'] !== null ? round($vk['sales_net'] * (1 + $mwst / 100), 2) : null,
+            'vat_rate' => $mwst,
+            'marge' => $this->marge->marge($vk['sales_net'], $r->ek_total_eur !== null ? (float) $r->ek_total_eur : null),
+            'pro_einheit' => $this->marge->proEinheit($vk['sales_net'], $anzahl, $mwst),
             'formel_fehlt' => $formelFehlt,
         ];
     }

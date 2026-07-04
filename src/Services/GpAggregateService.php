@@ -25,7 +25,7 @@ class GpAggregateService
 {
     /**
      * Effektive Allergen-Auflösung je GP:
-     * [feld => ['wert' => AllergenValue, 'source' => override|mutter|la|keine]].
+     * [feld => ['value' => AllergenValue, 'source' => override|mutter|la|keine]].
      */
     public function allergene(FoodAlchemistGp $gp): array
     {
@@ -36,7 +36,7 @@ class GpAggregateService
         foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
             $override = AllergenValue::tryFrom((string) $gp->getAttribute("allergen_{$feld}"));
             if ($override !== null) {                              // Prio 1: Override absolut, wird NIE gemax-t
-                $out[$feld] = ['wert' => $override, 'source' => 'override'];
+                $out[$feld] = ['value' => $override, 'source' => 'override'];
 
                 continue;
             }
@@ -47,14 +47,14 @@ class GpAggregateService
                     $mutterMax = $mutter !== null ? $this->aufgeloesteWerte($mutter) : [];
                 }
                 $wert = $mutterMax[$feld] ?? AllergenValue::Unbekannt;
-                $out[$feld] = ['wert' => $wert, 'source' => 'mutter'];
+                $out[$feld] = ['value' => $wert, 'source' => 'mutter'];
 
                 continue;
             }
 
             $wert = $laMax[$feld] ?? null;                         // Prio 3: MAX über alle LAs
             $out[$feld] = [
-                'wert' => $wert ?? AllergenValue::Unbekannt,       // leere Menge ⇒ unbekannt (§4.2)
+                'value' => $wert ?? AllergenValue::Unbekannt,       // leere Menge ⇒ unbekannt (§4.2)
                 'source' => $wert !== null ? 'la' : 'keine',
             ];
         }
@@ -64,13 +64,13 @@ class GpAggregateService
 
     /**
      * GP-Konfidenz nach GL-01 §4.5 (SOLL ⚠A1 — im Ist nicht vorhanden):
-     * ['konfidenz' => high|medium|low|none, 'needs_review' => bool, 'konflikt_felder' => string[]].
+     * ['confidence' => high|medium|low|none, 'needs_review' => bool, 'konflikt_felder' => string[]].
      */
     public function allergenKonfidenz(FoodAlchemistGp $gp): array
     {
         $profile = $this->laProfile($gp->id);
         if ($profile->isEmpty()) {
-            return ['konfidenz' => 'none', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 0];
+            return ['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 0];
         }
 
         $konflikt = [];   // enthalten ↔ nicht_enthalten ohne spuren-Mittelweg ⇒ LOW + Review
@@ -93,10 +93,10 @@ class GpAggregateService
         }
 
         if ($konflikt !== []) {
-            return ['konfidenz' => 'low', 'needs_review' => true, 'konflikt_felder' => $konflikt, 'n_las_mit_daten' => $profile->count()];
+            return ['confidence' => 'low', 'needs_review' => true, 'konflikt_felder' => $konflikt, 'n_las_mit_daten' => $profile->count()];
         }
 
-        return ['konfidenz' => $differenz ? 'medium' : 'high', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => $profile->count()];
+        return ['confidence' => $differenz ? 'medium' : 'high', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => $profile->count()];
     }
 
     /**

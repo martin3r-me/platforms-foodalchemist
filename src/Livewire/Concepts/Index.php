@@ -37,7 +37,7 @@ class Index extends Component
 
     public string $editKatName = '';
 
-    public array $form = ['name' => '', 'anlass' => '', 'niveau' => '', 'category_id' => null, 'status' => 'draft', 'description' => ''];
+    public array $form = ['name' => '', 'anlass' => '', 'level' => '', 'category_id' => null, 'status' => 'draft', 'description' => ''];
 
     /** Pro Slot editierbare Rolle/Titel (keyed by slot-id). */
     public array $slotForm = [];
@@ -68,7 +68,7 @@ class Index extends Component
 
     public function neu(ConceptService $svc): void
     {
-        $c = $svc->create($this->team(), ['name' => 'Neues Concept', 'is_vorlage' => $this->showVorlagen]);
+        $c = $svc->create($this->team(), ['name' => 'Neues Concept', 'is_template' => $this->showVorlagen]);
         $this->waehle($c->id, $svc);
     }
 
@@ -91,7 +91,7 @@ class Index extends Component
         }
         $this->selectedId = $id;
         $this->form = [
-            'name' => $c->name, 'anlass' => $c->anlass ?? '', 'niveau' => $c->niveau ?? '',
+            'name' => $c->name, 'anlass' => $c->anlass ?? '', 'level' => $c->level ?? '',
             'category_id' => $c->category_id, 'status' => $c->status, 'description' => $c->description ?? '',
         ];
         $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'titel' => $s->titel ?? '']])->all();
@@ -200,7 +200,7 @@ class Index extends Component
 
     public function fuelleGericht(int $slotId, int $vkRecipeId, ConceptService $svc): void
     {
-        $svc->fillSlot($this->team(), $slotId, ['vk_recipe_id' => $vkRecipeId, 'quantity' => 1]);
+        $svc->fillSlot($this->team(), $slotId, ['sales_recipe_id' => $vkRecipeId, 'quantity' => 1]);
         $this->fillSlotId = null;
         $this->gerichtSuche = '';
         $this->waehle($this->selectedId, $svc);

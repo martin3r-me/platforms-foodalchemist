@@ -88,9 +88,9 @@ class CoherenceService
                 continue;                                            // ohne Zutat kein Vorschlag
             }
             $liste[] = [
-                'typ' => in_array($v['typ'] ?? null, FoodAlchemistRecipeCulinaryCoherence::HEBER_TYPEN, true) ? $v['typ'] : 'ergaenzung',
+                'type' => in_array($v['type'] ?? null, FoodAlchemistRecipeCulinaryCoherence::HEBER_TYPEN, true) ? $v['type'] : 'ergaenzung',
                 'zutat' => $v['zutat'],
-                'kategorie' => $this->kurz($v['kategorie'] ?? null),
+                'category' => $this->kurz($v['category'] ?? null),
                 'reasoning' => is_string($v['reasoning'] ?? null) ? $v['reasoning'] : null,
                 'confidence' => is_numeric($v['confidence'] ?? null) ? max(0.0, min(1.0, (float) $v['confidence'])) : null,
             ];

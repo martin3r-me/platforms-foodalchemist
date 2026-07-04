@@ -32,7 +32,7 @@
                 </div>
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">Allergen-Konf.</span>
-                    <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergene_konfidenz) }}</p>
+                    <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergens_confidence] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergens_confidence) }}</p>
                 </div>
 
                 {{-- VK-Seite (2. Reihe): Verkaufspreis + Portion + Marge/Wareneinsatz.
@@ -40,11 +40,11 @@
                      Aufschlagsklasse/Portionsgröße gepflegt ist. --}}
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">VK netto</span>
-                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['vk']['vk_netto'] ?? null) !== null ? number_format((float) $cockpit['vk']['vk_netto'], 2, ',', '.') . ' €' : '—' }}</p>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['vk']['sales_net'] ?? null) !== null ? number_format((float) $cockpit['vk']['sales_net'], 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">VK brutto</span>
-                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['vk_brutto'] ?? null) !== null ? number_format((float) $cockpit['vk_brutto'], 2, ',', '.') . ' €' : '—' }}</p>
+                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['sales_gross'] ?? null) !== null ? number_format((float) $cockpit['sales_gross'], 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
                 <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-2">
                     <span class="text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">VK / Portion</span>
@@ -122,7 +122,7 @@
                 </div>
                 <div class="col-span-2">
                     <label class="block {{ $label }} mb-1">VK-Wording (neutraler Standard — Fallback für Concepter &amp; Foodbook)</label>
-                    <input type="text" wire:model="form.vk_wording_standard" class="{{ $input }}" data-vk-wording />
+                    <input type="text" wire:model="form.sales_wording_standard" class="{{ $input }}" data-vk-wording />
                     <p class="text-[10px] text-gray-400 mt-0.5">Wording-Kette: Foodbook-Override → Konzept-Wording → dieser Standard → interner Name. Marketing-Texte werden am Foodbook-Block gepflegt.</p>
                 </div>
                 <div>
@@ -229,9 +229,9 @@
                     </tbody>
                 </table>
                 <p class="text-[10px] text-gray-400 mt-1">
-                    Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->nutri_konfidenz] ?? '' }}">{{ strtoupper($rezept->nutri_konfidenz ?? '—') }}</span>
+                    Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->nutri_confidence] ?? '' }}">{{ strtoupper($rezept->nutri_confidence ?? '—') }}</span>
                     · {{ $rezept->nutri_n_ingredients_mapped ?? 0 }}/{{ $rezept->nutri_n_ingredients_total ?? 0 }} Zutaten mit Nährwert-Daten
-                    {{ $rezept->nutri_aggregiert_am !== null ? '· aggregiert ' . $rezept->nutri_aggregiert_am->format('Y-m-d H:i') : '' }}
+                    {{ $rezept->nutri_aggregated_at !== null ? '· aggregiert ' . $rezept->nutri_aggregated_at->format('Y-m-d H:i') : '' }}
                     — Garverlust/Putzverlust werden NICHT angewendet (BLS-Rohwerte); Stück-Zutaten ohne g/ml-Basis tragen nichts bei.
                 </p>
             @endif
@@ -258,7 +258,7 @@
             <div class="grid grid-cols-3 gap-3" data-vk-unit-block>
                 <div>
                     <label class="block {{ $label }} mb-1">Einheit</label>
-                    <select wire:model="form.vk_unit_vocab_id" class="{{ $input }}">
+                    <select wire:model="form.sales_unit_vocab_id" class="{{ $input }}">
                         <option value="">—</option>
                         @foreach($einheiten as $e)
                             <option value="{{ $e->id }}">{{ $e->display_de ?? $e->slug }}</option>
@@ -267,11 +267,11 @@
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Anzahl Einheiten (primär)</label>
-                    <input type="number" step="0.1" min="0" wire:model="form.vk_unit_count" class="{{ $input }}" data-vk-anzahl />
+                    <input type="number" step="0.1" min="0" wire:model="form.sales_unit_count" class="{{ $input }}" data-vk-anzahl />
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">g/Einheit (leer = aus Yield)</label>
-                    <input type="number" step="1" min="0" wire:model="form.vk_quantity_pro_unit_g" class="{{ $input }}"
+                    <input type="number" step="1" min="0" wire:model="form.sales_quantity_per_unit_g" class="{{ $input }}"
                            placeholder="{{ $cockpit['verkauft_als']['g_pro_einheit'] ?? '' }}" data-vk-g-unit />
                 </div>
             </div>
@@ -284,22 +284,22 @@
                     <select wire:model="form.markup_class_id" class="{{ $input }}" data-vk-ak>
                         <option value="">—</option>
                         @foreach($aufschlagsklassen as $ak)
-                            <option value="{{ $ak->id }}">{{ $ak->code }} ({{ rtrim(rtrim(number_format((float) $ak->raw_markup_pct, 1, '.', ''), '0'), '.') }} %){{ $ak->formel_typ === 'deckungsbeitrag' ? ' — Formel nicht definiert (W-1)' : '' }}</option>
+                            <option value="{{ $ak->id }}">{{ $ak->code }} ({{ rtrim(rtrim(number_format((float) $ak->raw_markup_pct, 1, '.', ''), '0'), '.') }} %){{ $ak->formula_type === 'deckungsbeitrag' ? ' — Formel nicht definiert (W-1)' : '' }}</option>
                         @endforeach
                     </select>
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">MwSt-Satz %</label>
-                    <input type="number" step="0.1" min="0" wire:model="form.mwst_satz" class="{{ $input }}" data-vk-mwst />
+                    <input type="number" step="0.1" min="0" wire:model="form.vat_rate" class="{{ $input }}" data-vk-mwst />
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">VK netto manuell € (leer = aus Klasse)</label>
-                    <input type="number" step="0.01" min="0" wire:model="form.vk_netto" class="{{ $input }}"
-                           placeholder="{{ $cockpit['vk']['vorschlag']['vk_netto'] ?? '' }}" data-vk-netto-manuell />
+                    <input type="number" step="0.01" min="0" wire:model="form.sales_net" class="{{ $input }}"
+                           placeholder="{{ $cockpit['vk']['vorschlag']['sales_net'] ?? '' }}" data-vk-netto-manuell />
                 </div>
             </div>
             @if($cockpit !== null && $cockpit['vk']['vorschlag'] !== null)
-                <p class="text-[11px] text-gray-400 mt-2" data-vk-vorschau>Vorschlag aus Klasse: {{ number_format($cockpit['vk']['vorschlag']['vk_netto'], 2, ',', '.') }} € netto · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
+                <p class="text-[11px] text-gray-400 mt-2" data-vk-vorschau>Vorschlag aus Klasse: {{ number_format($cockpit['vk']['vorschlag']['sales_net'], 2, ',', '.') }} € netto · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
             @endif
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab KALKULATION --}}
@@ -333,7 +333,7 @@
                             @if($d->created_via)<span class="block text-[10px] text-gray-400">{{ $d->created_via }}</span>@endif
                         </td>
                         <td class="py-1.5 pr-2 text-center">
-                            <input type="radio" name="dar-standard" @checked($d->ist_standard)
+                            <input type="radio" name="dar-standard" @checked($d->is_standard)
                                    wire:click="darreichungStandard({{ $d->id }})" title="Als Standard setzen" />
                         </td>
                         <td class="py-1.5 pr-2 text-right">
@@ -363,7 +363,7 @@
                             </select>
                         </td>
                         <td class="py-1.5 pr-2">
-                            <select wire:model="darForm.{{ $d->id }}.geschirr_item_id"
+                            <select wire:model="darForm.{{ $d->id }}.tableware_item_id"
                                     wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-32"
                                     title="Default-Geschirr dieser Form — wird im Concepter am Slot vorgeschlagen">
                                 <option value="">—</option>
@@ -375,26 +375,26 @@
                         </td>
                         <td class="py-1.5 pr-2 text-right tabular-nums">
                             @if(($darForm[$d->id]['preis_modus'] ?? 'auto') === 'manuell')
-                                <input type="text" wire:model.blur="darForm.{{ $d->id }}.vk_netto"
+                                <input type="text" wire:model.blur="darForm.{{ $d->id }}.sales_net"
                                        wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
                             @else
-                                <span class="text-emerald-600 dark:text-emerald-400">{{ $d->vk_netto !== null ? number_format($d->vk_netto, 2, ',', '.') . ' €' : '—' }}</span>
+                                <span class="text-emerald-600 dark:text-emerald-400">{{ $d->sales_net !== null ? number_format($d->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
                             @endif
                         </td>
                         @php($darVkNetto = ($darForm[$d->id]['preis_modus'] ?? 'auto') === 'manuell'
-                            ? (is_numeric(str_replace(',', '.', (string) ($darForm[$d->id]['vk_netto'] ?? ''))) ? (float) str_replace(',', '.', (string) $darForm[$d->id]['vk_netto']) : null)
-                            : $d->vk_netto)
+                            ? (is_numeric(str_replace(',', '.', (string) ($darForm[$d->id]['sales_net'] ?? ''))) ? (float) str_replace(',', '.', (string) $darForm[$d->id]['sales_net']) : null)
+                            : $d->sales_net)
                         @php($darWpct = ($d->ek_portion !== null && $darVkNetto !== null && $darVkNetto > 0) ? 100 * $d->ek_portion / $darVkNetto : null)
                         <td class="py-1.5 pr-2 text-right tabular-nums {{ $darWpct !== null && $darWpct > 35 ? 'text-rose-500' : 'text-gray-400' }}"
                             title="Wareneinsatz dieser Form">{{ $darWpct !== null ? number_format($darWpct, 0) . ' %' : '—' }}</td>
                         <td class="py-1.5 pr-2 text-right tabular-nums text-gray-400">
-                            {{ $d->vk_brutto !== null ? number_format($d->vk_brutto, 2, ',', '.') . ' €' : '—' }}
+                            {{ $d->sales_gross !== null ? number_format($d->sales_gross, 2, ',', '.') . ' €' : '—' }}
                         </td>
                         <td class="py-1.5 text-right whitespace-nowrap">
                             <button type="button" wire:click="darDeltaToggle({{ $d->id }})"
                                     class="{{ $btnGhostXs }} {{ $d->deltas->count() > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-gray-400' }}"
                                     title="Komponenten dieser Form anpassen (weglassen/reduzieren)">⚙ {{ $d->deltas->count() ?: '' }}</button>
-                            @unless($d->ist_standard)
+                            @unless($d->is_standard)
                                 <button type="button" wire:click="darreichungLoeschen({{ $d->id }})" wire:confirm="Diese Darreichung löschen?"
                                         class="{{ $btnGhostXs }} text-rose-500" title="löschen">🗑</button>
                             @endunless
@@ -471,10 +471,10 @@
                         <select wire:model="form.container_warm_vocab_id" class="{{ $input }} flex-1">
                             <option value="">—</option>
                             @foreach($behaelter as $b)
-                                <option value="{{ $b->id }}" @if($b->is_inactive && $form['container_warm_vocab_id'] != $b->id) hidden @endif>{{ $b->name }}{{ $b->gruppe ? ' · ' . $b->gruppe : '' }}{{ $b->is_inactive ? ' (inaktiv)' : '' }}</option>
+                                <option value="{{ $b->id }}" @if($b->is_inactive && $form['container_warm_vocab_id'] != $b->id) hidden @endif>{{ $b->name }}{{ $b->group_name ? ' · ' . $b->group_name : '' }}{{ $b->is_inactive ? ' (inaktiv)' : '' }}</option>
                             @endforeach
                         </select>
-                        <input type="number" min="0" wire:model="form.container_warm_anzahl" class="{{ $input }} w-16" placeholder="n" />
+                        <input type="number" min="0" wire:model="form.container_warm_count" class="{{ $input }} w-16" placeholder="n" />
                     </div>
                 </div>
                 <div>
@@ -483,10 +483,10 @@
                         <select wire:model="form.container_cold_vocab_id" class="{{ $input }} flex-1">
                             <option value="">—</option>
                             @foreach($behaelter as $b)
-                                <option value="{{ $b->id }}" @if($b->is_inactive && $form['container_cold_vocab_id'] != $b->id) hidden @endif>{{ $b->name }}{{ $b->gruppe ? ' · ' . $b->gruppe : '' }}{{ $b->is_inactive ? ' (inaktiv)' : '' }}</option>
+                                <option value="{{ $b->id }}" @if($b->is_inactive && $form['container_cold_vocab_id'] != $b->id) hidden @endif>{{ $b->name }}{{ $b->group_name ? ' · ' . $b->group_name : '' }}{{ $b->is_inactive ? ' (inaktiv)' : '' }}</option>
                             @endforeach
                         </select>
-                        <input type="number" min="0" wire:model="form.container_cold_anzahl" class="{{ $input }} w-16" placeholder="n" />
+                        <input type="number" min="0" wire:model="form.container_cold_count" class="{{ $input }} w-16" placeholder="n" />
                     </div>
                 </div>
                 <div>
@@ -494,7 +494,7 @@
                     <select wire:model="form.serving_vehicle_vocab_id" class="{{ $input }}">
                         <option value="">—</option>
                         @foreach($vehikel as $v)
-                            <option value="{{ $v->id }}" @if($v->is_inactive && $form['serving_vehicle_vocab_id'] != $v->id) hidden @endif>{{ $v->name }}{{ $v->gruppe ? ' · ' . $v->gruppe : '' }}{{ $v->is_inactive ? ' (inaktiv)' : '' }}</option>
+                            <option value="{{ $v->id }}" @if($v->is_inactive && $form['serving_vehicle_vocab_id'] != $v->id) hidden @endif>{{ $v->name }}{{ $v->group_name ? ' · ' . $v->group_name : '' }}{{ $v->is_inactive ? ' (inaktiv)' : '' }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -510,7 +510,7 @@
                     <p class="text-[11px] font-medium text-violet-700 dark:text-violet-300">✨ Programm-Vorschläge — je Zeile übernehmen:</p>
                     @foreach($regenVorschlaege as $idx => $rv)
                         <div class="flex items-center justify-between gap-2 text-[11px] text-gray-600 dark:text-gray-300" wire:key="rvz-{{ $idx }}">
-                            <span class="min-w-0 truncate">{{ $rv['komponente_label'] }}{{ $rv['temp_c'] !== null ? ' · ' . $rv['temp_c'] . ' °C' : '' }}{{ $rv['dauer_min'] !== null ? ' · ' . $rv['dauer_min'] . ' min' : '' }}{{ $rv['kerntemp_c'] !== null ? ' · KT ' . $rv['kerntemp_c'] . ' °C' : '' }}</span>
+                            <span class="min-w-0 truncate">{{ $rv['component_label'] }}{{ $rv['temp_c'] !== null ? ' · ' . $rv['temp_c'] . ' °C' : '' }}{{ $rv['duration_min'] !== null ? ' · ' . $rv['duration_min'] . ' min' : '' }}{{ $rv['core_temp_c'] !== null ? ' · KT ' . $rv['core_temp_c'] . ' °C' : '' }}</span>
                             <button type="button" wire:click="regenVorschlagUebernehmen({{ $idx }})" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-regen-uebernehmen>+ Übernehmen</button>
                         </div>
                     @endforeach
@@ -520,8 +520,8 @@
                 @foreach($regenZeilen as $z)
                     <div wire:key="rg-{{ $z->id }}" class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200" data-regen-zeile="{{ $z->id }}">
                         <span class="flex-1 truncate">
-                            <span class="font-medium">{{ $z->komponente_label }}</span>
-                            <span class="text-gray-400">· {{ $z->geraet ?? 'kalt servieren' }}{{ $z->temp_c !== null ? " · {$z->temp_c} °C" : '' }}{{ $z->dauer_min !== null ? " · {$z->dauer_min} min" : '' }}{{ $z->kerntemp_c !== null ? " · KT {$z->kerntemp_c} °C" : '' }}{{ $z->hinweis ? " · {$z->hinweis}" : '' }}</span>
+                            <span class="font-medium">{{ $z->component_label }}</span>
+                            <span class="text-gray-400">· {{ $z->geraet ?? 'kalt servieren' }}{{ $z->temp_c !== null ? " · {$z->temp_c} °C" : '' }}{{ $z->duration_min !== null ? " · {$z->duration_min} min" : '' }}{{ $z->core_temp_c !== null ? " · KT {$z->core_temp_c} °C" : '' }}{{ $z->note ? " · {$z->note}" : '' }}</span>
                         </span>
                         <button type="button" wire:click="regenSchieben({{ $z->id }}, -1)" class="{{ $btnGhostXs }}" title="hoch">↑</button>
                         <button type="button" wire:click="regenSchieben({{ $z->id }}, 1)" class="{{ $btnGhostXs }}" title="runter">↓</button>
@@ -530,15 +530,15 @@
                     </div>
                 @endforeach
                 <div class="grid grid-cols-6 gap-2 pt-1" data-regen-form>
-                    <input type="text" wire:model="regenForm.komponente_label" class="{{ $input }} col-span-2" placeholder="Komponente (z. B. Gesamt)" />
+                    <input type="text" wire:model="regenForm.component_label" class="{{ $input }} col-span-2" placeholder="Komponente (z. B. Gesamt)" />
                     <select wire:model="regenForm.device_vocab_id" class="{{ $input }}">
                         <option value="">kalt</option>
                         @foreach($geraete as $g)<option value="{{ $g->id }}">{{ $g->name }}</option>@endforeach
                     </select>
                     <input type="number" wire:model="regenForm.temp_c" class="{{ $input }}" placeholder="°C" />
-                    <input type="number" wire:model="regenForm.dauer_min" class="{{ $input }}" placeholder="min" />
-                    <input type="number" wire:model="regenForm.kerntemp_c" class="{{ $input }}" placeholder="KT °C" />
-                    <input type="text" wire:model="regenForm.hinweis" class="{{ $input }} col-span-5" placeholder="Hinweis (z. B. abgedeckt, nach 8 min schwenken)" />
+                    <input type="number" wire:model="regenForm.duration_min" class="{{ $input }}" placeholder="min" />
+                    <input type="number" wire:model="regenForm.core_temp_c" class="{{ $input }}" placeholder="KT °C" />
+                    <input type="text" wire:model="regenForm.note" class="{{ $input }} col-span-5" placeholder="Hinweis (z. B. abgedeckt, nach 8 min schwenken)" />
                     <button type="button" wire:click="regenSpeichern" class="{{ $btnGhostXs }}" data-regen-speichern>{{ $regenEditId !== null ? 'Aktualisieren' : '+ Zeile' }}</button>
                 </div>
             </div>
@@ -556,15 +556,15 @@
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1" title="M-K8: direkte Einzelkosten je Portion (Energie, Verpackung …) — fließen als Block in HK2">Nebenkosten (€/Portion)</label>
-                    <input type="number" min="0" step="0.01" wire:model="form.nebenkosten_eur" class="{{ $input }}" data-vk-nebenkosten />
+                    <input type="number" min="0" step="0.01" wire:model="form.additional_costs_eur" class="{{ $input }}" data-vk-nebenkosten />
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Temperatur</label>
-                    <input type="text" wire:model="form.temperatur" placeholder="z. B. 75 °C Kerntemperatur · gekühlt" class="{{ $input }}" />
+                    <input type="text" wire:model="form.temperature" placeholder="z. B. 75 °C Kerntemperatur · gekühlt" class="{{ $input }}" />
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Funktion</label>
-                    <input type="text" wire:model="form.funktion" placeholder="z. B. Hauptgang, Fingerfood" class="{{ $input }}" />
+                    <input type="text" wire:model="form.function" placeholder="z. B. Hauptgang, Fingerfood" class="{{ $input }}" />
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Fertigungstiefe</label>

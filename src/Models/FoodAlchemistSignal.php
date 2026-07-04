@@ -28,7 +28,7 @@ class FoodAlchemistSignal extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'typ' => SignalTyp::class,
+        'type' => SignalTyp::class,
         'severity' => SignalSeverity::class,
         'status' => SignalStatus::class,
         'payload' => 'array',
@@ -43,6 +43,6 @@ class FoodAlchemistSignal extends Model
 
     public function scopeTyp(Builder $q, string $typ): Builder
     {
-        return $q->where('typ', $typ);
+        return $q->where('type', $typ);
     }
 }

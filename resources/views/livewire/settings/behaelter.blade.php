@@ -13,9 +13,9 @@
         <div data-vokabular="{{ $key }}">
             <p class="{{ $dt }} mb-1.5">{{ $vokabular['label'] }} ({{ $vokabular['zeilen']->count() }})</p>
 
-            @foreach($vokabular['zeilen']->groupBy(fn ($z) => $z->gruppe ?? 'sonstig') as $gruppe => $zeilen)
+            @foreach($vokabular['zeilen']->groupBy(fn ($z) => $z->group_name ?? 'sonstig') as $gruppe => $zeilen)
                 <div class="flex items-start gap-2 mb-1">
-                    @if($vokabular['zeilen']->pluck('gruppe')->filter()->isNotEmpty())
+                    @if($vokabular['zeilen']->pluck('group_name')->filter()->isNotEmpty())
                         <span class="shrink-0 w-28 text-[11px] text-gray-400 pt-0.5">{{ $gruppe }}</span>
                     @endif
                     <div class="flex flex-wrap gap-1">

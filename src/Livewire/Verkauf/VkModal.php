@@ -74,28 +74,28 @@ class VkModal extends Component
             }
             $this->form = [
                 'name' => $r->name,
-                'vk_wording_standard' => $r->vk_wording_standard,
+                'sales_wording_standard' => $r->sales_wording_standard,
                 'taste_direction' => $r->taste_direction,
                 'dish_class_id' => $r->dish_class_id,
                 'markup_class_id' => $r->markup_class_id,
-                'mwst_satz' => $r->mwst_satz,
-                'vk_netto' => $r->vk_netto,
-                'vk_unit_vocab_id' => $r->vk_unit_vocab_id,
-                'vk_unit_count' => $r->vk_unit_count,
-                'vk_quantity_pro_unit_g' => $r->vk_quantity_pro_unit_g,
+                'vat_rate' => $r->vat_rate,
+                'sales_net' => $r->sales_net,
+                'sales_unit_vocab_id' => $r->sales_unit_vocab_id,
+                'sales_unit_count' => $r->sales_unit_count,
+                'sales_quantity_per_unit_g' => $r->sales_quantity_per_unit_g,
                 'container_warm_vocab_id' => $r->container_warm_vocab_id,
-                'container_warm_anzahl' => $r->container_warm_anzahl,
+                'container_warm_count' => $r->container_warm_count,
                 'container_cold_vocab_id' => $r->container_cold_vocab_id,
-                'container_cold_anzahl' => $r->container_cold_anzahl,
+                'container_cold_count' => $r->container_cold_count,
                 'serving_vehicle_vocab_id' => $r->serving_vehicle_vocab_id,
                 // M9-01: Voll-Editor-Parität (Texte/Eigenschaften/Plating/Notizen).
                 // marketing_text ist seit dem UX-Umbau 2026-07-03 raus: der Text lebt
                 // kundenspezifisch am Foodbook-Block (Spalte bleibt als WaWi-Import-Spiegel).
                 'description' => $r->description,
                 'work_time_min' => $r->work_time_min,
-                'nebenkosten_eur' => $r->nebenkosten_eur,             // M-K8: direkte Einzelkosten → HK2 (#379)
-                'temperatur' => $r->temperatur,
-                'funktion' => $r->funktion,
+                'additional_costs_eur' => $r->additional_costs_eur,             // M-K8: direkte Einzelkosten → HK2 (#379)
+                'temperature' => $r->temperature,
+                'function' => $r->function,
                 'production_depth' => $r->production_depth,
                 'plating_text' => $r->plating_text,
                 'notes_manual' => $r->notes_manual,
@@ -123,8 +123,8 @@ class VkModal extends Component
                 'unit_vocab_id' => $d->unit_vocab_id,
                 'markup_class_id' => $d->markup_class_id,
                 'preis_modus' => $d->preis_modus,
-                'vk_netto' => $d->vk_netto,
-                'geschirr_item_id' => $d->geschirr_item_id,
+                'sales_net' => $d->sales_net,
+                'tableware_item_id' => $d->tableware_item_id,
             ];
         }
     }
@@ -273,15 +273,15 @@ class VkModal extends Component
         $gateway = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class);
         $kontext = [
             'name' => $this->form['name'] ?? $r->name,
-            'vk_wording_standard' => $this->form['vk_wording_standard'] ?? null,
+            'sales_wording_standard' => $this->form['sales_wording_standard'] ?? null,
             'komponenten' => $r->ingredients->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all(),
             'speisen_klasse' => $r->speisenKlasse?->label,
         ];
 
         try {
             match ($aktion) {
-                'wording' => $this->uebernehmeText('vk_wording_standard', $gateway->propose('vk.wording', $kontext)),
-                'plating' => $this->uebernehmePlating($gateway->propose('vk.plating', $kontext + ['portion_g' => $this->form['vk_quantity_pro_unit_g'] ?? null])),
+                'wording' => $this->uebernehmeText('sales_wording_standard', $gateway->propose('vk.wording', $kontext)),
+                'plating' => $this->uebernehmePlating($gateway->propose('vk.plating', $kontext + ['portion_g' => $this->form['sales_quantity_per_unit_g'] ?? null])),
                 'eigenschaften' => $this->uebernehmeEigenschaften($gateway, $kontext),
                 'behaelter' => $this->uebernehmeBehaelter($gateway->propose('vk.behaelter', $kontext + [
                     'vokabular' => DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->where('is_inactive', false)->pluck('name', 'id')->all(),
@@ -320,10 +320,10 @@ class VkModal extends Component
     {
         $v = $ki->propose('recipe.eigenschaften', $kontext + [
             'work_time_min' => $this->form['work_time_min'] ?? null,
-            'temperatur' => $this->form['temperatur'] ?? null,
-            'funktion' => $this->form['funktion'] ?? null,
+            'temperature' => $this->form['temperature'] ?? null,
+            'function' => $this->form['function'] ?? null,
         ]);
-        foreach (['work_time_min', 'temperatur', 'funktion'] as $feld) {
+        foreach (['work_time_min', 'temperature', 'function'] as $feld) {
             if (! empty($v->werte[$feld])) {
                 $this->form[$feld] = $v->werte[$feld];
             }
@@ -338,12 +338,13 @@ class VkModal extends Component
     {
         $gueltig = DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->pluck('id')->flip();
         $gesetzt = false;
-        foreach (['warm', 'kalt'] as $seite) {
-            $id = $v->werte["behaelter_{$seite}_id"] ?? null;
+        // AI-Contract-Keys bleiben deutsch (behaelter_warm/kalt = KI-Ausgabe); Form-Keys englisch (container_warm/cold, wie Form-Load Z.86-89).
+        foreach (['warm' => 'warm', 'kalt' => 'cold'] as $aiSeite => $formSeite) {
+            $id = $v->werte["behaelter_{$aiSeite}_id"] ?? null;
             if ($id !== null && isset($gueltig[(int) $id])) {
-                $this->form["behaelter_{$seite}_vocab_id"] = (int) $id;
-                $anzahl = $v->werte["behaelter_{$seite}_anzahl"] ?? null;
-                $this->form["behaelter_{$seite}_anzahl"] = is_numeric($anzahl) ? (int) $anzahl : null;
+                $this->form["container_{$formSeite}_vocab_id"] = (int) $id;
+                $anzahl = $v->werte["behaelter_{$aiSeite}_anzahl"] ?? null;
+                $this->form["container_{$formSeite}_count"] = is_numeric($anzahl) ? (int) $anzahl : null;
                 $gesetzt = true;
             }
         }
@@ -382,14 +383,14 @@ class VkModal extends Component
         ]);
         $gueltig = DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at')->pluck('id')->flip();
         $this->regenVorschlaege = collect((array) ($v->werte['programme'] ?? []))
-            ->filter(fn ($z) => is_array($z) && ! empty($z['komponente_label']))
+            ->filter(fn ($z) => is_array($z) && ! empty($z['component_label']))
             ->map(fn ($z) => [
-                'komponente_label' => (string) $z['komponente_label'],
+                'component_label' => (string) $z['component_label'],
                 'device_vocab_id' => isset($z['geraet_id']) && isset($gueltig[(int) $z['geraet_id']]) ? (int) $z['geraet_id'] : null,
                 'temp_c' => is_numeric($z['temp_c'] ?? null) ? (int) $z['temp_c'] : null,
-                'dauer_min' => is_numeric($z['dauer_min'] ?? null) ? (int) $z['dauer_min'] : null,
-                'kerntemp_c' => is_numeric($z['kerntemp_c'] ?? null) ? (int) $z['kerntemp_c'] : null,
-                'hinweis' => is_string($z['hinweis'] ?? null) ? $z['hinweis'] : null,
+                'duration_min' => is_numeric($z['duration_min'] ?? null) ? (int) $z['duration_min'] : null,
+                'core_temp_c' => is_numeric($z['core_temp_c'] ?? null) ? (int) $z['core_temp_c'] : null,
+                'note' => is_string($z['note'] ?? null) ? $z['note'] : null,
             ])->values()->all();
         if ($this->regenVorschlaege === []) {
             $this->fehler = 'KI lieferte keine verwertbaren Regenerations-Programme — echter Provider nötig.';
@@ -447,9 +448,9 @@ class VkModal extends Component
         if ($zeile !== null) {
             $this->regenEditId = $id;
             $this->regenForm = [
-                'komponente_label' => $zeile->komponente_label, 'device_vocab_id' => $zeile->device_vocab_id,
-                'temp_c' => $zeile->temp_c, 'dauer_min' => $zeile->dauer_min, 'kerntemp_c' => $zeile->kerntemp_c,
-                'hinweis' => $zeile->hinweis,
+                'component_label' => $zeile->component_label, 'device_vocab_id' => $zeile->device_vocab_id,
+                'temp_c' => $zeile->temp_c, 'duration_min' => $zeile->duration_min, 'core_temp_c' => $zeile->core_temp_c,
+                'note' => $zeile->note,
             ];
         }
     }
@@ -562,16 +563,16 @@ class VkModal extends Component
             'klassen' => $this->hauptgruppeId !== null
                 ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppeId)->orderBy('label')->get(['id', 'label', 'diaetform'])
                 : collect(),
-            'aufschlagsklassen' => FoodAlchemistMarkupClass::where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'raw_markup_pct', 'formel_typ']),
+            'aufschlagsklassen' => FoodAlchemistMarkupClass::where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'raw_markup_pct', 'formula_type']),
             'einheiten' => $team !== null ? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)->orderBy('slug')->get(['id', 'slug', 'display_de']) : collect(),
-            'behaelter' => DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->orderBy('gruppe')->orderBy('sort_order')->get(['id', 'name', 'gruppe', 'is_inactive']),
+            'behaelter' => DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
             'geraete' => DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at')->orderBy('sort_order')->get(['id', 'name', 'is_inactive']),
-            'vehikel' => DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->orderBy('gruppe')->orderBy('sort_order')->get(['id', 'name', 'gruppe', 'is_inactive']),
+            'vehikel' => DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
             'regenZeilen' => $this->recipeId !== null
                 ? DB::table('foodalchemist_recipe_regenerations AS rr')
                     ->leftJoin('foodalchemist_vocab_regeneration_devices AS g', 'g.id', '=', 'rr.device_vocab_id')
                     ->where('rr.recipe_id', $this->recipeId)->whereNull('rr.deleted_at')
-                    ->orderBy('rr.sort_order')->get(['rr.id', 'rr.komponente_label', 'rr.temp_c', 'rr.dauer_min', 'rr.kerntemp_c', 'rr.hinweis', 'g.name AS geraet'])
+                    ->orderBy('rr.sort_order')->get(['rr.id', 'rr.component_label', 'rr.temp_c', 'rr.duration_min', 'rr.core_temp_c', 'rr.note', 'g.name AS geraet'])
                 : collect(),
             'kunden' => $this->recipeId !== null
                 ? DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $this->recipeId)->whereNull('deleted_at')->orderBy('customer_name')->get()
@@ -584,7 +585,7 @@ class VkModal extends Component
             // Darreichungen-Tab (Umbau-Spec Phase 5)
             'darreichungen' => $this->recipeId !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servierform', 'deltas')
-                    ->where('recipe_id', $this->recipeId)->orderByDesc('ist_standard')->orderBy('id')->get()
+                    ->where('recipe_id', $this->recipeId)->orderByDesc('is_standard')->orderBy('id')->get()
                 : collect(),
             'servierformenAlle' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
                 ->orderBy('sort_order')->get(['id', 'code', 'label']),

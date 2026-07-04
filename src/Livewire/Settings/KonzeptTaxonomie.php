@@ -21,7 +21,7 @@ use RuntimeException;
 class KonzeptTaxonomie extends Component
 {
     /** Achse der Master-Detail-Ansicht: kategorie|klasse. */
-    public string $achse = 'kategorie';
+    public string $achse = 'category';
 
     // ── Kategorie ──
     public ?int $katSelectedId = null;     // gewählte Ober-Kategorie (zeigt ihre Kinder)
@@ -49,7 +49,7 @@ class KonzeptTaxonomie extends Component
 
     public function setAchse(string $achse): void
     {
-        $this->achse = $achse === 'klasse' ? 'klasse' : 'kategorie';
+        $this->achse = $achse === 'class' ? 'class' : 'category';
         $this->reset('editKatId', 'editKlasseId', 'fehler');
     }
 
@@ -200,8 +200,8 @@ class KonzeptTaxonomie extends Component
             ->groupBy('category_id')->pluck('n', 'category_id');
 
         $klasseCounts = FoodAlchemistConcept::visibleToTeam($team)
-            ->whereNotNull('klasse')->selectRaw('klasse, COUNT(*) AS n')
-            ->groupBy('klasse')->pluck('n', 'klasse');
+            ->whereNotNull('class')->selectRaw('class, COUNT(*) AS n')
+            ->groupBy('class')->pluck('n', 'class');
 
         return view('foodalchemist::livewire.settings.konzept-taxonomie', [
             'kategorien' => $svc->categoriesFlat($team),

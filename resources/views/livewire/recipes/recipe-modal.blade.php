@@ -43,7 +43,7 @@
                 </div>
                 <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                     <span class="{{ $dt }}">Allergen-Konf.</span>
-                    <p class="text-xs font-semibold {{ ['high' => 'text-emerald-600', 'medium' => 'text-amber-600', 'low' => 'text-rose-600'][$voll->allergene_konfidenz] ?? 'text-gray-400' }}">{{ strtoupper((string) $voll->allergene_konfidenz) }}</p>
+                    <p class="text-xs font-semibold {{ ['high' => 'text-emerald-600', 'medium' => 'text-amber-600', 'low' => 'text-rose-600'][$voll->allergens_confidence] ?? 'text-gray-400' }}">{{ strtoupper((string) $voll->allergens_confidence) }}</p>
                 </div>
             </div>
         </x-slot:kpiHeader>
@@ -124,15 +124,15 @@
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Kategorie * <span class="normal-case text-gray-400">({{ $kategorien->count() }} in dieser Hauptgruppe)</span></label>
-                <select wire:model.live="form.kategorie_id" class="{{ $input }}" @disabled($kategorien->isEmpty())>
+                <select wire:model.live="form.category_id" class="{{ $input }}" @disabled($kategorien->isEmpty())>
                     <option value="">—</option>
                     @foreach($kategorien as $kat)<option value="{{ $kat->id }}">{{ $kat->label }}</option>@endforeach
                 </select>
             </div>
         </div>
-        @if(isset($kiVorschlag['kategorie']))
+        @if(isset($kiVorschlag['category']))
             <div class="mt-2 text-xs" data-kategorie-vorschlag>
-                <span class="{{ $pill }} {{ $variantPill['primary'] }}">✨ Kategorie: {{ $kiVorschlag['kategorie']['werte']['kategorie_name'] ?? $kiVorschlag['kategorie']['werte']['kategorie_id'] ?? '—' }} · {{ round($kiVorschlag['kategorie']['confidence'] * 100) }} %</span>
+                <span class="{{ $pill }} {{ $variantPill['primary'] }}">✨ Kategorie: {{ $kiVorschlag['category']['werte']['kategorie_name'] ?? $kiVorschlag['category']['werte']['category_id'] ?? '—' }} · {{ round($kiVorschlag['category']['confidence'] * 100) }} %</span>
                 <button type="button" wire:click="accept_kategorie" class="{{ $btnGhostXs }} text-emerald-600">Übernehmen</button>
             </div>
         @endif
@@ -205,8 +205,8 @@
                     </div>
                     <div>
                         <label class="block {{ $label }} mb-1">Ertrag in Stück (kg ↔ Stück)</label>
-                        <input type="text" wire:model.live.debounce.500ms="form.ertrag_stueck" placeholder="z. B. 50 (Törtchen)" class="{{ $input }} !w-40" data-ertrag-stueck />
-                        @php($es = is_numeric(str_replace(',', '.', (string) ($form['ertrag_stueck'] ?? ''))) ? (float) str_replace(',', '.', (string) $form['ertrag_stueck']) : null)
+                        <input type="text" wire:model.live.debounce.500ms="form.yield_pieces" placeholder="z. B. 50 (Törtchen)" class="{{ $input }} !w-40" data-ertrag-stueck />
+                        @php($es = is_numeric(str_replace(',', '.', (string) ($form['yield_pieces'] ?? ''))) ? (float) str_replace(',', '.', (string) $form['yield_pieces']) : null)
                         @if($es !== null && $es > 0 && $voll->yield_kg !== null)
                             <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">1 Stück ≈ {{ number_format((float) $voll->yield_kg / $es * 1000, 0, ',', '.') }} g{{ $voll->ek_total_eur !== null ? ' · EK/Stück ≈ ' . number_format((float) $voll->ek_total_eur / $es, 2, ',', '.') . ' €' : '' }}</p>
                         @endif
@@ -225,7 +225,7 @@
             @if(!$neu)<button type="button" wire:click="kiEquipment" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Set-Vorschlag aus den Zutaten (in die Auswahl, nichts persistiert)">✨ Equipment</button>@endif
         </x-slot:actions>
         <div class="space-y-1.5" data-rezept-equipment>
-            @foreach($equipmentListe->groupBy(fn ($g) => $g->gruppe ?? 'sonstig') as $gruppe => $geraete)
+            @foreach($equipmentListe->groupBy(fn ($g) => $g->group_name ?? 'sonstig') as $gruppe => $geraete)
                 <div class="flex items-start gap-2">
                     <span class="{{ $dt }} w-28 shrink-0 pt-1">{{ $gruppe }}</span>
                     <div class="flex flex-wrap gap-1.5">
@@ -343,13 +343,13 @@
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Temperatur</label>
-                <input type="text" wire:model="form.temperatur" placeholder="z. B. raumtemperatur, warm, kalt" class="{{ $input }}" />
+                <input type="text" wire:model="form.temperature" placeholder="z. B. raumtemperatur, warm, kalt" class="{{ $input }}" />
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Funktion</label>
                 {{-- Dropdown-Vorschläge via datalist — freie Eingabe bleibt möglich (bestehende Freitext-Werte gehen nicht verloren). --}}
-                <input type="text" wire:model="form.funktion" list="fa-funktion-optionen" placeholder="z. B. Komponente, Sauce, Bindung …" class="{{ $input }}" />
-                <datalist id="fa-funktion-optionen">
+                <input type="text" wire:model="form.function" list="fa-function-optionen" placeholder="z. B. Komponente, Sauce, Bindung …" class="{{ $input }}" />
+                <datalist id="fa-function-optionen">
                     @foreach(['Komponente', 'Hauptkomponente', 'Sauce', 'Bindung', 'Topping', 'Beilage', 'Garnitur', 'Fond / Basis', 'Marinade', 'Dekor', 'Füllung', 'Teig'] as $opt)
                         <option value="{{ $opt }}"></option>
                     @endforeach
@@ -438,7 +438,7 @@
                         @endforeach
                     </div>
                     <p class="text-[10px] text-gray-400 mt-1">
-                        Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$voll->nutri_konfidenz] ?? '' }}">{{ strtoupper($voll->nutri_konfidenz ?? '—') }}</span>
+                        Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$voll->nutri_confidence] ?? '' }}">{{ strtoupper($voll->nutri_confidence ?? '—') }}</span>
                         · {{ $voll->nutri_n_ingredients_mapped ?? 0 }}/{{ $voll->nutri_n_ingredients_total ?? 0 }} Zutaten mit Nährwert-Daten
                         — BLS-Rohwerte, Garverlust/Putzverlust nicht angewendet (GL-08)
                     </p>

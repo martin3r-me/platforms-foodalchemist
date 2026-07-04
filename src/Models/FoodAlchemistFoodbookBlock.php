@@ -31,7 +31,7 @@ class FoodAlchemistFoodbookBlock extends Model
         'sichtbar' => 'boolean',
         'variant_group_id' => 'integer',
         'quantity' => 'decimal:3',
-        'preis_wert' => 'decimal:2',
+        'price_value' => 'decimal:2',
         'payload_json' => 'array',
     ];
 
@@ -49,7 +49,7 @@ class FoodAlchemistFoodbookBlock extends Model
     /** recipe_ref: einzelnes Gericht (VK-Rezept). */
     public function gericht(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'vk_recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
     }
 
     public function unit(): BelongsTo

@@ -46,7 +46,7 @@ class KnowledgeContextService
     {
         $routing = DB::table('foodalchemist_knowledge_routings')
             ->where('feature', $feature)
-            ->get()->keyBy(fn ($r) => $r->kategorie . ':' . $r->modus);
+            ->get()->keyBy(fn ($r) => $r->category . ':' . $r->modus);
 
         $filesUsed = [];
         $parts = [];
@@ -235,7 +235,7 @@ class KnowledgeContextService
     private function crossCuttingDocs(): array
     {
         $docs = DB::table('foodalchemist_knowledge_documents')
-            ->where('kategorie', 'cross_cutting')->where('aktiv', 1)->whereNull('deleted_at')
+            ->where('category', 'cross_cutting')->where('active', 1)->whereNull('deleted_at')
             ->whereIn('slug', self::ALWAYS_LOAD_CROSS_CUTTING)
             ->get(['slug', 'inhalt_md', 'version'])->keyBy('slug');
 
@@ -257,7 +257,7 @@ class KnowledgeContextService
             // 2a. Explizites Alias-Mapping
             $aliases = DB::table('foodalchemist_knowledge_aliases as a')
                 ->join('foodalchemist_knowledge_documents as d', 'd.id', 'a.knowledge_document_id')
-                ->where('d.kategorie', 'domain')->where('d.aktiv', 1)->whereNull('d.deleted_at')
+                ->where('d.category', 'domain')->where('d.active', 1)->whereNull('d.deleted_at')
                 ->get(['a.alias_slug', 'd.slug']);
             foreach ($aliases as $alias) {
                 $a = mb_strtolower($alias->alias_slug);
@@ -312,7 +312,7 @@ class KnowledgeContextService
     private function domainDocs(): \Illuminate\Support\Collection
     {
         return DB::table('foodalchemist_knowledge_documents')
-            ->where('kategorie', 'domain')->where('aktiv', 1)->whereNull('deleted_at')
+            ->where('category', 'domain')->where('active', 1)->whereNull('deleted_at')
             ->get(['slug', 'inhalt_md', 'version'])->keyBy('slug');
     }
 
@@ -443,7 +443,7 @@ class KnowledgeContextService
         static $stems = null;
         if ($stems === null || app()->runningUnitTests()) {
             $stems = DB::table('foodalchemist_knowledge_documents')
-                ->where('kategorie', 'pairing')->where('aktiv', 1)->whereNull('deleted_at')
+                ->where('category', 'pairing')->where('active', 1)->whereNull('deleted_at')
                 ->orderBy('slug')->pluck('slug')
                 ->map(fn ($s) => str_starts_with($s, 'pairing.') ? substr($s, 8) : $s)
                 ->all();
@@ -455,7 +455,7 @@ class KnowledgeContextService
     private function pairingDoc(string $stem): ?object
     {
         return DB::table('foodalchemist_knowledge_documents')
-            ->where('kategorie', 'pairing')->where('aktiv', 1)->whereNull('deleted_at')
+            ->where('category', 'pairing')->where('active', 1)->whereNull('deleted_at')
             ->whereIn('slug', ["pairing.{$stem}", $stem])
             ->first(['slug', 'inhalt_md', 'version']);
     }
@@ -485,9 +485,9 @@ class KnowledgeContextService
 
         $scored = [];
         $docs = DB::table('foodalchemist_knowledge_documents')
-            ->where('aktiv', 1)->whereNull('deleted_at')
-            ->when($kategorie !== null, fn ($query) => $query->where('kategorie', $kategorie))
-            ->get(['id', 'slug', 'titel', 'kategorie', 'version', 'char_count']);
+            ->where('active', 1)->whereNull('deleted_at')
+            ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie))
+            ->get(['id', 'slug', 'titel', 'category', 'version', 'char_count']);
         foreach ($docs as $doc) {
             $haystack = $this->tokenize($doc->slug . ' ' . $doc->titel);
             $score = count(array_intersect($tokens, $haystack))
@@ -501,7 +501,7 @@ class KnowledgeContextService
         return array_map(fn ($item) => [
             'slug' => $item['doc']->slug,
             'titel' => $item['doc']->titel,
-            'kategorie' => $item['doc']->kategorie,
+            'category' => $item['doc']->category,
             'version' => (int) $item['doc']->version,
             'char_count' => (int) $item['doc']->char_count,
             'score' => $item['score'],
@@ -512,7 +512,7 @@ class KnowledgeContextService
     public function getDocument(string $slug): ?object
     {
         return DB::table('foodalchemist_knowledge_documents')
-            ->where('slug', $slug)->where('aktiv', 1)->whereNull('deleted_at')
-            ->first(['slug', 'titel', 'kategorie', 'version', 'char_count', 'inhalt_md']);
+            ->where('slug', $slug)->where('active', 1)->whereNull('deleted_at')
+            ->first(['slug', 'titel', 'category', 'version', 'char_count', 'inhalt_md']);
     }
 }

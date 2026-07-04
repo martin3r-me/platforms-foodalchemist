@@ -57,7 +57,7 @@ class DetailPanel extends Component
         $this->ersatzSuche = '';
         $this->tauschSuche = '';
         $this->fehler = null;
-        $this->hinweis = null;
+        $this->note = null;
         $this->kiVorschlag = null;
         $this->laKandidaten = null;
     }
@@ -96,9 +96,9 @@ class DetailPanel extends Component
         $this->laAktion(fn ($svc, $gp, $team) => $svc->setLeadLa($team, $gp, $laId), nurKurator: true);
     }
 
-    public function sperreToggle(int $laId, bool $gesperrt): void
+    public function sperreToggle(int $laId, bool $locked): void
     {
-        $this->laAktion(fn ($svc, $gp, $team) => $svc->sperren($team, $gp, $laId, $gesperrt));
+        $this->laAktion(fn ($svc, $gp, $team) => $svc->sperren($team, $gp, $laId, $locked));
     }
 
     public function pinToggle(int $laId, bool $pinnen): void
@@ -182,7 +182,7 @@ class DetailPanel extends Component
 
             return;
         }
-        $this->kiVorschlag = ['typ' => 'allergene', 'werte' => $werte, 'confidence' => max(0.0, min(1.0, $v->confidence))];
+        $this->kiVorschlag = ['type' => 'allergene', 'werte' => $werte, 'confidence' => max(0.0, min(1.0, $v->confidence))];
     }
 
     public function kiNaehrwerte(): void
@@ -212,7 +212,7 @@ class DetailPanel extends Component
 
             return;
         }
-        $this->kiVorschlag = ['typ' => 'naehrwerte', 'werte' => $werte, 'confidence' => max(0.0, min(1.0, $v->confidence))];
+        $this->kiVorschlag = ['type' => 'naehrwerte', 'werte' => $werte, 'confidence' => max(0.0, min(1.0, $v->confidence))];
     }
 
     /** Übernehmen = der EINE Schreib-Moment (GL-07): Override-Layer bzw. Fallback-Schicht. */
@@ -222,13 +222,13 @@ class DetailPanel extends Component
         if ($gp === null || $this->kiVorschlag === null) {
             return;
         }
-        if ($this->kiVorschlag['typ'] === 'allergene') {
+        if ($this->kiVorschlag['type'] === 'allergene') {
             $update = [];
             foreach ($this->kiVorschlag['werte'] as $feld => $wert) {
                 $update["allergen_{$feld}"] = $wert;             // GL-01 Prio 1: Override
             }
             $update['allergens_source'] = 'ki';                  // Quelle sichtbar machen (✨-Marker, 2026-07-02)
-            $update['allergene_ki_confidence'] = $this->kiVorschlag['confidence'];
+            $update['allergens_confidence'] = $this->kiVorschlag['confidence'];
             $gp->update($update);
         } else {
             $w = $this->kiVorschlag['werte'];
@@ -274,7 +274,7 @@ class DetailPanel extends Component
             return;
         }
         $this->tauschSuche = '';
-        $this->hinweis = "{$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en) auf „{$ziel->name}\" umgehängt — Rezepte neu berechnet.";
+        $this->note = "{$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en) auf „{$ziel->name}\" umgehängt — Rezepte neu berechnet.";
         $this->dispatch('gp-gespeichert'); // Browser: Rezept-Zähler/Zeile aktualisieren
     }
 
@@ -350,14 +350,14 @@ class DetailPanel extends Component
         if ($kette === null) {
             return null;
         }
-        $mitVp = $kette->filter(fn ($la) => $la->vergleichspreis !== null && ! $la->gesperrt);
+        $mitVp = $kette->filter(fn ($la) => $la->vergleichspreis !== null && ! $la->locked);
         if ($mitVp->isEmpty()) {
             return null;
         }
         $unit = $mitVp->groupBy(fn ($la) => $la->vergleichspreis['unit'])
             ->sortByDesc(fn ($g) => $g->count())->keys()->first();
         $inEinheit = $mitVp->filter(fn ($la) => $la->vergleichspreis['unit'] === $unit);
-        $werte = $inEinheit->map(fn ($la) => (float) $la->vergleichspreis['wert']);
+        $werte = $inEinheit->map(fn ($la) => (float) $la->vergleichspreis['value']);
         $lead = $inEinheit->firstWhere('id', $leadId);
 
         return [
@@ -365,7 +365,7 @@ class DetailPanel extends Component
             'max' => (float) $werte->max(),
             'unit' => (string) $unit,
             'n' => $werte->count(),
-            'lead' => $lead !== null ? (float) $lead->vergleichspreis['wert'] : null,
+            'lead' => $lead !== null ? (float) $lead->vergleichspreis['value'] : null,
         ];
     }
 

@@ -12,7 +12,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Concept-Slot (M10-01) — eine Rolle im Concept, gefüllt mit GENAU
- * EINEM: `package_id` (austauschbares Bündel) ODER `vk_recipe_id` (fest gesetztes
+ * EINEM: `package_id` (austauschbares Bündel) ODER `sales_recipe_id` (fest gesetztes
  * Gericht). Der Service erzwingt „genau eines". Position-sortiert.
  */
 class FoodAlchemistConceptSlot extends Model
@@ -29,7 +29,7 @@ class FoodAlchemistConceptSlot extends Model
         'ebene' => 'integer',
         'is_pflicht' => 'boolean',
         'quantity' => 'decimal:3',
-        'preis_wert' => 'decimal:2',
+        'price_value' => 'decimal:2',
     ];
 
     public function concept(): BelongsTo
@@ -46,7 +46,7 @@ class FoodAlchemistConceptSlot extends Model
     /** Befüllung B: fest gesetztes Gericht (VK-Rezept). */
     public function gericht(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'vk_recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
     }
 
     public function unit(): BelongsTo
@@ -63,13 +63,13 @@ class FoodAlchemistConceptSlot extends Model
     /** #388: direktes Geschirr je Gericht. */
     public function geschirrItem(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'geschirr_item_id');
+        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'tableware_item_id');
     }
 
     /** #388: Alternativ-Geschirr (z. B. anderer Leih-Caterer). */
     public function geschirrAltItem(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'geschirr_alt_item_id');
+        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'tableware_alt_item_id');
     }
 
     /** Staffelpreise (nur bei type=header_preis + preis_basis='staffel'). */

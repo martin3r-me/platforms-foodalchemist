@@ -45,15 +45,15 @@ class ConcepterBewertungService
         $paketNiveaus = DB::table('foodalchemist_concept_slots as s')
             ->join('foodalchemist_packages as p', 'p.id', '=', 's.package_id')
             ->where('s.concept_id', $concept->id)->whereNull('s.deleted_at')
-            ->whereNotNull('p.niveau')->distinct()->pluck('p.niveau')->all();
+            ->whereNotNull('p.level')->distinct()->pluck('p.level')->all();
         if (count($paketNiveaus) === 0) {
-            $checks[] = $this->check('niveau', 'Niveau-Konsistenz', 'info', 'Keine Niveau-Angabe an den Paketen.');
+            $checks[] = $this->check('level', 'Niveau-Konsistenz', 'info', 'Keine Niveau-Angabe an den Paketen.');
         } elseif (count($paketNiveaus) > 1) {
-            $checks[] = $this->check('niveau', 'Niveau-Konsistenz', 'warn', 'Gemischte Niveaus: ' . implode(', ', $paketNiveaus) . '.');
-        } elseif ($concept->niveau && $paketNiveaus[0] !== $concept->niveau) {
-            $checks[] = $this->check('niveau', 'Niveau-Konsistenz', 'warn', 'Pakete „' . $paketNiveaus[0] . '" ≠ Concept-Niveau „' . $concept->niveau . '".');
+            $checks[] = $this->check('level', 'Niveau-Konsistenz', 'warn', 'Gemischte Niveaus: ' . implode(', ', $paketNiveaus) . '.');
+        } elseif ($concept->level && $paketNiveaus[0] !== $concept->level) {
+            $checks[] = $this->check('level', 'Niveau-Konsistenz', 'warn', 'Pakete „' . $paketNiveaus[0] . '" ≠ Concept-Niveau „' . $concept->level . '".');
         } else {
-            $checks[] = $this->check('niveau', 'Niveau-Konsistenz', 'ok', 'Einheitliches Niveau (' . $paketNiveaus[0] . ').');
+            $checks[] = $this->check('level', 'Niveau-Konsistenz', 'ok', 'Einheitliches Niveau (' . $paketNiveaus[0] . ').');
         }
 
         // 3 — Diät-Abdeckung (gegen die Vorgabe, sonst Info aus dem Rollup)
@@ -83,14 +83,14 @@ class ConcepterBewertungService
         }
 
         // 5 — Allergen-Konfidenz
-        $konf = $a['konfidenz'] ?? 'unknown';
+        $konf = $a['confidence'] ?? 'unknown';
         $status = ['high' => 'ok', 'medium' => 'warn', 'low' => 'fail', 'unknown' => 'fail'][$konf] ?? 'fail';
         $checks[] = $this->check('allergen', 'Allergen-Konfidenz', $status, 'Schwächstes Gericht: ' . $konf . '.');
 
         // 6 — Sensorik passt zur Rolle (je Gang-Gericht; Sensorik-Layer, leichtgewichtig via fuerRezept)
         $gerichtIds = DB::table('foodalchemist_concept_slots')
             ->where('concept_id', $concept->id)->whereNull('deleted_at')
-            ->whereNotNull('vk_recipe_id')->pluck('vk_recipe_id')->all();
+            ->whereNotNull('sales_recipe_id')->pluck('sales_recipe_id')->all();
         if ($gerichtIds === []) {
             $checks[] = $this->check('sensorik_rolle', 'Sensorik / Rolle', 'info', 'Keine direkten Gang-Gerichte zum Prüfen.');
         } else {

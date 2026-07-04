@@ -39,7 +39,7 @@ class LeadLaService
 
     /**
      * Vollständige Rangliste (V-27-Kette): Rang 1 = Lead-Kandidat, Rest = Ausweich-LAs.
-     * Jeder Eintrag trägt vergleichspreis/ist_stamm/gesperrt/gepinnt fürs Panel (M3-07).
+     * Jeder Eintrag trägt vergleichspreis/ist_stamm/locked/gepinnt fürs Panel (M3-07).
      *
      * @return Collection<int, FoodAlchemistSupplierItem>
      */
@@ -60,7 +60,7 @@ class LeadLaService
             ->each(function ($la) use ($overlay, $stammIds) {
                 $pref = $overlay->get($la->id);
                 $la->setAttribute('ist_stamm', in_array((int) $la->supplier_id, $stammIds, true));
-                $la->setAttribute('gesperrt', (bool) ($pref?->gesperrt ?? false));
+                $la->setAttribute('locked', (bool) ($pref?->locked ?? false));
                 $la->setAttribute('gepinnt', (bool) ($pref?->gepinnt ?? false));
             })
             ->sortBy(fn ($la) => [
@@ -98,15 +98,15 @@ class LeadLaService
     }
 
     /**
-     * Effektiver Lead des Teams (V-27): Pin gewinnt (sofern verknüpft + nicht gesperrt),
+     * Effektiver Lead des Teams (V-27): Pin gewinnt (sofern verknüpft + nicht locked),
      * sonst erster nicht gesperrter Rang der Kette.
      */
     public function effektiverLead(FoodAlchemistGp $gp, Team $team): ?FoodAlchemistSupplierItem
     {
         $kette = $this->rangliste($gp, $team);
 
-        return $kette->first(fn ($la) => $la->gepinnt && ! $la->gesperrt)
-            ?? $kette->first(fn ($la) => ! $la->gesperrt);
+        return $kette->first(fn ($la) => $la->gepinnt && ! $la->locked)
+            ?? $kette->first(fn ($la) => ! $la->locked);
     }
 
     /** Manueller Override des globalen Leads (GT-6): LA muss zum GP gehören (I2), NULL erlaubt. */
@@ -119,7 +119,7 @@ class LeadLaService
     }
 
     /** Team-Sperre (V-27): LA fällt aus der effektiven Kette dieses Teams. */
-    public function sperren(Team $team, FoodAlchemistGp $gp, int $laId, bool $gesperrt = true): void
+    public function sperren(Team $team, FoodAlchemistGp $gp, int $laId, bool $locked = true): void
     {
         if (! $this->gehoertZuGp($gp, $laId)) {
             throw new \RuntimeException("LA [{$laId}] ist nicht mit GP [{$gp->name}] verknüpft (GL-03 I2).");
@@ -127,7 +127,7 @@ class LeadLaService
         FoodAlchemistGpLaPreference::withTrashed()
             ->updateOrCreate(
                 ['team_id' => $team->id, 'gp_id' => $gp->id, 'supplier_item_id' => $laId],
-                ['gesperrt' => $gesperrt, 'deleted_at' => null],
+                ['locked' => $locked, 'deleted_at' => null],
             );
         $this->raeumeLeerePrefsAuf($team, $gp);
     }
@@ -272,7 +272,7 @@ class LeadLaService
             $la->setAttribute('hat_aktiven_preis', $la->aktiver_preis !== null);
             $vp = $la->aktiver_preis !== null ? $this->preise->vergleichspreis($la, (float) $la->aktiver_preis) : null;
             $la->setAttribute('vergleichspreis', $vp);
-            $la->setAttribute('vergleichspreis_wert', $vp['wert'] ?? null);   // qty NULL ⇒ NULL ⇒ ans Ende (A-2)
+            $la->setAttribute('vergleichspreis_wert', $vp['value'] ?? null);   // qty NULL ⇒ NULL ⇒ ans Ende (A-2)
         });
     }
 
@@ -286,6 +286,6 @@ class LeadLaService
     private function raeumeLeerePrefsAuf(Team $team, FoodAlchemistGp $gp): void
     {
         FoodAlchemistGpLaPreference::where('team_id', $team->id)->where('gp_id', $gp->id)
-            ->where('gesperrt', false)->where('gepinnt', false)->delete();
+            ->where('locked', false)->where('gepinnt', false)->delete();
     }
 }

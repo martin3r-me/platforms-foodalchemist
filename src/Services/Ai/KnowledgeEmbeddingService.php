@@ -131,10 +131,10 @@ class KnowledgeEmbeddingService
 
         foreach ($kategorien as $kategorie) {
             $docs = DB::table('foodalchemist_knowledge_documents')
-                ->where('kategorie', $kategorie)
-                ->where('aktiv', 1)
+                ->where('category', $kategorie)
+                ->where('active', 1)
                 ->whereNull('deleted_at')
-                ->get(['id', 'slug', 'titel', 'kategorie', 'inhalt_md', 'team_id']);
+                ->get(['id', 'slug', 'titel', 'category', 'inhalt_md', 'team_id']);
 
             // Nach Team-Partition gruppieren (global NULL → Sentinel).
             $byTeam = [];
@@ -280,10 +280,10 @@ class KnowledgeEmbeddingService
         $ids = array_map(static fn ($h) => (int) $h['entity_id'], $hits);
         $docs = DB::table('foodalchemist_knowledge_documents')
             ->whereIn('id', $ids)
-            ->whereIn('kategorie', $kategorien)
-            ->where('aktiv', 1)
+            ->whereIn('category', $kategorien)
+            ->where('active', 1)
             ->whereNull('deleted_at')
-            ->get(['id', 'slug', 'kategorie'])
+            ->get(['id', 'slug', 'category'])
             ->keyBy('id');
 
         $slugs = [];
@@ -293,7 +293,7 @@ class KnowledgeEmbeddingService
                 continue;
             }
             $slug = $doc->slug;
-            if ($doc->kategorie === 'pairing' && str_starts_with($slug, 'pairing.')) {
+            if ($doc->category === 'pairing' && str_starts_with($slug, 'pairing.')) {
                 $slug = substr($slug, 8);                           // Stem-Form
             }
             $slugs[$slug] = true;
@@ -313,7 +313,7 @@ class KnowledgeEmbeddingService
         $titel = trim((string) ($doc->titel ?? ''));
         $inhalt = (string) ($doc->inhalt_md ?? '');
 
-        if (($doc->kategorie ?? '') === 'pairing') {
+        if (($doc->category ?? '') === 'pairing') {
             $slug = (string) ($doc->slug ?? '');
             $stem = str_starts_with($slug, 'pairing.') ? substr($slug, 8) : $slug;
             $surface = str_replace('_', ' ', $stem);

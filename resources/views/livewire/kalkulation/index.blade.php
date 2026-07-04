@@ -43,7 +43,7 @@
             @if(count($regeln['schema']))
                 <div class="flex flex-wrap gap-1 mt-2">
                     @foreach($regeln['schema'] as $b)
-                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $b['label'] }}: {{ rtrim(rtrim(number_format((float) ($b['wert'] ?? 0), 2, ',', '.'), '0'), ',') }}{{ str_starts_with((string) $b['typ'], 'pct') ? ' %' : ($b['typ'] === 'arbeitszeit' ? ' €/h' : ' €') }}</span>
+                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $b['label'] }}: {{ rtrim(rtrim(number_format((float) ($b['value'] ?? 0), 2, ',', '.'), '0'), ',') }}{{ str_starts_with((string) $b['type'], 'pct') ? ' %' : ($b['type'] === 'arbeitszeit' ? ' €/h' : ' €') }}</span>
                     @endforeach
                 </div>
             @endif

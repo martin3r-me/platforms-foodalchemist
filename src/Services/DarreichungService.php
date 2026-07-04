@@ -22,9 +22,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungDelta;
  *  - Stufe 1 (keine Deltas): ek_portion = EK/g des Rezepts × Grammatur × Anzahl
  *  - Stufe 2 (Deltas): Misch-Preis/g über Komponenten NACH Delta (weggelassen raus,
  *    Kosten skalieren linear mit der Masse), dann × Grammatur × Anzahl
- *  - preis_modus auto: vk_netto = ek_portion × (1 + rohaufschlag/100); manuell bleibt
- *  - vk_brutto in beiden Modi aus MwSt der Aufschlagsklasse
- *  - Standard-Darreichung spiegelt vk_netto nach recipes.vk_netto (Anzeige-Cache)
+ *  - preis_modus auto: sales_net = ek_portion × (1 + rohaufschlag/100); manuell bleibt
+ *  - sales_gross in beiden Modi aus MwSt der Aufschlagsklasse
+ *  - Standard-Darreichung spiegelt sales_net nach recipes.sales_net (Anzeige-Cache)
  */
 class DarreichungService
 {
@@ -49,14 +49,14 @@ class DarreichungService
             'team_id' => $recipe->team_id,
             'recipe_id' => $recipe->id,
             'serving_form_id' => $servierformId,
-            'ist_standard' => $standard === null,               // erste Form = Standard
+            'is_standard' => $standard === null,               // erste Form = Standard
             // Vorbefüllung aus der Standard-Form (F2: KEIN Pauschal-Faktor — User passt an)
             'quantity_pro_unit_g' => $attrs['quantity_pro_unit_g'] ?? $standard?->quantity_pro_unit_g,
             'unit_vocab_id' => $attrs['unit_vocab_id'] ?? $standard?->unit_vocab_id,
             'unit_count' => $attrs['unit_count'] ?? $standard?->unit_count,
             'markup_class_id' => $attrs['markup_class_id'] ?? $standard?->markup_class_id,
             'preis_modus' => $attrs['preis_modus'] ?? 'auto',
-            'vk_netto' => $attrs['vk_netto'] ?? null,
+            'sales_net' => $attrs['sales_net'] ?? null,
             'note' => $attrs['note'] ?? null,
             'created_via' => $createdVia,
         ]);
@@ -68,12 +68,12 @@ class DarreichungService
 
     private const FELDER = [
         'quantity_pro_unit_g', 'unit_vocab_id', 'unit_count',
-        'markup_class_id', 'preis_modus', 'vk_netto',
+        'markup_class_id', 'preis_modus', 'sales_net',
         'container_warm_vocab_id', 'container_cold_vocab_id',
-        'regeneration_temp_c', 'regeneration_dauer_min', 'regeneration_kerntemp_c',
+        'regeneration_temp_c', 'regeneration_duration_min', 'regeneration_core_temp_c',
         'regeneration_device_vocab_id', 'serving_vehicle_vocab_id',
-        'work_time_zuschlag_min', 'offer_text_override', 'note',
-        'geschirr_item_id', // Default-Geschirr der Form (Concepter-Vorschlag)
+        'work_time_surcharge_min', 'offer_text_override', 'note',
+        'tableware_item_id', // Default-Geschirr der Form (Concepter-Vorschlag)
     ];
 
     public function aktualisieren(Team $team, int $darreichungId, array $attrs): FoodAlchemistRecipeDarreichung
@@ -94,7 +94,7 @@ class DarreichungService
     public function loeschen(Team $team, int $darreichungId): void
     {
         $darreichung = $this->find($team, $darreichungId);
-        if ($darreichung->ist_standard && $darreichung->recipe->darreichungen()->count() > 1) {
+        if ($darreichung->is_standard && $darreichung->recipe->darreichungen()->count() > 1) {
             throw new \RuntimeException('Standard-Darreichung zuerst auf eine andere Form übertragen.');
         }
         $darreichung->delete();
@@ -104,11 +104,11 @@ class DarreichungService
     {
         $darreichung = $this->find($team, $darreichungId);
         DB::transaction(function () use ($darreichung) {
-            // Reihenfolge wichtig: partieller Unique-Index erlaubt nur EIN ist_standard=1
+            // Reihenfolge wichtig: partieller Unique-Index erlaubt nur EIN is_standard=1
             $darreichung->recipe->darreichungen()
                 ->where('id', '!=', $darreichung->id)
-                ->update(['ist_standard' => false]);
-            $darreichung->update(['ist_standard' => true]);
+                ->update(['is_standard' => false]);
+            $darreichung->update(['is_standard' => true]);
         });
         $this->spiegleStandardVk($darreichung->recipe->fresh());
     }
@@ -188,18 +188,18 @@ class DarreichungService
 
         $klasse = $darreichung->aufschlagsklasse;
         $vkNetto = $darreichung->preis_modus === 'manuell'
-            ? $darreichung->vk_netto
+            ? $darreichung->sales_net
             : (($ekPortion !== null && $klasse !== null)
                 ? round($ekPortion * (1 + ((float) $klasse->raw_markup_pct) / 100), 2)
                 : null);
         $vkBrutto = ($vkNetto !== null && $klasse !== null)
-            ? round((float) $vkNetto * (1 + ((float) $klasse->mwst_satz) / 100), 2)
+            ? round((float) $vkNetto * (1 + ((float) $klasse->vat_rate) / 100), 2)
             : null;
 
         $darreichung->update(['quantity_pro_unit_g' => $darreichung->quantity_pro_unit_g,
-            'ek_portion' => $ekPortion, 'vk_netto' => $vkNetto, 'vk_brutto' => $vkBrutto]);
+            'ek_portion' => $ekPortion, 'sales_net' => $vkNetto, 'sales_gross' => $vkBrutto]);
 
-        if ($darreichung->ist_standard) {
+        if ($darreichung->is_standard) {
             $this->spiegleStandardVk($recipe);
         }
     }
@@ -240,13 +240,13 @@ class DarreichungService
         return $out;
     }
 
-    /** recipes.vk_netto = Anzeige-Cache der Standard-Darreichung (Preis-Wahrheit = Darreichung). */
+    /** recipes.sales_net = Anzeige-Cache der Standard-Darreichung (Preis-Wahrheit = Darreichung). */
     private function spiegleStandardVk(FoodAlchemistRecipe $recipe): void
     {
         $standard = $recipe->standardDarreichung()->first();
         if ($standard !== null) {
             DB::table('foodalchemist_recipes')->where('id', $recipe->id)
-                ->update(['vk_netto' => $standard->vk_netto]);
+                ->update(['sales_net' => $standard->sales_net]);
         }
     }
 

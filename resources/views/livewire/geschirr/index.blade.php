@@ -103,7 +103,7 @@
                                 <button type="button" wire:click="artikelOeffnen({{ $item->id }})"
                                         class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150 truncate max-w-full text-left">{{ $item->label }}</button>
                             </td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $item->kategorie ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $item->category ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $item->material ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap text-[11px]">{{ $item->masse_label ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap text-right tabular-nums">
@@ -193,12 +193,12 @@
                     <div><label class="block {{ $label }} mb-1">Artikel-Nr.</label>
                         <input type="text" wire:model="artikelForm.artikel_nr" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Kategorie</label>
-                        <input type="text" list="g-kategorie" wire:model="artikelForm.kategorie" class="{{ $input }}" placeholder="Teller / Glas / Besteck …" />
+                        <input type="text" list="g-kategorie" wire:model="artikelForm.category" class="{{ $input }}" placeholder="Teller / Glas / Besteck …" />
                         <datalist id="g-kategorie"><option>Teller</option><option>Schale</option><option>Platte</option><option>Glas</option><option>Tasse</option><option>Besteck</option><option>Schüssel</option><option>Deko</option></datalist></div>
                     <div><label class="block {{ $label }} mb-1">Servier-Vehikel-Typ</label>
                         <select wire:model="artikelForm.vehicle_vocab_id" class="{{ $input }}" title="Ordnet den Artikel der abstrakten Präsentationsform zu — der Concepter-Picker bevorzugt dann passende Teile (Darreichungs-Scharnier)">
                             <option value="">—</option>
-                            @foreach($vehikelListe as $v)<option value="{{ $v->id }}">{{ $v->gruppe ? $v->gruppe . ' · ' : '' }}{{ $v->name }}</option>@endforeach
+                            @foreach($vehikelListe as $v)<option value="{{ $v->id }}">{{ $v->group_name ? $v->group_name . ' · ' : '' }}{{ $v->name }}</option>@endforeach
                         </select></div>
                     <div><label class="block {{ $label }} mb-1">Material</label>
                         <input type="text" list="g-material" wire:model="artikelForm.material" class="{{ $input }}" placeholder="Porzellan / Glas …" />
@@ -206,7 +206,7 @@
                     <div><label class="block {{ $label }} mb-1">Form</label>
                         <input type="text" wire:model="artikelForm.form" class="{{ $input }}" placeholder="rund / eckig / oval" /></div>
                     <div><label class="block {{ $label }} mb-1">Farbe</label>
-                        <input type="text" wire:model="artikelForm.farbe" class="{{ $input }}" /></div>
+                        <input type="text" wire:model="artikelForm.color" class="{{ $input }}" /></div>
                 </div>
             </x-foodalchemist::modal-section>
             <x-foodalchemist::modal-section title="Maße & Leih-Konditionen">

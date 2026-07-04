@@ -76,7 +76,7 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
         return ToolResult::success([
             'foodbook' => ['id' => $fb->id, 'label' => $fb->label, 'status' => $fb->status, 'jahr' => $fb->jahr],
             'kapitel' => $kapitel,
-            'hinweis' => 'Entwurf: Freigabe/Kunden-Verknüpfung (CRM) macht ein Mensch im Editor.',
+            'note' => 'Entwurf: Freigabe/Kunden-Verknüpfung (CRM) macht ein Mensch im Editor.',
         ]);
     }
 

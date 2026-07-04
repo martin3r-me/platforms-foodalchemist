@@ -153,31 +153,31 @@
                             x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $selectedId === $it->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}">
                             <td wire:click.stop="bearbeite({{ $it->id }})" class="{{ $td }} font-medium text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer" title="Editor öffnen">
-                                @if($it->niveau)<span class="inline-block w-1.5 h-1.5 rounded-full {{ $niveauDot[$it->niveau] ?? 'bg-gray-300' }} mr-1 align-middle" title="Niveau: {{ $it->niveau }}"></span>@endif
+                                @if($it->level)<span class="inline-block w-1.5 h-1.5 rounded-full {{ $niveauDot[$it->level] ?? 'bg-gray-300' }} mr-1 align-middle" title="Niveau: {{ $it->level }}"></span>@endif
                                 {{ $it->name }}
-                                @if($tab === 'concepts' && $it->is_vorlage)<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Vorlage</span>@endif
+                                @if($tab === 'concepts' && $it->is_template)<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Vorlage</span>@endif
                             </td>
                             @if($tab === 'pakete')
                                 <td class="{{ $td }} text-gray-500">{{ $it->role ?: '—' }}</td>
-                                <td class="{{ $td }} text-gray-500">{{ $it->klasse ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-500">{{ $it->class ?: '—' }}</td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->gerichte_count }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $it->preis_pro_person !== null ? number_format((float) $it->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->wareneinsatz_prozent !== null ? number_format((float) $it->wareneinsatz_prozent, 1, ',', '.') . ' %' : '—' }}</td>
+                                <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->food_cost_percent !== null ? number_format((float) $it->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
                             @else
-                                <td class="{{ $td }} text-gray-500">{{ $it->klasse ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-500">{{ $it->class ?: '—' }}</td>
                                 <td class="{{ $td }} text-gray-500">{{ collect([$it->eventtyp?->name, $it->servierform?->label])->filter()->join(' · ') ?: '—' }}</td>
                                 {{-- Inline-Status-Pflege wie bei GP (Concepts; Server gated canCurate/D1) --}}
                                 <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
-                                    @php($stMap = ['draft' => $variantPill['secondary'], 'aktiv' => $variantPill['success'], 'archiviert' => $variantPill['warning']])
+                                    @php($stMap = ['draft' => $variantPill['secondary'], 'active' => $variantPill['success'], 'archiviert' => $variantPill['warning']])
                                     @if(! isset($it->team_id) || \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $it))
                                         <select wire:key="cst-{{ $it->id }}-{{ $it->status }}" wire:change="statusSetzen({{ $it->id }}, $event.target.value)"
                                                 class="{{ $pill }} font-medium {{ $stMap[$it->status] ?? $variantPill['secondary'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6" data-status-select>
-                                            @foreach(['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiv'] as $val => $lbl)
+                                            @foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'] as $val => $lbl)
                                                 <option value="{{ $val }}" @selected($it->status === $val)>{{ $lbl }}</option>
                                             @endforeach
                                         </select>
                                     @else
-                                        <span class="{{ $pill }} {{ $stMap[$it->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiv'][$it->status] ?? $it->status }}</span>
+                                        <span class="{{ $pill }} {{ $stMap[$it->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'][$it->status] ?? $it->status }}</span>
                                     @endif
                                 </td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->slots_count }}</td>

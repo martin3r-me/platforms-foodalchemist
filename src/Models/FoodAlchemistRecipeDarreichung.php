@@ -12,7 +12,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  * @ai.description Darreichung eines VK-Gerichts (Umbau-Spec Phase 3): dünne
  * Varianten-Zeile am Kerngericht — Servierform, Grammatur, Behälter/Regeneration,
  * EK/VK je Form. Genau eine Standard-Darreichung pro Gericht. Preis-Wahrheit
- * liegt HIER (recipes.vk_netto ist nur noch Anzeige-Spiegel der Standard-Form).
+ * liegt HIER (recipes.sales_net ist nur noch Anzeige-Spiegel der Standard-Form).
  * WaWi = Master (Recompute 206 Stufe 4 rechnet ek_portion/Auto-VK); FA-native
  * Anlage nur mit created_via-Marker (F12).
  */
@@ -25,12 +25,12 @@ class FoodAlchemistRecipeDarreichung extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'ist_standard' => 'bool',
+        'is_standard' => 'bool',
         'quantity_pro_unit_g' => 'float',
         'unit_count' => 'float',
         'ek_portion' => 'float',
-        'vk_netto' => 'float',
-        'vk_brutto' => 'float',
+        'sales_net' => 'float',
+        'sales_gross' => 'float',
     ];
 
     public function recipe()
@@ -61,6 +61,6 @@ class FoodAlchemistRecipeDarreichung extends Model
     /** Default-Geschirr der Form — der Concepter schlägt es am Slot vor. */
     public function geschirrItem()
     {
-        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'geschirr_item_id');
+        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'tableware_item_id');
     }
 }

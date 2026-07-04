@@ -11,7 +11,7 @@ use Platform\FoodAlchemist\Exceptions\FormelNichtDefiniertException;
  * persistiert). Livewire bindet die Methoden als computed properties —
  * keine clientseitige Doppel-Implementierung (Alt-App-Drift-Risiko, §6).
  *
- * W-1-Disziplin (D-6 §6): formel_typ='deckungsbeitrag' ist als Stammdatum
+ * W-1-Disziplin (D-6 §6): formula_type='deckungsbeitrag' ist als Stammdatum
  * anlegbar, der Vorschlags-Pfad wirft aber eine typisierte Exception statt
  * still falsch zu rechnen — bis der D6-Entscheid steht (08_ENTSCHEIDUNGEN).
  */
@@ -19,34 +19,34 @@ class MargeService
 {
     /**
      * VK-Vorschlag aus EK + Aufschlagsklasse (GL-02 §3.6, GT-8):
-     *   ek_basis  = ek_per_kg_eur × vk_quantity_pro_unit_g / 1000
-     *   vk_netto  = ek_basis × (1 + raw_markup_pct/100)        [aufschlag]
-     *   vk_brutto = ROUND(vk_netto × (1 + mwst/100), 2)
+     *   ek_basis  = ek_per_kg_eur × sales_quantity_per_unit_g / 1000
+     *   sales_net  = ek_basis × (1 + raw_markup_pct/100)        [aufschlag]
+     *   sales_gross = ROUND(sales_net × (1 + mwst/100), 2)
      *
-     * @param  object  $klasse  markup_class-Zeile (raw_markup_pct, mwst_satz, formel_typ)
+     * @param  object  $klasse  markup_class-Zeile (raw_markup_pct, vat_rate, formula_type)
      * @param  ?float  $mwstSatz  Rezept-MwSt schlägt Klassen-Default
-     * @return ?array{ek_basis: float, vk_netto: float, vk_brutto: float, mwst_satz: float, formel: string}
+     * @return ?array{ek_basis: float, sales_net: float, sales_gross: float, vat_rate: float, formel: string}
      */
     public function vkVorschlag(?float $ekPerKgEur, ?float $vkMengeProEinheitG, object $klasse, ?float $mwstSatz = null): ?array
     {
-        if (($klasse->formel_typ ?? 'aufschlag') === 'deckungsbeitrag') {
+        if (($klasse->formula_type ?? 'aufschlag') === 'deckungsbeitrag') {
             throw new FormelNichtDefiniertException(
-                "Aufschlagsklasse {$klasse->code}: formel_typ 'deckungsbeitrag' ist nicht definiert (W-1, 08_ENTSCHEIDUNGEN D6) — Formel-Entscheid ausstehend."
+                "Aufschlagsklasse {$klasse->code}: formula_type 'deckungsbeitrag' ist nicht definiert (W-1, 08_ENTSCHEIDUNGEN D6) — Formel-Entscheid ausstehend."
             );
         }
         if ($ekPerKgEur === null || $vkMengeProEinheitG === null || $vkMengeProEinheitG <= 0) {
             return null;                                             // kein EK / keine Portionierung → leer, nie Fehler
         }
 
-        $mwst = $mwstSatz ?? (float) ($klasse->mwst_satz ?? 19);
+        $mwst = $mwstSatz ?? (float) ($klasse->vat_rate ?? 19);
         $ekBasis = $ekPerKgEur * $vkMengeProEinheitG / 1000;
         $vkNetto = $ekBasis * (1 + ((float) $klasse->raw_markup_pct) / 100);
 
         return [
             'ek_basis' => round($ekBasis, 4),
-            'vk_netto' => round($vkNetto, 2),
-            'vk_brutto' => round(round($vkNetto, 2) * (1 + $mwst / 100), 2),
-            'mwst_satz' => $mwst,
+            'sales_net' => round($vkNetto, 2),
+            'sales_gross' => round(round($vkNetto, 2) * (1 + $mwst / 100), 2),
+            'vat_rate' => $mwst,
             'formel' => sprintf('VK = EK × (1 + %s%%) · brutto × (1 + %s%% MwSt)',
                 rtrim(rtrim(number_format((float) $klasse->raw_markup_pct, 2, '.', ''), '0'), '.'),
                 rtrim(rtrim(number_format($mwst, 2, '.', ''), '0'), '.')),
@@ -91,18 +91,18 @@ class MargeService
     }
 
     /**
-     * Cockpit-Logik (Alt-Cockpit übernommen): manueller vk_netto GEWINNT gegen
+     * Cockpit-Logik (Alt-Cockpit übernommen): manueller sales_net GEWINNT gegen
      * den Klassen-Vorschlag; Rückgabe markiert die Quelle.
      *
-     * @return array{vk_netto: ?float, source: string, vorschlag: ?array}
+     * @return array{sales_net: ?float, source: string, vorschlag: ?array}
      */
     public function effektiverVk(?float $vkNettoManuell, ?float $ekPerKgEur, ?float $vkMengeProEinheitG, ?object $klasse, ?float $mwstSatz = null): array
     {
         $vorschlag = $klasse !== null ? $this->vkVorschlag($ekPerKgEur, $vkMengeProEinheitG, $klasse, $mwstSatz) : null;
         if ($vkNettoManuell !== null && $vkNettoManuell > 0) {
-            return ['vk_netto' => $vkNettoManuell, 'source' => 'manuell', 'vorschlag' => $vorschlag];
+            return ['sales_net' => $vkNettoManuell, 'source' => 'manuell', 'vorschlag' => $vorschlag];
         }
 
-        return ['vk_netto' => $vorschlag['vk_netto'] ?? null, 'source' => $vorschlag !== null ? 'klasse' : 'leer', 'vorschlag' => $vorschlag];
+        return ['sales_net' => $vorschlag['sales_net'] ?? null, 'source' => $vorschlag !== null ? 'class' : 'leer', 'vorschlag' => $vorschlag];
     }
 }

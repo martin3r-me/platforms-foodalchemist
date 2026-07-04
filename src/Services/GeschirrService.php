@@ -27,9 +27,9 @@ class GeschirrService
     {
         $itemCounts = DB::table('foodalchemist_tableware_items')
             ->whereNull('deleted_at')
-            ->selectRaw('geschirr_supplier_id, COUNT(*) AS n')
-            ->groupBy('geschirr_supplier_id')
-            ->pluck('n', 'geschirr_supplier_id');
+            ->selectRaw('tableware_supplier_id, COUNT(*) AS n')
+            ->groupBy('tableware_supplier_id')
+            ->pluck('n', 'tableware_supplier_id');
 
         return FoodAlchemistGeschirrSupplier::visibleToTeam($team)
             ->when(! $includeInactive, fn ($q) => $q->where('is_inactive', false))
@@ -102,7 +102,7 @@ class GeschirrService
     public function paginateForSupplier(Team $team, int $supplierId, array $filters = [], int $perPage = 100): LengthAwarePaginator
     {
         return $this->scopedItems($team)
-            ->where('geschirr_supplier_id', $supplierId)
+            ->where('tableware_supplier_id', $supplierId)
             ->when($filters['onlyActive'] ?? true, fn ($q) => $q->where('is_inactive', false))
             ->when($q = trim($filters['q'] ?? ''), fn ($w) => $w->where(fn ($x) => $x
                 ->whereRaw('LOWER(label) LIKE ?', ['%' . mb_strtolower($q) . '%'])
@@ -159,7 +159,7 @@ class GeschirrService
 
         return FoodAlchemistGeschirrItem::create($this->itemFelder($input) + [
             'team_id' => $team->id,
-            'geschirr_supplier_id' => $supplierId,
+            'tableware_supplier_id' => $supplierId,
             'label' => $bez,
         ]);
     }
@@ -205,10 +205,10 @@ class GeschirrService
 
         return [
             'artikel_nr' => $str('artikel_nr'),
-            'kategorie' => $str('kategorie'),
+            'category' => $str('category'),
             'material' => $str('material'),
             'form' => $str('form'),
-            'farbe' => $str('farbe'),
+            'color' => $str('color'),
             'durchmesser_mm' => $num('durchmesser_mm'),
             'laenge_mm' => $num('laenge_mm'),
             'breite_mm' => $num('breite_mm'),

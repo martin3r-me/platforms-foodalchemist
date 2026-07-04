@@ -41,7 +41,7 @@ return new class extends Migration
                 $table->id();
                 $table->uuid('uuid')->unique();
                 $table->unsignedBigInteger('team_id')->nullable()->index();
-                $table->unsignedBigInteger('legacy_id')->nullable()->index()->comment('recipe_kategorien.kategorie_id');
+                $table->unsignedBigInteger('legacy_id')->nullable()->index()->comment('recipe_kategorien.category_id');
                 $table->foreignId('main_group_id')->constrained('foodalchemist_recipe_main_groups')->cascadeOnDelete();
                 $table->string('code', 64);
                 $table->string('label');

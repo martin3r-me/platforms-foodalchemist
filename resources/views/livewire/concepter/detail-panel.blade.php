@@ -13,18 +13,18 @@
         <div>
             <div class="flex items-start justify-between gap-2">
                 <h3 class="text-[15px] font-semibold text-gray-900 dark:text-gray-100">{{ $item->name }}</h3>
-                @if($concept && $concept->is_vorlage)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">Vorlage</span>@endif
+                @if($concept && $concept->is_template)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">Vorlage</span>@endif
             </div>
-            @if($item->konsumenten_name)<p class="text-[11px] italic text-gray-400">„{{ $item->konsumenten_name }}"</p>@endif
+            @if($item->consumer_name)<p class="text-[11px] italic text-gray-400">„{{ $item->consumer_name }}"</p>@endif
         </div>
 
         {{-- Stamm-Pills --}}
         <div class="flex flex-wrap items-center gap-1.5">
-            @if($item->klasse)<span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ $item->klasse }}</span>@endif
-            @if($item->niveau)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $item->niveau }}</span>@endif
+            @if($item->class)<span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ $item->class }}</span>@endif
+            @if($item->level)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $item->level }}</span>@endif
             @if($concept)
                 @if($concept->anlass)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $concept->anlass }}</span>@endif
-                <span class="{{ $pill }} {{ ['draft' => $variantPill['secondary'], 'aktiv' => $variantPill['success'], 'archiviert' => $variantPill['warning']][$concept->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiv'][$concept->status] ?? $concept->status }}</span>
+                <span class="{{ $pill }} {{ ['draft' => $variantPill['secondary'], 'active' => $variantPill['success'], 'archiviert' => $variantPill['warning']][$concept->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'][$concept->status] ?? $concept->status }}</span>
             @elseif($paket)
                 @if($paket->role)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $paket->role }}</span>@endif
                 <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $paket->preis_modus === 'auto' ? 'Auto-Preis' : 'Manueller Preis' }}</span>
@@ -35,7 +35,7 @@
         <div class="flex flex-wrap items-center gap-1.5">
             @if($concept)
                 <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ $concept->id }} })" class="{{ $btnGhostXs }}">✎ Bearbeiten</button>
-                @if($concept->is_vorlage)
+                @if($concept->is_template)
                     <button type="button" wire:click="ausVorlage" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">↧ Als Concept nutzen</button>
                 @else
                     <button type="button" wire:click="alsVorlage" class="{{ $btnGhostXs }}">Als Vorlage</button>
@@ -73,8 +73,8 @@
             @php(
                 $gerichteSuffix = $concept
                     ? ' · ' . ($aggregat['n_slots'] ?? 0) . ' Slots'
-                    : (($paket && $paket->wareneinsatz_prozent !== null)
-                        ? ' · ' . number_format((float) $paket->wareneinsatz_prozent, 1, ',', '.') . ' % W'
+                    : (($paket && $paket->food_cost_percent !== null)
+                        ? ' · ' . number_format((float) $paket->food_cost_percent, 1, ',', '.') . ' % W'
                         : '')
             )
             <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
@@ -93,14 +93,14 @@
                 @if($aggregat['allergene']['is_halal'])<span class="{{ $pill }} {{ $variantPill['info'] }}">halal</span>@endif
                 @if($aggregat['allergene']['contains_pork'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Schwein</span>@endif
                 @if($aggregat['allergene']['contains_beef'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Rind</span>@endif
-                <span class="{{ $pill }} {{ $konfPill[$aggregat['allergene']['konfidenz']] ?? $variantPill['secondary'] }}" title="Allergen-Konfidenz (schwächstes Gericht)">Konf. {{ $aggregat['allergene']['konfidenz'] }}</span>
+                <span class="{{ $pill }} {{ $konfPill[$aggregat['allergene']['confidence']] ?? $variantPill['secondary'] }}" title="Allergen-Konfidenz (schwächstes Gericht)">Konf. {{ $aggregat['allergene']['confidence'] }}</span>
             </div>
 
             {{-- Nährwerte/Person (ehrliche Degradation) --}}
             <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
                 <div class="flex items-center justify-between">
                     <span class="{{ $label }}">Nährwerte / Person</span>
-                    <span class="{{ $pill }} {{ $konfPill[$aggregat['naehrwerte']['konfidenz']] ?? $variantPill['secondary'] }}">{{ $aggregat['naehrwerte']['konfidenz'] }}</span>
+                    <span class="{{ $pill }} {{ $konfPill[$aggregat['naehrwerte']['confidence']] ?? $variantPill['secondary'] }}">{{ $aggregat['naehrwerte']['confidence'] }}</span>
                 </div>
                 @if($aggregat['naehrwerte']['kcal'] !== null)
                     <div class="grid grid-cols-7 gap-1 text-center">
@@ -145,7 +145,7 @@
                     <div class="flex items-center justify-between gap-2 text-xs py-1">
                         <span class="min-w-0 truncate">
                             <span class="text-[10px] text-gray-400 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
-                            @if($z['typ'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['typ'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
+                            @if($z['type'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['type'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
                         </span>
                         <span class="shrink-0 tabular-nums {{ $z['preis'] === null ? 'text-gray-300' : '' }}">{{ $z['preis'] !== null ? number_format($z['preis'], 2, ',', '.') . ' €' : '—' }}</span>
                     </div>
@@ -157,7 +157,7 @@
                 @forelse($paket->gerichte as $pg)
                     <div class="flex items-center justify-between gap-2 text-xs py-1">
                         <span class="min-w-0 truncate">{{ $pg->gericht?->name ?? '—' }}</span>
-                        <span class="shrink-0 tabular-nums text-gray-400">{{ $pg->gericht?->vk_netto !== null ? number_format((float) $pg->gericht->vk_netto, 2, ',', '.') . ' €' : '' }}</span>
+                        <span class="shrink-0 tabular-nums text-gray-400">{{ $pg->gericht?->sales_net !== null ? number_format((float) $pg->gericht->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                     </div>
                 @empty
                     <p class="text-[11px] text-gray-400 py-1">Noch keine Gerichte im Paket.</p>
@@ -170,7 +170,7 @@
             <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
                 <span class="{{ $label }}">Menü-Karte (Konsumenten-Sicht)</span>
                 <div class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2 bg-white/40 dark:bg-white/[0.03]">
-                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $concept->konsumenten_name ?: $concept->name }}</p>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $concept->consumer_name ?: $concept->name }}</p>
                     @if($concept->additional_text)<p class="text-[11px] italic text-gray-500 mb-1">{{ $concept->additional_text }}</p>@endif
                     @forelse($concept->slots as $slot)
                         <div class="py-0.5">

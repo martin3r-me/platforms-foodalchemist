@@ -149,7 +149,7 @@
                             </td>
                             <td class="{{ $td }} whitespace-nowrap text-right tabular-nums" data-lead-preis>
                                 @if($gp->lead_vergleichspreis)
-                                    <span class="text-gray-900 dark:text-gray-100">{{ number_format($gp->lead_vergleichspreis['wert'], 2, ',', '.') }} {{ $gp->lead_vergleichspreis['unit'] }}</span>
+                                    <span class="text-gray-900 dark:text-gray-100">{{ number_format($gp->lead_vergleichspreis['value'], 2, ',', '.') }} {{ $gp->lead_vergleichspreis['unit'] }}</span>
                                 @elseif($gp->lead_preis !== null)
                                     <span class="text-gray-500" title="Gebinde-Preis — kein Vergleichspreis (qty fehlt, GL-03 A-2)">{{ number_format((float) $gp->lead_preis, 2, ',', '.') }} €</span>
                                 @else

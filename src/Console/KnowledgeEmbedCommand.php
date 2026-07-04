@@ -28,7 +28,7 @@ class KnowledgeEmbedCommand extends Command
             return self::FAILURE;
         }
 
-        $kategorien = (array) $this->option('kategorie');
+        $kategorien = (array) $this->option('category');
         $kategorien = $kategorien !== [] ? $kategorien : KnowledgeEmbeddingService::INDEXED_KATEGORIEN;
 
         $this->info('Embedding-Lauf (idempotent — unveränderte Einträge werden übersprungen) …');

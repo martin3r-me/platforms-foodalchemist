@@ -241,7 +241,7 @@
                     <div class="space-y-4">
                         <x-foodalchemist::ki-header label="Eigenschafts-Tags" field="tags"
                             :source="$gp->tag_source" :confidence="$gp->tag_ai_confidence !== null ? (float) $gp->tag_ai_confidence : null"
-                            :reasoning="$gp->tag_ai_begruendung" :hasProposal="isset($kiVorschlag['tags'])">
+                            :reasoning="$gp->tag_ai_reasoning" :hasProposal="isset($kiVorschlag['tags'])">
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1.5" data-tags-grid>
                                 @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistGp::TAG_FIELDS as $tag)
                                     <div class="flex items-center justify-between gap-1">

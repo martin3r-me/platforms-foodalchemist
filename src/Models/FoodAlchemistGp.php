@@ -22,8 +22,8 @@ class FoodAlchemistGp extends Model
 
     /** Die 14 EU-Allergen-Spalten (GL-01) — Reihenfolge = Anzeige-Reihenfolge. */
     public const ALLERGEN_FIELDS = [
-        'glutenhaltiges_getreide', 'krebstiere', 'eier', 'fisch', 'erdnuesse', 'soja', 'milch',
-        'schalenfruechte', 'sellerie', 'senf', 'sesam', 'schwefeldioxid', 'lupinen', 'weichtiere',
+        'gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk',
+        'tree_nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs',
     ];
 
     public const TAG_FIELDS = [
@@ -48,15 +48,15 @@ class FoodAlchemistGp extends Model
         'trimming_loss_default_pct' => 'decimal:2',
         'piece_default_g' => 'decimal:2',
         'ai_confidence' => 'decimal:3',
-        'allergene_ai_confidence' => 'decimal:3',
+        'allergens_confidence' => 'decimal:3',
         'tag_ai_confidence' => 'decimal:3',
         'food_domain_ai_confidence' => 'decimal:3',
         'stk_default_g_ai_confidence' => 'decimal:3',
         'first_seen_at' => 'datetime',
         'last_review_at' => 'datetime',
-        'allergene_aggregiert_am' => 'datetime',
-        'tag_aggregiert_am' => 'datetime',
-        'food_domain_aggregiert_am' => 'datetime',
+        'allergens_aggregated_at' => 'datetime',
+        'tag_aggregated_at' => 'datetime',
+        'food_domain_aggregated_at' => 'datetime',
         // Tags tri-state: NULL = unbewertet
         'tag_is_vegan' => 'boolean',
         'tag_is_vegetarian' => 'boolean',

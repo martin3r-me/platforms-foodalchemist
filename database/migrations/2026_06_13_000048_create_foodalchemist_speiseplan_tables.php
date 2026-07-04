@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
  * Dieselben Bausteine über eine ZEITACHSE (Tag × Mahlzeit, Wochen-Zyklus) statt
  * nach Anlass. Slot = Zeitpunkt, Inhalt = austauschbarer Baustein:
  *   Eintrag belegt (woche × wochentag × mahlzeit) mit GENAU EINEM:
- *     concept_id (ganzes Concept) ODER package_id ODER vk_recipe_id (Gericht) — D-PLAN-1.
+ *     concept_id (ganzes Concept) ODER package_id ODER sales_recipe_id (Gericht) — D-PLAN-1.
  *
  * `zyklus_wochen` = rotierender Plan (z. B. 4-Wochen). `min_abstand_tage` = Wiederholungs-
  * regel (0 = keine): dasselbe Gericht/Concept nicht in engerem Abstand (GV-Anforderung).
@@ -27,7 +27,7 @@ return new class extends Migration
                 $table->uuid('uuid')->unique();
                 $table->unsignedBigInteger('team_id')->nullable()->index();
                 $table->string('name');
-                $table->date('start_datum')->nullable();
+                $table->date('start_date')->nullable();
                 $table->unsignedInteger('zyklus_wochen')->default(1);
                 $table->unsignedInteger('min_abstand_tage')->default(0);  // Wiederholungsregel (0 = aus)
                 $table->string('status', 16)->default('draft');
@@ -51,7 +51,7 @@ return new class extends Migration
                 // Belegung: genau EINES (Service-validiert)
                 $table->foreignId('concept_id')->nullable()->constrained('foodalchemist_concepts')->nullOnDelete();
                 $table->foreignId('package_id')->nullable()->constrained('foodalchemist_packages')->nullOnDelete();
-                $table->foreignId('vk_recipe_id')->nullable()->constrained('foodalchemist_recipes')->nullOnDelete();
+                $table->foreignId('sales_recipe_id')->nullable()->constrained('foodalchemist_recipes')->nullOnDelete();
                 $table->timestamps();
                 $table->softDeletes();
             });

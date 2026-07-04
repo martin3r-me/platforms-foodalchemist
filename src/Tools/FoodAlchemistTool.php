@@ -71,7 +71,7 @@ abstract class FoodAlchemistTool
         return $recipe->status instanceof \BackedEnum ? $recipe->status->value : (string) $recipe->status;
     }
 
-    /** Phase A: Draft-Quarantäne-Guard — approved/review/archived sind für den MCP-Pfad gesperrt. */
+    /** Phase A: Draft-Quarantäne-Guard — approved/review/archived sind für den MCP-Pfad locked. */
     protected function kiEditGesperrt(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe): ?string
     {
         $status = $this->statusWert($recipe);

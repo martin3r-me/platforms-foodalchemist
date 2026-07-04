@@ -192,7 +192,7 @@
                                 {{ $item->aktiver_preis !== null ? number_format((float) $item->aktiver_preis, 2, ',', '.') . ' €' : '—' }}
                             </td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums" data-vergleichspreis>
-                                {{ $item->vergleichspreis !== null ? number_format($item->vergleichspreis['wert'], 2, ',', '.') . ' ' . $item->vergleichspreis['unit'] : '—' }}
+                                {{ $item->vergleichspreis !== null ? number_format($item->vergleichspreis['value'], 2, ',', '.') . ' ' . $item->vergleichspreis['unit'] : '—' }}
                             </td>
                             <td class="{{ $td }} max-w-48 truncate">
                                 @if($item->structure?->gp)
@@ -313,7 +313,7 @@
                                     <td class="{{ $td }} !px-2 max-w-sm truncate">{{ $a['label'] }}</td>
                                     <td class="{{ $td }} !px-2 text-gray-500">{{ $a['lieferant'] }}</td>
                                     <td class="{{ $td }} !px-2 text-gray-500">{{ $a['wg'] }}</td>
-                                    <td class="{{ $td }} !px-2">{{ number_format($a['wert'], 2, ',', '.') }} {{ $a['unit'] }}</td>
+                                    <td class="{{ $td }} !px-2">{{ number_format($a['value'], 2, ',', '.') }} {{ $a['unit'] }}</td>
                                     <td class="{{ $td }} !px-2 text-gray-500">{{ number_format($a['median'], 2, ',', '.') }} {{ $a['unit'] }}</td>
                                     <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $variantPill['warning'] }}">×{{ $a['faktor'] }}</span></td>
                                 </tr>

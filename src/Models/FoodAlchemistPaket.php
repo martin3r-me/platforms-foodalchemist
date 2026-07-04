@@ -32,7 +32,7 @@ class FoodAlchemistPaket extends Model
         'uuid' => 'string',
         'preis_pro_person' => 'decimal:2',
         'ek_pro_person' => 'decimal:4',
-        'wareneinsatz_prozent' => 'decimal:2',
+        'food_cost_percent' => 'decimal:2',
         'preis_berechnet_am' => 'datetime',
         'preis_stale' => 'boolean',
         'is_inactive' => 'boolean',

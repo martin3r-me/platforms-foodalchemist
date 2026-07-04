@@ -30,10 +30,10 @@ class UiOpenTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
         return [
             'type' => 'object',
             'properties' => [
-                'typ' => ['type' => 'string', 'enum' => ['recipe', 'verkaufsrezept', 'gp']],
+                'type' => ['type' => 'string', 'enum' => ['recipe', 'verkaufsrezept', 'gp']],
                 'id' => ['type' => 'integer'],
             ],
-            'required' => ['typ', 'id'],
+            'required' => ['type', 'id'],
         ];
     }
 
@@ -44,7 +44,7 @@ class UiOpenTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         // Sichtbarkeits-Guard: nur öffnen, was das Team sehen darf
-        $sichtbar = match ($arguments['typ']) {
+        $sichtbar = match ($arguments['type']) {
             'recipe', 'verkaufsrezept' => FoodAlchemistRecipe::visibleToTeam($team)->whereKey((int) $arguments['id'])->exists(),
             'gp' => \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->whereKey((int) $arguments['id'])->exists(),
             default => false,
@@ -53,7 +53,7 @@ class UiOpenTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             return ToolResult::error('Datensatz nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
 
-        return ToolResult::success(['open' => ['typ' => $arguments['typ'], 'id' => (int) $arguments['id']]]);
+        return ToolResult::success(['open' => ['type' => $arguments['type'], 'id' => (int) $arguments['id']]]);
     }
 
     public function getMetadata(): array

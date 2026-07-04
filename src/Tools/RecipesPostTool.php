@@ -36,7 +36,7 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'type' => 'object',
             'properties' => [
                 'name' => ['type' => 'string', 'description' => 'Rezept-Name nach Basisrezept-Regelwerk §1'],
-                'kategorie_id' => ['type' => 'integer'],
+                'category_id' => ['type' => 'integer'],
                 'is_sales_recipe' => ['type' => 'boolean', 'default' => false],
                 'description' => ['type' => 'string'],
                 'preparation' => ['type' => 'string', 'description' => 'Zubereitungs-Schritte (Klartext)'],
@@ -78,7 +78,7 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
         try {
             $recipe = $svc->create($team, [
                 'name' => (string) $arguments['name'],
-                'kategorie_id' => $arguments['kategorie_id'] ?? null,
+                'category_id' => $arguments['category_id'] ?? null,
                 'is_sales_recipe' => (bool) ($arguments['is_sales_recipe'] ?? false),
                 'description' => $arguments['description'] ?? null,
                 'taste_direction' => $arguments['taste_direction'] ?? null,
@@ -102,9 +102,9 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'id' => $recipe->id, 'name' => $recipe->name, 'recipe_key' => $recipe->recipe_key,
                 'status' => $this->statusWert($recipe), 'created_via' => $recipe->created_via,
                 'yield_kg' => $recipe->yield_kg, 'ek_total_eur' => $recipe->ek_total_eur,
-                'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_ungemappt' => $recipe->n_ingredients_ungemappt,
+                'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_unmapped' => $recipe->n_ingredients_unmapped,
             ],
-            'hinweis' => 'Entwurf (Draft-Quarantäne): fließt erst nach menschlichem Review in Verkauf/Kalkulation.',
+            'note' => 'Entwurf (Draft-Quarantäne): fließt erst nach menschlichem Review in Verkauf/Kalkulation.',
         ]);
     }
 

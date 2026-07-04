@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Concept-übergreifendes Wording: pro Position ein Brand-Voice-Anzeigename
- * (Variante des neutralen vk_wording_standard, im Concept-Schreibstil erzeugt).
+ * (Variante des neutralen sales_wording_standard, im Concept-Schreibstil erzeugt).
  * Leer = Standardname des Gerichts. Additiv, nullable.
  */
 return new class extends Migration

@@ -15,8 +15,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            if (! Schema::hasColumn('foodalchemist_team_settings', 'lohnnebenkosten_pct')) {
-                $table->decimal('lohnnebenkosten_pct', 5, 2)->nullable();
+            if (! Schema::hasColumn('foodalchemist_team_settings', 'labor_overhead_pct')) {
+                $table->decimal('labor_overhead_pct', 5, 2)->nullable();
             }
         });
     }
@@ -24,7 +24,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            $table->dropColumn('lohnnebenkosten_pct');
+            $table->dropColumn('labor_overhead_pct');
         });
     }
 };

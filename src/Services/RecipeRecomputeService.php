@@ -266,8 +266,8 @@ class RecipeRecomputeService
 
         $recipe->yield_kg = $yieldG > 0 ? round($yieldG / 1000, 3) : null;
         $recipe->n_ingredients_total = $nTotal;
-        $recipe->n_ingredients_ungemappt = $nUngemappt;
-        $recipe->allergene_konfidenz = match (true) {              // GL-01 §4.4 (erste zutreffende)
+        $recipe->n_ingredients_unmapped = $nUngemappt;
+        $recipe->allergens_confidence = match (true) {              // GL-01 §4.4 (erste zutreffende)
             $nTotal === 0 => 'unknown',
             $nUngemappt > 0 => 'low',
             $geminiDabei => 'medium',
@@ -327,12 +327,12 @@ class RecipeRecomputeService
     {
         $felder = FoodAlchemistGp::ALLERGEN_FIELDS;
 
-        if ($recipe->n_ingredients_ungemappt > 0) {                    // F7.1-Guard: Totalreset
+        if ($recipe->n_ingredients_unmapped > 0) {                    // F7.1-Guard: Totalreset
             foreach ($felder as $f) {
                 $recipe->{"allergen_{$f}"} = 'unbekannt';
             }
             $recipe->spec_is_gluten_free = null;
-            $recipe->allergene_aggregiert_am = now();              // Invariante 6 (Ziel: mitschreiben)
+            $recipe->allergens_aggregated_at = now();              // Invariante 6 (Ziel: mitschreiben)
 
             return;
         }
@@ -345,7 +345,7 @@ class RecipeRecomputeService
                     if ($werte[$f]['source'] === 'keine') {
                         continue;                                  // kein Beitrag (NULL)
                     }
-                    $rang = $werte[$f]['wert']->rank();
+                    $rang = $werte[$f]['value']->rank();
                     $raenge[$f] = max($raenge[$f] ?? 0, $rang);
                 }
             } elseif ($z->referencedRecipe !== null) {             // Sub-Pfad
@@ -362,12 +362,12 @@ class RecipeRecomputeService
         foreach ($felder as $f) {
             $recipe->{"allergen_{$f}"} = $this->rangZuText($raenge[$f]);
         }
-        $recipe->spec_is_gluten_free = match ($recipe->allergen_glutenhaltiges_getreide) {
+        $recipe->spec_is_gluten_free = match ($recipe->allergen_gluten) {
             'nicht_enthalten' => true,
             'enthalten', 'spuren' => false,
             default => null,
         };
-        $recipe->allergene_aggregiert_am = now();
+        $recipe->allergens_aggregated_at = now();
     }
 
     // ── 3. Zusatzstoffe (GL-09) ─────────────────────────────────────────
@@ -376,11 +376,11 @@ class RecipeRecomputeService
     {
         $stoffe = array_keys(FoodAlchemistItemDeclaration::STOFFE);
 
-        if ($recipe->n_ingredients_ungemappt > 0) {                    // F7.1-Guard: alle 18 NULL
+        if ($recipe->n_ingredients_unmapped > 0) {                    // F7.1-Guard: alle 18 NULL
             foreach ($stoffe as $s) {
-                $recipe->{"zusatz_{$s}"} = null;
+                $recipe->{"additive_{$s}"} = null;
             }
-            $recipe->zusatz_aggregiert_am = now();
+            $recipe->additive_aggregated_at = now();
 
             return;
         }
@@ -391,7 +391,7 @@ class RecipeRecomputeService
             if ($z->gp_id !== null && $z->gp !== null) {
                 $beitraege = $this->gpAggregate->zusatzstoffe($z->gp);
             } elseif ($z->referencedRecipe !== null) {
-                $beitraege = collect($stoffe)->mapWithKeys(fn ($s) => [$s => $z->referencedRecipe->{"zusatz_{$s}"}])->all();
+                $beitraege = collect($stoffe)->mapWithKeys(fn ($s) => [$s => $z->referencedRecipe->{"additive_{$s}"}])->all();
             }
             foreach ($stoffe as $s) {
                 $wert = $beitraege[$s] ?? null;
@@ -401,9 +401,9 @@ class RecipeRecomputeService
             }
         }
         foreach ($stoffe as $s) {
-            $recipe->{"zusatz_{$s}"} = $max[$s];
+            $recipe->{"additive_{$s}"} = $max[$s];
         }
-        $recipe->zusatz_aggregiert_am = now();
+        $recipe->additive_aggregated_at = now();
     }
 
     // ── 4. Kosten (§3.2, T3) ────────────────────────────────────────────
@@ -556,13 +556,13 @@ class RecipeRecomputeService
         }
         $recipe->nutri_n_ingredients_total = $nTotal;
         $recipe->nutri_n_ingredients_mapped = $nMapped;
-        $recipe->nutri_konfidenz = match (true) {                  // GL-08 §4.3 (erste zutreffende)
+        $recipe->nutri_confidence = match (true) {                  // GL-08 §4.3 (erste zutreffende)
             $nTotal === 0, $nMapped === 0 => 'unknown',
             $nMapped === $nTotal => 'high',
             $nMapped / $nTotal >= 0.8 => 'medium',
             default => 'low',
         };
-        $recipe->nutri_aggregiert_am = now();
+        $recipe->nutri_aggregated_at = now();
     }
 
     /** T3-Kaskade für EINE Zutat: [kosten €, priced?]. */
@@ -637,11 +637,11 @@ class RecipeRecomputeService
     private function grammFaktor(FoodAlchemistRecipeIngredient $z): float
     {
         $unit = $z->unit;
-        // Sub-Rezept per Stück (count): IMMER über den eigenen Stück-Ertrag (Yield ÷ ertrag_stueck),
+        // Sub-Rezept per Stück (count): IMMER über den eigenen Stück-Ertrag (Yield ÷ yield_pieces),
         // auch wenn die Einheit einen generischen g/Stück-Default trägt. Bsp Asia-Suppe: 4,579 kg / 100 ⇒ 45,8 g.
         if ($unit?->dimension === 'count' && $z->referenced_recipe_id !== null) {
             $sub = $z->referencedRecipe;
-            $ertrag = $sub?->ertrag_stueck !== null ? (float) $sub->ertrag_stueck : 0.0;
+            $ertrag = $sub?->yield_pieces !== null ? (float) $sub->yield_pieces : 0.0;
             if ($ertrag > 0 && $sub?->yield_kg !== null) {
                 return (float) $sub->yield_kg * 1000 / $ertrag;
             }

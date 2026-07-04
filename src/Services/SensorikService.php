@@ -75,9 +75,9 @@ class SensorikService
                 $geschmack[$d] = round((float) ($stored->{$d} ?? 0), 2);
             }
             $texRows = DB::table('foodalchemist_recipe_textures AS t')
-                ->join('foodalchemist_vocab_textur AS v', 'v.id', '=', 't.textur_vocab_id')
+                ->join('foodalchemist_vocab_textures AS v', 'v.id', '=', 't.texture_vocab_id')
                 ->where('t.recipe_id', $recipeId)
-                ->selectRaw('v.slug, v.display_de, MAX(t.intensitaet) AS intensitaet')
+                ->selectRaw('v.slug, v.display_de, MAX(t.intensity) AS intensitaet')
                 ->groupBy('v.slug', 'v.display_de')->get();
 
             return $this->montage(
@@ -99,7 +99,7 @@ class SensorikService
 
     public function fuerConcept(FoodAlchemistConcept $concept): array
     {
-        $recipeIds = $concept->slots->pluck('vk_recipe_id')->filter()->unique()->values()->all();
+        $recipeIds = $concept->slots->pluck('sales_recipe_id')->filter()->unique()->values()->all();
 
         return $this->auswertung($this->gpIdsFromRecipes($recipeIds), 'roh');
     }
@@ -203,9 +203,9 @@ class SensorikService
             $geschmack[$d] = round((float) ($row->{$d} ?? 0), 2);
         }
         $texRows = DB::table('foodalchemist_gp_textures AS t')
-            ->join('foodalchemist_vocab_textur AS v', 'v.id', '=', 't.textur_vocab_id')
+            ->join('foodalchemist_vocab_textures AS v', 'v.id', '=', 't.texture_vocab_id')
             ->whereIn('t.gp_id', $gpIds)
-            ->selectRaw('v.slug, v.display_de, MAX(t.intensitaet) AS intensitaet')
+            ->selectRaw('v.slug, v.display_de, MAX(t.intensity) AS intensitaet')
             ->groupBy('v.slug', 'v.display_de')->get();
 
         return $this->montage($geschmack, $texRows, $source, null, null,
@@ -222,7 +222,7 @@ class SensorikService
         $dominant = array_keys(array_filter($geschmack, fn ($v) => $v >= 0.6));
         $luecken = array_keys(array_filter($geschmack, fn ($v) => $v < 0.3));
 
-        $textur = $texRows->sortByDesc('intensitaet')
+        $textur = $texRows->sortByDesc('intensity')
             ->map(fn ($r) => ['slug' => $r->slug, 'label' => $r->display_de])->values()->all();
         $slugs = array_column($textur, 'slug');
         $weichN = count(array_intersect($slugs, self::WEICH));
@@ -359,7 +359,7 @@ class SensorikService
         );
 
         // Textur: nur KI-Zeilen ersetzen (manuelle bleiben), dann neu setzen
-        $vocab = DB::table('foodalchemist_vocab_textur')->pluck('id', 'slug');
+        $vocab = DB::table('foodalchemist_vocab_textures')->pluck('id', 'slug');
         DB::table('foodalchemist_recipe_textures')->where('recipe_id', $recipeId)->where('source', 'ai')->delete();
         foreach ($texturen as $t) {
             $slug = $t['slug'] ?? null;
@@ -367,8 +367,8 @@ class SensorikService
                 continue;
             }
             DB::table('foodalchemist_recipe_textures')->updateOrInsert(
-                ['recipe_id' => $recipeId, 'textur_vocab_id' => $vocab[$slug]],
-                ['intensitaet' => $clamp($t['intensitaet'] ?? 1), 'source' => 'ai', 'updated_at' => now(), 'created_at' => now()],
+                ['recipe_id' => $recipeId, 'texture_vocab_id' => $vocab[$slug]],
+                ['intensity' => $clamp($t['intensity'] ?? 1), 'source' => 'ai', 'updated_at' => now(), 'created_at' => now()],
             );
         }
     }

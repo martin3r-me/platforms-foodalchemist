@@ -19,8 +19,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('foodalchemist_vocab_textur')) {
-            Schema::create('foodalchemist_vocab_textur', function (Blueprint $table) {
+        if (! Schema::hasTable('foodalchemist_vocab_textures')) {
+            Schema::create('foodalchemist_vocab_textures', function (Blueprint $table) {
                 $table->id();
                 $table->string('slug', 48)->unique();
                 $table->string('display_de', 96);
@@ -37,7 +37,7 @@ return new class extends Migration
                 foreach (['suess', 'salzig', 'sauer', 'bitter', 'umami', 'fettig', 'scharf'] as $d) {
                     $table->decimal('d_' . $d, 4, 2)->default(0);
                 }
-                $table->string('textur_slugs', 255)->nullable();   // comma-sep vocab_textur-slugs
+                $table->string('texture_slugs', 255)->nullable();   // comma-sep vocab_textur-slugs
                 $table->string('note', 255)->nullable();
                 $table->timestamps();
             });
@@ -61,11 +61,11 @@ return new class extends Migration
             Schema::create('foodalchemist_gp_textures', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('gp_id')->index();
-                $table->unsignedBigInteger('textur_vocab_id')->index();
+                $table->unsignedBigInteger('texture_vocab_id')->index();
                 $table->decimal('intensitaet', 4, 2)->default(1);
                 $table->string('source', 16)->nullable();
                 $table->timestamps();
-                $table->unique(['gp_id', 'textur_vocab_id']);
+                $table->unique(['gp_id', 'texture_vocab_id']);
             });
         }
     }
@@ -75,6 +75,6 @@ return new class extends Migration
         Schema::dropIfExists('foodalchemist_gp_textures');
         Schema::dropIfExists('foodalchemist_gp_taste_vectors');
         Schema::dropIfExists('foodalchemist_vocab_process_sensory_deltas');
-        Schema::dropIfExists('foodalchemist_vocab_textur');
+        Schema::dropIfExists('foodalchemist_vocab_textures');
     }
 };

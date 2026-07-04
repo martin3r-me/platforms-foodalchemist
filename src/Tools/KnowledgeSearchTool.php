@@ -33,7 +33,7 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
             'type' => 'object',
             'properties' => [
                 'q' => ['type' => 'string', 'description' => 'Suchbegriffe, z. B. "Mengen Buffet" oder "Substitution Sahne"'],
-                'kategorie' => ['type' => 'string', 'enum' => ['cross_cutting', 'domain', 'pairing'], 'description' => 'Optionaler Filter'],
+                'category' => ['type' => 'string', 'enum' => ['cross_cutting', 'domain', 'pairing'], 'description' => 'Optionaler Filter'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 10],
             ],
             'required' => ['q'],
@@ -49,7 +49,7 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
 
         $treffer = app(KnowledgeContextService::class)->searchDocuments(
             (string) $arguments['q'],
-            isset($arguments['kategorie']) ? (string) $arguments['kategorie'] : null,
+            isset($arguments['category']) ? (string) $arguments['category'] : null,
             (int) ($arguments['limit'] ?? 10),
         );
 

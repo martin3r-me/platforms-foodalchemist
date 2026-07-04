@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Wording-Kette (UX-Umbau 2026-07-03): expliziter Anzeigename-Override am
  * Foodbook-Block — oberste Stufe der Kette
- * Foodbook-Block.wording → Concept-Slot.wording → Gericht.vk_wording_standard → Name.
+ * Foodbook-Block.wording → Concept-Slot.wording → Gericht.sales_wording_standard → Name.
  * `kundentext` verliert seine Doppelrolle als Label und wird wieder reiner
  * Beschreibungs-/Untertiteltext (bleibt als Legacy-Fallback in der Auflösung).
  * Additiv, nullable.

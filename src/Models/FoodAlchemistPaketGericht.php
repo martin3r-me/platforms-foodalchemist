@@ -35,7 +35,7 @@ class FoodAlchemistPaketGericht extends Model
     /** Das verknüpfte Gericht (VK-Rezept). */
     public function gericht(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'vk_recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
     }
 
     public function unit(): BelongsTo

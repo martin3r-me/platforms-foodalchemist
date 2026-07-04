@@ -11,7 +11,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
  * R5 (Dominique): Aufschlagsklassen als EIGENE Settings-Seite, jetzt
  * EDITIERBAR (vorher Lese-Tabelle in der VK-Taxonomie) — Rohaufschlag/
  * Bedienung/Profit/MwSt fließen direkt in den MargeService (GT-8).
- * `formel_typ` bleibt auf aufschlag|deckungsbeitrag begrenzt (W-1-Gate:
+ * `formula_type` bleibt auf aufschlag|deckungsbeitrag begrenzt (W-1-Gate:
  * deckungsbeitrag wirft im MargeService, bis die Formel entschieden ist).
  */
 class Aufschlagsklassen extends Component
@@ -20,11 +20,11 @@ class Aufschlagsklassen extends Component
 
     public array $form = [];
 
-    public array $neu = ['code' => '', 'label' => '', 'raw_markup_pct' => '', 'bedienung_pct' => '0', 'profit_pct' => '0', 'mwst_satz' => '19', 'formel_typ' => 'aufschlag', 'note' => ''];
+    public array $neu = ['code' => '', 'label' => '', 'raw_markup_pct' => '', 'bedienung_pct' => '0', 'profit_pct' => '0', 'vat_rate' => '19', 'formula_type' => 'aufschlag', 'note' => ''];
 
     public ?string $fehler = null;
 
-    private const PROZENT_FELDER = ['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'];
+    private const PROZENT_FELDER = ['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'vat_rate'];
 
     public function edit(int $id): void
     {
@@ -39,8 +39,8 @@ class Aufschlagsklassen extends Component
             'raw_markup_pct' => (string) $ak->raw_markup_pct,
             'bedienung_pct' => (string) $ak->bedienung_pct,
             'profit_pct' => (string) $ak->profit_pct,
-            'mwst_satz' => (string) $ak->mwst_satz,
-            'formel_typ' => $ak->formel_typ,
+            'vat_rate' => (string) $ak->vat_rate,
+            'formula_type' => $ak->formula_type,
             'note' => $ak->note,
         ];
     }
@@ -91,7 +91,7 @@ class Aufschlagsklassen extends Component
         $ak?->update(['is_inactive' => ! $ak->is_inactive]);
     }
 
-    /** Phase 5: hart löschen, wenn unbenutzt (sonst gesperrt → deaktivieren). */
+    /** Phase 5: hart löschen, wenn unbenutzt (sonst locked → deaktivieren). */
     public function delete(int $id): void
     {
         $ak = FoodAlchemistMarkupClass::find($id);
@@ -115,7 +115,7 @@ class Aufschlagsklassen extends Component
         $this->fehler = null;
     }
 
-    /** Prozente kommasicher parsen + formel_typ-Whitelist; null = Fehler gesetzt. */
+    /** Prozente kommasicher parsen + formula_type-Whitelist; null = Fehler gesetzt. */
     private function validiert(array $eingabe): ?array
     {
         $werte = ['label' => trim($eingabe['label'] ?? ''), 'note' => ($eingabe['note'] ?? '') ?: null];
@@ -133,8 +133,8 @@ class Aufschlagsklassen extends Component
             }
             $werte[$feld] = (float) $wert;
         }
-        $werte['formel_typ'] = in_array($eingabe['formel_typ'] ?? '', ['aufschlag', 'deckungsbeitrag'], true)
-            ? $eingabe['formel_typ'] : 'aufschlag';
+        $werte['formula_type'] = in_array($eingabe['formula_type'] ?? '', ['aufschlag', 'deckungsbeitrag'], true)
+            ? $eingabe['formula_type'] : 'aufschlag';
 
         return $werte;
     }
