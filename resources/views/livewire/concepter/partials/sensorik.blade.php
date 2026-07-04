@@ -5,7 +5,7 @@
 @if(! $sensorik || ($sensorik['leer'] ?? true))
     <p class="text-xs text-gray-400 py-4">Noch keine Sensorik-Daten (keine Grundprodukte mit Vektor).</p>
 @else
-    @php($sQuelle = $sensorik['quelle'] ?? 'roh')
+    @php($sQuelle = $sensorik['source'] ?? 'roh')
     <div class="flex items-center gap-2 mb-2 flex-wrap">
         @if($sQuelle === 'ki')
             <span class="{{ $pill }} {{ $variantPill['success'] }}">✨ KI-bewertet · gegart</span>
@@ -19,8 +19,8 @@
             @if(isset($sensorik['abdeckung']))<span class="text-[11px] text-gray-400">{{ $sensorik['abdeckung']['mit'] }}/{{ $sensorik['abdeckung']['gesamt'] }} GPs mit Daten · noch nicht KI-bewertet</span>@endif
         @endif
     </div>
-    @if(($sensorik['begruendung'] ?? null) !== null && $sQuelle === 'ki')
-        <p class="text-[11px] text-gray-400 mb-2 italic">{{ $sensorik['begruendung'] }}</p>
+    @if(($sensorik['reasoning'] ?? null) !== null && $sQuelle === 'ki')
+        <p class="text-[11px] text-gray-400 mb-2 italic">{{ $sensorik['reasoning'] }}</p>
     @endif
 
     <div class="relative overflow-hidden {{ $card }} mb-3">

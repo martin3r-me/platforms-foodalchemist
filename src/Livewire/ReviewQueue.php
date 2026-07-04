@@ -138,15 +138,15 @@ class ReviewQueue extends Component
                 ->get(['p.id', 'p.score', 'p.methode', 'i.designation AS la_name', 'g.name AS gp_name']),
             'bulkZahl' => (clone $bulkOffen)->count(),
             'bulks' => (clone $bulkOffen)->orderByDesc('b.id')->limit(50)
-                ->get(['b.id', 'b.feld', 'b.wert', 'b.confidence', 'r.name AS rezept_name', 'r.id AS rezept_id', 'r.ist_verkaufsrezept']),
-            'vkOhneKlasse' => (clone $rezept())->where('ist_verkaufsrezept', true)->whereNull('speisen_klasse_id')
+                ->get(['b.id', 'b.feld', 'b.wert', 'b.confidence', 'r.name AS rezept_name', 'r.id AS rezept_id', 'r.is_sales_recipe']),
+            'vkOhneKlasse' => (clone $rezept())->where('is_sales_recipe', true)->whereNull('dish_class_id')
                 ->orderBy('name')->limit(50)->get(['id', 'name']),
             'imReview' => (clone $rezept())->where('status', 'review')->orderBy('name')->limit(50)
-                ->get(['id', 'name', 'ist_verkaufsrezept']),
+                ->get(['id', 'name', 'is_sales_recipe']),
             'imReviewZahl' => (clone $rezept())->where('status', 'review')->count(),
-            'ungemappt' => (clone $rezept())->where('n_zutaten_ungemappt', '>', 0)->orderByDesc('n_zutaten_ungemappt')
-                ->limit(50)->get(['id', 'name', 'ist_verkaufsrezept', 'n_zutaten_ungemappt']),
-            'ungemapptZahl' => (clone $rezept())->where('n_zutaten_ungemappt', '>', 0)->count(),
+            'ungemappt' => (clone $rezept())->where('n_ingredients_ungemappt', '>', 0)->orderByDesc('n_ingredients_ungemappt')
+                ->limit(50)->get(['id', 'name', 'is_sales_recipe', 'n_ingredients_ungemappt']),
+            'ungemapptZahl' => (clone $rezept())->where('n_ingredients_ungemappt', '>', 0)->count(),
             // Klasse B: Signale (#378)
             'signale' => $signalSvc->paginate(['status' => $this->signalStatus, 'typ' => $this->signalTyp], $team, 30),
             'signalOffen' => $signalSvc->offeneCount($team),

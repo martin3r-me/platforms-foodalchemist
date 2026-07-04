@@ -23,8 +23,8 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
     public function getDescription(): string
     {
-        return 'Aktualisiert ein Rezept im Status stub/draft (Felder: name, beschreibung, zubereitung, '
-            . 'geschmacksrichtung, arbeitszeit_min, yield_kg_manual, kategorie_id). status="review" reicht '
+        return 'Aktualisiert ein Rezept im Status stub/draft (Felder: name, description, preparation, '
+            . 'taste_direction, work_time_min, yield_kg_manual, kategorie_id). status="review" reicht '
             . 'den Entwurf zum menschlichen Review ein (einzige erlaubte Transition). Gepflegte Rezepte '
             . '(review/approved/archived) sind für den MCP-Pfad gesperrt.';
     }
@@ -36,10 +36,10 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'properties' => [
                 'recipe_id' => ['type' => 'integer'],
                 'name' => ['type' => 'string'],
-                'beschreibung' => ['type' => 'string'],
-                'zubereitung' => ['type' => 'string'],
-                'geschmacksrichtung' => ['type' => 'string'],
-                'arbeitszeit_min' => ['type' => 'integer'],
+                'description' => ['type' => 'string'],
+                'preparation' => ['type' => 'string'],
+                'taste_direction' => ['type' => 'string'],
+                'work_time_min' => ['type' => 'integer'],
                 'yield_kg_manual' => ['type' => 'number'],
                 'kategorie_id' => ['type' => 'integer'],
                 'status' => ['type' => 'string', 'enum' => ['review'], 'description' => 'Nur draft→review erlaubt'],
@@ -63,8 +63,8 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         }
 
         $in = array_intersect_key($arguments, array_flip([
-            'name', 'beschreibung', 'zubereitung', 'geschmacksrichtung',
-            'arbeitszeit_min', 'yield_kg_manual', 'kategorie_id',
+            'name', 'description', 'preparation', 'taste_direction',
+            'work_time_min', 'yield_kg_manual', 'kategorie_id',
         ]));
         if (($arguments['status'] ?? null) === 'review') {
             $in['status'] = 'review';

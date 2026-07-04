@@ -13,16 +13,16 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('foodalchemist_servierformen')) {
+        if (Schema::hasTable('foodalchemist_serving_forms')) {
             return;
         }
-        Schema::create('foodalchemist_servierformen', function (Blueprint $table) {
+        Schema::create('foodalchemist_serving_forms', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->index();
             $table->unsignedBigInteger('legacy_id')->nullable()->unique();
             $table->string('code', 32)->unique();
-            $table->string('bezeichnung');
+            $table->string('label');
             $table->integer('sort_order')->default(100);
             $table->boolean('is_inactive')->default(false);
             $table->timestamps();
@@ -32,6 +32,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('foodalchemist_servierformen');
+        Schema::dropIfExists('foodalchemist_serving_forms');
     }
 };

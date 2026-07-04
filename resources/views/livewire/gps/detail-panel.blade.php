@@ -16,8 +16,8 @@
                 <h3 class="text-[15px] font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-snug">{{ $gp->name }}</h3>
                 <span class="{{ $pill }} font-medium shrink-0 {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
             </div>
-            @if($gp->hauptzutat_slug !== null)
-                <span class="inline-block mt-1.5 rounded-md bg-black/5 dark:bg-white/10 px-2 py-0.5 text-[11px] font-mono text-gray-500 dark:text-gray-400" data-gp-slug>{{ $gp->hauptzutat_slug }}</span>
+            @if($gp->main_ingredient_slug !== null)
+                <span class="inline-block mt-1.5 rounded-md bg-black/5 dark:bg-white/10 px-2 py-0.5 text-[11px] font-mono text-gray-500 dark:text-gray-400" data-gp-slug>{{ $gp->main_ingredient_slug }}</span>
             @endif
             @if($kannKuratieren)
                 <div class="mt-2">
@@ -38,10 +38,10 @@
         @if($section === null)
         <dl class="grid grid-cols-2 gap-x-4 gap-y-2" data-stammdaten>
             @foreach([
-                ['Warengruppe', $gp->warengruppe?->name ?? $gp->warengruppe_code ?? '—'],
-                ['Sub-Kategorie', $gp->sub_kategorie ?? '—'],
-                ['Zustand', $gp->zustand ?? '—'],
-                ['Garverlust-Default', $gp->garverlust_default_pct !== null ? number_format((float) $gp->garverlust_default_pct, 1, ',', '.') . ' %' : '—'],
+                ['Warengruppe', $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '—'],
+                ['Sub-Kategorie', $gp->sub_category ?? '—'],
+                ['Zustand', $gp->condition ?? '—'],
+                ['Garverlust-Default', $gp->cooking_loss_default_pct !== null ? number_format((float) $gp->cooking_loss_default_pct, 1, ',', '.') . ' %' : '—'],
             ] as [$lbl, $wert])
                 <div class="min-w-0">
                     <dt class="{{ $dt }}">{{ $lbl }}</dt>
@@ -53,13 +53,13 @@
 
         {{-- R12 (Jarvis): «Natürliche Einheit & Gewicht» prominent statt zweier Raster-Zellen --}}
         @if($section === null || $section === 'naehrwerte')
-        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-einheit-gewicht>
+        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-unit-gewicht>
             <p class="{{ $dt }} mb-0.5">Natürliche Einheit &amp; Gewicht</p>
-            @if($gp->preferredCountUnit !== null || $gp->stk_default_g !== null)
+            @if($gp->preferredCountUnit !== null || $gp->piece_default_g !== null)
                 <p class="text-xs text-gray-900 dark:text-gray-100">
                     1 {{ $gp->preferredCountUnit?->name ?? 'Stück' }}
-                    @if($gp->stk_default_g !== null)
-                        ≈ <span class="font-semibold">{{ number_format((float) $gp->stk_default_g, 0, ',', '.') }} g</span>
+                    @if($gp->piece_default_g !== null)
+                        ≈ <span class="font-semibold">{{ number_format((float) $gp->piece_default_g, 0, ',', '.') }} g</span>
                     @else
                         <span class="text-gray-400">— Gewicht nicht hinterlegt</span>
                     @endif
@@ -108,7 +108,7 @@
                         <span class="text-gray-500 dark:text-gray-400">Preis-Spanne <span class="text-gray-400">({{ $preisBand['n'] }} LA{{ $preisBand['n'] === 1 ? '' : 's' }})</span></span>
                         <span class="tabular-nums text-gray-900 dark:text-gray-100">
                             <span class="text-emerald-600 dark:text-emerald-400 font-medium">{{ number_format($preisBand['min'], 2, ',', '.') }}</span>
-                            – {{ number_format($preisBand['max'], 2, ',', '.') }} {{ $preisBand['einheit'] }}
+                            – {{ number_format($preisBand['max'], 2, ',', '.') }} {{ $preisBand['unit'] }}
                         </span>
                     </div>
                     @if($preisBand['lead'] !== null && $preisBand['max'] > $preisBand['min'])
@@ -166,7 +166,7 @@
                                         @endisset
                                     </p>
                                     @if($la->vergleichspreis !== null)
-                                        <p class="text-[11px] tabular-nums text-gray-400">{{ number_format($la->vergleichspreis['wert'], 2, ',', '.') }} {{ $la->vergleichspreis['einheit'] }}</p>
+                                        <p class="text-[11px] tabular-nums text-gray-400">{{ number_format($la->vergleichspreis['wert'], 2, ',', '.') }} {{ $la->vergleichspreis['unit'] }}</p>
                                     @else
                                         <p class="text-[11px] text-gray-400" title="kein Vergleichspreis — qty fehlt (GL-03 A-2)">⚠ ohne €/kg</p>
                                     @endif
@@ -247,8 +247,8 @@
             @php($allergKiConf = $gp->allergene_ki_confidence ?? $gp->allergene_ai_confidence)
             @php($nurKiOverride = $allergene !== null
                 && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0
-                && ($gp->allergene_quelle === 'ki' || $gp->allergene_ki_confidence !== null)
-                && collect($allergene)->contains(fn ($a) => $a['quelle'] === 'override'))
+                && ($gp->allergens_source === 'ki' || $gp->allergene_ki_confidence !== null)
+                && collect($allergene)->contains(fn ($a) => $a['source'] === 'override'))
             <p class="{{ $dt }} mb-1 flex items-center gap-2">Allergene <span class="normal-case">(effektiv)</span>
                 @if($nurKiOverride)
                     <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case ml-1" title="KI-geschätzt — keine LA-Daten{{ $allergKiConf !== null ? ' · ' . round($allergKiConf * 100) . ' %' : '' }}" data-allergene-ki-marker>✨ KI</span>
@@ -280,7 +280,7 @@
                             <div class="flex flex-wrap items-center gap-1">
                                 <span class="text-[11px] font-medium text-rose-600 dark:text-rose-400 mr-1 shrink-0">Enthält:</span>
                                 @foreach($enthalten as $feld => $a)
-                                    <span class="{{ $pill }} {{ $variantPill['danger'] }}" title="{{ $labels[$feld] ?? $feld }}{{ $a['quelle'] === 'override' ? ' · manueller Override' : ($a['quelle'] === 'mutter' ? ' · live vom Mutter-GP' : '') }}">{{ $labels[$feld] ?? $feld }}{{ $marker($a['quelle']) }}</span>
+                                    <span class="{{ $pill }} {{ $variantPill['danger'] }}" title="{{ $labels[$feld] ?? $feld }}{{ $a['source'] === 'override' ? ' · manueller Override' : ($a['source'] === 'mutter' ? ' · live vom Mutter-GP' : '') }}">{{ $labels[$feld] ?? $feld }}{{ $marker($a['source']) }}</span>
                                 @endforeach
                             </div>
                         @endif
@@ -288,7 +288,7 @@
                             <div class="flex flex-wrap items-center gap-1">
                                 <span class="text-[11px] font-medium text-amber-600 dark:text-amber-400 mr-1 shrink-0">Spuren von:</span>
                                 @foreach($spuren as $feld => $a)
-                                    <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="{{ $labels[$feld] ?? $feld }}{{ $marker($a['quelle']) === ' ✎' ? ' · manueller Override' : '' }}">{{ $labels[$feld] ?? $feld }}{{ $marker($a['quelle']) }}</span>
+                                    <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="{{ $labels[$feld] ?? $feld }}{{ $marker($a['source']) === ' ✎' ? ' · manueller Override' : '' }}">{{ $labels[$feld] ?? $feld }}{{ $marker($a['source']) }}</span>
                                 @endforeach
                             </div>
                         @endif
@@ -344,8 +344,8 @@
         @if($section === null || $section === 'naehrwerte')
         <div class="border-t border-black/5 dark:border-white/10 pt-2" data-sektion="naehrwerte">
             <p class="{{ $dt }} mb-1 flex items-center gap-2">Nährwerte
-                <span class="normal-case">({{ ($naehrwerte['quelle'] ?? 'la') === 'la' ? 'Ø aus LAs, je 100 g' : (($naehrwerte['quelle'] ?? '') === 'ki' ? 'KI-Schätzung je 100 g' : 'je 100 g') }})</span>
-                @if(($naehrwerte['quelle'] ?? null) === 'ki')
+                <span class="normal-case">({{ ($naehrwerte['source'] ?? 'la') === 'la' ? 'Ø aus LAs, je 100 g' : (($naehrwerte['source'] ?? '') === 'ki' ? 'KI-Schätzung je 100 g' : 'je 100 g') }})</span>
+                @if(($naehrwerte['source'] ?? null) === 'ki')
                     <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case" title="KI-geschätzt — keine LA-Daten{{ $gp->nutri_ai_confidence !== null ? ' · ' . round($gp->nutri_ai_confidence * 100) . ' %' : '' }}" data-naehrwerte-ki-marker>✨ KI</span>
                 @endif
                 @if($kannKuratieren && $naehrwerte !== null && $naehrwerte['energy_kcal']['avg'] === null)
@@ -363,12 +363,12 @@
                         ['carbs_absorbable', 'Kohlenhydrate', 'g', 2],
                         ['sugar', '— davon Zucker', 'g', 2],
                         ['salt_g', 'Salz', 'g', 3],
-                    ] as [$key, $label, $einheit, $stellen])
+                    ] as [$key, $label, $unit, $stellen])
                         <div class="flex items-baseline justify-between">
                             <dt class="text-[11px] text-gray-500 dark:text-gray-400">{{ $label }}</dt>
                             <dd class="text-[11px] text-gray-900 dark:text-gray-100 tabular-nums">
                                 @if($naehrwerte[$key]['avg'] !== null)
-                                    {{ number_format($naehrwerte[$key]['avg'], $stellen, ',', '.') }} {{ $einheit }} <span class="text-gray-400">({{ $naehrwerte[$key]['n'] }} LA{{ $naehrwerte[$key]['n'] === 1 ? '' : 's' }})</span>
+                                    {{ number_format($naehrwerte[$key]['avg'], $stellen, ',', '.') }} {{ $unit }} <span class="text-gray-400">({{ $naehrwerte[$key]['n'] }} LA{{ $naehrwerte[$key]['n'] === 1 ? '' : 's' }})</span>
                                 @else
                                     <span class="text-gray-400">—</span>
                                 @endif
@@ -420,9 +420,9 @@
             <p class="{{ $dt }} mb-1">Verwendet in Rezepten ({{ $verwendungen->count() }}{{ $verwendungen->count() === 30 ? '+' : '' }})</p>
             @forelse($verwendungen as $v)
                 <button type="button" wire:key="verw-{{ $v->id }}"
-                        wire:click="$dispatch('{{ $v->ist_verkaufsrezept ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $v->id }} })"
+                        wire:click="$dispatch('{{ $v->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $v->id }} })"
                         class="block w-full text-left text-[11px] text-sky-600 dark:text-sky-400 hover:underline truncate py-0.5" data-verwendung-link>
-                    {{ $v->ist_verkaufsrezept ? '💶' : '📖' }} {{ $v->name }}
+                    {{ $v->is_sales_recipe ? '💶' : '📖' }} {{ $v->name }}
                 </button>
             @empty
                 <p class="text-[11px] text-gray-400" data-verwendungen-leer>— in keinem Rezept eingesetzt —</p>

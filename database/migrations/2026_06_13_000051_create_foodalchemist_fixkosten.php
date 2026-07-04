@@ -14,12 +14,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('foodalchemist_fixkosten')) {
-            Schema::create('foodalchemist_fixkosten', function (Blueprint $table) {
+        if (! Schema::hasTable('foodalchemist_fixed_costs')) {
+            Schema::create('foodalchemist_fixed_costs', function (Blueprint $table) {
                 $table->id();
                 $table->uuid('uuid')->unique();
                 $table->unsignedBigInteger('team_id')->nullable()->index();
-                $table->string('bezeichnung');
+                $table->string('label');
                 $table->decimal('betrag', 12, 2)->default(0);
                 $table->string('periode', 12)->default('monatlich');   // monatlich | jaehrlich
                 $table->string('block_key')->index();                  // Zuordnung zu einem GK-Block
@@ -29,20 +29,20 @@ return new class extends Migration
             });
         }
 
-        if (! Schema::hasColumn('foodalchemist_team_settings', 'kalkulation_bezugsbasen')) {
+        if (! Schema::hasColumn('foodalchemist_team_settings', 'calculation_bezugsbasen')) {
             Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-                $table->json('kalkulation_bezugsbasen')->nullable();   // {mek, fek, hk, periode}
+                $table->json('calculation_bezugsbasen')->nullable();   // {mek, fek, hk, periode}
             });
         }
     }
 
     public function down(): void
     {
-        if (Schema::hasColumn('foodalchemist_team_settings', 'kalkulation_bezugsbasen')) {
+        if (Schema::hasColumn('foodalchemist_team_settings', 'calculation_bezugsbasen')) {
             Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-                $table->dropColumn('kalkulation_bezugsbasen');
+                $table->dropColumn('calculation_bezugsbasen');
             });
         }
-        Schema::dropIfExists('foodalchemist_fixkosten');
+        Schema::dropIfExists('foodalchemist_fixed_costs');
     }
 };

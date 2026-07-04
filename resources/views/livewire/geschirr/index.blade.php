@@ -99,9 +99,9 @@
                                 <td class="{{ $td }} text-gray-500">{{ $item->supplier?->name ?? '—' }}</td>
                             @endif
                             <td class="{{ $td }} font-mono text-[11px] text-gray-500">{{ $item->artikel_nr ?? '—' }}</td>
-                            <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" title="{{ $item->bezeichnung }}">
+                            <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" title="{{ $item->label }}">
                                 <button type="button" wire:click="artikelOeffnen({{ $item->id }})"
-                                        class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150 truncate max-w-full text-left">{{ $item->bezeichnung }}</button>
+                                        class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150 truncate max-w-full text-left">{{ $item->label }}</button>
                             </td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $item->kategorie ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $item->material ?? '—' }}</td>
@@ -189,14 +189,14 @@
             <x-foodalchemist::modal-section title="Artikel">
                 <div class="grid grid-cols-3 gap-3">
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Bezeichnung *</label>
-                        <input type="text" wire:model="artikelForm.bezeichnung" class="{{ $input }}" data-bezeichnung /></div>
+                        <input type="text" wire:model="artikelForm.label" class="{{ $input }}" data-label /></div>
                     <div><label class="block {{ $label }} mb-1">Artikel-Nr.</label>
                         <input type="text" wire:model="artikelForm.artikel_nr" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Kategorie</label>
                         <input type="text" list="g-kategorie" wire:model="artikelForm.kategorie" class="{{ $input }}" placeholder="Teller / Glas / Besteck …" />
                         <datalist id="g-kategorie"><option>Teller</option><option>Schale</option><option>Platte</option><option>Glas</option><option>Tasse</option><option>Besteck</option><option>Schüssel</option><option>Deko</option></datalist></div>
                     <div><label class="block {{ $label }} mb-1">Servier-Vehikel-Typ</label>
-                        <select wire:model="artikelForm.vehikel_vocab_id" class="{{ $input }}" title="Ordnet den Artikel der abstrakten Präsentationsform zu — der Concepter-Picker bevorzugt dann passende Teile (Darreichungs-Scharnier)">
+                        <select wire:model="artikelForm.vehicle_vocab_id" class="{{ $input }}" title="Ordnet den Artikel der abstrakten Präsentationsform zu — der Concepter-Picker bevorzugt dann passende Teile (Darreichungs-Scharnier)">
                             <option value="">—</option>
                             @foreach($vehikelListe as $v)<option value="{{ $v->id }}">{{ $v->gruppe ? $v->gruppe . ' · ' : '' }}{{ $v->name }}</option>@endforeach
                         </select></div>
@@ -224,7 +224,7 @@
                     <div><label class="block {{ $label }} mb-1">Gewicht g</label>
                         <input type="text" wire:model="artikelForm.gewicht_g" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Einheit</label>
-                        <input type="text" wire:model="artikelForm.einheit" class="{{ $input }}" /></div>
+                        <input type="text" wire:model="artikelForm.unit" class="{{ $input }}" /></div>
                 </div>
                 <div class="grid grid-cols-3 gap-3 mt-3">
                     <div><label class="block {{ $label }} mb-1">Leihpreis € (netto)</label>

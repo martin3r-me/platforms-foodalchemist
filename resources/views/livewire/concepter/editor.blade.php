@@ -100,14 +100,14 @@
                     {{-- 4c: Kategorie-Feld abgelöst — Facetten (Servierform/Eventtyp/Momente/Saison) übernehmen --}}
                     <div>
                         <label class="{{ $label }}">Servierform</label>
-                        <select wire:model="form.servierform_id" wire:change="speichern" class="{{ $input }}" title="Steuert die Darreichungs-Auflösung der Gerichte (Slot → passende Variante) — speichert sofort">
+                        <select wire:model="form.serving_form_id" wire:change="speichern" class="{{ $input }}" title="Steuert die Darreichungs-Auflösung der Gerichte (Slot → passende Variante) — speichert sofort">
                             <option value="">—</option>
-                            @foreach($servierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->bezeichnung }}</option>@endforeach
+                            @foreach($servierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
                         </select>
                     </div>
                     <div>
                         <label class="{{ $label }}">Eventtyp</label>
-                        <select wire:model="form.eventtyp_id" wire:change="speichern" class="{{ $input }}">
+                        <select wire:model="form.event_type_id" wire:change="speichern" class="{{ $input }}">
                             <option value="">—</option>
                             @foreach($eventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
                         </select>
@@ -120,7 +120,7 @@
                     </div>
                     <div>
                         <label class="{{ $label }}">Geschmack</label>
-                        <select wire:model="form.geschmacksrichtung" class="{{ $input }}">
+                        <select wire:model="form.taste_direction" class="{{ $input }}">
                             <option value="">—</option>
                             @foreach(['suess' => 'süß', 'herzhaft' => 'herzhaft', 'neutral' => 'neutral'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
                         </select>
@@ -128,7 +128,7 @@
                 @else
                     <div>
                         <label class="{{ $label }}">Rolle</label>
-                        <input type="text" wire:model="form.rolle" list="concepter-rollen" class="{{ $input }}" placeholder="z. B. Vorspeise" />
+                        <input type="text" wire:model="form.role" list="concepter-rollen" class="{{ $input }}" placeholder="z. B. Vorspeise" />
                         <datalist id="concepter-rollen">@foreach($rollen as $r)<option value="{{ $r }}"></option>@endforeach</datalist>
                     </div>
                 @endif
@@ -163,7 +163,7 @@
                 @php($editorTabs['kalkulation'] = 'Kalkulation')
                 @if($concept)@php($editorTabs['geschirr'] = 'Geschirr')@endif
                 @if($concept)@php($editorTabs['sensorik'] = 'Sensorik')@endif
-                @php($editorTabs['notizen'] = 'Notizen')
+                @php($editorTabs['notes'] = 'Notizen')
                 @foreach($editorTabs as $k => $l)
                     <button type="button" wire:click="setTab('{{ $k }}')"
                             class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors {{ $tab === $k ? $tabAktiv : $tabIdle }}">{{ $l }}</button>
@@ -196,7 +196,7 @@
                             @forelse($paketListe as $pk)
                                 <div wire:key="kpk-{{ $pk->id }}" draggable="true" @dragstart="dragTyp = 'paket'; dragId = {{ $pk->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px] cursor-grab active:cursor-grabbing">
                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider {{ $variantPill['info'] }}">PK</span>
-                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-700 dark:text-gray-200" title="{{ $pk->name }}{{ $pk->rolle ? ' · ' . $pk->rolle : '' }}">{{ $pk->name }}</span>
+                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-700 dark:text-gray-200" title="{{ $pk->name }}{{ $pk->role ? ' · ' . $pk->role : '' }}">{{ $pk->name }}</span>
                                     <span class="shrink-0 text-[10px] text-gray-400 tabular-nums">{{ $pk->preis_pro_person !== null ? number_format((float) $pk->preis_pro_person, 2, ',', '.') . ' €' : '' }}</span>
                                     <button type="button" wire:click="positionEinfuegen('paket', {{ $pk->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
                                 </div>
@@ -210,11 +210,11 @@
                         <div class="space-y-1 mb-1.5">
                             <select wire:model.live="basisHg" class="{{ $input }} !py-0.5 !text-[11px]" data-basis-filter-hg>
                                 <option value="">Alle Hauptgruppen</option>
-                                @foreach($basisHauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->bezeichnung }}</option>@endforeach
+                                @foreach($basisHauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->label }}</option>@endforeach
                             </select>
                             <select wire:model.live="basisKat" class="{{ $input }} !py-0.5 !text-[11px]" data-basis-filter-kat @disabled($basisKategorien->isEmpty())>
                                 <option value="">Alle Kategorien</option>
-                                @foreach($basisKategorien as $kat)<option value="{{ $kat->id }}">{{ $kat->bezeichnung }}</option>@endforeach
+                                @foreach($basisKategorien as $kat)<option value="{{ $kat->id }}">{{ $kat->label }}</option>@endforeach
                             </select>
                             <select wire:model.live="basisNiveau" class="{{ $input }} !py-0.5 !text-[11px]" data-basis-filter-niveau>
                                 <option value="">Jedes Niveau</option>
@@ -263,7 +263,7 @@
                             @if(in_array($s->type, ['header', 'header_preis'], true))
                                 @php($menueGruppen[] = $aktuelleGruppe)
                                 @php($aktuelleGruppe = ['typ' => 'header', 'titel' => $s->titel ?: '(Überschrift)', 'headerSlotId' => $s->id, 'slots' => []])
-                            @elseif($s->paket_id && $s->paket)
+                            @elseif($s->package_id && $s->paket)
                                 @php($menueGruppen[] = $aktuelleGruppe)
                                 @php($menueGruppen[] = ['typ' => 'paket', 'titel' => $s->paket->name, 'preis' => $s->paket->preis_pro_person, 'headerSlotId' => null, 'slots' => [], 'paket' => $s->paket])
                                 @php($aktuelleGruppe = ['typ' => 'sektion', 'titel' => null, 'headerSlotId' => null, 'slots' => []])
@@ -302,19 +302,19 @@
                                         @foreach($g['paket']->gerichte as $pg)
                                             @php($pgG = $pg->gericht)
                                             @php($pw = $wres->fuerGericht($pgG))
-                                            @php($qb = $quelleBadge[$pw['quelle']] ?? $quelleBadge['name'])
+                                            @php($qb = $quelleBadge[$pw['source']] ?? $quelleBadge['name'])
                                             @php($pgEnthaelt = collect(['Schwein' => $pgG?->spec_contains_pork, 'Rind' => $pgG?->spec_contains_beef])->filter()->keys()->all())
                                             <article wire:key="mpcard-{{ $pg->id }}" class="group relative rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 px-3.5 py-3 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
                                                 <div class="flex items-start justify-between gap-2">
                                                     <span class="inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-wider {{ $qb[1] }}"><span class="w-1.5 h-1.5 rounded-full {{ $qb[2] }}"></span>{{ $qb[0] }}</span>
                                                     @if($pg->vk_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->vk_recipe_id }} })" class="text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Gericht öffnen">🍽️</button>@endif
                                                 </div>
-                                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug mt-1 {{ $pw['quelle'] === 'name' ? 'italic text-amber-700 dark:text-amber-300 font-medium' : '' }}">{{ $pw['text'] }}</p>
+                                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug mt-1 {{ $pw['source'] === 'name' ? 'italic text-amber-700 dark:text-amber-300 font-medium' : '' }}">{{ $pw['text'] }}</p>
                                                 <p class="text-[10.5px] text-gray-400 font-mono truncate mt-0.5" title="{{ $pgG?->name }}">{{ $pgG?->name }}</p>
                                                 <div class="flex flex-wrap items-center gap-1.5 mt-2">
                                                     @if($pgG?->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($pgG?->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
                                                     <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($pgEnthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="Allergene / Diät{{ count($pgEnthaelt) ? ' — enthält ' . implode(', ', $pgEnthaelt) : '' }} · Konfidenz {{ $pgG?->allergene_konfidenz ?? 'unbekannt' }}">A</span>
-                                                    @if($pw['quelle'] === 'name')<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->vk_recipe_id }} })" class="{{ $pill }} {{ $variantPill['warning'] }}" title="VK-Wording am Gericht ergänzen">✎ Wording ergänzen</button>@endif
+                                                    @if($pw['source'] === 'name')<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->vk_recipe_id }} })" class="{{ $pill }} {{ $variantPill['warning'] }}" title="VK-Wording am Gericht ergänzen">✎ Wording ergänzen</button>@endif
                                                 </div>
                                                 <div class="flex gap-3 mt-2.5 pt-2 border-t border-black/5 dark:border-white/10 tabular-nums">
                                                     <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">VK/P</span><span class="text-xs font-semibold text-gray-500 dark:text-gray-400">im Paket</span></span>
@@ -325,8 +325,8 @@
                                     @else
                                         @foreach($g['slots'] as $s)
                                             @php($g0 = $s->gericht)
-                                            @php($w = $slotWording[$s->id] ?? ['text' => $g0->name, 'quelle' => 'name'])
-                                            @php($qb = $quelleBadge[$w['quelle']] ?? $quelleBadge['name'])
+                                            @php($w = $slotWording[$s->id] ?? ['text' => $g0->name, 'source' => 'name'])
+                                            @php($qb = $quelleBadge[$w['source']] ?? $quelleBadge['name'])
                                             @php($enthaelt = collect(['Schwein' => $g0->spec_contains_pork, 'Rind' => $g0->spec_contains_beef])->filter()->keys()->all())
                                             @php($ekz = $cockpitZeilen[$s->id]['ek'] ?? null)
                                             @php($vkz = $cockpitZeilen[$s->id]['preis'] ?? null)
@@ -336,17 +336,17 @@
                                                     <span class="inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-wider {{ $qb[1] }}"><span class="w-1.5 h-1.5 rounded-full {{ $qb[2] }}"></span>{{ $qb[0] }}</span>
                                                     <button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $s->vk_recipe_id }} })" class="text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Gericht öffnen">🍽️</button>
                                                 </div>
-                                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug mt-1 {{ $w['quelle'] === 'name' ? 'italic text-amber-700 dark:text-amber-300 font-medium' : '' }}">{{ $w['text'] }}</p>
+                                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug mt-1 {{ $w['source'] === 'name' ? 'italic text-amber-700 dark:text-amber-300 font-medium' : '' }}">{{ $w['text'] }}</p>
                                                 <p class="text-[10.5px] text-gray-400 font-mono truncate mt-0.5" title="{{ $g0->name }}">{{ $g0->name }}</p>
                                                 <div class="flex flex-wrap gap-1.5 mt-2">
                                                     @if(isset($darreichungInfo[$s->id]))
                                                         <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$s->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}">🍴 {{ $darreichungInfo[$s->id] }}</span>
                                                     @endif
-                                                    @if($g0->speisenKlasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g0->speisenKlasse->bezeichnung }}</span>@endif
+                                                    @if($g0->speisenKlasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g0->speisenKlasse->label }}</span>@endif
                                                     @if($g0->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($g0->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
                                                     <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="Allergene / Diät{{ count($enthaelt) ? ' — enthält ' . implode(', ', $enthaelt) : '' }} · Konfidenz {{ $g0->allergene_konfidenz ?? 'unbekannt' }}">A</span>
                                                     @if(isset($varianteFehlt[$s->id]))<button type="button" wire:click="varianteAnlegen({{ $s->id }})" class="{{ $pill }} {{ $variantPill['warning'] }}" title="Konzept-Servierform fehlt als Darreichung — anlegen">⚠ Form fehlt</button>@endif
-                                                    @if($w['quelle'] === 'name')<button type="button" @click="bauModus = true" class="{{ $pill }} {{ $variantPill['warning'] }}" title="In der Bearbeiten-Ansicht Wording ergänzen">✎ Wording ergänzen</button>@endif
+                                                    @if($w['source'] === 'name')<button type="button" @click="bauModus = true" class="{{ $pill }} {{ $variantPill['warning'] }}" title="In der Bearbeiten-Ansicht Wording ergänzen">✎ Wording ergänzen</button>@endif
                                                 </div>
                                                 <div class="flex gap-3 mt-2.5 pt-2 border-t border-black/5 dark:border-white/10 tabular-nums">
                                                     <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">VK/P</span><span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</span></span>
@@ -409,7 +409,7 @@
                             <tr wire:key="erow-{{ $slot->id }}"
                                 @dragover.prevent
                                 @drop.prevent="if (dragId) { $wire.positionDrop(dragTyp, dragId, {{ $slot->id }}); } else if (dragSlotId && dragSlotId !== {{ $slot->id }}) { $wire.positionVerschieben(dragSlotId, {{ $slot->id }}); } dragTyp = null; dragId = null; dragSlotId = null"
-                                class="{{ $tr }} {{ $istStruktur ? 'bg-violet-500/[0.03]' : '' }} {{ $slot->paket_id ? 'bg-violet-500/[0.06] border-t-2 !border-t-violet-500/30' : '' }} {{ $einfuegenNachId === $slot->id ? 'border-b-2 !border-b-violet-400' : '' }}">
+                                class="{{ $tr }} {{ $istStruktur ? 'bg-violet-500/[0.03]' : '' }} {{ $slot->package_id ? 'bg-violet-500/[0.06] border-t-2 !border-t-violet-500/30' : '' }} {{ $einfuegenNachId === $slot->id ? 'border-b-2 !border-b-violet-400' : '' }}">
                                 <td class="{{ $td }} !px-1.5 !py-0.5 whitespace-nowrap align-top">
                                     {{-- Ziehgriff: Position per Drag umsortieren (▲▼ bleibt als zuverlässige Alternative) --}}
                                     <span class="inline-block cursor-grab active:cursor-grabbing text-gray-400 hover:text-violet-500 select-none align-middle mr-0.5" draggable="true"
@@ -452,23 +452,23 @@
                                 @else
                                     <td class="{{ $td }} !px-2 align-top">
                                         @if($slot->vk_recipe_id)
-                                            <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.menge" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} !w-16 text-right tabular-nums" placeholder="1" />
+                                            <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.quantity" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} !w-16 text-right tabular-nums" placeholder="1" />
                                         @else<span class="text-gray-300">—</span>@endif
                                     </td>
                                     <td class="{{ $td }} !px-2 align-top">
                                         @if($slot->vk_recipe_id)
-                                            <select wire:model="slotForm.{{ $slot->id }}.einheit_vocab_id" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} !w-24">
+                                            <select wire:model="slotForm.{{ $slot->id }}.unit_vocab_id" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} !w-24">
                                                 <option value="">—</option>
                                                 @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                                             </select>
                                         @else<span class="text-gray-300">—</span>@endif
                                     </td>
                                     <td class="{{ $td }} !px-2 align-top">
-                                        @if($slot->paket_id && $slot->paket)
+                                        @if($slot->package_id && $slot->paket)
                                             {{-- Paket = Abschnitts-Header (Gerichte stehen als eingerückte Zeilen darunter) --}}
                                             <span class="{{ $pill }} {{ $variantPill['info'] }}">📦 Paket</span>
                                             <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $slot->paket->name }}</span>
-                                            <button type="button" wire:click="paketOeffnen({{ $slot->paket_id }})" class="text-gray-400 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">📦</button>
+                                            <button type="button" wire:click="paketOeffnen({{ $slot->package_id }})" class="text-gray-400 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">📦</button>
                                             @if($slot->paket->klasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->paket->klasse }}</span>@endif
                                             <span class="text-gray-400 text-[11px] tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €/P' : '' }}</span>
                                         @elseif($slot->vk_recipe_id && $slot->gericht)
@@ -477,7 +477,7 @@
                                             @php($allTitle = 'Allergene / Diät' . (count($enthaelt) ? ' — enthält ' . implode(', ', $enthaelt) : '') . ' · Konfidenz ' . ($g->allergene_konfidenz ?? 'unbekannt'))
                                             <span class="{{ $pill }} font-medium" style="{{ $typStyle($slot->type === 'basisrezept' ? 'basisrezept' : 'gericht') }}">{{ $slot->type === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
                                             <span class="text-sm font-medium">{{ $g->name }}</span>
-                                            @if($g->speisenKlasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g->speisenKlasse->bezeichnung }}</span>@endif
+                                            @if($g->speisenKlasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g->speisenKlasse->label }}</span>@endif
                                             @if(isset($darreichungInfo[$slot->id]))
                                                 <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$slot->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}"
                                                       title="Aufgelöste Darreichung dieser Position (explizit → Konzept-Servierform → Standard)" data-darreichung-pill>🍴 {{ $darreichungInfo[$slot->id] }}</span>
@@ -487,9 +487,9 @@
                                                 <select wire:change="slotDarreichungSetzen({{ $slot->id }}, $event.target.value)"
                                                         class="{{ $input }} !py-0 !text-[10px] !w-auto inline-block align-middle" data-slot-form-picker
                                                         title="Form dieser Position übersteuern — auto folgt der Konzept-Servierform bzw. dem Standard">
-                                                    <option value="" @selected($slot->darreichung_id === null)>auto</option>
+                                                    <option value="" @selected($slot->presentation_id === null)>auto</option>
                                                     @foreach($darreichungOptionen[$slot->id] as $opt)
-                                                        <option value="{{ $opt['id'] }}" @selected((int) $slot->darreichung_id === (int) $opt['id'])>{{ $opt['label'] }}</option>
+                                                        <option value="{{ $opt['id'] }}" @selected((int) $slot->presentation_id === (int) $opt['id'])>{{ $opt['label'] }}</option>
                                                     @endforeach
                                                 </select>
                                             @endif
@@ -501,7 +501,7 @@
                                             @if(isset($varianteFehlt[$slot->id]))
                                                 <button type="button" wire:click="varianteAnlegen({{ $slot->id }})"
                                                         class="{{ $pill }} {{ $variantPill['warning'] }}" data-variante-fehlt
-                                                        title="Gericht hat keine Darreichung für „{{ $concept->servierform?->bezeichnung }}" — Klick legt sie an (vorbefüllt aus der Standard-Form, danach Grammatur prüfen)">⚠ {{ $concept->servierform?->bezeichnung }} fehlt — anlegen</button>
+                                                        title="Gericht hat keine Darreichung für „{{ $concept->servierform?->label }}" — Klick legt sie an (vorbefüllt aus der Standard-Form, danach Grammatur prüfen)">⚠ {{ $concept->servierform?->label }} fehlt — anlegen</button>
                                             @endif
                                             {{-- Concept-Wording: Brand-Voice-Anzeigename je Position (leer = Standardname; ✨ oben füllt alle) --}}
                                             <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.wording" wire:change="wordingSpeichern({{ $slot->id }})" class="{{ $input }} !py-0.5 !text-[11px] italic mt-1 w-full" placeholder="Anzeigename im Konzept-Wording … (leer = „{{ $g->name }}“)" data-slot-wording />
@@ -509,7 +509,7 @@
                                             <span class="text-xs text-gray-400">leer — links/rechts aus den Listen einfügen</span>
                                         @endif
                                     </td>
-                                    <td class="{{ $td }} !px-2 align-top"><input type="text" wire:model.blur="slotForm.{{ $slot->id }}.rolle" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} !w-28" placeholder="Rolle" /></td>
+                                    <td class="{{ $td }} !px-2 align-top"><input type="text" wire:model.blur="slotForm.{{ $slot->id }}.role" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} !w-28" placeholder="Rolle" /></td>
                                     <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $ekz !== null ? number_format((float) $ekz, 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top text-gray-400">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</td>
@@ -526,7 +526,7 @@
                                 </td>
                             </tr>
                             {{-- Paket-Position = Abschnitt: seine Gerichte stehen immer read-only als eingerückte Zeilen darunter --}}
-                            @if($slot->paket_id && $slot->paket)
+                            @if($slot->package_id && $slot->paket)
                                 <tr wire:key="epaket-{{ $slot->id }}">
                                     <td></td>
                                     <td colspan="8" class="!px-2 !pb-2 align-top">
@@ -535,7 +535,7 @@
                                                 <div wire:key="epaketg-{{ $slot->id }}-{{ $pg->id }}" class="flex items-center gap-2 px-3 py-1 text-[11px]">
                                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gericht') }}">G</span>
                                                     <span class="flex-1 min-w-0 break-words leading-snug text-gray-700 dark:text-gray-200">{{ $pg->gericht?->name ?? '—' }}</span>
-                                                    <span class="shrink-0 text-gray-400 tabular-nums">{{ $pg->menge !== null ? rtrim(rtrim(number_format((float) $pg->menge, 2, ',', '.'), '0'), ',') . '×' : '' }}</span>
+                                                    <span class="shrink-0 text-gray-400 tabular-nums">{{ $pg->quantity !== null ? rtrim(rtrim(number_format((float) $pg->quantity, 2, ',', '.'), '0'), ',') . '×' : '' }}</span>
                                                     <span class="shrink-0 text-gray-400 tabular-nums w-16 text-right">{{ $pg->gericht?->vk_netto !== null ? number_format((float) $pg->gericht->vk_netto, 2, ',', '.') . ' €' : '' }}</span>
                                                     @if($pg->vk_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->vk_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="Gericht einsehen">🍽️</button>@endif
                                                 </div>
@@ -546,20 +546,20 @@
                                     </td>
                                 </tr>
                             @endif
-                            @if(! $istStruktur && ($fillOpenId === $slot->id || (! $slot->paket_id && ! $slot->vk_recipe_id)))
+                            @if(! $istStruktur && ($fillOpenId === $slot->id || (! $slot->package_id && ! $slot->vk_recipe_id)))
                                 <tr wire:key="efill-{{ $slot->id }}">
                                     <td></td>
                                     <td colspan="8" class="!px-2 !pb-2 bg-black/[0.02] dark:bg-white/[0.03]">
                                         <div class="flex flex-wrap items-center gap-2 pt-1">
                                             <select x-on:change="$wire.fuellePaket({{ $slot->id }}, $event.target.value); $event.target.value=''" class="{{ $input }} w-56">
-                                                <option value="">↹ Paket (Rolle {{ $slot->rolle ?: '–' }}) …</option>
+                                                <option value="">↹ Paket (Rolle {{ $slot->role ?: '–' }}) …</option>
                                                 @foreach(($tauschbar[$slot->id] ?? []) as $b)
                                                     <option value="{{ $b->id }}">{{ $b->name }}{{ $b->preis_pro_person !== null ? ' (' . number_format((float) $b->preis_pro_person, 2, ',', '.') . ' €)' : '' }}</option>
                                                 @endforeach
                                             </select>
                                             <button type="button" wire:click="gerichtPicker({{ $slot->id }})" class="{{ $btnGhostXs }}">Gericht / Basisrezept …</button>
                                             <button type="button" wire:click="neuesPaketImSlot({{ $slot->id }})" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Inline ein neues Paket schnüren">+ neues Paket</button>
-                                            @if($slot->paket_id || $slot->vk_recipe_id)
+                                            @if($slot->package_id || $slot->vk_recipe_id)
                                                 <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-400 hover:text-red-500">leeren</button>
                                             @endif
                                         </div>
@@ -628,7 +628,7 @@
                     </div>
                     <div class="space-y-1">
                         @forelse($paket->gerichte as $pg)
-                            @php($istBasis = ! ($pg->gericht?->ist_verkaufsrezept ?? true))
+                            @php($istBasis = ! ($pg->gericht?->is_sales_recipe ?? true))
                             <div wire:key="epg-{{ $pg->id }}" class="flex items-center gap-2 rounded-lg border border-black/5 dark:border-white/10 px-3 py-1.5">
                                 <span class="flex flex-col -my-0.5 shrink-0">
                                     <button type="button" wire:click="gerichtHoch({{ $pg->id }})" class="text-gray-400 hover:text-violet-500 leading-none">▲</button>
@@ -638,7 +638,7 @@
                                 <span class="flex-1 min-w-0 truncate text-sm">{{ $pg->gericht?->name ?? '—' }}</span>
                                 @if($pg->vk_recipe_id)<button type="button" @click="Livewire.dispatch('{{ $istBasis ? 'recipe-modal.oeffnen' : 'vk-modal.oeffnen' }}', { id: {{ $pg->vk_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="{{ $istBasis ? 'Basisrezept' : 'Gericht' }} einsehen">{{ $istBasis ? '📋' : '🍽️' }}</button>@endif
                                 <span class="text-[10px] text-gray-400">{{ $istBasis ? 'g/Person' : 'Menge/Person' }}</span>
-                                <input type="number" step="0.01" min="0" wire:model.blur="" value="{{ $pg->menge }}" wire:change="gerichtMengeSpeichern({{ $pg->id }}, $event.target.value)" class="{{ $input }} w-24 text-right tabular-nums" />
+                                <input type="number" step="0.01" min="0" wire:model.blur="" value="{{ $pg->quantity }}" wire:change="gerichtMengeSpeichern({{ $pg->id }}, $event.target.value)" class="{{ $input }} w-24 text-right tabular-nums" />
                                 <span class="text-gray-400 text-xs tabular-nums w-16 text-right">@if($istBasis){{ $pg->gericht?->ek_total_eur !== null ? 'EK ' . number_format((float) $pg->gericht->ek_total_eur, 2, ',', '.') . ' €' : '' }}@else{{ $pg->gericht?->vk_netto !== null ? number_format((float) $pg->gericht->vk_netto, 2, ',', '.') . ' €' : '' }}@endif</span>
                                 <button type="button" wire:click="gerichtRaus({{ $pg->vk_recipe_id }})" class="text-gray-400 hover:text-red-500 px-1" title="entfernen">✕</button>
                             </div>
@@ -656,9 +656,9 @@
                     </div>
                     {{-- Park-Flow (Politur): suchen → [+] parken → Menge bzw. g/Person → Enter → ✓-Flash --}}
                     <div class="space-y-1 flex-1 min-h-0 overflow-y-auto" x-data="{
-                            geparkt: null, menge: '', flash: false,
-                            park(id, name) { this.geparkt = { id, name }; this.menge = ''; this.$nextTick(() => this.$refs.menge && this.$refs.menge.focus()); },
-                            einfuegen() { if (!this.geparkt) return; this.$wire.gerichtHinzu(this.geparkt.id, this.menge); this.geparkt = null; this.menge = ''; this.flash = true; setTimeout(() => { this.flash = false; }, 1400); },
+                            geparkt: null, quantity: '', flash: false,
+                            park(id, name) { this.geparkt = { id, name }; this.quantity = ''; this.$nextTick(() => this.$refs.quantity && this.$refs.quantity.focus()); },
+                            einfuegen() { if (!this.geparkt) return; this.$wire.gerichtHinzu(this.geparkt.id, this.quantity); this.geparkt = null; this.quantity = ''; this.flash = true; setTimeout(() => { this.flash = false; }, 1400); },
                          }">
                         <div x-show="geparkt === null">
                             @if($paketQuelle === 'basisrezept')
@@ -686,7 +686,7 @@
                         <div x-show="geparkt !== null" x-cloak class="flex items-center gap-2" data-park-zeile>
                             <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $paketQuelle === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
                             <span class="flex-1 truncate text-sm" x-text="geparkt?.name"></span>
-                            <input type="number" step="0.01" min="0" x-ref="menge" x-model="menge" @keydown.enter.prevent="einfuegen()" placeholder="{{ $paketQuelle === 'basisrezept' ? 'g/Person' : 'Menge/Person' }}" class="{{ $input }} w-32 text-right tabular-nums" />
+                            <input type="number" step="0.01" min="0" x-ref="quantity" x-model="quantity" @keydown.enter.prevent="einfuegen()" placeholder="{{ $paketQuelle === 'basisrezept' ? 'g/Person' : 'Menge/Person' }}" class="{{ $input }} w-32 text-right tabular-nums" />
                             <button type="button" @click="einfuegen()" class="{{ $btnGhostXs }} text-emerald-600">Einfügen ⏎</button>
                             <button type="button" @click="geparkt = null" class="{{ $btnGhostXs }}">✕</button>
                         </div>
@@ -808,7 +808,7 @@
                             @foreach($cockpit['zeilen'] as $z)
                                 @php($zw = (($z['preis'] ?? 0) > 0 && $z['ek'] !== null) ? $z['ek'] / $z['preis'] * 100 : null)
                                 <tr class="border-t border-black/5 dark:border-white/10">
-                                    <td class="py-1">@if($z['rolle'])<span class="text-gray-400">{{ $z['rolle'] }}:</span> @endif{{ $z['label'] }}</td>
+                                    <td class="py-1">@if($z['role'])<span class="text-gray-400">{{ $z['role'] }}:</span> @endif{{ $z['label'] }}</td>
                                     <td class="text-right tabular-nums">{{ $z['ek'] !== null ? number_format((float) $z['ek'], 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="text-right tabular-nums text-gray-500">{{ $z['preis'] !== null ? number_format((float) $z['preis'], 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="text-right tabular-nums">{{ $zw !== null ? number_format($zw, 1, ',', '.') . ' %' : '—' }}</td>
@@ -837,15 +837,15 @@
                             </tr></thead>
                             <tbody>
                             @forelse($paket->gerichte as $pg)
-                                @php($istBasis = ! ($pg->gericht?->ist_verkaufsrezept ?? true))
-                                @php($faktor = $pg->menge !== null ? (float) $pg->menge : 1.0)
+                                @php($istBasis = ! ($pg->gericht?->is_sales_recipe ?? true))
+                                @php($faktor = $pg->quantity !== null ? (float) $pg->quantity : 1.0)
                                 @php($yieldG = (float) ($pg->gericht?->yield_kg ?? 0) * 1000)
                                 @php($postenEk = $istBasis
-                                    ? (($pg->gericht?->ek_total_eur !== null && $yieldG > 0 && $pg->menge !== null) ? (float) $pg->gericht->ek_total_eur * ((float) $pg->menge / $yieldG) : null)
+                                    ? (($pg->gericht?->ek_total_eur !== null && $yieldG > 0 && $pg->quantity !== null) ? (float) $pg->gericht->ek_total_eur * ((float) $pg->quantity / $yieldG) : null)
                                     : ($pg->gericht?->ek_total_eur !== null ? (float) $pg->gericht->ek_total_eur * $faktor : null))
                                 <tr class="border-t border-black/5 dark:border-white/10">
                                     <td class="py-1">{{ $pg->gericht?->name ?? '—' }}</td>
-                                    <td class="text-right tabular-nums text-gray-500">{{ $pg->menge !== null ? (rtrim(rtrim(number_format($faktor, 2, ',', '.'), '0'), ',') . ($istBasis ? ' g' : '')) : ($istBasis ? '— g' : '1') }}</td>
+                                    <td class="text-right tabular-nums text-gray-500">{{ $pg->quantity !== null ? (rtrim(rtrim(number_format($faktor, 2, ',', '.'), '0'), ',') . ($istBasis ? ' g' : '')) : ($istBasis ? '— g' : '1') }}</td>
                                     <td class="text-right tabular-nums">{{ $postenEk !== null ? number_format($postenEk, 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="text-right tabular-nums text-gray-500">{{ $istBasis ? '—' : ($pg->gericht?->vk_netto !== null ? number_format((float) $pg->gericht->vk_netto * $faktor, 2, ',', '.') . ' €' : '—') }}</td>
                                 </tr>
@@ -881,7 +881,7 @@
                         </div>
                         <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                             <span class="{{ $dt }}">Arbeitszeit</span>
-                            <p class="text-xs font-semibold tabular-nums">{{ $aggregat !== null ? $aggregat['arbeitszeit_min'] . ' min' : '—' }}</p>
+                            <p class="text-xs font-semibold tabular-nums">{{ $aggregat !== null ? $aggregat['work_time_min'] . ' min' : '—' }}</p>
                         </div>
                         <div>
                             <label class="{{ $label }}">Zielpreis €/Person</label>
@@ -946,7 +946,7 @@
             @endif
 
             {{-- ── Tab: NOTIZEN ──────────────────────────────────────────── --}}
-            @if($tab === 'notizen')
+            @if($tab === 'notes')
                 @if($concept)
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
@@ -971,7 +971,7 @@
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="{{ $label }}">Saison</label>
-                                <input type="text" wire:model="form.saison" class="{{ $input }}" />
+                                <input type="text" wire:model="form.season" class="{{ $input }}" />
                             </div>
                             <div>
                                 <label class="{{ $label }}">Zielgruppe/Sektor (frei)</label>
@@ -996,7 +996,7 @@
                         </div>
                         <div class="md:col-span-2">
                             <label class="{{ $label }}">Konsumenten-Zusatztext</label>
-                            <textarea wire:model="form.zusatztext" rows="2" class="{{ $input }}"></textarea>
+                            <textarea wire:model="form.additional_text" rows="2" class="{{ $input }}"></textarea>
                         </div>
                         <div class="md:col-span-2">
                             <label class="{{ $label }}">Interne Notiz</label>
@@ -1007,7 +1007,7 @@
                     <div class="space-y-3">
                         <div>
                             <label class="{{ $label }}">Beschreibung</label>
-                            <textarea wire:model="form.beschreibung" rows="2" class="{{ $input }}"></textarea>
+                            <textarea wire:model="form.description" rows="2" class="{{ $input }}"></textarea>
                         </div>
                         <div>
                             <label class="{{ $label }}">Interne Notiz</label>
@@ -1090,37 +1090,37 @@
                         <div wire:key="geschirr-slot-{{ $slot->id }}" class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2 mb-2">
                             <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1.5 truncate">{{ $slot->wording ?: ($slot->gericht?->name ?: ($slot->titel ?: 'Position')) }}</p>
                             <div class="grid grid-cols-2 gap-3">
-                                @foreach(['haupt' => 'Haupt-Geschirr', 'alt' => 'Alternative'] as $rolle => $rolleLabel)
-                                    @php($item = $rolle === 'haupt' ? $slot->geschirrItem : $slot->geschirrAltItem)
+                                @foreach(['haupt' => 'Haupt-Geschirr', 'alt' => 'Alternative'] as $role => $rolleLabel)
+                                    @php($item = $role === 'haupt' ? $slot->geschirrItem : $slot->geschirrAltItem)
                                     <div>
                                         <label class="{{ $label }} block mb-0.5">{{ $rolleLabel }}</label>
                                         @if($item)
                                             <div class="flex items-center gap-2">
-                                                <span class="text-xs text-gray-800 dark:text-gray-200 truncate" title="{{ $item->bezeichnung }}">{{ $item->bezeichnung }}</span>
+                                                <span class="text-xs text-gray-800 dark:text-gray-200 truncate" title="{{ $item->label }}">{{ $item->label }}</span>
                                                 @if($item->leihpreis !== null)<span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0">{{ number_format((float) $item->leihpreis, 2, ',', '.') }} €</span>@endif
                                             </div>
                                             <div class="flex items-center gap-2 mt-0.5">
-                                                <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $rolle }}')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">ändern</button>
-                                                <button type="button" wire:click="geschirrEntfernen({{ $slot->id }}, '{{ $rolle }}')" class="{{ $btnGhostXs }} text-rose-500">entfernen</button>
+                                                <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $role }}')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">ändern</button>
+                                                <button type="button" wire:click="geschirrEntfernen({{ $slot->id }}, '{{ $role }}')" class="{{ $btnGhostXs }} text-rose-500">entfernen</button>
                                             </div>
                                         @else
-                                            <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $rolle }}')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">+ Geschirr wählen</button>
-                                            @if($rolle === 'haupt' && isset($geschirrVorschlag[$slot->id]))
+                                            <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $role }}')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">+ Geschirr wählen</button>
+                                            @if($role === 'haupt' && isset($geschirrVorschlag[$slot->id]))
                                                 <button type="button" wire:click="geschirrWaehle({{ $slot->id }}, 'haupt', {{ $geschirrVorschlag[$slot->id]['id'] }})"
                                                         class="{{ $pill }} {{ $variantPill['primary'] }} mt-0.5" data-geschirr-vorschlag
-                                                        title="Default-Geschirr der aufgelösten Darreichung ({{ $geschirrVorschlag[$slot->id]['form'] }}) — Klick übernimmt">💡 {{ $geschirrVorschlag[$slot->id]['bezeichnung'] }} übernehmen</button>
+                                                        title="Default-Geschirr der aufgelösten Darreichung ({{ $geschirrVorschlag[$slot->id]['form'] }}) — Klick übernimmt">💡 {{ $geschirrVorschlag[$slot->id]['label'] }} übernehmen</button>
                                             @endif
                                         @endif
 
-                                        @if($geschirrPickSlotId === $slot->id && $geschirrPickRolle === $rolle)
-                                            <div class="mt-1.5 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] p-2" wire:key="geschirr-pick-{{ $slot->id }}-{{ $rolle }}">
+                                        @if($geschirrPickSlotId === $slot->id && $geschirrPickRolle === $role)
+                                            <div class="mt-1.5 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] p-2" wire:key="geschirr-pick-{{ $slot->id }}-{{ $role }}">
                                                 <input type="search" wire:model.live.debounce.300ms="geschirrSuche" placeholder="Geschirr suchen …" class="{{ $input }} !py-1 mb-1" autofocus />
                                                 <div class="space-y-0.5 max-h-48 overflow-y-auto">
                                                     @forelse($geschirrKandidaten as $kandidat)
-                                                        <button type="button" wire:key="gk-{{ $slot->id }}-{{ $rolle }}-{{ $kandidat->id }}"
-                                                                wire:click="geschirrWaehle({{ $slot->id }}, '{{ $rolle }}', {{ $kandidat->id }})"
+                                                        <button type="button" wire:key="gk-{{ $slot->id }}-{{ $role }}-{{ $kandidat->id }}"
+                                                                wire:click="geschirrWaehle({{ $slot->id }}, '{{ $role }}', {{ $kandidat->id }})"
                                                                 class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors">
-                                                            {{ $kandidat->bezeichnung }}
+                                                            {{ $kandidat->label }}
                                                             <span class="text-gray-400">· {{ $kandidat->supplier?->name }}{{ $kandidat->leihpreis !== null ? ' · ' . number_format((float) $kandidat->leihpreis, 2, ',', '.') . ' €' : '' }}</span>
                                                         </button>
                                                     @empty

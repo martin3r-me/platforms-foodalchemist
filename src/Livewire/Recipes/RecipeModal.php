@@ -20,11 +20,11 @@ class RecipeModal extends Component
     use \Livewire\WithFileUploads;
 
     private const LEER = [
-        'name' => '', 'herkunft' => '', 'kategorie_id' => null, 'hauptgruppe_id' => null,
-        'geschmacksrichtung' => '', 'fertigungstiefe' => '', 'arbeitszeit_min' => null,
+        'name' => '', 'origin_source' => '', 'kategorie_id' => null, 'hauptgruppe_id' => null,
+        'taste_direction' => '', 'production_depth' => '', 'work_time_min' => null,
         'temperatur' => '', 'funktion' => '', 'status' => 'draft',
-        'yield_kg_manual' => null, 'ertrag_stueck' => null, 'beschreibung' => '', 'zubereitung' => '',
-        'notizen_manual' => '', 'equipment_ids' => [], 'ist_verkaufsrezept' => false,
+        'yield_kg_manual' => null, 'ertrag_stueck' => null, 'description' => '', 'preparation' => '',
+        'notes_manual' => '', 'equipment_ids' => [], 'is_sales_recipe' => false,
     ];
 
     public ?int $recipeId = null;
@@ -79,22 +79,22 @@ class RecipeModal extends Component
             if ($r !== null) {
                 $this->form = [
                     'name' => $r->name,
-                    'herkunft' => $r->herkunft ?? '',
+                    'origin_source' => $r->origin_source ?? '',
                     'kategorie_id' => $r->kategorie_id,
                     'hauptgruppe_id' => $r->kategorie?->main_group_id,
-                    'geschmacksrichtung' => $r->geschmacksrichtung ?? '',
-                    'fertigungstiefe' => $r->fertigungstiefe ?? '',
-                    'arbeitszeit_min' => $r->arbeitszeit_min,
+                    'taste_direction' => $r->taste_direction ?? '',
+                    'production_depth' => $r->production_depth ?? '',
+                    'work_time_min' => $r->work_time_min,
                     'temperatur' => $r->temperatur ?? '',
                     'funktion' => $r->funktion ?? '',
                     'status' => $r->status->value,
                     'yield_kg_manual' => $r->yield_kg_manual,
                     'ertrag_stueck' => $r->ertrag_stueck,
-                    'beschreibung' => $r->beschreibung ?? '',
-                    'zubereitung' => $r->zubereitung ?? '',
-                    'notizen_manual' => $r->notizen_manual ?? '',
-                    'equipment_ids' => $r->equipment()->pluck('foodalchemist_vocab_kochequipment.id')->map(fn ($i) => (string) $i)->all(),
-                    'ist_verkaufsrezept' => (bool) $r->ist_verkaufsrezept,
+                    'description' => $r->description ?? '',
+                    'preparation' => $r->preparation ?? '',
+                    'notes_manual' => $r->notes_manual ?? '',
+                    'equipment_ids' => $r->equipment()->pluck('foodalchemist_vocab_kitchen_equipment.id')->map(fn ($i) => (string) $i)->all(),
+                    'is_sales_recipe' => (bool) $r->is_sales_recipe,
                 ];
             }
         }
@@ -128,7 +128,7 @@ class RecipeModal extends Component
                 return;
             }
             $in = [...$this->form,
-                'arbeitszeit_min' => $this->form['arbeitszeit_min'] !== null && $this->form['arbeitszeit_min'] !== '' ? (int) $this->form['arbeitszeit_min'] : null,
+                'work_time_min' => $this->form['work_time_min'] !== null && $this->form['work_time_min'] !== '' ? (int) $this->form['work_time_min'] : null,
                 'yield_kg_manual' => $rohYield !== '' ? (float) $rohYield : null,
                 'ertrag_stueck' => $rohStk !== '' ? (float) $rohStk : null,
             ];
@@ -144,114 +144,114 @@ class RecipeModal extends Component
         }
     }
 
-    /** @var array<string, array{werte: array, confidence: float, begruendung: ?string}> transiente GL-07-Vorschläge */
+    /** @var array<string, array{werte: array, confidence: float, reasoning: ?string}> transiente GL-07-Vorschläge */
     public array $kiVorschlag = [];
 
-    // ── M4-11: GL-07-Lebenszyklus beschreibung ──────────────────────────
+    // ── M4-11: GL-07-Lebenszyklus description ──────────────────────────
 
     public function ai_beschreibung(AiGatewayService $ki): void
     {
         $r = $this->rezept();
-        $vorschlag = $ki->propose('recipe.beschreibung', [
+        $vorschlag = $ki->propose('recipe.description', [
             'name' => $r?->name ?? $this->form['name'],
-            'beschreibung' => $this->form['beschreibung'] ?: null,
+            'description' => $this->form['description'] ?: null,
             'zutaten' => $r?->ingredients?->pluck('raw_text')->take(20)->all() ?? [],
         ]);
-        $this->kiVorschlag['beschreibung'] = [
+        $this->kiVorschlag['description'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
-            'begruendung' => $vorschlag->begruendung,
+            'reasoning' => $vorschlag->reasoning,
         ];
     }
 
     public function accept_beschreibung(): void
     {
         $r = $this->rezept();
-        $vorschlag = $this->kiVorschlag['beschreibung'] ?? null;
+        $vorschlag = $this->kiVorschlag['description'] ?? null;
         if ($r === null || $vorschlag === null) {
             return;
         }
-        if ($r->beschreibung_quelle === 'manual') {                          // GL-07 Override-First
+        if ($r->description_source === 'manual') {                          // GL-07 Override-First
             $this->fehler = 'Beschreibung ist manuell gepflegt — erst Reset, dann KI übernehmen.';
 
             return;
         }
-        $wert = $vorschlag['werte']['beschreibung'] ?? null;
+        $wert = $vorschlag['werte']['description'] ?? null;
         if (! is_string($wert) || trim($wert) === '') {
             $this->fehler = 'KI-Vorschlag enthält keine Beschreibung.';
 
             return;
         }
-        $r->update(['beschreibung' => $wert, 'beschreibung_quelle' => 'ki', 'beschreibung_ai_confidence' => $vorschlag['confidence']]);
-        $this->form['beschreibung'] = $wert;
-        unset($this->kiVorschlag['beschreibung']);
+        $r->update(['description' => $wert, 'description_source' => 'ki', 'description_ai_confidence' => $vorschlag['confidence']]);
+        $this->form['description'] = $wert;
+        unset($this->kiVorschlag['description']);
     }
 
     public function clear_beschreibung(): void
     {
-        $this->rezept()?->update(['beschreibung' => null, 'beschreibung_quelle' => null, 'beschreibung_ai_confidence' => null]);
-        $this->form['beschreibung'] = '';
-        unset($this->kiVorschlag['beschreibung']);
+        $this->rezept()?->update(['description' => null, 'description_source' => null, 'description_ai_confidence' => null]);
+        $this->form['description'] = '';
+        unset($this->kiVorschlag['description']);
     }
 
     public function manual_beschreibung(): void
     {
-        if (trim($this->form['beschreibung']) !== '') {
-            $this->rezept()?->update(['beschreibung' => $this->form['beschreibung'], 'beschreibung_quelle' => 'manual', 'beschreibung_ai_confidence' => null]);
+        if (trim($this->form['description']) !== '') {
+            $this->rezept()?->update(['description' => $this->form['description'], 'description_source' => 'manual', 'description_ai_confidence' => null]);
         }
     }
 
-    // ── UI-Audit: GL-07-Lebenszyklus zubereitung (D-5 §4.2.5, V-02-Klasse) ──
+    // ── UI-Audit: GL-07-Lebenszyklus preparation (D-5 §4.2.5, V-02-Klasse) ──
 
     public function ai_zubereitung(AiGatewayService $ki): void
     {
         $r = $this->rezept();
-        $vorschlag = $ki->propose('recipe.zubereitung', [
+        $vorschlag = $ki->propose('recipe.preparation', [
             'name' => $r?->name ?? $this->form['name'],
-            'zubereitung' => $this->form['zubereitung'] ?: null,
+            'preparation' => $this->form['preparation'] ?: null,
             'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
         ]);
-        $this->kiVorschlag['zubereitung'] = [
+        $this->kiVorschlag['preparation'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
-            'begruendung' => $vorschlag->begruendung,
+            'reasoning' => $vorschlag->reasoning,
         ];
     }
 
     public function accept_zubereitung(): void
     {
         $r = $this->rezept();
-        $vorschlag = $this->kiVorschlag['zubereitung'] ?? null;
+        $vorschlag = $this->kiVorschlag['preparation'] ?? null;
         if ($r === null || $vorschlag === null) {
             return;
         }
-        if ($r->zubereitung_quelle === 'manual') {                            // GL-07 Override-First
+        if ($r->preparation_source === 'manual') {                            // GL-07 Override-First
             $this->fehler = 'Zubereitung ist manuell gepflegt — erst Reset, dann KI übernehmen.';
 
             return;
         }
-        $wert = $vorschlag['werte']['zubereitung'] ?? null;
+        $wert = $vorschlag['werte']['preparation'] ?? null;
         if (! is_string($wert) || trim($wert) === '') {
             $this->fehler = 'KI-Vorschlag enthält keine Zubereitung.';
 
             return;
         }
-        $r->update(['zubereitung' => $wert, 'zubereitung_quelle' => 'ki', 'zubereitung_ai_confidence' => $vorschlag['confidence']]);
-        $this->form['zubereitung'] = $wert;
-        unset($this->kiVorschlag['zubereitung']);
+        $r->update(['preparation' => $wert, 'preparation_source' => 'ki', 'preparation_ai_confidence' => $vorschlag['confidence']]);
+        $this->form['preparation'] = $wert;
+        unset($this->kiVorschlag['preparation']);
     }
 
     public function clear_zubereitung(): void
     {
-        $this->rezept()?->update(['zubereitung' => null, 'zubereitung_quelle' => null, 'zubereitung_ai_confidence' => null]);
-        $this->form['zubereitung'] = '';
-        unset($this->kiVorschlag['zubereitung']);
+        $this->rezept()?->update(['preparation' => null, 'preparation_source' => null, 'preparation_ai_confidence' => null]);
+        $this->form['preparation'] = '';
+        unset($this->kiVorschlag['preparation']);
     }
 
     public function manual_zubereitung(): void
     {
-        if (trim($this->form['zubereitung']) !== '') {
-            $this->rezept()?->update(['zubereitung' => $this->form['zubereitung'], 'zubereitung_quelle' => 'manual', 'zubereitung_ai_confidence' => null]);
+        if (trim($this->form['preparation']) !== '') {
+            $this->rezept()?->update(['preparation' => $this->form['preparation'], 'preparation_source' => 'manual', 'preparation_ai_confidence' => null]);
         }
     }
 
@@ -265,13 +265,13 @@ class RecipeModal extends Component
             'name' => $r?->name ?? $this->form['name'],
             'kategorie_id' => $this->form['kategorie_id'],
             'kategorien' => $team !== null
-                ? FoodAlchemistRecipeCategory::orderBy('id')->limit(200)->pluck('bezeichnung', 'id')->all()
+                ? FoodAlchemistRecipeCategory::orderBy('id')->limit(200)->pluck('label', 'id')->all()
                 : [],
         ]);
         $this->kiVorschlag['kategorie'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
-            'begruendung' => $vorschlag->begruendung,
+            'reasoning' => $vorschlag->reasoning,
         ];
     }
 
@@ -282,7 +282,7 @@ class RecipeModal extends Component
         if ($r === null || $vorschlag === null) {
             return;
         }
-        if ($r->kategorie_quelle === 'manual') {
+        if ($r->kategorie_source === 'manual') {
             $this->fehler = 'Kategorie ist manuell gepflegt — erst Reset, dann KI übernehmen.';
 
             return;
@@ -295,9 +295,9 @@ class RecipeModal extends Component
             return;
         }
         $r->update([
-            'kategorie_id' => $kategorie->id, 'kategorie_quelle' => 'ki',
+            'kategorie_id' => $kategorie->id, 'kategorie_source' => 'ki',
             'kategorie_ai_confidence' => $vorschlag['confidence'],
-            'kategorie_ai_begruendung' => $vorschlag['begruendung'],
+            'kategorie_ai_begruendung' => $vorschlag['reasoning'],
         ]);
         $this->form['kategorie_id'] = $kategorie->id;
         $this->form['hauptgruppe_id'] = $kategorie->main_group_id;
@@ -306,7 +306,7 @@ class RecipeModal extends Component
 
     public function clear_kategorie(): void
     {
-        $this->rezept()?->update(['kategorie_id' => null, 'kategorie_quelle' => null, 'kategorie_ai_confidence' => null, 'kategorie_ai_begruendung' => null]);
+        $this->rezept()?->update(['kategorie_id' => null, 'kategorie_source' => null, 'kategorie_ai_confidence' => null, 'kategorie_ai_begruendung' => null]);
         $this->form['kategorie_id'] = null;
         unset($this->kiVorschlag['kategorie']);
     }
@@ -314,7 +314,7 @@ class RecipeModal extends Component
     public function manual_kategorie(): void
     {
         if ($this->form['kategorie_id'] !== null) {
-            $this->rezept()?->update(['kategorie_id' => $this->form['kategorie_id'], 'kategorie_quelle' => 'manual', 'kategorie_ai_confidence' => null, 'kategorie_ai_begruendung' => null]);
+            $this->rezept()?->update(['kategorie_id' => $this->form['kategorie_id'], 'kategorie_source' => 'manual', 'kategorie_ai_confidence' => null, 'kategorie_ai_begruendung' => null]);
         }
     }
 
@@ -360,13 +360,13 @@ class RecipeModal extends Component
             $vorschlag = app(AiGatewayService::class)->propose('recipe.ueberarbeiten', [
                 'anweisung' => trim($this->anweisung),
                 'name' => $r->name,
-                'beschreibung' => $r->beschreibung,
-                'zubereitung' => $r->zubereitung,
+                'description' => $r->description,
+                'preparation' => $r->preparation,
                 'zutaten' => $r->ingredients->map(fn ($z) => [
                     'id' => $z->id,
                     'text' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text,
-                    'menge' => (float) $z->menge,
-                    'einheit_slug' => $z->einheit?->slug,
+                    'quantity' => (float) $z->quantity,
+                    'einheit_slug' => $z->unit?->slug,
                 ])->values()->all(),
             ]);
         } catch (\RuntimeException $e) {
@@ -375,7 +375,7 @@ class RecipeModal extends Component
             return;
         }
 
-        if (empty($vorschlag->werte['zutaten']) && empty($vorschlag->werte['zubereitung']) && empty($vorschlag->werte['beschreibung'])) {
+        if (empty($vorschlag->werte['zutaten']) && empty($vorschlag->werte['preparation']) && empty($vorschlag->werte['description'])) {
             $this->fehler = 'KI lieferte keine verwertbare Überarbeitung — echter Provider nötig (FakeProvider-Grenze).';
 
             return;
@@ -392,7 +392,7 @@ class RecipeModal extends Component
         }
         $werte = $this->ueberarbeitung['werte'];
         $r = app(RecipeService::class)->detailAnySicht($team, $this->recipeId);
-        $einheiten = FoodAlchemistRecipe::query()->getConnection()->table('foodalchemist_vocab_einheiten')
+        $einheiten = FoodAlchemistRecipe::query()->getConnection()->table('foodalchemist_vocab_units')
             ->whereNull('deleted_at')->pluck('id', 'slug');
 
         try {
@@ -404,16 +404,16 @@ class RecipeModal extends Component
                         continue;
                     }
                     $orig = isset($z['id']) ? $original->get((int) $z['id']) : null;
-                    $menge = is_numeric(str_replace(',', '.', (string) ($z['menge'] ?? ''))) ? (float) str_replace(',', '.', (string) $z['menge']) : null;
+                    $quantity = is_numeric(str_replace(',', '.', (string) ($z['quantity'] ?? ''))) ? (float) str_replace(',', '.', (string) $z['quantity']) : null;
                     $zeilen[] = [
                         'id' => $orig?->id,
                         'gp_id' => $orig?->gp_id,                     // Verknüpfung des Originals bleibt
                         'referenced_recipe_id' => $orig?->referenced_recipe_id,
                         'raw_text' => (string) ($z['text'] ?? $orig?->raw_text ?? ''),
                         'display_name' => (string) ($z['text'] ?? $orig?->display_name ?? ''),
-                        'menge' => $menge ?? (float) ($orig?->menge ?? 1),
-                        'einheit_vocab_id' => $einheiten[$z['einheit_slug'] ?? ''] ?? $orig?->einheit_vocab_id ?? $einheiten['g'] ?? null,
-                        'garverlust_pct' => $orig?->garverlust_pct,
+                        'quantity' => $quantity ?? (float) ($orig?->quantity ?? 1),
+                        'unit_vocab_id' => $einheiten[$z['einheit_slug'] ?? ''] ?? $orig?->unit_vocab_id ?? $einheiten['g'] ?? null,
+                        'cooking_loss_pct' => $orig?->cooking_loss_pct,
                         'is_optional' => (bool) ($orig?->is_optional ?? false),
                         'note' => $orig?->note,
                     ];
@@ -425,13 +425,13 @@ class RecipeModal extends Component
             // Texte im Bestands-Muster (accept_zubereitung): direkter Write MIT Lineage,
             // Override-First — manuell gepflegte Felder bleiben unangetastet (GL-07 §4.2)
             $frisch = $r->fresh();
-            if (is_string($werte['beschreibung'] ?? null) && trim($werte['beschreibung']) !== '' && $frisch->beschreibung_quelle !== 'manual') {
-                $frisch->update(['beschreibung' => $werte['beschreibung'], 'beschreibung_quelle' => 'ki', 'beschreibung_ai_confidence' => $this->ueberarbeitung['confidence']]);
-                $this->form['beschreibung'] = $werte['beschreibung'];
+            if (is_string($werte['description'] ?? null) && trim($werte['description']) !== '' && $frisch->description_source !== 'manual') {
+                $frisch->update(['description' => $werte['description'], 'description_source' => 'ki', 'description_ai_confidence' => $this->ueberarbeitung['confidence']]);
+                $this->form['description'] = $werte['description'];
             }
-            if (is_string($werte['zubereitung'] ?? null) && trim($werte['zubereitung']) !== '' && $frisch->zubereitung_quelle !== 'manual') {
-                $frisch->update(['zubereitung' => $werte['zubereitung'], 'zubereitung_quelle' => 'ki', 'zubereitung_ai_confidence' => $this->ueberarbeitung['confidence']]);
-                $this->form['zubereitung'] = $werte['zubereitung'];
+            if (is_string($werte['preparation'] ?? null) && trim($werte['preparation']) !== '' && $frisch->preparation_source !== 'manual') {
+                $frisch->update(['preparation' => $werte['preparation'], 'preparation_source' => 'ki', 'preparation_ai_confidence' => $this->ueberarbeitung['confidence']]);
+                $this->form['preparation'] = $werte['preparation'];
             }
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -533,14 +533,14 @@ class RecipeModal extends Component
     public function kiFertigung(AiGatewayService $ki): void
     {
         $r = $this->rezept();
-        $vorschlag = $ki->propose('recipe.fertigungstiefe', [
+        $vorschlag = $ki->propose('recipe.production_depth', [
             'name' => $this->form['name'],
-            'fertigungstiefe' => $this->form['fertigungstiefe'] ?: null,
+            'production_depth' => $this->form['production_depth'] ?: null,
             'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
         ]);
-        $wert = $vorschlag->werte['fertigungstiefe'] ?? null;
+        $wert = $vorschlag->werte['production_depth'] ?? null;
         if (in_array($wert, ['from_scratch', 'teilfertig', 'convenience'], true)) {
-            $this->form['fertigungstiefe'] = $wert;
+            $this->form['production_depth'] = $wert;
         }
     }
 
@@ -552,19 +552,19 @@ class RecipeModal extends Component
         $eigenschaften = $ki->propose('recipe.eigenschaften', [
             'name' => $this->form['name'],
             'haltbarkeit_tage' => null, 'regenerierbarkeit' => null, 'transportstabilitaet' => null,
-            'arbeitszeit_min' => $this->form['arbeitszeit_min'], 'temperatur' => $this->form['temperatur'] ?: null,
+            'work_time_min' => $this->form['work_time_min'], 'temperatur' => $this->form['temperatur'] ?: null,
             'funktion' => $this->form['funktion'] ?: null, 'zutaten' => $zutaten,
         ]);
-        foreach (['arbeitszeit_min', 'temperatur', 'funktion'] as $feld) {
+        foreach (['work_time_min', 'temperatur', 'funktion'] as $feld) {
             if (! empty($eigenschaften->werte[$feld])) {
                 $this->form[$feld] = $eigenschaften->werte[$feld];
             }
         }
         $geschmack = $ki->propose('recipe.geschmack', [
-            'name' => $this->form['name'], 'geschmacksrichtung' => $this->form['geschmacksrichtung'] ?: null, 'zutaten' => $zutaten,
+            'name' => $this->form['name'], 'taste_direction' => $this->form['taste_direction'] ?: null, 'zutaten' => $zutaten,
         ]);
-        if (in_array($geschmack->werte['geschmacksrichtung'] ?? null, ['suess', 'herzhaft', 'neutral'], true)) {
-            $this->form['geschmacksrichtung'] = $geschmack->werte['geschmacksrichtung'];
+        if (in_array($geschmack->werte['taste_direction'] ?? null, ['suess', 'herzhaft', 'neutral'], true)) {
+            $this->form['taste_direction'] = $geschmack->werte['taste_direction'];
         }
     }
 
@@ -625,8 +625,8 @@ class RecipeModal extends Component
 
     public function vorschauZubereitung(): void
     {
-        $this->zubereitungVorschau = trim($this->form['zubereitung']) !== ''
-            ? \Illuminate\Support\Str::markdown($this->form['zubereitung'])
+        $this->zubereitungVorschau = trim($this->form['preparation']) !== ''
+            ? \Illuminate\Support\Str::markdown($this->form['preparation'])
             : '<p class="text-gray-400">— leer —</p>';
     }
 
@@ -654,12 +654,12 @@ class RecipeModal extends Component
         // UI-Audit: ehrliche Feld-Zustände für die KI-Felder-Sektion (vorher
         // zeigte »unbefüllt« trotz Inhalt — Quelle NULL bei Import-Beständen)
         $r = $this->rezept();
-        $feldZustand = function (?string $inhalt, ?string $quelle): string {
+        $feldZustand = function (?string $inhalt, ?string $source): string {
             if ($inhalt === null || trim($inhalt) === '') {
                 return 'unbefüllt';
             }
 
-            return $quelle ?? 'import';
+            return $source ?? 'import';
         };
 
         $voll = $r !== null && $team !== null ? app(RecipeService::class)->detailAnySicht($team, $r->id) : null;
@@ -678,9 +678,9 @@ class RecipeModal extends Component
             'bulkOffen' => $bulkRun !== null
                 ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->offeneVorschlaege($team, $this->bulkRunId) : 0,
             'zustaende' => [
-                'beschreibung' => $feldZustand($r?->beschreibung, $r?->beschreibung_quelle),
-                'zubereitung' => $feldZustand($r?->zubereitung, $r?->zubereitung_quelle),
-                'kategorie' => $r?->kategorie_id !== null ? ($r?->kategorie_quelle ?? 'import') : 'unbefüllt',
+                'description' => $feldZustand($r?->description, $r?->description_source),
+                'preparation' => $feldZustand($r?->preparation, $r?->preparation_source),
+                'kategorie' => $r?->kategorie_id !== null ? ($r?->kategorie_source ?? 'import') : 'unbefüllt',
             ],
             'equipmentListe' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::orderBy('gruppe')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'gruppe']),
             'hauptgruppen' => $team !== null ? $recipes->mainGroups($team) : collect(),

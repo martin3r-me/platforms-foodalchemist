@@ -30,10 +30,10 @@ return new class extends Migration
             });
         }
 
-        if (! Schema::hasTable('foodalchemist_vocab_prozess_sensorik_delta')) {
-            Schema::create('foodalchemist_vocab_prozess_sensorik_delta', function (Blueprint $table) {
+        if (! Schema::hasTable('foodalchemist_vocab_process_sensory_deltas')) {
+            Schema::create('foodalchemist_vocab_process_sensory_deltas', function (Blueprint $table) {
                 $table->id();
-                $table->string('anker_slug', 48)->unique();
+                $table->string('anchor_slug', 48)->unique();
                 foreach (['suess', 'salzig', 'sauer', 'bitter', 'umami', 'fettig', 'scharf'] as $d) {
                     $table->decimal('d_' . $d, 4, 2)->default(0);
                 }
@@ -43,27 +43,27 @@ return new class extends Migration
             });
         }
 
-        if (! Schema::hasTable('foodalchemist_gp_geschmack_vektor')) {
-            Schema::create('foodalchemist_gp_geschmack_vektor', function (Blueprint $table) {
+        if (! Schema::hasTable('foodalchemist_gp_taste_vectors')) {
+            Schema::create('foodalchemist_gp_taste_vectors', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('gp_id')->unique();
                 foreach (['suess', 'salzig', 'sauer', 'bitter', 'umami', 'fettig', 'scharf'] as $d) {
                     $table->decimal($d, 4, 2)->default(0);
                 }
-                $table->string('quelle', 16)->nullable();           // rule | gemini | manual
+                $table->string('source', 16)->nullable();           // rule | gemini | manual
                 $table->decimal('ai_confidence', 4, 2)->nullable();
-                $table->text('ai_begruendung')->nullable();
+                $table->text('ai_reasoning')->nullable();
                 $table->timestamps();
             });
         }
 
-        if (! Schema::hasTable('foodalchemist_gp_textur')) {
-            Schema::create('foodalchemist_gp_textur', function (Blueprint $table) {
+        if (! Schema::hasTable('foodalchemist_gp_textures')) {
+            Schema::create('foodalchemist_gp_textures', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('gp_id')->index();
                 $table->unsignedBigInteger('textur_vocab_id')->index();
                 $table->decimal('intensitaet', 4, 2)->default(1);
-                $table->string('quelle', 16)->nullable();
+                $table->string('source', 16)->nullable();
                 $table->timestamps();
                 $table->unique(['gp_id', 'textur_vocab_id']);
             });
@@ -72,9 +72,9 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('foodalchemist_gp_textur');
-        Schema::dropIfExists('foodalchemist_gp_geschmack_vektor');
-        Schema::dropIfExists('foodalchemist_vocab_prozess_sensorik_delta');
+        Schema::dropIfExists('foodalchemist_gp_textures');
+        Schema::dropIfExists('foodalchemist_gp_taste_vectors');
+        Schema::dropIfExists('foodalchemist_vocab_process_sensory_deltas');
         Schema::dropIfExists('foodalchemist_vocab_textur');
     }
 };

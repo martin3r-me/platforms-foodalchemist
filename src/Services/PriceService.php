@@ -194,7 +194,7 @@ class PriceService
             ->whereIn('i.team_id', FoodAlchemistSupplierItem::teamAncestryIds($team))
             ->whereNull('i.deleted_at')->whereNull('s.deleted_at')
             ->whereNotNull('i.qty')->where('i.qty', '>', 0)->whereNotNull('i.unit_code')
-            ->select(['i.id', 'i.designation', 'i.qty', 'i.unit_code', 'sup.name AS lieferant', 'g.warengruppe_code AS wg'])
+            ->select(['i.id', 'i.designation', 'i.qty', 'i.unit_code', 'sup.name AS lieferant', 'g.commodity_group_code AS wg'])
             ->selectSub($this->activePriceSubquery('i.id')->toBase(), 'aktiver_preis')
             ->get()
             ->filter(fn ($i) => $i->aktiver_preis !== null && (float) $i->aktiver_preis > 0)
@@ -203,17 +203,17 @@ class PriceService
 
                 return $v === null ? null : (object) [
                     'id' => $i->id,
-                    'bezeichnung' => $i->designation,
+                    'label' => $i->designation,
                     'lieferant' => $i->lieferant,
                     'wg' => $i->wg ?? '–',
-                    'einheit' => $v['einheit'],
+                    'unit' => $v['unit'],
                     'wert' => $v['wert'],
                 ];
             })
             ->filter();
 
         $ausreisser = collect();
-        foreach ($kandidaten->groupBy(fn ($k) => $k->wg . '|' . $k->einheit) as $gruppe) {
+        foreach ($kandidaten->groupBy(fn ($k) => $k->wg . '|' . $k->unit) as $gruppe) {
             if ($gruppe->count() < 4) {
                 continue; // zu wenig Daten für einen belastbaren Median
             }
@@ -222,8 +222,8 @@ class PriceService
                 $faktor = $median > 0 ? max($k->wert / $median, $median / max($k->wert, 1e-9)) : 0;
                 if ($faktor >= $ausreisserFaktor) {
                     $ausreisser->push((object) [
-                        'id' => $k->id, 'bezeichnung' => $k->bezeichnung, 'lieferant' => $k->lieferant,
-                        'wg' => $k->wg, 'einheit' => $k->einheit,
+                        'id' => $k->id, 'label' => $k->label, 'lieferant' => $k->lieferant,
+                        'wg' => $k->wg, 'unit' => $k->unit,
                         'wert' => round($k->wert, 2), 'median' => round($median, 2), 'faktor' => round($faktor, 1),
                     ]);
                 }
@@ -240,7 +240,7 @@ class PriceService
      * §3.2 Vergleichspreis: Gebindepreis → €/kg | €/l | €/Stk (Anzeige-Normalisierung).
      * qty NULL/0 ⇒ NULL (I4, nie Division), price < 0 ⇒ NULL (I5), unbekannte Einheit ⇒ NULL.
      *
-     * @return array{wert: float, einheit: string}|null
+     * @return array{wert: float, unit: string}|null
      */
     public function vergleichspreis(object $item, ?float $preis): ?array
     {
@@ -253,9 +253,9 @@ class PriceService
         }
 
         return match ($item->unit_code) {
-            'kg' => ['wert' => $preis / $qty, 'einheit' => '€/kg'],
-            'l' => ['wert' => $preis / $qty, 'einheit' => '€/l'],
-            'Stk' => ['wert' => $preis / $qty, 'einheit' => '€/Stk'],
+            'kg' => ['wert' => $preis / $qty, 'unit' => '€/kg'],
+            'l' => ['wert' => $preis / $qty, 'unit' => '€/l'],
+            'Stk' => ['wert' => $preis / $qty, 'unit' => '€/Stk'],
             default => null,
         };
     }
@@ -265,7 +265,7 @@ class PriceService
     {
         $v = $this->vergleichspreis($item, $preis);
 
-        return match ($v['einheit'] ?? null) {
+        return match ($v['unit'] ?? null) {
             '€/kg', '€/l' => $v['wert'] / 1000,
             default => null,
         };

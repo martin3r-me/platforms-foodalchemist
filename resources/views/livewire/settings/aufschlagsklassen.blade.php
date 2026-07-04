@@ -15,8 +15,8 @@
                 <tr class="{{ $tr }} {{ $ak->is_inactive ? 'opacity-50' : '' }}" wire:key="ak-{{ $ak->id }}">
                     @if($editId === $ak->id)
                         <td class="{{ $td }} !px-2 font-mono text-[11px]">{{ $ak->code }}</td>
-                        <td class="{{ $td }} !px-2"><input type="text" wire:model="form.bezeichnung" class="{{ $input }} !py-1" /></td>
-                        @foreach(['rohaufschlag_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'] as $feld)
+                        <td class="{{ $td }} !px-2"><input type="text" wire:model="form.label" class="{{ $input }} !py-1" /></td>
+                        @foreach(['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'] as $feld)
                             <td class="{{ $td }} !px-2"><input type="text" wire:model="form.{{ $feld }}" class="{{ $input }} !py-1 !w-16 text-right" /></td>
                         @endforeach
                         <td class="{{ $td }} !px-2">
@@ -32,8 +32,8 @@
                         </td>
                     @else
                         <td class="{{ $td }} !px-2 font-mono text-[11px]">{{ $ak->code }}</td>
-                        <td class="{{ $td }} !px-2">{{ $ak->bezeichnung }}</td>
-                        @foreach(['rohaufschlag_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'] as $feld)
+                        <td class="{{ $td }} !px-2">{{ $ak->label }}</td>
+                        @foreach(['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'] as $feld)
                             <td class="{{ $td }} !px-2 text-right tabular-nums">{{ rtrim(rtrim(number_format((float) $ak->{$feld}, 2, ',', '.'), '0'), ',') }}</td>
                         @endforeach
                         <td class="{{ $td }} !px-2">
@@ -62,8 +62,8 @@
         <p class="{{ $dt }}">Neue Aufschlagsklasse</p>
         <div class="flex flex-wrap items-center gap-2">
             <input type="text" wire:model="neu.code" placeholder="Code (z. B. AK_NEU)" class="{{ $input }} !py-1 w-32 font-mono" data-ak-neu-code />
-            <input type="text" wire:model="neu.bezeichnung" placeholder="Bezeichnung" class="{{ $input }} !py-1 w-44" />
-            <input type="text" wire:model="neu.rohaufschlag_pct" placeholder="Rohaufschlag %" class="{{ $input }} !py-1 w-28 text-right" />
+            <input type="text" wire:model="neu.label" placeholder="Bezeichnung" class="{{ $input }} !py-1 w-44" />
+            <input type="text" wire:model="neu.raw_markup_pct" placeholder="Rohaufschlag %" class="{{ $input }} !py-1 w-28 text-right" />
             <input type="text" wire:model="neu.bedienung_pct" placeholder="Bedienung %" class="{{ $input }} !py-1 w-24 text-right" />
             <input type="text" wire:model="neu.profit_pct" placeholder="Profit %" class="{{ $input }} !py-1 w-20 text-right" />
             <input type="text" wire:model="neu.mwst_satz" placeholder="MwSt %" class="{{ $input }} !py-1 w-20 text-right" />

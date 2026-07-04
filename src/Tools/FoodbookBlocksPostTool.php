@@ -37,14 +37,14 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
         return [
             'type' => 'object',
             'properties' => [
-                'kapitel_id' => ['type' => 'integer'],
+                'chapter_id' => ['type' => 'integer'],
                 'type' => ['type' => 'string', 'enum' => ['text', 'concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer'], 'default' => 'text'],
-                'bezeichnung' => ['type' => 'string', 'description' => 'Interner Titel des Blocks'],
+                'label' => ['type' => 'string', 'description' => 'Interner Titel des Blocks'],
                 'kundentext' => ['type' => 'string', 'description' => 'Kundenseitiger Angebotstext'],
                 'vk_recipe_id' => ['type' => 'integer', 'description' => 'Verkaufsrezept (Gericht) — via verkaufsrezepte.SEARCH ermitteln'],
                 'concept_id' => ['type' => 'integer', 'description' => 'Konzept/Paket bei type=concept_ref'],
-                'menge' => ['type' => 'number'],
-                'einheit' => ['type' => 'string', 'description' => 'Einheiten-Slug, z. B. stk, portion'],
+                'quantity' => ['type' => 'number'],
+                'unit' => ['type' => 'string', 'description' => 'Einheiten-Slug, z. B. stk, portion'],
                 'preis_wert' => ['type' => 'number'],
                 'preis_basis' => ['type' => 'string', 'enum' => ['pro_person', 'pro_stueck', 'pauschal'], 'description' => 'Basis für preis_wert'],
                 'sichtbar' => ['type' => 'boolean', 'default' => true],
@@ -61,7 +61,7 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
                     ],
                 ],
             ],
-            'required' => ['kapitel_id'],
+            'required' => ['chapter_id'],
         ];
     }
 
@@ -71,7 +71,7 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $kapitel = FoodAlchemistFoodbookKapitel::whereKey((int) $arguments['kapitel_id'])->first();
+        $kapitel = FoodAlchemistFoodbookKapitel::whereKey((int) $arguments['chapter_id'])->first();
         $fb = $kapitel !== null
             ? FoodAlchemistFoodbook::visibleToTeam($team)->whereKey($kapitel->foodbook_id)->first()
             : null;
@@ -87,15 +87,15 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
         }
 
         $daten = array_intersect_key($arguments, array_flip([
-            'type', 'bezeichnung', 'kundentext', 'interne_bemerkung', 'vk_recipe_id',
-            'concept_id', 'menge', 'preis_wert', 'preis_basis', 'sichtbar',
+            'type', 'label', 'kundentext', 'interne_bemerkung', 'vk_recipe_id',
+            'concept_id', 'quantity', 'preis_wert', 'preis_basis', 'sichtbar',
         ]));
-        if (($arguments['einheit'] ?? '') !== '') {
-            $einheit = app(VocabularyService::class)->findEinheit($team, (string) $arguments['einheit']);
-            if ($einheit === null) {
-                return ToolResult::error('Unbekannte Einheit "' . $arguments['einheit'] . '".', 'VALIDATION_ERROR');
+        if (($arguments['unit'] ?? '') !== '') {
+            $unit = app(VocabularyService::class)->findEinheit($team, (string) $arguments['unit']);
+            if ($unit === null) {
+                return ToolResult::error('Unbekannte Einheit "' . $arguments['unit'] . '".', 'VALIDATION_ERROR');
             }
-            $daten['einheit_vocab_id'] = $einheit->id;
+            $daten['unit_vocab_id'] = $unit->id;
         }
         $svc = app(FoodbookService::class);
 
@@ -110,7 +110,7 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
 
         return ToolResult::success(['block' => [
             'id' => $block->id, 'type' => $block->type, 'position' => $block->position,
-            'bezeichnung' => $block->bezeichnung, 'vk_recipe_id' => $block->vk_recipe_id,
+            'label' => $block->label, 'vk_recipe_id' => $block->vk_recipe_id,
             'staffel_zeilen' => count($arguments['staffel'] ?? []),
         ]]);
     }

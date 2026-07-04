@@ -11,7 +11,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Judge-Cache je Rezept (GL-10 §2, zweite Achse): Kohärenz-Urteil
- * (score/label/begruendung/schwachstelle) + Teller-Heber-Vorschläge; stale,
+ * (score/label/reasoning/schwachstelle) + Teller-Heber-Vorschläge; stale,
  * sobald components_hash nicht mehr zum Zutaten-Stand passt.
  */
 class FoodAlchemistRecipeCulinaryCoherence extends Model

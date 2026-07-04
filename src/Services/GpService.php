@@ -27,12 +27,12 @@ class GpService
     /**
      * GP-Liste mit Suche + Filtern, hierarchie-gescoped (D1).
      *
-     * @param array{search?: string, warengruppe?: string, status?: string} $filters
+     * @param array{search?: string, commodity_group?: string, status?: string} $filters
      */
     public function paginate(array $filters, ?Team $team, int $perPage = 25): LengthAwarePaginator
     {
         $query = $this->scoped(FoodAlchemistGp::query(), $team)
-            ->with('warengruppe');
+            ->with('commodity_group');
 
         $search = trim((string) ($filters['search'] ?? ''));
         if ($search !== '') {
@@ -40,12 +40,12 @@ class GpService
             $needle = mb_strtolower($search);
             $query->where(function ($q) use ($needle) {
                 $q->whereRaw('LOWER(name) LIKE ?', ["%{$needle}%"])
-                    ->orWhereRaw('LOWER(hauptzutat_slug) LIKE ?', ["%{$needle}%"]);
+                    ->orWhereRaw('LOWER(main_ingredient_slug) LIKE ?', ["%{$needle}%"]);
             });
         }
 
-        if (! empty($filters['warengruppe'])) {
-            $query->where('warengruppe_code', $filters['warengruppe']);
+        if (! empty($filters['commodity_group'])) {
+            $query->where('commodity_group_code', $filters['commodity_group']);
         }
 
         if (! empty($filters['status'])) {
@@ -61,7 +61,7 @@ class GpService
     public function find(int $id, ?Team $team): ?FoodAlchemistGp
     {
         return $this->scoped(FoodAlchemistGp::query(), $team)
-            ->with(['warengruppe', 'preferredCountUnit', 'derivatVon', 'mergedInto', 'leadLa.supplier'])
+            ->with(['commodity_group', 'preferredCountUnit', 'derivatVon', 'mergedInto', 'leadLa.supplier'])
             ->find($id);
     }
 
@@ -95,9 +95,9 @@ class GpService
             'team_id' => $team->id,
             'gp_key' => $gpKey,
             'name' => $gpName,
-            'warengruppe_code' => '00',
-            'hauptzutat_slug' => $slug,
-            'hauptzutat_display' => $base,
+            'commodity_group_code' => '00',
+            'main_ingredient_slug' => $slug,
+            'main_ingredient_display' => $base,
             'status' => GpStatus::Approved,
             'requires_la' => false,
             'is_platzhalter' => true,
@@ -123,8 +123,8 @@ class GpService
         $gp->update([
             'gp_key' => $gpKey,
             'name' => $gpName,
-            'hauptzutat_slug' => $slug,
-            'hauptzutat_display' => $base,
+            'main_ingredient_slug' => $slug,
+            'main_ingredient_display' => $base,
         ]);
 
         return $gp->refresh();
@@ -239,9 +239,9 @@ class GpService
     {
         return \Illuminate\Support\Facades\DB::transaction(fn () => FoodAlchemistGp::query()
             ->where('team_id', $team->id)
-            ->where('warengruppe_code', $warengruppeCode)
-            ->where('sub_kategorie', $alt)
-            ->update(['sub_kategorie' => $neu]));
+            ->where('commodity_group_code', $warengruppeCode)
+            ->where('sub_category', $alt)
+            ->update(['sub_category' => $neu]));
     }
 
     /** M1-03: Sub-Kategorie-Wert auf NULL setzen (Housekeeping) — nur eigene Zeilen. */
@@ -249,9 +249,9 @@ class GpService
     {
         return FoodAlchemistGp::query()
             ->where('team_id', $team->id)
-            ->where('warengruppe_code', $warengruppeCode)
-            ->where('sub_kategorie', $wert)
-            ->update(['sub_kategorie' => null]);
+            ->where('commodity_group_code', $warengruppeCode)
+            ->where('sub_category', $wert)
+            ->update(['sub_category' => null]);
     }
 
     // ── M3-01/02: Browser-Neubau ────────────────────────────────────────
@@ -259,22 +259,22 @@ class GpService
     /** WG-Baum-Zähler in EINER GROUP-BY-Query (P-1), optional unter aktuellem Filter. */
     public function wgCounts(?Team $team, array $filters = []): array
     {
-        return $this->browserQuery($team, array_diff_key($filters, ['warengruppe' => 1]))
-            ->selectRaw('warengruppe_code, COUNT(*) AS n')
-            ->groupBy('warengruppe_code')
-            ->pluck('n', 'warengruppe_code')
+        return $this->browserQuery($team, array_diff_key($filters, ['commodity_group' => 1]))
+            ->selectRaw('commodity_group_code, COUNT(*) AS n')
+            ->groupBy('commodity_group_code')
+            ->pluck('n', 'commodity_group_code')
             ->all();
     }
 
     /** Sub-Kategorie-Zähler der gewählten WG (Screen 1: zweite Baum-Spalte). */
     public function subKategorieCounts(?Team $team, string $warengruppeCode): array
     {
-        return $this->browserQuery($team, ['warengruppe' => $warengruppeCode])
-            ->whereNotNull('sub_kategorie')
-            ->selectRaw('sub_kategorie, COUNT(*) AS n')
-            ->groupBy('sub_kategorie')
-            ->orderBy('sub_kategorie')
-            ->pluck('n', 'sub_kategorie')
+        return $this->browserQuery($team, ['commodity_group' => $warengruppeCode])
+            ->whereNotNull('sub_category')
+            ->selectRaw('sub_category, COUNT(*) AS n')
+            ->groupBy('sub_category')
+            ->orderBy('sub_category')
+            ->pluck('n', 'sub_category')
             ->all();
     }
 
@@ -288,7 +288,7 @@ class GpService
             ->leftJoin('foodalchemist_supplier_items AS lead', 'lead.id', '=', 'foodalchemist_gps.lead_la_supplier_item_id')
             ->select('foodalchemist_gps.*', 'lead.qty AS lead_qty', 'lead.unit_code AS lead_unit_code')
             ->selectSub(app(PriceService::class)->activePriceSubquery('lead.id')->toBase(), 'lead_preis')
-            ->with('warengruppe')
+            ->with('commodity_group')
             ->orderBy('foodalchemist_gps.name');
 
         // M8-04: Total OHNE den Lead-Join zählen (1:1-Join ändert die Zeilen-
@@ -318,7 +318,7 @@ class GpService
 
             $mutter = $gp->is_derivat ? $muetter->get($gp->derivat_von_gp_id) : null;
             $rangVon = ['enthalten' => 3, 'spuren' => 2, 'nicht_enthalten' => 1, 'unbekannt' => 0];
-            $kiQuelle = fn (FoodAlchemistGp $g): bool => $g->allergene_quelle === 'ki' || $g->allergene_ki_confidence !== null;
+            $kiQuelle = fn (FoodAlchemistGp $g): bool => $g->allergens_source === 'ki' || $g->allergene_ki_confidence !== null;
             // LA-belegt = irgendein Allergen hat konkrete LA-Daten (eigene bzw. Mutter-LAs bei Derivaten)
             // — unabhängig davon, ob ein Override die Prio gewinnt (Override + LA-Bestätigung ≠ reine Schätzung).
             $laBelegt = collect($raenge[$gp->id] ?? [])->max() > 0
@@ -366,10 +366,10 @@ class GpService
                 $such = mb_strtolower(trim($filters['search']));
                 $q->where(fn (Builder $w) => $w
                     ->whereRaw('LOWER(name) LIKE ?', ['%' . $such . '%'])
-                    ->orWhereRaw('LOWER(hauptzutat_slug) LIKE ?', ['%' . $such . '%']));
+                    ->orWhereRaw('LOWER(main_ingredient_slug) LIKE ?', ['%' . $such . '%']));
             })
-            ->when(($filters['warengruppe'] ?? '') !== '', fn (Builder $q) => $q->where('warengruppe_code', $filters['warengruppe']))
-            ->when(($filters['sub_kategorie'] ?? '') !== '', fn (Builder $q) => $q->where('sub_kategorie', $filters['sub_kategorie']))
+            ->when(($filters['commodity_group'] ?? '') !== '', fn (Builder $q) => $q->where('commodity_group_code', $filters['commodity_group']))
+            ->when(($filters['sub_category'] ?? '') !== '', fn (Builder $q) => $q->where('sub_category', $filters['sub_category']))
             ->when(($filters['status'] ?? '') !== '', fn (Builder $q) => $q->where('status', $filters['status']));
     }
 

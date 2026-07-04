@@ -11,33 +11,33 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Position einer Standalone-Kalkulation (M-K10, Doc 16 §11). typ =
- * gericht|basisrezept|gp|frei. Bei Referenz-Typen sind label/einheit/einzel_ek/
- * arbeitszeit_min ein Snapshot der Quelle (überschreibbar). Wareneinsatz = menge × einzel_ek.
+ * gericht|basisrezept|gp|frei. Bei Referenz-Typen sind label/unit/einzel_ek/
+ * work_time_min ein Snapshot der Quelle (überschreibbar). Wareneinsatz = quantity × einzel_ek.
  */
 class FoodAlchemistKalkulationPosition extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_kalkulation_positionen';
+    protected $table = 'foodalchemist_calculation_positions';
 
     protected $guarded = ['id'];
 
     protected $casts = [
         'uuid' => 'string',
-        'menge' => 'decimal:3',
+        'quantity' => 'decimal:3',
         'einzel_ek' => 'decimal:4',
-        'arbeitszeit_min' => 'integer',
+        'work_time_min' => 'integer',
         'position' => 'integer',
     ];
 
     public function kalkulation(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistKalkulation::class, 'kalkulation_id');
+        return $this->belongsTo(FoodAlchemistKalkulation::class, 'calculation_id');
     }
 
     /** Wareneinsatz dieser Position (Snapshot-Einzelpreis × Menge). */
     public function wareneinsatz(): float
     {
-        return round((float) $this->menge * (float) $this->einzel_ek, 4);
+        return round((float) $this->quantity * (float) $this->einzel_ek, 4);
     }
 }

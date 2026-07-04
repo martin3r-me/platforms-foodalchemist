@@ -19,7 +19,7 @@ use Throwable;
  *  - Diese Klasse embeddet den globalen Wissens-Korpus über Cores
  *    {@see EmbeddingService} (Commit 32b66074) und findet semantisch das passende
  *    Domain-/Pairing-Doc, WENN die Lexik dünn bleibt.
- *  - Der präzise Anker-Edge-Graph (foodalchemist_pairing_anker_edges) bleibt
+ *  - Der präzise Anker-Edge-Graph (foodalchemist_pairing_anchor_edges) bleibt
  *    unangetastet: Semantik löst Freitext → Doc-/Stem-Slug auf, der Graph paart.
  *
  * Was wird embeddet (die Qualitäts-Stellschraube):
@@ -179,7 +179,7 @@ class KnowledgeEmbeddingService
         $providerName = $this->providerName();
         $globalTeam = $this->globalTeamId();
 
-        $rows = DB::table('foodalchemist_vocab_pairing_ankers')
+        $rows = DB::table('foodalchemist_vocab_pairing_anchors')
             ->whereNull('deleted_at')
             ->where('slug', '!=', 'neutral')
             ->get(['id', 'slug', 'display_de', 'team_id']);

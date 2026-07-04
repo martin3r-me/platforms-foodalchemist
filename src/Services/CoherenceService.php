@@ -27,7 +27,7 @@ class CoherenceService
     public function componentsHash(FoodAlchemistRecipe $r): string
     {
         $teile = $r->ingredients
-            ->map(fn ($z) => ($z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name ?? $z->raw_text) . '|' . (float) $z->menge)
+            ->map(fn ($z) => ($z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name ?? $z->raw_text) . '|' . (float) $z->quantity)
             ->sort()->values();
 
         return sha1($teile->implode(';'));
@@ -68,7 +68,7 @@ class CoherenceService
                 'components_hash' => $this->componentsHash($r),
                 'score' => max(0, min(100, (int) round((float) $score))),
                 'label' => $this->kurz($vorschlag->werte['label'] ?? null),
-                'begruendung' => is_string($vorschlag->werte['begruendung'] ?? null) ? $vorschlag->werte['begruendung'] : $vorschlag->begruendung,
+                'reasoning' => is_string($vorschlag->werte['reasoning'] ?? null) ? $vorschlag->werte['reasoning'] : $vorschlag->reasoning,
                 'schwachstelle' => $this->kurz($vorschlag->werte['schwachstelle'] ?? null),
                 'judge_model' => $vorschlag->model,
                 'judged_at' => now(),
@@ -91,7 +91,7 @@ class CoherenceService
                 'typ' => in_array($v['typ'] ?? null, FoodAlchemistRecipeCulinaryCoherence::HEBER_TYPEN, true) ? $v['typ'] : 'ergaenzung',
                 'zutat' => $v['zutat'],
                 'kategorie' => $this->kurz($v['kategorie'] ?? null),
-                'begruendung' => is_string($v['begruendung'] ?? null) ? $v['begruendung'] : null,
+                'reasoning' => is_string($v['reasoning'] ?? null) ? $v['reasoning'] : null,
                 'confidence' => is_numeric($v['confidence'] ?? null) ? max(0.0, min(1.0, (float) $v['confidence'])) : null,
             ];
         }
@@ -122,8 +122,8 @@ class CoherenceService
             'komponenten' => $r->ingredients
                 ->map(fn ($z) => ($z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name ?? $z->raw_text))
                 ->filter()->values()->all(),
-            'geschmack' => $r->geschmacksrichtung,
-            'speisen_klasse' => $r->speisenKlasse?->bezeichnung,
+            'geschmack' => $r->taste_direction,
+            'speisen_klasse' => $r->speisenKlasse?->label,
         ];
     }
 
@@ -131,7 +131,7 @@ class CoherenceService
     private function lade(Team $team, int $recipeId): FoodAlchemistRecipe
     {
         return FoodAlchemistRecipe::visibleToTeam($team)
-            ->with(['ingredients' => fn ($q) => $q->whereNull('deleted_at'), 'ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name', 'speisenKlasse:id,bezeichnung'])
+            ->with(['ingredients' => fn ($q) => $q->whereNull('deleted_at'), 'ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name', 'speisenKlasse:id,label'])
             ->findOrFail($recipeId);
     }
 

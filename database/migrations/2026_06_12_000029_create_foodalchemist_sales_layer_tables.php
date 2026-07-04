@@ -25,8 +25,8 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->unsignedBigInteger('legacy_id')->nullable()->unique();
             $table->string('code', 16);
-            $table->string('bezeichnung');
-            $table->decimal('rohaufschlag_pct', 7, 2)->default(0);
+            $table->string('label');
+            $table->decimal('raw_markup_pct', 7, 2)->default(0);
             $table->decimal('bedienung_pct', 7, 2)->default(0);
             $table->decimal('profit_pct', 7, 2)->default(0);
             $table->decimal('mwst_satz', 5, 2)->default(19);
@@ -45,7 +45,7 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->unsignedBigInteger('legacy_id')->nullable()->unique();
             $table->string('code', 16);                               // Pipe-Naming-Präfix (§4.4)
-            $table->string('bezeichnung');
+            $table->string('label');
             $table->integer('sort_order')->default(100);
             $table->boolean('is_inactive')->default(false);
             $table->timestamps();
@@ -61,7 +61,7 @@ return new class extends Migration
             $table->unsignedBigInteger('legacy_id')->nullable()->unique();
             $table->foreignId('dish_main_group_id')->nullable()->constrained('foodalchemist_dish_main_groups')->nullOnDelete();
             $table->string('code', 32);
-            $table->string('bezeichnung');
+            $table->string('label');
             $table->foreignId('default_markup_class_id')->nullable()->constrained('foodalchemist_markup_classes')->nullOnDelete();
             $table->string('diaetform', 16)->default('neutral');      // fleisch|fisch|vegi|vegan|neutral|allergie
             $table->boolean('is_vegi')->default(false);
@@ -84,7 +84,7 @@ return new class extends Migration
             $table->string('name');
             $table->text('sprach_duktus');                            // Prompt-Material (GL-06-Feld-Hülle)
             $table->text('beispiele_md')->nullable();
-            $table->text('beschreibung')->nullable();
+            $table->text('description')->nullable();
             $table->boolean('is_inactive')->default(false);
             $table->integer('sort_order')->default(0);
             $table->timestamps();
@@ -94,7 +94,7 @@ return new class extends Migration
         });
 
         // Container-Vokabulare (einheitliches D-1-Muster; Behälter mit kapazitaet_kg)
-        foreach (['foodalchemist_vocab_behaelter' => true, 'foodalchemist_vocab_regen_geraete' => false, 'foodalchemist_vocab_serviervehikel' => false] as $name => $mitKapazitaet) {
+        foreach (['foodalchemist_vocab_containers' => true, 'foodalchemist_vocab_regeneration_devices' => false, 'foodalchemist_vocab_serving_vehicles' => false] as $name => $mitKapazitaet) {
             Schema::create($name, function (Blueprint $table) use ($mitKapazitaet) {
                 $table->id();
                 $table->uuid('uuid')->unique();
@@ -141,32 +141,32 @@ return new class extends Migration
             $table->foreignId('recipe_id')->constrained('foodalchemist_recipes')->cascadeOnDelete();
             $table->string('komponente_label');
             $table->foreignId('ingredient_id')->nullable()->constrained('foodalchemist_recipe_ingredients')->nullOnDelete();
-            $table->foreignId('geraet_vocab_id')->nullable()->constrained('foodalchemist_vocab_regen_geraete')->nullOnDelete();
+            $table->foreignId('device_vocab_id')->nullable()->constrained('foodalchemist_vocab_regeneration_devices')->nullOnDelete();
             $table->integer('temp_c')->nullable();
             $table->integer('dauer_min')->nullable();
             $table->integer('kerntemp_c')->nullable();
             $table->text('hinweis')->nullable();
             $table->integer('sort_order')->default(0);
-            $table->string('quelle', 16)->nullable();                 // Lineage-Trio zeilenbasiert (GL-07 §3)
+            $table->string('source', 16)->nullable();                 // Lineage-Trio zeilenbasiert (GL-07 §3)
             $table->decimal('ai_confidence', 4, 3)->nullable();
-            $table->text('ai_begruendung')->nullable();
+            $table->text('ai_reasoning')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
 
         // Echte FK-Spalten + fehlende Lineage am Rezept (Rohwerte *_legacy_id aus M4-01)
         Schema::table('foodalchemist_recipes', function (Blueprint $table) {
-            $table->foreignId('speisen_klasse_id')->nullable()->constrained('foodalchemist_dish_classes')->nullOnDelete();
-            $table->string('speisen_klasse_quelle', 16)->nullable();  // Lineage der KI-Klassifikation (GL-07)
-            $table->decimal('speisen_klasse_ai_confidence', 4, 3)->nullable();
-            $table->text('speisen_klasse_ai_begruendung')->nullable();
-            $table->foreignId('aufschlagsklasse_id')->nullable()->constrained('foodalchemist_markup_classes')->nullOnDelete();
-            $table->foreignId('behaelter_warm_vocab_id')->nullable()->constrained('foodalchemist_vocab_behaelter')->nullOnDelete();
-            $table->integer('behaelter_warm_anzahl')->nullable();
-            $table->foreignId('behaelter_kalt_vocab_id')->nullable()->constrained('foodalchemist_vocab_behaelter')->nullOnDelete();
-            $table->integer('behaelter_kalt_anzahl')->nullable();
-            $table->foreignId('servier_vehikel_vocab_id')->nullable()->constrained('foodalchemist_vocab_serviervehikel')->nullOnDelete();
-            $table->string('vk_wording_quelle', 16)->nullable();      // Lineage vk_wording_standard (D-6 §2.1)
+            $table->foreignId('dish_class_id')->nullable()->constrained('foodalchemist_dish_classes')->nullOnDelete();
+            $table->string('dish_class_source', 16)->nullable();  // Lineage der KI-Klassifikation (GL-07)
+            $table->decimal('dish_class_ai_confidence', 4, 3)->nullable();
+            $table->text('dish_class_ai_reasoning')->nullable();
+            $table->foreignId('markup_class_id')->nullable()->constrained('foodalchemist_markup_classes')->nullOnDelete();
+            $table->foreignId('container_warm_vocab_id')->nullable()->constrained('foodalchemist_vocab_containers')->nullOnDelete();
+            $table->integer('container_warm_anzahl')->nullable();
+            $table->foreignId('container_cold_vocab_id')->nullable()->constrained('foodalchemist_vocab_containers')->nullOnDelete();
+            $table->integer('container_cold_anzahl')->nullable();
+            $table->foreignId('serving_vehicle_vocab_id')->nullable()->constrained('foodalchemist_vocab_serving_vehicles')->nullOnDelete();
+            $table->string('vk_wording_source', 16)->nullable();      // Lineage vk_wording_standard (D-6 §2.1)
             $table->decimal('vk_wording_ai_confidence', 4, 3)->nullable();
         });
     }
@@ -174,21 +174,21 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_recipes', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('speisen_klasse_id');
-            $table->dropConstrainedForeignId('aufschlagsklasse_id');
-            $table->dropConstrainedForeignId('behaelter_warm_vocab_id');
-            $table->dropConstrainedForeignId('behaelter_kalt_vocab_id');
-            $table->dropConstrainedForeignId('servier_vehikel_vocab_id');
+            $table->dropConstrainedForeignId('dish_class_id');
+            $table->dropConstrainedForeignId('markup_class_id');
+            $table->dropConstrainedForeignId('container_warm_vocab_id');
+            $table->dropConstrainedForeignId('container_cold_vocab_id');
+            $table->dropConstrainedForeignId('serving_vehicle_vocab_id');
             $table->dropColumn([
-                'speisen_klasse_quelle', 'speisen_klasse_ai_confidence', 'speisen_klasse_ai_begruendung',
-                'behaelter_warm_anzahl', 'behaelter_kalt_anzahl', 'vk_wording_quelle', 'vk_wording_ai_confidence',
+                'dish_class_source', 'dish_class_ai_confidence', 'dish_class_ai_reasoning',
+                'container_warm_anzahl', 'container_cold_anzahl', 'vk_wording_source', 'vk_wording_ai_confidence',
             ]);
         });
         Schema::dropIfExists('foodalchemist_recipe_regenerations');
         Schema::dropIfExists('foodalchemist_recipe_customer_names');
-        Schema::dropIfExists('foodalchemist_vocab_serviervehikel');
-        Schema::dropIfExists('foodalchemist_vocab_regen_geraete');
-        Schema::dropIfExists('foodalchemist_vocab_behaelter');
+        Schema::dropIfExists('foodalchemist_vocab_serving_vehicles');
+        Schema::dropIfExists('foodalchemist_vocab_regeneration_devices');
+        Schema::dropIfExists('foodalchemist_vocab_containers');
         Schema::dropIfExists('foodalchemist_writing_styles');
         Schema::dropIfExists('foodalchemist_dish_classes');
         Schema::dropIfExists('foodalchemist_dish_main_groups');

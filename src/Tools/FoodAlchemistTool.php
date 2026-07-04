@@ -29,8 +29,8 @@ abstract class FoodAlchemistTool
     }
 
     /**
-     * Phase A: MCP-Zutat-Zeilen → syncIngredients-Format. Löst `einheit`
-     * (Slug/Name) in einheit_vocab_id auf; wirft RuntimeException mit
+     * Phase A: MCP-Zutat-Zeilen → syncIngredients-Format. Löst `unit`
+     * (Slug/Name) in unit_vocab_id auf; wirft RuntimeException mit
      * verfügbaren Einheiten, wenn nichts passt.
      *
      * @return array<int, array>
@@ -40,25 +40,25 @@ abstract class FoodAlchemistTool
         $vocab = app(\Platform\FoodAlchemist\Services\VocabularyService::class);
         $out = [];
         foreach (array_values($zeilen) as $i => $z) {
-            $einheit = $vocab->findEinheit($team, (string) ($z['einheit'] ?? ''));
-            if ($einheit === null) {
+            $unit = $vocab->findEinheit($team, (string) ($z['unit'] ?? ''));
+            if ($unit === null) {
                 $verfuegbar = $vocab->listEinheiten($team)->pluck('slug')->implode(', ');
-                throw new \RuntimeException('Unbekannte Einheit "' . ($z['einheit'] ?? '') . '" (Zeile ' . ($i + 1) . "). Verfügbar: {$verfuegbar}");
+                throw new \RuntimeException('Unbekannte Einheit "' . ($z['unit'] ?? '') . '" (Zeile ' . ($i + 1) . "). Verfügbar: {$verfuegbar}");
             }
             $out[] = [
                 'gp_id' => $z['gp_id'] ?? null,
                 'referenced_recipe_id' => $z['referenced_recipe_id'] ?? null,
                 'raw_text' => (string) ($z['name'] ?? ''),
                 'display_name' => (string) ($z['name'] ?? ''),
-                'menge' => $z['menge'] ?? 0,
-                'menge_max' => $z['menge_max'] ?? null,
-                'einheit_vocab_id' => $einheit->id,
-                'putzverlust_pct' => $z['putzverlust_pct'] ?? null,
-                'garverlust_pct' => $z['garverlust_pct'] ?? null,
-                'garverlust_quelle' => isset($z['garverlust_pct']) ? 'ki' : null,   // GL-07-Lineage
+                'quantity' => $z['quantity'] ?? 0,
+                'quantity_max' => $z['quantity_max'] ?? null,
+                'unit_vocab_id' => $unit->id,
+                'trimming_loss_pct' => $z['trimming_loss_pct'] ?? null,
+                'cooking_loss_pct' => $z['cooking_loss_pct'] ?? null,
+                'cooking_loss_source' => isset($z['cooking_loss_pct']) ? 'ki' : null,   // GL-07-Lineage
                 'is_optional' => (bool) ($z['is_optional'] ?? false),
                 'note' => $z['note'] ?? null,
-                'rolle' => $z['rolle'] ?? null,
+                'role' => $z['role'] ?? null,
             ];
         }
 

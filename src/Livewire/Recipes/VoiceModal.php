@@ -82,7 +82,7 @@ class VoiceModal extends Component
         try {
             app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)->acceptKlasse(
                 $team, (int) $p['recipe_id'], (int) $p['klasse_id'],
-                (float) ($p['confidence'] ?? 0), $p['begruendung'] ?? null, $p['call_log_id'] ?? null,
+                (float) ($p['confidence'] ?? 0), $p['reasoning'] ?? null, $p['call_log_id'] ?? null,
             );
             $this->ergebnis['proposals'][$index]['accepted'] = true;
             $this->dispatch('recipe-gespeichert');

@@ -11,7 +11,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 /**
  * @ai.description Concept↔Sektor-Eignung (M10R-1, Doc 15 §10.8) — mehrwertige
  * Sektor-Eignung am Concept, spiegelbildlich zu recipe_sektor_eignung (VK-Parität).
- * GL-07-Lineage (quelle/ai_confidence/ai_begruendung). Satellit: scopt über das
+ * GL-07-Lineage (source/ai_confidence/ai_reasoning). Satellit: scopt über das
  * Eltern-Concept (kein eigener BelongsToTeamHierarchy — wie RecipeSektorEignung).
  */
 class FoodAlchemistConceptSektorEignung extends Model

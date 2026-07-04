@@ -55,7 +55,7 @@ class CanvasService
                 ['key' => 'usp_eignung', 'label' => 'Vorteil / USP + Eignung', 'gruppe' => 'Verkauf', 'typ' => 'longtext'],
                 ['key' => 'inszenierung', 'label' => 'Inszenierung & Servierform', 'gruppe' => 'Inszenierung', 'typ' => 'longtext'],
                 ['key' => 'intern', 'label' => 'Intern (Constraints / Inklusiv)', 'gruppe' => 'Inszenierung', 'typ' => 'longtext'],
-                ['key' => 'geschmackswelten', 'label' => 'Geschmackswelten', 'gruppe' => 'Geschmackswelten', 'typ' => 'repeatable', 'sub' => ['claim' => 'Claim', 'beschreibung' => 'Beschreibung']],
+                ['key' => 'geschmackswelten', 'label' => 'Geschmackswelten', 'gruppe' => 'Geschmackswelten', 'typ' => 'repeatable', 'sub' => ['claim' => 'Claim', 'description' => 'Beschreibung']],
             ],
         ],
         'angebot' => [
@@ -169,7 +169,7 @@ class CanvasService
                 if ($items) {
                     $teile = array_map(function ($it) {
                         $claim = $it['meta']['claim'] ?? null;
-                        $beschr = $it['meta']['beschreibung'] ?? null;
+                        $beschr = $it['meta']['description'] ?? null;
                         return $it['value'] . ($claim ? " ({$claim})" : '') . ($beschr ? " – {$beschr}" : '');
                     }, $items);
                     $zeilen[] = $f['label'] . ': ' . implode('; ', $teile);

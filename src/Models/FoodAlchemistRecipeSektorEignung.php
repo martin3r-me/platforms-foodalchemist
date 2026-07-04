@@ -10,13 +10,13 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Sektor-Eignung eines Rezepts (D-5 §2.3, slug-basiert wie Quelle;
- * vocab_sektor folgt mit V-20). quelle manual|ai_inferred + Konfidenz (GL-07).
+ * vocab_sektor folgt mit V-20). source manual|ai_inferred + Konfidenz (GL-07).
  */
 class FoodAlchemistRecipeSektorEignung extends Model
 {
     use HasUuidV7, LogsActivity, SoftDeletes;
 
-    protected $table = 'foodalchemist_recipe_sektor_eignung';
+    protected $table = 'foodalchemist_recipe_sector_suitability';
 
     protected $guarded = ['id'];
 

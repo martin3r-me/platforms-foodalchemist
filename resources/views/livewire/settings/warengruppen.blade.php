@@ -64,8 +64,8 @@
                     <thead><tr class="text-left">@foreach(['Sub-Kategorie', 'GPs', ''] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>
                     <tbody>
                         @forelse($subKategorien as $sub)
-                            <tr wire:key="sub-{{ md5($sub->sub_kategorie) }}" class="{{ $tr }}">
-                                @if($renameAlt === $sub->sub_kategorie)
+                            <tr wire:key="sub-{{ md5($sub->sub_category) }}" class="{{ $tr }}">
+                                @if($renameAlt === $sub->sub_category)
                                     <td class="{{ $td }}"><input type="text" wire:model="renameNeu" wire:keydown.enter="rename" wire:keydown.escape="$set('renameAlt', null)" class="{{ $input }} !py-1" autofocus /></td>
                                     <td class="{{ $td }} text-gray-500">{{ $sub->n }}</td>
                                     <td class="{{ $td }} text-right whitespace-nowrap">
@@ -73,11 +73,11 @@
                                         <button type="button" wire:click="$set('renameAlt', null)" class="{{ $btnGhostXs }}">Abbrechen</button>
                                     </td>
                                 @else
-                                    <td class="{{ $td }} text-gray-700 dark:text-gray-300">{{ $sub->sub_kategorie }}</td>
+                                    <td class="{{ $td }} text-gray-700 dark:text-gray-300">{{ $sub->sub_category }}</td>
                                     <td class="{{ $td }} text-gray-500">{{ $sub->n }}</td>
                                     <td class="{{ $td }} text-right whitespace-nowrap">
-                                        <button type="button" wire:click="startRename('{{ addslashes($sub->sub_kategorie) }}')" class="{{ $btnGhostXs }}">Umbenennen</button>
-                                        <button type="button" wire:click="clearWert('{{ addslashes($sub->sub_kategorie) }}')" wire:confirm="„{{ $sub->sub_kategorie }}" auf allen eigenen GPs auf NULL setzen?" class="{{ $btnGhostXs }} text-red-500">→ NULL</button>
+                                        <button type="button" wire:click="startRename('{{ addslashes($sub->sub_category) }}')" class="{{ $btnGhostXs }}">Umbenennen</button>
+                                        <button type="button" wire:click="clearWert('{{ addslashes($sub->sub_category) }}')" wire:confirm="„{{ $sub->sub_category }}" auf allen eigenen GPs auf NULL setzen?" class="{{ $btnGhostXs }} text-red-500">→ NULL</button>
                                     </td>
                                 @endif
                             </tr>

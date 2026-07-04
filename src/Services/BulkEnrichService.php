@@ -14,16 +14,16 @@ use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
  * M7-06 / D-5 §4.4 + V-15: Bulk-Autopilot — der Job erzeugt VORSCHLÄGE in
  * die Review-Liste (nie Auto-Persistenz, GL-07); Übernahme einzeln/alle
  * bleibt interaktiv und respektiert Override-First. Schritte hier: die
- * implementierten Feld-KIs (beschreibung · kategorie · geschmack) — weitere
+ * implementierten Feld-KIs (description · kategorie · geschmack) — weitere
  * Orchestrator-Schritte docken über SCHRITTE an, sobald ihre Accept-Pfade
  * existieren (Registry-Prompts stehen seit M7-04).
  */
 class BulkEnrichService
 {
-    public const SCHRITTE = ['beschreibung', 'kategorie', 'geschmack'];
+    public const SCHRITTE = ['description', 'kategorie', 'geschmack'];
 
     /** GP-Bulk-Autopilot-Schritte (Feld-KIs mit vorhandenem Accept-Pfad). */
-    public const SCHRITTE_GP = ['zustand', 'tags', 'allergene', 'naehrwerte'];
+    public const SCHRITTE_GP = ['condition', 'tags', 'allergene', 'naehrwerte'];
 
     public function __construct(private AiGatewayService $ki)
     {
@@ -59,7 +59,7 @@ class BulkEnrichService
                     'team_id' => $team->id, 'run_id' => $runId, 'recipe_id' => $r->id, 'feld' => $feld,
                     'wert' => json_encode($vorschlag['wert']),
                     'confidence' => $vorschlag['confidence'],
-                    'begruendung' => $vorschlag['begruendung'],
+                    'reasoning' => $vorschlag['reasoning'],
                     'call_log_id' => $vorschlag['call_log_id'],
                     'status' => $vorschlag['wert'] === null || $vorschlag['wert'] === '' ? 'leer' : 'offen',
                     'created_at' => now(), 'updated_at' => now(),
@@ -84,20 +84,20 @@ class BulkEnrichService
             ->update(['status' => 'done', 'updated_at' => now()]);
     }
 
-    /** @return array{wert: mixed, confidence: ?float, begruendung: ?string, call_log_id: ?int} */
+    /** @return array{wert: mixed, confidence: ?float, reasoning: ?string, call_log_id: ?int} */
     private function proposeFeld(Team $team, FoodAlchemistRecipe $r, string $feld): array
     {
         [$key, $kontext, $extract] = match ($feld) {
-            'beschreibung' => ['recipe.beschreibung',
-                ['name' => $r->name, 'beschreibung' => $r->beschreibung, 'zutaten' => $r->ingredients()->whereNull('deleted_at')->pluck('display_name')->all()],
-                fn (array $w) => $w['beschreibung'] ?? null],
+            'description' => ['recipe.description',
+                ['name' => $r->name, 'description' => $r->description, 'zutaten' => $r->ingredients()->whereNull('deleted_at')->pluck('display_name')->all()],
+                fn (array $w) => $w['description'] ?? null],
             'kategorie' => ['recipe.kategorie',
                 ['name' => $r->name, 'kategorie_id' => $r->kategorie_id,
-                    'kategorien' => FoodAlchemistRecipeCategory::orderBy('id')->limit(200)->pluck('bezeichnung', 'id')->all()],
+                    'kategorien' => FoodAlchemistRecipeCategory::orderBy('id')->limit(200)->pluck('label', 'id')->all()],
                 fn (array $w) => $w['kategorie_id'] ?? null],
             'geschmack' => ['recipe.geschmack',
-                ['name' => $r->name, 'geschmacksrichtung' => $r->geschmacksrichtung],
-                fn (array $w) => $w['geschmacksrichtung'] ?? null],
+                ['name' => $r->name, 'taste_direction' => $r->taste_direction],
+                fn (array $w) => $w['taste_direction'] ?? null],
             default => throw new \RuntimeException("Unbekannter Bulk-Schritt [{$feld}]."),
         };
 
@@ -106,7 +106,7 @@ class BulkEnrichService
         return [
             'wert' => $extract($p->werte),
             'confidence' => $p->confidence,
-            'begruendung' => $p->begruendung,
+            'reasoning' => $p->reasoning,
             'call_log_id' => $p->callLogId,
         ];
     }
@@ -125,12 +125,12 @@ class BulkEnrichService
         $wert = json_decode((string) $prop->wert, true);
 
         $update = match ($prop->feld) {
-            'beschreibung' => $r->beschreibung_quelle === 'manual' ? null
-                : ['beschreibung' => (string) $wert, 'beschreibung_quelle' => 'ki', 'beschreibung_ai_confidence' => $prop->confidence],
-            'kategorie' => $r->kategorie_quelle === 'manual' || FoodAlchemistRecipeCategory::find((int) $wert) === null ? null
-                : ['kategorie_id' => (int) $wert, 'kategorie_quelle' => 'ki', 'kategorie_ai_confidence' => $prop->confidence],
+            'description' => $r->description_source === 'manual' ? null
+                : ['description' => (string) $wert, 'description_source' => 'ki', 'description_ai_confidence' => $prop->confidence],
+            'kategorie' => $r->kategorie_source === 'manual' || FoodAlchemistRecipeCategory::find((int) $wert) === null ? null
+                : ['kategorie_id' => (int) $wert, 'kategorie_source' => 'ki', 'kategorie_ai_confidence' => $prop->confidence],
             'geschmack' => in_array($wert, ['suess', 'herzhaft', 'neutral'], true)
-                ? ['geschmacksrichtung' => $wert] : null,             // Auto-Apply-Ausnahme-Feld (GL-07 §4.3), kein Lineage-Trio
+                ? ['taste_direction' => $wert] : null,             // Auto-Apply-Ausnahme-Feld (GL-07 §4.3), kein Lineage-Trio
             default => null,
         };
         if ($update === null) {
@@ -198,7 +198,7 @@ class BulkEnrichService
     /** Job-Kern: ein GP × Schritte → Vorschläge (kein Fach-Write). */
     public function verarbeiteGp(Team $team, int $runId, int $gpId, array $schritte): void
     {
-        $gp = FoodAlchemistGp::visibleToTeam($team)->with('warengruppe')->find($gpId);
+        $gp = FoodAlchemistGp::visibleToTeam($team)->with('commodity_group')->find($gpId);
         $fehler = false;
         foreach ($gp === null ? [] : $schritte as $feld) {
             try {
@@ -209,7 +209,7 @@ class BulkEnrichService
                     'team_id' => $team->id, 'run_id' => $runId, 'gp_id' => $gp->id, 'feld' => $feld,
                     'wert' => json_encode($vorschlag['wert']),
                     'confidence' => $vorschlag['confidence'],
-                    'begruendung' => $vorschlag['begruendung'],
+                    'reasoning' => $vorschlag['reasoning'],
                     'call_log_id' => $vorschlag['call_log_id'],
                     'status' => $leer ? 'leer' : 'offen',
                     'created_at' => now(), 'updated_at' => now(),
@@ -234,14 +234,14 @@ class BulkEnrichService
             ->update(['status' => 'done', 'updated_at' => now()]);
     }
 
-    /** @return array{wert: mixed, confidence: ?float, begruendung: ?string, call_log_id: ?int} */
+    /** @return array{wert: mixed, confidence: ?float, reasoning: ?string, call_log_id: ?int} */
     private function proposeGpFeld(Team $team, FoodAlchemistGp $gp, string $feld): array
     {
-        $basis = ['name' => $gp->name, 'zustand' => $gp->zustand, 'warengruppe' => $gp->warengruppe?->name];
+        $basis = ['name' => $gp->name, 'condition' => $gp->condition, 'commodity_group' => $gp->commodity_group?->name];
 
         [$key, $kontext, $extract] = match ($feld) {
-            'zustand' => ['gp.zustand', ['name' => $gp->name, 'zustand' => $gp->zustand ?: null],
-                fn (array $w) => $w['zustand'] ?? null],
+            'condition' => ['gp.condition', ['name' => $gp->name, 'condition' => $gp->condition ?: null],
+                fn (array $w) => $w['condition'] ?? null],
             'tags' => ['gp.tags', ['name' => $gp->name,
                 'tags' => collect(FoodAlchemistGp::TAG_FIELDS)->mapWithKeys(fn ($t) => [$t => $gp->getAttribute("tag_{$t}")])->filter(fn ($v) => $v !== null)->all()],
                 fn (array $w) => $w['tags'] ?? null],
@@ -257,7 +257,7 @@ class BulkEnrichService
         return [
             'wert' => $extract($p->werte),
             'confidence' => $p->confidence,
-            'begruendung' => $p->begruendung,
+            'reasoning' => $p->reasoning,
             'call_log_id' => $p->callLogId,
         ];
     }
@@ -276,13 +276,13 @@ class BulkEnrichService
         $wert = json_decode((string) $prop->wert, true);
         $ok = false;
 
-        if ($prop->feld === 'zustand') {
-            $z = app(GpNamingService::class)->normalisiereZustand(is_array($wert) ? ($wert['zustand'] ?? null) : $wert);
-            if ($z !== null && in_array($z, GpNamingService::ZUSTAND_VOCAB, true) && $gp->zustand_quelle !== 'manual') {
-                $gp->update(['zustand' => $z, 'zustand_quelle' => 'ki', 'zustand_ai_confidence' => $prop->confidence, 'zustand_ai_begruendung' => $prop->begruendung]);
+        if ($prop->feld === 'condition') {
+            $z = app(GpNamingService::class)->normalisiereZustand(is_array($wert) ? ($wert['condition'] ?? null) : $wert);
+            if ($z !== null && in_array($z, GpNamingService::ZUSTAND_VOCAB, true) && $gp->condition_source !== 'manual') {
+                $gp->update(['condition' => $z, 'condition_source' => 'ki', 'condition_ai_confidence' => $prop->confidence, 'condition_ai_reasoning' => $prop->reasoning]);
                 $ok = true;
             }
-        } elseif ($prop->feld === 'tags' && is_array($wert) && $gp->tag_quelle !== 'manual') {
+        } elseif ($prop->feld === 'tags' && is_array($wert) && $gp->tag_source !== 'manual') {
             $tagWerte = $wert['tags'] ?? $wert;
             $update = [];
             foreach (FoodAlchemistGp::TAG_FIELDS as $tag) {
@@ -291,7 +291,7 @@ class BulkEnrichService
                 }
             }
             if ($update !== []) {
-                $gp->update([...$update, 'tag_quelle' => 'ki', 'tag_ai_confidence' => $prop->confidence, 'tag_ai_begruendung' => $prop->begruendung, 'tag_aggregiert_am' => now()]);
+                $gp->update([...$update, 'tag_source' => 'ki', 'tag_ai_confidence' => $prop->confidence, 'tag_ai_begruendung' => $prop->reasoning, 'tag_aggregiert_am' => now()]);
                 $ok = true;
             }
         } elseif ($prop->feld === 'allergene' && is_array($wert)) {
@@ -307,7 +307,7 @@ class BulkEnrichService
                 $gp->update([...$update, 'allergene_ki_confidence' => $prop->confidence]);
                 $ok = true;
             }
-        } elseif ($prop->feld === 'naehrwerte' && is_array($wert) && $gp->nutri_quelle !== 'manual') {
+        } elseif ($prop->feld === 'naehrwerte' && is_array($wert) && $gp->nutri_source !== 'manual') {
             $num = fn ($v) => is_numeric($v) && (float) $v >= 0 ? round((float) $v, 2) : null;
             if ($num($wert['kcal'] ?? null) !== null) {                // kcal = Leit-Indikator (GL-08)
                 $gp->update([
@@ -316,7 +316,7 @@ class BulkEnrichService
                     'nutri_fat_g_per_100g' => $num($wert['fat_g'] ?? null),
                     'nutri_carbs_g_per_100g' => $num($wert['carbs_g'] ?? null),
                     'nutri_salt_g_per_100g' => $num($wert['salt_g'] ?? null),
-                    'nutri_quelle' => 'ki', 'nutri_ai_confidence' => $prop->confidence,
+                    'nutri_source' => 'ki', 'nutri_ai_confidence' => $prop->confidence,
                 ]);
                 $ok = true;
             }

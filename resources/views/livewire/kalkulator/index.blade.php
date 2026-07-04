@@ -86,12 +86,12 @@
                                                     class="{{ $input }} !py-1" />
                                             </td>
                                             <td class="{{ $td }} text-right">
-                                                <input type="number" min="0" step="0.001" value="{{ rtrim(rtrim(number_format($p['menge'], 3, '.', ''), '0'), '.') }}"
-                                                    wire:change="updatePos({{ $p['id'] }}, 'menge', $event.target.value)"
+                                                <input type="number" min="0" step="0.001" value="{{ rtrim(rtrim(number_format($p['quantity'], 3, '.', ''), '0'), '.') }}"
+                                                    wire:change="updatePos({{ $p['id'] }}, 'quantity', $event.target.value)"
                                                     class="{{ $input }} !py-1 !w-20 text-right tabular-nums" />
                                             </td>
                                             <td class="{{ $td }}">
-                                                <input type="text" value="{{ $p['einheit'] }}" wire:change="updatePos({{ $p['id'] }}, 'einheit', $event.target.value)"
+                                                <input type="text" value="{{ $p['unit'] }}" wire:change="updatePos({{ $p['id'] }}, 'unit', $event.target.value)"
                                                     class="{{ $input }} !py-1 !w-20" placeholder="—" />
                                             </td>
                                             <td class="{{ $td }} text-right">
@@ -100,7 +100,7 @@
                                                     class="{{ $input }} !py-1 !w-24 text-right tabular-nums" />
                                             </td>
                                             <td class="{{ $td }} text-right tabular-nums font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">{{ number_format($p['wareneinsatz'], 2, ',', '.') }} €</td>
-                                            <td class="{{ $td }} text-right tabular-nums text-gray-400">{{ $p['arbeitszeit_min'] !== null ? $p['arbeitszeit_min'] : '—' }}</td>
+                                            <td class="{{ $td }} text-right tabular-nums text-gray-400">{{ $p['work_time_min'] !== null ? $p['work_time_min'] : '—' }}</td>
                                             <td class="{{ $td }} whitespace-nowrap text-right">
                                                 @if($p['typ'] !== 'frei')
                                                     <button type="button" wire:click="aktualisierePos({{ $p['id'] }})" title="Snapshot neu ziehen" class="text-gray-400 hover:text-violet-500 mr-1">↻</button>
@@ -168,7 +168,7 @@
                                 <span class="text-gray-500">VK-Vorschlag (HK2 × Marge)</span>
                                 <span class="tabular-nums text-violet-700 dark:text-violet-300 font-medium">{{ number_format((float) $berechnung['vk_vorschlag'], 2, ',', '.') }} €</span>
                             </div>
-                            <p class="text-[10px] text-gray-400 pt-1">Arbeitszeit-Rollup: {{ number_format((float) $berechnung['arbeitszeit_min'], 0, ',', '.') }} min · nicht-lineare Skalierung folgt mit der KI. Sätze/Gemeinkosten in Einstellungen → Kalkulation.</p>
+                            <p class="text-[10px] text-gray-400 pt-1">Arbeitszeit-Rollup: {{ number_format((float) $berechnung['work_time_min'], 0, ',', '.') }} min · nicht-lineare Skalierung folgt mit der KI. Sätze/Gemeinkosten in Einstellungen → Kalkulation.</p>
                         </div>
                     </div>
                 </div>

@@ -13,7 +13,7 @@ use Platform\Core\Models\Team;
  * editierbar = nur Eigenes). Views fragen IMMER hierüber — nie team_id-Vergleiche
  * inline nachbauen.
  *
- *     Curate::canCurate($user, $einheit)            // Model mit team_id
+ *     Curate::canCurate($user, $unit)            // Model mit team_id
  *     Curate::canCurate($user, $team)               // explizites Besitzer-Team
  */
 final class Curate

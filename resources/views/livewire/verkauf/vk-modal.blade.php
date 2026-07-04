@@ -99,7 +99,7 @@
                 {{-- 'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" — bündelt Allergene · Zusatzstoffe · Nährwerte · Spezifikation (Rezept-Modal-Parität) --}}
                 @php($vkTabs = ['aufbau' => 'Aufbau', 'allergene' => 'Deklaration', 'kalkulation' => 'Kalkulation', 'darreichungen' => 'Darreichungen', 'service' => 'Service'])
                 @if($rezept !== null)@php($vkTabs['sensorik'] = 'Sensorik & Pairing')@endif
-                @php($vkTabs['notizen'] = 'Notizen')
+                @php($vkTabs['notes'] = 'Notizen')
                 @foreach($vkTabs as $tabKey => $tabLabel)
                     <button type="button" @click="tab = '{{ $tabKey }}'"
                             :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
@@ -127,7 +127,7 @@
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Geschmack</label>
-                    <select wire:model="form.geschmacksrichtung" class="{{ $input }}">
+                    <select wire:model="form.taste_direction" class="{{ $input }}">
                         <option value="">—</option>
                         @foreach(['suess' => 'süß', 'herzhaft' => 'herzhaft', 'neutral' => 'neutral'] as $wert => $lbl)
                             <option value="{{ $wert }}">{{ $lbl }}</option>
@@ -144,16 +144,16 @@
                     <select wire:model.live="hauptgruppeId" class="{{ $input }}" data-vk-hg>
                         <option value="">—</option>
                         @foreach($hauptgruppen as $hg)
-                            <option value="{{ $hg->id }}">[{{ $hg->code }}] {{ $hg->bezeichnung }}</option>
+                            <option value="{{ $hg->id }}">[{{ $hg->code }}] {{ $hg->label }}</option>
                         @endforeach
                     </select>
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Speisen-Klasse (Diätform)</label>
-                    <select wire:model="form.speisen_klasse_id" class="{{ $input }}" data-vk-klasse @if($klassen->isEmpty()) disabled @endif>
+                    <select wire:model="form.dish_class_id" class="{{ $input }}" data-vk-klasse @if($klassen->isEmpty()) disabled @endif>
                         <option value="">—</option>
                         @foreach($klassen as $k)
-                            <option value="{{ $k->id }}">{{ $k->bezeichnung }} ({{ $k->diaetform }})</option>
+                            <option value="{{ $k->id }}">{{ $k->label }} ({{ $k->diaetform }})</option>
                         @endforeach
                     </select>
                 </div>
@@ -173,9 +173,9 @@
                         <p class="text-[11px] text-gray-400 mt-0.5">Kein gültiger Vorschlag (Vokabular: aroma_treiber · komponente · beilage · garnitur).</p>
                     @else
                         <div class="mt-1 space-y-0.5">
-                            @foreach($rollenVorschlag['rollen'] as $zeileId => $rolle)
+                            @foreach($rollenVorschlag['rollen'] as $zeileId => $role)
                                 @php($zeile = $rezept->ingredients->firstWhere('id', $zeileId))
-                                <p class="text-[11px] text-gray-600 dark:text-gray-300" wire:key="vkmr-{{ $zeileId }}">{{ $zeile?->referencedRecipe?->name ?? $zeile?->gp?->name ?? $zeile?->display_name ?? "Zeile {$zeileId}" }} → <span class="font-medium">{{ $rolle }}</span></p>
+                                <p class="text-[11px] text-gray-600 dark:text-gray-300" wire:key="vkmr-{{ $zeileId }}">{{ $zeile?->referencedRecipe?->name ?? $zeile?->gp?->name ?? $zeile?->display_name ?? "Zeile {$zeileId}" }} → <span class="font-medium">{{ $role }}</span></p>
                             @endforeach
                         </div>
                     @endif
@@ -219,11 +219,11 @@
                             ['Kohlenhydrate', $rezept->nutri_carbs_g_per_100g, 'g', 1],
                             ['— davon Zucker', $rezept->nutri_sugar_g_per_100g, 'g', 1],
                             ['Salz', $rezept->nutri_salt_g_per_100g, 'g', 2],
-                        ] as [$lbl, $wert, $einheit, $dez])
+                        ] as [$lbl, $wert, $unit, $dez])
                             <tr class="{{ $tr }}" wire:key="vkn-{{ $lbl }}">
                                 <td class="{{ $td }} {{ $lbl === 'Brennwert' ? 'font-medium text-gray-900 dark:text-gray-100' : '' }}">{{ $lbl }}</td>
-                                <td class="{{ $td }} text-right tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $einheit : '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums">{{ $wert !== null && $gProStueck !== null ? number_format((float) $wert * $gProStueck / 100, $dez, ',', '.') . ' ' . $einheit : '—' }}</td>
+                                <td class="{{ $td }} text-right tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $unit : '—' }}</td>
+                                <td class="{{ $td }} text-right tabular-nums">{{ $wert !== null && $gProStueck !== null ? number_format((float) $wert * $gProStueck / 100, $dez, ',', '.') . ' ' . $unit : '—' }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -255,10 +255,10 @@
         {{-- ── Tab: KALKULATION (Verkaufseinheit + Verkaufs-Block) ──────── --}}
         <div x-show="tab === 'kalkulation'" x-cloak class="pt-4 space-y-4">
         <x-foodalchemist::modal-section title="Verkaufseinheit">
-            <div class="grid grid-cols-3 gap-3" data-vk-einheit-block>
+            <div class="grid grid-cols-3 gap-3" data-vk-unit-block>
                 <div>
                     <label class="block {{ $label }} mb-1">Einheit</label>
-                    <select wire:model="form.vk_einheit_vocab_id" class="{{ $input }}">
+                    <select wire:model="form.vk_unit_vocab_id" class="{{ $input }}">
                         <option value="">—</option>
                         @foreach($einheiten as $e)
                             <option value="{{ $e->id }}">{{ $e->display_de ?? $e->slug }}</option>
@@ -267,12 +267,12 @@
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Anzahl Einheiten (primär)</label>
-                    <input type="number" step="0.1" min="0" wire:model="form.vk_anzahl_einheiten" class="{{ $input }}" data-vk-anzahl />
+                    <input type="number" step="0.1" min="0" wire:model="form.vk_unit_count" class="{{ $input }}" data-vk-anzahl />
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">g/Einheit (leer = aus Yield)</label>
-                    <input type="number" step="1" min="0" wire:model="form.vk_menge_pro_einheit_g" class="{{ $input }}"
-                           placeholder="{{ $cockpit['verkauft_als']['g_pro_einheit'] ?? '' }}" data-vk-g-einheit />
+                    <input type="number" step="1" min="0" wire:model="form.vk_quantity_pro_unit_g" class="{{ $input }}"
+                           placeholder="{{ $cockpit['verkauft_als']['g_pro_einheit'] ?? '' }}" data-vk-g-unit />
                 </div>
             </div>
         </x-foodalchemist::modal-section>
@@ -281,10 +281,10 @@
             <div class="grid grid-cols-3 gap-3" data-vk-verkaufsblock>
                 <div>
                     <label class="block {{ $label }} mb-1">Aufschlagsklasse</label>
-                    <select wire:model="form.aufschlagsklasse_id" class="{{ $input }}" data-vk-ak>
+                    <select wire:model="form.markup_class_id" class="{{ $input }}" data-vk-ak>
                         <option value="">—</option>
                         @foreach($aufschlagsklassen as $ak)
-                            <option value="{{ $ak->id }}">{{ $ak->code }} ({{ rtrim(rtrim(number_format((float) $ak->rohaufschlag_pct, 1, '.', ''), '0'), '.') }} %){{ $ak->formel_typ === 'deckungsbeitrag' ? ' — Formel nicht definiert (W-1)' : '' }}</option>
+                            <option value="{{ $ak->id }}">{{ $ak->code }} ({{ rtrim(rtrim(number_format((float) $ak->raw_markup_pct, 1, '.', ''), '0'), '.') }} %){{ $ak->formel_typ === 'deckungsbeitrag' ? ' — Formel nicht definiert (W-1)' : '' }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -329,7 +329,7 @@
                 @forelse($darreichungen as $d)
                     <tr wire:key="dar-{{ $d->id }}" class="border-t border-black/5 dark:border-white/10 align-top">
                         <td class="py-1.5 pr-2">
-                            <span class="font-medium">{{ $d->servierform?->bezeichnung ?? '—' }}</span>
+                            <span class="font-medium">{{ $d->servierform?->label ?? '—' }}</span>
                             @if($d->created_via)<span class="block text-[10px] text-gray-400">{{ $d->created_via }}</span>@endif
                         </td>
                         <td class="py-1.5 pr-2 text-center">
@@ -338,18 +338,18 @@
                         </td>
                         <td class="py-1.5 pr-2 text-right">
                             @if($d->deltas->count() > 0)
-                                <span class="tabular-nums text-gray-500" title="Ergibt sich automatisch aus der Komponenten-Summe (⚙)">{{ $d->menge_pro_einheit_g !== null ? number_format($d->menge_pro_einheit_g, 0, ',', '.') : '—' }} <span class="text-[10px] text-gray-400">Σ</span></span>
+                                <span class="tabular-nums text-gray-500" title="Ergibt sich automatisch aus der Komponenten-Summe (⚙)">{{ $d->quantity_pro_unit_g !== null ? number_format($d->quantity_pro_unit_g, 0, ',', '.') : '—' }} <span class="text-[10px] text-gray-400">Σ</span></span>
                             @else
-                                <input type="text" wire:model.blur="darForm.{{ $d->id }}.menge_pro_einheit_g"
+                                <input type="text" wire:model.blur="darForm.{{ $d->id }}.quantity_pro_unit_g"
                                        wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
                             @endif
                         </td>
                         <td class="py-1.5 pr-2 text-right">
-                            <input type="text" wire:model.blur="darForm.{{ $d->id }}.anzahl_einheiten"
+                            <input type="text" wire:model.blur="darForm.{{ $d->id }}.unit_count"
                                    wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-12 text-right" />
                         </td>
                         <td class="py-1.5 pr-2">
-                            <select wire:model="darForm.{{ $d->id }}.aufschlagsklasse_id"
+                            <select wire:model="darForm.{{ $d->id }}.markup_class_id"
                                     wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-28">
                                 <option value="">—</option>
                                 @foreach($aufschlagsklassen as $ak)<option value="{{ $ak->id }}">{{ $ak->code }}</option>@endforeach
@@ -367,7 +367,7 @@
                                     wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-32"
                                     title="Default-Geschirr dieser Form — wird im Concepter am Slot vorgeschlagen">
                                 <option value="">—</option>
-                                @foreach($geschirrItems as $gi)<option value="{{ $gi->id }}">{{ $gi->bezeichnung }}</option>@endforeach
+                                @foreach($geschirrItems as $gi)<option value="{{ $gi->id }}">{{ $gi->label }}</option>@endforeach
                             </select>
                         </td>
                         <td class="py-1.5 pr-2 text-right tabular-nums text-orange-600 dark:text-orange-400">
@@ -421,7 +421,7 @@
                                                 <td class="py-1 pr-2">{{ $z->display_name ?? $z->gp?->gp_name ?? $z->referencedRecipe?->name ?? $z->raw_text }}</td>
                                                 <td class="py-1 pr-2 text-right tabular-nums text-gray-400">{{ number_format($darZeilen[$z->id]['masse_g'], 0, ',', '.') }}</td>
                                                 <td class="py-1 pr-2 text-right">
-                                                    <input type="text" value="{{ $delta?->menge_override_g }}"
+                                                    <input type="text" value="{{ $delta?->quantity_override_g }}"
                                                            wire:change="darDeltaMenge({{ $d->id }}, {{ $z->id }}, $event.target.value)"
                                                            class="{{ $input }} !py-0.5 !w-20 text-right" placeholder="—" />
                                                 </td>
@@ -443,13 +443,13 @@
                 </tbody>
             </table>
 
-            @php($belegte = $darreichungen->pluck('servierform_id')->all())
+            @php($belegte = $darreichungen->pluck('serving_form_id')->all())
             <div class="flex items-center gap-2 mt-2" data-dar-anlegen>
                 <select wire:model="darNeueForm" class="{{ $input }} !py-1 w-52">
                     <option value="">Neue Darreichung: Servierform …</option>
                     @foreach($servierformenAlle as $sf)
                         @continue(in_array($sf->id, $belegte))
-                        <option value="{{ $sf->id }}">{{ $sf->bezeichnung }}</option>
+                        <option value="{{ $sf->id }}">{{ $sf->label }}</option>
                     @endforeach
                 </select>
                 <button type="button" wire:click="darreichungNeu" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">+ Anlegen</button>
@@ -468,33 +468,33 @@
                 <div>
                     <label class="block {{ $label }} mb-1">Behälter warm</label>
                     <div class="flex gap-2">
-                        <select wire:model="form.behaelter_warm_vocab_id" class="{{ $input }} flex-1">
+                        <select wire:model="form.container_warm_vocab_id" class="{{ $input }} flex-1">
                             <option value="">—</option>
                             @foreach($behaelter as $b)
-                                <option value="{{ $b->id }}" @if($b->is_inactive && $form['behaelter_warm_vocab_id'] != $b->id) hidden @endif>{{ $b->name }}{{ $b->gruppe ? ' · ' . $b->gruppe : '' }}{{ $b->is_inactive ? ' (inaktiv)' : '' }}</option>
+                                <option value="{{ $b->id }}" @if($b->is_inactive && $form['container_warm_vocab_id'] != $b->id) hidden @endif>{{ $b->name }}{{ $b->gruppe ? ' · ' . $b->gruppe : '' }}{{ $b->is_inactive ? ' (inaktiv)' : '' }}</option>
                             @endforeach
                         </select>
-                        <input type="number" min="0" wire:model="form.behaelter_warm_anzahl" class="{{ $input }} w-16" placeholder="n" />
+                        <input type="number" min="0" wire:model="form.container_warm_anzahl" class="{{ $input }} w-16" placeholder="n" />
                     </div>
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Behälter kalt</label>
                     <div class="flex gap-2">
-                        <select wire:model="form.behaelter_kalt_vocab_id" class="{{ $input }} flex-1">
+                        <select wire:model="form.container_cold_vocab_id" class="{{ $input }} flex-1">
                             <option value="">—</option>
                             @foreach($behaelter as $b)
-                                <option value="{{ $b->id }}" @if($b->is_inactive && $form['behaelter_kalt_vocab_id'] != $b->id) hidden @endif>{{ $b->name }}{{ $b->gruppe ? ' · ' . $b->gruppe : '' }}{{ $b->is_inactive ? ' (inaktiv)' : '' }}</option>
+                                <option value="{{ $b->id }}" @if($b->is_inactive && $form['container_cold_vocab_id'] != $b->id) hidden @endif>{{ $b->name }}{{ $b->gruppe ? ' · ' . $b->gruppe : '' }}{{ $b->is_inactive ? ' (inaktiv)' : '' }}</option>
                             @endforeach
                         </select>
-                        <input type="number" min="0" wire:model="form.behaelter_kalt_anzahl" class="{{ $input }} w-16" placeholder="n" />
+                        <input type="number" min="0" wire:model="form.container_cold_anzahl" class="{{ $input }} w-16" placeholder="n" />
                     </div>
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Servier-Vehikel</label>
-                    <select wire:model="form.servier_vehikel_vocab_id" class="{{ $input }}">
+                    <select wire:model="form.serving_vehicle_vocab_id" class="{{ $input }}">
                         <option value="">—</option>
                         @foreach($vehikel as $v)
-                            <option value="{{ $v->id }}" @if($v->is_inactive && $form['servier_vehikel_vocab_id'] != $v->id) hidden @endif>{{ $v->name }}{{ $v->gruppe ? ' · ' . $v->gruppe : '' }}{{ $v->is_inactive ? ' (inaktiv)' : '' }}</option>
+                            <option value="{{ $v->id }}" @if($v->is_inactive && $form['serving_vehicle_vocab_id'] != $v->id) hidden @endif>{{ $v->name }}{{ $v->gruppe ? ' · ' . $v->gruppe : '' }}{{ $v->is_inactive ? ' (inaktiv)' : '' }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -531,7 +531,7 @@
                 @endforeach
                 <div class="grid grid-cols-6 gap-2 pt-1" data-regen-form>
                     <input type="text" wire:model="regenForm.komponente_label" class="{{ $input }} col-span-2" placeholder="Komponente (z. B. Gesamt)" />
-                    <select wire:model="regenForm.geraet_vocab_id" class="{{ $input }}">
+                    <select wire:model="regenForm.device_vocab_id" class="{{ $input }}">
                         <option value="">kalt</option>
                         @foreach($geraete as $g)<option value="{{ $g->id }}">{{ $g->name }}</option>@endforeach
                     </select>
@@ -552,7 +552,7 @@
             <div class="grid grid-cols-2 gap-3" data-vk-eigenschaften>
                 <div>
                     <label class="block {{ $label }} mb-1">Arbeitszeit (min)</label>
-                    <input type="number" min="0" wire:model="form.arbeitszeit_min" class="{{ $input }}" />
+                    <input type="number" min="0" wire:model="form.work_time_min" class="{{ $input }}" />
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1" title="M-K8: direkte Einzelkosten je Portion (Energie, Verpackung …) — fließen als Block in HK2">Nebenkosten (€/Portion)</label>
@@ -568,7 +568,7 @@
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Fertigungstiefe</label>
-                    <select wire:model="form.fertigungstiefe" class="{{ $input }}">
+                    <select wire:model="form.production_depth" class="{{ $input }}">
                         <option value="">— unbestimmt —</option>
                         <option value="from_scratch">from scratch</option>
                         <option value="teilfertig">teilfertig</option>
@@ -577,7 +577,7 @@
                 </div>
                 <div class="col-span-2">
                     <label class="block {{ $label }} mb-1">KI-Beschreibung (3–5 Sätze nüchtern, §8.3)</label>
-                    <textarea wire:model="form.beschreibung" rows="3" class="{{ $input }}" data-vk-beschreibung></textarea>
+                    <textarea wire:model="form.description" rows="3" class="{{ $input }}" data-vk-description></textarea>
                 </div>
             </div>
         </x-foodalchemist::modal-section>
@@ -618,10 +618,10 @@
         </div>
 
         {{-- ── Tab: NOTIZEN (Notizen + Verwendungsnachweise) ───────────── --}}
-        <div x-show="tab === 'notizen'" x-cloak class="pt-4 space-y-4">
+        <div x-show="tab === 'notes'" x-cloak class="pt-4 space-y-4">
         {{-- M9-01h: Notizen (§9.1 — manuelle Insel) --}}
         <x-foodalchemist::modal-section title="Notizen (§9.1 — bleibt bei jedem KI-Sync erhalten)">
-            <textarea wire:model="form.notizen_manual" rows="3" class="{{ $input }}" data-vk-notizen></textarea>
+            <textarea wire:model="form.notes_manual" rows="3" class="{{ $input }}" data-vk-notes></textarea>
         </x-foodalchemist::modal-section>
 
         <x-foodalchemist::modal-section title="Verwendungsnachweise (Kunde × Marketing-Name)">

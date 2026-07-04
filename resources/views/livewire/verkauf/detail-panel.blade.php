@@ -23,7 +23,7 @@
             <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
                 <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
                 @if($rezept->speisenKlasse !== null)
-                    <span class="{{ $pill }} {{ $variantPill['info'] }}" title="{{ $rezept->speisenKlasse->bezeichnung }}">{{ $rezept->speisenKlasse->hauptgruppe?->code ?? 'HG?' }} · {{ $rezept->speisenKlasse->bezeichnung }}</span>
+                    <span class="{{ $pill }} {{ $variantPill['info'] }}" title="{{ $rezept->speisenKlasse->label }}">{{ $rezept->speisenKlasse->hauptgruppe?->code ?? 'HG?' }} · {{ $rezept->speisenKlasse->label }}</span>
                     <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $rezept->speisenKlasse->diaetform }}</span>
                 @else
                     <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="V-22-Seed-Gate: Klassifikation fehlt">ohne Speisen-Klasse</span>
@@ -39,7 +39,7 @@
                     ✨ Speisen-Klasse: <span class="font-medium">{{ $klasseVorschlag['klasse_name'] ?? 'kein sicherer Treffer' }}</span>
                     <span class="text-[11px] text-gray-400">· {{ round($klasseVorschlag['confidence'] * 100) }} %</span>
                 </p>
-                @if($klasseVorschlag['begruendung'] !== null)<p class="text-[11px] text-gray-400 mt-0.5">{{ $klasseVorschlag['begruendung'] }}</p>@endif
+                @if($klasseVorschlag['reasoning'] !== null)<p class="text-[11px] text-gray-400 mt-0.5">{{ $klasseVorschlag['reasoning'] }}</p>@endif
                 <div class="flex gap-1.5 mt-1.5">
                     @if($klasseVorschlag['klasse_id'] !== null)
                         <button type="button" wire:click="accept_klasse" class="{{ $btnGhostXs }} text-emerald-600" data-klasse-accept>Übernehmen</button>
@@ -55,11 +55,11 @@
                     <p class="text-[11px] text-gray-400 mt-0.5">Kein gültiger Vorschlag (Rollen-Vokabular: aroma_treiber · komponente · beilage · garnitur).</p>
                 @else
                     <div class="mt-1 space-y-0.5">
-                        @foreach($rollenVorschlag['rollen'] as $zeileId => $rolle)
+                        @foreach($rollenVorschlag['rollen'] as $zeileId => $role)
                             @php($zeile = $rezept->ingredients->firstWhere('id', $zeileId))
                             <p class="text-[11px] text-gray-600 dark:text-gray-300" wire:key="rv-{{ $zeileId }}">
                                 {{ $zeile?->referencedRecipe?->name ?? $zeile?->gp?->name ?? $zeile?->display_name ?? "Zeile {$zeileId}" }}
-                                → <span class="font-medium">{{ $rolle }}</span>
+                                → <span class="font-medium">{{ $role }}</span>
                             </p>
                         @endforeach
                     </div>
@@ -77,8 +77,8 @@
         @if($cockpit['verkauft_als'] !== null)
             <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2 text-xs text-orange-900 dark:text-orange-200" data-verkauft-als>
                 <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400 block">Verkauft als</span>
-                {{ $cockpit['verkauft_als']['anzahl'] !== null ? number_format((float) $cockpit['verkauft_als']['anzahl'], 1, ',', '.') : '?' }} {{ $cockpit['verkauft_als']['einheit'] }}
-                @if($cockpit['verkauft_als']['g_pro_einheit'] !== null) · ≈ {{ number_format($cockpit['verkauft_als']['g_pro_einheit'], 0, ',', '.') }} g pro {{ $cockpit['verkauft_als']['einheit'] }}@endif
+                {{ $cockpit['verkauft_als']['anzahl'] !== null ? number_format((float) $cockpit['verkauft_als']['anzahl'], 1, ',', '.') : '?' }} {{ $cockpit['verkauft_als']['unit'] }}
+                @if($cockpit['verkauft_als']['g_pro_einheit'] !== null) · ≈ {{ number_format($cockpit['verkauft_als']['g_pro_einheit'], 0, ',', '.') }} g pro {{ $cockpit['verkauft_als']['unit'] }}@endif
                 @if($cockpit['verkauft_als']['yield_kg'] !== null) · Yield {{ number_format($cockpit['verkauft_als']['yield_kg'], 2, ',', '.') }} kg @endif
             </div>
         @endif
@@ -90,7 +90,7 @@
                 <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
             </div>
             <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
-                <span class="{{ $dt }}">VK netto {{ $cockpit['vk']['quelle'] === 'manuell' ? '(manuell)' : ($cockpit['vk']['quelle'] === 'klasse' ? '(aus Klasse)' : '') }}</span>
+                <span class="{{ $dt }}">VK netto {{ $cockpit['vk']['source'] === 'manuell' ? '(manuell)' : ($cockpit['vk']['source'] === 'klasse' ? '(aus Klasse)' : '') }}</span>
                 <p class="text-xs font-semibold text-gray-900 dark:text-gray-100" data-vk-netto>{{ $cockpit['vk']['vk_netto'] !== null ? number_format($cockpit['vk']['vk_netto'], 2, ',', '.') . ' €' : '—' }}</p>
             </div>
             <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-vk-brutto>
@@ -119,17 +119,17 @@
         @if($cockpit['formel_fehlt'])
             <p class="text-[11px] text-amber-600 dark:text-amber-400" data-formel-fehlt>⚠ Aufschlagsklasse {{ $rezept->aufschlagsklasse?->code }}: Formel »deckungsbeitrag« nicht definiert (W-1) — Entscheid ausstehend, VK nur manuell.</p>
         @elseif($rezept->aufschlagsklasse !== null && $cockpit['vk']['vorschlag'] !== null)
-            <p class="text-[11px] text-gray-400" data-formel-klartext>{{ $rezept->aufschlagsklasse->code }} · {{ $rezept->aufschlagsklasse->bezeichnung }} · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
+            <p class="text-[11px] text-gray-400" data-formel-klartext>{{ $rezept->aufschlagsklasse->code }} · {{ $rezept->aufschlagsklasse->label }} · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
         @elseif($rezept->ek_total_eur === null)
             <p class="text-[11px] text-gray-400" data-cockpit-leer>Kein EK berechnet — Zutaten ergänzen oder Lead-LAs setzen.</p>
         @elseif($rezept->aufschlagsklasse === null)
             <p class="text-[11px] text-gray-400" data-cockpit-leer>Keine Aufschlagsklasse gesetzt — VK-Vorschlag erst nach Klassifikation (M6-04).</p>
         @endif
 
-        @if($rezept->beschreibung !== null)
+        @if($rezept->description !== null)
             <div>
                 <p class="{{ $dt }} mb-1">Beschreibung</p>
-                <p class="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{{ $rezept->beschreibung }}</p>
+                <p class="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{{ $rezept->description }}</p>
             </div>
         @endif
         {{-- Marketing-Text entfällt hier (UX-Umbau 2026-07-03): kundenspezifischer
@@ -151,12 +151,12 @@
                     </div>
                 </div>
             @endif
-            @foreach(['sektor' => ['Sektor', $sektorEignungen, 'sektor_slug'], 'niveau' => ['Niveau', $niveauEignungen, 'niveau_slug']] as $typ => [$lbl, $eignungen, $slugSpalte])
+            @foreach(['sektor' => ['Sektor', $sektorEignungen, 'sektor_slug'], 'niveau' => ['Niveau', $niveauEignungen, 'level_slug']] as $typ => [$lbl, $eignungen, $slugSpalte])
                 <div class="flex items-center gap-1.5 flex-wrap py-0.5" data-eignung-zeile="{{ $typ }}">
                     <span class="text-[11px] text-gray-400 w-12 shrink-0">{{ $lbl }}</span>
                     @forelse($eignungen as $e)
                         <span wire:key="eig-{{ $typ }}-{{ $e->id }}" class="{{ $pill }} {{ $variantPill[$typ === 'sektor' ? 'secondary' : 'info'] }} group"
-                              title="{{ $e->quelle }}{{ $e->ai_confidence !== null ? ' · ' . round($e->ai_confidence * 100) . ' %' : '' }}">
+                              title="{{ $e->source }}{{ $e->ai_confidence !== null ? ' · ' . round($e->ai_confidence * 100) . ' %' : '' }}">
                             {{ $e->{$slugSpalte} }}
                             <button type="button" wire:click="eignungEntfernen('{{ $typ }}', '{{ $e->{$slugSpalte} }}')" class="hidden group-hover:inline text-rose-400 ml-0.5" title="entfernen">✕</button>
                         </span>
@@ -187,7 +187,7 @@
             </div>
             <div class="flex flex-wrap gap-1 mt-1">
                 @foreach($kernAnker as $anker)
-                    <span wire:key="vka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->quelle }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
+                    <span wire:key="vka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->source }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
                         ★ {{ $anker->display_de }}
                         <button type="button" wire:click="ankerLoesen({{ $anker->id }})" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
                     </span>
@@ -255,8 +255,8 @@
                                 <span class="px-2.5 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider {{ $urteil->score >= 80 ? 'border-green-600 text-green-700 dark:border-green-400 dark:text-green-300' : 'border-amber-500 text-amber-700 dark:text-amber-300' }}">{{ $urteil->label }}</span>
                             @endif
                         </div>
-                        @if($urteil->begruendung !== null)
-                            <p class="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{{ $urteil->begruendung }}</p>
+                        @if($urteil->reasoning !== null)
+                            <p class="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{{ $urteil->reasoning }}</p>
                         @endif
                         @if($urteil->schwachstelle !== null)
                             <p class="text-[11px] text-amber-600 dark:text-amber-400">Schwachstelle: {{ $urteil->schwachstelle }}</p>
@@ -306,7 +306,7 @@
                                     <p class="font-medium text-gray-900 dark:text-gray-100">{{ $v['zutat'] }}
                                         @if($v['kategorie'] !== null)<span class="text-[11px] font-normal text-gray-400 ml-1">{{ $v['kategorie'] }}</span>@endif
                                     </p>
-                                    @if($v['begruendung'] !== null)<p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">{{ $v['begruendung'] }}</p>@endif
+                                    @if($v['reasoning'] !== null)<p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">{{ $v['reasoning'] }}</p>@endif
                                 </div>
                             </div>
                         @endforeach
@@ -344,7 +344,7 @@
                         @foreach(['klassiker', 'signature'] as $modus)
                             <div x-show="modus === '{{ $modus }}'" class="space-y-1.5">
                                 @foreach($nachbarn[$modus] as $n)
-                                    <div class="flex gap-2 text-xs" wire:key="vkn-{{ $modus }}-{{ $n['anker_id'] }}">
+                                    <div class="flex gap-2 text-xs" wire:key="vkn-{{ $modus }}-{{ $n['anchor_id'] }}">
                                         <span class="font-semibold shrink-0 {{ $n['mean_w'] >= 80 ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400' }}">{{ $n['mean_w'] }} %</span>
                                         <div class="min-w-0">
                                             <p class="font-medium text-gray-900 dark:text-gray-100">{{ $n['slug'] }}
@@ -370,7 +370,7 @@
             <div class="space-y-1" data-vk-zutaten>
                 @foreach($rezept->ingredients as $z)
                     <p class="text-xs text-gray-900 dark:text-gray-100 leading-snug" wire:key="vkz-{{ $z->id }}">
-                        <span class="text-gray-400 tabular-nums">{{ $z->menge !== null ? rtrim(rtrim(number_format((float) $z->menge, 2, ',', '.'), '0'), ',') . ' ' . ($z->einheit?->slug ?? '') : '' }}</span>
+                        <span class="text-gray-400 tabular-nums">{{ $z->quantity !== null ? rtrim(rtrim(number_format((float) $z->quantity, 2, ',', '.'), '0'), ',') . ' ' . ($z->unit?->slug ?? '') : '' }}</span>
                         {{ $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name }}
                     </p>
                 @endforeach

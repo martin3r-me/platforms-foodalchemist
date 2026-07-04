@@ -18,7 +18,7 @@ class SignalService
     /**
      * Erzeugt/aktualisiert ein Signal — idempotent über dedup_key: existiert bereits ein
      * OFFENES Signal mit gleichem (Team, typ, dedup_key), wird es aktualisiert statt
-     * dupliziert. opts: beschreibung, payload(array), dedup_key, ref_type, ref_id, quelle.
+     * dupliziert. opts: description, payload(array), dedup_key, ref_type, ref_id, source.
      */
     public function erzeuge(Team $team, SignalTyp $typ, SignalSeverity $severity, string $titel, array $opts = []): FoodAlchemistSignal
     {
@@ -31,7 +31,7 @@ class SignalService
                 $vorhanden->update([
                     'severity' => $severity->value,
                     'titel' => $titel,
-                    'beschreibung' => $opts['beschreibung'] ?? $vorhanden->beschreibung,
+                    'description' => $opts['description'] ?? $vorhanden->description,
                     'payload' => $opts['payload'] ?? $vorhanden->payload,
                 ]);
 
@@ -45,12 +45,12 @@ class SignalService
             'severity' => $severity->value,
             'status' => SignalStatus::Offen->value,
             'titel' => $titel,
-            'beschreibung' => $opts['beschreibung'] ?? null,
+            'description' => $opts['description'] ?? null,
             'payload' => $opts['payload'] ?? null,
             'dedup_key' => $dedup,
             'ref_type' => $opts['ref_type'] ?? null,
             'ref_id' => $opts['ref_id'] ?? null,
-            'quelle' => $opts['quelle'] ?? 'detektor',
+            'source' => $opts['source'] ?? 'detektor',
         ]);
     }
 

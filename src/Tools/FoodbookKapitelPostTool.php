@@ -20,7 +20,7 @@ class FoodbookKapitelPostTool extends FoodAlchemistTool implements ToolContract,
     public function getDescription(): string
     {
         return 'Legt ein Kapitel in einem draft-Foodbook an (parent_id für Unterkapitel, Position ans Ende). '
-            . 'Optional: konsumententitel, claim, beschreibung, preis_pro_person (setzt preis_modus=fix — '
+            . 'Optional: konsumententitel, claim, description, preis_pro_person (setzt preis_modus=fix — '
             . 'sonst auto-Aggregation aus den Blöcken).';
     }
 
@@ -34,7 +34,7 @@ class FoodbookKapitelPostTool extends FoodAlchemistTool implements ToolContract,
                 'parent_id' => ['type' => 'integer', 'description' => 'Übergeordnetes Kapitel für Verschachtelung'],
                 'konsumententitel' => ['type' => 'string', 'description' => 'Kundenseitiger Titel, falls abweichend'],
                 'claim' => ['type' => 'string'],
-                'beschreibung' => ['type' => 'string'],
+                'description' => ['type' => 'string'],
                 'preis_pro_person' => ['type' => 'number', 'description' => 'Fix-Preis p. P.; weglassen = auto aus Blöcken'],
             ],
             'required' => ['foodbook_id', 'titel'],
@@ -61,7 +61,7 @@ class FoodbookKapitelPostTool extends FoodAlchemistTool implements ToolContract,
                 'titel' => (string) $arguments['titel'],
                 'preis_modus' => isset($arguments['preis_pro_person']) ? 'fix' : 'auto',
             ], isset($arguments['parent_id']) ? (int) $arguments['parent_id'] : null);
-            $extras = array_intersect_key($arguments, array_flip(['konsumententitel', 'claim', 'beschreibung', 'preis_pro_person']));
+            $extras = array_intersect_key($arguments, array_flip(['konsumententitel', 'claim', 'description', 'preis_pro_person']));
             if ($extras !== []) {
                 $k = $svc->updateKapitel($team, $k->id, $extras);
             }

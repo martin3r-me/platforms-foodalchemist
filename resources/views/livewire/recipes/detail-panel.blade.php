@@ -24,7 +24,7 @@
                     <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
                 </div>
             </div>
-            <p class="text-[11px] text-gray-400 mt-0.5">{{ $rezept->kategorie?->bezeichnung ?? '—' }} · {{ $rezept->recipe_key }}</p>
+            <p class="text-[11px] text-gray-400 mt-0.5">{{ $rezept->kategorie?->label ?? '—' }} · {{ $rezept->recipe_key }}</p>
         </div>
 
         {{-- KPI-Karte (EK/kg · EK · Yield · Konfidenz) --}}
@@ -46,8 +46,8 @@
             <p class="text-[11px] text-amber-600 dark:text-amber-400 -mt-2">Yield manuell überschrieben (Auto: {{ number_format((float) $rezept->yield_kg, 3, ',', '.') }} kg)</p>
         @endif
 
-        @if($rezept->beschreibung)
-            <p class="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed" data-beschreibung>{{ $rezept->beschreibung }}</p>
+        @if($rezept->description)
+            <p class="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed" data-description>{{ $rezept->description }}</p>
         @endif
 
         {{-- Zutaten read-only: GP-Links (Kontext-Erhalt: ?gp=), Lineage kursiv, EK je Zeile --}}
@@ -56,7 +56,7 @@
             <div class="space-y-0.5">
                 @foreach($rezept->ingredients as $z)
                     <div wire:key="z-{{ $z->id }}" class="flex items-baseline gap-2 text-[11px] py-0.5 border-b border-black/5 dark:border-white/5 last:border-0 {{ $z->is_optional ? 'opacity-60' : '' }}">
-                        <span class="text-gray-500 tabular-nums shrink-0 w-20 text-right">{{ rtrim(rtrim(number_format((float) $z->menge, 2, ',', '.'), '0'), ',') }}{{ $z->menge_max !== null ? '–' . rtrim(rtrim(number_format((float) $z->menge_max, 2, ',', '.'), '0'), ',') : '' }} {{ $z->einheit?->slug }}</span>
+                        <span class="text-gray-500 tabular-nums shrink-0 w-20 text-right">{{ rtrim(rtrim(number_format((float) $z->quantity, 2, ',', '.'), '0'), ',') }}{{ $z->quantity_max !== null ? '–' . rtrim(rtrim(number_format((float) $z->quantity_max, 2, ',', '.'), '0'), ',') : '' }} {{ $z->unit?->slug }}</span>
                         <span class="min-w-0 flex-1">
                             @if($z->gp !== null)
                                 <a href="{{ route('foodalchemist.gps.index', ['gp' => $z->gp_id]) }}" class="text-violet-600 dark:text-violet-400 hover:underline">{{ $z->gp->name }}</a>
@@ -108,10 +108,10 @@
                     @foreach($eltern as $parent)
                         {{-- M9-05-Rest: VK-Eltern öffnen den VK-Editor als Modal, Basis-Eltern hüpfen im Panel --}}
                         <button type="button" wire:key="el-{{ $parent->id }}"
-                                @if($parent->ist_verkaufsrezept) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })"
+                                @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })"
                                 @else wire:click="zeige({{ $parent->id }})" @endif
                                 class="block w-full text-left text-[11px] text-sky-600 dark:text-sky-400 hover:underline truncate" data-eltern-link>
-                            {{ $parent->ist_verkaufsrezept ? '💶' : '↑' }} {{ $parent->name }}
+                            {{ $parent->is_sales_recipe ? '💶' : '↑' }} {{ $parent->name }}
                         </button>
                     @endforeach
                 </div>
@@ -124,7 +124,7 @@
         @if($nurEignung || ! ($embedded ?? false))
         @php($eignungVokab = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular())
         @php($eignungAktiv = [
-            'niveau' => $rezept->niveauEignungen->keyBy('niveau_slug'),
+            'niveau' => $rezept->niveauEignungen->keyBy('level_slug'),
             'sektor' => $rezept->sektorEignungen->keyBy('sektor_slug'),
         ])
         <div data-eignungen>
@@ -143,7 +143,7 @@
                                         ? ($typ === 'niveau' ? $variantPill['info'] : $variantPill['primary'])
                                         : 'border border-black/10 dark:border-white/15 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300' }}"
                                     title="{{ $eintrag !== null
-                                        ? 'geeignet · ' . $eintrag->quelle . ($eintrag->ai_confidence !== null ? ' ' . round($eintrag->ai_confidence * 100) . '%' : '') . ' — Klick entfernt'
+                                        ? 'geeignet · ' . $eintrag->source . ($eintrag->ai_confidence !== null ? ' ' . round($eintrag->ai_confidence * 100) . '%' : '') . ' — Klick entfernt'
                                         : 'Klick markiert als geeignet' }}"
                                     data-eignung-chip="{{ $typ }}-{{ $slug }}">{{ $slug }}</button>
                         @endforeach
@@ -207,7 +207,7 @@
             </button>
             <div class="flex flex-wrap gap-1 mt-1">
                 @foreach($kernAnker as $anker)
-                    <span wire:key="ka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->quelle }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
+                    <span wire:key="ka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->source }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
                         ★ {{ $anker->display_de }}
                         <button type="button" wire:click="ankerLoesen({{ $anker->id }})" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
                     </span>
@@ -299,7 +299,7 @@
                         <p class="{{ $dt }} mt-1.5 mb-1">{{ $lbl }}</p>
                         <div class="flex flex-wrap gap-1" data-nachbarn-{{ $modus }}>
                             @foreach($nachbarn[$modus] as $n)
-                                <span wire:key="nb-{{ $modus }}-{{ $n['anker_id'] }}" class="{{ $pill }} {{ $modus === 'klassiker' ? $variantPill['success'] : $variantPill['info'] }}"
+                                <span wire:key="nb-{{ $modus }}-{{ $n['anchor_id'] }}" class="{{ $pill }} {{ $modus === 'klassiker' ? $variantPill['success'] : $variantPill['info'] }}"
                                       title="trifft {{ $n['cover'] }} Anker · Grad {{ $n['degree'] }}{{ $n['degree'] > 100 ? ' (Allrounder)' : '' }}">{{ $n['slug'] }} {{ $n['mean_w'] }} %</span>
                             @endforeach
                         </div>
@@ -325,7 +325,7 @@
 
         <p class="text-[11px] text-gray-400 border-t border-black/5 dark:border-white/10 pt-2">
             Nährwerte {{ $rezept->nutri_kcal_per_100g !== null ? number_format((float) $rezept->nutri_kcal_per_100g, 0, ',', '.') . ' kcal/100 g (' . $rezept->nutri_konfidenz . ')' : '—' }}
-            · v{{ $rezept->version }}{{ $rezept->arbeitszeit_min ? ' · ' . $rezept->arbeitszeit_min . ' min' : '' }}
+            · v{{ $rezept->version }}{{ $rezept->work_time_min ? ' · ' . $rezept->work_time_min . ' min' : '' }}
         </p>
         @endunless
     @endif

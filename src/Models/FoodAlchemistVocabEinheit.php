@@ -16,7 +16,7 @@ class FoodAlchemistVocabEinheit extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_vocab_einheiten';
+    protected $table = 'foodalchemist_vocab_units';
 
     protected $fillable = [
         'uuid', 'team_id', 'slug', 'display_de', 'dimension',

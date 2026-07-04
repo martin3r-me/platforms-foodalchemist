@@ -64,7 +64,7 @@
             <div class="grid grid-cols-2 gap-2">
                 <div><label class="{{ $label }}">Preis-Modus</label>
                     <select wire:model="form.preis_modus" wire:change="speichern" class="{{ $input }}"><option value="auto">Auto (Pax × Menü)</option><option value="manuell">Manuell</option></select></div>
-                <div><label class="{{ $label }}">Gültig bis</label><input type="date" wire:model="form.gueltig_bis" class="{{ $input }}" /></div>
+                <div><label class="{{ $label }}">Gültig bis</label><input type="date" wire:model="form.valid_until" class="{{ $input }}" /></div>
             </div>
             @if($kalkulation['preis_modus']==='manuell')
                 <div><label class="{{ $label }}">Gesamtpreis € (manuell)</label>
@@ -206,7 +206,7 @@
                 @foreach($kalkulation['mengen'] as $m)
                     <div wire:key="mng-{{ $loop->index }}" class="flex items-center justify-between gap-2 text-[11px]">
                         <span class="truncate text-gray-600 dark:text-gray-300">{{ $m['gericht'] ?? '—' }}</span>
-                        <span class="tabular-nums text-gray-500 shrink-0">{{ $m['gesamt_menge'] !== null ? rtrim(rtrim(number_format($m['gesamt_menge'],2,',','.'),'0'),',').' '.($m['einheit'] ?? '') : '—' }}</span>
+                        <span class="tabular-nums text-gray-500 shrink-0">{{ $m['gesamt_menge'] !== null ? rtrim(rtrim(number_format($m['gesamt_menge'],2,',','.'),'0'),',').' '.($m['unit'] ?? '') : '—' }}</span>
                     </div>
                 @endforeach
             </div>

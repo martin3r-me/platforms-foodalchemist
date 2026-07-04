@@ -18,7 +18,7 @@ class FoodAlchemistVocabRolle extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_vocab_rollen';
+    protected $table = 'foodalchemist_vocab_roles';
 
     protected $guarded = ['id'];
 

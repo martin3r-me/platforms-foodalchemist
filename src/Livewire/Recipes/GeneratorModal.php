@@ -14,7 +14,7 @@ use Platform\FoodAlchemist\Services\RecipeGeneratorService;
  */
 class GeneratorModal extends Component
 {
-    public string $beschreibung = '';
+    public string $description = '';
 
     /**
      * R5 (Dominique, Ist-App-Vorbild «Richtung (optional)»): Pill-Gruppen statt
@@ -57,7 +57,7 @@ class GeneratorModal extends Component
     #[On('generator-modal.oeffnen')]
     public function oeffnen(): void
     {
-        $this->reset('fehler', 'ergebnis', 'beschreibung');
+        $this->reset('fehler', 'ergebnis', 'description');
         $this->dispatch('modal.open', name: 'generator-modal');
     }
 
@@ -66,7 +66,7 @@ class GeneratorModal extends Component
         $this->fehler = null;
         $this->ergebnis = null;
         $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || trim($this->beschreibung) === '') {
+        if ($team === null || trim($this->description) === '') {
             $this->fehler = 'Beschreibung ist Pflicht.';
 
             return;
@@ -77,7 +77,7 @@ class GeneratorModal extends Component
             // Präferenz geht zusätzlich als Prompt-Kontext mit (egal ≠ bio erzwingen)
             $parameter = $this->parameter;
             $parameter['bio'] = $parameter['bio_praeferenz'] === 'bio';
-            $resultat = $generator->generiere($team, trim($this->beschreibung), $parameter);
+            $resultat = $generator->generiere($team, trim($this->description), $parameter);
             $this->ergebnis = [
                 'recipe_id' => $resultat['recipe']->id,
                 'name' => $resultat['recipe']->name,

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
  * M4-01 / D-5 §2.2: Zutatenliste (Quelle recipe_ingredients, 9.590).
  * gp_id XOR referenced_recipe_id — XOR wird im Service erzwungen (07 §7:
  * kein Raw-CHECK). Tote Spalten NICHT migriert (GL-02 A-6): prozent_garverlust,
- * prozent_in_produkt, menge_in_g_computed. V-21: rolle + ist_wertgebend von
+ * prozent_in_produkt, menge_in_g_computed. V-21: role + is_value_relevant von
  * Anfang an dabei (in der Alt-App tot, weil ohne UI).
  */
 return new class extends Migration
@@ -30,14 +30,14 @@ return new class extends Migration
             $table->text('raw_text');
             $table->string('display_name')->nullable()->comment('D-5 §2.2 — Anzeige-Name (neu, Backfill via V-03)');
 
-            $table->decimal('menge', 12, 4);
-            $table->decimal('menge_max', 12, 4)->nullable()->comment('Mengen-Bereich (§6.4: Mittelwert)');
-            $table->foreignId('einheit_vocab_id')->constrained('foodalchemist_vocab_einheiten');
+            $table->decimal('quantity', 12, 4);
+            $table->decimal('quantity_max', 12, 4)->nullable()->comment('Mengen-Bereich (§6.4: Mittelwert)');
+            $table->foreignId('unit_vocab_id')->constrained('foodalchemist_vocab_units');
 
-            $table->decimal('putzverlust_pct', 5, 2)->nullable();
-            $table->decimal('garverlust_pct', 5, 2)->nullable();
-            $table->string('garverlust_quelle', 16)->nullable()->comment('manual|ki|auto (GL-07)');
-            $table->decimal('garverlust_ai_confidence', 4, 3)->nullable();
+            $table->decimal('trimming_loss_pct', 5, 2)->nullable();
+            $table->decimal('cooking_loss_pct', 5, 2)->nullable();
+            $table->string('cooking_loss_source', 16)->nullable()->comment('manual|ki|auto (GL-07)');
+            $table->decimal('cooking_loss_ai_confidence', 4, 3)->nullable();
 
             $table->boolean('is_optional')->default(false);
             $table->string('klammer_note')->nullable();
@@ -48,9 +48,9 @@ return new class extends Migration
             $table->decimal('match_confidence', 4, 3)->nullable();
 
             // V-21: von Anfang an mit Spalten + Pflege-UI
-            $table->string('rolle', 16)->nullable()->comment('aroma_treiber|komponente|beilage|garnitur');
-            $table->boolean('ist_wertgebend')->default(false);
-            $table->string('rechen_modus', 16)->default('voll')->comment('voll|nur_naehrwerte|nur_allergene|keine');
+            $table->string('role', 16)->nullable()->comment('aroma_treiber|komponente|beilage|garnitur');
+            $table->boolean('is_value_relevant')->default(false);
+            $table->string('calc_mode', 16)->default('voll')->comment('voll|nur_naehrwerte|nur_allergene|keine');
 
             $table->timestamps();
             $table->softDeletes();

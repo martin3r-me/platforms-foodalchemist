@@ -18,7 +18,7 @@ class FoodAlchemistFixkosten extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_fixkosten';
+    protected $table = 'foodalchemist_fixed_costs';
 
     protected $guarded = ['id'];
 

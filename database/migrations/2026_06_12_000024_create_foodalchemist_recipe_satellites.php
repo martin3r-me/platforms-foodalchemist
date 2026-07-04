@@ -14,7 +14,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('foodalchemist_vocab_kochequipment', function (Blueprint $table) {
+        Schema::create('foodalchemist_vocab_kitchen_equipment', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index()->comment('NULL = global (D1)');
@@ -31,14 +31,14 @@ return new class extends Migration
         Schema::create('foodalchemist_recipe_equipment', function (Blueprint $table) {
             $table->id();
             $table->foreignId('recipe_id')->constrained('foodalchemist_recipes')->cascadeOnDelete();
-            $table->foreignId('equipment_id')->constrained('foodalchemist_vocab_kochequipment')->cascadeOnDelete();
+            $table->foreignId('equipment_id')->constrained('foodalchemist_vocab_kitchen_equipment')->cascadeOnDelete();
             $table->string('note')->nullable();
             $table->timestamps();
 
             $table->unique(['recipe_id', 'equipment_id']);
         });
 
-        foreach (['foodalchemist_recipe_niveau_eignung' => 'niveau_slug', 'foodalchemist_recipe_sektor_eignung' => 'sektor_slug'] as $tabelle => $slugSpalte) {
+        foreach (['foodalchemist_recipe_level_suitability' => 'level_slug', 'foodalchemist_recipe_sector_suitability' => 'sektor_slug'] as $tabelle => $slugSpalte) {
             Schema::create($tabelle, function (Blueprint $table) use ($slugSpalte) {
                 $table->id();
                 $table->uuid('uuid')->unique();
@@ -46,9 +46,9 @@ return new class extends Migration
                 $table->unsignedBigInteger('legacy_id')->nullable()->unique()->comment('Quell-PK eignung_id');
                 $table->foreignId('recipe_id')->constrained('foodalchemist_recipes')->cascadeOnDelete();
                 $table->string($slugSpalte)->index();
-                $table->string('quelle', 16)->default('ai_inferred')->comment('manual|ai_inferred (GL-07)');
+                $table->string('source', 16)->default('ai_inferred')->comment('manual|ai_inferred (GL-07)');
                 $table->decimal('ai_confidence', 4, 3)->nullable();
-                $table->text('ai_begruendung')->nullable();
+                $table->text('ai_reasoning')->nullable();
                 $table->timestamps();
                 $table->softDeletes();
 
@@ -59,9 +59,9 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('foodalchemist_recipe_sektor_eignung');
-        Schema::dropIfExists('foodalchemist_recipe_niveau_eignung');
+        Schema::dropIfExists('foodalchemist_recipe_sector_suitability');
+        Schema::dropIfExists('foodalchemist_recipe_level_suitability');
         Schema::dropIfExists('foodalchemist_recipe_equipment');
-        Schema::dropIfExists('foodalchemist_vocab_kochequipment');
+        Schema::dropIfExists('foodalchemist_vocab_kitchen_equipment');
     }
 };

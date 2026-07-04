@@ -24,17 +24,17 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index()->comment('NULL = global (D1)');
 
             // ── Identität & Naming (GL-12)
-            $table->string('gp_key')->comment('hauptzutat|verarbeitung|form — slugify() byte-identisch zur Alt-App (GL-12 I6)');
+            $table->string('gp_key')->comment('hauptzutat|processing|form — slugify() byte-identisch zur Alt-App (GL-12 I6)');
             $table->string('name')->index()->comment('§6-Schema: Produktname: Eigenschaft, Zustand, … (GL-12)');
-            $table->string('hauptzutat_slug')->nullable()->index()->comment('NULL = Hygiene-Fall (26 Test-GPs im Seed, V-22-Flag) — Pflichtfeld ab GP-Editor (D-3)');
-            $table->string('hauptzutat_display')->nullable();
-            $table->string('verarbeitung')->nullable();
+            $table->string('main_ingredient_slug')->nullable()->index()->comment('NULL = Hygiene-Fall (26 Test-GPs im Seed, V-22-Flag) — Pflichtfeld ab GP-Editor (D-3)');
+            $table->string('main_ingredient_display')->nullable();
+            $table->string('processing')->nullable();
             $table->string('form')->nullable();
 
             // ── Klassifikation (§3/§9 GP-Regelwerk)
-            $table->string('warengruppe_code', 8)->nullable()->index()->comment('FK-leicht auf lookup_warengruppen.code');
-            $table->string('sub_kategorie')->nullable();
-            $table->string('zustand', 16)->nullable()->comment('frisch|TK|trocken|konserviert (§9); WG 15 ausgenommen (Regelwerk-Rev. v3.3.3 geplant)');
+            $table->string('commodity_group_code', 8)->nullable()->index()->comment('FK-leicht auf lookup_warengruppen.code');
+            $table->string('sub_category')->nullable();
+            $table->string('condition', 16)->nullable()->comment('frisch|TK|trocken|konserviert (§9); WG 15 ausgenommen (Regelwerk-Rev. v3.3.3 geplant)');
             $table->string('bio', 16)->nullable();
 
             // ── Status & Kuratierung (GL-05/GL-07)
@@ -44,7 +44,7 @@ return new class extends Migration
             $table->dateTime('first_seen_at')->nullable();
             $table->dateTime('last_review_at')->nullable();
             $table->decimal('ai_confidence', 4, 3)->nullable();
-            $table->text('ai_begruendung')->nullable();
+            $table->text('ai_reasoning')->nullable();
 
             // ── Derivate (§11 GP-Regelwerk)
             $table->boolean('is_derivat')->default(false);
@@ -58,12 +58,12 @@ return new class extends Migration
             $table->unsignedBigInteger('lead_la_supplier_item_legacy_id')->nullable()->comment('FK folgt P3; danach V-27-Kette');
 
             // ── Kalkulations-Defaults (GL-02)
-            $table->decimal('garverlust_default_pct', 5, 2)->nullable();
-            $table->decimal('stk_default_g', 8, 2)->nullable();
-            $table->string('stk_default_g_quelle', 16)->nullable()->comment('manual|ki|auto (GL-07)');
+            $table->decimal('cooking_loss_default_pct', 5, 2)->nullable();
+            $table->decimal('piece_default_g', 8, 2)->nullable();
+            $table->string('piece_default_g_source', 16)->nullable()->comment('manual|ki|auto (GL-07)');
             $table->decimal('stk_default_g_ai_confidence', 4, 3)->nullable();
             $table->text('stk_default_g_ai_begruendung')->nullable();
-            $table->foreignId('preferred_count_unit_id')->nullable()->constrained('foodalchemist_vocab_einheiten')->nullOnDelete();
+            $table->foreignId('preferred_count_unit_id')->nullable()->constrained('foodalchemist_vocab_units')->nullOnDelete();
 
             // ── Allergen-Override-Layer: 14 EU-Allergene, 4-Wert (GL-01; NULL = kein Override → LA-Aggregation)
             foreach ([
@@ -72,7 +72,7 @@ return new class extends Migration
             ] as $allergen) {
                 $table->string("allergen_{$allergen}", 16)->nullable();
             }
-            $table->string('allergene_quelle', 16)->nullable()->comment('manual|ki|auto (GL-07)');
+            $table->string('allergens_source', 16)->nullable()->comment('manual|ki|auto (GL-07)');
             $table->decimal('allergene_ai_confidence', 4, 3)->nullable();
             $table->dateTime('allergene_aggregiert_am')->nullable();
 
@@ -84,14 +84,14 @@ return new class extends Migration
             ] as $tag) {
                 $table->boolean("tag_{$tag}")->nullable();
             }
-            $table->string('tag_quelle', 16)->nullable();
+            $table->string('tag_source', 16)->nullable();
             $table->decimal('tag_ai_confidence', 4, 3)->nullable();
             $table->text('tag_ai_begruendung')->nullable();
             $table->dateTime('tag_aggregiert_am')->nullable();
 
             // ── Food-Domain (Wissens-Routing GL-13) — Legacy-Ref bis Knowledge-Import (⚠D4)
             $table->unsignedBigInteger('primary_food_domain_legacy_id')->nullable()->comment('FK auf vocab_food_domain folgt mit Knowledge-Import');
-            $table->string('food_domain_quelle', 16)->nullable();
+            $table->string('food_domain_source', 16)->nullable();
             $table->decimal('food_domain_ai_confidence', 4, 3)->nullable();
             $table->text('food_domain_ai_begruendung')->nullable();
             $table->dateTime('food_domain_aggregiert_am')->nullable();

@@ -24,13 +24,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('foodalchemist_angebote', function (Blueprint $table) {
+        Schema::create('foodalchemist_offers', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index();
 
             $table->string('name')->nullable();                       // Angebots-Titel (intern)
-            $table->string('angebot_nummer')->nullable()->index();    // fortlaufende Nr. (App-Logik), optional
+            $table->string('offer_number')->nullable()->index();    // fortlaufende Nr. (App-Logik), optional
             $table->string('status', 16)->default('anfrage')->index();// AngebotStatus (PHP-Enum)
 
             // CRM-Verknüpfung (MVP: nur Kontakt/Firma verlinken, kein Rücksync).
@@ -49,9 +49,9 @@ return new class extends Migration
 
             // Kommerzielle Schicht
             $table->decimal('gesamtpreis', 10, 2)->nullable();        // Angebots-Gesamtpreis (Cache/manuell)
-            $table->date('gueltig_bis')->nullable();                  // Angebots-Gültigkeit
+            $table->date('valid_until')->nullable();                  // Angebots-Gültigkeit
 
-            $table->text('beschreibung')->nullable();
+            $table->text('description')->nullable();
             $table->text('note')->nullable();
 
             $table->unsignedBigInteger('created_by_user_id')->nullable()->index();
@@ -63,6 +63,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('foodalchemist_angebote');
+        Schema::dropIfExists('foodalchemist_offers');
     }
 };

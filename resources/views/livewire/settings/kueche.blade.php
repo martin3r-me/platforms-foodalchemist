@@ -16,10 +16,10 @@
             <input type="radio" wire:model="kuechenTyp" value="" class="mt-0.5 border-gray-300 text-violet-600 focus:ring-violet-500" />
             <span><span class="font-medium">Kein Profil</span> <span class="text-gray-400">— Generator ohne Mandanten-Tendenz</span></span>
         </label>
-        @foreach($typen as $slug => $beschreibung)
+        @foreach($typen as $slug => $description)
             <label class="flex items-start gap-2 text-xs text-gray-700 dark:text-gray-200 cursor-pointer" wire:key="kt-{{ $slug }}">
                 <input type="radio" wire:model="kuechenTyp" value="{{ $slug }}" class="mt-0.5 border-gray-300 text-violet-600 focus:ring-violet-500" />
-                <span>{{ $beschreibung }}</span>
+                <span>{{ $description }}</span>
             </label>
         @endforeach
     </div>

@@ -42,7 +42,7 @@ class KnowledgeContextService
      * @param  list<string>  $hauptzutatSlugs  nur für Grounding-Features (ai_suggest_pairings, ai_infer_ankers)
      * @return array{block: string, files_used: list<string>, total_chars: int}
      */
-    public function contextFor(string $feature, string $beschreibung, ?string $stil = null, array $hauptzutatSlugs = []): array
+    public function contextFor(string $feature, string $description, ?string $stil = null, array $hauptzutatSlugs = []): array
     {
         $routing = DB::table('foodalchemist_knowledge_routings')
             ->where('feature', $feature)
@@ -60,7 +60,7 @@ class KnowledgeContextService
             }
         }
         if ($routing->has('domain:discovery')) {
-            foreach ($this->discoverDomains($beschreibung) as $doc) {
+            foreach ($this->discoverDomains($description) as $doc) {
                 $blocks[] = "## DOMAIN: {$doc->slug}\n\n" . $this->truncate($doc->inhalt_md, self::DOMAIN_TRUNCATE_CHARS);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
@@ -74,7 +74,7 @@ class KnowledgeContextService
 
         // ── 2. FLAVOR-PAIRING-Block (Generator-Features; SQL-Anker-Graph bleibt primär, GL-10) ──
         if ($routing->has('pairing:discovery')) {
-            $pairing = $this->pairingBlock($beschreibung, $stil, $filesUsed);
+            $pairing = $this->pairingBlock($description, $stil, $filesUsed);
             if ($pairing !== null) {
                 $parts[] = $pairing;
             }
@@ -132,7 +132,7 @@ class KnowledgeContextService
      * @param  list<string>  $kategorien
      * @return list<string>
      */
-    private function semanticSlugs(string $beschreibung, array $kategorien, int $limit): array
+    private function semanticSlugs(string $description, array $kategorien, int $limit): array
     {
         if ($limit <= 0 || ! config('foodalchemist.semantic_search.enabled', false)) {
             return [];
@@ -143,7 +143,7 @@ class KnowledgeContextService
                 return [];
             }
 
-            return $svc->searchSlugs($beschreibung, $kategorien, $limit);
+            return $svc->searchSlugs($description, $kategorien, $limit);
         } catch (\Throwable) {
             return [];
         }
@@ -248,9 +248,9 @@ class KnowledgeContextService
      * <2 Treffer: Filename-Token-Fallback (Jaccard + 0,1·Wort-Treffer). Max 4,
      * alphabetisch sortiert geladen.
      */
-    private function discoverDomains(string $beschreibung): array
+    private function discoverDomains(string $description): array
     {
-        $tokens = $this->tokenize($beschreibung);
+        $tokens = $this->tokenize($description);
         $slugs = [];
 
         if ($tokens !== []) {
@@ -294,7 +294,7 @@ class KnowledgeContextService
         // 2c. Semantischer Recall (Hybrid, opt-in): füllt auf, wenn die Lexik
         // < TOP_K Domains liefert. Deaktiviert (Default) = unverändertes Verhalten.
         if (count($slugs) < self::DOMAIN_TOP_K) {
-            foreach ($this->semanticSlugs($beschreibung, ['domain'], self::DOMAIN_TOP_K - count($slugs)) as $slug) {
+            foreach ($this->semanticSlugs($description, ['domain'], self::DOMAIN_TOP_K - count($slugs)) as $slug) {
                 $slugs[$slug] = true;
             }
         }
@@ -324,7 +324,7 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function pairingBlock(string $beschreibung, ?string $stil, array &$filesUsed): ?string
+    private function pairingBlock(string $description, ?string $stil, array &$filesUsed): ?string
     {
         $sectionFilter = match ($stil) {
             'klassisch' => ['Klassisch'],
@@ -339,7 +339,7 @@ class KnowledgeContextService
             default => '',
         };
 
-        $tokens = $this->tokenize($beschreibung);
+        $tokens = $this->tokenize($description);
         if ($tokens === []) {
             return null;
         }
@@ -360,7 +360,7 @@ class KnowledgeContextService
         // Semantischer Recall (Hybrid, opt-in): ergänzt eine dünne/leere Lexik um
         // semantisch passende Pairing-Stems. Deaktiviert (Default) = no-op.
         if (count($matched) < self::PAIRING_TOP_K) {
-            foreach ($this->semanticSlugs($beschreibung, ['pairing'], self::PAIRING_TOP_K) as $stem) {
+            foreach ($this->semanticSlugs($description, ['pairing'], self::PAIRING_TOP_K) as $stem) {
                 if (! in_array($stem, $matched, true)) {
                     $matched[] = $stem;
                 }

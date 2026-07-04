@@ -33,15 +33,15 @@ class GpProposalsPostTool extends FoodAlchemistTool implements ToolContract, Too
             'type' => 'object',
             'properties' => [
                 'name' => ['type' => 'string', 'description' => 'Vorgeschlagener GP-Name, möglichst Regelwerk-Schema "Produktname: Eigenschaft, Zustand"'],
-                'hauptzutat_slug' => ['type' => 'string'],
-                'warengruppe' => ['type' => 'string', 'description' => 'Warengruppen-Vermutung (final entscheidet die Kuration)'],
-                'zustand' => ['type' => 'string', 'enum' => ['frisch', 'tk', 'trocken', 'konserviert']],
+                'main_ingredient_slug' => ['type' => 'string'],
+                'commodity_group' => ['type' => 'string', 'description' => 'Warengruppen-Vermutung (final entscheidet die Kuration)'],
+                'condition' => ['type' => 'string', 'enum' => ['frisch', 'tk', 'trocken', 'konserviert']],
                 'kontext' => ['type' => 'string', 'description' => 'Wofür gebraucht (Rezept/Foodbook, Menge, Anlass)'],
-                'quelle_kind' => ['type' => 'string', 'enum' => ['recipe', 'foodbook', 'canvas', 'sonstiges']],
-                'quelle_id' => ['type' => 'integer'],
-                'begruendung' => ['type' => 'string', 'description' => 'Warum reichte kein vorhandener GP (beste Kandidaten + warum unpassend)'],
+                'source_kind' => ['type' => 'string', 'enum' => ['recipe', 'foodbook', 'canvas', 'sonstiges']],
+                'source_id' => ['type' => 'integer'],
+                'reasoning' => ['type' => 'string', 'description' => 'Warum reichte kein vorhandener GP (beste Kandidaten + warum unpassend)'],
             ],
-            'required' => ['name', 'begruendung'],
+            'required' => ['name', 'reasoning'],
         ];
     }
 
@@ -62,7 +62,7 @@ class GpProposalsPostTool extends FoodAlchemistTool implements ToolContract, Too
             'created' => $ergebnis['created'],
             'proposal' => [
                 'id' => $p->id, 'name' => $p->name, 'status' => $p->status,
-                'warengruppe' => $p->warengruppe, 'zustand' => $p->zustand,
+                'commodity_group' => $p->commodity_group, 'condition' => $p->condition,
             ],
             'hinweis' => 'Staging-only: Der GP entsteht erst nach Kuration (LA-First, WaWi) und Sync.',
         ]);

@@ -25,7 +25,7 @@ class GeschirrService
     /** Geschirr-Lieferanten der Team-Kette + item_count (eine GROUP-BY-Query). */
     public function listSuppliersWithCounts(Team $team, bool $includeInactive = false, string $search = ''): Collection
     {
-        $itemCounts = DB::table('foodalchemist_geschirr_items')
+        $itemCounts = DB::table('foodalchemist_tableware_items')
             ->whereNull('deleted_at')
             ->selectRaw('geschirr_supplier_id, COUNT(*) AS n')
             ->groupBy('geschirr_supplier_id')
@@ -105,9 +105,9 @@ class GeschirrService
             ->where('geschirr_supplier_id', $supplierId)
             ->when($filters['onlyActive'] ?? true, fn ($q) => $q->where('is_inactive', false))
             ->when($q = trim($filters['q'] ?? ''), fn ($w) => $w->where(fn ($x) => $x
-                ->whereRaw('LOWER(bezeichnung) LIKE ?', ['%' . mb_strtolower($q) . '%'])
+                ->whereRaw('LOWER(label) LIKE ?', ['%' . mb_strtolower($q) . '%'])
                 ->orWhere('artikel_nr', 'like', $q . '%')))
-            ->orderBy('bezeichnung')
+            ->orderBy('label')
             ->paginate($perPage)
             ->withQueryString();
     }
@@ -117,9 +117,9 @@ class GeschirrService
         return $this->scopedItems($team)
             ->when($filters['onlyActive'] ?? true, fn ($x) => $x->where('is_inactive', false))
             ->where(fn ($w) => $w
-                ->whereRaw('LOWER(bezeichnung) LIKE ?', ['%' . mb_strtolower($q) . '%'])
+                ->whereRaw('LOWER(label) LIKE ?', ['%' . mb_strtolower($q) . '%'])
                 ->orWhere('artikel_nr', 'like', $q . '%'))
-            ->orderBy('bezeichnung')
+            ->orderBy('label')
             ->paginate($perPage)
             ->withQueryString();
     }
@@ -136,13 +136,13 @@ class GeschirrService
             ->with('supplier:id,name')
             ->where('is_inactive', false)
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x
-                ->whereRaw('LOWER(bezeichnung) LIKE ?', ['%' . mb_strtolower($q) . '%'])
+                ->whereRaw('LOWER(label) LIKE ?', ['%' . mb_strtolower($q) . '%'])
                 ->orWhereRaw('LOWER(kategorie) LIKE ?', ['%' . mb_strtolower($q) . '%'])))
             // A2: Teile mit passendem Servier-Vehikel-Typ zuerst (weiches Ranking, kein
             // Hard-Filter — ungemappte Kataloge bleiben voll benutzbar)
             ->when($bevorzugtVehikelId !== null, fn ($w) => $w
-                ->orderByRaw('CASE WHEN vehikel_vocab_id = ? THEN 0 ELSE 1 END', [$bevorzugtVehikelId]))
-            ->orderBy('bezeichnung')
+                ->orderByRaw('CASE WHEN vehicle_vocab_id = ? THEN 0 ELSE 1 END', [$bevorzugtVehikelId]))
+            ->orderBy('label')
             ->limit($limit)
             ->get();
     }
@@ -152,7 +152,7 @@ class GeschirrService
         if (! FoodAlchemistGeschirrSupplier::visibleToTeam($team)->whereKey($supplierId)->exists()) {
             throw new RuntimeException('Geschirr-Lieferant nicht sichtbar.');
         }
-        $bez = trim($input['bezeichnung'] ?? '');
+        $bez = trim($input['label'] ?? '');
         if ($bez === '') {
             throw new RuntimeException('Bezeichnung ist Pflicht.');
         }
@@ -160,7 +160,7 @@ class GeschirrService
         return FoodAlchemistGeschirrItem::create($this->itemFelder($input) + [
             'team_id' => $team->id,
             'geschirr_supplier_id' => $supplierId,
-            'bezeichnung' => $bez,
+            'label' => $bez,
         ]);
     }
 
@@ -170,11 +170,11 @@ class GeschirrService
         if (! $item->isOwnedBy($team)) {
             throw new RuntimeException('Geerbter Geschirr-Artikel — Pflege nur durch das Besitzer-Team.');
         }
-        $bez = trim($input['bezeichnung'] ?? $item->bezeichnung);
+        $bez = trim($input['label'] ?? $item->label);
         if ($bez === '') {
             throw new RuntimeException('Bezeichnung ist Pflicht.');
         }
-        $item->update($this->itemFelder($input) + ['bezeichnung' => $bez]);
+        $item->update($this->itemFelder($input) + ['label' => $bez]);
 
         return $item;
     }
@@ -217,11 +217,11 @@ class GeschirrService
             'gewicht_g' => $num('gewicht_g'),
             'leihpreis' => $num('leihpreis'),
             'pfand' => $num('pfand'),
-            'einheit' => $str('einheit') ?? 'Stk',
+            'unit' => $str('unit') ?? 'Stk',
             'note' => $str('note'),
             // A2: Servier-Vehikel-Typ (abstrakte Präsentationsform ↔ konkretes Mietteil)
-            'vehikel_vocab_id' => isset($in['vehikel_vocab_id']) && $in['vehikel_vocab_id'] !== ''
-                ? (int) $in['vehikel_vocab_id'] : null,
+            'vehicle_vocab_id' => isset($in['vehicle_vocab_id']) && $in['vehicle_vocab_id'] !== ''
+                ? (int) $in['vehicle_vocab_id'] : null,
         ];
     }
 }

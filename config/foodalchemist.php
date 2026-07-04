@@ -296,34 +296,34 @@ return [
         'demo.echo' => [
             'tier' => 'D',
             'task' => 'Gib die übergebenen Kontext-Felder unverändert als JSON-Objekt '
-                . '{"werte": …, "confidence": 0-1, "begruendung": "…"} zurück (Smoke-Test).',
+                . '{"werte": …, "confidence": 0-1, "reasoning": "…"} zurück (Smoke-Test).',
         ],
         // M3-09/10: GP-Modal (Naming-Builder + KI-Felder). Antwort-Schema immer
-        // {"werte": {…}, "confidence": 0-1, "begruendung": "…"} (GL-07).
+        // {"werte": {…}, "confidence": 0-1, "reasoning": "…"} (GL-07).
         'gp.suggest' => [
             'tier' => 'C',
             'task' => 'Leite aus der Roh-Bezeichnung eines Lebensmittels die strukturierten '
-                . 'GP-Naming-Felder nach Regelwerk §6 ab: werte = {hauptzutat, zustand '
-                . '(frisch|TK|trocken|konserviert), verarbeitung, form, pflichtangabe}. '
+                . 'GP-Naming-Felder nach Regelwerk §6 ab: werte = {hauptzutat, condition '
+                . '(frisch|TK|trocken|konserviert), processing, form, pflichtangabe}. '
                 . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1), Marke nur nach §5-Tiebreaker.',
         ],
-        'gp.zustand' => [
+        'gp.condition' => [
             'tier' => 'D',
             'task' => 'Bestimme den §9-Zustand (frisch|TK|trocken|konserviert) des Grundprodukts '
-                . 'aus Name und Lieferantenartikeln: werte = {zustand}.',
+                . 'aus Name und Lieferantenartikeln: werte = {condition}.',
         ],
         'recipe.generator' => [
             'tier' => 'B',
             'task' => 'Erzeuge ein Basisrezept aus der Beschreibung unter Beachtung der Richtungs-'
                 . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, aroma): werte = '
-                . '{name (§1-Syntax <Typ>: <Bezeichnung>), beschreibung (§8-Stil), geschmacksrichtung, '
-                . 'zubereitung (Markdown-Schritte), zutaten: [{text, menge, einheit (g|ml|kg|l|el|tl|stk), '
+                . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction, '
+                . 'preparation (Markdown-Schritte), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
                 . 'slug (hauptzutat), note}]}. Diät-harte Vorgaben sind VERBINDLICH.',
         ],
-        'recipe.beschreibung' => [
+        'recipe.description' => [
             'tier' => 'C',
             'task' => 'Schreibe die Rezept-Beschreibung im §8-Stil (sachlich-appetitlich, 2-4 Sätze, '
-                . 'Textur + Einsatzkontext, keine Marketing-Floskeln): werte = {beschreibung}.',
+                . 'Textur + Einsatzkontext, keine Marketing-Floskeln): werte = {description}.',
         ],
         'recipe.kategorie' => [
             'tier' => 'D',
@@ -346,12 +346,12 @@ return [
                 . 'unter Beachtung der Richtungs-Parameter (convenience, frische, bio, niveau, sektor, '
                 . 'diaet_hart, aroma, anlass, serviceform, kompositions_stil): werte = '
                 . '{name (Pipe-Syntax §4.4 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
-                . 'keine Marketing-Adjektive), beschreibung (§8-Stil), geschmacksrichtung, '
-                . 'zubereitung (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '
-                . 'NICHT die Produktion), zutaten: [{text, menge, einheit (g|ml|kg|l|el|tl|stk), slug, note}] '
+                . 'keine Marketing-Adjektive), description (§8-Stil), taste_direction, '
+                . 'preparation (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '
+                . 'NICHT die Produktion), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note}] '
                 . '(Komponenten bevorzugt als Basisrezepte; wenn bestands_inventar mitgegeben ist, benenne '
                 . 'passende Komponenten EXAKT wie dort gelistet — vorhandene Basisrezepte zuerst), '
-                . 'speisen_klasse_id (aus der mitgegebenen Liste, '
+                . 'dish_class_id (aus der mitgegebenen Liste, '
                 . 'null wenn unsicher), aufschlagsklasse_code (aus der mitgegebenen Liste)}. '
                 . 'Diät-harte Vorgaben sind VERBINDLICH.',
         ],
@@ -359,14 +359,14 @@ return [
             'tier' => 'B',
             'task' => 'Klassifiziere das Verkaufsrezept in GENAU EINE Speisen-Klasse aus der '
                 . 'mitgegebenen Taxonomie (Kontext: Name, Komponenten, Diät-Eigenschaften). '
-                . 'Kein sicherer Treffer => speisen_klasse_id = null (NICHT raten): '
-                . 'werte = {speisen_klasse_id, klasse_name}.',
+                . 'Kein sicherer Treffer => dish_class_id = null (NICHT raten): '
+                . 'werte = {dish_class_id, klasse_name}.',
         ],
         'vk.rollen' => [
             'tier' => 'B',
             'task' => 'Verteile die Komponenten-Rollen uebers GANZE Gericht (V-21-Vokabular: '
                 . 'aroma_treiber | komponente | beilage | garnitur — jede Zutat genau eine Rolle, '
-                . 'Gesamt-Gericht-Sicht statt Einzelbetrachtung): werte = {rollen: {<zutat_id>: rolle}}.',
+                . 'Gesamt-Gericht-Sicht statt Einzelbetrachtung): werte = {rollen: {<zutat_id>: role}}.',
         ],
         // ── M7-04: Anhang-A-Inventar komplett (06_KI) ────────────────────
         // Bewusst NICHT portiert: #2 TEMPLATE_FILL + #38 AGENTIC_RESOLVER
@@ -388,25 +388,25 @@ return [
             'task' => 'Ordne das Grundprodukt GENAU EINER Wissens-Domain aus der mitgegebenen '
                 . 'Liste zu: werte = {domain_slug}.',
         ],
-        'gp.stk_default_g' => [
+        'gp.piece_default_g' => [
             'tier' => 'B',
             'task' => 'Schaetze das Stueck-Durchschnittsgewicht des Grundprodukts in Gramm '
-                . '(kuechenuebliche Handelsware): werte = {stk_default_g}.',
+                . '(kuechenuebliche Handelsware): werte = {piece_default_g}.',
         ],
         'gp.zaehl_einheiten' => [
             'tier' => 'B',
             'task' => 'Liste die natuerlichen Zaehl-Einheiten des Grundprodukts mit '
-                . 'Durchschnittsgewichten: werte = {einheiten: [{einheit, gewicht_g}]}.',
+                . 'Durchschnittsgewichten: werte = {einheiten: [{unit, gewicht_g}]}.',
         ],
         'gp.anker' => [
             'tier' => 'B',
             'task' => 'Bestimme den Kern-Anker (Aroma-Identitaet) des Grundprodukts aus dem '
-                . 'mitgegebenen Anker-Vokabular; kein Aroma-Traeger => neutral: werte = {anker_slug}.',
+                . 'mitgegebenen Anker-Vokabular; kein Aroma-Traeger => neutral: werte = {anchor_slug}.',
         ],
-        'gp.rolle' => [
+        'gp.role' => [
             'tier' => 'B',                                            // Inline-Prompt im Ist — gehoben
             'task' => 'Bestimme die kulinarische Rolle des Grundprodukts '
-                . '(aroma_treiber|komponente|beilage|garnitur): werte = {rolle}.',
+                . '(aroma_treiber|komponente|beilage|garnitur): werte = {role}.',
         ],
         'gp.la_suggest' => [
             'tier' => 'B',
@@ -433,16 +433,16 @@ return [
             'task' => 'Klassifiziere das Rezept zu GENAU EINEM Sub-Rezept-Typ aus dem mitgegebenen '
                 . 'Vokabular; kein Treffer => null: werte = {sub_typ_slug}.',
         ],
-        'recipe.fertigungstiefe' => [
+        'recipe.production_depth' => [
             'tier' => 'B',
             'task' => 'Klassifiziere die Fertigungstiefe (from_scratch|teilfertig|convenience) '
-                . 'aus den Zutaten: werte = {fertigungstiefe}.',
+                . 'aus den Zutaten: werte = {production_depth}.',
         ],
-        'recipe.zubereitung' => [
+        'recipe.preparation' => [
             'tier' => 'A',                                            // V-02: langes Einzeltext-Feld
             'task' => 'Schreibe die Schritt-fuer-Schritt-Zubereitung fuers PRODUKTIONS-Rezept '
                 . '(Markdown, nummerierte Schritte, Temperaturen/Zeiten konkret, H2 fuer Phasen): '
-                . 'werte = {zubereitung}.',
+                . 'werte = {preparation}.',
         ],
         'recipe.eigenschaften' => [
             'tier' => 'B',
@@ -453,7 +453,7 @@ return [
         'recipe.geschmack' => [
             'tier' => 'B',                                            // Auto-Apply-Ausnahme (GL-07 §4.3)
             'task' => 'Bestimme die grobe Geschmacksrichtung fuer die Menueplanung '
-                . '(suess|herzhaft|neutral): werte = {geschmacksrichtung}.',
+                . '(suess|herzhaft|neutral): werte = {taste_direction}.',
         ],
         'recipe.sensorik' => [
             'tier' => 'B',
@@ -495,19 +495,19 @@ return [
             'tier' => 'A',                                            // R6 (Ist: KI-Überarbeiten-Button) — freie Anweisung, Gesamt-Rezept
             'task' => 'Ueberarbeite das Rezept exakt nach der freien Anweisung (anweisung) — '
                 . 'aendere NUR Angefragtes, behalte ids bestehender Zutaten, neue Zutaten ohne id: '
-                . 'werte = {beschreibung, zubereitung, zutaten: [{id, text, menge, einheit_slug}], aenderungs_notiz}.',
+                . 'werte = {description, preparation, zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
         ],
         'recipe.extract' => [
             'tier' => 'C',                                            // Vision — blockiert auf Martin-Frage (Offene Entscheide)
             'task' => 'Extrahiere das Rezept TREU aus dem Anhang (Foto/PDF/Text) — NICHTS '
                 . 'anreichern oder erfinden (GL-13 Inv. 7, Wissenskontext bewusst leer): '
-                . 'werte = {name, zutaten: [{text, menge, einheit}], zubereitung}.',
+                . 'werte = {name, zutaten: [{text, quantity, unit}], preparation}.',
         ],
         'vk.plating' => [
             'tier' => 'A',                                            // V-02
             'task' => 'Schreibe die Hybrid-Plating-Anweisung fuers Verkaufsrezept (Teller-Aufbau, '
                 . 'Mengenverteilung pro Komponente, Service-Anweisung — NICHT die Produktion): '
-                . 'werte = {zubereitung}.',
+                . 'werte = {preparation}.',
         ],
         'vk.name_putzen' => [
             'tier' => 'B',
@@ -536,7 +536,7 @@ return [
             'tier' => 'B',
             'task' => 'Schlage Behaelter (warm/kalt getrennt) + Anzahl fuers Catering vor '
                 . '(Kontext: Gesamtgewicht + Speisen-Klasse, Vokabular mitgegeben): '
-                . 'werte = {behaelter_warm_id, behaelter_warm_anzahl, behaelter_kalt_id, behaelter_kalt_anzahl}.',
+                . 'werte = {behaelter_warm_id, container_warm_anzahl, behaelter_kalt_id, container_cold_anzahl}.',
         ],
         'vk.regeneration' => [
             'tier' => 'B',
@@ -558,13 +558,13 @@ return [
             'tier' => 'A',                                            // Inline-Prompt im Ist (culinary_coherence_judge) — gehoben
             'task' => 'Beurteile die kulinarische Kohaerenz des Tellers (Score 0-100, Label wie '
                 . '«Klassischer Teller», kurze Begruendung, groesste Schwachstelle als eine Zutat '
-                . 'oder null): werte = {score, label, begruendung, schwachstelle}.',
+                . 'oder null): werte = {score, label, reasoning, schwachstelle}.',
         ],
         'vk.teller_heber' => [
             'tier' => 'A',                                            // Inline-Prompt im Ist (plate_suggester) — gehoben
             'task' => 'Schlage vor, was den Teller hebt (1-3 konkrete, machbare Verbesserungen — '
                 . 'keine Fantasie-Zutaten; typ je Vorschlag: kontrast | ergaenzung | veredelung): '
-                . 'werte = {einschaetzung, vorschlaege: [{typ, zutat, kategorie, begruendung, confidence}]}.',
+                . 'werte = {einschaetzung, vorschlaege: [{typ, zutat, kategorie, reasoning, confidence}]}.',
         ],
         'price.plausi' => [
             'tier' => 'B',

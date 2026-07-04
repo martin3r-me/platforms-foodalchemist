@@ -153,7 +153,7 @@ class MatchHeuristics
         return 'unknown';
     }
 
-    /** 4.4u — Feld-primär (zustand-Spalte), Namens-Tokens nur als Fallback. */
+    /** 4.4u — Feld-primär (condition-Spalte), Namens-Tokens nur als Fallback. */
     public function zustandClassResolved(string $gpName, ?string $zustandCol): string
     {
         $z = $zustandCol !== null ? trim($zustandCol) : '';
@@ -234,7 +234,7 @@ class MatchHeuristics
                     }
                 }
             }
-            $zustand = match ([$pref, $class]) {
+            $condition = match ([$pref, $class]) {
                 ['fresh_first', 'fresh'] => 3,
                 ['fresh_first', 'frozen'] => -1,
                 ['fresh_first', 'preserved'] => -2,
@@ -251,7 +251,7 @@ class MatchHeuristics
                 'preserved_first' => $isProcessed ? 1 : 0,
                 default => 0,
             };
-            $zustandForm = $zustand + $form;
+            $zustandForm = $condition + $form;
         }
 
         $cut = ($preferRaw && $this->hasCutForm($tokens)) ? self::CUT_FORM_PENALTY : 0;

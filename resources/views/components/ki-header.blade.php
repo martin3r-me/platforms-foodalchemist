@@ -10,23 +10,23 @@
         Übernehmen    → accept_<field>()   (nur sichtbar bei :has-proposal="true";
                                             Override-First-Check macht der Server, GL-07 I2)
         Reset         → clear_<field>()    (Wert + Lineage → NULL; nur bei gesetzter Quelle)
-        Manuell       → manual_<field>()   (Besitzer schaltet Edit-Modus frei; Edit setzt quelle='manual')
+        Manuell       → manual_<field>()   (Besitzer schaltet Edit-Modus frei; Edit setzt source='manual')
 
     Quelle-Zustände (GL-07 §4.1): null = unbefüllt · 'ki' (+ Konfidenz %) · 'manual' · 'auto'.
-    begruendung wird als title-Tooltip am Quelle-Badge gereicht (Review-Hilfe).
+    reasoning wird als title-Tooltip am Quelle-Badge gereicht (Review-Hilfe).
 --}}
 @props([
     'label',
     'field',
-    'quelle' => null,
+    'source' => null,
     'confidence' => null,
-    'begruendung' => null,
+    'reasoning' => null,
     'hasProposal' => false,
 ])
 
 @php
     $ui = \Platform\FoodAlchemist\Support\Ui::maps(); // M0-12: zentrale Maps
-    $badge = match ($quelle) {
+    $badge = match ($source) {
         'ki' => ['KI', $ui['variantPill']['primary']],
         'auto' => ['Auto', $ui['variantPill']['info']],
         'manual' => ['Manuell', $ui['variantPill']['success']],
@@ -35,13 +35,13 @@
     $ghostBtn = $ui['btnGhostXs'];
 @endphp
 
-<div {{ $attributes->merge(['class' => 'space-y-2']) }} data-ki-header="{{ $field }}" data-quelle="{{ $quelle ?? 'leer' }}">
+<div {{ $attributes->merge(['class' => 'space-y-2']) }} data-ki-header="{{ $field }}" data-source="{{ $source ?? 'leer' }}">
     <div class="flex items-center justify-between gap-3">
         <div class="flex items-baseline gap-2 min-w-0">
             <span class="{{ $ui['label'] }}">{{ $label }}</span>
             <span class="{{ $ui['pill'] }} {{ $badge[1] }}"
-                  @if($begruendung) title="{{ $begruendung }}" @endif>{{ $badge[0] }}</span>
-            @if($quelle === 'ki' && $confidence !== null)
+                  @if($reasoning) title="{{ $reasoning }}" @endif>{{ $badge[0] }}</span>
+            @if($source === 'ki' && $confidence !== null)
                 <span class="text-[11px] text-gray-400" data-ki-confidence>{{ round($confidence * 100) }}%</span>
             @endif
         </div>
@@ -52,12 +52,12 @@
                     Übernehmen
                 </button>
             @endif
-            @if($quelle !== null)
+            @if($source !== null)
                 <button type="button" wire:click="clear_{{ $field }}" class="{{ $ghostBtn }}" title="Wert und Lineage zurücksetzen (GL-07 clear)">
                     Reset
                 </button>
             @endif
-            {{-- „Manuell" entfernt (Dominique 2026-07-01): redundant — Editieren+Speichern setzt quelle=manual ohnehin. --}}
+            {{-- „Manuell" entfernt (Dominique 2026-07-01): redundant — Editieren+Speichern setzt source=manual ohnehin. --}}
             <button type="button" wire:click="ai_{{ $field }}" class="{{ $ghostBtn }} text-violet-600 dark:text-violet-400" title="KI-Vorschlag anfordern (persistiert nichts)">
                 ✨ Autopilot
             </button>

@@ -14,7 +14,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('foodalchemist_lookup_warengruppen', function (Blueprint $table) {
+        Schema::create('foodalchemist_lookup_commodity_groups', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index()->comment('NULL = global (D1)');
@@ -30,6 +30,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('foodalchemist_lookup_warengruppen');
+        Schema::dropIfExists('foodalchemist_lookup_commodity_groups');
     }
 };

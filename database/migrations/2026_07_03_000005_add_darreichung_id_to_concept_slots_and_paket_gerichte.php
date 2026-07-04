@@ -14,25 +14,25 @@ return new class extends Migration
 {
     public function up(): void
     {
-        foreach (['foodalchemist_concept_slots', 'foodalchemist_paket_gerichte'] as $tableName) {
-            if (Schema::hasColumn($tableName, 'darreichung_id')) {
+        foreach (['foodalchemist_concept_slots', 'foodalchemist_package_dishes'] as $tableName) {
+            if (Schema::hasColumn($tableName, 'presentation_id')) {
                 continue;
             }
             Schema::table($tableName, function (Blueprint $table) {
-                $table->foreignId('darreichung_id')->nullable()
-                    ->constrained('foodalchemist_recipe_darreichungen')->nullOnDelete();
+                $table->foreignId('presentation_id')->nullable()
+                    ->constrained('foodalchemist_recipe_presentations')->nullOnDelete();
             });
         }
     }
 
     public function down(): void
     {
-        foreach (['foodalchemist_concept_slots', 'foodalchemist_paket_gerichte'] as $tableName) {
-            if (! Schema::hasColumn($tableName, 'darreichung_id')) {
+        foreach (['foodalchemist_concept_slots', 'foodalchemist_package_dishes'] as $tableName) {
+            if (! Schema::hasColumn($tableName, 'presentation_id')) {
                 continue;
             }
             Schema::table($tableName, function (Blueprint $table) {
-                $table->dropConstrainedForeignId('darreichung_id');
+                $table->dropConstrainedForeignId('presentation_id');
             });
         }
     }

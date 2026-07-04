@@ -17,7 +17,7 @@ class FoodAlchemistEinsatzmoment extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_einsatzmomente';
+    protected $table = 'foodalchemist_service_moments';
 
     protected $guarded = ['id'];
 
@@ -27,8 +27,8 @@ class FoodAlchemistEinsatzmoment extends Model
     {
         return $this->belongsToMany(
             FoodAlchemistConcept::class,
-            'foodalchemist_concept_einsatzmomente',
-            'einsatzmoment_id',
+            'foodalchemist_concept_service_moments',
+            'service_moment_id',
             'concept_id'
         );
     }

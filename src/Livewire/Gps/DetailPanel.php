@@ -163,7 +163,7 @@ class DetailPanel extends Component
         }
         try {
             $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('gp.allergene', [
-                'name' => $gp->name, 'zustand' => $gp->zustand, 'warengruppe' => $gp->warengruppe?->name,
+                'name' => $gp->name, 'condition' => $gp->condition, 'commodity_group' => $gp->commodity_group?->name,
             ]);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -193,7 +193,7 @@ class DetailPanel extends Component
         }
         try {
             $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('gp.naehrwerte', [
-                'name' => $gp->name, 'zustand' => $gp->zustand, 'warengruppe' => $gp->warengruppe?->name,
+                'name' => $gp->name, 'condition' => $gp->condition, 'commodity_group' => $gp->commodity_group?->name,
             ]);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -227,7 +227,7 @@ class DetailPanel extends Component
             foreach ($this->kiVorschlag['werte'] as $feld => $wert) {
                 $update["allergen_{$feld}"] = $wert;             // GL-01 Prio 1: Override
             }
-            $update['allergene_quelle'] = 'ki';                  // Quelle sichtbar machen (✨-Marker, 2026-07-02)
+            $update['allergens_source'] = 'ki';                  // Quelle sichtbar machen (✨-Marker, 2026-07-02)
             $update['allergene_ki_confidence'] = $this->kiVorschlag['confidence'];
             $gp->update($update);
         } else {
@@ -238,7 +238,7 @@ class DetailPanel extends Component
                 'nutri_fat_g_per_100g' => $w['fat_g'] ?? null,
                 'nutri_carbs_g_per_100g' => $w['carbs_g'] ?? null,
                 'nutri_salt_g_per_100g' => $w['salt_g'] ?? null,
-                'nutri_quelle' => 'ki',
+                'nutri_source' => 'ki',
                 'nutri_ai_confidence' => $this->kiVorschlag['confidence'],
             ]);
         }
@@ -302,7 +302,7 @@ class DetailPanel extends Component
         $this->fehler = null;
         $team = Auth::user()?->currentTeamRelation;
         $gp = $team !== null && $this->gpId !== null
-            ? FoodAlchemistGp::visibleToTeam($team)->with('warengruppe')->find($this->gpId)
+            ? FoodAlchemistGp::visibleToTeam($team)->with('commodity_group')->find($this->gpId)
             : null;
         if ($gp === null) {
             return null;
@@ -343,7 +343,7 @@ class DetailPanel extends Component
      * Preis-Band über die LAs: min/max des Vergleichspreises in der DOMINANTEN Einheit
      * (Einheiten nie mischen — €/kg ≠ €/l ≠ €/Stk). Gesperrte LAs zählen nicht.
      *
-     * @return array{min:float,max:float,einheit:string,n:int,lead:?float}|null
+     * @return array{min:float,max:float,unit:string,n:int,lead:?float}|null
      */
     private function preisBand(?\Illuminate\Support\Collection $kette, ?int $leadId): ?array
     {
@@ -354,16 +354,16 @@ class DetailPanel extends Component
         if ($mitVp->isEmpty()) {
             return null;
         }
-        $einheit = $mitVp->groupBy(fn ($la) => $la->vergleichspreis['einheit'])
+        $unit = $mitVp->groupBy(fn ($la) => $la->vergleichspreis['unit'])
             ->sortByDesc(fn ($g) => $g->count())->keys()->first();
-        $inEinheit = $mitVp->filter(fn ($la) => $la->vergleichspreis['einheit'] === $einheit);
+        $inEinheit = $mitVp->filter(fn ($la) => $la->vergleichspreis['unit'] === $unit);
         $werte = $inEinheit->map(fn ($la) => (float) $la->vergleichspreis['wert']);
         $lead = $inEinheit->firstWhere('id', $leadId);
 
         return [
             'min' => (float) $werte->min(),
             'max' => (float) $werte->max(),
-            'einheit' => (string) $einheit,
+            'unit' => (string) $unit,
             'n' => $werte->count(),
             'lead' => $lead !== null ? (float) $lead->vergleichspreis['wert'] : null,
         ];
@@ -375,7 +375,7 @@ class DetailPanel extends Component
         $gp = null;
         if ($this->gpId !== null && $team !== null) {
             $gp = FoodAlchemistGp::visibleToTeam($team)
-                ->with(['warengruppe', 'preferredCountUnit', 'leadLa', 'derivatVon'])
+                ->with(['commodity_group', 'preferredCountUnit', 'leadLa', 'derivatVon'])
                 ->find($this->gpId);
         }
 
@@ -424,7 +424,7 @@ class DetailPanel extends Component
                     ->where('ri.gp_id', $gp->id)->whereNull('ri.deleted_at')->whereNull('r.deleted_at')
                     ->whereIn('r.team_id', FoodAlchemistGp::teamAncestryIds($team))
                     ->orderBy('r.name')->distinct()
-                    ->limit(30)->get(['r.id', 'r.name', 'r.ist_verkaufsrezept'])
+                    ->limit(30)->get(['r.id', 'r.name', 'r.is_sales_recipe'])
                 : collect(),
         ]);
     }

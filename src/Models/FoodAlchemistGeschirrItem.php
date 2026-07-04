@@ -17,7 +17,7 @@ class FoodAlchemistGeschirrItem extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_geschirr_items';
+    protected $table = 'foodalchemist_tableware_items';
 
     protected $guarded = ['id'];
 

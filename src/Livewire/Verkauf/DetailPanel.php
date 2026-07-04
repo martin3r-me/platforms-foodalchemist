@@ -38,10 +38,10 @@ class DetailPanel extends Component
 
     // ── M6-05: GL-07-Proposal-Flow (Klassifikation + Rollen) ────────────
 
-    /** @var ?array{klasse_id: ?int, klasse_name: ?string, confidence: float, begruendung: ?string} */
+    /** @var ?array{klasse_id: ?int, klasse_name: ?string, confidence: float, reasoning: ?string} */
     public ?array $klasseVorschlag = null;
 
-    /** @var ?array{rollen: array<int, string>, confidence: float, begruendung: ?string} */
+    /** @var ?array{rollen: array<int, string>, confidence: float, reasoning: ?string} */
     public ?array $rollenVorschlag = null;
 
     public ?string $kiFehler = null;
@@ -66,7 +66,7 @@ class DetailPanel extends Component
         try {
             app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)->acceptKlasse(
                 $team, $this->recipeId, $this->klasseVorschlag['klasse_id'],
-                $this->klasseVorschlag['confidence'], $this->klasseVorschlag['begruendung'],
+                $this->klasseVorschlag['confidence'], $this->klasseVorschlag['reasoning'],
                 $this->klasseVorschlag['call_log_id'] ?? null,
             );
         } catch (\RuntimeException $e) {
@@ -283,7 +283,7 @@ class DetailPanel extends Component
             'kohaesion' => $rezept !== null && ($this->offen['anker'] ?? false) ? $pairing->recipeCohesion($rezept) : null,
             'pairings' => $rezept !== null && ($this->offen['pairing'] ?? false) ? $pairing->recipePairings($rezept->id) : null,
             'ankerKandidaten' => $this->ankerSuche !== ''
-                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_ankers')
+                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
                     ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),

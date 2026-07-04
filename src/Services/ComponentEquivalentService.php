@@ -197,12 +197,12 @@ class ComponentEquivalentService
 
         $e = Equiv::visibleToTeam($team)->findOrFail($treffer->id);
         $gegen = $e->counterpartOf($kind, $id);
-        $neueMenge = $e->convertMenge($zutat->menge !== null ? (float) $zutat->menge : 0.0, $gegen['von']);
+        $neueMenge = $e->convertMenge($zutat->quantity !== null ? (float) $zutat->quantity : 0.0, $gegen['von']);
 
         $zutat->update([
             'gp_id' => $gegen['kind'] === Equiv::KIND_GP ? $gegen['id'] : null,
             'referenced_recipe_id' => $gegen['kind'] === Equiv::KIND_RECIPE ? $gegen['id'] : null,
-            'menge' => $neueMenge,
+            'quantity' => $neueMenge,
         ]);
 
         $this->recompute->recomputeAndPropagate((int) $zutat->recipe_id);

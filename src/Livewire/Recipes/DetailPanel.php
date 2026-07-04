@@ -94,7 +94,7 @@ class DetailPanel extends Component
         $this->fehlerEignung = null;
         $svc = app(\Platform\FoodAlchemist\Services\RecipeService::class);
         try {
-            $spalte = $typ === 'niveau' ? 'niveau_slug' : 'sektor_slug';
+            $spalte = $typ === 'niveau' ? 'level_slug' : 'sektor_slug';
             $relation = $typ === 'niveau' ? 'niveauEignungen' : 'sektorEignungen';
             $aktiv = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($this->recipeId)
                 ->{$relation}->pluck($spalte)->contains($slug);
@@ -241,12 +241,12 @@ class DetailPanel extends Component
             'nachbarn' => $rezept !== null && ($this->offen['nachbarn'] ?? false)
                 ? app(\Platform\FoodAlchemist\Services\PairingService::class)->componentSuggestions($rezept) : null,
             'ankerKandidaten' => $this->ankerSuche !== ''
-                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_ankers')
+                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
                     ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),
             'pairingKandidaten' => $this->pairingSuche !== '' && ($this->offen['pairing'] ?? false)
-                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_ankers')
+                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->pairingSuche) . '%'])
                     ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),

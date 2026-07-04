@@ -31,7 +31,7 @@ class RecipeTemplateService
             ->where('is_template', true)
             ->whereHas('ingredients', fn ($q) => $q->whereHas('gp', fn ($g) => $g->where('is_platzhalter', true)))
             ->orderBy('name')
-            ->get(['id', 'name', 'yield_kg', 'n_zutaten_total']);
+            ->get(['id', 'name', 'yield_kg', 'n_ingredients_total']);
     }
 
     /**
@@ -54,13 +54,13 @@ class RecipeTemplateService
     /**
      * Platzhalter-Slots eines Templates = Zutaten-Zeilen an einem Platzhalter-GP.
      *
-     * @return list<array{ingredient_id:int, placeholder_name:string, menge:float, einheit:string, raw_text:string}>
+     * @return list<array{ingredient_id:int, placeholder_name:string, quantity:float, unit:string, raw_text:string}>
      */
     public function slotsFor(Team $team, int $templateId): array
     {
         $template = FoodAlchemistRecipe::visibleToTeam($team)->basis()
             ->where('is_template', true)
-            ->with(['ingredients.gp:id,name,is_platzhalter', 'ingredients.einheit:id,display_de'])
+            ->with(['ingredients.gp:id,name,is_platzhalter', 'ingredients.unit:id,display_de'])
             ->findOrFail($templateId);
 
         $slots = [];
@@ -71,8 +71,8 @@ class RecipeTemplateService
             $slots[] = [
                 'ingredient_id' => (int) $ri->id,
                 'placeholder_name' => (string) $ri->gp->name,
-                'menge' => (float) $ri->menge,
-                'einheit' => (string) ($ri->einheit?->display_de ?? ''),
+                'quantity' => (float) $ri->quantity,
+                'unit' => (string) ($ri->unit?->display_de ?? ''),
                 'raw_text' => (string) $ri->raw_text,
             ];
         }
@@ -169,16 +169,16 @@ class RecipeTemplateService
             $instanz = app(RecipeService::class)->create($team, [
                 'name' => $name,
                 'kategorie_id' => $template->kategorie_id,
-                'herkunft' => $template->herkunft,
-                'geschmacksrichtung' => $template->geschmacksrichtung,
-                'fertigungstiefe' => $template->fertigungstiefe,
-                'ist_verkaufsrezept' => false,
-                'beschreibung' => $template->beschreibung,
+                'origin_source' => $template->origin_source,
+                'taste_direction' => $template->taste_direction,
+                'production_depth' => $template->production_depth,
+                'is_sales_recipe' => false,
+                'description' => $template->description,
             ]);
             // Lineage + template-fixe Felder (Bindemittel-Verhältnis/Zubereitung/Yield bleiben fix).
             $instanz->update([
                 'instantiated_from_recipe_id' => $template->id,
-                'zubereitung' => $template->zubereitung,
+                'preparation' => $template->preparation,
                 'yield_kg_manual' => $template->yield_kg_manual,
                 'last_modified_by' => 'template_instanz',
             ]);
@@ -191,9 +191,9 @@ class RecipeTemplateService
             foreach ($template->ingredients as $ri) {
                 $felder = [
                     ...$ri->only(['position', 'gp_id', 'referenced_recipe_id', 'raw_text', 'display_name',
-                        'menge', 'menge_max', 'einheit_vocab_id', 'putzverlust_pct', 'garverlust_pct',
+                        'quantity', 'quantity_max', 'unit_vocab_id', 'trimming_loss_pct', 'cooking_loss_pct',
                         'is_optional', 'klammer_note', 'note', 'match_method', 'match_confidence',
-                        'rolle', 'ist_wertgebend', 'rechen_modus']),
+                        'role', 'is_value_relevant', 'calc_mode']),
                     'team_id' => $team->id,
                 ];
 

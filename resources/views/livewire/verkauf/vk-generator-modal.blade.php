@@ -8,7 +8,7 @@
 
     @if($ergebnis === null)
         <x-foodalchemist::modal-section title="Beschreibung">
-            <textarea wire:model="beschreibung" rows="3" class="{{ $input }}" data-vk-generator-beschreibung
+            <textarea wire:model="description" rows="3" class="{{ $input }}" data-vk-generator-description
                       placeholder="z. B. Herbstlicher Hauptgang mit geschmortem Rind, Wurzelgemüse und Kartoffelkomponente für Bankett …"></textarea>
             <p class="text-[10px] text-gray-400 mt-1">Aus Foto/PDF: blockiert auf die Vision-Frage bei Martin — bis dahin Text.</p>
         </x-foodalchemist::modal-section>

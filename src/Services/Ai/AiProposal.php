@@ -13,7 +13,7 @@ final readonly class AiProposal
     public function __construct(
         public array $werte,
         public float $confidence,
-        public ?string $begruendung = null,
+        public ?string $reasoning = null,
         public array $unknownSlugs = [],
         public ?string $model = null,
         public int $elapsedMs = 0,

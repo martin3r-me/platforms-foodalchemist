@@ -23,7 +23,7 @@ class DetailPanel extends Component
     public array $form = [
         'name' => '', 'status' => 'anfrage', 'anlass' => '', 'personen' => null,
         'budget' => null, 'event_datum' => null, 'location' => '', 'diaet_vorgabe' => '',
-        'brief' => '', 'gesamtpreis' => null, 'gueltig_bis' => null, 'preis_modus' => 'auto',
+        'brief' => '', 'gesamtpreis' => null, 'valid_until' => null, 'preis_modus' => 'auto',
     ];
 
     public string $firmaSuche = '';
@@ -68,7 +68,7 @@ class DetailPanel extends Component
             'diaet_vorgabe' => $a->diaet_vorgabe,
             'brief' => $a->brief,
             'gesamtpreis' => $a->gesamtpreis,
-            'gueltig_bis' => $a->gueltig_bis?->format('Y-m-d'),
+            'valid_until' => $a->valid_until?->format('Y-m-d'),
             'preis_modus' => $a->preis_modus ?? 'auto',
         ];
     }
@@ -155,7 +155,7 @@ class DetailPanel extends Component
         $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $conceptId);
     }
 
-    /** „In Concepter übernehmen" — Promote (angebot_id → NULL, standardisiert). */
+    /** „In Concepter übernehmen" — Promote (offer_id → NULL, standardisiert). */
     public function uebernehmeMenue(int $conceptId, AngebotService $svc): void
     {
         $svc->promoteConcept($this->team(), $conceptId);

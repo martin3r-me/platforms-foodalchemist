@@ -21,11 +21,11 @@
                     @else
                         <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-2 py-1.5 text-xs">
                             <span class="font-mono text-[10px] text-gray-400">{{ $hg->code }}</span>
-                            <span class="min-w-0 truncate">{{ $hg->bezeichnung }}</span>
+                            <span class="min-w-0 truncate">{{ $hg->label }}</span>
                         </button>
                         <span class="text-[11px] text-gray-400 shrink-0">{{ $nKl }}</span>
                         @if($darfEditHg)
-                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->bezeichnung))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
                             <button type="button" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" @disabled($nKl > 0)
                                     class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $nKl > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500' }}"
                                     title="{{ $nKl > 0 ? 'Hat Klassen — erst dort entfernen' : 'löschen' }}">✕</button>
@@ -46,7 +46,7 @@
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                     <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Klassen</h3>
-                    <span class="{{ $label }}">{{ optional($hauptgruppen->firstWhere('id', $hauptgruppeId))->bezeichnung ?? 'Hauptgruppe wählen' }}</span>
+                    <span class="{{ $label }}">{{ optional($hauptgruppen->firstWhere('id', $hauptgruppeId))->label ?? 'Hauptgruppe wählen' }}</span>
                 </div>
                 @if($klassen->isNotEmpty())
                     <table class="{{ $table }}">
@@ -64,13 +64,13 @@
                                             <button type="button" wire:click="$set('klasseEditId', null)" class="{{ $btnGhostXs }}">Abbrechen</button>
                                         </td>
                                     @else
-                                        <td class="{{ $td }} text-gray-900 dark:text-gray-100">{{ $k->bezeichnung }} <span class="text-[10px] font-mono text-gray-400">{{ $k->code }}</span></td>
+                                        <td class="{{ $td }} text-gray-900 dark:text-gray-100">{{ $k->label }} <span class="text-[10px] font-mono text-gray-400">{{ $k->code }}</span></td>
                                         <td class="{{ $td }}"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $k->diaetform }}</span></td>
                                         <td class="{{ $td }} text-[11px] text-gray-400">{{ collect(['vegan' => $k->is_vegan, 'vegi' => $k->is_vegi, 'halal' => $k->is_halal, 'koscher' => $k->is_koscher])->filter()->keys()->implode(' · ') ?: '—' }}</td>
                                         <td class="{{ $td }} text-gray-500">{{ $nRez }}</td>
                                         <td class="{{ $td }} text-right whitespace-nowrap">
                                             @if($darfEditK)
-                                                <button type="button" wire:click="startKlasseEdit({{ $k->id }}, @js($k->bezeichnung))" class="{{ $btnGhostXs }}">Umbenennen</button>
+                                                <button type="button" wire:click="startKlasseEdit({{ $k->id }}, @js($k->label))" class="{{ $btnGhostXs }}">Umbenennen</button>
                                                 <button type="button" wire:click="klasseDelete({{ $k->id }})" wire:confirm="Diese Klasse löschen?" @disabled($nRez > 0)
                                                         class="{{ $btnGhostXs }} {{ $nRez > 0 ? 'opacity-40 cursor-not-allowed' : 'text-red-500' }}"
                                                         title="{{ $nRez > 0 ? 'Wird von Gerichten genutzt' : 'löschen' }}">Löschen</button>

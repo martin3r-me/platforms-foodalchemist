@@ -39,15 +39,15 @@ class Dashboard extends Component
         $rezept = fn () => DB::table('foodalchemist_recipes')->whereIn('team_id', $kette)->whereNull('deleted_at');
 
         $workflow = $team === null ? [] : [
-            'basis' => (clone $rezept())->where('ist_verkaufsrezept', false)->count(),
-            'vk' => (clone $rezept())->where('ist_verkaufsrezept', true)->count(),
+            'basis' => (clone $rezept())->where('is_sales_recipe', false)->count(),
+            'vk' => (clone $rezept())->where('is_sales_recipe', true)->count(),
             'templates' => (clone $rezept())->where('is_template', true)->count(),
             'review' => (clone $rezept())->where('status', 'review')->count(),
             'draft' => (clone $rezept())->where('status', 'draft')->count(),
             'approved' => (clone $rezept())->where('status', 'approved')->count(),
             'allergen_low' => (clone $rezept())->whereIn('allergene_konfidenz', ['low', 'unknown'])->count(),
-            'ungemappt' => (clone $rezept())->where('n_zutaten_ungemappt', '>', 0)->count(),
-            'vk_ohne_klasse' => (clone $rezept())->where('ist_verkaufsrezept', true)->whereNull('speisen_klasse_id')->count(),
+            'ungemappt' => (clone $rezept())->where('n_ingredients_ungemappt', '>', 0)->count(),
+            'vk_ohne_klasse' => (clone $rezept())->where('is_sales_recipe', true)->whereNull('dish_class_id')->count(),
         ];
 
         $ki = ['calls' => 0, 'accepted' => 0];

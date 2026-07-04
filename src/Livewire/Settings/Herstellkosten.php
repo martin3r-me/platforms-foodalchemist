@@ -36,7 +36,7 @@ class Herstellkosten extends Component
 
     public array $fixListe = [];
 
-    public array $neuFix = ['bezeichnung' => '', 'betrag' => '', 'periode' => 'monatlich', 'block_key' => ''];
+    public array $neuFix = ['label' => '', 'betrag' => '', 'periode' => 'monatlich', 'block_key' => ''];
 
     /** Neuer Kostenblock (Phase 4 — vorher gab es nur das feste Default-Set). */
     public array $neuBlock = ['label' => '', 'typ' => 'pct_mek'];
@@ -69,7 +69,7 @@ class Herstellkosten extends Component
     private function ladeFix(): void
     {
         $this->fixListe = app(FixkostenService::class)->liste($this->team())->map(fn ($f) => [
-            'id' => $f->id, 'bezeichnung' => $f->bezeichnung,
+            'id' => $f->id, 'label' => $f->label,
             'betrag' => $this->fmt((float) $f->betrag), 'periode' => $f->periode, 'block_key' => $f->block_key,
             'monatsbetrag' => round((float) $f->monatsbetrag(), 2),   // #379+: normalisiert (jährlich/12) für Σ-Anzeige
         ])->all();
@@ -132,11 +132,11 @@ class Herstellkosten extends Component
 
     public function fixHinzu(): void
     {
-        if (trim((string) $this->neuFix['bezeichnung']) === '' || ($this->neuFix['block_key'] ?? '') === '') {
+        if (trim((string) $this->neuFix['label']) === '' || ($this->neuFix['block_key'] ?? '') === '') {
             return;
         }
         app(FixkostenService::class)->create($this->team(), $this->neuFix);
-        $this->neuFix = ['bezeichnung' => '', 'betrag' => '', 'periode' => 'monatlich', 'block_key' => ''];
+        $this->neuFix = ['label' => '', 'betrag' => '', 'periode' => 'monatlich', 'block_key' => ''];
         $this->ladeFix();
         $this->dispatch('kosten-aktualisiert');   // #379+: Werkstatt-Cockpit live nachziehen
     }
@@ -168,8 +168,8 @@ class Herstellkosten extends Component
             'marge_pct' => $this->num($this->marge),
             'ziel_wareneinsatz_pct' => $this->num($this->zielWe),
             'lohnnebenkosten_pct' => $this->num($this->lnk),
-            'kalkulation_schema' => $this->baueSchema(),
-            'kalkulation_bezugsbasen' => [
+            'calculation_schema' => $this->baueSchema(),
+            'calculation_bezugsbasen' => [
                 'mek' => $this->num((string) $this->bezugsbasen['mek']),
                 'fek' => $this->num((string) $this->bezugsbasen['fek']),
                 'hk' => $this->num((string) $this->bezugsbasen['hk']),

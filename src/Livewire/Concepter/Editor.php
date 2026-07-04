@@ -34,7 +34,7 @@ class Editor extends Component
 
     public ?int $id = null;
 
-    public string $tab = 'aufbau';       // aufbau | allergene (Label „Deklaration": Diät + Nährwerte) | kalkulation | geschirr | notizen
+    public string $tab = 'aufbau';       // aufbau | allergene (Label „Deklaration": Diät + Nährwerte) | kalkulation | geschirr | notes
 
     /** @var array<string, mixed> */
     public array $form = [];
@@ -79,7 +79,7 @@ class Editor extends Component
     // B2: Quelle des Position-Pickers — VK-Gericht ODER Basisrezept (keine Produkte/GPs).
     public string $pickTyp = 'gericht';   // gericht | basisrezept
 
-    /** @var array<int, array{rolle:string, titel:string}> */
+    /** @var array<int, array{role:string, titel:string}> */
     public array $slotForm = [];
 
     /** B3: Inline-Inhalt der Struktur-Blöcke (Text/Header/Preis), keyed by slotId. */
@@ -140,10 +140,10 @@ class Editor extends Component
             }
             $this->form = [
                 'name' => $p->name, 'konsumenten_name' => $p->konsumenten_name ?? '',
-                'rolle' => $p->rolle ?? '', 'klasse' => $p->klasse ?? '', 'niveau' => $p->niveau ?? '',
+                'role' => $p->role ?? '', 'klasse' => $p->klasse ?? '', 'niveau' => $p->niveau ?? '',
                 'preis_modus' => $p->preis_modus, 'preis_pro_person' => $p->preis_pro_person,
                 'ek_pro_person' => $p->ek_pro_person, 'wareneinsatz_prozent' => $p->wareneinsatz_prozent,
-                'beschreibung' => $p->beschreibung ?? '', 'note' => $p->note ?? '',
+                'description' => $p->description ?? '', 'note' => $p->note ?? '',
             ];
         } else {
             $c = app(ConceptService::class)->detail($team, $id);
@@ -153,20 +153,20 @@ class Editor extends Component
             $this->form = [
                 'name' => $c->name, 'konsumenten_name' => $c->konsumenten_name ?? '',
                 'klasse' => $c->klasse ?? '', 'niveau' => $c->niveau ?? '', 'anlass' => $c->anlass ?? '',
-                'category_id' => $c->category_id, 'geschmacksrichtung' => $c->geschmacksrichtung ?? '',
+                'category_id' => $c->category_id, 'taste_direction' => $c->taste_direction ?? '',
                 'schreibstil_id' => $c->schreibstil_id, 'status' => $c->status,
-                'beschreibung' => $c->beschreibung ?? '', 'zusatztext' => $c->zusatztext ?? '',
+                'description' => $c->description ?? '', 'additional_text' => $c->additional_text ?? '',
                 'brief' => $c->brief ?? '', 'diaet_vorgabe' => $c->diaet_vorgabe ?? '',
-                'struktur_vorgabe' => $c->struktur_vorgabe ?? '', 'saison' => $c->saison ?? '',
+                'struktur_vorgabe' => $c->struktur_vorgabe ?? '', 'season' => $c->season ?? '',
                 'zielgruppe' => $c->zielgruppe ?? '', 'zielpreis_pro_person' => $c->zielpreis_pro_person,
                 'preis_modus' => $c->preis_modus ?? 'auto', 'preis_pro_person_manuell' => $c->preis_pro_person_manuell,
                 'note' => $c->note ?? '',
                 // Facetten (Umbau-Spec Phase 4b)
-                'servierform_id' => $c->servierform_id, 'eventtyp_id' => $c->eventtyp_id,
-                'einsatzmoment_ids' => $c->einsatzmomente()->pluck('foodalchemist_einsatzmomente.id')->all(),
-                'saison_ids' => $c->saisons()->pluck('foodalchemist_saisons.id')->all(),
+                'serving_form_id' => $c->serving_form_id, 'event_type_id' => $c->event_type_id,
+                'einsatzmoment_ids' => $c->einsatzmomente()->pluck('foodalchemist_service_moments.id')->all(),
+                'saison_ids' => $c->saisons()->pluck('foodalchemist_seasons.id')->all(),
             ];
-            $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id, 'wording' => $s->wording ?? '']])->all();
+            $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'quantity' => $s->quantity, 'unit_vocab_id' => $s->unit_vocab_id, 'wording' => $s->wording ?? '']])->all();
             $this->blockForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => [
                 'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
                 'preis_wert' => $s->preis_wert, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
@@ -180,33 +180,33 @@ class Editor extends Component
 
     public function setTab(string $tab): void
     {
-        if (in_array($tab, ['aufbau', 'konzept', 'allergene', 'kalkulation', 'geschirr', 'sensorik', 'notizen'], true)) {
+        if (in_array($tab, ['aufbau', 'konzept', 'allergene', 'kalkulation', 'geschirr', 'sensorik', 'notes'], true)) {
             $this->tab = $tab;
         }
     }
 
     // ── #388 Geschirr-Tab ─────────────────────────────────────────────────────
 
-    /** Picker für slot+rolle auf/zu (Toggle). */
-    public function geschirrPicker(int $slotId, string $rolle = 'haupt'): void
+    /** Picker für slot+role auf/zu (Toggle). */
+    public function geschirrPicker(int $slotId, string $role = 'haupt'): void
     {
-        $rolle = $rolle === 'alt' ? 'alt' : 'haupt';
-        $offen = $this->geschirrPickSlotId === $slotId && $this->geschirrPickRolle === $rolle;
+        $role = $role === 'alt' ? 'alt' : 'haupt';
+        $offen = $this->geschirrPickSlotId === $slotId && $this->geschirrPickRolle === $role;
         $this->geschirrPickSlotId = $offen ? null : $slotId;
-        $this->geschirrPickRolle = $rolle;
+        $this->geschirrPickRolle = $role;
         $this->geschirrSuche = '';
     }
 
-    public function geschirrWaehle(int $slotId, string $rolle, int $itemId): void
+    public function geschirrWaehle(int $slotId, string $role, int $itemId): void
     {
-        app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $rolle, $itemId);
+        app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $role, $itemId);
         $this->geschirrPickSlotId = null;
         $this->geschirrSuche = '';
     }
 
-    public function geschirrEntfernen(int $slotId, string $rolle): void
+    public function geschirrEntfernen(int $slotId, string $role): void
     {
-        app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $rolle, null);
+        app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $role, null);
     }
 
     public function speichern(): void
@@ -266,7 +266,7 @@ class Editor extends Component
         $slot->setRelation('concept', $concept);
         $dar = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->fuerSlot($slot);
 
-        return $dar?->servier_vehikel_vocab_id !== null ? (int) $dar->servier_vehikel_vocab_id : null;
+        return $dar?->serving_vehicle_vocab_id !== null ? (int) $dar->serving_vehicle_vocab_id : null;
     }
 
     /** „Variante fehlt" (Umbau-Spec Phase 5): Darreichung zur Konzept-Servierform per 1-Klick anlegen. */
@@ -278,12 +278,12 @@ class Editor extends Component
         $team = $this->team();
         $concept = app(ConceptService::class)->detail($team, $this->id);
         $slot = $concept?->slots->firstWhere('id', $slotId);
-        if ($concept?->servierform_id === null || $slot === null || $slot->vk_recipe_id === null) {
+        if ($concept?->serving_form_id === null || $slot === null || $slot->vk_recipe_id === null) {
             return;
         }
         try {
             app(\Platform\FoodAlchemist\Services\DarreichungService::class)
-                ->anlegen($team, $slot->vk_recipe_id, $concept->servierform_id, [], 'fa_ui');
+                ->anlegen($team, $slot->vk_recipe_id, $concept->serving_form_id, [], 'fa_ui');
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
 
@@ -363,8 +363,8 @@ class Editor extends Component
         }
         $intro = $vorschlag->werte['intro'] ?? null;
         if (is_string($intro) && trim($intro) !== '') {
-            $this->form['beschreibung'] = trim($intro);
-            $concepts->update($team, $this->id, ['beschreibung' => trim($intro)]);
+            $this->form['description'] = trim($intro);
+            $concepts->update($team, $this->id, ['description' => trim($intro)]);
         }
         foreach (($vorschlag->werte['slots'] ?? []) as $slotId => $text) {
             if (is_string($text) && trim($text) !== '') {
@@ -391,7 +391,7 @@ class Editor extends Component
         if ($this->type !== 'concepts' || $this->id === null) {
             return;
         }
-        app(ConceptService::class)->addSlot($this->team(), $this->id, ['rolle' => $this->neuerSlotRolle ?: null, 'titel' => $this->neuerSlotRolle ?: null]);
+        app(ConceptService::class)->addSlot($this->team(), $this->id, ['role' => $this->neuerSlotRolle ?: null, 'titel' => $this->neuerSlotRolle ?: null]);
         $this->neuerSlotRolle = '';
         $this->reloadSlotForm();
         $this->dispatch('concepter-gespeichert', id: $this->id);
@@ -407,9 +407,9 @@ class Editor extends Component
     public function mengeSpeichern(int $slotId): void
     {
         $f = $this->slotForm[$slotId] ?? [];
-        $menge = ($f['menge'] ?? '') !== '' && $f['menge'] !== null ? (float) $f['menge'] : null;
-        $einheit = ($f['einheit_vocab_id'] ?? '') !== '' ? (int) $f['einheit_vocab_id'] : null;
-        app(ConceptService::class)->setSlotMengeEinheit($this->team(), $slotId, $menge, $einheit);
+        $quantity = ($f['quantity'] ?? '') !== '' && $f['quantity'] !== null ? (float) $f['quantity'] : null;
+        $unit = ($f['unit_vocab_id'] ?? '') !== '' ? (int) $f['unit_vocab_id'] : null;
+        app(ConceptService::class)->setSlotMengeEinheit($this->team(), $slotId, $quantity, $unit);
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
@@ -449,7 +449,7 @@ class Editor extends Component
 
     public function fuellePaket(int $slotId, int $paketId): void
     {
-        app(ConceptService::class)->fillSlot($this->team(), $slotId, ['paket_id' => $paketId]);
+        app(ConceptService::class)->fillSlot($this->team(), $slotId, ['package_id' => $paketId]);
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
@@ -512,7 +512,7 @@ class Editor extends Component
     public function fuelleGericht(int $slotId, int $vkRecipeId, string $typ = 'gericht'): void
     {
         app(ConceptService::class)->fillSlot($this->team(), $slotId, [
-            'vk_recipe_id' => $vkRecipeId, 'menge' => 1, 'einheit_vocab_id' => $this->portionEinheitId(),
+            'vk_recipe_id' => $vkRecipeId, 'quantity' => 1, 'unit_vocab_id' => $this->portionEinheitId(),
             'type' => $typ === 'basisrezept' ? 'basisrezept' : 'gericht',
         ]);
         $this->fillSlotId = null;
@@ -573,7 +573,7 @@ class Editor extends Component
             $this->einfuegenNachId = $slot->id;
         }
         $paket = app(PaketService::class)->create($team, ['name' => 'Neues Paket']);
-        $svc->fillSlot($team, $slot->id, ['paket_id' => $paket->id]);
+        $svc->fillSlot($team, $slot->id, ['package_id' => $paket->id]);
         $conceptId = $this->id;
         $this->dispatch('concepter-gespeichert', id: $conceptId);
         // direkt das neue Paket im selben Modal öffnen (Gerichte schnüren) …
@@ -627,10 +627,10 @@ class Editor extends Component
         $svc = app(ConceptService::class);
         $slot = $svc->addSlot($this->team(), $this->id, []);
         if ($typ === 'paket') {
-            $svc->fillSlot($this->team(), $slot->id, ['paket_id' => $id]);
+            $svc->fillSlot($this->team(), $slot->id, ['package_id' => $id]);
         } else {
             $svc->fillSlot($this->team(), $slot->id, [
-                'vk_recipe_id' => $id, 'menge' => 1, 'einheit_vocab_id' => $this->portionEinheitId(),
+                'vk_recipe_id' => $id, 'quantity' => 1, 'unit_vocab_id' => $this->portionEinheitId(),
                 'type' => $typ === 'basisrezept' ? 'basisrezept' : 'gericht',
             ]);
         }
@@ -674,12 +674,12 @@ class Editor extends Component
         if ($slot === null) {
             return;
         }
-        $rolle = $slot->rolle ?: null;
+        $role = $slot->role ?: null;
         $paket = app(PaketService::class)->create($team, [
-            'name' => trim(($rolle ? $rolle . '-' : '') . 'Paket'),
-            'rolle' => $rolle,
+            'name' => trim(($role ? $role . '-' : '') . 'Paket'),
+            'role' => $role,
         ]);
-        $svc->fillSlot($team, $slotId, ['paket_id' => $paket->id]);
+        $svc->fillSlot($team, $slotId, ['package_id' => $paket->id]);
         $this->dispatch('concepter-gespeichert', id: $this->id);
         // direkt das neue Paket im selben Modal öffnen (Gerichte schnüren)
         $this->oeffnen('pakete', $paket->id);
@@ -700,7 +700,7 @@ class Editor extends Component
     private function reloadSlotForm(): void
     {
         $c = app(ConceptService::class)->detail($this->team(), $this->id);
-        $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id, 'wording' => $s->wording ?? '']])->all() : [];
+        $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'quantity' => $s->quantity, 'unit_vocab_id' => $s->unit_vocab_id, 'wording' => $s->wording ?? '']])->all() : [];
         $this->blockForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => [
             'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
             'preis_wert' => $s->preis_wert, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
@@ -754,16 +754,16 @@ class Editor extends Component
     // ── Aufbau · Paket-Gerichte ──────────────────────────────────────────────
 
     /** Park-Flow: Gericht mit der eingegebenen Menge/Person einfügen (Politur). */
-    public function gerichtHinzu(int $vkRecipeId, $menge = null): void
+    public function gerichtHinzu(int $vkRecipeId, $quantity = null): void
     {
         if ($this->type !== 'pakete' || $this->id === null) {
             return;
         }
         $svc = app(PaketService::class);
         $paket = $svc->detail($this->team(), $this->id);
-        $items = $paket->gerichte->map(fn ($g) => ['vk_recipe_id' => $g->vk_recipe_id, 'menge' => $g->menge, 'einheit_vocab_id' => $g->einheit_vocab_id])->all();
+        $items = $paket->gerichte->map(fn ($g) => ['vk_recipe_id' => $g->vk_recipe_id, 'quantity' => $g->quantity, 'unit_vocab_id' => $g->unit_vocab_id])->all();
         if (! collect($items)->pluck('vk_recipe_id')->contains($vkRecipeId)) {
-            $items[] = ['vk_recipe_id' => $vkRecipeId, 'menge' => ($menge !== null && $menge !== '') ? (float) $menge : null];
+            $items[] = ['vk_recipe_id' => $vkRecipeId, 'quantity' => ($quantity !== null && $quantity !== '') ? (float) $quantity : null];
         }
         $svc->syncGerichte($this->team(), $this->id, $items);
         $this->paketGerichtSuche = '';
@@ -775,14 +775,14 @@ class Editor extends Component
         $svc = app(PaketService::class);
         $paket = $svc->detail($this->team(), $this->id);
         $items = $paket->gerichte->reject(fn ($g) => (int) $g->vk_recipe_id === $vkRecipeId)
-            ->map(fn ($g) => ['vk_recipe_id' => $g->vk_recipe_id, 'menge' => $g->menge, 'einheit_vocab_id' => $g->einheit_vocab_id])->values()->all();
+            ->map(fn ($g) => ['vk_recipe_id' => $g->vk_recipe_id, 'quantity' => $g->quantity, 'unit_vocab_id' => $g->unit_vocab_id])->values()->all();
         $svc->syncGerichte($this->team(), $this->id, $items);
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
-    public function gerichtMengeSpeichern(int $rowId, $menge): void
+    public function gerichtMengeSpeichern(int $rowId, $quantity): void
     {
-        app(PaketService::class)->setGerichtMenge($this->team(), $this->id, $rowId, $menge !== '' ? (float) $menge : null);
+        app(PaketService::class)->setGerichtMenge($this->team(), $this->id, $rowId, $quantity !== '' ? (float) $quantity : null);
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
@@ -915,27 +915,27 @@ class Editor extends Component
                     if ($formen->count() > 1) {
                         // A1: Form-Picker je Position (nur sinnvoll bei mehreren Formen)
                         $darreichungOptionen[$slot->id] = $formen
-                            ->map(fn ($f) => ['id' => $f->id, 'label' => $f->servierform?->bezeichnung ?? '—'])->all();
+                            ->map(fn ($f) => ['id' => $f->id, 'label' => $f->servierform?->label ?? '—'])->all();
                     }
                     $dar = $resolver->fuerSlot($slot);
                     if ($dar !== null) {
-                        $passtZurKonzeptForm = $concept->servierform_id !== null
-                            && (int) $dar->servierform_id === (int) $concept->servierform_id;
-                        $darreichungInfo[$slot->id] = ($passtZurKonzeptForm || $concept->servierform_id === null)
-                            ? ($dar->servierform?->bezeichnung ?? '—')
-                            : 'Standard: ' . ($dar->servierform?->bezeichnung ?? '—');
+                        $passtZurKonzeptForm = $concept->serving_form_id !== null
+                            && (int) $dar->serving_form_id === (int) $concept->serving_form_id;
+                        $darreichungInfo[$slot->id] = ($passtZurKonzeptForm || $concept->serving_form_id === null)
+                            ? ($dar->servierform?->label ?? '—')
+                            : 'Standard: ' . ($dar->servierform?->label ?? '—');
                         // Default-Geschirr der Form → Vorschlag am Slot (nur wenn dort noch keins gesetzt)
                         if ($dar->geschirr_item_id !== null && $slot->geschirr_item_id === null && $dar->geschirrItem !== null) {
                             $geschirrVorschlag[$slot->id] = [
                                 'id' => $dar->geschirr_item_id,
-                                'bezeichnung' => $dar->geschirrItem->bezeichnung,
-                                'form' => $dar->servierform?->bezeichnung,
+                                'label' => $dar->geschirrItem->label,
+                                'form' => $dar->servierform?->label,
                             ];
                         }
                     }
-                    if ($concept->servierform_id !== null) {
+                    if ($concept->serving_form_id !== null) {
                         $hatForm = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $slot->vk_recipe_id)
-                            ->where('servierform_id', $concept->servierform_id)->exists();
+                            ->where('serving_form_id', $concept->serving_form_id)->exists();
                         if (! $hatForm) {
                             $varianteFehlt[$slot->id] = true;
                         }
@@ -981,7 +981,7 @@ class Editor extends Component
             'pickHauptgruppen' => $sales->dishMainGroups($team),
             'pickHgCounts' => $sales->hauptgruppenCounts($team),
             'pickKlassen' => $this->pickHg !== null
-                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->pickHg)->orderBy('bezeichnung')->get(['id', 'bezeichnung'])
+                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->pickHg)->orderBy('label')->get(['id', 'label'])
                 : collect(),
             'pickKlassenCounts' => $this->pickHg !== null ? $sales->klassenCounts($team, $this->pickHg) : [],
             'concept' => $concept,
@@ -1011,7 +1011,7 @@ class Editor extends Component
             'gerichtListe' => $gerichtListe ?? collect(),
             'basisHauptgruppen' => $this->type === 'concepts' ? app(\Platform\FoodAlchemist\Services\RecipeService::class)->mainGroups($team) : collect(),
             'basisKategorien' => ($this->type === 'concepts' && $this->basisHg !== null)
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::where('main_group_id', $this->basisHg)->orderBy('bezeichnung')->get(['id', 'bezeichnung'])
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::where('main_group_id', $this->basisHg)->orderBy('label')->get(['id', 'label'])
                 : collect(),
             'basisNiveaus' => [['slug' => 'haute_cuisine', 'label' => 'Haute'], ['slug' => 'gehoben', 'label' => 'Gehoben'], ['slug' => 'klassisch', 'label' => 'Klassisch']],
             'typFarben' => app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->typFarben($team),
@@ -1020,7 +1020,7 @@ class Editor extends Component
             // 4c: Kategorie-Feld abgelöst — kategorienFlat nicht mehr benötigt
             // Facetten-Vokabulare (Umbau-Spec Phase 4b)
             'servierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
-                ->orderBy('sort_order')->get(['id', 'code', 'bezeichnung']),
+                ->orderBy('sort_order')->get(['id', 'code', 'label']),
             'eventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
             'einsatzmomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)

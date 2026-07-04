@@ -24,7 +24,7 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
     public function getDescription(): string
     {
         return 'Ersetzt die KOMPLETTE Zutatenliste eines stub/draft-Rezepts (Voll-Sync: Reihenfolge = '
-            . 'Array-Reihenfolge, fehlende Zeilen werden gelöscht). Pro Zeile: name + menge + einheit '
+            . 'Array-Reihenfolge, fehlende Zeilen werden gelöscht). Pro Zeile: name + quantity + unit '
             . '(Slug wie g/kg/ml/stk) + gp_id ODER referenced_recipe_id (XOR; via foodalchemist.gps.MATCH erden). '
             . 'Aggregate (Yield/Allergene/EK) werden automatisch neu gerechnet und in Eltern-Rezepte propagiert.';
     }
@@ -44,16 +44,16 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
                             'name' => ['type' => 'string'],
                             'gp_id' => ['type' => 'integer'],
                             'referenced_recipe_id' => ['type' => 'integer'],
-                            'menge' => ['type' => 'number'],
-                            'menge_max' => ['type' => 'number'],
-                            'einheit' => ['type' => 'string'],
-                            'putzverlust_pct' => ['type' => 'number'],
-                            'garverlust_pct' => ['type' => 'number'],
+                            'quantity' => ['type' => 'number'],
+                            'quantity_max' => ['type' => 'number'],
+                            'unit' => ['type' => 'string'],
+                            'trimming_loss_pct' => ['type' => 'number'],
+                            'cooking_loss_pct' => ['type' => 'number'],
                             'is_optional' => ['type' => 'boolean'],
                             'note' => ['type' => 'string'],
-                            'rolle' => ['type' => 'string'],
+                            'role' => ['type' => 'string'],
                         ],
-                        'required' => ['name', 'menge', 'einheit'],
+                        'required' => ['name', 'quantity', 'unit'],
                     ],
                 ],
             ],
@@ -87,7 +87,7 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
             'recipe' => [
                 'id' => $recipe->id, 'name' => $recipe->name, 'status' => $this->statusWert($recipe),
                 'yield_kg' => $recipe->yield_kg, 'ek_total_eur' => $recipe->ek_total_eur,
-                'n_zutaten_total' => $recipe->n_zutaten_total, 'n_zutaten_ungemappt' => $recipe->n_zutaten_ungemappt,
+                'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_ungemappt' => $recipe->n_ingredients_ungemappt,
             ],
         ]);
     }

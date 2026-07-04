@@ -13,7 +13,7 @@ use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
  * M4-14: Basisrezept-Generator — ✨ Rezept aus Beschreibung mit Richtungs-
  * Parametern + Bestand-Nutzung Hybrid (agentischer Resolver):
  *
- *   1. KI-Vorschlag (recipe.generator) → {name, beschreibung, zubereitung, zutaten[]}
+ *   1. KI-Vorschlag (recipe.generator) → {name, description, preparation, zutaten[]}
  *   2. Resolver je Zutat: BESTAND ZUERST (GL-04 voll — Aliasse, Pools, Tiebreaker
  *      mit den Richtungs-Parametern als Hooks), NEUES nur für Lücken:
  *      Halbfabrikat ohne Treffer → Sub-Rezept-Stub (F4.1); Grund-Zutat ohne
@@ -44,7 +44,7 @@ class RecipeGeneratorService
      * @param array $parameter convenience|frische|bio|niveau|sektor|diaet_hart|aroma
      * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
      */
-    public function generiere(Team $team, string $beschreibung, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false): array
+    public function generiere(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false): array
     {
         $kiRezept = $kiRezeptOverride;
         if ($kiRezept === null) {
@@ -52,10 +52,10 @@ class RecipeGeneratorService
             // als Fakten-Block in den User-Prompt; Stil-Filter (Achse 10) zieht im
             // VK-Modus über kompositions_stil. Leere Wissensbasis = leer, nie Fehler.
             $wissen = app(Ai\KnowledgeContextService::class)->contextFor(
-                'ai_generate_recipe', $beschreibung, $parameter['kompositions_stil'] ?? null
+                'ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null
             );
             $kontext = [
-                'beschreibung' => $beschreibung,
+                'description' => $description,
                 'parameter' => $parameter,
             ];
             // M7-07: Küchen-Profil VOR den Hooks (Soft-Default-Schicht,
@@ -69,7 +69,7 @@ class RecipeGeneratorService
             // M6-07 / V-04 (Audit-Hebel 3): Reuse-at-Generation — lexikalischer
             // Prefetch des Bestands VOR der Benennung; die KI soll vorhandene
             // Basisrezepte EXAKT so benennen (billiger als Nach-Matching).
-            $inventar = $this->bestandsInventar($team, $beschreibung);
+            $inventar = $this->bestandsInventar($team, $description);
             if ($inventar !== []) {
                 $kontext['bestands_inventar'] = $inventar;
             }
@@ -77,10 +77,10 @@ class RecipeGeneratorService
                 // M6-06: VK-Achsen + Taxonomie-Vorrat für Klasse/AK-Vorschlag
                 $kontext['speisen_klassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::query()
                     ->join('foodalchemist_dish_main_groups AS hg', 'hg.id', '=', 'foodalchemist_dish_classes.dish_main_group_id')
-                    ->selectRaw("foodalchemist_dish_classes.id AS id, hg.code || ' / ' || foodalchemist_dish_classes.bezeichnung AS label")
+                    ->selectRaw("foodalchemist_dish_classes.id AS id, hg.code || ' / ' || foodalchemist_dish_classes.label AS label")
                     ->orderBy('foodalchemist_dish_classes.id')->pluck('label', 'id')->all();
                 $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
-                    ->orderBy('code')->pluck('bezeichnung', 'code')->all();
+                    ->orderBy('code')->pluck('label', 'code')->all();
             }
             $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [
                 'knowledge' => $wissen['block'],
@@ -111,10 +111,10 @@ class RecipeGeneratorService
         return DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $vkModus) {
             $recipe = $this->recipes->create($team, [
                 'name' => $kiRezept['name'],
-                'ist_verkaufsrezept' => $vkModus,
-                'beschreibung' => $kiRezept['beschreibung'] ?? null,
-                'geschmacksrichtung' => $kiRezept['geschmacksrichtung'] ?? null,
-                'fertigungstiefe' => match ($parameter['convenience'] ?? null) {
+                'is_sales_recipe' => $vkModus,
+                'description' => $kiRezept['description'] ?? null,
+                'taste_direction' => $kiRezept['taste_direction'] ?? null,
+                'production_depth' => match ($parameter['convenience'] ?? null) {
                     'from_scratch' => 'from_scratch',
                     'teil_convenience' => 'teilfertig',
                     'voll_convenience' => 'convenience',
@@ -122,23 +122,23 @@ class RecipeGeneratorService
                 },
             ]);
             $recipe->update([
-                'zubereitung' => $kiRezept['zubereitung'] ?? null,
+                'preparation' => $kiRezept['preparation'] ?? null,
                 'last_modified_by' => $vkModus ? 'vk_generator' : 'generator',
-                'beschreibung_quelle' => ! empty($kiRezept['beschreibung']) ? 'ki' : null,
+                'description_source' => ! empty($kiRezept['description']) ? 'ki' : null,
             ]);
 
             // M6-06: Klasse/AK aus dem Vorschlag — beides validiert, Lineage ki (GL-07)
             if ($vkModus) {
-                $klasse = isset($kiRezept['speisen_klasse_id'])
-                    ? \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::find((int) $kiRezept['speisen_klasse_id'])
+                $klasse = isset($kiRezept['dish_class_id'])
+                    ? \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::find((int) $kiRezept['dish_class_id'])
                     : null;
                 $ak = isset($kiRezept['aufschlagsklasse_code'])
                     ? \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('code', $kiRezept['aufschlagsklasse_code'])->first()
                     : null;
                 $recipe->update(array_filter([
-                    'speisen_klasse_id' => $klasse?->id,
-                    'speisen_klasse_quelle' => $klasse !== null ? 'ki' : null,
-                    'aufschlagsklasse_id' => $ak?->id ?? $klasse?->default_markup_class_id,
+                    'dish_class_id' => $klasse?->id,
+                    'dish_class_source' => $klasse !== null ? 'ki' : null,
+                    'markup_class_id' => $ak?->id ?? $klasse?->default_markup_class_id,
                     'mwst_satz' => $ak?->mwst_satz,
                 ], fn ($v) => $v !== null));
             }
@@ -151,12 +151,12 @@ class RecipeGeneratorService
                 if ($text === '') {
                     continue;
                 }
-                $einheitId = $this->einheitId($team, (string) ($z['einheit'] ?? 'g'));
+                $einheitId = $this->einheitId($team, (string) ($z['unit'] ?? 'g'));
                 $zeile = [
                     'raw_text' => $text,
                     'display_name' => $text,
-                    'menge' => (float) ($z['menge'] ?? 1),
-                    'einheit_vocab_id' => $einheitId,
+                    'quantity' => (float) ($z['quantity'] ?? 1),
+                    'unit_vocab_id' => $einheitId,
                     'note' => $z['note'] ?? null,
                 ];
 
@@ -204,10 +204,10 @@ class RecipeGeneratorService
      *
      * @return list<string>
      */
-    private function bestandsInventar(Team $team, string $beschreibung, int $limit = 30): array
+    private function bestandsInventar(Team $team, string $description, int $limit = 30): array
     {
         $tokens = array_values(array_filter(
-            app(Matching\TokenEngine::class)->tokenize($beschreibung),
+            app(Matching\TokenEngine::class)->tokenize($description),
             fn ($t) => mb_strlen($t) >= 4,
         ));
         if ($tokens === []) {
@@ -234,13 +234,13 @@ class RecipeGeneratorService
     private function einheitId(Team $team, string $slug): int
     {
         $slug = mb_strtolower(trim($slug)) ?: 'g';
-        $einheit = FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', $slug)->first()
+        $unit = FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', $slug)->first()
             ?? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', 'g')->first()
             ?? FoodAlchemistVocabEinheit::visibleToTeam($team)->orderBy('id')->first();
-        if ($einheit === null) {
+        if ($unit === null) {
             throw new \RuntimeException('Kein Einheiten-Vokabular vorhanden (M1-02 zuerst).');
         }
 
-        return $einheit->id;
+        return $unit->id;
     }
 }

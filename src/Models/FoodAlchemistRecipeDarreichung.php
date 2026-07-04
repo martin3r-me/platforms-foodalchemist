@@ -20,14 +20,14 @@ class FoodAlchemistRecipeDarreichung extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_recipe_darreichungen';
+    protected $table = 'foodalchemist_recipe_presentations';
 
     protected $guarded = ['id'];
 
     protected $casts = [
         'ist_standard' => 'bool',
-        'menge_pro_einheit_g' => 'float',
-        'anzahl_einheiten' => 'float',
+        'quantity_pro_unit_g' => 'float',
+        'unit_count' => 'float',
         'ek_portion' => 'float',
         'vk_netto' => 'float',
         'vk_brutto' => 'float',
@@ -40,22 +40,22 @@ class FoodAlchemistRecipeDarreichung extends Model
 
     public function servierform()
     {
-        return $this->belongsTo(FoodAlchemistServierform::class, 'servierform_id');
+        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
     }
 
     public function aufschlagsklasse()
     {
-        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'aufschlagsklasse_id');
+        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'markup_class_id');
     }
 
-    public function einheit()
+    public function unit()
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id');
     }
 
     public function deltas()
     {
-        return $this->hasMany(FoodAlchemistRecipeDarreichungDelta::class, 'darreichung_id');
+        return $this->hasMany(FoodAlchemistRecipeDarreichungDelta::class, 'presentation_id');
     }
 
     /** Default-Geschirr der Form — der Concepter schlägt es am Slot vor. */

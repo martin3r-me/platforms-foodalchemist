@@ -26,14 +26,14 @@ return new class extends Migration
             $table->string('status', 12)->default('offen')->index();  // SignalStatus
 
             $table->string('titel');
-            $table->text('beschreibung')->nullable();
+            $table->text('description')->nullable();
             $table->json('payload')->nullable();                      // strukturierte Details (Refs/Werte)
 
             // Dedup + Bezug auf das betroffene Objekt (schlichte Spalten, kein FK).
             $table->string('dedup_key')->nullable()->index();
             $table->string('ref_type', 64)->nullable();
             $table->unsignedBigInteger('ref_id')->nullable();
-            $table->string('quelle', 32)->nullable();                 // z.B. 'detektor'
+            $table->string('source', 32)->nullable();                 // z.B. 'detektor'
 
             $table->timestamp('erledigt_at')->nullable();
             $table->timestamp('ignoriert_at')->nullable();

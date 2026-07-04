@@ -43,12 +43,12 @@ class PaketService
                 $s = '%' . mb_strtolower($filters['search']) . '%';
                 $q->where(fn ($w) => $w
                     ->whereRaw('LOWER(name) LIKE ?', [$s])
-                    ->orWhereRaw('LOWER(COALESCE(rolle, \'\')) LIKE ?', [$s]));
+                    ->orWhereRaw('LOWER(COALESCE(role, \'\')) LIKE ?', [$s]));
             })
-            ->when(($filters['rolle'] ?? '') !== '', fn ($q) => $q->where('rolle', $filters['rolle']))
+            ->when(($filters['role'] ?? '') !== '', fn ($q) => $q->where('role', $filters['role']))
             ->when(($filters['klasse'] ?? '') !== '', fn ($q) => $q->where('klasse', $filters['klasse']))
             ->when(($filters['niveau'] ?? '') !== '', fn ($q) => $q->where('niveau', $filters['niveau']))
-            ->orderBy('rolle')->orderBy('name')
+            ->orderBy('role')->orderBy('name')
             ->paginate($perPage);
     }
 
@@ -56,7 +56,7 @@ class PaketService
     public function rollen(Team $team): array
     {
         $verwendet = FoodAlchemistPaket::visibleToTeam($team)
-            ->whereNotNull('rolle')->distinct()->orderBy('rolle')->pluck('rolle')->all();
+            ->whereNotNull('role')->distinct()->orderBy('role')->pluck('role')->all();
         $vokabular = FoodAlchemistVocabRolle::visibleToTeam($team)
             ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->pluck('name')->all();
 
@@ -78,8 +78,8 @@ class PaketService
     {
         return FoodAlchemistPaket::visibleToTeam($team)
             ->with(['gerichte' => fn ($q) => $q->orderBy('position'),
-                'gerichte.gericht:id,name,vk_netto,vk_brutto,ek_total_eur,mwst_satz,ist_verkaufsrezept,yield_kg',
-                'gerichte.einheit:id,slug,display_de'])
+                'gerichte.gericht:id,name,vk_netto,vk_brutto,ek_total_eur,mwst_satz,is_sales_recipe,yield_kg',
+                'gerichte.unit:id,slug,display_de'])
             ->find($id);
     }
 
@@ -90,7 +90,7 @@ class PaketService
         return FoodAlchemistPaket::create([
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neuer Paket')) ?: 'Neuer Paket',
-            'rolle' => $this->normalizeRolle($in['rolle'] ?? null),
+            'role' => $this->normalizeRolle($in['role'] ?? null),
             'klasse' => $this->normalizeRolle($in['klasse'] ?? null),
             'niveau' => $in['niveau'] ?? null,
             'preis_modus' => in_array($modus, ['auto', 'manuell'], true) ? $modus : 'manuell',
@@ -99,8 +99,8 @@ class PaketService
 
     /** Editierbare Paket-Felder (Stamm + Klasse/Konsumenten-Name + manuelle Preise). */
     private const FELDER = [
-        'name', 'konsumenten_name', 'rolle', 'klasse', 'niveau', 'preis_modus', 'preis_pro_person',
-        'ek_pro_person', 'wareneinsatz_prozent', 'beschreibung', 'note', 'is_inactive',
+        'name', 'konsumenten_name', 'role', 'klasse', 'niveau', 'preis_modus', 'preis_pro_person',
+        'ek_pro_person', 'wareneinsatz_prozent', 'description', 'note', 'is_inactive',
     ];
 
     public function update(Team $team, int $id, array $in): FoodAlchemistPaket
@@ -109,8 +109,8 @@ class PaketService
         $this->guardOwner($paket, $team);
 
         $update = array_intersect_key($in, array_flip(self::FELDER));
-        if (array_key_exists('rolle', $update)) {
-            $update['rolle'] = $this->normalizeRolle($update['rolle']);
+        if (array_key_exists('role', $update)) {
+            $update['role'] = $this->normalizeRolle($update['role']);
         }
         if (array_key_exists('klasse', $update)) {
             $update['klasse'] = $this->normalizeRolle($update['klasse']);
@@ -139,8 +139,8 @@ class PaketService
 
         return DB::transaction(function () use ($team, $orig) {
             $felder = array_intersect_key($orig->attributesToArray(), array_flip([
-                'konsumenten_name', 'rolle', 'klasse', 'niveau', 'preis_modus', 'preis_pro_person',
-                'ek_pro_person', 'wareneinsatz_prozent', 'beschreibung', 'note',
+                'konsumenten_name', 'role', 'klasse', 'niveau', 'preis_modus', 'preis_pro_person',
+                'ek_pro_person', 'wareneinsatz_prozent', 'description', 'note',
             ]));
             $neu = FoodAlchemistPaket::create($felder + [
                 'team_id' => $team->id, 'name' => $orig->name . ' (Kopie)',
@@ -148,7 +148,7 @@ class PaketService
             foreach ($orig->gerichte as $g) {
                 $neu->gerichte()->create([
                     'team_id' => $team->id, 'vk_recipe_id' => $g->vk_recipe_id,
-                    'menge' => $g->menge, 'einheit_vocab_id' => $g->einheit_vocab_id, 'position' => $g->position,
+                    'quantity' => $g->quantity, 'unit_vocab_id' => $g->unit_vocab_id, 'position' => $g->position,
                 ]);
             }
             app(ConcepterAggregateService::class)->cachePaket($neu);
@@ -161,7 +161,7 @@ class PaketService
      * Setzt die Gerichte des Pakets (Vollersatz) in EINER Transaktion (V-07),
      * danach Preis-Recompute im Auto-Modus.
      *
-     * @param  array<int, array{vk_recipe_id:int, menge?:float|null, einheit_vocab_id?:int|null}>  $items
+     * @param  array<int, array{vk_recipe_id:int, quantity?:float|null, unit_vocab_id?:int|null}>  $items
      */
     public function syncGerichte(Team $team, int $paketId, array $items): FoodAlchemistPaket
     {
@@ -177,8 +177,8 @@ class PaketService
                 $paket->gerichte()->create([
                     'team_id' => $paket->team_id,
                     'vk_recipe_id' => (int) $row['vk_recipe_id'],
-                    'menge' => $row['menge'] ?? null,
-                    'einheit_vocab_id' => $row['einheit_vocab_id'] ?? null,
+                    'quantity' => $row['quantity'] ?? null,
+                    'unit_vocab_id' => $row['unit_vocab_id'] ?? null,
                     'position' => $i,
                 ]);
             }
@@ -195,11 +195,11 @@ class PaketService
     }
 
     /** Menge/Person eines Gerichts im Paket setzen (C-08-Hochrechnung). */
-    public function setGerichtMenge(Team $team, int $paketId, int $gerichtRowId, ?float $menge): void
+    public function setGerichtMenge(Team $team, int $paketId, int $gerichtRowId, ?float $quantity): void
     {
         $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($paketId);
         $this->guardOwner($paket, $team);
-        $paket->gerichte()->where('id', $gerichtRowId)->update(['menge' => $menge]);
+        $paket->gerichte()->where('id', $gerichtRowId)->update(['quantity' => $quantity]);
 
         // M10R-1: Mengen-Faktor fließt in Nährwert-/Kosten-Rollup → EK + Cache neu.
         $this->recomputePrice($paket->refresh());
@@ -214,7 +214,7 @@ class PaketService
         DB::transaction(function () use ($paketId, $ids) {
             foreach (array_values($ids) as $i => $id) {
                 \Platform\FoodAlchemist\Models\FoodAlchemistPaketGericht::where('id', (int) $id)
-                    ->where('paket_id', $paketId)->update(['position' => $i]);
+                    ->where('package_id', $paketId)->update(['position' => $i]);
             }
         });
     }
@@ -226,16 +226,16 @@ class PaketService
      * leitet zusätzlich den Preis ab. Sind keine Gerichte hinterlegt, bleibt ein evtl. von
      * Hand gesetzter EK unangetastet.
      *
-     * EK je Gericht = ek_total_eur / vk_anzahl_einheiten (Wareneinsatz PRO PORTION, nicht
-     * Batch!) × Portions-Äquivalent — einheit-abhängig über ConcepterAggregateService::
+     * EK je Gericht = ek_total_eur / vk_unit_count (Wareneinsatz PRO PORTION, nicht
+     * Batch!) × Portions-Äquivalent — unit-abhängig über ConcepterAggregateService::
      * portionsAequivalent() (EINE Stelle, konsistent zu recipeHk/ConcepterAggregate/Cockpit).
      */
     public function recomputePrice(FoodAlchemistPaket $paket): FoodAlchemistPaket
     {
         $auto = $paket->preis_modus === 'auto';
         $gerichte = $paket->gerichte()->with([
-            'gericht:id,vk_netto,ek_total_eur,vk_anzahl_einheiten,vk_menge_pro_einheit_g,ist_verkaufsrezept,yield_kg',
-            'einheit:id,slug,dimension,default_in_g',
+            'gericht:id,vk_netto,ek_total_eur,vk_unit_count,vk_quantity_pro_unit_g,is_sales_recipe,yield_kg',
+            'unit:id,slug,dimension,default_in_g',
         ])->get();
 
         $vkSum = 0.0;
@@ -243,10 +243,10 @@ class PaketService
         foreach ($gerichte as $g) {
             // Basisrezept-Posten (z. B. Hausbrot im Brotkorb-Paket): Menge/Person = GRAMM,
             // EK = g/Person ÷ Batch-Gramm × Batch-EK; kein Einzel-VK (Basis wird nicht solo verkauft).
-            // Zweig greift nur für ist_verkaufsrezept=0 → Gericht-Pfad unverändert (keine Regression).
-            if (! (bool) ($g->gericht->ist_verkaufsrezept ?? true)) {
+            // Zweig greift nur für is_sales_recipe=0 → Gericht-Pfad unverändert (keine Regression).
+            if (! (bool) ($g->gericht->is_sales_recipe ?? true)) {
                 $yieldG = (float) ($g->gericht->yield_kg ?? 0) * 1000;
-                $mengeG = $g->menge !== null ? (float) $g->menge : null;
+                $mengeG = $g->quantity !== null ? (float) $g->quantity : null;
                 if ($yieldG > 0 && $mengeG !== null && $mengeG > 0) {
                     $ekSum += (float) ($g->gericht->ek_total_eur ?? 0) * ($mengeG / $yieldG);
                 }
@@ -255,17 +255,17 @@ class PaketService
             }
             // Umbau-Spec Phase 5: geltende Darreichung auflösen (explizit → Standard)
             $dar = app(DarreichungResolver::class)->fuerPaketGericht($g);
-            $darPortionG = $dar?->menge_pro_einheit_g !== null ? (float) $dar->menge_pro_einheit_g : null;
+            $darPortionG = $dar?->quantity_pro_unit_g !== null ? (float) $dar->quantity_pro_unit_g : null;
             $pae = ConcepterAggregateService::portionsAequivalent(
-                $g->menge !== null ? (float) $g->menge : null,
-                $g->einheit,
+                $g->quantity !== null ? (float) $g->quantity : null,
+                $g->unit,
                 $g->gericht,
                 $darPortionG,
             );
             if ($pae === null) {
                 continue; // Gramm-Position ohne Portionsgewicht → trägt ehrlich nicht bei
             }
-            $anzahl = max(1, (int) ($g->gericht->vk_anzahl_einheiten ?? 1));
+            $anzahl = max(1, (int) ($g->gericht->vk_unit_count ?? 1));
             $vkSum += (float) ($dar?->vk_netto ?? $g->gericht->vk_netto ?? 0) * $pae;
             $ekSum += ($dar?->ek_portion !== null
                 ? (float) $dar->ek_portion * $pae
@@ -296,9 +296,9 @@ class PaketService
      */
     public function markStaleForRecipe(int $vkRecipeId): int
     {
-        $paketIds = DB::table('foodalchemist_paket_gerichte')
+        $paketIds = DB::table('foodalchemist_package_dishes')
             ->where('vk_recipe_id', $vkRecipeId)->whereNull('deleted_at')
-            ->distinct()->pluck('paket_id');
+            ->distinct()->pluck('package_id');
 
         return FoodAlchemistPaket::whereIn('id', $paketIds)
             ->where('preis_modus', 'auto')->update(['preis_stale' => true]);
@@ -310,7 +310,7 @@ class PaketService
      */
     public function verwendetInConcepts(Team $team, int $paketId): Collection
     {
-        $conceptIds = FoodAlchemistConceptSlot::where('paket_id', $paketId)
+        $conceptIds = FoodAlchemistConceptSlot::where('package_id', $paketId)
             ->whereNull('deleted_at')->distinct()->pluck('concept_id');
 
         return FoodAlchemistConcept::visibleToTeam($team)
@@ -331,9 +331,9 @@ class PaketService
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
             ->when($filter['hauptgruppe'] ?? null, fn ($q, $hg) => $q
-                ->whereIn('speisen_klasse_id', FoodAlchemistDishClass::where('dish_main_group_id', $hg)->pluck('id')))
-            ->when($filter['klasse'] ?? null, fn ($q, $k) => $q->where('speisen_klasse_id', $k))
-            ->when(($filter['geschmack'] ?? '') !== '', fn ($q) => $q->where('geschmacksrichtung', $filter['geschmack']))
+                ->whereIn('dish_class_id', FoodAlchemistDishClass::where('dish_main_group_id', $hg)->pluck('id')))
+            ->when($filter['klasse'] ?? null, fn ($q, $k) => $q->where('dish_class_id', $k))
+            ->when(($filter['geschmack'] ?? '') !== '', fn ($q) => $q->where('taste_direction', $filter['geschmack']))
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'vk_netto']);
     }
@@ -344,11 +344,11 @@ class PaketService
         return FoodAlchemistPaket::visibleToTeam($team)
             ->when($suche !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($suche).'%'])
-                ->orWhereRaw('LOWER(COALESCE(rolle, \'\')) LIKE ?', ['%'.mb_strtolower($suche).'%'])))
+                ->orWhereRaw('LOWER(COALESCE(role, \'\')) LIKE ?', ['%'.mb_strtolower($suche).'%'])))
             ->when(($filter['klasse'] ?? '') !== '', fn ($q) => $q->where('klasse', $filter['klasse']))
-            ->when(($filter['rolle'] ?? '') !== '', fn ($q) => $q->where('rolle', $filter['rolle']))
+            ->when(($filter['role'] ?? '') !== '', fn ($q) => $q->where('role', $filter['role']))
             ->orderBy('name')->limit($limit)
-            ->get(['id', 'name', 'preis_pro_person', 'klasse', 'rolle']);
+            ->get(['id', 'name', 'preis_pro_person', 'klasse', 'role']);
     }
 
     /**
@@ -361,16 +361,16 @@ class PaketService
             ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($suche).'%']))
             ->when(($filter['hauptgruppe'] ?? null), fn ($q, $hg) => $q->whereHas('kategorie', fn ($k) => $k->where('main_group_id', (int) $hg)))
             ->when(($filter['kategorie'] ?? null), fn ($q, $kat) => $q->where('kategorie_id', (int) $kat))
-            ->when(($filter['niveau'] ?? '') !== '', fn ($q) => $q->whereHas('niveauEignungen', fn ($n) => $n->where('niveau_slug', $filter['niveau'])))
+            ->when(($filter['niveau'] ?? '') !== '', fn ($q) => $q->whereHas('niveauEignungen', fn ($n) => $n->where('level_slug', $filter['niveau'])))
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'ek_total_eur']);
     }
 
-    private function normalizeRolle(?string $rolle): ?string
+    private function normalizeRolle(?string $role): ?string
     {
-        $rolle = $rolle !== null ? trim($rolle) : null;
+        $role = $role !== null ? trim($role) : null;
 
-        return $rolle === '' ? null : $rolle;
+        return $role === '' ? null : $role;
     }
 
     private function guardOwner(FoodAlchemistPaket $paket, Team $team): void

@@ -11,13 +11,13 @@ use Platform\FoodAlchemist\Services\RecipeGeneratorService;
  * M6-06 / D-6 §4.3 + N3: ✨ VK-Generator v1 — der Pain-Point: Basisrezept→VK
  * automatisiert. D-5-Achsen + VK-Achsen Anlass/Serviceform/Kompositions-Stil
  * (Stil filtert den GL-13-Pairing-Block, Achse 10); Bestand-Hybrid-Resolver
- * mit Basisrezepten ZUERST; Accept setzt ist_verkaufsrezept=true + Klasse/AK
+ * mit Basisrezepten ZUERST; Accept setzt is_sales_recipe=true + Klasse/AK
  * aus dem Vorschlag (validiert, Lineage ki). Aus-Foto/PDF blockiert (Martin-
  * Vision-Frage). Bio-Default konventionell — Bio nie zufällig.
  */
 class VkGeneratorModal extends Component
 {
-    public string $beschreibung = '';
+    public string $description = '';
 
     public array $parameter = [
         'convenience' => 'standard', 'frische' => 'frisch', 'bio' => false,
@@ -32,7 +32,7 @@ class VkGeneratorModal extends Component
     #[On('vk-generator-modal.oeffnen')]
     public function oeffnen(): void
     {
-        $this->reset('fehler', 'ergebnis', 'beschreibung');
+        $this->reset('fehler', 'ergebnis', 'description');
         $this->dispatch('modal.open', name: 'vk-generator-modal');
     }
 
@@ -41,14 +41,14 @@ class VkGeneratorModal extends Component
         $this->fehler = null;
         $this->ergebnis = null;
         $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || trim($this->beschreibung) === '') {
+        if ($team === null || trim($this->description) === '') {
             $this->fehler = 'Beschreibung ist Pflicht.';
 
             return;
         }
 
         try {
-            $resultat = $generator->generiere($team, trim($this->beschreibung), array_filter(
+            $resultat = $generator->generiere($team, trim($this->description), array_filter(
                 $this->parameter, fn ($v) => $v !== '' && $v !== null,
             ), null, vkModus: true);
             $this->ergebnis = [

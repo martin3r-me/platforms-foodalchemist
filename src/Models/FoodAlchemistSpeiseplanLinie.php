@@ -19,7 +19,7 @@ class FoodAlchemistSpeiseplanLinie extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_speiseplan_linien';
+    protected $table = 'foodalchemist_menu_plan_lines';
 
     protected $guarded = ['id'];
 
@@ -31,11 +31,11 @@ class FoodAlchemistSpeiseplanLinie extends Model
 
     public function speiseplan(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSpeiseplan::class, 'speiseplan_id');
+        return $this->belongsTo(FoodAlchemistSpeiseplan::class, 'menu_plan_id');
     }
 
     public function eintraege(): HasMany
     {
-        return $this->hasMany(FoodAlchemistSpeiseplanEintrag::class, 'linie_id');
+        return $this->hasMany(FoodAlchemistSpeiseplanEintrag::class, 'line_id');
     }
 }

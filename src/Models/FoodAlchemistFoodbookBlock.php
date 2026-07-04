@@ -30,14 +30,14 @@ class FoodAlchemistFoodbookBlock extends Model
         'ebene' => 'integer',
         'sichtbar' => 'boolean',
         'variant_group_id' => 'integer',
-        'menge' => 'decimal:3',
+        'quantity' => 'decimal:3',
         'preis_wert' => 'decimal:2',
         'payload_json' => 'array',
     ];
 
     public function kapitel(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistFoodbookKapitel::class, 'kapitel_id');
+        return $this->belongsTo(FoodAlchemistFoodbookKapitel::class, 'chapter_id');
     }
 
     /** concept_ref: das referenzierte Concept (live). */
@@ -52,9 +52,9 @@ class FoodAlchemistFoodbookBlock extends Model
         return $this->belongsTo(FoodAlchemistRecipe::class, 'vk_recipe_id');
     }
 
-    public function einheit(): BelongsTo
+    public function unit(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id');
     }
 
     /** Staffelpreise (nur bei preis_basis='staffel'). */

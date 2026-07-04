@@ -197,8 +197,8 @@ class IngredientMatchService
 
         $out = [];
         foreach ($this->gpPool($team, $queryTokens, $querySlug) as $gp) {
-            $combined = trim($gp->name . ' ' . ($gp->hauptzutat_display ?? ''));
-            $strict = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->hauptzutat_slug, $gp->name);
+            $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
+            $strict = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
             $score = max($strict, $this->heuristik->substringOverlap($queryTokens, $combined));
             if ($score > 0.0) {
                 $out[] = ['kind' => 'gp', 'id' => $gp->id, 'name' => $gp->name, 'score' => $score, 'reference' => "gp:{$gp->id}"];
@@ -225,8 +225,8 @@ class IngredientMatchService
         $bestZustand = null;
         $bestBio = null;
         foreach ($this->gpPool($team, $queryTokens, $querySlug) as $gp) {
-            $combined = trim($gp->name . ' ' . ($gp->hauptzutat_display ?? ''));
-            $score = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->hauptzutat_slug, $gp->name);
+            $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
+            $score = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
 
             $take = false;
             if ($best === null) {
@@ -235,11 +235,11 @@ class IngredientMatchService
                 $take = true;
             } elseif (abs($score - $best['score']) <= MatchHeuristics::SCORE_EPS) {
                 // 4.4l/u — Tiebreaker bei (Float-)Gleichstand, Feld-primär
-                $take = $this->heuristik->variantRankResolved($gp->name, $pref, $preferRaw, $bio, $gp->zustand, $gp->bio)
+                $take = $this->heuristik->variantRankResolved($gp->name, $pref, $preferRaw, $bio, $gp->condition, $gp->bio)
                     > $this->heuristik->variantRankResolved($best['gp_name'], $pref, $preferRaw, $bio, $bestZustand, $bestBio);
             }
             if ($take) {
-                $bestZustand = $gp->zustand;
+                $bestZustand = $gp->condition;
                 $bestBio = $gp->bio;
                 $best = [
                     'target' => 'gp', 'status' => MatchBand::fuerScore($score),
@@ -294,10 +294,10 @@ class IngredientMatchService
         $query = FoodAlchemistGp::visibleToTeam($team)
             ->whereIn('status', ['approved', 'tentative'])
             ->where('is_platzhalter', false);
-        $this->likeVorfilter($query, $queryTokens, $querySlug, ['name', 'hauptzutat_slug', 'hauptzutat_display']);
+        $this->likeVorfilter($query, $queryTokens, $querySlug, ['name', 'main_ingredient_slug', 'main_ingredient_display']);
 
         return $query->orderBy('id')->limit(300)
-            ->get(['id', 'name', 'hauptzutat_slug', 'hauptzutat_display', 'zustand', 'bio', 'team_id']);
+            ->get(['id', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'condition', 'bio', 'team_id']);
     }
 
     /** Sub-Pool: Basisrezepte (alle Workflow-Stadien inkl. stub), ORDER BY id, LIMIT 200. */

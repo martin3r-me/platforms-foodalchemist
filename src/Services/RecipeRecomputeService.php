@@ -55,7 +55,7 @@ class RecipeRecomputeService
     {
         $this->laCache = [];                                       // Preis-Memo nie über Edits hinweg tragen
         DB::transaction(function () use ($recipeId) {
-            $recipe = FoodAlchemistRecipe::with(['ingredients.einheit', 'ingredients.gp', 'ingredients.referencedRecipe'])
+            $recipe = FoodAlchemistRecipe::with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
                 ->findOrFail($recipeId);
             // Verlust-Kaskade (GL-02): Team + WG-Default-Memo je Recompute-Lauf frisch.
             $this->recomputeTeam = Team::find($recipe->team_id);
@@ -255,7 +255,7 @@ class RecipeRecomputeService
             } elseif ($z->match_method === MatchMethod::GeminiProposed) {
                 $geminiDabei = true;
             }
-            if ($z->is_optional || $z->einheit?->slug === 'qs') {
+            if ($z->is_optional || $z->unit?->slug === 'qs') {
                 continue;                                          // Yield-Beitrag 0 (T2)
             }
             // Ungemappte tragen zum Yield bei (Masse ist mapping-unabhängig, §3.1)
@@ -265,8 +265,8 @@ class RecipeRecomputeService
         }
 
         $recipe->yield_kg = $yieldG > 0 ? round($yieldG / 1000, 3) : null;
-        $recipe->n_zutaten_total = $nTotal;
-        $recipe->n_zutaten_ungemappt = $nUngemappt;
+        $recipe->n_ingredients_total = $nTotal;
+        $recipe->n_ingredients_ungemappt = $nUngemappt;
         $recipe->allergene_konfidenz = match (true) {              // GL-01 §4.4 (erste zutreffende)
             $nTotal === 0 => 'unknown',
             $nUngemappt > 0 => 'low',
@@ -278,26 +278,26 @@ class RecipeRecomputeService
     /** Verlust-Kaskade (GL-02): Zutat-Wert → GP-Default → Team-WG-Default → 0. */
     private function effektiverGarverlust(FoodAlchemistRecipeIngredient $z): float
     {
-        if ($z->garverlust_pct !== null) {
-            return (float) $z->garverlust_pct;
+        if ($z->cooking_loss_pct !== null) {
+            return (float) $z->cooking_loss_pct;
         }
-        if ($z->gp?->garverlust_default_pct !== null) {
-            return (float) $z->gp->garverlust_default_pct;
+        if ($z->gp?->cooking_loss_default_pct !== null) {
+            return (float) $z->gp->cooking_loss_default_pct;
         }
 
-        return $this->teamVerlustDefault('garverlust', $z->gp?->warengruppe_code);
+        return $this->teamVerlustDefault('garverlust', $z->gp?->commodity_group_code);
     }
 
     private function effektiverPutzverlust(FoodAlchemistRecipeIngredient $z): float
     {
-        if ($z->putzverlust_pct !== null) {
-            return (float) $z->putzverlust_pct;
+        if ($z->trimming_loss_pct !== null) {
+            return (float) $z->trimming_loss_pct;
         }
-        if ($z->gp?->putzverlust_default_pct !== null) {
-            return (float) $z->gp->putzverlust_default_pct;
+        if ($z->gp?->trimming_loss_default_pct !== null) {
+            return (float) $z->gp->trimming_loss_default_pct;
         }
 
-        return $this->teamVerlustDefault('putzverlust', $z->gp?->warengruppe_code);
+        return $this->teamVerlustDefault('putzverlust', $z->gp?->commodity_group_code);
     }
 
     /** Team-WG-Default (je Lauf gecacht); 0 wenn kein Team / kein Default hinterlegt. */
@@ -327,7 +327,7 @@ class RecipeRecomputeService
     {
         $felder = FoodAlchemistGp::ALLERGEN_FIELDS;
 
-        if ($recipe->n_zutaten_ungemappt > 0) {                    // F7.1-Guard: Totalreset
+        if ($recipe->n_ingredients_ungemappt > 0) {                    // F7.1-Guard: Totalreset
             foreach ($felder as $f) {
                 $recipe->{"allergen_{$f}"} = 'unbekannt';
             }
@@ -342,7 +342,7 @@ class RecipeRecomputeService
             if ($z->gp_id !== null && $z->gp !== null) {           // GP-Pfad gewinnt
                 $werte = $this->gpAggregate->allergene($z->gp);    // Prio-Kette 4.3 (Override>Mutter>LA-MAX)
                 foreach ($felder as $f) {
-                    if ($werte[$f]['quelle'] === 'keine') {
+                    if ($werte[$f]['source'] === 'keine') {
                         continue;                                  // kein Beitrag (NULL)
                     }
                     $rang = $werte[$f]['wert']->rank();
@@ -376,7 +376,7 @@ class RecipeRecomputeService
     {
         $stoffe = array_keys(FoodAlchemistItemDeclaration::STOFFE);
 
-        if ($recipe->n_zutaten_ungemappt > 0) {                    // F7.1-Guard: alle 18 NULL
+        if ($recipe->n_ingredients_ungemappt > 0) {                    // F7.1-Guard: alle 18 NULL
             foreach ($stoffe as $s) {
                 $recipe->{"zusatz_{$s}"} = null;
             }
@@ -444,7 +444,7 @@ class RecipeRecomputeService
         $out = [];
         foreach ($this->aggregationsZutaten($zutaten) as $z) {
             [$kosten, $priced] = $this->zutatKosten($z);
-            $masseG = ($z->is_optional || $z->einheit?->slug === 'qs') ? 0.0
+            $masseG = ($z->is_optional || $z->unit?->slug === 'qs') ? 0.0
                 : $this->mengeAvg($z) * $this->grammFaktor($z)
                     * (1 - $this->effektiverPutzverlust($z) / 100)
                     * (1 - $this->effektiverGarverlust($z) / 100);
@@ -483,7 +483,7 @@ class RecipeRecomputeService
     private function naehrwerte(FoodAlchemistRecipe $recipe, Collection $zutaten): void
     {
         $relevant = $zutaten->filter(fn ($z) => ! $z->is_optional
-            && $z->einheit?->slug !== 'qs'
+            && $z->unit?->slug !== 'qs'
             && $this->istGemappt($z));
 
         $totalG = 0.0;
@@ -492,7 +492,7 @@ class RecipeRecomputeService
 
         foreach ($relevant as $z) {
             // GL-08 §4.2 verbatim: NUR g/ml-Faktor — bewusst KEIN stk-Fallback (Lücke dokumentiert)
-            $mengeG = $this->mengeAvg($z) * (float) ($z->einheit?->default_in_g ?? $z->einheit?->default_in_ml ?? 0);
+            $mengeG = $this->mengeAvg($z) * (float) ($z->unit?->default_in_g ?? $z->unit?->default_in_ml ?? 0);
 
             $werte = null;
             if ($z->referencedRecipe !== null) {                   // Sub-Pfad gewinnt (GL-08 4.1)
@@ -509,11 +509,11 @@ class RecipeRecomputeService
                     ];
                 }
             } elseif ($z->gp !== null) {
-                // GL-08-Verfeinerung (Salz-Fall): KURATIERTE GP-Werte (nutri_quelle='manual')
+                // GL-08-Verfeinerung (Salz-Fall): KURATIERTE GP-Werte (nutri_source='manual')
                 // dürfen LA-Lücken füllen — z.B. Speisesalz-LAs mit sodium, aber ohne kcal
                 // (Leit-Indikator schlug fehl → Salz trug 0 bei). KI-Schätzungen bleiben
                 // weiterhin Panel-only und verfälschen keine Rezept-Nährwerte.
-                $n = $this->gpAggregate->naehrwerte($z->gp, mitKiFallback: $z->gp->nutri_quelle === 'manual');
+                $n = $this->gpAggregate->naehrwerte($z->gp, mitKiFallback: $z->gp->nutri_source === 'manual');
                 if ($n['energy_kcal']['avg'] !== null) {           // kcal = Leit-Indikator
                     $werte = [
                         'kcal' => $n['energy_kcal']['avg'],
@@ -577,7 +577,7 @@ class RecipeRecomputeService
         $pSub = $z->referencedRecipe?->ek_per_kg_eur !== null
             ? ((float) $z->referencedRecipe->ek_per_kg_eur) / 1000 : null;
 
-        if ($z->einheit?->dimension === 'count') {                 // T3 Zeile count
+        if ($z->unit?->dimension === 'count') {                 // T3 Zeile count
             if ($pStk !== null) {
                 return [$mengeAvg * $pStk, true];
             }
@@ -592,12 +592,12 @@ class RecipeRecomputeService
         }
 
         // mass/volume/pinch/piece
-        $stkDefaultG = $gp?->stk_default_g !== null ? (float) $gp->stk_default_g : null;
-        $quelle = $pG
+        $stkDefaultG = $gp?->piece_default_g !== null ? (float) $gp->piece_default_g : null;
+        $source = $pG
             ?? ($pStk !== null && $stkDefaultG > 0 ? $pStk / $stkDefaultG : null)  // Stk→g-Brücke
             ?? $pSub;
-        if ($quelle !== null && $mengeG > 0) {                     // T2: qs (Faktor 0) bleibt unpriced
-            return [$mengeG * $quelle, true];
+        if ($source !== null && $mengeG > 0) {                     // T2: qs (Faktor 0) bleibt unpriced
+            return [$mengeG * $source, true];
         }
 
         return [0.0, false];
@@ -628,39 +628,39 @@ class RecipeRecomputeService
     /** I6 / F6.4: Mittelwert bei Mengen-Bereich. */
     private function mengeAvg(FoodAlchemistRecipeIngredient $z): float
     {
-        return $z->menge_max !== null
-            ? ((float) $z->menge + (float) $z->menge_max) / 2
-            : (float) $z->menge;
+        return $z->quantity_max !== null
+            ? ((float) $z->quantity + (float) $z->quantity_max) / 2
+            : (float) $z->quantity;
     }
 
     /** T1-Kaskade (A-2-Ziel: für Yield UND Kosten identisch). */
     private function grammFaktor(FoodAlchemistRecipeIngredient $z): float
     {
-        $einheit = $z->einheit;
+        $unit = $z->unit;
         // Sub-Rezept per Stück (count): IMMER über den eigenen Stück-Ertrag (Yield ÷ ertrag_stueck),
         // auch wenn die Einheit einen generischen g/Stück-Default trägt. Bsp Asia-Suppe: 4,579 kg / 100 ⇒ 45,8 g.
-        if ($einheit?->dimension === 'count' && $z->referenced_recipe_id !== null) {
+        if ($unit?->dimension === 'count' && $z->referenced_recipe_id !== null) {
             $sub = $z->referencedRecipe;
             $ertrag = $sub?->ertrag_stueck !== null ? (float) $sub->ertrag_stueck : 0.0;
             if ($ertrag > 0 && $sub?->yield_kg !== null) {
                 return (float) $sub->yield_kg * 1000 / $ertrag;
             }
         }
-        if ($einheit?->default_in_g !== null) {
-            return (float) $einheit->default_in_g;
+        if ($unit?->default_in_g !== null) {
+            return (float) $unit->default_in_g;
         }
-        if ($einheit?->default_in_ml !== null) {
-            return (float) $einheit->default_in_ml;                // Dichte 1.0 (Wasser)
+        if ($unit?->default_in_ml !== null) {
+            return (float) $unit->default_in_ml;                // Dichte 1.0 (Wasser)
         }
-        if ($einheit?->dimension === 'count' && $z->gp_id !== null) {
+        if ($unit?->dimension === 'count' && $z->gp_id !== null) {
             $eintrag = DB::table('foodalchemist_gp_count_unit_defaults')
-                ->where('gp_id', $z->gp_id)->where('einheit_vocab_id', $z->einheit_vocab_id)
+                ->where('gp_id', $z->gp_id)->where('unit_vocab_id', $z->unit_vocab_id)
                 ->whereNull('deleted_at')->value('default_g');
             if ($eintrag !== null) {
                 return (float) $eintrag;                           // T1 Zeile 3 (Zehe 5 g / Knolle 40 g)
             }
-            if ($z->gp?->stk_default_g !== null) {
-                return (float) $z->gp->stk_default_g;              // T1 Zeile 4
+            if ($z->gp?->piece_default_g !== null) {
+                return (float) $z->gp->piece_default_g;              // T1 Zeile 4
             }
         }
 

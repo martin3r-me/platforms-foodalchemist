@@ -204,12 +204,12 @@ class MatchService
         $gpDaten = [];
         $tokenIndex = [];
         FoodAlchemistGp::visibleToTeam($team)
-            ->select('id', 'name', 'hauptzutat_slug')
+            ->select('id', 'name', 'main_ingredient_slug')
             ->orderBy('id')
             ->chunk(2000, function ($gps) use (&$gpDaten, &$tokenIndex) {
                 foreach ($gps as $gp) {
                     $tokens = $this->engine->tokenize($gp->name);
-                    $gpDaten[$gp->id] = ['name' => $gp->name, 'tokens' => $tokens, 'slug' => $gp->hauptzutat_slug];
+                    $gpDaten[$gp->id] = ['name' => $gp->name, 'tokens' => $tokens, 'slug' => $gp->main_ingredient_slug];
                     foreach ($tokens as $token) {
                         $tokenIndex[$this->engine->stemGerman($token)][] = $gp->id;  // Stem-Schlüssel
                     }
@@ -274,11 +274,11 @@ class MatchService
         $treffer = [];
         FoodAlchemistGp::visibleToTeam($team)
             ->whereNotIn('id', $ausschluss)
-            ->select('id', 'name', 'hauptzutat_slug', 'warengruppe_code', 'status', 'team_id')
+            ->select('id', 'name', 'main_ingredient_slug', 'commodity_group_code', 'status', 'team_id')
             ->orderBy('id')                                            // Inv. 7: deterministische Iteration
             ->chunk(2000, function ($gps) use (&$treffer, $query) {
                 foreach ($gps as $gp) {
-                    $score = $this->engine->matchScore($query, null, $this->engine->tokenize($gp->name), $gp->hauptzutat_slug);
+                    $score = $this->engine->matchScore($query, null, $this->engine->tokenize($gp->name), $gp->main_ingredient_slug);
                     if ($score < 0.90 && $this->engine->headMatchesQuery($gp->name, $query)) {
                         $score = 0.90;                                 // NAME_CONTAINMENT_FLOOR (4.4o)
                     }

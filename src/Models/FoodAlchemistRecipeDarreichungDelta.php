@@ -18,18 +18,18 @@ class FoodAlchemistRecipeDarreichungDelta extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_recipe_darreichung_deltas';
+    protected $table = 'foodalchemist_recipe_presentation_deltas';
 
     protected $guarded = ['id'];
 
     protected $casts = [
-        'menge_override_g' => 'float',
+        'quantity_override_g' => 'float',
         'weggelassen' => 'bool',
     ];
 
     public function darreichung()
     {
-        return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'darreichung_id');
+        return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'presentation_id');
     }
 
     public function ingredient()

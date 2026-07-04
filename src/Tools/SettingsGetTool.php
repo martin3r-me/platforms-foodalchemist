@@ -44,7 +44,7 @@ class SettingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'lead_la_strategie' => $svc->leadLaStrategie($team)->value ?? (string) $svc->leadLaStrategie($team),
             'lead_la_strategie_pro_wg' => collect($svc->leadLaStrategiePerWg($team))
                 ->map(fn ($s) => $s instanceof \BackedEnum ? $s->value : (string) $s)->all(),
-            'garverlust_default_pct' => $svc->garverlustDefault($team),
+            'cooking_loss_default_pct' => $svc->garverlustDefault($team),
             'hinweis' => 'Read-only: Einstellungen ändern nur Menschen in der UI.',
         ]);
     }

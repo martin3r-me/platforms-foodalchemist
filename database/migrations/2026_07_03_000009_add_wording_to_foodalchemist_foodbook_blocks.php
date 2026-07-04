@@ -18,7 +18,7 @@ return new class extends Migration
     {
         Schema::table('foodalchemist_foodbook_blocks', function (Blueprint $table) {
             if (! Schema::hasColumn('foodalchemist_foodbook_blocks', 'wording')) {
-                $table->text('wording')->nullable()->after('bezeichnung');
+                $table->text('wording')->nullable()->after('label');
             }
         });
     }

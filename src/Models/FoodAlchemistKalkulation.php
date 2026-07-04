@@ -18,7 +18,7 @@ class FoodAlchemistKalkulation extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_kalkulationen';
+    protected $table = 'foodalchemist_calculations';
 
     protected $guarded = ['id'];
 
@@ -29,6 +29,6 @@ class FoodAlchemistKalkulation extends Model
 
     public function positionen(): HasMany
     {
-        return $this->hasMany(FoodAlchemistKalkulationPosition::class, 'kalkulation_id')->orderBy('position');
+        return $this->hasMany(FoodAlchemistKalkulationPosition::class, 'calculation_id')->orderBy('position');
     }
 }

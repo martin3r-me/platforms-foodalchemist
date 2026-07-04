@@ -28,7 +28,7 @@
                 </select>
 
                 <button type="button" wire:click="waehleWg('')"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $warengruppe === ''
+                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $commodity_group === ''
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                             : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                     <span class="font-medium">Alle Warengruppen</span>
@@ -39,13 +39,13 @@
                     @foreach($warengruppen as $wg)
                         <div wire:key="wg-{{ $wg->code }}">
                             <button type="button" wire:click="waehleWg('{{ $wg->code }}')"
-                                    class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $warengruppe === $wg->code
+                                    class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $commodity_group === $wg->code
                                         ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                                         : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                                 <span class="min-w-0 truncate">{{ $wg->codedLabel() }}</span>
                                 <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $wgCounts[$wg->code] ?? 0 }}</span>
                             </button>
-                            @if($warengruppe === $wg->code && count($subCounts) > 0)
+                            @if($commodity_group === $wg->code && count($subCounts) > 0)
                                 <div class="ml-4 mt-0.5 space-y-0.5" data-sub-liste>
                                     @foreach($subCounts as $sub => $n)
                                         <button type="button" wire:key="sub-{{ md5($sub) }}" wire:click="waehleSub('{{ addslashes($sub) }}')"
@@ -97,7 +97,7 @@
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                 <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">
                     Grundprodukte
-                    @if($warengruppe !== '')<span class="text-gray-400 font-normal">· {{ $warengruppe }}{{ $subKategorie !== '' ? ' · ' . $subKategorie : '' }}</span>@endif
+                    @if($commodity_group !== '')<span class="text-gray-400 font-normal">· {{ $commodity_group }}{{ $subKategorie !== '' ? ' · ' . $subKategorie : '' }}</span>@endif
                 </h3>
                 <span class="{{ $label }} flex items-center gap-2">
                     {{ number_format($gps->total(), 0, ',', '.') }} Treffer ·
@@ -126,7 +126,7 @@
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-gp-name>{{ $gp->name }}</span>
                                 @if($gp->is_derivat)<span class="ml-1.5 {{ $pill }} {{ $variantPill['info'] }}">Derivat</span>@endif
                             </td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-500 whitespace-nowrap max-w-36 truncate" title="{{ $gp->warengruppe?->name ?? '' }}">{{ $gp->warengruppe?->name ?? $gp->warengruppe_code ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-500 whitespace-nowrap max-w-36 truncate" title="{{ $gp->commodity_group?->name ?? '' }}">{{ $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '—' }}</td>
                             {{-- Inline-Status-Pflege: Kuratoren editieren direkt (Beschleuniger), sonst Badge (D1) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp) && $gp->status !== \Platform\FoodAlchemist\Enums\GpStatus::Merged)
@@ -149,7 +149,7 @@
                             </td>
                             <td class="{{ $td }} whitespace-nowrap text-right tabular-nums" data-lead-preis>
                                 @if($gp->lead_vergleichspreis)
-                                    <span class="text-gray-900 dark:text-gray-100">{{ number_format($gp->lead_vergleichspreis['wert'], 2, ',', '.') }} {{ $gp->lead_vergleichspreis['einheit'] }}</span>
+                                    <span class="text-gray-900 dark:text-gray-100">{{ number_format($gp->lead_vergleichspreis['wert'], 2, ',', '.') }} {{ $gp->lead_vergleichspreis['unit'] }}</span>
                                 @elseif($gp->lead_preis !== null)
                                     <span class="text-gray-500" title="Gebinde-Preis — kein Vergleichspreis (qty fehlt, GL-03 A-2)">{{ number_format((float) $gp->lead_preis, 2, ',', '.') }} €</span>
                                 @else

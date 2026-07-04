@@ -16,7 +16,7 @@ class FoodAlchemistVocabKochequipment extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_vocab_kochequipment';
+    protected $table = 'foodalchemist_vocab_kitchen_equipment';
 
     protected $guarded = ['id'];
 

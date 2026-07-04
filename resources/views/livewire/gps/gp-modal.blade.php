@@ -86,14 +86,14 @@
                         </div>
                         <div>
                             <label class="block {{ $label }} mb-1">Zustand (§9)</label>
-                            <select wire:model.live="builder.zustand" class="{{ $input }}">
+                            <select wire:model.live="builder.condition" class="{{ $input }}">
                                 <option value="">—</option>
                                 @foreach($zustandVocab as $z)<option value="{{ $z }}">{{ $z }}</option>@endforeach
                             </select>
                         </div>
                         <div>
                             <label class="block {{ $label }} mb-1">Verarbeitung</label>
-                            <input type="text" wire:model.live.debounce.300ms="builder.verarbeitung" placeholder="z. B. Wuerfel 5 mm" class="{{ $input }}" />
+                            <input type="text" wire:model.live.debounce.300ms="builder.processing" placeholder="z. B. Wuerfel 5 mm" class="{{ $input }}" />
                         </div>
                         <div>
                             <label class="block {{ $label }} mb-1">Form</label>
@@ -158,7 +158,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block {{ $label }} mb-1">Warengruppe</label>
-                        <select wire:model.live="builder.warengruppe_code" class="{{ $input }}">
+                        <select wire:model.live="builder.commodity_group_code" class="{{ $input }}">
                             <option value="">—</option>
                             @foreach($warengruppen as $wg)<option value="{{ $wg->code }}">{{ $wg->codedLabel() }}</option>@endforeach
                         </select>
@@ -166,18 +166,18 @@
                     <div>
                         <label class="block {{ $label }} mb-1">Sub-Kategorie</label>
                         {{-- Punkt C: WG-gescopetes Dropdown gegen Drift (verwaltet + Bestand gemerged, #371) --}}
-                        <select wire:model.live="builder.sub_kategorie" class="{{ $input }}" data-sub-kategorie
-                                @disabled(($builder['warengruppe_code'] ?? '') === '')>
+                        <select wire:model.live="builder.sub_category" class="{{ $input }}" data-sub-kategorie
+                                @disabled(($builder['commodity_group_code'] ?? '') === '')>
                             <option value="">—</option>
                             @foreach($subKategorien as $sk)
-                                <option value="{{ $sk->sub_kategorie }}">{{ $sk->sub_kategorie }}</option>
+                                <option value="{{ $sk->sub_category }}">{{ $sk->sub_category }}</option>
                             @endforeach
-                            @if(($builder['sub_kategorie'] ?? '') !== '' && ! $subKategorien->contains('sub_kategorie', $builder['sub_kategorie']))
-                                <option value="{{ $builder['sub_kategorie'] }}" selected>{{ $builder['sub_kategorie'] }} (Bestand)</option>
+                            @if(($builder['sub_category'] ?? '') !== '' && ! $subKategorien->contains('sub_category', $builder['sub_category']))
+                                <option value="{{ $builder['sub_category'] }}" selected>{{ $builder['sub_category'] }} (Bestand)</option>
                             @endif
                         </select>
                         <p class="text-[11px] text-gray-400 mt-1">
-                            @if(($builder['warengruppe_code'] ?? '') === '') Erst Warengruppe wählen. @else Neue Werte in Einstellungen → Warengruppen pflegen. @endif
+                            @if(($builder['commodity_group_code'] ?? '') === '') Erst Warengruppe wählen. @else Neue Werte in Einstellungen → Warengruppen pflegen. @endif
                         </p>
                     </div>
                 </div>
@@ -186,17 +186,17 @@
             {{-- Zustand (§9) — Klassifikations-Attribut, gehört zu Allgemein (nicht Eigenschaften). Nur Edit. --}}
             @if(! $neu && $gp !== null)
                 <x-foodalchemist::modal-section title="Zustand (§9)">
-                    <x-foodalchemist::ki-header label="Zustand (§9)" field="zustand"
-                        :quelle="$gp->zustand_quelle" :confidence="$gp->zustand_ai_confidence !== null ? (float) $gp->zustand_ai_confidence : null"
-                        :begruendung="$gp->zustand_ai_begruendung" :hasProposal="isset($kiVorschlag['zustand'])">
+                    <x-foodalchemist::ki-header label="Zustand (§9)" field="condition"
+                        :source="$gp->condition_source" :confidence="$gp->condition_ai_confidence !== null ? (float) $gp->condition_ai_confidence : null"
+                        :reasoning="$gp->condition_ai_reasoning" :hasProposal="isset($kiVorschlag['condition'])">
                         <div class="flex items-center gap-2">
-                            <select wire:model.live="builder.zustand" class="{{ $input }} !w-44">
+                            <select wire:model.live="builder.condition" class="{{ $input }} !w-44">
                                 <option value="">—</option>
                                 @foreach($zustandVocab as $z)<option value="{{ $z }}">{{ $z }}</option>@endforeach
                             </select>
-                            @if(isset($kiVorschlag['zustand']))
-                                <span class="{{ $pill }} {{ $variantPill['primary'] }}" data-zustand-vorschlag>
-                                    Vorschlag: {{ $kiVorschlag['zustand']['werte']['zustand'] ?? '—' }} ({{ round($kiVorschlag['zustand']['confidence'] * 100) }}%)
+                            @if(isset($kiVorschlag['condition']))
+                                <span class="{{ $pill }} {{ $variantPill['primary'] }}" data-condition-vorschlag>
+                                    Vorschlag: {{ $kiVorschlag['condition']['werte']['condition'] ?? '—' }} ({{ round($kiVorschlag['condition']['confidence'] * 100) }}%)
                                 </span>
                             @endif
                         </div>
@@ -240,8 +240,8 @@
                 <x-foodalchemist::modal-section title="Eigenschafts-Tags (GL-07)">
                     <div class="space-y-4">
                         <x-foodalchemist::ki-header label="Eigenschafts-Tags" field="tags"
-                            :quelle="$gp->tag_quelle" :confidence="$gp->tag_ai_confidence !== null ? (float) $gp->tag_ai_confidence : null"
-                            :begruendung="$gp->tag_ai_begruendung" :hasProposal="isset($kiVorschlag['tags'])">
+                            :source="$gp->tag_source" :confidence="$gp->tag_ai_confidence !== null ? (float) $gp->tag_ai_confidence : null"
+                            :reasoning="$gp->tag_ai_begruendung" :hasProposal="isset($kiVorschlag['tags'])">
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1.5" data-tags-grid>
                                 @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistGp::TAG_FIELDS as $tag)
                                     <div class="flex items-center justify-between gap-1">
@@ -299,15 +299,15 @@
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3" data-gp-defaults>
                         <div>
                             <label class="{{ $label }}">Garverlust-Default %</label>
-                            <input type="text" wire:model="defaults.garverlust_default_pct" placeholder="—" class="{{ $input }} mt-1" data-gp-garverlust />
+                            <input type="text" wire:model="defaults.cooking_loss_default_pct" placeholder="—" class="{{ $input }} mt-1" data-gp-garverlust />
                         </div>
                         <div>
                             <label class="{{ $label }}">Putzverlust-Default %</label>
-                            <input type="text" wire:model="defaults.putzverlust_default_pct" placeholder="—" class="{{ $input }} mt-1" data-gp-putzverlust />
+                            <input type="text" wire:model="defaults.trimming_loss_default_pct" placeholder="—" class="{{ $input }} mt-1" data-gp-putzverlust />
                         </div>
                         <div>
                             <label class="{{ $label }}">Stück-Gewicht (g)</label>
-                            <input type="text" wire:model="defaults.stk_default_g" placeholder="—" class="{{ $input }} mt-1" data-gp-stk />
+                            <input type="text" wire:model="defaults.piece_default_g" placeholder="—" class="{{ $input }} mt-1" data-gp-stk />
                         </div>
                     </div>
                 </x-foodalchemist::modal-section>

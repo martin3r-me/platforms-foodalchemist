@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="utf-8">
-    <title>Foodbook — {{ $fb->bezeichnung }}</title>
+    <title>Foodbook — {{ $fb->label }}</title>
     <style>
         * { box-sizing: border-box; }
         body { font-family: "DejaVu Sans", Arial, sans-serif; color: #1f2937; font-size: 12px; line-height: 1.55; margin: 0; padding: 32px; }
@@ -40,7 +40,7 @@
     @endunless
 
     <div class="head">
-        <h1>{{ $fb->bezeichnung }}</h1>
+        <h1>{{ $fb->label }}</h1>
         <div class="sub">Foodbook / Portfolio</div>
     </div>
 
@@ -89,8 +89,8 @@
         <div style="color:#9ca3af; font-size:10px; margin-top:6px">{{ $mwstText }}</div>
     </div>
 
-    @if($fb->beschreibung)
-        <div style="margin-top:16px">{!! nl2br(e($fb->beschreibung)) !!}</div>
+    @if($fb->description)
+        <div style="margin-top:16px">{!! nl2br(e($fb->description)) !!}</div>
     @endif
 
     <div class="foot">Erstellt mit Food Alchemist</div>

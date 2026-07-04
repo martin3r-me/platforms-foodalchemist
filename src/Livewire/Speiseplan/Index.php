@@ -216,9 +216,9 @@ class Index extends Component
         if ($this->selectedId === null || $this->cellDatum === null) {
             return;
         }
-        $feld = ['concept' => 'concept_id', 'paket' => 'paket_id', 'gericht' => 'vk_recipe_id'][$typ] ?? 'vk_recipe_id';
+        $feld = ['concept' => 'concept_id', 'paket' => 'package_id', 'gericht' => 'vk_recipe_id'][$typ] ?? 'vk_recipe_id';
         $svc->addEintrag($this->team(), $this->selectedId, [
-            'datum' => $this->cellDatum, 'linie_id' => $this->cellLinie, 'mahlzeit' => $this->mahlzeit, $feld => $id,
+            'datum' => $this->cellDatum, 'line_id' => $this->cellLinie, 'mahlzeit' => $this->mahlzeit, $feld => $id,
         ]);
         $this->pickerSuche = '';
     }

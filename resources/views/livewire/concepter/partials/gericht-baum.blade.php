@@ -11,9 +11,9 @@
     {{-- VK-Hauptgruppen --}}
     <div class="flex flex-wrap gap-1">
         @foreach($pickHauptgruppen as $hg)
-            <button type="button" wire:click="pickHgWaehle({{ $hg->id }})" title="{{ $hg->bezeichnung }}"
+            <button type="button" wire:click="pickHgWaehle({{ $hg->id }})" title="{{ $hg->label }}"
                     class="{{ $pillBtn }} {{ $pickHg === $hg->id ? $pillOn : $pillOff }}">
-                <span class="font-medium">{{ $hg->code ?: $hg->bezeichnung }}</span>
+                <span class="font-medium">{{ $hg->code ?: $hg->label }}</span>
                 @if(($pickHgCounts[$hg->id] ?? 0) > 0)<span class="opacity-60 tabular-nums">{{ $pickHgCounts[$hg->id] }}</span>@endif
             </button>
         @endforeach
@@ -25,7 +25,7 @@
             @foreach($pickKlassen as $kl)
                 <button type="button" wire:click="pickKlasseWaehle({{ $kl->id }})"
                         class="{{ $pillBtn }} {{ $pickKlasse === $kl->id ? $pillOn : $pillOff }}">
-                    {{ $kl->bezeichnung }}
+                    {{ $kl->label }}
                     @if(($pickKlassenCounts[$kl->id] ?? 0) > 0)<span class="opacity-60 tabular-nums">{{ $pickKlassenCounts[$kl->id] }}</span>@endif
                 </button>
             @endforeach

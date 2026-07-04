@@ -192,7 +192,7 @@
                                 {{ $item->aktiver_preis !== null ? number_format((float) $item->aktiver_preis, 2, ',', '.') . ' €' : '—' }}
                             </td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums" data-vergleichspreis>
-                                {{ $item->vergleichspreis !== null ? number_format($item->vergleichspreis['wert'], 2, ',', '.') . ' ' . $item->vergleichspreis['einheit'] : '—' }}
+                                {{ $item->vergleichspreis !== null ? number_format($item->vergleichspreis['wert'], 2, ',', '.') . ' ' . $item->vergleichspreis['unit'] : '—' }}
                             </td>
                             <td class="{{ $td }} max-w-48 truncate">
                                 @if($item->structure?->gp)
@@ -278,7 +278,7 @@
             <x-foodalchemist::modal-section title="Stammdaten">
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Bezeichnung *</label>
-                        <input type="text" wire:model="neuArtikel.designation" wire:keydown.enter="artikelAnlegen" class="{{ $input }}" data-neu-bezeichnung /></div>
+                        <input type="text" wire:model="neuArtikel.designation" wire:keydown.enter="artikelAnlegen" class="{{ $input }}" data-neu-label /></div>
                     <div><label class="block {{ $label }} mb-1">Artikel-Nr.</label>
                         <input type="text" wire:model="neuArtikel.article_number" class="{{ $input }}" /></div>
                     <div class="grid grid-cols-2 gap-2">
@@ -310,11 +310,11 @@
                         <tbody>
                             @forelse($anomalien['ausreisser'] as $a)
                                 <tr class="{{ $tr }}">
-                                    <td class="{{ $td }} !px-2 max-w-sm truncate">{{ $a['bezeichnung'] }}</td>
+                                    <td class="{{ $td }} !px-2 max-w-sm truncate">{{ $a['label'] }}</td>
                                     <td class="{{ $td }} !px-2 text-gray-500">{{ $a['lieferant'] }}</td>
                                     <td class="{{ $td }} !px-2 text-gray-500">{{ $a['wg'] }}</td>
-                                    <td class="{{ $td }} !px-2">{{ number_format($a['wert'], 2, ',', '.') }} {{ $a['einheit'] }}</td>
-                                    <td class="{{ $td }} !px-2 text-gray-500">{{ number_format($a['median'], 2, ',', '.') }} {{ $a['einheit'] }}</td>
+                                    <td class="{{ $td }} !px-2">{{ number_format($a['wert'], 2, ',', '.') }} {{ $a['unit'] }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-500">{{ number_format($a['median'], 2, ',', '.') }} {{ $a['unit'] }}</td>
                                     <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $variantPill['warning'] }}">×{{ $a['faktor'] }}</span></td>
                                 </tr>
                             @empty

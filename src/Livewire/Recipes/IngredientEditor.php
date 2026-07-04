@@ -70,7 +70,7 @@ class IngredientEditor extends Component
 
     /**
      * M4-11: Garverlust-Vorschläge via Gateway (GL-07: nichts persistiert —
-     * Alpine merged in die rows, geschrieben wird beim Save mit quelle=ki).
+     * Alpine merged in die rows, geschrieben wird beim Save mit source=ki).
      *
      * @param array<int, string> $zutaten [index => raw_text]
      * @return array{verluste: array<int, float>, confidence: float}
@@ -113,15 +113,15 @@ class IngredientEditor extends Component
                     'lead' => $la->item !== null && (int) $la->item->id === (int) $gp->lead_la_supplier_item_id,
                     'lieferant' => $la->supplier?->name ?? '—',
                     'artikelnr' => $la->item?->article_number ?? '—',
-                    'bezeichnung' => $la->item?->designation ?? '—',
+                    'label' => $la->item?->designation ?? '—',
                     'marke' => $la->item?->brand ?? null,
                     'vpe' => $la->item?->qty !== null
                         ? rtrim(rtrim(number_format((float) $la->item->qty, 2, ',', '.'), '0'), ',') . ' ' . ($la->item->packaging_unit ?? $la->item->unit_code ?? '')
                         : null,
                     'preis' => $preis !== null ? number_format($preis, 2, ',', '.') . ' €' : null,
-                    'vergleichspreis' => $vergleich !== null ? number_format($vergleich['wert'], 2, ',', '.') . ' ' . $vergleich['einheit'] : null,
-                    'match' => $la->structure?->hauptzutat_konfidenz !== null
-                        ? round((float) $la->structure->hauptzutat_konfidenz * 100) . ' %'
+                    'vergleichspreis' => $vergleich !== null ? number_format($vergleich['wert'], 2, ',', '.') . ' ' . $vergleich['unit'] : null,
+                    'match' => $la->structure?->main_ingredient_konfidenz !== null
+                        ? round((float) $la->structure->main_ingredient_konfidenz * 100) . ' %'
                         : null,
                 ];
             })
@@ -213,14 +213,14 @@ class IngredientEditor extends Component
 
         $gpQuery = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)
             ->when($suche !== '', fn ($w) => $w->whereRaw('LOWER(name) LIKE ?', ['%' . $suche . '%']))
-            ->when(($gpFilter['wg'] ?? '') !== '', fn ($w) => $w->where('warengruppe_code', $gpFilter['wg']))
-            ->when(($gpFilter['sub'] ?? '') !== '', fn ($w) => $w->where('sub_kategorie', $gpFilter['sub']))
-            ->when(($gpFilter['zustand'] ?? '') !== '', fn ($w) => $w->where('zustand', $gpFilter['zustand']))
+            ->when(($gpFilter['wg'] ?? '') !== '', fn ($w) => $w->where('commodity_group_code', $gpFilter['wg']))
+            ->when(($gpFilter['sub'] ?? '') !== '', fn ($w) => $w->where('sub_category', $gpFilter['sub']))
+            ->when(($gpFilter['condition'] ?? '') !== '', fn ($w) => $w->where('condition', $gpFilter['condition']))
             ->when((bool) ($gpFilter['bio'] ?? false), fn ($w) => $w->where('is_organic', true))
             ->when((bool) ($gpFilter['regional'] ?? false), fn ($w) => $w->where('is_regional', true));
         $gpTotal = (clone $gpQuery)->count();
         $gpModels = $gpQuery->orderBy('name')->limit(200)
-            ->get(['id', 'name', 'zustand', 'lead_la_supplier_item_id', 'stk_default_g', 'team_id']);
+            ->get(['id', 'name', 'condition', 'lead_la_supplier_item_id', 'piece_default_g', 'team_id']);
         // Performance: 30× preisProGrammPublic wären ~60 Queries je Tipper — stattdessen EINE
         // Bulk-Query (Ø €/g über aktive kg/l-LAs). Der präzise Lead-Wert kommt beim Parken nach.
         $aktiverPreis = app(\Platform\FoodAlchemist\Services\PriceService::class)->activePriceSubquery()->toBase();
@@ -245,7 +245,7 @@ class IngredientEditor extends Component
                     'ek_pro_g' => $ek,
                     'preis_label' => $ek !== null ? number_format($ek * 1000, 2, ',', '.') . ' €/kg' : null,
                     // Spec: Einheit hängt am Produkt (Chilipulver→g, Bier→ml) — Override im Dropdown
-                    'einheit_slug' => str_contains(mb_strtolower($gp->name . ' ' . ($gp->zustand ?? '')), 'fluessig') ? 'ml' : 'g',
+                    'einheit_slug' => str_contains(mb_strtolower($gp->name . ' ' . ($gp->condition ?? '')), 'fluessig') ? 'ml' : 'g',
                 ];
             })->values()->all();
 
@@ -254,9 +254,9 @@ class IngredientEditor extends Component
             ->when($suche !== '', fn ($w) => $w->whereRaw('LOWER(foodalchemist_recipes.name) LIKE ?', ['%' . $suche . '%']))
             ->when(($rezFilter['hg'] ?? '') !== '', fn ($w) => $w->whereHas('kategorie', fn ($k) => $k->where('main_group_id', (int) $rezFilter['hg'])))
             ->when(($rezFilter['kat'] ?? '') !== '', fn ($w) => $w->where('kategorie_id', (int) $rezFilter['kat']))
-            ->when(($rezFilter['niveau'] ?? '') !== '', fn ($w) => $w->whereHas('niveauEignungen', fn ($n) => $n->where('niveau_slug', $rezFilter['niveau'])));
+            ->when(($rezFilter['niveau'] ?? '') !== '', fn ($w) => $w->whereHas('niveauEignungen', fn ($n) => $n->where('level_slug', $rezFilter['niveau'])));
         $rezTotal = (clone $rezQuery)->count();
-        $rezepte = $rezQuery->with('niveauEignungen:id,recipe_id,niveau_slug')->orderBy('name')->limit(200)
+        $rezepte = $rezQuery->with('niveauEignungen:id,recipe_id,level_slug')->orderBy('name')->limit(200)
             ->get(['id', 'name', 'ek_per_kg_eur', 'yield_kg', 'ertrag_stueck'])
             ->map(function ($r) {
                 $hatStueck = $r->ertrag_stueck !== null && (float) $r->ertrag_stueck > 0 && $r->yield_kg !== null;
@@ -268,7 +268,7 @@ class IngredientEditor extends Component
                     // Stück-Ertrag → Einheit beim Einfügen auf „stk" vorbelegen + g/Stück fürs Live-Rechnen
                     'einheit_slug' => $hatStueck ? 'stk' : 'g',
                     'g_pro_stueck' => $hatStueck ? (float) $r->yield_kg * 1000 / (float) $r->ertrag_stueck : null,
-                    'niveaus' => $r->niveauEignungen->pluck('niveau_slug')->values()->all(),
+                    'niveaus' => $r->niveauEignungen->pluck('level_slug')->values()->all(),
                 ];
             })->values()->all();
 
@@ -326,15 +326,15 @@ class IngredientEditor extends Component
                         : ($z->referenced_recipe_id !== null ? \Platform\FoodAlchemist\Support\Sprungziel::rezept($z->referenced_recipe_id) : null),
                     'raw_text' => $z->raw_text,
                     'display_name' => $z->display_name,
-                    'menge' => (float) $z->menge,
-                    'menge_max' => $z->menge_max !== null ? (float) $z->menge_max : null,
-                    'einheit_vocab_id' => $z->einheit_vocab_id,
-                    'garverlust_pct' => $z->garverlust_pct !== null ? (float) $z->garverlust_pct : null,
-                    'putzverlust_pct' => $z->putzverlust_pct !== null ? (float) $z->putzverlust_pct : null,
+                    'quantity' => (float) $z->quantity,
+                    'quantity_max' => $z->quantity_max !== null ? (float) $z->quantity_max : null,
+                    'unit_vocab_id' => $z->unit_vocab_id,
+                    'cooking_loss_pct' => $z->cooking_loss_pct !== null ? (float) $z->cooking_loss_pct : null,
+                    'trimming_loss_pct' => $z->trimming_loss_pct !== null ? (float) $z->trimming_loss_pct : null,
                     'is_optional' => (bool) $z->is_optional,
                     'note' => $z->note,
-                    'rolle' => $z->rolle,
-                    'ist_wertgebend' => (bool) $z->ist_wertgebend,
+                    'role' => $z->role,
+                    'is_value_relevant' => (bool) $z->is_value_relevant,
                     'lineage' => $z->match_method?->value,
                     'ek_pro_g' => $ekProG,
                     'ek_pro_g_min' => $varianten['min'],
@@ -367,7 +367,7 @@ class IngredientEditor extends Component
 
         // R18: Filter-Vokabulare für die Seitenspalten (klein genug für einmaliges Mitgeben;
         // der Client verengt Kategorien nach gewählter Hauptgruppe selbst)
-        $db = \Illuminate\Support\Facades\DB::table('foodalchemist_lookup_warengruppen');
+        $db = \Illuminate\Support\Facades\DB::table('foodalchemist_lookup_commodity_groups');
 
         return view('foodalchemist::livewire.recipes.ingredient-editor', [
             'rezept' => $rezept,
@@ -378,18 +378,18 @@ class IngredientEditor extends Component
                 ? \Platform\FoodAlchemist\Services\TeamSettingsService::TYP_FARBEN_DEFAULTS
                 : app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->typFarben($team),
             // M9-01a: VK-Kontext zeigt die Rollen-Spalte (V-21 — Gesamt-Gericht-Sicht)
-            'vkKontext' => (bool) ($rezept?->ist_verkaufsrezept ?? false),
+            'vkKontext' => (bool) ($rezept?->is_sales_recipe ?? false),
             'browserVokabular' => $team === null ? null : [
                 'warengruppen' => $db->whereNull('deleted_at')->orderBy('sort_order')->get(['code', 'name'])->all(),
                 'subKategorien' => \Illuminate\Support\Facades\DB::table('foodalchemist_gps')
-                    ->whereNull('deleted_at')->whereNotNull('sub_kategorie')
-                    ->distinct()->orderBy('sub_kategorie')
-                    ->get(['warengruppe_code', 'sub_kategorie'])->all(),
+                    ->whereNull('deleted_at')->whereNotNull('sub_category')
+                    ->distinct()->orderBy('sub_category')
+                    ->get(['commodity_group_code', 'sub_category'])->all(),
                 'zustande' => ['frisch', 'TK', 'trocken', 'konserviert'],
                 'hauptgruppen' => \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_main_groups')
-                    ->whereNull('deleted_at')->orderBy('sort_order')->get(['id', 'bezeichnung'])->all(),
+                    ->whereNull('deleted_at')->orderBy('sort_order')->get(['id', 'label'])->all(),
                 'kategorien' => \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_categories')
-                    ->whereNull('deleted_at')->orderBy('bezeichnung')->get(['id', 'bezeichnung', 'main_group_id'])->all(),
+                    ->whereNull('deleted_at')->orderBy('label')->get(['id', 'label', 'main_group_id'])->all(),
                 'niveaus' => [['slug' => 'haute_cuisine', 'label' => 'Haute'], ['slug' => 'gehoben', 'label' => 'Gehoben'], ['slug' => 'klassisch', 'label' => 'Klassisch']],
             ],
         ]);

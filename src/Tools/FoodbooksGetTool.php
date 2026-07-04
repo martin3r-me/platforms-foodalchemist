@@ -46,7 +46,7 @@ class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
         return ToolResult::success([
             'id' => $fb->id,
-            'bezeichnung' => $fb->bezeichnung,
+            'label' => $fb->label,
             'kunde' => $fb->kunde,
             'personen' => $fb->personen,
             'status' => $fb->status instanceof \BackedEnum ? $fb->status->value : $fb->status,
@@ -57,7 +57,7 @@ class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'parent_id' => $k->parent_id,
                 'blocks' => $k->blocks->map(fn ($b) => [
                     'type' => $b->type,
-                    'name' => $b->concept?->name ?? $b->bezeichnung ?? $b->kundentext,
+                    'name' => $b->concept?->name ?? $b->label ?? $b->kundentext,
                     'preis_pro_person' => $b->concept?->preis_pro_person_cache ?? $b->preis_wert,
                 ])->values()->all(),
             ])->values()->all(),

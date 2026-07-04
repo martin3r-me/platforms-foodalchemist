@@ -47,7 +47,7 @@
                                     class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === $hg->id
                                         ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                                         : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                                <span class="min-w-0 truncate"><span class="font-mono text-[10px] text-gray-400 mr-1">[{{ $hg->code }}]</span>{{ $hg->bezeichnung }}</span>
+                                <span class="min-w-0 truncate"><span class="font-mono text-[10px] text-gray-400 mr-1">[{{ $hg->code }}]</span>{{ $hg->label }}</span>
                                 <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
                             </button>
                             @if($hauptgruppe === $hg->id && $klassen->isNotEmpty())
@@ -58,7 +58,7 @@
                                                     class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $klasse === $k->id
                                                         ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
                                                         : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                                                <span class="min-w-0 truncate">{{ $k->bezeichnung }}</span>
+                                                <span class="min-w-0 truncate">{{ $k->label }}</span>
                                                 <span class="text-gray-400 shrink-0 ml-2">{{ $klassenCounts[$k->id] }}</span>
                                             </button>
                                         @endif
@@ -125,8 +125,8 @@
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-vk-name>{{ $r->name }}</span>
                             </td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->speisenKlasse?->hauptgruppe?->code ?? '—' }}</td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-500 truncate max-w-[10rem] whitespace-nowrap">{{ $r->speisenKlasse?->bezeichnung ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->geschmacksrichtung ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-500 truncate max-w-[10rem] whitespace-nowrap">{{ $r->speisenKlasse?->label ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
@@ -142,7 +142,7 @@
                             </td>
                             <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap text-right tabular-nums">{{ $r->vk_netto !== null ? number_format((float) $r->vk_netto, 2, ',', '.') . ' €' : '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums">{{ $r->ek_total_eur !== null ? number_format((float) $r->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</td>
-                            <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $r->n_zutaten_total }}</td>
+                            <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $r->n_ingredients_total }}</td>
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergene_konfidenz] ?? $variantPill['secondary'] }}">{{ $r->allergene_konfidenz }}</span>
                             </td>

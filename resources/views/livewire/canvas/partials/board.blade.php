@@ -26,7 +26,7 @@
                                         <div class="flex-1 min-w-0">
                                             <span class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ $w['value'] }}</span>
                                             @if($w['claim'])<span class="text-[11px] text-gray-400"> · {{ $w['claim'] }}</span>@endif
-                                            @if($w['beschreibung'])<div class="text-[11px] text-gray-500 truncate">{{ $w['beschreibung'] }}</div>@endif
+                                            @if($w['description'])<div class="text-[11px] text-gray-500 truncate">{{ $w['description'] }}</div>@endif
                                         </div>
                                         <button type="button" wire:click="weltLoeschen({{ $w['id'] }})" class="{{ $btnGhostXs }} text-rose-500 shrink-0">✕</button>
                                     </div>
@@ -38,7 +38,7 @@
                                 <input type="text" wire:model="canvasNeuWelt.value" placeholder="Name (z. B. Italien)" class="{{ $input }}" />
                                 <input type="text" wire:model="canvasNeuWelt.claim" placeholder="Claim" class="{{ $input }}" />
                                 <div class="flex gap-2">
-                                    <input type="text" wire:model="canvasNeuWelt.beschreibung" placeholder="Beschreibung" class="{{ $input }}" />
+                                    <input type="text" wire:model="canvasNeuWelt.description" placeholder="Beschreibung" class="{{ $input }}" />
                                     <button type="button" wire:click="weltHinzu" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0">+ </button>
                                 </div>
                             </div>

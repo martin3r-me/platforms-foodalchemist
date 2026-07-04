@@ -20,7 +20,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  * (Portfolio). Verknüpft optional eine CRM-Firma/-Kontakt (MVP: nur verlinken).
  *
  * Die Menü-Substanz wird im Concepter gebaut: angebots-lokale Entwürfe sind
- * Concepts/Pakete mit `angebot_id = dieses Angebot` (spekulativ, „mal eben
+ * Concepts/Pakete mit `offer_id = dieses Angebot` (spekulativ, „mal eben
  * schnell"); zusätzlich können standardisierte Concepter-Artefakte referenziert
  * werden (Positions-Ebene folgt beim Composer). team-eigen.
  */
@@ -28,7 +28,7 @@ class FoodAlchemistAngebot extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_angebote';
+    protected $table = 'foodalchemist_offers';
 
     protected $guarded = ['id'];
 
@@ -39,7 +39,7 @@ class FoodAlchemistAngebot extends Model
         'budget' => 'decimal:2',
         'gesamtpreis' => 'decimal:2',
         'event_datum' => 'date',
-        'gueltig_bis' => 'date',
+        'valid_until' => 'date',
     ];
 
     /** Verknüpfte CRM-Firma (optional, MVP: nur verlinken — kein Rücksync). */
@@ -57,21 +57,21 @@ class FoodAlchemistAngebot extends Model
     /** Angebots-lokale (spekulative) Concept-Entwürfe dieses Angebots. */
     public function concepts(): HasMany
     {
-        return $this->hasMany(FoodAlchemistConcept::class, 'angebot_id');
+        return $this->hasMany(FoodAlchemistConcept::class, 'offer_id');
     }
 
     /** Angebots-lokale (spekulative) Paket-Entwürfe dieses Angebots. */
     public function pakete(): HasMany
     {
-        return $this->hasMany(FoodAlchemistPaket::class, 'angebot_id');
+        return $this->hasMany(FoodAlchemistPaket::class, 'offer_id');
     }
 
     /** #380 DoD-5: zusätzlich referenzierte STANDARDISIERTE Katalog-Concepts (geteilt, nicht besessen). */
     public function referenzierteConcepts(): BelongsToMany
     {
-        return $this->belongsToMany(FoodAlchemistConcept::class, 'foodalchemist_angebot_concept', 'angebot_id', 'concept_id')
+        return $this->belongsToMany(FoodAlchemistConcept::class, 'foodalchemist_offer_concept', 'offer_id', 'concept_id')
             ->withPivot('position')->withTimestamps()
-            ->orderBy('foodalchemist_angebot_concept.position');
+            ->orderBy('foodalchemist_offer_concept.position');
     }
 
     /** Noch nicht final entschiedene Angebote (nicht angenommen/abgelehnt). */

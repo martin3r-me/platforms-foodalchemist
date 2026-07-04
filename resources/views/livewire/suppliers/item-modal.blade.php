@@ -17,7 +17,7 @@
                     EK: {{ $aktiverPreis?->price !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}
                 </span>
                 <span class="text-xs text-gray-500" data-vergleichspreis-kopf>
-                    {{ $vergleichspreis ? number_format($vergleichspreis['wert'], 2, ',', '.') . ' ' . $vergleichspreis['einheit'] : 'kein Vergleichspreis' }}
+                    {{ $vergleichspreis ? number_format($vergleichspreis['wert'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : 'kein Vergleichspreis' }}
                 </span>
                 @if($item->structure?->gp)
                     <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ $item->structure->gp->name }}</span>
@@ -38,7 +38,7 @@
                     @endforeach
                 </div>
                 <div class="mt-3"><label class="block {{ $label }} mb-1">Zusatztext</label>
-                    <textarea wire:model="stammdaten.zusatztext" rows="2" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60"></textarea></div>
+                    <textarea wire:model="stammdaten.additional_text" rows="2" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60"></textarea></div>
             </x-foodalchemist::modal-section>
 
             <x-foodalchemist::modal-section title="Verpackung & Mengen">
@@ -208,7 +208,7 @@
                 <div class="flex items-center justify-end gap-3 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 mb-2" data-ek-aktuell>
                     <p class="text-xs text-gray-900 dark:text-gray-100">EK aktuell:
                         <span class="font-semibold {{ $aktiverPreis !== null ? 'text-green-600 dark:text-green-400' : 'text-gray-400' }}">{{ $aktiverPreis !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}</span>
-                        <span class="text-gray-400">pro {{ $item->ordering_unit ?? $item->unit_code ?? 'Einheit' }}{{ $vergleichspreis !== null ? ' · ' . number_format($vergleichspreis['wert'], 2, ',', '.') . ' ' . $vergleichspreis['einheit'] : '' }}</span>
+                        <span class="text-gray-400">pro {{ $item->ordering_unit ?? $item->unit_code ?? 'Einheit' }}{{ $vergleichspreis !== null ? ' · ' . number_format($vergleichspreis['wert'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : '' }}</span>
                     </p>
                     @if($darfEdit)
                         <button type="button" x-data @click="$el.closest('[data-modal]').querySelector('[data-preis-neu]')?.classList.toggle('hidden')" class="{{ $btnPrimary }}" data-preis-neu-toggle>+ Neuer Preis</button>

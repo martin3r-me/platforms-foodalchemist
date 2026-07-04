@@ -25,12 +25,12 @@ class FoodAlchemistRecipeIngredient extends Model
     protected $casts = [
         'match_method' => MatchMethod::class,
         'match_confidence' => 'decimal:3',
-        'menge' => 'decimal:4',
-        'menge_max' => 'decimal:4',
-        'putzverlust_pct' => 'decimal:2',
-        'garverlust_pct' => 'decimal:2',
+        'quantity' => 'decimal:4',
+        'quantity_max' => 'decimal:4',
+        'trimming_loss_pct' => 'decimal:2',
+        'cooking_loss_pct' => 'decimal:2',
         'is_optional' => 'boolean',
-        'ist_wertgebend' => 'boolean',
+        'is_value_relevant' => 'boolean',
         'position' => 'integer',
     ];
 
@@ -49,8 +49,8 @@ class FoodAlchemistRecipeIngredient extends Model
         return $this->belongsTo(FoodAlchemistRecipe::class, 'referenced_recipe_id');
     }
 
-    public function einheit(): BelongsTo
+    public function unit(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id');
     }
 }

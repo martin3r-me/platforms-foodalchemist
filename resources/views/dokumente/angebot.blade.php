@@ -16,7 +16,7 @@
         .menue { margin-bottom: 14px; }
         .menue h2 { font-size: 14px; color: #6d28d9; margin: 0 0 4px; border-bottom: 1px solid #ececec; padding-bottom: 3px; }
         .pos { padding: 1px 0; }
-        .pos .rolle { color: #9ca3af; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+        .pos .role { color: #9ca3af; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
         .preis { margin-top: 20px; border-top: 2px solid #6d28d9; padding-top: 10px; }
         .preis table { width: 100%; border-collapse: collapse; }
         .preis td { padding: 4px 0; }
@@ -51,14 +51,14 @@
         @if($angebot->location)<tr><td class="k">Location</td><td>{{ $angebot->location }}</td></tr>@endif
         <tr><td class="k">Personen</td><td>{{ $kalk['pax'] ?: '—' }}</td></tr>
         @if($angebot->diaet_vorgabe)<tr><td class="k">Diät / Allergien</td><td>{{ $angebot->diaet_vorgabe }}</td></tr>@endif
-        @if($angebot->gueltig_bis)<tr><td class="k">Gültig bis</td><td>{{ $angebot->gueltig_bis->format('d.m.Y') }}</td></tr>@endif
+        @if($angebot->valid_until)<tr><td class="k">Gültig bis</td><td>{{ $angebot->valid_until->format('d.m.Y') }}</td></tr>@endif
     </table>
 
     @forelse($menues as $menue)
         <div class="menue">
             <h2>{{ $menue['name'] }}</h2>
             @forelse($menue['positionen'] as $p)
-                <div class="pos">@if($p['rolle'])<span class="rolle">{{ $p['rolle'] }}:</span> @endif{{ $p['label'] }}</div>
+                <div class="pos">@if($p['role'])<span class="role">{{ $p['role'] }}:</span> @endif{{ $p['label'] }}</div>
             @empty
                 <div class="pos" style="color:#9ca3af">— noch keine Positionen —</div>
             @endforelse
@@ -75,13 +75,13 @@
         </table>
     </div>
 
-    @if($angebot->beschreibung)
-        <div class="note">{!! nl2br(e($angebot->beschreibung)) !!}</div>
+    @if($angebot->description)
+        <div class="note">{!! nl2br(e($angebot->description)) !!}</div>
     @endif
 
     <div class="foot">
         Erstellt mit Food Alchemist
-        @if($angebot->gueltig_bis) · gültig bis {{ $angebot->gueltig_bis->format('d.m.Y') }}@endif
+        @if($angebot->valid_until) · gültig bis {{ $angebot->valid_until->format('d.m.Y') }}@endif
     </div>
 </div>
 </body>

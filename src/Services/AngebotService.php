@@ -27,12 +27,12 @@ class AngebotService
     /** Editierbare Felder (Anfrage/Briefing + kommerziell + CRM-Verknüpfung). */
     private const FELDER = [
         'name', 'status', 'anlass', 'personen', 'budget', 'event_datum', 'location',
-        'diaet_vorgabe', 'brief', 'gesamtpreis', 'gueltig_bis', 'beschreibung', 'note',
+        'diaet_vorgabe', 'brief', 'gesamtpreis', 'valid_until', 'description', 'note',
         'crm_company_id', 'crm_contact_id', 'preis_modus',
     ];
 
     /** Leer („" / null) → NULL (optionale Zahlen/Daten/FKs). */
-    private const FELDER_NULLBAR = ['personen', 'budget', 'event_datum', 'gueltig_bis', 'gesamtpreis', 'crm_company_id', 'crm_contact_id'];
+    private const FELDER_NULLBAR = ['personen', 'budget', 'event_datum', 'valid_until', 'gesamtpreis', 'crm_company_id', 'crm_contact_id'];
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
@@ -55,7 +55,7 @@ class AngebotService
                 'crmCompany', 'crmContact',
                 'concepts' => fn ($q) => $q->withCount('slots')->orderBy('name'),
                 'referenzierteConcepts' => fn ($q) => $q->withCount('slots'),
-                'pakete:id,name,angebot_id',
+                'pakete:id,name,offer_id',
             ])
             ->find($id);
     }
@@ -113,9 +113,9 @@ class AngebotService
 
     // ── Menü-Composer: angebots-lokale Concepts (#380) ─────────────────────
     // Gebaut wird mit der Concepter-Slot-Engine (ConceptService), aber als
-    // LOKALER Entwurf (angebot_id gesetzt) — bleibt aus dem Katalog gefiltert.
+    // LOKALER Entwurf (offer_id gesetzt) — bleibt aus dem Katalog gefiltert.
 
-    /** Legt einen angebots-lokalen Menü-Entwurf an (Concept mit angebot_id). */
+    /** Legt einen angebots-lokalen Menü-Entwurf an (Concept mit offer_id). */
     public function neuesConcept(Team $team, int $angebotId, ?string $name = null): FoodAlchemistConcept
     {
         $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($angebotId);
@@ -123,7 +123,7 @@ class AngebotService
 
         return FoodAlchemistConcept::create([
             'team_id' => $team->id,
-            'angebot_id' => $angebot->id,
+            'offer_id' => $angebot->id,
             'name' => trim((string) ($name ?? ($angebot->name . ' – Menü'))) ?: 'Menü',
             'status' => 'draft',
             'is_vorlage' => false,
@@ -133,17 +133,17 @@ class AngebotService
 
     /**
      * „In Concepter übernehmen / live gehen" — angebots-lokalen Entwurf zum
-     * standardisierten Katalog-Concept machen (angebot_id → NULL). Die
+     * standardisierten Katalog-Concept machen (offer_id → NULL). Die
      * kommerzielle Schicht bleibt am Angebot.
      */
     public function promoteConcept(Team $team, int $conceptId): FoodAlchemistConcept
     {
-        $concept = FoodAlchemistConcept::visibleToTeam($team)->whereNotNull('angebot_id')->findOrFail($conceptId);
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->whereNotNull('offer_id')->findOrFail($conceptId);
         if (! $concept->isOwnedBy($team)) {
             throw new \RuntimeException('Geerbtes Concept — Pflege nur durchs Besitzer-Team (D1).');
         }
-        $angebotId = (int) $concept->angebot_id;
-        $concept->update(['angebot_id' => null]);
+        $angebotId = (int) $concept->offer_id;
+        $concept->update(['offer_id' => null]);
         $this->recomputeAngebot($team, $angebotId);
 
         return $concept->refresh();
@@ -152,11 +152,11 @@ class AngebotService
     /** Entfernt einen angebots-lokalen Menü-Entwurf (nur lokale, nie Katalog-Concepts). */
     public function entferneConcept(Team $team, int $conceptId): void
     {
-        $concept = FoodAlchemistConcept::visibleToTeam($team)->whereNotNull('angebot_id')->findOrFail($conceptId);
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->whereNotNull('offer_id')->findOrFail($conceptId);
         if (! $concept->isOwnedBy($team)) {
             throw new \RuntimeException('Geerbtes Concept — Pflege nur durchs Besitzer-Team (D1).');
         }
-        $angebotId = (int) $concept->angebot_id;
+        $angebotId = (int) $concept->offer_id;
         $concept->delete();
         $this->recomputeAngebot($team, $angebotId);
     }
@@ -276,7 +276,7 @@ class AngebotService
                     continue;
                 }
                 // Kundensicht: Brand-Voice-Wording bevorzugen (Concept-Schreibstil), sonst interner Name.
-                $positionen[] = ['rolle' => $z['rolle'] ?? null, 'label' => ($z['wording'] ?? null) ?: ($z['label'] ?? '—')];
+                $positionen[] = ['role' => $z['role'] ?? null, 'label' => ($z['wording'] ?? null) ?: ($z['label'] ?? '—')];
             }
             $menues[] = [
                 'name' => $c->konsumenten_name ?: $c->name,
@@ -295,7 +295,7 @@ class AngebotService
 
     // ── #380 DoD-5: Katalog-Concepts referenzieren ─────────────────────────
 
-    /** Alle Menüs eines Angebots: ad-hoc (angebot_id) + referenzierte Katalog-Concepts. */
+    /** Alle Menüs eines Angebots: ad-hoc (offer_id) + referenzierte Katalog-Concepts. */
     public function menueConcepts(FoodAlchemistAngebot $angebot): Collection
     {
         $adhoc = $angebot->relationLoaded('concepts') ? $angebot->concepts : $angebot->concepts()->get();
@@ -310,11 +310,11 @@ class AngebotService
         $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($angebotId);
         $this->guardOwner($angebot, $team);
 
-        $concept = FoodAlchemistConcept::visibleToTeam($team)->whereNull('angebot_id')->find($conceptId);
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->whereNull('offer_id')->find($conceptId);
         if ($concept === null) {
             throw new \RuntimeException('Nur standardisierte Katalog-Concepts können referenziert werden.');
         }
-        $pos = (int) (DB::table('foodalchemist_angebot_concept')->where('angebot_id', $angebot->id)->max('position') ?? -1) + 1;
+        $pos = (int) (DB::table('foodalchemist_offer_concept')->where('offer_id', $angebot->id)->max('position') ?? -1) + 1;
         $angebot->referenzierteConcepts()->syncWithoutDetaching([$conceptId => ['team_id' => $team->id, 'position' => $pos]]);
         $this->aktualisiereAutoPreis($team, $angebot);
     }

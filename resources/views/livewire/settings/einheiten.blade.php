@@ -28,11 +28,11 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($einheiten as $einheit)
-                    @php($darfEdit = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $einheit))
-                    <tr wire:key="einheit-{{ $einheit->id }}" class="{{ $tr }} {{ $einheit->is_inactive ? 'opacity-50' : '' }}">
-                        @if($editId === $einheit->id)
-                            <td class="{{ $td }} text-gray-400">{{ $einheit->slug }}</td>
+                @foreach($einheiten as $unit)
+                    @php($darfEdit = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $unit))
+                    <tr wire:key="unit-{{ $unit->id }}" class="{{ $tr }} {{ $unit->is_inactive ? 'opacity-50' : '' }}">
+                        @if($editId === $unit->id)
+                            <td class="{{ $td }} text-gray-400">{{ $unit->slug }}</td>
                             <td class="{{ $td }}"><input type="text" wire:model="form.display_de" wire:keydown.enter="save" wire:keydown.escape="cancel" class="{{ $input }} !py-1" /></td>
                             <td class="{{ $td }}">
                                 <select wire:model="form.dimension" class="{{ $input }} !py-1">
@@ -48,19 +48,19 @@
                                 <button type="button" wire:click="cancel" class="{{ $btnGhostXs }}">Abbrechen</button>
                             </td>
                         @else
-                            <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $einheit->slug }}
+                            <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $unit->slug }}
                                 @unless($darfEdit)<span class="ml-1.5 {{ $pill }} {{ $variantPill['secondary'] }}" title="Geerbter Katalog — Pflege nur Besitzer-Team (D1)">geerbt</span>@endunless
                             </td>
-                            <td class="{{ $td }} text-gray-700 dark:text-gray-300">{{ $einheit->display_de }}</td>
-                            <td class="{{ $td }} text-gray-500">{{ $einheit->dimension ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-500">{{ $einheit->default_in_g !== null ? rtrim(rtrim((string) $einheit->default_in_g, '0'), '.') : '—' }}</td>
-                            <td class="{{ $td }} text-gray-500">{{ $einheit->default_in_ml !== null ? rtrim(rtrim((string) $einheit->default_in_ml, '0'), '.') : '—' }}</td>
-                            <td class="{{ $td }} text-gray-400">{{ $einheit->sort_order }}</td>
-                            <td class="{{ $td }} text-right whitespace-nowrap" data-einheit-aktionen="{{ $darfEdit ? 'edit' : 'readonly' }}">
+                            <td class="{{ $td }} text-gray-700 dark:text-gray-300">{{ $unit->display_de }}</td>
+                            <td class="{{ $td }} text-gray-500">{{ $unit->dimension ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-500">{{ $unit->default_in_g !== null ? rtrim(rtrim((string) $unit->default_in_g, '0'), '.') : '—' }}</td>
+                            <td class="{{ $td }} text-gray-500">{{ $unit->default_in_ml !== null ? rtrim(rtrim((string) $unit->default_in_ml, '0'), '.') : '—' }}</td>
+                            <td class="{{ $td }} text-gray-400">{{ $unit->sort_order }}</td>
+                            <td class="{{ $td }} text-right whitespace-nowrap" data-unit-aktionen="{{ $darfEdit ? 'edit' : 'readonly' }}">
                                 @if($darfEdit)
-                                    <button type="button" wire:click="edit({{ $einheit->id }})" class="{{ $btnGhostXs }}">Bearbeiten</button>
-                                    <button type="button" wire:click="toggleInactive({{ $einheit->id }}, {{ $einheit->is_inactive ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $einheit->is_inactive ? 'Aktivieren' : 'Inaktiv' }}</button>
-                                    <button type="button" wire:click="delete({{ $einheit->id }})" wire:confirm="Einheit „{{ $einheit->display_de }}" wirklich löschen?" class="{{ $btnGhostXs }} text-red-500">Löschen</button>
+                                    <button type="button" wire:click="edit({{ $unit->id }})" class="{{ $btnGhostXs }}">Bearbeiten</button>
+                                    <button type="button" wire:click="toggleInactive({{ $unit->id }}, {{ $unit->is_inactive ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $unit->is_inactive ? 'Aktivieren' : 'Inaktiv' }}</button>
+                                    <button type="button" wire:click="delete({{ $unit->id }})" wire:confirm="Einheit „{{ $unit->display_de }}" wirklich löschen?" class="{{ $btnGhostXs }} text-red-500">Löschen</button>
                                 @endif
                             </td>
                         @endif
@@ -71,7 +71,7 @@
     </div>
 
     {{-- Neu anlegen (eigenes Team — Kind-Teams ergänzen Eigenes, D1) --}}
-    <div class="{{ $card }} p-5" data-einheit-neu>
+    <div class="{{ $card }} p-5" data-unit-neu>
         <h4 class="{{ $label }} mb-3">Neue Einheit (für dein Team)</h4>
         <div class="grid grid-cols-2 md:grid-cols-6 gap-2">
             <input type="text" wire:model="neu.slug" placeholder="slug (z. B. el)" class="{{ $input }}" />

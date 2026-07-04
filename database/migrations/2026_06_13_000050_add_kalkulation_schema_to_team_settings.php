@@ -15,8 +15,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            if (! Schema::hasColumn('foodalchemist_team_settings', 'kalkulation_schema')) {
-                $table->json('kalkulation_schema')->nullable();   // [{key,label,typ,wert,aktiv,sort}]
+            if (! Schema::hasColumn('foodalchemist_team_settings', 'calculation_schema')) {
+                $table->json('calculation_schema')->nullable();   // [{key,label,typ,wert,aktiv,sort}]
             }
             if (! Schema::hasColumn('foodalchemist_team_settings', 'stundensatz_eur')) {
                 $table->decimal('stundensatz_eur', 10, 2)->nullable();   // Default-Lohnsatz für den arbeitszeit-Block
@@ -30,7 +30,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            foreach (['kalkulation_schema', 'stundensatz_eur', 'marge_pct'] as $col) {
+            foreach (['calculation_schema', 'stundensatz_eur', 'marge_pct'] as $col) {
                 if (Schema::hasColumn('foodalchemist_team_settings', $col)) {
                     $table->dropColumn($col);
                 }

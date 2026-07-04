@@ -24,7 +24,7 @@ class FoodAlchemistPaket extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_pakete';
+    protected $table = 'foodalchemist_packages';
 
     protected $guarded = ['id'];
 
@@ -37,20 +37,20 @@ class FoodAlchemistPaket extends Model
         'preis_stale' => 'boolean',
         'is_inactive' => 'boolean',
         // M10R-1: Aggregat-Caches (Nährwerte/Person, Arbeitszeit)
-        'arbeitszeit_min_cache' => 'integer',
+        'work_time_min_cache' => 'integer',
         'naehrwerte_cache' => 'array',
     ];
 
     /** Die Gerichte (VK-Rezepte) in diesem Paket. */
     public function gerichte(): HasMany
     {
-        return $this->hasMany(FoodAlchemistPaketGericht::class, 'paket_id')->orderBy('position');
+        return $this->hasMany(FoodAlchemistPaketGericht::class, 'package_id')->orderBy('position');
     }
 
     /** Slots, die diesen Paket referenzieren (für „wo verwendet?" / Löschschutz). */
     public function slots(): HasMany
     {
-        return $this->hasMany(FoodAlchemistConceptSlot::class, 'paket_id');
+        return $this->hasMany(FoodAlchemistConceptSlot::class, 'package_id');
     }
 
     /**
@@ -59,18 +59,18 @@ class FoodAlchemistPaket extends Model
      */
     public function angebot(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistAngebot::class, 'angebot_id');
+        return $this->belongsTo(FoodAlchemistAngebot::class, 'offer_id');
     }
 
-    /** #380 — Standardisierter Katalog (angebot_id NULL). */
+    /** #380 — Standardisierter Katalog (offer_id NULL). */
     public function scopeStandardisiert(Builder $q): Builder
     {
-        return $q->whereNull('angebot_id');
+        return $q->whereNull('offer_id');
     }
 
     /** #380 — Angebots-lokaler (spekulativer) Entwurf. */
     public function scopeAngebotsLokal(Builder $q): Builder
     {
-        return $q->whereNotNull('angebot_id');
+        return $q->whereNotNull('offer_id');
     }
 }

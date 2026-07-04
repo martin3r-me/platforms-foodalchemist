@@ -138,7 +138,7 @@ class Browser extends Component
             'hauptgruppen' => $verkauf->dishMainGroups($team),
             'hgCounts' => $verkauf->hauptgruppenCounts($team),
             'klassen' => $this->hauptgruppe !== null
-                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppe)->orderBy('bezeichnung')->get()
+                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppe)->orderBy('label')->get()
                 : collect(),
             'klassenCounts' => $this->hauptgruppe !== null ? $verkauf->klassenCounts($team, $this->hauptgruppe) : [],
             'statusFaelle' => RecipeStatus::cases(),

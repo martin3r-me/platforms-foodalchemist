@@ -19,10 +19,10 @@
                         <input type="text" wire:model="hgEditName" wire:keydown.enter="hgSave" wire:keydown.escape="$set('hgEditId', null)" class="{{ $input }} !py-0.5 flex-1" autofocus />
                         <button type="button" wire:click="hgSave" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0">OK</button>
                     @else
-                        <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $hg->bezeichnung }}</button>
+                        <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $hg->label }}</button>
                         <span class="text-[11px] text-gray-400 shrink-0">{{ $hg->kategorie_count }}</span>
                         @if($darfEditHg)
-                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->bezeichnung))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
                             <button type="button" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" @disabled($hg->kategorie_count > 0)
                                     class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $hg->kategorie_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500' }}"
                                     title="{{ $hg->kategorie_count > 0 ? 'Hat Kategorien — erst dort entfernen' : 'löschen' }}">✕</button>
@@ -55,7 +55,7 @@
                             @php($darfEdit = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $kat))
                             <tr wire:key="kat-{{ $kat->id }}" class="{{ $tr }}">
                                 @if($editId === $kat->id)
-                                    <td class="{{ $td }}"><input type="text" wire:model="form.bezeichnung" wire:keydown.enter="save" class="{{ $input }} !py-1" /></td>
+                                    <td class="{{ $td }}"><input type="text" wire:model="form.label" wire:keydown.enter="save" class="{{ $input }} !py-1" /></td>
                                     <td class="{{ $td }}"><input type="text" wire:model="form.technik" wire:keydown.enter="save" class="{{ $input }} !py-1" /></td>
                                     <td class="{{ $td }}"><input type="number" wire:model="form.sort_order" class="{{ $input }} !py-1 w-16" /></td>
                                     <td class="{{ $td }}"></td>
@@ -64,7 +64,7 @@
                                         <button type="button" wire:click="$set('editId', null)" class="{{ $btnGhostXs }}">Abbrechen</button>
                                     </td>
                                 @else
-                                    <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $kat->bezeichnung }}</td>
+                                    <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $kat->label }}</td>
                                     <td class="{{ $td }} text-gray-500">{{ $kat->technik ?? '—' }}</td>
                                     <td class="{{ $td }} text-gray-400">{{ $kat->sort_order }}</td>
                                     <td class="{{ $td }} text-gray-500">{{ $kat->recipe_count }}</td>
@@ -73,7 +73,7 @@
                                             <button type="button" wire:click="edit({{ $kat->id }})" class="{{ $btnGhostXs }}">Bearbeiten</button>
                                             <button type="button" wire:click="delete({{ $kat->id }})"
                                                     @if($kat->recipe_count > 0) disabled title="Hat {{ $kat->recipe_count }} Rezepte — erst mergen/umhängen (AT-D1-02)" @endif
-                                                    wire:confirm="Kategorie „{{ $kat->bezeichnung }}" löschen?"
+                                                    wire:confirm="Kategorie „{{ $kat->label }}" löschen?"
                                                     class="{{ $btnGhostXs }} {{ $kat->recipe_count > 0 ? 'opacity-40 cursor-not-allowed' : 'text-red-500' }}">Löschen</button>
                                         @endif
                                     </td>
@@ -87,7 +87,7 @@
             <div class="{{ $card }} p-5" data-taxonomie-neu>
                 <h4 class="{{ $label }} mb-3">Neue Kategorie in dieser Hauptgruppe</h4>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <input type="text" wire:model="neu.bezeichnung" placeholder="Bezeichnung" class="{{ $input }}" />
+                    <input type="text" wire:model="neu.label" placeholder="Bezeichnung" class="{{ $input }}" />
                     <input type="text" wire:model="neu.technik" placeholder="Technik (optional)" class="{{ $input }}" />
                     <input type="number" wire:model="neu.sort_order" placeholder="Sort" class="{{ $input }}" />
                     <button type="button" wire:click="create" class="{{ $btnPrimary }} justify-center">Anlegen</button>

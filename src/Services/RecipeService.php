@@ -51,7 +51,7 @@ class RecipeService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return $this->browserQuery($team, $filters)
-            ->with('kategorie:id,main_group_id,bezeichnung')
+            ->with('kategorie:id,main_group_id,label')
             ->orderBy('foodalchemist_recipes.name')
             ->paginate($perPage)
             ->withQueryString();
@@ -62,9 +62,9 @@ class RecipeService
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->basis()
             ->with([
-                'kategorie:id,main_group_id,bezeichnung',
-                'ingredients.gp:id,name,hauptzutat_slug,lead_la_supplier_item_id,stk_default_g', // Zeilen-EK braucht Lead+Stückgewicht (T3)
-                'ingredients.einheit:id,slug,display_de,dimension,default_in_g,default_in_ml', // T1-Kaskade braucht die Faktoren
+                'kategorie:id,main_group_id,label',
+                'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g', // Zeilen-EK braucht Lead+Stückgewicht (T3)
+                'ingredients.unit:id,slug,display_de,dimension,default_in_g,default_in_ml', // T1-Kaskade braucht die Faktoren
                 'ingredients.referencedRecipe:id,name,ek_per_kg_eur',
                 'equipment',
                 'niveauEignungen',
@@ -83,9 +83,9 @@ class RecipeService
     {
         return FoodAlchemistRecipe::visibleToTeam($team)
             ->with([
-                'kategorie:id,main_group_id,bezeichnung',
-                'ingredients.gp:id,name,hauptzutat_slug,lead_la_supplier_item_id,stk_default_g',
-                'ingredients.einheit:id,slug,display_de,dimension,default_in_g,default_in_ml',
+                'kategorie:id,main_group_id,label',
+                'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g',
+                'ingredients.unit:id,slug,display_de,dimension,default_in_g,default_in_ml',
                 'ingredients.referencedRecipe:id,name,ek_per_kg_eur',
                 'equipment',
                 'niveauEignungen',
@@ -127,7 +127,7 @@ class RecipeService
         $key = $this->rezeptKey($name);
         if ($this->keyVergeben($team, $key)) {                     // §1.8: Kategorie als Diskriminator
             $kategorie = $kategorieId !== null
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::find($kategorieId)?->bezeichnung
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::find($kategorieId)?->label
                 : null;
             if ($kategorie !== null) {
                 $key = $this->rezeptKey($name) . '_' . $this->rezeptKey($kategorie);
@@ -142,15 +142,15 @@ class RecipeService
             'team_id' => $team->id,
             'recipe_key' => $key,
             'name' => $name,
-            'herkunft' => ($in['herkunft'] ?? '') ?: null,
+            'origin_source' => ($in['origin_source'] ?? '') ?: null,
             'kategorie_id' => $kategorieId,
-            'ist_verkaufsrezept' => (bool) ($in['ist_verkaufsrezept'] ?? false),
+            'is_sales_recipe' => (bool) ($in['is_sales_recipe'] ?? false),
             'status' => 'draft',
-            'geschmacksrichtung' => ($in['geschmacksrichtung'] ?? '') ?: null,
-            'fertigungstiefe' => ($in['fertigungstiefe'] ?? '') ?: null,
-            'arbeitszeit_min' => $in['arbeitszeit_min'] ?? null,
+            'taste_direction' => ($in['taste_direction'] ?? '') ?: null,
+            'production_depth' => ($in['production_depth'] ?? '') ?: null,
+            'work_time_min' => $in['work_time_min'] ?? null,
             'yield_kg_manual' => $in['yield_kg_manual'] ?? null,
-            'beschreibung' => ($in['beschreibung'] ?? '') ?: null,
+            'description' => ($in['description'] ?? '') ?: null,
             'last_modified_by' => 'editor',
             'created_via' => ($in['created_via'] ?? '') ?: null,     // Phase A: mcp | editor | import | generator
         ]);
@@ -174,19 +174,19 @@ class RecipeService
         $altManual = $recipe->yield_kg_manual;
         $recipe->update([
             'name' => $name,
-            'herkunft' => array_key_exists('herkunft', $in) ? (($in['herkunft'] ?? '') ?: null) : $recipe->herkunft,
+            'origin_source' => array_key_exists('origin_source', $in) ? (($in['origin_source'] ?? '') ?: null) : $recipe->origin_source,
             'kategorie_id' => $in['kategorie_id'] ?? $recipe->kategorie_id,
-            'geschmacksrichtung' => array_key_exists('geschmacksrichtung', $in) ? (($in['geschmacksrichtung'] ?? '') ?: null) : $recipe->geschmacksrichtung,
-            'fertigungstiefe' => array_key_exists('fertigungstiefe', $in) ? (($in['fertigungstiefe'] ?? '') ?: null) : $recipe->fertigungstiefe,
-            'arbeitszeit_min' => array_key_exists('arbeitszeit_min', $in) ? $in['arbeitszeit_min'] : $recipe->arbeitszeit_min,
+            'taste_direction' => array_key_exists('taste_direction', $in) ? (($in['taste_direction'] ?? '') ?: null) : $recipe->taste_direction,
+            'production_depth' => array_key_exists('production_depth', $in) ? (($in['production_depth'] ?? '') ?: null) : $recipe->production_depth,
+            'work_time_min' => array_key_exists('work_time_min', $in) ? $in['work_time_min'] : $recipe->work_time_min,
             'yield_kg_manual' => array_key_exists('yield_kg_manual', $in) ? $in['yield_kg_manual'] : $recipe->yield_kg_manual,
             'ertrag_stueck' => array_key_exists('ertrag_stueck', $in) ? (($in['ertrag_stueck'] ?? '') !== '' ? $in['ertrag_stueck'] : null) : $recipe->ertrag_stueck,
-            'beschreibung' => array_key_exists('beschreibung', $in) ? (($in['beschreibung'] ?? '') ?: null) : $recipe->beschreibung,
+            'description' => array_key_exists('description', $in) ? (($in['description'] ?? '') ?: null) : $recipe->description,
             // UI-Audit (D-5 §4.2): Eigenschaften/Zubereitung/Notizen/Status im Editor pflegbar
             'temperatur' => array_key_exists('temperatur', $in) ? (($in['temperatur'] ?? '') ?: null) : $recipe->temperatur,
             'funktion' => array_key_exists('funktion', $in) ? (($in['funktion'] ?? '') ?: null) : $recipe->funktion,
-            'zubereitung' => array_key_exists('zubereitung', $in) ? (($in['zubereitung'] ?? '') ?: null) : $recipe->zubereitung,
-            'notizen_manual' => array_key_exists('notizen_manual', $in) ? (($in['notizen_manual'] ?? '') ?: null) : $recipe->notizen_manual,
+            'preparation' => array_key_exists('preparation', $in) ? (($in['preparation'] ?? '') ?: null) : $recipe->preparation,
+            'notes_manual' => array_key_exists('notes_manual', $in) ? (($in['notes_manual'] ?? '') ?: null) : $recipe->notes_manual,
             'status' => array_key_exists('status', $in) && in_array($in['status'], ['stub', 'draft', 'review', 'approved', 'archived'], true)
                 ? $in['status'] : $recipe->status,
             'version' => $recipe->version + 1,
@@ -212,18 +212,18 @@ class RecipeService
             $kopie = $this->create($team, [
                 'name' => $neuerName,
                 'kategorie_id' => $original->kategorie_id,
-                'herkunft' => $original->herkunft,
-                'geschmacksrichtung' => $original->geschmacksrichtung,
-                'fertigungstiefe' => $original->fertigungstiefe,
-                'ist_verkaufsrezept' => $original->ist_verkaufsrezept,
-                'beschreibung' => $original->beschreibung,
+                'origin_source' => $original->origin_source,
+                'taste_direction' => $original->taste_direction,
+                'production_depth' => $original->production_depth,
+                'is_sales_recipe' => $original->is_sales_recipe,
+                'description' => $original->description,
             ]);
             foreach ($original->ingredients as $z) {
                 $kopie->ingredients()->create([
                     ...$z->only(['position', 'gp_id', 'referenced_recipe_id', 'raw_text', 'display_name',
-                        'menge', 'menge_max', 'einheit_vocab_id', 'putzverlust_pct', 'garverlust_pct',
+                        'quantity', 'quantity_max', 'unit_vocab_id', 'trimming_loss_pct', 'cooking_loss_pct',
                         'is_optional', 'klammer_note', 'note', 'match_method', 'match_confidence',
-                        'rolle', 'ist_wertgebend', 'rechen_modus']),
+                        'role', 'is_value_relevant', 'calc_mode']),
                     'team_id' => $team->id,
                 ]);
             }
@@ -356,14 +356,14 @@ class RecipeService
             ->whereIn('id', \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::where('referenced_recipe_id', $id)
                 ->whereNull('deleted_at')->distinct()->pluck('recipe_id'))
             ->orderBy('name')
-            ->get(['id', 'name', 'status', 'team_id', 'ist_verkaufsrezept']);
+            ->get(['id', 'name', 'status', 'team_id', 'is_sales_recipe']);
     }
 
     // ── M9-01k: Sektor-/Niveau-Eignung pflegen (Zeile = geeignet; unique recipe+slug) ──
 
     private const EIGNUNG_TABELLEN = [
-        'niveau' => ['tabelle' => 'foodalchemist_recipe_niveau_eignung', 'spalte' => 'niveau_slug', 'slugs' => ['haute_cuisine', 'gehoben', 'klassisch']],
-        'sektor' => ['tabelle' => 'foodalchemist_recipe_sektor_eignung', 'spalte' => 'sektor_slug', 'slugs' => ['business', 'care', 'crew', 'event_privat', 'kita_schule', 'restaurant']],
+        'niveau' => ['tabelle' => 'foodalchemist_recipe_level_suitability', 'spalte' => 'level_slug', 'slugs' => ['haute_cuisine', 'gehoben', 'klassisch']],
+        'sektor' => ['tabelle' => 'foodalchemist_recipe_sector_suitability', 'spalte' => 'sektor_slug', 'slugs' => ['business', 'care', 'crew', 'event_privat', 'kita_schule', 'restaurant']],
     ];
 
     /** @return array<string, array> Vokabular fürs UI */
@@ -372,7 +372,7 @@ class RecipeService
         return self::EIGNUNG_TABELLEN;
     }
 
-    public function setzeEignung(Team $team, int $recipeId, string $typ, string $slug, string $quelle = 'manual', ?float $confidence = null, ?string $grund = null): void
+    public function setzeEignung(Team $team, int $recipeId, string $typ, string $slug, string $source = 'manual', ?float $confidence = null, ?string $grund = null): void
     {
         $meta = self::EIGNUNG_TABELLEN[$typ] ?? throw new \RuntimeException("Unbekannter Eignungs-Typ [{$typ}].");
         if (! in_array($slug, $meta['slugs'], true)) {
@@ -385,7 +385,7 @@ class RecipeService
 
         // unique(recipe, slug) gilt inkl. soft-deleted ⇒ vorhandene Zeile reaktivieren
         $vorhanden = DB::table($meta['tabelle'])->where('recipe_id', $recipeId)->where($meta['spalte'], $slug)->first();
-        $werte = ['quelle' => $quelle, 'ai_confidence' => $confidence, 'ai_begruendung' => $grund, 'deleted_at' => null, 'updated_at' => now()];
+        $werte = ['source' => $source, 'ai_confidence' => $confidence, 'ai_reasoning' => $grund, 'deleted_at' => null, 'updated_at' => now()];
         if ($vorhanden !== null) {
             DB::table($meta['tabelle'])->where('id', $vorhanden->id)->update($werte);
         } else {
@@ -442,8 +442,8 @@ class RecipeService
                         throw new \RuntimeException("Sub-Rezept-Verknüpfung abgelehnt: {$pruefung['grund']}.");
                     }
                 }
-                $menge = (float) str_replace(',', '.', (string) ($z['menge'] ?? 0));
-                if ($menge <= 0) {
+                $quantity = (float) str_replace(',', '.', (string) ($z['quantity'] ?? 0));
+                if ($quantity <= 0) {
                     throw new \RuntimeException('Menge muss > 0 sein (Zeile ' . ($i + 1) . ').');
                 }
 
@@ -453,16 +453,16 @@ class RecipeService
                     'referenced_recipe_id' => $subId,
                     'raw_text' => trim((string) ($z['raw_text'] ?? '')) ?: ($z['display_name'] ?? 'Zutat'),
                     'display_name' => ($z['display_name'] ?? '') ?: null,
-                    'menge' => $menge,
-                    'menge_max' => ($z['menge_max'] ?? '') !== '' && $z['menge_max'] !== null ? (float) str_replace(',', '.', (string) $z['menge_max']) : null,
-                    'einheit_vocab_id' => (int) $z['einheit_vocab_id'],
-                    'garverlust_pct' => ($z['garverlust_pct'] ?? '') !== '' && $z['garverlust_pct'] !== null ? (float) str_replace(',', '.', (string) $z['garverlust_pct']) : null,
-                    'garverlust_quelle' => ($z['garverlust_quelle'] ?? null) ?: null,   // M4-11: ki|manual (GL-07)
-                    'putzverlust_pct' => ($z['putzverlust_pct'] ?? '') !== '' && ($z['putzverlust_pct'] ?? null) !== null ? (float) str_replace(',', '.', (string) $z['putzverlust_pct']) : null,
+                    'quantity' => $quantity,
+                    'quantity_max' => ($z['quantity_max'] ?? '') !== '' && $z['quantity_max'] !== null ? (float) str_replace(',', '.', (string) $z['quantity_max']) : null,
+                    'unit_vocab_id' => (int) $z['unit_vocab_id'],
+                    'cooking_loss_pct' => ($z['cooking_loss_pct'] ?? '') !== '' && $z['cooking_loss_pct'] !== null ? (float) str_replace(',', '.', (string) $z['cooking_loss_pct']) : null,
+                    'cooking_loss_source' => ($z['cooking_loss_source'] ?? null) ?: null,   // M4-11: ki|manual (GL-07)
+                    'trimming_loss_pct' => ($z['trimming_loss_pct'] ?? '') !== '' && ($z['trimming_loss_pct'] ?? null) !== null ? (float) str_replace(',', '.', (string) $z['trimming_loss_pct']) : null,
                     'is_optional' => (bool) ($z['is_optional'] ?? false),
                     'note' => ($z['note'] ?? '') ?: null,
-                    'rolle' => ($z['rolle'] ?? '') ?: null,            // V-21
-                    'ist_wertgebend' => (bool) ($z['ist_wertgebend'] ?? false),
+                    'role' => ($z['role'] ?? '') ?: null,            // V-21
+                    'is_value_relevant' => (bool) ($z['is_value_relevant'] ?? false),
                 ];
 
                 $id = ($z['id'] ?? null) !== null && $vorhanden->has((int) $z['id']) ? (int) $z['id'] : null;
@@ -501,7 +501,7 @@ class RecipeService
         $gps = FoodAlchemistGp::visibleToTeam($team)
             ->whereRaw('LOWER(name) LIKE ?', [$q])
             ->orderBy('name')->limit($limit)
-            ->get(['id', 'name', 'lead_la_supplier_item_id', 'stk_default_g', 'team_id'])
+            ->get(['id', 'name', 'lead_la_supplier_item_id', 'piece_default_g', 'team_id'])
             ->map(fn ($gp) => [
                 'typ' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
                 'ek_pro_g' => $recompute->preisProGrammPublic($gp),
@@ -542,8 +542,8 @@ class RecipeService
             ->when(($filters['kategorie'] ?? null) !== null && $filters['kategorie'] !== '', fn (Builder $q) => $q
                 ->where('kategorie_id', (int) $filters['kategorie']))
             ->when(($filters['status'] ?? '') !== '', fn (Builder $q) => $q->where('status', $filters['status']))
-            ->when(($filters['geschmack'] ?? '') !== '', fn (Builder $q) => $q->where('geschmacksrichtung', $filters['geschmack']))
-            ->when(($filters['fertigung'] ?? '') !== '', fn (Builder $q) => $q->where('fertigungstiefe', $filters['fertigung']))
+            ->when(($filters['geschmack'] ?? '') !== '', fn (Builder $q) => $q->where('taste_direction', $filters['geschmack']))
+            ->when(($filters['fertigung'] ?? '') !== '', fn (Builder $q) => $q->where('production_depth', $filters['fertigung']))
             ->when($filters['nur_templates'] ?? false, fn (Builder $q) => $q->where('is_template', true));  // R6: Template-Filter
     }
 }

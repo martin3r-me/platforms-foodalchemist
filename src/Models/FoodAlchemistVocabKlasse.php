@@ -23,7 +23,7 @@ class FoodAlchemistVocabKlasse extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_vocab_klassen';
+    protected $table = 'foodalchemist_vocab_classes';
 
     protected $guarded = ['id'];
 

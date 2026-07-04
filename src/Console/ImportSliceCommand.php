@@ -110,7 +110,7 @@ class ImportSliceCommand extends Command
                 'qty' => $r['qty'],
                 'ean_packaging' => self::nullIfBlank($r['ean_packaging'] ?? null),
                 'ean_ordering' => self::nullIfBlank($r['ean_ordering'] ?? null),
-                'zusatztext' => self::nullIfBlank($r['text'] ?? null),
+                'additional_text' => self::nullIfBlank($r['text'] ?? null),
                 'vat' => $r['vat'] ?? null,
                 'organic_control_number' => self::nullIfBlank($r['organic_control_number'] ?? null),
                 'is_halal' => self::triState($r['is_halal'] ?? null),
@@ -146,33 +146,33 @@ class ImportSliceCommand extends Command
                 'legacy_id' => $r['supplier_item_id'],
                 'supplier_item_id' => $itemMap[(int) $r['supplier_item_id']] ?? null,
                 'gp_id' => $r['gp_v2_id'] !== null ? ($gpMap[(int) $r['gp_v2_id']] ?? null) : null,
-                'ist_lebensmittel' => self::triState($r['ist_lebensmittel']),
-                'ausschluss_grund' => self::nullIfBlank($r['ausschluss_grund']),
-                'hauptzutat_slug' => self::nullIfBlank($r['hauptzutat_slug']),
-                'hauptzutat_display' => self::nullIfBlank($r['hauptzutat_display']),
-                'hauptzutat_konfidenz' => $r['hauptzutat_konfidenz'],
-                'ist_aroma_haupttraeger' => self::triState($r['ist_aroma_haupttraeger']),
-                'aroma_zutaten_slugs' => self::nullIfBlank($r['aroma_zutaten_slugs']),
-                'aroma_zutaten_konfidenz' => $r['aroma_zutaten_konfidenz'],
-                'verarbeitung' => self::nullIfBlank($r['verarbeitung']),
-                'verarbeitung_konfidenz' => $r['verarbeitung_konfidenz'],
+                'is_food' => self::triState($r['ist_lebensmittel']),
+                'ausschluss_reason' => self::nullIfBlank($r['ausschluss_grund']),
+                'main_ingredient_slug' => self::nullIfBlank($r['hauptzutat_slug']),
+                'main_ingredient_display' => self::nullIfBlank($r['hauptzutat_display']),
+                'main_ingredient_konfidenz' => $r['hauptzutat_konfidenz'],
+                'is_primary_flavor_carrier' => self::triState($r['ist_aroma_haupttraeger']),
+                'flavor_ingredient_slugs' => self::nullIfBlank($r['aroma_zutaten_slugs']),
+                'flavor_ingredients_konfidenz' => $r['aroma_zutaten_konfidenz'],
+                'processing' => self::nullIfBlank($r['verarbeitung']),
+                'processing_konfidenz' => $r['verarbeitung_konfidenz'],
                 'form' => self::nullIfBlank($r['form']),
                 'groesse' => self::nullIfBlank($r['groesse']),
                 'convenience_host' => self::nullIfBlank($r['convenience_host']),
                 'ist_bio' => self::triState($r['ist_bio']),
                 'ist_halal' => self::triState($r['ist_halal']),
                 'ist_vegan' => self::triState($r['ist_vegan']),
-                'warengruppe_vorschlag' => self::nullIfBlank($r['warengruppe_vorschlag']),
-                'warengruppe_konfidenz' => $r['warengruppe_konfidenz'],
+                'commodity_group_vorschlag' => self::nullIfBlank($r['warengruppe_vorschlag']),
+                'commodity_group_konfidenz' => $r['warengruppe_konfidenz'],
                 'gp_key' => self::nullIfBlank($r['gp_key']),
                 'gp_name_derived' => self::nullIfBlank($r['gp_name_derived']),
-                'zustand' => self::nullIfBlank($r['zustand']),
-                'klassifikator' => self::nullIfBlank($r['klassifikator']),
-                'klassifikator_version' => self::nullIfBlank($r['klassifikator_version']),
-                'klassifiziert_am' => self::utcOrNull($r['klassifiziert_am']),
+                'condition' => self::nullIfBlank($r['zustand']),
+                'classifier' => self::nullIfBlank($r['klassifikator']),
+                'classifier_version' => self::nullIfBlank($r['klassifikator_version']),
+                'classified_at' => self::utcOrNull($r['klassifiziert_am']),
                 'needs_review' => (bool) ($r['needs_review'] ?? 0),
-                'review_grund' => self::nullIfBlank($r['review_grund']),
-                'ai_begruendung' => self::nullIfBlank($r['ai_begruendung']),
+                'review_reason' => self::nullIfBlank($r['review_grund']),
+                'ai_reasoning' => self::nullIfBlank($r['ai_begruendung']),
             ], skipRow: fn (array $r) => ! isset($itemMap[(int) $r['supplier_item_id']]));
         if (! $dryRun) {
             $stats['lead_la_wire'] = $this->wireLeadLas();
@@ -183,7 +183,7 @@ class ImportSliceCommand extends Command
             fn (array $r) => [
                 'legacy_id' => $r['hauptgruppe_id'],
                 'code' => $r['code'],
-                'bezeichnung' => $r['bezeichnung'],
+                'label' => $r['bezeichnung'],
                 'bereich' => self::nullIfBlank($r['beschreibung'] ?? null),
                 'sort_order' => (int) ($r['sort_nr'] ?? 0),
             ]);
@@ -193,7 +193,7 @@ class ImportSliceCommand extends Command
                 'legacy_id' => $r['kategorie_id'],
                 'main_group_id' => $hgMap[(int) $r['hauptgruppe_id']] ?? null,
                 'code' => $r['code'],
-                'bezeichnung' => $r['bezeichnung'],
+                'label' => $r['bezeichnung'],
                 'technik' => self::nullIfBlank($r['technik'] ?? null),
                 'sort_order' => (int) ($r['sort_nr'] ?? 0),
                 'legacy_excel_kat' => self::nullIfBlank($r['legacy_excel_kat'] ?? null),
@@ -302,7 +302,7 @@ class ImportSliceCommand extends Command
     {
         $stats = [];
         $katMap = $this->targetMap('foodalchemist_recipe_categories');
-        $einheitMap = $this->targetMap('foodalchemist_vocab_einheiten', 'vocab_einheit');
+        $einheitMap = $this->targetMap('foodalchemist_vocab_units', 'vocab_einheit');
 
         $allergene = [
             'glutenhaltiges_getreide', 'krebstiere', 'eier', 'fisch', 'erdnuesse', 'soja', 'milch',
@@ -322,34 +322,34 @@ class ImportSliceCommand extends Command
                     'legacy_id' => $r['recipe_id'],
                     'recipe_key' => $r['recipe_key'],
                     'name' => $r['name'],
-                    'herkunft' => self::nullIfBlank($r['herkunft'] ?? null),
+                    'origin_source' => self::nullIfBlank($r['herkunft'] ?? null),
                     'kategorie_id' => $katMap[(int) ($r['kategorie_id'] ?? 0)] ?? null,
                     'kat_v2_legacy_id' => $r['kat_v2_id'] ?? null,
                     'klasse_v2_legacy_id' => $r['klasse_v2_id'] ?? null,
-                    'ist_verkaufsrezept' => (int) ($r['ist_verkaufsrezept'] ?? 0),
+                    'is_sales_recipe' => (int) ($r['ist_verkaufsrezept'] ?? 0),
                     'status' => $r['status'],
                     'yield_kg' => $r['yield_kg'],
-                    'arbeitszeit_min' => $r['arbeitszeit_min'],
-                    'beschreibung' => self::nullIfBlank($r['ki_beschreibung'] ?? null),
+                    'work_time_min' => $r['arbeitszeit_min'],
+                    'description' => self::nullIfBlank($r['ki_beschreibung'] ?? null),
                     'temperatur' => self::nullIfBlank($r['temperatur'] ?? null),
                     'funktion' => self::nullIfBlank($r['funktion'] ?? null),
-                    'zubereitung' => self::nullIfBlank($r['zubereitung'] ?? null),
-                    'notizen' => self::nullIfBlank($r['notizen'] ?? null),
-                    'notizen_manual' => self::nullIfBlank($r['notizen_manual'] ?? null),
-                    'geschmacksrichtung' => $r['geschmacksrichtung'] ?? null,
-                    'geschmacksrichtung_quelle' => self::mapQuelle($r['geschmacksrichtung_quelle'] ?? null),
-                    'geschmacksrichtung_ai_confidence' => $r['geschmacksrichtung_ai_confidence'] ?? null,
-                    'fertigungstiefe' => $r['fertigungstiefe'] ?? null,
+                    'preparation' => self::nullIfBlank($r['zubereitung'] ?? null),
+                    'notes' => self::nullIfBlank($r['notizen'] ?? null),
+                    'notes_manual' => self::nullIfBlank($r['notizen_manual'] ?? null),
+                    'taste_direction' => $r['geschmacksrichtung'] ?? null,
+                    'taste_direction_source' => self::mapQuelle($r['geschmacksrichtung_quelle'] ?? null),
+                    'taste_direction_ai_confidence' => $r['geschmacksrichtung_ai_confidence'] ?? null,
+                    'production_depth' => $r['fertigungstiefe'] ?? null,
                     'sub_rezept_typ_legacy_id' => $r['sub_rezept_typ_id'] ?? null,
-                    'sub_rezept_typ_quelle' => self::mapQuelle($r['sub_rezept_typ_quelle'] ?? null),
+                    'sub_rezept_typ_source' => self::mapQuelle($r['sub_rezept_typ_quelle'] ?? null),
                     'sub_rezept_typ_ai_confidence' => $r['sub_rezept_typ_ai_confidence'] ?? null,
                     'sub_rezept_typ_ai_begruendung' => self::nullIfBlank($r['sub_rezept_typ_ai_begruendung'] ?? null),
                     'context_hooks_json' => $r['context_hooks_json'] ?? null,
                     'allergene_konfidenz' => $r['allergene_konfidenz'] ?? 'unknown',
                     'allergene_aggregiert_am' => self::utcOrNull($r['allergene_aggregiert_am'] ?? null),
                     'zusatz_aggregiert_am' => self::utcOrNull($r['zusatz_aggregiert_am'] ?? null),
-                    'n_zutaten_total' => (int) ($r['n_zutaten_total'] ?? 0),
-                    'n_zutaten_ungemappt' => (int) ($r['n_zutaten_ungemappt'] ?? 0),
+                    'n_ingredients_total' => (int) ($r['n_zutaten_total'] ?? 0),
+                    'n_ingredients_ungemappt' => (int) ($r['n_zutaten_ungemappt'] ?? 0),
                     'version' => (int) ($r['version'] ?? 1),
                     'last_modified_by' => self::nullIfBlank($r['last_modified_by'] ?? null),
                     'ek_total_eur' => $r['ek_total_eur'] ?? null,
@@ -379,30 +379,30 @@ class ImportSliceCommand extends Command
                     'spec_n_total' => $r['spec_n_total'] ?? null,
                     'spec_aggregiert_am' => self::utcOrNull($r['spec_aggregiert_am'] ?? null),
                     'ai_confidence' => $r['ai_confidence'] ?? null,
-                    'ai_begruendung' => self::nullIfBlank($r['ai_begruendung'] ?? null),
-                    'aufschlagsklasse_legacy_id' => $r['aufschlagsklasse_id'] ?? null,
-                    'speisen_klasse_legacy_id' => $r['speisen_klasse_id'] ?? null,
+                    'ai_reasoning' => self::nullIfBlank($r['ai_begruendung'] ?? null),
+                    'markup_class_legacy_id' => $r['aufschlagsklasse_id'] ?? null,
+                    'dish_class_legacy_id' => $r['speisen_klasse_id'] ?? null,
                     'vk_netto' => $r['vk_netto'] ?? null,
                     'vk_brutto' => $r['vk_brutto'] ?? null,
                     'mwst_satz' => $r['mwst_satz'] ?? null,
                     'regeneration_temp_c' => $r['regeneration_temp_c'] ?? null,
                     'regeneration_dauer_min' => $r['regeneration_dauer_min'] ?? null,
                     'regeneration_kerntemp_c' => $r['regeneration_kerntemp_c'] ?? null,
-                    'vk_einheit_vocab_id' => $einheitMap[(int) ($r['vk_einheit_vocab_id'] ?? 0)] ?? null,
-                    'vk_menge_pro_einheit_g' => $r['vk_menge_pro_einheit_g'] ?? null,
-                    'vk_anzahl_einheiten' => $r['vk_anzahl_einheiten'] ?? null,
-                    'behaelter_warm_legacy_id' => $r['behaelter_warm_vocab_id'] ?? null,
-                    'behaelter_kalt_legacy_id' => $r['behaelter_kalt_vocab_id'] ?? null,
-                    'regeneration_geraet_legacy_id' => $r['regeneration_geraet_vocab_id'] ?? null,
-                    'servier_vehikel_legacy_id' => $r['servier_vehikel_vocab_id'] ?? null,
+                    'vk_unit_vocab_id' => $einheitMap[(int) ($r['vk_einheit_vocab_id'] ?? 0)] ?? null,
+                    'vk_quantity_pro_unit_g' => $r['vk_menge_pro_einheit_g'] ?? null,
+                    'vk_unit_count' => $r['vk_anzahl_einheiten'] ?? null,
+                    'container_warm_legacy_id' => $r['behaelter_warm_vocab_id'] ?? null,
+                    'container_cold_legacy_id' => $r['behaelter_kalt_vocab_id'] ?? null,
+                    'regeneration_device_legacy_id' => $r['regeneration_geraet_vocab_id'] ?? null,
+                    'serving_vehicle_legacy_id' => $r['servier_vehikel_vocab_id'] ?? null,
                     'marketing_text' => self::nullIfBlank($r['marketing_text'] ?? null),
-                    'marketing_text_quelle' => self::mapQuelle($r['marketing_text_quelle'] ?? null),
+                    'marketing_text_source' => self::mapQuelle($r['marketing_text_quelle'] ?? null),
                     'marketing_text_ai_confidence' => $r['marketing_text_ai_confidence'] ?? null,
                     'vk_wording_standard' => self::nullIfBlank($r['vk_wording_standard'] ?? null),
                     'is_template' => (int) ($r['is_template'] ?? 0),
                     'excel_source_row' => $r['excel_source_row'] ?? null,
-                    'excel_raw_zutaten' => $r['excel_raw_zutaten'] ?? null,
-                    'excel_raw_zubereitung' => $r['excel_raw_zubereitung'] ?? null,
+                    'excel_raw_ingredients' => $r['excel_raw_zutaten'] ?? null,
+                    'excel_raw_preparation' => $r['excel_raw_zubereitung'] ?? null,
                     'pdf_page' => $r['pdf_page'] ?? null,
                     'pdf_raw_text' => $r['pdf_raw_text'] ?? null,
                     'is_split_result' => (int) ($r['is_split_result'] ?? 0),
@@ -432,25 +432,25 @@ class ImportSliceCommand extends Command
                 'gp_id' => $gpMap[(int) ($r['gp_v2_id'] ?? 0)] ?? null,
                 'referenced_recipe_id' => $recipeMap[(int) ($r['referenced_recipe_id'] ?? 0)] ?? null,
                 'raw_text' => $r['raw_text'],
-                'menge' => $r['menge'],
-                'menge_max' => $r['menge_max'] ?? null,
-                'einheit_vocab_id' => $einheitMap[(int) $r['einheit_vocab_id']],
-                'putzverlust_pct' => $r['putzverlust_pct'] ?? null,
-                'garverlust_pct' => $r['garverlust_pct'] ?? null,
+                'quantity' => $r['menge'],
+                'quantity_max' => $r['menge_max'] ?? null,
+                'unit_vocab_id' => $einheitMap[(int) $r['einheit_vocab_id']],
+                'trimming_loss_pct' => $r['putzverlust_pct'] ?? null,
+                'cooking_loss_pct' => $r['garverlust_pct'] ?? null,
                 'is_optional' => (int) ($r['is_optional'] ?? 0),
                 'klammer_note' => self::nullIfBlank($r['klammer_note'] ?? null),
                 'note' => self::nullIfBlank($r['note'] ?? null),
                 'match_method' => $r['match_method'] ?? null,
                 'match_confidence' => $r['match_confidence'] ?? null,
-                'rolle' => $r['rolle'] ?? null,
-                'ist_wertgebend' => (int) ($r['ist_wertgebend'] ?? 0),
-                'rechen_modus' => $r['rechen_modus'] ?? 'voll',
+                'role' => $r['rolle'] ?? null,
+                'is_value_relevant' => (int) ($r['ist_wertgebend'] ?? 0),
+                'calc_mode' => $r['rechen_modus'] ?? 'voll',
                 // GL-02 A-6: prozent_garverlust / prozent_in_produkt / menge_in_g_computed bewusst NICHT migriert
             ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']])
                 || ! isset($einheitMap[(int) $r['einheit_vocab_id']]));
 
         // Nachtrag 13_REFERENZ: Equipment-Vokabular (40) + M:N (836)
-        $stats['vocab_kochequipment'] = $this->importBulk($pdo, $dryRun, 'vocab_kochequipment', 'foodalchemist_vocab_kochequipment', 'vocab_id',
+        $stats['vocab_kochequipment'] = $this->importBulk($pdo, $dryRun, 'vocab_kochequipment', 'foodalchemist_vocab_kitchen_equipment', 'vocab_id',
             fn (array $r) => [
                 'legacy_id' => $r['vocab_id'],
                 'slug' => $r['slug'],
@@ -466,27 +466,27 @@ class ImportSliceCommand extends Command
             fn (array $r) => [
                 'legacy_id' => $r['id'],
                 'gp_id' => $gpMap[(int) $r['gp_v2_id']],
-                'einheit_vocab_id' => $einheitMap[(int) $r['einheit_vocab_id']],
+                'unit_vocab_id' => $einheitMap[(int) $r['einheit_vocab_id']],
                 'default_g' => $r['default_g'],
                 'is_primary' => (int) ($r['is_primary'] ?? 0),
                 'sort_order' => (int) ($r['sort_order'] ?? 0),
-                'quelle' => $r['quelle'] ?? null,
+                'source' => $r['quelle'] ?? null,
                 'ai_confidence' => $r['ai_confidence'] ?? null,
             ], skipRow: fn (array $r) => ! isset($gpMap[(int) $r['gp_v2_id']]) || ! isset($einheitMap[(int) $r['einheit_vocab_id']]));
 
         // Eignungs-Satelliten (Niveau 637 / Sektor 1.644)
         foreach ([
-            'recipe_niveau_eignung' => ['foodalchemist_recipe_niveau_eignung', 'niveau_slug'],
-            'recipe_sektor_eignung' => ['foodalchemist_recipe_sektor_eignung', 'sektor_slug'],
+            'recipe_niveau_eignung' => ['foodalchemist_recipe_level_suitability', 'niveau_slug'],
+            'recipe_sektor_eignung' => ['foodalchemist_recipe_sector_suitability', 'sektor_slug'],
         ] as $quelle => [$ziel, $slugSpalte]) {
             $stats[$quelle] = $this->importBulk($pdo, $dryRun, $quelle, $ziel, 'eignung_id',
                 fn (array $r) => [
                     'legacy_id' => $r['eignung_id'],
                     'recipe_id' => $recipeMap[(int) $r['recipe_id']],
                     $slugSpalte => $r[$slugSpalte],
-                    'quelle' => $r['quelle'] ?? 'ai_inferred',
+                    'source' => $r['quelle'] ?? 'ai_inferred',
                     'ai_confidence' => $r['ai_confidence'] ?? null,
-                    'ai_begruendung' => self::nullIfBlank($r['ai_begruendung'] ?? null),
+                    'ai_reasoning' => self::nullIfBlank($r['ai_begruendung'] ?? null),
                 ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]));
         }
 
@@ -500,67 +500,67 @@ class ImportSliceCommand extends Command
     private function importPairing(PDO $pdo, bool $dryRun, array $recipeMap, array $gpMap): array
     {
         $stats = [];
-        $stats['vocab_pairing_anker'] = $this->importBulk($pdo, $dryRun, 'vocab_pairing_anker', 'foodalchemist_vocab_pairing_ankers', 'vocab_id',
+        $stats['vocab_pairing_anker'] = $this->importBulk($pdo, $dryRun, 'vocab_pairing_anker', 'foodalchemist_vocab_pairing_anchors', 'vocab_id',
             fn (array $r) => [
                 'legacy_id' => $r['vocab_id'],
                 'slug' => $r['slug'],
                 'display_de' => $r['display_de'],
-                'quelle_pfad' => self::nullIfBlank($r['file_path'] ?? null),  // -> knowledge_document_id via M5-02
+                'source_pfad' => self::nullIfBlank($r['file_path'] ?? null),  // -> knowledge_document_id via M5-02
                 'note' => self::nullIfBlank($r['note'] ?? null),
             ]);
-        $ankerMap = $this->targetMap('foodalchemist_vocab_pairing_ankers');
+        $ankerMap = $this->targetMap('foodalchemist_vocab_pairing_anchors');
 
-        $stats['pairing_anker_edges'] = $this->importBulk($pdo, $dryRun, 'pairing_anker_edges', 'foodalchemist_pairing_anker_edges', 'edge_id',
+        $stats['pairing_anker_edges'] = $this->importBulk($pdo, $dryRun, 'pairing_anker_edges', 'foodalchemist_pairing_anchor_edges', 'edge_id',
             fn (array $r) => [
                 'legacy_id' => $r['edge_id'],
-                'anker_a_id' => $ankerMap[(int) $r['anker_a_id']],
-                'anker_b_id' => $ankerMap[(int) $r['anker_b_id']],
+                'anchor_a_id' => $ankerMap[(int) $r['anker_a_id']],
+                'anchor_b_id' => $ankerMap[(int) $r['anker_b_id']],
                 'typ' => $r['typ'],
                 'evidenz' => self::nullIfBlank($r['evidenz'] ?? null),
                 'source_slug' => self::nullIfBlank($r['source_slug'] ?? null),
             ], skipRow: fn (array $r) => ! isset($ankerMap[(int) $r['anker_a_id']]) || ! isset($ankerMap[(int) $r['anker_b_id']]));
 
-        $stats['gp_anker_mapping'] = $this->importBulk($pdo, $dryRun, 'gp_anker_mapping', 'foodalchemist_gp_anker_mappings', 'mapping_id',
+        $stats['gp_anker_mapping'] = $this->importBulk($pdo, $dryRun, 'gp_anker_mapping', 'foodalchemist_gp_anchor_mappings', 'mapping_id',
             fn (array $r) => [
                 'legacy_id' => $r['mapping_id'],
                 'gp_id' => $gpMap[(int) $r['gp_v2_id']],
-                'anker_id' => $ankerMap[(int) $r['anker_vocab_id']],
-                'rolle' => $r['rolle'] ?? 'kern',
-                'quelle' => self::mapQuelle($r['quelle'] ?? null),
+                'anchor_id' => $ankerMap[(int) $r['anker_vocab_id']],
+                'role' => $r['rolle'] ?? 'kern',
+                'source' => self::mapQuelle($r['quelle'] ?? null),
                 'ai_confidence' => $r['ai_confidence'] ?? null,
-                'ai_begruendung' => self::nullIfBlank($r['ai_begruendung'] ?? null),
+                'ai_reasoning' => self::nullIfBlank($r['ai_begruendung'] ?? null),
             ], skipRow: fn (array $r) => ! isset($gpMap[(int) $r['gp_v2_id']]) || ! isset($ankerMap[(int) $r['anker_vocab_id']]));
 
-        $stats['recipe_anker_mapping'] = $this->importBulk($pdo, $dryRun, 'recipe_anker_mapping', 'foodalchemist_recipe_anker_mappings', 'mapping_id',
+        $stats['recipe_anker_mapping'] = $this->importBulk($pdo, $dryRun, 'recipe_anker_mapping', 'foodalchemist_recipe_anchor_mappings', 'mapping_id',
             fn (array $r) => [
                 'legacy_id' => $r['mapping_id'],
                 'recipe_id' => $recipeMap[(int) $r['recipe_id']],
-                'anker_id' => $ankerMap[(int) $r['anker_vocab_id']],
-                'rolle' => $r['rolle'] ?? 'kern',
-                'quelle' => self::mapQuelle($r['quelle'] ?? null),
+                'anchor_id' => $ankerMap[(int) $r['anker_vocab_id']],
+                'role' => $r['rolle'] ?? 'kern',
+                'source' => self::mapQuelle($r['quelle'] ?? null),
                 'ai_confidence' => $r['ai_confidence'] ?? null,
-                'ai_begruendung' => self::nullIfBlank($r['ai_begruendung'] ?? null),
+                'ai_reasoning' => self::nullIfBlank($r['ai_begruendung'] ?? null),
             ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]) || ! isset($ankerMap[(int) $r['anker_vocab_id']]));
 
         $stats['recipe_pairings'] = $this->importBulk($pdo, $dryRun, 'recipe_pairings', 'foodalchemist_recipe_pairings', 'recipe_pairing_id',
             fn (array $r) => [
                 'legacy_id' => $r['recipe_pairing_id'],
                 'recipe_id' => $recipeMap[(int) $r['recipe_id']],
-                'anker_id' => $ankerMap[(int) $r['pairing_anker_vocab_id']],
+                'anchor_id' => $ankerMap[(int) $r['pairing_anker_vocab_id']],
                 'typ' => $r['typ'],
                 'konfidenz' => $r['konfidenz'] ?? 'medium',
                 'note' => self::nullIfBlank($r['note'] ?? null),
                 'created_via' => $r['created_via'] ?? null,
             ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]) || ! isset($ankerMap[(int) $r['pairing_anker_vocab_id']]));
 
-        $stats['recipe_prozess_anker'] = $this->importBulk($pdo, $dryRun, 'recipe_prozess_anker', 'foodalchemist_recipe_prozess_anker', 'mapping_id',
+        $stats['recipe_prozess_anker'] = $this->importBulk($pdo, $dryRun, 'recipe_prozess_anker', 'foodalchemist_recipe_process_anchors', 'mapping_id',
             fn (array $r) => [
                 'legacy_id' => $r['mapping_id'],
                 'recipe_id' => $recipeMap[(int) $r['recipe_id']],
-                'anker_id' => $ankerMap[(int) $r['anker_vocab_id']],
-                'quelle' => self::mapQuelle($r['quelle'] ?? null),
+                'anchor_id' => $ankerMap[(int) $r['anker_vocab_id']],
+                'source' => self::mapQuelle($r['quelle'] ?? null),
                 'ai_confidence' => $r['ai_confidence'] ?? null,
-                'ai_begruendung' => self::nullIfBlank($r['ai_begruendung'] ?? null),
+                'ai_reasoning' => self::nullIfBlank($r['ai_begruendung'] ?? null),
             ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]) || ! isset($ankerMap[(int) $r['anker_vocab_id']]));
 
         // V-23: Kanten-Symmetrie herstellen (GL-10 Inv. 4 — die Abfragen setzen sie voraus;
@@ -568,18 +568,18 @@ class ImportSliceCommand extends Command
         if (! $dryRun) {
             $fehlend = DB::select('
                 SELECT e.anker_a_id, e.anker_b_id, e.typ, e.evidenz, e.source_slug
-                FROM foodalchemist_pairing_anker_edges e
+                FROM foodalchemist_pairing_anchor_edges e
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM foodalchemist_pairing_anker_edges r
+                    SELECT 1 FROM foodalchemist_pairing_anchor_edges r
                     WHERE r.anker_a_id = e.anker_b_id AND r.anker_b_id = e.anker_a_id AND r.typ = e.typ
                 )');
             $now = now()->toDateTimeString();
             foreach ($fehlend as $kante) {
-                DB::table('foodalchemist_pairing_anker_edges')->insertOrIgnore([
+                DB::table('foodalchemist_pairing_anchor_edges')->insertOrIgnore([
                     'uuid' => (string) UuidV7::generate(),
                     'team_id' => $this->teamId,
-                    'anker_a_id' => $kante->anker_b_id,
-                    'anker_b_id' => $kante->anker_a_id,
+                    'anchor_a_id' => $kante->anker_b_id,
+                    'anchor_b_id' => $kante->anker_a_id,
                     'typ' => $kante->typ,
                     'evidenz' => $kante->evidenz,
                     'source_slug' => 'symmetrie_backfill:' . ($kante->source_slug ?? ''),
@@ -587,9 +587,9 @@ class ImportSliceCommand extends Command
                 ]);
             }
             $rest = DB::selectOne('
-                SELECT COUNT(*) AS n FROM foodalchemist_pairing_anker_edges e
+                SELECT COUNT(*) AS n FROM foodalchemist_pairing_anchor_edges e
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM foodalchemist_pairing_anker_edges r
+                    SELECT 1 FROM foodalchemist_pairing_anchor_edges r
                     WHERE r.anker_a_id = e.anker_b_id AND r.anker_b_id = e.anker_a_id AND r.typ = e.typ
                 )')->n;
             $this->line(($rest === 0 ? '✅' : '❌') . ' pairing_edges-Symmetrie (V-23): ' . count($fehlend) . " Gegenkanten ergänzt, {$rest} offen");
@@ -630,7 +630,7 @@ class ImportSliceCommand extends Command
         if (DB::table('foodalchemist_recipe_equipment')->exists()) {
             return ['source' => count($rows), 'imported' => 0, 'skipped' => count($rows)];
         }
-        $equipMap = $this->targetMap('foodalchemist_vocab_kochequipment');
+        $equipMap = $this->targetMap('foodalchemist_vocab_kitchen_equipment');
         $now = now()->toDateTimeString();
         $chunk = [];
         $done = 0;
@@ -730,7 +730,7 @@ class ImportSliceCommand extends Command
                 continue;
             }
             $attrs = array_filter([
-                'zusatztext' => self::nullIfBlank($r['text']),
+                'additional_text' => self::nullIfBlank($r['text']),
                 'vat' => $r['vat'],
                 'origin_country' => $countryMap[(int) ($r['origin_country_id'] ?? 0)] ?? null,
                 'organic_control_number' => self::nullIfBlank($r['organic_control_number']),
@@ -775,7 +775,7 @@ class ImportSliceCommand extends Command
         if ($dryRun) {
             return ['source' => $totalGlobal + $totalWg, 'imported' => 0, 'skipped' => 0];
         }
-        if (DB::table('foodalchemist_stamm_lieferanten')->where('team_id', $this->teamId)->exists()) {
+        if (DB::table('foodalchemist_preferred_suppliers')->where('team_id', $this->teamId)->exists()) {
             return ['source' => $totalGlobal + $totalWg, 'imported' => 0, 'skipped' => $totalGlobal + $totalWg];
         }
 
@@ -790,7 +790,7 @@ class ImportSliceCommand extends Command
 
                 continue;
             }
-            $rows[] = ['supplier_id' => $supplierMap[(int) $r['supplier_id']], 'warengruppe_code' => null];
+            $rows[] = ['supplier_id' => $supplierMap[(int) $r['supplier_id']], 'commodity_group_code' => null];
         }
         foreach ($pdo->query('SELECT supplier_id, warengruppe FROM stamm_lieferant_wg ORDER BY supplier_id, warengruppe') as $r) {
             $code = preg_match('/^(\d{2})/', (string) $r['warengruppe'], $m) ? $m[1] : null;
@@ -799,10 +799,10 @@ class ImportSliceCommand extends Command
 
                 continue;
             }
-            $rows[] = ['supplier_id' => $supplierMap[(int) $r['supplier_id']], 'warengruppe_code' => $code];
+            $rows[] = ['supplier_id' => $supplierMap[(int) $r['supplier_id']], 'commodity_group_code' => $code];
         }
 
-        DB::transaction(fn () => DB::table('foodalchemist_stamm_lieferanten')->insert(
+        DB::transaction(fn () => DB::table('foodalchemist_preferred_suppliers')->insert(
             array_map(fn (array $r) => [
                 'uuid' => (string) UuidV7::generate(),
                 'team_id' => $this->teamId,
@@ -812,8 +812,8 @@ class ImportSliceCommand extends Command
             ], $rows)
         ));
 
-        $zielGlobal = DB::table('foodalchemist_stamm_lieferanten')->where('team_id', $this->teamId)->whereNull('warengruppe_code')->count();
-        $zielWg = DB::table('foodalchemist_stamm_lieferanten')->where('team_id', $this->teamId)->whereNotNull('warengruppe_code')->count();
+        $zielGlobal = DB::table('foodalchemist_preferred_suppliers')->where('team_id', $this->teamId)->whereNull('warengruppe_code')->count();
+        $zielWg = DB::table('foodalchemist_preferred_suppliers')->where('team_id', $this->teamId)->whereNotNull('warengruppe_code')->count();
         $this->line(($zielGlobal === $totalGlobal ? '✅' : '❌ BLOCKER') . " stamm_lieferant: Quelle {$totalGlobal} ↔ Ziel {$zielGlobal}");
         $this->line(($zielWg === $totalWg ? '✅' : '❌ BLOCKER') . " stamm_lieferant_wg: Quelle {$totalWg} ↔ Ziel {$zielWg}");
 
@@ -833,8 +833,8 @@ class ImportSliceCommand extends Command
             fn (array $r) => [
                 'legacy_id' => $r['aufschlagsklasse_id'],
                 'code' => $r['code'],
-                'bezeichnung' => $r['bezeichnung'],
-                'rohaufschlag_pct' => $r['rohaufschlag_pct'] ?? 0,
+                'label' => $r['bezeichnung'],
+                'raw_markup_pct' => $r['rohaufschlag_pct'] ?? 0,
                 'bedienung_pct' => $r['bedienung_pct'] ?? 0,
                 'profit_pct' => $r['profit_pct'] ?? 0,
                 'mwst_satz' => $r['mwst_satz'] ?? 19,
@@ -847,7 +847,7 @@ class ImportSliceCommand extends Command
             fn (array $r) => [
                 'legacy_id' => $r['hauptgruppe_id'],
                 'code' => $r['code'],
-                'bezeichnung' => $r['bezeichnung'],
+                'label' => $r['bezeichnung'],
             ]);
         $dhgMap = $this->targetMap('foodalchemist_dish_main_groups');
 
@@ -856,7 +856,7 @@ class ImportSliceCommand extends Command
                 'legacy_id' => $r['klasse_id'],
                 'dish_main_group_id' => $r['hauptgruppe_id'] !== null ? ($dhgMap[(int) $r['hauptgruppe_id']] ?? null) : null,
                 'code' => $r['code'],
-                'bezeichnung' => $r['bezeichnung'],
+                'label' => $r['bezeichnung'],
                 'default_markup_class_id' => $r['default_aufschlagsklasse_id'] !== null ? ($akMap[(int) $r['default_aufschlagsklasse_id']] ?? null) : null,
                 'diaetform' => $r['diaetform'] ?? 'neutral',
                 'is_vegi' => (bool) ($r['is_vegi'] ?? 0),
@@ -873,7 +873,7 @@ class ImportSliceCommand extends Command
                 'name' => $r['name'],
                 'sprach_duktus' => $r['sprach_duktus'],
                 'beispiele_md' => self::nullIfBlank($r['beispiele_md'] ?? null),
-                'beschreibung' => self::nullIfBlank($r['beschreibung'] ?? null),
+                'description' => self::nullIfBlank($r['beschreibung'] ?? null),
                 'is_inactive' => (bool) ($r['is_inactive'] ?? 0),
                 'sort_order' => (int) ($r['sort_order'] ?? 0),
             ]);
@@ -886,10 +886,10 @@ class ImportSliceCommand extends Command
             'sort_order' => (int) ($r['sort_order'] ?? 100),
             'is_inactive' => (bool) ($r['is_inactive'] ?? 0),
         ];
-        $stats['vocab_behaelter'] = $this->importBulk($pdo, $dryRun, 'vocab_behaelter', 'foodalchemist_vocab_behaelter', 'vocab_id',
+        $stats['vocab_behaelter'] = $this->importBulk($pdo, $dryRun, 'vocab_behaelter', 'foodalchemist_vocab_containers', 'vocab_id',
             fn (array $r) => $vokabular($r) + ['kapazitaet_kg' => $r['kapazitaet_kg'] ?? null]);
-        $stats['vocab_regen_geraete'] = $this->importBulk($pdo, $dryRun, 'vocab_regen_geraet', 'foodalchemist_vocab_regen_geraete', 'vocab_id', $vokabular);
-        $stats['vocab_serviervehikel'] = $this->importBulk($pdo, $dryRun, 'vocab_serviervehikel', 'foodalchemist_vocab_serviervehikel', 'vocab_id', $vokabular);
+        $stats['vocab_regen_geraete'] = $this->importBulk($pdo, $dryRun, 'vocab_regen_geraet', 'foodalchemist_vocab_regeneration_devices', 'vocab_id', $vokabular);
+        $stats['vocab_serviervehikel'] = $this->importBulk($pdo, $dryRun, 'vocab_serviervehikel', 'foodalchemist_vocab_serving_vehicles', 'vocab_id', $vokabular);
 
         $recipeMap = $this->targetMap('foodalchemist_recipes', 'recipes');
         $stats['recipe_customer_names'] = $this->importBulk($pdo, $dryRun, 'recipe_customer_names', 'foodalchemist_recipe_customer_names', 'id',
@@ -902,56 +902,56 @@ class ImportSliceCommand extends Command
             ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]));
 
         // ── Darreichungen (Umbau-Spec Phase 3): Servierformen + Varianten + Deltas ──
-        $stats['servierformen'] = $this->importBulk($pdo, $dryRun, 'vocab_servierform', 'foodalchemist_servierformen', 'servierform_id',
+        $stats['servierformen'] = $this->importBulk($pdo, $dryRun, 'vocab_servierform', 'foodalchemist_serving_forms', 'servierform_id',
             fn (array $r) => [
                 'legacy_id' => $r['servierform_id'],
                 'code' => $r['code'],
-                'bezeichnung' => $r['bezeichnung'],
+                'label' => $r['bezeichnung'],
                 'sort_order' => (int) ($r['sort_order'] ?? 100),
                 'is_inactive' => (bool) ($r['is_inactive'] ?? 0),
             ]);
 
-        $servierformMap = $this->targetMap('foodalchemist_servierformen');
-        $einheitMapDar = $this->targetMap('foodalchemist_vocab_einheiten', 'vocab_einheit');
+        $servierformMap = $this->targetMap('foodalchemist_serving_forms');
+        $einheitMapDar = $this->targetMap('foodalchemist_vocab_units', 'vocab_einheit');
         $akMapDar = $this->targetMap('foodalchemist_markup_classes');
-        $behMapDar = $this->targetMap('foodalchemist_vocab_behaelter');
-        $regenMapDar = $this->targetMap('foodalchemist_vocab_regen_geraete');
-        $vehikelMapDar = $this->targetMap('foodalchemist_vocab_serviervehikel');
-        $stats['recipe_darreichungen'] = $this->importBulk($pdo, $dryRun, 'recipe_darreichungen', 'foodalchemist_recipe_darreichungen', 'darreichung_id',
+        $behMapDar = $this->targetMap('foodalchemist_vocab_containers');
+        $regenMapDar = $this->targetMap('foodalchemist_vocab_regeneration_devices');
+        $vehikelMapDar = $this->targetMap('foodalchemist_vocab_serving_vehicles');
+        $stats['recipe_darreichungen'] = $this->importBulk($pdo, $dryRun, 'recipe_darreichungen', 'foodalchemist_recipe_presentations', 'darreichung_id',
             fn (array $r) => [
                 'legacy_id' => $r['darreichung_id'],
                 'recipe_id' => $recipeMap[(int) $r['recipe_id']] ?? null,
-                'servierform_id' => $servierformMap[(int) $r['servierform_vocab_id']] ?? null,
+                'serving_form_id' => $servierformMap[(int) $r['servierform_vocab_id']] ?? null,
                 'ist_standard' => (bool) $r['ist_standard'],
-                'menge_pro_einheit_g' => $r['menge_pro_einheit_g'],
-                'einheit_vocab_id' => $r['einheit_vocab_id'] !== null ? ($einheitMapDar[(int) $r['einheit_vocab_id']] ?? null) : null,
-                'anzahl_einheiten' => $r['anzahl_einheiten'],
+                'quantity_pro_unit_g' => $r['menge_pro_einheit_g'],
+                'unit_vocab_id' => $r['einheit_vocab_id'] !== null ? ($einheitMapDar[(int) $r['einheit_vocab_id']] ?? null) : null,
+                'unit_count' => $r['anzahl_einheiten'],
                 'ek_portion' => $r['ek_portion'],
-                'aufschlagsklasse_id' => $r['aufschlagsklasse_id'] !== null ? ($akMapDar[(int) $r['aufschlagsklasse_id']] ?? null) : null,
+                'markup_class_id' => $r['aufschlagsklasse_id'] !== null ? ($akMapDar[(int) $r['aufschlagsklasse_id']] ?? null) : null,
                 'vk_netto' => $r['vk_netto'],
                 'vk_brutto' => $r['vk_brutto'],
                 'preis_modus' => $r['preis_modus'] ?? 'auto',
-                'behaelter_warm_vocab_id' => $r['behaelter_warm_vocab_id'] !== null ? ($behMapDar[(int) $r['behaelter_warm_vocab_id']] ?? null) : null,
-                'behaelter_kalt_vocab_id' => $r['behaelter_kalt_vocab_id'] !== null ? ($behMapDar[(int) $r['behaelter_kalt_vocab_id']] ?? null) : null,
+                'container_warm_vocab_id' => $r['behaelter_warm_vocab_id'] !== null ? ($behMapDar[(int) $r['behaelter_warm_vocab_id']] ?? null) : null,
+                'container_cold_vocab_id' => $r['behaelter_kalt_vocab_id'] !== null ? ($behMapDar[(int) $r['behaelter_kalt_vocab_id']] ?? null) : null,
                 'regeneration_temp_c' => $r['regeneration_temp_c'],
                 'regeneration_dauer_min' => $r['regeneration_dauer_min'],
                 'regeneration_kerntemp_c' => $r['regeneration_kerntemp_c'],
-                'regeneration_geraet_vocab_id' => $r['regeneration_geraet_vocab_id'] !== null ? ($regenMapDar[(int) $r['regeneration_geraet_vocab_id']] ?? null) : null,
-                'servier_vehikel_vocab_id' => $r['servier_vehikel_vocab_id'] !== null ? ($vehikelMapDar[(int) $r['servier_vehikel_vocab_id']] ?? null) : null,
-                'arbeitszeit_zuschlag_min' => $r['arbeitszeit_zuschlag_min'],
-                'angebotstext_override' => self::nullIfBlank($r['angebotstext_override'] ?? null),
+                'regeneration_device_vocab_id' => $r['regeneration_geraet_vocab_id'] !== null ? ($regenMapDar[(int) $r['regeneration_geraet_vocab_id']] ?? null) : null,
+                'serving_vehicle_vocab_id' => $r['servier_vehikel_vocab_id'] !== null ? ($vehikelMapDar[(int) $r['servier_vehikel_vocab_id']] ?? null) : null,
+                'work_time_zuschlag_min' => $r['arbeitszeit_zuschlag_min'],
+                'offer_text_override' => self::nullIfBlank($r['angebotstext_override'] ?? null),
                 'note' => self::nullIfBlank($r['note'] ?? null),
             ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']])
                 || ! isset($servierformMap[(int) $r['servierform_vocab_id']]));
 
-        $darreichungMap = $this->targetMap('foodalchemist_recipe_darreichungen');
+        $darreichungMap = $this->targetMap('foodalchemist_recipe_presentations');
         $ingredientMap = $this->targetMap('foodalchemist_recipe_ingredients', 'recipe_ingredients');
-        $stats['recipe_darreichung_deltas'] = $this->importBulk($pdo, $dryRun, 'recipe_darreichung_deltas', 'foodalchemist_recipe_darreichung_deltas', 'delta_id',
+        $stats['recipe_darreichung_deltas'] = $this->importBulk($pdo, $dryRun, 'recipe_darreichung_deltas', 'foodalchemist_recipe_presentation_deltas', 'delta_id',
             fn (array $r) => [
                 'legacy_id' => $r['delta_id'],
-                'darreichung_id' => $darreichungMap[(int) $r['darreichung_id']] ?? null,
+                'presentation_id' => $darreichungMap[(int) $r['darreichung_id']] ?? null,
                 'recipe_ingredient_id' => $ingredientMap[(int) $r['recipe_ingredient_id']] ?? null,
-                'menge_override_g' => $r['menge_override_g'],
+                'quantity_override_g' => $r['menge_override_g'],
                 'weggelassen' => (bool) $r['weggelassen'],
                 'note' => self::nullIfBlank($r['note'] ?? null),
             ], skipRow: fn (array $r) => ! isset($darreichungMap[(int) $r['darreichung_id']])
@@ -966,13 +966,13 @@ class ImportSliceCommand extends Command
         $gespiegelt = DB::update('
             UPDATE foodalchemist_recipes
             SET vk_netto = (
-                SELECT d.vk_netto FROM foodalchemist_recipe_darreichungen d
+                SELECT d.vk_netto FROM foodalchemist_recipe_presentations d
                 WHERE d.recipe_id = foodalchemist_recipes.id
                   AND d.ist_standard = 1 AND d.deleted_at IS NULL
             )
             WHERE vk_netto IS NULL
               AND EXISTS (
-                SELECT 1 FROM foodalchemist_recipe_darreichungen d
+                SELECT 1 FROM foodalchemist_recipe_presentations d
                 WHERE d.recipe_id = foodalchemist_recipes.id
                   AND d.ist_standard = 1 AND d.deleted_at IS NULL
                   AND d.vk_netto IS NOT NULL
@@ -982,20 +982,20 @@ class ImportSliceCommand extends Command
 
         // FK-Resolve: M4-01-Rohwerte → echte FKs (idempotent, nur 1.407 Rezepte)
         $klasseMap = $this->targetMap('foodalchemist_dish_classes');
-        $behMap = $this->targetMap('foodalchemist_vocab_behaelter');
-        $regenMap = $this->targetMap('foodalchemist_vocab_regen_geraete');
-        $vehikelMap = $this->targetMap('foodalchemist_vocab_serviervehikel');
+        $behMap = $this->targetMap('foodalchemist_vocab_containers');
+        $regenMap = $this->targetMap('foodalchemist_vocab_regeneration_devices');
+        $vehikelMap = $this->targetMap('foodalchemist_vocab_serving_vehicles');
         $resolved = 0;
         foreach (DB::table('foodalchemist_recipes')->whereNotNull('legacy_id')->get([
             'id', 'speisen_klasse_legacy_id', 'aufschlagsklasse_legacy_id', 'behaelter_warm_legacy_id',
             'behaelter_kalt_legacy_id', 'servier_vehikel_legacy_id',
         ]) as $r) {
             $update = array_filter([
-                'speisen_klasse_id' => $r->speisen_klasse_legacy_id !== null ? ($klasseMap[(int) $r->speisen_klasse_legacy_id] ?? null) : null,
-                'aufschlagsklasse_id' => $r->aufschlagsklasse_legacy_id !== null ? ($akMap[(int) $r->aufschlagsklasse_legacy_id] ?? null) : null,
-                'behaelter_warm_vocab_id' => $r->behaelter_warm_legacy_id !== null ? ($behMap[(int) $r->behaelter_warm_legacy_id] ?? null) : null,
-                'behaelter_kalt_vocab_id' => $r->behaelter_kalt_legacy_id !== null ? ($behMap[(int) $r->behaelter_kalt_legacy_id] ?? null) : null,
-                'servier_vehikel_vocab_id' => $r->servier_vehikel_legacy_id !== null ? ($vehikelMap[(int) $r->servier_vehikel_legacy_id] ?? null) : null,
+                'dish_class_id' => $r->speisen_klasse_legacy_id !== null ? ($klasseMap[(int) $r->speisen_klasse_legacy_id] ?? null) : null,
+                'markup_class_id' => $r->aufschlagsklasse_legacy_id !== null ? ($akMap[(int) $r->aufschlagsklasse_legacy_id] ?? null) : null,
+                'container_warm_vocab_id' => $r->behaelter_warm_legacy_id !== null ? ($behMap[(int) $r->behaelter_warm_legacy_id] ?? null) : null,
+                'container_cold_vocab_id' => $r->behaelter_kalt_legacy_id !== null ? ($behMap[(int) $r->behaelter_kalt_legacy_id] ?? null) : null,
+                'serving_vehicle_vocab_id' => $r->servier_vehikel_legacy_id !== null ? ($vehikelMap[(int) $r->servier_vehikel_legacy_id] ?? null) : null,
             ]);
             if ($update !== []) {
                 DB::table('foodalchemist_recipes')->where('id', $r->id)->update($update);
@@ -1018,11 +1018,11 @@ class ImportSliceCommand extends Command
                 'team_id' => $r->team_id,
                 'recipe_id' => $r->id,
                 'komponente_label' => 'Gesamt',
-                'geraet_vocab_id' => $r->regeneration_geraet_legacy_id !== null ? ($regenMap[(int) $r->regeneration_geraet_legacy_id] ?? null) : null,
+                'device_vocab_id' => $r->regeneration_geraet_legacy_id !== null ? ($regenMap[(int) $r->regeneration_geraet_legacy_id] ?? null) : null,
                 'temp_c' => $r->regeneration_temp_c,
                 'dauer_min' => $r->regeneration_dauer_min,
                 'kerntemp_c' => $r->regeneration_kerntemp_c,
-                'quelle' => 'import',
+                'source' => 'import',
                 'created_at' => now(), 'updated_at' => now(),
             ]);
             $regenZeilen++;
@@ -1048,36 +1048,36 @@ class ImportSliceCommand extends Command
         ]);
         // M6-01: Verkaufslayer zuerst (FKs auf recipes + Stammdaten)
         DB::table('foodalchemist_recipes')->update([
-            'speisen_klasse_id' => null, 'aufschlagsklasse_id' => null, 'behaelter_warm_vocab_id' => null,
-            'behaelter_kalt_vocab_id' => null, 'servier_vehikel_vocab_id' => null,
+            'dish_class_id' => null, 'markup_class_id' => null, 'container_warm_vocab_id' => null,
+            'container_cold_vocab_id' => null, 'serving_vehicle_vocab_id' => null,
         ]);
         // Darreichungen (Phase 3): FK-Ketten zuerst lösen, dann Kinder → Eltern
-        DB::table('foodalchemist_concept_slots')->update(['darreichung_id' => null]);
-        DB::table('foodalchemist_paket_gerichte')->update(['darreichung_id' => null]);
-        DB::table('foodalchemist_recipe_darreichung_deltas')->delete();
-        DB::table('foodalchemist_recipe_darreichungen')->delete();
-        DB::table('foodalchemist_servierformen')->delete();
+        DB::table('foodalchemist_concept_slots')->update(['presentation_id' => null]);
+        DB::table('foodalchemist_package_dishes')->update(['presentation_id' => null]);
+        DB::table('foodalchemist_recipe_presentation_deltas')->delete();
+        DB::table('foodalchemist_recipe_presentations')->delete();
+        DB::table('foodalchemist_serving_forms')->delete();
         DB::table('foodalchemist_recipe_regenerations')->delete();
         DB::table('foodalchemist_recipe_customer_names')->delete();
-        DB::table('foodalchemist_vocab_serviervehikel')->delete();
-        DB::table('foodalchemist_vocab_regen_geraete')->delete();
-        DB::table('foodalchemist_vocab_behaelter')->delete();
+        DB::table('foodalchemist_vocab_serving_vehicles')->delete();
+        DB::table('foodalchemist_vocab_regeneration_devices')->delete();
+        DB::table('foodalchemist_vocab_containers')->delete();
         DB::table('foodalchemist_writing_styles')->delete();
         DB::table('foodalchemist_dish_classes')->delete();
         DB::table('foodalchemist_dish_main_groups')->delete();
         DB::table('foodalchemist_markup_classes')->delete();
         // M5-03: Pairing-Graph zuerst (FKs auf gps/recipes/anker)
-        DB::table('foodalchemist_recipe_prozess_anker')->delete();
+        DB::table('foodalchemist_recipe_process_anchors')->delete();
         DB::table('foodalchemist_recipe_pairings')->delete();
-        DB::table('foodalchemist_recipe_anker_mappings')->delete();
-        DB::table('foodalchemist_gp_anker_mappings')->delete();
-        DB::table('foodalchemist_pairing_anker_edges')->delete();
-        DB::table('foodalchemist_vocab_pairing_ankers')->delete();
+        DB::table('foodalchemist_recipe_anchor_mappings')->delete();
+        DB::table('foodalchemist_gp_anchor_mappings')->delete();
+        DB::table('foodalchemist_pairing_anchor_edges')->delete();
+        DB::table('foodalchemist_vocab_pairing_anchors')->delete();
         // M4-02: Rezept-Welt zuerst (FKs auf gps/einheiten/kategorien)
-        DB::table('foodalchemist_recipe_sektor_eignung')->delete();
-        DB::table('foodalchemist_recipe_niveau_eignung')->delete();
+        DB::table('foodalchemist_recipe_sector_suitability')->delete();
+        DB::table('foodalchemist_recipe_level_suitability')->delete();
         DB::table('foodalchemist_recipe_equipment')->delete();
-        DB::table('foodalchemist_vocab_kochequipment')->delete();
+        DB::table('foodalchemist_vocab_kitchen_equipment')->delete();
         DB::table('foodalchemist_recipe_ingredients')->delete();
         DB::table('foodalchemist_gp_count_unit_defaults')->delete();
         DB::table('foodalchemist_recipes')->update(['instantiated_from_recipe_id' => null]);
@@ -1085,7 +1085,7 @@ class ImportSliceCommand extends Command
         DB::table('foodalchemist_item_nutritionals')->delete();
         DB::table('foodalchemist_item_declarations')->delete();
         DB::table('foodalchemist_item_allergens')->delete();
-        DB::table('foodalchemist_stamm_lieferanten')->delete();
+        DB::table('foodalchemist_preferred_suppliers')->delete();
         DB::table('foodalchemist_recipe_categories')->delete();
         DB::table('foodalchemist_recipe_main_groups')->delete();
         DB::table('foodalchemist_supplier_item_structures')->delete();
@@ -1093,8 +1093,8 @@ class ImportSliceCommand extends Command
         DB::table('foodalchemist_supplier_items')->delete();
         DB::table('foodalchemist_suppliers')->delete();
         DB::table('foodalchemist_gps')->delete();
-        DB::table('foodalchemist_vocab_einheiten')->delete();
-        DB::table('foodalchemist_lookup_warengruppen')->delete();
+        DB::table('foodalchemist_vocab_units')->delete();
+        DB::table('foodalchemist_lookup_commodity_groups')->delete();
         DB::table('foodalchemist_legacy_id_map')
             ->whereIn('source_table', [
                 'lookup_warengruppe', 'vocab_einheit', 'wawi_gp_v2',
@@ -1126,7 +1126,7 @@ class ImportSliceCommand extends Command
                     continue;
                 }
                 $uuid = (string) UuidV7::generate();
-                $id = DB::table('foodalchemist_lookup_warengruppen')->insertGetId([
+                $id = DB::table('foodalchemist_lookup_commodity_groups')->insertGetId([
                     'uuid' => $uuid,
                     'team_id' => $this->teamId,
                     'code' => $row['code'],
@@ -1159,7 +1159,7 @@ class ImportSliceCommand extends Command
                     continue;
                 }
                 $uuid = (string) UuidV7::generate();
-                $id = DB::table('foodalchemist_vocab_einheiten')->insertGetId([
+                $id = DB::table('foodalchemist_vocab_units')->insertGetId([
                     'uuid' => $uuid,
                     'team_id' => $this->teamId,
                     'slug' => $row['slug'],
@@ -1225,45 +1225,45 @@ class ImportSliceCommand extends Command
                     'team_id' => $this->teamId, // Katalog-Besitzer (D1 Eltern→Kinder)
                     'gp_key' => $row['gp_key'],
                     'name' => $row['gp_name'],
-                    'hauptzutat_slug' => $row['hauptzutat_slug'],
-                    'hauptzutat_display' => self::nullIfBlank($row['hauptzutat_display']),
-                    'verarbeitung' => self::nullIfBlank($row['verarbeitung']),
+                    'main_ingredient_slug' => $row['hauptzutat_slug'],
+                    'main_ingredient_display' => self::nullIfBlank($row['hauptzutat_display']),
+                    'processing' => self::nullIfBlank($row['verarbeitung']),
                     'form' => self::nullIfBlank($row['form']),
-                    'warengruppe_code' => self::warengruppeCode($row['warengruppe']),
-                    'sub_kategorie' => self::nullIfBlank($row['sub_kategorie']),
-                    'zustand' => self::nullIfBlank($row['zustand']),
+                    'commodity_group_code' => self::warengruppeCode($row['warengruppe']),
+                    'sub_category' => self::nullIfBlank($row['sub_kategorie']),
+                    'condition' => self::nullIfBlank($row['zustand']),
                     'bio' => self::nullIfBlank($row['bio']),
                     'status' => $row['status'] ?: 'tentative',
                     'reviewer_note' => self::nullIfBlank($row['reviewer_note']),
                     'first_seen_at' => self::utcOrNull($row['first_seen_at']),
                     'last_review_at' => self::utcOrNull($row['last_review_at']),
                     'ai_confidence' => $row['ai_confidence'],
-                    'ai_begruendung' => self::nullIfBlank($row['ai_begruendung']),
+                    'ai_reasoning' => self::nullIfBlank($row['ai_begruendung']),
                     'is_derivat' => (bool) ($row['is_derivat'] ?? 0),
                     'requires_la' => (bool) ($row['requires_la'] ?? 1),
                     'is_platzhalter' => (bool) ($row['is_platzhalter'] ?? 0),
                     'n_las_total' => (int) ($row['n_las_total'] ?? 0),
                     'first_supplier_legacy_id' => $row['first_supplier_id'],
                     'lead_la_supplier_item_legacy_id' => $row['lead_la_supplier_item_id'],
-                    'garverlust_default_pct' => $row['garverlust_default_pct'],
-                    'stk_default_g' => $row['stk_default_g'],
-                    'stk_default_g_quelle' => self::mapQuelle($row['stk_default_g_quelle']),
+                    'cooking_loss_default_pct' => $row['garverlust_default_pct'],
+                    'piece_default_g' => $row['stk_default_g'],
+                    'piece_default_g_source' => self::mapQuelle($row['stk_default_g_quelle']),
                     'stk_default_g_ai_confidence' => $row['stk_default_g_ai_confidence'],
                     'stk_default_g_ai_begruendung' => self::nullIfBlank($row['stk_default_g_ai_begruendung']),
                     'preferred_count_unit_id' => $row['preferred_count_unit_vocab_id'] !== null
                         ? ($einheitMap[(int) $row['preferred_count_unit_vocab_id']] ?? null)
                         : null,
                     ...self::allergenColumns($row),
-                    'allergene_quelle' => self::mapQuelle($row['allergene_quelle']),
+                    'allergens_source' => self::mapQuelle($row['allergene_quelle']),
                     'allergene_ai_confidence' => $row['allergene_ai_confidence'],
                     'allergene_aggregiert_am' => self::utcOrNull($row['allergene_aggregiert_am']),
                     ...self::tagColumns($row),
-                    'tag_quelle' => self::mapQuelle($row['tag_quelle']),
+                    'tag_source' => self::mapQuelle($row['tag_quelle']),
                     'tag_ai_confidence' => $row['tag_ai_confidence'],
                     'tag_ai_begruendung' => self::nullIfBlank($row['tag_ai_begruendung']),
                     'tag_aggregiert_am' => self::utcOrNull($row['tag_aggregiert_am']),
                     'primary_food_domain_legacy_id' => $row['primary_food_domain_id'],
-                    'food_domain_quelle' => self::mapQuelle($row['food_domain_quelle']),
+                    'food_domain_source' => self::mapQuelle($row['food_domain_quelle']),
                     'food_domain_ai_confidence' => $row['food_domain_ai_confidence'],
                     'food_domain_ai_begruendung' => self::nullIfBlank($row['food_domain_ai_begruendung']),
                     'food_domain_aggregiert_am' => self::utcOrNull($row['food_domain_aggregiert_am']),

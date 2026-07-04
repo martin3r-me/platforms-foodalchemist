@@ -25,25 +25,25 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class WordingResolver
 {
-    /** @return array{text: string, quelle: string} */
+    /** @return array{text: string, source: string} */
     public function fuerGericht(?FoodAlchemistRecipe $gericht): array
     {
         if ($gericht === null) {
-            return ['text' => '—', 'quelle' => 'name'];
+            return ['text' => '—', 'source' => 'name'];
         }
         $std = trim((string) $gericht->vk_wording_standard);
 
         return $std !== ''
-            ? ['text' => $std, 'quelle' => 'standard']
-            : ['text' => (string) $gericht->name, 'quelle' => 'name'];
+            ? ['text' => $std, 'source' => 'standard']
+            : ['text' => (string) $gericht->name, 'source' => 'name'];
     }
 
-    /** @return array{text: string, quelle: string} */
+    /** @return array{text: string, source: string} */
     public function fuerSlot(FoodAlchemistConceptSlot $slot): array
     {
         $w = trim((string) $slot->wording);
         if ($w !== '') {
-            return ['text' => $w, 'quelle' => 'konzept'];
+            return ['text' => $w, 'source' => 'konzept'];
         }
 
         return $this->fuerGericht($slot->gericht);
@@ -53,14 +53,14 @@ class WordingResolver
      * Gericht-Zeile INNERHALB eines Foodbook-Blocks (concept_ref):
      * payload_json['wording_overrides'][slot_id] → Slot-Kette.
      *
-     * @return array{text: string, quelle: string}
+     * @return array{text: string, source: string}
      */
     public function fuerBlockSlot(FoodAlchemistFoodbookBlock $block, FoodAlchemistConceptSlot $slot): array
     {
         $override = trim((string) (($block->payload_json['wording_overrides'] ?? [])[(string) $slot->id]
             ?? ($block->payload_json['wording_overrides'] ?? [])[$slot->id] ?? ''));
         if ($override !== '') {
-            return ['text' => $override, 'quelle' => 'foodbook'];
+            return ['text' => $override, 'source' => 'foodbook'];
         }
 
         return $this->fuerSlot($slot);
@@ -72,23 +72,23 @@ class WordingResolver
      * kundentext bleibt als Fallback, weil Bestandsdaten ihn als Label nutzen —
      * neue Pflege schreibt `wording`, kundentext ist wieder Beschreibungstext.
      *
-     * @return array{text: string, quelle: string}
+     * @return array{text: string, source: string}
      */
     public function blockTitel(FoodAlchemistFoodbookBlock $block): array
     {
         $w = trim((string) $block->wording);
         if ($w !== '') {
-            return ['text' => $w, 'quelle' => 'foodbook'];
+            return ['text' => $w, 'source' => 'foodbook'];
         }
         $legacy = trim((string) $block->kundentext);
         if ($legacy !== '' && $block->wording === null) {
-            return ['text' => $legacy, 'quelle' => 'foodbook'];
+            return ['text' => $legacy, 'source' => 'foodbook'];
         }
 
         return match ($block->type) {
-            'concept_ref' => ['text' => (string) ($block->concept?->name ?? '—'), 'quelle' => 'name'],
+            'concept_ref' => ['text' => (string) ($block->concept?->name ?? '—'), 'source' => 'name'],
             'recipe_ref' => $this->fuerGericht($block->gericht),
-            default => ['text' => (string) ($block->bezeichnung ?? '—'), 'quelle' => 'name'],
+            default => ['text' => (string) ($block->label ?? '—'), 'source' => 'name'],
         };
     }
 
@@ -97,23 +97,23 @@ class WordingResolver
      * Gericht-Slots als Zeilen, Paket-Slots als Gruppe (Paketname + Gerichte).
      * Struktur-Slots (header/text/spacer) liefern Header als Zwischenzeile.
      *
-     * @return list<array{typ: string, text: string, quelle: ?string, einrueckung: int}>
+     * @return list<array{typ: string, text: string, source: ?string, einrueckung: int}>
      */
     public function gerichtZeilen(FoodAlchemistConcept $concept, ?FoodAlchemistFoodbookBlock $block = null): array
     {
         $zeilen = [];
         foreach ($concept->slots->sortBy('position') as $slot) {
-            if ($slot->paket_id !== null && $slot->paket !== null) {
-                $zeilen[] = ['typ' => 'paket', 'text' => (string) $slot->paket->name, 'quelle' => null, 'einrueckung' => 0];
+            if ($slot->package_id !== null && $slot->paket !== null) {
+                $zeilen[] = ['typ' => 'paket', 'text' => (string) $slot->paket->name, 'source' => null, 'einrueckung' => 0];
                 foreach ($slot->paket->gerichte as $pg) {
                     $r = $this->fuerGericht($pg->gericht);
-                    $zeilen[] = ['typ' => 'gericht', 'text' => $r['text'], 'quelle' => $r['quelle'], 'einrueckung' => 1];
+                    $zeilen[] = ['typ' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 1];
                 }
 
                 continue;
             }
             if (in_array($slot->type, ['header', 'header_preis'], true) && trim((string) $slot->titel) !== '') {
-                $zeilen[] = ['typ' => 'header', 'text' => (string) $slot->titel, 'quelle' => null, 'einrueckung' => 0];
+                $zeilen[] = ['typ' => 'header', 'text' => (string) $slot->titel, 'source' => null, 'einrueckung' => 0];
 
                 continue;
             }
@@ -121,7 +121,7 @@ class WordingResolver
                 continue; // spacer/text/leere Slots sind im Kundendokument unsichtbar
             }
             $r = $block !== null ? $this->fuerBlockSlot($block, $slot) : $this->fuerSlot($slot);
-            $zeilen[] = ['typ' => 'gericht', 'text' => $r['text'], 'quelle' => $r['quelle'], 'einrueckung' => 0, 'slot_id' => $slot->id];
+            $zeilen[] = ['typ' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 0, 'slot_id' => $slot->id];
         }
 
         return $zeilen;

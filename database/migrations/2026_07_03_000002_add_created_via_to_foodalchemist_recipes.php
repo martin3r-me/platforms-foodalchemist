@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
  * Phase A (MCP-Schreibkaskade, Weg-A-Ausnahme 2026-07-03): maschineller
  * Erstellungs-Marker für Rezepte. `mcp` = LLM-Client via Tool-Registry
  * (Draft-Quarantäne + spätere Rückholbarkeit FA→WaWi hängen daran).
- * `herkunft` bleibt die menschenlesbare Provenienz-Spur.
+ * `origin_source` bleibt die menschenlesbare Provenienz-Spur.
  */
 return new class extends Migration
 {

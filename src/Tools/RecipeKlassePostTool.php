@@ -57,7 +57,7 @@ class RecipeKlassePostTool extends FoodAlchemistTool implements ToolContract, To
         if (($arguments['accept'] ?? false) === true && $vorschlag['klasse_id'] !== null) {
             try {
                 $svc->acceptKlasse($team, (int) $arguments['recipe_id'], $vorschlag['klasse_id'],
-                    $vorschlag['confidence'], $vorschlag['begruendung'], $vorschlag['call_log_id']);
+                    $vorschlag['confidence'], $vorschlag['reasoning'], $vorschlag['call_log_id']);
                 $angenommen = true;
             } catch (\RuntimeException $e) {
                 return ToolResult::error($e->getMessage(), 'OVERRIDE_FIRST');

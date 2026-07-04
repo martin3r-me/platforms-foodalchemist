@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Schema;
  * Generischer SPEICHER (canvases + canvas_entries) mit FESTEN Templates je canvas_type
  * (Feld-Definitionen in CanvasService::TEMPLATES — semantische Felder bleiben kuratiert,
  * nicht frei zusammenklickbar). Repeatable-Felder (z. B. Geschmackswelten) = mehrere
- * Entries gleichen field_key mit position + meta-JSON (Sub-Felder claim/beschreibung).
+ * Entries gleichen field_key mit position + meta-JSON (Sub-Felder claim/description).
  *
  * Inspiration: Martins planner_project_canvases → _blocks → _entries.
  * 07 §7: nullable+index statt cross-Modul-FK (owner polymorph), idempotent, engine-agnostisch.
@@ -45,7 +45,7 @@ return new class extends Migration
                 $table->string('field_key', 48);
                 $table->integer('position')->default(0);
                 $table->text('value')->nullable();
-                $table->json('meta')->nullable();                    // repeatable: {claim, beschreibung, …}
+                $table->json('meta')->nullable();                    // repeatable: {claim, description, …}
                 $table->timestamps();
                 $table->softDeletes();
                 $table->index(['canvas_id', 'field_key']);

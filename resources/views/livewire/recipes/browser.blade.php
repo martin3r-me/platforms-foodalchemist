@@ -63,7 +63,7 @@
                                     class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === $hg->id
                                         ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                                         : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                                <span class="min-w-0 truncate">{{ $hg->bezeichnung }}</span>
+                                <span class="min-w-0 truncate">{{ $hg->label }}</span>
                                 <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
                             </button>
                             @if($hauptgruppe === $hg->id && $kategorien->isNotEmpty())
@@ -74,7 +74,7 @@
                                                     class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $kategorie === $kat->id
                                                         ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
                                                         : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                                                <span class="min-w-0 truncate">{{ $kat->bezeichnung }}</span>
+                                                <span class="min-w-0 truncate">{{ $kat->label }}</span>
                                                 <span class="text-gray-400 shrink-0 ml-2">{{ $katCounts[$kat->id] }}</span>
                                             </button>
                                         @endif
@@ -130,7 +130,7 @@
                                 <button type="button" wire:key="tpl-{{ $template->id }}" wire:click="ausTemplate({{ $template->id }})"
                                         class="block w-full text-left px-3 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">
                                     {{ $template->name }}
-                                    <span class="text-gray-400">· {{ $template->n_zutaten_total }} Zutaten{{ $template->yield_kg !== null ? ' · ' . number_format((float) $template->yield_kg, 2, ',', '.') . ' kg' : '' }}</span>
+                                    <span class="text-gray-400">· {{ $template->n_ingredients_total }} Zutaten{{ $template->yield_kg !== null ? ' · ' . number_format((float) $template->yield_kg, 2, ',', '.') . ' kg' : '' }}</span>
                                 </button>
                             @empty
                                 <p class="px-3 py-2 text-[11px] text-gray-400">Keine Templates — im Editor «📐 Template» markieren.</p>
@@ -200,9 +200,9 @@
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
                                 @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>📐 Template</span>@endif
                             </td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-500 truncate max-w-[12rem] whitespace-nowrap">{{ $r->kategorie?->bezeichnung ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->geschmacksrichtung ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->fertigungstiefe ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-500 truncate max-w-[12rem] whitespace-nowrap">{{ $r->kategorie?->label ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->production_depth ?? '—' }}</td>
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge — Auto-Zustand) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
@@ -217,8 +217,8 @@
                                 @endif
                             </td>
                             <td class="{{ $td }} text-gray-500 text-right tabular-nums whitespace-nowrap">
-                                {{ $r->n_zutaten_total }}
-                                @if($r->n_zutaten_ungemappt > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }} ml-1" title="ungemappte Zutaten — F7.1: Allergene unbekannt">{{ $r->n_zutaten_ungemappt }}?</span>@endif
+                                {{ $r->n_ingredients_total }}
+                                @if($r->n_ingredients_ungemappt > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }} ml-1" title="ungemappte Zutaten — F7.1: Allergene unbekannt">{{ $r->n_ingredients_ungemappt }}?</span>@endif
                             </td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '—' }}</td>
                             <td class="{{ $td }}">

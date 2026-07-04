@@ -20,7 +20,7 @@ enum LeadLaStrategie: string
         };
     }
 
-    public function beschreibung(): string
+    public function description(): string
     {
         return match ($this) {
             self::GuenstigsterPreis => 'Lead = niedrigster Vergleichspreis (GL-03-Standardkette).',

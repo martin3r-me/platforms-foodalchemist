@@ -44,9 +44,9 @@ class FoodAlchemistGp extends Model
         'requires_la' => 'boolean',
         'is_platzhalter' => 'boolean',
         'n_las_total' => 'integer',
-        'garverlust_default_pct' => 'decimal:2',
-        'putzverlust_default_pct' => 'decimal:2',
-        'stk_default_g' => 'decimal:2',
+        'cooking_loss_default_pct' => 'decimal:2',
+        'trimming_loss_default_pct' => 'decimal:2',
+        'piece_default_g' => 'decimal:2',
         'ai_confidence' => 'decimal:3',
         'allergene_ai_confidence' => 'decimal:3',
         'tag_ai_confidence' => 'decimal:3',
@@ -65,15 +65,15 @@ class FoodAlchemistGp extends Model
         'tag_contains_beef' => 'boolean',
         'tag_is_organic' => 'boolean',
         'tag_is_regional' => 'boolean',
-        'tag_is_grundnahrungsmittel' => 'boolean',
+        'tag_is_staple_food' => 'boolean',
         'tag_is_convenience' => 'boolean',
         'tag_is_lactose_free' => 'boolean',
         'tag_is_gluten_free' => 'boolean',
     ];
 
-    public function warengruppe(): BelongsTo
+    public function commodity_group(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistLookupWarengruppe::class, 'warengruppe_code', 'code');
+        return $this->belongsTo(FoodAlchemistLookupWarengruppe::class, 'commodity_group_code', 'code');
     }
 
     public function preferredCountUnit(): BelongsTo

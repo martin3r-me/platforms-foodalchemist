@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
  * Text/Leerzeile/Header±Preis), aus dem man Pakete bildet.
  *
  * `type` ∈ gericht | basisrezept | paket | text | spacer | header | header_preis.
- * Backfill: paket_id → 'paket', vk_recipe_id → 'gericht' (Alt-Slots hielten nur VK-Gerichte).
+ * Backfill: package_id → 'paket', vk_recipe_id → 'gericht' (Alt-Slots hielten nur VK-Gerichte).
  * Struktur-Felder analog Foodbook-Block (text_inhalt/preis_wert/preis_basis/hoehe/ebene).
  * Neue Tabelle concept_slot_staffel = Spiegel von foodbook_block_staffel (header_preis-Staffel).
  *
@@ -32,7 +32,7 @@ return new class extends Migration
                 $table->text('text_inhalt')->nullable()->after('titel');
             }
             if (! Schema::hasColumn('foodalchemist_concept_slots', 'preis_wert')) {
-                $table->decimal('preis_wert', 10, 2)->nullable()->after('menge');
+                $table->decimal('preis_wert', 10, 2)->nullable()->after('quantity');
             }
             if (! Schema::hasColumn('foodalchemist_concept_slots', 'preis_basis')) {
                 $table->string('preis_basis', 12)->nullable()->after('preis_wert'); // person|pauschal|staffel
@@ -43,8 +43,8 @@ return new class extends Migration
         });
 
         // Backfill type aus der bisherigen Befüllung (genau eines war gesetzt; sonst Default 'gericht').
-        DB::table('foodalchemist_concept_slots')->whereNotNull('paket_id')->update(['type' => 'paket']);
-        DB::table('foodalchemist_concept_slots')->whereNull('paket_id')->whereNotNull('vk_recipe_id')->update(['type' => 'gericht']);
+        DB::table('foodalchemist_concept_slots')->whereNotNull('package_id')->update(['type' => 'paket']);
+        DB::table('foodalchemist_concept_slots')->whereNull('package_id')->whereNotNull('vk_recipe_id')->update(['type' => 'gericht']);
 
         if (! Schema::hasTable('foodalchemist_concept_slot_staffel')) {
             Schema::create('foodalchemist_concept_slot_staffel', function (Blueprint $table) {

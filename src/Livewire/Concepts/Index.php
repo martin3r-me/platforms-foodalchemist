@@ -37,7 +37,7 @@ class Index extends Component
 
     public string $editKatName = '';
 
-    public array $form = ['name' => '', 'anlass' => '', 'niveau' => '', 'category_id' => null, 'status' => 'draft', 'beschreibung' => ''];
+    public array $form = ['name' => '', 'anlass' => '', 'niveau' => '', 'category_id' => null, 'status' => 'draft', 'description' => ''];
 
     /** Pro Slot editierbare Rolle/Titel (keyed by slot-id). */
     public array $slotForm = [];
@@ -92,9 +92,9 @@ class Index extends Component
         $this->selectedId = $id;
         $this->form = [
             'name' => $c->name, 'anlass' => $c->anlass ?? '', 'niveau' => $c->niveau ?? '',
-            'category_id' => $c->category_id, 'status' => $c->status, 'beschreibung' => $c->beschreibung ?? '',
+            'category_id' => $c->category_id, 'status' => $c->status, 'description' => $c->description ?? '',
         ];
-        $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['rolle' => $s->rolle ?? '', 'titel' => $s->titel ?? '']])->all();
+        $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'titel' => $s->titel ?? '']])->all();
         $this->fillSlotId = null;
         $this->gerichtSuche = '';
         $this->zielModus = false;
@@ -150,7 +150,7 @@ class Index extends Component
         if ($this->selectedId === null) {
             return;
         }
-        $svc->addSlot($this->team(), $this->selectedId, ['rolle' => $this->neuerSlotRolle ?: null, 'titel' => $this->neuerSlotRolle ?: null]);
+        $svc->addSlot($this->team(), $this->selectedId, ['role' => $this->neuerSlotRolle ?: null, 'titel' => $this->neuerSlotRolle ?: null]);
         $this->neuerSlotRolle = '';
         $this->waehle($this->selectedId, $svc);
     }
@@ -194,13 +194,13 @@ class Index extends Component
 
     public function fuellePaket(int $slotId, int $paketId, ConceptService $svc): void
     {
-        $svc->fillSlot($this->team(), $slotId, ['paket_id' => $paketId]);
+        $svc->fillSlot($this->team(), $slotId, ['package_id' => $paketId]);
         $this->waehle($this->selectedId, $svc);
     }
 
     public function fuelleGericht(int $slotId, int $vkRecipeId, ConceptService $svc): void
     {
-        $svc->fillSlot($this->team(), $slotId, ['vk_recipe_id' => $vkRecipeId, 'menge' => 1]);
+        $svc->fillSlot($this->team(), $slotId, ['vk_recipe_id' => $vkRecipeId, 'quantity' => 1]);
         $this->fillSlotId = null;
         $this->gerichtSuche = '';
         $this->waehle($this->selectedId, $svc);

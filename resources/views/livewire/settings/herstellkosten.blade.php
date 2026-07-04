@@ -140,7 +140,7 @@
             <tbody>
                 @forelse($fixListe as $f)
                     <tr wire:key="fix-{{ $f['id'] }}" class="{{ $tr }}">
-                        <td class="{{ $td }}">{{ $f['bezeichnung'] }}</td>
+                        <td class="{{ $td }}">{{ $f['label'] }}</td>
                         <td class="{{ $td }} text-gray-500">{{ collect($gkBloecke)->firstWhere('key', $f['block_key'])['label'] ?? $f['block_key'] }}</td>
                         <td class="{{ $td }} text-right tabular-nums">{{ number_format((float) $f['betrag'], 2, ',', '.') }} €</td>
                         <td class="{{ $td }} text-gray-500">
@@ -156,7 +156,7 @@
                 @endforelse
                 {{-- Neue Zeile --}}
                 <tr class="border-t-2 border-black/5 dark:border-white/10">
-                    <td class="{{ $td }}"><input type="text" wire:model="neuFix.bezeichnung" wire:keydown.enter="fixHinzu" placeholder="z. B. Spülpersonal, LKW, Miete …" class="{{ $input }}" /></td>
+                    <td class="{{ $td }}"><input type="text" wire:model="neuFix.label" wire:keydown.enter="fixHinzu" placeholder="z. B. Spülpersonal, LKW, Miete …" class="{{ $input }}" /></td>
                     <td class="{{ $td }}">
                         <select wire:model="neuFix.block_key" class="{{ $input }} !w-40 !py-1">
                             <option value="">— Block —</option>

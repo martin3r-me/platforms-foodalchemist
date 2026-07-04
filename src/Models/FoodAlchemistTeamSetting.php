@@ -31,13 +31,13 @@ class FoodAlchemistTeamSetting extends Model
         'lead_la_strategie_per_wg' => 'array',
         'lead_la_prioritaeten' => 'array',
         'ausweich_kette_anzeigen' => 'boolean',
-        'garverlust_defaults' => 'array',
-        'putzverlust_defaults' => 'array',
+        'cooking_loss_defaults' => 'array',
+        'trimming_loss_defaults' => 'array',
         'mwst_defaults' => 'array',
         'rundungsregeln' => 'array',
         'hk2_zuschlag_pct' => 'decimal:2',
         // M-K1: Kalkulations-Block-Schema (Doc 16)
-        'kalkulation_schema' => 'array',
+        'calculation_schema' => 'array',
         'stundensatz_eur' => 'decimal:2',
         'marge_pct' => 'decimal:2',
         // #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — Controlling-Ziel + Break-even-Treiber
@@ -45,7 +45,7 @@ class FoodAlchemistTeamSetting extends Model
         // #379+: Lohnnebenkosten-Zuschlag % (AG-/Sozialabgaben auf den Produktionslohn)
         'lohnnebenkosten_pct' => 'decimal:2',
         // M-K6: Bezugsbasen für die Fixkosten-Ableitung (mek/fek/hk, monatlich)
-        'kalkulation_bezugsbasen' => 'array',
+        'calculation_bezugsbasen' => 'array',
         // Phase 5: pro-Typ-Farben (GP / Basisrezept / Gericht), teamweit
         'typ_farben' => 'array',
     ];

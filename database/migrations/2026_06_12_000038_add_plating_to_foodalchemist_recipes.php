@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::table('foodalchemist_recipes', function (Blueprint $table) {
             $table->text('plating_text')->nullable();
-            $table->string('plating_quelle', 16)->nullable();
+            $table->string('plating_source', 16)->nullable();
             $table->decimal('plating_ai_confidence', 4, 3)->nullable();
         });
     }
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_recipes', function (Blueprint $table) {
-            $table->dropColumn(['plating_text', 'plating_quelle', 'plating_ai_confidence']);
+            $table->dropColumn(['plating_text', 'plating_source', 'plating_ai_confidence']);
         });
     }
 };

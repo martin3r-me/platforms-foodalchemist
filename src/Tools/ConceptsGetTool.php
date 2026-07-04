@@ -46,16 +46,16 @@ class ConceptsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
         return ToolResult::success([
             'concept' => [
                 'id' => $c->id, 'name' => $c->name, 'status' => $c->status, 'klasse' => $c->klasse,
-                'anlass' => $c->anlass, 'niveau' => $c->niveau, 'beschreibung' => $c->beschreibung,
-                'zielpreis_pro_person' => $c->zielpreis_pro_person, 'saison' => $c->saison,
+                'anlass' => $c->anlass, 'niveau' => $c->niveau, 'description' => $c->description,
+                'zielpreis_pro_person' => $c->zielpreis_pro_person, 'season' => $c->season,
                 'zielgruppe' => $c->zielgruppe, 'sektor_eignung' => $svc->sektorEignungSlugs($c),
             ],
             'slots' => $c->slots->map(fn ($s) => [
-                'id' => $s->id, 'position' => $s->position, 'type' => $s->type, 'rolle' => $s->rolle,
+                'id' => $s->id, 'position' => $s->position, 'type' => $s->type, 'role' => $s->role,
                 'titel' => $s->titel, 'wording' => $s->wording, 'is_pflicht' => (bool) $s->is_pflicht,
                 'vk_recipe' => $s->gericht ? ['id' => $s->gericht->id, 'name' => $s->gericht->name, 'vk_netto' => $s->gericht->vk_netto] : null,
                 'paket' => $s->paket ? ['id' => $s->paket->id, 'name' => $s->paket->name, 'preis_pro_person' => $s->paket->preis_pro_person] : null,
-                'menge' => $s->menge, 'einheit' => $s->einheit?->slug,
+                'quantity' => $s->quantity, 'unit' => $s->unit?->slug,
             ])->all(),
         ]);
     }

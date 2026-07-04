@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * 14 EU-Allergene im 4-Wert-Modell als Strings (AllergenValue; NULL = unbekannt/
  * unbewertet — Quell-Kodierung 0). Getreide-/Nuss-Unterarten (wheat…queensland)
- * lossless als `details`-JSON (nur Nicht-Null-Werte). `quelle` = Lineage:
+ * lossless als `details`-JSON (nur Nicht-Null-Werte). `source` = Lineage:
  * NULL = Import, 'manual' = UI-Edit (GL-07; KI-Pfad kommt später).
  */
 return new class extends Migration
@@ -30,7 +30,7 @@ return new class extends Migration
                 $table->string("allergen_{$allergen}", 16)->nullable();
             }
             $table->json('details')->nullable()->comment('Unterarten (weizen/roggen/…, mandel/…) — nur Nicht-Null');
-            $table->string('quelle', 16)->nullable()->comment('NULL=Import | manual (GL-07-Lineage)');
+            $table->string('source', 16)->nullable()->comment('NULL=Import | manual (GL-07-Lineage)');
 
             $table->timestamps();
             $table->softDeletes();

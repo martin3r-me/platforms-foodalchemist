@@ -18,7 +18,7 @@ class FoodAlchemistServierform extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_servierformen';
+    protected $table = 'foodalchemist_serving_forms';
 
     protected $guarded = ['id'];
 
@@ -28,6 +28,6 @@ class FoodAlchemistServierform extends Model
 
     public function darreichungen()
     {
-        return $this->hasMany(FoodAlchemistRecipeDarreichung::class, 'servierform_id');
+        return $this->hasMany(FoodAlchemistRecipeDarreichung::class, 'serving_form_id');
     }
 }

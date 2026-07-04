@@ -23,10 +23,10 @@ trait ManagesCanvas
     /** @var array<string,string> skalare Felder field_key => value */
     public array $canvasForm = [];
 
-    /** @var list<array{id:int,value:string,claim:string,beschreibung:string}> repeatable */
+    /** @var list<array{id:int,value:string,claim:string,description:string}> repeatable */
     public array $canvasWelten = [];
 
-    public array $canvasNeuWelt = ['value' => '', 'claim' => '', 'beschreibung' => ''];
+    public array $canvasNeuWelt = ['value' => '', 'claim' => '', 'description' => ''];
 
     public bool $canvasGespeichert = false;
 
@@ -69,7 +69,7 @@ trait ManagesCanvas
             if (($f['typ'] ?? '') === 'repeatable') {
                 $this->canvasWelten = array_map(fn ($it) => [
                     'id' => $it['id'], 'value' => (string) $it['value'],
-                    'claim' => (string) ($it['meta']['claim'] ?? ''), 'beschreibung' => (string) ($it['meta']['beschreibung'] ?? ''),
+                    'claim' => (string) ($it['meta']['claim'] ?? ''), 'description' => (string) ($it['meta']['description'] ?? ''),
                 ], $werte[$f['key']] ?? []);
             } else {
                 $this->canvasForm[$f['key']] = (string) ($werte[$f['key']] ?? '');
@@ -95,9 +95,9 @@ trait ManagesCanvas
         $canvas = $svc->canvasFor($this->canvasTeam(), $this->canvasType, $this->canvasOwnerType, $this->canvasOwnerId);
         $svc->addEntry($canvas, $key, (string) $this->canvasNeuWelt['value'], [
             'claim' => trim((string) ($this->canvasNeuWelt['claim'] ?? '')) ?: null,
-            'beschreibung' => trim((string) ($this->canvasNeuWelt['beschreibung'] ?? '')) ?: null,
+            'description' => trim((string) ($this->canvasNeuWelt['description'] ?? '')) ?: null,
         ]);
-        $this->canvasNeuWelt = ['value' => '', 'claim' => '', 'beschreibung' => ''];
+        $this->canvasNeuWelt = ['value' => '', 'claim' => '', 'description' => ''];
         $this->canvasLaden();
     }
 

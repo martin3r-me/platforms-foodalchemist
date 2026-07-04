@@ -49,7 +49,7 @@ class VkTaxonomie extends Component
     public function createHg(): void
     {
         try {
-            $hg = app(VocabularyService::class)->createDishMainGroup($this->team(), ['bezeichnung' => $this->neuHg]);
+            $hg = app(VocabularyService::class)->createDishMainGroup($this->team(), ['label' => $this->neuHg]);
             $this->reset('neuHg', 'fehler');
             $this->hauptgruppeId = $hg->id;
             $this->meldung = 'Speisen-Hauptgruppe angelegt.';
@@ -68,7 +68,7 @@ class VkTaxonomie extends Component
         }
         try {
             app(VocabularyService::class)->createDishClass($this->team(), $this->hauptgruppeId, [
-                'bezeichnung' => $this->neuKlasse,
+                'label' => $this->neuKlasse,
                 'diaetform' => $this->neuKlasseDiaet,
             ]);
             $this->reset('neuKlasse', 'fehler');
@@ -120,7 +120,7 @@ class VkTaxonomie extends Component
     public function klasseSave(): void
     {
         try {
-            app(VocabularyService::class)->updateDishClass($this->team(), (int) $this->klasseEditId, ['bezeichnung' => $this->klasseEditName]);
+            app(VocabularyService::class)->updateDishClass($this->team(), (int) $this->klasseEditId, ['label' => $this->klasseEditName]);
             $this->reset('klasseEditId', 'klasseEditName');
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -158,13 +158,13 @@ class VkTaxonomie extends Component
     public function render()
     {
         $klassenZaehler = DB::table('foodalchemist_recipes')->whereNull('deleted_at')
-            ->whereNotNull('speisen_klasse_id')->selectRaw('speisen_klasse_id, COUNT(*) AS n')
-            ->groupBy('speisen_klasse_id')->pluck('n', 'speisen_klasse_id');
+            ->whereNotNull('dish_class_id')->selectRaw('dish_class_id, COUNT(*) AS n')
+            ->groupBy('dish_class_id')->pluck('n', 'dish_class_id');
 
         return view('foodalchemist::livewire.settings.vk-taxonomie', [
             'hauptgruppen' => FoodAlchemistDishMainGroup::orderBy('sort_order')->orderBy('code')->get(),
             'klassen' => $this->hauptgruppeId !== null
-                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppeId)->orderBy('bezeichnung')->get()
+                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppeId)->orderBy('label')->get()
                 : collect(),
             'klassenZaehler' => $klassenZaehler,
             'klassenJeHg' => FoodAlchemistDishClass::selectRaw('dish_main_group_id, COUNT(*) AS n')

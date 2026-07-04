@@ -18,7 +18,7 @@
                     <input type="radio" wire:model.live="strategie" value="{{ $s->value }}" class="mt-0.5" />
                     <span>
                         <span class="block text-xs font-medium text-gray-900 dark:text-gray-100">{{ $s->label() }}</span>
-                        <span class="block text-[11px] text-gray-400 mt-0.5">{{ $s->beschreibung() }}</span>
+                        <span class="block text-[11px] text-gray-400 mt-0.5">{{ $s->description() }}</span>
                     </span>
                 </label>
             @endforeach

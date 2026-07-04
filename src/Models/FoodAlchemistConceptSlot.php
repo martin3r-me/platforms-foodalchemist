@@ -12,7 +12,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Concept-Slot (M10-01) — eine Rolle im Concept, gefüllt mit GENAU
- * EINEM: `paket_id` (austauschbares Bündel) ODER `vk_recipe_id` (fest gesetztes
+ * EINEM: `package_id` (austauschbares Bündel) ODER `vk_recipe_id` (fest gesetztes
  * Gericht). Der Service erzwingt „genau eines". Position-sortiert.
  */
 class FoodAlchemistConceptSlot extends Model
@@ -28,7 +28,7 @@ class FoodAlchemistConceptSlot extends Model
         'position' => 'integer',
         'ebene' => 'integer',
         'is_pflicht' => 'boolean',
-        'menge' => 'decimal:3',
+        'quantity' => 'decimal:3',
         'preis_wert' => 'decimal:2',
     ];
 
@@ -40,7 +40,7 @@ class FoodAlchemistConceptSlot extends Model
     /** Befüllung A: austauschbarer Paket. */
     public function paket(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistPaket::class, 'paket_id');
+        return $this->belongsTo(FoodAlchemistPaket::class, 'package_id');
     }
 
     /** Befüllung B: fest gesetztes Gericht (VK-Rezept). */
@@ -49,15 +49,15 @@ class FoodAlchemistConceptSlot extends Model
         return $this->belongsTo(FoodAlchemistRecipe::class, 'vk_recipe_id');
     }
 
-    public function einheit(): BelongsTo
+    public function unit(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id');
     }
 
     /** Optional: explizit gewählte Darreichung des Gerichts (Umbau-Spec Phase 3). */
     public function darreichung(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'darreichung_id');
+        return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'presentation_id');
     }
 
     /** #388: direktes Geschirr je Gericht. */
@@ -81,6 +81,6 @@ class FoodAlchemistConceptSlot extends Model
     /** True, wenn der Slot durch einen austauschbaren Paket gefüllt ist. */
     public function istPaket(): bool
     {
-        return $this->paket_id !== null;
+        return $this->package_id !== null;
     }
 }

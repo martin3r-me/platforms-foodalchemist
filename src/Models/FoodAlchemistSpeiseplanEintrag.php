@@ -17,7 +17,7 @@ class FoodAlchemistSpeiseplanEintrag extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_speiseplan_eintraege';
+    protected $table = 'foodalchemist_menu_plan_entries';
 
     protected $guarded = ['id'];
 
@@ -31,12 +31,12 @@ class FoodAlchemistSpeiseplanEintrag extends Model
 
     public function speiseplan(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSpeiseplan::class, 'speiseplan_id');
+        return $this->belongsTo(FoodAlchemistSpeiseplan::class, 'menu_plan_id');
     }
 
     public function linie(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSpeiseplanLinie::class, 'linie_id');
+        return $this->belongsTo(FoodAlchemistSpeiseplanLinie::class, 'line_id');
     }
 
     public function concept(): BelongsTo
@@ -46,7 +46,7 @@ class FoodAlchemistSpeiseplanEintrag extends Model
 
     public function paket(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistPaket::class, 'paket_id');
+        return $this->belongsTo(FoodAlchemistPaket::class, 'package_id');
     }
 
     public function gericht(): BelongsTo
@@ -59,7 +59,7 @@ class FoodAlchemistSpeiseplanEintrag extends Model
     {
         return match (true) {
             $this->concept_id !== null => 'c' . $this->concept_id,
-            $this->paket_id !== null => 'p' . $this->paket_id,
+            $this->package_id !== null => 'p' . $this->package_id,
             $this->vk_recipe_id !== null => 'g' . $this->vk_recipe_id,
             default => null,
         };

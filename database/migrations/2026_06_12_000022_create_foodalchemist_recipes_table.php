@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * M4-01 / D-5 §2.1: EIN Rezept-Modell, zwei Service-Sichten (basis()/verkauf()
- * via ist_verkaufsrezept) — Quelle `recipes` (1.407). CHECKs werden PHP-Enums
+ * via is_sales_recipe) — Quelle `recipes` (1.407). CHECKs werden PHP-Enums
  * (07 §7: kein Raw-SQL, Index-Namen auto). team_id NOT NULL (⚠D1: Rezepte sind
  * IMMER team-eigen; BHG-Bibliothek geht als Snapshot-Kopie an Teams, ⚠D2).
  *
@@ -28,31 +28,31 @@ return new class extends Migration
             // ── Identität (Regelwerk BR §1)
             $table->string('recipe_key')->index();
             $table->string('name');
-            $table->string('herkunft')->nullable();
+            $table->string('origin_source')->nullable();
             $table->foreignId('kategorie_id')->nullable()->constrained('foodalchemist_recipe_categories')->nullOnDelete();
             $table->unsignedBigInteger('kat_v2_legacy_id')->nullable()->comment('Taxonomie v2 (E5 offen) — FK folgt');
             $table->unsignedBigInteger('klasse_v2_legacy_id')->nullable();
-            $table->boolean('ist_verkaufsrezept')->default(false)->index();
+            $table->boolean('is_sales_recipe')->default(false)->index();
             $table->string('status', 16)->default('draft')->index()->comment('stub|draft|review|approved|deprecated');
 
             // ── Yield & Arbeit (GL-02)
             $table->decimal('yield_kg', 10, 3)->nullable();
             $table->decimal('yield_kg_manual', 10, 3)->nullable()->comment('GL-02 A-3: manueller Vorrang (COALESCE)');
-            $table->unsignedInteger('arbeitszeit_min')->nullable();
+            $table->unsignedInteger('work_time_min')->nullable();
 
             // ── Inhalt
-            $table->text('beschreibung')->nullable()->comment('Quelle ki_beschreibung (§8-Stil)');
+            $table->text('description')->nullable()->comment('Quelle ki_beschreibung (§8-Stil)');
             $table->string('temperatur', 32)->nullable();
             $table->string('funktion', 64)->nullable();
-            $table->text('zubereitung')->nullable();
-            $table->text('notizen')->nullable();
-            $table->text('notizen_manual')->nullable()->comment('Regelwerk §9.1 — überlebt jede Generierung');
-            $table->string('geschmacksrichtung', 16)->nullable()->comment('suess|herzhaft|neutral');
-            $table->string('geschmacksrichtung_quelle', 16)->nullable();
-            $table->decimal('geschmacksrichtung_ai_confidence', 4, 3)->nullable();
-            $table->string('fertigungstiefe', 16)->nullable()->comment('from_scratch|teilfertig|convenience');
+            $table->text('preparation')->nullable();
+            $table->text('notes')->nullable();
+            $table->text('notes_manual')->nullable()->comment('Regelwerk §9.1 — überlebt jede Generierung');
+            $table->string('taste_direction', 16)->nullable()->comment('suess|herzhaft|neutral');
+            $table->string('taste_direction_source', 16)->nullable();
+            $table->decimal('taste_direction_ai_confidence', 4, 3)->nullable();
+            $table->string('production_depth', 16)->nullable()->comment('from_scratch|teilfertig|convenience');
             $table->unsignedBigInteger('sub_rezept_typ_legacy_id')->nullable()->comment('vocab_sub_rezept_typ — Tabelle folgt (V-20)');
-            $table->string('sub_rezept_typ_quelle', 16)->nullable();
+            $table->string('sub_rezept_typ_source', 16)->nullable();
             $table->decimal('sub_rezept_typ_ai_confidence', 4, 3)->nullable();
             $table->text('sub_rezept_typ_ai_begruendung')->nullable();
             $table->text('context_hooks_json')->nullable();
@@ -80,8 +80,8 @@ return new class extends Migration
             $table->dateTime('zusatz_aggregiert_am')->nullable();
 
             // ── Zähler & Versionierung
-            $table->unsignedInteger('n_zutaten_total')->default(0);
-            $table->unsignedInteger('n_zutaten_ungemappt')->default(0);
+            $table->unsignedInteger('n_ingredients_total')->default(0);
+            $table->unsignedInteger('n_ingredients_ungemappt')->default(0);
             $table->unsignedInteger('version')->default(1);
             $table->string('last_modified_by', 64)->nullable();
 
@@ -115,26 +115,26 @@ return new class extends Migration
 
             // ── KI-Kuratierung (generisches Trio wie gps)
             $table->decimal('ai_confidence', 4, 3)->nullable();
-            $table->text('ai_begruendung')->nullable();
+            $table->text('ai_reasoning')->nullable();
 
             // ── VK-Block (D-6 §2 — UI folgt M6; Import braucht die Spalten jetzt)
-            $table->unsignedBigInteger('aufschlagsklasse_legacy_id')->nullable();
-            $table->unsignedBigInteger('speisen_klasse_legacy_id')->nullable();
+            $table->unsignedBigInteger('markup_class_legacy_id')->nullable();
+            $table->unsignedBigInteger('dish_class_legacy_id')->nullable();
             $table->decimal('vk_netto', 10, 2)->nullable();
             $table->decimal('vk_brutto', 10, 2)->nullable();
             $table->decimal('mwst_satz', 5, 2)->nullable();
             $table->unsignedSmallInteger('regeneration_temp_c')->nullable();
             $table->unsignedSmallInteger('regeneration_dauer_min')->nullable();
             $table->unsignedSmallInteger('regeneration_kerntemp_c')->nullable();
-            $table->foreignId('vk_einheit_vocab_id')->nullable()->constrained('foodalchemist_vocab_einheiten')->nullOnDelete();
-            $table->decimal('vk_menge_pro_einheit_g', 10, 2)->nullable();
-            $table->decimal('vk_anzahl_einheiten', 10, 2)->nullable();
-            $table->unsignedBigInteger('behaelter_warm_legacy_id')->nullable();
-            $table->unsignedBigInteger('behaelter_kalt_legacy_id')->nullable();
-            $table->unsignedBigInteger('regeneration_geraet_legacy_id')->nullable();
-            $table->unsignedBigInteger('servier_vehikel_legacy_id')->nullable();
+            $table->foreignId('vk_unit_vocab_id')->nullable()->constrained('foodalchemist_vocab_units')->nullOnDelete();
+            $table->decimal('vk_quantity_pro_unit_g', 10, 2)->nullable();
+            $table->decimal('vk_unit_count', 10, 2)->nullable();
+            $table->unsignedBigInteger('container_warm_legacy_id')->nullable();
+            $table->unsignedBigInteger('container_cold_legacy_id')->nullable();
+            $table->unsignedBigInteger('regeneration_device_legacy_id')->nullable();
+            $table->unsignedBigInteger('serving_vehicle_legacy_id')->nullable();
             $table->text('marketing_text')->nullable();
-            $table->string('marketing_text_quelle', 16)->nullable();
+            $table->string('marketing_text_source', 16)->nullable();
             $table->decimal('marketing_text_ai_confidence', 4, 3)->nullable();
             $table->string('vk_wording_standard')->nullable();
             $table->boolean('is_template')->default(false);
@@ -142,8 +142,8 @@ return new class extends Migration
 
             // ── Audit/Lineage (Quelle Excel/PDF-Import)
             $table->unsignedInteger('excel_source_row')->nullable();
-            $table->text('excel_raw_zutaten')->nullable();
-            $table->text('excel_raw_zubereitung')->nullable();
+            $table->text('excel_raw_ingredients')->nullable();
+            $table->text('excel_raw_preparation')->nullable();
             $table->unsignedInteger('pdf_page')->nullable();
             $table->text('pdf_raw_text')->nullable();
             $table->boolean('is_split_result')->default(false);

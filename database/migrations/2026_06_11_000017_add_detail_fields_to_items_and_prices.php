@@ -14,7 +14,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('foodalchemist_supplier_items', function (Blueprint $table) {
-            $table->text('zusatztext')->nullable()->comment('Quelle: text');
+            $table->text('additional_text')->nullable()->comment('Quelle: text');
             $table->decimal('vat', 5, 2)->nullable()->comment('MwSt % (Anzeige, GL-11 I1: Preise netto)');
             $table->string('origin_country', 64)->nullable()->comment('aus origin_country_id → lookup_country.name_de');
             $table->string('organic_control_number', 64)->nullable();
@@ -33,7 +33,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_supplier_items', function (Blueprint $table) {
-            $table->dropColumn(['zusatztext', 'vat', 'origin_country', 'organic_control_number', 'is_halal', 'is_gmo_free', 'is_preorder', 'preorder_days', 'ingredients_lieferant']);
+            $table->dropColumn(['additional_text', 'vat', 'origin_country', 'organic_control_number', 'is_halal', 'is_gmo_free', 'is_preorder', 'preorder_days', 'ingredients_lieferant']);
         });
         Schema::table('foodalchemist_prices', function (Blueprint $table) {
             $table->dropColumn('note');

@@ -18,7 +18,7 @@ return new class extends Migration
             foreach (['nutri_kcal_per_100g', 'nutri_protein_g_per_100g', 'nutri_fat_g_per_100g', 'nutri_carbs_g_per_100g', 'nutri_salt_g_per_100g'] as $feld) {
                 $table->decimal($feld, 8, 2)->nullable();
             }
-            $table->string('nutri_quelle', 16)->nullable();          // ki | manual
+            $table->string('nutri_source', 16)->nullable();          // ki | manual
             $table->decimal('nutri_ai_confidence', 4, 3)->nullable();
             $table->decimal('allergene_ki_confidence', 4, 3)->nullable();
         });
@@ -30,7 +30,7 @@ return new class extends Migration
             $table->dropColumn([
                 'nutri_kcal_per_100g', 'nutri_protein_g_per_100g', 'nutri_fat_g_per_100g',
                 'nutri_carbs_g_per_100g', 'nutri_salt_g_per_100g',
-                'nutri_quelle', 'nutri_ai_confidence', 'allergene_ki_confidence',
+                'nutri_source', 'nutri_ai_confidence', 'allergene_ki_confidence',
             ]);
         });
     }

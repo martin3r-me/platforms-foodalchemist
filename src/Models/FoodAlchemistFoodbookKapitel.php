@@ -19,7 +19,7 @@ class FoodAlchemistFoodbookKapitel extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_foodbook_kapitel';
+    protected $table = 'foodalchemist_foodbook_chapters';
 
     protected $guarded = ['id'];
 
@@ -48,6 +48,6 @@ class FoodAlchemistFoodbookKapitel extends Model
 
     public function blocks(): HasMany
     {
-        return $this->hasMany(FoodAlchemistFoodbookBlock::class, 'kapitel_id')->orderBy('position');
+        return $this->hasMany(FoodAlchemistFoodbookBlock::class, 'chapter_id')->orderBy('position');
     }
 }

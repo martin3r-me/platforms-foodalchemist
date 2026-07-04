@@ -34,7 +34,7 @@ class TemplateInstantiateModal extends Component
      * Platzhalter-Slots des Templates. NICHT `$slots` nennen — der Name kollidiert
      * mit Livewires interner Slot-Mechanik (SupportSlots ruft getName() darauf auf).
      *
-     * @var array<int, array{placeholder_name:string, menge:float, einheit:string, raw_text:string}>
+     * @var array<int, array{placeholder_name:string, quantity:float, unit:string, raw_text:string}>
      */
     public array $slotFelder = [];
 
@@ -70,8 +70,8 @@ class TemplateInstantiateModal extends Component
         foreach ($slots as $s) {
             $this->slotFelder[$s['ingredient_id']] = [
                 'placeholder_name' => $s['placeholder_name'],
-                'menge' => $s['menge'],
-                'einheit' => $s['einheit'],
+                'quantity' => $s['quantity'],
+                'unit' => $s['unit'],
                 'raw_text' => $s['raw_text'],
             ];
             $this->bindings[$s['ingredient_id']] = ['query' => '', 'target' => 'none', 'id' => null, 'name' => null, 'score' => 0.0];

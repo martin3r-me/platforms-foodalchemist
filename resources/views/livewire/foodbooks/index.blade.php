@@ -24,7 +24,7 @@
                     @forelse($foodbooks as $f)
                         <button type="button" wire:key="fb-{{ $f->id }}" wire:click="waehle({{ $f->id }})"
                                 class="w-full text-left px-2 py-1 rounded-lg text-xs {{ $selectedId === $f->id ? $aktiv : $hover }}">
-                            <span class="truncate block">{{ $f->bezeichnung }}</span>
+                            <span class="truncate block">{{ $f->label }}</span>
                             <span class="text-[10px] text-gray-400">{{ $f->kunde ?? 'ohne Kunde' }} · {{ $f->kapitel_count }} Kapitel</span>
                         </button>
                     @empty
@@ -85,7 +85,7 @@
             <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbhdr-{{ $fb->id }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div class="md:col-span-2"><label class="{{ $label }}">Bezeichnung</label><input type="text" wire:model="form.bezeichnung" class="{{ $input }}" /></div>
+                    <div class="md:col-span-2"><label class="{{ $label }}">Bezeichnung</label><input type="text" wire:model="form.label" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Kunde</label><input type="text" wire:model="form.kunde" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Status</label>
                         <select wire:model="form.status" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
@@ -134,7 +134,7 @@
                         <label class="{{ $label }}">Briefing / Einleitung (Kundentext)</label>
                         <button type="button" disabled title="KI-Befüllung folgt — speist sich aus Kunde, Briefing und den enthaltenen Concepts (M11-08, LLM offen)" class="{{ $btnGhostXs }} opacity-50 cursor-not-allowed">✨ KI-Text (folgt)</button>
                     </div>
-                    <textarea wire:model="form.beschreibung" rows="3" class="{{ $input }}" placeholder="Briefing / Einleitungstext fürs Angebot — später KI-befüllbar aus Kunde + Concepts"></textarea>
+                    <textarea wire:model="form.description" rows="3" class="{{ $input }}" placeholder="Briefing / Einleitungstext fürs Angebot — später KI-befüllbar aus Kunde + Concepts"></textarea>
                 </div>
                 <div class="flex gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
@@ -170,7 +170,7 @@
                 <div class="{{ $cardAccent }}"></div>
                 <div class="flex items-baseline justify-between border-b border-black/5 dark:border-white/10 pb-3">
                     <div>
-                        <h2 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">{{ $fb->bezeichnung }}</h2>
+                        <h2 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">{{ $fb->label }}</h2>
                         @if($menue['kunde'] ?? null)<p class="text-xs text-gray-400">{{ $menue['kunde'] }}@if(($menue['kontakt'] ?? null) && $menue['kontakt'] !== $menue['kunde']) · {{ $menue['kontakt'] }}@endif</p>@endif
                     </div>
                     @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)<span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
@@ -189,7 +189,7 @@
                                     @if($g['typ'] === 'paket' || $g['typ'] === 'header')
                                         <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 ml-3 mt-1">{{ $g['text'] }}</p>
                                     @else
-                                        <p class="text-xs text-gray-600 dark:text-gray-300 {{ $g['quelle'] === 'name' ? 'italic text-amber-600 dark:text-amber-400' : '' }}" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}@if($g['quelle'] === 'name')<span class="ml-1 text-[10px]">· Wording fehlt</span>@endif</p>
+                                        <p class="text-xs text-gray-600 dark:text-gray-300 {{ $g['source'] === 'name' ? 'italic text-amber-600 dark:text-amber-400' : '' }}" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}@if($g['source'] === 'name')<span class="ml-1 text-[10px]">· Wording fehlt</span>@endif</p>
                                     @endif
                                 @endforeach
                             </div>
@@ -270,10 +270,10 @@
                                                 @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600 dark:text-violet-400">· „{{ $block->wording }}“</span>@endif
                                                 @break
                                             @case('header_neutral') @case('header_frei')
-                                                <span class="font-semibold">{{ $block->bezeichnung ?: '(Header)' }}</span>
+                                                <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
                                                 @break
                                             @case('header_frei_preis')
-                                                <span class="font-semibold">{{ $block->bezeichnung ?: '(Header)' }}</span>
+                                                <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
                                                 <span class="text-gray-500">· {{ $block->preis_basis === 'staffel' ? 'Staffel' : number_format((float) ($block->preis_wert ?? 0), 2, ',', '.') . ' € ' . ($block->preis_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
                                                 @break
                                             @case('spacer') <span class="italic text-gray-400">Leerzeile ({{ $block->hoehe ?? 'mittel' }})</span> @break
@@ -294,7 +294,7 @@
                                 @if($editBlockId === $block->id)
                                     <div class="mt-2 space-y-2 pl-6">
                                         @if(in_array($block->type, ['header_neutral', 'header_frei', 'header_frei_preis']))
-                                            <input type="text" wire:model="blockForm.bezeichnung" placeholder="Header-Text" class="{{ $input }}" />
+                                            <input type="text" wire:model="blockForm.label" placeholder="Header-Text" class="{{ $input }}" />
                                         @endif
                                         @if($block->type === 'header_frei_preis')
                                             <div class="flex gap-2">

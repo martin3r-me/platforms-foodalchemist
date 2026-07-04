@@ -25,7 +25,7 @@ class GpAggregateService
 {
     /**
      * Effektive Allergen-Auflösung je GP:
-     * [feld => ['wert' => AllergenValue, 'quelle' => override|mutter|la|keine]].
+     * [feld => ['wert' => AllergenValue, 'source' => override|mutter|la|keine]].
      */
     public function allergene(FoodAlchemistGp $gp): array
     {
@@ -36,7 +36,7 @@ class GpAggregateService
         foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
             $override = AllergenValue::tryFrom((string) $gp->getAttribute("allergen_{$feld}"));
             if ($override !== null) {                              // Prio 1: Override absolut, wird NIE gemax-t
-                $out[$feld] = ['wert' => $override, 'quelle' => 'override'];
+                $out[$feld] = ['wert' => $override, 'source' => 'override'];
 
                 continue;
             }
@@ -47,7 +47,7 @@ class GpAggregateService
                     $mutterMax = $mutter !== null ? $this->aufgeloesteWerte($mutter) : [];
                 }
                 $wert = $mutterMax[$feld] ?? AllergenValue::Unbekannt;
-                $out[$feld] = ['wert' => $wert, 'quelle' => 'mutter'];
+                $out[$feld] = ['wert' => $wert, 'source' => 'mutter'];
 
                 continue;
             }
@@ -55,7 +55,7 @@ class GpAggregateService
             $wert = $laMax[$feld] ?? null;                         // Prio 3: MAX über alle LAs
             $out[$feld] = [
                 'wert' => $wert ?? AllergenValue::Unbekannt,       // leere Menge ⇒ unbekannt (§4.2)
-                'quelle' => $wert !== null ? 'la' : 'keine',
+                'source' => $wert !== null ? 'la' : 'keine',
             ];
         }
 
@@ -162,10 +162,10 @@ class GpAggregateService
             'avg' => $out['sodium']['avg'] !== null ? $out['sodium']['avg'] * 0.0025 : null,
             'n' => $out['sodium']['n'],
         ];
-        $out['quelle'] = $out['energy_kcal']['avg'] !== null ? 'la' : 'keine';
+        $out['source'] = $out['energy_kcal']['avg'] !== null ? 'la' : 'keine';
 
         // R10: Fallback-Schicht (ki|manual) — nur wenn KEINE LA-Daten und gewünscht
-        if ($mitKiFallback && $out['energy_kcal']['avg'] === null && $gp->nutri_quelle !== null) {
+        if ($mitKiFallback && $out['energy_kcal']['avg'] === null && $gp->nutri_source !== null) {
             $map = [
                 'energy_kcal' => 'nutri_kcal_per_100g', 'protein' => 'nutri_protein_g_per_100g',
                 'fat' => 'nutri_fat_g_per_100g', 'carbs_absorbable' => 'nutri_carbs_g_per_100g',
@@ -174,7 +174,7 @@ class GpAggregateService
             foreach ($map as $key => $feld) {
                 $out[$key] = ['avg' => $gp->{$feld} !== null ? (float) $gp->{$feld} : null, 'n' => 0];
             }
-            $out['quelle'] = $gp->nutri_quelle;                   // 'ki' | 'manual'
+            $out['source'] = $gp->nutri_source;                   // 'ki' | 'manual'
         }
 
         return $out;

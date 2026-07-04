@@ -17,7 +17,7 @@ class FoodAlchemistEventtyp extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_eventtypen';
+    protected $table = 'foodalchemist_event_types';
 
     protected $guarded = ['id'];
 
@@ -25,6 +25,6 @@ class FoodAlchemistEventtyp extends Model
 
     public function concepts()
     {
-        return $this->hasMany(FoodAlchemistConcept::class, 'eventtyp_id');
+        return $this->hasMany(FoodAlchemistConcept::class, 'event_type_id');
     }
 }

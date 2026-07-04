@@ -23,17 +23,17 @@ class FoodAlchemistSupplierItemStructure extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'ist_lebensmittel' => 'boolean',
-        'ist_aroma_haupttraeger' => 'boolean',
+        'is_food' => 'boolean',
+        'is_primary_flavor_carrier' => 'boolean',
         'ist_bio' => 'boolean',
         'ist_halal' => 'boolean',
         'ist_vegan' => 'boolean',
         'needs_review' => 'boolean',
-        'hauptzutat_konfidenz' => 'decimal:3',
-        'aroma_zutaten_konfidenz' => 'decimal:3',
-        'verarbeitung_konfidenz' => 'decimal:3',
-        'warengruppe_konfidenz' => 'decimal:3',
-        'klassifiziert_am' => 'datetime',
+        'main_ingredient_konfidenz' => 'decimal:3',
+        'flavor_ingredients_konfidenz' => 'decimal:3',
+        'processing_konfidenz' => 'decimal:3',
+        'commodity_group_konfidenz' => 'decimal:3',
+        'classified_at' => 'datetime',
     ];
 
     public function item(): BelongsTo

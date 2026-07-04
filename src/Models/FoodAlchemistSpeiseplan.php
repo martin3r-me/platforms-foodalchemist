@@ -17,7 +17,7 @@ class FoodAlchemistSpeiseplan extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_speiseplaene';
+    protected $table = 'foodalchemist_menu_plans';
 
     protected $guarded = ['id'];
 
@@ -30,13 +30,13 @@ class FoodAlchemistSpeiseplan extends Model
 
     public function eintraege(): HasMany
     {
-        return $this->hasMany(FoodAlchemistSpeiseplanEintrag::class, 'speiseplan_id')
+        return $this->hasMany(FoodAlchemistSpeiseplanEintrag::class, 'menu_plan_id')
             ->orderBy('datum')->orderBy('woche')->orderBy('wochentag')->orderBy('position');
     }
 
     public function linien(): HasMany
     {
-        return $this->hasMany(FoodAlchemistSpeiseplanLinie::class, 'speiseplan_id')
+        return $this->hasMany(FoodAlchemistSpeiseplanLinie::class, 'menu_plan_id')
             ->orderBy('sort_order')->orderBy('id');
     }
 }

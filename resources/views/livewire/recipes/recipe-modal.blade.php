@@ -73,9 +73,9 @@
     <div x-data="{ tab: 'aufbau' }" data-rezept-tabs>
         <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
             {{-- 'details'-Key bleibt stabil (Marker/Alpine), Label seit 2026-07-02 „Deklaration" (Allergene · Zusatzstoffe · Nährwerte) --}}
-            @php($rezTabs = ['aufbau' => 'Aufbau', 'zubereitung' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'details' => 'Deklaration'])
+            @php($rezTabs = ['aufbau' => 'Aufbau', 'preparation' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'details' => 'Deklaration'])
             @if(! $neu)@php($rezTabs['sensorik'] = 'Sensorik & Pairing')@endif
-            @php($rezTabs['notizen'] = 'Notizen')
+            @php($rezTabs['notes'] = 'Notizen')
             @foreach($rezTabs as $tabKey => $tabLabel)
                 <button type="button" @click="tab = '{{ $tabKey }}'"
                         :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
@@ -105,7 +105,7 @@
         <div class="grid grid-cols-2 gap-3 mt-3">
             <div>
                 <label class="block {{ $label }} mb-1">Herkunft / Quelle <span class="normal-case text-gray-400">(nicht im Namen — §1.6)</span></label>
-                <input type="text" wire:model="form.herkunft" placeholder="z. B. Broich, nach Paul, nach Omas Art" class="{{ $input }}" />
+                <input type="text" wire:model="form.origin_source" placeholder="z. B. Broich, nach Paul, nach Omas Art" class="{{ $input }}" />
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Status (§4.2.8)</label>
@@ -119,14 +119,14 @@
                 <label class="block {{ $label }} mb-1">Hauptgruppe * <span class="normal-case text-gray-400">({{ $hauptgruppen->count() }} kuratiert)</span></label>
                 <select wire:model.live="form.hauptgruppe_id" class="{{ $input }}">
                     <option value="">—</option>
-                    @foreach($hauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->bezeichnung }}</option>@endforeach
+                    @foreach($hauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->label }}</option>@endforeach
                 </select>
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Kategorie * <span class="normal-case text-gray-400">({{ $kategorien->count() }} in dieser Hauptgruppe)</span></label>
                 <select wire:model.live="form.kategorie_id" class="{{ $input }}" @disabled($kategorien->isEmpty())>
                     <option value="">—</option>
-                    @foreach($kategorien as $kat)<option value="{{ $kat->id }}">{{ $kat->bezeichnung }}</option>@endforeach
+                    @foreach($kategorien as $kat)<option value="{{ $kat->id }}">{{ $kat->label }}</option>@endforeach
                 </select>
             </div>
         </div>
@@ -137,7 +137,7 @@
             </div>
         @endif
         <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 mt-3">
-            <input type="checkbox" wire:model="form.ist_verkaufsrezept" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+            <input type="checkbox" wire:model="form.is_sales_recipe" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
             Gericht (D-6 — VK-Felder im VK-Editor)
         </label>
     </x-foodalchemist::modal-section>
@@ -171,19 +171,19 @@
                                 @foreach($ueberarbeitung['werte']['zutaten'] as $z)
                                     @if(is_array($z))
                                         <p class="text-[11px] text-gray-600 dark:text-gray-300" wire:key="uz-{{ $loop->index }}">
-                                            {{ $z['menge'] ?? '?' }} {{ $z['einheit_slug'] ?? '' }} · {{ $z['text'] ?? '—' }}
+                                            {{ $z['quantity'] ?? '?' }} {{ $z['einheit_slug'] ?? '' }} · {{ $z['text'] ?? '—' }}
                                             <span class="text-gray-400">{{ isset($z['id']) ? '(bestehend #' . $z['id'] . ')' : '(neu)' }}</span>
                                         </p>
                                     @endif
                                 @endforeach
                             @endif
-                            @if(is_string($ueberarbeitung['werte']['beschreibung'] ?? null))
+                            @if(is_string($ueberarbeitung['werte']['description'] ?? null))
                                 <p class="{{ $dt }}">Beschreibung (neu)</p>
-                                <p class="text-[11px] text-gray-600 dark:text-gray-300">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['beschreibung'], 280) }}</p>
+                                <p class="text-[11px] text-gray-600 dark:text-gray-300">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['description'], 280) }}</p>
                             @endif
-                            @if(is_string($ueberarbeitung['werte']['zubereitung'] ?? null))
+                            @if(is_string($ueberarbeitung['werte']['preparation'] ?? null))
                                 <p class="{{ $dt }}">Zubereitung (neu)</p>
-                                <p class="text-[11px] text-gray-600 dark:text-gray-300 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['zubereitung'], 400) }}</p>
+                                <p class="text-[11px] text-gray-600 dark:text-gray-300 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['preparation'], 400) }}</p>
                             @endif
                         </div>
                         <div class="flex items-center gap-1.5">
@@ -218,7 +218,7 @@
     </div>{{-- /Tab AUFBAU --}}
 
     {{-- ── Tab: ZUBEREITUNG (Equipment + Zubereitung) ────────────────── --}}
-    <div x-show="tab === 'zubereitung'" x-cloak class="pt-4 space-y-4">
+    <div x-show="tab === 'preparation'" x-cloak class="pt-4 space-y-4">
     {{-- EQUIPMENT (§4.2.6) — gruppiert nach Vokabular-Gruppe (Ist-App-Layout) --}}
     <x-foodalchemist::modal-section title="Equipment">
         <x-slot:actions>
@@ -247,24 +247,24 @@
     <x-foodalchemist::modal-section title="Zubereitung">
         <x-slot:actions>
             @if(!$neu)
-                <button type="button" wire:click="ai_zubereitung" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-ai-zubereitung>✨ Zubereitung</button>
+                <button type="button" wire:click="ai_zubereitung" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-ai-preparation>✨ Zubereitung</button>
                 <button type="button" wire:click="manual_zubereitung" class="{{ $btnGhostXs }}" title="als manuell markieren">als manuell</button>
                 <button type="button" wire:click="clear_zubereitung" class="{{ $btnGhostXs }}">Reset</button>
             @endif
         </x-slot:actions>
-        <div x-data="{ tab: 'schreiben' }" data-zubereitung-tabs>
+        <div x-data="{ tab: 'schreiben' }" data-preparation-tabs>
             <div class="flex items-center gap-1 mb-1.5">
                 <button type="button" @click="tab = 'schreiben'" :class="tab === 'schreiben' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'" class="{{ $pill }}">Schreiben</button>
                 <button type="button" @click="tab = 'vorschau'; $wire.vorschauZubereitung()" :class="tab === 'vorschau' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'" class="{{ $pill }}" data-tab-vorschau>Vorschau</button>
                 <span class="text-[10px] text-gray-400 ml-2">Markdown — <code>##</code> für Phasen (Mise en Place / Finish), nummerierte Schritte</span>
                 <span class="ml-auto" x-show="tab === 'schreiben'">
-                    @include('foodalchemist::livewire.recipes.partials.md-toolbar', ['ziel' => 'zubereitung-text'])
+                    @include('foodalchemist::livewire.recipes.partials.md-toolbar', ['ziel' => 'preparation-text'])
                 </span>
             </div>
             <div x-show="tab === 'schreiben'">
-                <textarea wire:model="form.zubereitung" id="zubereitung-text" rows="8" class="{{ $input }} font-mono text-[11px]" data-rezept-zubereitung></textarea>
+                <textarea wire:model="form.preparation" id="preparation-text" rows="8" class="{{ $input }} font-mono text-[11px]" data-rezept-preparation></textarea>
             </div>
-            <div x-show="tab === 'vorschau'" x-cloak class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-4 py-3" data-zubereitung-vorschau>
+            <div x-show="tab === 'vorschau'" x-cloak class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-4 py-3" data-preparation-vorschau>
                 <div class="prose prose-sm dark:prose-invert max-w-none">
                     {!! $zubereitungVorschau ?? '<p class="text-gray-400">Vorschau lädt …</p>' !!}
                 </div>
@@ -319,13 +319,13 @@
                 </div>
             </div>
         @endif
-        @if(isset($kiVorschlag['zubereitung']))
-            <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 max-h-40 overflow-y-auto" data-zubereitung-ki-vorschlag>
-                <p class="text-[11px] text-violet-700 dark:text-violet-300 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($kiVorschlag['zubereitung']['werte']['zubereitung'] ?? '—', 900) }}</p>
-                <button type="button" wire:click="accept_zubereitung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['zubereitung']['confidence'] * 100) }} %)</button>
+        @if(isset($kiVorschlag['preparation']))
+            <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 max-h-40 overflow-y-auto" data-preparation-ki-vorschlag>
+                <p class="text-[11px] text-violet-700 dark:text-violet-300 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($kiVorschlag['preparation']['werte']['preparation'] ?? '—', 900) }}</p>
+                <button type="button" wire:click="accept_zubereitung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['preparation']['confidence'] * 100) }} %)</button>
             </div>
         @endif
-        @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['zubereitung'] }}</p>@endif
+        @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['preparation'] }}</p>@endif
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab ZUBEREITUNG --}}
 
@@ -339,7 +339,7 @@
         <div class="grid grid-cols-2 gap-3">
             <div>
                 <label class="block {{ $label }} mb-1">Arbeitszeit (min)</label>
-                <input type="number" wire:model="form.arbeitszeit_min" min="0" class="{{ $input }}" />
+                <input type="number" wire:model="form.work_time_min" min="0" class="{{ $input }}" />
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Temperatur</label>
@@ -357,14 +357,14 @@
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Geschmacksrichtung <span class="normal-case text-gray-400">(via ✨ oder manuell)</span></label>
-                <select wire:model="form.geschmacksrichtung" class="{{ $input }}">
+                <select wire:model="form.taste_direction" class="{{ $input }}">
                     <option value="">—</option>
                     <option value="suess">süß</option><option value="herzhaft">herzhaft</option><option value="neutral">neutral</option>
                 </select>
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Fertigungstiefe <span class="normal-case text-gray-400">(via ✨ Fertigung oder manuell)</span></label>
-                <select wire:model="form.fertigungstiefe" class="{{ $input }}">
+                <select wire:model="form.production_depth" class="{{ $input }}">
                     <option value="">—</option>
                     <option value="from_scratch">From Scratch</option><option value="teilfertig">teilfertig</option><option value="convenience">Convenience</option>
                 </select>
@@ -385,19 +385,19 @@
     <x-foodalchemist::modal-section title="Beschreibung (§8.3 — 3-5 Sätze nüchtern)">
         <x-slot:actions>
             @if(!$neu)
-                <button type="button" wire:click="ai_beschreibung" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-ai-beschreibung>✨ Beschreibung</button>
+                <button type="button" wire:click="ai_beschreibung" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-ai-description>✨ Beschreibung</button>
                 <button type="button" wire:click="manual_beschreibung" class="{{ $btnGhostXs }}" title="aktuellen Text als manuell markieren (Override-First-Schutz)">als manuell</button>
                 <button type="button" wire:click="clear_beschreibung" class="{{ $btnGhostXs }}" title="Feld + Lineage leeren">Reset</button>
             @endif
         </x-slot:actions>
-        <textarea wire:model="form.beschreibung" rows="3" class="{{ $input }}"></textarea>
-        @if(isset($kiVorschlag['beschreibung']))
-            <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-beschreibung-vorschlag>
-                <p class="text-[11px] text-violet-700 dark:text-violet-300 italic">{{ $kiVorschlag['beschreibung']['werte']['beschreibung'] ?? '—' }}</p>
-                <button type="button" wire:click="accept_beschreibung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['beschreibung']['confidence'] * 100) }} %)</button>
+        <textarea wire:model="form.description" rows="3" class="{{ $input }}"></textarea>
+        @if(isset($kiVorschlag['description']))
+            <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-description-vorschlag>
+                <p class="text-[11px] text-violet-700 dark:text-violet-300 italic">{{ $kiVorschlag['description']['werte']['description'] ?? '—' }}</p>
+                <button type="button" wire:click="accept_beschreibung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['description']['confidence'] * 100) }} %)</button>
             </div>
         @endif
-        @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['beschreibung'] }}</p>@endif
+        @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['description'] }}</p>@endif
     </x-foodalchemist::modal-section>
 
     {{-- ERSATZ (make-or-buy / Artikel-Ersatz) — Detail-Panel-Kartei via section-Prop (eine Quelle, keine Duplikation) --}}
@@ -427,10 +427,10 @@
                             ['Fett', $voll->nutri_fat_g_per_100g, 'g', 1, 'davon gesättigt', $voll->nutri_saturated_fat_g_per_100g],
                             ['Kohlenhydrate', $voll->nutri_carbs_g_per_100g, 'g', 1, 'davon Zucker', $voll->nutri_sugar_g_per_100g],
                             ['Salz', $voll->nutri_salt_g_per_100g, 'g', 2, null, null],
-                        ] as [$lbl, $wert, $einheit, $dez, $subLbl, $subWert])
+                        ] as [$lbl, $wert, $unit, $dez, $subLbl, $subWert])
                             <div class="text-center" wire:key="rn-{{ $lbl }}">
                                 <p class="text-[10px] uppercase tracking-wider text-gray-400">{{ $lbl }}</p>
-                                <p class="text-xs font-medium text-gray-900 dark:text-gray-100 tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $einheit : '—' }}</p>
+                                <p class="text-xs font-medium text-gray-900 dark:text-gray-100 tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $unit : '—' }}</p>
                                 @if($subLbl !== null)
                                     <p class="text-[10px] text-gray-400 tabular-nums" data-naehrwert-sub="{{ $subLbl }}">{{ $subLbl }} {{ $subWert !== null ? number_format((float) $subWert, 1, ',', '.') . ' g' : '—' }}</p>
                                 @endif
@@ -466,10 +466,10 @@
     </div>
 
     {{-- ── Tab: NOTIZEN ──────────────────────────────────────────────── --}}
-    <div x-show="tab === 'notizen'" x-cloak class="pt-4 space-y-4">
+    <div x-show="tab === 'notes'" x-cloak class="pt-4 space-y-4">
     {{-- NOTIZEN (§9.1 — manuelle Insel) --}}
     <x-foodalchemist::modal-section title="Notizen (§9.1 — bleibt bei jedem KI-Sync erhalten)">
-        <textarea wire:model="form.notizen_manual" rows="3" class="{{ $input }}" data-rezept-notizen
+        <textarea wire:model="form.notes_manual" rows="3" class="{{ $input }}" data-rezept-notes
                   placeholder="z. B. Anpassung im Catering-Kontext, Mengen-Korrektur, …"></textarea>
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab NOTIZEN --}}

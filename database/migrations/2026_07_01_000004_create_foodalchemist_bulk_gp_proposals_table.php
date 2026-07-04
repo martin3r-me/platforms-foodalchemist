@@ -24,10 +24,10 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->foreignId('run_id')->constrained('foodalchemist_bulk_runs')->cascadeOnDelete();
             $table->foreignId('gp_id')->constrained('foodalchemist_gps')->cascadeOnDelete();
-            $table->string('feld', 32);                                // zustand | tags | allergene | naehrwerte
+            $table->string('feld', 32);                                // condition | tags | allergene | naehrwerte
             $table->json('wert')->nullable();                          // Vorschlagswert (feld-spezifisch)
             $table->decimal('confidence', 4, 3)->nullable();
-            $table->text('begruendung')->nullable();
+            $table->text('reasoning')->nullable();
             $table->unsignedBigInteger('call_log_id')->nullable();
             $table->string('status', 16)->default('offen');            // offen | uebernommen | verworfen | leer
             $table->text('fehler')->nullable();

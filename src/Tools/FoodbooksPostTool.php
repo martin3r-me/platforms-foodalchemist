@@ -32,18 +32,18 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
         return [
             'type' => 'object',
             'properties' => [
-                'bezeichnung' => ['type' => 'string', 'description' => 'Name des Foodbooks, z. B. "Sommerhochzeiten 2027"'],
+                'label' => ['type' => 'string', 'description' => 'Name des Foodbooks, z. B. "Sommerhochzeiten 2027"'],
                 'jahr' => ['type' => 'integer'],
                 'kunde' => ['type' => 'string', 'description' => 'Kunden-Name (Freitext; CRM-Link macht der Editor)'],
                 'personen' => ['type' => 'integer', 'description' => 'Default-Pax für Preis-Kalkulationen'],
-                'beschreibung' => ['type' => 'string'],
+                'description' => ['type' => 'string'],
                 'kapitel' => [
                     'type' => 'array',
                     'items' => ['type' => 'string'],
                     'description' => 'Optionales Kapitel-Gerüst (Titel in Reihenfolge), z. B. ["Empfang", "Vorspeisen", "Hauptgänge"]',
                 ],
             ],
-            'required' => ['bezeichnung'],
+            'required' => ['label'],
         ];
     }
 
@@ -57,11 +57,11 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
 
         try {
             $fb = $svc->create($team, [
-                'bezeichnung' => (string) $arguments['bezeichnung'],
+                'label' => (string) $arguments['label'],
                 'jahr' => $arguments['jahr'] ?? null,
                 'kunde' => $arguments['kunde'] ?? null,
                 'personen' => $arguments['personen'] ?? null,
-                'beschreibung' => $arguments['beschreibung'] ?? null,
+                'description' => $arguments['description'] ?? null,
                 'status' => 'draft',
             ]);
             $kapitel = [];
@@ -74,7 +74,7 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
         }
 
         return ToolResult::success([
-            'foodbook' => ['id' => $fb->id, 'bezeichnung' => $fb->bezeichnung, 'status' => $fb->status, 'jahr' => $fb->jahr],
+            'foodbook' => ['id' => $fb->id, 'label' => $fb->label, 'status' => $fb->status, 'jahr' => $fb->jahr],
             'kapitel' => $kapitel,
             'hinweis' => 'Entwurf: Freigabe/Kunden-Verknüpfung (CRM) macht ein Mensch im Editor.',
         ]);

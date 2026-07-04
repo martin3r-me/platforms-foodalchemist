@@ -20,7 +20,7 @@ class StammLieferantService
     {
         return FoodAlchemistStammLieferant::visibleToTeam($team)
             ->with('supplier:id,name')
-            ->orderBy('warengruppe_code')
+            ->orderBy('commodity_group_code')
             ->get();
     }
 
@@ -33,8 +33,8 @@ class StammLieferantService
     public function stammSupplierIdsFor(Team $team, ?string $warengruppeCode = null): array
     {
         return FoodAlchemistStammLieferant::visibleToTeam($team)
-            ->where(fn ($q) => $q->whereNull('warengruppe_code')
-                ->when($warengruppeCode, fn ($q2) => $q2->orWhere('warengruppe_code', $warengruppeCode)))
+            ->where(fn ($q) => $q->whereNull('commodity_group_code')
+                ->when($warengruppeCode, fn ($q2) => $q2->orWhere('commodity_group_code', $warengruppeCode)))
             ->pluck('supplier_id')
             ->map(fn ($id) => (int) $id)
             ->unique()
@@ -42,7 +42,7 @@ class StammLieferantService
             ->all();
     }
 
-    /** Stamm setzen (warengruppe_code NULL = global) — idempotent, je Team eigene Zeile. */
+    /** Stamm setzen (commodity_group_code NULL = global) — idempotent, je Team eigene Zeile. */
     public function setStamm(Team $team, int $supplierId, ?string $warengruppeCode = null): FoodAlchemistStammLieferant
     {
         if (! FoodAlchemistSupplier::visibleToTeam($team)->whereKey($supplierId)->exists()) {
@@ -52,7 +52,7 @@ class StammLieferantService
         return FoodAlchemistStammLieferant::firstOrCreate([
             'team_id' => $team->id,
             'supplier_id' => $supplierId,
-            'warengruppe_code' => $warengruppeCode,
+            'commodity_group_code' => $warengruppeCode,
         ]);
     }
 
@@ -61,7 +61,7 @@ class StammLieferantService
     {
         $zeile = FoodAlchemistStammLieferant::visibleToTeam($team)
             ->where('supplier_id', $supplierId)
-            ->when($warengruppeCode === null, fn ($q) => $q->whereNull('warengruppe_code'), fn ($q) => $q->where('warengruppe_code', $warengruppeCode))
+            ->when($warengruppeCode === null, fn ($q) => $q->whereNull('commodity_group_code'), fn ($q) => $q->where('commodity_group_code', $warengruppeCode))
             ->first();
 
         if ($zeile === null) {

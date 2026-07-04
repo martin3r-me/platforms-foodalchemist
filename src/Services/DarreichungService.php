@@ -33,13 +33,13 @@ class DarreichungService
     public function anlegen(Team $team, int $recipeId, int $servierformId, array $attrs = [], string $createdVia = 'fa_ui'): FoodAlchemistRecipeDarreichung
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
-        if ($recipe->darreichungen()->where('servierform_id', $servierformId)->exists()) {
+        if ($recipe->darreichungen()->where('serving_form_id', $servierformId)->exists()) {
             throw new \RuntimeException('Diese Servierform existiert schon an diesem Gericht.');
         }
 
         // Soft-gelöschte Zeile derselben Form blockiert den DB-Unique → reaktivieren statt einfügen
         $trashed = FoodAlchemistRecipeDarreichung::onlyTrashed()
-            ->where('recipe_id', $recipe->id)->where('servierform_id', $servierformId)->first();
+            ->where('recipe_id', $recipe->id)->where('serving_form_id', $servierformId)->first();
         if ($trashed !== null) {
             $trashed->forceDelete();
         }
@@ -48,13 +48,13 @@ class DarreichungService
         $darreichung = FoodAlchemistRecipeDarreichung::create([
             'team_id' => $recipe->team_id,
             'recipe_id' => $recipe->id,
-            'servierform_id' => $servierformId,
+            'serving_form_id' => $servierformId,
             'ist_standard' => $standard === null,               // erste Form = Standard
             // Vorbefüllung aus der Standard-Form (F2: KEIN Pauschal-Faktor — User passt an)
-            'menge_pro_einheit_g' => $attrs['menge_pro_einheit_g'] ?? $standard?->menge_pro_einheit_g,
-            'einheit_vocab_id' => $attrs['einheit_vocab_id'] ?? $standard?->einheit_vocab_id,
-            'anzahl_einheiten' => $attrs['anzahl_einheiten'] ?? $standard?->anzahl_einheiten,
-            'aufschlagsklasse_id' => $attrs['aufschlagsklasse_id'] ?? $standard?->aufschlagsklasse_id,
+            'quantity_pro_unit_g' => $attrs['quantity_pro_unit_g'] ?? $standard?->quantity_pro_unit_g,
+            'unit_vocab_id' => $attrs['unit_vocab_id'] ?? $standard?->unit_vocab_id,
+            'unit_count' => $attrs['unit_count'] ?? $standard?->unit_count,
+            'markup_class_id' => $attrs['markup_class_id'] ?? $standard?->markup_class_id,
             'preis_modus' => $attrs['preis_modus'] ?? 'auto',
             'vk_netto' => $attrs['vk_netto'] ?? null,
             'note' => $attrs['note'] ?? null,
@@ -67,12 +67,12 @@ class DarreichungService
     }
 
     private const FELDER = [
-        'menge_pro_einheit_g', 'einheit_vocab_id', 'anzahl_einheiten',
-        'aufschlagsklasse_id', 'preis_modus', 'vk_netto',
-        'behaelter_warm_vocab_id', 'behaelter_kalt_vocab_id',
+        'quantity_pro_unit_g', 'unit_vocab_id', 'unit_count',
+        'markup_class_id', 'preis_modus', 'vk_netto',
+        'container_warm_vocab_id', 'container_cold_vocab_id',
         'regeneration_temp_c', 'regeneration_dauer_min', 'regeneration_kerntemp_c',
-        'regeneration_geraet_vocab_id', 'servier_vehikel_vocab_id',
-        'arbeitszeit_zuschlag_min', 'angebotstext_override', 'note',
+        'regeneration_device_vocab_id', 'serving_vehicle_vocab_id',
+        'work_time_zuschlag_min', 'offer_text_override', 'note',
         'geschirr_item_id', // Default-Geschirr der Form (Concepter-Vorschlag)
     ];
 
@@ -128,8 +128,8 @@ class DarreichungService
             return;
         }
         FoodAlchemistRecipeDarreichungDelta::withTrashed()->updateOrCreate(
-            ['darreichung_id' => $darreichung->id, 'recipe_ingredient_id' => $recipeIngredientId],
-            ['team_id' => $darreichung->team_id, 'menge_override_g' => $mengeOverrideG,
+            ['presentation_id' => $darreichung->id, 'recipe_ingredient_id' => $recipeIngredientId],
+            ['team_id' => $darreichung->team_id, 'quantity_override_g' => $mengeOverrideG,
                 'weggelassen' => $weggelassen, 'deleted_at' => null],
         );
         $this->recomputePreise($darreichung);
@@ -145,15 +145,15 @@ class DarreichungService
     /** EK/VK einer Darreichung neu rechnen (Stufe 1 + Stufe-2-Deltas). */
     public function recomputePreise(FoodAlchemistRecipeDarreichung $darreichung): void
     {
-        $recipe = $darreichung->recipe()->with('ingredients.einheit', 'ingredients.gp', 'ingredients.referencedRecipe')->first();
+        $recipe = $darreichung->recipe()->with('ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe')->first();
         $deltas = $darreichung->deltas()->get();
 
         if ($deltas->isEmpty()) {
             // Stufe 1: proportional — EK/g des Rezepts × Grammatur × Anzahl
             $ekProG = $recipe->ek_per_kg_eur !== null ? (float) $recipe->ek_per_kg_eur / 1000.0 : null;
-            $ekPortion = ($ekProG !== null && (float) $darreichung->menge_pro_einheit_g > 0)
-                ? round($ekProG * (float) $darreichung->menge_pro_einheit_g
-                    * (float) ($darreichung->anzahl_einheiten ?: 1), 4)
+            $ekPortion = ($ekProG !== null && (float) $darreichung->quantity_pro_unit_g > 0)
+                ? round($ekProG * (float) $darreichung->quantity_pro_unit_g
+                    * (float) ($darreichung->unit_count ?: 1), 4)
                 : null;
         } else {
             // Stufe 2: Overrides sind ECHTE Gramm je Einheit dieser Form (User-Entscheid
@@ -169,7 +169,7 @@ class DarreichungService
                 if ($delta !== null && $delta->weggelassen) {
                     continue;
                 }
-                $m = $delta?->menge_override_g !== null ? (float) $delta->menge_override_g : $zeile['masse_g'];
+                $m = $delta?->quantity_override_g !== null ? (float) $delta->quantity_override_g : $zeile['masse_g'];
                 if ($zeile['kosten_pro_g'] !== null) {
                     $nBepreist++;
                     $kosten += $zeile['kosten_pro_g'] * $m;
@@ -177,12 +177,12 @@ class DarreichungService
                 $masse += $m;
             }
             // Auto-Grammatur: g/Einheit = Summe der Komponenten dieser Form
-            $darreichung->menge_pro_einheit_g = $masse > 0 ? round($masse, 1) : $darreichung->menge_pro_einheit_g;
+            $darreichung->quantity_pro_unit_g = $masse > 0 ? round($masse, 1) : $darreichung->quantity_pro_unit_g;
             $ekPortion = $nBepreist > 0
-                ? round($kosten * (float) ($darreichung->anzahl_einheiten ?: 1), 4)
+                ? round($kosten * (float) ($darreichung->unit_count ?: 1), 4)
                 : ($recipe->ek_per_kg_eur !== null && $masse > 0
                     ? round((float) $recipe->ek_per_kg_eur / 1000.0 * $masse
-                        * (float) ($darreichung->anzahl_einheiten ?: 1), 4)
+                        * (float) ($darreichung->unit_count ?: 1), 4)
                     : null);
         }
 
@@ -190,13 +190,13 @@ class DarreichungService
         $vkNetto = $darreichung->preis_modus === 'manuell'
             ? $darreichung->vk_netto
             : (($ekPortion !== null && $klasse !== null)
-                ? round($ekPortion * (1 + ((float) $klasse->rohaufschlag_pct) / 100), 2)
+                ? round($ekPortion * (1 + ((float) $klasse->raw_markup_pct) / 100), 2)
                 : null);
         $vkBrutto = ($vkNetto !== null && $klasse !== null)
             ? round((float) $vkNetto * (1 + ((float) $klasse->mwst_satz) / 100), 2)
             : null;
 
-        $darreichung->update(['menge_pro_einheit_g' => $darreichung->menge_pro_einheit_g,
+        $darreichung->update(['quantity_pro_unit_g' => $darreichung->quantity_pro_unit_g,
             'ek_portion' => $ekPortion, 'vk_netto' => $vkNetto, 'vk_brutto' => $vkBrutto]);
 
         if ($darreichung->ist_standard) {
@@ -226,7 +226,7 @@ class DarreichungService
         // Referenz = Grammatur der Standard-Form — aber nur, wenn diese selbst delta-frei
         // ist (sonst wäre die Referenz zirkulär, weil ihre Grammatur aus Deltas entsteht).
         $standard = $recipe->standardDarreichung()->first();
-        $stdG = ($standard !== null && ! $standard->deltas()->exists()) ? $standard->menge_pro_einheit_g : null;
+        $stdG = ($standard !== null && ! $standard->deltas()->exists()) ? $standard->quantity_pro_unit_g : null;
         $faktor = ($batchG > 0 && $stdG !== null && (float) $stdG > 0) ? (float) $stdG / $batchG : 1.0;
 
         $out = [];

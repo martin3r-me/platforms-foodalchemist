@@ -18,7 +18,7 @@ class FoodAlchemistSaison extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_saisons';
+    protected $table = 'foodalchemist_seasons';
 
     protected $guarded = ['id'];
 
@@ -28,8 +28,8 @@ class FoodAlchemistSaison extends Model
     {
         return $this->belongsToMany(
             FoodAlchemistConcept::class,
-            'foodalchemist_concept_saisons',
-            'saison_id',
+            'foodalchemist_concept_seasons',
+            'season_id',
             'concept_id'
         );
     }

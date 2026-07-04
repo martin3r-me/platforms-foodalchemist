@@ -25,13 +25,13 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->string('name');                                     // vorgeschlagener GP-Name (Regelwerk §6 best effort)
             $table->string('name_normalized')->index();                 // Dedup-Schlüssel (lowercase, getrimmt)
-            $table->string('hauptzutat_slug', 64)->nullable();
-            $table->string('warengruppe', 64)->nullable();              // Vermutung, WaWi-Kuration entscheidet
-            $table->string('zustand', 24)->nullable();                  // frisch | tk | trocken | konserviert (Vermutung)
+            $table->string('main_ingredient_slug', 64)->nullable();
+            $table->string('commodity_group', 64)->nullable();              // Vermutung, WaWi-Kuration entscheidet
+            $table->string('condition', 24)->nullable();                  // frisch | tk | trocken | konserviert (Vermutung)
             $table->text('kontext')->nullable();                        // wofür gebraucht (Rezept-/Foodbook-Bezug, Freitext)
-            $table->string('quelle_kind', 24)->nullable();              // kind-Diskriminator (recipe | foodbook | …), kein FK
-            $table->unsignedBigInteger('quelle_id')->nullable();
-            $table->text('begruendung')->nullable();                    // warum kein Match reichte
+            $table->string('source_kind', 24)->nullable();              // kind-Diskriminator (recipe | foodbook | …), kein FK
+            $table->unsignedBigInteger('source_id')->nullable();
+            $table->text('reasoning')->nullable();                    // warum kein Match reichte
             $table->json('match_snapshot')->nullable();                 // beste Kandidaten + Scores zum Proposal-Zeitpunkt
             $table->string('status', 16)->default('offen')->index();    // offen | uebernommen | verworfen
             $table->unsignedBigInteger('created_by_user_id')->nullable();

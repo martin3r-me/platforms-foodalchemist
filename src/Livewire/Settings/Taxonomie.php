@@ -19,7 +19,7 @@ class Taxonomie extends Component
 
     public array $form = [];
 
-    public array $neu = ['bezeichnung' => '', 'technik' => '', 'sort_order' => 999];
+    public array $neu = ['label' => '', 'technik' => '', 'sort_order' => 999];
 
     public string $neueHauptgruppe = '';
 
@@ -43,7 +43,7 @@ class Taxonomie extends Component
             return;
         }
         try {
-            $hg = app(VocabularyService::class)->createMainGroup($this->team(), ['bezeichnung' => $this->neueHauptgruppe]);
+            $hg = app(VocabularyService::class)->createMainGroup($this->team(), ['label' => $this->neueHauptgruppe]);
             $this->hauptgruppeId = $hg->id;
             $this->reset('neueHauptgruppe', 'editId', 'form', 'fehler');
         } catch (RuntimeException $e) {
@@ -62,7 +62,7 @@ class Taxonomie extends Component
     public function hgSave(): void
     {
         try {
-            app(VocabularyService::class)->updateMainGroup($this->team(), (int) $this->hgEditId, ['bezeichnung' => $this->hgEditName]);
+            app(VocabularyService::class)->updateMainGroup($this->team(), (int) $this->hgEditId, ['label' => $this->hgEditName]);
             $this->reset('hgEditId', 'hgEditName');
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -88,7 +88,7 @@ class Taxonomie extends Component
             return;
         }
         $this->editId = $id;
-        $this->form = $kat->only(['bezeichnung', 'technik', 'sort_order']);
+        $this->form = $kat->only(['label', 'technik', 'sort_order']);
         $this->fehler = null;
     }
 

@@ -59,11 +59,11 @@
 
                 {{-- 4. Vorschläge (amber, gestrichelt an ihren Anker) --}}
                 @foreach($vorschlaege_liste as $s)
-                    @if($pos->has($s['anker_id']))
-                        <line x1="{{ $pos[$s['anker_id']]['x'] }}" y1="{{ $pos[$s['anker_id']]['y'] }}" x2="{{ $s['x'] }}" y2="{{ $s['y'] }}"
+                    @if($pos->has($s['anchor_id']))
+                        <line x1="{{ $pos[$s['anchor_id']]['x'] }}" y1="{{ $pos[$s['anchor_id']]['y'] }}" x2="{{ $s['x'] }}" y2="{{ $s['y'] }}"
                               stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.6" />
                         <circle cx="{{ $s['x'] }}" cy="{{ $s['y'] }}" r="6" fill="#fcd34d" stroke="#f59e0b" data-netz-vorschlag="{{ $s['slug'] }}">
-                            <title>{{ $s['display_de'] }} ({{ $s['typ'] }}) — Vorschlag über {{ $pos[$s['anker_id']]['slug'] }}</title>
+                            <title>{{ $s['display_de'] }} ({{ $s['typ'] }}) — Vorschlag über {{ $pos[$s['anchor_id']]['slug'] }}</title>
                         </circle>
                         <text x="{{ $s['x'] }}" y="{{ $s['y'] + 16 }}" text-anchor="middle" font-size="9"
                               style="paint-order: stroke; stroke: rgba(255,255,255,.8); stroke-width: 2px;" class="fill-amber-600 dark:fill-amber-400">{{ $s['slug'] }}</text>

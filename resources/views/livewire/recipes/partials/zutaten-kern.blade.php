@@ -26,15 +26,15 @@
                 </select>
                 <select x-model="gpFilter.sub" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-gp-filter-sub>
                     <option value="">Alle Kategorien</option>
-                    <template x-for="su in subKategorienFuerWg()" :key="su.warengruppe_code + su.sub_kategorie">
-                        <option :value="su.sub_kategorie" x-text="su.sub_kategorie"></option>
+                    <template x-for="su in subKategorienFuerWg()" :key="su.commodity_group_code + su.sub_category">
+                        <option :value="su.sub_category" x-text="su.sub_category"></option>
                     </template>
                 </select>
                 <button type="button" @click="gpFilter.mehr = !gpFilter.mehr"
                         class="text-[10px] text-gray-400 hover:text-violet-500" data-gp-mehr-filter
                         x-text="gpFilter.mehr ? '− Weniger Filter' : '+ Mehr Filter'"></button>
                 <div x-show="gpFilter.mehr" x-cloak class="space-y-1">
-                    <select x-model="gpFilter.zustand" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]">
+                    <select x-model="gpFilter.condition" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]">
                         <option value="">Jeder Zustand</option>
                         <template x-for="z in (vokabular?.zustande ?? [])" :key="z"><option :value="z" x-text="z"></option></template>
                     </select>
@@ -80,9 +80,9 @@
                       :style="geparkt?.typ === 'gp' ? '{{ $typStyle('gp') }}' : '{{ $typStyle('basisrezept') }}'"
                       x-text="geparkt?.typ === 'gp' ? 'GP' : 'Rezept'"></span>
                 <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-900 dark:text-gray-100" x-text="geparkt?.name" data-park-name></span>
-                <input type="text" x-model="neu.menge" @keydown.enter.prevent="einfuegen()" placeholder="Menge"
-                       class="{{ $input }} !w-20 !py-1 text-right" data-park-menge />
-                <select x-model.number="neu.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]" data-park-einheit>
+                <input type="text" x-model="neu.quantity" @keydown.enter.prevent="einfuegen()" placeholder="Menge"
+                       class="{{ $input }} !w-20 !py-1 text-right" data-park-quantity />
+                <select x-model.number="neu.unit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]" data-park-unit>
                     @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                 </select>
                 <label class="inline-flex items-center gap-1 text-[11px] text-gray-400 shrink-0">
@@ -93,11 +93,11 @@
             </div>
             <p class="text-[10px] text-gray-400 mt-1">Erst Produkt/Rezept per [+] wählen — Einheit kommt automatisch mit, dann Menge + Enter (§1.2)</p>
             <button type="button" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 mt-1" @click="garverluste()" data-garverlust-ki
-                    title="M4-11: KI-Schätzung je Zutat (GL-07 — geschrieben erst beim Speichern, quelle=ki)">✨ Garverluste vorschlagen</button>
+                    title="M4-11: KI-Schätzung je Zutat (GL-07 — geschrieben erst beim Speichern, source=ki)">✨ Garverluste vorschlagen</button>
         </div>
         <div class="overflow-x-auto">{{-- R18: Mitte scrollt intern statt unter die Seitenspalten zu laufen --}}
         <table class="{{ $table }} border-collapse">
-            {{-- R5: BIS-Spalte raus (Dominique) — menge_max bleibt in den Daten erhalten; 3 EK-Sichten statt einer --}}
+            {{-- R5: BIS-Spalte raus (Dominique) — quantity_max bleibt in den Daten erhalten; 3 EK-Sichten statt einer --}}
             <thead><tr class="text-left">
                 @php($koepfe = ['#' => null, 'Menge' => null, 'Einheit' => null, 'Verknüpfung / Beschreibung' => 'Klick auf den Namen öffnet GP/Rezept als Fenster über dem Editor']
                     + ($vkKontext ? ['Rolle' => 'V-21: aroma_treiber · komponente · beilage · garnitur (🎭 verteilt per KI)'] : [])
@@ -126,9 +126,9 @@
                             </span>
                             <span class="text-gray-400 tabular-nums text-[11px] ml-0.5" x-text="i + 1"></span>
                         </td>
-                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.menge" class="{{ $input }} !w-20 !py-0.5 !text-[11px] text-right" data-menge /></td>
+                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.quantity" class="{{ $input }} !w-20 !py-0.5 !text-[11px] text-right" data-quantity /></td>
                         <td class="{{ $td }} !px-2 !py-0.5">
-                            <select x-model.number="zeile.einheit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
+                            <select x-model.number="zeile.unit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
                                 @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                             </select>
                         </td>
@@ -158,15 +158,15 @@
                         </td>
                         @if($vkKontext)
                             <td class="{{ $td }} !px-2 !py-0.5">
-                                <select x-model="zeile.rolle" class="{{ $input }} !w-32 !py-0.5 !text-[11px]" data-rolle-select>
+                                <select x-model="zeile.role" class="{{ $input }} !w-32 !py-0.5 !text-[11px]" data-role-select>
                                     <option value="">—</option>
-                                    @foreach(\Platform\FoodAlchemist\Services\SpeisenKlassenService::ROLLEN as $rolle)
-                                        <option value="{{ $rolle }}">{{ $rolle }}</option>
+                                    @foreach(\Platform\FoodAlchemist\Services\SpeisenKlassenService::ROLLEN as $role)
+                                        <option value="{{ $role }}">{{ $role }}</option>
                                     @endforeach
                                 </select>
                             </td>
                         @endif
-                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.garverlust_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" /></td>
+                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.cooking_loss_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" /></td>
                         <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
                             <span x-text="zeilenEk(zeile) ?? '—'" :class="zeilenEk(zeile) ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'"></span>
                         </td>
@@ -206,7 +206,7 @@
                                                 <td class="px-1.5 py-0.5"><span x-show="la.lead" class="text-orange-500" title="Lead-LA (GL-03)">★</span></td>
                                                 <td class="px-1.5 py-0.5 text-gray-600 dark:text-gray-300" x-text="la.lieferant"></td>
                                                 <td class="px-1.5 py-0.5 font-mono text-gray-500" x-text="la.artikelnr"></td>
-                                                <td class="px-1.5 py-0.5 text-gray-900 dark:text-gray-100" x-text="la.bezeichnung"></td>
+                                                <td class="px-1.5 py-0.5 text-gray-900 dark:text-gray-100" x-text="la.label"></td>
                                                 <td class="px-1.5 py-0.5 text-gray-500" x-text="la.marke ?? '—'"></td>
                                                 <td class="px-1.5 py-0.5 text-gray-500 italic" x-text="la.vpe ?? '—'"></td>
                                                 <td class="px-1.5 py-0.5 text-right tabular-nums" x-text="la.preis ?? '—'"></td>
@@ -258,13 +258,13 @@
                 <select x-model="rezFilter.hg" @change="rezFilter.kat = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-hg>
                     <option value="">Alle Hauptgruppen</option>
                     <template x-for="h in (vokabular?.hauptgruppen ?? [])" :key="h.id">
-                        <option :value="h.id" x-text="h.bezeichnung"></option>
+                        <option :value="h.id" x-text="h.label"></option>
                     </template>
                 </select>
                 <select x-model="rezFilter.kat" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-kat>
                     <option value="">Alle Kategorien</option>
                     <template x-for="k in kategorienFuerHg()" :key="k.id">
-                        <option :value="k.id" x-text="k.bezeichnung"></option>
+                        <option :value="k.id" x-text="k.label"></option>
                     </template>
                 </select>
                 <select x-model="rezFilter.niveau" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-niveau>

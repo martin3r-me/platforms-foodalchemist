@@ -14,18 +14,18 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasColumn('foodalchemist_recipe_darreichungen', 'geschirr_item_id')) {
+        if (Schema::hasColumn('foodalchemist_recipe_presentations', 'geschirr_item_id')) {
             return;
         }
-        Schema::table('foodalchemist_recipe_darreichungen', function (Blueprint $table) {
+        Schema::table('foodalchemist_recipe_presentations', function (Blueprint $table) {
             $table->foreignId('geschirr_item_id')->nullable()
-                ->constrained('foodalchemist_geschirr_items')->nullOnDelete();
+                ->constrained('foodalchemist_tableware_items')->nullOnDelete();
         });
     }
 
     public function down(): void
     {
-        Schema::table('foodalchemist_recipe_darreichungen', function (Blueprint $table) {
+        Schema::table('foodalchemist_recipe_presentations', function (Blueprint $table) {
             $table->dropConstrainedForeignId('geschirr_item_id');
         });
     }

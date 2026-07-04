@@ -85,7 +85,7 @@ class PairingService
             return $this->anchorIndex;
         }
         $index = [];
-        foreach (DB::table('foodalchemist_vocab_pairing_ankers')->whereNull('deleted_at')
+        foreach (DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('deleted_at')
             ->where('slug', '!=', 'neutral')->get(['id', 'slug', 'display_de']) as $anker) {
             $terme = [[trim($this->fold($anker->slug)), 0]];
             $display = trim($this->fold($anker->display_de));
@@ -153,7 +153,7 @@ class PairingService
      */
     public function resolveRecipeAnchors(FoodAlchemistRecipe $recipe): array
     {
-        $neutralId = DB::table('foodalchemist_vocab_pairing_ankers')->where('slug', 'neutral')->value('id');
+        $neutralId = DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', 'neutral')->value('id');
         $out = [];
         foreach ($recipe->ingredients()->with(['gp:id,name', 'referencedRecipe:id,name'])->whereNull('deleted_at')->orderBy('position')->get() as $z) {
             $label = $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->raw_text;
@@ -162,24 +162,24 @@ class PairingService
             $prozess = [];
 
             if ($z->referenced_recipe_id !== null) {
-                $mapping = DB::table('foodalchemist_recipe_anker_mappings')
-                    ->where('recipe_id', $z->referenced_recipe_id)->where('rolle', 'kern')->whereNull('deleted_at')
+                $mapping = DB::table('foodalchemist_recipe_anchor_mappings')
+                    ->where('recipe_id', $z->referenced_recipe_id)->where('role', 'kern')->whereNull('deleted_at')
                     ->orderByRaw('COALESCE(ai_confidence, 1.0) DESC')->orderBy('id')
-                    ->value('anker_id');
+                    ->value('anchor_id');
                 if ($mapping !== null) {
                     [$kern, $via] = $mapping === $neutralId ? [null, 'neutral'] : [$mapping, 'recipe_anker'];
                 } else {
                     $kern = $this->resolveByName($z->referencedRecipe->name);
                     $via = $kern !== null ? 'name_match' : 'unresolved';
                 }
-                $prozess = DB::table('foodalchemist_recipe_prozess_anker')
+                $prozess = DB::table('foodalchemist_recipe_process_anchors')
                     ->where('recipe_id', $z->referenced_recipe_id)->whereNull('deleted_at')
-                    ->where('anker_id', '!=', $kern ?? 0)->pluck('anker_id')->all();
+                    ->where('anchor_id', '!=', $kern ?? 0)->pluck('anchor_id')->all();
             } elseif ($z->gp_id !== null) {
-                $mapping = DB::table('foodalchemist_gp_anker_mappings')
-                    ->where('gp_id', $z->gp_id)->where('rolle', 'kern')->whereNull('deleted_at')
+                $mapping = DB::table('foodalchemist_gp_anchor_mappings')
+                    ->where('gp_id', $z->gp_id)->where('role', 'kern')->whereNull('deleted_at')
                     ->orderByRaw('COALESCE(ai_confidence, 1.0) DESC')->orderBy('id')
-                    ->value('anker_id');
+                    ->value('anchor_id');
                 if ($mapping !== null) {
                     [$kern, $via] = $mapping === $neutralId ? [null, 'neutral'] : [$mapping, 'gp_anker'];
                 } else {
@@ -306,18 +306,18 @@ class PairingService
         $dishIds = array_keys($dish);
 
         $kandidaten = [];
-        foreach (DB::table('foodalchemist_pairing_anker_edges')->whereIn('anker_b_id', $dishIds)
-            ->whereNotIn('anker_a_id', $dishIds)
-            ->get(['anker_a_id', 'anker_b_id', 'typ']) as $kante) {
+        foreach (DB::table('foodalchemist_pairing_anchor_edges')->whereIn('anchor_b_id', $dishIds)
+            ->whereNotIn('anchor_a_id', $dishIds)
+            ->get(['anchor_a_id', 'anchor_b_id', 'typ']) as $kante) {
             $w = self::GEWICHTE[$kante->typ] ?? 0.5;
-            $k = &$kandidaten[$kante->anker_a_id];
-            $k['best'][$kante->anker_b_id] = max($k['best'][$kante->anker_b_id] ?? 0, $w);
+            $k = &$kandidaten[$kante->anchor_a_id];
+            $k['best'][$kante->anchor_b_id] = max($k['best'][$kante->anchor_b_id] ?? 0, $w);
         }
         unset($k);
 
-        $grade = DB::table('foodalchemist_pairing_anker_edges')->whereIn('anker_a_id', array_keys($kandidaten))
-            ->selectRaw('anker_a_id, COUNT(*) AS n')->groupBy('anker_a_id')->pluck('n', 'anker_a_id');
-        $namen = DB::table('foodalchemist_vocab_pairing_ankers')
+        $grade = DB::table('foodalchemist_pairing_anchor_edges')->whereIn('anchor_a_id', array_keys($kandidaten))
+            ->selectRaw('anchor_a_id, COUNT(*) AS n')->groupBy('anchor_a_id')->pluck('n', 'anchor_a_id');
+        $namen = DB::table('foodalchemist_vocab_pairing_anchors')
             ->whereIn('id', array_merge(array_keys($kandidaten), $dishIds))   // + dish für »verbindet n/m: …«
             ->pluck('slug', 'id');
 
@@ -330,7 +330,7 @@ class PairingService
             $meanW = (int) round(100 * array_sum($daten['best']) / $cover);
             $degree = (int) ($grade[$id] ?? 0);
             $liste[] = [
-                'anker_id' => $id, 'slug' => (string) $namen[$id], 'cover' => $cover,
+                'anchor_id' => $id, 'slug' => (string) $namen[$id], 'cover' => $cover,
                 'mean_w' => $meanW, 'degree' => $degree,
                 'spec' => ($cover * $meanW / 100) / sqrt(max($degree, 1)),
                 // Anzeige-Zusatz (Ist-App »Aroma-Nachbarn«): welche Teller-Anker er trifft,
@@ -353,15 +353,15 @@ class PairingService
 
     public function pairingBridge(int $recipeA, int $recipeB): array
     {
-        $ankerA = DB::table('foodalchemist_recipe_pairings')->where('recipe_id', $recipeA)->whereNull('deleted_at')->distinct()->pluck('anker_id')->all();
-        $ankerB = DB::table('foodalchemist_recipe_pairings')->where('recipe_id', $recipeB)->whereNull('deleted_at')->distinct()->pluck('anker_id')->all();
+        $ankerA = DB::table('foodalchemist_recipe_pairings')->where('recipe_id', $recipeA)->whereNull('deleted_at')->distinct()->pluck('anchor_id')->all();
+        $ankerB = DB::table('foodalchemist_recipe_pairings')->where('recipe_id', $recipeB)->whereNull('deleted_at')->distinct()->pluck('anchor_id')->all();
 
         $direkte = array_values(array_intersect($ankerA, $ankerB));
         // LIMIT 30 deckelt die indirekte Zählung (Ist holt max 30 Zeilen) — COUNT ignoriert
         // LIMIT in SQL, daher explizit über die gedeckelte Ergebnisliste zählen
-        $indirekte = DB::table('foodalchemist_pairing_anker_edges')
-            ->whereIn('anker_a_id', $ankerA)->whereIn('anker_b_id', $ankerB)
-            ->whereColumn('anker_a_id', '!=', 'anker_b_id')
+        $indirekte = DB::table('foodalchemist_pairing_anchor_edges')
+            ->whereIn('anchor_a_id', $ankerA)->whereIn('anchor_b_id', $ankerB)
+            ->whereColumn('anchor_a_id', '!=', 'anchor_b_id')
             ->orderByRaw("CASE typ WHEN 'klassisch' THEN 1 WHEN 'modern' THEN 2 ELSE 3 END")
             ->limit(30)->get(['id'])->count();
 
@@ -376,19 +376,19 @@ class PairingService
     {
         $minShared = max(1, $minShared);
         $limit = max(1, min(50, $limit));
-        $eigene = DB::table('foodalchemist_recipe_pairings')->where('recipe_id', $recipeId)->whereNull('deleted_at')->distinct()->pluck('anker_id');
+        $eigene = DB::table('foodalchemist_recipe_pairings')->where('recipe_id', $recipeId)->whereNull('deleted_at')->distinct()->pluck('anchor_id');
         if ($eigene->isEmpty()) {
             return collect();
         }
 
         $treffer = DB::table('foodalchemist_recipe_pairings AS rp')
-            ->whereIn('rp.anker_id', $eigene)->where('rp.recipe_id', '!=', $recipeId)->whereNull('rp.deleted_at')
-            ->selectRaw('rp.recipe_id, COUNT(DISTINCT rp.anker_id) AS shared')
-            ->groupBy('rp.recipe_id')->havingRaw('COUNT(DISTINCT rp.anker_id) >= ?', [$minShared])
+            ->whereIn('rp.anchor_id', $eigene)->where('rp.recipe_id', '!=', $recipeId)->whereNull('rp.deleted_at')
+            ->selectRaw('rp.recipe_id, COUNT(DISTINCT rp.anchor_id) AS shared')
+            ->groupBy('rp.recipe_id')->havingRaw('COUNT(DISTINCT rp.anchor_id) >= ?', [$minShared])
             ->get();
 
         $gesamt = DB::table('foodalchemist_recipe_pairings')->whereIn('recipe_id', $treffer->pluck('recipe_id'))
-            ->whereNull('deleted_at')->selectRaw('recipe_id, COUNT(DISTINCT anker_id) AS n')->groupBy('recipe_id')->pluck('n', 'recipe_id');
+            ->whereNull('deleted_at')->selectRaw('recipe_id, COUNT(DISTINCT anchor_id) AS n')->groupBy('recipe_id')->pluck('n', 'recipe_id');
         $rezepte = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $treffer->pluck('recipe_id'))->pluck('name', 'id');
 
         return $treffer->filter(fn ($t) => $rezepte->has($t->recipe_id))
@@ -398,8 +398,8 @@ class PairingService
                 'shared' => (int) $t->shared,
                 'eigene_gesamt' => (int) ($gesamt[$t->recipe_id] ?? 0),
                 'shared_slugs' => DB::table('foodalchemist_recipe_pairings AS rp')
-                    ->join('foodalchemist_vocab_pairing_ankers AS a', 'a.id', '=', 'rp.anker_id')
-                    ->where('rp.recipe_id', $t->recipe_id)->whereIn('rp.anker_id', $eigene)->whereNull('rp.deleted_at')
+                    ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
+                    ->where('rp.recipe_id', $t->recipe_id)->whereIn('rp.anchor_id', $eigene)->whereNull('rp.deleted_at')
                     ->distinct()->limit(5)->pluck('a.slug')->all(),
             ])
             ->sortBy([fn ($a, $b) => [$b['shared'], $a['eigene_gesamt'], $a['recipe_id']] <=> [$a['shared'], $b['eigene_gesamt'], $b['recipe_id']]])
@@ -409,14 +409,14 @@ class PairingService
     public function ankerNeighbors(string $slug, ?string $typ = null, int $limit = 30): Collection
     {
         $limit = max(1, min(200, $limit));
-        $ankerId = DB::table('foodalchemist_vocab_pairing_ankers')->where('slug', $slug)->value('id');
+        $ankerId = DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', $slug)->value('id');
         if ($ankerId === null) {
             return collect();
         }
 
-        return DB::table('foodalchemist_pairing_anker_edges AS e')
-            ->join('foodalchemist_vocab_pairing_ankers AS a', 'a.id', '=', 'e.anker_b_id')
-            ->where('e.anker_a_id', $ankerId)
+        return DB::table('foodalchemist_pairing_anchor_edges AS e')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
+            ->where('e.anchor_a_id', $ankerId)
             ->when($typ !== null, fn ($q) => $q->where('e.typ', $typ))
             ->orderByRaw("CASE e.typ WHEN 'klassisch' THEN 1 WHEN 'modern' THEN 2 ELSE 3 END")
             ->orderBy('a.slug')->limit($limit)
@@ -428,16 +428,16 @@ class PairingService
     public function setRecipeAnker(Team $team, int $recipeId, int $ankerId): void
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
-        $vorhanden = DB::table('foodalchemist_recipe_anker_mappings')
-            ->where('recipe_id', $recipe->id)->where('anker_id', $ankerId)->whereNull('deleted_at')->first();
+        $vorhanden = DB::table('foodalchemist_recipe_anchor_mappings')
+            ->where('recipe_id', $recipe->id)->where('anchor_id', $ankerId)->whereNull('deleted_at')->first();
         if ($vorhanden === null
-            && DB::table('foodalchemist_recipe_anker_mappings')->where('recipe_id', $recipe->id)->whereNull('deleted_at')->count() >= self::CAP_RECIPE) {
+            && DB::table('foodalchemist_recipe_anchor_mappings')->where('recipe_id', $recipe->id)->whereNull('deleted_at')->count() >= self::CAP_RECIPE) {
             throw new \RuntimeException('Limit erreicht: max ' . self::CAP_RECIPE . ' Kern-Anker pro Rezept.');
         }
-        DB::table('foodalchemist_recipe_anker_mappings')->updateOrInsert(
-            ['recipe_id' => $recipe->id, 'anker_id' => $ankerId],
-            ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id, 'rolle' => 'kern',
-                'quelle' => 'manual', 'ai_confidence' => null, 'ai_begruendung' => null,    // manual gewinnt (Inv. 3)
+        DB::table('foodalchemist_recipe_anchor_mappings')->updateOrInsert(
+            ['recipe_id' => $recipe->id, 'anchor_id' => $ankerId],
+            ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id, 'role' => 'kern',
+                'source' => 'manual', 'ai_confidence' => null, 'ai_reasoning' => null,    // manual gewinnt (Inv. 3)
                 'deleted_at' => null, 'updated_at' => now(), 'created_at' => now()],
         );
     }
@@ -445,25 +445,25 @@ class PairingService
     public function removeRecipeAnker(Team $team, int $recipeId, int $ankerId): void
     {
         FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
-        DB::table('foodalchemist_recipe_anker_mappings')
-            ->where('recipe_id', $recipeId)->where('anker_id', $ankerId)->update(['deleted_at' => now()]);
+        DB::table('foodalchemist_recipe_anchor_mappings')
+            ->where('recipe_id', $recipeId)->where('anchor_id', $ankerId)->update(['deleted_at' => now()]);
     }
 
     /** Anker eines Rezepts inkl. Slug/Quelle (Panel-Chips). */
     public function recipeAnkers(int $recipeId): Collection
     {
-        return DB::table('foodalchemist_recipe_anker_mappings AS m')
-            ->join('foodalchemist_vocab_pairing_ankers AS a', 'a.id', '=', 'm.anker_id')
+        return DB::table('foodalchemist_recipe_anchor_mappings AS m')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'm.anchor_id')
             ->where('m.recipe_id', $recipeId)->whereNull('m.deleted_at')
             ->orderByRaw('COALESCE(m.ai_confidence, 1.0) DESC')->orderBy('m.id')
-            ->get(['a.id', 'a.slug', 'a.display_de', 'm.quelle', 'm.ai_confidence']);
+            ->get(['a.id', 'a.slug', 'a.display_de', 'm.source', 'm.ai_confidence']);
     }
 
     /** Pairing-Partner eines Rezepts (recipe_pairings — Chips, M5-05). */
     public function recipePairings(int $recipeId): Collection
     {
         return DB::table('foodalchemist_recipe_pairings AS rp')
-            ->join('foodalchemist_vocab_pairing_ankers AS a', 'a.id', '=', 'rp.anker_id')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
             ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
             ->orderByRaw("CASE rp.typ WHEN 'klassisch' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
             ->orderBy('a.slug')
@@ -476,7 +476,7 @@ class PairingService
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
         $typ = in_array($typ, ['klassisch', 'modern', 'kontrast', 'verbund', 'trinitas'], true) ? $typ : 'klassisch';
         DB::table('foodalchemist_recipe_pairings')->updateOrInsert(
-            ['recipe_id' => $recipe->id, 'anker_id' => $ankerId, 'typ' => $typ],
+            ['recipe_id' => $recipe->id, 'anchor_id' => $ankerId, 'typ' => $typ],
             ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
                 'konfidenz' => 'hoch', 'created_via' => 'manual', 'note' => null,
                 'deleted_at' => null, 'updated_at' => now(), 'created_at' => now()],
@@ -487,7 +487,7 @@ class PairingService
     {
         FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
         DB::table('foodalchemist_recipe_pairings')
-            ->where('recipe_id', $recipeId)->where('anker_id', $ankerId)
+            ->where('recipe_id', $recipeId)->where('anchor_id', $ankerId)
             ->when($typ !== null, fn ($q) => $q->where('typ', $typ))
             ->update(['deleted_at' => now()]);
     }
@@ -495,11 +495,11 @@ class PairingService
     /** Kern-Aroma-Anker eines GP inkl. Slug/Quelle (GP-Pairing-Panel). */
     public function gpAnkers(int $gpId): Collection
     {
-        return DB::table('foodalchemist_gp_anker_mappings AS m')
-            ->join('foodalchemist_vocab_pairing_ankers AS a', 'a.id', '=', 'm.anker_id')
-            ->where('m.gp_id', $gpId)->where('m.rolle', 'kern')->whereNull('m.deleted_at')
+        return DB::table('foodalchemist_gp_anchor_mappings AS m')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'm.anchor_id')
+            ->where('m.gp_id', $gpId)->where('m.role', 'kern')->whereNull('m.deleted_at')
             ->orderByRaw('COALESCE(m.ai_confidence, 1.0) DESC')->orderBy('m.id')
-            ->get(['a.id', 'a.slug', 'a.display_de', 'm.quelle', 'm.ai_confidence']);
+            ->get(['a.id', 'a.slug', 'a.display_de', 'm.source', 'm.ai_confidence']);
     }
 
     // ── Kompakt-Panels fürs »Sensorik & Pairing«-Tab (read-only) ─────────
@@ -548,7 +548,7 @@ class PairingService
         // NUR fürs GERICHT Sinn — ein Basisrezept ist eine Komponente, kein Teller.
         // Basisrezept ⇒ stattdessen die Graph-Sicht: klassische Aroma-Nachbarn +
         // verwandte Basisrezepte (geteilte Pairing-Anker).
-        $istGericht = (bool) $recipe->ist_verkaufsrezept;
+        $istGericht = (bool) $recipe->is_sales_recipe;
         $vorschlaege = $signature = $nachbarn = $verwandte = [];
 
         if ($istGericht) {
@@ -580,7 +580,7 @@ class PairingService
                 array_filter($k['komponenten'], fn ($c) => $c['is_orphan']),
             )),
             'anker' => $ankerRows
-                ->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'quelle' => $a->quelle])->all(),
+                ->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'source' => $a->source])->all(),
             'vorschlaege' => $vorschlaege,
             'signature' => $signature,
             'nachbarn' => $nachbarn,
@@ -598,7 +598,7 @@ class PairingService
 
         return [
             'typ' => 'gp',
-            'anker' => $anker->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'quelle' => $a->quelle])->all(),
+            'anker' => $anker->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'source' => $a->source])->all(),
             'nachbarn' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'klassisch'),
             'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
         ];
@@ -624,7 +624,7 @@ class PairingService
 
         $kern = $this->recipeAnkers($recipeId);
         $pairing = DB::table('foodalchemist_recipe_pairings AS rp')
-            ->join('foodalchemist_vocab_pairing_ankers AS a', 'a.id', '=', 'rp.anker_id')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
             ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
             ->whereNotIn('a.id', $kern->pluck('id'))
             ->orderByRaw("CASE rp.typ WHEN 'klassisch' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
@@ -649,8 +649,8 @@ class PairingService
         $verwandte = $this->recipesSharingPairings($team, $recipeId)->map(function (array $v) use ($ringIds) {
             $v['shared_anker_ids'] = DB::table('foodalchemist_recipe_pairings')
                 ->where('recipe_id', $v['recipe_id'])->whereNull('deleted_at')
-                ->whereIn('anker_id', $ringIds)->distinct()->pluck('anker_id')->map(fn ($i) => (int) $i)->all();
-            $v['vk'] = (bool) FoodAlchemistRecipe::withoutGlobalScopes()->whereKey($v['recipe_id'])->value('ist_verkaufsrezept');
+                ->whereIn('anchor_id', $ringIds)->distinct()->pluck('anchor_id')->map(fn ($i) => (int) $i)->all();
+            $v['vk'] = (bool) FoodAlchemistRecipe::withoutGlobalScopes()->whereKey($v['recipe_id'])->value('is_sales_recipe');
 
             return $v;
         })->values()->all();
@@ -665,7 +665,7 @@ class PairingService
                     ->take($vorschlaegeProAnker);
                 foreach ($neu as $n) {
                     $vorschlaege[] = [
-                        'anker_id' => $a['id'], 'id' => (int) $n->id,
+                        'anchor_id' => $a['id'], 'id' => (int) $n->id,
                         'slug' => $n->slug, 'display_de' => $n->display_de, 'typ' => $n->typ,
                     ];
                 }
@@ -690,11 +690,11 @@ class PairingService
             return [];
         }
         $out = [];
-        foreach (DB::table('foodalchemist_pairing_anker_edges')
-            ->whereIn('anker_a_id', $ankerIds)->whereIn('anker_b_id', $ankerIds)
-            ->get(['anker_a_id', 'anker_b_id', 'typ']) as $kante) {
+        foreach (DB::table('foodalchemist_pairing_anchor_edges')
+            ->whereIn('anchor_a_id', $ankerIds)->whereIn('anchor_b_id', $ankerIds)
+            ->get(['anchor_a_id', 'anchor_b_id', 'typ']) as $kante) {
             $w = self::GEWICHTE[$kante->typ] ?? 0.5;                 // unbekannter typ defensiv 0.5
-            foreach ([[$kante->anker_a_id, $kante->anker_b_id], [$kante->anker_b_id, $kante->anker_a_id]] as [$a, $b]) {
+            foreach ([[$kante->anchor_a_id, $kante->anchor_b_id], [$kante->anchor_b_id, $kante->anchor_a_id]] as [$a, $b]) {
                 if (! isset($out[$a][$b]) || $out[$a][$b][0] < $w) {
                     $out[$a][$b] = [$w, $kante->typ];
                 }
@@ -714,12 +714,12 @@ class PairingService
      */
     public function neighborsForName(string $name, ?string $typ = null, int $limit = 30): array
     {
-        $anker = DB::table('foodalchemist_vocab_pairing_ankers')
+        $anker = DB::table('foodalchemist_vocab_pairing_anchors')
             ->whereIn('slug', array_unique([trim($name), $this->normalizeAnkerSlug($name)]))
             ->first(['id', 'slug', 'display_de']);
 
         if ($anker === null && ($ankerId = $this->resolveByName($name)) !== null) {
-            $anker = DB::table('foodalchemist_vocab_pairing_ankers')
+            $anker = DB::table('foodalchemist_vocab_pairing_anchors')
                 ->where('id', $ankerId)->first(['id', 'slug', 'display_de']);
         }
         if ($anker === null) {

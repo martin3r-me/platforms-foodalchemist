@@ -16,10 +16,10 @@ class Behaelter extends Component
 {
     /** Whitelist: vokabular-key => [tabelle, label, hat kapazitaet_kg] */
     public const VOKABULARE = [
-        'behaelter' => ['tabelle' => 'foodalchemist_vocab_behaelter', 'label' => 'Behälter (GN & Co.)', 'kapazitaet' => true],
-        'regen' => ['tabelle' => 'foodalchemist_vocab_regen_geraete', 'label' => 'Regenerations-Geräte', 'kapazitaet' => false],
-        'vehikel' => ['tabelle' => 'foodalchemist_vocab_serviervehikel', 'label' => 'Servier-Vehikel', 'kapazitaet' => false],
-        'equipment' => ['tabelle' => 'foodalchemist_vocab_kochequipment', 'label' => 'Koch-Equipment (Basisrezepte)', 'kapazitaet' => false],
+        'behaelter' => ['tabelle' => 'foodalchemist_vocab_containers', 'label' => 'Behälter (GN & Co.)', 'kapazitaet' => true],
+        'regen' => ['tabelle' => 'foodalchemist_vocab_regeneration_devices', 'label' => 'Regenerations-Geräte', 'kapazitaet' => false],
+        'vehikel' => ['tabelle' => 'foodalchemist_vocab_serving_vehicles', 'label' => 'Servier-Vehikel', 'kapazitaet' => false],
+        'equipment' => ['tabelle' => 'foodalchemist_vocab_kitchen_equipment', 'label' => 'Koch-Equipment (Basisrezepte)', 'kapazitaet' => false],
     ];
 
     /** @var array<string, array{name: string, gruppe: string, kapazitaet_kg: string}> Add-Form je Vokabular */
@@ -132,9 +132,9 @@ class Behaelter extends Component
         };
 
         return match ($vokabular) {
-            'behaelter' => $recipeRef(['behaelter_warm_legacy_id', 'behaelter_kalt_legacy_id']),
-            'regen' => $recipeRef(['regeneration_geraet_legacy_id']),
-            'vehikel' => $recipeRef(['servier_vehikel_legacy_id']),
+            'behaelter' => $recipeRef(['container_warm_legacy_id', 'container_cold_legacy_id']),
+            'regen' => $recipeRef(['regeneration_device_legacy_id']),
+            'vehikel' => $recipeRef(['serving_vehicle_legacy_id']),
             'equipment' => \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_recipe_equipment')
                 ? DB::table('foodalchemist_recipe_equipment')->where('equipment_id', $zeile->id)->count() : 0,
             default => 0,

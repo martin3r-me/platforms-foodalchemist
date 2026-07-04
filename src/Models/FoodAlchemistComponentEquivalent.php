@@ -64,10 +64,10 @@ class FoodAlchemistComponentEquivalent extends Model
     }
 
     /** Menge beim Wechsel source→alt (bzw. zurück) umrechnen. */
-    public function convertMenge(float $menge, string $vonSeite): float
+    public function convertMenge(float $quantity, string $vonSeite): float
     {
         $f = (float) $this->umrechnungsfaktor ?: 1.0;
-        return $vonSeite === self::SEITE_SOURCE ? $menge * $f : $menge / $f;
+        return $vonSeite === self::SEITE_SOURCE ? $quantity * $f : $quantity / $f;
     }
 
     /** Findet für eine Realisierung (kind,id) die Gegenseite dieser Äquivalenz. */

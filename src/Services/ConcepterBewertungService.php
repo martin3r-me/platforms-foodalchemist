@@ -43,7 +43,7 @@ class ConcepterBewertungService
 
         // 2 — Niveau-Konsistenz über die Gänge
         $paketNiveaus = DB::table('foodalchemist_concept_slots as s')
-            ->join('foodalchemist_pakete as p', 'p.id', '=', 's.paket_id')
+            ->join('foodalchemist_packages as p', 'p.id', '=', 's.package_id')
             ->where('s.concept_id', $concept->id)->whereNull('s.deleted_at')
             ->whereNotNull('p.niveau')->distinct()->pluck('p.niveau')->all();
         if (count($paketNiveaus) === 0) {

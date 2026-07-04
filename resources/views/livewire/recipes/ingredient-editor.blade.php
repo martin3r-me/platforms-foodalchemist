@@ -20,12 +20,12 @@
         return {
             rows: zeilen.map((z, i) => ({ ...z, _key: 'z' + i })),
             einheiten,
-            neu: { menge: '', einheit_vocab_id: Object.keys(einheiten)[0] ? parseInt(Object.keys(einheiten)[0]) : null, is_optional: false },
+            neu: { quantity: '', unit_vocab_id: Object.keys(einheiten)[0] ? parseInt(Object.keys(einheiten)[0]) : null, is_optional: false },
             _n: zeilen.length,
 
             // ── R18: Drei-Spalten-Browser — Filter-States + Listen (serverseitig gefiltert) ──
             vokabular,
-            gpFilter: { wg: '', sub: '', zustand: '', bio: false, regional: false, mehr: false },
+            gpFilter: { wg: '', sub: '', condition: '', bio: false, regional: false, mehr: false },
             rezFilter: { hg: '', kat: '', niveau: '', mehr: false },
             browseQ: '',                                             // zentrales Suchfeld → filtert BEIDE Listen
             gpListe: [], gpTotal: 0, rezListe: [], rezTotal: 0,
@@ -34,7 +34,7 @@
 
             async browse() {
                 const r = await this.$wire.browseKatalog(
-                    { wg: this.gpFilter.wg, sub: this.gpFilter.sub, zustand: this.gpFilter.zustand, bio: this.gpFilter.bio, regional: this.gpFilter.regional },
+                    { wg: this.gpFilter.wg, sub: this.gpFilter.sub, condition: this.gpFilter.condition, bio: this.gpFilter.bio, regional: this.gpFilter.regional },
                     { hg: this.rezFilter.hg, kat: this.rezFilter.kat, niveau: this.rezFilter.niveau },
                     this.browseQ
                 );
@@ -42,14 +42,14 @@
                 this.rezListe = r.rezepte.items; this.rezTotal = r.rezepte.total;
             },
             subKategorienFuerWg() {
-                return (this.vokabular?.subKategorien ?? []).filter(s => this.gpFilter.wg === '' || s.warengruppe_code === this.gpFilter.wg);
+                return (this.vokabular?.subKategorien ?? []).filter(s => this.gpFilter.wg === '' || s.commodity_group_code === this.gpFilter.wg);
             },
             kategorienFuerHg() {
                 return (this.vokabular?.kategorien ?? []).filter(k => this.rezFilter.hg === '' || String(k.main_group_id) === String(this.rezFilter.hg));
             },
             einheitIdFuerSlug(slug) {
                 for (const [id, e] of Object.entries(this.einheiten)) { if (e.slug === slug) return parseInt(id); }
-                return this.neu.einheit_vocab_id;
+                return this.neu.unit_vocab_id;
             },
             niveauFarbe(n) {
                 return { haute_cuisine: 'bg-violet-500', gehoben: 'bg-amber-500', klassisch: 'bg-sky-400' }[n] ?? 'bg-gray-300';
@@ -58,16 +58,16 @@
             parke(ziel) {
                 if (this.tauschIdx != null) { this.tauscheAus(ziel); return; }   // ⇄ Tausch-Modus (loose: undefined zählt als „aus")
                 this.geparkt = ziel;
-                this.neu.menge = '';
-                this.neu.einheit_vocab_id = this.einheitIdFuerSlug(ziel.einheit_slug ?? 'g');
-                this.$nextTick(() => this.$root.querySelector('[data-park-menge]')?.focus());
+                this.neu.quantity = '';
+                this.neu.unit_vocab_id = this.einheitIdFuerSlug(ziel.einheit_slug ?? 'g');
+                this.$nextTick(() => this.$root.querySelector('[data-park-quantity]')?.focus());
                 // Listen tragen nur den Bulk-Ø — präzisen Lead-€/g (T3) leise nachladen
                 this.$wire.ekFuerZiel(ziel.typ, ziel.id).then(ek => { if (ek !== null && this.geparkt === ziel) ziel.ek_pro_g = ek; });
             },
-            verwerfen() { this.geparkt = null; this.neu.menge = ''; },
+            verwerfen() { this.geparkt = null; this.neu.quantity = ''; },
             // Menge tippen + Enter → Zutat wandert in die Liste und blinkt kurz auf
             einfuegen() {
-                if (this.geparkt === null || this.zahl(this.neu.menge) === null) return;
+                if (this.geparkt === null || this.zahl(this.neu.quantity) === null) return;
                 this.hinzufuegen(this.geparkt);
                 const z = this.rows[this.rows.length - 1];
                 z._flash = true;
@@ -94,15 +94,15 @@
                     name: z.ziel_name, url: z.ziel_url,
                     faktor: e.faktor ? Math.round(10000 / e.faktor) / 10000 : 1,
                 };
-                const m = this.zahl(z.menge);
-                if (m !== null) z.menge = Math.round(m * (e.faktor || 1) * 100) / 100;
-                const mx = this.zahl(z.menge_max);
-                if (mx !== null) z.menge_max = Math.round(mx * (e.faktor || 1) * 100) / 100;
+                const m = this.zahl(z.quantity);
+                if (m !== null) z.quantity = Math.round(m * (e.faktor || 1) * 100) / 100;
+                const mx = this.zahl(z.quantity_max);
+                if (mx !== null) z.quantity_max = Math.round(mx * (e.faktor || 1) * 100) / 100;
                 z.gp_id = e.kind === 'gp' ? e.id : null;
                 z.referenced_recipe_id = e.kind === 'recipe' ? e.id : null;
                 z.ziel_name = e.name; z.display_name = e.name.replace('↳ ', '');
                 z.ziel_url = e.url ?? null;
-                z.raw_text = (this.zahl(z.menge) ?? '') + ' ' + e.name.replace('↳ ', '');
+                z.raw_text = (this.zahl(z.quantity) ?? '') + ' ' + e.name.replace('↳ ', '');
                 z.lineage = e.kind === 'recipe' ? 'recipe_ref' : 'manual';
                 z.ek_pro_g = null; z.ek_pro_g_min = null; z.ek_pro_g_avg = null;
                 z.g_pro_stueck = null;                               // Stück-Faktor kennt nur der Save-Recompute präzise
@@ -135,7 +135,7 @@
                 z.ziel_name = ziel.name;
                 z.ziel_url = ziel.url ?? null;
                 z.display_name = ziel.name;
-                z.raw_text = (this.zahl(z.menge) ?? '') + ' ' + ziel.name;
+                z.raw_text = (this.zahl(z.quantity) ?? '') + ' ' + ziel.name;
                 z.lineage = ziel.typ === 'sub' ? 'recipe_ref' : 'manual';
                 z.ek_pro_g = ziel.ek_pro_g ?? null;
                 z.g_pro_stueck = ziel.g_pro_stueck ?? null;          // Stück-Sub: g/Stück fürs Live-Rechnen
@@ -167,7 +167,7 @@
                 zeile._peek = await this.$wire.gpArtikel(zeile.gp_id);
             },
             payload() {
-                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, ersatz, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, garverlust_quelle: _garverlust_ki ? 'ki' : undefined }));
+                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, ersatz, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, cooking_loss_source: _garverlust_ki ? 'ki' : undefined }));
             },
             init() {
                 // Window-Event: der Haupt-"Speichern" des Rezept-Modals (UND der Standalone-Modal-Footer)
@@ -179,11 +179,11 @@
             },
             zahl(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; },
             mengeAvg(z) {
-                const m = this.zahl(z.menge); const mx = this.zahl(z.menge_max);
+                const m = this.zahl(z.quantity); const mx = this.zahl(z.quantity_max);
                 return m === null ? null : (mx !== null ? (m + mx) / 2 : m);
             },
             // g-Faktor je Zeile: g/ml-Einheit ODER (Stück-Sub) g/Stück = Yield÷ertrag_stueck (spiegelt Server-grammFaktor)
-            gFaktor(z) { return this.einheiten[z.einheit_vocab_id]?.g ?? z.g_pro_stueck ?? null; },
+            gFaktor(z) { return this.einheiten[z.unit_vocab_id]?.g ?? z.g_pro_stueck ?? null; },
             zeilenEk(z, feld = 'ek_pro_g') {  // Live-Näherung: menge_g × €/g; R5: feld wählt Lead | min | Ø
                 if (z.is_optional || z[feld] === null || z[feld] === undefined) return null;
                 const avg = this.mengeAvg(z); const f = this.gFaktor(z);
@@ -206,20 +206,20 @@
                     if (z.is_optional) continue;
                     const f = this.gFaktor(z); const avg = this.mengeAvg(z);
                     if (avg === null || !f) continue;
-                    const garv = (this.zahl(z.garverlust_pct) ?? 0) / 100;
-                    const putz = (this.zahl(z.putzverlust_pct) ?? 0) / 100;
+                    const garv = (this.zahl(z.cooking_loss_pct) ?? 0) / 100;
+                    const putz = (this.zahl(z.trimming_loss_pct) ?? 0) / 100;
                     g += avg * f * (1 - putz) * (1 - garv);
                 }
                 return g > 0 ? (g / 1000).toFixed(3).replace('.', ',') + ' kg' : '—';
             },
             hoch(i) { if (i > 0) this.rows.splice(i - 1, 0, this.rows.splice(i, 1)[0]); },
             runter(i) { if (i < this.rows.length - 1) this.rows.splice(i + 1, 0, this.rows.splice(i, 1)[0]); },
-            async garverluste() {  // M4-11: Vorschläge in die Client-rows mergen (Save schreibt quelle=ki)
+            async garverluste() {  // M4-11: Vorschläge in die Client-rows mergen (Save schreibt source=ki)
                 const zutaten = {};
                 this.rows.forEach((z, i) => { zutaten[i] = z.raw_text; });
                 const v = await this.$wire.garverlustVorschlag(zutaten);
                 for (const [i, pct] of Object.entries(v.verluste ?? {})) {
-                    if (this.rows[i] !== undefined) { this.rows[i].garverlust_pct = pct; this.rows[i]._garverlust_ki = true; }
+                    if (this.rows[i] !== undefined) { this.rows[i].cooking_loss_pct = pct; this.rows[i]._garverlust_ki = true; }
                 }
             },
             hinzufuegen(ziel) {  // Auto-Fill (M4-08) — R18: interner Schritt des Park-Flows
@@ -230,21 +230,21 @@
                     referenced_recipe_id: ziel.typ === 'sub' ? ziel.id : null,
                     ziel_name: ziel.name,
                     ziel_url: ziel.url ?? null,
-                    raw_text: (this.neu.menge || '') + ' ' + ziel.name,
+                    raw_text: (this.neu.quantity || '') + ' ' + ziel.name,
                     display_name: ziel.name,
-                    menge: this.zahl(this.neu.menge) ?? 1,
-                    menge_max: null,
-                    einheit_vocab_id: this.neu.einheit_vocab_id,
-                    garverlust_pct: null, putzverlust_pct: null,
+                    quantity: this.zahl(this.neu.quantity) ?? 1,
+                    quantity_max: null,
+                    unit_vocab_id: this.neu.unit_vocab_id,
+                    cooking_loss_pct: null, trimming_loss_pct: null,
                     is_optional: this.neu.is_optional,
-                    note: '', rolle: null, ist_wertgebend: false,
+                    note: '', role: null, is_value_relevant: false,
                     lineage: ziel.typ === 'sub' ? 'recipe_ref' : 'manual',
                     ek_pro_g: ziel.ek_pro_g,
                     g_pro_stueck: ziel.g_pro_stueck ?? null,          // Stück-Sub: g/Stück fürs Live-Rechnen
                     ersatz: null,
                 });
                 this.ladeErsatz(this.rows[this.rows.length - 1]);     // ♻-Hinweis leise nachladen
-                this.neu.menge = ''; this.neu.is_optional = false;
+                this.neu.quantity = ''; this.neu.is_optional = false;
             },
         };
     };

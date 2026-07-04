@@ -32,7 +32,7 @@ return new class extends Migration
                 $table->unsignedTinyInteger($stoff)->nullable()->comment('0=k.A. 1=nein 3=ja (GL-09 A1)');
             }
             $table->json('details')->nullable()->comment('table_sweetener_basis / basis_tafe_sweetness');
-            $table->string('quelle', 16)->nullable()->comment('NULL=Import | manual (GL-07-Lineage)');
+            $table->string('source', 16)->nullable()->comment('NULL=Import | manual (GL-07-Lineage)');
 
             $table->timestamps();
             $table->softDeletes();

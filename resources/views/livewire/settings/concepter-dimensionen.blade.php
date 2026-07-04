@@ -19,7 +19,7 @@
                     <span wire:key="dim-{{ $key }}-{{ $zeile->id }}"
                           class="{{ $pill }} {{ $variantPill['secondary'] }} group {{ $zeile->is_inactive ? 'opacity-40 line-through' : '' }}"
                           title="{{ $key === 'servierformen' ? ($zeile->code . ($zeile->legacy_id !== null ? ' · WaWi-Master' : ' · FA-nativ')) : '' }}">
-                        {{ $zeile->bezeichnung ?? $zeile->name }}
+                        {{ $zeile->label ?? $zeile->name }}
                         <button type="button" wire:click="toggleInactive('{{ $key }}', {{ $zeile->id }})"
                                 class="hidden group-hover:inline ml-0.5 {{ $zeile->is_inactive ? 'text-emerald-500' : 'text-rose-400' }}"
                                 title="{{ $zeile->is_inactive ? 'aktivieren' : 'deaktivieren' }}">{{ $zeile->is_inactive ? '↻' : '✕' }}</button>

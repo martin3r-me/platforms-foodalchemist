@@ -15,14 +15,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('foodalchemist_gps', function (Blueprint $table) {
-            if (! Schema::hasColumn('foodalchemist_gps', 'putzverlust_default_pct')) {
-                $table->decimal('putzverlust_default_pct', 5, 2)->nullable()->after('garverlust_default_pct');
+            if (! Schema::hasColumn('foodalchemist_gps', 'trimming_loss_default_pct')) {
+                $table->decimal('trimming_loss_default_pct', 5, 2)->nullable()->after('cooking_loss_default_pct');
             }
         });
 
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            if (! Schema::hasColumn('foodalchemist_team_settings', 'putzverlust_defaults')) {
-                $table->json('putzverlust_defaults')->nullable()->after('garverlust_defaults');
+            if (! Schema::hasColumn('foodalchemist_team_settings', 'trimming_loss_defaults')) {
+                $table->json('trimming_loss_defaults')->nullable()->after('cooking_loss_defaults');
             }
         });
     }
@@ -30,10 +30,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_gps', function (Blueprint $table) {
-            $table->dropColumn('putzverlust_default_pct');
+            $table->dropColumn('trimming_loss_default_pct');
         });
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            $table->dropColumn('putzverlust_defaults');
+            $table->dropColumn('trimming_loss_defaults');
         });
     }
 };

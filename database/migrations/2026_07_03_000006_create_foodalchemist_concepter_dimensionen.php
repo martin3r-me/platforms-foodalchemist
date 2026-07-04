@@ -9,10 +9,10 @@ use Symfony\Component\Uid\UuidV7;
 /**
  * Umbau-Spec Darreichungen Phase 4: Concepter-Facetten statt tiefem Kategorien-Baum.
  * 4 flache Dimensionen (Review F3–F6, alle in Einstellungen pflegbar):
- *   - Servierform (einfach)   → FK auf foodalchemist_servierformen (Scharnier zu Darreichungen)
- *   - Eventtyp (einfach)      → foodalchemist_eventtypen
- *   - Einsatzmoment (mehrfach)→ foodalchemist_einsatzmomente + Pivot
- *   - Saison (mehrfach)       → foodalchemist_saisons + Pivot
+ *   - Servierform (einfach)   → FK auf foodalchemist_serving_forms (Scharnier zu Darreichungen)
+ *   - Eventtyp (einfach)      → foodalchemist_event_types
+ *   - Einsatzmoment (mehrfach)→ foodalchemist_service_moments + Pivot
+ *   - Saison (mehrfach)       → foodalchemist_seasons + Pivot
  * FA-nativ (kein WaWi-Spiegel). Seeds pro bestehendem Team; neue Teams pflegen
  * über die Einstellungen nach.
  */
@@ -34,7 +34,7 @@ return new class extends Migration
 
     public function up(): void
     {
-        foreach (['foodalchemist_einsatzmomente', 'foodalchemist_eventtypen', 'foodalchemist_saisons'] as $vocabTable) {
+        foreach (['foodalchemist_service_moments', 'foodalchemist_event_types', 'foodalchemist_seasons'] as $vocabTable) {
             if (Schema::hasTable($vocabTable)) {
                 continue;
             }
@@ -51,32 +51,32 @@ return new class extends Migration
             });
         }
 
-        if (! Schema::hasColumn('foodalchemist_concepts', 'servierform_id')) {
+        if (! Schema::hasColumn('foodalchemist_concepts', 'serving_form_id')) {
             Schema::table('foodalchemist_concepts', function (Blueprint $table) {
-                $table->foreignId('servierform_id')->nullable()
-                    ->constrained('foodalchemist_servierformen')->nullOnDelete();
-                $table->foreignId('eventtyp_id')->nullable()
-                    ->constrained('foodalchemist_eventtypen')->nullOnDelete();
+                $table->foreignId('serving_form_id')->nullable()
+                    ->constrained('foodalchemist_serving_forms')->nullOnDelete();
+                $table->foreignId('event_type_id')->nullable()
+                    ->constrained('foodalchemist_event_types')->nullOnDelete();
             });
         }
 
-        if (! Schema::hasTable('foodalchemist_concept_einsatzmomente')) {
-            Schema::create('foodalchemist_concept_einsatzmomente', function (Blueprint $table) {
+        if (! Schema::hasTable('foodalchemist_concept_service_moments')) {
+            Schema::create('foodalchemist_concept_service_moments', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('concept_id')->constrained('foodalchemist_concepts')->cascadeOnDelete();
-                $table->foreignId('einsatzmoment_id')->constrained('foodalchemist_einsatzmomente')->cascadeOnDelete();
+                $table->foreignId('service_moment_id')->constrained('foodalchemist_service_moments')->cascadeOnDelete();
                 $table->timestamps();
-                $table->unique(['concept_id', 'einsatzmoment_id'], 'fa_concept_einsatzmomente_unique');
+                $table->unique(['concept_id', 'service_moment_id'], 'fa_concept_einsatzmomente_unique');
             });
         }
 
-        if (! Schema::hasTable('foodalchemist_concept_saisons')) {
-            Schema::create('foodalchemist_concept_saisons', function (Blueprint $table) {
+        if (! Schema::hasTable('foodalchemist_concept_seasons')) {
+            Schema::create('foodalchemist_concept_seasons', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('concept_id')->constrained('foodalchemist_concepts')->cascadeOnDelete();
-                $table->foreignId('saison_id')->constrained('foodalchemist_saisons')->cascadeOnDelete();
+                $table->foreignId('season_id')->constrained('foodalchemist_seasons')->cascadeOnDelete();
                 $table->timestamps();
-                $table->unique(['concept_id', 'saison_id'], 'fa_concept_saisons_unique');
+                $table->unique(['concept_id', 'season_id'], 'fa_concept_saisons_unique');
             });
         }
 
@@ -88,9 +88,9 @@ return new class extends Migration
     {
         $teamIds = DB::table('teams')->pluck('id');
         $seedSets = [
-            'foodalchemist_einsatzmomente' => self::EINSATZMOMENTE,
-            'foodalchemist_eventtypen' => self::EVENTTYPEN,
-            'foodalchemist_saisons' => self::SAISONS,
+            'foodalchemist_service_moments' => self::EINSATZMOMENTE,
+            'foodalchemist_event_types' => self::EVENTTYPEN,
+            'foodalchemist_seasons' => self::SAISONS,
         ];
         foreach ($teamIds as $teamId) {
             foreach ($seedSets as $tableName => $namen) {
@@ -115,16 +115,16 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('foodalchemist_concept_saisons');
-        Schema::dropIfExists('foodalchemist_concept_einsatzmomente');
-        if (Schema::hasColumn('foodalchemist_concepts', 'servierform_id')) {
+        Schema::dropIfExists('foodalchemist_concept_seasons');
+        Schema::dropIfExists('foodalchemist_concept_service_moments');
+        if (Schema::hasColumn('foodalchemist_concepts', 'serving_form_id')) {
             Schema::table('foodalchemist_concepts', function (Blueprint $table) {
-                $table->dropConstrainedForeignId('servierform_id');
-                $table->dropConstrainedForeignId('eventtyp_id');
+                $table->dropConstrainedForeignId('serving_form_id');
+                $table->dropConstrainedForeignId('event_type_id');
             });
         }
-        Schema::dropIfExists('foodalchemist_saisons');
-        Schema::dropIfExists('foodalchemist_eventtypen');
-        Schema::dropIfExists('foodalchemist_einsatzmomente');
+        Schema::dropIfExists('foodalchemist_seasons');
+        Schema::dropIfExists('foodalchemist_event_types');
+        Schema::dropIfExists('foodalchemist_service_moments');
     }
 };

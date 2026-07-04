@@ -30,7 +30,7 @@ return new class extends Migration
                 ->constrained('foodalchemist_supplier_items')->nullOnDelete();
             $table->json('blocked_supplier_item_ids')->nullable();
 
-            $table->text('notiz')->nullable();
+            $table->text('note')->nullable();
             $table->timestamps();
             $table->softDeletes();
 

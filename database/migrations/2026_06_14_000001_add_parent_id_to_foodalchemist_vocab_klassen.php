@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Macht die Klasse-Dimension (foodalchemist_vocab_klassen) zu einem Baum (Eltern/Kinder),
+ * Macht die Klasse-Dimension (foodalchemist_vocab_classes) zu einem Baum (Eltern/Kinder),
  * Pendant zur Concept-Kategorie. Pflege künftig in den Einstellungen → „Konzept-Taxonomie".
  *
  * Bewusst KEINE DB-FK (Schema::table auf bestehender Tabelle bricht sonst auf SQLite — vgl.
@@ -17,8 +17,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('foodalchemist_vocab_klassen', function (Blueprint $table) {
-            if (! Schema::hasColumn('foodalchemist_vocab_klassen', 'parent_id')) {
+        Schema::table('foodalchemist_vocab_classes', function (Blueprint $table) {
+            if (! Schema::hasColumn('foodalchemist_vocab_classes', 'parent_id')) {
                 $table->unsignedBigInteger('parent_id')->nullable()->after('team_id')->index();
             }
         });
@@ -26,8 +26,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('foodalchemist_vocab_klassen', function (Blueprint $table) {
-            if (Schema::hasColumn('foodalchemist_vocab_klassen', 'parent_id')) {
+        Schema::table('foodalchemist_vocab_classes', function (Blueprint $table) {
+            if (Schema::hasColumn('foodalchemist_vocab_classes', 'parent_id')) {
                 $table->dropColumn('parent_id');
             }
         });

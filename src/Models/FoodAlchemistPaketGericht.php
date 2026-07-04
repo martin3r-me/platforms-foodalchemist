@@ -17,19 +17,19 @@ class FoodAlchemistPaketGericht extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_paket_gerichte';
+    protected $table = 'foodalchemist_package_dishes';
 
     protected $guarded = ['id'];
 
     protected $casts = [
         'uuid' => 'string',
-        'menge' => 'decimal:3',
+        'quantity' => 'decimal:3',
         'position' => 'integer',
     ];
 
     public function paket(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistPaket::class, 'paket_id');
+        return $this->belongsTo(FoodAlchemistPaket::class, 'package_id');
     }
 
     /** Das verknüpfte Gericht (VK-Rezept). */
@@ -38,14 +38,14 @@ class FoodAlchemistPaketGericht extends Model
         return $this->belongsTo(FoodAlchemistRecipe::class, 'vk_recipe_id');
     }
 
-    public function einheit(): BelongsTo
+    public function unit(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'einheit_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id');
     }
 
     /** Optional: explizit gewählte Darreichung des Gerichts (Umbau-Spec Phase 3). */
     public function darreichung(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'darreichung_id');
+        return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'presentation_id');
     }
 }

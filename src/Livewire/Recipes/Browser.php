@@ -210,7 +210,7 @@ class Browser extends Component
             'rezepte' => $recipes->paginateBrowser($filters, $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100),
             'templateAnzahl' => \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()->where('is_template', true)->count(),
             'templateListe' => $this->templateWahlOffen
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()->where('is_template', true)->orderBy('name')->get(['id', 'name', 'yield_kg', 'n_zutaten_total'])
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()->where('is_template', true)->orderBy('name')->get(['id', 'name', 'yield_kg', 'n_ingredients_total'])
                 : collect(),
             'hauptgruppen' => $recipes->mainGroups($team),
             'hgCounts' => $recipes->hauptgruppenCounts($team, $filters),

@@ -75,7 +75,7 @@ class KalkulationDokService
     // ── Positionen ──────────────────────────────────────────────────────────
 
     /**
-     * Position hinzufügen. Bei Referenz-Typen wird der Snapshot (label/einheit/
+     * Position hinzufügen. Bei Referenz-Typen wird der Snapshot (label/unit/
      * einzel_ek/arbeitszeit) aus der Quelle gezogen.
      */
     public function addPosition(Team $team, int $kalkulationId, string $typ, ?int $refId = null, array $override = []): FoodAlchemistKalkulationPosition
@@ -93,10 +93,10 @@ class KalkulationDokService
             'typ' => $typ,
             'ref_id' => $typ === 'frei' ? null : $refId,
             'label' => $override['label'] ?? $snap['label'],
-            'einheit' => $override['einheit'] ?? $snap['einheit'],
-            'menge' => $override['menge'] ?? 1,
+            'unit' => $override['unit'] ?? $snap['unit'],
+            'quantity' => $override['quantity'] ?? 1,
             'einzel_ek' => $override['einzel_ek'] ?? $snap['einzel_ek'],
-            'arbeitszeit_min' => $override['arbeitszeit_min'] ?? $snap['arbeitszeit_min'],
+            'work_time_min' => $override['work_time_min'] ?? $snap['work_time_min'],
             'position' => $next,
         ]);
         $k->touch();
@@ -108,19 +108,19 @@ class KalkulationDokService
     {
         $pos = $this->findPosition($team, $positionId);
         $patch = [];
-        foreach (['label', 'einheit'] as $f) {
+        foreach (['label', 'unit'] as $f) {
             if (array_key_exists($f, $data)) {
                 $patch[$f] = $data[$f];
             }
         }
-        foreach (['menge', 'einzel_ek'] as $f) {
+        foreach (['quantity', 'einzel_ek'] as $f) {
             if (array_key_exists($f, $data)) {
                 $patch[$f] = max(0, (float) str_replace(',', '.', (string) $data[$f]));
             }
         }
-        if (array_key_exists('arbeitszeit_min', $data)) {
-            $v = $data['arbeitszeit_min'];
-            $patch['arbeitszeit_min'] = ($v === '' || $v === null) ? null : max(0, (int) $v);
+        if (array_key_exists('work_time_min', $data)) {
+            $v = $data['work_time_min'];
+            $patch['work_time_min'] = ($v === '' || $v === null) ? null : max(0, (int) $v);
         }
         if ($patch) {
             $pos->update($patch);
@@ -144,7 +144,7 @@ class KalkulationDokService
         $pos = $this->findPosition($team, $positionId);
         if ($pos->typ !== 'frei' && $pos->ref_id) {
             $snap = $this->snapshot($team, $pos->typ, (int) $pos->ref_id);
-            $pos->update(['einzel_ek' => $snap['einzel_ek'], 'arbeitszeit_min' => $snap['arbeitszeit_min']]);
+            $pos->update(['einzel_ek' => $snap['einzel_ek'], 'work_time_min' => $snap['work_time_min']]);
             $pos->kalkulation?->touch();
         }
 
@@ -157,7 +157,7 @@ class KalkulationDokService
      * Vollständige Kalkulation: Positionen → HK1 (Σ Wareneinsatz) + Arbeitszeit-Rollup
      * → Settings-Zuschläge (mehrstufig) → HK2 → VK-Vorschlag (Marge bzw. Override).
      *
-     * @return array{positionen: list<array>, hk1: float, arbeitszeit_min: float,
+     * @return array{positionen: list<array>, hk1: float, work_time_min: float,
      *               bloecke: list<array>, hk2: float, marge_pct: float, vk_vorschlag: float}
      */
     public function berechne(Team $team, FoodAlchemistKalkulation $kalkulation): array
@@ -169,7 +169,7 @@ class KalkulationDokService
         $zeilen = [];
         foreach ($positionen as $p) {
             $we = $p->wareneinsatz();
-            $az = (float) (($p->arbeitszeit_min ?? 0)) * (float) $p->menge;
+            $az = (float) (($p->work_time_min ?? 0)) * (float) $p->quantity;
             $hk1 += $we;
             $azTotal += $az;
             $zeilen[] = [
@@ -177,10 +177,10 @@ class KalkulationDokService
                 'typ' => $p->typ,
                 'ref_id' => $p->ref_id,
                 'label' => $p->label,
-                'einheit' => $p->einheit,
-                'menge' => (float) $p->menge,
+                'unit' => $p->unit,
+                'quantity' => (float) $p->quantity,
                 'einzel_ek' => (float) $p->einzel_ek,
-                'arbeitszeit_min' => $p->arbeitszeit_min !== null ? (int) $p->arbeitszeit_min : null,
+                'work_time_min' => $p->work_time_min !== null ? (int) $p->work_time_min : null,
                 'wareneinsatz' => $we,
             ];
         }
@@ -195,7 +195,7 @@ class KalkulationDokService
         return [
             'positionen' => $zeilen,
             'hk1' => round($hk1, 4),
-            'arbeitszeit_min' => round($azTotal, 2),
+            'work_time_min' => round($azTotal, 2),
             'bloecke' => $r['bloecke'],
             'hk2' => (float) $r['hk2'],
             'marge_pct' => $marge,
@@ -235,7 +235,7 @@ class KalkulationDokService
     /**
      * Snapshot der Einzel-Daten einer Quelle.
      *
-     * @return array{label: string, einheit: string, einzel_ek: float, arbeitszeit_min: ?int}
+     * @return array{label: string, unit: string, einzel_ek: float, work_time_min: ?int}
      */
     private function snapshot(Team $team, string $typ, ?int $refId): array
     {
@@ -247,7 +247,7 @@ class KalkulationDokService
             $gp = FoodAlchemistGp::where('team_id', $team->id)->find($refId);
             $proKg = $gp ? (($this->recompute->preisProGrammPublic($gp) ?? 0) * 1000) : 0.0;
 
-            return ['label' => $gp?->name ?? 'GP', 'einheit' => 'kg', 'einzel_ek' => round($proKg, 4), 'arbeitszeit_min' => null];
+            return ['label' => $gp?->name ?? 'GP', 'unit' => 'kg', 'einzel_ek' => round($proKg, 4), 'work_time_min' => null];
         }
 
         $r = FoodAlchemistRecipe::where('team_id', $team->id)->find($refId);
@@ -259,26 +259,26 @@ class KalkulationDokService
             // €/kg; Arbeitszeit pro kg bleibt offen (nicht-linear → KI), daher null.
             return [
                 'label' => (string) $r->name,
-                'einheit' => 'kg',
+                'unit' => 'kg',
                 'einzel_ek' => round((float) ($r->ek_per_kg_eur ?? 0), 4),
-                'arbeitszeit_min' => null,
+                'work_time_min' => null,
             ];
         }
 
         // Gericht (Verkaufsrezept): pro Portion.
-        $anzahl = max(1, (int) ($r->vk_anzahl_einheiten ?? 1));
+        $anzahl = max(1, (int) ($r->vk_unit_count ?? 1));
 
         return [
             'label' => (string) $r->name,
-            'einheit' => 'Portion',
+            'unit' => 'Portion',
             'einzel_ek' => round((float) ($r->ek_total_eur ?? 0) / $anzahl, 4),
-            'arbeitszeit_min' => $r->arbeitszeit_min !== null ? (int) round((float) $r->arbeitszeit_min / $anzahl) : null,
+            'work_time_min' => $r->work_time_min !== null ? (int) round((float) $r->work_time_min / $anzahl) : null,
         ];
     }
 
     private function leereZeile(): array
     {
-        return ['label' => 'Freie Position', 'einheit' => null, 'einzel_ek' => 0.0, 'arbeitszeit_min' => null];
+        return ['label' => 'Freie Position', 'unit' => null, 'einzel_ek' => 0.0, 'work_time_min' => null];
     }
 
     private function find(Team $team, int $id): FoodAlchemistKalkulation

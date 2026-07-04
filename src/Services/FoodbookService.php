@@ -36,12 +36,12 @@ class FoodbookService
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
                 $s = '%' . mb_strtolower($filters['search']) . '%';
                 $q->where(fn ($w) => $w
-                    ->whereRaw('LOWER(bezeichnung) LIKE ?', [$s])
+                    ->whereRaw('LOWER(label) LIKE ?', [$s])
                     ->orWhereRaw('LOWER(COALESCE(kunde, \'\')) LIKE ?', [$s])
                     ->orWhereRaw('LOWER(COALESCE(code, \'\')) LIKE ?', [$s]));
             })
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
-            ->orderByDesc('jahr')->orderBy('bezeichnung')
+            ->orderByDesc('jahr')->orderBy('label')
             ->paginate($perPage);
     }
 
@@ -58,18 +58,18 @@ class FoodbookService
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'bezeichnung', 'jahr', 'kunde', 'personen', 'status', 'beschreibung', 'note', 'crm_company_id', 'crm_contact_id'];
+    private const FELDER = ['code', 'label', 'jahr', 'kunde', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
         return FoodAlchemistFoodbook::create([
             'team_id' => $team->id,
-            'bezeichnung' => trim((string) ($in['bezeichnung'] ?? 'Neues Foodbook')) ?: 'Neues Foodbook',
+            'label' => trim((string) ($in['label'] ?? 'Neues Foodbook')) ?: 'Neues Foodbook',
             'kunde' => $in['kunde'] ?? null,
             'jahr' => $in['jahr'] ?? null,
             'personen' => $in['personen'] ?? null,
             'status' => $in['status'] ?? 'draft',
-            'beschreibung' => $in['beschreibung'] ?? null,
+            'description' => $in['description'] ?? null,
         ]);
     }
 
@@ -156,7 +156,7 @@ class FoodbookService
         ]);
     }
 
-    private const KAPITEL_FELDER = ['titel', 'konsumententitel', 'claim', 'beschreibung', 'preis_pro_person', 'preis_modus'];
+    private const KAPITEL_FELDER = ['titel', 'konsumententitel', 'claim', 'description', 'preis_pro_person', 'preis_modus'];
 
     public function updateKapitel(Team $team, int $id, array $in): FoodAlchemistFoodbookKapitel
     {
@@ -224,8 +224,8 @@ class FoodbookService
      */
     public const BLOCK_TYPES = ['concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text', 'image'];
 
-    private const BLOCK_FELDER = ['type', 'ebene', 'sichtbar', 'bezeichnung', 'wording', 'kundentext', 'interne_bemerkung',
-        'variant_group_id', 'concept_id', 'vk_recipe_id', 'menge', 'einheit_vocab_id', 'preis_wert', 'preis_basis', 'hoehe', 'header_quelle', 'payload_json'];
+    private const BLOCK_FELDER = ['type', 'ebene', 'sichtbar', 'label', 'wording', 'kundentext', 'interne_bemerkung',
+        'variant_group_id', 'concept_id', 'vk_recipe_id', 'quantity', 'unit_vocab_id', 'preis_wert', 'preis_basis', 'hoehe', 'header_source', 'payload_json'];
 
     public function addBlock(Team $team, int $kapitelId, array $in): FoodAlchemistFoodbookBlock
     {
@@ -279,7 +279,7 @@ class FoodbookService
         $this->ownedKapitel($team, $kapitelId);
         DB::transaction(function () use ($kapitelId, $ids) {
             foreach (array_values($ids) as $i => $id) {
-                FoodAlchemistFoodbookBlock::where('id', (int) $id)->where('kapitel_id', $kapitelId)->update(['position' => $i]);
+                FoodAlchemistFoodbookBlock::where('id', (int) $id)->where('chapter_id', $kapitelId)->update(['position' => $i]);
             }
         });
     }
@@ -289,7 +289,7 @@ class FoodbookService
     {
         $this->ownedKapitel($team, $kapitelId);
 
-        return (int) FoodAlchemistFoodbookBlock::where('kapitel_id', $kapitelId)->max('variant_group_id') + 1;
+        return (int) FoodAlchemistFoodbookBlock::where('chapter_id', $kapitelId)->max('variant_group_id') + 1;
     }
 
     /** @param list<int> $blockIds */
@@ -381,7 +381,7 @@ class FoodbookService
             return ['vk_pp' => (float) $cockpit['preis_pro_person'], 'ek_pp' => (float) $cockpit['ek_pro_person'], 'pauschal' => 0.0];
         }
         if ($block->type === 'recipe_ref' && $block->gericht) {
-            $faktor = $block->menge !== null ? (float) $block->menge : 1.0;
+            $faktor = $block->quantity !== null ? (float) $block->quantity : 1.0;
 
             return ['vk_pp' => round((float) ($block->gericht->vk_netto ?? 0) * $faktor, 2),
                 'ek_pp' => round((float) ($block->gericht->ek_total_eur ?? 0) * $faktor, 2), 'pauschal' => 0.0];
@@ -591,7 +591,7 @@ class FoodbookService
     /**
      * M11-08: Andock-Kontext für die spätere KI-Text-Generierung (Einleitung/Kapitel) —
      * assembliert NUR die Eingaben, KEIN LLM-Call (Befüllung extern/später, blockiert).
-     * Quelle: Kunde + Briefing (beschreibung) + die referenzierten Concepts + Kapitel-Titel.
+     * Quelle: Kunde + Briefing (description) + die referenzierten Concepts + Kapitel-Titel.
      * Der echte Canvas-Wissen-Link folgt mit D10; bis dahin ist `briefing` der lose Text.
      *
      * @return array{kunde: ?string, briefing: ?string, personen: ?int, concepts: list<string>, kapitel: list<string>}
@@ -614,7 +614,7 @@ class FoodbookService
 
         return [
             'kunde' => $fb->kunde,
-            'briefing' => $fb->beschreibung,
+            'briefing' => $fb->description,
             'personen' => $fb->personen,
             'concepts' => $conceptNamen->unique()->values()->all(),
             'kapitel' => $fb->kapitel->pluck('titel')->values()->all(),

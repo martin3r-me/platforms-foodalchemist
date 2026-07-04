@@ -26,17 +26,17 @@ class Einheiten extends Component
 
     public function edit(int $id): void
     {
-        $einheit = app(VocabularyService::class)
+        $unit = app(VocabularyService::class)
             ->listEinheiten($this->team(), true)
             ->firstWhere('id', $id);
 
-        if ($einheit === null) {
+        if ($unit === null) {
             return;
         }
 
         $this->editId = $id;
         $this->fehler = null;
-        $this->form = $einheit->only(['display_de', 'dimension', 'default_in_g', 'default_in_ml', 'is_approximate', 'sort_order']);
+        $this->form = $unit->only(['display_de', 'dimension', 'default_in_g', 'default_in_ml', 'is_approximate', 'sort_order']);
     }
 
     public function cancel(): void

@@ -37,11 +37,11 @@ class AiGatewayService
     /**
      * #389 Food DNA: kreative/geschmackliche Prompt-Keys, die die Marken-/Küchen-DNA als
      * STEHENDEN Kontext erhalten (Team-Basis + optional Concept-Override via Option
-     * 'food_dna_concept_id'). Klassifikatoren (kategorie/eigenschaften/geschmack/zustand/…)
+     * 'food_dna_concept_id'). Klassifikatoren (kategorie/eigenschaften/geschmack/condition/…)
      * bleiben bewusst AUSSEN vor — DNA würde dort die strukturelle Klassifikation verzerren.
      */
     public const FOOD_DNA_KEYS = [
-        'recipe.generator', 'recipe.beschreibung', 'recipe.zubereitung', 'recipe.ueberarbeiten', 'recipe.pairing', 'recipe.review',
+        'recipe.generator', 'recipe.description', 'recipe.preparation', 'recipe.ueberarbeiten', 'recipe.pairing', 'recipe.review',
         'vk.generator', 'vk.wording', 'vk.marketing', 'vk.plating', 'vk.servier_vehikel', 'vk.behaelter', 'vk.regeneration', 'vk.kohaerenz', 'vk.teller_heber', 'vk.review',
         'concept.wording',
     ];
@@ -152,7 +152,7 @@ class AiGatewayService
         return new AiProposal(
             werte: $parsed['werte'] ?? [],
             confidence: min(1.0, max(0.0, (float) ($parsed['confidence'] ?? 0.0))), // Clamp (GL-07 I5)
-            begruendung: $parsed['begruendung'] ?? null,
+            reasoning: $parsed['reasoning'] ?? null,
             unknownSlugs: $parsed['unknown_slugs'] ?? [],
             model: $antwort['model'] ?? null,
             elapsedMs: $elapsedMs,
@@ -182,7 +182,7 @@ class AiGatewayService
         $katalog = collect($toolNames)
             ->map(fn ($n) => $registry->get($n))
             ->filter()
-            ->map(fn ($t) => ['name' => $t->getName(), 'beschreibung' => $t->getDescription(), 'schema' => $t->getSchema()])
+            ->map(fn ($t) => ['name' => $t->getName(), 'description' => $t->getDescription(), 'schema' => $t->getSchema()])
             ->values()->all();
 
         $messages = [[

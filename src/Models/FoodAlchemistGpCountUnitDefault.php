@@ -9,7 +9,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Stückgewicht je GP×Einheit (GL-02 T1 Zeile 3 — Knoblauch
- * „Zehe" 5 g vs. „Knolle" 40 g); ergänzt gps.stk_default_g.
+ * „Zehe" 5 g vs. „Knolle" 40 g); ergänzt gps.piece_default_g.
  */
 class FoodAlchemistGpCountUnitDefault extends Model
 {

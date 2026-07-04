@@ -77,45 +77,45 @@ class VocabularyService
 
     public function updateEinheit(Team $team, int $id, array $input): FoodAlchemistVocabEinheit
     {
-        $einheit = FoodAlchemistVocabEinheit::visibleToTeam($team)->findOrFail($id);
-        if (! $einheit->isOwnedBy($team)) {
+        $unit = FoodAlchemistVocabEinheit::visibleToTeam($team)->findOrFail($id);
+        if (! $unit->isOwnedBy($team)) {
             throw new RuntimeException('Geerbte Katalog-Einheit — Pflege nur durch das Besitzer-Team (D1).');
         }
 
-        $einheit->update([
-            'display_de' => ($input['display_de'] ?? '') ?: $einheit->display_de,
+        $unit->update([
+            'display_de' => ($input['display_de'] ?? '') ?: $unit->display_de,
             'dimension' => ($input['dimension'] ?? '') ?: null,
             'default_in_g' => self::dezimalOrNull($input['default_in_g'] ?? null),
             'default_in_ml' => self::dezimalOrNull($input['default_in_ml'] ?? null),
             'is_approximate' => (bool) ($input['is_approximate'] ?? false),
-            'sort_order' => (int) ($input['sort_order'] ?? $einheit->sort_order),
+            'sort_order' => (int) ($input['sort_order'] ?? $unit->sort_order),
         ]);
 
-        return $einheit;
+        return $unit;
     }
 
     public function setEinheitInactive(Team $team, int $id, bool $inactive): void
     {
-        $einheit = FoodAlchemistVocabEinheit::visibleToTeam($team)->findOrFail($id);
-        if (! $einheit->isOwnedBy($team)) {
+        $unit = FoodAlchemistVocabEinheit::visibleToTeam($team)->findOrFail($id);
+        if (! $unit->isOwnedBy($team)) {
             throw new RuntimeException('Geerbte Katalog-Einheit — Pflege nur durch das Besitzer-Team (D1).');
         }
-        $einheit->update(['is_inactive' => $inactive]); // AT-D1-04: ausblenden statt löschen
+        $unit->update(['is_inactive' => $inactive]); // AT-D1-04: ausblenden statt löschen
     }
 
     public function deleteEinheit(Team $team, int $id): void
     {
-        $einheit = FoodAlchemistVocabEinheit::visibleToTeam($team)->findOrFail($id);
-        if (! $einheit->isOwnedBy($team)) {
+        $unit = FoodAlchemistVocabEinheit::visibleToTeam($team)->findOrFail($id);
+        if (! $unit->isOwnedBy($team)) {
             throw new RuntimeException('Geerbte Katalog-Einheit — Pflege nur durch das Besitzer-Team (D1).');
         }
 
-        $referenzen = FoodAlchemistGp::where('preferred_count_unit_id', $einheit->id)->count();
+        $referenzen = FoodAlchemistGp::where('preferred_count_unit_id', $unit->id)->count();
         if ($referenzen > 0) {
             throw new RuntimeException("Einheit wird von {$referenzen} GP(s) referenziert — erst umhängen oder inaktiv setzen."); // V-06
         }
 
-        $einheit->delete();
+        $unit->delete();
     }
 
     // ── Warengruppen & Sub-Kategorien (M1-03, Regelwerk GP §3) ─────────
@@ -172,9 +172,9 @@ class VocabularyService
     public function listWarengruppen(Team $team): Collection
     {
         $counts = FoodAlchemistGp::visibleToTeam($team)
-            ->selectRaw('warengruppe_code, COUNT(*) AS n')
-            ->groupBy('warengruppe_code')
-            ->pluck('n', 'warengruppe_code');
+            ->selectRaw('commodity_group_code, COUNT(*) AS n')
+            ->groupBy('commodity_group_code')
+            ->pluck('n', 'commodity_group_code');
 
         return FoodAlchemistLookupWarengruppe::visibleToTeam($team)
             ->orderBy('sort_order')->orderBy('code')
@@ -207,7 +207,7 @@ class VocabularyService
         if (! $wg->isOwnedBy($team)) {
             throw new RuntimeException('Geerbte Warengruppe — Pflege nur durch das Besitzer-Team (D1).');
         }
-        $n = FoodAlchemistGp::where('warengruppe_code', $wg->code)->whereNull('deleted_at')->count();
+        $n = FoodAlchemistGp::where('commodity_group_code', $wg->code)->whereNull('deleted_at')->count();
         if ($n > 0) {
             throw new RuntimeException("Warengruppe wird von {$n} GP(s) genutzt — erst umhängen, dann löschen."); // V-06
         }
@@ -216,41 +216,41 @@ class VocabularyService
 
     /**
      * Sub-Kategorie-Übersicht (#371): verwaltete Einträge (anlegbar) + vorhandene GP-Freitext-
-     * werte (Bestand), gemerged je Warengruppe. Felder bleiben `sub_kategorie` + `n` (GP-Zähler)
+     * werte (Bestand), gemerged je Warengruppe. Felder bleiben `sub_category` + `n` (GP-Zähler)
      * UI-kompatibel; `managed_id` markiert verwaltete Einträge.
      */
     public function listSubCategories(Team $team, ?string $warengruppeCode = null): \Illuminate\Support\Collection
     {
         $gpRows = FoodAlchemistGp::visibleToTeam($team)
-            ->whereNotNull('sub_kategorie')
-            ->when($warengruppeCode, fn ($q) => $q->where('warengruppe_code', $warengruppeCode))
-            ->selectRaw('warengruppe_code, sub_kategorie, COUNT(*) AS n')
-            ->groupBy('warengruppe_code', 'sub_kategorie')
+            ->whereNotNull('sub_category')
+            ->when($warengruppeCode, fn ($q) => $q->where('commodity_group_code', $warengruppeCode))
+            ->selectRaw('commodity_group_code, sub_category, COUNT(*) AS n')
+            ->groupBy('commodity_group_code', 'sub_category')
             ->get();
-        $counts = $gpRows->keyBy(fn ($r) => $r->warengruppe_code.'|'.$r->sub_kategorie);
+        $counts = $gpRows->keyBy(fn ($r) => $r->commodity_group_code.'|'.$r->sub_category);
 
         $managed = FoodAlchemistWarengruppeSubkategorie::visibleToTeam($team)
-            ->when($warengruppeCode, fn ($q) => $q->where('warengruppe_code', $warengruppeCode))
+            ->when($warengruppeCode, fn ($q) => $q->where('commodity_group_code', $warengruppeCode))
             ->orderBy('position')->orderBy('name')->get();
 
         $out = collect();
         $gesehen = [];
         foreach ($managed as $m) {
-            $key = $m->warengruppe_code.'|'.$m->name;
+            $key = $m->commodity_group_code.'|'.$m->name;
             $gesehen[$key] = true;
             $out->push((object) [
-                'warengruppe_code' => $m->warengruppe_code,
-                'sub_kategorie' => $m->name,
+                'commodity_group_code' => $m->commodity_group_code,
+                'sub_category' => $m->name,
                 'n' => (int) ($counts[$key]->n ?? 0),
                 'managed_id' => $m->id,
             ]);
         }
-        foreach ($gpRows->sortBy('sub_kategorie') as $r) {  // Bestands-Freitextwerte (noch nicht verwaltet)
-            $key = $r->warengruppe_code.'|'.$r->sub_kategorie;
+        foreach ($gpRows->sortBy('sub_category') as $r) {  // Bestands-Freitextwerte (noch nicht verwaltet)
+            $key = $r->commodity_group_code.'|'.$r->sub_category;
             if (! isset($gesehen[$key])) {
                 $out->push((object) [
-                    'warengruppe_code' => $r->warengruppe_code,
-                    'sub_kategorie' => $r->sub_kategorie,
+                    'commodity_group_code' => $r->commodity_group_code,
+                    'sub_category' => $r->sub_category,
                     'n' => (int) $r->n,
                     'managed_id' => null,
                 ]);
@@ -274,16 +274,16 @@ class VocabularyService
             throw new RuntimeException('Erst eine Warengruppe wählen.');
         }
         $vorhanden = FoodAlchemistWarengruppeSubkategorie::where('team_id', $team->id)
-            ->where('warengruppe_code', $warengruppeCode)->where('name', $name)->exists();
+            ->where('commodity_group_code', $warengruppeCode)->where('name', $name)->exists();
         if ($vorhanden) {
             throw new RuntimeException('Diese Sub-Kategorie gibt es in der Warengruppe schon.');
         }
         $maxPos = FoodAlchemistWarengruppeSubkategorie::where('team_id', $team->id)
-            ->where('warengruppe_code', $warengruppeCode)->max('position');
+            ->where('commodity_group_code', $warengruppeCode)->max('position');
 
         return FoodAlchemistWarengruppeSubkategorie::create([
             'team_id' => $team->id,
-            'warengruppe_code' => $warengruppeCode,
+            'commodity_group_code' => $warengruppeCode,
             'name' => $name,
             'position' => (int) $maxPos + 1,
         ]);
@@ -299,7 +299,7 @@ class VocabularyService
 
         // #371: verwalteten Eintrag mitziehen, damit Liste und GP-Werte synchron bleiben.
         FoodAlchemistWarengruppeSubkategorie::where('team_id', $team->id)
-            ->where('warengruppe_code', $warengruppeCode)->where('name', $alt)
+            ->where('commodity_group_code', $warengruppeCode)->where('name', $alt)
             ->update(['name' => $neu]);
 
         return app(GpService::class)->renameSubKategorie($team, $warengruppeCode, $alt, $neu);
@@ -331,7 +331,7 @@ class VocabularyService
     {
         return FoodAlchemistRecipeCategory::visibleToTeam($team)
             ->when($mainGroupId, fn ($q) => $q->where('main_group_id', $mainGroupId))
-            ->orderBy('sort_order')->orderBy('bezeichnung')
+            ->orderBy('sort_order')->orderBy('label')
             ->get()
             ->each(fn ($kat) => $kat->setAttribute('recipe_count', $this->recipeCount($kat->id)));
     }
@@ -343,12 +343,12 @@ class VocabularyService
      */
     public function createMainGroup(Team $team, array $input): FoodAlchemistRecipeMainGroup
     {
-        $bezeichnung = trim($input['bezeichnung'] ?? '');
-        if ($bezeichnung === '') {
+        $label = trim($input['label'] ?? '');
+        if ($label === '') {
             throw new RuntimeException('Hauptgruppe braucht eine Bezeichnung.');
         }
 
-        $basis = Str::slug($bezeichnung, '_') ?: 'hauptgruppe';
+        $basis = Str::slug($label, '_') ?: 'hauptgruppe';
         $code = $basis;
         $i = 2;
         while (FoodAlchemistRecipeMainGroup::where('team_id', $team->id)->where('code', $code)->exists()) {
@@ -360,7 +360,7 @@ class VocabularyService
         return FoodAlchemistRecipeMainGroup::create([
             'team_id' => $team->id,
             'code' => $code,
-            'bezeichnung' => $bezeichnung,
+            'label' => $label,
             'bereich' => ($input['bereich'] ?? '') ?: null,
             'sort_order' => (int) ($input['sort_order'] ?? ((int) $maxSort + 1)),
         ]);
@@ -369,16 +369,16 @@ class VocabularyService
     public function createRecipeCategory(Team $team, int $mainGroupId, array $input): FoodAlchemistRecipeCategory
     {
         $hg = FoodAlchemistRecipeMainGroup::visibleToTeam($team)->findOrFail($mainGroupId);
-        $bezeichnung = trim($input['bezeichnung'] ?? '');
-        if ($bezeichnung === '') {
+        $label = trim($input['label'] ?? '');
+        if ($label === '') {
             throw new RuntimeException('Kategorie braucht eine Bezeichnung.');
         }
 
         return FoodAlchemistRecipeCategory::create([
             'team_id' => $team->id,
             'main_group_id' => $hg->id,
-            'code' => Str::slug($bezeichnung, '_'),
-            'bezeichnung' => $bezeichnung,
+            'code' => Str::slug($label, '_'),
+            'label' => $label,
             'technik' => ($input['technik'] ?? '') ?: null,
             'sort_order' => (int) ($input['sort_order'] ?? 999),
         ]);
@@ -391,12 +391,12 @@ class VocabularyService
      */
     public function createDishMainGroup(Team $team, array $input): FoodAlchemistDishMainGroup
     {
-        $bezeichnung = trim($input['bezeichnung'] ?? '');
-        if ($bezeichnung === '') {
+        $label = trim($input['label'] ?? '');
+        if ($label === '') {
             throw new RuntimeException('Speisen-Hauptgruppe braucht eine Bezeichnung.');
         }
 
-        $basis = mb_substr(Str::slug($bezeichnung, '_') ?: 'hg', 0, 14);
+        $basis = mb_substr(Str::slug($label, '_') ?: 'hg', 0, 14);
         $code = $basis;
         $i = 2;
         while (FoodAlchemistDishMainGroup::where('team_id', $team->id)->where('code', $code)->exists()) {
@@ -406,7 +406,7 @@ class VocabularyService
         return FoodAlchemistDishMainGroup::create([
             'team_id' => $team->id,
             'code' => $code,
-            'bezeichnung' => $bezeichnung,
+            'label' => $label,
             'sort_order' => (int) FoodAlchemistDishMainGroup::max('sort_order') + 1,
         ]);
     }
@@ -418,15 +418,15 @@ class VocabularyService
     public function createDishClass(Team $team, int $mainGroupId, array $input): FoodAlchemistDishClass
     {
         $hg = FoodAlchemistDishMainGroup::findOrFail($mainGroupId);
-        $bezeichnung = trim($input['bezeichnung'] ?? '');
-        if ($bezeichnung === '') {
+        $label = trim($input['label'] ?? '');
+        if ($label === '') {
             throw new RuntimeException('Klasse braucht eine Bezeichnung.');
         }
 
         $diaet = in_array($input['diaetform'] ?? '', ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'], true)
             ? $input['diaetform'] : 'neutral';
 
-        $basis = mb_substr(Str::slug($bezeichnung, '_') ?: 'klasse', 0, 30);
+        $basis = mb_substr(Str::slug($label, '_') ?: 'klasse', 0, 30);
         $code = $basis;
         $i = 2;
         while (FoodAlchemistDishClass::where('team_id', $team->id)->where('code', $code)->exists()) {
@@ -437,7 +437,7 @@ class VocabularyService
             'team_id' => $team->id,
             'dish_main_group_id' => $hg->id,
             'code' => $code,
-            'bezeichnung' => $bezeichnung,
+            'label' => $label,
             'diaetform' => $diaet,
             'is_vegi' => in_array($diaet, ['vegi', 'vegan'], true),
             'is_vegan' => $diaet === 'vegan',
@@ -454,7 +454,7 @@ class VocabularyService
         if (trim($name) === '') {
             throw new RuntimeException('Bezeichnung darf nicht leer sein.');
         }
-        $hg->update(['bezeichnung' => trim($name)]);
+        $hg->update(['label' => trim($name)]);
 
         return $hg;
     }
@@ -480,11 +480,11 @@ class VocabularyService
         if (! $klasse->isOwnedBy($team)) {
             throw new RuntimeException('Geerbte Klasse — Pflege nur durch das Besitzer-Team (D1).');
         }
-        $bezeichnung = trim($input['bezeichnung'] ?? '');
+        $label = trim($input['label'] ?? '');
         $diaet = in_array($input['diaetform'] ?? '', ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'], true)
             ? $input['diaetform'] : $klasse->diaetform;
         $klasse->update([
-            'bezeichnung' => $bezeichnung !== '' ? $bezeichnung : $klasse->bezeichnung,
+            'label' => $label !== '' ? $label : $klasse->label,
             'diaetform' => $diaet,
             'is_vegi' => in_array($diaet, ['vegi', 'vegan'], true),
             'is_vegan' => $diaet === 'vegan',
@@ -502,7 +502,7 @@ class VocabularyService
         }
         if (\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_recipes')) {
             $n = (int) \Illuminate\Support\Facades\DB::table('foodalchemist_recipes')
-                ->where('speisen_klasse_id', $klasse->id)->whereNull('deleted_at')->count();
+                ->where('dish_class_id', $klasse->id)->whereNull('deleted_at')->count();
             if ($n > 0) {
                 throw new RuntimeException("Klasse wird von {$n} Gericht(en) genutzt — erst umhängen, dann löschen.");
             }
@@ -517,7 +517,7 @@ class VocabularyService
             throw new RuntimeException('Geerbte Kategorie — Pflege nur durch das Besitzer-Team (D1).');
         }
         $kat->update([
-            'bezeichnung' => ($input['bezeichnung'] ?? '') ?: $kat->bezeichnung,
+            'label' => ($input['label'] ?? '') ?: $kat->label,
             'technik' => ($input['technik'] ?? '') ?: null,
             'sort_order' => (int) ($input['sort_order'] ?? $kat->sort_order),
         ]);
@@ -555,12 +555,12 @@ class VocabularyService
         if (! $hg->isOwnedBy($team)) {
             throw new RuntimeException('Geerbte Hauptgruppe — Pflege nur durch das Besitzer-Team (D1).');
         }
-        $bezeichnung = trim($input['bezeichnung'] ?? '');
-        if ($bezeichnung === '') {
+        $label = trim($input['label'] ?? '');
+        if ($label === '') {
             throw new RuntimeException('Bezeichnung darf nicht leer sein.');
         }
         $hg->update([
-            'bezeichnung' => $bezeichnung,
+            'label' => $label,
             'bereich' => array_key_exists('bereich', $input) ? (($input['bereich'] ?? '') ?: null) : $hg->bereich,
             'sort_order' => (int) ($input['sort_order'] ?? $hg->sort_order),
         ]);

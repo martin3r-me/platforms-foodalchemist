@@ -22,7 +22,7 @@ class DarreichungResolver
 {
     public function fuerSlot(FoodAlchemistConceptSlot $slot): ?FoodAlchemistRecipeDarreichung
     {
-        if ($slot->darreichung_id !== null && $slot->darreichung !== null) {
+        if ($slot->presentation_id !== null && $slot->darreichung !== null) {
             return $slot->darreichung;
         }
 
@@ -31,10 +31,10 @@ class DarreichungResolver
         }
 
         // Phase 4: Servierform des Konzepts → passende Darreichung des Gerichts
-        $konzeptServierformId = $slot->concept?->servierform_id;
+        $konzeptServierformId = $slot->concept?->serving_form_id;
         if ($konzeptServierformId !== null) {
             $passend = $slot->gericht->darreichungen()
-                ->where('servierform_id', $konzeptServierformId)
+                ->where('serving_form_id', $konzeptServierformId)
                 ->first();
             if ($passend !== null) {
                 return $passend;
@@ -46,7 +46,7 @@ class DarreichungResolver
 
     public function fuerPaketGericht(FoodAlchemistPaketGericht $pg): ?FoodAlchemistRecipeDarreichung
     {
-        if ($pg->darreichung_id !== null && $pg->darreichung !== null) {
+        if ($pg->presentation_id !== null && $pg->darreichung !== null) {
             return $pg->darreichung;
         }
 

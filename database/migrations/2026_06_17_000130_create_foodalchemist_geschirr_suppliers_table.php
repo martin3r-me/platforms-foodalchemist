@@ -19,11 +19,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('foodalchemist_geschirr_suppliers')) {
+        if (Schema::hasTable('foodalchemist_tableware_suppliers')) {
             return;
         }
 
-        Schema::create('foodalchemist_geschirr_suppliers', function (Blueprint $table) {
+        Schema::create('foodalchemist_tableware_suppliers', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index()->comment('team-eigen (kein D1-global)');
@@ -43,6 +43,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('foodalchemist_geschirr_suppliers');
+        Schema::dropIfExists('foodalchemist_tableware_suppliers');
     }
 };

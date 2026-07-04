@@ -64,7 +64,7 @@ class SignalDetektorService
             $anzahl . ' Rezepte mit unplausiblen Nährwerten (Zucker > KH / gesättigte > Fett)',
             [
                 'dedup_key' => 'naehrwert-plausi',
-                'beschreibung' => '„davon"-Wert liegt über dem Oberwert — Ursache ist meist ungleiche Nährwert-Abdeckung der Lieferantenartikel je GP (Ø über verschiedene LA-Mengen). Auf Labels/Foodbooks wäre das ein Deklarationsfehler — betroffene GP-Daten prüfen.',
+                'description' => '„davon"-Wert liegt über dem Oberwert — Ursache ist meist ungleiche Nährwert-Abdeckung der Lieferantenartikel je GP (Ø über verschiedene LA-Mengen). Auf Labels/Foodbooks wäre das ein Deklarationsfehler — betroffene GP-Daten prüfen.',
                 'payload' => ['anzahl' => $anzahl, 'beispiele' => $beispiele],
             ]
         );
@@ -96,7 +96,7 @@ class SignalDetektorService
             $anzahl . ' Grundprodukte ohne Lead-Lieferantenartikel',
             [
                 'dedup_key' => 'datenqualitaet-gp-ohne-la',
-                'beschreibung' => 'Diese GPs benötigen einen Lieferantenartikel, haben aber keinen Lead-LA bzw. keine LAs — Kalkulation und Allergen-Aggregation bleiben dadurch unvollständig.',
+                'description' => 'Diese GPs benötigen einen Lieferantenartikel, haben aber keinen Lead-LA bzw. keine LAs — Kalkulation und Allergen-Aggregation bleiben dadurch unvollständig.',
                 'payload' => ['anzahl' => $anzahl, 'beispiele' => $beispiele],
             ]
         );
@@ -136,7 +136,7 @@ class SignalDetektorService
             $anzahl . ' Lead-Lieferantenartikel mit veraltetem Preis (> ' . $tageSchwelle . ' Tage)',
             [
                 'dedup_key' => 'veraltete-preise',
-                'beschreibung' => 'Der jüngste hinterlegte Preis dieser Lead-LAs ist älter als ' . $tageSchwelle . ' Tage (oder fehlt) — die Kalkulation rechnet evtl. mit Alt-Preisen.',
+                'description' => 'Der jüngste hinterlegte Preis dieser Lead-LAs ist älter als ' . $tageSchwelle . ' Tage (oder fehlt) — die Kalkulation rechnet evtl. mit Alt-Preisen.',
                 'payload' => ['anzahl' => $anzahl, 'schwelle_tage' => $tageSchwelle],
             ]
         );
@@ -212,7 +212,7 @@ class SignalDetektorService
                     'dedup_key' => 'preis-anomalie-gp-' . $gpId,
                     'ref_type' => 'gp',
                     'ref_id' => (int) $gpId,
-                    'beschreibung' => 'Lieferantenpreise weichen innerhalb gleicher Einheit stark vom Median ab — prüfen (Tippfehler, Datenfehler, Premium oder echter Ausreißer).',
+                    'description' => 'Lieferantenpreise weichen innerhalb gleicher Einheit stark vom Median ab — prüfen (Tippfehler, Datenfehler, Premium oder echter Ausreißer).',
                     'payload' => ['ausreisser' => array_slice($ausreisser, 0, 10), 'max_abw_pct' => $maxAbw],
                 ]
             );
@@ -263,7 +263,7 @@ class SignalDetektorService
                     'dedup_key' => 'marge-recipe-' . $r->id,
                     'ref_type' => 'recipe',
                     'ref_id' => $r->id,
-                    'beschreibung' => 'Deckungsbeitrag unter der Zielmarge — Verkaufspreis erhöhen oder Wareneinsatz/Vollkosten senken.',
+                    'description' => 'Deckungsbeitrag unter der Zielmarge — Verkaufspreis erhöhen oder Wareneinsatz/Vollkosten senken.',
                     'payload' => ['db_pct' => (float) $db, 'ziel_pct' => $ziel, 'vk_netto' => (float) $r->vk_netto],
                 ]
             );
@@ -305,7 +305,7 @@ class SignalDetektorService
                     'dedup_key' => 'we-quote-recipe-' . $r->id,
                     'ref_type' => 'recipe',
                     'ref_id' => $r->id,
-                    'beschreibung' => 'Food-Cost über dem Ziel — günstigeren Lead-LA prüfen, Rezeptur/Portion anpassen oder Verkaufspreis erhöhen.',
+                    'description' => 'Food-Cost über dem Ziel — günstigeren Lead-LA prüfen, Rezeptur/Portion anpassen oder Verkaufspreis erhöhen.',
                     'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'vk_netto' => (float) $r->vk_netto],
                 ]
             );

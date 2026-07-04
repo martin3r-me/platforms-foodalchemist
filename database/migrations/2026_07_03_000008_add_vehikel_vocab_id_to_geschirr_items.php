@@ -15,19 +15,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasColumn('foodalchemist_geschirr_items', 'vehikel_vocab_id')) {
+        if (Schema::hasColumn('foodalchemist_tableware_items', 'vehicle_vocab_id')) {
             return;
         }
-        Schema::table('foodalchemist_geschirr_items', function (Blueprint $table) {
-            $table->foreignId('vehikel_vocab_id')->nullable()
-                ->constrained('foodalchemist_vocab_serviervehikel')->nullOnDelete();
+        Schema::table('foodalchemist_tableware_items', function (Blueprint $table) {
+            $table->foreignId('vehicle_vocab_id')->nullable()
+                ->constrained('foodalchemist_vocab_serving_vehicles')->nullOnDelete();
         });
     }
 
     public function down(): void
     {
-        Schema::table('foodalchemist_geschirr_items', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('vehikel_vocab_id');
+        Schema::table('foodalchemist_tableware_items', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('vehicle_vocab_id');
         });
     }
 };

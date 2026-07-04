@@ -32,10 +32,10 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'anlass' => ['type' => 'string'],
                 'niveau' => ['type' => 'string'],
                 'klasse' => ['type' => 'string'],
-                'beschreibung' => ['type' => 'string'],
+                'description' => ['type' => 'string'],
                 'brief' => ['type' => 'string', 'description' => 'KI-Brief: was soll das Konzept leisten'],
                 'zielpreis_pro_person' => ['type' => 'number'],
-                'saison' => ['type' => 'string'],
+                'season' => ['type' => 'string'],
                 'zielgruppe' => ['type' => 'string'],
                 'diaet_vorgabe' => ['type' => 'string'],
             ],
@@ -60,7 +60,7 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'status' => 'draft',
             ]);
             $extras = array_intersect_key($arguments, array_flip([
-                'beschreibung', 'brief', 'zielpreis_pro_person', 'saison', 'zielgruppe', 'diaet_vorgabe',
+                'description', 'brief', 'zielpreis_pro_person', 'season', 'zielgruppe', 'diaet_vorgabe',
             ]));
             if ($extras !== []) {
                 $c = $svc->update($team, $c->id, $extras);

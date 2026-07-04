@@ -186,7 +186,7 @@ class TeamSettingsService
     /** Garverlust-Default in % je GP-Klasse (Warengruppen-Code), '*' = global. */
     public function garverlustDefault(Team $team, ?string $warengruppeCode = null): ?float
     {
-        $defaults = $this->for($team)->garverlust_defaults ?? [];
+        $defaults = $this->for($team)->cooking_loss_defaults ?? [];
 
         $wert = $defaults[$warengruppeCode] ?? $defaults['*'] ?? null;
 
@@ -196,7 +196,7 @@ class TeamSettingsService
     /** Putzverlust-Default in % je GP-Klasse (Warengruppen-Code), '*' = global (Phase 2). */
     public function putzverlustDefault(Team $team, ?string $warengruppeCode = null): ?float
     {
-        $defaults = $this->for($team)->putzverlust_defaults ?? [];
+        $defaults = $this->for($team)->trimming_loss_defaults ?? [];
 
         $wert = $defaults[$warengruppeCode] ?? $defaults['*'] ?? null;
 
@@ -270,7 +270,7 @@ class TeamSettingsService
     public function kalkulationSchema(Team $team): array
     {
         $erlaubteTypen = ['pct_mek', 'pct_fek', 'pct_hk', 'eur_pro_portion', 'arbeitszeit', 'pct_we'];
-        $schema = $this->for($team)->kalkulation_schema;
+        $schema = $this->for($team)->calculation_schema;
         if (! is_array($schema) || $schema === []) {
             $schema = $this->defaultSchema($team);
         }
@@ -337,7 +337,7 @@ class TeamSettingsService
      */
     public function bezugsbasen(Team $team): array
     {
-        $b = $this->for($team)->kalkulation_bezugsbasen ?? [];
+        $b = $this->for($team)->calculation_bezugsbasen ?? [];
 
         return [
             'mek' => (float) ($b['mek'] ?? 0),

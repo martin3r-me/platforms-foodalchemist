@@ -17,10 +17,10 @@ class ConcepterDimensionen extends Component
 {
     /** Whitelist: key => [tabelle, label, hint] */
     public const VOKABULARE = [
-        'einsatzmomente' => ['tabelle' => 'foodalchemist_einsatzmomente', 'label' => 'Einsatzmomente', 'hint' => 'mehrfach pro Concept (Frühstück, Lunch, Apéro …)'],
-        'eventtypen' => ['tabelle' => 'foodalchemist_eventtypen', 'label' => 'Eventtypen', 'hint' => 'einfach pro Concept (Konferenz, Gala, Sommerfest …)'],
-        'saisons' => ['tabelle' => 'foodalchemist_saisons', 'label' => 'Saisons', 'hint' => 'mehrfach pro Concept'],
-        'servierformen' => ['tabelle' => 'foodalchemist_servierformen', 'label' => 'Servierformen', 'hint' => 'Scharnier Concept ⇄ Gericht-Darreichung — WaWi-Master, Zusätze FA-nativ'],
+        'einsatzmomente' => ['tabelle' => 'foodalchemist_service_moments', 'label' => 'Einsatzmomente', 'hint' => 'mehrfach pro Concept (Frühstück, Lunch, Apéro …)'],
+        'eventtypen' => ['tabelle' => 'foodalchemist_event_types', 'label' => 'Eventtypen', 'hint' => 'einfach pro Concept (Konferenz, Gala, Sommerfest …)'],
+        'saisons' => ['tabelle' => 'foodalchemist_seasons', 'label' => 'Saisons', 'hint' => 'mehrfach pro Concept'],
+        'servierformen' => ['tabelle' => 'foodalchemist_serving_forms', 'label' => 'Servierformen', 'hint' => 'Scharnier Concept ⇄ Gericht-Darreichung — WaWi-Master, Zusätze FA-nativ'],
     ];
 
     /** @var array<string, string> Add-Form (Name) je Vokabular */
@@ -47,7 +47,7 @@ class ConcepterDimensionen extends Component
             return;
         }
         $teamId = Auth::user()?->currentTeamRelation?->id;
-        $nameSpalte = $vokabular === 'servierformen' ? 'bezeichnung' : 'name';
+        $nameSpalte = $vokabular === 'servierformen' ? 'label' : 'name';
         if (DB::table($meta['tabelle'])->where($nameSpalte, $name)->whereNull('deleted_at')->exists()) {
             $this->fehler = "«{$name}» existiert schon in {$meta['label']}.";
 
@@ -97,7 +97,7 @@ class ConcepterDimensionen extends Component
         if ($zeile === null) {
             return;
         }
-        $name = $zeile->bezeichnung ?? $zeile->name;
+        $name = $zeile->label ?? $zeile->name;
         if ($vokabular === 'servierformen' && $zeile->legacy_id !== null) {
             $this->fehler = "«{$name}» kommt aus der WaWi (Master) — nur deaktivieren.";
 
@@ -117,11 +117,11 @@ class ConcepterDimensionen extends Component
     private function referenzen(string $vokabular, int $id): int
     {
         return match ($vokabular) {
-            'einsatzmomente' => DB::table('foodalchemist_concept_einsatzmomente')->where('einsatzmoment_id', $id)->count(),
-            'eventtypen' => DB::table('foodalchemist_concepts')->where('eventtyp_id', $id)->whereNull('deleted_at')->count(),
-            'saisons' => DB::table('foodalchemist_concept_saisons')->where('saison_id', $id)->count(),
-            'servierformen' => DB::table('foodalchemist_concepts')->where('servierform_id', $id)->whereNull('deleted_at')->count()
-                + DB::table('foodalchemist_recipe_darreichungen')->where('servierform_id', $id)->whereNull('deleted_at')->count(),
+            'einsatzmomente' => DB::table('foodalchemist_concept_service_moments')->where('service_moment_id', $id)->count(),
+            'eventtypen' => DB::table('foodalchemist_concepts')->where('event_type_id', $id)->whereNull('deleted_at')->count(),
+            'saisons' => DB::table('foodalchemist_concept_seasons')->where('season_id', $id)->count(),
+            'servierformen' => DB::table('foodalchemist_concepts')->where('serving_form_id', $id)->whereNull('deleted_at')->count()
+                + DB::table('foodalchemist_recipe_presentations')->where('serving_form_id', $id)->whereNull('deleted_at')->count(),
             default => 0,
         };
     }
@@ -132,7 +132,7 @@ class ConcepterDimensionen extends Component
         foreach (self::VOKABULARE as $key => $meta) {
             $listen[$key] = $meta + [
                 'zeilen' => DB::table($meta['tabelle'])->whereNull('deleted_at')
-                    ->orderBy('sort_order')->orderBy($key === 'servierformen' ? 'bezeichnung' : 'name')->get(),
+                    ->orderBy('sort_order')->orderBy($key === 'servierformen' ? 'label' : 'name')->get(),
             ];
         }
 

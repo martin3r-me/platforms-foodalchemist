@@ -70,7 +70,7 @@ class SupplierItemService
             ->all();
     }
 
-    /** Edit nur Besitzer-Team (D1); manuelle Pflege setzt quelle='manual' (GL-07-Lineage). */
+    /** Edit nur Besitzer-Team (D1); manuelle Pflege setzt source='manual' (GL-07-Lineage). */
     public function setAllergens(Team $team, FoodAlchemistSupplierItem $item, array $werte): FoodAlchemistItemAllergen
     {
         if (! $item->isOwnedBy($team)) {
@@ -89,7 +89,7 @@ class SupplierItemService
 
         return FoodAlchemistItemAllergen::updateOrCreate(
             ['supplier_item_id' => $item->id],
-            [...$attribute, 'team_id' => $item->team_id, 'quelle' => 'manual'],
+            [...$attribute, 'team_id' => $item->team_id, 'source' => 'manual'],
         );
     }
 
@@ -160,7 +160,7 @@ class SupplierItemService
             ->all();
     }
 
-    /** Edit nur Besitzer-Team; manuelle Pflege stempelt quelle=manual. Schreibt ROHE Domäne (GL-09 A1). */
+    /** Edit nur Besitzer-Team; manuelle Pflege stempelt source=manual. Schreibt ROHE Domäne (GL-09 A1). */
     public function setDeclarations(Team $team, FoodAlchemistSupplierItem $item, array $werte): FoodAlchemistItemDeclaration
     {
         if (! $item->isOwnedBy($team)) {
@@ -180,7 +180,7 @@ class SupplierItemService
 
         return FoodAlchemistItemDeclaration::updateOrCreate(
             ['supplier_item_id' => $item->id],
-            [...$attribute, 'team_id' => $item->team_id, 'quelle' => 'manual'],
+            [...$attribute, 'team_id' => $item->team_id, 'source' => 'manual'],
         );
     }
 

@@ -19,19 +19,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('foodalchemist_geschirr_items')) {
+        if (Schema::hasTable('foodalchemist_tableware_items')) {
             return;
         }
 
-        Schema::create('foodalchemist_geschirr_items', function (Blueprint $table) {
+        Schema::create('foodalchemist_tableware_items', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->foreignId('geschirr_supplier_id')->nullable()
-                ->constrained('foodalchemist_geschirr_suppliers')->nullOnDelete();
+                ->constrained('foodalchemist_tableware_suppliers')->nullOnDelete();
 
             // Identität
-            $table->string('bezeichnung')->index();
+            $table->string('label')->index();
             $table->string('artikel_nr', 64)->nullable()->index();
 
             // Klassifikation (frei, kleine Vokabel-Anmutung — kein FK)
@@ -51,7 +51,7 @@ return new class extends Migration
             // Leih-Konditionen (netto)
             $table->decimal('leihpreis', 10, 2)->nullable()->comment('Leihpreis netto je Einheit');
             $table->decimal('pfand', 10, 2)->nullable();
-            $table->string('einheit', 16)->default('Stk');
+            $table->string('unit', 16)->default('Stk');
 
             $table->text('note')->nullable();
             $table->boolean('is_inactive')->default(false)->index();
@@ -62,6 +62,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('foodalchemist_geschirr_items');
+        Schema::dropIfExists('foodalchemist_tableware_items');
     }
 };

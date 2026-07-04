@@ -18,7 +18,7 @@ use Platform\FoodAlchemist\Support\Curate;
  * M3-09/10: GP-Modal — Neuanlage über den Naming-Builder (GL-12 Render-First,
  * AUTO-SYNC-Vorschau für Name/Slug/gp_key), Edit für Klassifikation + KI-Felder.
  *
- * KI-Felder (GL-07-Lebenszyklus, M3-10): `zustand` + `tags` mit ki-header-Baustein —
+ * KI-Felder (GL-07-Lebenszyklus, M3-10): `condition` + `tags` mit ki-header-Baustein —
  * ai_* holt einen Vorschlag (persistiert nichts), accept_* schreibt Wert + Lineage
  * (Override-First: manuelle Quelle wird nie still überschrieben), clear_* setzt
  * Wert + Lineage zurück, manual_* markiert den aktuellen Wert als manuell gepflegt.
@@ -26,10 +26,10 @@ use Platform\FoodAlchemist\Support\Curate;
 class GpModal extends Component
 {
     private const BUILDER_LEER = [
-        'hauptzutat' => '', 'zustand' => '', 'verarbeitung' => '', 'form' => '',
+        'hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '',
         'portion' => '', 'pflichtangabe' => '',
         'bio' => false, 'vegan' => false, 'glutenfrei' => false, 'laktosefrei' => false,
-        'warengruppe_code' => '', 'sub_kategorie' => '',
+        'commodity_group_code' => '', 'sub_category' => '',
         'is_derivat' => false, 'derivat_von_gp_id' => null,
     ];
 
@@ -41,7 +41,7 @@ class GpModal extends Component
     public string $manuellerName = '';
 
     /** Kalkulations-Defaults (GL-02) — direkt persistiert, nur im Edit-Modus (Phase 2). */
-    public array $defaults = ['garverlust_default_pct' => '', 'putzverlust_default_pct' => '', 'stk_default_g' => ''];
+    public array $defaults = ['cooking_loss_default_pct' => '', 'trimming_loss_default_pct' => '', 'piece_default_g' => ''];
 
     public bool $force = false;
 
@@ -50,7 +50,7 @@ class GpModal extends Component
     /** ✨-Kopf-Button (Neuanlage): Roh-Bezeichnung für gp.suggest. */
     public string $kiRohtext = '';
 
-    /** @var array<string, array{werte: array, confidence: float, begruendung: ?string}> transiente GL-07-Vorschläge */
+    /** @var array<string, array{werte: array, confidence: float, reasoning: ?string}> transiente GL-07-Vorschläge */
     public array $kiVorschlag = [];
 
     /** @var array<string, string> Tri-State je TAG_FIELD: '' = unbewertet, '1' = ja, '0' = nein */
@@ -75,9 +75,9 @@ class GpModal extends Component
         if ($id !== null && ($gp = $this->gp()) !== null) {
             $this->manuellerName = $gp->name;
             $this->builder = array_merge(self::BUILDER_LEER, [
-                'zustand' => $gp->zustand ?? '',
-                'warengruppe_code' => $gp->warengruppe_code ?? '',
-                'sub_kategorie' => $gp->sub_kategorie ?? '',
+                'condition' => $gp->condition ?? '',
+                'commodity_group_code' => $gp->commodity_group_code ?? '',
+                'sub_category' => $gp->sub_category ?? '',
                 'is_derivat' => (bool) $gp->is_derivat,
                 'derivat_von_gp_id' => $gp->derivat_von_gp_id,
             ]);
@@ -86,9 +86,9 @@ class GpModal extends Component
                 $this->tags[$tag] = $wert === null ? '' : ($wert ? '1' : '0');
             }
             $this->defaults = [
-                'garverlust_default_pct' => $gp->garverlust_default_pct !== null ? (string) (float) $gp->garverlust_default_pct : '',
-                'putzverlust_default_pct' => $gp->putzverlust_default_pct !== null ? (string) (float) $gp->putzverlust_default_pct : '',
-                'stk_default_g' => $gp->stk_default_g !== null ? (string) (float) $gp->stk_default_g : '',
+                'cooking_loss_default_pct' => $gp->cooking_loss_default_pct !== null ? (string) (float) $gp->cooking_loss_default_pct : '',
+                'trimming_loss_default_pct' => $gp->trimming_loss_default_pct !== null ? (string) (float) $gp->trimming_loss_default_pct : '',
+                'piece_default_g' => $gp->piece_default_g !== null ? (string) (float) $gp->piece_default_g : '',
             ];
         }
 
@@ -108,9 +108,9 @@ class GpModal extends Component
     {
         $num = fn ($v) => trim((string) $v) === '' ? null : max(0, (float) str_replace(',', '.', (string) $v));
         $gp->update([
-            'garverlust_default_pct' => $num($this->defaults['garverlust_default_pct'] ?? ''),
-            'putzverlust_default_pct' => $num($this->defaults['putzverlust_default_pct'] ?? ''),
-            'stk_default_g' => $num($this->defaults['stk_default_g'] ?? ''),
+            'cooking_loss_default_pct' => $num($this->defaults['cooking_loss_default_pct'] ?? ''),
+            'trimming_loss_default_pct' => $num($this->defaults['trimming_loss_default_pct'] ?? ''),
+            'piece_default_g' => $num($this->defaults['piece_default_g'] ?? ''),
         ]);
     }
 
@@ -208,70 +208,70 @@ class GpModal extends Component
         $this->bulkRunId = null;                                      // Run-Box schließen; Vorschläge bleiben offen (verwerfbar via Review)
     }
 
-    // ── M3-10: GL-07-Lebenszyklus zustand ───────────────────────────────
+    // ── M3-10: GL-07-Lebenszyklus condition ───────────────────────────────
 
     public function ai_zustand(AiGatewayService $ki): void
     {
         $gp = $this->gp();
-        $vorschlag = $ki->propose('gp.zustand', [
+        $vorschlag = $ki->propose('gp.condition', [
             'name' => $gp?->name ?? $this->vorschauName(),
-            'zustand' => $this->builder['zustand'] ?: null,
+            'condition' => $this->builder['condition'] ?: null,
         ]);
-        $this->kiVorschlag['zustand'] = [
+        $this->kiVorschlag['condition'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),     // GL-07 Confidence-Clamp
-            'begruendung' => $vorschlag->begruendung,
+            'reasoning' => $vorschlag->reasoning,
         ];
     }
 
     public function accept_zustand(GpNamingService $naming): void
     {
         $gp = $this->gp();
-        $vorschlag = $this->kiVorschlag['zustand'] ?? null;
+        $vorschlag = $this->kiVorschlag['condition'] ?? null;
         if ($gp === null || $vorschlag === null) {
             return;
         }
-        if ($gp->zustand_quelle === 'manual') {                              // GL-07 Override-First
-            $this->fehler = 'zustand ist manuell gepflegt — erst Reset (clear), dann KI übernehmen.';
+        if ($gp->condition_source === 'manual') {                              // GL-07 Override-First
+            $this->fehler = 'condition ist manuell gepflegt — erst Reset (clear), dann KI übernehmen.';
 
             return;
         }
-        $wert = $naming->normalisiereZustand($vorschlag['werte']['zustand'] ?? null);
+        $wert = $naming->normalisiereZustand($vorschlag['werte']['condition'] ?? null);
         if ($wert === null || ! in_array($wert, GpNamingService::ZUSTAND_VOCAB, true)) {
             $this->fehler = 'KI-Vorschlag enthält keinen gültigen §9-Zustand.';
 
             return;
         }
         $gp->update([
-            'zustand' => $wert,
-            'zustand_quelle' => 'ki',
-            'zustand_ai_confidence' => $vorschlag['confidence'],
-            'zustand_ai_begruendung' => $vorschlag['begruendung'],
+            'condition' => $wert,
+            'condition_source' => 'ki',
+            'condition_ai_confidence' => $vorschlag['confidence'],
+            'condition_ai_reasoning' => $vorschlag['reasoning'],
         ]);
-        $this->builder['zustand'] = $wert;
-        unset($this->kiVorschlag['zustand']);
+        $this->builder['condition'] = $wert;
+        unset($this->kiVorschlag['condition']);
     }
 
     public function clear_zustand(): void
     {
         $this->gp()?->update([
-            'zustand' => null, 'zustand_quelle' => null,
-            'zustand_ai_confidence' => null, 'zustand_ai_begruendung' => null,
+            'condition' => null, 'condition_source' => null,
+            'condition_ai_confidence' => null, 'condition_ai_reasoning' => null,
         ]);
-        $this->builder['zustand'] = '';
-        unset($this->kiVorschlag['zustand']);
+        $this->builder['condition'] = '';
+        unset($this->kiVorschlag['condition']);
     }
 
     public function manual_zustand(GpNamingService $naming): void
     {
         $gp = $this->gp();
-        $wert = $naming->normalisiereZustand($this->builder['zustand'] ?: null);
+        $wert = $naming->normalisiereZustand($this->builder['condition'] ?: null);
         if ($gp === null || $wert === null) {
             return;
         }
         $gp->update([
-            'zustand' => $wert, 'zustand_quelle' => 'manual',
-            'zustand_ai_confidence' => null, 'zustand_ai_begruendung' => null,
+            'condition' => $wert, 'condition_source' => 'manual',
+            'condition_ai_confidence' => null, 'condition_ai_reasoning' => null,
         ]);
     }
 
@@ -287,7 +287,7 @@ class GpModal extends Component
         $this->kiVorschlag['tags'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
-            'begruendung' => $vorschlag->begruendung,
+            'reasoning' => $vorschlag->reasoning,
         ];
     }
 
@@ -298,7 +298,7 @@ class GpModal extends Component
         if ($gp === null || $vorschlag === null) {
             return;
         }
-        if ($gp->tag_quelle === 'manual') {                                  // GL-07 Override-First
+        if ($gp->tag_source === 'manual') {                                  // GL-07 Override-First
             $this->fehler = 'Tags sind manuell gepflegt — erst Reset (clear), dann KI übernehmen.';
 
             return;
@@ -317,9 +317,9 @@ class GpModal extends Component
             return;
         }
         $gp->update([...$update,
-            'tag_quelle' => 'ki',
+            'tag_source' => 'ki',
             'tag_ai_confidence' => $vorschlag['confidence'],
-            'tag_ai_begruendung' => $vorschlag['begruendung'],
+            'tag_ai_begruendung' => $vorschlag['reasoning'],
             'tag_aggregiert_am' => now(),
         ]);
         unset($this->kiVorschlag['tags']);
@@ -336,13 +336,13 @@ class GpModal extends Component
             $reset["tag_{$tag}"] = null;
             $this->tags[$tag] = '';
         }
-        $gp->update([...$reset, 'tag_quelle' => null, 'tag_ai_confidence' => null, 'tag_ai_begruendung' => null]);
+        $gp->update([...$reset, 'tag_source' => null, 'tag_ai_confidence' => null, 'tag_ai_begruendung' => null]);
         unset($this->kiVorschlag['tags']);
     }
 
     public function manual_tags(): void
     {
-        $this->speichereTags($this->gp(), quelle: 'manual');
+        $this->speichereTags($this->gp(), source: 'manual');
     }
 
     // ── ✨ Kopf-Button: Naming-Builder aus Roh-Bezeichnung (NEUE GPs) ────
@@ -352,8 +352,8 @@ class GpModal extends Component
         if (trim($this->kiRohtext) === '') {
             return;
         }
-        $vorschlag = $ki->propose('gp.suggest', ['bezeichnung' => trim($this->kiRohtext)]);
-        foreach (['hauptzutat', 'zustand', 'verarbeitung', 'form', 'pflichtangabe'] as $feld) {
+        $vorschlag = $ki->propose('gp.suggest', ['label' => trim($this->kiRohtext)]);
+        foreach (['hauptzutat', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
             if (! empty($vorschlag->werte[$feld]) && is_string($vorschlag->werte[$feld])) {
                 $this->builder[$feld] = $vorschlag->werte[$feld];
             }
@@ -383,9 +383,9 @@ class GpModal extends Component
             return;
         }
 
-        $vorschlag = $ki->propose('gp.suggest', ['bezeichnung' => trim($designation)]);
+        $vorschlag = $ki->propose('gp.suggest', ['label' => trim($designation)]);
         $builder = $this->builder;
-        foreach (['hauptzutat', 'zustand', 'verarbeitung', 'form', 'pflichtangabe'] as $feld) {
+        foreach (['hauptzutat', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
             if (! empty($vorschlag->werte[$feld]) && is_string($vorschlag->werte[$feld])) {
                 $builder[$feld] = $vorschlag->werte[$feld];
             }
@@ -418,7 +418,7 @@ class GpModal extends Component
         $team = Auth::user()?->currentTeamRelation;
         $gp = $this->gp();
         $name = $this->vorschauName();
-        $slug = $naming->slugify($this->builder['hauptzutat'] ?: ($gp->hauptzutat_slug ?? ''));
+        $slug = $naming->slugify($this->builder['hauptzutat'] ?: ($gp->main_ingredient_slug ?? ''));
         $pruefung = $naming->validateGpName($name, [...$this->builder, 'hauptzutat' => $this->builder['hauptzutat'] ?: $name]);
         // R20: Drift (I4) ist nur aussagekräftig, wenn die strukturierten Felder gepflegt sind —
         // Bestands-GPs ohne Builder-Pflege meldeten sonst IMMER Drift (Falsch-Positiv).
@@ -432,14 +432,14 @@ class GpModal extends Component
             'vorschauName' => $name,
             'vorschauSlug' => $slug,
             'vorschauKey' => $this->gpId === null
-                ? $naming->buildGpKey($slug, $this->builder['verarbeitung'] ?: null, $this->builder['form'] ?: null)
+                ? $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null)
                 : ($gp->gp_key ?? ''),
             'warnungen' => $pruefung['warnings'],
             'liveFehler' => $pruefung['errors'],
             'warengruppen' => $team !== null ? $vocab->listWarengruppen($team) : collect(),
             // Punkt C: WG-gescopetes Sub-Kategorie-Dropdown (verwaltet + GP-Freitext gemerged, #371)
-            'subKategorien' => $team !== null && ($this->builder['warengruppe_code'] ?? '') !== ''
-                ? $vocab->listSubCategories($team, $this->builder['warengruppe_code'])
+            'subKategorien' => $team !== null && ($this->builder['commodity_group_code'] ?? '') !== ''
+                ? $vocab->listSubCategories($team, $this->builder['commodity_group_code'])
                 : collect(),
             'statusFaelle' => [GpStatus::Approved, GpStatus::Tentative, GpStatus::Rejected],
             'bulkRun' => $this->bulkRunId !== null && $team !== null ? app(BulkEnrichService::class)->status($team, $this->bulkRunId) : null,
@@ -472,7 +472,7 @@ class GpModal extends Component
         return app(GpNamingService::class)->renderGpName($this->builder);
     }
 
-    private function speichereTags(?FoodAlchemistGp $gp, string $quelle = 'manual'): void
+    private function speichereTags(?FoodAlchemistGp $gp, string $source = 'manual'): void
     {
         if ($gp === null) {
             return;
@@ -486,7 +486,7 @@ class GpModal extends Component
             $geaendert = $geaendert || ($alt === null ? $neu !== null : $neu !== (bool) $alt);
         }
         if ($geaendert) {
-            $gp->update([...$update, 'tag_quelle' => $quelle, 'tag_ai_confidence' => null, 'tag_ai_begruendung' => null]);
+            $gp->update([...$update, 'tag_source' => $source, 'tag_ai_confidence' => null, 'tag_ai_begruendung' => null]);
         }
     }
 }

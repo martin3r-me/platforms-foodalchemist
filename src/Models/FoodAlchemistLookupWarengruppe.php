@@ -16,7 +16,7 @@ class FoodAlchemistLookupWarengruppe extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_lookup_warengruppen';
+    protected $table = 'foodalchemist_lookup_commodity_groups';
 
     protected $fillable = ['uuid', 'team_id', 'code', 'name', 'sort_order'];
 
@@ -27,7 +27,7 @@ class FoodAlchemistLookupWarengruppe extends Model
 
     public function gps(): HasMany
     {
-        return $this->hasMany(FoodAlchemistGp::class, 'warengruppe_code', 'code');
+        return $this->hasMany(FoodAlchemistGp::class, 'commodity_group_code', 'code');
     }
 
     /**

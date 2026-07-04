@@ -45,7 +45,7 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
 
         return ToolResult::success([
             'id' => $gp->id, 'name' => $gp->name, 'status' => $gp->status,
-            'hauptzutat_slug' => $gp->hauptzutat_slug, 'zustand' => $gp->zustand, 'bio' => $gp->bio,
+            'main_ingredient_slug' => $gp->main_ingredient_slug, 'condition' => $gp->condition, 'bio' => $gp->bio,
             'lead_la_supplier_item_id' => $gp->lead_la_supplier_item_id,
             'allergene' => app(GpAggregateService::class)->allergene($gp),
         ]);

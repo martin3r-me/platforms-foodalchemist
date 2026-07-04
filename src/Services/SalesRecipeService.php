@@ -25,7 +25,7 @@ class SalesRecipeService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->with(['speisenKlasse:id,bezeichnung,dish_main_group_id', 'speisenKlasse.hauptgruppe:id,code,bezeichnung'])
+            ->with(['speisenKlasse:id,label,dish_main_group_id', 'speisenKlasse.hauptgruppe:id,code,label'])
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
                 $s = '%' . mb_strtolower($filters['search']) . '%';
                 $q->where(fn ($w) => $w
@@ -37,10 +37,10 @@ class SalesRecipeService
                         ->whereRaw('(LOWER(cn.customer_name) LIKE ? OR LOWER(cn.marketing_name) LIKE ?)', [$s, $s])));
             })
             ->when($filters['hauptgruppe'] ?? null, fn ($q, $hg) => $q
-                ->whereIn('speisen_klasse_id', FoodAlchemistDishClass::where('dish_main_group_id', $hg)->pluck('id')))
-            ->when($filters['klasse'] ?? null, fn ($q, $k) => $q->where('speisen_klasse_id', $k))
+                ->whereIn('dish_class_id', FoodAlchemistDishClass::where('dish_main_group_id', $hg)->pluck('id')))
+            ->when($filters['klasse'] ?? null, fn ($q, $k) => $q->where('dish_class_id', $k))
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
-            ->when(($filters['geschmack'] ?? '') !== '', fn ($q) => $q->where('geschmacksrichtung', $filters['geschmack']))
+            ->when(($filters['geschmack'] ?? '') !== '', fn ($q) => $q->where('taste_direction', $filters['geschmack']))
             ->orderBy('name')
             ->paginate($perPage);
     }
@@ -56,7 +56,7 @@ class SalesRecipeService
     public function hauptgruppenCounts(Team $team): array
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->join('foodalchemist_dish_classes AS dc', 'dc.id', '=', 'foodalchemist_recipes.speisen_klasse_id')
+            ->join('foodalchemist_dish_classes AS dc', 'dc.id', '=', 'foodalchemist_recipes.dish_class_id')
             ->whereNotNull('dc.dish_main_group_id')
             ->groupBy('dc.dish_main_group_id')
             ->pluck(DB::raw('COUNT(*) AS n'), 'dc.dish_main_group_id')
@@ -67,10 +67,10 @@ class SalesRecipeService
     public function klassenCounts(Team $team, int $hauptgruppeId): array
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->join('foodalchemist_dish_classes AS dc', 'dc.id', '=', 'foodalchemist_recipes.speisen_klasse_id')
+            ->join('foodalchemist_dish_classes AS dc', 'dc.id', '=', 'foodalchemist_recipes.dish_class_id')
             ->where('dc.dish_main_group_id', $hauptgruppeId)
-            ->groupBy('foodalchemist_recipes.speisen_klasse_id')
-            ->pluck(DB::raw('COUNT(*) AS n'), 'foodalchemist_recipes.speisen_klasse_id')
+            ->groupBy('foodalchemist_recipes.dish_class_id')
+            ->pluck(DB::raw('COUNT(*) AS n'), 'foodalchemist_recipes.dish_class_id')
             ->map(fn ($n) => (int) $n)->all();
     }
 
@@ -86,14 +86,14 @@ class SalesRecipeService
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->with([
-                'speisenKlasse:id,bezeichnung,diaetform,dish_main_group_id',
-                'speisenKlasse.hauptgruppe:id,code,bezeichnung',
+                'speisenKlasse:id,label,diaetform,dish_main_group_id',
+                'speisenKlasse.hauptgruppe:id,code,label',
                 'aufschlagsklasse',
                 'vkEinheit:id,slug,display_de',
                 'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
                 // M9-01e: Bio-/Regional-Anteil braucht die GP-Tags; Nährwert-Faktor die Einheit
                 'ingredients.gp:id,name,is_organic,is_regional', 'ingredients.referencedRecipe:id,name',
-                'ingredients.einheit:id,slug,display_de,default_in_g,default_in_ml',
+                'ingredients.unit:id,slug,display_de,default_in_g,default_in_ml',
             ])
             ->find($id);
     }
@@ -102,13 +102,13 @@ class SalesRecipeService
 
     /** Erlaubte VK-Feldgruppen (V-12: Policy-Grenze mitten durchs geteilte Modell). */
     private const VK_FELDER = [
-        'name', 'vk_wording_standard', 'speisen_klasse_id', 'aufschlagsklasse_id', 'mwst_satz',
-        'vk_netto', 'vk_einheit_vocab_id', 'vk_anzahl_einheiten', 'vk_menge_pro_einheit_g',
-        'behaelter_warm_vocab_id', 'behaelter_warm_anzahl', 'behaelter_kalt_vocab_id', 'behaelter_kalt_anzahl',
-        'servier_vehikel_vocab_id', 'geschmacksrichtung',
+        'name', 'vk_wording_standard', 'dish_class_id', 'markup_class_id', 'mwst_satz',
+        'vk_netto', 'vk_unit_vocab_id', 'vk_unit_count', 'vk_quantity_pro_unit_g',
+        'container_warm_vocab_id', 'container_warm_anzahl', 'container_cold_vocab_id', 'container_cold_anzahl',
+        'serving_vehicle_vocab_id', 'taste_direction',
         // M9-01: Voll-Editor-Parität — Eigenschaften, Texte, Plating, Notizen
-        'marketing_text', 'beschreibung', 'arbeitszeit_min', 'temperatur', 'funktion',
-        'fertigungstiefe', 'plating_text', 'notizen_manual',
+        'marketing_text', 'description', 'work_time_min', 'temperatur', 'funktion',
+        'production_depth', 'plating_text', 'notes_manual',
         'nebenkosten_eur',                                            // M12: Energie/Nebenkosten je Charge (HK2)
     ];
 
@@ -161,20 +161,20 @@ class SalesRecipeService
                 return;
             }
             $standard = app(DarreichungService::class)->anlegen($team, $recipe->id, (int) $unbestimmt, [
-                'menge_pro_einheit_g' => $update['vk_menge_pro_einheit_g'] ?? $recipe->vk_menge_pro_einheit_g,
-                'einheit_vocab_id' => $update['vk_einheit_vocab_id'] ?? $recipe->vk_einheit_vocab_id,
-                'anzahl_einheiten' => $update['vk_anzahl_einheiten'] ?? $recipe->vk_anzahl_einheiten,
-                'aufschlagsklasse_id' => $update['aufschlagsklasse_id'] ?? $recipe->aufschlagsklasse_id,
+                'quantity_pro_unit_g' => $update['vk_quantity_pro_unit_g'] ?? $recipe->vk_quantity_pro_unit_g,
+                'unit_vocab_id' => $update['vk_unit_vocab_id'] ?? $recipe->vk_unit_vocab_id,
+                'unit_count' => $update['vk_unit_count'] ?? $recipe->vk_unit_count,
+                'markup_class_id' => $update['markup_class_id'] ?? $recipe->markup_class_id,
             ], 'fa_ui');
         }
         $map = [
-            'vk_menge_pro_einheit_g' => 'menge_pro_einheit_g',
-            'vk_einheit_vocab_id' => 'einheit_vocab_id',
-            'vk_anzahl_einheiten' => 'anzahl_einheiten',
-            'aufschlagsklasse_id' => 'aufschlagsklasse_id',
-            'behaelter_warm_vocab_id' => 'behaelter_warm_vocab_id',
-            'behaelter_kalt_vocab_id' => 'behaelter_kalt_vocab_id',
-            'servier_vehikel_vocab_id' => 'servier_vehikel_vocab_id',
+            'vk_quantity_pro_unit_g' => 'quantity_pro_unit_g',
+            'vk_unit_vocab_id' => 'unit_vocab_id',
+            'vk_unit_count' => 'unit_count',
+            'markup_class_id' => 'markup_class_id',
+            'container_warm_vocab_id' => 'container_warm_vocab_id',
+            'container_cold_vocab_id' => 'container_cold_vocab_id',
+            'serving_vehicle_vocab_id' => 'serving_vehicle_vocab_id',
         ];
         $dUpdate = [];
         foreach ($map as $von => $nach) {
@@ -202,15 +202,15 @@ class SalesRecipeService
         $recipes = app(RecipeService::class);
 
         return DB::transaction(function () use ($team, $basis, $name, $recipes) {
-            $vk = $recipes->create($team, ['name' => $name, 'ist_verkaufsrezept' => true]);
+            $vk = $recipes->create($team, ['name' => $name, 'is_sales_recipe' => true]);
             $gramm = $basis->yield_kg !== null ? round((float) $basis->yield_kg * 1000, 1) : 1000.0;
             $einheitG = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', 'g')->value('id');
 
             return $recipes->syncIngredients($team, $vk->id, [[
                 'raw_text' => $basis->name,
                 'display_name' => $basis->name,
-                'menge' => $gramm,
-                'einheit_vocab_id' => $einheitG,
+                'quantity' => $gramm,
+                'unit_vocab_id' => $einheitG,
                 'referenced_recipe_id' => $basis->id,
                 'match_method' => 'recipe_ref',
             ]]);
@@ -220,7 +220,7 @@ class SalesRecipeService
     /** Leeres Verkaufsrezept (Gericht) ohne erste Komponente — Komponenten/Stück-Basisrezepte kommen im Editor dazu. */
     public function createLeer(Team $team, string $name): FoodAlchemistRecipe
     {
-        return app(RecipeService::class)->create($team, ['name' => $name, 'ist_verkaufsrezept' => true]);
+        return app(RecipeService::class)->create($team, ['name' => $name, 'is_sales_recipe' => true]);
     }
 
     // V-19: Regen-Programme (zeilenbasiert)
@@ -230,12 +230,12 @@ class SalesRecipeService
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
         $werte = [
             'komponente_label' => trim((string) ($in['komponente_label'] ?? '')) ?: 'Gesamt',
-            'geraet_vocab_id' => $in['geraet_vocab_id'] ?? null,
+            'device_vocab_id' => $in['device_vocab_id'] ?? null,
             'temp_c' => $in['temp_c'] ?? null,
             'dauer_min' => $in['dauer_min'] ?? null,
             'kerntemp_c' => $in['kerntemp_c'] ?? null,
             'hinweis' => $in['hinweis'] ?? null,
-            'quelle' => 'manual', 'ai_confidence' => null, 'ai_begruendung' => null,      // manual gewinnt (GL-07)
+            'source' => 'manual', 'ai_confidence' => null, 'ai_reasoning' => null,      // manual gewinnt (GL-07)
             'updated_at' => now(),
         ];
         if ($id !== null) {
@@ -308,20 +308,20 @@ class SalesRecipeService
      */
     public function cockpit(FoodAlchemistRecipe $r): array
     {
-        $anzahl = $r->vk_anzahl_einheiten !== null ? (int) $r->vk_anzahl_einheiten : null;
-        $mengeProEinheitG = $r->vk_menge_pro_einheit_g !== null
-            ? (float) $r->vk_menge_pro_einheit_g
+        $anzahl = $r->vk_unit_count !== null ? (int) $r->vk_unit_count : null;
+        $mengeProEinheitG = $r->vk_quantity_pro_unit_g !== null
+            ? (float) $r->vk_quantity_pro_unit_g
             : ($r->yield_kg !== null && $anzahl !== null && $anzahl > 0 ? round((float) $r->yield_kg * 1000 / $anzahl, 1) : null);
 
         $verkauftAls = $anzahl !== null || $mengeProEinheitG !== null ? [
             'anzahl' => $anzahl,
-            'einheit' => $r->vkEinheit?->display_de ?? $r->vkEinheit?->slug ?? 'Einheit',
+            'unit' => $r->vkEinheit?->display_de ?? $r->vkEinheit?->slug ?? 'Einheit',
             'g_pro_einheit' => $mengeProEinheitG,
             'yield_kg' => $r->yield_kg !== null ? (float) $r->yield_kg : null,
         ] : null;
 
         $formelFehlt = false;
-        $vk = ['vk_netto' => null, 'quelle' => 'leer', 'vorschlag' => null];
+        $vk = ['vk_netto' => null, 'source' => 'leer', 'vorschlag' => null];
         try {
             $vk = $this->marge->effektiverVk(
                 $r->vk_netto !== null ? (float) $r->vk_netto : null,
@@ -333,7 +333,7 @@ class SalesRecipeService
         } catch (\Platform\FoodAlchemist\Exceptions\FormelNichtDefiniertException) {
             $formelFehlt = true;                                     // W-1: UI kennzeichnet, kein Crash
             if ($r->vk_netto !== null) {
-                $vk = ['vk_netto' => (float) $r->vk_netto, 'quelle' => 'manuell', 'vorschlag' => null];
+                $vk = ['vk_netto' => (float) $r->vk_netto, 'source' => 'manuell', 'vorschlag' => null];
             }
         }
 

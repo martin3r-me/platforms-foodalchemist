@@ -27,7 +27,7 @@ class Browser extends Component
     public ?int $gpId = null;
 
     #[Url(as: 'wg')]
-    public string $warengruppe = '';
+    public string $commodity_group = '';
 
     #[Url(as: 'sub')]
     public string $subKategorie = '';
@@ -43,7 +43,7 @@ class Browser extends Component
 
     public function waehleWg(string $code): void
     {
-        $this->warengruppe = $this->warengruppe === $code ? '' : $code;
+        $this->commodity_group = $this->commodity_group === $code ? '' : $code;
         $this->subKategorie = '';
         $this->resetPage();
     }
@@ -131,8 +131,8 @@ class Browser extends Component
         $team = Auth::user()?->currentTeamRelation;
         $filters = [
             'search' => $this->search,
-            'warengruppe' => $this->warengruppe,
-            'sub_kategorie' => $this->subKategorie,
+            'commodity_group' => $this->commodity_group,
+            'sub_category' => $this->subKategorie,
             'status' => $this->status,
         ];
 
@@ -140,7 +140,7 @@ class Browser extends Component
             'gps' => $gps->paginateBrowser($filters, $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100),
             'warengruppen' => $team !== null ? $vocab->listWarengruppen($team) : collect(),
             'wgCounts' => $gps->wgCounts($team, $filters),
-            'subCounts' => $this->warengruppe !== '' ? $gps->subKategorieCounts($team, $this->warengruppe) : [],
+            'subCounts' => $this->commodity_group !== '' ? $gps->subKategorieCounts($team, $this->commodity_group) : [],
             // Merged = System-Tombstone, komplett unsichtbar (2026-07-02) — weder Filter noch Zeilen
             'statusFaelle' => array_values(array_filter(GpStatus::cases(), fn (GpStatus $f) => $f !== GpStatus::Merged)),
             'statusCounts' => $gps->statusCounts($team),

@@ -34,7 +34,7 @@ class GpNamingService
     {
     }
 
-    /** KANONISCH (gp_key/hauptzutat_slug) — byte-identisch zu commands.rs:2471 (I6). */
+    /** KANONISCH (gp_key/main_ingredient_slug) — byte-identisch zu commands.rs:2471 (I6). */
     public function slugify(string $s): string
     {
         $s = mb_strtolower($s);
@@ -46,34 +46,34 @@ class GpNamingService
     }
 
     /** commands.rs:2496 — IMMER 3 Slots, auch leere (Tomatenpulver-Dubletten-Bug 2026-05-26). */
-    public function buildGpKey(string $hauptzutatSlug, ?string $verarbeitung, ?string $form): string
+    public function buildGpKey(string $hauptzutatSlug, ?string $processing, ?string $form): string
     {
-        return $hauptzutatSlug . '|' . $this->slugify($verarbeitung ?? '') . '|' . $this->slugify($form ?? '');
+        return $hauptzutatSlug . '|' . $this->slugify($processing ?? '') . '|' . $this->slugify($form ?? '');
     }
 
     /** A2/A7: Eingangs-Normalisierung — Langform → kanonisch TK; sonst unverändert. */
-    public function normalisiereZustand(?string $zustand): ?string
+    public function normalisiereZustand(?string $condition): ?string
     {
-        if ($zustand === null || trim($zustand) === '') {
+        if ($condition === null || trim($condition) === '') {
             return null;
         }
-        $z = trim($zustand);
+        $z = trim($condition);
 
         return mb_strtolower($z) === 'tiefgekuehlt' ? 'TK' : $z;
     }
 
     /**
      * gp_naming.rs Z. 31 — §6-Schema (Ist-Slots 1:1, A1):
-     * `<Hauptzutat>: <zustand>, <verarbeitung|form>[, Portion <x> pro Stueck][, <pflicht>][ / (Bio)]…`
+     * `<Hauptzutat>: <condition>, <processing|form>[, Portion <x> pro Stueck][, <pflicht>][ / (Bio)]…`
      */
     public function renderGpName(array $in): string
     {
         $parts = [];
-        $zustand = $this->normalisiereZustand($in['zustand'] ?? null);
-        if ($zustand !== null) {
-            $parts[] = $zustand;
+        $condition = $this->normalisiereZustand($in['condition'] ?? null);
+        if ($condition !== null) {
+            $parts[] = $condition;
         }
-        $mid = ($in['verarbeitung'] ?? null) ?: ($in['form'] ?? null);       // verarbeitung gewinnt (spezifischer)
+        $mid = ($in['processing'] ?? null) ?: ($in['form'] ?? null);       // processing gewinnt (spezifischer)
         if ($mid) {
             $parts[] = $mid;
         }
@@ -115,9 +115,9 @@ class GpNamingService
                 $errors[] = "§7.1: Verpackungswort »{$wort}« gehört nie in den GP-Namen.";
             }
         }
-        $zustand = $this->normalisiereZustand($in['zustand'] ?? null);
-        if ($zustand !== null && ! in_array($zustand, self::ZUSTAND_VOCAB, true)) {
-            $errors[] = "§9: Zustand »{$zustand}« ist nicht im Pflicht-Vokabular (" . implode('/', self::ZUSTAND_VOCAB) . ').';
+        $condition = $this->normalisiereZustand($in['condition'] ?? null);
+        if ($condition !== null && ! in_array($condition, self::ZUSTAND_VOCAB, true)) {
+            $errors[] = "§9: Zustand »{$condition}« ist nicht im Pflicht-Vokabular (" . implode('/', self::ZUSTAND_VOCAB) . ').';
         }
         if ($this->normalisiere($name) !== $this->normalisiere($this->renderGpName($in))) {
             $warnings[] = 'Drift: Name weicht vom Render aus den strukturierten Feldern ab (I4).';
@@ -189,9 +189,9 @@ class GpNamingService
 
         $hauptzutatSlug = $this->slugify($in['hauptzutat'] ?? '');
         if ($hauptzutatSlug === '') {
-            throw new \RuntimeException('Hauptzutat ist Pflicht (D-3: hauptzutat_slug ab Editor).');
+            throw new \RuntimeException('Hauptzutat ist Pflicht (D-3: main_ingredient_slug ab Editor).');
         }
-        $gpKey = $this->buildGpKey($hauptzutatSlug, $in['verarbeitung'] ?? null, $in['form'] ?? null);
+        $gpKey = $this->buildGpKey($hauptzutatSlug, $in['processing'] ?? null, $in['form'] ?? null);
 
         $guard = $this->anlageGuard($team, $gpKey, $name);
         if ($guard['blockiert']) {
@@ -214,11 +214,11 @@ class GpNamingService
             'team_id' => $team->id,                                          // D1: Kind-eigene GPs möglich
             'gp_key' => $gpKey,
             'name' => $name,
-            'hauptzutat_slug' => $hauptzutatSlug,
+            'main_ingredient_slug' => $hauptzutatSlug,
             'status' => 'tentative',
-            'zustand' => $this->normalisiereZustand($in['zustand'] ?? null),
-            'warengruppe_code' => ($in['warengruppe_code'] ?? '') ?: null,
-            'sub_kategorie' => ($in['sub_kategorie'] ?? '') ?: null,
+            'condition' => $this->normalisiereZustand($in['condition'] ?? null),
+            'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: null,
+            'sub_category' => ($in['sub_category'] ?? '') ?: null,
             'is_derivat' => (bool) ($in['is_derivat'] ?? false),
             'derivat_von_gp_id' => $in['derivat_von_gp_id'] ?? null,
             'requires_la' => ! (bool) ($in['is_derivat'] ?? false),          // §11.2: Derivat braucht keinen LA
@@ -237,9 +237,9 @@ class GpNamingService
 
         $gp->update([
             'name' => $name,
-            'zustand' => $this->normalisiereZustand($in['zustand'] ?? null) ?? $gp->zustand,
-            'warengruppe_code' => ($in['warengruppe_code'] ?? '') ?: $gp->warengruppe_code,
-            'sub_kategorie' => array_key_exists('sub_kategorie', $in) ? (($in['sub_kategorie'] ?? '') ?: null) : $gp->sub_kategorie,
+            'condition' => $this->normalisiereZustand($in['condition'] ?? null) ?? $gp->condition,
+            'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: $gp->commodity_group_code,
+            'sub_category' => array_key_exists('sub_category', $in) ? (($in['sub_category'] ?? '') ?: null) : $gp->sub_category,
             'is_derivat' => (bool) ($in['is_derivat'] ?? $gp->is_derivat),
             'derivat_von_gp_id' => array_key_exists('derivat_von_gp_id', $in) ? $in['derivat_von_gp_id'] : $gp->derivat_von_gp_id,
         ]);

@@ -21,7 +21,7 @@ class Index extends Component
     #[Url(as: 'q')]
     public string $search = '';
 
-    #[Url(as: 'rolle')]
+    #[Url(as: 'role')]
     public string $rolleFilter = '';
 
     #[Url(as: 'b')]
@@ -29,9 +29,9 @@ class Index extends Component
 
     /** Editierbare Felder des gewählten Pakets. */
     public array $form = [
-        'name' => '', 'rolle' => '', 'niveau' => '', 'preis_modus' => 'manuell',
+        'name' => '', 'role' => '', 'niveau' => '', 'preis_modus' => 'manuell',
         'preis_pro_person' => null, 'ek_pro_person' => null, 'wareneinsatz_prozent' => null,
-        'beschreibung' => '',
+        'description' => '',
     ];
 
     public string $gerichtSuche = '';
@@ -47,7 +47,7 @@ class Index extends Component
     public function neu(PaketService $svc): void
     {
         $team = $this->team();
-        $b = $svc->create($team, ['name' => 'Neuer Paket', 'rolle' => $this->rolleFilter ?: null]);
+        $b = $svc->create($team, ['name' => 'Neuer Paket', 'role' => $this->rolleFilter ?: null]);
         $this->waehle($b->id, $svc);
     }
 
@@ -59,12 +59,12 @@ class Index extends Component
         }
         $this->selectedId = $id;
         $this->form = [
-            'name' => $b->name, 'rolle' => $b->rolle ?? '', 'niveau' => $b->niveau ?? '',
+            'name' => $b->name, 'role' => $b->role ?? '', 'niveau' => $b->niveau ?? '',
             'preis_modus' => $b->preis_modus, 'preis_pro_person' => $b->preis_pro_person,
             'ek_pro_person' => $b->ek_pro_person, 'wareneinsatz_prozent' => $b->wareneinsatz_prozent,
-            'beschreibung' => $b->beschreibung ?? '',
+            'description' => $b->description ?? '',
         ];
-        $this->mengeForm = $b->gerichte->mapWithKeys(fn ($g) => [$g->id => $g->menge !== null ? (float) $g->menge : null])->all();
+        $this->mengeForm = $b->gerichte->mapWithKeys(fn ($g) => [$g->id => $g->quantity !== null ? (float) $g->quantity : null])->all();
         $this->gerichtSuche = '';
     }
 
@@ -73,8 +73,8 @@ class Index extends Component
         if ($this->selectedId === null) {
             return;
         }
-        $menge = $this->mengeForm[$rowId] ?? null;
-        $svc->setGerichtMenge($this->team(), $this->selectedId, $rowId, $menge !== null && $menge !== '' ? (float) $menge : null);
+        $quantity = $this->mengeForm[$rowId] ?? null;
+        $svc->setGerichtMenge($this->team(), $this->selectedId, $rowId, $quantity !== null && $quantity !== '' ? (float) $quantity : null);
     }
 
     public function gerichtHoch(int $rowId, PaketService $svc): void
@@ -160,7 +160,7 @@ class Index extends Component
         $selected = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
 
         return view('foodalchemist::livewire.pakete.index', [
-            'pakete' => $svc->paginateBrowser(['search' => $this->search, 'rolle' => $this->rolleFilter], $team),
+            'pakete' => $svc->paginateBrowser(['search' => $this->search, 'role' => $this->rolleFilter], $team),
             'rollen' => $svc->rollen($team),
             'selected' => $selected,
             'kandidaten' => $selected !== null

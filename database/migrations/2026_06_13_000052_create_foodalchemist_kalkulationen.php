@@ -15,8 +15,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('foodalchemist_kalkulationen')) {
-            Schema::create('foodalchemist_kalkulationen', function (Blueprint $table) {
+        if (! Schema::hasTable('foodalchemist_calculations')) {
+            Schema::create('foodalchemist_calculations', function (Blueprint $table) {
                 $table->id();
                 $table->uuid('uuid')->unique();
                 $table->unsignedBigInteger('team_id')->nullable()->index();
@@ -28,19 +28,19 @@ return new class extends Migration
             });
         }
 
-        if (! Schema::hasTable('foodalchemist_kalkulation_positionen')) {
-            Schema::create('foodalchemist_kalkulation_positionen', function (Blueprint $table) {
+        if (! Schema::hasTable('foodalchemist_calculation_positions')) {
+            Schema::create('foodalchemist_calculation_positions', function (Blueprint $table) {
                 $table->id();
                 $table->uuid('uuid')->unique();
                 $table->unsignedBigInteger('team_id')->nullable()->index();
-                $table->foreignId('kalkulation_id')->constrained('foodalchemist_kalkulationen')->cascadeOnDelete();
+                $table->foreignId('calculation_id')->constrained('foodalchemist_calculations')->cascadeOnDelete();
                 $table->string('typ', 16);                                 // gericht | basisrezept | gp | frei
                 $table->unsignedBigInteger('ref_id')->nullable();          // recipe_id bzw. gp_id (kein harter FK: Snapshot-Charakter)
                 $table->string('label');
-                $table->string('einheit', 24)->nullable();                 // Portion | kg | …
-                $table->decimal('menge', 12, 3)->default(1);
+                $table->string('unit', 24)->nullable();                 // Portion | kg | …
+                $table->decimal('quantity', 12, 3)->default(1);
                 $table->decimal('einzel_ek', 12, 4)->default(0);           // Wareneinsatz je Einheit (Snapshot, überschreibbar)
-                $table->unsignedInteger('arbeitszeit_min')->nullable();    // gezogen (Snapshot), für den Lohn-Block
+                $table->unsignedInteger('work_time_min')->nullable();    // gezogen (Snapshot), für den Lohn-Block
                 $table->integer('position')->default(0);
                 $table->timestamps();
                 $table->softDeletes();
@@ -50,7 +50,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('foodalchemist_kalkulation_positionen');
-        Schema::dropIfExists('foodalchemist_kalkulationen');
+        Schema::dropIfExists('foodalchemist_calculation_positions');
+        Schema::dropIfExists('foodalchemist_calculations');
     }
 };

@@ -26,8 +26,8 @@ return new class extends Migration
                 $table->unsignedBigInteger('team_id')->nullable()->index();
                 $table->unsignedBigInteger('legacy_id')->nullable()->index()->comment('recipe_hauptgruppen.hauptgruppe_id');
                 $table->string('code', 64);
-                $table->string('bezeichnung');
-                $table->string('bereich', 64)->nullable()->comment('Quelle beschreibung: KUECHE_HERZHAFT|KUECHE_SUESS|…');
+                $table->string('label');
+                $table->string('bereich', 64)->nullable()->comment('Quelle description: KUECHE_HERZHAFT|KUECHE_SUESS|…');
                 $table->unsignedInteger('sort_order')->default(0);
                 $table->timestamps();
                 $table->softDeletes();
@@ -44,7 +44,7 @@ return new class extends Migration
                 $table->unsignedBigInteger('legacy_id')->nullable()->index()->comment('recipe_kategorien.kategorie_id');
                 $table->foreignId('main_group_id')->constrained('foodalchemist_recipe_main_groups')->cascadeOnDelete();
                 $table->string('code', 64);
-                $table->string('bezeichnung');
+                $table->string('label');
                 $table->string('technik')->nullable();
                 $table->unsignedInteger('sort_order')->default(0);
                 $table->string('legacy_excel_kat')->nullable();
@@ -58,7 +58,7 @@ return new class extends Migration
         // (Tabelle vom failed run da, aber ALTER für Unique war es, was scheiterte).
         if (! $this->hasIndex('foodalchemist_recipe_categories', 'fa_recipe_cats_team_grp_bez_unique')) {
             Schema::table('foodalchemist_recipe_categories', function (Blueprint $table) {
-                $table->unique(['team_id', 'main_group_id', 'bezeichnung'], 'fa_recipe_cats_team_grp_bez_unique');
+                $table->unique(['team_id', 'main_group_id', 'label'], 'fa_recipe_cats_team_grp_bez_unique');
             });
         }
     }

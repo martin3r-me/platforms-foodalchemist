@@ -126,10 +126,10 @@ class KalkulationService
      */
     public function recipeHk(Team $team, FoodAlchemistRecipe $recipe): array
     {
-        $anzahl = max(1, (int) ($recipe->vk_anzahl_einheiten ?? 1));
+        $anzahl = max(1, (int) ($recipe->vk_unit_count ?? 1));
         $hk1Total = (float) ($recipe->ek_total_eur ?? 0);
         $nebenTotal = (float) ($recipe->nebenkosten_eur ?? 0);
-        $azTotal = (float) ($recipe->arbeitszeit_min ?? 0);
+        $azTotal = (float) ($recipe->work_time_min ?? 0);
 
         // Pro Portion rechnen (Wasserfall), dann auf Total skalieren.
         $r = $this->berechne($team, $hk1Total / $anzahl, $azTotal / $anzahl, $nebenTotal / $anzahl);

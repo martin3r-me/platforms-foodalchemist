@@ -26,8 +26,8 @@ class AngeboteGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
     {
         return [
             'type' => 'object',
-            'properties' => ['angebot_id' => ['type' => 'integer']],
-            'required' => ['angebot_id'],
+            'properties' => ['offer_id' => ['type' => 'integer']],
+            'required' => ['offer_id'],
         ];
     }
 
@@ -38,7 +38,7 @@ class AngeboteGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $svc = app(AngebotService::class);
-        $a = $svc->detail($team, (int) $arguments['angebot_id']);
+        $a = $svc->detail($team, (int) $arguments['offer_id']);
         if ($a === null) {
             return ToolResult::error('Angebot nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }

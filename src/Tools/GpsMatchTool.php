@@ -34,7 +34,7 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
             'type' => 'object',
             'properties' => [
                 'zutat' => ['type' => 'string', 'description' => 'Zutat-Freitext, z. B. "Kürbispüree" oder "Zanderfilet ohne Haut"'],
-                'hauptzutat_slug' => ['type' => 'string', 'description' => 'Optionaler Slug der Hauptzutat zur Präzisierung'],
+                'main_ingredient_slug' => ['type' => 'string', 'description' => 'Optionaler Slug der Hauptzutat zur Präzisierung'],
                 'k' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 10, 'default' => 5, 'description' => 'Anzahl Kandidaten'],
             ],
             'required' => ['zutat'],
@@ -51,7 +51,7 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         if ($zutat === '') {
             return ToolResult::error('zutat darf nicht leer sein.', 'VALIDATION_ERROR');
         }
-        $slug = isset($arguments['hauptzutat_slug']) ? (string) $arguments['hauptzutat_slug'] : null;
+        $slug = isset($arguments['main_ingredient_slug']) ? (string) $arguments['main_ingredient_slug'] : null;
         $svc = app(IngredientMatchService::class);
 
         $match = $svc->matchIngredient($team, $zutat, $slug);

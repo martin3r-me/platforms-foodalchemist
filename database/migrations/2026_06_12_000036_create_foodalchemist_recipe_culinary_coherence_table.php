@@ -28,12 +28,12 @@ return new class extends Migration
             // Achse 2: Kohärenz-Judge (vk.kohaerenz — Ist: culinary_coherence_judge)
             $table->unsignedTinyInteger('score')->nullable();        // 0–100
             $table->string('label')->nullable();                     // z. B. «Klassischer Teller»
-            $table->text('begruendung')->nullable();
+            $table->text('reasoning')->nullable();
             $table->string('schwachstelle')->nullable();             // GL-10 §2 (T5: «Gruyere»)
             $table->string('judge_model')->nullable();
             $table->timestamp('judged_at')->nullable();
 
-            // Teller-Heber (vk.teller_heber): {einschaetzung, vorschlaege: [{typ, zutat, kategorie, begruendung, confidence}]}
+            // Teller-Heber (vk.teller_heber): {einschaetzung, vorschlaege: [{typ, zutat, kategorie, reasoning, confidence}]}
             $table->json('heber_json')->nullable();
             $table->string('heber_model')->nullable();
             $table->timestamp('heber_at')->nullable();

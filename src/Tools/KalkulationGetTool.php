@@ -25,7 +25,7 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
     public function getDescription(): string
     {
         return 'Rechnet die Kalkulation (HK1/HK2, Wareneinsatz, Arbeitszeit, Nebenkosten) nach den '
-            . 'Team-Parametern — GENAU EINES angeben: recipe_id, concept_id oder paket_id. Read-only.';
+            . 'Team-Parametern — GENAU EINES angeben: recipe_id, concept_id oder package_id. Read-only.';
     }
 
     public function getSchema(): array
@@ -35,7 +35,7 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
             'properties' => [
                 'recipe_id' => ['type' => 'integer'],
                 'concept_id' => ['type' => 'integer'],
-                'paket_id' => ['type' => 'integer'],
+                'package_id' => ['type' => 'integer'],
             ],
         ];
     }
@@ -46,9 +46,9 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $keys = array_values(array_intersect(['recipe_id', 'concept_id', 'paket_id'], array_keys(array_filter($arguments))));
+        $keys = array_values(array_intersect(['recipe_id', 'concept_id', 'package_id'], array_keys(array_filter($arguments))));
         if (count($keys) !== 1) {
-            return ToolResult::error('Genau EINES von recipe_id, concept_id, paket_id angeben.', 'VALIDATION_ERROR');
+            return ToolResult::error('Genau EINES von recipe_id, concept_id, package_id angeben.', 'VALIDATION_ERROR');
         }
         $svc = app(KalkulationService::class);
 
@@ -58,7 +58,7 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
                     ? ['ziel' => ['typ' => 'recipe', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->recipeHk($team, $m)] : null,
                 'concept_id' => ($m = FoodAlchemistConcept::visibleToTeam($team)->find((int) $arguments['concept_id']))
                     ? ['ziel' => ['typ' => 'concept', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->conceptHk($team, $m)] : null,
-                'paket_id' => ($m = FoodAlchemistPaket::visibleToTeam($team)->find((int) $arguments['paket_id']))
+                'package_id' => ($m = FoodAlchemistPaket::visibleToTeam($team)->find((int) $arguments['package_id']))
                     ? ['ziel' => ['typ' => 'paket', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->paketHk($team, $m)] : null,
             };
         } catch (\RuntimeException $e) {

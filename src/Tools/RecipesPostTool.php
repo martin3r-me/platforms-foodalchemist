@@ -25,7 +25,7 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
     public function getDescription(): string
     {
         return 'Legt ein neues Rezept als ENTWURF an (status=draft, created_via=mcp — nie automatisch aktiv). '
-            . 'Zutaten optional direkt mit: pro Zeile name + menge + einheit (Slug, z. B. g/kg/ml/stk) und '
+            . 'Zutaten optional direkt mit: pro Zeile name + quantity + unit (Slug, z. B. g/kg/ml/stk) und '
             . 'gp_id ODER referenced_recipe_id (XOR; vorher via foodalchemist.gps.MATCH erden — ungematcht nur als Ausnahme). '
             . 'Yield/Allergene/EK werden automatisch aggregiert. Freigabe (approved) macht nur ein Mensch im Editor.';
     }
@@ -37,13 +37,13 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'properties' => [
                 'name' => ['type' => 'string', 'description' => 'Rezept-Name nach Basisrezept-Regelwerk §1'],
                 'kategorie_id' => ['type' => 'integer'],
-                'ist_verkaufsrezept' => ['type' => 'boolean', 'default' => false],
-                'beschreibung' => ['type' => 'string'],
-                'zubereitung' => ['type' => 'string', 'description' => 'Zubereitungs-Schritte (Klartext)'],
-                'geschmacksrichtung' => ['type' => 'string'],
-                'arbeitszeit_min' => ['type' => 'integer'],
+                'is_sales_recipe' => ['type' => 'boolean', 'default' => false],
+                'description' => ['type' => 'string'],
+                'preparation' => ['type' => 'string', 'description' => 'Zubereitungs-Schritte (Klartext)'],
+                'taste_direction' => ['type' => 'string'],
+                'work_time_min' => ['type' => 'integer'],
                 'yield_kg_manual' => ['type' => 'number', 'description' => 'Nur wenn Auto-Summe nicht passt'],
-                'herkunft' => ['type' => 'string', 'description' => 'Menschenlesbare Provenienz, Default "MCP/KI"'],
+                'origin_source' => ['type' => 'string', 'description' => 'Menschenlesbare Provenienz, Default "MCP/KI"'],
                 'zutaten' => [
                     'type' => 'array',
                     'items' => [
@@ -52,14 +52,14 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                             'name' => ['type' => 'string'],
                             'gp_id' => ['type' => 'integer', 'description' => 'GP aus foodalchemist.gps.MATCH'],
                             'referenced_recipe_id' => ['type' => 'integer', 'description' => 'Sub-Rezept statt GP (XOR)'],
-                            'menge' => ['type' => 'number'],
-                            'einheit' => ['type' => 'string', 'description' => 'Einheiten-Slug oder -Name, z. B. g, kg, ml, stk'],
-                            'putzverlust_pct' => ['type' => 'number'],
-                            'garverlust_pct' => ['type' => 'number'],
+                            'quantity' => ['type' => 'number'],
+                            'unit' => ['type' => 'string', 'description' => 'Einheiten-Slug oder -Name, z. B. g, kg, ml, stk'],
+                            'trimming_loss_pct' => ['type' => 'number'],
+                            'cooking_loss_pct' => ['type' => 'number'],
                             'is_optional' => ['type' => 'boolean'],
                             'note' => ['type' => 'string'],
                         ],
-                        'required' => ['name', 'menge', 'einheit'],
+                        'required' => ['name', 'quantity', 'unit'],
                     ],
                 ],
             ],
@@ -79,16 +79,16 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
             $recipe = $svc->create($team, [
                 'name' => (string) $arguments['name'],
                 'kategorie_id' => $arguments['kategorie_id'] ?? null,
-                'ist_verkaufsrezept' => (bool) ($arguments['ist_verkaufsrezept'] ?? false),
-                'beschreibung' => $arguments['beschreibung'] ?? null,
-                'geschmacksrichtung' => $arguments['geschmacksrichtung'] ?? null,
-                'arbeitszeit_min' => $arguments['arbeitszeit_min'] ?? null,
+                'is_sales_recipe' => (bool) ($arguments['is_sales_recipe'] ?? false),
+                'description' => $arguments['description'] ?? null,
+                'taste_direction' => $arguments['taste_direction'] ?? null,
+                'work_time_min' => $arguments['work_time_min'] ?? null,
                 'yield_kg_manual' => $arguments['yield_kg_manual'] ?? null,
-                'herkunft' => ($arguments['herkunft'] ?? '') ?: 'MCP/KI',
+                'origin_source' => ($arguments['origin_source'] ?? '') ?: 'MCP/KI',
                 'created_via' => 'mcp',
             ]);
-            if (($arguments['zubereitung'] ?? '') !== '') {
-                $recipe = $svc->update($team, $recipe->id, ['zubereitung' => $arguments['zubereitung']]);
+            if (($arguments['preparation'] ?? '') !== '') {
+                $recipe = $svc->update($team, $recipe->id, ['preparation' => $arguments['preparation']]);
             }
             if (! empty($arguments['zutaten'])) {
                 $recipe = $svc->syncIngredients($team, $recipe->id, $this->normalisiereZutatZeilen($team, $arguments['zutaten']));
@@ -102,7 +102,7 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'id' => $recipe->id, 'name' => $recipe->name, 'recipe_key' => $recipe->recipe_key,
                 'status' => $this->statusWert($recipe), 'created_via' => $recipe->created_via,
                 'yield_kg' => $recipe->yield_kg, 'ek_total_eur' => $recipe->ek_total_eur,
-                'n_zutaten_total' => $recipe->n_zutaten_total, 'n_zutaten_ungemappt' => $recipe->n_zutaten_ungemappt,
+                'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_ungemappt' => $recipe->n_ingredients_ungemappt,
             ],
             'hinweis' => 'Entwurf (Draft-Quarantäne): fließt erst nach menschlichem Review in Verkauf/Kalkulation.',
         ]);

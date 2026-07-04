@@ -19,7 +19,7 @@ class GpsSearchTool extends FoodAlchemistTool implements ToolContract, ToolMetad
     public function getDescription(): string
     {
         return 'Durchsucht die Grundprodukte (GPs) des aktuellen Teams nach Name/Slug. '
-            . 'Liefert id, name, status, hauptzutat_slug — Details via foodalchemist.gps.GET.';
+            . 'Liefert id, name, status, main_ingredient_slug — Details via foodalchemist.gps.GET.';
     }
 
     public function getSchema(): array
@@ -48,7 +48,7 @@ class GpsSearchTool extends FoodAlchemistTool implements ToolContract, ToolMetad
             'total' => $treffer->total(),
             'gps' => collect($treffer->items())->map(fn ($gp) => [
                 'id' => $gp->id, 'name' => $gp->name, 'status' => $gp->status,
-                'hauptzutat_slug' => $gp->hauptzutat_slug,
+                'main_ingredient_slug' => $gp->main_ingredient_slug,
             ])->all(),
         ]);
     }

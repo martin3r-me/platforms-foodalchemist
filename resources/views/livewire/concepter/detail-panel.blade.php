@@ -26,7 +26,7 @@
                 @if($concept->anlass)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $concept->anlass }}</span>@endif
                 <span class="{{ $pill }} {{ ['draft' => $variantPill['secondary'], 'aktiv' => $variantPill['success'], 'archiviert' => $variantPill['warning']][$concept->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiv'][$concept->status] ?? $concept->status }}</span>
             @elseif($paket)
-                @if($paket->rolle)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $paket->rolle }}</span>@endif
+                @if($paket->role)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $paket->role }}</span>@endif
                 <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $paket->preis_modus === 'auto' ? 'Auto-Preis' : 'Manueller Preis' }}</span>
             @endif
         </div>
@@ -68,7 +68,7 @@
             </div>
             <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                 <span class="{{ $dt }}">Arbeitszeit</span>
-                <p class="text-xs font-semibold tabular-nums">{{ $aggregat !== null ? $aggregat['arbeitszeit_min'] . ' min' : '—' }}</p>
+                <p class="text-xs font-semibold tabular-nums">{{ $aggregat !== null ? $aggregat['work_time_min'] . ' min' : '—' }}</p>
             </div>
             @php(
                 $gerichteSuffix = $concept
@@ -144,7 +144,7 @@
                 @foreach($cockpit['zeilen'] as $z)
                     <div class="flex items-center justify-between gap-2 text-xs py-1">
                         <span class="min-w-0 truncate">
-                            <span class="text-[10px] text-gray-400 uppercase mr-1">{{ $z['rolle'] ?? '—' }}</span>{{ $z['label'] }}
+                            <span class="text-[10px] text-gray-400 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
                             @if($z['typ'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['typ'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
                         </span>
                         <span class="shrink-0 tabular-nums {{ $z['preis'] === null ? 'text-gray-300' : '' }}">{{ $z['preis'] !== null ? number_format($z['preis'], 2, ',', '.') . ' €' : '—' }}</span>
@@ -171,10 +171,10 @@
                 <span class="{{ $label }}">Menü-Karte (Konsumenten-Sicht)</span>
                 <div class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2 bg-white/40 dark:bg-white/[0.03]">
                     <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $concept->konsumenten_name ?: $concept->name }}</p>
-                    @if($concept->zusatztext)<p class="text-[11px] italic text-gray-500 mb-1">{{ $concept->zusatztext }}</p>@endif
+                    @if($concept->additional_text)<p class="text-[11px] italic text-gray-500 mb-1">{{ $concept->additional_text }}</p>@endif
                     @forelse($concept->slots as $slot)
                         <div class="py-0.5">
-                            <span class="text-[9px] uppercase tracking-wider text-gray-400">{{ $slot->rolle ?: '—' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
+                            <span class="text-[9px] uppercase tracking-wider text-gray-400">{{ $slot->role ?: '—' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
                             <p class="text-xs text-gray-800 dark:text-gray-200">{{ $slot->titel ?: ($slot->paket?->name ?? $slot->gericht?->name ?? '(leer)') }}</p>
                         </div>
                     @empty
@@ -189,7 +189,7 @@
             <span class="{{ $label }}">Wo verwendet? ({{ $verwendung->count() }})</span>
             @forelse($verwendung as $v)
                 <div class="flex items-center justify-between gap-2 text-xs py-0.5">
-                    <span class="min-w-0 truncate">{{ $concept ? ($v->bezeichnung ?? '—') : $v->name }}</span>
+                    <span class="min-w-0 truncate">{{ $concept ? ($v->label ?? '—') : $v->name }}</span>
                     <span class="shrink-0 text-[10px] text-gray-400">{{ $concept ? ('Foodbook' . ($v->jahr ? ' ' . $v->jahr : '') . ($v->kunde ? ' · ' . $v->kunde : '')) : 'Concept' }}</span>
                 </div>
             @empty

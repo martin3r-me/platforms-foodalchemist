@@ -44,11 +44,11 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
         return ToolResult::success([
             'id' => $r->id, 'name' => $r->name, 'status' => $r->status->value,
-            'beschreibung' => $r->beschreibung, 'yield_kg' => $r->yield_kg,
+            'description' => $r->description, 'yield_kg' => $r->yield_kg,
             'ek_total_eur' => $r->ek_total_eur, 'ek_per_kg_eur' => $r->ek_per_kg_eur,
             'allergene_konfidenz' => $r->allergene_konfidenz,
             'zutaten' => $r->ingredients->map(fn ($z) => [
-                'menge' => $z->menge, 'einheit' => $z->einheit?->slug,
+                'quantity' => $z->quantity, 'unit' => $z->unit?->slug,
                 'name' => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name,
                 'gp_id' => $z->gp_id, 'sub_recipe_id' => $z->referenced_recipe_id,
             ])->all(),

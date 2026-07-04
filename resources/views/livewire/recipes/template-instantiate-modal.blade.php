@@ -45,7 +45,7 @@
                     <div class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2" wire:key="slot-{{ $rid }}" data-template-slot="{{ $rid }}">
                         <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
                             <strong class="text-gray-700 dark:text-gray-200">{{ $slot['placeholder_name'] }}</strong>
-                            · {{ rtrim(rtrim(number_format($slot['menge'], 2, ',', '.'), '0'), ',') }} {{ $slot['einheit'] }}
+                            · {{ rtrim(rtrim(number_format($slot['quantity'], 2, ',', '.'), '0'), ',') }} {{ $slot['unit'] }}
                             @if($slot['raw_text'] !== '')<span class="italic">· „{{ $slot['raw_text'] }}"</span>@endif
                         </p>
                         <div class="flex items-center gap-2">

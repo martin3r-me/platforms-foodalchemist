@@ -19,7 +19,7 @@ class Schreibstile extends Component
 
     public array $form = [];
 
-    public array $neu = ['name' => '', 'sprach_duktus' => '', 'beschreibung' => ''];
+    public array $neu = ['name' => '', 'sprach_duktus' => '', 'description' => ''];
 
     public ?string $fehler = null;
 
@@ -31,7 +31,7 @@ class Schreibstile extends Component
         }
         $this->editId = $id;
         $this->fehler = null;
-        $this->form = ['name' => $zeile->name, 'sprach_duktus' => $zeile->sprach_duktus, 'beschreibung' => $zeile->beschreibung, 'sort_order' => $zeile->sort_order];
+        $this->form = ['name' => $zeile->name, 'sprach_duktus' => $zeile->sprach_duktus, 'description' => $zeile->description, 'sort_order' => $zeile->sort_order];
     }
 
     public function cancel(): void
@@ -49,7 +49,7 @@ class Schreibstile extends Component
         DB::table('foodalchemist_writing_styles')->where('id', $this->editId)->update([
             'name' => trim($this->form['name']),
             'sprach_duktus' => trim($this->form['sprach_duktus']),
-            'beschreibung' => $this->form['beschreibung'] ?: null,
+            'description' => $this->form['description'] ?: null,
             'sort_order' => (int) ($this->form['sort_order'] ?? 0),
             'updated_at' => now(),
         ]);
@@ -76,7 +76,7 @@ class Schreibstile extends Component
             'slug' => $slug,
             'name' => $name,
             'sprach_duktus' => trim($this->neu['sprach_duktus']),
-            'beschreibung' => $this->neu['beschreibung'] ?: null,
+            'description' => $this->neu['description'] ?: null,
             'sort_order' => 100,
             'created_at' => now(), 'updated_at' => now(),
         ]);

@@ -22,10 +22,10 @@
                     <span class="font-medium">Alle Rollen</span>
                 </button>
                 <div class="space-y-0.5 -mx-1">
-                    @foreach($rollen as $rolle)
-                        <button type="button" wire:key="rolle-{{ $loop->index }}" wire:click="$set('rolleFilter', @js($rolle))"
-                                class="w-full flex items-center px-2 py-1 rounded-lg text-xs {{ $rolleFilter === $rolle ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                            <span class="truncate">{{ $rolle }}</span>
+                    @foreach($rollen as $role)
+                        <button type="button" wire:key="role-{{ $loop->index }}" wire:click="$set('rolleFilter', @js($role))"
+                                class="w-full flex items-center px-2 py-1 rounded-lg text-xs {{ $rolleFilter === $role ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                            <span class="truncate">{{ $role }}</span>
                         </button>
                     @endforeach
                 </div>
@@ -41,7 +41,7 @@
                         <label class="{{ $label }}">Name</label>
                         <input type="text" wire:model="form.name" class="{{ $input }}" />
                         <label class="{{ $label }}">Rolle (frei)</label>
-                        <input type="text" wire:model="form.rolle" list="rollen-liste" class="{{ $input }}" placeholder="z. B. Vorspeise" />
+                        <input type="text" wire:model="form.role" list="rollen-liste" class="{{ $input }}" placeholder="z. B. Vorspeise" />
                         <datalist id="rollen-liste">@foreach($rollen as $r)<option value="{{ $r }}"></option>@endforeach</datalist>
                         <label class="{{ $label }}">Niveau</label>
                         <select wire:model="form.niveau" class="{{ $input }}">
@@ -157,7 +157,7 @@
                             <tr wire:key="b-{{ $b->id }}" wire:click="waehle({{ $b->id }})"
                                 class="{{ $tr }} cursor-pointer {{ $selectedId === $b->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}">
                                 <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate text-gray-900 dark:text-gray-100">{{ $b->name }}</td>
-                                <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $b->rolle ?? '—' }}</td>
+                                <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $b->role ?? '—' }}</td>
                                 <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $b->niveau ?? '—' }}</td>
                                 <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $b->gerichte_count }}</td>
                                 <td class="{{ $td }} text-gray-900 dark:text-gray-100 text-right tabular-nums whitespace-nowrap">{{ $b->preis_pro_person !== null ? number_format((float) $b->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</td>

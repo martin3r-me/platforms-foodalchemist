@@ -24,14 +24,14 @@ class FixkostenService
     /** @return Collection<int, FoodAlchemistFixkosten> */
     public function liste(Team $team): Collection
     {
-        return FoodAlchemistFixkosten::visibleToTeam($team)->orderBy('block_key')->orderBy('bezeichnung')->get();
+        return FoodAlchemistFixkosten::visibleToTeam($team)->orderBy('block_key')->orderBy('label')->get();
     }
 
     public function create(Team $team, array $in): FoodAlchemistFixkosten
     {
         return FoodAlchemistFixkosten::create([
             'team_id' => $team->id,
-            'bezeichnung' => trim((string) ($in['bezeichnung'] ?? 'Fixkosten')) ?: 'Fixkosten',
+            'label' => trim((string) ($in['label'] ?? 'Fixkosten')) ?: 'Fixkosten',
             'betrag' => max(0, (float) str_replace(',', '.', (string) ($in['betrag'] ?? 0))),
             'periode' => in_array($p = $in['periode'] ?? 'monatlich', ['monatlich', 'jaehrlich'], true) ? $p : 'monatlich',
             'block_key' => (string) ($in['block_key'] ?? 'gemeinkosten'),
@@ -43,8 +43,8 @@ class FixkostenService
         $row = FoodAlchemistFixkosten::visibleToTeam($team)->findOrFail($id);
         $this->guard($row, $team);
         $update = [];
-        if (array_key_exists('bezeichnung', $in)) {
-            $update['bezeichnung'] = trim((string) $in['bezeichnung']) ?: $row->bezeichnung;
+        if (array_key_exists('label', $in)) {
+            $update['label'] = trim((string) $in['label']) ?: $row->label;
         }
         if (array_key_exists('betrag', $in)) {
             $update['betrag'] = max(0, (float) str_replace(',', '.', (string) $in['betrag']));

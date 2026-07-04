@@ -119,7 +119,7 @@ class Einkauf extends Component
             ->where('is_inactive', false)->orderBy('name')->get(['id', 'name', 'team_id']);
 
         $matrix = app(StammLieferantService::class)->matrixFor($team)
-            ->groupBy(fn ($z) => $z->warengruppe_code ?? '');
+            ->groupBy(fn ($z) => $z->commodity_group_code ?? '');
 
         return view('foodalchemist::livewire.settings.einkauf', [
             'team' => $team,

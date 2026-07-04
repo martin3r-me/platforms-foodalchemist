@@ -100,7 +100,7 @@
                         @foreach($cockpit['zeilen'] as $z)
                             <div class="flex items-center justify-between gap-2 text-xs py-1 border-t border-black/5 dark:border-white/10">
                                 <span class="min-w-0 truncate">
-                                    <span class="text-[10px] text-gray-400 uppercase mr-1">{{ $z['rolle'] ?? '—' }}</span>{{ $z['label'] }}
+                                    <span class="text-[10px] text-gray-400 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
                                     @if($z['typ'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['typ'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
                                 </span>
                                 <span class="shrink-0 tabular-nums {{ $z['preis'] === null ? 'text-gray-300' : 'text-gray-900 dark:text-gray-100' }}">{{ $z['preis'] !== null ? number_format($z['preis'], 2, ',', '.') . ' €' : '—' }}</span>
@@ -200,7 +200,7 @@
                                     <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="hoch">▲</button>
                                     <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="runter">▼</button>
                                 </span>
-                                <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.rolle" wire:change="slotSpeichern({{ $slot->id }})"
+                                <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.role" wire:change="slotSpeichern({{ $slot->id }})"
                                        class="{{ $input }} w-40" placeholder="Rolle" />
                                 <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.titel" wire:change="slotSpeichern({{ $slot->id }})"
                                        class="{{ $input }} flex-1" placeholder="Titel (optional)" />
@@ -209,7 +209,7 @@
 
                             {{-- Befüllung --}}
                             <div class="flex flex-wrap items-center gap-2">
-                                @if($slot->paket_id && $slot->paket)
+                                @if($slot->package_id && $slot->paket)
                                     <span class="{{ $pill }} {{ $variantPill['info'] }}">Paket</span>
                                     <span class="text-sm font-medium">{{ $slot->paket->name }}</span>
                                     <span class="text-gray-400 text-xs tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</span>
@@ -220,7 +220,7 @@
                                 @else
                                     <span class="text-xs text-gray-400">leer — Paket wählen oder festes Gericht setzen</span>
                                 @endif
-                                @if($slot->paket_id || $slot->vk_recipe_id)
+                                @if($slot->package_id || $slot->vk_recipe_id)
                                     <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-400 hover:text-red-500">leeren</button>
                                 @endif
                             </div>
@@ -229,7 +229,7 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <select x-on:change="$wire.fuellePaket({{ $slot->id }}, $event.target.value); $event.target.value=''"
                                         class="{{ $input }} w-56">
-                                    <option value="">↹ Paket (Rolle {{ $slot->rolle ?: '–' }}) …</option>
+                                    <option value="">↹ Paket (Rolle {{ $slot->role ?: '–' }}) …</option>
                                     @foreach(($tauschbar[$slot->id] ?? []) as $b)
                                         <option value="{{ $b->id }}">{{ $b->name }}{{ $b->preis_pro_person !== null ? ' (' . number_format((float) $b->preis_pro_person, 2, ',', '.') . ' €)' : '' }}</option>
                                     @endforeach

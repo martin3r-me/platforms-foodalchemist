@@ -56,7 +56,7 @@
                             <span class="text-gray-400 shrink-0">{{ $sig->typ->label() }}</span>
                             <span class="font-medium text-gray-900 dark:text-gray-100 truncate">{{ $sig->titel }}</span>
                         </div>
-                        @if($sig->beschreibung)<p class="text-gray-500 mt-0.5">{{ \Illuminate\Support\Str::limit($sig->beschreibung, 140) }}</p>@endif
+                        @if($sig->description)<p class="text-gray-500 mt-0.5">{{ \Illuminate\Support\Str::limit($sig->description, 140) }}</p>@endif
                     </div>
                     <span class="shrink-0 flex gap-1">
                         @if($sig->status->istOffen())
@@ -107,7 +107,7 @@
             </h3>
             @forelse($bulks as $b)
                 <div class="flex items-center gap-2 py-1 border-t border-black/5 dark:border-white/5 text-[11px]" wire:key="rqb-{{ $b->id }}">
-                    <button type="button" wire:click="$dispatch('{{ $b->ist_verkaufsrezept ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $b->rezept_id }} })"
+                    <button type="button" wire:click="$dispatch('{{ $b->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $b->rezept_id }} })"
                             class="min-w-0 truncate text-sky-600 dark:text-sky-400 hover:underline text-left" title="{{ $b->rezept_name }}">{{ $b->rezept_name }}</button>
                     <span class="{{ $pill }} {{ $variantPill['info'] }} shrink-0">{{ $b->feld }}</span>
                     <span class="min-w-0 truncate text-gray-500" title="{{ is_string($b->wert) ? trim($b->wert, '"') : '' }}">{{ \Illuminate\Support\Str::limit(trim((string) $b->wert, '"'), 60) }}</span>
@@ -138,7 +138,7 @@
                 <h3 class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">Im Review-Status <span class="{{ $pill }} {{ $imReviewZahl > 0 ? $variantPill['warning'] : $variantPill['secondary'] }}">{{ number_format($imReviewZahl, 0, ',', '.') }}</span></h3>
                 <p class="text-[10px] text-gray-400 mb-1.5">Freigeben oder zurück in den Entwurf (zeigt 50)</p>
                 @forelse($imReview as $r)
-                    <button type="button" wire:key="rqr-{{ $r->id }}" wire:click="$dispatch('{{ $r->ist_verkaufsrezept ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $r->id }} })"
+                    <button type="button" wire:key="rqr-{{ $r->id }}" wire:click="$dispatch('{{ $r->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $r->id }} })"
                             class="block w-full text-left text-[11px] text-sky-600 dark:text-sky-400 hover:underline truncate py-0.5">{{ $r->name }}</button>
                 @empty
                     <p class="text-[11px] text-gray-400">— keine —</p>
@@ -148,9 +148,9 @@
                 <h3 class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">Ungemappte Zutaten <span class="{{ $pill }} {{ $ungemapptZahl > 0 ? $variantPill['danger'] : $variantPill['secondary'] }}">{{ number_format($ungemapptZahl, 0, ',', '.') }}</span></h3>
                 <p class="text-[10px] text-gray-400 mb-1.5">F7.1: Allergene unbekannt, bis gemappt (zeigt 50)</p>
                 @forelse($ungemappt as $r)
-                    <button type="button" wire:key="rqu-{{ $r->id }}" wire:click="$dispatch('{{ $r->ist_verkaufsrezept ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $r->id }} })"
+                    <button type="button" wire:key="rqu-{{ $r->id }}" wire:click="$dispatch('{{ $r->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $r->id }} })"
                             class="flex w-full items-center justify-between text-left text-[11px] text-sky-600 dark:text-sky-400 hover:underline py-0.5">
-                        <span class="min-w-0 truncate">{{ $r->name }}</span><span class="text-gray-400 shrink-0 ml-1">{{ $r->n_zutaten_ungemappt }}?</span>
+                        <span class="min-w-0 truncate">{{ $r->name }}</span><span class="text-gray-400 shrink-0 ml-1">{{ $r->n_ingredients_ungemappt }}?</span>
                     </button>
                 @empty
                     <p class="text-[11px] text-gray-400">— keine —</p>

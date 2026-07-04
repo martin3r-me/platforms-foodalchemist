@@ -32,7 +32,7 @@ class FakeAiProvider implements LLMProviderContract
             'content' => json_encode([
                 'werte' => $werte,
                 'confidence' => 0.87,
-                'begruendung' => 'FakeAiProvider: deterministisches Kontext-Echo (kein echter LLM-Call).',
+                'reasoning' => 'FakeAiProvider: deterministisches Kontext-Echo (kein echter LLM-Call).',
             ], JSON_UNESCAPED_UNICODE),
             'usage' => ['input_tokens' => 0, 'output_tokens' => 0],
             'model' => 'fake-deterministic-1',

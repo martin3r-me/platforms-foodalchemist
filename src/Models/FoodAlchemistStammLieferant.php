@@ -11,14 +11,14 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Stamm-Lieferant (M1-06): Lieferant × Warengruppe je Team;
- * warengruppe_code NULL = globaler Stamm. Kind-Teams erben die Eltern-Matrix
+ * commodity_group_code NULL = globaler Stamm. Kind-Teams erben die Eltern-Matrix
  * lesend (D1) und ergänzen eigene Einträge.
  */
 class FoodAlchemistStammLieferant extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_stamm_lieferanten';
+    protected $table = 'foodalchemist_preferred_suppliers';
 
     protected $guarded = ['id'];
 

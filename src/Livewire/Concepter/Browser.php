@@ -44,7 +44,7 @@ class Browser extends Component
     public bool $showVorlagen = false;
 
     /** Pakete: Rollen-Filter. */
-    #[Url(as: 'rolle')]
+    #[Url(as: 'role')]
     public string $rolleFilter = '';
 
     /** Concepts: Facetten-Filter (Umbau-Spec Phase 4b) — '' alle · ID. */
@@ -57,7 +57,7 @@ class Browser extends Component
     #[Url(as: 'moment')]
     public string $momentFilter = '';
 
-    #[Url(as: 'saison')]
+    #[Url(as: 'season')]
     public string $saisonFilter = '';
 
     #[Url(as: 'sel')]
@@ -201,7 +201,7 @@ class Browser extends Component
             $items = $pakete->paginateBrowser([
                 'search' => $this->search,
                 'klasse' => $this->klasse,
-                'rolle' => $this->rolleFilter,
+                'role' => $this->rolleFilter,
             ], $team);
             $klassen = $pakete->klassen($team);
             $rollen = $pakete->rollen($team);
@@ -215,7 +215,7 @@ class Browser extends Component
                 'servierform' => $this->servierformFilter !== '' ? $this->servierformFilter : null,
                 'eventtyp' => $this->eventtypFilter !== '' ? $this->eventtypFilter : null,
                 'einsatzmoment' => $this->momentFilter !== '' ? $this->momentFilter : null,
-                'saison' => $this->saisonFilter !== '' ? $this->saisonFilter : null,
+                'season' => $this->saisonFilter !== '' ? $this->saisonFilter : null,
             ], $team);
             $klassen = $concepts->klassen($team);
             $rollen = [];
@@ -228,7 +228,7 @@ class Browser extends Component
             'rollen' => $rollen,
             // Facetten-Vokabulare (nur Concepts-Tab relevant)
             'facetteServierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
-                ->orderBy('sort_order')->get(['id', 'code', 'bezeichnung']),
+                ->orderBy('sort_order')->get(['id', 'code', 'label']),
             'facetteEventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
             'facetteMomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)

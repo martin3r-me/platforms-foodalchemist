@@ -84,7 +84,7 @@
                         <div class="flex flex-wrap gap-1">
                             @foreach($facetteServierformen as $sf)
                                 <button type="button" wire:key="fsf-{{ $sf->id }}" wire:click="waehleFacette('servierformFilter', '{{ $sf->id }}')"
-                                        class="{{ $pill }} {{ $servierformFilter === (string) $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->bezeichnung }}</button>
+                                        class="{{ $pill }} {{ $servierformFilter === (string) $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>
                             @endforeach
                         </div>
                     </div>
@@ -158,14 +158,14 @@
                                 @if($tab === 'concepts' && $it->is_vorlage)<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Vorlage</span>@endif
                             </td>
                             @if($tab === 'pakete')
-                                <td class="{{ $td }} text-gray-500">{{ $it->rolle ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-500">{{ $it->role ?: '—' }}</td>
                                 <td class="{{ $td }} text-gray-500">{{ $it->klasse ?: '—' }}</td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->gerichte_count }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $it->preis_pro_person !== null ? number_format((float) $it->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->wareneinsatz_prozent !== null ? number_format((float) $it->wareneinsatz_prozent, 1, ',', '.') . ' %' : '—' }}</td>
                             @else
                                 <td class="{{ $td }} text-gray-500">{{ $it->klasse ?: '—' }}</td>
-                                <td class="{{ $td }} text-gray-500">{{ collect([$it->eventtyp?->name, $it->servierform?->bezeichnung])->filter()->join(' · ') ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-500">{{ collect([$it->eventtyp?->name, $it->servierform?->label])->filter()->join(' · ') ?: '—' }}</td>
                                 {{-- Inline-Status-Pflege wie bei GP (Concepts; Server gated canCurate/D1) --}}
                                 <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                     @php($stMap = ['draft' => $variantPill['secondary'], 'aktiv' => $variantPill['success'], 'archiviert' => $variantPill['warning']])

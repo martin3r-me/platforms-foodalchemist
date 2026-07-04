@@ -33,7 +33,7 @@ class ConceptService
     {
         return FoodAlchemistConcept::visibleToTeam($team)
             ->standardisiert()   // #380: angebots-lokale Entwürfe gehören nicht in den Katalog
-            ->with(['eventtyp:id,name', 'servierform:id,bezeichnung']) // 4c: Facetten-Spalte im Browser
+            ->with(['eventtyp:id,name', 'servierform:id,label']) // 4c: Facetten-Spalte im Browser
             ->withCount('slots')
             ->when(($filters['vorlagen'] ?? false), fn ($q) => $q->vorlagen(), fn ($q) => $q->echte())
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
@@ -48,12 +48,12 @@ class ConceptService
             ->when(is_numeric($filters['category'] ?? null), fn ($q) => $q
                 ->whereIn('category_id', $this->descendantIds($team, (int) $filters['category'])))
             // Facetten-Filter (Umbau-Spec Phase 4b)
-            ->when(is_numeric($filters['servierform'] ?? null), fn ($q) => $q->where('servierform_id', (int) $filters['servierform']))
-            ->when(is_numeric($filters['eventtyp'] ?? null), fn ($q) => $q->where('eventtyp_id', (int) $filters['eventtyp']))
+            ->when(is_numeric($filters['servierform'] ?? null), fn ($q) => $q->where('serving_form_id', (int) $filters['servierform']))
+            ->when(is_numeric($filters['eventtyp'] ?? null), fn ($q) => $q->where('event_type_id', (int) $filters['eventtyp']))
             ->when(is_numeric($filters['einsatzmoment'] ?? null), fn ($q) => $q
-                ->whereHas('einsatzmomente', fn ($w) => $w->where('foodalchemist_einsatzmomente.id', (int) $filters['einsatzmoment'])))
-            ->when(is_numeric($filters['saison'] ?? null), fn ($q) => $q
-                ->whereHas('saisons', fn ($w) => $w->where('foodalchemist_saisons.id', (int) $filters['saison'])))
+                ->whereHas('einsatzmomente', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $filters['einsatzmoment'])))
+            ->when(is_numeric($filters['season'] ?? null), fn ($q) => $q
+                ->whereHas('saisons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $filters['season'])))
             ->orderBy('name')
             ->paginate($perPage);
     }
@@ -63,14 +63,14 @@ class ConceptService
         return FoodAlchemistConcept::visibleToTeam($team)
             ->with([
                 'slots' => fn ($q) => $q->orderBy('position'),
-                'slots.paket:id,name,rolle,klasse,preis_pro_person,ek_pro_person,wareneinsatz_prozent,preis_modus,preis_stale',
+                'slots.paket:id,name,role,klasse,preis_pro_person,ek_pro_person,wareneinsatz_prozent,preis_modus,preis_stale',
                 // Menü-Ansicht: Paket-Gerichte mit Wording-Feldern (Wording-Kette)
                 'slots.paket.gerichte.gericht:id,name,vk_wording_standard',
-                'slots.gericht:id,name,vk_wording_standard,vk_netto,ek_total_eur,speisen_klasse_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergene_konfidenz',
-                'slots.gericht.speisenKlasse:id,bezeichnung',
-                'slots.einheit:id,slug,display_de',
-                'slots.geschirrItem:id,bezeichnung,leihpreis,einheit',
-                'slots.geschirrAltItem:id,bezeichnung,leihpreis,einheit',
+                'slots.gericht:id,name,vk_wording_standard,vk_netto,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergene_konfidenz',
+                'slots.gericht.speisenKlasse:id,label',
+                'slots.unit:id,slug,display_de',
+                'slots.geschirrItem:id,label,leihpreis,unit',
+                'slots.geschirrAltItem:id,label,leihpreis,unit',
                 'vorlageQuelle:id,name',
             ])
             ->find($id);
@@ -100,17 +100,17 @@ class ConceptService
 
     // M10R-1/3: VK-Parität-Metadaten + Konsumenten-Felder + KI-Brief am Concept editierbar.
     private const FELDER = [
-        'name', 'konsumenten_name', 'anlass', 'niveau', 'klasse', 'geschmacksrichtung',
-        'schreibstil_id', 'category_id', 'status', 'beschreibung', 'zusatztext', 'note',
-        'brief', 'zielpreis_pro_person', 'diaet_vorgabe', 'struktur_vorgabe', 'saison', 'zielgruppe',
+        'name', 'konsumenten_name', 'anlass', 'niveau', 'klasse', 'taste_direction',
+        'schreibstil_id', 'category_id', 'status', 'description', 'additional_text', 'note',
+        'brief', 'zielpreis_pro_person', 'diaet_vorgabe', 'struktur_vorgabe', 'season', 'zielgruppe',
         'preis_modus', 'preis_pro_person_manuell',
-        'servierform_id', 'eventtyp_id', // Facetten (Umbau-Spec Phase 4)
+        'serving_form_id', 'event_type_id', // Facetten (Umbau-Spec Phase 4)
     ];
 
     /** Felder, die leer („" / 0) als NULL gespeichert werden (FK/optional). */
     private const FELDER_NULLBAR = [
         'category_id', 'schreibstil_id', 'zielpreis_pro_person', 'preis_pro_person_manuell',
-        'servierform_id', 'eventtyp_id',
+        'serving_form_id', 'event_type_id',
     ];
 
     public function update(Team $team, int $id, array $in): FoodAlchemistConcept
@@ -178,7 +178,7 @@ class ConceptService
         }
         FoodAlchemistConceptSektorEignung::create([
             'team_id' => $concept->team_id, 'concept_id' => $conceptId,
-            'sektor_slug' => $slug, 'quelle' => 'manual',
+            'sektor_slug' => $slug, 'source' => 'manual',
         ]);
     }
 
@@ -224,7 +224,7 @@ class ConceptService
 
         $slot = $concept->slots()->create([
             'team_id' => $concept->team_id,
-            'rolle' => $this->norm($in['rolle'] ?? null),
+            'role' => $this->norm($in['role'] ?? null),
             'titel' => $this->norm($in['titel'] ?? null),
             'is_pflicht' => (bool) ($in['is_pflicht'] ?? true),
             'position' => (int) ($concept->slots()->max('position') ?? -1) + 1,
@@ -238,7 +238,7 @@ class ConceptService
     {
         $slot = $this->ownedSlot($team, $slotId);
         $slot->update([
-            'rolle' => array_key_exists('rolle', $in) ? $this->norm($in['rolle']) : $slot->rolle,
+            'role' => array_key_exists('role', $in) ? $this->norm($in['role']) : $slot->role,
             'titel' => array_key_exists('titel', $in) ? $this->norm($in['titel']) : $slot->titel,
             'is_pflicht' => array_key_exists('is_pflicht', $in) ? (bool) $in['is_pflicht'] : $slot->is_pflicht,
         ]);
@@ -302,22 +302,22 @@ class ConceptService
     {
         $slot = $this->ownedSlot($team, $slotId);
 
-        if (! empty($in['paket_id'])) {
+        if (! empty($in['package_id'])) {
             $slot->update([
                 'type' => 'paket',
-                'paket_id' => (int) $in['paket_id'],
-                'vk_recipe_id' => null, 'menge' => null, 'einheit_vocab_id' => null,
+                'package_id' => (int) $in['package_id'],
+                'vk_recipe_id' => null, 'quantity' => null, 'unit_vocab_id' => null,
             ]);
         } elseif (! empty($in['vk_recipe_id'])) {
             $slot->update([
                 // B2: Gericht (VK) ODER Basisrezept — beide referenzieren vk_recipe_id, `type` unterscheidet.
                 'type' => ($in['type'] ?? null) === 'basisrezept' ? 'basisrezept' : 'gericht',
                 'vk_recipe_id' => (int) $in['vk_recipe_id'],
-                'menge' => $in['menge'] ?? null, 'einheit_vocab_id' => $in['einheit_vocab_id'] ?? null,
-                'paket_id' => null,
+                'quantity' => $in['quantity'] ?? null, 'unit_vocab_id' => $in['unit_vocab_id'] ?? null,
+                'package_id' => null,
             ]);
         } else {
-            $slot->update(['type' => 'gericht', 'paket_id' => null, 'vk_recipe_id' => null, 'menge' => null, 'einheit_vocab_id' => null]);
+            $slot->update(['type' => 'gericht', 'package_id' => null, 'vk_recipe_id' => null, 'quantity' => null, 'unit_vocab_id' => null]);
         }
         $this->refreshCache($slot->concept);
 
@@ -335,16 +335,16 @@ class ConceptService
     }
 
     /**
-     * #388: Geschirr-Zuordnung je Gericht-Slot. $rolle ∈ haupt|alt; $itemId=null = entfernen.
+     * #388: Geschirr-Zuordnung je Gericht-Slot. $role ∈ haupt|alt; $itemId=null = entfernen.
      * Item muss team-sichtbar sein (FoodAlchemistGeschirrItem::visibleToTeam).
      */
-    public function setSlotGeschirr(Team $team, int $slotId, string $rolle, ?int $itemId): FoodAlchemistConceptSlot
+    public function setSlotGeschirr(Team $team, int $slotId, string $role, ?int $itemId): FoodAlchemistConceptSlot
     {
         $slot = $this->ownedSlot($team, $slotId);
         if ($itemId !== null && ! \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::visibleToTeam($team)->whereKey($itemId)->exists()) {
             throw new \RuntimeException('Geschirr-Artikel nicht sichtbar.');
         }
-        $spalte = $rolle === 'alt' ? 'geschirr_alt_item_id' : 'geschirr_item_id';
+        $spalte = $role === 'alt' ? 'geschirr_alt_item_id' : 'geschirr_item_id';
         $slot->update([$spalte => $itemId]);
 
         return $slot->refresh();
@@ -361,18 +361,18 @@ class ConceptService
                 throw new \RuntimeException('Darreichung gehört nicht zum Gericht dieser Position.');
             }
         }
-        $slot->update(['darreichung_id' => $darreichungId]);
+        $slot->update(['presentation_id' => $darreichungId]);
 
         return $slot->refresh();
     }
 
     /** Inline-Pflege Menge + Einheit einer Gericht-/Basisrezept-Position (Zeilen-Editor). */
-    public function setSlotMengeEinheit(Team $team, int $slotId, ?float $menge, ?int $einheitId = null): FoodAlchemistConceptSlot
+    public function setSlotMengeEinheit(Team $team, int $slotId, ?float $quantity, ?int $einheitId = null): FoodAlchemistConceptSlot
     {
         $slot = $this->ownedSlot($team, $slotId);
         $slot->update([
-            'menge' => $menge,
-            'einheit_vocab_id' => $einheitId ?: null,
+            'quantity' => $quantity,
+            'unit_vocab_id' => $einheitId ?: null,
         ]);
         $this->refreshCache($slot->concept);
 
@@ -406,13 +406,13 @@ class ConceptService
     public function verwendetInFoodbooks(Team $team, int $conceptId): \Illuminate\Support\Collection
     {
         $foodbookIds = DB::table('foodalchemist_foodbook_blocks as b')
-            ->join('foodalchemist_foodbook_kapitel as k', 'k.id', '=', 'b.kapitel_id')
+            ->join('foodalchemist_foodbook_chapters as k', 'k.id', '=', 'b.chapter_id')
             ->where('b.concept_id', $conceptId)->whereNull('b.deleted_at')
             ->distinct()->pluck('k.foodbook_id');
 
         return FoodAlchemistFoodbook::visibleToTeam($team)
-            ->whereIn('id', $foodbookIds)->orderBy('bezeichnung')
-            ->get(['id', 'bezeichnung', 'jahr', 'kunde', 'status']);
+            ->whereIn('id', $foodbookIds)->orderBy('label')
+            ->get(['id', 'label', 'jahr', 'kunde', 'status']);
     }
 
     /** Austauschbare Pakete für einen Slot = gleiche Rolle (M13-Vorstufe). */
@@ -421,12 +421,12 @@ class ConceptService
      * die Positionen werden durch EINE Paket-Position ersetzt. Struktur-Blöcke/Pakete in der
      * Auswahl werden ignoriert (nur vk_recipe_id-Positionen wandern ins Paket).
      */
-    public function bildePaketAusPositionen(Team $team, int $conceptId, array $slotIds, string $name, ?string $rolle = null): FoodAlchemistConceptSlot
+    public function bildePaketAusPositionen(Team $team, int $conceptId, array $slotIds, string $name, ?string $role = null): FoodAlchemistConceptSlot
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
         $this->guardOwner($concept, $team);
 
-        return DB::transaction(function () use ($team, $concept, $slotIds, $name, $rolle) {
+        return DB::transaction(function () use ($team, $concept, $slotIds, $name, $role) {
             $slots = $concept->slots()->whereIn('id', $slotIds)->whereNotNull('vk_recipe_id')
                 ->orderBy('position')->get();
             if ($slots->isEmpty()) {
@@ -436,15 +436,15 @@ class ConceptService
 
             $paketSvc = app(PaketService::class);
             // auto-Preis: das gebildete Paket = Σ der Gericht-Preise → Concept-Summe bleibt unverändert.
-            $paket = $paketSvc->create($team, ['name' => trim($name) !== '' ? trim($name) : 'Paket', 'rolle' => $rolle, 'preis_modus' => 'auto']);
+            $paket = $paketSvc->create($team, ['name' => trim($name) !== '' ? trim($name) : 'Paket', 'role' => $role, 'preis_modus' => 'auto']);
             $paketSvc->syncGerichte($team, $paket->id, $slots->map(fn ($s) => [
-                'vk_recipe_id' => $s->vk_recipe_id, 'menge' => $s->menge, 'einheit_vocab_id' => $s->einheit_vocab_id,
+                'vk_recipe_id' => $s->vk_recipe_id, 'quantity' => $s->quantity, 'unit_vocab_id' => $s->unit_vocab_id,
             ])->values()->all());
 
             $concept->slots()->whereIn('id', $slots->pluck('id'))->delete();
             $neu = $concept->slots()->create([
-                'team_id' => $concept->team_id, 'type' => 'paket', 'paket_id' => $paket->id,
-                'rolle' => $rolle, 'position' => $minPos, 'is_pflicht' => true,
+                'team_id' => $concept->team_id, 'type' => 'paket', 'package_id' => $paket->id,
+                'role' => $role, 'position' => $minPos, 'is_pflicht' => true,
             ]);
             $this->refreshCache($concept->refresh());
 
@@ -456,9 +456,9 @@ class ConceptService
     {
         return FoodAlchemistPaket::visibleToTeam($team)
             ->where('is_inactive', false)
-            ->when($slot->rolle, fn ($q, $rolle) => $q->where('rolle', $rolle))
+            ->when($slot->role, fn ($q, $role) => $q->where('role', $role))
             ->orderBy('name')
-            ->get(['id', 'name', 'rolle', 'preis_pro_person']);
+            ->get(['id', 'name', 'role', 'preis_pro_person']);
     }
 
     // ── M10-04: Live-Output-Preis (Σ gespeicherte Paket-Preise) ─────────
@@ -473,9 +473,9 @@ class ConceptService
     public function preisCockpit(FoodAlchemistConcept $concept): array
     {
         $concept->loadMissing(['slots' => fn ($q) => $q->orderBy('position'),
-            'slots.einheit:id,slug,dimension,default_in_g',
+            'slots.unit:id,slug,dimension,default_in_g',
             'slots.paket:id,name,preis_pro_person,ek_pro_person,preis_stale',
-            'slots.gericht:id,name,vk_netto,ek_total_eur,vk_anzahl_einheiten,vk_menge_pro_einheit_g,yield_kg,ertrag_stueck']);
+            'slots.gericht:id,name,vk_netto,ek_total_eur,vk_unit_count,vk_quantity_pro_unit_g,yield_kg,ertrag_stueck']);
 
         $zeilen = [];
         $vkTotal = 0.0;
@@ -488,44 +488,44 @@ class ConceptService
             if (in_array($slot->type, self::STRUKTUR_TYPEN, true)) {
                 continue; // Struktur-Blöcke (Text/Leerzeile/Header) sind keine Preis-Positionen
             }
-            if ($slot->paket_id !== null && $slot->paket) {
+            if ($slot->package_id !== null && $slot->paket) {
                 $vk = (float) ($slot->paket->preis_pro_person ?? 0);
                 $ek = (float) ($slot->paket->ek_pro_person ?? 0);
                 $hatStale = $hatStale || (bool) $slot->paket->preis_stale;
-                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'paket', 'rolle' => $slot->rolle, 'wording' => $slot->wording,
+                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'paket', 'role' => $slot->role, 'wording' => $slot->wording,
                     'label' => $slot->paket->name, 'preis' => $vk, 'ek' => round($ek, 2), 'ek_fehlt' => false, 'stale' => (bool) $slot->paket->preis_stale];
             } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
                 // Umbau-Spec Phase 5: geltende Darreichung auflösen (explizit → Konzept-Form → Standard)
                 $slot->setRelation('concept', $concept);
                 $dar = app(DarreichungResolver::class)->fuerSlot($slot);
-                $darPortionG = $dar?->menge_pro_einheit_g !== null ? (float) $dar->menge_pro_einheit_g : null;
+                $darPortionG = $dar?->quantity_pro_unit_g !== null ? (float) $dar->quantity_pro_unit_g : null;
                 // Einheit-abhängige Mengen-Umrechnung — EINE Stelle (Konsistenz zu ConcepterAggregate/Paket).
                 $pae = ConcepterAggregateService::portionsAequivalent(
-                    $slot->menge !== null ? (float) $slot->menge : null,
-                    $slot->einheit,
+                    $slot->quantity !== null ? (float) $slot->quantity : null,
+                    $slot->unit,
                     $slot->gericht,
                     $darPortionG,
                 );
                 $ekFehlt = $pae === null;       // Gramm-Position ohne Portionsgewicht → ehrlich „unbekannt"
                 // Teiler von ek_total: Stück-Modus (kg↔Stück) → ertrag_stueck, sonst Portionszahl.
-                $stueck = ConcepterAggregateService::stueckModus($slot->einheit, $slot->gericht);
+                $stueck = ConcepterAggregateService::stueckModus($slot->unit, $slot->gericht);
                 $anzahl = $stueck
                     ? (float) $slot->gericht->ertrag_stueck
-                    : max(1, (int) ($slot->gericht->vk_anzahl_einheiten ?? 1));
+                    : max(1, (int) ($slot->gericht->vk_unit_count ?? 1));
                 $vk = $ekFehlt ? 0.0 : (float) ($dar?->vk_netto ?? $slot->gericht->vk_netto ?? 0) * $pae;
                 $ek = $ekFehlt ? 0.0
                     : (($dar?->ek_portion !== null && ! $stueck)
                         ? (float) $dar->ek_portion * $pae
                         : (float) ($slot->gericht->ek_total_eur ?? 0) / $anzahl * $pae);
                 $hatEkLuecke = $hatEkLuecke || $ekFehlt;
-                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'gericht', 'rolle' => $slot->rolle, 'wording' => $slot->wording,
+                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'gericht', 'role' => $slot->role, 'wording' => $slot->wording,
                     'label' => $slot->gericht->name, 'preis' => round($vk, 2),
                     'ek' => $ekFehlt ? null : round($ek, 2), 'ek_fehlt' => $ekFehlt, 'stale' => false];
             } else {
                 $vk = 0.0;
                 $ek = 0.0;
                 $hatLeer = true;
-                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'leer', 'rolle' => $slot->rolle,
+                $zeilen[] = ['slot_id' => $slot->id, 'typ' => 'leer', 'role' => $slot->role,
                     'label' => $slot->titel ?? '(leer)', 'preis' => null, 'ek' => null, 'ek_fehlt' => false, 'stale' => false];
             }
             $vkTotal += $vk;
@@ -551,41 +551,41 @@ class ConceptService
 
     /**
      * Mengen-Hochrechnung für eine GEGEBENE Pax-Zahl — je Gericht (aus den
-     * Paketen + fest gesetzte Gerichte) `menge` pro Person × Pax. Das Concept
+     * Paketen + fest gesetzte Gerichte) `quantity` pro Person × Pax. Das Concept
      * ist person-UNABHÄNGIG (D-CON-5) — die Pax kommt vom Aufruf (Foodbook/Angebot,
-     * M11), nicht vom Concept. `menge` = Menge pro Person in der Einheit.
+     * M11), nicht vom Concept. `quantity` = Menge pro Person in der Einheit.
      *
-     * @return list<array{rolle:?string, paket:?string, gericht:string, menge_pro_person:?float, einheit:?string, gesamt_menge:?float}>
+     * @return list<array{role:?string, paket:?string, gericht:string, menge_pro_person:?float, unit:?string, gesamt_menge:?float}>
      */
     public function mengenHochrechnung(FoodAlchemistConcept $concept, ?int $personen = null): array
     {
         $concept->loadMissing([
             'slots' => fn ($q) => $q->orderBy('position'),
             'slots.paket.gerichte.gericht:id,name',
-            'slots.paket.gerichte.einheit:id,slug,display_de',
-            'slots.gericht:id,name', 'slots.einheit:id,slug,display_de',
+            'slots.paket.gerichte.unit:id,slug,display_de',
+            'slots.gericht:id,name', 'slots.unit:id,slug,display_de',
         ]);
 
         $zeilen = [];
         foreach ($concept->slots as $slot) {
-            if ($slot->paket_id !== null && $slot->paket) {
+            if ($slot->package_id !== null && $slot->paket) {
                 foreach ($slot->paket->gerichte as $bg) {
-                    $mpp = $bg->menge !== null ? (float) $bg->menge : null;
+                    $mpp = $bg->quantity !== null ? (float) $bg->quantity : null;
                     $zeilen[] = [
-                        'rolle' => $slot->rolle, 'paket' => $slot->paket->name,
+                        'role' => $slot->role, 'paket' => $slot->paket->name,
                         'gericht' => $bg->gericht?->name ?? '—',
                         'menge_pro_person' => $mpp,
-                        'einheit' => $bg->einheit?->display_de ?? $bg->einheit?->slug,
+                        'unit' => $bg->unit?->display_de ?? $bg->unit?->slug,
                         'gesamt_menge' => $mpp !== null && $personen !== null ? round($mpp * $personen, 2) : null,
                     ];
                 }
             } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
-                $mpp = $slot->menge !== null ? (float) $slot->menge : null;
+                $mpp = $slot->quantity !== null ? (float) $slot->quantity : null;
                 $zeilen[] = [
-                    'rolle' => $slot->rolle, 'paket' => null,
+                    'role' => $slot->role, 'paket' => null,
                     'gericht' => $slot->gericht->name,
                     'menge_pro_person' => $mpp,
-                    'einheit' => $slot->einheit?->display_de ?? $slot->einheit?->slug,
+                    'unit' => $slot->unit?->display_de ?? $slot->unit?->slug,
                     'gesamt_menge' => $mpp !== null && $personen !== null ? round($mpp * $personen, 2) : null,
                 ];
             }
@@ -631,7 +631,7 @@ class ConceptService
         $concept->update([
             'preis_pro_person_cache' => $this->preisCockpit($concept)['preis_pro_person'],
             'naehrwerte_cache' => $agg['naehrwerte'],
-            'arbeitszeit_min_cache' => $agg['arbeitszeit_min'],
+            'work_time_min_cache' => $agg['work_time_min'],
             'ek_pro_person_cache' => $agg['ek_pro_person'],
         ]);
     }
@@ -647,15 +647,15 @@ class ConceptService
             $neu = FoodAlchemistConcept::create([
                 'team_id' => $team->id, 'name' => $name,
                 'anlass' => $vorlage->anlass, 'niveau' => $vorlage->niveau,
-                'status' => 'draft', 'is_vorlage' => false, 'vorlage_quelle_id' => $vorlage->id,
+                'status' => 'draft', 'is_vorlage' => false, 'template_source_id' => $vorlage->id,
             ]);
             foreach ($vorlage->slots as $slot) {
                 $neu->slots()->create([
-                    'team_id' => $team->id, 'rolle' => $slot->rolle, 'titel' => $slot->titel,
+                    'team_id' => $team->id, 'role' => $slot->role, 'titel' => $slot->titel,
                     'position' => $slot->position, 'is_pflicht' => $slot->is_pflicht,
-                    'paket_id' => $slot->paket_id,          // Paket bleibt Referenz (zieht durch)
-                    'vk_recipe_id' => $slot->vk_recipe_id, 'menge' => $slot->menge,
-                    'einheit_vocab_id' => $slot->einheit_vocab_id,
+                    'package_id' => $slot->package_id,          // Paket bleibt Referenz (zieht durch)
+                    'vk_recipe_id' => $slot->vk_recipe_id, 'quantity' => $slot->quantity,
+                    'unit_vocab_id' => $slot->unit_vocab_id,
                 ]);
             }
             $this->refreshCache($neu);
@@ -671,19 +671,19 @@ class ConceptService
 
         return DB::transaction(function () use ($team, $orig) {
             $felder = array_intersect_key($orig->attributesToArray(), array_flip([
-                'konsumenten_name', 'anlass', 'niveau', 'klasse', 'geschmacksrichtung', 'schreibstil_id',
-                'category_id', 'beschreibung', 'zusatztext', 'brief', 'diaet_vorgabe', 'struktur_vorgabe',
-                'saison', 'zielgruppe', 'zielpreis_pro_person', 'is_vorlage',
+                'konsumenten_name', 'anlass', 'niveau', 'klasse', 'taste_direction', 'schreibstil_id',
+                'category_id', 'description', 'additional_text', 'brief', 'diaet_vorgabe', 'struktur_vorgabe',
+                'season', 'zielgruppe', 'zielpreis_pro_person', 'is_vorlage',
             ]));
             $neu = FoodAlchemistConcept::create($felder + [
                 'team_id' => $team->id, 'name' => $orig->name . ' (Kopie)', 'status' => 'draft',
             ]);
             foreach ($orig->slots as $slot) {
                 $neu->slots()->create([
-                    'team_id' => $team->id, 'rolle' => $slot->rolle, 'titel' => $slot->titel,
+                    'team_id' => $team->id, 'role' => $slot->role, 'titel' => $slot->titel,
                     'position' => $slot->position, 'is_pflicht' => $slot->is_pflicht,
-                    'paket_id' => $slot->paket_id, 'vk_recipe_id' => $slot->vk_recipe_id,
-                    'menge' => $slot->menge, 'einheit_vocab_id' => $slot->einheit_vocab_id,
+                    'package_id' => $slot->package_id, 'vk_recipe_id' => $slot->vk_recipe_id,
+                    'quantity' => $slot->quantity, 'unit_vocab_id' => $slot->unit_vocab_id,
                 ]);
             }
             $this->refreshCache($neu);
@@ -697,7 +697,7 @@ class ConceptService
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
         $vorlage = $this->forkVonVorlage($team, $conceptId, $name ?: ($concept->name . ' (Vorlage)'));
-        $vorlage->update(['is_vorlage' => true, 'vorlage_quelle_id' => null, 'status' => 'aktiv']);
+        $vorlage->update(['is_vorlage' => true, 'template_source_id' => null, 'status' => 'aktiv']);
 
         return $vorlage->refresh();
     }
@@ -718,21 +718,21 @@ class ConceptService
         $concept = FoodAlchemistConcept::visibleToTeam($team)->with('slots')->findOrFail($conceptId);
 
         $fix = 0.0;
-        $slots = [];   // adjustable: ['slot_id', 'current_paket_id', 'kandidaten' => [paket_id => preis]]
+        $slots = [];   // adjustable: ['slot_id', 'current_paket_id', 'kandidaten' => [package_id => preis]]
         foreach ($concept->slots as $slot) {
             $kandidaten = $this->tauschbarePakete($team, $slot)
                 ->mapWithKeys(fn ($p) => [(int) $p->id => (float) ($p->preis_pro_person ?? 0)])->all();
             // aktuelles Paket aufnehmen, falls (z. B. inaktiv) nicht in den Kandidaten
-            if ($slot->paket_id !== null && ! isset($kandidaten[$slot->paket_id]) && $slot->paket) {
-                $kandidaten[(int) $slot->paket_id] = (float) ($slot->paket->preis_pro_person ?? 0);
+            if ($slot->package_id !== null && ! isset($kandidaten[$slot->package_id]) && $slot->paket) {
+                $kandidaten[(int) $slot->package_id] = (float) ($slot->paket->preis_pro_person ?? 0);
             }
             if (! empty($kandidaten)) {
-                $slots[] = ['slot_id' => (int) $slot->id, 'current' => $slot->paket_id !== null ? (int) $slot->paket_id : null, 'kandidaten' => $kandidaten];
+                $slots[] = ['slot_id' => (int) $slot->id, 'current' => $slot->package_id !== null ? (int) $slot->package_id : null, 'kandidaten' => $kandidaten];
             } elseif ($slot->vk_recipe_id !== null && $slot->gericht) {
                 // Umbau-Spec Phase 5: aufgelöste Darreichung gewinnt (Fixanteil des Zielpreis-Solvers)
                 $slot->setRelation('concept', $concept);
                 $darVk = app(DarreichungResolver::class)->vkNettoFuerSlot($slot);
-                $fix += (float) ($darVk ?? 0) * ($slot->menge !== null ? (float) $slot->menge : 1.0);
+                $fix += (float) ($darVk ?? 0) * ($slot->quantity !== null ? (float) $slot->quantity : 1.0);
             }
         }
 
@@ -747,7 +747,7 @@ class ConceptService
             $max += max($s['kandidaten']);
         }
 
-        $wahl = $this->loeseZielpreis($slots, $zielRest);  // [slot_id => paket_id]
+        $wahl = $this->loeseZielpreis($slots, $zielRest);  // [slot_id => package_id]
         $preis = $fix;
         foreach ($wahl as $slotId => $paketId) {
             $s = collect($slots)->firstWhere('slot_id', $slotId);
@@ -772,7 +772,7 @@ class ConceptService
      * dem Rest-Ziel am nächsten kommt. Exhaustiv (≤ 4000 Kombis), sonst greedy.
      *
      * @param  list<array{slot_id:int, current:?int, kandidaten:array<int,float>}>  $slots
-     * @return array<int,int> slot_id => paket_id
+     * @return array<int,int> slot_id => package_id
      */
     private function loeseZielpreis(array $slots, float $zielRest): array
     {
@@ -848,7 +848,7 @@ class ConceptService
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
         $this->guardOwner($concept, $team);
         foreach ($vorschlag as $slotId => $paketId) {
-            $this->fillSlot($team, (int) $slotId, ['paket_id' => (int) $paketId]);
+            $this->fillSlot($team, (int) $slotId, ['package_id' => (int) $paketId]);
         }
 
         return $concept->refresh();

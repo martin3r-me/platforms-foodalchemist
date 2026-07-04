@@ -16,7 +16,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Rezept (D-5 Basisrezept / D-6 Verkaufsrezept — EIN Modell, zwei
- * Service-Sichten über ist_verkaufsrezept). Aggregat-Spalten (Allergene GL-01,
+ * Service-Sichten über is_sales_recipe). Aggregat-Spalten (Allergene GL-01,
  * Zusatzstoffe GL-09, Kosten/Yield GL-02, Nährwerte GL-08, Spec-Flags) schreibt
  * NUR der RecipeRecomputeService. team_id NOT NULL (⚠D1: immer team-eigen).
  */
@@ -31,7 +31,7 @@ class FoodAlchemistRecipe extends Model
     protected $casts = [
         'uuid' => 'string',
         'status' => RecipeStatus::class,
-        'ist_verkaufsrezept' => 'boolean',
+        'is_sales_recipe' => 'boolean',
         'is_template' => 'boolean',
         'is_split_result' => 'boolean',
         'is_user_stub' => 'boolean',
@@ -41,8 +41,8 @@ class FoodAlchemistRecipe extends Model
         'ek_total_eur' => 'decimal:4',
         'ek_per_kg_eur' => 'decimal:4',
         'nebenkosten_eur' => 'decimal:4',
-        'n_zutaten_total' => 'integer',
-        'n_zutaten_ungemappt' => 'integer',
+        'n_ingredients_total' => 'integer',
+        'n_ingredients_ungemappt' => 'integer',
         'ai_confidence' => 'decimal:3',
         'allergene_aggregiert_am' => 'datetime',
         'zusatz_aggregiert_am' => 'datetime',
@@ -62,12 +62,12 @@ class FoodAlchemistRecipe extends Model
 
     public function scopeBasis(Builder $q): Builder
     {
-        return $q->where('ist_verkaufsrezept', false);
+        return $q->where('is_sales_recipe', false);
     }
 
     public function scopeVerkauf(Builder $q): Builder
     {
-        return $q->where('ist_verkaufsrezept', true);
+        return $q->where('is_sales_recipe', true);
     }
 
     // ── Relationen ───────────────────────────────────────────────────────
@@ -108,17 +108,17 @@ class FoodAlchemistRecipe extends Model
 
     public function speisenKlasse(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistDishClass::class, 'speisen_klasse_id');
+        return $this->belongsTo(FoodAlchemistDishClass::class, 'dish_class_id');
     }
 
     public function aufschlagsklasse(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'aufschlagsklasse_id');
+        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'markup_class_id');
     }
 
     public function vkEinheit(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'vk_einheit_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'vk_unit_vocab_id');
     }
 
     /** Darreichungs-Varianten des Gerichts (Umbau-Spec Phase 3). */

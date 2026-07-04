@@ -47,7 +47,7 @@ class ItemModal extends Component
         $item = $this->item($id);
         $this->itemId = $item->id;
         $this->fehler = null;
-        $this->stammdaten = $item->only(['designation', 'article_number', 'brand', 'manufacturer', 'origin', 'marketing_name', 'zusatztext']);
+        $this->stammdaten = $item->only(['designation', 'article_number', 'brand', 'manufacturer', 'origin', 'marketing_name', 'additional_text']);
         $this->verpackung = $item->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering']);
         $this->eigenschaften = $item->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder', 'vat', 'origin_country', 'organic_control_number', 'preorder_days', 'ingredients_lieferant']);
         $this->allergene = app(SupplierItemService::class)->getAllergens($item);
@@ -288,8 +288,8 @@ class ItemModal extends Component
             'allergenLabels' => FoodAlchemistItemAllergen::ALLERGENE,
             'naehrwertFelder' => SupplierItemService::NAEHRWERT_FELDER,
             'deklarationLabels' => FoodAlchemistItemDeclaration::STOFFE,
-            'deklarationQuelle' => $item?->declarations?->quelle,
-            'allergenQuelle' => $item?->allergens?->quelle,
+            'deklarationQuelle' => $item?->declarations?->source,
+            'allergenQuelle' => $item?->allergens?->source,
             'aktiverPreis' => $aktiv,
             'vergleichspreis' => $item !== null && $aktiv !== null
                 ? $preise->vergleichspreis($item, (float) $aktiv->price)

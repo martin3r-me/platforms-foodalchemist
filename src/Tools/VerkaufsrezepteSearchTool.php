@@ -49,7 +49,7 @@ class VerkaufsrezepteSearchTool extends FoodAlchemistTool implements ToolContrac
             'verkaufsrezepte' => collect($treffer->items())->map(fn ($r) => [
                 'id' => $r->id, 'name' => $r->name, 'vk_netto' => $r->vk_netto,
                 'ek_total_eur' => $r->ek_total_eur,
-                'speisen_klasse' => $r->speisenKlasse?->bezeichnung,
+                'speisen_klasse' => $r->speisenKlasse?->label,
             ])->all(),
         ]);
     }

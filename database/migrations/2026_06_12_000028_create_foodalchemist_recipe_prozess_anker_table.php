@@ -13,25 +13,25 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('foodalchemist_recipe_prozess_anker', function (Blueprint $table) {
+        Schema::create('foodalchemist_recipe_process_anchors', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->unsignedBigInteger('legacy_id')->nullable()->unique();
             $table->foreignId('recipe_id')->constrained('foodalchemist_recipes')->cascadeOnDelete();
-            $table->foreignId('anker_id')->constrained('foodalchemist_vocab_pairing_ankers')->cascadeOnDelete();
-            $table->string('quelle', 16)->nullable();
+            $table->foreignId('anchor_id')->constrained('foodalchemist_vocab_pairing_anchors')->cascadeOnDelete();
+            $table->string('source', 16)->nullable();
             $table->decimal('ai_confidence', 4, 3)->nullable();
-            $table->text('ai_begruendung')->nullable();
+            $table->text('ai_reasoning')->nullable();
             $table->timestamps();
             $table->softDeletes();
 
-            $table->unique(['recipe_id', 'anker_id']);
+            $table->unique(['recipe_id', 'anchor_id']);
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('foodalchemist_recipe_prozess_anker');
+        Schema::dropIfExists('foodalchemist_recipe_process_anchors');
     }
 };

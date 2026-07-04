@@ -7,7 +7,7 @@
 @if($rc)
     <div class="flex items-center gap-2 mb-2">
         @php($rcVar = ['ok' => 'success', 'warn' => 'warning', 'info' => 'secondary'][$rc['status']] ?? 'secondary')
-        <span class="{{ $pill }} {{ $variantPill[$rcVar] }}">Rolle: {{ $rc['rolle'] }}</span>
+        <span class="{{ $pill }} {{ $variantPill[$rcVar] }}">Rolle: {{ $rc['role'] }}</span>
         <span class="text-[11px] {{ $rc['status'] === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400' }}">{{ $rc['detail'] }}</span>
     </div>
 @endif
@@ -48,7 +48,7 @@
         @foreach($komposition['komponenten'] as $c)
             <div class="flex items-center gap-2 text-xs">
                 <span class="flex-1 min-w-0 truncate text-gray-700 dark:text-gray-200">{{ $c['name'] }}</span>
-                @if($c['quelle'] === 'ki')<span class="{{ $pill }} {{ $variantPill['success'] }}">gegart</span>@elseif($c['quelle'] === 'gp')<span class="{{ $pill }} {{ $variantPill['secondary'] }}">roh</span>@endif
+                @if($c['source'] === 'ki')<span class="{{ $pill }} {{ $variantPill['success'] }}">gegart</span>@elseif($c['source'] === 'gp')<span class="{{ $pill }} {{ $variantPill['secondary'] }}">roh</span>@endif
                 <span class="flex flex-wrap gap-1 shrink-0">
                     @forelse($c['dominant'] as $d)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $dimLabel[$d] ?? $d }}</span>@empty<span class="text-[11px] text-gray-400">mild</span>@endforelse
                 </span>

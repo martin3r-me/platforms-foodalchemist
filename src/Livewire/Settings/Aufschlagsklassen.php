@@ -20,11 +20,11 @@ class Aufschlagsklassen extends Component
 
     public array $form = [];
 
-    public array $neu = ['code' => '', 'bezeichnung' => '', 'rohaufschlag_pct' => '', 'bedienung_pct' => '0', 'profit_pct' => '0', 'mwst_satz' => '19', 'formel_typ' => 'aufschlag', 'note' => ''];
+    public array $neu = ['code' => '', 'label' => '', 'raw_markup_pct' => '', 'bedienung_pct' => '0', 'profit_pct' => '0', 'mwst_satz' => '19', 'formel_typ' => 'aufschlag', 'note' => ''];
 
     public ?string $fehler = null;
 
-    private const PROZENT_FELDER = ['rohaufschlag_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'];
+    private const PROZENT_FELDER = ['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'mwst_satz'];
 
     public function edit(int $id): void
     {
@@ -35,8 +35,8 @@ class Aufschlagsklassen extends Component
         $this->editId = $id;
         $this->fehler = null;
         $this->form = [
-            'bezeichnung' => $ak->bezeichnung,
-            'rohaufschlag_pct' => (string) $ak->rohaufschlag_pct,
+            'label' => $ak->label,
+            'raw_markup_pct' => (string) $ak->raw_markup_pct,
             'bedienung_pct' => (string) $ak->bedienung_pct,
             'profit_pct' => (string) $ak->profit_pct,
             'mwst_satz' => (string) $ak->mwst_satz,
@@ -64,7 +64,7 @@ class Aufschlagsklassen extends Component
     public function create(): void
     {
         $code = strtoupper(trim($this->neu['code']));
-        if ($code === '' || trim($this->neu['bezeichnung']) === '') {
+        if ($code === '' || trim($this->neu['label']) === '') {
             $this->fehler = 'Code und Bezeichnung sind Pflicht.';
 
             return;
@@ -104,7 +104,7 @@ class Aufschlagsklassen extends Component
 
             return;
         }
-        $nRec = DB::table('foodalchemist_recipes')->whereNull('deleted_at')->where('aufschlagsklasse_id', $id)->count();
+        $nRec = DB::table('foodalchemist_recipes')->whereNull('deleted_at')->where('markup_class_id', $id)->count();
         $nCls = DB::table('foodalchemist_dish_classes')->whereNull('deleted_at')->where('default_markup_class_id', $id)->count();
         if ($nRec + $nCls > 0) {
             $this->fehler = "Wird von {$nRec} Gericht(en) + {$nCls} Klasse(n) genutzt — erst umhängen oder deaktivieren.";
@@ -118,8 +118,8 @@ class Aufschlagsklassen extends Component
     /** Prozente kommasicher parsen + formel_typ-Whitelist; null = Fehler gesetzt. */
     private function validiert(array $eingabe): ?array
     {
-        $werte = ['bezeichnung' => trim($eingabe['bezeichnung'] ?? ''), 'note' => ($eingabe['note'] ?? '') ?: null];
-        if ($werte['bezeichnung'] === '') {
+        $werte = ['label' => trim($eingabe['label'] ?? ''), 'note' => ($eingabe['note'] ?? '') ?: null];
+        if ($werte['label'] === '') {
             $this->fehler = 'Bezeichnung ist Pflicht.';
 
             return null;
@@ -144,8 +144,8 @@ class Aufschlagsklassen extends Component
         return view('foodalchemist::livewire.settings.aufschlagsklassen', [
             'klassen' => FoodAlchemistMarkupClass::orderBy('code')->get(),
             'zaehler' => DB::table('foodalchemist_recipes')->whereNull('deleted_at')
-                ->whereNotNull('aufschlagsklasse_id')->selectRaw('aufschlagsklasse_id, COUNT(*) AS n')
-                ->groupBy('aufschlagsklasse_id')->pluck('n', 'aufschlagsklasse_id'),
+                ->whereNotNull('markup_class_id')->selectRaw('markup_class_id, COUNT(*) AS n')
+                ->groupBy('markup_class_id')->pluck('n', 'markup_class_id'),
         ]);
     }
 }

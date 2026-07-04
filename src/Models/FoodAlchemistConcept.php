@@ -34,7 +34,7 @@ class FoodAlchemistConcept extends Model
         // M10R-1: VK-Parität + KI-Brief + Aggregat-Caches
         'zielpreis_pro_person' => 'decimal:2',
         'ek_pro_person_cache' => 'decimal:4',
-        'arbeitszeit_min_cache' => 'integer',
+        'work_time_min_cache' => 'integer',
         'ai_confidence' => 'decimal:3',
         'naehrwerte_cache' => 'array',
     ];
@@ -56,19 +56,19 @@ class FoodAlchemistConcept extends Model
      */
     public function angebot(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistAngebot::class, 'angebot_id');
+        return $this->belongsTo(FoodAlchemistAngebot::class, 'offer_id');
     }
 
-    /** #380 — Standardisierter Katalog (angebot_id NULL). Concepter-Browser MUSS hierauf filtern. */
+    /** #380 — Standardisierter Katalog (offer_id NULL). Concepter-Browser MUSS hierauf filtern. */
     public function scopeStandardisiert(Builder $q): Builder
     {
-        return $q->whereNull('angebot_id');
+        return $q->whereNull('offer_id');
     }
 
     /** #380 — Angebots-lokaler (spekulativer) Entwurf. */
     public function scopeAngebotsLokal(Builder $q): Builder
     {
-        return $q->whereNotNull('angebot_id');
+        return $q->whereNotNull('offer_id');
     }
 
     public function slots(): HasMany
@@ -79,7 +79,7 @@ class FoodAlchemistConcept extends Model
     /** Vorlage, aus der dieses Concept geforkt wurde (Lineage, optional). */
     public function vorlageQuelle(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistConcept::class, 'vorlage_quelle_id');
+        return $this->belongsTo(FoodAlchemistConcept::class, 'template_source_id');
     }
 
     /** Organisatorische Kategorie (M10c-B, Baum). */
@@ -99,13 +99,13 @@ class FoodAlchemistConcept extends Model
     /** Servierform (einfach) — Scharnier zur Darreichungs-Auflösung der Slots. */
     public function servierform(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistServierform::class, 'servierform_id');
+        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
     }
 
     /** Eventtyp (einfach). */
     public function eventtyp(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistEventtyp::class, 'eventtyp_id');
+        return $this->belongsTo(FoodAlchemistEventtyp::class, 'event_type_id');
     }
 
     /** Einsatzmomente (mehrfach): Frühstück/Lunch/Apéro/…. */
@@ -113,9 +113,9 @@ class FoodAlchemistConcept extends Model
     {
         return $this->belongsToMany(
             FoodAlchemistEinsatzmoment::class,
-            'foodalchemist_concept_einsatzmomente',
+            'foodalchemist_concept_service_moments',
             'concept_id',
-            'einsatzmoment_id'
+            'service_moment_id'
         );
     }
 
@@ -124,9 +124,9 @@ class FoodAlchemistConcept extends Model
     {
         return $this->belongsToMany(
             FoodAlchemistSaison::class,
-            'foodalchemist_concept_saisons',
+            'foodalchemist_concept_seasons',
             'concept_id',
-            'saison_id'
+            'season_id'
         );
     }
 

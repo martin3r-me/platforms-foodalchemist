@@ -104,8 +104,8 @@ class AromaNetzModal extends Component
         // Vorschläge: radial außen am jeweiligen Anker, je Anker leicht gefächert
         $jeAnker = [];
         foreach ($netz['vorschlaege'] as &$s) {
-            $i = $jeAnker[$s['anker_id']] = ($jeAnker[$s['anker_id']] ?? -1) + 1;
-            $w = ($winkel[$s['anker_id']] ?? 0) + ($i - max(0, $this->vorschlaege - 1) / 2) * 0.18;
+            $i = $jeAnker[$s['anchor_id']] = ($jeAnker[$s['anchor_id']] ?? -1) + 1;
+            $w = ($winkel[$s['anchor_id']] ?? 0) + ($i - max(0, $this->vorschlaege - 1) / 2) * 0.18;
             $s['x'] = round($cx + self::R_VORSCHLAG * cos($w), 1);
             $s['y'] = round($cy + self::R_VORSCHLAG * sin($w), 1);
         }

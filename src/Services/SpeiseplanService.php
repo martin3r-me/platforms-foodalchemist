@@ -44,7 +44,7 @@ class SpeiseplanService
             ->find($id);
     }
 
-    private const FELDER = ['name', 'start_datum', 'zyklus_wochen', 'min_abstand_tage', 'status', 'beschreibung', 'note'];
+    private const FELDER = ['name', 'start_datum', 'zyklus_wochen', 'min_abstand_tage', 'status', 'description', 'note'];
 
     public function create(Team $team, array $in): FoodAlchemistSpeiseplan
     {
@@ -124,7 +124,7 @@ class SpeiseplanService
         $linie = FoodAlchemistSpeiseplanLinie::visibleToTeam($team)->with('speiseplan')->findOrFail($linieId);
         $this->guard($linie->speiseplan, $team);
         // FK app-seitig: Einträge der Linie entkoppeln statt löschen
-        FoodAlchemistSpeiseplanEintrag::where('linie_id', $linie->id)->update(['linie_id' => null]);
+        FoodAlchemistSpeiseplanEintrag::where('line_id', $linie->id)->update(['line_id' => null]);
         $linie->delete();
     }
 
@@ -133,7 +133,7 @@ class SpeiseplanService
     {
         $linie = FoodAlchemistSpeiseplanLinie::visibleToTeam($team)->with('speiseplan')->findOrFail($linieId);
         $this->guard($linie->speiseplan, $team);
-        $nachbar = FoodAlchemistSpeiseplanLinie::where('speiseplan_id', $linie->speiseplan_id)->whereNull('deleted_at')
+        $nachbar = FoodAlchemistSpeiseplanLinie::where('menu_plan_id', $linie->menu_plan_id)->whereNull('deleted_at')
             ->when($richtung < 0,
                 fn ($q) => $q->where('sort_order', '<', $linie->sort_order)->orderByDesc('sort_order'),
                 fn ($q) => $q->where('sort_order', '>', $linie->sort_order)->orderBy('sort_order'))
@@ -154,7 +154,7 @@ class SpeiseplanService
         $this->guard($plan, $team);
         $datum = Carbon::parse($in['datum'])->startOfDay();
         $mahlzeit = in_array($in['mahlzeit'] ?? '', array_keys(self::MAHLZEITEN), true) ? $in['mahlzeit'] : 'mittag';
-        $linieId = $in['linie_id'] ?? null;
+        $linieId = $in['line_id'] ?? null;
         if ($linieId !== null && ! $plan->linien->contains('id', (int) $linieId)) {
             $linieId = null;
         }
@@ -165,13 +165,13 @@ class SpeiseplanService
             'datum' => $tag,
             'woche' => 1, 'wochentag' => (int) $datum->isoWeekday(),   // Back-Compat-Spalten
             'mahlzeit' => $mahlzeit,
-            'linie_id' => $linieId,
+            'line_id' => $linieId,
             'concept_id' => $in['concept_id'] ?? null,
-            'paket_id' => empty($in['concept_id']) ? ($in['paket_id'] ?? null) : null,
-            'vk_recipe_id' => empty($in['concept_id']) && empty($in['paket_id']) ? ($in['vk_recipe_id'] ?? null) : null,
+            'package_id' => empty($in['concept_id']) ? ($in['package_id'] ?? null) : null,
+            'vk_recipe_id' => empty($in['concept_id']) && empty($in['package_id']) ? ($in['vk_recipe_id'] ?? null) : null,
             'position' => (int) $plan->eintraege()
                 ->where('datum', $tag)->where('mahlzeit', $mahlzeit)
-                ->when($linieId !== null, fn ($q) => $q->where('linie_id', $linieId))->max('position') + 1,
+                ->when($linieId !== null, fn ($q) => $q->where('line_id', $linieId))->max('position') + 1,
         ]);
     }
 
@@ -185,7 +185,7 @@ class SpeiseplanService
     // ── Wochen-Matrix + Monats-Kalender ──────────────────────────────────
 
     /**
-     * Wochen-Matrix einer Mahlzeit: [linie_id][Y-m-d] => list<Eintrag> (Mo..So ab $montag).
+     * Wochen-Matrix einer Mahlzeit: [line_id][Y-m-d] => list<Eintrag> (Mo..So ab $montag).
      * Einträge ohne Linie laufen unter Key 0 (»Ohne Linie«).
      *
      * @return array<int, array<string, list<FoodAlchemistSpeiseplanEintrag>>>
@@ -199,7 +199,7 @@ class SpeiseplanService
             if ($e->datum === null || $e->mahlzeit !== $mahlzeit || ! $e->datum->between($start, $ende)) {
                 continue;
             }
-            $grid[(int) $e->linie_id][$e->datum->format('Y-m-d')][] = $e;
+            $grid[(int) $e->line_id][$e->datum->format('Y-m-d')][] = $e;
         }
 
         return $grid;
@@ -237,7 +237,7 @@ class SpeiseplanService
 
             return ['vk' => (float) $c['preis_pro_person'], 'ek' => (float) $c['ek_pro_person']];
         }
-        if ($e->paket_id !== null && $e->paket) {
+        if ($e->package_id !== null && $e->paket) {
             return ['vk' => (float) ($e->paket->preis_pro_person ?? 0), 'ek' => (float) ($e->paket->ek_pro_person ?? 0)];
         }
         if ($e->vk_recipe_id !== null && $e->gericht) {
@@ -290,7 +290,7 @@ class SpeiseplanService
         for ($i = 0; $i < $tage; $i++) {
             $tag = $montag->copy()->addDays($i)->startOfDay();
             $hat = $plan->eintraege->first(fn ($e) => $e->datum !== null && $e->mahlzeit === $mahlzeit
-                && in_array((int) $e->linie_id, $veggie, true) && $e->datum->isSameDay($tag));
+                && in_array((int) $e->line_id, $veggie, true) && $e->datum->isSameDay($tag));
             if ($hat === null) {
                 $fehl[] = $tag->format('Y-m-d');
             }
@@ -367,7 +367,7 @@ class SpeiseplanService
         $vorhanden = [];
         foreach ($plan->eintraege as $e) {
             if ($e->datum !== null) {
-                $vorhanden[$e->datum->format('Y-m-d') . '|' . $e->mahlzeit . '|' . (int) $e->linie_id . '|' . $e->inhaltKey()] = true;
+                $vorhanden[$e->datum->format('Y-m-d') . '|' . $e->mahlzeit . '|' . (int) $e->line_id . '|' . $e->inhaltKey()] = true;
             }
         }
 
@@ -382,14 +382,14 @@ class SpeiseplanService
                 if ($ziel->gt($bis)) {
                     continue;
                 }
-                $sig = $ziel->format('Y-m-d') . '|' . $e->mahlzeit . '|' . (int) $e->linie_id . '|' . $e->inhaltKey();
+                $sig = $ziel->format('Y-m-d') . '|' . $e->mahlzeit . '|' . (int) $e->line_id . '|' . $e->inhaltKey();
                 if (isset($vorhanden[$sig])) {
                     continue;
                 }
                 $plan->eintraege()->create([
                     'team_id' => $plan->team_id, 'datum' => $ziel->format('Y-m-d'),
                     'woche' => 1, 'wochentag' => (int) $ziel->isoWeekday(), 'mahlzeit' => $e->mahlzeit,
-                    'linie_id' => $e->linie_id, 'concept_id' => $e->concept_id, 'paket_id' => $e->paket_id,
+                    'line_id' => $e->line_id, 'concept_id' => $e->concept_id, 'package_id' => $e->package_id,
                     'vk_recipe_id' => $e->vk_recipe_id, 'position' => $e->position,
                 ]);
                 $vorhanden[$sig] = true;
