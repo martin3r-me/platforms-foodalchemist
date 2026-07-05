@@ -44,6 +44,8 @@ class FoodAlchemistTeamSetting extends Model
         'target_food_cost_pct' => 'decimal:2',
         // #379+: Lohnnebenkosten-Zuschlag % (AG-/Sozialabgaben auf den Produktionslohn)
         'labor_overhead_pct' => 'decimal:2',
+        // R2.1: Preis-Alarm-Schwelle (relative LA-Preisänderung in %, ab der ein Signal entsteht)
+        'price_alarm_threshold_pct' => 'decimal:2',
         // M-K6: Bezugsbasen für die Fixkosten-Ableitung (mek/fek/hk, monatlich)
         'calculation_reference_bases' => 'array',
         // Phase 5: pro-Typ-Farben (GP / Basisrezept / Gericht), teamweit

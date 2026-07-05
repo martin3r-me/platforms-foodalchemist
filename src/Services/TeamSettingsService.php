@@ -233,6 +233,9 @@ class TeamSettingsService
     /** #379+: Lohnnebenkosten-Zuschlag % (AG-Anteil auf Produktionslohn). Default 0 = nur Brutto-Lohn. */
     public const LOHNNEBENKOSTEN_DEFAULT = 0.0;
 
+    /** R2.1: Preis-Alarm-Schwelle — relative LA-Preisänderung in %, ab der ein Signal entsteht. Default 15 %. */
+    public const PREIS_ALARM_SCHWELLE_DEFAULT = 15.0;
+
     /**
      * Kanonisches Default-Schema — mehrstufige Zuschlagskalkulation (D-K8, produzierendes
      * Gewerbe). Stufen: MEK + MGK(%·MEK) + FEK + FGK(%·FEK) = HK → +VwGK/Logistik(%·HK)
@@ -318,6 +321,14 @@ class TeamSettingsService
         $v = $this->for($team)->target_food_cost_pct;
 
         return $v !== null && (float) $v > 0 ? (float) $v : self::ZIEL_WARENEINSATZ_DEFAULT;
+    }
+
+    /** R2.1: Preis-Alarm-Schwelle in % (relative LA-Preisänderung). Team-Wert vor Code-Default. */
+    public function preisAlarmSchwellePct(Team $team): float
+    {
+        $v = $this->for($team)->price_alarm_threshold_pct;
+
+        return $v !== null && (float) $v > 0 ? (float) $v : self::PREIS_ALARM_SCHWELLE_DEFAULT;
     }
 
     /** #379+: Lohnnebenkosten-Zuschlag % auf den Produktionslohn (AG-/Sozialabgaben). */

@@ -29,7 +29,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
             'type' => 'object',
             'properties' => [
                 'status' => ['type' => 'string', 'description' => 'offen (Default) | abgeschlossen | ignoriert | leer = alle'],
-                'type' => ['type' => 'string', 'enum' => ['preis_anomalie', 'veraltete_preise', 'marge_unter_ziel', 'wareneinsatz_ueber_ziel', 'datenqualitaet_gp_la', 'naehrwert_plausi']],
+                'type' => ['type' => 'string', 'enum' => ['preis_anomalie', 'preis_sprung_marge_impact', 'veraltete_preise', 'marge_unter_ziel', 'wareneinsatz_ueber_ziel', 'datenqualitaet_gp_la', 'naehrwert_plausi']],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 20],
             ],
         ];

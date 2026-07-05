@@ -10,6 +10,7 @@ namespace Platform\FoodAlchemist\Enums;
 enum SignalTyp: string
 {
     case PreisAnomalie = 'preis_anomalie';
+    case PreisSprungMargeImpact = 'preis_sprung_marge_impact';
     case VeraltetePreise = 'veraltete_preise';
     case MargeUnterZiel = 'marge_unter_ziel';
     case WareneinsatzUeberZiel = 'wareneinsatz_ueber_ziel';
@@ -20,6 +21,7 @@ enum SignalTyp: string
     {
         return match ($this) {
             self::PreisAnomalie => 'Preis-Anomalie',
+            self::PreisSprungMargeImpact => 'Preis-Sprung (Marge-Impact)',
             self::VeraltetePreise => 'Veraltete Preise',
             self::MargeUnterZiel => 'Marge unter Ziel',
             self::WareneinsatzUeberZiel => 'Wareneinsatz über Ziel',
@@ -33,6 +35,7 @@ enum SignalTyp: string
     {
         return match ($this) {
             self::PreisAnomalie => 'heroicon-o-arrow-trending-up',
+            self::PreisSprungMargeImpact => 'heroicon-o-bolt',
             self::VeraltetePreise => 'heroicon-o-clock',
             self::MargeUnterZiel => 'heroicon-o-scale',
             self::WareneinsatzUeberZiel => 'heroicon-o-shopping-cart',
