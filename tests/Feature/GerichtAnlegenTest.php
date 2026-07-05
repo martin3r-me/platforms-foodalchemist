@@ -27,7 +27,7 @@ it('legt ein Gericht OHNE Basisrezept an (nur Name)', function () {
 
     $vk = FoodAlchemistRecipe::where('name', 'HG: Leeres Testgericht')->first();
     expect($vk)->not->toBeNull()
-        ->and((bool) $vk->ist_verkaufsrezept)->toBeTrue()
+        ->and((bool) $vk->is_sales_recipe)->toBeTrue()
         ->and($vk->ingredients()->count())->toBe(0);   // wirklich leer
 });
 

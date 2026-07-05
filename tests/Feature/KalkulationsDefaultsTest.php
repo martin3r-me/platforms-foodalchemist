@@ -22,7 +22,7 @@ it('liefert Code-Defaults ohne gespeicherte Zeile', function () {
 });
 
 it('Garverlust: WG-spezifisch schlägt global (*), fehlend = null (GL-02-Kaskade)', function () {
-    $this->settings->update($this->childA, ['garverlust_defaults' => ['*' => 5.0, '04' => 22.5]]);
+    $this->settings->update($this->childA, ['cooking_loss_defaults' => ['*' => 5.0, '04' => 22.5]]);
 
     expect($this->settings->garverlustDefault($this->childA, '04'))->toBe(22.5)
         ->and($this->settings->garverlustDefault($this->childA, '01'))->toBe(5.0)
@@ -31,10 +31,10 @@ it('Garverlust: WG-spezifisch schlägt global (*), fehlend = null (GL-02-Kaskade
 
 it('MwSt + Rundung: gespeicherte Werte überlagern Defaults feldweise', function () {
     $this->settings->update($this->childA, [
-        'mwst_defaults' => ['default_satz' => 'regulaer'],
+        'vat_defaults' => ['default_satz' => 'regulaer'],
         'rundungsregeln' => ['nachkommastellen' => 3],
     ]);
 
     expect($this->settings->mwst($this->childA))->toBe(['regulaer' => 19.0, 'ermaessigt' => 7.0, 'default_satz' => 'regulaer'])
-        ->and($this->settings->rundung($this->childA))->toBe(['nachkommastellen' => 3, 'modus' => 'kaufmaennisch']);
+        ->and($this->settings->rundung($this->childA))->toBe(['nachkommastellen' => 3, 'mode' => 'kaufmaennisch']);
 });

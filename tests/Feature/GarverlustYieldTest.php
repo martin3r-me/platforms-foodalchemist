@@ -32,7 +32,7 @@ it('Garverlust wird gespeichert UND reduziert den Auto-Yield', function () {
 
     // 1000 g, ohne Garverlust
     $svc->syncIngredients($this->rootTeam, $r->id, [[
-        'id' => null, 'menge' => 1000, 'einheit_vocab_id' => $g->id, 'raw_text' => 'Mehl', 'garverlust_pct' => 0,
+        'id' => null, 'quantity' => 1000, 'unit_vocab_id' => $g->id, 'raw_text' => 'Mehl', 'cooking_loss_pct' => 0,
     ]]);
     $yield0 = (float) $r->refresh()->yield_kg;
     $zeileId = (int) DB::table('foodalchemist_recipe_ingredients')->where('recipe_id', $r->id)->value('id');
@@ -40,11 +40,11 @@ it('Garverlust wird gespeichert UND reduziert den Auto-Yield', function () {
 
     // gleiche Zeile mit 40 % Garverlust
     $svc->syncIngredients($this->rootTeam, $r->id, [[
-        'id' => $zeileId, 'menge' => 1000, 'einheit_vocab_id' => $g->id, 'raw_text' => 'Mehl', 'garverlust_pct' => 40,
+        'id' => $zeileId, 'quantity' => 1000, 'unit_vocab_id' => $g->id, 'raw_text' => 'Mehl', 'cooking_loss_pct' => 40,
     ]]);
     $r->refresh();
 
-    expect((int) round((float) DB::table('foodalchemist_recipe_ingredients')->where('id', $zeileId)->value('garverlust_pct')))->toBe(40)  // PERSISTIERT
+    expect((int) round((float) DB::table('foodalchemist_recipe_ingredients')->where('id', $zeileId)->value('cooking_loss_pct')))->toBe(40)  // PERSISTIERT
         ->and((float) $r->yield_kg)->toBeLessThan($yield0)                                                                                 // WIRKT
         ->and(abs((float) $r->yield_kg - 0.6 * $yield0))->toBeLessThan(0.001);                                                             // exakt 60 % (1−0,4)
 });

@@ -24,9 +24,9 @@ beforeEach(function () {
     $this->gen = app(RecipeGeneratorService::class);
 
     FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
-    $hg = FoodAlchemistDishMainGroup::create(['code' => 'HG', 'bezeichnung' => 'Hauptgang']);
-    $this->klasse = FoodAlchemistDishClass::create(['dish_main_group_id' => $hg->id, 'code' => 'HG_FLEISCH', 'bezeichnung' => 'Fleisch', 'diaetform' => 'fleisch']);
-    $this->alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'bezeichnung' => 'A la Carte', 'rohaufschlag_pct' => 420, 'mwst_satz' => 19, 'formel_typ' => 'aufschlag']);
+    $hg = FoodAlchemistDishMainGroup::create(['code' => 'HG', 'label' => 'Hauptgang']);
+    $this->class = FoodAlchemistDishClass::create(['dish_main_group_id' => $hg->id, 'code' => 'HG_FLEISCH', 'label' => 'Fleisch', 'diet_form' => 'fleisch']);
+    $this->alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 420, 'vat_rate' => 19, 'formula_type' => 'aufschlag']);
 
     // Bestand: ein freigegebenes Basisrezept als Komponenten-Kandidat
     $this->basis = FoodAlchemistRecipe::create([
@@ -38,17 +38,17 @@ beforeEach(function () {
 it('vkModus: VK angelegt, Basisrezept-Komponente resolved, Klasse/AK aus Vorschlag (Lineage ki)', function () {
     $res = $this->gen->generiere($this->rootTeam, 'Test', [], [
         'name' => 'HG: Filet | Rotwein-Jus',
-        'zutaten' => [['text' => 'Rotwein-Jus', 'menge' => 80, 'einheit' => 'g', 'slug' => 'rotwein_jus']],
-        'speisen_klasse_id' => $this->klasse->id,
+        'zutaten' => [['text' => 'Rotwein-Jus', 'quantity' => 80, 'unit' => 'g', 'slug' => 'rotwein_jus']],
+        'dish_class_id' => $this->class->id,
         'aufschlagsklasse_code' => 'ALC',
     ], vkModus: true);
 
     $r = $res['recipe'];
-    expect($r->ist_verkaufsrezept)->toBeTrue()
-        ->and($r->speisen_klasse_id)->toBe($this->klasse->id)
-        ->and($r->speisen_klasse_quelle)->toBe('ki')
-        ->and($r->aufschlagsklasse_id)->toBe($this->alc->id)
-        ->and((float) $r->mwst_satz)->toBe(19.0)
+    expect($r->is_sales_recipe)->toBeTrue()
+        ->and($r->dish_class_id)->toBe($this->class->id)
+        ->and($r->dish_class_source)->toBe('ki')
+        ->and($r->markup_class_id)->toBe($this->alc->id)
+        ->and((float) $r->vat_rate)->toBe(19.0)
         ->and($res['statistik']['bestand_sub'])->toBe(1)              // Basisrezept ZUERST gefunden
         ->and($r->ingredients()->first()->referenced_recipe_id)->toBe($this->basis->id)
         ->and((float) $r->ek_total_eur)->toBeGreaterThan(0);          // Recompute lief
@@ -61,24 +61,24 @@ it('vkModus: VK angelegt, Basisrezept-Komponente resolved, Klasse/AK aus Vorschl
 it('vkModus: ungültige Klasse/AK fallen still raus — VK trotzdem angelegt (Editor pflegt nach)', function () {
     $res = $this->gen->generiere($this->rootTeam, 'Test', [], [
         'name' => 'HG: Filet | Jus',
-        'zutaten' => [['text' => 'Rotwein-Jus', 'menge' => 80, 'einheit' => 'g']],
-        'speisen_klasse_id' => 999999,
+        'zutaten' => [['text' => 'Rotwein-Jus', 'quantity' => 80, 'unit' => 'g']],
+        'dish_class_id' => 999999,
         'aufschlagsklasse_code' => 'GIBTS_NICHT',
     ], vkModus: true);
 
-    expect($res['recipe']->ist_verkaufsrezept)->toBeTrue()
-        ->and($res['recipe']->speisen_klasse_id)->toBeNull()
-        ->and($res['recipe']->aufschlagsklasse_id)->toBeNull();
+    expect($res['recipe']->is_sales_recipe)->toBeTrue()
+        ->and($res['recipe']->dish_class_id)->toBeNull()
+        ->and($res['recipe']->markup_class_id)->toBeNull();
 });
 
 it('vkModus: ohne AK-Code greift die Default-AK der Klasse', function () {
-    $this->klasse->update(['default_markup_class_id' => $this->alc->id]);
+    $this->class->update(['default_markup_class_id' => $this->alc->id]);
 
     $res = $this->gen->generiere($this->rootTeam, 'Test', [], [
         'name' => 'HG: Filet | Jus',
-        'zutaten' => [['text' => 'Rotwein-Jus', 'menge' => 80, 'einheit' => 'g']],
-        'speisen_klasse_id' => $this->klasse->id,
+        'zutaten' => [['text' => 'Rotwein-Jus', 'quantity' => 80, 'unit' => 'g']],
+        'dish_class_id' => $this->class->id,
     ], vkModus: true);
 
-    expect($res['recipe']->aufschlagsklasse_id)->toBe($this->alc->id);
+    expect($res['recipe']->markup_class_id)->toBe($this->alc->id);
 });

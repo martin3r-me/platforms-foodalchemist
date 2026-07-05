@@ -22,7 +22,7 @@ it('Neuanlage über den Builder: AUTO-SYNC-Name, Slug/gp_key-Vorschau, Insert va
     Livewire::test(GpModal::class)
         ->call('oeffnen')
         ->set('builder.hauptzutat', 'Zander')
-        ->set('builder.zustand', 'TK')
+        ->set('builder.condition', 'TK')
         ->set('builder.form', 'Filet')
         ->assertSeeHtml('Zander: TK, Filet')          // AUTO-SYNC-Vorschau
         ->assertSeeHtml('zander||filet')              // gp_key-Vorschau (3 Slots)
@@ -32,7 +32,7 @@ it('Neuanlage über den Builder: AUTO-SYNC-Name, Slug/gp_key-Vorschau, Insert va
 
     $gp = FoodAlchemistGp::where('name', 'Zander: TK, Filet')->firstOrFail();
     expect($gp->gp_key)->toBe('zander||filet')
-        ->and($gp->hauptzutat_slug)->toBe('zander')
+        ->and($gp->main_ingredient_slug)->toBe('zander')
         ->and($gp->status->value)->toBe('tentative')
         ->and($gp->team_id)->toBe($this->rootTeam->id);
 });
@@ -41,7 +41,7 @@ it('Hard-Error (§7.1 Verpackungswort) blockt den Insert mit Fehlertext', functi
     Livewire::test(GpModal::class)
         ->call('oeffnen')
         ->set('builder.hauptzutat', 'Tomaten Kiste')
-        ->set('builder.zustand', 'frisch')
+        ->set('builder.condition', 'frisch')
         ->call('speichern')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, '§7.1'))
         ->assertNotDispatched('gp-gespeichert');
@@ -53,15 +53,15 @@ it('GT-12-10 im Modal: Duplikat ⇒ HARD_STOP-Fehler, force-Checkbox legt trotzd
     $modal = Livewire::test(GpModal::class)
         ->call('oeffnen')
         ->set('builder.hauptzutat', 'Tomate')
-        ->set('builder.zustand', 'trocken')
-        ->set('builder.verarbeitung', 'pulverfoermig')
+        ->set('builder.condition', 'trocken')
+        ->set('builder.processing', 'pulverfoermig')
         ->call('speichern');
     expect(FoodAlchemistGp::where('gp_key', 'tomate|pulverfoermig|')->count())->toBe(1);
 
     $modal->call('oeffnen')
         ->set('builder.hauptzutat', 'Tomate')
-        ->set('builder.zustand', 'trocken')
-        ->set('builder.verarbeitung', 'pulverfoermig')
+        ->set('builder.condition', 'trocken')
+        ->set('builder.processing', 'pulverfoermig')
         ->call('speichern')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'HARD_STOP_EXISTING_GP'))
         ->set('force', true)
@@ -76,34 +76,34 @@ it('M3-10 (DoD): Fake-Provider-Roundtrip zustand — ai → accept ändert Feld 
 
     $modal = Livewire::test(GpModal::class)
         ->call('oeffnen', $gp->id)
-        ->set('builder.zustand', 'TK')                 // Kontext fürs Fake-Echo
+        ->set('builder.condition', 'TK')                 // Kontext fürs Fake-Echo
         ->call('ai_zustand')
-        ->assertSet('kiVorschlag.zustand.confidence', 0.87);
+        ->assertSet('kiVorschlag.condition.confidence', 0.87);
 
     $modal->call('accept_zustand');
     $gp->refresh();
-    expect($gp->zustand)->toBe('TK')
-        ->and($gp->zustand_quelle)->toBe('ki')
-        ->and((float) $gp->zustand_ai_confidence)->toBe(0.87)
-        ->and($gp->zustand_ai_begruendung)->toContain('FakeAiProvider');
+    expect($gp->condition)->toBe('TK')
+        ->and($gp->condition_source)->toBe('ki')
+        ->and((float) $gp->condition_ai_confidence)->toBe(0.87)
+        ->and($gp->condition_ai_reasoning)->toContain('FakeAiProvider');
 
     $modal->call('clear_zustand');
     $gp->refresh();
-    expect($gp->zustand)->toBeNull()->and($gp->zustand_quelle)->toBeNull();
+    expect($gp->condition)->toBeNull()->and($gp->condition_source)->toBeNull();
 });
 
 it('GL-07 Override-First: manuell gepflegter zustand wird vom accept NICHT überschrieben', function () {
     $gp = $this->makeGp($this->rootTeam, 'Erbsen: frisch');
-    $gp->update(['zustand' => 'frisch', 'zustand_quelle' => 'manual']);
+    $gp->update(['condition' => 'frisch', 'condition_source' => 'manual']);
 
     Livewire::test(GpModal::class)
         ->call('oeffnen', $gp->id)
-        ->set('builder.zustand', 'TK')
+        ->set('builder.condition', 'TK')
         ->call('ai_zustand')
         ->call('accept_zustand')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'manuell'));
 
-    expect($gp->fresh()->zustand)->toBe('frisch');     // unverändert
+    expect($gp->fresh()->condition)->toBe('frisch');     // unverändert
 });
 
 it('M3-10: Fake-Roundtrip tags — accept schreibt tag_-Spalten + Lineage-Trio', function () {
@@ -119,7 +119,7 @@ it('M3-10: Fake-Roundtrip tags — accept schreibt tag_-Spalten + Lineage-Trio',
     $gp->refresh();
     expect($gp->tag_is_vegan)->toBeTrue()
         ->and($gp->tag_is_gluten_free)->toBeFalse()
-        ->and($gp->tag_quelle)->toBe('ki')
+        ->and($gp->tag_source)->toBe('ki')
         ->and((float) $gp->tag_ai_confidence)->toBe(0.87);
 });
 

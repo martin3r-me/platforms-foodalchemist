@@ -20,8 +20,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->svc = app(RecipeService::class);
-    $this->hg = FoodAlchemistRecipeMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'SOR', 'bezeichnung' => 'Sorbets']);
-    $this->kat = FoodAlchemistRecipeCategory::create(['team_id' => $this->rootTeam->id, 'main_group_id' => $this->hg->id, 'code' => 'FRU', 'bezeichnung' => 'Frucht']);
+    $this->hg = FoodAlchemistRecipeMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'SOR', 'label' => 'Sorbets']);
+    $this->kat = FoodAlchemistRecipeCategory::create(['team_id' => $this->rootTeam->id, 'main_group_id' => $this->hg->id, 'code' => 'FRU', 'label' => 'Frucht']);
 });
 
 it('§1.7: recipe_key = slug(name) mit ae/oe/ue/ss; §1.8: Kategorie-Diskriminator + _2-Suffix', function () {
@@ -34,7 +34,7 @@ it('§1.7: recipe_key = slug(name) mit ae/oe/ue/ss; §1.8: Kategorie-Diskriminat
         ->and($erstes->status->value)->toBe('draft');
 
     // Kollision + Kategorie ⇒ Diskriminator
-    $zweites = $this->svc->create($this->rootTeam, ['name' => 'Sorbet: Birne', 'kategorie_id' => $this->kat->id]);
+    $zweites = $this->svc->create($this->rootTeam, ['name' => 'Sorbet: Birne', 'category_id' => $this->kat->id]);
     expect($zweites->recipe_key)->toBe('sorbet_birne_frucht');
 
     // identisches Duplikat ohne Kategorie ⇒ _2
@@ -47,7 +47,7 @@ it('duplicate kopiert Zutaten und rechnet die Kopie durch; delete blockt bei Elt
     $original = $this->svc->create($this->rootTeam, ['name' => 'Fond: Gemüse']);
     FoodAlchemistRecipeIngredient::create([
         'team_id' => $this->rootTeam->id, 'recipe_id' => $original->id, 'position' => 1,
-        'raw_text' => '500 g Karotten', 'menge' => 500, 'einheit_vocab_id' => $g->id, 'match_method' => 'manual',
+        'raw_text' => '500 g Karotten', 'quantity' => 500, 'unit_vocab_id' => $g->id, 'match_method' => 'manual',
         'gp_id' => $this->makeGp($this->rootTeam, 'Karotte')->id,
     ]);
 
@@ -60,7 +60,7 @@ it('duplicate kopiert Zutaten und rechnet die Kopie durch; delete blockt bei Elt
     $eltern = $this->svc->create($this->rootTeam, ['name' => 'Suppe: Klar']);
     FoodAlchemistRecipeIngredient::create([
         'team_id' => $this->rootTeam->id, 'recipe_id' => $eltern->id, 'position' => 1,
-        'raw_text' => 'Fond', 'menge' => 1000, 'einheit_vocab_id' => $g->id,
+        'raw_text' => 'Fond', 'quantity' => 1000, 'unit_vocab_id' => $g->id,
         'referenced_recipe_id' => $original->id, 'match_method' => 'recipe_ref',
     ]);
     expect(fn () => $this->svc->delete($this->rootTeam, $original->id))
@@ -78,7 +78,7 @@ it('Modal-Roundtrip: Anlage validiert, Edit mit yield_kg_manual triggert Recompu
         ->call('oeffnen')
         ->set('form.name', 'Sorbet: Birne')
         ->set('form.hauptgruppe_id', $this->hg->id)
-        ->set('form.kategorie_id', $this->kat->id)
+        ->set('form.category_id', $this->kat->id)
         ->assertSeeHtml('sorbet_birne')                                   // Key-Vorschau
         ->call('speichern')
         ->assertSet('fehler', null)
@@ -87,7 +87,7 @@ it('Modal-Roundtrip: Anlage validiert, Edit mit yield_kg_manual triggert Recompu
     $r = FoodAlchemistRecipe::where('recipe_key', 'sorbet_birne')->firstOrFail();
     FoodAlchemistRecipeIngredient::create([
         'team_id' => $this->rootTeam->id, 'recipe_id' => $r->id, 'position' => 1,
-        'raw_text' => '1 kg Birne', 'menge' => 1000, 'einheit_vocab_id' => $g->id, 'match_method' => 'manual',
+        'raw_text' => '1 kg Birne', 'quantity' => 1000, 'unit_vocab_id' => $g->id, 'match_method' => 'manual',
         'gp_id' => $this->makeGp($this->rootTeam, 'Birne')->id,
     ]);
     app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputePipeline($r->id);
@@ -152,18 +152,18 @@ it('UI-Audit: update pflegt die §4.2-Editor-Felder (Status/Zubereitung/Eigensch
     $nach = $svc->update($this->rootTeam, $r->id, [
         'name' => 'Fond: Audit',
         'status' => 'review',
-        'zubereitung' => "1. Ansetzen\n2. Reduzieren",
-        'temperatur' => 'warm',
-        'funktion' => 'Saucenbasis',
-        'notizen_manual' => 'Insel-Notiz',
+        'preparation' => "1. Ansetzen\n2. Reduzieren",
+        'temperature' => 'warm',
+        'function' => 'Saucenbasis',
+        'notes_manual' => 'Insel-Notiz',
         'equipment_ids' => [$geraet->id],
     ]);
 
     expect($nach->status->value)->toBe('review')
-        ->and($nach->zubereitung)->toContain('Reduzieren')
-        ->and($nach->temperatur)->toBe('warm')
-        ->and($nach->funktion)->toBe('Saucenbasis')
-        ->and($nach->notizen_manual)->toBe('Insel-Notiz')
+        ->and($nach->preparation)->toContain('Reduzieren')
+        ->and($nach->temperature)->toBe('warm')
+        ->and($nach->function)->toBe('Saucenbasis')
+        ->and($nach->notes_manual)->toBe('Insel-Notiz')
         ->and($nach->equipment()->pluck('slug')->all())->toBe(['kombi']);
 
     // ungültiger Status fällt still auf den Bestand zurück (Whitelist)
@@ -171,12 +171,12 @@ it('UI-Audit: update pflegt die §4.2-Editor-Felder (Status/Zubereitung/Eigensch
 });
 
 it('Ertrag in Stück (kg↔Stück): persistiert und leert sauber', function () {
-    $r = $this->svc->create($this->rootTeam, ['name' => 'Törtchen-Teig', 'ist_verkaufsrezept' => false]);
+    $r = $this->svc->create($this->rootTeam, ['name' => 'Törtchen-Teig', 'is_sales_recipe' => false]);
 
-    $this->svc->update($this->rootTeam, $r->id, ['ertrag_stueck' => 50]);
-    expect((float) $r->fresh()->ertrag_stueck)->toBe(50.0);
+    $this->svc->update($this->rootTeam, $r->id, ['yield_pieces' => 50]);
+    expect((float) $r->fresh()->yield_pieces)->toBe(50.0);
 
     // Leer-String → null (UI-Pfad)
-    $this->svc->update($this->rootTeam, $r->id, ['ertrag_stueck' => '']);
-    expect($r->fresh()->ertrag_stueck)->toBeNull();
+    $this->svc->update($this->rootTeam, $r->id, ['yield_pieces' => '']);
+    expect($r->fresh()->yield_pieces)->toBeNull();
 });

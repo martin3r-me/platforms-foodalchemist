@@ -26,14 +26,14 @@ beforeEach(function () {
 
     $this->vk = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'vk-koh', 'name' => 'HG: Käsekrainer | Brioche',
-        'status' => 'draft', 'ist_verkaufsrezept' => true,
+        'status' => 'draft', 'is_sales_recipe' => true,
     ]);
     $g = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
     $gp = $this->makeGp($this->rootTeam, 'Käsekrainer');
     DB::table('foodalchemist_recipe_ingredients')->insert([
         'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $this->rootTeam->id,
         'recipe_id' => $this->vk->id, 'gp_id' => $gp->id, 'raw_text' => 'Käsekrainer', 'display_name' => 'Käsekrainer',
-        'menge' => 180, 'einheit_vocab_id' => $g->id, 'position' => 1, 'created_at' => now(), 'updated_at' => now(),
+        'quantity' => 180, 'unit_vocab_id' => $g->id, 'position' => 1, 'created_at' => now(), 'updated_at' => now(),
     ]);
     $this->zeileId = (int) DB::getPdo()->lastInsertId();
 
@@ -45,7 +45,7 @@ beforeEach(function () {
 });
 
 it('judge: schreibt Cache-Zeile (Score-Clamp, Label, Modell, Hash); Zutaten-Änderung macht stale; Re-Judge ersetzt', function () {
-    ($this->mockGateway)(['score' => 195, 'label' => 'Klassischer Teller', 'begruendung' => 'Streetfood-Logik.', 'schwachstelle' => 'Senf']);
+    ($this->mockGateway)(['score' => 195, 'label' => 'Klassischer Teller', 'reasoning' => 'Streetfood-Logik.', 'schwachstelle' => 'Senf']);
     $zeile = app(CoherenceService::class)->judge($this->rootTeam, $this->vk->id);
 
     expect($zeile->score)->toBe(100)                                  // 195 → Clamp
@@ -59,11 +59,11 @@ it('judge: schreibt Cache-Zeile (Score-Clamp, Label, Modell, Hash); Zutaten-Änd
     expect($status['stale'])->toBeFalse();
 
     // Zutaten-Änderung ⇒ components_hash passt nicht mehr ⇒ stale (GL-10-Invalidierung)
-    DB::table('foodalchemist_recipe_ingredients')->where('id', $this->zeileId)->update(['menge' => 250]);
+    DB::table('foodalchemist_recipe_ingredients')->where('id', $this->zeileId)->update(['quantity' => 250]);
     expect(app(CoherenceService::class)->status($this->rootTeam, $this->vk->id)['stale'])->toBeTrue();
 
     // Re-Judge ersetzt die EINE Zeile (kein Duplikat) und ist wieder frisch
-    ($this->mockGateway)(['score' => 72, 'label' => 'Solide', 'begruendung' => 'Neu.', 'schwachstelle' => null]);
+    ($this->mockGateway)(['score' => 72, 'label' => 'Solide', 'reasoning' => 'Neu.', 'schwachstelle' => null]);
     app(CoherenceService::class)->judge($this->rootTeam, $this->vk->id);
     expect(FoodAlchemistRecipeCulinaryCoherence::count())->toBe(1)
         ->and(FoodAlchemistRecipeCulinaryCoherence::first()->score)->toBe(72)
@@ -77,23 +77,23 @@ it('judge ohne score (FakeProvider-Echo) = ehrlicher Nicht-Treffer ohne Cache-Wr
 });
 
 it('tellerHeber: validiert Typen + Confidence, lebt in derselben Zeile, lässt das Judge-Urteil unberührt', function () {
-    ($this->mockGateway)(['score' => 95, 'label' => 'Klassischer Teller', 'begruendung' => 'x', 'schwachstelle' => null]);
+    ($this->mockGateway)(['score' => 95, 'label' => 'Klassischer Teller', 'reasoning' => 'x', 'schwachstelle' => null]);
     app(CoherenceService::class)->judge($this->rootTeam, $this->vk->id);
 
     ($this->mockGateway)([
         'einschaetzung' => 'Gewinnt durch hellere Säure.',
         'vorschlaege' => [
-            ['typ' => 'kontrast', 'zutat' => 'Eingelegte rote Zwiebeln', 'kategorie' => 'Säure', 'begruendung' => 'Durchbricht die Fettlastigkeit.', 'confidence' => 0.92],
-            ['typ' => 'quatsch', 'zutat' => 'Schnittlauch', 'kategorie' => null, 'begruendung' => null, 'confidence' => 7],
-            ['typ' => 'veredelung', 'zutat' => '', 'kategorie' => null, 'begruendung' => null, 'confidence' => 0.5],  // ohne Zutat ⇒ raus
+            ['type' => 'kontrast', 'zutat' => 'Eingelegte rote Zwiebeln', 'category' => 'Säure', 'reasoning' => 'Durchbricht die Fettlastigkeit.', 'confidence' => 0.92],
+            ['type' => 'quatsch', 'zutat' => 'Schnittlauch', 'category' => null, 'reasoning' => null, 'confidence' => 7],
+            ['type' => 'veredelung', 'zutat' => '', 'category' => null, 'reasoning' => null, 'confidence' => 0.5],  // ohne Zutat ⇒ raus
         ],
     ]);
     $zeile = app(CoherenceService::class)->tellerHeber($this->rootTeam, $this->vk->id);
 
     expect($zeile->heber_json['einschaetzung'])->toBe('Gewinnt durch hellere Säure.')
         ->and($zeile->heber_json['vorschlaege'])->toHaveCount(2)
-        ->and($zeile->heber_json['vorschlaege'][0]['typ'])->toBe('kontrast')
-        ->and($zeile->heber_json['vorschlaege'][1]['typ'])->toBe('ergaenzung')   // Whitelist-Fallback
+        ->and($zeile->heber_json['vorschlaege'][0]['type'])->toBe('kontrast')
+        ->and($zeile->heber_json['vorschlaege'][1]['type'])->toBe('ergaenzung')   // Whitelist-Fallback
         ->and((float) $zeile->heber_json['vorschlaege'][1]['confidence'])->toBe(1.0)  // Clamp (JSON-Roundtrip macht 1.0 → 1)
         ->and($zeile->heber_model)->toBe('judge-mock-1')
         ->and($zeile->score)->toBe(95)                                            // Judge-Urteil unberührt
@@ -101,7 +101,7 @@ it('tellerHeber: validiert Typen + Confidence, lebt in derselben Zeile, lässt d
 });
 
 it('Panel: Sektionen togglen, pruefeKohaerenz zeigt Urteil, Fake-Fehler landet als kiFehler (kein Crash)', function () {
-    ($this->mockGateway)(['score' => 95, 'label' => 'Klassischer Teller', 'begruendung' => 'Streetfood-Logik.', 'schwachstelle' => null]);
+    ($this->mockGateway)(['score' => 95, 'label' => 'Klassischer Teller', 'reasoning' => 'Streetfood-Logik.', 'schwachstelle' => null]);
 
     Livewire::test(DetailPanel::class, ['recipeId' => $this->vk->id])
         ->call('toggleSektion', 'kohaerenz')

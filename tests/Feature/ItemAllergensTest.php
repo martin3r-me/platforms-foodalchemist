@@ -36,11 +36,11 @@ it('Set-Roundtrip: unbekannt ⇒ NULL in DB, manuelle Pflege stempelt quelle=man
     ]);
 
     $zeile = $this->la->fresh()->allergens;
-    expect($zeile->allergen_milch)->toBe('enthalten')
-        ->and($zeile->allergen_soja)->toBe('spuren')
-        ->and($zeile->allergen_fisch)->toBe('nicht_enthalten')
-        ->and($zeile->allergen_senf)->toBeNull() // unbekannt ⇒ NULL
-        ->and($zeile->quelle)->toBe('manual');
+    expect($zeile->allergen_milk)->toBe('enthalten')
+        ->and($zeile->allergen_soy)->toBe('spuren')
+        ->and($zeile->allergen_fish)->toBe('nicht_enthalten')
+        ->and($zeile->allergen_mustard)->toBeNull() // unbekannt ⇒ NULL
+        ->and($zeile->source)->toBe('manual');
 
     expect($this->svc->getAllergens($this->la->fresh())['senf'])->toBe('unbekannt');
 });
@@ -49,7 +49,7 @@ it('Edit ändert die Werte (DoD M2-10 — Aggregations-Quelle für M3-04/05)', f
     $this->svc->setAllergens($this->rootTeam, $this->la, ['milch' => 'enthalten']);
     $this->svc->setAllergens($this->rootTeam, $this->la, ['milch' => 'spuren']);
 
-    expect($this->la->fresh()->allergens->allergen_milch)->toBe('spuren')
+    expect($this->la->fresh()->allergens->allergen_milk)->toBe('spuren')
         ->and(FoodAlchemistItemAllergen::where('supplier_item_id', $this->la->id)->count())->toBe(1); // Upsert, keine Duplikate
 });
 

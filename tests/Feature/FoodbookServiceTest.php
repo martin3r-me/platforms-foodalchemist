@@ -22,27 +22,27 @@ beforeEach(function () {
 
     $this->gericht = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g1', 'name' => 'Gruß: Amuse', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'vk_netto' => 2.50, 'ek_total_eur' => 0.75,
+        'is_sales_recipe' => true, 'sales_net' => 2.50, 'ek_total_eur' => 0.75,
     ]);
     // Concept „Grill-Buffet" mit einem Paket (manuell 4,50 €/P) → preis_pro_person_cache
-    $paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
-    $this->pakete->update($this->rootTeam, $paket->id, ['preis_pro_person' => 4.50, 'ek_pro_person' => 1.35]);
+    $paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise', 'price_mode' => 'manuell']);
+    $this->pakete->update($this->rootTeam, $paket->id, ['price_per_person' => 4.50, 'ek_per_person' => 1.35]);
     $this->paket = $paket;
     $this->concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
-    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
-    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $paket->id]);
+    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['package_id' => $paket->id]);
 });
 
 it('M11-02: Kapitel-Aggregat (concept_ref + Paket-Preisblock) + Pax-Gesamtpreis — KEINE Einzelgerichte', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'Angebot Adler', 'kunde' => 'Hotel Adler', 'personen' => 100]);
-    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Menü']);
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Angebot Adler', 'customer' => 'Hotel Adler', 'personen' => 100]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü']);
     // Foodbook komponiert Concepts (4,50 €/P) + strukturierte Preis-Blöcke — kein Gericht-Picker
     $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
-    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'preis_basis' => 'person', 'preis_wert' => 2.50, 'bezeichnung' => 'Aperitif-Paket']);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'price_basis' => 'person', 'price_value' => 2.50, 'label' => 'Aperitif-Paket']);
 
     $agg = $this->foodbooks->kapitelAggregat($this->rootTeam, $kap->refresh());
     expect($agg['vk_pro_person'])->toBe(7.00)                         // 4,50 Concept + 2,50 Paket-Preis
-        ->and($agg['ek_pro_person'])->toBe(1.35);                     // nur Concept-EK (Preisblock ohne EK)
+        ->and($agg['ek_per_person'])->toBe(1.35);                     // nur Concept-EK (Preisblock ohne EK)
 
     $gesamt = $this->foodbooks->gesamt($this->rootTeam, $fb->refresh());
     expect($gesamt['vk_pro_person'])->toBe(7.00)
@@ -54,12 +54,12 @@ it('M11-02: Kapitel-Aggregat (concept_ref + Paket-Preisblock) + Pax-Gesamtpreis 
 });
 
 it('M11-02: Kapitel-Baum + Move mit Zyklus-Schutz', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB']);
-    $top = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Top']);
-    $sub = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Sub'], $top->id);
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB']);
+    $top = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Top']);
+    $sub = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Sub'], $top->id);
 
     $tree = $this->foodbooks->kapitelTree($this->rootTeam, $fb->id);
-    expect(collect($tree)->firstWhere('titel', 'Sub')['depth'])->toBe(1);
+    expect(collect($tree)->firstWhere('title', 'Sub')['depth'])->toBe(1);
 
     // Zyklus: Top unter den eigenen Nachfahren Sub → wirft
     expect(fn () => $this->foodbooks->moveKapitel($this->rootTeam, $top->id, $sub->id))
@@ -71,25 +71,25 @@ it('M11-02: Kapitel-Baum + Move mit Zyklus-Schutz', function () {
 });
 
 it('M11-02: Owner-Guard — Kind-Team kann geerbtes Foodbook nicht pflegen (D1)', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'Root-FB']);
-    expect(fn () => $this->foodbooks->update($this->childA, $fb->id, ['bezeichnung' => 'Hack']))
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Root-FB']);
+    expect(fn () => $this->foodbooks->update($this->childA, $fb->id, ['label' => 'Hack']))
         ->toThrow(\RuntimeException::class)
-        ->and(fn () => $this->foodbooks->addKapitel($this->childA, $fb->id, ['titel' => 'X']))
+        ->and(fn () => $this->foodbooks->addKapitel($this->childA, $fb->id, ['title' => 'X']))
         ->toThrow(\RuntimeException::class);
 });
 
 it('M11 Jarvis: header_frei_preis person/pauschal/staffel im Gesamtpreis (Pax-aufgelöst)', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'Buffet-Angebot', 'personen' => 100]);
-    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Pakete']);
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Buffet-Angebot', 'personen' => 100]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Pakete']);
 
     // Person: 38 €/P
-    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'preis_basis' => 'person', 'preis_wert' => 38, 'bezeichnung' => 'Menü-Paket']);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'price_basis' => 'person', 'price_value' => 38, 'label' => 'Menü-Paket']);
     // Pauschal: 200 € flach
-    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'preis_basis' => 'pauschal', 'preis_wert' => 200, 'bezeichnung' => 'Servicepauschale']);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'price_basis' => 'pauschal', 'price_value' => 200, 'label' => 'Servicepauschale']);
     // Staffel: ab 50 = 36, ab 100 = 32 → bei 100 Pax = 32
-    $staffelBlock = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'preis_basis' => 'staffel', 'bezeichnung' => 'Staffel']);
+    $staffelBlock = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'price_basis' => 'staffel', 'label' => 'Staffel']);
     $this->foodbooks->setStaffel($this->rootTeam, $staffelBlock->id, [
-        ['min_personen' => 50, 'preis' => 36], ['min_personen' => 100, 'preis' => 32],
+        ['min_persons' => 50, 'price' => 36], ['min_persons' => 100, 'price' => 32],
     ]);
 
     $agg = $this->foodbooks->kapitelAggregat($this->rootTeam, $kap->refresh(), 100);
@@ -102,8 +102,8 @@ it('M11 Jarvis: header_frei_preis person/pauschal/staffel im Gesamtpreis (Pax-au
 });
 
 it('M11 Jarvis: Wahl-Gruppe (A|B|C) zwischen Concepts setzen', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB']);
-    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Hauptgang']);
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB']);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Hauptgang']);
     $a = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
     $b = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
 
@@ -117,36 +117,36 @@ it('M11 Jarvis: Wahl-Gruppe (A|B|C) zwischen Concepts setzen', function () {
 // ── Golden-Tests M11 (Abnahme-Gates der Foodbook-Roadmap) ────────────────────
 
 it('GT-FB-2: Live-Referenz — Concept-Preisänderung zieht im Foodbook live mit (keine Kopie)', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB', 'personen' => 10]);
-    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Menü']);
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB', 'personen' => 10]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü']);
     $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
 
     expect($this->foodbooks->gesamt($this->rootTeam, $fb->refresh())['vk_pro_person'])->toBe(4.50);
 
     // Paket-Preis am Concept ändern → Foodbook-Summe zieht live mit (Live-Referenz, kein Snapshot).
-    $this->pakete->update($this->rootTeam, $this->paket->id, ['preis_pro_person' => 6.00]);
+    $this->pakete->update($this->rootTeam, $this->paket->id, ['price_per_person' => 6.00]);
     expect($this->foodbooks->gesamt($this->rootTeam, $fb->refresh())['vk_pro_person'])->toBe(6.00);
 });
 
 it('GT-FB-3: n:m — gleiches Concept in zwei Foodbooks, Änderung wirkt in beiden', function () {
-    $fb1 = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB1', 'personen' => 10]);
-    $fb2 = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB2', 'personen' => 10]);
-    $k1 = $this->foodbooks->addKapitel($this->rootTeam, $fb1->id, ['titel' => 'K']);
-    $k2 = $this->foodbooks->addKapitel($this->rootTeam, $fb2->id, ['titel' => 'K']);
+    $fb1 = $this->foodbooks->create($this->rootTeam, ['label' => 'FB1', 'personen' => 10]);
+    $fb2 = $this->foodbooks->create($this->rootTeam, ['label' => 'FB2', 'personen' => 10]);
+    $k1 = $this->foodbooks->addKapitel($this->rootTeam, $fb1->id, ['title' => 'K']);
+    $k2 = $this->foodbooks->addKapitel($this->rootTeam, $fb2->id, ['title' => 'K']);
     $this->foodbooks->addBlock($this->rootTeam, $k1->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
     $this->foodbooks->addBlock($this->rootTeam, $k2->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
 
     expect($this->foodbooks->gesamt($this->rootTeam, $fb1->refresh())['vk_pro_person'])->toBe(4.50)
         ->and($this->foodbooks->gesamt($this->rootTeam, $fb2->refresh())['vk_pro_person'])->toBe(4.50);
 
-    $this->pakete->update($this->rootTeam, $this->paket->id, ['preis_pro_person' => 5.00]);
+    $this->pakete->update($this->rootTeam, $this->paket->id, ['price_per_person' => 5.00]);
     expect($this->foodbooks->gesamt($this->rootTeam, $fb1->refresh())['vk_pro_person'])->toBe(5.00)
         ->and($this->foodbooks->gesamt($this->rootTeam, $fb2->refresh())['vk_pro_person'])->toBe(5.00); // keine Kopie
 });
 
 it('GT-FB-4: Lösch-Guard — referenziertes Concept löschen wirft typisierte Exception (V-06)', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB']);
-    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'K']);
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB']);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'K']);
     $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
 
     expect(fn () => $this->concepts->delete($this->rootTeam, $this->concept->id))
@@ -174,8 +174,8 @@ it('GT-FB-7: Concept-Picker filtert nach Concept-Kategorie (FB-1)', function () 
 });
 
 it('M11-09: Block-Notiz (interne_bemerkung) persistiert via updateBlock — auch auf concept_ref', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB']);
-    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'K']);
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB']);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'K']);
     $block = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
 
     $this->foodbooks->updateBlock($this->rootTeam, $block->id, ['interne_bemerkung' => 'Allergiker-Hinweis intern']);
@@ -183,12 +183,12 @@ it('M11-09: Block-Notiz (interne_bemerkung) persistiert via updateBlock — auch
 });
 
 it('M11-08: kiAndockKontext assembliert Kunde + Briefing + Concept-Liste (kein LLM-Call)', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'FB', 'kunde' => 'Hotel Adler', 'beschreibung' => 'Sommerliches Gartenfest', 'personen' => 80]);
-    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['titel' => 'Menü']);
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB', 'customer' => 'Hotel Adler', 'description' => 'Sommerliches Gartenfest', 'personen' => 80]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü']);
     $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
 
     $ctx = $this->foodbooks->kiAndockKontext($this->rootTeam, $fb->id);
-    expect($ctx['kunde'])->toBe('Hotel Adler')
+    expect($ctx['customer'])->toBe('Hotel Adler')
         ->and($ctx['briefing'])->toBe('Sommerliches Gartenfest')
         ->and($ctx['personen'])->toBe(80)
         ->and($ctx['concepts'])->toContain('Grill-Buffet')

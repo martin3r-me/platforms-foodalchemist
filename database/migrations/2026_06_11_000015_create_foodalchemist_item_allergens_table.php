@@ -24,8 +24,8 @@ return new class extends Migration
             $table->foreignId('supplier_item_id')->unique()->constrained('foodalchemist_supplier_items')->cascadeOnDelete();
 
             foreach ([
-                'glutenhaltiges_getreide', 'krebstiere', 'eier', 'fisch', 'erdnuesse', 'soja', 'milch',
-                'schalenfruechte', 'sellerie', 'senf', 'sesam', 'schwefeldioxid', 'lupinen', 'weichtiere',
+                'gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk',
+                'tree_nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs',
             ] as $allergen) {
                 $table->string("allergen_{$allergen}", 16)->nullable();
             }

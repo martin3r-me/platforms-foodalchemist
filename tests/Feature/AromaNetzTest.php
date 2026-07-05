@@ -21,7 +21,7 @@ beforeEach(function () {
     $this->svc = app(PairingService::class);
 
     $mkAnker = function (string $slug) {
-        DB::table('foodalchemist_vocab_pairing_ankers')->insert([
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert([
             'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'display_de' => ucfirst($slug),
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -35,21 +35,21 @@ beforeEach(function () {
 
     foreach ([[$this->ketchup, $this->chili, 'klassisch'], [$this->chili, $this->essig, 'kontrast'], [$this->ketchup, $this->vanille, 'klassisch']] as [$a, $b, $typ]) {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
-            DB::table('foodalchemist_pairing_anker_edges')->insert([
-                'uuid' => (string) UuidV7::generate(), 'anker_a_id' => $x, 'anker_b_id' => $y,
-                'typ' => $typ, 'created_at' => now(), 'updated_at' => now(),
+            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+                'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
+                'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
             ]);
         }
     }
 
     $this->rezept = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'netz', 'name' => 'Sauce: Netz', 'status' => 'draft']);
-    $this->verwandt = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'netz2', 'name' => 'Sauce: Verwandt', 'status' => 'draft', 'ist_verkaufsrezept' => true]);
+    $this->verwandt = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'netz2', 'name' => 'Sauce: Verwandt', 'status' => 'draft', 'is_sales_recipe' => true]);
 
     $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->ketchup);   // Kern-Anker ★
     foreach ([[$this->rezept->id, $this->chili], [$this->rezept->id, $this->essig], [$this->verwandt->id, $this->chili], [$this->verwandt->id, $this->essig]] as [$rid, $aid]) {
         DB::table('foodalchemist_recipe_pairings')->insert([
             'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
-            'recipe_id' => $rid, 'anker_id' => $aid, 'typ' => 'klassisch', 'konfidenz' => 'hoch',
+            'recipe_id' => $rid, 'anchor_id' => $aid, 'type' => 'klassisch', 'confidence' => 'hoch',
             'created_at' => now(), 'updated_at' => now(),
         ]);
     }
@@ -64,7 +64,7 @@ it('aromaNetz: Kern zuerst (★), Brücken einmal je Paar mit Typ, Verwandte doc
         ->and($netz['anker'][1]['kern'])->toBeFalse();
 
     // Kanten im Ring: ketchup–chili (klassisch) + chili–essig (kontrast); ketchup–vanille liegt außerhalb
-    $kanten = collect($netz['kanten'])->map(fn ($k) => [min($k['a'], $k['b']), max($k['a'], $k['b']), $k['typ']]);
+    $kanten = collect($netz['kanten'])->map(fn ($k) => [min($k['a'], $k['b']), max($k['a'], $k['b']), $k['type']]);
     expect($kanten)->toHaveCount(2)
         ->and($kanten->contains([min($this->ketchup, $this->chili), max($this->ketchup, $this->chili), 'klassisch']))->toBeTrue()
         ->and($kanten->contains([min($this->chili, $this->essig), max($this->chili, $this->essig), 'kontrast']))->toBeTrue();
@@ -82,7 +82,7 @@ it('aromaNetz: Vorschlags-Modus liefert nur Anker AUSSERHALB des Rings', functio
     $slugs = array_column($netz['vorschlaege'], 'slug');
     expect($slugs)->toContain('vanille')                              // ketchup→vanille (klassisch)
         ->and(array_intersect($slugs, ['ketchup', 'chili', 'essig']))->toBe([]);
-    expect($netz['vorschlaege'][0]['anker_id'])->toBe($this->ketchup);
+    expect($netz['vorschlaege'][0]['anchor_id'])->toBe($this->ketchup);
 });
 
 it('Modal: öffnen rendert Zentrum/Anker/Brücken, Klick auf Rezept navigiert und schließt', function () {

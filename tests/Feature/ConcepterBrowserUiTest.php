@@ -25,19 +25,19 @@ beforeEach(function () {
 
     $this->green = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g', 'name' => 'Salat: Green Power',
-        'status' => 'approved', 'ist_verkaufsrezept' => true, 'vk_netto' => 2.00, 'ek_total_eur' => 0.60,
-        'vk_menge_pro_einheit_g' => 250, 'nutri_kcal_per_100g' => 200, 'nutri_konfidenz' => 'high',
-        'spec_is_vegan' => true, 'spec_is_vegetarian' => true, 'allergene_konfidenz' => 'high',
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00, 'ek_total_eur' => 0.60,
+        'sales_quantity_per_unit_g' => 250, 'nutri_kcal_per_100g' => 200, 'nutri_confidence' => 'high',
+        'spec_is_vegan' => true, 'spec_is_vegetarian' => true, 'allergens_confidence' => 'high',
     ]);
 
     // Paket „Salad Wall" (Klasse Buffet, manueller Preis) + Concept „Grill-Buffet".
-    $this->paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'klasse' => 'Buffet']);
-    $this->pakete->update($this->rootTeam, $this->paket->id, ['preis_pro_person' => 4.50]);
-    $this->pakete->syncGerichte($this->rootTeam, $this->paket->id, [['vk_recipe_id' => $this->green->id]]);
+    $this->paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise', 'class' => 'Buffet']);
+    $this->pakete->update($this->rootTeam, $this->paket->id, ['price_per_person' => 4.50]);
+    $this->pakete->syncGerichte($this->rootTeam, $this->paket->id, [['sales_recipe_id' => $this->green->id]]);
 
-    $this->concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet', 'klasse' => 'Buffet']);
-    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
-    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $this->paket->id]);
+    $this->concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet', 'class' => 'Buffet']);
+    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['package_id' => $this->paket->id]);
 });
 
 it('Browser rendert (Voll-Page) und zeigt Concepts im Default-Tab', function () {
@@ -59,11 +59,11 @@ it('Tab-Wechsel zu Pakete zeigt Pakete und leert die Auswahl', function () {
 });
 
 it('Klasse-Filter grenzt die Liste ein', function () {
-    $this->concepts->create($this->rootTeam, ['name' => 'Fingerfood-Linie', 'klasse' => 'Flying']);
+    $this->concepts->create($this->rootTeam, ['name' => 'Fingerfood-Linie', 'class' => 'Flying']);
 
     Livewire::test(Browser::class)
         ->call('waehleKlasse', 'Buffet')
-        ->assertSet('klasse', 'Buffet')
+        ->assertSet('class', 'Buffet')
         ->assertSee('Grill-Buffet')
         ->assertDontSee('Fingerfood-Linie');
 });
@@ -116,8 +116,8 @@ it('DetailPanel zeigt die Menü-Karte (Konsumenten-Sicht, C-10)', function () {
 });
 
 it('DetailPanel forkt eine Vorlage und öffnet den Fork (M10R-4)', function () {
-    $v = $this->concepts->create($this->rootTeam, ['name' => '3-Gang', 'is_vorlage' => true]);
-    $this->concepts->addSlot($this->rootTeam, $v->id, ['rolle' => 'Vorspeise']);
+    $v = $this->concepts->create($this->rootTeam, ['name' => '3-Gang', 'is_template' => true]);
+    $this->concepts->addSlot($this->rootTeam, $v->id, ['role' => 'Vorspeise']);
 
     Livewire::test(DetailPanel::class)
         ->call('zeige', 'concepts', $v->id)

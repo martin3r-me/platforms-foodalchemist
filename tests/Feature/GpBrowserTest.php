@@ -26,12 +26,12 @@ beforeEach(function () {
 
         return $gp->refresh();
     };
-    $this->zander = $mk('Zanderfilet', ['warengruppe_code' => '01', 'sub_kategorie' => 'Fisch', 'status' => 'approved']);
-    $mk('Karotte', ['warengruppe_code' => '01', 'sub_kategorie' => 'Wurzelgemüse', 'status' => 'approved']);
-    $mk('Brotkonfekt', ['warengruppe_code' => '09', 'status' => 'tentative']);
+    $this->zander = $mk('Zanderfilet', ['commodity_group_code' => '01', 'sub_category' => 'Fisch', 'status' => 'approved']);
+    $mk('Karotte', ['commodity_group_code' => '01', 'sub_category' => 'Wurzelgemüse', 'status' => 'approved']);
+    $mk('Brotkonfekt', ['commodity_group_code' => '09', 'status' => 'tentative']);
     // Kind-Team ergänzt Eigenes — für Root unsichtbar (D1)
     $kindGp = $this->makeGp($this->childA, 'Kind-Spezial');
-    $kindGp->update(['warengruppe_code' => '01']);
+    $kindGp->update(['commodity_group_code' => '01']);
 });
 
 it('WG-Baum-Counts stimmen mit SQL überein und ignorieren den WG-Filter selbst (DoD M3-01)', function () {
@@ -39,7 +39,7 @@ it('WG-Baum-Counts stimmen mit SQL überein und ignorieren den WG-Filter selbst 
 
     expect($svc->wgCounts($this->rootTeam))->toBe(['01' => 2, '09' => 1])
         // WG-Filter darf die Baum-Counts nicht beschneiden (sonst „verschwinden" Geschwister-Gruppen)
-        ->and($svc->wgCounts($this->rootTeam, ['warengruppe' => '09']))->toBe(['01' => 2, '09' => 1])
+        ->and($svc->wgCounts($this->rootTeam, ['commodity_group' => '09']))->toBe(['01' => 2, '09' => 1])
         // andere Filter wirken auf den Baum
         ->and($svc->wgCounts($this->rootTeam, ['status' => 'tentative']))->toBe(['09' => 1]);
 
@@ -55,8 +55,8 @@ it('Sub-Kategorie-Counts je WG (DoD M3-01)', function () {
 it('paginateBrowser filtert nach WG, Sub-Kategorie, Status und Suche (DoD M3-02)', function () {
     $svc = app(GpService::class);
 
-    expect($svc->paginateBrowser(['warengruppe' => '01'], $this->rootTeam)->total())->toBe(2)
-        ->and($svc->paginateBrowser(['warengruppe' => '01', 'sub_kategorie' => 'Fisch'], $this->rootTeam)->total())->toBe(1)
+    expect($svc->paginateBrowser(['commodity_group' => '01'], $this->rootTeam)->total())->toBe(2)
+        ->and($svc->paginateBrowser(['commodity_group' => '01', 'sub_category' => 'Fisch'], $this->rootTeam)->total())->toBe(1)
         ->and($svc->paginateBrowser(['status' => 'tentative'], $this->rootTeam)->total())->toBe(1)
         ->and($svc->paginateBrowser(['search' => 'zander'], $this->rootTeam)->total())->toBe(1)
         ->and($svc->paginateBrowser([], $this->rootTeam)->total())->toBe(3);
@@ -77,11 +77,11 @@ it('Browser: WG-Wahl togglet und setzt Sub-Kategorie zurück', function () {
 
     Livewire::test(Browser::class)
         ->call('waehleWg', '01')
-        ->assertSet('warengruppe', '01')
+        ->assertSet('commodity_group', '01')
         ->call('waehleSub', 'Fisch')
         ->assertSet('subKategorie', 'Fisch')
         ->call('waehleWg', '01') // erneuter Klick = abwählen
-        ->assertSet('warengruppe', '')
+        ->assertSet('commodity_group', '')
         ->assertSet('subKategorie', '');
 });
 
@@ -103,7 +103,7 @@ it('DetailPanel R9: Sektionen IMMER sichtbar — Allergene/Nährwerte/Verwendung
         'team_id' => $this->rootTeam->id, 'supplier_item_id' => $item->id, 'gp_id' => $this->zander->id,
     ]);
     \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::create([
-        'team_id' => $this->rootTeam->id, 'supplier_item_id' => $item->id, 'allergen_fisch' => 'enthalten',
+        'team_id' => $this->rootTeam->id, 'supplier_item_id' => $item->id, 'allergen_fish' => 'enthalten',
     ]);
 
     Livewire::test(DetailPanel::class, ['gpId' => $this->zander->id])

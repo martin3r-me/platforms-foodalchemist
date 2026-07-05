@@ -20,46 +20,46 @@ beforeEach(function () {
     // Zwei Gerichte (VK-Rezepte) für den Vorspeisen-Paket
     $this->greenPower = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'gp1', 'name' => 'Salat: Green Power',
-        'status' => 'approved', 'ist_verkaufsrezept' => true,
+        'status' => 'approved', 'is_sales_recipe' => true,
     ]);
     $this->sunnyKick = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'sk1', 'name' => 'Salat: Sunny Kick',
-        'status' => 'approved', 'ist_verkaufsrezept' => true,
+        'status' => 'approved', 'is_sales_recipe' => true,
     ]);
 });
 
 it('legt einen Paket als bepreistes Bündel mehrerer Gerichte an (Salad Wall)', function () {
     $paket = FoodAlchemistPaket::create([
-        'team_id' => $this->rootTeam->id, 'name' => 'Salad Wall', 'rolle' => 'Vorspeise',
-        'preis_pro_person' => 4.50, 'ek_pro_person' => 1.41, 'wareneinsatz_prozent' => 31.3,
-        'preis_modus' => 'manuell',
+        'team_id' => $this->rootTeam->id, 'name' => 'Salad Wall', 'role' => 'Vorspeise',
+        'price_per_person' => 4.50, 'ek_per_person' => 1.41, 'food_cost_percent' => 31.3,
+        'price_mode' => 'manuell',
     ]);
-    $paket->gerichte()->create(['team_id' => $this->rootTeam->id, 'vk_recipe_id' => $this->greenPower->id, 'position' => 0]);
-    $paket->gerichte()->create(['team_id' => $this->rootTeam->id, 'vk_recipe_id' => $this->sunnyKick->id, 'position' => 1]);
+    $paket->gerichte()->create(['team_id' => $this->rootTeam->id, 'sales_recipe_id' => $this->greenPower->id, 'position' => 0]);
+    $paket->gerichte()->create(['team_id' => $this->rootTeam->id, 'sales_recipe_id' => $this->sunnyKick->id, 'position' => 1]);
 
     expect($paket->uuid)->not->toBeNull()                          // HasUuidV7
         ->and($paket->gerichte()->count())->toBe(2)
-        ->and((float) $paket->preis_pro_person)->toBe(4.50)
+        ->and((float) $paket->price_per_person)->toBe(4.50)
         ->and($paket->gerichte->first()->gericht->name)->toBe('Salat: Green Power');
 });
 
 it('baut ein Concept mit Slots: Paket ODER festes Gericht je Slot (Grill-Buffet)', function () {
     $saladWall = FoodAlchemistPaket::create([
-        'team_id' => $this->rootTeam->id, 'name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'preis_pro_person' => 4.50,
+        'team_id' => $this->rootTeam->id, 'name' => 'Salad Wall', 'role' => 'Vorspeise', 'price_per_person' => 4.50,
     ]);
 
     $concept = FoodAlchemistConcept::create([
-        'team_id' => $this->rootTeam->id, 'name' => 'Grill-Buffet', 'anlass' => 'Sommerfest', 'status' => 'draft',
+        'team_id' => $this->rootTeam->id, 'name' => 'Grill-Buffet', 'occasion' => 'Sommerfest', 'status' => 'draft',
     ]);
     // Slot A: gefüllt mit Paket (austauschbar)
     $concept->slots()->create([
-        'team_id' => $this->rootTeam->id, 'rolle' => 'Vorspeise', 'titel' => 'Vorspeise',
-        'position' => 0, 'paket_id' => $saladWall->id,
+        'team_id' => $this->rootTeam->id, 'role' => 'Vorspeise', 'title' => 'Vorspeise',
+        'position' => 0, 'package_id' => $saladWall->id,
     ]);
     // Slot B: festes Gericht
     $concept->slots()->create([
-        'team_id' => $this->rootTeam->id, 'rolle' => 'Dessert', 'titel' => 'Dessert',
-        'position' => 1, 'vk_recipe_id' => $this->greenPower->id, 'menge' => 1,
+        'team_id' => $this->rootTeam->id, 'role' => 'Dessert', 'title' => 'Dessert',
+        'position' => 1, 'sales_recipe_id' => $this->greenPower->id, 'quantity' => 1,
     ]);
 
     $slots = $concept->slots()->get();
@@ -71,8 +71,8 @@ it('baut ein Concept mit Slots: Paket ODER festes Gericht je Slot (Grill-Buffet)
 });
 
 it('Team-Hierarchie: Kind sieht Eltern-Pakete, Besitzer-Check greift (D1)', function () {
-    $rootPaket = FoodAlchemistPaket::create(['team_id' => $this->rootTeam->id, 'name' => 'Root-Paket', 'rolle' => 'Vorspeise']);
-    $childPaket = FoodAlchemistPaket::create(['team_id' => $this->childA->id, 'name' => 'Kind-A-Paket', 'rolle' => 'Vorspeise']);
+    $rootPaket = FoodAlchemistPaket::create(['team_id' => $this->rootTeam->id, 'name' => 'Root-Paket', 'role' => 'Vorspeise']);
+    $childPaket = FoodAlchemistPaket::create(['team_id' => $this->childA->id, 'name' => 'Kind-A-Paket', 'role' => 'Vorspeise']);
 
     // Kind A sieht eigenen + geerbten (Root); NICHT den von Geschwister-Kind B
     $sichtbarFuerA = FoodAlchemistPaket::visibleToTeam($this->childA)->pluck('name')->all();
@@ -88,8 +88,8 @@ it('Team-Hierarchie: Kind sieht Eltern-Pakete, Besitzer-Check greift (D1)', func
 });
 
 it('Vorlage-Scopes + Rollen-Vokabular', function () {
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => '3-Gang-Vorlage', 'is_vorlage' => true]);
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Grill-Buffet', 'is_vorlage' => false]);
+    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => '3-Gang-Vorlage', 'is_template' => true]);
+    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Grill-Buffet', 'is_template' => false]);
 
     expect(FoodAlchemistConcept::vorlagen()->count())->toBe(1)
         ->and(FoodAlchemistConcept::echte()->count())->toBe(1);

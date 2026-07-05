@@ -47,7 +47,7 @@ it('Pflichtfeld + Sichtbarkeits-Guard, Deaktivieren soft und nur Besitzer', func
 
 it('DoD M2-12: Ausreißer je WG (Faktor ≥ 4 vom Median) und Generationen-Sprünge > 30 %', function () {
     $gp = $this->makeGp($this->rootTeam, 'Tomate');
-    $gp->update(['warengruppe_code' => '01']);
+    $gp->update(['commodity_group_code' => '01']);
 
     // 4 normale + 1 Ausreißer in WG 01 (kg)
     foreach ([2.0, 2.2, 2.4, 2.6, 24.0] as $i => $preis) {
@@ -62,7 +62,7 @@ it('DoD M2-12: Ausreißer je WG (Faktor ≥ 4 vom Median) und Generationen-Sprü
     $ergebnis = $this->preise->detectAnomalies($this->rootTeam);
 
     expect($ergebnis['ausreisser'])->toHaveCount(1)
-        ->and($ergebnis['ausreisser']->first()->wert)->toBe(24.0)->and($ergebnis['ausreisser']->first()->bezeichnung)->toBe('Tomate 4')
+        ->and($ergebnis['ausreisser']->first()->value)->toBe(24.0)->and($ergebnis['ausreisser']->first()->label)->toBe('Tomate 4')
         ->and($ergebnis['ausreisser']->first()->faktor)->toBeGreaterThanOrEqual(4.0)
         ->and($ergebnis['spruenge'])->toHaveCount(1)
         ->and($ergebnis['spruenge']->first()->sprung_pct)->toBe(100.0);

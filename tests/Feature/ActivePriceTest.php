@@ -61,11 +61,11 @@ it('GT-2/3/4: Normalisierung kg, l, Stk — Werte wörtlich aus GL-11 §5', func
     $limette = new FoodAlchemistSupplierItem(['qty' => 0.75, 'unit_code' => 'l']);
     $epos = new FoodAlchemistSupplierItem(['qty' => 1.0, 'unit_code' => 'Stk']);
 
-    expect($this->preise->vergleichspreis($zucker, 42.00))->toBe(['wert' => 1.68, 'einheit' => '€/kg'])
+    expect($this->preise->vergleichspreis($zucker, 42.00))->toBe(['value' => 1.68, 'unit' => '€/kg'])
         ->and($this->preise->preisProGramm($zucker, 42.00))->toEqualWithDelta(0.00168, 1e-12)
-        ->and($this->preise->vergleichspreis($bos, 22.50))->toBe(['wert' => 9.375, 'einheit' => '€/l'])
-        ->and(round($this->preise->vergleichspreis($limette, 2.69)['wert'], 4))->toBe(3.5867)
-        ->and($this->preise->vergleichspreis($epos, 1.72))->toBe(['wert' => 1.72, 'einheit' => '€/Stk'])
+        ->and($this->preise->vergleichspreis($bos, 22.50))->toBe(['value' => 9.375, 'unit' => '€/l'])
+        ->and(round($this->preise->vergleichspreis($limette, 2.69)['value'], 4))->toBe(3.5867)
+        ->and($this->preise->vergleichspreis($epos, 1.72))->toBe(['value' => 1.72, 'unit' => '€/Stk'])
         ->and($this->preise->preisProGramm($epos, 1.72))->toBeNull(); // Stk→g nur via Stückgewichts-Brücke (T3)
 });
 

@@ -19,23 +19,23 @@ beforeEach(function () {
 
     $this->gericht = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g1', 'name' => 'Tagessuppe', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'vk_netto' => 3.50, 'ek_total_eur' => 1.00,
+        'is_sales_recipe' => true, 'sales_net' => 3.50, 'ek_total_eur' => 1.00,
     ]);
-    $this->paket = $this->pakete->create($this->rootTeam, ['name' => 'Salatbar', 'rolle' => 'Beilage', 'preis_modus' => 'manuell']);
-    $this->pakete->update($this->rootTeam, $this->paket->id, ['preis_pro_person' => 2.50, 'ek_pro_person' => 0.80]);
+    $this->paket = $this->pakete->create($this->rootTeam, ['name' => 'Salatbar', 'role' => 'Beilage', 'price_mode' => 'manuell']);
+    $this->pakete->update($this->rootTeam, $this->paket->id, ['price_per_person' => 2.50, 'ek_per_person' => 0.80]);
 });
 
 it('M14/v2: Eintrag belegt Zelle mit GENAU EINEM Inhalt; Wochen-Raster + Kosten pro Tag', function () {
     // Speiseplan v2: echtes Datum × Linie × Mahlzeit statt woche/wochentag
-    $sp = $this->plan->create($this->rootTeam, ['name' => 'KW 28', 'zyklus_wochen' => 1, 'start_datum' => '2026-07-06']);
+    $sp = $this->plan->create($this->rootTeam, ['name' => 'KW 28', 'zyklus_wochen' => 1, 'start_date' => '2026-07-06']);
     $mo = '2026-07-06';                                             // Montag
     $di = '2026-07-07';
     // Mo Mittag: Gericht (3,50) + Paket (2,50)
-    $this->plan->addEintrag($this->rootTeam, $sp->id, ['datum' => $mo, 'mahlzeit' => 'mittag', 'vk_recipe_id' => $this->gericht->id]);
-    $this->plan->addEintrag($this->rootTeam, $sp->id, ['datum' => $mo, 'mahlzeit' => 'mittag', 'paket_id' => $this->paket->id]);
+    $this->plan->addEintrag($this->rootTeam, $sp->id, ['entry_date' => $mo, 'mahlzeit' => 'mittag', 'sales_recipe_id' => $this->gericht->id]);
+    $this->plan->addEintrag($this->rootTeam, $sp->id, ['entry_date' => $mo, 'mahlzeit' => 'mittag', 'package_id' => $this->paket->id]);
     // Eintrag mit BEIDEN gesetzt → nur paket gewinnt (genau eines)
-    $beide = $this->plan->addEintrag($this->rootTeam, $sp->id, ['datum' => $di, 'mahlzeit' => 'mittag', 'paket_id' => $this->paket->id, 'vk_recipe_id' => $this->gericht->id]);
-    expect($beide->paket_id)->toBe($this->paket->id)->and($beide->vk_recipe_id)->toBeNull();
+    $beide = $this->plan->addEintrag($this->rootTeam, $sp->id, ['entry_date' => $di, 'mahlzeit' => 'mittag', 'package_id' => $this->paket->id, 'sales_recipe_id' => $this->gericht->id]);
+    expect($beide->package_id)->toBe($this->paket->id)->and($beide->sales_recipe_id)->toBeNull();
 
     $montag = \Illuminate\Support\Carbon::parse($mo);
     $raster = $this->plan->wochenRaster($sp->refresh(), 'mittag', $montag);
@@ -48,10 +48,10 @@ it('M14/v2: Eintrag belegt Zelle mit GENAU EINEM Inhalt; Wochen-Raster + Kosten 
 });
 
 it('M14/v2: Wiederholungs-Check flaggt zu engen Abstand (echte Tages-Abstände)', function () {
-    $sp = $this->plan->create($this->rootTeam, ['name' => 'Zyklus', 'zyklus_wochen' => 2, 'min_abstand_tage' => 5, 'start_datum' => '2026-07-06']);
+    $sp = $this->plan->create($this->rootTeam, ['name' => 'Zyklus', 'zyklus_wochen' => 2, 'min_abstand_tage' => 5, 'start_date' => '2026-07-06']);
     // Tagessuppe Mo (06.07.) und Mi (08.07.) → Abstand 2 < 5 → Konflikt
-    $this->plan->addEintrag($this->rootTeam, $sp->id, ['datum' => '2026-07-06', 'mahlzeit' => 'mittag', 'vk_recipe_id' => $this->gericht->id]);
-    $this->plan->addEintrag($this->rootTeam, $sp->id, ['datum' => '2026-07-08', 'mahlzeit' => 'mittag', 'vk_recipe_id' => $this->gericht->id]);
+    $this->plan->addEintrag($this->rootTeam, $sp->id, ['entry_date' => '2026-07-06', 'mahlzeit' => 'mittag', 'sales_recipe_id' => $this->gericht->id]);
+    $this->plan->addEintrag($this->rootTeam, $sp->id, ['entry_date' => '2026-07-08', 'mahlzeit' => 'mittag', 'sales_recipe_id' => $this->gericht->id]);
 
     $w = collect($this->plan->wiederholungen($sp->refresh()))->firstWhere('key', 'g' . $this->gericht->id);
     expect($w['vorkommen'])->toBe(2)->and($w['min_abstand'])->toBe(2)->and($w['konflikt'])->toBeTrue();
@@ -60,5 +60,5 @@ it('M14/v2: Wiederholungs-Check flaggt zu engen Abstand (echte Tages-Abstände)'
 it('M14: Owner-Guard — Kind-Team kann geerbten Speiseplan nicht pflegen', function () {
     $sp = $this->plan->create($this->rootTeam, ['name' => 'Root-Plan']);
     expect(fn () => $this->plan->update($this->childA, $sp->id, ['name' => 'Hack']))->toThrow(\RuntimeException::class)
-        ->and(fn () => $this->plan->addEintrag($this->childA, $sp->id, ['vk_recipe_id' => $this->gericht->id]))->toThrow(\RuntimeException::class);
+        ->and(fn () => $this->plan->addEintrag($this->childA, $sp->id, ['sales_recipe_id' => $this->gericht->id]))->toThrow(\RuntimeException::class);
 });

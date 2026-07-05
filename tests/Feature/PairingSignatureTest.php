@@ -20,7 +20,7 @@ beforeEach(function () {
     $this->svc = app(PairingService::class);
 
     $this->mkAnker = function (string $slug): int {
-        DB::table('foodalchemist_vocab_pairing_ankers')->insert([
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert([
             'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'display_de' => ucfirst($slug),
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -29,16 +29,16 @@ beforeEach(function () {
     };
     $this->mkKante = function (int $a, int $b, string $typ = 'klassisch') {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {                  // bidirektional (Inv. 4)
-            DB::table('foodalchemist_pairing_anker_edges')->insert([
-                'uuid' => (string) UuidV7::generate(), 'anker_a_id' => $x, 'anker_b_id' => $y,
-                'typ' => $typ, 'created_at' => now(), 'updated_at' => now(),
+            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+                'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
+                'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
             ]);
         }
     };
     $this->mkRezeptMitZutaten = function (array $rawTexte, bool $istGericht = true): FoodAlchemistRecipe {
         $r = FoodAlchemistRecipe::create([
             'team_id' => $this->rootTeam->id, 'recipe_key' => 'sig-' . count($rawTexte) . '-' . uniqid(),
-            'name' => 'Test: Signature', 'status' => 'draft', 'ist_verkaufsrezept' => $istGericht,
+            'name' => 'Test: Signature', 'status' => 'draft', 'is_sales_recipe' => $istGericht,
         ]);
         $g = FoodAlchemistVocabEinheit::create([
             'team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1,
@@ -46,8 +46,8 @@ beforeEach(function () {
         foreach ($rawTexte as $i => $txt) {
             DB::table('foodalchemist_recipe_ingredients')->insert([
                 'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
-                'recipe_id' => $r->id, 'raw_text' => $txt, 'menge' => 100,
-                'einheit_vocab_id' => $g->id, 'position' => $i + 1, 'created_at' => now(), 'updated_at' => now(),
+                'recipe_id' => $r->id, 'raw_text' => $txt, 'quantity' => 100,
+                'unit_vocab_id' => $g->id, 'position' => $i + 1, 'created_at' => now(), 'updated_at' => now(),
             ]);
         }
 
@@ -109,7 +109,7 @@ it('Basisrezept: KEINE Teller-Blöcke, stattdessen Graph-Nachbarn', function () 
 
     $basis = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'basis-sauce',
-        'name' => 'Basis: Sauce', 'status' => 'draft', 'ist_verkaufsrezept' => false,
+        'name' => 'Basis: Sauce', 'status' => 'draft', 'is_sales_recipe' => false,
     ]);
     $this->svc->setRecipeAnker($this->rootTeam, $basis->id, $erd);   // Anker des Basisrezepts = erdbeere
 

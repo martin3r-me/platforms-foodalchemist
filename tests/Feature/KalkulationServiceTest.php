@@ -17,14 +17,14 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->kalk = app(KalkulationService::class);
-    app(TeamSettingsService::class)->update($this->rootTeam, ['hk2_zuschlag_pct' => 20]); // 20 % Gemeinkosten
+    app(TeamSettingsService::class)->update($this->rootTeam, ['hk2_surcharge_pct' => 20]); // 20 % Gemeinkosten
 });
 
 it('M12: recipeHk — HK1/HK2 pro Portion + Vollkosten-DB', function () {
     $r = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g1', 'name' => 'HG: Filet', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'ek_total_eur' => 10.00, 'vk_anzahl_einheiten' => 5,
-        'nebenkosten_eur' => 2.50, 'vk_netto' => 8.00,
+        'is_sales_recipe' => true, 'ek_total_eur' => 10.00, 'sales_unit_count' => 5,
+        'additional_costs_eur' => 2.50, 'sales_net' => 8.00,
     ]);
 
     $hk = $this->kalk->recipeHk($this->rootTeam, $r);
@@ -38,11 +38,11 @@ it('M12: recipeHk — HK1/HK2 pro Portion + Vollkosten-DB', function () {
 });
 
 it('M12: conceptHk — HK2 pro Person + DB gegen Concept-€/Person', function () {
-    $paket = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
-    app(PaketService::class)->update($this->rootTeam, $paket->id, ['preis_pro_person' => 4.50, 'ek_pro_person' => 1.35]);
+    $paket = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise', 'price_mode' => 'manuell']);
+    app(PaketService::class)->update($this->rootTeam, $paket->id, ['price_per_person' => 4.50, 'ek_per_person' => 1.35]);
     $concept = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
-    $slot = app(ConceptService::class)->addSlot($this->rootTeam, $concept->id, ['rolle' => 'Vorspeise']);
-    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $paket->id]);
+    $slot = app(ConceptService::class)->addSlot($this->rootTeam, $concept->id, ['role' => 'Vorspeise']);
+    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['package_id' => $paket->id]);
 
     $hk = $this->kalk->conceptHk($this->rootTeam, $concept->refresh());
     expect($hk['hk1_pro_person'])->toBe(1.35)
@@ -53,6 +53,6 @@ it('M12: conceptHk — HK2 pro Person + DB gegen Concept-€/Person', function (
 });
 
 it('M12: ohne Zuschlag/Nebenkosten ist HK2 = HK1', function () {
-    app(TeamSettingsService::class)->update($this->childA, ['hk2_zuschlag_pct' => 0]);
+    app(TeamSettingsService::class)->update($this->childA, ['hk2_surcharge_pct' => 0]);
     expect($this->kalk->hk2($this->childA, 5.0))->toBe(5.0);
 });

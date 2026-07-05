@@ -81,8 +81,8 @@ it('Editor: Zeilen tragen den Ersatz-Hinweis, ersatzFuer laedt fuer Client-Zeile
     $this->equiv->verknuepfe($this->rootTeam, 'gp', $frisch->id, 'gp', $konserve->id, 0.8);
 
     $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
-        ['gp_id' => $frisch->id, 'raw_text' => '500 g Tomate frisch', 'menge' => '500', 'einheit_vocab_id' => $this->g->id],
-        ['gp_id' => $ohne->id, 'raw_text' => '100 g Zwiebel', 'menge' => '100', 'einheit_vocab_id' => $this->g->id],
+        ['gp_id' => $frisch->id, 'raw_text' => '500 g Tomate frisch', 'quantity' => '500', 'unit_vocab_id' => $this->g->id],
+        ['gp_id' => $ohne->id, 'raw_text' => '100 g Zwiebel', 'quantity' => '100', 'unit_vocab_id' => $this->g->id],
     ]);
 
     $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
@@ -108,19 +108,19 @@ it('tauscheZutat (Server-Weg): tauscht die Realisierung, rechnet Menge um und re
     $this->equiv->verknuepfe($this->rootTeam, 'gp', $frisch->id, 'gp', $konserve->id, 0.8);
 
     $r = $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
-        ['gp_id' => $frisch->id, 'raw_text' => '1000 g Tomate frisch', 'menge' => '1000', 'einheit_vocab_id' => $this->g->id],
+        ['gp_id' => $frisch->id, 'raw_text' => '1000 g Tomate frisch', 'quantity' => '1000', 'unit_vocab_id' => $this->g->id],
     ]);
     expect((float) $r->ek_total_eur)->toBe(2.00);                                // 1 kg × 2 €/kg
 
     $zutat = $this->equiv->tauscheZutat($this->rootTeam, (int) $r->ingredients()->first()->id);
 
     expect($zutat->gp_id)->toBe($konserve->id)
-        ->and((float) $zutat->menge)->toBe(800.0)                                // 1000 × 0,8
+        ->and((float) $zutat->quantity)->toBe(800.0)                                // 1000 × 0,8
         ->and((float) $r->refresh()->ek_total_eur)->toBe(0.80);                  // 0,8 kg × 1 €/kg
 
     // Zutat ohne Katalog-Eintrag → sprechende Ablehnung
     $r2 = $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
-        ['gp_id' => ($this->mkGpMitPreis)('Zwiebel', 1.00)->id, 'raw_text' => '100 g Zwiebel', 'menge' => '100', 'einheit_vocab_id' => $this->g->id],
+        ['gp_id' => ($this->mkGpMitPreis)('Zwiebel', 1.00)->id, 'raw_text' => '100 g Zwiebel', 'quantity' => '100', 'unit_vocab_id' => $this->g->id],
     ]);
     expect(fn () => $this->equiv->tauscheZutat($this->rootTeam, (int) $r2->ingredients()->first()->id))
         ->toThrow(RuntimeException::class, 'Kein Ersatz');

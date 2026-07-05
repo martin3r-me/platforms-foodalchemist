@@ -24,10 +24,10 @@ beforeEach(function () {
 
     $this->green = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g', 'name' => 'Green Power',
-        'status' => 'approved', 'ist_verkaufsrezept' => true, 'vk_netto' => 2.00, 'ek_total_eur' => 0.60,
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00, 'ek_total_eur' => 0.60,
     ]);
-    $this->paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
-    $this->pakete->update($this->rootTeam, $this->paket->id, ['preis_pro_person' => 4.50]);
+    $this->paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise']);
+    $this->pakete->update($this->rootTeam, $this->paket->id, ['price_per_person' => 4.50]);
     $this->concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
 });
 
@@ -44,16 +44,16 @@ it('öffnet ein Concept, lädt den Kopf + meldet modal.open', function () {
 it('speichert die Kopf-Felder (Konsumentenname, Klasse, Zielpreis)', function () {
     Livewire::test(Editor::class)
         ->call('oeffnen', 'concepts', $this->concept->id)
-        ->set('form.konsumenten_name', 'Sommerbuffet')
-        ->set('form.klasse', 'Buffet')
-        ->set('form.zielpreis_pro_person', 36.00)
+        ->set('form.consumer_name', 'Sommerbuffet')
+        ->set('form.class', 'Buffet')
+        ->set('form.target_price_per_person', 36.00)
         ->call('speichern')
         ->assertDispatched('concepter-gespeichert');
 
     $c = FoodAlchemistConcept::find($this->concept->id);
-    expect($c->konsumenten_name)->toBe('Sommerbuffet')
-        ->and($c->klasse)->toBe('Buffet')
-        ->and((float) $c->zielpreis_pro_person)->toBe(36.0);
+    expect($c->consumer_name)->toBe('Sommerbuffet')
+        ->and($c->class)->toBe('Buffet')
+        ->and((float) $c->target_price_per_person)->toBe(36.0);
 });
 
 it('Aufbau: Position anlegen + mit Paket füllen', function () {
@@ -66,7 +66,7 @@ it('Aufbau: Position anlegen + mit Paket füllen', function () {
     expect($slot)->not->toBeNull();
 
     $comp->call('fuellePaket', $slot->id, $this->paket->id);
-    expect($slot->refresh()->paket_id)->toBe($this->paket->id);
+    expect($slot->refresh()->package_id)->toBe($this->paket->id);
 });
 
 it('öffnet ein Paket und schnürt Gerichte (hinzufügen/entfernen)', function () {
@@ -91,7 +91,7 @@ it('Tab-Wechsel funktioniert', function () {
 });
 
 it('M10R-4: inline neues Paket im Slot schnüren öffnet das Paket im selben Modal', function () {
-    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
+    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
     $vorher = FoodAlchemistPaket::count();
 
     Livewire::test(Editor::class)
@@ -101,11 +101,11 @@ it('M10R-4: inline neues Paket im Slot schnüren öffnet das Paket im selben Mod
         ->assertSet('id', fn ($v) => $v !== null);
 
     expect(FoodAlchemistPaket::count())->toBe($vorher + 1)
-        ->and($slot->refresh()->paket_id)->not->toBeNull();
+        ->and($slot->refresh()->package_id)->not->toBeNull();
 });
 
 it('C-02: Pflicht/optional-Toggle je Slot speichert is_pflicht', function () {
-    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
+    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
 
     Livewire::test(Editor::class)
         ->call('oeffnen', 'concepts', $this->concept->id)
@@ -116,7 +116,7 @@ it('C-02: Pflicht/optional-Toggle je Slot speichert is_pflicht', function () {
 });
 
 it('M10R-4: Als Vorlage speichern aus dem Editor', function () {
-    $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
+    $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
 
     Livewire::test(Editor::class)
         ->call('oeffnen', 'concepts', $this->concept->id)
@@ -129,7 +129,7 @@ it('M10R-4: Als Vorlage speichern aus dem Editor', function () {
 it('Phase 3: positionEinfuegen legt aus der Seiten-Liste direkt eine Gericht- bzw. Basisrezept-Position an', function () {
     $basis = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'b', 'name' => 'Demi-Glace',
-        'status' => 'approved', 'ist_verkaufsrezept' => false, 'ek_total_eur' => 1.20,
+        'status' => 'approved', 'is_sales_recipe' => false, 'ek_total_eur' => 1.20,
     ]);
 
     $comp = Livewire::test(Editor::class)->call('oeffnen', 'concepts', $this->concept->id);
@@ -139,16 +139,16 @@ it('Phase 3: positionEinfuegen legt aus der Seiten-Liste direkt eine Gericht- bz
 
     $slots = $this->concept->slots()->orderBy('position')->get();
     expect($slots)->toHaveCount(2)
-        ->and($slots[0]->vk_recipe_id)->toBe($this->green->id)
+        ->and($slots[0]->sales_recipe_id)->toBe($this->green->id)
         ->and($slots[0]->type)->toBe('gericht')
-        ->and($slots[1]->vk_recipe_id)->toBe($basis->id)
+        ->and($slots[1]->sales_recipe_id)->toBe($basis->id)
         ->and($slots[1]->type)->toBe('basisrezept');
 });
 
 it('Build C: Einfügeziel + Drop sortieren neue Positionen an die gewählte Stelle (nicht nur ans Ende)', function () {
     $mk = fn (string $k, string $n) => FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => $k, 'name' => $n,
-        'status' => 'approved', 'ist_verkaufsrezept' => false, 'ek_total_eur' => 1.0,
+        'status' => 'approved', 'is_sales_recipe' => false, 'ek_total_eur' => 1.0,
     ]);
     $a = $mk('a', 'Basis A');
     $b = $mk('b', 'Basis B');
@@ -171,14 +171,14 @@ it('Build C: Einfügeziel + Drop sortieren neue Positionen an die gewählte Stel
     // Drop = explizit hinter green → C zwischen green und B
     $comp->call('positionDrop', 'basisrezept', $c->id, $gruen->id);   // [green, C, B, A]
 
-    $reihenfolge = $this->concept->slots()->orderBy('position')->pluck('vk_recipe_id')->all();
+    $reihenfolge = $this->concept->slots()->orderBy('position')->pluck('sales_recipe_id')->all();
     expect($reihenfolge)->toBe([$this->green->id, $c->id, $b->id, $a->id]);
 });
 
 it('Paket = Abschnitt: die Gerichte des Pakets stehen immer als eingerückte Zeilen darunter', function () {
-    $this->pakete->syncGerichte($this->rootTeam, $this->paket->id, [['vk_recipe_id' => $this->green->id, 'menge' => 1]]);
-    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
-    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $this->paket->id]);
+    $this->pakete->syncGerichte($this->rootTeam, $this->paket->id, [['sales_recipe_id' => $this->green->id, 'quantity' => 1]]);
+    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['package_id' => $this->paket->id]);
 
     // Ohne Toggle: Paket-Header (Name) + sein Gericht direkt sichtbar.
     Livewire::test(Editor::class)->call('oeffnen', 'concepts', $this->concept->id)
@@ -193,14 +193,14 @@ it('Q2: positionEinfuegen(paket) legt eine Paket-Position an (linke Liste, Umsch
     $comp->call('positionEinfuegen', 'paket', $this->paket->id);
 
     $slot = $this->concept->slots()->orderBy('position')->first();
-    expect($slot->paket_id)->toBe($this->paket->id)
+    expect($slot->package_id)->toBe($this->paket->id)
         ->and($slot->type)->toBe('paket');
 });
 
 it('Inline-Reorder: positionVerschieben sortiert eine Position hinter eine andere', function () {
     $mk = fn (string $k, string $n) => FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => $k, 'name' => $n,
-        'status' => 'approved', 'ist_verkaufsrezept' => false, 'ek_total_eur' => 1.0,
+        'status' => 'approved', 'is_sales_recipe' => false, 'ek_total_eur' => 1.0,
     ]);
     $a = $mk('ra', 'R A');
     $b = $mk('rb', 'R B');
@@ -227,7 +227,7 @@ it('+ Paket: legt Paket-Position an, öffnet den Paket-Editor und springt zurüc
         ->assertSet('rueckSprungConceptId', $this->concept->id);
 
     // Eine Paket-Position ist im Concept entstanden.
-    expect($this->concept->slots()->whereNotNull('paket_id')->count())->toBe(1);
+    expect($this->concept->slots()->whereNotNull('package_id')->count())->toBe(1);
 
     // Zurück ins Concept.
     $comp->call('zurueckZumConcept')
@@ -242,7 +242,7 @@ it('Einheiten-Fix: Einfügen setzt die Portion-Einheit als Default (Gericht + Ba
     ]);
     $basis = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'eb', 'name' => 'Edel-Basis',
-        'status' => 'approved', 'ist_verkaufsrezept' => false, 'ek_total_eur' => 1.0,
+        'status' => 'approved', 'is_sales_recipe' => false, 'ek_total_eur' => 1.0,
     ]);
 
     $comp = Livewire::test(Editor::class)->call('oeffnen', 'concepts', $this->concept->id);
@@ -250,9 +250,9 @@ it('Einheiten-Fix: Einfügen setzt die Portion-Einheit als Default (Gericht + Ba
     $comp->call('positionEinfuegen', 'basisrezept', $basis->id);
 
     $slots = $this->concept->slots()->orderBy('position')->get();
-    expect($slots[0]->einheit_vocab_id)->toBe($portion->id)
-        ->and((float) $slots[0]->menge)->toBe(1.0)
-        ->and($slots[1]->einheit_vocab_id)->toBe($portion->id);
+    expect($slots[0]->unit_vocab_id)->toBe($portion->id)
+        ->and((float) $slots[0]->quantity)->toBe(1.0)
+        ->and($slots[1]->unit_vocab_id)->toBe($portion->id);
 });
 
 it('Reinspringen: paketOeffnen öffnet das Paket und merkt den Rückweg ins Concept', function () {
@@ -273,16 +273,16 @@ it('Concept-VK: auto = Summe der Positionen, manuell überschreibt sie (EK bleib
 
     $svc = app(ConceptService::class);
     $auto = $svc->preisCockpit($this->concept->fresh());
-    expect((float) $auto['preis_pro_person'])->toBe(2.0)
+    expect((float) $auto['price_per_person'])->toBe(2.0)
         ->and((float) $auto['summe_pro_person'])->toBe(2.0)
-        ->and($auto['preis_modus'])->toBe('auto');
+        ->and($auto['price_mode'])->toBe('auto');
 
     // Manuell auf 99 €/Person (z. B. Lunchbuffet, Preis auf EK-Basis)
-    $comp->call('setPreisModus', 'manuell')->set('form.preis_pro_person_manuell', 99)->call('speichern');
+    $comp->call('setPreisModus', 'manuell')->set('form.price_per_person_manual', 99)->call('speichern');
 
     $manuell = $svc->preisCockpit($this->concept->fresh());
-    expect((float) $manuell['preis_pro_person'])->toBe(99.0)         // manueller Preis gewinnt
+    expect((float) $manuell['price_per_person'])->toBe(99.0)         // manueller Preis gewinnt
         ->and((float) $manuell['summe_pro_person'])->toBe(2.0)        // berechnete Summe bleibt sichtbar
-        ->and($manuell['preis_modus'])->toBe('manuell')
-        ->and((float) $manuell['ek_pro_person'])->toBe(0.6);          // EK weiter aus den Positionen
+        ->and($manuell['price_mode'])->toBe('manuell')
+        ->and((float) $manuell['ek_per_person'])->toBe(0.6);          // EK weiter aus den Positionen
 });

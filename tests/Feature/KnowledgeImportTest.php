@@ -37,7 +37,7 @@ it('importiert Klasse A, ist idempotent und zählt version bei Inhalts-Änderung
         ->assertSuccessful();
 
     expect(DB::table('foodalchemist_knowledge_documents')->count())->toBe(3)
-        ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', 'pairing.salbei')->value('kategorie'))->toBe('pairing')
+        ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', 'pairing.salbei')->value('category'))->toBe('pairing')
         ->and(DB::table('foodalchemist_knowledge_aliases')->count())->toBe(2)
         ->and(DB::table('foodalchemist_knowledge_routings')->count())->toBe(8);
 
@@ -50,15 +50,15 @@ it('importiert Klasse A, ist idempotent und zählt version bei Inhalts-Änderung
     $this->artisan('foodalchemist:knowledge-import', ['--vault' => $this->vault, '--rust-src' => $this->rustSrc])->assertSuccessful();
     $doc = DB::table('foodalchemist_knowledge_documents')->where('slug', 'pairing.salbei')->first();
     expect($doc->version)->toBe(2)
-        ->and($doc->inhalt_md)->toContain('NEUES');
+        ->and($doc->content_md)->toContain('NEUES');
 });
 
 it('verdrahtet Anker über quelle_pfad und löst Slug-Dubletten per Suffix', function () {
     // Anker, der auf die Salbei-MD zeigt (wie der Slice-Import ihn anlegt)
-    DB::table('foodalchemist_vocab_pairing_ankers')->insert([
+    DB::table('foodalchemist_vocab_pairing_anchors')->insert([
         'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
         'slug' => 'salbei', 'display_de' => 'Salbei',
-        'quelle_pfad' => '07_WISSEN/07.02_Flavor_Pairing/pairings/salbei.md',
+        'source_path' => '07_WISSEN/07.02_Flavor_Pairing/pairings/salbei.md',
         'created_at' => now(), 'updated_at' => now(),
     ]);
     // Dublette: zwei Dateien, ein Slug
@@ -67,6 +67,6 @@ it('verdrahtet Anker über quelle_pfad und löst Slug-Dubletten per Suffix', fun
 
     $this->artisan('foodalchemist:knowledge-import', ['--vault' => $this->vault, '--rust-src' => $this->rustSrc])->assertSuccessful();
 
-    expect(DB::table('foodalchemist_vocab_pairing_ankers')->where('slug', 'salbei')->whereNotNull('knowledge_document_id')->exists())->toBeTrue()
+    expect(DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', 'salbei')->whereNotNull('knowledge_document_id')->exists())->toBeTrue()
         ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', 'like', 'pairing.schwarzer_knoblauch%')->count())->toBe(2);
 });

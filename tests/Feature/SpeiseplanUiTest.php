@@ -18,7 +18,7 @@ beforeEach(function () {
     $this->actingAs($this->user);
     $this->gericht = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g1', 'name' => 'Tagessuppe Kürbis', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'vk_netto' => 3.50, 'ek_total_eur' => 1.00,
+        'is_sales_recipe' => true, 'sales_net' => 3.50, 'ek_total_eur' => 1.00,
     ]);
 });
 
@@ -41,7 +41,7 @@ it('Speiseplan-Raster: anlegen, Zelle (Datum × Mittag) mit Gericht belegen', fu
 
     $e = $sp->eintraege()->first();
     expect($e)->not->toBeNull()
-        ->and($e->datum->format('Y-m-d'))->toBe($montag)
+        ->and($e->entry_date->format('Y-m-d'))->toBe($montag)
         ->and($e->mahlzeit)->toBe('mittag')
-        ->and($e->vk_recipe_id)->toBe($this->gericht->id);
+        ->and($e->sales_recipe_id)->toBe($this->gericht->id);
 });

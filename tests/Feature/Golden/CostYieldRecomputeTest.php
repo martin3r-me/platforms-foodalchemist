@@ -43,7 +43,7 @@ beforeEach(function () {
         ]);
         FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => $gp->id]);
         FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'price' => $preis, 'status' => '0']);
-        $gp->update(['lead_la_supplier_item_id' => $la->id, 'stk_default_g' => $stkDefaultG, 'n_las_total' => 1]);
+        $gp->update(['lead_la_supplier_item_id' => $la->id, 'piece_default_g' => $stkDefaultG, 'n_las_total' => 1]);
 
         return $gp->refresh();
     };
@@ -69,15 +69,15 @@ it('GT-1: Blatt-Rezept mit allen Pfaden — yield 2.08 · ek 1.03 · ek/kg 0.5 �
     $ml = $this->einheiten['ml']->id;
     $stk = $this->einheiten['stk']->id;
 
-    ($this->mkZutat)($fond, ['menge' => 1000, 'einheit_vocab_id' => $g, 'gp_id' => ($this->mkGpMitPreis)('Rote Bete', 0.76, 1.0, 'kg')->id]);
-    ($this->mkZutat)($fond, ['menge' => 1000, 'einheit_vocab_id' => $ml, 'gp_id' => ($this->mkGpMitPreis)('Leitungswasser', 0.001, 1.0, 'l')->id]);
-    ($this->mkZutat)($fond, ['menge' => 50, 'einheit_vocab_id' => $ml, 'gp_id' => ($this->mkGpMitPreis)('Rotweinessig', 8.14, 2.0, 'l')->id]);
-    ($this->mkZutat)($fond, ['menge' => 30, 'einheit_vocab_id' => $g, 'gp_id' => ($this->mkGpMitPreis)('Zucker Bio', 42.00, 25.0, 'kg')->id]);
+    ($this->mkZutat)($fond, ['quantity' => 1000, 'unit_vocab_id' => $g, 'gp_id' => ($this->mkGpMitPreis)('Rote Bete', 0.76, 1.0, 'kg')->id]);
+    ($this->mkZutat)($fond, ['quantity' => 1000, 'unit_vocab_id' => $ml, 'gp_id' => ($this->mkGpMitPreis)('Leitungswasser', 0.001, 1.0, 'l')->id]);
+    ($this->mkZutat)($fond, ['quantity' => 50, 'unit_vocab_id' => $ml, 'gp_id' => ($this->mkGpMitPreis)('Rotweinessig', 8.14, 2.0, 'l')->id]);
+    ($this->mkZutat)($fond, ['quantity' => 30, 'unit_vocab_id' => $g, 'gp_id' => ($this->mkGpMitPreis)('Zucker Bio', 42.00, 25.0, 'kg')->id]);
     // Lorbeer: kein Stk-Preis, aber kg-Lead → count→mass-Brücke über stk_default_g 0.2
-    ($this->mkZutat)($fond, ['menge' => 2, 'einheit_vocab_id' => $stk, 'gp_id' => ($this->mkGpMitPreis)('Lorbeerblaetter', 1.84, 0.05, 'kg', stkDefaultG: 0.2)->id]);
+    ($this->mkZutat)($fond, ['quantity' => 2, 'unit_vocab_id' => $stk, 'gp_id' => ($this->mkGpMitPreis)('Lorbeerblaetter', 1.84, 0.05, 'kg', stkDefaultG: 0.2)->id]);
     // Pfeffer: stk_default_g NULL + Lead ohne brauchbare Einheit ⇒ unpriced, Yield 0
     $pfeffer = $this->makeGp($this->rootTeam, 'Pfefferkoerner schwarz');
-    ($this->mkZutat)($fond, ['menge' => 5, 'einheit_vocab_id' => $stk, 'gp_id' => $pfeffer->id]);
+    ($this->mkZutat)($fond, ['quantity' => 5, 'unit_vocab_id' => $stk, 'gp_id' => $pfeffer->id]);
 
     $this->svc->recomputePipeline($fond->id);
     $fond->refresh();
@@ -87,22 +87,22 @@ it('GT-1: Blatt-Rezept mit allen Pfaden — yield 2.08 · ek 1.03 · ek/kg 0.5 �
         ->and((float) $fond->ek_per_kg_eur)->toBe(0.5)
         ->and($fond->ek_n_ingredients_total)->toBe(6)
         ->and($fond->ek_n_ingredients_priced)->toBe(5)
-        ->and($fond->n_zutaten_total)->toBe(6)
-        ->and($fond->n_zutaten_ungemappt)->toBe(0);
+        ->and($fond->n_ingredients_total)->toBe(6)
+        ->and($fond->n_ingredients_unmapped)->toBe(0);
 });
 
 it('GT-2: 2-Ebenen-Sub-Rezept — I7-Rundung: Nenner = GERUNDETES yield (1.22, nicht 1.23) + Propagation', function () {
     // Sub mit ECHTER Zutat ⇒ Recompute ergibt ek_per_kg 0.5 (wie GT-1-Ergebnis)
     $sub = ($this->mkRecipe)('Fond');
     $fondGp = ($this->mkGpMitPreis)('Fond-Basis', 1.00, 2.0, 'kg');     // 0.0005 €/g
-    ($this->mkZutat)($sub, ['menge' => 2000, 'einheit_vocab_id' => $this->einheiten['g']->id, 'gp_id' => $fondGp->id]);
+    ($this->mkZutat)($sub, ['quantity' => 2000, 'unit_vocab_id' => $this->einheiten['g']->id, 'gp_id' => $fondGp->id]);
     $this->svc->recomputePipeline($sub->id);
     expect((float) $sub->fresh()->ek_per_kg_eur)->toBe(0.5);
 
     $gel = ($this->mkRecipe)('ROTE BETE GEL');
-    ($this->mkZutat)($gel, ['menge' => 250, 'einheit_vocab_id' => $this->einheiten['ml']->id,
+    ($this->mkZutat)($gel, ['quantity' => 250, 'unit_vocab_id' => $this->einheiten['ml']->id,
         'referenced_recipe_id' => $sub->id, 'match_method' => 'recipe_ref']);
-    ($this->mkZutat)($gel, ['menge' => 2.5, 'einheit_vocab_id' => $this->einheiten['g']->id,
+    ($this->mkZutat)($gel, ['quantity' => 2.5, 'unit_vocab_id' => $this->einheiten['g']->id,
         'gp_id' => ($this->mkGpMitPreis)('Agar', 36.90, 0.5, 'kg')->id,
         'match_method' => 'gemini_proposed', 'match_confidence' => 0.95]);
 
@@ -123,7 +123,7 @@ it('GT-2: 2-Ebenen-Sub-Rezept — I7-Rundung: Nenner = GERUNDETES yield (1.22, n
 
 it('GT-3 (F6.4): Mengen-Bereich 1–2 EL ⇒ Mittelwert 22.5 g Yield-Beitrag', function () {
     $r = ($this->mkRecipe)('Bereich');
-    ($this->mkZutat)($r, ['menge' => 1, 'menge_max' => 2, 'einheit_vocab_id' => $this->einheiten['el']->id,
+    ($this->mkZutat)($r, ['quantity' => 1, 'quantity_max' => 2, 'unit_vocab_id' => $this->einheiten['el']->id,
         'gp_id' => ($this->mkGpMitPreis)('Olivenoel', 10.0, 1.0, 'l')->id]);
 
     $this->svc->recomputePipeline($r->id);
@@ -133,17 +133,17 @@ it('GT-3 (F6.4): Mengen-Bereich 1–2 EL ⇒ Mittelwert 22.5 g Yield-Beitrag', f
 
 it('GT-4: optional + qs — Zähl- und Beitragsregeln (T2)', function () {
     $r = ($this->mkRecipe)('OptQs');
-    ($this->mkZutat)($r, ['menge' => 100, 'einheit_vocab_id' => $this->einheiten['g']->id,
+    ($this->mkZutat)($r, ['quantity' => 100, 'unit_vocab_id' => $this->einheiten['g']->id,
         'gp_id' => ($this->mkGpMitPreis)('Mehl', 1.0, 1.0, 'kg')->id]);
-    ($this->mkZutat)($r, ['menge' => 50, 'einheit_vocab_id' => $this->einheiten['g']->id, 'is_optional' => true,
+    ($this->mkZutat)($r, ['quantity' => 50, 'unit_vocab_id' => $this->einheiten['g']->id, 'is_optional' => true,
         'gp_id' => ($this->mkGpMitPreis)('Butter', 8.0, 1.0, 'kg')->id]);
-    ($this->mkZutat)($r, ['menge' => 1, 'einheit_vocab_id' => $this->einheiten['qs']->id,
+    ($this->mkZutat)($r, ['quantity' => 1, 'unit_vocab_id' => $this->einheiten['qs']->id,
         'gp_id' => ($this->mkGpMitPreis)('Salz', 0.5, 1.0, 'kg')->id]);
 
     $this->svc->recomputePipeline($r->id);
     $r->refresh();
 
-    expect($r->n_zutaten_total)->toBe(3)
+    expect($r->n_ingredients_total)->toBe(3)
         ->and((float) $r->yield_kg)->toBe(0.1)                     // nur Mehl
         ->and($r->ek_n_ingredients_total)->toBe(2)                 // Mehl + Salz (optional komplett raus)
         ->and($r->ek_n_ingredients_priced)->toBe(1);               // Salz qs ⇒ Faktor 0 ⇒ unpriced
@@ -151,8 +151,8 @@ it('GT-4: optional + qs — Zähl- und Beitragsregeln (T2)', function () {
 
 it('GT-5 (A-1-Entscheid): Verluste MULTIPLIKATIV — 1000 g · putz 20 % · gar 10 % ⇒ 720 g', function () {
     $r = ($this->mkRecipe)('Verlust');
-    ($this->mkZutat)($r, ['menge' => 1000, 'einheit_vocab_id' => $this->einheiten['g']->id,
-        'putzverlust_pct' => 20, 'garverlust_pct' => 10,
+    ($this->mkZutat)($r, ['quantity' => 1000, 'unit_vocab_id' => $this->einheiten['g']->id,
+        'trimming_loss_pct' => 20, 'cooking_loss_pct' => 10,
         'gp_id' => ($this->mkGpMitPreis)('Sellerie', 2.0, 1.0, 'kg')->id]);
 
     $this->svc->recomputePipeline($r->id);
@@ -164,51 +164,51 @@ it('GT-6: Zyklen-Schutz — Bulk bricht mit beteiligten IDs ab, Inspector lehnt 
     $a = ($this->mkRecipe)('A');
     $b = ($this->mkRecipe)('B');
     // Zyklus per Direkt-Insert (Service-Guards umgangen)
-    ($this->mkZutat)($a, ['menge' => 1, 'einheit_vocab_id' => $this->einheiten['g']->id, 'referenced_recipe_id' => $b->id, 'match_method' => 'recipe_ref']);
-    ($this->mkZutat)($b, ['menge' => 1, 'einheit_vocab_id' => $this->einheiten['g']->id, 'referenced_recipe_id' => $a->id, 'match_method' => 'recipe_ref']);
+    ($this->mkZutat)($a, ['quantity' => 1, 'unit_vocab_id' => $this->einheiten['g']->id, 'referenced_recipe_id' => $b->id, 'match_method' => 'recipe_ref']);
+    ($this->mkZutat)($b, ['quantity' => 1, 'unit_vocab_id' => $this->einheiten['g']->id, 'referenced_recipe_id' => $a->id, 'match_method' => 'recipe_ref']);
 
     expect(fn () => $this->svc->recomputeAll())
         ->toThrow(RuntimeException::class, 'Zyklus');
 
     expect($this->svc->pruefeVerknuepfung($a->id, $b->id))
-        ->toMatchArray(['erlaubt' => false, 'grund' => 'Zyklus']);
+        ->toMatchArray(['erlaubt' => false, 'reason' => 'Zyklus']);
 });
 
 it('GT-7 (A-5-Ziel): Kette A→B→C erlaubt (Tiefe 3); Link C→D blockt (projiziert 4)', function () {
     [$a, $b, $c, $d] = [($this->mkRecipe)('A'), ($this->mkRecipe)('B'), ($this->mkRecipe)('C'), ($this->mkRecipe)('D')];
     $g = $this->einheiten['g']->id;
-    ($this->mkZutat)($a, ['menge' => 1, 'einheit_vocab_id' => $g, 'referenced_recipe_id' => $b->id, 'match_method' => 'recipe_ref']);
-    ($this->mkZutat)($b, ['menge' => 1, 'einheit_vocab_id' => $g, 'referenced_recipe_id' => $c->id, 'match_method' => 'recipe_ref']);
+    ($this->mkZutat)($a, ['quantity' => 1, 'unit_vocab_id' => $g, 'referenced_recipe_id' => $b->id, 'match_method' => 'recipe_ref']);
+    ($this->mkZutat)($b, ['quantity' => 1, 'unit_vocab_id' => $g, 'referenced_recipe_id' => $c->id, 'match_method' => 'recipe_ref']);
 
     expect($this->svc->pruefeVerknuepfung($b->id, $c->id)['projizierte_tiefe'])->toBeLessThanOrEqual(3);
 
     $pruefung = $this->svc->pruefeVerknuepfung($c->id, $d->id);
     expect($pruefung['erlaubt'])->toBeFalse()
         ->and($pruefung['projizierte_tiefe'])->toBe(4)
-        ->and($pruefung['grund'])->toContain('Tiefe');
+        ->and($pruefung['reason'])->toContain('Tiefe');
 });
 
 it('I5-Gate: gemini_proposed < 0.85 zählt als ungemappt ⇒ F7.1-Reset + Kosten ohne die Zutat', function () {
     $r = ($this->mkRecipe)('Gate');
-    ($this->mkZutat)($r, ['menge' => 100, 'einheit_vocab_id' => $this->einheiten['g']->id,
+    ($this->mkZutat)($r, ['quantity' => 100, 'unit_vocab_id' => $this->einheiten['g']->id,
         'gp_id' => ($this->mkGpMitPreis)('Mehl 2', 1.0, 1.0, 'kg')->id]);
-    ($this->mkZutat)($r, ['menge' => 500, 'einheit_vocab_id' => $this->einheiten['g']->id,
+    ($this->mkZutat)($r, ['quantity' => 500, 'unit_vocab_id' => $this->einheiten['g']->id,
         'gp_id' => ($this->mkGpMitPreis)('Fruchtpueree', 5.0, 1.0, 'kg')->id,
         'match_method' => 'gemini_proposed', 'match_confidence' => 0.8]);
 
     $this->svc->recomputePipeline($r->id);
     $r->refresh();
 
-    expect($r->n_zutaten_ungemappt)->toBe(1)
-        ->and($r->allergene_konfidenz)->toBe('low')
-        ->and($r->allergen_glutenhaltiges_getreide)->toBe('unbekannt')   // F7.1-Totalreset
+    expect($r->n_ingredients_unmapped)->toBe(1)
+        ->and($r->allergens_confidence)->toBe('low')
+        ->and($r->allergen_gluten)->toBe('unbekannt')   // F7.1-Totalreset
         ->and((float) $r->yield_kg)->toBe(0.6)                           // Masse zählt trotzdem (§3.1!)
         ->and($r->ek_n_ingredients_total)->toBe(1);                      // Kosten ohne die ungemappte
 });
 
 it('A-3: yield_kg_manual hat Vorrang im ek/kg-Nenner (COALESCE)', function () {
     $r = ($this->mkRecipe)('Manuell');
-    ($this->mkZutat)($r, ['menge' => 1000, 'einheit_vocab_id' => $this->einheiten['g']->id,
+    ($this->mkZutat)($r, ['quantity' => 1000, 'unit_vocab_id' => $this->einheiten['g']->id,
         'gp_id' => ($this->mkGpMitPreis)('Karotte', 2.0, 1.0, 'kg')->id]);
     $r->update(['yield_kg_manual' => 0.5]);                              // Reduktion: Koch weiß es besser
 

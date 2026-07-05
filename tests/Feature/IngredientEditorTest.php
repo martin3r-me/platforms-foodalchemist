@@ -45,8 +45,8 @@ it('syncIngredients: anlegen, ändern, löschen, Reorder = Array-Reihenfolge —
     $zwiebel = ($this->mkGpMitPreis)('Zwiebel', 1.00);
 
     $r = $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
-        ['id' => null, 'gp_id' => $karotte->id, 'raw_text' => '500 g Karotte', 'menge' => '500', 'einheit_vocab_id' => $this->g->id],
-        ['id' => null, 'gp_id' => $zwiebel->id, 'raw_text' => '250 g Zwiebel', 'menge' => '250', 'einheit_vocab_id' => $this->g->id],
+        ['id' => null, 'gp_id' => $karotte->id, 'raw_text' => '500 g Karotte', 'quantity' => '500', 'unit_vocab_id' => $this->g->id],
+        ['id' => null, 'gp_id' => $zwiebel->id, 'raw_text' => '250 g Zwiebel', 'quantity' => '250', 'unit_vocab_id' => $this->g->id],
     ]);
 
     expect($r->ingredients()->count())->toBe(2)
@@ -56,17 +56,17 @@ it('syncIngredients: anlegen, ändern, löschen, Reorder = Array-Reihenfolge —
     // Reorder (Zwiebel zuerst) + Karotte ändern + implizit nichts löschen
     $ids = $r->ingredients()->orderBy('position')->pluck('id', 'position')->all();
     $r = $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
-        ['id' => $ids[2], 'gp_id' => $zwiebel->id, 'raw_text' => '250 g Zwiebel', 'menge' => '250', 'einheit_vocab_id' => $this->g->id],
-        ['id' => $ids[1], 'gp_id' => $karotte->id, 'raw_text' => '1000 g Karotte', 'menge' => '1000', 'einheit_vocab_id' => $this->g->id],
+        ['id' => $ids[2], 'gp_id' => $zwiebel->id, 'raw_text' => '250 g Zwiebel', 'quantity' => '250', 'unit_vocab_id' => $this->g->id],
+        ['id' => $ids[1], 'gp_id' => $karotte->id, 'raw_text' => '1000 g Karotte', 'quantity' => '1000', 'unit_vocab_id' => $this->g->id],
     ]);
     $sortiert = $r->ingredients()->orderBy('position')->get();
     expect($sortiert->first()->gp_id)->toBe($zwiebel->id)                        // Reorder persistiert (DoD M4-08)
-        ->and((float) $sortiert->last()->menge)->toBe(1000.0)
+        ->and((float) $sortiert->last()->quantity)->toBe(1000.0)
         ->and((float) $r->yield_kg)->toBe(1.25);
 
     // Zeile weglassen ⇒ gelöscht
     $r = $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
-        ['id' => $sortiert->last()->id, 'gp_id' => $karotte->id, 'raw_text' => '1000 g Karotte', 'menge' => '1000', 'einheit_vocab_id' => $this->g->id],
+        ['id' => $sortiert->last()->id, 'gp_id' => $karotte->id, 'raw_text' => '1000 g Karotte', 'quantity' => '1000', 'unit_vocab_id' => $this->g->id],
     ]);
     expect($r->ingredients()->count())->toBe(1)->and((float) $r->yield_kg)->toBe(1.0);
 });
@@ -76,15 +76,15 @@ it('syncIngredients erzwingt XOR, Menge > 0 und die GL-02-Verknüpfungs-Guards',
     $sub = $this->svc->create($this->rootTeam, ['name' => 'Sub: Fond']);
 
     expect(fn () => $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
-        ['gp_id' => $gp->id, 'referenced_recipe_id' => $sub->id, 'raw_text' => 'x', 'menge' => '1', 'einheit_vocab_id' => $this->g->id],
+        ['gp_id' => $gp->id, 'referenced_recipe_id' => $sub->id, 'raw_text' => 'x', 'quantity' => '1', 'unit_vocab_id' => $this->g->id],
     ]))->toThrow(RuntimeException::class, 'XOR');
 
     expect(fn () => $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
-        ['gp_id' => $gp->id, 'raw_text' => 'x', 'menge' => '0', 'einheit_vocab_id' => $this->g->id],
+        ['gp_id' => $gp->id, 'raw_text' => 'x', 'quantity' => '0', 'unit_vocab_id' => $this->g->id],
     ]))->toThrow(RuntimeException::class, 'Menge');
 
     expect(fn () => $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
-        ['referenced_recipe_id' => $this->rezept->id, 'raw_text' => 'x', 'menge' => '1', 'einheit_vocab_id' => $this->g->id],
+        ['referenced_recipe_id' => $this->rezept->id, 'raw_text' => 'x', 'quantity' => '1', 'unit_vocab_id' => $this->g->id],
     ]))->toThrow(RuntimeException::class, 'Selbstreferenz');
 });
 
@@ -95,8 +95,8 @@ it('Picker findet GPs der Team-Kette + Basisrezepte ohne self (DoD M4-08) und li
     // Kind erbt lesend (D1) — Service direkt (Livewire-Test-API hat kein Rückgabe-Assert)
     $treffer = $this->svc->sucheZutatenZiel($this->childA, 'limette', $this->rezept->id);
 
-    expect(collect($treffer)->pluck('typ')->sort()->values()->all())->toBe(['gp', 'sub'])
-        ->and(collect($treffer)->firstWhere('typ', 'gp')['ek_pro_g'])->toBe(0.004)  // 4 €/kg
+    expect(collect($treffer)->pluck('type')->sort()->values()->all())->toBe(['gp', 'sub'])
+        ->and(collect($treffer)->firstWhere('type', 'gp')['ek_pro_g'])->toBe(0.004)  // 4 €/kg
         ->and(collect($treffer)->pluck('name'))->not->toContain('Fond: Test');      // self raus
 });
 
@@ -107,7 +107,7 @@ it('Modal-Roundtrip: speichern synct + dispatcht Events; D1-Gate blockt fremde T
     Livewire::test(IngredientEditor::class)
         ->call('oeffnen', $this->rezept->id)
         ->call('speichern', [
-            ['id' => null, 'gp_id' => $gp->id, 'raw_text' => '300 g Karotte', 'menge' => '300', 'einheit_vocab_id' => $this->g->id],
+            ['id' => null, 'gp_id' => $gp->id, 'raw_text' => '300 g Karotte', 'quantity' => '300', 'unit_vocab_id' => $this->g->id],
         ])
         ->assertSet('fehler', null)
         ->assertDispatched('recipe-gespeichert');
@@ -139,7 +139,7 @@ it('gpArtikel (GP-Peek): liefert LAs hinter dem GP mit ★-Lead zuerst, VPE, Pre
     expect($artikel)->toHaveCount(2)
         ->and($artikel[0]['lead'])->toBeTrue()                                   // Lead sortiert nach oben
         ->and($artikel[0]['lieferant'])->toBe('Necta')
-        ->and($artikel[0]['preis'])->toBe('3,50 €')
+        ->and($artikel[0]['price'])->toBe('3,50 €')
         ->and($artikel[0]['vergleichspreis'])->toBe('3,50 €/kg')
         ->and($artikel[1]['lead'])->toBeFalse()
         ->and($artikel[1]['lieferant'])->toBe('Hanos')

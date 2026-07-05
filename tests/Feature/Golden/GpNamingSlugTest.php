@@ -22,22 +22,22 @@ it('GT-12-01: nur Hauptzutat ⇒ kein Doppelpunkt ohne Attribute', function () {
 
 it('GT-12-02: volles §6-Schema mit Pflichtangabe + Bio-Suffix', function () {
     $name = $this->svc->renderGpName([
-        'hauptzutat' => 'Vollmilch', 'zustand' => 'frisch',
-        'verarbeitung' => 'pasteurisiert', 'pflichtangabe' => '3,5 %', 'bio' => true,
+        'hauptzutat' => 'Vollmilch', 'condition' => 'frisch',
+        'processing' => 'pasteurisiert', 'pflichtangabe' => '3,5 %', 'bio' => true,
     ]);
 
     expect($name)->toBe('Vollmilch: frisch, pasteurisiert, 3,5 % / (Bio)');
 });
 
 it('GT-12-03: §7.1 Verpackungswort = Hard-Error; Wort-Boundary („Dosentomate" erlaubt)', function () {
-    $kiste = $this->svc->validateGpName('Tomaten Kiste: frisch', ['hauptzutat' => 'Tomaten Kiste', 'zustand' => 'frisch']);
+    $kiste = $this->svc->validateGpName('Tomaten Kiste: frisch', ['hauptzutat' => 'Tomaten Kiste', 'condition' => 'frisch']);
     expect($kiste['errors'])->toHaveCount(1)
         ->and($kiste['errors'][0])->toContain('§7.1');
 
-    $dose = $this->svc->validateGpName('Dose Ananas: konserviert', ['hauptzutat' => 'Dose Ananas', 'zustand' => 'konserviert']);
+    $dose = $this->svc->validateGpName('Dose Ananas: konserviert', ['hauptzutat' => 'Dose Ananas', 'condition' => 'konserviert']);
     expect($dose['errors'])->not->toBeEmpty();                  // „Dose" als Wort blockt
 
-    $dosentomate = $this->svc->validateGpName('Dosentomate: konserviert', ['hauptzutat' => 'Dosentomate', 'zustand' => 'konserviert']);
+    $dosentomate = $this->svc->validateGpName('Dosentomate: konserviert', ['hauptzutat' => 'Dosentomate', 'condition' => 'konserviert']);
     expect($dosentomate['errors'])->toBeEmpty();                // Kompositum nicht
 });
 
@@ -45,12 +45,12 @@ it('GT-12-04 (A2-SOLL): Langform tiefgekuehlt wird zu TK normalisiert, DANN vali
     expect($this->svc->normalisiereZustand('tiefgekuehlt'))->toBe('TK');
 
     $pruefung = $this->svc->validateGpName(
-        $this->svc->renderGpName(['hauptzutat' => 'Erbse', 'zustand' => 'tiefgekuehlt']),
-        ['hauptzutat' => 'Erbse', 'zustand' => 'tiefgekuehlt'],
+        $this->svc->renderGpName(['hauptzutat' => 'Erbse', 'condition' => 'tiefgekuehlt']),
+        ['hauptzutat' => 'Erbse', 'condition' => 'tiefgekuehlt'],
     );
     expect($pruefung['errors'])->toBeEmpty();
 
-    $kaputt = $this->svc->validateGpName('Erbse: matschig', ['hauptzutat' => 'Erbse', 'zustand' => 'matschig']);
+    $kaputt = $this->svc->validateGpName('Erbse: matschig', ['hauptzutat' => 'Erbse', 'condition' => 'matschig']);
     expect($kaputt['errors'][0])->toContain('§9');
 });
 
@@ -64,35 +64,35 @@ it('GT-12-09 (I6): slugify byte-identisch — ä→a (EIN Zeichen), gp_key immer
 
 it('GT-12-10: Anlage-Guard — identischer gp_key ⇒ HARD_STOP, force legt trotzdem an', function () {
     $erstes = $this->svc->createGp($this->rootTeam, [
-        'hauptzutat' => 'Tomate', 'zustand' => 'trocken', 'verarbeitung' => 'pulverfoermig',
+        'hauptzutat' => 'Tomate', 'condition' => 'trocken', 'processing' => 'pulverfoermig',
     ]);
     expect($erstes->gp_key)->toBe('tomate|pulverfoermig|')
         ->and($erstes->status->value)->toBe('tentative')
-        ->and($erstes->hauptzutat_slug)->toBe('tomate');
+        ->and($erstes->main_ingredient_slug)->toBe('tomate');
 
     expect(fn () => $this->svc->createGp($this->rootTeam, [
-        'hauptzutat' => 'Tomate', 'zustand' => 'trocken', 'verarbeitung' => 'pulverfoermig',
+        'hauptzutat' => 'Tomate', 'condition' => 'trocken', 'processing' => 'pulverfoermig',
     ]))->toThrow(RuntimeException::class, 'HARD_STOP_EXISTING_GP');
 
     $force = $this->svc->createGp($this->rootTeam, [
-        'hauptzutat' => 'Tomate', 'zustand' => 'trocken', 'verarbeitung' => 'pulverfoermig',
+        'hauptzutat' => 'Tomate', 'condition' => 'trocken', 'processing' => 'pulverfoermig',
     ], force: true);
     expect($force->id)->not->toBe($erstes->id)
         ->and($force->gp_key)->toBe('tomate|pulverfoermig|~2'); // DB-UNIQUE bleibt scharf — Force-Suffix
 });
 
 it('Anlage-Guard: Jaccard ≥ 0.92 gegen bestehenden Namen blockt auch ohne Key-Kollision', function () {
-    $this->svc->createGp($this->rootTeam, ['hauptzutat' => 'Limettensaft', 'zustand' => 'konserviert']);
+    $this->svc->createGp($this->rootTeam, ['hauptzutat' => 'Limettensaft', 'condition' => 'konserviert']);
 
     // gleicher Name, anderes verarbeitung-Feld ⇒ anderer gp_key, aber Token-identisch
     expect(fn () => $this->svc->createGp($this->rootTeam, [
-        'hauptzutat' => 'Limettensaft', 'zustand' => 'konserviert', 'form' => 'Ganz',
+        'hauptzutat' => 'Limettensaft', 'condition' => 'konserviert', 'form' => 'Ganz',
         'name' => 'Limettensaft: konserviert',
     ]))->toThrow(RuntimeException::class, 'HARD_STOP_EXISTING_GP');
 });
 
 it('I4 Drift-Warning: manueller Name ≠ Render ⇒ Warning, kein Error', function () {
-    $pruefung = $this->svc->validateGpName('Limettensaft Premium', ['hauptzutat' => 'Limettensaft', 'zustand' => 'konserviert']);
+    $pruefung = $this->svc->validateGpName('Limettensaft Premium', ['hauptzutat' => 'Limettensaft', 'condition' => 'konserviert']);
 
     expect($pruefung['errors'])->toBeEmpty()
         ->and($pruefung['warnings'])->toHaveCount(1)
@@ -102,7 +102,7 @@ it('I4 Drift-Warning: manueller Name ≠ Render ⇒ Warning, kein Error', functi
 it('§11.2: Derivat-Anlage setzt requires_la=0', function () {
     $mutter = $this->makeGp($this->rootTeam, 'Zitrone');
     $derivat = $this->svc->createGp($this->rootTeam, [
-        'hauptzutat' => 'Zitronensaft', 'zustand' => 'frisch',
+        'hauptzutat' => 'Zitronensaft', 'condition' => 'frisch',
         'is_derivat' => true, 'derivat_von_gp_id' => $mutter->id,
     ]);
 

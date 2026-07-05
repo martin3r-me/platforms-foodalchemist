@@ -17,7 +17,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->mkAnker = function (string $slug): int {
-        DB::table('foodalchemist_vocab_pairing_ankers')->insert([
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert([
             'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'display_de' => ucfirst($slug),
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -37,7 +37,7 @@ it('setzt + löst ein manuelles Pairing, Re-Add nach Löschen geht', function ()
     $p = $svc->recipePairings($r->id);
     expect($p)->toHaveCount(1)
         ->and($p->first()->slug)->toBe('erdbeere')
-        ->and($p->first()->typ)->toBe('kontrast')
+        ->and($p->first()->type)->toBe('kontrast')
         ->and($p->first()->created_via)->toBe('manual');
 
     $svc->removeRecipePairing($this->rootTeam, $r->id, $erd, 'kontrast');

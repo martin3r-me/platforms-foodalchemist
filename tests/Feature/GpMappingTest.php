@@ -64,11 +64,11 @@ it('GP-Panel: Verwendungen listen Basis- und VK-Rezepte, ★-Lead-Klick setzt de
     foreach ([['Fond: Tomate', false], ['HG: Pasta Rosso', true]] as [$name, $vk]) {
         $r = FoodAlchemistRecipe::create([
             'team_id' => $this->rootTeam->id, 'recipe_key' => \Illuminate\Support\Str::slug($name, '_'),
-            'name' => $name, 'status' => 'draft', 'ist_verkaufsrezept' => $vk,
+            'name' => $name, 'status' => 'draft', 'is_sales_recipe' => $vk,
         ]);
         DB::table('foodalchemist_recipe_ingredients')->insert([
             'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $this->rootTeam->id,
-            'recipe_id' => $r->id, 'gp_id' => $this->gp->id, 'raw_text' => 'Tomatenmark', 'menge' => 100, 'einheit_vocab_id' => $g->id,
+            'recipe_id' => $r->id, 'gp_id' => $this->gp->id, 'raw_text' => 'Tomatenmark', 'quantity' => 100, 'unit_vocab_id' => $g->id,
             'position' => 1, 'created_at' => now(), 'updated_at' => now(),
         ]);
     }

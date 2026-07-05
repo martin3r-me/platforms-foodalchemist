@@ -59,9 +59,9 @@ it('exact: gleiche article_number beim selben Lieferanten (Dublette) liefert das
 
 it('fuzzy: Name-Containment-Floor hebt Kopf==Query auf 0.90 (Band exact); Schwellen filtern', function () {
     $treffer = $this->makeGp($this->rootTeam, 'Limettensaft: konserviert');
-    $treffer->update(['hauptzutat_slug' => 'limettensaft']);
+    $treffer->update(['main_ingredient_slug' => 'limettensaft']);
     $fremd = $this->makeGp($this->rootTeam, 'Weizenmehl: trocken, Type 1050');
-    $fremd->update(['hauptzutat_slug' => 'weizenmehl']);
+    $fremd->update(['main_ingredient_slug' => 'weizenmehl']);
 
     $unmapped = ($this->mkLa)('Limettensaft');
 

@@ -23,14 +23,14 @@ beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->user = $this->makeUser($this->rootTeam);
 
-    $hg = FoodAlchemistDishMainGroup::create(['code' => 'HG', 'bezeichnung' => 'Hauptgang']);
-    $this->klasse = FoodAlchemistDishClass::create(['dish_main_group_id' => $hg->id, 'code' => 'HG_FLEISCH', 'bezeichnung' => 'Fleisch', 'diaetform' => 'fleisch']);
-    $this->alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'bezeichnung' => 'A la Carte', 'rohaufschlag_pct' => 420, 'mwst_satz' => 19, 'formel_typ' => 'aufschlag']);
+    $hg = FoodAlchemistDishMainGroup::create(['code' => 'HG', 'label' => 'Hauptgang']);
+    $this->class = FoodAlchemistDishClass::create(['dish_main_group_id' => $hg->id, 'code' => 'HG_FLEISCH', 'label' => 'Fleisch', 'diet_form' => 'fleisch']);
+    $this->alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 420, 'vat_rate' => 19, 'formula_type' => 'aufschlag']);
 
     $this->vk = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'vk1', 'name' => 'HG: Filet | Jus', 'status' => 'draft',
-        'ist_verkaufsrezept' => true, 'speisen_klasse_id' => $this->klasse->id, 'aufschlagsklasse_id' => $this->alc->id,
-        'ek_total_eur' => 1.30, 'ek_per_kg_eur' => 5.20, 'yield_kg' => 0.5, 'vk_anzahl_einheiten' => 2,
+        'is_sales_recipe' => true, 'dish_class_id' => $this->class->id, 'markup_class_id' => $this->alc->id,
+        'ek_total_eur' => 1.30, 'ek_per_kg_eur' => 5.20, 'yield_kg' => 0.5, 'sales_unit_count' => 2,
     ]);
     $this->basis = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'b1', 'name' => 'Sauce: Jus', 'status' => 'draft',
@@ -51,17 +51,17 @@ it('GL-04-Pool-Filter: VK-Rezept ist nicht als Sub-Rezept verknüpfbar', functio
     $treffer = collect(app(\Platform\FoodAlchemist\Services\RecipeService::class)
         ->sucheZutatenZiel($this->rootTeam, 'Filet', 0));
 
-    expect($treffer->where('typ', 'sub')->pluck('id'))->not->toContain($this->vk->id)
-        ->and($treffer->where('typ', 'sub'))->toBeEmpty();            // einziger Namens-Treffer wäre das VK-Rezept
+    expect($treffer->where('type', 'sub')->pluck('id'))->not->toContain($this->vk->id)
+        ->and($treffer->where('type', 'sub'))->toBeEmpty();            // einziger Namens-Treffer wäre das VK-Rezept
 });
 
 it('Cockpit: g/Einheit aus Yield/Anzahl abgeleitet, VK-Vorschlag aus Klasse, Wareneinsatz konsistent', function () {
     $cockpit = app(SalesRecipeService::class)->cockpit(app(SalesRecipeService::class)->detail($this->rootTeam, $this->vk->id));
 
     expect($cockpit['verkauft_als']['g_pro_einheit'])->toBe(250.0)   // 0,5 kg / 2 Einheiten
-        ->and($cockpit['vk']['quelle'])->toBe('klasse')
-        ->and($cockpit['vk']['vk_netto'])->toBe(6.76)                // GT-8: 5,20 €/kg × 250 g × 5,2
-        ->and($cockpit['vk_brutto'])->toBe(8.04)
+        ->and($cockpit['vk']['source'])->toBe('class')
+        ->and($cockpit['vk']['sales_net'])->toBe(6.76)                // GT-8: 5,20 €/kg × 250 g × 5,2
+        ->and($cockpit['sales_gross'])->toBe(8.04)
         ->and($cockpit['marge']['wareneinsatz_pct'] + $cockpit['marge']['marge_pct'])->toBe(100.0)
         ->and($cockpit['pro_einheit']['vk_netto_pro_einheit'])->toBe(3.38);
 });
@@ -86,8 +86,8 @@ it('Panel zeigt VERKAUFT-ALS + KPI-Karten; W-1-Klasse kennzeichnet statt crasht'
         ->assertSeeHtml('data-vk-brutto')
         ->assertSeeHtml('data-formel-klartext');
 
-    $this->vk->update(['aufschlagsklasse_id' => FoodAlchemistMarkupClass::create([
-        'code' => 'PAUS', 'bezeichnung' => 'Pauschal', 'formel_typ' => 'deckungsbeitrag',
+    $this->vk->update(['markup_class_id' => FoodAlchemistMarkupClass::create([
+        'code' => 'PAUS', 'label' => 'Pauschal', 'formula_type' => 'deckungsbeitrag',
     ])->id]);
 
     Livewire::test(DetailPanel::class, ['recipeId' => $this->vk->id])

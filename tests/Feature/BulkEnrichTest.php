@@ -27,8 +27,8 @@ beforeEach(function () {
         public function chat(array $messages, array $options = []): array
         {
             $user = collect($messages)->last()['content'];
-            $werte = str_contains($user, 'Geschmacksrichtung') ? ['geschmacksrichtung' => 'herzhaft']
-                : (str_contains($user, 'Kategorie') ? ['kategorie_id' => null] : ['beschreibung' => 'Bulk-Beschreibung.']);
+            $werte = str_contains($user, 'Geschmacksrichtung') ? ['taste_direction' => 'herzhaft']
+                : (str_contains($user, 'Kategorie') ? ['category_id' => null] : ['description' => 'Bulk-Beschreibung.']);
 
             return ['content' => json_encode(['werte' => $werte, 'confidence' => 0.8]), 'model' => 'fake-bulk', 'usage' => []];
         }
@@ -50,31 +50,31 @@ it('DoD: 50er-Bulk läuft durch — Fortschritt done/total, Vorschläge offen, K
 
     // 50 × beschreibung/geschmack offen; kategorie (null vom Provider) als leer markiert
     expect(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('status', 'offen')->count())->toBe(100)
-        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('feld', 'kategorie')->where('status', 'leer')->count())->toBe(50)
-        ->and(FoodAlchemistRecipe::whereNotNull('beschreibung')->count())->toBe(0);  // nie Auto-Persistenz
+        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('field', 'category')->where('status', 'leer')->count())->toBe(50)
+        ->and(FoodAlchemistRecipe::whereNotNull('description')->count())->toBe(0);  // nie Auto-Persistenz
 });
 
 it('Alle übernehmen: schreibt mit Lineage ki + Stempel; Override-First (manual bleibt)', function () {
     $manuell = $this->rezepte[0];
-    $manuell->update(['beschreibung' => 'Handarbeit.', 'beschreibung_quelle' => 'manual']);
+    $manuell->update(['description' => 'Handarbeit.', 'description_source' => 'manual']);
 
     $runId = $this->svc->starte($this->rootTeam, $this->rezepte->take(3)->pluck('id')->all());
     $n = $this->svc->alleUebernehmen($this->rootTeam, $runId);
 
     expect($n)->toBe(5)                                               // 3×geschmack + 2×beschreibung (1 manual geblockt)
-        ->and($manuell->fresh()->beschreibung)->toBe('Handarbeit.')
-        ->and($this->rezepte[1]->fresh()->beschreibung)->toBe('Bulk-Beschreibung.')
-        ->and($this->rezepte[1]->fresh()->beschreibung_quelle)->toBe('ki')
-        ->and($this->rezepte[1]->fresh()->geschmacksrichtung)->toBe('herzhaft')
+        ->and($manuell->fresh()->description)->toBe('Handarbeit.')
+        ->and($this->rezepte[1]->fresh()->description)->toBe('Bulk-Beschreibung.')
+        ->and($this->rezepte[1]->fresh()->description_source)->toBe('ki')
+        ->and($this->rezepte[1]->fresh()->taste_direction)->toBe('herzhaft')
         ->and(DB::table('foodalchemist_ai_call_log')->whereNotNull('accepted_at')->count())->toBe(5);
 
     // geblockter manual-Vorschlag bleibt offen (Review kann später entscheiden)
     expect(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('recipe_id', $manuell->id)
-        ->where('feld', 'beschreibung')->value('status'))->toBe('offen');
+        ->where('field', 'description')->value('status'))->toBe('offen');
 });
 
 it('Kill-Switch mitten im Bulk: Items zählen als Fehler, Run wird trotzdem done', function () {
-    app(TeamSettingsService::class)->update($this->rootTeam, ['ki_aktiv' => false]);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['ai_active' => false]);
 
     $runId = $this->svc->starte($this->rootTeam, $this->rezepte->take(5)->pluck('id')->all());
     $run = $this->svc->status($this->rootTeam, $runId);

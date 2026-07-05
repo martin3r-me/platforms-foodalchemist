@@ -16,35 +16,35 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->svc = new MargeService;
-    $this->alc = (object) ['code' => 'ALC', 'rohaufschlag_pct' => 420.0, 'mwst_satz' => 19.0, 'formel_typ' => 'aufschlag'];
+    $this->alc = (object) ['code' => 'ALC', 'raw_markup_pct' => 420.0, 'vat_rate' => 19.0, 'formula_type' => 'aufschlag'];
 });
 
 it('GT-8: ALC-Beispiel exakt — ek_basis 1,30 → vk_netto 6,76 → vk_brutto 8,04', function () {
     $v = $this->svc->vkVorschlag(5.20, 250.0, $this->alc);
 
     expect($v['ek_basis'])->toBe(1.30)
-        ->and($v['vk_netto'])->toBe(6.76)
-        ->and($v['vk_brutto'])->toBe(8.04)                            // ROUND(6.76 × 1.19, 2)
-        ->and($v['mwst_satz'])->toBe(19.0);
+        ->and($v['sales_net'])->toBe(6.76)
+        ->and($v['sales_gross'])->toBe(8.04)                            // ROUND(6.76 × 1.19, 2)
+        ->and($v['vat_rate'])->toBe(19.0);
 });
 
 it('GT-8 / I9: ein voller Recompute-Lauf verändert persistierte vk_*-Werte NICHT', function () {
     $this->seedTeamHierarchy();
     $rezept = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'i9', 'name' => 'Sauce: I9', 'status' => 'draft',
-        'vk_netto' => 6.76, 'vk_brutto' => 8.04, 'mwst_satz' => 19,
+        'sales_net' => 6.76, 'sales_gross' => 8.04, 'vat_rate' => 19,
     ]);
 
     app(RecipeRecomputeService::class)->recomputeAndPropagate($rezept->id);
 
-    $danach = DB::table('foodalchemist_recipes')->where('id', $rezept->id)->first(['vk_netto', 'vk_brutto', 'mwst_satz']);
-    expect((float) $danach->vk_netto)->toBe(6.76)
-        ->and((float) $danach->vk_brutto)->toBe(8.04)
-        ->and((float) $danach->mwst_satz)->toBe(19.0);
+    $danach = DB::table('foodalchemist_recipes')->where('id', $rezept->id)->first(['sales_net', 'sales_gross', 'vat_rate']);
+    expect((float) $danach->sales_net)->toBe(6.76)
+        ->and((float) $danach->sales_gross)->toBe(8.04)
+        ->and((float) $danach->vat_rate)->toBe(19.0);
 });
 
 it('W-1-Guard: deckungsbeitrag wirft typisiert im Vorschlags-Pfad', function () {
-    $klasse = (object) ['code' => 'PAUS', 'rohaufschlag_pct' => 0.0, 'mwst_satz' => 19.0, 'formel_typ' => 'deckungsbeitrag'];
+    $klasse = (object) ['code' => 'PAUS', 'raw_markup_pct' => 0.0, 'vat_rate' => 19.0, 'formula_type' => 'deckungsbeitrag'];
 
     expect(fn () => $this->svc->vkVorschlag(5.20, 250.0, $klasse))
         ->toThrow(FormelNichtDefiniertException::class, 'W-1');
@@ -54,11 +54,11 @@ it('Cockpit-Vertrag: manueller vk_netto gewinnt gegen den Klassen-Vorschlag', fu
     $mitManuell = $this->svc->effektiverVk(9.90, 5.20, 250.0, $this->alc);
     $ohneManuell = $this->svc->effektiverVk(null, 5.20, 250.0, $this->alc);
 
-    expect($mitManuell['vk_netto'])->toBe(9.90)
-        ->and($mitManuell['quelle'])->toBe('manuell')
-        ->and($mitManuell['vorschlag']['vk_netto'])->toBe(6.76)       // Vorschlag bleibt sichtbar
-        ->and($ohneManuell['vk_netto'])->toBe(6.76)
-        ->and($ohneManuell['quelle'])->toBe('klasse');
+    expect($mitManuell['sales_net'])->toBe(9.90)
+        ->and($mitManuell['source'])->toBe('manuell')
+        ->and($mitManuell['vorschlag']['sales_net'])->toBe(6.76)       // Vorschlag bleibt sichtbar
+        ->and($ohneManuell['sales_net'])->toBe(6.76)
+        ->and($ohneManuell['source'])->toBe('class');
 });
 
 it('Cockpit-Vertrag: margePct + wePct = 100 (gleiche Basis), Werte konsistent', function () {
@@ -83,5 +83,5 @@ it('Cockpit-Vertrag: ohne EK/Portionierung alles leer — Hinweis statt Fehler',
         ->and($this->svc->marge(null, 1.30))->toBeNull()
         ->and($this->svc->marge(6.76, null))->toBeNull()
         ->and($this->svc->proEinheit(6.76, null, 19.0))->toBeNull()
-        ->and($this->svc->effektiverVk(null, null, null, null)['quelle'])->toBe('leer');
+        ->and($this->svc->effektiverVk(null, null, null, null)['source'])->toBe('leer');
 });

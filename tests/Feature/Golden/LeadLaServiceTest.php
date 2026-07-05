@@ -25,7 +25,7 @@ beforeEach(function () {
 
     FoodAlchemistLookupWarengruppe::create(['team_id' => $this->rootTeam->id, 'code' => '10', 'name' => 'Getränke']);
     $this->gp = $this->makeGp($this->rootTeam, 'Limettensaft');
-    $this->gp->update(['warengruppe_code' => '10']);
+    $this->gp->update(['commodity_group_code' => '10']);
     $this->gp->refresh();
 
     $this->mkLa = function (string $lieferant, array $item = [], ?float $preis = null, string $status = '0', $gp = null) {

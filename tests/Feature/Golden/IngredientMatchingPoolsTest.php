@@ -33,13 +33,13 @@ beforeEach(function () {
 
     $this->mkGp = function (string $name, ?string $slug = null, ?string $zustand = null, ?string $bio = null) {
         $gp = $this->makeGp($this->rootTeam, $name);
-        $gp->update(['hauptzutat_slug' => $slug, 'status' => 'approved', 'zustand' => $zustand, 'bio' => $bio]);
+        $gp->update(['main_ingredient_slug' => $slug, 'status' => 'approved', 'condition' => $zustand, 'bio' => $bio]);
 
         return $gp->refresh();
     };
     $this->mkSub = fn (string $name, ?int $typLegacyId = null) => FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => mb_strtolower(str_replace([' ', ':'], '_', $name)) . '_' . uniqid(),
-        'name' => $name, 'status' => 'approved', 'sub_rezept_typ_legacy_id' => $typLegacyId,
+        'name' => $name, 'status' => 'approved', 'sub_recipe_type_legacy_id' => $typLegacyId,
     ]);
     $this->match = fn (string $name, ?string $slug = null, string $mode = 'gp_first', string $pref = 'neutral', bool $raw = false, string $bio = 'neutral') => $this->svc->matchIngredient($this->rootTeam, $name, $slug, $mode, $pref, $raw, $bio);
 });

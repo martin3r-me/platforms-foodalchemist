@@ -25,7 +25,7 @@ beforeEach(function () {
     // Je Team ein Datensatz pro Sektion
     $this->mkRezept = fn ($team, $key, $vk = false) => FoodAlchemistRecipe::create([
         'team_id' => $team->id, 'recipe_key' => $key, 'name' => strtoupper($key), 'status' => 'draft',
-        'ist_verkaufsrezept' => $vk,
+        'is_sales_recipe' => $vk,
     ]);
 });
 
@@ -67,7 +67,7 @@ it('M4+M6/Rezepte: Basis- und VK-Sicht — Geschwister nie, Kette aufwärts ja',
 
 it('M5/Pairing-Schreibpfad: setRecipeAnker auf Geschwister-Rezept wirft (visibleToTeam)', function () {
     $bBasis = ($this->mkRezept)($this->childB, 'b_geheim');
-    \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_ankers')->insert([
+    \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')->insert([
         'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'slug' => 'zimt', 'display_de' => 'Zimt',
         'created_at' => now(), 'updated_at' => now(),
     ]);

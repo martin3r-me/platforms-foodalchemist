@@ -47,7 +47,7 @@ it('deleteGeneratorStub: Guards blocken Nicht-Stub, Nicht-Generator, Zutaten und
     $parent = $this->svc->create($this->rootTeam, ['name' => 'Suppe: Klar']);
     $ref = FoodAlchemistRecipeIngredient::create([
         'team_id' => $this->rootTeam->id, 'recipe_id' => $parent->id, 'position' => 1,
-        'raw_text' => 'Fond', 'menge' => 100, 'einheit_vocab_id' => $this->g->id,
+        'raw_text' => 'Fond', 'quantity' => 100, 'unit_vocab_id' => $this->g->id,
         'referenced_recipe_id' => $stub->id, 'match_method' => 'recipe_ref',
     ]);
     expect(fn () => $this->svc->deleteGeneratorStub($this->rootTeam, $stub->id))
@@ -57,7 +57,7 @@ it('deleteGeneratorStub: Guards blocken Nicht-Stub, Nicht-Generator, Zutaten und
     // Zutaten blocken
     $zutat = FoodAlchemistRecipeIngredient::create([
         'team_id' => $this->rootTeam->id, 'recipe_id' => $stub->id, 'position' => 1,
-        'raw_text' => 'Wasser', 'menge' => 1000, 'einheit_vocab_id' => $this->g->id, 'match_method' => 'manual',
+        'raw_text' => 'Wasser', 'quantity' => 1000, 'unit_vocab_id' => $this->g->id, 'match_method' => 'manual',
     ]);
     expect(fn () => $this->svc->deleteGeneratorStub($this->rootTeam, $stub->id))
         ->toThrow(RuntimeException::class, 'Zutaten');
@@ -87,7 +87,7 @@ it('getParents liefert die ↑-Navigation (DoD: Rekursion sichtbar)', function (
     foreach ([$a, $b] as $parent) {
         FoodAlchemistRecipeIngredient::create([
             'team_id' => $this->rootTeam->id, 'recipe_id' => $parent->id, 'position' => 1,
-            'raw_text' => 'Fond', 'menge' => 100, 'einheit_vocab_id' => $this->g->id,
+            'raw_text' => 'Fond', 'quantity' => 100, 'unit_vocab_id' => $this->g->id,
             'referenced_recipe_id' => $sub->id, 'match_method' => 'recipe_ref',
         ]);
     }

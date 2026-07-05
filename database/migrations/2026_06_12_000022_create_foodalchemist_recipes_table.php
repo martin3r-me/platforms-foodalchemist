@@ -59,8 +59,8 @@ return new class extends Migration
 
             // ── Allergene (GL-01 — NUR RecipeRecomputeService schreibt)
             foreach ([
-                'glutenhaltiges_getreide', 'krebstiere', 'eier', 'fisch', 'erdnuesse', 'soja', 'milch',
-                'schalenfruechte', 'sellerie', 'senf', 'sesam', 'schwefeldioxid', 'lupinen', 'weichtiere',
+                'gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk',
+                'tree_nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs',
             ] as $allergen) {
                 $table->string("allergen_{$allergen}", 16)->default('unbekannt');
             }
@@ -75,7 +75,7 @@ return new class extends Migration
                 'caffeinated', 'contains_milk_protein', 'contains_quinine', 'taurine_containing',
                 'can_impair_attention_children', 'with_type_sugar_sweetener',
             ] as $stoff) {
-                $table->unsignedTinyInteger("zusatz_{$stoff}")->nullable();
+                $table->unsignedTinyInteger("additive_{$stoff}")->nullable();
             }
             $table->dateTime('additive_aggregated_at')->nullable();
 

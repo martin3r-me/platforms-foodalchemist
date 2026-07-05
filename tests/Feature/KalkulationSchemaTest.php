@@ -25,7 +25,7 @@ beforeEach(function () {
     $this->kalk = app(KalkulationService::class);
     $this->settings = app(TeamSettingsService::class);
     // Gemeinkosten 20 % (= Default-Block-Wert), Stundensatz 30 €/h, Marge 15 %.
-    $this->settings->update($this->rootTeam, ['hk2_zuschlag_pct' => 20, 'stundensatz_eur' => 30, 'marge_pct' => 15]);
+    $this->settings->update($this->rootTeam, ['hk2_surcharge_pct' => 20, 'stundensatz_eur' => 30, 'marge_pct' => 15]);
 });
 
 function block(array $r, string $key): float
@@ -36,12 +36,12 @@ function block(array $r, string $key): float
 it('Default-Schema: Lohn/Schwund/Gemeinkosten aktiv, Verpackung/Lager inaktiv', function () {
     $schema = collect($this->settings->kalkulationSchema($this->rootTeam))->keyBy('key');
 
-    expect($schema['lohn']['aktiv'])->toBeTrue()
-        ->and($schema['schwund']['aktiv'])->toBeTrue()
-        ->and($schema['gemeinkosten']['aktiv'])->toBeTrue()
-        ->and($schema['gemeinkosten']['wert'])->toBe(20.0)            // erbt hk2_zuschlag_pct
-        ->and($schema['gemeinkosten']['typ'])->toBe('pct_mek')        // Material-GK auf Wareneinsatz
-        ->and($schema['verpackung']['aktiv'])->toBeFalse();
+    expect($schema['lohn']['active'])->toBeTrue()
+        ->and($schema['schwund']['active'])->toBeTrue()
+        ->and($schema['gemeinkosten']['active'])->toBeTrue()
+        ->and($schema['gemeinkosten']['value'])->toBe(20.0)            // erbt hk2_zuschlag_pct
+        ->and($schema['gemeinkosten']['type'])->toBe('pct_mek')        // Material-GK auf Wareneinsatz
+        ->and($schema['verpackung']['active'])->toBeFalse();
 });
 
 it('berechne: mehrstufig — Material-GK auf MEK, Lohn = FEK, HK2 = Selbstkosten', function () {
@@ -57,15 +57,15 @@ it('berechne: mehrstufig — Material-GK auf MEK, Lohn = FEK, HK2 = Selbstkosten
 });
 
 it('berechne ohne Arbeitszeit + 0 Gemeinkosten = HK2 ist WE (childA)', function () {
-    $this->settings->update($this->childA, ['hk2_zuschlag_pct' => 0]);
+    $this->settings->update($this->childA, ['hk2_surcharge_pct' => 0]);
     expect($this->kalk->hk2($this->childA, 5.0))->toBe(5.0);
 });
 
 it('recipeHk: Lohn aus arbeitszeit_min/Portion fließt in HK2', function () {
     $r = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g', 'name' => 'HG', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'ek_total_eur' => 10.00, 'vk_anzahl_einheiten' => 1,
-        'arbeitszeit_min' => 10, 'vk_netto' => 25.00,
+        'is_sales_recipe' => true, 'ek_total_eur' => 10.00, 'sales_unit_count' => 1,
+        'work_time_min' => 10, 'sales_net' => 25.00,
     ]);
 
     $hk = $this->kalk->recipeHk($this->rootTeam, $r);
@@ -77,14 +77,14 @@ it('recipeHk: Lohn aus arbeitszeit_min/Portion fließt in HK2', function () {
 it('conceptHk: Lohn aus dem Arbeitszeit-Rollup pro Person (M-K2)', function () {
     $g = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'd', 'name' => 'Dish', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'vk_netto' => 6.00, 'ek_total_eur' => 2.00,
-        'arbeitszeit_min' => 10, 'vk_anzahl_einheiten' => 1,
+        'is_sales_recipe' => true, 'sales_net' => 6.00, 'ek_total_eur' => 2.00,
+        'work_time_min' => 10, 'sales_unit_count' => 1,
     ]);
-    $paket = app(PaketService::class)->create($this->rootTeam, ['name' => 'P', 'rolle' => 'Vorspeise', 'preis_modus' => 'auto']);
-    app(PaketService::class)->syncGerichte($this->rootTeam, $paket->id, [['vk_recipe_id' => $g->id]]);
+    $paket = app(PaketService::class)->create($this->rootTeam, ['name' => 'P', 'role' => 'Vorspeise', 'price_mode' => 'auto']);
+    app(PaketService::class)->syncGerichte($this->rootTeam, $paket->id, [['sales_recipe_id' => $g->id]]);
     $concept = app(ConceptService::class)->create($this->rootTeam, ['name' => 'C']);
-    $slot = app(ConceptService::class)->addSlot($this->rootTeam, $concept->id, ['rolle' => 'Vorspeise']);
-    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $paket->id]);
+    $slot = app(ConceptService::class)->addSlot($this->rootTeam, $concept->id, ['role' => 'Vorspeise']);
+    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['package_id' => $paket->id]);
 
     $hk = $this->kalk->conceptHk($this->rootTeam, $concept->refresh());
     // WE/Person = 2,00 (auto-Paket = Σ ek); Lohn = 10 min @ 30 = 5,00 (FEK);
@@ -98,12 +98,12 @@ it('Settings/Herstellkosten: Block-Schema + Marge über die UI speichern', funct
 
     $comp = Livewire::test(HerstellkostenSettings::class)->assertOk();
     // Lohn-Block (erster editierbarer) auf €/h setzen + aktiv, Marge ändern.
-    $comp->set('schema.0.aktiv', true)->set('schema.0.wert', '40')
+    $comp->set('schema.0.active', true)->set('schema.0.value', '40')
         ->set('marge', '20')
         ->call('speichern');
 
     $schema = collect(app(TeamSettingsService::class)->kalkulationSchema($this->rootTeam))->keyBy('key');
-    expect((float) $schema['lohn']['wert'])->toBe(40.0)
+    expect((float) $schema['lohn']['value'])->toBe(40.0)
         ->and(app(TeamSettingsService::class)->margePct($this->rootTeam))->toBe(20.0)
         ->and($schema->has('gemeinkosten'))->toBeTrue();              // Gemeinkosten bleibt im Schema
 });
@@ -125,7 +125,7 @@ it('recipeHk: kompletter Wasserfall (DB, Food-Cost-Quote, VK-Vorschlag)', functi
     // entfallen — der Screen zeigt Regeln; die per-Gericht-Rechnung liefert recipeHk.
     $r = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'hk', 'name' => 'HG: Filet', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'ek_total_eur' => 8.00, 'vk_anzahl_einheiten' => 1, 'vk_netto' => 25.00,
+        'is_sales_recipe' => true, 'ek_total_eur' => 8.00, 'sales_unit_count' => 1, 'sales_net' => 25.00,
     ]);
 
     $hk = $this->kalk->recipeHk($this->rootTeam, $r);
@@ -142,20 +142,20 @@ it('Settings/Herstellkosten: Fixkosten anlegen/löschen + Bezugsbasen speichern 
     $this->actingAs($this->makeUser($this->rootTeam));
 
     $comp = Livewire::test(HerstellkostenSettings::class)->assertOk()
-        ->set('neuFix.bezeichnung', 'LKW Logistik')
+        ->set('neuFix.label', 'LKW Logistik')
         ->set('neuFix.betrag', '1500')
         ->set('neuFix.block_key', 'logistik')
         ->call('fixHinzu');
 
-    expect(FoodAlchemistFixkosten::where('bezeichnung', 'LKW Logistik')->exists())->toBeTrue();
+    expect(FoodAlchemistFixkosten::where('label', 'LKW Logistik')->exists())->toBeTrue();
 
     $comp->set('bezugsbasen.hk', '30000')->set('bezugsbasen.mek', '20000')->call('speichern');
     $basen = app(TeamSettingsService::class)->bezugsbasen($this->rootTeam);
     expect($basen['hk'])->toBe(30000.0)->and($basen['mek'])->toBe(20000.0);
 
-    $id = FoodAlchemistFixkosten::where('bezeichnung', 'LKW Logistik')->value('id');
+    $id = FoodAlchemistFixkosten::where('label', 'LKW Logistik')->value('id');
     $comp->call('fixLoeschen', $id);
-    expect(FoodAlchemistFixkosten::where('bezeichnung', 'LKW Logistik')->exists())->toBeFalse();
+    expect(FoodAlchemistFixkosten::where('label', 'LKW Logistik')->exists())->toBeFalse();
 });
 
 it('M-K8-Mathe: direkte Einzelkosten (nebenkosten_eur) fließen in HK2 — Pflege-UI seit Werkstatt-Umbau offen', function () {
@@ -163,12 +163,12 @@ it('M-K8-Mathe: direkte Einzelkosten (nebenkosten_eur) fließen in HK2 — Pfleg
     // Umbau weg; die RECHNUNG muss trotzdem stimmen. UI-Lücke ist in #379 vermerkt.
     $ohne = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'e0', 'name' => 'HG: Ohne', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'ek_total_eur' => 8.00, 'vk_anzahl_einheiten' => 1, 'vk_netto' => 25.00,
+        'is_sales_recipe' => true, 'ek_total_eur' => 8.00, 'sales_unit_count' => 1, 'sales_net' => 25.00,
     ]);
     $mit = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'e1', 'name' => 'HG: Mit', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'ek_total_eur' => 8.00, 'vk_anzahl_einheiten' => 1, 'vk_netto' => 25.00,
-        'nebenkosten_eur' => 1.50,
+        'is_sales_recipe' => true, 'ek_total_eur' => 8.00, 'sales_unit_count' => 1, 'sales_net' => 25.00,
+        'additional_costs_eur' => 1.50,
     ]);
 
     $hkOhne = $this->kalk->recipeHk($this->rootTeam, $ohne);
@@ -190,10 +190,10 @@ it('Concepter-Editor: Kalkulation-Tab zeigt den HK2-Wasserfall', function () {
 });
 
 it('Schema lässt sich speichern und wird normalisiert (sortiert, nur valide Typen)', function () {
-    $this->settings->update($this->rootTeam, ['kalkulation_schema' => [
-        ['key' => 'b', 'label' => 'B', 'typ' => 'pct_we', 'wert' => 5, 'aktiv' => true, 'sort' => 20],
-        ['key' => 'a', 'label' => 'A', 'typ' => 'eur_pro_portion', 'wert' => 1, 'aktiv' => true, 'sort' => 10],
-        ['key' => 'x', 'label' => 'X', 'typ' => 'quatsch', 'wert' => 9, 'aktiv' => true, 'sort' => 5], // invalider Typ → raus
+    $this->settings->update($this->rootTeam, ['calculation_schema' => [
+        ['key' => 'b', 'label' => 'B', 'type' => 'pct_we', 'value' => 5, 'active' => true, 'sort' => 20],
+        ['key' => 'a', 'label' => 'A', 'type' => 'eur_pro_portion', 'value' => 1, 'active' => true, 'sort' => 10],
+        ['key' => 'x', 'label' => 'X', 'type' => 'quatsch', 'value' => 9, 'active' => true, 'sort' => 5], // invalider Typ → raus
     ]]);
 
     $schema = $this->settings->kalkulationSchema($this->rootTeam);

@@ -50,85 +50,85 @@ beforeEach(function () {
 // ── GL-01 — Allergene ────────────────────────────────────────────────────
 
 it('GL-01 GT-04: LA→GP-Merge — MAX-Rang gewinnt, konkreter Wert schlägt unbekannt, leer = unbekannt', function () {
-    ($this->mkLa)(['allergen_glutenhaltiges_getreide' => 'enthalten', 'allergen_soja' => 'nicht_enthalten']);
-    ($this->mkLa)(['allergen_glutenhaltiges_getreide' => 'enthalten']);
-    ($this->mkLa)(['allergen_glutenhaltiges_getreide' => 'spuren', 'allergen_milch' => 'nicht_enthalten']);
+    ($this->mkLa)(['allergen_gluten' => 'enthalten', 'allergen_soy' => 'nicht_enthalten']);
+    ($this->mkLa)(['allergen_gluten' => 'enthalten']);
+    ($this->mkLa)(['allergen_gluten' => 'spuren', 'allergen_milk' => 'nicht_enthalten']);
 
     $werte = $this->svc->allergene($this->gp->fresh());
 
-    expect($werte['glutenhaltiges_getreide']['wert'])->toBe(AllergenValue::Enthalten)   // MAX(3,3,2)=3
-        ->and($werte['glutenhaltiges_getreide']['quelle'])->toBe('la')
-        ->and($werte['soja']['wert'])->toBe(AllergenValue::NichtEnthalten)               // {1, NULL, NULL} ⇒ konkreter gewinnt
-        ->and($werte['milch']['wert'])->toBe(AllergenValue::NichtEnthalten)
-        ->and($werte['fisch']['wert'])->toBe(AllergenValue::Unbekannt)                   // {NULL,NULL,NULL} ⇒ unbekannt
-        ->and($werte['fisch']['quelle'])->toBe('keine');
+    expect($werte['glutenhaltiges_getreide']['value'])->toBe(AllergenValue::Enthalten)   // MAX(3,3,2)=3
+        ->and($werte['glutenhaltiges_getreide']['source'])->toBe('la')
+        ->and($werte['soja']['value'])->toBe(AllergenValue::NichtEnthalten)               // {1, NULL, NULL} ⇒ konkreter gewinnt
+        ->and($werte['milch']['value'])->toBe(AllergenValue::NichtEnthalten)
+        ->and($werte['fisch']['value'])->toBe(AllergenValue::Unbekannt)                   // {NULL,NULL,NULL} ⇒ unbekannt
+        ->and($werte['fisch']['source'])->toBe('keine');
 });
 
 it('GL-01 GT-07: GP-Override ist absolut — ersetzt die LA-Aggregation, wird NICHT gemax-t', function () {
-    ($this->mkLa)(['allergen_milch' => 'enthalten']);
-    $this->gp->update(['allergen_milch' => 'nicht_enthalten', 'allergene_quelle' => 'manual']);
+    ($this->mkLa)(['allergen_milk' => 'enthalten']);
+    $this->gp->update(['allergen_milk' => 'nicht_enthalten', 'allergens_source' => 'manual']);
 
     $werte = $this->svc->allergene($this->gp->fresh());
 
-    expect($werte['milch']['wert'])->toBe(AllergenValue::NichtEnthalten)
-        ->and($werte['milch']['quelle'])->toBe('override');
+    expect($werte['milch']['value'])->toBe(AllergenValue::NichtEnthalten)
+        ->and($werte['milch']['source'])->toBe('override');
 });
 
 it('GL-01 GT-06 (SOLL ⚠A2): Derivat erbt LIVE vom Mutter-GP — kein Snapshot', function () {
     $mutter = $this->makeGp($this->rootTeam, 'Haehnchen ganz');
-    $mutterLa = ($this->mkLa)(['allergen_soja' => 'spuren'], gp: $mutter);
+    $mutterLa = ($this->mkLa)(['allergen_soy' => 'spuren'], gp: $mutter);
 
     $derivat = $this->makeGp($this->rootTeam, 'Huehnerfett frisch');
     $derivat->update(['is_derivat' => true, 'derivat_von_gp_id' => $mutter->id]);
 
     $werte = $this->svc->allergene($derivat->fresh());
-    expect($werte['soja']['wert'])->toBe(AllergenValue::Spuren)
-        ->and($werte['soja']['quelle'])->toBe('mutter');
+    expect($werte['soja']['value'])->toBe(AllergenValue::Spuren)
+        ->and($werte['soja']['source'])->toBe('mutter');
 
     // LIVE-Beweis: Mutter ändert sich ⇒ nächste Auflösung folgt sofort
-    $mutterLa->allergens->first()->update(['allergen_soja' => 'enthalten']);
-    expect($this->svc->allergene($derivat->fresh())['soja']['wert'])->toBe(AllergenValue::Enthalten);
+    $mutterLa->allergens->first()->update(['allergen_soy' => 'enthalten']);
+    expect($this->svc->allergene($derivat->fresh())['soja']['value'])->toBe(AllergenValue::Enthalten);
 
     // Override auf dem Derivat schlägt die Mutter (Prio 1 vor Prio 2)
-    $derivat->update(['allergen_soja' => 'nicht_enthalten']);
-    expect($this->svc->allergene($derivat->fresh())['soja']['quelle'])->toBe('override');
+    $derivat->update(['allergen_soy' => 'nicht_enthalten']);
+    expect($this->svc->allergene($derivat->fresh())['soja']['source'])->toBe('override');
 });
 
 // ── GL-01 §4.5 — GP-Konfidenz (SOLL ⚠A1) ───────────────────────────────
 
 it('GL-01 §4.5: identische LA-Profile ⇒ HIGH; nur unbekannt-vs-konkret ⇒ HIGH', function () {
-    ($this->mkLa)(['allergen_milch' => 'enthalten']);
-    ($this->mkLa)(['allergen_milch' => 'enthalten']);
+    ($this->mkLa)(['allergen_milk' => 'enthalten']);
+    ($this->mkLa)(['allergen_milk' => 'enthalten']);
     ($this->mkLa)([]); // LA ohne Allergen-Zeile — kein Profil-Beitrag
 
     expect($this->svc->allergenKonfidenz($this->gp))
-        ->toBe(['konfidenz' => 'high', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 2]);
+        ->toBe(['confidence' => 'high', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 2]);
 
-    ($this->mkLa)(['allergen_soja' => 'nicht_enthalten']); // milch=NULL hier: unbekannt vs. konkret ⇒ bleibt HIGH
-    expect($this->svc->allergenKonfidenz($this->gp)['konfidenz'])->toBe('high');
+    ($this->mkLa)(['allergen_soy' => 'nicht_enthalten']); // milch=NULL hier: unbekannt vs. konkret ⇒ bleibt HIGH
+    expect($this->svc->allergenKonfidenz($this->gp)['confidence'])->toBe('high');
 });
 
 it('GL-01 §4.5: Unterschiede auf gleicher Stufe ⇒ MED; enthalten↔nicht_enthalten ohne spuren ⇒ LOW + Review', function () {
-    ($this->mkLa)(['allergen_senf' => 'spuren']);
-    ($this->mkLa)(['allergen_senf' => 'nicht_enthalten']);
-    expect($this->svc->allergenKonfidenz($this->gp)['konfidenz'])->toBe('medium');
+    ($this->mkLa)(['allergen_mustard' => 'spuren']);
+    ($this->mkLa)(['allergen_mustard' => 'nicht_enthalten']);
+    expect($this->svc->allergenKonfidenz($this->gp)['confidence'])->toBe('medium');
 
-    ($this->mkLa)(['allergen_sellerie' => 'enthalten']);
-    ($this->mkLa)(['allergen_sellerie' => 'nicht_enthalten']);
+    ($this->mkLa)(['allergen_celery' => 'enthalten']);
+    ($this->mkLa)(['allergen_celery' => 'nicht_enthalten']);
     $k = $this->svc->allergenKonfidenz($this->gp);
-    expect($k['konfidenz'])->toBe('low')
+    expect($k['confidence'])->toBe('low')
         ->and($k['needs_review'])->toBeTrue()
         ->and($k['konflikt_felder'])->toBe(['sellerie']);
 
     // spuren-Mittelweg entschärft den Konflikt zurück auf MED
-    ($this->mkLa)(['allergen_sellerie' => 'spuren']);
-    expect($this->svc->allergenKonfidenz($this->gp)['konfidenz'])->toBe('medium');
+    ($this->mkLa)(['allergen_celery' => 'spuren']);
+    expect($this->svc->allergenKonfidenz($this->gp)['confidence'])->toBe('medium');
 });
 
 it('GL-01 §4.5: GP ohne LA mit gepflegten Allergenen ⇒ NONE', function () {
     ($this->mkLa)([]); // LA ohne Allergen-Zeile
 
-    expect($this->svc->allergenKonfidenz($this->gp)['konfidenz'])->toBe('none');
+    expect($this->svc->allergenKonfidenz($this->gp)['confidence'])->toBe('none');
 });
 
 // ── GL-09 — Zusatzstoffe (GP-Teil) ──────────────────────────────────────

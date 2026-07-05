@@ -20,9 +20,9 @@ beforeEach(function () {
 
     $this->hg = FoodAlchemistRecipeMainGroup::create([
         'team_id' => $this->rootTeam->id, 'code' => 'fonds_reduktionen',
-        'bezeichnung' => 'Fonds & Reduktionen', 'bereich' => 'KUECHE_HERZHAFT', 'sort_order' => 1,
+        'label' => 'Fonds & Reduktionen', 'bereich' => 'KUECHE_HERZHAFT', 'sort_order' => 1,
     ]);
-    $this->kat = $this->vocab->createRecipeCategory($this->rootTeam, $this->hg->id, ['bezeichnung' => 'Heller Fond', 'sort_order' => 1]);
+    $this->kat = $this->vocab->createRecipeCategory($this->rootTeam, $this->hg->id, ['label' => 'Heller Fond', 'sort_order' => 1]);
 });
 
 it('liefert HG-Baum mit Kategorie-Zählern je Team-Kette (M4-Lese-Vertrag)', function () {
@@ -30,17 +30,17 @@ it('liefert HG-Baum mit Kategorie-Zählern je Team-Kette (M4-Lese-Vertrag)', fun
 
     expect($baum)->toHaveCount(1)
         ->and($baum->first()->kategorie_count)->toBe(1)
-        ->and($this->vocab->listRecipeCategories($this->childA, $this->hg->id)->pluck('bezeichnung'))->toContain('Heller Fond');
+        ->and($this->vocab->listRecipeCategories($this->childA, $this->hg->id)->pluck('label'))->toContain('Heller Fond');
 });
 
 it('CRUD: anlegen mit Slug-Code, ändern + sortieren nur als Besitzer', function () {
     expect($this->kat->code)->toBe('heller_fond');
 
-    $this->vocab->updateRecipeCategory($this->rootTeam, $this->kat->id, ['bezeichnung' => 'Heller Fond (Geflügel)', 'sort_order' => 5]);
-    expect($this->kat->fresh()->bezeichnung)->toBe('Heller Fond (Geflügel)')
+    $this->vocab->updateRecipeCategory($this->rootTeam, $this->kat->id, ['label' => 'Heller Fond (Geflügel)', 'sort_order' => 5]);
+    expect($this->kat->fresh()->label)->toBe('Heller Fond (Geflügel)')
         ->and($this->kat->fresh()->sort_order)->toBe(5);
 
-    expect(fn () => $this->vocab->updateRecipeCategory($this->childA, $this->kat->id, ['bezeichnung' => 'Gekapert']))
+    expect(fn () => $this->vocab->updateRecipeCategory($this->childA, $this->kat->id, ['label' => 'Gekapert']))
         ->toThrow(RuntimeException::class, 'Besitzer-Team');
 
     $this->vocab->updateMainGroupSort($this->rootTeam, $this->hg->id, 7);
@@ -58,22 +58,22 @@ it('löscht Kategorien ohne Rezepte; recipe_count ist 0 bis M4-01', function () 
 });
 
 it('Kind-Team legt eigene Kategorie im geerbten Baum an — Geschwister sehen sie nicht', function () {
-    $eigene = $this->vocab->createRecipeCategory($this->childA, $this->hg->id, ['bezeichnung' => 'Hausfond A']);
+    $eigene = $this->vocab->createRecipeCategory($this->childA, $this->hg->id, ['label' => 'Hausfond A']);
 
-    expect($this->vocab->listRecipeCategories($this->childA, $this->hg->id)->pluck('bezeichnung'))->toContain('Hausfond A')
-        ->and($this->vocab->listRecipeCategories($this->childB, $this->hg->id)->pluck('bezeichnung'))->not->toContain('Hausfond A')
+    expect($this->vocab->listRecipeCategories($this->childA, $this->hg->id)->pluck('label'))->toContain('Hausfond A')
+        ->and($this->vocab->listRecipeCategories($this->childB, $this->hg->id)->pluck('label'))->not->toContain('Hausfond A')
         ->and($eigene->team_id)->toBe($this->childA->id);
 });
 
 it('legt eine neue Hauptgruppe an — Bug-Fix 2026-06-14 (vorher gar nicht möglich)', function () {
-    $hg = $this->vocab->createMainGroup($this->rootTeam, ['bezeichnung' => 'Saucen & Dips']);
+    $hg = $this->vocab->createMainGroup($this->rootTeam, ['label' => 'Saucen & Dips']);
 
     expect($hg->code)->toBe('saucen_dips')
         ->and($hg->team_id)->toBe($this->rootTeam->id)
-        ->and($this->vocab->listMainGroups($this->rootTeam)->pluck('bezeichnung'))->toContain('Saucen & Dips');
+        ->and($this->vocab->listMainGroups($this->rootTeam)->pluck('label'))->toContain('Saucen & Dips');
 
     // Slug-Kollision wird suffixt (unique[team_id, code])
-    expect($this->vocab->createMainGroup($this->rootTeam, ['bezeichnung' => 'Saucen Dips'])->code)->toBe('saucen_dips_2');
+    expect($this->vocab->createMainGroup($this->rootTeam, ['label' => 'Saucen Dips'])->code)->toBe('saucen_dips_2');
 });
 
 it('Livewire: „Neue Hauptgruppe" legt an und wählt sie direkt aus', function () {
@@ -85,5 +85,5 @@ it('Livewire: „Neue Hauptgruppe" legt an und wählt sie direkt aus', function 
         ->assertSet('neueHauptgruppe', '')
         ->assertSet('hauptgruppeId', fn ($id) => $id !== null);
 
-    expect(FoodAlchemistRecipeMainGroup::where('bezeichnung', 'Frühstück')->where('team_id', $this->rootTeam->id)->exists())->toBeTrue();
+    expect(FoodAlchemistRecipeMainGroup::where('label', 'Frühstück')->where('team_id', $this->rootTeam->id)->exists())->toBeTrue();
 });

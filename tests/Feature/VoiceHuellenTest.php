@@ -55,11 +55,11 @@ beforeEach(function () {
 
 it('DoD: Layer-Wechsel ändert den Prompt nachweisbar (erste systemInstruction)', function () {
     ($this->bindLayer)('HÜLLE ALPHA: Antworte als Catering-Souschef.', [['key' => 'global.default', 'semver' => '1.0.0']]);
-    app(AiGatewayService::class)->propose('recipe.beschreibung', ['b' => 1]);
+    app(AiGatewayService::class)->propose('recipe.description', ['b' => 1]);
     $alpha = $this->spy->messages;
 
     ($this->bindLayer)('HÜLLE BETA: Antworte knapp und norddeutsch.', [['key' => 'team.kueste', 'semver' => '2.1.0']]);
-    app(AiGatewayService::class)->propose('recipe.beschreibung', ['b' => 1]);
+    app(AiGatewayService::class)->propose('recipe.description', ['b' => 1]);
     $beta = $this->spy->messages;
 
     expect($alpha[0]['role'])->toBe('system')
@@ -70,12 +70,12 @@ it('DoD: Layer-Wechsel ändert den Prompt nachweisbar (erste systemInstruction)'
 
 it('layers_used (GL-06 Inv. 7) landet im Audit; ohne Layer bleibt es null', function () {
     ($this->bindLayer)('HÜLLE', [['key' => 'global.default', 'semver' => '1.0.0']]);
-    app(AiGatewayService::class)->propose('recipe.beschreibung', ['b' => 1]);
+    app(AiGatewayService::class)->propose('recipe.description', ['b' => 1]);
     expect(json_decode(DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('layers_used'), true))
         ->toBe([['key' => 'global.default', 'semver' => '1.0.0']]);
 
     ($this->bindLayer)(null);                                         // kein Layer → empty
-    app(AiGatewayService::class)->propose('recipe.beschreibung', ['b' => 1]);
+    app(AiGatewayService::class)->propose('recipe.description', ['b' => 1]);
     expect(DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('layers_used'))->toBeNull()
         ->and($this->spy->messages[0]['role'])->toBe('user');         // keine system-Message vorangestellt
 });
@@ -84,7 +84,7 @@ it('Hülle ist abschaltbar und graceful (Config aus → kein Resolver-Aufruf)', 
     config(['foodalchemist.ai.huellen' => false]);
     ($this->bindLayer)('HÜLLE DARF NICHT ERSCHEINEN');
 
-    app(AiGatewayService::class)->propose('recipe.beschreibung', ['b' => 1]);
+    app(AiGatewayService::class)->propose('recipe.description', ['b' => 1]);
 
     expect(collect($this->spy->messages)->pluck('content')->implode(' '))->not->toContain('DARF NICHT');
 });

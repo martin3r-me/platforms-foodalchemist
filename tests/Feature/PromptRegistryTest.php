@@ -12,14 +12,14 @@ uses(TestCase::class);
  */
 const REGISTRY_SOLL = [
     // GP-Welt
-    'gp.suggest' => 'B', 'gp.zustand' => null, 'gp.tags' => 'C', 'gp.allergene' => 'A',
-    'gp.domain' => 'B', 'gp.stk_default_g' => 'B', 'gp.zaehl_einheiten' => 'B',
-    'gp.anker' => 'B', 'gp.rolle' => 'B', 'gp.la_suggest' => 'B', 'gp.term_la_rank' => 'B',
+    'gp.suggest' => 'B', 'gp.condition' => null, 'gp.tags' => 'C', 'gp.allergene' => 'A',
+    'gp.domain' => 'B', 'gp.piece_default_g' => 'B', 'gp.zaehl_einheiten' => 'B',
+    'gp.anker' => 'B', 'gp.role' => 'B', 'gp.la_suggest' => 'B', 'gp.term_la_rank' => 'B',
     // Rezept-Welt
-    'recipe.generator' => 'B', 'recipe.beschreibung' => 'C', 'recipe.kategorie' => 'D',
+    'recipe.generator' => 'B', 'recipe.description' => 'C', 'recipe.category' => 'D',
     'recipe.garverlust' => 'C', 'recipe.name_putzen' => 'D', 'recipe.sektor' => 'B',
-    'recipe.niveau' => 'B', 'recipe.sub_typ' => 'B', 'recipe.fertigungstiefe' => 'B',
-    'recipe.zubereitung' => 'A', 'recipe.eigenschaften' => 'B', 'recipe.geschmack' => 'B',
+    'recipe.level' => 'B', 'recipe.sub_typ' => 'B', 'recipe.production_depth' => 'B',
+    'recipe.preparation' => 'A', 'recipe.eigenschaften' => 'B', 'recipe.taste' => 'B',
     'recipe.review' => 'A', 'recipe.pairing' => 'A', 'recipe.anker' => 'B',
     'recipe.equipment' => 'B', 'recipe.extract' => 'C',
     'recipe.ueberarbeiten' => 'A',                                    // R6: KI-Überarbeiten (freie Anweisung, Ist-Button)
@@ -53,7 +53,7 @@ it('keine unbekannten Keys außer demo.echo (Inventar-Disziplin)', function () {
 });
 
 it('Compliance- und V-02-Features sind Tier A (06_KI §2-Begründung)', function () {
-    foreach (['gp.allergene', 'recipe.zubereitung', 'vk.plating', 'recipe.pairing', 'vk.marketing'] as $key) {
+    foreach (['gp.allergene', 'recipe.preparation', 'vk.plating', 'recipe.pairing', 'vk.marketing'] as $key) {
         expect(config('foodalchemist.prompts')[$key]['tier'])->toBe('A', $key);
     }
 });

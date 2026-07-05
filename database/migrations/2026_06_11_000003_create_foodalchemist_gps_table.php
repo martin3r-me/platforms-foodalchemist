@@ -67,8 +67,8 @@ return new class extends Migration
 
             // ── Allergen-Override-Layer: 14 EU-Allergene, 4-Wert (GL-01; NULL = kein Override → LA-Aggregation)
             foreach ([
-                'glutenhaltiges_getreide', 'krebstiere', 'eier', 'fisch', 'erdnuesse', 'soja', 'milch',
-                'schalenfruechte', 'sellerie', 'senf', 'sesam', 'schwefeldioxid', 'lupinen', 'weichtiere',
+                'gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk',
+                'tree_nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs',
             ] as $allergen) {
                 $table->string("allergen_{$allergen}", 16)->nullable();
             }
@@ -79,7 +79,7 @@ return new class extends Migration
             // ── Eigenschafts-Tags (tri-state: NULL = unbewertet)
             foreach ([
                 'is_vegan', 'is_vegetarian', 'is_halal', 'contains_pork', 'contains_beef',
-                'is_organic', 'is_regional', 'is_grundnahrungsmittel', 'is_convenience',
+                'is_organic', 'is_regional', 'is_staple_food', 'is_convenience',
                 'is_lactose_free', 'is_gluten_free',
             ] as $tag) {
                 $table->boolean("tag_{$tag}")->nullable();

@@ -36,10 +36,10 @@ it('End-to-End: Concept + Paket im einen Screen sichtbar, Tab-Wechsel zeigt beid
 
     FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g', 'name' => 'Green Power',
-        'status' => 'approved', 'ist_verkaufsrezept' => true, 'vk_netto' => 2.00, 'ek_total_eur' => 0.60,
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00, 'ek_total_eur' => 0.60,
     ]);
-    $pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'klasse' => 'Buffet']);
-    $concepts->create($this->rootTeam, ['name' => 'Grill-Buffet', 'klasse' => 'Buffet']);
+    $pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise', 'class' => 'Buffet']);
+    $concepts->create($this->rootTeam, ['name' => 'Grill-Buffet', 'class' => 'Buffet']);
 
     Livewire::test(Browser::class)
         ->assertSee('Grill-Buffet')                                   // Concepts-Tab

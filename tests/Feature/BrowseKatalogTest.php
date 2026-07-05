@@ -22,15 +22,15 @@ beforeEach(function () {
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'wrap', 'name' => 'HG: Wrap', 'status' => 'draft',
     ]);
     $this->gpTomate = $this->makeGp($this->rootTeam, 'Tomatenmark');
-    $this->gpTomate->update(['warengruppe_code' => '10', 'sub_kategorie' => '10.1 Pasten', 'zustand' => 'konserviert']);
+    $this->gpTomate->update(['commodity_group_code' => '10', 'sub_category' => '10.1 Pasten', 'condition' => 'konserviert']);
     $this->gpBier = $this->makeGp($this->rootTeam, 'Veltins Bier: fluessig');
-    $this->gpBier->update(['warengruppe_code' => '15', 'zustand' => 'frisch']);
+    $this->gpBier->update(['commodity_group_code' => '15', 'condition' => 'frisch']);
 
     $this->sub = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'fond_tomate', 'name' => 'Fond: Tomate', 'status' => 'draft',
     ]);
     app(\Platform\FoodAlchemist\Services\RecipeService::class)
-        ->setzeEignung($this->rootTeam, $this->sub->id, 'niveau', 'gehoben');
+        ->setzeEignung($this->rootTeam, $this->sub->id, 'level', 'gehoben');
 });
 
 it('filtert GPs nach Warengruppe/Zustand und liefert die Auto-Fill-Einheit (fluessig → ml)', function () {
@@ -45,7 +45,7 @@ it('filtert GPs nach Warengruppe/Zustand und liefert die Auto-Fill-Einheit (flue
     expect($nurWg10['gps']['total'])->toBe(1)
         ->and($nurWg10['gps']['items'][0]['name'])->toBe('Tomatenmark');
 
-    $zustand = $komponente->browseKatalog(['zustand' => 'frisch']);
+    $zustand = $komponente->browseKatalog(['condition' => 'frisch']);
     expect(collect($zustand['gps']['items'])->pluck('id'))->toContain($this->gpBier->id)->not->toContain($this->gpTomate->id);
 });
 
@@ -56,9 +56,9 @@ it('filtert Rezepte nach Niveau, schließt das eigene Rezept aus und trägt Nive
     expect(collect($alle['rezepte']['items'])->pluck('id'))->toContain($this->sub->id)->not->toContain($this->rezept->id)
         ->and(collect($alle['rezepte']['items'])->firstWhere('id', $this->sub->id)['niveaus'])->toBe(['gehoben']);
 
-    $gehoben = $komponente->browseKatalog([], ['niveau' => 'gehoben']);
+    $gehoben = $komponente->browseKatalog([], ['level' => 'gehoben']);
     expect($gehoben['rezepte']['total'])->toBe(1);
-    $haute = $komponente->browseKatalog([], ['niveau' => 'haute_cuisine']);
+    $haute = $komponente->browseKatalog([], ['level' => 'haute_cuisine']);
     expect($haute['rezepte']['total'])->toBe(0);
 });
 

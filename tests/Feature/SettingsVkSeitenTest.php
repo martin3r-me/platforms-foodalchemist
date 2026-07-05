@@ -48,15 +48,15 @@ it('Schreibstile: anlegen (Slug + Pflichtfelder), Dublette blockt, deaktivieren 
 
 it('Behälter & Geräte: anlegen je Vokabular (inkl. Komma-Kapazität + Equipment), Whitelist hält', function () {
     Livewire::test(Behaelter::class)
-        ->set('neu.behaelter.name', 'GN 1/4 65mm')->set('neu.behaelter.gruppe', 'GN')->set('neu.behaelter.kapazitaet_kg', '1,2')
+        ->set('neu.behaelter.name', 'GN 1/4 65mm')->set('neu.behaelter.group_name', 'GN')->set('neu.behaelter.kapazitaet_kg', '1,2')
         ->call('create', 'behaelter')->assertSet('fehler', null);
-    $b = DB::table('foodalchemist_vocab_behaelter')->where('slug', 'gn_14_65mm')->first();
+    $b = DB::table('foodalchemist_vocab_containers')->where('slug', 'gn_14_65mm')->first();
     expect($b)->not->toBeNull()->and((float) $b->kapazitaet_kg)->toBe(1.2);
 
     Livewire::test(Behaelter::class)
-        ->set('neu.equipment.name', 'Räucherpistole')->set('neu.equipment.gruppe', 'Spezial')
+        ->set('neu.equipment.name', 'Räucherpistole')->set('neu.equipment.group_name', 'Spezial')
         ->call('create', 'equipment')->assertSet('fehler', null);
-    expect(DB::table('foodalchemist_vocab_kochequipment')->where('slug', 'raucherpistole')->exists())->toBeTrue();
+    expect(DB::table('foodalchemist_vocab_kitchen_equipment')->where('slug', 'raucherpistole')->exists())->toBeTrue();
 
     // unbekanntes Vokabular ⇒ Fehler, kein Insert
     Livewire::test(Behaelter::class)->call('create', 'boese_tabelle')
@@ -65,32 +65,32 @@ it('Behälter & Geräte: anlegen je Vokabular (inkl. Komma-Kapazität + Equipmen
 
 it('Aufschlagsklassen: Edit mit Komma-Prozenten + formel_typ-Whitelist; Code-Dublette blockt; Validierung greift', function () {
     $ak = FoodAlchemistMarkupClass::create([
-        'team_id' => $this->rootTeam->id, 'code' => 'TST', 'bezeichnung' => 'Test',
-        'rohaufschlag_pct' => 100, 'mwst_satz' => 19,
+        'team_id' => $this->rootTeam->id, 'code' => 'TST', 'label' => 'Test',
+        'raw_markup_pct' => 100, 'vat_rate' => 19,
     ]);
 
     Livewire::test(Aufschlagsklassen::class)
         ->call('edit', $ak->id)
-        ->set('form.rohaufschlag_pct', '312,5')
-        ->set('form.formel_typ', 'quatsch')                           // Whitelist-Fallback
+        ->set('form.raw_markup_pct', '312,5')
+        ->set('form.formula_type', 'quatsch')                           // Whitelist-Fallback
         ->call('save')->assertSet('fehler', null);
     $ak->refresh();
-    expect((float) $ak->rohaufschlag_pct)->toBe(312.5)
-        ->and($ak->formel_typ)->toBe('aufschlag');
+    expect((float) $ak->raw_markup_pct)->toBe(312.5)
+        ->and($ak->formula_type)->toBe('aufschlag');
 
     // Nicht-numerisch ⇒ Fehler, kein Write
     Livewire::test(Aufschlagsklassen::class)
-        ->call('edit', $ak->id)->set('form.mwst_satz', 'abc')->call('save')
+        ->call('edit', $ak->id)->set('form.vat_rate', 'abc')->call('save')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Zahl'));
-    expect((float) $ak->fresh()->mwst_satz)->toBe(19.0);
+    expect((float) $ak->fresh()->vat_rate)->toBe(19.0);
 
     // Anlegen + Code-Dublette
     Livewire::test(Aufschlagsklassen::class)
-        ->set('neu.code', 'tst')->set('neu.bezeichnung', 'Dublette')->set('neu.rohaufschlag_pct', '50')
+        ->set('neu.code', 'tst')->set('neu.label', 'Dublette')->set('neu.raw_markup_pct', '50')
         ->call('create')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'vergeben'));
     Livewire::test(Aufschlagsklassen::class)
-        ->set('neu.code', 'NEU1')->set('neu.bezeichnung', 'Neue Klasse')->set('neu.rohaufschlag_pct', '250')
+        ->set('neu.code', 'NEU1')->set('neu.label', 'Neue Klasse')->set('neu.raw_markup_pct', '250')
         ->call('create')->assertSet('fehler', null);
-    expect(FoodAlchemistMarkupClass::where('code', 'NEU1')->first()->rohaufschlag_pct)->not->toBeNull();
+    expect(FoodAlchemistMarkupClass::where('code', 'NEU1')->first()->raw_markup_pct)->not->toBeNull();
 });

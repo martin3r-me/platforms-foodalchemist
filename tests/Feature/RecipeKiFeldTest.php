@@ -28,39 +28,39 @@ beforeEach(function () {
 it('M4-11 (DoD 1/3): beschreibung — Fake-Roundtrip ändert Feld + Lineage, Override-First greift', function () {
     $modal = Livewire::test(RecipeModal::class)
         ->call('oeffnen', $this->rezept->id)
-        ->set('form.beschreibung', 'Klarer Fond auf Gemüsebasis.')   // Kontext fürs Echo
+        ->set('form.description', 'Klarer Fond auf Gemüsebasis.')   // Kontext fürs Echo
         ->call('ai_beschreibung')
         ->call('accept_beschreibung');
 
     $this->rezept->refresh();
-    expect($this->rezept->beschreibung)->toBe('Klarer Fond auf Gemüsebasis.')
-        ->and($this->rezept->beschreibung_quelle)->toBe('ki')
-        ->and((float) $this->rezept->beschreibung_ai_confidence)->toBe(0.87);
+    expect($this->rezept->description)->toBe('Klarer Fond auf Gemüsebasis.')
+        ->and($this->rezept->description_source)->toBe('ki')
+        ->and((float) $this->rezept->description_ai_confidence)->toBe(0.87);
 
     // Override-First: manuell gepflegt blockt accept
-    $this->rezept->update(['beschreibung_quelle' => 'manual']);
+    $this->rezept->update(['description_source' => 'manual']);
     $modal->call('ai_beschreibung')->call('accept_beschreibung')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'manuell'));
 
     $modal->set('fehler', null)->call('clear_beschreibung');
-    expect($this->rezept->fresh()->beschreibung)->toBeNull();
+    expect($this->rezept->fresh()->description)->toBeNull();
 });
 
 it('M4-11 (DoD 2/3): kategorie — Fake-Roundtrip setzt kategorie_id + Lineage-Trio', function () {
-    $hg = FoodAlchemistRecipeMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'FO', 'bezeichnung' => 'Fonds']);
-    $kat = FoodAlchemistRecipeCategory::create(['team_id' => $this->rootTeam->id, 'main_group_id' => $hg->id, 'code' => 'KLA', 'bezeichnung' => 'Klare Fonds']);
+    $hg = FoodAlchemistRecipeMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'FO', 'label' => 'Fonds']);
+    $kat = FoodAlchemistRecipeCategory::create(['team_id' => $this->rootTeam->id, 'main_group_id' => $hg->id, 'code' => 'KLA', 'label' => 'Klare Fonds']);
 
     Livewire::test(RecipeModal::class)
         ->call('oeffnen', $this->rezept->id)
-        ->set('form.kategorie_id', $kat->id)                          // Kontext fürs Echo
+        ->set('form.category_id', $kat->id)                          // Kontext fürs Echo
         ->call('ai_kategorie')
         ->call('accept_kategorie')
         ->assertSet('fehler', null);
 
     $this->rezept->refresh();
-    expect($this->rezept->kategorie_id)->toBe($kat->id)
-        ->and($this->rezept->kategorie_quelle)->toBe('ki')
-        ->and((float) $this->rezept->kategorie_ai_confidence)->toBe(0.87);
+    expect($this->rezept->category_id)->toBe($kat->id)
+        ->and($this->rezept->category_source)->toBe('ki')
+        ->and((float) $this->rezept->category_ai_confidence)->toBe(0.87);
 });
 
 it('M4-11 (DoD 3/3): garverlust — Vorschlag geclampt, Save schreibt quelle=ki', function () {
@@ -75,13 +75,13 @@ it('M4-11 (DoD 3/3): garverlust — Vorschlag geclampt, Save schreibt quelle=ki'
     expect($antwort->werte['verluste'][0])->toBe(95);                 // Echo roh — Clamp passiert in der Komponente
 
     $editor->call('speichern', [[
-        'id' => null, 'gp_id' => $gp->id, 'raw_text' => '500 g Karotte', 'menge' => '500',
-        'einheit_vocab_id' => $g->id, 'garverlust_pct' => '12', 'garverlust_quelle' => 'ki',
+        'id' => null, 'gp_id' => $gp->id, 'raw_text' => '500 g Karotte', 'quantity' => '500',
+        'unit_vocab_id' => $g->id, 'cooking_loss_pct' => '12', 'cooking_loss_source' => 'ki',
     ]])->assertSet('fehler', null);
 
     $zutat = $this->rezept->ingredients()->first();
-    expect((float) $zutat->garverlust_pct)->toBe(12.0)
-        ->and($zutat->garverlust_quelle)->toBe('ki');
+    expect((float) $zutat->cooking_loss_pct)->toBe(12.0)
+        ->and($zutat->cooking_loss_source)->toBe('ki');
 });
 
 it('M4-12: Template-Toggle, Status-Workflow und Bulk-Status (D1: nur eigene)', function () {

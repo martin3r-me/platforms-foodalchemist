@@ -17,7 +17,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->actingAs($this->makeUser($this->rootTeam));
-    app(TeamSettingsService::class)->update($this->rootTeam, ['hk2_zuschlag_pct' => 20, 'stundensatz_eur' => 30, 'marge_pct' => 15]);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['hk2_surcharge_pct' => 20, 'stundensatz_eur' => 30, 'marge_pct' => 15]);
 });
 
 it('legt eine Kalkulation an', function () {
@@ -42,7 +42,7 @@ it('Deep-Link ?k=ID rendert den Editor mit HK1/HK2-Wasserfall', function () {
 it('Gericht-Position hinzufügen zeigt Wareneinsatz + HK2/VK-Vorschlag', function () {
     $g = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g', 'name' => 'HG: Filet', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'ek_total_eur' => 20.00, 'vk_anzahl_einheiten' => 4, 'arbeitszeit_min' => 40,
+        'is_sales_recipe' => true, 'ek_total_eur' => 20.00, 'sales_unit_count' => 4, 'work_time_min' => 40,
     ]);
 
     $comp = Livewire::test(Kalkulator::class)->call('neueKalkulation');

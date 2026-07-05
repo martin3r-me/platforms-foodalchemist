@@ -21,22 +21,22 @@ beforeEach(function () {
 });
 
 it('DoD: Kill-Switch stoppt jeden KI-Call typisiert — VOR Provider und Log', function () {
-    app(TeamSettingsService::class)->update($this->rootTeam, ['ki_aktiv' => false]);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['ai_active' => false]);
 
-    expect(fn () => app(AiGatewayService::class)->propose('recipe.beschreibung', ['b' => 1]))
+    expect(fn () => app(AiGatewayService::class)->propose('recipe.description', ['b' => 1]))
         ->toThrow(KiDeaktiviertException::class, 'Kill-Switch');
     expect(\Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')->count())->toBe(0);
 
     // Autopilot-Pfad (M6-05) degradiert sauber in den Panel-Fehler statt 500
     $vk = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([
-        'team_id' => $this->rootTeam->id, 'recipe_key' => 'ks', 'name' => 'X', 'status' => 'draft', 'ist_verkaufsrezept' => true,
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'ks', 'name' => 'X', 'status' => 'draft', 'is_sales_recipe' => true,
     ]);
     expect(fn () => app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)->classify($this->rootTeam, $vk->id))
         ->toThrow(KiDeaktiviertException::class);
 
     // wieder an → Call läuft + loggt
-    app(TeamSettingsService::class)->update($this->rootTeam, ['ki_aktiv' => true]);
-    app(AiGatewayService::class)->propose('recipe.beschreibung', ['b' => 1]);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['ai_active' => true]);
+    app(AiGatewayService::class)->propose('recipe.description', ['b' => 1]);
     expect(\Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')->count())->toBe(1);
 });
 

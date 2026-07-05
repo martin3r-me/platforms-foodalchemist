@@ -33,7 +33,7 @@ beforeEach(function () {
     $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);
     $this->mkGpMitPreis = function (string $name, ?string $slug, float $preis) use ($supplier) {
         $gp = $this->makeGp($this->rootTeam, $name);
-        $gp->update(['hauptzutat_slug' => $slug, 'status' => 'approved']);
+        $gp->update(['main_ingredient_slug' => $slug, 'status' => 'approved']);
         $la = FoodAlchemistSupplierItem::create([
             'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
             'designation' => $name, 'qty' => 1.0, 'unit_code' => 'kg',
@@ -54,14 +54,14 @@ it('DoD M4-14: 1 Rezept end-to-end — Bestand-GP + Sub-Stub für Halbfabrikat +
         'convenience' => 'from_scratch', 'frische' => 'frisch',
     ], kiRezeptOverride: [
         'name' => 'Reduktion: Rotwein-Schalotte',
-        'beschreibung' => 'Dunkle, sirupartige Reduktion als Saucenbasis.',
-        'geschmacksrichtung' => 'herzhaft',
-        'zubereitung' => '1. Schalotten anschwitzen. 2. Mit Rotwein abloeschen, reduzieren.',
+        'description' => 'Dunkle, sirupartige Reduktion als Saucenbasis.',
+        'taste_direction' => 'herzhaft',
+        'preparation' => '1. Schalotten anschwitzen. 2. Mit Rotwein abloeschen, reduzieren.',
         'zutaten' => [
-            ['text' => 'Schalotten', 'slug' => 'schalotten', 'menge' => 200, 'einheit' => 'g'],
-            ['text' => 'Rotwein', 'slug' => 'rotwein', 'menge' => 500, 'einheit' => 'ml'],
-            ['text' => 'brauner Kalbsfond', 'menge' => 250, 'einheit' => 'ml'],   // Halbfabrikat-Lücke ⇒ Stub
-            ['text' => 'Drachenfrucht-Essenz', 'menge' => 10, 'einheit' => 'ml'], // GP-Lücke ⇒ Hard-Stop
+            ['text' => 'Schalotten', 'slug' => 'schalotten', 'quantity' => 200, 'unit' => 'g'],
+            ['text' => 'Rotwein', 'slug' => 'rotwein', 'quantity' => 500, 'unit' => 'ml'],
+            ['text' => 'brauner Kalbsfond', 'quantity' => 250, 'unit' => 'ml'],   // Halbfabrikat-Lücke ⇒ Stub
+            ['text' => 'Drachenfrucht-Essenz', 'quantity' => 10, 'unit' => 'ml'], // GP-Lücke ⇒ Hard-Stop
         ],
     ]);
 
@@ -69,7 +69,7 @@ it('DoD M4-14: 1 Rezept end-to-end — Bestand-GP + Sub-Stub für Halbfabrikat +
     expect($recipe->name)->toBe('Reduktion: Rotwein-Schalotte')
         ->and($recipe->status->value)->toBe('draft')
         ->and($recipe->last_modified_by)->toBe('generator')
-        ->and($recipe->beschreibung_quelle)->toBe('ki')
+        ->and($recipe->description_source)->toBe('ki')
         ->and($recipe->ingredients()->count())->toBe(4);
 
     // Statistik: 2 Bestand-GPs, 1 Stub neu, 1 offen
@@ -90,8 +90,8 @@ it('DoD M4-14: 1 Rezept end-to-end — Bestand-GP + Sub-Stub für Halbfabrikat +
         ->and((float) $recipe->ek_total_eur)->toBeGreaterThan(0);
 
     // n_zutaten_ungemappt = 1 (Hard-Stop) ⇒ F7.1: Allergene unbekannt, Konfidenz low
-    expect($recipe->n_zutaten_ungemappt)->toBe(1)
-        ->and($recipe->allergene_konfidenz)->toBe('low');
+    expect($recipe->n_ingredients_unmapped)->toBe(1)
+        ->and($recipe->allergens_confidence)->toBe('low');
 });
 
 it('§4-Alias greift im Generator: Rinderbrühe nutzt den BESTAND statt einen Stub anzulegen', function () {
@@ -102,7 +102,7 @@ it('§4-Alias greift im Generator: Rinderbrühe nutzt den BESTAND statt einen St
 
     $resultat = $this->svc->generiere($this->rootTeam, 'Helle Suppe', [], kiRezeptOverride: [
         'name' => 'Suppe: Hell',
-        'zutaten' => [['text' => 'Rinderbrühe', 'slug' => 'rinderbruehe', 'menge' => 1000, 'einheit' => 'ml']],
+        'zutaten' => [['text' => 'Rinderbrühe', 'slug' => 'rinderbruehe', 'quantity' => 1000, 'unit' => 'ml']],
     ]);
 
     expect($resultat['statistik']['bestand_sub'])->toBe(1)

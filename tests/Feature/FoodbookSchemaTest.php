@@ -17,24 +17,24 @@ beforeEach(function () {
     $this->concept = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Grill-Buffet']);
     $this->gericht = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g1', 'name' => 'Gruß aus der Küche',
-        'status' => 'approved', 'ist_verkaufsrezept' => true, 'vk_netto' => 2.50,
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.50,
     ]);
 });
 
 it('Foodbook: Mappe mit Kunde + Pax, Kapitel-Baum, Blöcke (concept_ref + recipe_ref + header)', function () {
     $fb = FoodAlchemistFoodbook::create([
-        'team_id' => $this->rootTeam->id, 'code' => 'FB2027', 'bezeichnung' => 'Angebot Hotel Adler',
-        'jahr' => 2027, 'kunde' => 'Hotel Adler', 'personen' => 120, 'status' => 'draft',
+        'team_id' => $this->rootTeam->id, 'code' => 'FB2027', 'label' => 'Angebot Hotel Adler',
+        'jahr' => 2027, 'customer' => 'Hotel Adler', 'personen' => 120, 'status' => 'draft',
     ]);
 
-    $top = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'titel' => 'Abendveranstaltung', 'position' => 0]);
-    $sub = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'parent_id' => $top->id, 'titel' => 'Hauptgang', 'position' => 0]);
+    $top = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'title' => 'Abendveranstaltung', 'position' => 0]);
+    $sub = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'parent_id' => $top->id, 'title' => 'Hauptgang', 'position' => 0]);
 
-    $top->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'header', 'bezeichnung' => 'Willkommen', 'position' => 0]);
+    $top->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'header', 'label' => 'Willkommen', 'position' => 0]);
     $sub->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'concept_ref', 'concept_id' => $this->concept->id, 'position' => 0]);
-    $sub->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'recipe_ref', 'vk_recipe_id' => $this->gericht->id, 'menge' => 1, 'position' => 1]);
+    $sub->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'recipe_ref', 'sales_recipe_id' => $this->gericht->id, 'quantity' => 1, 'position' => 1]);
 
-    expect($fb->kunde)->toBe('Hotel Adler')
+    expect($fb->customer)->toBe('Hotel Adler')
         ->and($fb->personen)->toBe(120)
         ->and($fb->kapitel()->count())->toBe(2)
         ->and($top->children()->count())->toBe(1)
@@ -44,12 +44,12 @@ it('Foodbook: Mappe mit Kunde + Pax, Kapitel-Baum, Blöcke (concept_ref + recipe
 });
 
 it('Team-Hierarchie: Kind sieht Eltern-Foodbooks; Besitzer-Check (D1)', function () {
-    $rootFb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'bezeichnung' => 'Root-FB']);
-    $childFb = FoodAlchemistFoodbook::create(['team_id' => $this->childA->id, 'bezeichnung' => 'Kind-FB']);
+    $rootFb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'label' => 'Root-FB']);
+    $childFb = FoodAlchemistFoodbook::create(['team_id' => $this->childA->id, 'label' => 'Kind-FB']);
 
-    expect(FoodAlchemistFoodbook::visibleToTeam($this->childA)->pluck('bezeichnung')->all())
+    expect(FoodAlchemistFoodbook::visibleToTeam($this->childA)->pluck('label')->all())
         ->toContain('Root-FB')->toContain('Kind-FB')
-        ->and(FoodAlchemistFoodbook::visibleToTeam($this->rootTeam)->pluck('bezeichnung')->all())
+        ->and(FoodAlchemistFoodbook::visibleToTeam($this->rootTeam)->pluck('label')->all())
         ->toContain('Root-FB')->not->toContain('Kind-FB')
         ->and($rootFb->isOwnedBy($this->rootTeam))->toBeTrue()
         ->and($rootFb->isOwnedBy($this->childA))->toBeFalse();

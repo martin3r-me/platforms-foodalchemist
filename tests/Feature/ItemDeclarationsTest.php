@@ -39,7 +39,7 @@ it('Set-Roundtrip schreibt die ROHE Domäne: ja⇒3, nein⇒1, unbekannt⇒0 (GL
     expect((int) $zeile->caffeinated)->toBe(3)
         ->and((int) $zeile->with_dye)->toBe(1)
         ->and((int) $zeile->waxed)->toBe(0)
-        ->and($zeile->quelle)->toBe('manual');
+        ->and($zeile->source)->toBe('manual');
 
     $ui = $this->svc->getDeclarations($this->la->fresh());
     expect($ui['caffeinated'])->toBe('ja')

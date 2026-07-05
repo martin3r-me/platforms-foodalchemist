@@ -19,10 +19,10 @@ beforeEach(function () {
 
     $this->mkDoc = function (string $slug, string $kategorie, string $inhalt) {
         DB::table('foodalchemist_knowledge_documents')->insert([
-            'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'titel' => $slug,
-            'kategorie' => $kategorie, 'inhalt_md' => $inhalt, 'version' => 1,
+            'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'title' => $slug,
+            'category' => $kategorie, 'content_md' => $inhalt, 'version' => 1,
             'content_hash' => hash('sha256', $inhalt), 'char_count' => mb_strlen($inhalt),
-            'aktiv' => 1, 'created_at' => now(), 'updated_at' => now(),
+            'active' => 1, 'created_at' => now(), 'updated_at' => now(),
         ]);
 
         return (int) DB::getPdo()->lastInsertId();
@@ -35,7 +35,7 @@ beforeEach(function () {
     };
     $this->mkRouting = function (string $feature, string $kategorie, string $modus, ?int $maxDocs = null, ?int $maxChars = null) {
         DB::table('foodalchemist_knowledge_routings')->insert([
-            'feature' => $feature, 'kategorie' => $kategorie, 'modus' => $modus,
+            'feature' => $feature, 'category' => $kategorie, 'mode' => $modus,
             'max_docs' => $maxDocs, 'max_chars_per_doc' => $maxChars,
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -179,8 +179,8 @@ it('Inv. 7: ai_extract_recipe bleibt BEWUSST ohne Wissen (Routing none)', functi
 
 it('DoD: Assembly hält das Gesamtbudget — übergroße Docs auf ≈52k Zeichen gedeckelt', function () {
     ($this->seedGenerator)(str_repeat('D', 20000));
-    DB::table('foodalchemist_knowledge_documents')->where('kategorie', 'cross_cutting')
-        ->update(['inhalt_md' => str_repeat('C', 20000)]);
+    DB::table('foodalchemist_knowledge_documents')->where('category', 'cross_cutting')
+        ->update(['content_md' => str_repeat('C', 20000)]);
     ($this->mkDoc)('schwein', 'domain', str_repeat('D', 20000));      // 4. Domain via Fallback unmöglich — Aliase decken 3
 
     $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');

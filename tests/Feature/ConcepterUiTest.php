@@ -25,7 +25,7 @@ beforeEach(function () {
 
     $mk = fn (string $k, string $n, float $vk) => FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => $k, 'name' => $n,
-        'status' => 'approved', 'ist_verkaufsrezept' => true, 'vk_netto' => $vk, 'ek_total_eur' => $vk * 0.3,
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => $vk, 'ek_total_eur' => $vk * 0.3,
     ]);
     $this->green = $mk('g', 'Salat: Green Power', 2.00);
     $this->sunny = $mk('s', 'Salat: Sunny Kick', 3.00);
@@ -45,18 +45,18 @@ it('Paket-Browser: anlegen, Gerichte hinzufügen, speichern (Voll-Page-Render)',
         ->call('gerichtHinzu', $this->green->id)
         ->call('gerichtHinzu', $this->sunny->id)
         ->set('form.name', 'Salad Wall')
-        ->set('form.rolle', 'Vorspeise')
+        ->set('form.role', 'Vorspeise')
         ->call('speichern')
         ->assertSee('Salad Wall');
 
     $b = FoodAlchemistPaket::find($id);
-    expect($b->name)->toBe('Salad Wall')->and($b->rolle)->toBe('Vorspeise')
+    expect($b->name)->toBe('Salad Wall')->and($b->role)->toBe('Vorspeise')
         ->and($b->gerichte()->count())->toBe(2);
 });
 
 it('Concept-Editor: Slot anlegen, mit Paket füllen, Live-Preis im Cockpit', function () {
-    $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
-    app(PaketService::class)->update($this->rootTeam, $b->id, ['preis_pro_person' => 4.50]);
+    $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise']);
+    app(PaketService::class)->update($this->rootTeam, $b->id, ['price_per_person' => 4.50]);
 
     Livewire::test(ConceptsIndex::class)->call('neu');
     $c = FoodAlchemistConcept::echte()->first();
@@ -73,12 +73,12 @@ it('Concept-Editor: Slot anlegen, mit Paket füllen, Live-Preis im Cockpit', fun
         ->assertSee('Salad Wall')
         ->assertSee('4,50');
 
-    expect((float) $c->refresh()->preis_pro_person_cache)->toBe(4.50);
+    expect((float) $c->refresh()->price_per_person_cache)->toBe(4.50);
 });
 
 it('Vorlage-Fork über die UI erzeugt ein eigenständiges Concept (M10-05)', function () {
-    $vorlage = app(ConceptService::class)->create($this->rootTeam, ['name' => '3-Gang', 'is_vorlage' => true]);
-    app(ConceptService::class)->addSlot($this->rootTeam, $vorlage->id, ['rolle' => 'Vorspeise']);
+    $vorlage = app(ConceptService::class)->create($this->rootTeam, ['name' => '3-Gang', 'is_template' => true]);
+    app(ConceptService::class)->addSlot($this->rootTeam, $vorlage->id, ['role' => 'Vorspeise']);
 
     Livewire::test(ConceptsIndex::class)
         ->set('showVorlagen', true)
@@ -91,8 +91,8 @@ it('Vorlage-Fork über die UI erzeugt ein eigenständiges Concept (M10-05)', fun
 });
 
 it('M10c: Concept-Editor zeigt €/Person (kein Pax), Slot-Reorder über die UI', function () {
-    $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
-    app(PaketService::class)->update($this->rootTeam, $b->id, ['preis_pro_person' => 4.50]);
+    $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise']);
+    app(PaketService::class)->update($this->rootTeam, $b->id, ['price_per_person' => 4.50]);
     $c = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
 
     $comp = Livewire::test(ConceptsIndex::class)
@@ -126,29 +126,29 @@ it('M10c-B: Kategorie anlegen + Concept filtern (UI)', function () {
 });
 
 it('M13: Zielpreis-Modus — Vorschlag berechnen + übernehmen (UI)', function () {
-    $v4 = app(PaketService::class)->create($this->rootTeam, ['name' => 'Vorspeise A', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
-    $v6 = app(PaketService::class)->create($this->rootTeam, ['name' => 'Vorspeise B', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
-    app(PaketService::class)->update($this->rootTeam, $v4->id, ['preis_pro_person' => 4.00]);
-    app(PaketService::class)->update($this->rootTeam, $v6->id, ['preis_pro_person' => 6.00]);
+    $v4 = app(PaketService::class)->create($this->rootTeam, ['name' => 'Vorspeise A', 'role' => 'Vorspeise', 'price_mode' => 'manuell']);
+    $v6 = app(PaketService::class)->create($this->rootTeam, ['name' => 'Vorspeise B', 'role' => 'Vorspeise', 'price_mode' => 'manuell']);
+    app(PaketService::class)->update($this->rootTeam, $v4->id, ['price_per_person' => 4.00]);
+    app(PaketService::class)->update($this->rootTeam, $v6->id, ['price_per_person' => 6.00]);
     $c = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
-    $slot = app(ConceptService::class)->addSlot($this->rootTeam, $c->id, ['rolle' => 'Vorspeise']);
-    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $v4->id]);
+    $slot = app(ConceptService::class)->addSlot($this->rootTeam, $c->id, ['role' => 'Vorspeise']);
+    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['package_id' => $v4->id]);
 
     Livewire::test(ConceptsIndex::class)
         ->call('waehle', $c->id)
         ->call('zielpreisToggle')
         ->set('zielPreis', '6')
         ->call('zielpreisBerechnen')
-        ->assertSet('zielVorschlag.preis', 6.00)
+        ->assertSet('zielVorschlag.price', 6.00)
         ->assertSet('zielVorschlag.aenderungen', 1)
         ->call('zielpreisUebernehmen');
 
-    expect((float) $c->refresh()->preis_pro_person_cache)->toBe(6.00)
-        ->and($slot->refresh()->paket_id)->toBe($v6->id);
+    expect((float) $c->refresh()->price_per_person_cache)->toBe(6.00)
+        ->and($slot->refresh()->package_id)->toBe($v6->id);
 });
 
 it('M10p: Paket-Gericht Menge/Person setzen + ▲▼-Reorder', function () {
-    $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
+    $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise']);
 
     $comp = Livewire::test(PaketeIndex::class)
         ->call('waehle', $b->id)
@@ -159,6 +159,6 @@ it('M10p: Paket-Gericht Menge/Person setzen + ▲▼-Reorder', function () {
     $comp->set("mengeForm.{$rows[0]}", 120)->call('gerichtMengeSpeichern', $rows[0])
         ->call('gerichtHoch', $rows[1]);
 
-    expect((float) $b->gerichte()->find($rows[0])->menge)->toBe(120.0)
+    expect((float) $b->gerichte()->find($rows[0])->quantity)->toBe(120.0)
         ->and($b->gerichte()->orderBy('position')->pluck('id')->first())->toBe($rows[1]);
 });

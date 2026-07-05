@@ -14,13 +14,13 @@ uses(TestCase::class);
 it('Fake-Roundtrip: propose() liefert deterministisches Vorschlags-DTO', function () {
     config(['foodalchemist.ai.provider' => 'fake']);
 
-    $proposal = app(AiGatewayService::class)->propose('demo.echo', ['name' => 'Zanderfilet', 'zustand' => 'TK']);
+    $proposal = app(AiGatewayService::class)->propose('demo.echo', ['name' => 'Zanderfilet', 'condition' => 'TK']);
 
     expect($proposal)->toBeInstanceOf(AiProposal::class)
-        ->and($proposal->werte)->toBe(['name' => 'Zanderfilet', 'zustand' => 'TK']) // Kontext-Echo
+        ->and($proposal->werte)->toBe(['name' => 'Zanderfilet', 'condition' => 'TK']) // Kontext-Echo
         ->and($proposal->confidence)->toBe(0.87)
         ->and($proposal->model)->toBe('fake-deterministic-1')
-        ->and($proposal->begruendung)->toContain('FakeAiProvider')
+        ->and($proposal->reasoning)->toContain('FakeAiProvider')
         ->and($proposal->callLogId)->toBeNull(); // Audit-Tabelle kommt mit M7-01
 });
 

@@ -18,7 +18,7 @@ beforeEach(function () {
     $this->svc = app(PairingService::class);
 
     $this->mkAnker = function (string $slug) {
-        DB::table('foodalchemist_vocab_pairing_ankers')->insert([
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert([
             'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'display_de' => ucfirst($slug),
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -27,9 +27,9 @@ beforeEach(function () {
     };
     $this->mkKante = function (int $a, int $b, string $typ) {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {                 // Inv. 4: bidirektional
-            DB::table('foodalchemist_pairing_anker_edges')->insert([
-                'uuid' => (string) UuidV7::generate(), 'anker_a_id' => $x, 'anker_b_id' => $y,
-                'typ' => $typ, 'created_at' => now(), 'updated_at' => now(),
+            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+                'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
+                'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
             ]);
         }
     };
@@ -70,7 +70,7 @@ it('T4: Kohäsion durchgerechnet — 92/75/100 %, fits 88/88/100, weakest modern
         ->and($k['coverage_pct'])->toBe(100)
         ->and($k['rated_pairs'])->toBe(3)
         ->and(collect($k['komponenten'])->pluck('fit', 'label')->all())->toBe(['Erdbeere' => 88, 'Basilikum' => 88, 'Balsamico' => 100])
-        ->and($k['weakest_pair']['typ'])->toBe('modern')
+        ->and($k['weakest_pair']['type'])->toBe('modern')
         ->and($k['weakest_pair']['score'])->toBe(75)
         ->and(collect($k['komponenten'])->contains(fn ($c) => $c['is_orphan']))->toBeFalse();
 });
@@ -107,9 +107,9 @@ it('Inv. 1/3: Rezept-Cap 5 blockt, manual gewinnt (nullt KI-Lineage)', function 
         ->toThrow(RuntimeException::class, 'max 5');
 
     // manual gewinnt: bestehender KI-Anker wird beim Set auf manual gehoben, Lineage genullt
-    DB::table('foodalchemist_recipe_anker_mappings')->where('recipe_id', $rezept->id)->where('anker_id', $ids[0])
-        ->update(['quelle' => 'ai_inferred', 'ai_confidence' => 0.7]);
+    DB::table('foodalchemist_recipe_anchor_mappings')->where('recipe_id', $rezept->id)->where('anchor_id', $ids[0])
+        ->update(['source' => 'ai_inferred', 'ai_confidence' => 0.7]);
     $this->svc->setRecipeAnker($this->rootTeam, $rezept->id, $ids[0]);  // Update zählt nicht gegen Cap
-    $zeile = DB::table('foodalchemist_recipe_anker_mappings')->where('recipe_id', $rezept->id)->where('anker_id', $ids[0])->first();
-    expect($zeile->quelle)->toBe('manual')->and($zeile->ai_confidence)->toBeNull();
+    $zeile = DB::table('foodalchemist_recipe_anchor_mappings')->where('recipe_id', $rezept->id)->where('anchor_id', $ids[0])->first();
+    expect($zeile->source)->toBe('manual')->and($zeile->ai_confidence)->toBeNull();
 });

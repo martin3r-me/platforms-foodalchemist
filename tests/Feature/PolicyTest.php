@@ -40,7 +40,7 @@ it('Policy gilt auch für Rezepte (geteiltes Modell, beide Sichten)', function (
 it('Policy gilt für Foodbooks (M11-10): Kind sieht Eltern-Foodbook, kuratiert es aber nicht', function () {
     $this->seedTeamHierarchy();
     $kindUser = $this->makeUser($this->childA, 'Kind A');
-    $rootFb = app(\Platform\FoodAlchemist\Services\FoodbookService::class)->create($this->rootTeam, ['bezeichnung' => 'Root-FB']);
+    $rootFb = app(\Platform\FoodAlchemist\Services\FoodbookService::class)->create($this->rootTeam, ['label' => 'Root-FB']);
 
     expect(Gate::forUser($kindUser)->allows('view', $rootFb))->toBeTrue()        // Kette aufwärts
         ->and(Gate::forUser($kindUser)->allows('update', $rootFb))->toBeFalse()  // Curate nur Besitzer

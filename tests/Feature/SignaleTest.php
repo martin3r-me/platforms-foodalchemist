@@ -36,7 +36,7 @@ it('erzeuge ist idempotent über dedup_key: offenes Signal wird aktualisiert sta
 
     expect($b->id)->toBe($a->id)                                     // aktualisiert, kein Duplikat
         ->and($b->severity)->toBe(SignalSeverity::Kritisch)
-        ->and($b->titel)->toBe('120 GPs ohne Lead-LA')
+        ->and($b->title)->toBe('120 GPs ohne Lead-LA')
         ->and(FoodAlchemistSignal::count())->toBe(1);
 
     // erledigtes Signal blockt den dedup NICHT — neues offenes Signal entsteht (Historie bleibt)
@@ -68,7 +68,7 @@ it('paginate filtert nach Status + Typ; offeneCount/offeneNachTyp zählen nur of
     $this->signals->abschliessen($this->rootTeam, $erledigt->id);
 
     expect($this->signals->paginate(['status' => 'offen'], $this->rootTeam)->total())->toBe(2)
-        ->and($this->signals->paginate(['status' => 'offen', 'typ' => 'veraltete_preise'], $this->rootTeam)->total())->toBe(1)
+        ->and($this->signals->paginate(['status' => 'offen', 'type' => 'veraltete_preise'], $this->rootTeam)->total())->toBe(1)
         ->and($this->signals->paginate(['status' => 'erledigt'], $this->rootTeam)->total())->toBe(1)
         ->and($this->signals->offeneCount($this->rootTeam))->toBe(2)
         ->and($this->signals->offeneNachTyp($this->rootTeam))->toBe(['datenqualitaet_gp_la' => 1, 'veraltete_preise' => 1]);
@@ -151,13 +151,13 @@ it('R2.1 Detektor preisSprungMargeImpact: Lead-LA +30% → Signal mit transitive
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'basis-butter', 'name' => 'Buttersauce', 'status' => 'approved', 'is_sales_recipe' => false,
     ]);
     \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
-        'team_id' => $this->rootTeam->id, 'recipe_id' => $basis->id, 'gp_id' => $gp->id, 'raw_text' => 'Butter', 'quantity' => '200', 'unit_vocab_id' => $g->id,
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $basis->id, 'gp_id' => $gp->id, 'raw_text' => 'Butter', 'quantity' => '200', 'unit_vocab_id' => $g->id, 'position' => 1,
     ]);
     $gericht = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'gericht-x', 'name' => 'Gericht mit Buttersauce', 'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 20.0,
     ]);
     \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
-        'team_id' => $this->rootTeam->id, 'recipe_id' => $gericht->id, 'referenced_recipe_id' => $basis->id, 'raw_text' => 'Buttersauce', 'quantity' => '100', 'unit_vocab_id' => $g->id,
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $gericht->id, 'referenced_recipe_id' => $basis->id, 'raw_text' => 'Buttersauce', 'quantity' => '100', 'unit_vocab_id' => $g->id, 'position' => 1,
     ]);
 
     $n = $this->detektor->preisSprungMargeImpact($this->rootTeam, 10.0);
@@ -186,12 +186,12 @@ it('Detektor naehrwertPlausi: flaggt Zucker>KH bzw. gesFett>Fett, Toleranz schü
 
     expect($this->detektor->naehrwertPlausi($this->rootTeam))->toBe(1);
 
-    $signal = FoodAlchemistSignal::where('typ', 'naehrwert_plausi')->firstOrFail();
+    $signal = FoodAlchemistSignal::where('type', 'naehrwert_plausi')->firstOrFail();
     expect($signal->payload['anzahl'])->toBe(2)
         ->and(collect($signal->payload['beispiele'])->pluck('name')->sort()->values()->all())
         ->toBe(['R-gesfett-hoch', 'R-zucker-hoch']);
 
     // Idempotenz: zweiter Lauf aktualisiert statt dupliziert
     $this->detektor->naehrwertPlausi($this->rootTeam);
-    expect(FoodAlchemistSignal::where('typ', 'naehrwert_plausi')->count())->toBe(1);
+    expect(FoodAlchemistSignal::where('type', 'naehrwert_plausi')->count())->toBe(1);
 });

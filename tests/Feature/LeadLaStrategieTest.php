@@ -70,7 +70,7 @@ it('DoD: dieselben Kandidaten, drei Strategien, drei verschiedene Leads', functi
 });
 
 it('Einstellungen persistieren je Team — Geschwister bleiben beim Default', function () {
-    $this->settings->update($this->childA, ['lead_la_strategie' => LeadLaStrategie::GuenstigsterPreis, 'ausweich_kette_anzeigen' => true]);
+    $this->settings->update($this->childA, ['lead_la_strategie' => LeadLaStrategie::GuenstigsterPreis, 'show_fallback_chain' => true]);
 
     expect($this->settings->leadLaStrategie($this->childA))->toBe(LeadLaStrategie::GuenstigsterPreis)
         ->and($this->settings->ausweichKetteAnzeigen($this->childA))->toBeTrue()

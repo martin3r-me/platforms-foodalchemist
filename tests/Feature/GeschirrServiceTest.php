@@ -18,14 +18,14 @@ beforeEach(function () {
 
 it('Leihpreis/Pfand: Tippfehler/negativ wird null statt stiller 0; gültige Komma-Eingabe + legitime 0 bleiben', function () {
     $bad = $this->svc->createItem($this->rootTeam, $this->supplier->id, [
-        'bezeichnung' => 'Teller flach', 'leihpreis' => 'abc', 'pfand' => '-5',
+        'label' => 'Teller flach', 'rental_price' => 'abc', 'pfand' => '-5',
     ]);
-    expect($bad->leihpreis)->toBeNull()
+    expect($bad->rental_price)->toBeNull()
         ->and($bad->pfand)->toBeNull();
 
     $ok = $this->svc->createItem($this->rootTeam, $this->supplier->id, [
-        'bezeichnung' => 'Teller tief', 'leihpreis' => '1,50', 'pfand' => '0',
+        'label' => 'Teller tief', 'rental_price' => '1,50', 'pfand' => '0',
     ]);
-    expect((float) $ok->leihpreis)->toBe(1.5)
+    expect((float) $ok->rental_price)->toBe(1.5)
         ->and((float) $ok->pfand)->toBe(0.0); // legitime 0 bleibt erhalten
 });

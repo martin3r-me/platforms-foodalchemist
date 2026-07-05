@@ -64,7 +64,7 @@ it('Befehl 1 — Suche: Loop ruft recipes.SEARCH und antwortet final; Latenz gem
 
 it('Befehl 2 — Detail öffnen: ui.OPEN mit Sichtbarkeits-Guard ⇒ UI-Aktion + Event', function () {
     ($this->skript)([
-        '{"action":"tool","name":"foodalchemist.ui.OPEN","arguments":{"typ":"recipe","id":' . $this->rezept->id . '}}',
+        '{"action":"tool","name":"foodalchemist.ui.OPEN","arguments":{"type":"recipe","id":' . $this->rezept->id . '}}',
         '{"action":"final","text":"Geöffnet."}',
     ]);
 
@@ -75,25 +75,25 @@ it('Befehl 2 — Detail öffnen: ui.OPEN mit Sichtbarkeits-Guard ⇒ UI-Aktion +
 });
 
 it('Befehl 3 — Schreib-Proposal: sprechen → Proposal (kein Write) → Bestätigen schreibt via GL-07', function () {
-    $hg = FoodAlchemistDishMainGroup::create(['code' => 'HG', 'bezeichnung' => 'Hauptgang']);
-    $klasse = FoodAlchemistDishClass::create(['dish_main_group_id' => $hg->id, 'code' => 'HG_F', 'bezeichnung' => 'Fleisch', 'diaetform' => 'fleisch']);
+    $hg = FoodAlchemistDishMainGroup::create(['code' => 'HG', 'label' => 'Hauptgang']);
+    $klasse = FoodAlchemistDishClass::create(['dish_main_group_id' => $hg->id, 'code' => 'HG_F', 'label' => 'Fleisch', 'diet_form' => 'fleisch']);
     $vk = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'vk', 'name' => 'HG: Filet', 'status' => 'draft',
-        'ist_verkaufsrezept' => true, 'speisen_klasse_id' => $klasse->id,  // Kontext fürs classify-Echo
+        'is_sales_recipe' => true, 'dish_class_id' => $klasse->id,  // Kontext fürs classify-Echo
     ]);
     ($this->skript)([
         '{"action":"tool","name":"foodalchemist.recipe_klasse.POST","arguments":{"recipe_id":' . $vk->id . '}}',
         // Antwort 2 konsumiert das classify INNERHALB des Tools (gleicher Provider):
-        '{"werte":{"speisen_klasse_id":' . $klasse->id . '},"confidence":0.87}',
+        '{"werte":{"dish_class_id":' . $klasse->id . '},"confidence":0.87}',
         '{"action":"final","text":"Vorschlag: Fleisch — bitte bestätigen."}',
     ]);
 
     $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Klassifiziere das Filet');
-    $vk->update(['speisen_klasse_id' => null]);                       // Proposal hat NICHT geschrieben
-    expect($vk->fresh()->speisen_klasse_id)->toBeNull();
+    $vk->update(['dish_class_id' => null]);                       // Proposal hat NICHT geschrieben
+    expect($vk->fresh()->dish_class_id)->toBeNull();
 
     $modal->call('proposalUebernehmen', 0)->assertDispatched('recipe-gespeichert');
-    expect($vk->fresh()->speisen_klasse_quelle)->toBe('ki');          // Accept = GL-07-Pfad
+    expect($vk->fresh()->dish_class_source)->toBe('ki');          // Accept = GL-07-Pfad
 });
 
 it('STT-Fassade: Fake liefert konfigurierten Text; AssemblyAI ohne Key wirft mit D8-Hinweis', function () {

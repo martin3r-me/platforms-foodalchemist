@@ -62,7 +62,7 @@ it('DoD §3.3: kaputte Antwort (Degeneration) → Re-Roll mit Temp-Treppe → Er
         '{"werte": {"x": 2}, "confidence": 0.9}',                     // Versuch 2: valide
     ]);
 
-    $p = $this->gw->propose('recipe.beschreibung', ['b' => 1]);
+    $p = $this->gw->propose('recipe.description', ['b' => 1]);
 
     expect($p->werte)->toBe(['x' => 2])
         ->and($p->confidence)->toBe(0.9)
@@ -85,7 +85,7 @@ it('§3.3 Generator-Variante: strukturell unbrauchbar (leere zutaten) → Retry 
 it('§3.3: 3× kaputt → Exception NACH dem Log (error-Zeile, Versuch 3 dokumentiert)', function () {
     ($this->skriptProvider)(['MÜLL', 'MÜLL', 'MÜLL']);
 
-    expect(fn () => $this->gw->propose('recipe.beschreibung', ['b' => 1]))
+    expect(fn () => $this->gw->propose('recipe.description', ['b' => 1]))
         ->toThrow(RuntimeException::class, 'Versuch 3');
 
     expect(DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('error'))->toContain('Versuch 3');
@@ -105,7 +105,7 @@ it('§3.2: nach erschöpftem Backoff einmaliger Modell-Fallback — model trägt
         }
     });
 
-    $p = $this->gw->propose('recipe.beschreibung', ['b' => 1]);
+    $p = $this->gw->propose('recipe.description', ['b' => 1]);
 
     expect($p->werte)->toBe(['ok' => true])
         ->and($p->model)->toBe('billig-fallback')

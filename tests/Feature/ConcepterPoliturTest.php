@@ -25,12 +25,12 @@ beforeEach(function () {
 
     $this->green = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g', 'name' => 'Green Power',
-        'status' => 'approved', 'ist_verkaufsrezept' => true, 'vk_netto' => 2.00, 'ek_total_eur' => 0.60,
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00, 'ek_total_eur' => 0.60,
     ]);
-    $this->paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise']);
+    $this->paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise']);
     $this->concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
-    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
-    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $this->paket->id]);
+    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['package_id' => $this->paket->id]);
 });
 
 it('Wo verwendet?: Paket → Concepts, die es referenzieren', function () {
@@ -41,14 +41,14 @@ it('Wo verwendet?: Paket → Concepts, die es referenzieren', function () {
 });
 
 it('Wo verwendet?: Concept → Foodbooks, die es referenzieren', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['bezeichnung' => 'Portfolio 2026']);
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Portfolio 2026']);
     $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['name' => 'Buffets']);
     $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
 
     $treffer = $this->concepts->verwendetInFoodbooks($this->rootTeam, $this->concept->id);
 
     expect($treffer)->toHaveCount(1)
-        ->and($treffer->first()->bezeichnung)->toBe('Portfolio 2026');
+        ->and($treffer->first()->label)->toBe('Portfolio 2026');
 
     // Anderes Concept ist in keinem Foodbook.
     $leer = $this->concepts->create($this->rootTeam, ['name' => 'Ungenutzt']);
@@ -68,7 +68,7 @@ it('Park-Flow: gerichtHinzu setzt die Menge/Person beim Einfügen', function () 
         ->call('gerichtHinzu', $this->green->id, 1.5);
 
     $row = $this->paket->gerichte()->first();
-    expect((float) $row->menge)->toBe(1.5);
+    expect((float) $row->quantity)->toBe(1.5);
 });
 
 it('Sektor-Eignung: zuweisen, reaktivieren, entfernen', function () {

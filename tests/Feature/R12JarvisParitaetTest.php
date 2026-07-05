@@ -64,8 +64,8 @@ it('LA-Modal: ✎ Preis-Inline-Edit ändert Preis/Gültig-bis/Notiz (Komma-Parsi
     Livewire::test(ItemModal::class)
         ->call('oeffnen', $this->la->id)
         ->call('preisBearbeiten', $p->id)
-        ->assertSet('preisEdit.preis', '20,00')
-        ->set('preisEdit.preis', '21,50')
+        ->assertSet('preisEdit.price', '20,00')
+        ->set('preisEdit.price', '21,50')
         ->set('preisEdit.valid_to', '2026-12-31')
         ->set('preisEdit.note', 'Listenpreis 2026')
         ->call('preisUpdate')
@@ -79,7 +79,7 @@ it('LA-Modal: ✎ Preis-Inline-Edit ändert Preis/Gültig-bis/Notiz (Komma-Parsi
     Livewire::test(ItemModal::class)
         ->call('oeffnen', $this->la->id)
         ->call('preisBearbeiten', $p->id)
-        ->set('preisEdit.preis', 'quatsch')
+        ->set('preisEdit.price', 'quatsch')
         ->call('preisUpdate')
         ->assertSet('fehler', 'Preis braucht eine Zahl ≥ 0.');
     expect((float) $p->fresh()->price)->toBe(21.5);
@@ -88,7 +88,7 @@ it('LA-Modal: ✎ Preis-Inline-Edit ändert Preis/Gültig-bis/Notiz (Komma-Parsi
 it('LA-Modal: + Preis anlegen blockt nicht-numerische Eingabe — kein stiller 0,00-€-Preis an der Wurzel der Kostenkette', function () {
     Livewire::test(ItemModal::class)
         ->call('oeffnen', $this->la->id)
-        ->set('preisNeu.preis', 'abc')
+        ->set('preisNeu.price', 'abc')
         ->call('preisAnlegen')
         ->assertSet('fehler', 'Preis braucht eine Zahl ≥ 0.');
     expect(FoodAlchemistPrice::where('supplier_item_id', $this->la->id)->count())->toBe(0);
@@ -96,7 +96,7 @@ it('LA-Modal: + Preis anlegen blockt nicht-numerische Eingabe — kein stiller 0
     // gültige Eingabe (Komma-Parsing) legt den Preis weiterhin an
     Livewire::test(ItemModal::class)
         ->call('oeffnen', $this->la->id)
-        ->set('preisNeu.preis', '12,50')
+        ->set('preisNeu.price', '12,50')
         ->call('preisAnlegen')
         ->assertSet('fehler', null);
     expect((float) FoodAlchemistPrice::where('supplier_item_id', $this->la->id)->latest('id')->first()->price)->toBe(12.5);

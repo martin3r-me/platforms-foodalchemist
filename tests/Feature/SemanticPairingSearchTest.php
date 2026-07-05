@@ -48,10 +48,10 @@ beforeEach(function () {
 
     $this->mkDoc = function (string $slug, string $kategorie, string $titel, string $inhalt, ?int $teamId = null): int {
         DB::table('foodalchemist_knowledge_documents')->insert([
-            'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'titel' => $titel,
-            'kategorie' => $kategorie, 'inhalt_md' => $inhalt, 'version' => 1,
+            'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'title' => $titel,
+            'category' => $kategorie, 'content_md' => $inhalt, 'version' => 1,
             'content_hash' => hash('sha256', $inhalt), 'char_count' => mb_strlen($inhalt),
-            'aktiv' => 1, 'team_id' => $teamId, 'created_at' => now(), 'updated_at' => now(),
+            'active' => 1, 'team_id' => $teamId, 'created_at' => now(), 'updated_at' => now(),
         ]);
 
         return (int) DB::getPdo()->lastInsertId();
@@ -92,7 +92,7 @@ it('findet ein Domain-Doc über einen Token im Inhalt, den der Slug nicht trägt
 it('verdrahtet den semantischen Fallback in discoverDomains (über contextFor)', function () {
     // Routing wie der Generator; nur Domain-Discovery relevant.
     DB::table('foodalchemist_knowledge_routings')->insert([
-        ['feature' => 'ai_generate_recipe', 'kategorie' => 'domain', 'modus' => 'discovery', 'created_at' => now(), 'updated_at' => now()],
+        ['feature' => 'ai_generate_recipe', 'category' => 'domain', 'mode' => 'discovery', 'created_at' => now(), 'updated_at' => now()],
     ]);
     ($this->mkDoc)('wurzelgemuese', 'domain', 'Wurzelgemüse', "# Wurzelgemüse\nTopinambur, Pastinake.\n");
     $this->svc->embedCorpus(['domain']);
@@ -109,7 +109,7 @@ it('lässt die Lexik unangetastet, wenn das Flag aus ist (kein Embedding-Zugriff
     $this->svc->embedCorpus(['domain']);
 
     DB::table('foodalchemist_knowledge_routings')->insert([
-        ['feature' => 'ai_generate_recipe', 'kategorie' => 'domain', 'modus' => 'discovery', 'created_at' => now(), 'updated_at' => now()],
+        ['feature' => 'ai_generate_recipe', 'category' => 'domain', 'mode' => 'discovery', 'created_at' => now(), 'updated_at' => now()],
     ]);
     $ctx = app(KnowledgeContextService::class)->contextFor('ai_generate_recipe', 'Topinambur Velouté');
 
@@ -144,7 +144,7 @@ it('ist idempotent — zweiter Lauf ohne Inhaltsänderung legt nicht neu an', fu
 
 it('löst einen Anker semantisch über das Vokabular auf (B) — Schwelle hält Falsch-Treffer raus', function () {
     $mkAnker = function (string $slug, string $display): int {
-        DB::table('foodalchemist_vocab_pairing_ankers')->insert([
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert([
             'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'display_de' => $display,
             'created_at' => now(), 'updated_at' => now(),
         ]);

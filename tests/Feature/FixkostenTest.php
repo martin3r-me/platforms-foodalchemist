@@ -21,25 +21,25 @@ beforeEach(function () {
     // Drei GK-Blöcke auf „abgeleitet" + Bezugsbasen (monatlich) + Stundensatz/Marge.
     $this->settings->update($this->rootTeam, [
         'stundensatz_eur' => 30, 'marge_pct' => 15,
-        'kalkulation_bezugsbasen' => ['mek' => 20000, 'fek' => 4000, 'hk' => 30000],
-        'kalkulation_schema' => [
-            ['key' => 'lohn', 'label' => 'Lohn', 'typ' => 'arbeitszeit', 'wert' => 0, 'aktiv' => true, 'sort' => 10, 'modus' => 'manuell'],
-            ['key' => 'gemeinkosten', 'label' => 'Material-GK', 'typ' => 'pct_mek', 'wert' => 0, 'aktiv' => true, 'sort' => 40, 'modus' => 'abgeleitet'],
-            ['key' => 'fertigungs_gk', 'label' => 'Fertigungs-GK', 'typ' => 'pct_fek', 'wert' => 0, 'aktiv' => true, 'sort' => 50, 'modus' => 'abgeleitet'],
-            ['key' => 'logistik', 'label' => 'Logistik', 'typ' => 'pct_hk', 'wert' => 0, 'aktiv' => true, 'sort' => 70, 'modus' => 'abgeleitet'],
+        'calculation_reference_bases' => ['mek' => 20000, 'fek' => 4000, 'hk' => 30000],
+        'calculation_schema' => [
+            ['key' => 'lohn', 'label' => 'Lohn', 'type' => 'arbeitszeit', 'value' => 0, 'active' => true, 'sort' => 10, 'mode' => 'manuell'],
+            ['key' => 'gemeinkosten', 'label' => 'Material-GK', 'type' => 'pct_mek', 'value' => 0, 'active' => true, 'sort' => 40, 'mode' => 'abgeleitet'],
+            ['key' => 'fertigungs_gk', 'label' => 'Fertigungs-GK', 'type' => 'pct_fek', 'value' => 0, 'active' => true, 'sort' => 50, 'mode' => 'abgeleitet'],
+            ['key' => 'logistik', 'label' => 'Logistik', 'type' => 'pct_hk', 'value' => 0, 'active' => true, 'sort' => 70, 'mode' => 'abgeleitet'],
         ],
     ]);
-    $this->fix->create($this->rootTeam, ['bezeichnung' => 'Einkauf/Lager', 'betrag' => 4000, 'periode' => 'monatlich', 'block_key' => 'gemeinkosten']);
-    $this->fix->create($this->rootTeam, ['bezeichnung' => 'Spüle/Energie', 'betrag' => 2000, 'periode' => 'monatlich', 'block_key' => 'fertigungs_gk']);
-    $this->fix->create($this->rootTeam, ['bezeichnung' => 'LKW', 'betrag' => 1500, 'periode' => 'monatlich', 'block_key' => 'logistik']);
+    $this->fix->create($this->rootTeam, ['label' => 'Einkauf/Lager', 'betrag' => 4000, 'periode' => 'monatlich', 'block_key' => 'gemeinkosten']);
+    $this->fix->create($this->rootTeam, ['label' => 'Spüle/Energie', 'betrag' => 2000, 'periode' => 'monatlich', 'block_key' => 'fertigungs_gk']);
+    $this->fix->create($this->rootTeam, ['label' => 'LKW', 'betrag' => 1500, 'periode' => 'monatlich', 'block_key' => 'logistik']);
 });
 
 it('leitet die Zuschlag-Sätze aus Fixkosten ÷ Bezugsbasis ab', function () {
     $schema = collect($this->fix->aufgeloestesSchema($this->rootTeam))->keyBy('key');
 
-    expect($schema['gemeinkosten']['wert'])->toBe(20.0)   // 4000 / 20000 (MEK)
-        ->and($schema['fertigungs_gk']['wert'])->toBe(50.0) // 2000 / 4000 (FEK)
-        ->and($schema['logistik']['wert'])->toBe(5.0);      // 1500 / 30000 (HK)
+    expect($schema['gemeinkosten']['value'])->toBe(20.0)   // 4000 / 20000 (MEK)
+        ->and($schema['fertigungs_gk']['value'])->toBe(50.0) // 2000 / 4000 (FEK)
+        ->and($schema['logistik']['value'])->toBe(5.0);      // 1500 / 30000 (HK)
 });
 
 it('rechnet mehrstufig mit den abgeleiteten Sätzen', function () {
@@ -53,17 +53,17 @@ it('rechnet mehrstufig mit den abgeleiteten Sätzen', function () {
 });
 
 it('normalisiert jährliche Fixkosten auf Monatsbasis', function () {
-    $this->fix->create($this->rootTeam, ['bezeichnung' => 'Versicherung', 'betrag' => 12000, 'periode' => 'jaehrlich', 'block_key' => 'logistik']);
+    $this->fix->create($this->rootTeam, ['label' => 'Versicherung', 'betrag' => 12000, 'periode' => 'jaehrlich', 'block_key' => 'logistik']);
     // logistik jetzt 1500 + 1000 (12000/12) = 2500 / 30000 (HK) = 8,33 %.
     $schema = collect($this->fix->aufgeloestesSchema($this->rootTeam))->keyBy('key');
 
-    expect($schema['logistik']['wert'])->toBe(8.33);
+    expect($schema['logistik']['value'])->toBe(8.33);
 });
 
 it('ohne Bezugsbasis bleibt der abgeleitete Satz 0 (keine Division durch 0)', function () {
-    $this->settings->update($this->rootTeam, ['kalkulation_bezugsbasen' => ['mek' => 0, 'fek' => 0, 'hk' => 0]]);
+    $this->settings->update($this->rootTeam, ['calculation_reference_bases' => ['mek' => 0, 'fek' => 0, 'hk' => 0]]);
     $schema = collect($this->fix->aufgeloestesSchema($this->rootTeam))->keyBy('key');
 
-    expect($schema['gemeinkosten']['wert'])->toBe(0.0)
-        ->and($schema['logistik']['wert'])->toBe(0.0);
+    expect($schema['gemeinkosten']['value'])->toBe(0.0)
+        ->and($schema['logistik']['value'])->toBe(0.0);
 });

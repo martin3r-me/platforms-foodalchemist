@@ -46,7 +46,7 @@ it('DoD: gesetztes Profil ändert den Generator-Prompt; Vorrang-Hinweis steht im
     };
 
     $ohne = $lauf();
-    app(TeamSettingsService::class)->update($this->rootTeam, ['kuechen_typ' => 'catering']);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['kitchen_type' => 'catering']);
     $mit = $lauf();
 
     expect($ohne)->not->toContain('kuechen_profil')
@@ -73,7 +73,7 @@ it('Phase 5: Typ-Farben — Defaults ohne Config, valide Hex überschreiben, Mü
     expect($svc->typFarben($this->rootTeam))->toBe(TeamSettingsService::TYP_FARBEN_DEFAULTS);
 
     // valide Hex überschreiben (case-insensitiv → lowercase), Müll + Teil-Config fallen auf Default
-    $svc->update($this->rootTeam, ['typ_farben' => [
+    $svc->update($this->rootTeam, ['type_colors' => [
         'gp' => '#AABBCC',          // valide, wird lowercased
         'basisrezept' => 'rot',     // ungültig → Default
         // 'gericht' fehlt          // → Default

@@ -38,7 +38,7 @@ it('DoD: Historie konsistent nach 3 Operationen (anlegen → anlegen → lösche
 
     expect($historie)->toHaveCount(1)
         ->and($this->preise->activeFor($this->la->id)?->id)->toBe($p1->id)
-        ->and($historie->first()->kategorie->istAktiv())->toBeTrue();
+        ->and($historie->first()->category->istAktiv())->toBeTrue();
 });
 
 it('unbefristete neue Zeile schlägt gestempelte alte (Append-only-Ranking)', function () {

@@ -23,26 +23,26 @@ beforeEach(function () {
     config(['foodalchemist.ai.provider' => 'fake']);
     $this->vk = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'vk-eig', 'name' => 'FIN: Wrap',
-        'status' => 'draft', 'ist_verkaufsrezept' => true,
+        'status' => 'draft', 'is_sales_recipe' => true,
     ]);
 });
 
 it('setzeEignung/entferneEignung: Slug-Whitelist, Besitzer-Guard, Reaktivierung statt unique-Crash', function () {
     $svc = app(RecipeService::class);
     $svc->setzeEignung($this->rootTeam, $this->vk->id, 'sektor', 'care');
-    expect(DB::table('foodalchemist_recipe_sektor_eignung')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->count())->toBe(1);
+    expect(DB::table('foodalchemist_recipe_sector_suitability')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->count())->toBe(1);
 
     $svc->entferneEignung($this->rootTeam, $this->vk->id, 'sektor', 'care');
-    expect(DB::table('foodalchemist_recipe_sektor_eignung')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->count())->toBe(0);
+    expect(DB::table('foodalchemist_recipe_sector_suitability')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->count())->toBe(0);
 
     // Reaktivierung derselben Zeile (unique recipe+slug gilt inkl. soft-deleted)
     $svc->setzeEignung($this->rootTeam, $this->vk->id, 'sektor', 'care', 'ai_inferred', 0.8);
-    $zeile = DB::table('foodalchemist_recipe_sektor_eignung')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->first();
-    expect($zeile->quelle)->toBe('ai_inferred')->and((float) $zeile->ai_confidence)->toBe(0.8);
+    $zeile = DB::table('foodalchemist_recipe_sector_suitability')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->first();
+    expect($zeile->source)->toBe('ai_inferred')->and((float) $zeile->ai_confidence)->toBe(0.8);
 
     expect(fn () => $svc->setzeEignung($this->rootTeam, $this->vk->id, 'sektor', 'quatsch'))
         ->toThrow(RuntimeException::class, 'Slug');
-    expect(fn () => $svc->setzeEignung($this->childA, $this->vk->id, 'niveau', 'gehoben'))
+    expect(fn () => $svc->setzeEignung($this->childA, $this->vk->id, 'level', 'gehoben'))
         ->toThrow(RuntimeException::class, 'Besitzer-Team');
 });
 
@@ -57,11 +57,11 @@ it('Panel: ✨ Eignung übernimmt nur «geeignet»-Urteile aus dem Vokabular', f
     Livewire::test(DetailPanel::class, ['recipeId' => $this->vk->id])
         ->call('kiEignung')
         ->assertSet('kiFehler', null)
-        ->assertSet('eignungVorschlag.slugs', ['care' => 'sektor', 'klassisch' => 'niveau'])
+        ->assertSet('eignungVorschlag.slugs', ['care' => 'sektor', 'klassisch' => 'level'])
         ->call('eignungUebernehmen');
 
-    expect(DB::table('foodalchemist_recipe_sektor_eignung')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->value('sektor_slug'))->toBe('care')
-        ->and(DB::table('foodalchemist_recipe_niveau_eignung')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->value('niveau_slug'))->toBe('klassisch');
+    expect(DB::table('foodalchemist_recipe_sector_suitability')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->value('sector_slug'))->toBe('care')
+        ->and(DB::table('foodalchemist_recipe_level_suitability')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->value('level_slug'))->toBe('klassisch');
 });
 
 it('Panel: ✨ Marketing schreibt mit Lineage ki; manual blockt (Override-First)', function () {
@@ -74,9 +74,9 @@ it('Panel: ✨ Marketing schreibt mit Lineage ki; manual blockt (Override-First)
         ->call('marketingUebernehmen')
         ->assertSet('kiFehler', null);
     $r = $this->vk->fresh();
-    expect($r->marketing_text)->toBe('Knusprig gewickelt.')->and($r->marketing_text_quelle)->toBe('ki');
+    expect($r->marketing_text)->toBe('Knusprig gewickelt.')->and($r->marketing_text_source)->toBe('ki');
 
-    $r->update(['marketing_text_quelle' => 'manual']);
+    $r->update(['marketing_text_source' => 'manual']);
     Livewire::test(DetailPanel::class, ['recipeId' => $this->vk->id])
         ->call('kiMarketing')
         ->call('marketingUebernehmen')

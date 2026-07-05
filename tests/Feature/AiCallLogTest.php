@@ -21,7 +21,7 @@ beforeEach(function () {
 });
 
 it('Pflicht 1: erfolgreicher Call schreibt genau eine Zeile, callLogId im DTO', function () {
-    $p = $this->gw->propose('recipe.beschreibung', ['beschreibung' => 'Klarer Fond.'], [
+    $p = $this->gw->propose('recipe.description', ['description' => 'Klarer Fond.'], [
         'knowledge_used' => ['substitutionen@v1', 'fisch_seafood@v1'],
         'target_table' => 'foodalchemist_recipes', 'target_id' => 42,
     ]);
@@ -31,7 +31,7 @@ it('Pflicht 1: erfolgreicher Call schreibt genau eine Zeile, callLogId im DTO', 
         ->and($p->callLogId)->toBe((int) $zeilen[0]->id);
 
     $log = $zeilen[0];
-    expect($log->feature)->toBe('recipe.beschreibung')
+    expect($log->feature)->toBe('recipe.description')
         ->and($log->tier)->toBe('C')                                  // aus der Registry
         ->and($log->model)->toBe('fake-deterministic-1')
         ->and(json_decode($log->knowledge_used, true))->toBe(['substitutionen@v1', 'fisch_seafood@v1'])
@@ -56,7 +56,7 @@ it('Pflicht 2: AUCH der Fehlerpfad loggt (error-Spalte befüllt), Exception flie
         }
     });
 
-    expect(fn () => $this->gw->propose('recipe.beschreibung', ['x' => 1]))
+    expect(fn () => $this->gw->propose('recipe.description', ['x' => 1]))
         ->toThrow(RuntimeException::class, 'kein valides JSON');
 
     $log = DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->first();
@@ -66,7 +66,7 @@ it('Pflicht 2: AUCH der Fehlerpfad loggt (error-Spalte befüllt), Exception flie
 });
 
 it('Pflicht 3: stempleAccepted/-Rejected setzen die Stempel; null-Id ist no-op', function () {
-    $p = $this->gw->propose('recipe.beschreibung', ['beschreibung' => 'X.']);
+    $p = $this->gw->propose('recipe.description', ['description' => 'X.']);
 
     $this->gw->stempleAccepted($p->callLogId);
     expect(DB::table('foodalchemist_ai_call_log')->where('id', $p->callLogId)->value('accepted_at'))->not->toBeNull();
@@ -91,12 +91,12 @@ it('Tiering: Registry-Tier loggt; options[tier] übersteuert; Tier-Modell-Mappin
 it('GL-13-Audit-Faden: Generator schreibt knowledge_used ins Log (vorher verloren)', function () {
     \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
     DB::table('foodalchemist_knowledge_documents')->insert([
-        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'slug' => 'substitutionen', 'titel' => 'S',
-        'kategorie' => 'cross_cutting', 'inhalt_md' => 'Wissen', 'version' => 1, 'content_hash' => 'x',
-        'char_count' => 6, 'aktiv' => 1, 'created_at' => now(), 'updated_at' => now(),
+        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'slug' => 'substitutionen', 'title' => 'S',
+        'category' => 'cross_cutting', 'content_md' => 'Wissen', 'version' => 1, 'content_hash' => 'x',
+        'char_count' => 6, 'active' => 1, 'created_at' => now(), 'updated_at' => now(),
     ]);
     DB::table('foodalchemist_knowledge_routings')->insert([
-        'feature' => 'ai_generate_recipe', 'kategorie' => 'cross_cutting', 'modus' => 'always',
+        'feature' => 'ai_generate_recipe', 'category' => 'cross_cutting', 'mode' => 'always',
         'created_at' => now(), 'updated_at' => now(),
     ]);
 

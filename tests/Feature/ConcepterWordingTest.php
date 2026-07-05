@@ -26,7 +26,7 @@ beforeEach(function () {
     ]);
     $this->green = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g', 'name' => 'Green Power',
-        'status' => 'approved', 'ist_verkaufsrezept' => true, 'vk_netto' => 2.00, 'ek_total_eur' => 0.60,
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00, 'ek_total_eur' => 0.60,
     ]);
     $this->concept = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
 });
@@ -56,7 +56,7 @@ it('✨ erzeugt Konzept-Intro (in beschreibung) + Brand-Voice-Namen je Position'
 
     $comp->call('wordingGenerieren')->assertSet('fehler', null);
 
-    expect($this->concept->fresh()->beschreibung)->toBe('Ein sommerliches Grill-Erlebnis.')
+    expect($this->concept->fresh()->description)->toBe('Ein sommerliches Grill-Erlebnis.')
         ->and($slot->fresh()->wording)->toBe('Knuspriger Hot-Dog-Traum');
 });
 

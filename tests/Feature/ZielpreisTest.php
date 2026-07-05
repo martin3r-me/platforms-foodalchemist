@@ -17,8 +17,8 @@ beforeEach(function () {
     $this->seedTeamHierarchy();
 
     $mk = function (string $name, string $rolle, float $preis) {
-        $p = $this->pakete->create($this->rootTeam, ['name' => $name, 'rolle' => $rolle, 'preis_modus' => 'manuell']);
-        $this->pakete->update($this->rootTeam, $p->id, ['preis_pro_person' => $preis]);
+        $p = $this->pakete->create($this->rootTeam, ['name' => $name, 'role' => $rolle, 'price_mode' => 'manuell']);
+        $this->pakete->update($this->rootTeam, $p->id, ['price_per_person' => $preis]);
 
         return $p;
     };
@@ -29,10 +29,10 @@ beforeEach(function () {
     $this->h30 = $mk('Hauptgang premium', 'Hauptgang', 30.00);
 
     $this->concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
-    $this->sVor = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
-    $this->sHg = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Hauptgang']);
-    $this->concepts->fillSlot($this->rootTeam, $this->sVor->id, ['paket_id' => $this->v4->id]);
-    $this->concepts->fillSlot($this->rootTeam, $this->sHg->id, ['paket_id' => $this->h20->id]);
+    $this->sVor = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
+    $this->sHg = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Hauptgang']);
+    $this->concepts->fillSlot($this->rootTeam, $this->sVor->id, ['package_id' => $this->v4->id]);
+    $this->concepts->fillSlot($this->rootTeam, $this->sHg->id, ['package_id' => $this->h20->id]);
 });
 
 it('M13: Zielpreis-Solver trifft die nächstbeste Paket-Kombination (greift nur Paket-Slots)', function () {
@@ -40,7 +40,7 @@ it('M13: Zielpreis-Solver trifft die nächstbeste Paket-Kombination (greift nur 
     $v = $this->concepts->zielpreisVorschlag($this->rootTeam, $this->concept->id, 36.00);
 
     expect($v['aktuell'])->toBe(24.00)
-        ->and($v['preis'])->toBe(36.00)                              // exakt erreichbar
+        ->and($v['price'])->toBe(36.00)                              // exakt erreichbar
         ->and($v['min'])->toBe(24.00)->and($v['max'])->toBe(40.00)   // Spanne
         ->and($v['aenderungen'])->toBe(2)
         ->and($v['vorschlag'][$this->sVor->id])->toBe($this->v6->id)
@@ -48,21 +48,21 @@ it('M13: Zielpreis-Solver trifft die nächstbeste Paket-Kombination (greift nur 
 
     // Anwenden → Concept-Preis = 36
     $this->concepts->zielpreisAnwenden($this->rootTeam, $this->concept->id, $v['vorschlag']);
-    expect($this->concepts->preisCockpit($this->concept->refresh())['preis_pro_person'])->toBe(36.00);
+    expect($this->concepts->preisCockpit($this->concept->refresh())['price_per_person'])->toBe(36.00);
 });
 
 it('M13: festes Gericht bleibt Fixkosten, nur Pakete werden getauscht', function () {
     // Dessert-Slot mit festem Gericht (5 €) → Fixkosten; Pakete tauschen für Ziel
     $dessert = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'd1', 'name' => 'Dessert', 'status' => 'approved',
-        'ist_verkaufsrezept' => true, 'vk_netto' => 5.00,
+        'is_sales_recipe' => true, 'sales_net' => 5.00,
     ]);
-    $sDess = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Dessert']);
-    $this->concepts->fillSlot($this->rootTeam, $sDess->id, ['vk_recipe_id' => $dessert->id]);
+    $sDess = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Dessert']);
+    $this->concepts->fillSlot($this->rootTeam, $sDess->id, ['sales_recipe_id' => $dessert->id]);
 
     // Ziel 41 = 5 fix + 36 Pakete (6 + 30)
     $v = $this->concepts->zielpreisVorschlag($this->rootTeam, $this->concept->id, 41.00);
     expect($v['fix'])->toBe(5.00)
-        ->and($v['preis'])->toBe(41.00)
+        ->and($v['price'])->toBe(41.00)
         ->and($v['vorschlag'])->not->toHaveKey($sDess->id);          // festes Gericht nicht im Vorschlag
 });

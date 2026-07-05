@@ -20,11 +20,11 @@ beforeEach(function () {
     $this->actingAs($this->user);
 
     // Concept „Grill-Buffet" (4,50 €/P) als einfügbarer Inhalt
-    $paket = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'rolle' => 'Vorspeise', 'preis_modus' => 'manuell']);
-    app(PaketService::class)->update($this->rootTeam, $paket->id, ['preis_pro_person' => 4.50]);
+    $paket = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise', 'price_mode' => 'manuell']);
+    app(PaketService::class)->update($this->rootTeam, $paket->id, ['price_per_person' => 4.50]);
     $this->concept = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
-    $slot = app(ConceptService::class)->addSlot($this->rootTeam, $this->concept->id, ['rolle' => 'Vorspeise']);
-    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['paket_id' => $paket->id]);
+    $slot = app(ConceptService::class)->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
+    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['package_id' => $paket->id]);
 });
 
 it('Foodbook-Editor: anlegen, Kapitel, Concept einfügen, €/Person im Cockpit', function () {
@@ -34,8 +34,8 @@ it('Foodbook-Editor: anlegen, Kapitel, Concept einfügen, €/Person im Cockpit'
 
     $comp = Livewire::test(FoodbooksIndex::class)
         ->call('waehle', $fb->id)
-        ->set('form.bezeichnung', 'Angebot Adler')
-        ->set('form.kunde', 'Hotel Adler')
+        ->set('form.label', 'Angebot Adler')
+        ->set('form.customer', 'Hotel Adler')
         ->set('form.personen', 100)
         ->call('speichern')
         ->set('neuesKapitelTitel', 'Menü')
@@ -85,10 +85,10 @@ it('Foodbook-Editor: Header-Preis-Block (person) erscheint mit €/Person im Coc
 
     // Preis setzen via Inline-Editor
     $comp->call('blockBearbeiten', $block->id)
-        ->set('blockForm.preis_wert', 38)
-        ->set('blockForm.preis_basis', 'person')
+        ->set('blockForm.price_value', 38)
+        ->set('blockForm.price_basis', 'person')
         ->call('blockSpeichern')
         ->assertSee('38,00');                                         // €/Person — Pax-Gesamt lebt im Angebot
 
-    expect((float) $block->refresh()->preis_wert)->toBe(38.0);
+    expect((float) $block->refresh()->price_value)->toBe(38.0);
 });

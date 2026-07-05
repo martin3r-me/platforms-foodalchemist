@@ -82,7 +82,7 @@ it('Klasse-Baum: anlegen + verschachteln als Vokabular-Baum', function () {
     $kind = FoodAlchemistVocabKlasse::where('name', 'Flying Buffet')->firstOrFail();
     expect((int) $kind->parent_id)->toBe($eltern->id);
 
-    // Klasse löschen → Kind rückt hoch; concepts.klasse-Strings bleiben unberührt
+    // Klasse löschen → Kind rückt hoch; concepts.class-Strings bleiben unberührt
     $comp->call('klasseLoeschen', $eltern->id);
     expect(FoodAlchemistVocabKlasse::find($eltern->id))->toBeNull()
         ->and($kind->fresh()->parent_id)->toBeNull();
@@ -90,8 +90,8 @@ it('Klasse-Baum: anlegen + verschachteln als Vokabular-Baum', function () {
 
 it('zählt Concepts je Kategorie und je Klasse-Name', function () {
     $kat = $this->svc->createCategory($this->rootTeam, 'Buffets');
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'C1', 'category_id' => $kat->id, 'klasse' => 'Buffet', 'is_vorlage' => false]);
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'C2', 'category_id' => $kat->id, 'klasse' => 'Buffet', 'is_vorlage' => false]);
+    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'C1', 'category_id' => $kat->id, 'class' => 'Buffet', 'is_template' => false]);
+    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'C2', 'category_id' => $kat->id, 'class' => 'Buffet', 'is_template' => false]);
 
     Livewire::test(KonzeptTaxonomie::class)
         ->assertViewHas('katCounts', fn ($c) => (int) ($c[$kat->id] ?? 0) === 2)

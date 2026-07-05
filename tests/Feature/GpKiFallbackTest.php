@@ -34,18 +34,18 @@ it('kiNaehrwerte: Vorschlag validiert → Übernehmen schreibt Fallback-Schicht;
     Livewire::test(DetailPanel::class, ['gpId' => $this->gp->id])
         ->call('kiNaehrwerte')
         ->assertSet('fehler', null)
-        ->assertSet('kiVorschlag.typ', 'naehrwerte')
+        ->assertSet('kiVorschlag.type', 'naehrwerte')
         ->call('kiUebernehmen');
 
     $gp = $this->gp->fresh();
     expect((float) $gp->nutri_kcal_per_100g)->toBe(389.0)
-        ->and($gp->nutri_quelle)->toBe('ki')
+        ->and($gp->nutri_source)->toBe('ki')
         ->and((float) $gp->nutri_ai_confidence)->toBe(0.82);
 
     $agg = app(GpAggregateService::class);
     expect($agg->naehrwerte($gp)['energy_kcal']['avg'])->toBeNull()           // Rezept-Pfad: KEIN Fallback
         ->and($agg->naehrwerte($gp, mitKiFallback: true)['energy_kcal']['avg'])->toBe(389.0)
-        ->and($agg->naehrwerte($gp, mitKiFallback: true)['quelle'])->toBe('ki');
+        ->and($agg->naehrwerte($gp, mitKiFallback: true)['source'])->toBe('ki');
 });
 
 it('kiAllergene: nur gültige Werte werden Vorschlag, unbekannt fliegt; Übernehmen schreibt den Override (GL-01 Prio 1)', function () {
@@ -62,21 +62,21 @@ it('kiAllergene: nur gültige Werte werden Vorschlag, unbekannt fliegt; Überneh
         ->call('kiUebernehmen');
 
     $gp = $this->gp->fresh();
-    expect($gp->allergen_glutenhaltiges_getreide)->toBe('enthalten')
-        ->and($gp->allergen_milch)->toBe('spuren')
-        ->and($gp->allergen_fisch)->toBeNull()                                 // unbekannt ⇒ KEIN Override (F7.1)
+    expect($gp->allergen_gluten)->toBe('enthalten')
+        ->and($gp->allergen_milk)->toBe('spuren')
+        ->and($gp->allergen_fish)->toBeNull()                                 // unbekannt ⇒ KEIN Override (F7.1)
         ->and((float) $gp->allergene_ki_confidence)->toBe(0.9);
 
     // Aggregat zeigt Override-Quelle
     $allergene = app(GpAggregateService::class)->allergene($gp);
-    expect($allergene['glutenhaltiges_getreide']['quelle'])->toBe('override');
+    expect($allergene['glutenhaltiges_getreide']['source'])->toBe('override');
 });
 
 it('FakeProvider-Echo ⇒ ehrlicher Fehler, nichts geschrieben; Kind-Team blockt am Curate-Gate', function () {
     Livewire::test(DetailPanel::class, ['gpId' => $this->gp->id])
         ->call('kiNaehrwerte')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'echter Provider'));
-    expect($this->gp->fresh()->nutri_quelle)->toBeNull();
+    expect($this->gp->fresh()->nutri_source)->toBeNull();
 
     $this->actingAs($this->makeUser($this->childA, 'Kind User'));
     Livewire::test(DetailPanel::class, ['gpId' => $this->gp->id])
@@ -99,13 +99,13 @@ it('Salz-Fix: manual-kuratierte GP-Werte fließen in die Rezept-Aggregation, KI-
 
     // Kuratierung wie beim echten Salz-GP: 0 kcal/Makros, 100 g Salz, quelle=manual
     $salz->update(['nutri_kcal_per_100g' => 0, 'nutri_protein_g_per_100g' => 0, 'nutri_fat_g_per_100g' => 0,
-        'nutri_carbs_g_per_100g' => 0, 'nutri_salt_g_per_100g' => 100, 'nutri_quelle' => 'manual']);
+        'nutri_carbs_g_per_100g' => 0, 'nutri_salt_g_per_100g' => 100, 'nutri_source' => 'manual']);
 
     $wasser = $this->makeGp($this->rootTeam, 'Wasser still');       // ohne Daten → verdünnt nur
     $rezept = $svc->create($this->rootTeam, ['name' => 'Sole: Test']);
     $rezept = $svc->syncIngredients($this->rootTeam, $rezept->id, [
-        ['gp_id' => $salz->id, 'raw_text' => '10 g Salz', 'menge' => '10', 'einheit_vocab_id' => $g->id],
-        ['gp_id' => $wasser->id, 'raw_text' => '990 g Wasser', 'menge' => '990', 'einheit_vocab_id' => $g->id],
+        ['gp_id' => $salz->id, 'raw_text' => '10 g Salz', 'quantity' => '10', 'unit_vocab_id' => $g->id],
+        ['gp_id' => $wasser->id, 'raw_text' => '990 g Wasser', 'quantity' => '990', 'unit_vocab_id' => $g->id],
     ]);
 
     // 10 g Salz × 100 g/100g ÷ 1000 g Gesamt = 1,0 g Salz/100 g — kcal ehrlich 0
@@ -113,9 +113,9 @@ it('Salz-Fix: manual-kuratierte GP-Werte fließen in die Rezept-Aggregation, KI-
         ->and((float) $rezept->nutri_kcal_per_100g)->toBe(0.0);
 
     // Gegenprobe: gleiche Lage mit quelle=ki → Aggregation ignoriert den Fallback weiter
-    $salz->update(['nutri_quelle' => 'ki']);
+    $salz->update(['nutri_source' => 'ki']);
     $rezept = $svc->syncIngredients($this->rootTeam, $rezept->id, [
-        ['gp_id' => $salz->id, 'raw_text' => '10 g Salz', 'menge' => '10', 'einheit_vocab_id' => $g->id],
+        ['gp_id' => $salz->id, 'raw_text' => '10 g Salz', 'quantity' => '10', 'unit_vocab_id' => $g->id],
     ]);
     expect($rezept->nutri_kcal_per_100g)->toBeNull();
 });

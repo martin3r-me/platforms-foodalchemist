@@ -30,15 +30,15 @@ it('Sub-Rezept per Stück: Yield + EK über ertrag_stueck', function () {
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'sub-suppe', 'name' => 'Sub: Suppe', 'status' => 'draft',
     ]);
     DB::table('foodalchemist_recipes')->where('id', $basis->id)->update([
-        'yield_kg' => 1.0, 'ek_per_kg_eur' => 4.0, 'ek_total_eur' => 4.0, 'ertrag_stueck' => 10,
+        'yield_kg' => 1.0, 'ek_per_kg_eur' => 4.0, 'ek_total_eur' => 4.0, 'yield_pieces' => 10,
     ]);
 
     // Gericht referenziert die Basis als „2 stk"
     $gericht = FoodAlchemistRecipe::create([
-        'team_id' => $this->rootTeam->id, 'recipe_key' => 'hg-test', 'name' => 'HG: Test', 'status' => 'draft', 'ist_verkaufsrezept' => true,
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'hg-test', 'name' => 'HG: Test', 'status' => 'draft', 'is_sales_recipe' => true,
     ]);
     $svc->syncIngredients($this->rootTeam, $gericht->id, [[
-        'referenced_recipe_id' => $basis->id, 'menge' => 2, 'einheit_vocab_id' => $stk->id, 'raw_text' => 'Sub: Suppe',
+        'referenced_recipe_id' => $basis->id, 'quantity' => 2, 'unit_vocab_id' => $stk->id, 'raw_text' => 'Sub: Suppe',
     ]]);
     $gericht->refresh();
 
