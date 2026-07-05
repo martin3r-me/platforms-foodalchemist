@@ -131,6 +131,49 @@ it('#393-Rest: ReviewQueue-Match-Zähler ist team-scoped (aktuelles Team), nicht
     Livewire::test(ReviewQueue::class)->assertViewHas('matchZahl', 1);
 });
 
+it('R2.1 Detektor preisSprungMargeImpact: Lead-LA +30% → Signal mit transitiver Betroffenheit (Gericht via Basisrezept)', function () {
+    // Einheit g
+    $g = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1,
+    ]);
+    // Lieferant + LA (kg) + zwei Preis-Generationen: alt 10 (geschlossen, frisch), neu 13 (aktiv) = +30%
+    $sup = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);
+    $la = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $sup->id, 'designation' => 'Butter 1 kg', 'qty' => 1.0, 'unit_code' => 'kg',
+    ]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'price' => 10.0, 'status' => '0', 'valid_to' => now()]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'price' => 13.0, 'status' => '0', 'valid_to' => null]);
+    // GP mit Lead-LA
+    $gp = $this->makeGp($this->rootTeam, 'Butter');
+    $gp->update(['lead_la_supplier_item_id' => $la->id]);
+    // Basisrezept nutzt GP direkt; Gericht referenziert das Basisrezept (transitive Kette)
+    $basis = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'basis-butter', 'name' => 'Buttersauce', 'status' => 'approved', 'is_sales_recipe' => false,
+    ]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $basis->id, 'gp_id' => $gp->id, 'raw_text' => 'Butter', 'quantity' => '200', 'unit_vocab_id' => $g->id,
+    ]);
+    $gericht = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'gericht-x', 'name' => 'Gericht mit Buttersauce', 'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 20.0,
+    ]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $gericht->id, 'referenced_recipe_id' => $basis->id, 'raw_text' => 'Buttersauce', 'quantity' => '100', 'unit_vocab_id' => $g->id,
+    ]);
+
+    $n = $this->detektor->preisSprungMargeImpact($this->rootTeam, 10.0);
+
+    expect($n)->toBe(1);
+    $sig = FoodAlchemistSignal::where('type', 'preis_sprung_marge_impact')->where('ref_id', $gp->id)->firstOrFail();
+    expect($sig->payload['n_gerichte'])->toBe(1)                        // transitive Betroffenheit: das Gericht via Basisrezept
+        ->and($sig->payload['n_recipes'])->toBe(2)                      // Basisrezept + Gericht
+        ->and(round($sig->payload['delta_pct']))->toBe(30.0)
+        ->and($sig->payload['marge_delta_eur'])->toBeLessThanOrEqual(0.0); // teurer → Marge sinkt (nie besser)
+
+    // Idempotenz: zweiter Lauf aktualisiert statt dupliziert (Dedup je neuem Preis)
+    $this->detektor->preisSprungMargeImpact($this->rootTeam, 10.0);
+    expect(FoodAlchemistSignal::where('type', 'preis_sprung_marge_impact')->where('ref_id', $gp->id)->count())->toBe(1);
+});
+
 it('Detektor naehrwertPlausi: flaggt Zucker>KH bzw. gesFett>Fett, Toleranz schützt Rundungs-Rauschen', function () {
     $mk = fn (string $key, array $nutri) => \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => $key, 'name' => 'R-' . $key, 'status' => 'approved',

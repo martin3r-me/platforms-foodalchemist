@@ -57,6 +57,31 @@
                             <span class="font-medium text-gray-900 dark:text-gray-100 truncate">{{ $sig->title }}</span>
                         </div>
                         @if($sig->description)<p class="text-gray-500 mt-0.5">{{ \Illuminate\Support\Str::limit($sig->description, 140) }}</p>@endif
+                        @php $pl = is_array($sig->payload) ? $sig->payload : []; @endphp
+                        @if($sig->type->value === 'preis_sprung_marge_impact' && $pl)
+                            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-gray-500">
+                                @isset($pl['preis_alt'], $pl['preis_neu'])
+                                    <span>{{ number_format($pl['preis_alt'], 2, ',', '.') }} € → <span class="font-medium text-gray-700 dark:text-gray-300">{{ number_format($pl['preis_neu'], 2, ',', '.') }} €</span></span>
+                                @endisset
+                                <span>{{ $pl['n_gerichte'] ?? 0 }} Gericht(e) · {{ $pl['n_concepts'] ?? 0 }} Konzept(e)</span>
+                                @if(($pl['marge_delta_eur'] ?? 0) != 0)
+                                    <span class="font-medium {{ $pl['marge_delta_eur'] < 0 ? 'text-rose-600' : 'text-emerald-600' }}">Marge {{ number_format($pl['marge_delta_eur'], 2, ',', '.') }} €@if(($pl['wpct_delta'] ?? 0) != 0) ({{ $pl['wpct_delta'] > 0 ? '+' : '' }}{{ number_format($pl['wpct_delta'], 1, ',', '.') }} W%-Pkt.)@endif</span>
+                                @endif
+                                @if(!empty($pl['guenstigere_alternative']['label']))
+                                    <span class="text-sky-600 dark:text-sky-400" title="günstigere Alternative">↓ {{ \Illuminate\Support\Str::limit($pl['guenstigere_alternative']['label'], 28) }} ({{ $pl['guenstigere_alternative']['diff_pct'] }} %)</span>
+                                @endif
+                            </div>
+                            @if(!empty($pl['beispiele']))
+                                <div class="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px]">
+                                    @foreach(array_slice($pl['beispiele'], 0, 6) as $bsp)
+                                        <a href="{{ route('foodalchemist.verkauf.index', ['rezept' => $bsp['recipe_id']]) }}" wire:navigate
+                                           class="text-sky-600 dark:text-sky-400 hover:underline" title="Marge {{ $bsp['marge_pct_alt'] }} % → {{ $bsp['marge_pct_neu'] }} %">
+                                            {{ \Illuminate\Support\Str::limit($bsp['name'], 26) }}@if(($bsp['marge_delta_eur'] ?? 0) != 0) <span class="text-gray-400">({{ number_format($bsp['marge_delta_eur'], 2, ',', '.') }} €)</span>@endif
+                                        </a>
+                                    @endforeach
+                                </div>
+                            @endif
+                        @endif
                     </div>
                     <span class="shrink-0 flex gap-1">
                         @if($sig->status->istOffen())
