@@ -13,14 +13,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            $table->boolean('ki_aktiv')->default(true);
+            $table->boolean('ai_active')->default(true);
         });
     }
 
     public function down(): void
     {
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            $table->dropColumn('ki_aktiv');
+            $table->dropColumn('ai_active');
         });
     }
 };

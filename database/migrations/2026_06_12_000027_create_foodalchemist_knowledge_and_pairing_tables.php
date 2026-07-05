@@ -20,12 +20,12 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index()->comment('NULL = global/BHG-kuratiert (D1)');
             $table->string('slug')->unique();
             $table->string('titel');
-            $table->string('kategorie', 24)->index()->comment('cross_cutting|domain|pairing|regelwerk_snippet');
+            $table->string('category', 24)->index()->comment('cross_cutting|domain|pairing|regelwerk_snippet');
             $table->longText('inhalt_md');
             $table->unsignedInteger('version')->default(1);
             $table->string('content_hash', 64)->comment('sha256 — unverändert ⇒ skip (idempotent)');
             $table->unsignedInteger('char_count');
-            $table->boolean('aktiv')->default(true);
+            $table->boolean('active')->default(true);
             $table->string('source_path')->nullable();
             $table->timestamps();
             $table->softDeletes();
@@ -41,13 +41,13 @@ return new class extends Migration
         Schema::create('foodalchemist_knowledge_routings', function (Blueprint $table) {
             $table->id();
             $table->string('feature', 64);
-            $table->string('kategorie', 24);
+            $table->string('category', 24);
             $table->string('modus', 16)->comment('always|discovery|grounding|none');
             $table->unsignedInteger('max_docs')->nullable();
             $table->unsignedInteger('max_chars_per_doc')->nullable();
             $table->timestamps();
 
-            $table->unique(['feature', 'kategorie']);
+            $table->unique(['feature', 'category']);
         });
 
         Schema::create('foodalchemist_vocab_pairing_anchors', function (Blueprint $table) {
@@ -72,12 +72,12 @@ return new class extends Migration
             $table->unsignedBigInteger('legacy_id')->nullable()->unique();
             $table->foreignId('anchor_a_id')->constrained('foodalchemist_vocab_pairing_anchors')->cascadeOnDelete();
             $table->foreignId('anchor_b_id')->constrained('foodalchemist_vocab_pairing_anchors')->cascadeOnDelete();
-            $table->string('typ', 16)->comment('klassisch|modern|kontrast (GL-10)');
+            $table->string('type', 16)->comment('klassisch|modern|kontrast (GL-10)');
             $table->text('evidenz')->nullable();
             $table->string('source_slug')->nullable();
             $table->timestamps();
 
-            $table->unique(['anchor_a_id', 'anchor_b_id', 'typ'], 'fa_pairing_edges_a_b_typ_unique');
+            $table->unique(['anchor_a_id', 'anchor_b_id', 'type'], 'fa_pairing_edges_a_b_typ_unique');
             $table->index('anchor_b_id');
         });
 
@@ -122,14 +122,14 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->index();
             $table->foreignId('recipe_id')->constrained('foodalchemist_recipes')->cascadeOnDelete();
             $table->foreignId('anchor_id')->constrained('foodalchemist_vocab_pairing_anchors')->cascadeOnDelete();
-            $table->string('typ', 16)->comment('klassisch|kontrast|verbund|trinitas');
-            $table->string('konfidenz', 16)->default('medium');
+            $table->string('type', 16)->comment('klassisch|kontrast|verbund|trinitas');
+            $table->string('confidence', 16)->default('medium');
             $table->text('note')->nullable();
             $table->string('created_via', 16)->nullable()->comment('gemini|manual|pairing_doc');
             $table->timestamps();
             $table->softDeletes();
 
-            $table->unique(['recipe_id', 'anchor_id', 'typ']);
+            $table->unique(['recipe_id', 'anchor_id', 'type']);
         });
     }
 

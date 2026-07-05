@@ -31,7 +31,7 @@ return new class extends Migration
                 $table->unsignedBigInteger('team_id')->nullable()->index();
                 $table->string('slug');
                 $table->string('name');
-                $table->string('gruppe')->nullable();
+                $table->string('group_name')->nullable();
                 $table->integer('sort_order')->default(100);
                 $table->boolean('is_inactive')->default(false);
                 $table->timestamps();
@@ -62,12 +62,12 @@ return new class extends Migration
         // ── Concepts: VK-Parität-Metadaten + Konsumenten-Felder + KI-Brief ────
         Schema::table('foodalchemist_concepts', function (Blueprint $table) {
             // §10.3 Klasse (frei/wählbar, Pendant zu role)
-            if (! Schema::hasColumn('foodalchemist_concepts', 'klasse')) {
-                $table->string('klasse')->nullable()->after('niveau')->index();
+            if (! Schema::hasColumn('foodalchemist_concepts', 'class')) {
+                $table->string('class')->nullable()->after('level')->index();
             }
             // §10.8 Wording: Schreibstil am Concept (effektiver Stil = Foodbook-Override ?? hier)
             if (! Schema::hasColumn('foodalchemist_concepts', 'writing_style_id')) {
-                $table->foreignId('writing_style_id')->nullable()->after('klasse')
+                $table->foreignId('writing_style_id')->nullable()->after('class')
                     ->constrained('foodalchemist_writing_styles')->nullOnDelete();
             }
             // §10.8 Geschmack (wie VK-Rezept)
@@ -124,8 +124,8 @@ return new class extends Migration
 
         // ── Pakete: Klasse + Konsumenten-Name + Aggregat-Caches ───────────────
         Schema::table('foodalchemist_packages', function (Blueprint $table) {
-            if (! Schema::hasColumn('foodalchemist_packages', 'klasse')) {
-                $table->string('klasse')->nullable()->after('role')->index();
+            if (! Schema::hasColumn('foodalchemist_packages', 'class')) {
+                $table->string('class')->nullable()->after('role')->index();
             }
             if (! Schema::hasColumn('foodalchemist_packages', 'consumer_name')) {
                 $table->string('consumer_name')->nullable()->after('name');
@@ -156,7 +156,7 @@ return new class extends Migration
         });
 
         Schema::table('foodalchemist_packages', function (Blueprint $table) {
-            foreach (['klasse', 'consumer_name', 'work_time_min_cache', 'naehrwerte_cache'] as $col) {
+            foreach (['class', 'consumer_name', 'work_time_min_cache', 'naehrwerte_cache'] as $col) {
                 if (Schema::hasColumn('foodalchemist_packages', $col)) {
                     $table->dropColumn($col);
                 }
@@ -168,7 +168,7 @@ return new class extends Migration
                 $table->dropConstrainedForeignId('writing_style_id');
             }
             foreach ([
-                'klasse', 'taste_direction', 'consumer_name', 'additional_text', 'brief',
+                'class', 'taste_direction', 'consumer_name', 'additional_text', 'brief',
                 'zielpreis_pro_person', 'diaet_vorgabe', 'struktur_vorgabe', 'season', 'target_group',
                 'composition_source', 'ai_confidence', 'ai_reasoning',
                 'naehrwerte_cache', 'work_time_min_cache', 'ek_pro_person_cache',

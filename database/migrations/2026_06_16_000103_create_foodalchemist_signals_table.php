@@ -21,7 +21,7 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index();
 
-            $table->string('typ', 32)->index();                       // SignalTyp (PHP-Enum)
+            $table->string('type', 32)->index();                      // SignalTyp (PHP-Enum)
             $table->string('severity', 12)->default('warnung');       // SignalSeverity
             $table->string('status', 12)->default('offen')->index();  // SignalStatus
 
@@ -41,7 +41,7 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['team_id', 'status', 'typ']);
+            $table->index(['team_id', 'status', 'type']);
         });
     }
 

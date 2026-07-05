@@ -17,7 +17,7 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->unsignedBigInteger('user_id')->nullable();
-            $table->string('typ', 32)->default('enrich');             // enrich (Basis) | enrich_vk (D-6 §4.7, später)
+            $table->string('type', 32)->default('enrich');             // enrich (Basis) | enrich_vk (D-6 §4.7, später)
             $table->string('status', 16)->default('running');         // running | done
             $table->unsignedInteger('total')->default(0);             // Rezepte
             $table->unsignedInteger('done')->default(0);
@@ -32,7 +32,7 @@ return new class extends Migration
             $table->foreignId('run_id')->constrained('foodalchemist_bulk_runs')->cascadeOnDelete();
             $table->foreignId('recipe_id')->constrained('foodalchemist_recipes')->cascadeOnDelete();
             $table->string('feld', 32);                                // description | kategorie | geschmack …
-            $table->json('wert')->nullable();                          // Vorschlagswert (feld-spezifisch)
+            $table->json('value')->nullable();                          // Vorschlagswert (feld-spezifisch)
             $table->decimal('confidence', 4, 3)->nullable();
             $table->text('reasoning')->nullable();
             $table->unsignedBigInteger('call_log_id')->nullable();     // Accept stempelt (06_KI §5 P3)

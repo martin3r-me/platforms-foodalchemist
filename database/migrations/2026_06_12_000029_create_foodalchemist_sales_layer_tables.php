@@ -145,7 +145,7 @@ return new class extends Migration
             $table->integer('temp_c')->nullable();
             $table->integer('duration_min')->nullable();
             $table->integer('core_temp_c')->nullable();
-            $table->text('hinweis')->nullable();
+            $table->text('note')->nullable();
             $table->integer('sort_order')->default(0);
             $table->string('source', 16)->nullable();                 // Lineage-Trio zeilenbasiert (GL-07 §3)
             $table->decimal('ai_confidence', 4, 3)->nullable();

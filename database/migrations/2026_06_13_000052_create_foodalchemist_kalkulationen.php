@@ -34,7 +34,7 @@ return new class extends Migration
                 $table->uuid('uuid')->unique();
                 $table->unsignedBigInteger('team_id')->nullable()->index();
                 $table->foreignId('calculation_id')->constrained('foodalchemist_calculations')->cascadeOnDelete();
-                $table->string('typ', 16);                                 // gericht | basisrezept | gp | frei
+                $table->string('type', 16);                                 // gericht | basisrezept | gp | frei
                 $table->unsignedBigInteger('ref_id')->nullable();          // recipe_id bzw. gp_id (kein harter FK: Snapshot-Charakter)
                 $table->string('label');
                 $table->string('unit', 24)->nullable();                 // Portion | kg | …

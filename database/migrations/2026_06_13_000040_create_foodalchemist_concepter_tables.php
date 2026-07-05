@@ -39,7 +39,7 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->string('slug');
             $table->string('name');
-            $table->string('gruppe')->nullable();
+            $table->string('group_name')->nullable();
             $table->integer('sort_order')->default(100);
             $table->boolean('is_inactive')->default(false);
             $table->timestamps();
@@ -55,7 +55,7 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->string('name');
             $table->string('role')->nullable()->index();             // frei; nur gleiche Rolle ist tauschbar (M13)
-            $table->string('niveau', 16)->nullable();                 // haute|gehoben|klassisch (Tag)
+            $table->string('level', 16)->nullable();                 // haute|gehoben|klassisch (Tag)
             // Gespeicherter Per-Person-Preis (Einzelpreis) — Concept summiert NUR diesen
             $table->decimal('preis_pro_person', 10, 2)->nullable();
             $table->decimal('ek_pro_person', 10, 4)->nullable();      // Wareneinsatz/Person (Cache)
@@ -93,7 +93,7 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->string('name');
             $table->string('anlass')->nullable();                     // Anlass-Tag
-            $table->string('niveau', 16)->nullable();                 // haute|gehoben|klassisch
+            $table->string('level', 16)->nullable();                 // haute|gehoben|klassisch
             $table->string('status', 16)->default('draft');           // draft|aktiv|archiviert
             $table->boolean('is_template')->default(false)->index();   // Vorlage = gespeichertes Slot-Gerüst
             $table->foreignId('template_source_id')->nullable()        // woher geforkt (Lineage, optional)

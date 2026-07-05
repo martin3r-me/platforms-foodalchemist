@@ -62,7 +62,7 @@ return new class extends Migration
                 $table->id();
                 $table->unsignedBigInteger('gp_id')->index();
                 $table->unsignedBigInteger('texture_vocab_id')->index();
-                $table->decimal('intensitaet', 4, 2)->default(1);
+                $table->decimal('intensity', 4, 2)->default(1);
                 $table->string('source', 16)->nullable();
                 $table->timestamps();
                 $table->unique(['gp_id', 'texture_vocab_id']);

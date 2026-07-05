@@ -42,7 +42,7 @@ return new class extends Migration
 
             // ── Inhalt
             $table->text('description')->nullable()->comment('Quelle ki_beschreibung (§8-Stil)');
-            $table->string('temperatur', 32)->nullable();
+            $table->string('temperature', 32)->nullable();
             $table->string('function', 64)->nullable();
             $table->text('preparation')->nullable();
             $table->text('notes')->nullable();

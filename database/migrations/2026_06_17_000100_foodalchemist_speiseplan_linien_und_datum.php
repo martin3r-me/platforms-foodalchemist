@@ -27,7 +27,7 @@ return new class extends Migration
                 $table->unsignedBigInteger('team_id')->nullable()->index();
                 $table->foreignId('menu_plan_id')->constrained('foodalchemist_menu_plans')->cascadeOnDelete();
                 $table->string('name');
-                $table->string('farbe', 16)->nullable();             // Token/Hex für die Zeilen-Markierung
+                $table->string('color', 16)->nullable();             // Token/Hex für die Zeilen-Markierung
                 $table->boolean('ist_vegetarisch')->default(false);  // GV: „Veggie täglich"-Check
                 $table->unsignedInteger('sort_order')->default(0);
                 $table->timestamps();
@@ -40,8 +40,8 @@ return new class extends Migration
                 if (! Schema::hasColumn('foodalchemist_menu_plan_entries', 'line_id')) {
                     $table->unsignedBigInteger('line_id')->nullable()->index();
                 }
-                if (! Schema::hasColumn('foodalchemist_menu_plan_entries', 'datum')) {
-                    $table->date('datum')->nullable()->index();
+                if (! Schema::hasColumn('foodalchemist_menu_plan_entries', 'entry_date')) {
+                    $table->date('entry_date')->nullable()->index();
                 }
             });
         }
@@ -51,7 +51,7 @@ return new class extends Migration
     {
         if (Schema::hasTable('foodalchemist_menu_plan_entries')) {
             Schema::table('foodalchemist_menu_plan_entries', function (Blueprint $table) {
-                foreach (['line_id', 'datum'] as $spalte) {
+                foreach (['line_id', 'entry_date'] as $spalte) {
                     if (Schema::hasColumn('foodalchemist_menu_plan_entries', $spalte)) {
                         $table->dropColumn($spalte);
                     }

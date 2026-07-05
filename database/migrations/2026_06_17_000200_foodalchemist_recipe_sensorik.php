@@ -41,7 +41,7 @@ return new class extends Migration
                 $table->id();
                 $table->unsignedBigInteger('recipe_id')->index();
                 $table->unsignedBigInteger('texture_vocab_id');
-                $table->decimal('intensitaet', 4, 2)->default(1);
+                $table->decimal('intensity', 4, 2)->default(1);
                 $table->string('source')->nullable();
                 $table->timestamps();
                 $table->unique(['recipe_id', 'texture_vocab_id']);

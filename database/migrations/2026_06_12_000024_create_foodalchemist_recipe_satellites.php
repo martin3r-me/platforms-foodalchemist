@@ -21,7 +21,7 @@ return new class extends Migration
             $table->unsignedBigInteger('legacy_id')->nullable()->unique();
             $table->string('slug')->unique();
             $table->string('name');
-            $table->string('gruppe')->nullable();
+            $table->string('group_name')->nullable();
             $table->unsignedInteger('sort_order')->default(100);
             $table->boolean('is_inactive')->default(false);
             $table->timestamps();
