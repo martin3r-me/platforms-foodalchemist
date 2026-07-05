@@ -259,6 +259,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\AngeboteGetTool::class,
                     \Platform\FoodAlchemist\Tools\AngebotePostTool::class,
                     \Platform\FoodAlchemist\Tools\KalkulationGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SimulationPostTool::class,
                     \Platform\FoodAlchemist\Tools\SettingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\SignaleSearchTool::class,
                     \Platform\FoodAlchemist\Tools\SignalePutTool::class,
