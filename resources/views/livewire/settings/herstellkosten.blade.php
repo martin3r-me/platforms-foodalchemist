@@ -33,7 +33,7 @@
             <tbody>
                 @foreach($schema as $i => $b)
                     @php($istGk = in_array($b['type'], ['pct_mek', 'pct_fek', 'pct_hk'], true))
-                    @php($istAbgeleitet = $istGk && ($b['modus'] ?? 'manuell') === 'abgeleitet')
+                    @php($istAbgeleitet = $istGk && ($b['mode'] ?? 'manuell') === 'abgeleitet')
                     <tr wire:key="kblock-{{ $b['key'] }}" class="{{ $tr }}">
                         <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $b['label'] }}</td>
                         <td class="{{ $td }}"><span class="{{ $pill }} {{ $basisPill[$b['type']] ?? $variantPill['secondary'] }}">{{ $basisLabel[$b['type']] ?? $b['type'] }}</span></td>

@@ -26,7 +26,7 @@ return new class extends Migration
         });
 
         Schema::table('foodalchemist_concepts', function (Blueprint $table) {
-            $table->foreignId('category_id')->nullable()->after('niveau')
+            $table->foreignId('category_id')->nullable()->after('level')
                 ->constrained('foodalchemist_concept_categories')->nullOnDelete();
         });
     }

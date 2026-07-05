@@ -165,10 +165,10 @@ class KalkulationService
     public function conceptHk(Team $team, FoodAlchemistConcept $concept): array
     {
         $cockpit = $this->concepts->preisCockpit($concept);
-        $hk1 = (float) $cockpit['ek_pro_person'];
+        $hk1 = (float) $cockpit['ek_per_person'];
         $az = (float) ($this->aggregat->conceptAggregat($concept)['arbeitszeit_min_pro_portion'] ?? 0);
         $r = $this->berechne($team, $hk1, $az, 0.0);
-        $vk = (float) $cockpit['preis_pro_person'];
+        $vk = (float) $cockpit['price_per_person'];
 
         return [
             'hk1_pro_person' => round($hk1, 4),
@@ -192,10 +192,10 @@ class KalkulationService
     public function paketHk(Team $team, FoodAlchemistPaket $paket): array
     {
         $agg = $this->aggregat->paketAggregat($paket);
-        $hk1 = $paket->ek_pro_person !== null ? (float) $paket->ek_pro_person : (float) $agg['ek_pro_person'];
+        $hk1 = $paket->ek_per_person !== null ? (float) $paket->ek_per_person : (float) $agg['ek_per_person'];
         $az = (float) ($agg['arbeitszeit_min_pro_portion'] ?? 0);
         $r = $this->berechne($team, $hk1, $az, 0.0);
-        $vk = $paket->preis_pro_person !== null ? (float) $paket->preis_pro_person : null;
+        $vk = $paket->price_per_person !== null ? (float) $paket->price_per_person : null;
 
         return [
             'hk1_pro_person' => round($hk1, 4),

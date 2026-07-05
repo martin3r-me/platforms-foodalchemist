@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('severity', 12)->default('warnung');       // SignalSeverity
             $table->string('status', 12)->default('offen')->index();  // SignalStatus
 
-            $table->string('titel');
+            $table->string('title');
             $table->text('description')->nullable();
             $table->json('payload')->nullable();                      // strukturierte Details (Refs/Werte)
 

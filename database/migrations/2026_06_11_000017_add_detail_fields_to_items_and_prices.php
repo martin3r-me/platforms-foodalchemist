@@ -22,7 +22,7 @@ return new class extends Migration
             $table->boolean('is_gmo_free')->nullable();
             $table->boolean('is_preorder')->nullable()->index();
             $table->unsignedInteger('preorder_days')->nullable()->comment('V-29 Vorbestellzeit in Tagen');
-            $table->text('ingredients_lieferant')->nullable()->comment('Zutatenliste vom Lieferanten (Quelle: ingredients)');
+            $table->text('ingredients_supplier')->nullable()->comment('Zutatenliste vom Lieferanten (Quelle: ingredients)');
         });
 
         Schema::table('foodalchemist_prices', function (Blueprint $table) {
@@ -33,7 +33,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_supplier_items', function (Blueprint $table) {
-            $table->dropColumn(['additional_text', 'vat', 'origin_country', 'organic_control_number', 'is_halal', 'is_gmo_free', 'is_preorder', 'preorder_days', 'ingredients_lieferant']);
+            $table->dropColumn(['additional_text', 'vat', 'origin_country', 'organic_control_number', 'is_halal', 'is_gmo_free', 'is_preorder', 'preorder_days', 'ingredients_supplier']);
         });
         Schema::table('foodalchemist_prices', function (Blueprint $table) {
             $table->dropColumn('note');

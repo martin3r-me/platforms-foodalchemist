@@ -37,7 +37,7 @@ class FoodAlchemistAngebot extends Model
         'status' => AngebotStatus::class,
         'personen' => 'integer',
         'budget' => 'decimal:2',
-        'gesamtpreis' => 'decimal:2',
+        'total_price' => 'decimal:2',
         'event_date' => 'date',
         'valid_until' => 'date',
     ];

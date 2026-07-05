@@ -43,7 +43,7 @@ class Index extends Component
 
     public ?int $editLinieId = null;
 
-    public array $linieForm = ['name' => '', 'color' => '', 'ist_vegetarisch' => false];
+    public array $linieForm = ['name' => '', 'color' => '', 'is_vegetarian' => false];
 
     // Zellen-Picker
     public ?string $cellDatum = null;
@@ -171,7 +171,7 @@ class Index extends Component
             return;
         }
         $this->editLinieId = $id;
-        $this->linieForm = ['name' => $linie->name, 'color' => $linie->color ?? '', 'ist_vegetarisch' => (bool) $linie->ist_vegetarisch];
+        $this->linieForm = ['name' => $linie->name, 'color' => $linie->color ?? '', 'is_vegetarian' => (bool) $linie->is_vegetarian];
     }
 
     public function linieSpeichern(SpeiseplanService $svc): void

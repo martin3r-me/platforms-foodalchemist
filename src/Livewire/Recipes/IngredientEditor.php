@@ -118,7 +118,7 @@ class IngredientEditor extends Component
                     'vpe' => $la->item?->qty !== null
                         ? rtrim(rtrim(number_format((float) $la->item->qty, 2, ',', '.'), '0'), ',') . ' ' . ($la->item->packaging_unit ?? $la->item->unit_code ?? '')
                         : null,
-                    'preis' => $preis !== null ? number_format($preis, 2, ',', '.') . ' €' : null,
+                    'price' => $preis !== null ? number_format($preis, 2, ',', '.') . ' €' : null,
                     'vergleichspreis' => $vergleich !== null ? number_format($vergleich['value'], 2, ',', '.') . ' ' . $vergleich['unit'] : null,
                     'match' => $la->structure?->main_ingredient_confidence !== null
                         ? round((float) $la->structure->main_ingredient_confidence * 100) . ' %'

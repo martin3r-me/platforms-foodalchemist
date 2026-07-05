@@ -30,14 +30,14 @@ class FoodbookKapitelPostTool extends FoodAlchemistTool implements ToolContract,
             'type' => 'object',
             'properties' => [
                 'foodbook_id' => ['type' => 'integer'],
-                'titel' => ['type' => 'string'],
+                'title' => ['type' => 'string'],
                 'parent_id' => ['type' => 'integer', 'description' => 'Übergeordnetes Kapitel für Verschachtelung'],
-                'konsumententitel' => ['type' => 'string', 'description' => 'Kundenseitiger Titel, falls abweichend'],
+                'consumer_title' => ['type' => 'string', 'description' => 'Kundenseitiger Titel, falls abweichend'],
                 'claim' => ['type' => 'string'],
                 'description' => ['type' => 'string'],
-                'preis_pro_person' => ['type' => 'number', 'description' => 'Fix-Preis p. P.; weglassen = auto aus Blöcken'],
+                'price_per_person' => ['type' => 'number', 'description' => 'Fix-Preis p. P.; weglassen = auto aus Blöcken'],
             ],
-            'required' => ['foodbook_id', 'titel'],
+            'required' => ['foodbook_id', 'title'],
         ];
     }
 
@@ -58,10 +58,10 @@ class FoodbookKapitelPostTool extends FoodAlchemistTool implements ToolContract,
 
         try {
             $k = $svc->addKapitel($team, $fb->id, [
-                'titel' => (string) $arguments['titel'],
-                'preis_modus' => isset($arguments['preis_pro_person']) ? 'fix' : 'auto',
+                'title' => (string) $arguments['title'],
+                'price_mode' => isset($arguments['price_per_person']) ? 'fix' : 'auto',
             ], isset($arguments['parent_id']) ? (int) $arguments['parent_id'] : null);
-            $extras = array_intersect_key($arguments, array_flip(['konsumententitel', 'claim', 'description', 'preis_pro_person']));
+            $extras = array_intersect_key($arguments, array_flip(['consumer_title', 'claim', 'description', 'price_per_person']));
             if ($extras !== []) {
                 $k = $svc->updateKapitel($team, $k->id, $extras);
             }
@@ -70,8 +70,8 @@ class FoodbookKapitelPostTool extends FoodAlchemistTool implements ToolContract,
         }
 
         return ToolResult::success(['kapitel' => [
-            'id' => $k->id, 'titel' => $k->titel, 'parent_id' => $k->parent_id,
-            'position' => $k->position, 'preis_modus' => $k->preis_modus,
+            'id' => $k->id, 'title' => $k->title, 'parent_id' => $k->parent_id,
+            'position' => $k->position, 'price_mode' => $k->price_mode,
         ]]);
     }
 

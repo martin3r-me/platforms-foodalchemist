@@ -30,7 +30,7 @@ class SignalService
             if ($vorhanden !== null) {
                 $vorhanden->update([
                     'severity' => $severity->value,
-                    'titel' => $titel,
+                    'title' => $titel,
                     'description' => $opts['description'] ?? $vorhanden->description,
                     'payload' => $opts['payload'] ?? $vorhanden->payload,
                 ]);
@@ -44,7 +44,7 @@ class SignalService
             'type' => $typ->value,
             'severity' => $severity->value,
             'status' => SignalStatus::Offen->value,
-            'titel' => $titel,
+            'title' => $titel,
             'description' => $opts['description'] ?? null,
             'payload' => $opts['payload'] ?? null,
             'dedup_key' => $dedup,

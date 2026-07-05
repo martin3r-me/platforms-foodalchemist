@@ -29,15 +29,15 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'type' => 'object',
             'properties' => [
                 'name' => ['type' => 'string'],
-                'anlass' => ['type' => 'string'],
+                'occasion' => ['type' => 'string'],
                 'level' => ['type' => 'string'],
                 'class' => ['type' => 'string'],
                 'description' => ['type' => 'string'],
                 'brief' => ['type' => 'string', 'description' => 'KI-Brief: was soll das Konzept leisten'],
-                'zielpreis_pro_person' => ['type' => 'number'],
+                'target_price_per_person' => ['type' => 'number'],
                 'season' => ['type' => 'string'],
                 'target_group' => ['type' => 'string'],
-                'diaet_vorgabe' => ['type' => 'string'],
+                'diet_requirement' => ['type' => 'string'],
             ],
             'required' => ['name'],
         ];
@@ -54,13 +54,13 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
         try {
             $c = $svc->create($team, [
                 'name' => (string) $arguments['name'],
-                'anlass' => $arguments['anlass'] ?? null,
+                'occasion' => $arguments['occasion'] ?? null,
                 'level' => $arguments['level'] ?? null,
                 'class' => $arguments['class'] ?? null,
                 'status' => 'draft',
             ]);
             $extras = array_intersect_key($arguments, array_flip([
-                'description', 'brief', 'zielpreis_pro_person', 'season', 'target_group', 'diaet_vorgabe',
+                'description', 'brief', 'target_price_per_person', 'season', 'target_group', 'diet_requirement',
             ]));
             if ($extras !== []) {
                 $c = $svc->update($team, $c->id, $extras);

@@ -108,7 +108,7 @@
                         <div wire:key="linie-{{ $linie->id }}" class="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg border border-black/5 dark:border-white/10">
                             <span class="w-3 h-3 rounded-full shrink-0" style="background: {{ $linie->color ?: '#888780' }}"></span>
                             <span class="text-xs">{{ $linie->name }}</span>
-                            @if($linie->ist_vegetarisch)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg</span>@endif
+                            @if($linie->is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg</span>@endif
                             <button type="button" wire:click="linieVerschieben({{ $linie->id }}, -1)" class="text-gray-300 hover:text-violet-500 text-[10px]" title="hoch">▲</button>
                             <button type="button" wire:click="linieVerschieben({{ $linie->id }}, 1)" class="text-gray-300 hover:text-violet-500 text-[10px]" title="runter">▼</button>
                             <button type="button" wire:click="linieEdit({{ $linie->id }})" class="text-gray-400 hover:text-violet-500 text-xs" title="bearbeiten">✎</button>
@@ -124,7 +124,7 @@
                     <div class="mt-1 pt-2 border-t border-black/5 dark:border-white/10 flex flex-wrap items-end gap-2">
                         <div><label class="{{ $label }}">Name</label><input type="text" wire:model="linieForm.name" class="{{ $input }} w-44 h-8" /></div>
                         <div><label class="{{ $label }}">Farbe</label><input type="color" wire:model="linieForm.color" class="h-8 w-12 rounded border border-black/10 dark:border-white/10 bg-transparent" /></div>
-                        <label class="flex items-center gap-1.5 text-xs pb-1.5"><input type="checkbox" wire:model="linieForm.ist_vegetarisch" /> vegetarisch</label>
+                        <label class="flex items-center gap-1.5 text-xs pb-1.5"><input type="checkbox" wire:model="linieForm.is_vegetarian" /> vegetarisch</label>
                         <button type="button" wire:click="linieSpeichern" class="{{ $btnPrimary }} h-8">OK</button>
                         <button type="button" wire:click="$set('editLinieId', null)" class="{{ $btnGhost }} h-8">Abbrechen</button>
                     </div>

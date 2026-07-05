@@ -26,7 +26,7 @@ class FoodAlchemistFoodbookKapitel extends Model
     protected $casts = [
         'uuid' => 'string',
         'position' => 'integer',
-        'preis_pro_person' => 'decimal:2',
+        'price_per_person' => 'decimal:2',
         'snapshot_at' => 'datetime',
         'snapshot_json' => 'array',
     ];

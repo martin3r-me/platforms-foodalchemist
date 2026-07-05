@@ -40,24 +40,24 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
                 'chapter_id' => ['type' => 'integer'],
                 'type' => ['type' => 'string', 'enum' => ['text', 'concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer'], 'default' => 'text'],
                 'label' => ['type' => 'string', 'description' => 'Interner Titel des Blocks'],
-                'kundentext' => ['type' => 'string', 'description' => 'Kundenseitiger Angebotstext'],
+                'customer_text' => ['type' => 'string', 'description' => 'Kundenseitiger Angebotstext'],
                 'sales_recipe_id' => ['type' => 'integer', 'description' => 'Verkaufsrezept (Gericht) — via verkaufsrezepte.SEARCH ermitteln'],
                 'concept_id' => ['type' => 'integer', 'description' => 'Konzept/Paket bei type=concept_ref'],
                 'quantity' => ['type' => 'number'],
                 'unit' => ['type' => 'string', 'description' => 'Einheiten-Slug, z. B. stk, portion'],
                 'price_value' => ['type' => 'number'],
-                'preis_basis' => ['type' => 'string', 'enum' => ['pro_person', 'pro_stueck', 'pauschal'], 'description' => 'Basis für price_value'],
-                'sichtbar' => ['type' => 'boolean', 'default' => true],
+                'price_basis' => ['type' => 'string', 'enum' => ['pro_person', 'pro_stueck', 'pauschal'], 'description' => 'Basis für price_value'],
+                'visible' => ['type' => 'boolean', 'default' => true],
                 'interne_bemerkung' => ['type' => 'string'],
                 'staffel' => [
                     'type' => 'array',
                     'items' => [
                         'type' => 'object',
                         'properties' => [
-                            'min_personen' => ['type' => 'integer', 'minimum' => 1],
-                            'preis' => ['type' => 'number'],
+                            'min_persons' => ['type' => 'integer', 'minimum' => 1],
+                            'price' => ['type' => 'number'],
                         ],
-                        'required' => ['min_personen', 'preis'],
+                        'required' => ['min_persons', 'price'],
                     ],
                 ],
             ],
@@ -87,8 +87,8 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
         }
 
         $daten = array_intersect_key($arguments, array_flip([
-            'type', 'label', 'kundentext', 'interne_bemerkung', 'sales_recipe_id',
-            'concept_id', 'quantity', 'price_value', 'preis_basis', 'sichtbar',
+            'type', 'label', 'customer_text', 'interne_bemerkung', 'sales_recipe_id',
+            'concept_id', 'quantity', 'price_value', 'price_basis', 'visible',
         ]));
         if (($arguments['unit'] ?? '') !== '') {
             $unit = app(VocabularyService::class)->findEinheit($team, (string) $arguments['unit']);

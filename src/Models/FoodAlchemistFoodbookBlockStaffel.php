@@ -24,8 +24,8 @@ class FoodAlchemistFoodbookBlockStaffel extends Model
     protected $casts = [
         'uuid' => 'string',
         'position' => 'integer',
-        'min_personen' => 'integer',
-        'preis' => 'decimal:2',
+        'min_persons' => 'integer',
+        'price' => 'decimal:2',
     ];
 
     public function block(): BelongsTo

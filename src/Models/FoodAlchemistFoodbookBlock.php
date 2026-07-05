@@ -27,8 +27,8 @@ class FoodAlchemistFoodbookBlock extends Model
     protected $casts = [
         'uuid' => 'string',
         'position' => 'integer',
-        'ebene' => 'integer',
-        'sichtbar' => 'boolean',
+        'level' => 'integer',
+        'visible' => 'boolean',
         'variant_group_id' => 'integer',
         'quantity' => 'decimal:3',
         'price_value' => 'decimal:2',
@@ -60,6 +60,6 @@ class FoodAlchemistFoodbookBlock extends Model
     /** Staffelpreise (nur bei preis_basis='staffel'). */
     public function staffel(): HasMany
     {
-        return $this->hasMany(FoodAlchemistFoodbookBlockStaffel::class, 'block_id')->orderBy('min_personen');
+        return $this->hasMany(FoodAlchemistFoodbookBlockStaffel::class, 'block_id')->orderBy('min_persons');
     }
 }

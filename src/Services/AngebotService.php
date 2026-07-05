@@ -26,13 +26,13 @@ class AngebotService
 {
     /** Editierbare Felder (Anfrage/Briefing + kommerziell + CRM-Verknüpfung). */
     private const FELDER = [
-        'name', 'status', 'anlass', 'personen', 'budget', 'event_date', 'location',
-        'diaet_vorgabe', 'brief', 'gesamtpreis', 'valid_until', 'description', 'note',
-        'crm_company_id', 'crm_contact_id', 'preis_modus',
+        'name', 'status', 'occasion', 'personen', 'budget', 'event_date', 'location',
+        'diet_requirement', 'brief', 'total_price', 'valid_until', 'description', 'note',
+        'crm_company_id', 'crm_contact_id', 'price_mode',
     ];
 
     /** Leer („" / null) → NULL (optionale Zahlen/Daten/FKs). */
-    private const FELDER_NULLBAR = ['personen', 'budget', 'event_date', 'valid_until', 'gesamtpreis', 'crm_company_id', 'crm_contact_id'];
+    private const FELDER_NULLBAR = ['personen', 'budget', 'event_date', 'valid_until', 'total_price', 'crm_company_id', 'crm_contact_id'];
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
@@ -66,7 +66,7 @@ class AngebotService
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neue Anfrage')) ?: 'Neue Anfrage',
             'status' => $in['status'] ?? AngebotStatus::Anfrage->value,
-            'anlass' => $in['anlass'] ?? null,
+            'occasion' => $in['occasion'] ?? null,
             'personen' => $in['personen'] ?? null,
             'created_by_user_id' => Auth::id(),
         ]);
@@ -127,7 +127,7 @@ class AngebotService
             'name' => trim((string) ($name ?? ($angebot->name . ' – Menü'))) ?: 'Menü',
             'status' => 'draft',
             'is_template' => false,
-            'anlass' => $angebot->anlass,
+            'occasion' => $angebot->occasion,
         ]);
     }
 
@@ -221,15 +221,15 @@ class AngebotService
         }
 
         $autoGesamt = round($vkPp * $pax, 2);
-        $manuell = ($angebot->preis_modus ?? 'auto') === 'manuell' && $angebot->gesamtpreis !== null;
-        $gesamt = $manuell ? round((float) $angebot->gesamtpreis, 2) : $autoGesamt;
+        $manuell = ($angebot->price_mode ?? 'auto') === 'manuell' && $angebot->total_price !== null;
+        $gesamt = $manuell ? round((float) $angebot->total_price, 2) : $autoGesamt;
 
         return [
             'pax' => $pax,
-            'preis_modus' => $manuell ? 'manuell' : 'auto',
+            'price_mode' => $manuell ? 'manuell' : 'auto',
             'leer' => $concepts->isEmpty(),
             'vk_pro_person' => round($vkPp, 2),
-            'ek_pro_person' => round($ekPp, 2),
+            'ek_per_person' => round($ekPp, 2),
             'hk2_pro_person' => round($hk2Pp, 2),
             'db_pro_person' => round($vkPp - $hk2Pp, 2),
             'wareneinsatz_pct' => $vkPp > 0 ? round($ekPp / $vkPp * 100, 1) : null,
@@ -246,12 +246,12 @@ class AngebotService
     /** auto-Modus: schreibt den berechneten Gesamtpreis zurück (Liste + Persistenz konsistent). */
     public function aktualisiereAutoPreis(Team $team, FoodAlchemistAngebot $angebot): void
     {
-        if (($angebot->preis_modus ?? 'auto') !== 'auto') {
+        if (($angebot->price_mode ?? 'auto') !== 'auto') {
             return;
         }
         $auto = $this->kalkulation($team, $angebot)['auto_gesamt'];
-        if (round((float) ($angebot->gesamtpreis ?? -1), 2) !== $auto) {
-            $angebot->update(['gesamtpreis' => $auto]);
+        if (round((float) ($angebot->total_price ?? -1), 2) !== $auto) {
+            $angebot->update(['total_price' => $auto]);
         }
     }
 
@@ -288,7 +288,7 @@ class AngebotService
             'angebot' => $angebot,
             'kalk' => $kalk,
             'menues' => $menues,
-            'kunde' => $angebot->crmCompany?->display_name ?? $angebot->crmContact?->display_name,
+            'customer' => $angebot->crmCompany?->display_name ?? $angebot->crmContact?->display_name,
             'kontakt' => $angebot->crmContact?->display_name,
         ];
     }
@@ -333,7 +333,7 @@ class AngebotService
         return FoodAlchemistConcept::visibleToTeam($team)->standardisiert()->echte()
             ->when(trim($suche) !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($suche)) . '%']))
             ->when($kategorieId !== null, fn ($q) => $q->where('category_id', $kategorieId))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'preis_pro_person_cache', 'category_id']);
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'category_id']);
     }
 
     // ── CRM-Lese-Picker (MVP) — class_exists-geschützt (Modul läuft ohne crm) ──

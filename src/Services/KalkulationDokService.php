@@ -40,15 +40,15 @@ class KalkulationDokService
     {
         $titel = trim($titel) !== '' ? trim($titel) : 'Neue Kalkulation';
 
-        return FoodAlchemistKalkulation::create(['team_id' => $team->id, 'titel' => $titel]);
+        return FoodAlchemistKalkulation::create(['team_id' => $team->id, 'title' => $titel]);
     }
 
     public function update(Team $team, int $id, array $data): FoodAlchemistKalkulation
     {
         $k = $this->find($team, $id);
         $patch = [];
-        if (array_key_exists('titel', $data) && trim((string) $data['titel']) !== '') {
-            $patch['titel'] = trim((string) $data['titel']);
+        if (array_key_exists('title', $data) && trim((string) $data['title']) !== '') {
+            $patch['title'] = trim((string) $data['title']);
         }
         if (array_key_exists('note', $data)) {
             $patch['note'] = $data['note'];

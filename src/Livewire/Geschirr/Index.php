@@ -46,8 +46,8 @@ class Index extends Component
     /** Formular-Array (Name ≠ View-Variable $artikel = Paginator!). */
     public array $artikelForm = [
         'label' => '', 'artikel_nr' => '', 'category' => '', 'material' => '', 'form' => '', 'color' => '',
-        'durchmesser_mm' => '', 'laenge_mm' => '', 'breite_mm' => '', 'hoehe_mm' => '', 'volumen_ml' => '', 'gewicht_g' => '',
-        'leihpreis' => '', 'pfand' => '', 'unit' => 'Stk', 'note' => '',
+        'diameter_mm' => '', 'length_mm' => '', 'width_mm' => '', 'height_mm' => '', 'volumen_ml' => '', 'weight_g' => '',
+        'rental_price' => '', 'pfand' => '', 'unit' => 'Stk', 'note' => '',
         'vehicle_vocab_id' => '', // A2: Servier-Vehikel-Typ (Darreichungs-Scharnier)
     ];
 

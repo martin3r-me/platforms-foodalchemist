@@ -17,7 +17,7 @@ class TeamSettingsService
 {
     public const MWST_DEFAULTS = ['regulaer' => 19.0, 'ermaessigt' => 7.0, 'default_satz' => 'ermaessigt'];
 
-    public const RUNDUNG_DEFAULTS = ['nachkommastellen' => 2, 'modus' => 'kaufmaennisch'];
+    public const RUNDUNG_DEFAULTS = ['nachkommastellen' => 2, 'mode' => 'kaufmaennisch'];
 
     /** Phase 5: Default-Typ-Farben (GP violett · Basisrezept teal · Gericht amber) — Hex. */
     public const TYP_FARBEN_DEFAULTS = ['gp' => '#7c3aed', 'basisrezept' => '#0d9488', 'gericht' => '#d97706'];
@@ -180,7 +180,7 @@ class TeamSettingsService
 
     public function ausweichKetteAnzeigen(Team $team): bool
     {
-        return $this->for($team)->ausweich_kette_anzeigen ?? false;
+        return $this->for($team)->show_fallback_chain ?? false;
     }
 
     /** Garverlust-Default in % je GP-Klasse (Warengruppen-Code), '*' = global. */
@@ -249,14 +249,14 @@ class TeamSettingsService
     public function defaultSchema(Team $team): array
     {
         return [
-            ['key' => 'lohn', 'label' => 'Lohn / Produktion (FEK)', 'type' => 'arbeitszeit', 'value' => 0.0, 'active' => true, 'sort' => 10, 'modus' => 'manuell'],
-            ['key' => 'verpackung', 'label' => 'Verpackung (direkt)', 'type' => 'eur_pro_portion', 'value' => 0.25, 'active' => false, 'sort' => 20, 'modus' => 'manuell'],
-            ['key' => 'schwund', 'label' => 'Schwund (auf Wareneinsatz)', 'type' => 'pct_mek', 'value' => 0.0, 'active' => true, 'sort' => 30, 'modus' => 'manuell'],
+            ['key' => 'lohn', 'label' => 'Lohn / Produktion (FEK)', 'type' => 'arbeitszeit', 'value' => 0.0, 'active' => true, 'sort' => 10, 'mode' => 'manuell'],
+            ['key' => 'verpackung', 'label' => 'Verpackung (direkt)', 'type' => 'eur_pro_portion', 'value' => 0.25, 'active' => false, 'sort' => 20, 'mode' => 'manuell'],
+            ['key' => 'schwund', 'label' => 'Schwund (auf Wareneinsatz)', 'type' => 'pct_mek', 'value' => 0.0, 'active' => true, 'sort' => 30, 'mode' => 'manuell'],
             // „gemeinkosten" = Material-GK; erbt den M12-Wert (rückwärtskompatibel: % auf MEK).
-            ['key' => 'gemeinkosten', 'label' => 'Material-Gemeinkosten (Einkauf/Lager/Warenannahme)', 'type' => 'pct_mek', 'value' => $this->hk2Zuschlag($team), 'active' => true, 'sort' => 40, 'modus' => 'manuell'],
-            ['key' => 'fertigungs_gk', 'label' => 'Fertigungs-Gemeinkosten (Spüle/Energie/Maschinen)', 'type' => 'pct_fek', 'value' => 0.0, 'active' => true, 'sort' => 50, 'modus' => 'manuell'],
-            ['key' => 'verwaltung', 'label' => 'Verwaltung & Vertrieb', 'type' => 'pct_hk', 'value' => 0.0, 'active' => true, 'sort' => 60, 'modus' => 'manuell'],
-            ['key' => 'logistik', 'label' => 'Logistik', 'type' => 'pct_hk', 'value' => 0.0, 'active' => true, 'sort' => 70, 'modus' => 'manuell'],
+            ['key' => 'gemeinkosten', 'label' => 'Material-Gemeinkosten (Einkauf/Lager/Warenannahme)', 'type' => 'pct_mek', 'value' => $this->hk2Zuschlag($team), 'active' => true, 'sort' => 40, 'mode' => 'manuell'],
+            ['key' => 'fertigungs_gk', 'label' => 'Fertigungs-Gemeinkosten (Spüle/Energie/Maschinen)', 'type' => 'pct_fek', 'value' => 0.0, 'active' => true, 'sort' => 50, 'mode' => 'manuell'],
+            ['key' => 'verwaltung', 'label' => 'Verwaltung & Vertrieb', 'type' => 'pct_hk', 'value' => 0.0, 'active' => true, 'sort' => 60, 'mode' => 'manuell'],
+            ['key' => 'logistik', 'label' => 'Logistik', 'type' => 'pct_hk', 'value' => 0.0, 'active' => true, 'sort' => 70, 'mode' => 'manuell'],
         ];
     }
 
@@ -280,7 +280,7 @@ class TeamSettingsService
                 continue;
             }
             $typ = $b['type'] === 'pct_we' ? 'pct_mek' : $b['type'];   // Legacy-Alias
-            $modus = $b['modus'] ?? 'manuell';
+            $modus = $b['mode'] ?? 'manuell';
             $norm[] = [
                 'key' => (string) ($b['key'] ?? ''),
                 'label' => (string) ($b['label'] ?? ($b['key'] ?? 'Block')),
@@ -288,7 +288,7 @@ class TeamSettingsService
                 'value' => (float) ($b['value'] ?? 0),
                 'active' => (bool) ($b['active'] ?? true),
                 'sort' => (int) ($b['sort'] ?? 100),
-                'modus' => in_array($modus, ['manuell', 'abgeleitet'], true) ? $modus : 'manuell',
+                'mode' => in_array($modus, ['manuell', 'abgeleitet'], true) ? $modus : 'manuell',
             ];
         }
         usort($norm, fn ($a, $b) => $a['sort'] <=> $b['sort']);

@@ -29,7 +29,7 @@
                     @forelse($kalkulationen as $k)
                         <button type="button" wire:key="kalk-{{ $k->id }}" wire:click="waehle({{ $k->id }})"
                             class="w-full text-left px-4 py-2.5 transition-colors {{ $selectedId === $k->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : 'hover:bg-black/[0.02] dark:hover:bg-white/5' }}">
-                            <div class="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">{{ $k->titel }}</div>
+                            <div class="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">{{ $k->title }}</div>
                             <div class="text-[10px] text-gray-400">{{ $k->positionen_count }} {{ $k->positionen_count === 1 ? 'Position' : 'Positionen' }}</div>
                         </button>
                     @empty
@@ -51,7 +51,7 @@
                         <div class="flex flex-wrap items-end gap-3">
                             <div class="flex-1 min-w-48">
                                 <label class="{{ $label }}">Titel</label>
-                                <input type="text" wire:model="titel" class="{{ $input }}" placeholder="Kalkulation …" />
+                                <input type="text" wire:model="title" class="{{ $input }}" placeholder="Kalkulation …" />
                             </div>
                             <div class="w-28">
                                 <label class="{{ $label }}">Marge-Override (%)</label>

@@ -33,7 +33,7 @@ class AngebotePostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'type' => 'object',
             'properties' => [
                 'name' => ['type' => 'string', 'description' => 'z. B. "Sommerfest Musterfirma 2027"'],
-                'anlass' => ['type' => 'string'],
+                'occasion' => ['type' => 'string'],
                 'personen' => ['type' => 'integer'],
                 'concepts' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Namen angebots-lokaler Concepts'],
             ],
@@ -52,7 +52,7 @@ class AngebotePostTool extends FoodAlchemistTool implements ToolContract, ToolMe
         try {
             $a = $svc->create($team, [
                 'name' => (string) $arguments['name'],
-                'anlass' => $arguments['anlass'] ?? null,
+                'occasion' => $arguments['occasion'] ?? null,
                 'personen' => $arguments['personen'] ?? null,
             ]);
             $concepts = [];

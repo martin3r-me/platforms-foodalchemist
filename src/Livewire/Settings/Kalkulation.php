@@ -53,7 +53,7 @@ class Kalkulation extends Component
             ],
             'rundungsregeln' => [
                 'nachkommastellen' => max(0, min(4, (int) $this->rundung['nachkommastellen'])),
-                'modus' => in_array($this->rundung['modus'], ['kaufmaennisch', 'auf', 'ab'], true) ? $this->rundung['modus'] : 'kaufmaennisch',
+                'mode' => in_array($this->rundung['mode'], ['kaufmaennisch', 'auf', 'ab'], true) ? $this->rundung['mode'] : 'kaufmaennisch',
             ],
         ]);
         $this->meldung = 'Gespeichert — Recompute & Cockpits nutzen diese Werte.';

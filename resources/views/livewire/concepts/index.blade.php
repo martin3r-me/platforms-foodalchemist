@@ -57,7 +57,7 @@
                              class="group flex items-center justify-between px-2 py-1 rounded-lg text-xs {{ $selectedId === $c->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                             <button type="button" wire:click="waehle({{ $c->id }})" class="min-w-0 flex-1 text-left truncate">
                                 {{ $c->name }}
-                                <span class="text-[10px] text-gray-400">· {{ $c->slots_count }} Slots{{ $c->preis_pro_person_cache !== null ? ' · ' . number_format((float) $c->preis_pro_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                <span class="text-[10px] text-gray-400">· {{ $c->slots_count }} Slots{{ $c->price_per_person_cache !== null ? ' · ' . number_format((float) $c->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
                             </button>
                             @if($showVorlagen)
                                 <button type="button" wire:click="ausVorlage({{ $c->id }})" class="shrink-0 text-[10px] text-violet-500 opacity-0 group-hover:opacity-100" title="Aus Vorlage starten">↧ nutzen</button>
@@ -76,8 +76,8 @@
             @if($selected && $cockpit)
                 <div class="p-4 space-y-3">
                     <div class="text-center py-2">
-                        <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($cockpit['preis_pro_person'], 2, ',', '.') }} €</div>
-                        <div class="{{ $label }}">pro Person · EK {{ number_format($cockpit['ek_pro_person'], 2, ',', '.') }} €</div>
+                        <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($cockpit['price_per_person'], 2, ',', '.') }} €</div>
+                        <div class="{{ $label }}">pro Person · EK {{ number_format($cockpit['ek_per_person'], 2, ',', '.') }} €</div>
                         <div class="text-[10px] text-gray-400 mt-1">Gästezahl &amp; Gesamtpreis erst im Foodbook/Angebot</div>
                     </div>
                     @if($cockpit['hat_leer'])<p class="{{ $pill }} {{ $variantPill['secondary'] }} w-full justify-center">Es gibt noch leere Slots</p>@endif
@@ -103,7 +103,7 @@
                                     <span class="text-[10px] text-gray-400 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
                                     @if($z['type'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['type'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
                                 </span>
-                                <span class="shrink-0 tabular-nums {{ $z['preis'] === null ? 'text-gray-300' : 'text-gray-900 dark:text-gray-100' }}">{{ $z['preis'] !== null ? number_format($z['preis'], 2, ',', '.') . ' €' : '—' }}</span>
+                                <span class="shrink-0 tabular-nums {{ $z['price'] === null ? 'text-gray-300' : 'text-gray-900 dark:text-gray-100' }}">{{ $z['price'] !== null ? number_format($z['price'], 2, ',', '.') . ' €' : '—' }}</span>
                             </div>
                         @endforeach
                     </div>
@@ -129,7 +129,7 @@
                     </div>
                     <div>
                         <label class="{{ $label }}">Anlass</label>
-                        <input type="text" wire:model="form.anlass" class="{{ $input }}" placeholder="z. B. Sommerfest" />
+                        <input type="text" wire:model="form.occasion" class="{{ $input }}" placeholder="z. B. Sommerfest" />
                     </div>
                     <div>
                         <label class="{{ $label }}">Kategorie</label>
@@ -166,9 +166,9 @@
                             <div class="text-xs space-y-1 pt-1 border-t border-violet-500/20">
                                 <div class="flex flex-wrap gap-x-6 gap-y-1">
                                     <span><span class="{{ $label }}">Aktuell</span> <span class="tabular-nums">{{ number_format($zielVorschlag['aktuell'], 2, ',', '.') }} €</span></span>
-                                    <span><span class="{{ $label }}">Vorschlag</span> <span class="tabular-nums font-semibold text-gray-900 dark:text-gray-100">{{ number_format($zielVorschlag['preis'], 2, ',', '.') }} €</span></span>
+                                    <span><span class="{{ $label }}">Vorschlag</span> <span class="tabular-nums font-semibold text-gray-900 dark:text-gray-100">{{ number_format($zielVorschlag['price'], 2, ',', '.') }} €</span></span>
                                     <span><span class="{{ $label }}">Ziel</span> <span class="tabular-nums">{{ number_format($zielVorschlag['ziel'], 2, ',', '.') }} €</span></span>
-                                    <span><span class="{{ $label }}">Δ Ziel</span> <span class="tabular-nums {{ abs($zielVorschlag['preis'] - $zielVorschlag['ziel']) < 0.01 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400' }}">{{ number_format($zielVorschlag['preis'] - $zielVorschlag['ziel'], 2, ',', '.') }} €</span></span>
+                                    <span><span class="{{ $label }}">Δ Ziel</span> <span class="tabular-nums {{ abs($zielVorschlag['price'] - $zielVorschlag['ziel']) < 0.01 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400' }}">{{ number_format($zielVorschlag['price'] - $zielVorschlag['ziel'], 2, ',', '.') }} €</span></span>
                                     <span><span class="{{ $label }}">Tausche</span> <span class="tabular-nums">{{ $zielVorschlag['aenderungen'] }}</span></span>
                                 </div>
                                 <p class="text-[11px] text-gray-400">Erreichbar mit den Paketen: {{ number_format($zielVorschlag['min'], 2, ',', '.') }} – {{ number_format($zielVorschlag['max'], 2, ',', '.') }} €/Person{{ $zielVorschlag['fix'] > 0 ? ' (inkl. ' . number_format($zielVorschlag['fix'], 2, ',', '.') . ' € feste Gerichte)' : '' }}.</p>
@@ -212,7 +212,7 @@
                                 @if($slot->package_id && $slot->paket)
                                     <span class="{{ $pill }} {{ $variantPill['info'] }}">Paket</span>
                                     <span class="text-sm font-medium">{{ $slot->paket->name }}</span>
-                                    <span class="text-gray-400 text-xs tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</span>
+                                    <span class="text-gray-400 text-xs tabular-nums">{{ $slot->paket->price_per_person !== null ? number_format((float) $slot->paket->price_per_person, 2, ',', '.') . ' €' : '—' }}</span>
                                 @elseif($slot->sales_recipe_id && $slot->gericht)
                                     <span class="{{ $pill }} {{ $variantPill['secondary'] }}">festes Gericht</span>
                                     <span class="text-sm font-medium">{{ $slot->gericht->name }}</span>
@@ -231,7 +231,7 @@
                                         class="{{ $input }} w-56">
                                     <option value="">↹ Paket (Rolle {{ $slot->role ?: '–' }}) …</option>
                                     @foreach(($tauschbar[$slot->id] ?? []) as $b)
-                                        <option value="{{ $b->id }}">{{ $b->name }}{{ $b->preis_pro_person !== null ? ' (' . number_format((float) $b->preis_pro_person, 2, ',', '.') . ' €)' : '' }}</option>
+                                        <option value="{{ $b->id }}">{{ $b->name }}{{ $b->price_per_person !== null ? ' (' . number_format((float) $b->price_per_person, 2, ',', '.') . ' €)' : '' }}</option>
                                     @endforeach
                                 </select>
                                 <button type="button" wire:click="gerichtPicker({{ $slot->id }})" class="{{ $btnGhostXs }}">festes Gericht …</button>

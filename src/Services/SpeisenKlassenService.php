@@ -37,7 +37,7 @@ class SpeisenKlassenService
 
         $taxonomie = FoodAlchemistDishClass::query()
             ->join('foodalchemist_dish_main_groups AS hg', 'hg.id', '=', 'foodalchemist_dish_classes.dish_main_group_id')
-            ->selectRaw("foodalchemist_dish_classes.id AS id, hg.code || ' / ' || foodalchemist_dish_classes.label || ' (' || foodalchemist_dish_classes.diaetform || ')' AS label")
+            ->selectRaw("foodalchemist_dish_classes.id AS id, hg.code || ' / ' || foodalchemist_dish_classes.label || ' (' || foodalchemist_dish_classes.diet_form || ')' AS label")
             ->orderBy('foodalchemist_dish_classes.id')
             ->pluck('label', 'id')->all();
 

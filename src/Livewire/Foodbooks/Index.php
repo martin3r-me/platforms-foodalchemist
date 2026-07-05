@@ -27,9 +27,9 @@ class Index extends Component
     #[Url(as: 'kap')]
     public ?int $selectedKapitelId = null;
 
-    public array $form = ['label' => '', 'kunde' => '', 'jahr' => null, 'personen' => null, 'status' => 'draft', 'description' => ''];
+    public array $form = ['label' => '', 'customer' => '', 'jahr' => null, 'personen' => null, 'status' => 'draft', 'description' => ''];
 
-    public array $kapitelForm = ['titel' => '', 'konsumententitel' => '', 'preis_modus' => 'auto', 'preis_pro_person' => null];
+    public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'price_mode' => 'auto', 'price_per_person' => null];
 
     public string $neuesKapitelTitel = '';
 
@@ -71,7 +71,7 @@ class Index extends Component
         }
         $this->selectedId = $id;
         $this->form = [
-            'label' => $fb->label, 'kunde' => $fb->kunde ?? '', 'jahr' => $fb->jahr,
+            'label' => $fb->label, 'customer' => $fb->customer ?? '', 'jahr' => $fb->jahr,
             'personen' => $fb->personen, 'status' => $fb->status, 'description' => $fb->description ?? '',
         ];
         $this->selectedKapitelId = $fb->kapitel->first()->id ?? null;
@@ -135,7 +135,7 @@ class Index extends Component
         }
         $svc = app(FoodbookService::class);   // via Container, nicht als Action-Param — sonst kollidiert die DI mit $parentId
         $titel = $parentId !== null ? 'Neues Unterkapitel' : ($this->neuesKapitelTitel ?: 'Neues Kapitel');
-        $k = $svc->addKapitel($this->team(), $this->selectedId, ['titel' => $titel], $parentId);
+        $k = $svc->addKapitel($this->team(), $this->selectedId, ['title' => $titel], $parentId);
         $this->neuesKapitelTitel = '';
         $this->selectedKapitelId = $k->id;
         $this->ladeKapitelForm($svc);
@@ -157,8 +157,8 @@ class Index extends Component
         $k = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($this->selectedKapitelId);
         if ($k) {
             $this->kapitelForm = [
-                'titel' => $k->titel, 'konsumententitel' => $k->konsumententitel ?? '',
-                'preis_modus' => $k->preis_modus, 'preis_pro_person' => $k->preis_pro_person,
+                'title' => $k->title, 'consumer_title' => $k->consumer_title ?? '',
+                'price_mode' => $k->price_mode, 'price_per_person' => $k->price_per_person,
             ];
         }
     }
@@ -223,9 +223,9 @@ class Index extends Component
         }
         $svc->addBlock($this->team(), $this->selectedKapitelId, [
             'type' => $type, 'header_source' => $slug, 'label' => $label,
-            'preis_basis' => $type === 'header_frei_preis' ? ($preisBasis ?: 'person') : null,
+            'price_basis' => $type === 'header_frei_preis' ? ($preisBasis ?: 'person') : null,
             'price_value' => $type === 'header_frei_preis' ? 0 : null,
-            'sichtbar' => $sichtbar,
+            'visible' => $sichtbar,
         ]);
     }
 
@@ -236,8 +236,8 @@ class Index extends Component
         }
         $svc->addBlock($this->team(), $this->selectedKapitelId, [
             'type' => $type,
-            'hoehe' => $type === 'spacer' ? 'mittel' : null,
-            'preis_basis' => $type === 'header_frei_preis' ? 'person' : null,
+            'height' => $type === 'spacer' ? 'mittel' : null,
+            'price_basis' => $type === 'header_frei_preis' ? 'person' : null,
             'price_value' => $type === 'header_frei_preis' ? 0 : null,
         ]);
     }
@@ -251,9 +251,9 @@ class Index extends Component
         $this->editBlockId = $id;
         $this->blockForm = [
             'label' => $block->label ?? '', 'wording' => $block->wording ?? '',
-            'kundentext' => $block->kundentext ?? '',
-            'price_value' => $block->price_value, 'preis_basis' => $block->preis_basis ?? 'person',
-            'hoehe' => $block->hoehe ?? 'mittel', 'interne_bemerkung' => $block->interne_bemerkung ?? '',
+            'customer_text' => $block->customer_text ?? '',
+            'price_value' => $block->price_value, 'price_basis' => $block->price_basis ?? 'person',
+            'height' => $block->height ?? 'mittel', 'interne_bemerkung' => $block->interne_bemerkung ?? '',
         ];
     }
 
@@ -285,7 +285,7 @@ class Index extends Component
             ]);
             $text = $v->werte['marketing_text'] ?? null;
             if (is_string($text) && trim($text) !== '') {
-                $this->blockForm['kundentext'] = trim($text);
+                $this->blockForm['customer_text'] = trim($text);
             }
         } catch (\Throwable $e) {
             // still — Feld bleibt unverändert (Kill-Switch/Provider-Fehler); kein Crash im Editor
@@ -309,7 +309,7 @@ class Index extends Component
     {
         $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::find($id);
         if ($block !== null) {
-            $svc->updateBlock($this->team(), $id, ['sichtbar' => ! $block->sichtbar]);
+            $svc->updateBlock($this->team(), $id, ['visible' => ! $block->visible]);
         }
     }
 
@@ -317,7 +317,7 @@ class Index extends Component
     {
         $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::find($id);
         if ($block !== null) {
-            $svc->updateBlock($this->team(), $id, ['ebene' => max(0, min(2, (int) $block->ebene + $delta))]);
+            $svc->updateBlock($this->team(), $id, ['level' => max(0, min(2, (int) $block->level + $delta))]);
         }
     }
 

@@ -59,7 +59,7 @@ class SpeiseplanService
 
         // Starter-Linien (Kantinen-Standard) — pro Plan frei änderbar
         foreach ([['Menü 1', '#D85A30', false], ['Vegetarisch', '#639922', true], ['Dessert', '#EF9F27', false]] as $i => [$n, $f, $v]) {
-            $plan->linien()->create(['team_id' => $team->id, 'name' => $n, 'color' => $f, 'ist_vegetarisch' => $v, 'sort_order' => $i + 1]);
+            $plan->linien()->create(['team_id' => $team->id, 'name' => $n, 'color' => $f, 'is_vegetarian' => $v, 'sort_order' => $i + 1]);
         }
 
         return $plan;
@@ -98,7 +98,7 @@ class SpeiseplanService
             'team_id' => $plan->team_id,
             'name' => trim((string) ($in['name'] ?? 'Neue Linie')) ?: 'Neue Linie',
             'color' => $in['color'] ?? null,
-            'ist_vegetarisch' => (bool) ($in['ist_vegetarisch'] ?? false),
+            'is_vegetarian' => (bool) ($in['is_vegetarian'] ?? false),
             'sort_order' => (int) $plan->linien()->max('sort_order') + 1,
         ]);
     }
@@ -107,12 +107,12 @@ class SpeiseplanService
     {
         $linie = FoodAlchemistSpeiseplanLinie::visibleToTeam($team)->with('speiseplan')->findOrFail($linieId);
         $this->guard($linie->speiseplan, $team);
-        $upd = array_intersect_key($in, array_flip(['name', 'color', 'ist_vegetarisch']));
+        $upd = array_intersect_key($in, array_flip(['name', 'color', 'is_vegetarian']));
         if (isset($upd['name'])) {
             $upd['name'] = trim((string) $upd['name']) ?: $linie->name;
         }
-        if (array_key_exists('ist_vegetarisch', $upd)) {
-            $upd['ist_vegetarisch'] = (bool) $upd['ist_vegetarisch'];
+        if (array_key_exists('is_vegetarian', $upd)) {
+            $upd['is_vegetarian'] = (bool) $upd['is_vegetarian'];
         }
         $linie->update($upd);
 
@@ -235,10 +235,10 @@ class SpeiseplanService
         if ($e->concept_id !== null && $e->concept) {
             $c = $this->concepts->preisCockpit($e->concept);
 
-            return ['vk' => (float) $c['preis_pro_person'], 'ek' => (float) $c['ek_pro_person']];
+            return ['vk' => (float) $c['price_per_person'], 'ek' => (float) $c['ek_per_person']];
         }
         if ($e->package_id !== null && $e->paket) {
-            return ['vk' => (float) ($e->paket->preis_pro_person ?? 0), 'ek' => (float) ($e->paket->ek_pro_person ?? 0)];
+            return ['vk' => (float) ($e->paket->price_per_person ?? 0), 'ek' => (float) ($e->paket->ek_per_person ?? 0)];
         }
         if ($e->sales_recipe_id !== null && $e->gericht) {
             return ['vk' => (float) ($e->gericht->sales_net ?? 0), 'ek' => (float) ($e->gericht->ek_total_eur ?? 0)];
@@ -282,7 +282,7 @@ class SpeiseplanService
      */
     public function veggieCheck(FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, int $tage = 5): array
     {
-        $veggie = $plan->linien->where('ist_vegetarisch', true)->pluck('id')->map(fn ($i) => (int) $i)->all();
+        $veggie = $plan->linien->where('is_vegetarian', true)->pluck('id')->map(fn ($i) => (int) $i)->all();
         if ($veggie === []) {
             return ['active' => false, 'erfuellt' => false, 'fehltage' => []];
         }

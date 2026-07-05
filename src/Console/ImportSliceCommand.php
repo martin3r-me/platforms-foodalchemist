@@ -117,7 +117,7 @@ class ImportSliceCommand extends Command
                 'is_gmo_free' => self::triState($r['is_gmo_free'] ?? null),
                 'is_preorder' => self::triState($r['is_preorder'] ?? null),
                 'preorder_days' => $r['preorder_days'] ?? null,
-                'ingredients_lieferant' => self::nullIfBlank($r['ingredients'] ?? null),
+                'ingredients_supplier' => self::nullIfBlank($r['ingredients'] ?? null),
                 'origin_country' => $countryMap[(int) ($r['origin_country_id'] ?? 0)] ?? null,
                 'is_organic' => self::triState($r['is_organic'] ?? null),
                 'is_vegan' => self::triState($r['is_vegan'] ?? null),
@@ -159,9 +159,9 @@ class ImportSliceCommand extends Command
                 'form' => self::nullIfBlank($r['form']),
                 'groesse' => self::nullIfBlank($r['groesse']),
                 'convenience_host' => self::nullIfBlank($r['convenience_host']),
-                'ist_bio' => self::triState($r['ist_bio']),
-                'ist_halal' => self::triState($r['ist_halal']),
-                'ist_vegan' => self::triState($r['ist_vegan']),
+                'is_bio' => self::triState($r['is_bio']),
+                'is_halal' => self::triState($r['is_halal']),
+                'is_vegan' => self::triState($r['is_vegan']),
                 'commodity_group_suggestion' => self::nullIfBlank($r['warengruppe_vorschlag']),
                 'commodity_group_confidence' => $r['warengruppe_konfidenz'],
                 'gp_key' => self::nullIfBlank($r['gp_key']),
@@ -516,7 +516,7 @@ class ImportSliceCommand extends Command
                 'anchor_a_id' => $ankerMap[(int) $r['anker_a_id']],
                 'anchor_b_id' => $ankerMap[(int) $r['anker_b_id']],
                 'type' => $r['type'],
-                'evidenz' => self::nullIfBlank($r['evidenz'] ?? null),
+                'evidence' => self::nullIfBlank($r['evidence'] ?? null),
                 'source_slug' => self::nullIfBlank($r['source_slug'] ?? null),
             ], skipRow: fn (array $r) => ! isset($ankerMap[(int) $r['anker_a_id']]) || ! isset($ankerMap[(int) $r['anker_b_id']]));
 
@@ -567,7 +567,7 @@ class ImportSliceCommand extends Command
         // die Quelle selbst trägt Asymmetrien). Fehlende Gegenkanten deterministisch ergänzen.
         if (! $dryRun) {
             $fehlend = DB::select('
-                SELECT e.anker_a_id, e.anker_b_id, e.type, e.evidenz, e.source_slug
+                SELECT e.anker_a_id, e.anker_b_id, e.type, e.evidence, e.source_slug
                 FROM foodalchemist_pairing_anchor_edges e
                 WHERE NOT EXISTS (
                     SELECT 1 FROM foodalchemist_pairing_anchor_edges r
@@ -581,7 +581,7 @@ class ImportSliceCommand extends Command
                     'anchor_a_id' => $kante->anker_b_id,
                     'anchor_b_id' => $kante->anker_a_id,
                     'type' => $kante->type,
-                    'evidenz' => $kante->evidenz,
+                    'evidence' => $kante->evidence,
                     'source_slug' => 'symmetrie_backfill:' . ($kante->source_slug ?? ''),
                     'created_at' => $now, 'updated_at' => $now,
                 ]);
@@ -738,7 +738,7 @@ class ImportSliceCommand extends Command
                 'is_gmo_free' => self::triState($r['is_gmo_free']),
                 'is_preorder' => self::triState($r['is_preorder']),
                 'preorder_days' => $r['preorder_days'],
-                'ingredients_lieferant' => self::nullIfBlank($r['ingredients']),
+                'ingredients_supplier' => self::nullIfBlank($r['ingredients']),
             ], fn ($v) => $v !== null);
             if ($attrs !== []) {
                 $batch[] = [$zielId, $attrs];
@@ -793,7 +793,7 @@ class ImportSliceCommand extends Command
             $rows[] = ['supplier_id' => $supplierMap[(int) $r['supplier_id']], 'commodity_group_code' => null];
         }
         foreach ($pdo->query('SELECT supplier_id, warengruppe FROM stamm_lieferant_wg ORDER BY supplier_id, warengruppe') as $r) {
-            $code = preg_match('/^(\d{2})/', (string) $r['warengruppe'], $m) ? $m[1] : null;
+            $code = preg_match('/^(\d{2})/', (string) $r['commodity_group'], $m) ? $m[1] : null;
             if ($code === null || ! isset($supplierMap[(int) $r['supplier_id']])) {
                 $skipped++;
 
@@ -858,7 +858,7 @@ class ImportSliceCommand extends Command
                 'code' => $r['code'],
                 'label' => $r['bezeichnung'],
                 'default_markup_class_id' => $r['default_aufschlagsklasse_id'] !== null ? ($akMap[(int) $r['default_aufschlagsklasse_id']] ?? null) : null,
-                'diaetform' => $r['diaetform'] ?? 'neutral',
+                'diet_form' => $r['diet_form'] ?? 'neutral',
                 'is_vegi' => (bool) ($r['is_vegi'] ?? 0),
                 'is_vegan' => (bool) ($r['is_vegan'] ?? 0),
                 'is_halal' => (bool) ($r['is_halal'] ?? 0),
@@ -923,14 +923,14 @@ class ImportSliceCommand extends Command
                 'recipe_id' => $recipeMap[(int) $r['recipe_id']] ?? null,
                 'serving_form_id' => $servierformMap[(int) $r['servierform_vocab_id']] ?? null,
                 'is_standard' => (bool) $r['ist_standard'],
-                'quantity_pro_unit_g' => $r['menge_pro_einheit_g'],
+                'quantity_per_unit_g' => $r['menge_pro_einheit_g'],
                 'unit_vocab_id' => $r['einheit_vocab_id'] !== null ? ($einheitMapDar[(int) $r['einheit_vocab_id']] ?? null) : null,
                 'unit_count' => $r['anzahl_einheiten'],
                 'ek_portion' => $r['ek_portion'],
                 'markup_class_id' => $r['aufschlagsklasse_id'] !== null ? ($akMapDar[(int) $r['aufschlagsklasse_id']] ?? null) : null,
                 'sales_net' => $r['vk_netto'],
                 'sales_gross' => $r['vk_brutto'],
-                'preis_modus' => $r['preis_modus'] ?? 'auto',
+                'price_mode' => $r['price_mode'] ?? 'auto',
                 'container_warm_vocab_id' => $r['behaelter_warm_vocab_id'] !== null ? ($behMapDar[(int) $r['behaelter_warm_vocab_id']] ?? null) : null,
                 'container_cold_vocab_id' => $r['behaelter_kalt_vocab_id'] !== null ? ($behMapDar[(int) $r['behaelter_kalt_vocab_id']] ?? null) : null,
                 'regeneration_temp_c' => $r['regeneration_temp_c'],
@@ -1229,7 +1229,7 @@ class ImportSliceCommand extends Command
                     'main_ingredient_display' => self::nullIfBlank($row['hauptzutat_display']),
                     'processing' => self::nullIfBlank($row['verarbeitung']),
                     'form' => self::nullIfBlank($row['form']),
-                    'commodity_group_code' => self::warengruppeCode($row['warengruppe']),
+                    'commodity_group_code' => self::warengruppeCode($row['commodity_group']),
                     'sub_category' => self::nullIfBlank($row['sub_kategorie']),
                     'condition' => self::nullIfBlank($row['zustand']),
                     'bio' => self::nullIfBlank($row['bio']),

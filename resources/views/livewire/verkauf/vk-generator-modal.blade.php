@@ -17,7 +17,7 @@
             <div class="grid grid-cols-2 md:grid-cols-3 gap-3" data-vk-generator-parameter>
                 <div>
                     <label class="block {{ $label }} mb-1">Anlass</label>
-                    <select wire:model="parameter.anlass" class="{{ $input }}">
+                    <select wire:model="parameter.occasion" class="{{ $input }}">
                         <option value="">—</option>
                         @foreach(['fruehstueck' => 'Frühstück', 'lunch' => 'Lunch', 'konferenz' => 'Konferenz', 'empfang' => 'Empfang', 'dinner' => 'Dinner', 'late_night' => 'Late Night'] as $wert => $lbl)
                             <option value="{{ $wert }}">{{ $lbl }}</option>

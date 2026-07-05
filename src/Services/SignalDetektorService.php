@@ -183,7 +183,7 @@ class SignalDetektorService
                         continue;
                     }
                     $qty = (float) ($r->qty ?? 0);
-                    $ppus[] = ['item_id' => (int) $r->item_id, 'ppu' => $qty > 0 ? (float) $r->aktiv_preis / $qty : (float) $r->aktiv_preis, 'preis' => (float) $r->aktiv_preis];
+                    $ppus[] = ['item_id' => (int) $r->item_id, 'ppu' => $qty > 0 ? (float) $r->aktiv_preis / $qty : (float) $r->aktiv_preis, 'price' => (float) $r->aktiv_preis];
                 }
                 if (count($ppus) < 3) {
                     continue;
@@ -195,7 +195,7 @@ class SignalDetektorService
                 foreach ($ppus as $p) {
                     $abw = abs($p['ppu'] - $median) / $median;
                     if ($abw > $schwelle) {
-                        $ausreisser[] = ['item_id' => $p['item_id'], 'preis' => round($p['preis'], 2), 'ppu' => round($p['ppu'], 4), 'median_ppu' => round($median, 4), 'abw_pct' => (int) round($abw * 100)];
+                        $ausreisser[] = ['item_id' => $p['item_id'], 'price' => round($p['price'], 2), 'ppu' => round($p['ppu'], 4), 'median_ppu' => round($median, 4), 'abw_pct' => (int) round($abw * 100)];
                     }
                 }
             }

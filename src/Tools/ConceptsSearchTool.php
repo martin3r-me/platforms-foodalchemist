@@ -52,7 +52,7 @@ class ConceptsSearchTool extends FoodAlchemistTool implements ToolContract, Tool
             'total' => $treffer->total(),
             'concepts' => collect($treffer->items())->map(fn ($c) => [
                 'id' => $c->id, 'name' => $c->name, 'status' => $c->status, 'class' => $c->class,
-                'anlass' => $c->anlass, 'level' => $c->level, 'slots' => $c->slots_count,
+                'occasion' => $c->occasion, 'level' => $c->level, 'slots' => $c->slots_count,
             ])->all(),
         ]);
     }

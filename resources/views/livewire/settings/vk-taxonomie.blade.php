@@ -65,7 +65,7 @@
                                         </td>
                                     @else
                                         <td class="{{ $td }} text-gray-900 dark:text-gray-100">{{ $k->label }} <span class="text-[10px] font-mono text-gray-400">{{ $k->code }}</span></td>
-                                        <td class="{{ $td }}"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $k->diaetform }}</span></td>
+                                        <td class="{{ $td }}"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $k->diet_form }}</span></td>
                                         <td class="{{ $td }} text-[11px] text-gray-400">{{ collect(['vegan' => $k->is_vegan, 'vegi' => $k->is_vegi, 'halal' => $k->is_halal, 'koscher' => $k->is_koscher])->filter()->keys()->implode(' · ') ?: '—' }}</td>
                                         <td class="{{ $td }} text-gray-500">{{ $nRez }}</td>
                                         <td class="{{ $td }} text-right whitespace-nowrap">

@@ -153,7 +153,7 @@
                     <select wire:model="form.dish_class_id" class="{{ $input }}" data-vk-klasse @if($klassen->isEmpty()) disabled @endif>
                         <option value="">—</option>
                         @foreach($klassen as $k)
-                            <option value="{{ $k->id }}">{{ $k->label }} ({{ $k->diaetform }})</option>
+                            <option value="{{ $k->id }}">{{ $k->label }} ({{ $k->diet_form }})</option>
                         @endforeach
                     </select>
                 </div>
@@ -338,7 +338,7 @@
                         </td>
                         <td class="py-1.5 pr-2 text-right">
                             @if($d->deltas->count() > 0)
-                                <span class="tabular-nums text-gray-500" title="Ergibt sich automatisch aus der Komponenten-Summe (⚙)">{{ $d->quantity_pro_unit_g !== null ? number_format($d->quantity_pro_unit_g, 0, ',', '.') : '—' }} <span class="text-[10px] text-gray-400">Σ</span></span>
+                                <span class="tabular-nums text-gray-500" title="Ergibt sich automatisch aus der Komponenten-Summe (⚙)">{{ $d->quantity_per_unit_g !== null ? number_format($d->quantity_per_unit_g, 0, ',', '.') : '—' }} <span class="text-[10px] text-gray-400">Σ</span></span>
                             @else
                                 <input type="text" wire:model.blur="darForm.{{ $d->id }}.quantity_pro_unit_g"
                                        wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
@@ -374,14 +374,14 @@
                             {{ $d->ek_portion !== null ? number_format($d->ek_portion, 2, ',', '.') . ' €' : '—' }}
                         </td>
                         <td class="py-1.5 pr-2 text-right tabular-nums">
-                            @if(($darForm[$d->id]['preis_modus'] ?? 'auto') === 'manuell')
+                            @if(($darForm[$d->id]['price_mode'] ?? 'auto') === 'manuell')
                                 <input type="text" wire:model.blur="darForm.{{ $d->id }}.sales_net"
                                        wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
                             @else
                                 <span class="text-emerald-600 dark:text-emerald-400">{{ $d->sales_net !== null ? number_format($d->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
                             @endif
                         </td>
-                        @php($darVkNetto = ($darForm[$d->id]['preis_modus'] ?? 'auto') === 'manuell'
+                        @php($darVkNetto = ($darForm[$d->id]['price_mode'] ?? 'auto') === 'manuell'
                             ? (is_numeric(str_replace(',', '.', (string) ($darForm[$d->id]['sales_net'] ?? ''))) ? (float) str_replace(',', '.', (string) $darForm[$d->id]['sales_net']) : null)
                             : $d->sales_net)
                         @php($darWpct = ($d->ek_portion !== null && $darVkNetto !== null && $darVkNetto > 0) ? 100 * $d->ek_portion / $darVkNetto : null)

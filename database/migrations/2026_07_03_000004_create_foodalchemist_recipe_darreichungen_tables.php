@@ -29,14 +29,14 @@ return new class extends Migration
                 $table->foreignId('recipe_id')->constrained('foodalchemist_recipes')->cascadeOnDelete();
                 $table->foreignId('serving_form_id')->constrained('foodalchemist_serving_forms')->cascadeOnDelete();
                 $table->boolean('is_standard')->default(false);
-                $table->decimal('quantity_pro_unit_g', 12, 3)->nullable();
+                $table->decimal('quantity_per_unit_g', 12, 3)->nullable();
                 $table->foreignId('unit_vocab_id')->nullable()->constrained('foodalchemist_vocab_units')->nullOnDelete();
                 $table->decimal('unit_count', 12, 3)->nullable();
                 $table->decimal('ek_portion', 12, 4)->nullable();          // berechnet (WaWi Recompute 206 Stufe 4)
                 $table->foreignId('markup_class_id')->nullable()->constrained('foodalchemist_markup_classes')->nullOnDelete();
                 $table->decimal('sales_net', 12, 2)->nullable();
                 $table->decimal('sales_gross', 12, 2)->nullable();
-                $table->string('preis_modus', 12)->default('auto');        // auto | manuell
+                $table->string('price_mode', 12)->default('auto');        // auto | manuell
                 // MySQL-Identifier-Limit (64): FK-Namen für lange Spalten explizit gekürzt.
                 $table->foreignId('container_warm_vocab_id')->nullable();
                 $table->foreign('container_warm_vocab_id', 'fa_recipe_darreichungen_behaelter_warm_fk')

@@ -34,7 +34,7 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
             'properties' => [
                 'label' => ['type' => 'string', 'description' => 'Name des Foodbooks, z. B. "Sommerhochzeiten 2027"'],
                 'jahr' => ['type' => 'integer'],
-                'kunde' => ['type' => 'string', 'description' => 'Kunden-Name (Freitext; CRM-Link macht der Editor)'],
+                'customer' => ['type' => 'string', 'description' => 'Kunden-Name (Freitext; CRM-Link macht der Editor)'],
                 'personen' => ['type' => 'integer', 'description' => 'Default-Pax für Preis-Kalkulationen'],
                 'description' => ['type' => 'string'],
                 'kapitel' => [
@@ -59,15 +59,15 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
             $fb = $svc->create($team, [
                 'label' => (string) $arguments['label'],
                 'jahr' => $arguments['jahr'] ?? null,
-                'kunde' => $arguments['kunde'] ?? null,
+                'customer' => $arguments['customer'] ?? null,
                 'personen' => $arguments['personen'] ?? null,
                 'description' => $arguments['description'] ?? null,
                 'status' => 'draft',
             ]);
             $kapitel = [];
             foreach (array_values((array) ($arguments['kapitel'] ?? [])) as $titel) {
-                $k = $svc->addKapitel($team, $fb->id, ['titel' => (string) $titel]);
-                $kapitel[] = ['id' => $k->id, 'titel' => $k->titel];
+                $k = $svc->addKapitel($team, $fb->id, ['title' => (string) $titel]);
+                $kapitel[] = ['id' => $k->id, 'title' => $k->title];
             }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');

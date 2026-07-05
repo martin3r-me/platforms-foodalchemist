@@ -134,7 +134,7 @@ class KnowledgeEmbeddingService
                 ->where('category', $kategorie)
                 ->where('active', 1)
                 ->whereNull('deleted_at')
-                ->get(['id', 'slug', 'titel', 'category', 'inhalt_md', 'team_id']);
+                ->get(['id', 'slug', 'title', 'category', 'content_md', 'team_id']);
 
             // Nach Team-Partition gruppieren (global NULL → Sentinel).
             $byTeam = [];
@@ -310,8 +310,8 @@ class KnowledgeEmbeddingService
      */
     private function embedText(object $doc): string
     {
-        $titel = trim((string) ($doc->titel ?? ''));
-        $inhalt = (string) ($doc->inhalt_md ?? '');
+        $titel = trim((string) ($doc->title ?? ''));
+        $inhalt = (string) ($doc->content_md ?? '');
 
         if (($doc->category ?? '') === 'pairing') {
             $slug = (string) ($doc->slug ?? '');

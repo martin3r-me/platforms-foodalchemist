@@ -25,7 +25,7 @@ class FoodAlchemistSpeiseplanLinie extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'ist_vegetarisch' => 'boolean',
+        'is_vegetarian' => 'boolean',
         'sort_order' => 'integer',
     ];
 

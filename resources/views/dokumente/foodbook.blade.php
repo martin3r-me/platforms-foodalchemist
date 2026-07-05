@@ -55,7 +55,7 @@
         <div class="kapitel" style="margin-left: {{ $k['depth'] * 16 }}px">
             <h2>
                 @if($k['vk_pro_person'] > 0)<span class="kpreis">{{ number_format($k['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
-                {{ $k['titel'] }}
+                {{ $k['title'] }}
             </h2>
             @forelse($k['bloecke'] as $b)
                 <div class="pos {{ $b['ist_header'] ? 'header' : '' }}">{{ $b['label'] }}</div>
@@ -78,7 +78,7 @@
         <p style="color:#9ca3af">Noch keine Kapitel angelegt.</p>
     @endforelse
 
-    <div class="preis">
+    <div class="price">
         <table>
             <tr><td>Preis pro Person</td><td class="right">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</td></tr>
             @if($gesamt['personen'])<tr><td>Personen</td><td class="right">{{ $gesamt['personen'] }}</td></tr>@endif

@@ -14,11 +14,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('foodalchemist_concepts', function (Blueprint $table) {
-            if (! Schema::hasColumn('foodalchemist_concepts', 'preis_modus')) {
-                $table->string('preis_modus', 16)->default('auto');   // auto | manuell
+            if (! Schema::hasColumn('foodalchemist_concepts', 'price_mode')) {
+                $table->string('price_mode', 16)->default('auto');   // auto | manuell
             }
-            if (! Schema::hasColumn('foodalchemist_concepts', 'preis_pro_person_manuell')) {
-                $table->decimal('preis_pro_person_manuell', 10, 2)->nullable();
+            if (! Schema::hasColumn('foodalchemist_concepts', 'price_per_person_manual')) {
+                $table->decimal('price_per_person_manual', 10, 2)->nullable();
             }
         });
     }
@@ -26,7 +26,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_concepts', function (Blueprint $table) {
-            foreach (['preis_modus', 'preis_pro_person_manuell'] as $col) {
+            foreach (['price_mode', 'price_per_person_manual'] as $col) {
                 if (Schema::hasColumn('foodalchemist_concepts', $col)) {
                     $table->dropColumn($col);
                 }

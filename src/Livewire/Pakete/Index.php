@@ -29,8 +29,8 @@ class Index extends Component
 
     /** Editierbare Felder des gewählten Pakets. */
     public array $form = [
-        'name' => '', 'role' => '', 'level' => '', 'preis_modus' => 'manuell',
-        'preis_pro_person' => null, 'ek_pro_person' => null, 'food_cost_percent' => null,
+        'name' => '', 'role' => '', 'level' => '', 'price_mode' => 'manuell',
+        'price_per_person' => null, 'ek_per_person' => null, 'food_cost_percent' => null,
         'description' => '',
     ];
 
@@ -60,8 +60,8 @@ class Index extends Component
         $this->selectedId = $id;
         $this->form = [
             'name' => $b->name, 'role' => $b->role ?? '', 'level' => $b->level ?? '',
-            'preis_modus' => $b->preis_modus, 'preis_pro_person' => $b->preis_pro_person,
-            'ek_pro_person' => $b->ek_pro_person, 'food_cost_percent' => $b->food_cost_percent,
+            'price_mode' => $b->price_mode, 'price_per_person' => $b->price_per_person,
+            'ek_per_person' => $b->ek_per_person, 'food_cost_percent' => $b->food_cost_percent,
             'description' => $b->description ?? '',
         ];
         $this->mengeForm = $b->gerichte->mapWithKeys(fn ($g) => [$g->id => $g->quantity !== null ? (float) $g->quantity : null])->all();

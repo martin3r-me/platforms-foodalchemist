@@ -420,7 +420,7 @@ class PairingService
             ->when($typ !== null, fn ($q) => $q->where('e.type', $typ))
             ->orderByRaw("CASE e.type WHEN 'klassisch' THEN 1 WHEN 'modern' THEN 2 ELSE 3 END")
             ->orderBy('a.slug')->limit($limit)
-            ->get(['a.id', 'a.slug', 'a.display_de', 'e.type', 'e.evidenz']);
+            ->get(['a.id', 'a.slug', 'a.display_de', 'e.type', 'e.evidence']);
     }
 
     // ── Schreibpfade (Inv. 1/3) ──────────────────────────────────────────

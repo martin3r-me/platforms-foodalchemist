@@ -141,8 +141,8 @@ class Editor extends Component
             $this->form = [
                 'name' => $p->name, 'consumer_name' => $p->consumer_name ?? '',
                 'role' => $p->role ?? '', 'class' => $p->class ?? '', 'level' => $p->level ?? '',
-                'preis_modus' => $p->preis_modus, 'preis_pro_person' => $p->preis_pro_person,
-                'ek_pro_person' => $p->ek_pro_person, 'food_cost_percent' => $p->food_cost_percent,
+                'price_mode' => $p->price_mode, 'price_per_person' => $p->price_per_person,
+                'ek_per_person' => $p->ek_per_person, 'food_cost_percent' => $p->food_cost_percent,
                 'description' => $p->description ?? '', 'note' => $p->note ?? '',
             ];
         } else {
@@ -152,24 +152,24 @@ class Editor extends Component
             }
             $this->form = [
                 'name' => $c->name, 'consumer_name' => $c->consumer_name ?? '',
-                'class' => $c->class ?? '', 'level' => $c->level ?? '', 'anlass' => $c->anlass ?? '',
+                'class' => $c->class ?? '', 'level' => $c->level ?? '', 'occasion' => $c->occasion ?? '',
                 'category_id' => $c->category_id, 'taste_direction' => $c->taste_direction ?? '',
                 'writing_style_id' => $c->writing_style_id, 'status' => $c->status,
                 'description' => $c->description ?? '', 'additional_text' => $c->additional_text ?? '',
-                'brief' => $c->brief ?? '', 'diaet_vorgabe' => $c->diaet_vorgabe ?? '',
-                'struktur_vorgabe' => $c->struktur_vorgabe ?? '', 'season' => $c->season ?? '',
-                'target_group' => $c->target_group ?? '', 'zielpreis_pro_person' => $c->zielpreis_pro_person,
-                'preis_modus' => $c->preis_modus ?? 'auto', 'preis_pro_person_manuell' => $c->preis_pro_person_manuell,
+                'brief' => $c->brief ?? '', 'diet_requirement' => $c->diet_requirement ?? '',
+                'structure_requirement' => $c->structure_requirement ?? '', 'season' => $c->season ?? '',
+                'target_group' => $c->target_group ?? '', 'target_price_per_person' => $c->target_price_per_person,
+                'price_mode' => $c->price_mode ?? 'auto', 'price_per_person_manual' => $c->price_per_person_manual,
                 'note' => $c->note ?? '',
                 // Facetten (Umbau-Spec Phase 4b)
                 'serving_form_id' => $c->serving_form_id, 'event_type_id' => $c->event_type_id,
                 'einsatzmoment_ids' => $c->einsatzmomente()->pluck('foodalchemist_service_moments.id')->all(),
                 'saison_ids' => $c->saisons()->pluck('foodalchemist_seasons.id')->all(),
             ];
-            $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'quantity' => $s->quantity, 'unit_vocab_id' => $s->unit_vocab_id, 'wording' => $s->wording ?? '']])->all();
+            $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'title' => $s->title ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'quantity' => $s->quantity, 'unit_vocab_id' => $s->unit_vocab_id, 'wording' => $s->wording ?? '']])->all();
             $this->blockForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => [
-                'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
-                'price_value' => $s->price_value, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
+                'title' => $s->title ?? '', 'text_content' => $s->text_content ?? '',
+                'price_value' => $s->price_value, 'price_basis' => $s->price_basis ?? 'person', 'height' => $s->height ?? 'mittel',
             ]])->all();
             // #389/Canvas: Concept-Canvas (kreatives Foodkonzept) über die zentrale Mechanik laden.
             $this->canvasInit('concept', 'concept', $id);
@@ -312,7 +312,7 @@ class Editor extends Component
         if ($this->type !== 'concepts') {
             return;
         }
-        $this->form['preis_modus'] = in_array($modus, ['auto', 'manuell'], true) ? $modus : 'auto';
+        $this->form['price_mode'] = in_array($modus, ['auto', 'manuell'], true) ? $modus : 'auto';
         $this->speichern();
     }
 
@@ -345,7 +345,7 @@ class Editor extends Component
         $stil = $this->form['writing_style_id'] ?? null;
         $kontext = [
             'concept' => $concept->name,
-            'anlass' => $concept->anlass,
+            'occasion' => $concept->occasion,
             'class' => $concept->class,
             'schreibstil' => $stil ? optional(FoodAlchemistWritingStyle::find($stil))->name : null,
             'positionen' => $concept->slots
@@ -391,7 +391,7 @@ class Editor extends Component
         if ($this->type !== 'concepts' || $this->id === null) {
             return;
         }
-        app(ConceptService::class)->addSlot($this->team(), $this->id, ['role' => $this->neuerSlotRolle ?: null, 'titel' => $this->neuerSlotRolle ?: null]);
+        app(ConceptService::class)->addSlot($this->team(), $this->id, ['role' => $this->neuerSlotRolle ?: null, 'title' => $this->neuerSlotRolle ?: null]);
         $this->neuerSlotRolle = '';
         $this->reloadSlotForm();
         $this->dispatch('concepter-gespeichert', id: $this->id);
@@ -700,10 +700,10 @@ class Editor extends Component
     private function reloadSlotForm(): void
     {
         $c = app(ConceptService::class)->detail($this->team(), $this->id);
-        $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'titel' => $s->titel ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'quantity' => $s->quantity, 'unit_vocab_id' => $s->unit_vocab_id, 'wording' => $s->wording ?? '']])->all() : [];
+        $this->slotForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'title' => $s->title ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'quantity' => $s->quantity, 'unit_vocab_id' => $s->unit_vocab_id, 'wording' => $s->wording ?? '']])->all() : [];
         $this->blockForm = $c ? $c->slots->mapWithKeys(fn ($s) => [$s->id => [
-            'titel' => $s->titel ?? '', 'text_inhalt' => $s->text_inhalt ?? '',
-            'price_value' => $s->price_value, 'preis_basis' => $s->preis_basis ?? 'person', 'hoehe' => $s->hoehe ?? 'mittel',
+            'title' => $s->title ?? '', 'text_content' => $s->text_content ?? '',
+            'price_value' => $s->price_value, 'price_basis' => $s->price_basis ?? 'person', 'height' => $s->height ?? 'mittel',
         ]])->all() : [];
     }
 
@@ -815,8 +815,8 @@ class Editor extends Component
         if ($this->type === 'pakete' && $this->id !== null) {
             $p = app(PaketService::class)->detail($this->team(), $this->id);
             app(PaketService::class)->recomputePrice($p);
-            $this->form['preis_pro_person'] = $p->refresh()->preis_pro_person;
-            $this->form['ek_pro_person'] = $p->ek_pro_person;
+            $this->form['price_per_person'] = $p->refresh()->price_per_person;
+            $this->form['ek_per_person'] = $p->ek_per_person;
             $this->form['food_cost_percent'] = $p->food_cost_percent;
             $this->dispatch('concepter-gespeichert', id: $this->id);
         }
@@ -1071,7 +1071,7 @@ class Editor extends Component
                 continue;
             }
             $summen[$key]['ek'] += (float) ($row['ek'] ?? 0);
-            $summen[$key]['vk'] += (float) ($row['preis'] ?? 0);
+            $summen[$key]['vk'] += (float) ($row['price'] ?? 0);
             $summen[$key]['n']++;
         }
 

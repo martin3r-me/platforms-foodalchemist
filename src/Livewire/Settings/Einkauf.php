@@ -42,7 +42,7 @@ class Einkauf extends Component
         $settings = app(TeamSettingsService::class)->for($this->team());
         $this->strategie = ($settings->lead_la_strategie ?? LeadLaStrategie::GuenstigsterPreis)->value;
         $this->prioritaeten = $settings->lead_la_prioritaeten ?? [];
-        $this->ausweichKette = (bool) ($settings->ausweich_kette_anzeigen ?? false);
+        $this->ausweichKette = (bool) ($settings->show_fallback_chain ?? false);
         $this->strategiePerWg = is_array($settings->lead_la_strategie_per_wg ?? null) ? $settings->lead_la_strategie_per_wg : [];
     }
 
@@ -58,7 +58,7 @@ class Einkauf extends Component
             'lead_la_strategie' => LeadLaStrategie::from($this->strategie),
             'lead_la_strategie_per_wg' => $perWg ?: null,
             'lead_la_prioritaeten' => array_values(array_map('intval', $this->prioritaeten)),
-            'ausweich_kette_anzeigen' => $this->ausweichKette,
+            'show_fallback_chain' => $this->ausweichKette,
         ]);
         $this->meldung = 'Gespeichert — wirkt ab sofort auf die Lead-LA-Wahl (M3-06).';
     }

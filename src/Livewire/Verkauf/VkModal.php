@@ -118,11 +118,11 @@ class VkModal extends Component
         }
         foreach (\Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $this->recipeId)->get() as $d) {
             $this->darForm[$d->id] = [
-                'quantity_pro_unit_g' => $d->quantity_pro_unit_g,
+                'quantity_per_unit_g' => $d->quantity_per_unit_g,
                 'unit_count' => $d->unit_count,
                 'unit_vocab_id' => $d->unit_vocab_id,
                 'markup_class_id' => $d->markup_class_id,
-                'preis_modus' => $d->preis_modus,
+                'price_mode' => $d->price_mode,
                 'sales_net' => $d->sales_net,
                 'tableware_item_id' => $d->tableware_item_id,
             ];
@@ -561,7 +561,7 @@ class VkModal extends Component
             'anteile' => $anteile,
             'hauptgruppen' => $team !== null ? $verkauf->dishMainGroups($team) : collect(),
             'klassen' => $this->hauptgruppeId !== null
-                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppeId)->orderBy('label')->get(['id', 'label', 'diaetform'])
+                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppeId)->orderBy('label')->get(['id', 'label', 'diet_form'])
                 : collect(),
             'aufschlagsklassen' => FoodAlchemistMarkupClass::where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'raw_markup_pct', 'formula_type']),
             'einheiten' => $team !== null ? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)->orderBy('slug')->get(['id', 'slug', 'display_de']) : collect(),
@@ -591,7 +591,7 @@ class VkModal extends Component
                 ->orderBy('sort_order')->get(['id', 'code', 'label']),
             'geschirrItems' => $team !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::visibleToTeam($team)
-                    ->orderBy('label')->get(['id', 'label', 'leihpreis'])
+                    ->orderBy('label')->get(['id', 'label', 'rental_price'])
                 : collect(),
             'darZeilen' => ($rezept !== null && $this->darDeltaOffen !== null)
                 ? app(\Platform\FoodAlchemist\Services\DarreichungService::class)->standardProEinheit($rezept)

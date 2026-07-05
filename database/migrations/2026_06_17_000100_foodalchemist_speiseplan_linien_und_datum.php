@@ -28,7 +28,7 @@ return new class extends Migration
                 $table->foreignId('menu_plan_id')->constrained('foodalchemist_menu_plans')->cascadeOnDelete();
                 $table->string('name');
                 $table->string('color', 16)->nullable();             // Token/Hex für die Zeilen-Markierung
-                $table->boolean('ist_vegetarisch')->default(false);  // GV: „Veggie täglich"-Check
+                $table->boolean('is_vegetarian')->default(false);  // GV: „Veggie täglich"-Check
                 $table->unsignedInteger('sort_order')->default(0);
                 $table->timestamps();
                 $table->softDeletes();

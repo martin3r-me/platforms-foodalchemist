@@ -63,10 +63,10 @@
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ $variantPill[$it->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $it->status->label() }}</span>
                             </td>
-                            <td class="{{ $td }} text-gray-500">{{ $it->anlass ?: '—' }}</td>
+                            <td class="{{ $td }} text-gray-500">{{ $it->occasion ?: '—' }}</td>
                             <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->personen ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500">{{ $it->event_date ? $it->event_date->format('d.m.Y') : '—' }}</td>
-                            <td class="{{ $td }} text-right tabular-nums">{{ $it->gesamtpreis !== null ? number_format((float) $it->gesamtpreis, 2, ',', '.') . ' €' : '—' }}</td>
+                            <td class="{{ $td }} text-right tabular-nums">{{ $it->total_price !== null ? number_format((float) $it->total_price, 2, ',', '.') . ' €' : '—' }}</td>
                         </tr>
                     @empty
                         <tr wire:key="ang-empty"><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-400">Keine Angebote. Oben „+ Neue Anfrage".</td></tr>

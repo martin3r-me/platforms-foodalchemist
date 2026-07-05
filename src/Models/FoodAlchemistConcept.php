@@ -29,14 +29,14 @@ class FoodAlchemistConcept extends Model
     protected $casts = [
         'uuid' => 'string',
         'is_template' => 'boolean',
-        'preis_pro_person_cache' => 'decimal:2',
-        'preis_pro_person_manuell' => 'decimal:2',   // manueller Concept-VK (preis_modus=manuell)
+        'price_per_person_cache' => 'decimal:2',
+        'price_per_person_manual' => 'decimal:2',   // manueller Concept-VK (preis_modus=manuell)
         // M10R-1: VK-Parität + KI-Brief + Aggregat-Caches
-        'zielpreis_pro_person' => 'decimal:2',
-        'ek_pro_person_cache' => 'decimal:4',
+        'target_price_per_person' => 'decimal:2',
+        'ek_per_person_cache' => 'decimal:4',
         'work_time_min_cache' => 'integer',
         'ai_confidence' => 'decimal:3',
-        'naehrwerte_cache' => 'array',
+        'nutrition_cache' => 'array',
     ];
 
     public function scopeVorlagen(Builder $q): Builder

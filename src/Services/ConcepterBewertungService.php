@@ -58,7 +58,7 @@ class ConcepterBewertungService
 
         // 3 — Diät-Abdeckung (gegen die Vorgabe, sonst Info aus dem Rollup)
         $a = $aggregat['allergene'] ?? [];
-        $vorgabe = mb_strtolower((string) ($concept->diaet_vorgabe ?? ''));
+        $vorgabe = mb_strtolower((string) ($concept->diet_requirement ?? ''));
         if ($vorgabe !== '' && str_contains($vorgabe, 'vegan')) {
             $checks[] = $this->check('diaet', 'Diät-Vorgabe (vegan)', ! empty($a['is_vegan']) ? 'ok' : 'fail',
                 ! empty($a['is_vegan']) ? 'Menü ist durchgängig vegan.' : 'Vorgabe vegan, aber nicht alle Gänge sind vegan.');
@@ -71,14 +71,14 @@ class ConcepterBewertungService
         }
 
         // 4 — Preis im Zielkorridor
-        $ziel = $concept->zielpreis_pro_person !== null ? (float) $concept->zielpreis_pro_person : null;
-        $ist = (float) ($cockpit['preis_pro_person'] ?? 0);
+        $ziel = $concept->target_price_per_person !== null ? (float) $concept->target_price_per_person : null;
+        $ist = (float) ($cockpit['price_per_person'] ?? 0);
         if ($ziel === null || $ziel <= 0) {
-            $checks[] = $this->check('preis', 'Preis-Korridor', 'info', 'Kein Zielpreis gesetzt.');
+            $checks[] = $this->check('price', 'Preis-Korridor', 'info', 'Kein Zielpreis gesetzt.');
         } else {
             $abw = abs($ist - $ziel) / $ziel;
             $status = $abw <= self::PREIS_OK ? 'ok' : ($abw <= self::PREIS_WARN ? 'warn' : 'fail');
-            $checks[] = $this->check('preis', 'Preis-Korridor', $status,
+            $checks[] = $this->check('price', 'Preis-Korridor', $status,
                 'Ist ' . number_format($ist, 2, ',', '.') . ' € vs. Ziel ' . number_format($ziel, 2, ',', '.') . ' € (' . round($abw * 100) . ' % Abw.).');
         }
 

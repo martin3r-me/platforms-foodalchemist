@@ -138,7 +138,7 @@ class ReviewQueue extends Component
                 ->get(['p.id', 'p.score', 'p.methode', 'i.designation AS la_name', 'g.name AS gp_name']),
             'bulkZahl' => (clone $bulkOffen)->count(),
             'bulks' => (clone $bulkOffen)->orderByDesc('b.id')->limit(50)
-                ->get(['b.id', 'b.feld', 'b.value', 'b.confidence', 'r.name AS rezept_name', 'r.id AS rezept_id', 'r.is_sales_recipe']),
+                ->get(['b.id', 'b.field', 'b.value', 'b.confidence', 'r.name AS rezept_name', 'r.id AS rezept_id', 'r.is_sales_recipe']),
             'vkOhneKlasse' => (clone $rezept())->where('is_sales_recipe', true)->whereNull('dish_class_id')
                 ->orderBy('name')->limit(50)->get(['id', 'name']),
             'imReview' => (clone $rezept())->where('status', 'review')->orderBy('name')->limit(50)

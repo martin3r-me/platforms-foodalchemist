@@ -107,7 +107,7 @@
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $item->material ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap text-[11px]">{{ $item->masse_label ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap text-right tabular-nums">
-                                {{ $item->leihpreis !== null ? number_format((float) $item->leihpreis, 2, ',', '.') . ' €' : '—' }}
+                                {{ $item->rental_price !== null ? number_format((float) $item->rental_price, 2, ',', '.') . ' €' : '—' }}
                             </td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums">
                                 {{ $item->pfand !== null ? number_format((float) $item->pfand, 2, ',', '.') . ' €' : '—' }}
@@ -212,23 +212,23 @@
             <x-foodalchemist::modal-section title="Maße & Leih-Konditionen">
                 <div class="grid grid-cols-4 gap-3">
                     <div><label class="block {{ $label }} mb-1">Ø mm</label>
-                        <input type="text" wire:model="artikelForm.durchmesser_mm" class="{{ $input }}" /></div>
+                        <input type="text" wire:model="artikelForm.diameter_mm" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Länge mm</label>
-                        <input type="text" wire:model="artikelForm.laenge_mm" class="{{ $input }}" /></div>
+                        <input type="text" wire:model="artikelForm.length_mm" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Breite mm</label>
-                        <input type="text" wire:model="artikelForm.breite_mm" class="{{ $input }}" /></div>
+                        <input type="text" wire:model="artikelForm.width_mm" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Höhe mm</label>
-                        <input type="text" wire:model="artikelForm.hoehe_mm" class="{{ $input }}" /></div>
+                        <input type="text" wire:model="artikelForm.height_mm" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Volumen ml</label>
                         <input type="text" wire:model="artikelForm.volumen_ml" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Gewicht g</label>
-                        <input type="text" wire:model="artikelForm.gewicht_g" class="{{ $input }}" /></div>
+                        <input type="text" wire:model="artikelForm.weight_g" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Einheit</label>
                         <input type="text" wire:model="artikelForm.unit" class="{{ $input }}" /></div>
                 </div>
                 <div class="grid grid-cols-3 gap-3 mt-3">
                     <div><label class="block {{ $label }} mb-1">Leihpreis € (netto)</label>
-                        <input type="text" wire:model="artikelForm.leihpreis" class="{{ $input }}" /></div>
+                        <input type="text" wire:model="artikelForm.rental_price" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Pfand €</label>
                         <input type="text" wire:model="artikelForm.pfand" class="{{ $input }}" /></div>
                 </div>

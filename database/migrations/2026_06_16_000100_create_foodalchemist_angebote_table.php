@@ -39,16 +39,16 @@ return new class extends Migration
             $table->unsignedBigInteger('crm_contact_id')->nullable()->index();
 
             // Anfrage / Briefing (nativ — funktioniert OHNE Canvas; Canvas = Phase 2).
-            $table->string('anlass')->nullable();                     // Hochzeit, Firmenfeier …
+            $table->string('occasion')->nullable();                     // Hochzeit, Firmenfeier …
             $table->unsignedInteger('personen')->nullable();          // Pax
             $table->decimal('budget', 10, 2)->nullable();             // Kunden-Budget (Richtwert)
             $table->date('event_date')->nullable();                  // Veranstaltungsdatum
             $table->string('location')->nullable();
-            $table->string('diaet_vorgabe')->nullable();              // Diät/Allergie-Vorgabe (frei)
+            $table->string('diet_requirement')->nullable();              // Diät/Allergie-Vorgabe (frei)
             $table->text('brief')->nullable();                        // Freitext-Briefing / Hintergrund
 
             // Kommerzielle Schicht
-            $table->decimal('gesamtpreis', 10, 2)->nullable();        // Angebots-Gesamtpreis (Cache/manuell)
+            $table->decimal('total_price', 10, 2)->nullable();        // Angebots-Gesamtpreis (Cache/manuell)
             $table->date('valid_until')->nullable();                  // Angebots-Gültigkeit
 
             $table->text('description')->nullable();

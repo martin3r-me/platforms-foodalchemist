@@ -20,8 +20,8 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->foreignId('block_id')->constrained('foodalchemist_foodbook_blocks')->cascadeOnDelete();
             $table->integer('position')->default(0);
-            $table->unsignedInteger('min_personen')->default(1);
-            $table->decimal('preis', 10, 2)->default(0);
+            $table->unsignedInteger('min_persons')->default(1);
+            $table->decimal('price', 10, 2)->default(0);
             $table->timestamps();
             $table->softDeletes();
         });

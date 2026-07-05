@@ -64,7 +64,7 @@
 
         {{-- Tab-Leiste (nur Edit — Neuanlage hat nur „Allgemein") --}}
         @if(! $neu && $gp !== null)
-            @php($gpTabs = ['allgemein' => 'Allgemein', 'eigenschaften' => 'Eigenschaften', 'allergene' => 'Allergene', 'zusatzstoffe' => 'Zusatzstoffe', 'preis' => 'Preis & Lieferanten', 'ersatz' => 'Ersatz', 'sensorik' => 'Sensorik & Pairing', 'kalkulation' => 'Kalkulation'])
+            @php($gpTabs = ['allgemein' => 'Allgemein', 'eigenschaften' => 'Eigenschaften', 'allergene' => 'Allergene', 'zusatzstoffe' => 'Zusatzstoffe', 'price' => 'Preis & Lieferanten', 'ersatz' => 'Ersatz', 'sensorik' => 'Sensorik & Pairing', 'kalkulation' => 'Kalkulation'])
             <div class="flex items-center gap-1 border-b border-black/5 dark:border-white/10 mb-1 overflow-x-auto" data-gp-tabbar>
                 @foreach($gpTabs as $tabKey => $tabLabel)
                     <button type="button" @click="tab = '{{ $tabKey }}'"
@@ -274,7 +274,7 @@
             </div>{{-- /Tab ZUSATZSTOFFE --}}
 
             {{-- ── Tab: PREIS & LIEFERANTEN (eingebettet — LA-Kette + Verwendungen) ── --}}
-            <div x-show="tab === 'preis'" x-cloak class="pt-3">
+            <div x-show="tab === 'price'" x-cloak class="pt-3">
                 <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="las" :key="'gpd-las-'.$gpId" />
             </div>{{-- /Tab PREIS & LIEFERANTEN --}}
 

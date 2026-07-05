@@ -63,7 +63,7 @@ return new class extends Migration
             $table->string('code', 32);
             $table->string('label');
             $table->foreignId('default_markup_class_id')->nullable()->constrained('foodalchemist_markup_classes')->nullOnDelete();
-            $table->string('diaetform', 16)->default('neutral');      // fleisch|fisch|vegi|vegan|neutral|allergie
+            $table->string('diet_form', 16)->default('neutral');      // fleisch|fisch|vegi|vegan|neutral|allergie
             $table->boolean('is_vegi')->default(false);
             $table->boolean('is_vegan')->default(false);
             $table->boolean('is_halal')->default(false);

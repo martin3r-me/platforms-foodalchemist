@@ -28,7 +28,7 @@
         {{-- Phase 1: Live-Kosten-Streifen fix im Modal-Kopf (immer sichtbar, alle Tabs) --}}
         @if($kalkulation)
             <x-slot:kpiHeader>
-                @php($stripVk = $concept ? ($cockpit['preis_pro_person'] ?? 0) : ($paket?->preis_pro_person !== null ? (float) $paket->preis_pro_person : null))
+                @php($stripVk = $concept ? ($cockpit['price_per_person'] ?? 0) : ($paket?->price_per_person !== null ? (float) $paket->price_per_person : null))
                 @php($stripEk = (float) ($kalkulation['hk1_pro_person'] ?? 0))
                 @php($stripWpct = ($stripVk !== null && $stripVk > 0) ? $stripEk / $stripVk * 100 : null)
                 <div class="grid grid-cols-3 md:grid-cols-7 gap-2">
@@ -95,7 +95,7 @@
                 @if($concept)
                     <div>
                         <label class="{{ $label }}">Anlass</label>
-                        <input type="text" wire:model="form.anlass" class="{{ $input }}" placeholder="z. B. Sommerfest" />
+                        <input type="text" wire:model="form.occasion" class="{{ $input }}" placeholder="z. B. Sommerfest" />
                     </div>
                     {{-- 4c: Kategorie-Feld abgelöst — Facetten (Servierform/Eventtyp/Momente/Saison) übernehmen --}}
                     <div>
@@ -197,7 +197,7 @@
                                 <div wire:key="kpk-{{ $pk->id }}" draggable="true" @dragstart="dragTyp = 'paket'; dragId = {{ $pk->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px] cursor-grab active:cursor-grabbing">
                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider {{ $variantPill['info'] }}">PK</span>
                                     <span class="min-w-0 flex-1 break-words leading-snug text-gray-700 dark:text-gray-200" title="{{ $pk->name }}{{ $pk->role ? ' · ' . $pk->role : '' }}">{{ $pk->name }}</span>
-                                    <span class="shrink-0 text-[10px] text-gray-400 tabular-nums">{{ $pk->preis_pro_person !== null ? number_format((float) $pk->preis_pro_person, 2, ',', '.') . ' €' : '' }}</span>
+                                    <span class="shrink-0 text-[10px] text-gray-400 tabular-nums">{{ $pk->price_per_person !== null ? number_format((float) $pk->price_per_person, 2, ',', '.') . ' €' : '' }}</span>
                                     <button type="button" wire:click="positionEinfuegen('paket', {{ $pk->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
                                 </div>
                             @empty
@@ -258,15 +258,15 @@
                     {{-- ═══ MENÜ-ANSICHT (Gäste-Perspektive, read-only) — UX-Umbau 2026-07-03 ═══ --}}
                     <div x-show="!bauModus" x-cloak class="space-y-3" data-konzept-menue>
                         @php($menueGruppen = [])
-                        @php($aktuelleGruppe = ['type' => 'sektion', 'titel' => null, 'headerSlotId' => null, 'slots' => []])
+                        @php($aktuelleGruppe = ['type' => 'sektion', 'title' => null, 'headerSlotId' => null, 'slots' => []])
                         @foreach($concept->slots as $s)
                             @if(in_array($s->type, ['header', 'header_preis'], true))
                                 @php($menueGruppen[] = $aktuelleGruppe)
-                                @php($aktuelleGruppe = ['type' => 'header', 'titel' => $s->titel ?: '(Überschrift)', 'headerSlotId' => $s->id, 'slots' => []])
+                                @php($aktuelleGruppe = ['type' => 'header', 'title' => $s->title ?: '(Überschrift)', 'headerSlotId' => $s->id, 'slots' => []])
                             @elseif($s->package_id && $s->paket)
                                 @php($menueGruppen[] = $aktuelleGruppe)
-                                @php($menueGruppen[] = ['type' => 'paket', 'titel' => $s->paket->name, 'preis' => $s->paket->preis_pro_person, 'headerSlotId' => null, 'slots' => [], 'paket' => $s->paket])
-                                @php($aktuelleGruppe = ['type' => 'sektion', 'titel' => null, 'headerSlotId' => null, 'slots' => []])
+                                @php($menueGruppen[] = ['type' => 'paket', 'title' => $s->paket->name, 'price' => $s->paket->price_per_person, 'headerSlotId' => null, 'slots' => [], 'paket' => $s->paket])
+                                @php($aktuelleGruppe = ['type' => 'sektion', 'title' => null, 'headerSlotId' => null, 'slots' => []])
                             @elseif($s->sales_recipe_id && $s->gericht)
                                 @php($aktuelleGruppe['slots'][] = $s)
                             @endif
@@ -282,15 +282,15 @@
                             {{-- Gruppen-Container: subtile Klammer um Kopf + Karten (gleiche Fläche wie die Seiten-Listen) --}}
                             <section wire:key="menue-{{ $loop->index }}" class="rounded-xl bg-gray-500/[0.05] dark:bg-white/[0.03] border border-black/5 dark:border-white/10 p-3">
                                 @php($slotEks = collect($g['slots'])->map(fn ($sx) => $cockpitZeilen[$sx->id]['ek'] ?? null)->filter())
-                                @php($slotVks = collect($g['slots'])->map(fn ($sx) => $cockpitZeilen[$sx->id]['preis'] ?? null)->filter())
+                                @php($slotVks = collect($g['slots'])->map(fn ($sx) => $cockpitZeilen[$sx->id]['price'] ?? null)->filter())
                                 <div class="flex items-baseline gap-2 pb-2.5">
                                     @if($g['type'] === 'paket')
                                         <span class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0">📦 Paket</span>
-                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['titel'] }}</h4>
-                                        <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ $g['paket']->gerichte->count() }} {{ $g['paket']->gerichte->count() === 1 ? 'Gericht' : 'Gerichte' }}{{ $g['preis'] !== null ? ' · ' . number_format((float) $g['preis'], 2, ',', '.') . ' €/P fix' : '' }}</span>
-                                    @elseif($g['titel'])
+                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['title'] }}</h4>
+                                        <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ $g['paket']->gerichte->count() }} {{ $g['paket']->gerichte->count() === 1 ? 'Gericht' : 'Gerichte' }}{{ $g['price'] !== null ? ' · ' . number_format((float) $g['price'], 2, ',', '.') . ' €/P fix' : '' }}</span>
+                                    @elseif($g['title'])
                                         <span class="{{ $pill }} {{ $variantPill['info'] }} shrink-0">Sektion</span>
-                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['titel'] }}</h4>
+                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['title'] }}</h4>
                                         <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ $slotVks->isNotEmpty() ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}{{ $slotEks->isNotEmpty() ? ' · Σ EK ' . number_format($slotEks->sum(), 2, ',', '.') . ' €' : '' }}</span>
                                     @else
                                         <h4 class="text-[11px] font-medium uppercase tracking-wider text-gray-400">Gerichte</h4>
@@ -329,7 +329,7 @@
                                             @php($qb = $quelleBadge[$w['source']] ?? $quelleBadge['name'])
                                             @php($enthaelt = collect(['Schwein' => $g0->spec_contains_pork, 'Rind' => $g0->spec_contains_beef])->filter()->keys()->all())
                                             @php($ekz = $cockpitZeilen[$s->id]['ek'] ?? null)
-                                            @php($vkz = $cockpitZeilen[$s->id]['preis'] ?? null)
+                                            @php($vkz = $cockpitZeilen[$s->id]['price'] ?? null)
                                             @php($wpct = ($vkz && (float) $vkz > 0 && $ekz !== null) ? ((float) $ekz / (float) $vkz * 100) : null)
                                             <article wire:key="mcard-{{ $s->id }}" class="group relative rounded-xl bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm shadow-black/5 px-3.5 py-3 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
                                                 <div class="flex items-start justify-between gap-2">
@@ -404,7 +404,7 @@
                         @forelse($concept->slots as $slot)
                             @php($istStruktur = in_array($slot->type, ['text', 'spacer', 'header', 'header_preis']))
                             @php($ekz = $cockpitZeilen[$slot->id]['ek'] ?? null)
-                            @php($vkz = $cockpitZeilen[$slot->id]['preis'] ?? null)
+                            @php($vkz = $cockpitZeilen[$slot->id]['price'] ?? null)
                             @php($wpct = ($vkz && (float) $vkz > 0 && $ekz !== null) ? ((float) $ekz / (float) $vkz * 100) : null)
                             <tr wire:key="erow-{{ $slot->id }}"
                                 @dragover.prevent
@@ -470,7 +470,7 @@
                                             <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $slot->paket->name }}</span>
                                             <button type="button" wire:click="paketOeffnen({{ $slot->package_id }})" class="text-gray-400 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">📦</button>
                                             @if($slot->paket->class)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->paket->class }}</span>@endif
-                                            <span class="text-gray-400 text-[11px] tabular-nums">{{ $slot->paket->preis_pro_person !== null ? number_format((float) $slot->paket->preis_pro_person, 2, ',', '.') . ' €/P' : '' }}</span>
+                                            <span class="text-gray-400 text-[11px] tabular-nums">{{ $slot->paket->price_per_person !== null ? number_format((float) $slot->paket->price_per_person, 2, ',', '.') . ' €/P' : '' }}</span>
                                         @elseif($slot->sales_recipe_id && $slot->gericht)
                                             @php($g = $slot->gericht)
                                             @php($enthaelt = collect(['Schwein' => $g->spec_contains_pork, 'Rind' => $g->spec_contains_beef])->filter()->keys()->all())
@@ -554,7 +554,7 @@
                                             <select x-on:change="$wire.fuellePaket({{ $slot->id }}, $event.target.value); $event.target.value=''" class="{{ $input }} w-56">
                                                 <option value="">↹ Paket (Rolle {{ $slot->role ?: '–' }}) …</option>
                                                 @foreach(($tauschbar[$slot->id] ?? []) as $b)
-                                                    <option value="{{ $b->id }}">{{ $b->name }}{{ $b->preis_pro_person !== null ? ' (' . number_format((float) $b->preis_pro_person, 2, ',', '.') . ' €)' : '' }}</option>
+                                                    <option value="{{ $b->id }}">{{ $b->name }}{{ $b->price_per_person !== null ? ' (' . number_format((float) $b->price_per_person, 2, ',', '.') . ' €)' : '' }}</option>
                                                 @endforeach
                                             </select>
                                             <button type="button" wire:click="gerichtPicker({{ $slot->id }})" class="{{ $btnGhostXs }}">Gericht / Basisrezept …</button>
@@ -746,18 +746,18 @@
                         <div class="flex items-center justify-between">
                             <span class="{{ $label }}">VK-Preis / Person</span>
                             <div class="flex gap-1">
-                                <button type="button" wire:click="setPreisModus('auto')" class="{{ $pill }} {{ ($form['preis_modus'] ?? 'auto') === 'auto' ? $variantPill['primary'] : $variantPill['secondary'] }}">automatisch (Summe)</button>
-                                <button type="button" wire:click="setPreisModus('manuell')" class="{{ $pill }} {{ ($form['preis_modus'] ?? 'auto') === 'manuell' ? $variantPill['primary'] : $variantPill['secondary'] }}">manuell</button>
+                                <button type="button" wire:click="setPreisModus('auto')" class="{{ $pill }} {{ ($form['price_mode'] ?? 'auto') === 'auto' ? $variantPill['primary'] : $variantPill['secondary'] }}">automatisch (Summe)</button>
+                                <button type="button" wire:click="setPreisModus('manuell')" class="{{ $pill }} {{ ($form['price_mode'] ?? 'auto') === 'manuell' ? $variantPill['primary'] : $variantPill['secondary'] }}">manuell</button>
                             </div>
                         </div>
                         <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
                             <span class="text-gray-500 dark:text-gray-400">Berechnete Summe: <span class="tabular-nums font-medium text-gray-900 dark:text-gray-100">{{ number_format((float) ($cockpit['summe_pro_person'] ?? 0), 2, ',', '.') }} €</span></span>
-                            <span class="text-gray-500 dark:text-gray-400">Wareneinsatz: <span class="tabular-nums">{{ number_format((float) ($cockpit['ek_pro_person'] ?? 0), 2, ',', '.') }} €</span></span>
+                            <span class="text-gray-500 dark:text-gray-400">Wareneinsatz: <span class="tabular-nums">{{ number_format((float) ($cockpit['ek_per_person'] ?? 0), 2, ',', '.') }} €</span></span>
                         </div>
-                        @if(($form['preis_modus'] ?? 'auto') === 'manuell')
+                        @if(($form['price_mode'] ?? 'auto') === 'manuell')
                             <div class="flex items-center gap-2">
                                 <label class="{{ $label }}">Fixer VK / Person</label>
-                                <input type="number" step="0.01" min="0" wire:model.blur="form.preis_pro_person_manuell" wire:change="speichern" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 24,90" />
+                                <input type="number" step="0.01" min="0" wire:model.blur="form.price_per_person_manual" wire:change="speichern" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 24,90" />
                                 <span class="text-[11px] text-gray-400">überschreibt die Summe — EK bleibt als Basis sichtbar</span>
                             </div>
                         @endif
@@ -806,11 +806,11 @@
                             </tr></thead>
                             <tbody>
                             @foreach($cockpit['zeilen'] as $z)
-                                @php($zw = (($z['preis'] ?? 0) > 0 && $z['ek'] !== null) ? $z['ek'] / $z['preis'] * 100 : null)
+                                @php($zw = (($z['price'] ?? 0) > 0 && $z['ek'] !== null) ? $z['ek'] / $z['price'] * 100 : null)
                                 <tr class="border-t border-black/5 dark:border-white/10">
                                     <td class="py-1">@if($z['role'])<span class="text-gray-400">{{ $z['role'] }}:</span> @endif{{ $z['label'] }}</td>
                                     <td class="text-right tabular-nums">{{ $z['ek'] !== null ? number_format((float) $z['ek'], 2, ',', '.') . ' €' : '—' }}</td>
-                                    <td class="text-right tabular-nums text-gray-500">{{ $z['preis'] !== null ? number_format((float) $z['preis'], 2, ',', '.') . ' €' : '—' }}</td>
+                                    <td class="text-right tabular-nums text-gray-500">{{ $z['price'] !== null ? number_format((float) $z['price'], 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="text-right tabular-nums">{{ $zw !== null ? number_format($zw, 1, ',', '.') . ' %' : '—' }}</td>
                                 </tr>
                             @endforeach
@@ -818,9 +818,9 @@
                             <tfoot>
                                 <tr class="border-t border-black/10 dark:border-white/15 font-semibold text-gray-900 dark:text-gray-100">
                                     <td class="py-1">Summe / Person</td>
-                                    <td class="text-right tabular-nums">{{ number_format((float) $cockpit['ek_pro_person'], 2, ',', '.') }} €</td>
-                                    <td class="text-right tabular-nums text-gray-500">{{ number_format((float) $cockpit['preis_pro_person'], 2, ',', '.') }} €</td>
-                                    <td class="text-right tabular-nums">{{ $cockpit['preis_pro_person'] > 0 ? number_format($cockpit['ek_pro_person'] / $cockpit['preis_pro_person'] * 100, 1, ',', '.') . ' %' : '—' }}</td>
+                                    <td class="text-right tabular-nums">{{ number_format((float) $cockpit['ek_per_person'], 2, ',', '.') }} €</td>
+                                    <td class="text-right tabular-nums text-gray-500">{{ number_format((float) $cockpit['price_per_person'], 2, ',', '.') }} €</td>
+                                    <td class="text-right tabular-nums">{{ $cockpit['price_per_person'] > 0 ? number_format($cockpit['ek_per_person'] / $cockpit['price_per_person'] * 100, 1, ',', '.') . ' %' : '—' }}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -857,7 +857,7 @@
                                 <tr class="border-t border-black/10 dark:border-white/15 font-semibold text-gray-900 dark:text-gray-100">
                                     <td class="py-1">Summe / Person</td>
                                     <td></td>
-                                    <td class="text-right tabular-nums">{{ $paket->ek_pro_person !== null ? number_format((float) $paket->ek_pro_person, 2, ',', '.') . ' €' : '—' }}</td>
+                                    <td class="text-right tabular-nums">{{ $paket->ek_per_person !== null ? number_format((float) $paket->ek_per_person, 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="text-right tabular-nums text-gray-500">{{ $aggregat !== null ? number_format((float) $aggregat['vk_summe'], 2, ',', '.') . ' €' : '—' }}</td>
                                 </tr>
                             </tfoot>
@@ -869,7 +869,7 @@
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
                         <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2">
                             <span class="text-[10px] uppercase tracking-wider text-violet-600 dark:text-violet-400">€/Person</span>
-                            <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ number_format($cockpit['preis_pro_person'], 2, ',', '.') }} €</p>
+                            <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ number_format($cockpit['price_per_person'], 2, ',', '.') }} €</p>
                         </div>
                         <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                             <span class="{{ $dt }}">Wareneinsatz/Pers.</span>
@@ -877,7 +877,7 @@
                         </div>
                         <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                             <span class="{{ $dt }}">Wareneinsatz %</span>
-                            <p class="text-xs font-semibold tabular-nums">{{ ($kalkulation !== null && $cockpit['preis_pro_person'] > 0) ? number_format($kalkulation['hk1_pro_person'] / $cockpit['preis_pro_person'] * 100, 1, ',', '.') . ' %' : '—' }}</p>
+                            <p class="text-xs font-semibold tabular-nums">{{ ($kalkulation !== null && $cockpit['price_per_person'] > 0) ? number_format($kalkulation['hk1_pro_person'] / $cockpit['price_per_person'] * 100, 1, ',', '.') . ' %' : '—' }}</p>
                         </div>
                         <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                             <span class="{{ $dt }}">Arbeitszeit</span>
@@ -885,7 +885,7 @@
                         </div>
                         <div>
                             <label class="{{ $label }}">Zielpreis €/Person</label>
-                            <input type="number" step="0.01" min="0" wire:model="form.zielpreis_pro_person" class="{{ $input }} text-right tabular-nums" />
+                            <input type="number" step="0.01" min="0" wire:model="form.target_price_per_person" class="{{ $input }} text-right tabular-nums" />
                         </div>
                     </div>
                     <div class="pt-2">
@@ -905,7 +905,7 @@
                                 <div class="text-xs space-y-1 pt-1 border-t border-violet-500/20">
                                     <div class="flex flex-wrap gap-x-6 gap-y-1">
                                         <span><span class="{{ $label }}">Aktuell</span> {{ number_format($zielVorschlag['aktuell'], 2, ',', '.') }} €</span>
-                                        <span><span class="{{ $label }}">Vorschlag</span> <span class="font-semibold">{{ number_format($zielVorschlag['preis'], 2, ',', '.') }} €</span></span>
+                                        <span><span class="{{ $label }}">Vorschlag</span> <span class="font-semibold">{{ number_format($zielVorschlag['price'], 2, ',', '.') }} €</span></span>
                                         <span><span class="{{ $label }}">Tausche</span> {{ $zielVorschlag['aenderungen'] }}</span>
                                     </div>
                                     <div class="flex gap-2 pt-1">
@@ -920,18 +920,18 @@
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
                             <label class="{{ $label }}">Preis-Modus</label>
-                            <select wire:model.live="form.preis_modus" class="{{ $input }}">
+                            <select wire:model.live="form.price_mode" class="{{ $input }}">
                                 <option value="manuell">manuell (Buffet)</option>
                                 <option value="auto">auto (Σ Gerichte)</option>
                             </select>
                         </div>
                         <div>
                             <label class="{{ $label }}">€/Person</label>
-                            <input type="number" step="0.01" min="0" wire:model="form.preis_pro_person" @disabled($form['preis_modus'] === 'auto') class="{{ $input }} text-right tabular-nums" />
+                            <input type="number" step="0.01" min="0" wire:model="form.price_per_person" @disabled($form['price_mode'] === 'auto') class="{{ $input }} text-right tabular-nums" />
                         </div>
                         <div>
                             <label class="{{ $label }}">EK/Person <span class="text-gray-400 normal-case">· aus Gerichten</span></label>
-                            <input type="number" step="0.0001" min="0" wire:model="form.ek_pro_person" disabled class="{{ $input }} text-right tabular-nums opacity-70" />
+                            <input type="number" step="0.0001" min="0" wire:model="form.ek_per_person" disabled class="{{ $input }} text-right tabular-nums opacity-70" />
                         </div>
                         <div>
                             <label class="{{ $label }}">Wareneinsatz % <span class="text-gray-400 normal-case">· abgeleitet</span></label>
@@ -962,11 +962,11 @@
                         </div>
                         <div>
                             <label class="{{ $label }}">Diät-Vorgabe (KI-Brief)</label>
-                            <input type="text" wire:model="form.diaet_vorgabe" class="{{ $input }}" placeholder="z. B. „je Gang ≥1 vegan"" />
+                            <input type="text" wire:model="form.diet_requirement" class="{{ $input }}" placeholder="z. B. „je Gang ≥1 vegan"" />
                         </div>
                         <div>
                             <label class="{{ $label }}">Struktur-Vorgabe</label>
-                            <input type="text" wire:model="form.struktur_vorgabe" class="{{ $input }}" placeholder="z. B. „3-Gang" / „Buffet: Salat+HG+Dessert"" />
+                            <input type="text" wire:model="form.structure_requirement" class="{{ $input }}" placeholder="z. B. „3-Gang" / „Buffet: Salat+HG+Dessert"" />
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
@@ -1088,7 +1088,7 @@
                     <p class="text-[11px] text-gray-400 mb-2">Pro Gericht ein Haupt-Geschirr + optional eine Alternative (z. B. anderer Leih-Caterer). Pflege den Geschirr-Katalog unter <span class="font-medium">Stammdaten → Geschirr</span>.</p>
                     @forelse($gerichtSlots as $slot)
                         <div wire:key="geschirr-slot-{{ $slot->id }}" class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2 mb-2">
-                            <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1.5 truncate">{{ $slot->wording ?: ($slot->gericht?->name ?: ($slot->titel ?: 'Position')) }}</p>
+                            <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1.5 truncate">{{ $slot->wording ?: ($slot->gericht?->name ?: ($slot->title ?: 'Position')) }}</p>
                             <div class="grid grid-cols-2 gap-3">
                                 @foreach(['haupt' => 'Haupt-Geschirr', 'alt' => 'Alternative'] as $role => $rolleLabel)
                                     @php($item = $role === 'haupt' ? $slot->geschirrItem : $slot->geschirrAltItem)
@@ -1097,7 +1097,7 @@
                                         @if($item)
                                             <div class="flex items-center gap-2">
                                                 <span class="text-xs text-gray-800 dark:text-gray-200 truncate" title="{{ $item->label }}">{{ $item->label }}</span>
-                                                @if($item->leihpreis !== null)<span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0">{{ number_format((float) $item->leihpreis, 2, ',', '.') }} €</span>@endif
+                                                @if($item->rental_price !== null)<span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0">{{ number_format((float) $item->rental_price, 2, ',', '.') }} €</span>@endif
                                             </div>
                                             <div class="flex items-center gap-2 mt-0.5">
                                                 <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $role }}')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">ändern</button>
@@ -1121,7 +1121,7 @@
                                                                 wire:click="geschirrWaehle({{ $slot->id }}, '{{ $role }}', {{ $kandidat->id }})"
                                                                 class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors">
                                                             {{ $kandidat->label }}
-                                                            <span class="text-gray-400">· {{ $kandidat->supplier?->name }}{{ $kandidat->leihpreis !== null ? ' · ' . number_format((float) $kandidat->leihpreis, 2, ',', '.') . ' €' : '' }}</span>
+                                                            <span class="text-gray-400">· {{ $kandidat->supplier?->name }}{{ $kandidat->rental_price !== null ? ' · ' . number_format((float) $kandidat->rental_price, 2, ',', '.') . ' €' : '' }}</span>
                                                         </button>
                                                     @empty
                                                         <p class="text-[11px] text-gray-400 px-2 py-1">{{ trim($geschirrSuche) === '' ? 'Tippen zum Suchen …' : 'Kein Geschirr gefunden.' }}</p>

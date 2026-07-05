@@ -30,15 +30,15 @@ class FoodAlchemistPaket extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'preis_pro_person' => 'decimal:2',
-        'ek_pro_person' => 'decimal:4',
+        'price_per_person' => 'decimal:2',
+        'ek_per_person' => 'decimal:4',
         'food_cost_percent' => 'decimal:2',
-        'preis_berechnet_am' => 'datetime',
-        'preis_stale' => 'boolean',
+        'price_calculated_at' => 'datetime',
+        'price_stale' => 'boolean',
         'is_inactive' => 'boolean',
         // M10R-1: Aggregat-Caches (Nährwerte/Person, Arbeitszeit)
         'work_time_min_cache' => 'integer',
-        'naehrwerte_cache' => 'array',
+        'nutrition_cache' => 'array',
     ];
 
     /** Die Gerichte (VK-Rezepte) in diesem Paket. */

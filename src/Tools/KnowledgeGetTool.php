@@ -49,12 +49,12 @@ class KnowledgeGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
         return ToolResult::success([
             'slug' => $doc->slug,
-            'titel' => $doc->titel,
+            'title' => $doc->title,
             'category' => $doc->category,
             'version' => (int) $doc->version,
             'char_count' => (int) $doc->char_count,
-            'truncated' => mb_strlen($doc->inhalt_md) > $maxChars,
-            'inhalt_md' => $svc->truncate($doc->inhalt_md, $maxChars),
+            'truncated' => mb_strlen($doc->content_md) > $maxChars,
+            'content_md' => $svc->truncate($doc->content_md, $maxChars),
         ]);
     }
 

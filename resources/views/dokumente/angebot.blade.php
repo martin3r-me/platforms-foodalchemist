@@ -46,11 +46,11 @@
 
     <table class="meta">
         @if($kunde)<tr><td class="k">Kunde</td><td>{{ $kunde }}@if($kontakt && $kontakt !== $kunde) · {{ $kontakt }}@endif</td></tr>@endif
-        @if($angebot->anlass)<tr><td class="k">Anlass</td><td>{{ $angebot->anlass }}</td></tr>@endif
+        @if($angebot->occasion)<tr><td class="k">Anlass</td><td>{{ $angebot->occasion }}</td></tr>@endif
         @if($angebot->event_date)<tr><td class="k">Datum</td><td>{{ $angebot->event_date->format('d.m.Y') }}</td></tr>@endif
         @if($angebot->location)<tr><td class="k">Location</td><td>{{ $angebot->location }}</td></tr>@endif
         <tr><td class="k">Personen</td><td>{{ $kalk['pax'] ?: '—' }}</td></tr>
-        @if($angebot->diaet_vorgabe)<tr><td class="k">Diät / Allergien</td><td>{{ $angebot->diaet_vorgabe }}</td></tr>@endif
+        @if($angebot->diet_requirement)<tr><td class="k">Diät / Allergien</td><td>{{ $angebot->diet_requirement }}</td></tr>@endif
         @if($angebot->valid_until)<tr><td class="k">Gültig bis</td><td>{{ $angebot->valid_until->format('d.m.Y') }}</td></tr>@endif
     </table>
 
@@ -67,7 +67,7 @@
         <p style="color:#9ca3af">Noch kein Menü zusammengestellt.</p>
     @endforelse
 
-    <div class="preis">
+    <div class="price">
         <table>
             <tr><td>Preis pro Person</td><td class="right">{{ number_format($kalk['vk_pro_person'], 2, ',', '.') }} €</td></tr>
             <tr><td>Personen</td><td class="right">{{ $kalk['pax'] ?: '—' }}</td></tr>

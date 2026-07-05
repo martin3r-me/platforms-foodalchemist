@@ -68,7 +68,7 @@ class WordingResolver
 
     /**
      * Titel eines Foodbook-Blocks (concept_ref/recipe_ref):
-     * block.wording → (Legacy) block.kundentext → Concept-/Gericht-Kette.
+     * block.wording → (Legacy) block.customer_text → Concept-/Gericht-Kette.
      * kundentext bleibt als Fallback, weil Bestandsdaten ihn als Label nutzen —
      * neue Pflege schreibt `wording`, kundentext ist wieder Beschreibungstext.
      *
@@ -80,7 +80,7 @@ class WordingResolver
         if ($w !== '') {
             return ['text' => $w, 'source' => 'foodbook'];
         }
-        $legacy = trim((string) $block->kundentext);
+        $legacy = trim((string) $block->customer_text);
         if ($legacy !== '' && $block->wording === null) {
             return ['text' => $legacy, 'source' => 'foodbook'];
         }
@@ -112,8 +112,8 @@ class WordingResolver
 
                 continue;
             }
-            if (in_array($slot->type, ['header', 'header_preis'], true) && trim((string) $slot->titel) !== '') {
-                $zeilen[] = ['type' => 'header', 'text' => (string) $slot->titel, 'source' => null, 'einrueckung' => 0];
+            if (in_array($slot->type, ['header', 'header_preis'], true) && trim((string) $slot->title) !== '') {
+                $zeilen[] = ['type' => 'header', 'text' => (string) $slot->title, 'source' => null, 'einrueckung' => 0];
 
                 continue;
             }

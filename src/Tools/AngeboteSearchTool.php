@@ -52,7 +52,7 @@ class AngeboteSearchTool extends FoodAlchemistTool implements ToolContract, Tool
             'angebote' => collect($treffer->items())->map(fn ($a) => [
                 'id' => $a->id, 'name' => $a->name,
                 'status' => $a->status instanceof \BackedEnum ? $a->status->value : $a->status,
-                'anlass' => $a->anlass, 'personen' => $a->personen,
+                'occasion' => $a->occasion, 'personen' => $a->personen,
             ])->all(),
         ]);
     }

@@ -75,7 +75,7 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
     {
         return [
             'category' => 'query',
-            'tags' => ['foodalchemist', 'kalkulation', 'hk', 'wareneinsatz', 'marge', 'preis'],
+            'tags' => ['foodalchemist', 'kalkulation', 'hk', 'wareneinsatz', 'marge', 'price'],
             'read_only' => true, 'idempotent' => true, 'risk_level' => 'safe',
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'related_tools' => ['foodalchemist.recipes.GET', 'foodalchemist.concepts.GET', 'foodalchemist.angebote.GET'],

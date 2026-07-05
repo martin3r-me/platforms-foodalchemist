@@ -24,7 +24,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_concepts', function (Blueprint $table) {
-            $table->unsignedInteger('personen')->nullable()->after('niveau');
+            $table->unsignedInteger('personen')->nullable()->after('level');
         });
     }
 };

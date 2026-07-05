@@ -29,7 +29,7 @@ return new class extends Migration
             $table->string('code', 32)->nullable();
             $table->string('label');
             $table->integer('jahr')->nullable();
-            $table->string('kunde')->nullable();                      // Kundenbindung (D-CON-5)
+            $table->string('customer')->nullable();                      // Kundenbindung (D-CON-5)
             $table->unsignedInteger('personen')->nullable();          // Pax/Gästezahl fürs Angebot (F-12)
             $table->string('status', 16)->default('draft');           // draft | aktiv | versendet | archiviert
             $table->text('description')->nullable();
@@ -47,12 +47,12 @@ return new class extends Migration
             $table->foreignId('foodbook_id')->constrained('foodalchemist_foodbooks')->cascadeOnDelete();
             $table->foreignId('parent_id')->nullable()->constrained('foodalchemist_foodbook_chapters')->nullOnDelete();
             $table->integer('position')->default(0);
-            $table->string('titel');                                  // intern
-            $table->string('konsumententitel')->nullable();           // Marketing (PDF)
+            $table->string('title');                                  // intern
+            $table->string('consumer_title')->nullable();           // Marketing (PDF)
             $table->string('claim')->nullable();
             $table->text('description')->nullable();
-            $table->decimal('preis_pro_person', 10, 2)->nullable();
-            $table->string('preis_modus', 12)->default('auto');       // auto (Σ Blöcke) | manuell
+            $table->decimal('price_per_person', 10, 2)->nullable();
+            $table->string('price_mode', 12)->default('auto');       // auto (Σ Blöcke) | manuell
             $table->string('status', 16)->default('draft');           // draft | sent | archived
             $table->timestamp('snapshot_at')->nullable();             // Versand friert ein
             $table->json('snapshot_json')->nullable();
@@ -67,10 +67,10 @@ return new class extends Migration
             $table->foreignId('chapter_id')->constrained('foodalchemist_foodbook_chapters')->cascadeOnDelete();
             $table->integer('position')->default(0);
             $table->string('type', 24);                               // concept_ref|recipe_ref|header|text|spacer|image
-            $table->integer('ebene')->default(0);                     // 0–2 Einrückung
-            $table->boolean('sichtbar')->default(true);               // Export-Filter
+            $table->integer('level')->default(0);                     // 0–2 Einrückung
+            $table->boolean('visible')->default(true);               // Export-Filter
             $table->string('label')->nullable();                // intern
-            $table->text('kundentext')->nullable();
+            $table->text('customer_text')->nullable();
             $table->text('interne_bemerkung')->nullable();
             $table->unsignedInteger('variant_group_id')->nullable();  // Wahl-Gruppe „A|B|C"
             // Typ-spezifisch (Service validiert Konsistenz)
@@ -79,8 +79,8 @@ return new class extends Migration
             $table->decimal('quantity', 12, 3)->nullable();
             $table->foreignId('unit_vocab_id')->nullable()->constrained('foodalchemist_vocab_units')->nullOnDelete();
             $table->decimal('price_value', 10, 2)->nullable();         // header_frei_preis
-            $table->string('preis_basis', 12)->nullable();            // person | pauschal
-            $table->string('hoehe', 12)->nullable();                  // spacer: klein|mittel|gross
+            $table->string('price_basis', 12)->nullable();            // person | pauschal
+            $table->string('height', 12)->nullable();                  // spacer: klein|mittel|gross
             $table->json('payload_json')->nullable();                 // image u. a.
             $table->string('header_source', 16)->nullable();          // KI-Lineage (GL-07)
             $table->timestamps();

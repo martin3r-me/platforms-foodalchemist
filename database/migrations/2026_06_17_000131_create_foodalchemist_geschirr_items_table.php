@@ -41,15 +41,15 @@ return new class extends Migration
             $table->string('color', 48)->nullable();
 
             // Maße (alle nullable — je nach Geschirr-Typ relevant)
-            $table->decimal('durchmesser_mm', 8, 1)->nullable();   // Teller/Schale
-            $table->decimal('laenge_mm', 8, 1)->nullable();        // eckige Platte
-            $table->decimal('breite_mm', 8, 1)->nullable();
-            $table->decimal('hoehe_mm', 8, 1)->nullable();
+            $table->decimal('diameter_mm', 8, 1)->nullable();   // Teller/Schale
+            $table->decimal('length_mm', 8, 1)->nullable();        // eckige Platte
+            $table->decimal('width_mm', 8, 1)->nullable();
+            $table->decimal('height_mm', 8, 1)->nullable();
             $table->decimal('volumen_ml', 8, 1)->nullable();       // Glas/Schale
-            $table->decimal('gewicht_g', 8, 1)->nullable();
+            $table->decimal('weight_g', 8, 1)->nullable();
 
             // Leih-Konditionen (netto)
-            $table->decimal('leihpreis', 10, 2)->nullable()->comment('Leihpreis netto je Einheit');
+            $table->decimal('rental_price', 10, 2)->nullable()->comment('Leihpreis netto je Einheit');
             $table->decimal('pfand', 10, 2)->nullable();
             $table->string('unit', 16)->default('Stk');
 

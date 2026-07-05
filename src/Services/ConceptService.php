@@ -81,7 +81,7 @@ class ConceptService
         return FoodAlchemistConcept::create([
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neues Concept')) ?: 'Neues Concept',
-            'anlass' => $in['anlass'] ?? null,
+            'occasion' => $in['occasion'] ?? null,
             'level' => $in['level'] ?? null,
             'class' => $this->norm($in['class'] ?? null),
             'status' => $in['status'] ?? 'draft',
@@ -100,16 +100,16 @@ class ConceptService
 
     // M10R-1/3: VK-Parität-Metadaten + Konsumenten-Felder + KI-Brief am Concept editierbar.
     private const FELDER = [
-        'name', 'consumer_name', 'anlass', 'level', 'class', 'taste_direction',
+        'name', 'consumer_name', 'occasion', 'level', 'class', 'taste_direction',
         'writing_style_id', 'category_id', 'status', 'description', 'additional_text', 'note',
-        'brief', 'zielpreis_pro_person', 'diaet_vorgabe', 'struktur_vorgabe', 'season', 'target_group',
-        'preis_modus', 'preis_pro_person_manuell',
+        'brief', 'target_price_per_person', 'diet_requirement', 'structure_requirement', 'season', 'target_group',
+        'price_mode', 'price_per_person_manual',
         'serving_form_id', 'event_type_id', // Facetten (Umbau-Spec Phase 4)
     ];
 
     /** Felder, die leer („" / 0) als NULL gespeichert werden (FK/optional). */
     private const FELDER_NULLBAR = [
-        'category_id', 'writing_style_id', 'zielpreis_pro_person', 'preis_pro_person_manuell',
+        'category_id', 'writing_style_id', 'target_price_per_person', 'price_per_person_manual',
         'serving_form_id', 'event_type_id',
     ];
 
@@ -225,7 +225,7 @@ class ConceptService
         $slot = $concept->slots()->create([
             'team_id' => $concept->team_id,
             'role' => $this->norm($in['role'] ?? null),
-            'titel' => $this->norm($in['titel'] ?? null),
+            'title' => $this->norm($in['title'] ?? null),
             'is_pflicht' => (bool) ($in['is_pflicht'] ?? true),
             'position' => (int) ($concept->slots()->max('position') ?? -1) + 1,
         ]);
@@ -239,7 +239,7 @@ class ConceptService
         $slot = $this->ownedSlot($team, $slotId);
         $slot->update([
             'role' => array_key_exists('role', $in) ? $this->norm($in['role']) : $slot->role,
-            'titel' => array_key_exists('titel', $in) ? $this->norm($in['titel']) : $slot->titel,
+            'title' => array_key_exists('title', $in) ? $this->norm($in['title']) : $slot->title,
             'is_pflicht' => array_key_exists('is_pflicht', $in) ? (bool) $in['is_pflicht'] : $slot->is_pflicht,
         ]);
 
@@ -264,11 +264,11 @@ class ConceptService
         return $concept->slots()->create([
             'team_id' => $concept->team_id,
             'type' => $type,
-            'titel' => $this->norm($in['titel'] ?? null),
-            'text_inhalt' => $this->norm($in['text_inhalt'] ?? null),
-            'hoehe' => $type === 'spacer' ? ($in['hoehe'] ?? 'mittel') : null,
+            'title' => $this->norm($in['title'] ?? null),
+            'text_content' => $this->norm($in['text_content'] ?? null),
+            'height' => $type === 'spacer' ? ($in['height'] ?? 'mittel') : null,
             'price_value' => $type === 'header_preis' ? ($in['price_value'] ?? null) : null,
-            'preis_basis' => $type === 'header_preis' ? ($in['preis_basis'] ?? 'person') : null,
+            'price_basis' => $type === 'header_preis' ? ($in['price_basis'] ?? 'person') : null,
             'is_pflicht' => false,
             'position' => (int) ($concept->slots()->max('position') ?? -1) + 1,
         ]);
@@ -279,7 +279,7 @@ class ConceptService
     {
         $slot = $this->ownedSlot($team, $slotId);
         $update = [];
-        foreach (['titel', 'text_inhalt', 'hoehe', 'preis_basis'] as $f) {
+        foreach (['title', 'text_content', 'height', 'price_basis'] as $f) {
             if (array_key_exists($f, $in)) {
                 $update[$f] = $this->norm($in[$f]);
             }
@@ -412,7 +412,7 @@ class ConceptService
 
         return FoodAlchemistFoodbook::visibleToTeam($team)
             ->whereIn('id', $foodbookIds)->orderBy('label')
-            ->get(['id', 'label', 'jahr', 'kunde', 'status']);
+            ->get(['id', 'label', 'jahr', 'customer', 'status']);
     }
 
     /** Austauschbare Pakete für einen Slot = gleiche Rolle (M13-Vorstufe). */
@@ -436,7 +436,7 @@ class ConceptService
 
             $paketSvc = app(PaketService::class);
             // auto-Preis: das gebildete Paket = Σ der Gericht-Preise → Concept-Summe bleibt unverändert.
-            $paket = $paketSvc->create($team, ['name' => trim($name) !== '' ? trim($name) : 'Paket', 'role' => $role, 'preis_modus' => 'auto']);
+            $paket = $paketSvc->create($team, ['name' => trim($name) !== '' ? trim($name) : 'Paket', 'role' => $role, 'price_mode' => 'auto']);
             $paketSvc->syncGerichte($team, $paket->id, $slots->map(fn ($s) => [
                 'sales_recipe_id' => $s->sales_recipe_id, 'quantity' => $s->quantity, 'unit_vocab_id' => $s->unit_vocab_id,
             ])->values()->all());
@@ -458,7 +458,7 @@ class ConceptService
             ->where('is_inactive', false)
             ->when($slot->role, fn ($q, $role) => $q->where('role', $role))
             ->orderBy('name')
-            ->get(['id', 'name', 'role', 'preis_pro_person']);
+            ->get(['id', 'name', 'role', 'price_per_person']);
     }
 
     // ── M10-04: Live-Output-Preis (Σ gespeicherte Paket-Preise) ─────────
@@ -489,16 +489,16 @@ class ConceptService
                 continue; // Struktur-Blöcke (Text/Leerzeile/Header) sind keine Preis-Positionen
             }
             if ($slot->package_id !== null && $slot->paket) {
-                $vk = (float) ($slot->paket->preis_pro_person ?? 0);
-                $ek = (float) ($slot->paket->ek_pro_person ?? 0);
-                $hatStale = $hatStale || (bool) $slot->paket->preis_stale;
+                $vk = (float) ($slot->paket->price_per_person ?? 0);
+                $ek = (float) ($slot->paket->ek_per_person ?? 0);
+                $hatStale = $hatStale || (bool) $slot->paket->price_stale;
                 $zeilen[] = ['slot_id' => $slot->id, 'type' => 'paket', 'role' => $slot->role, 'wording' => $slot->wording,
-                    'label' => $slot->paket->name, 'preis' => $vk, 'ek' => round($ek, 2), 'ek_fehlt' => false, 'stale' => (bool) $slot->paket->preis_stale];
+                    'label' => $slot->paket->name, 'price' => $vk, 'ek' => round($ek, 2), 'ek_fehlt' => false, 'stale' => (bool) $slot->paket->price_stale];
             } elseif ($slot->sales_recipe_id !== null && $slot->gericht) {
                 // Umbau-Spec Phase 5: geltende Darreichung auflösen (explizit → Konzept-Form → Standard)
                 $slot->setRelation('concept', $concept);
                 $dar = app(DarreichungResolver::class)->fuerSlot($slot);
-                $darPortionG = $dar?->quantity_pro_unit_g !== null ? (float) $dar->quantity_pro_unit_g : null;
+                $darPortionG = $dar?->quantity_per_unit_g !== null ? (float) $dar->quantity_per_unit_g : null;
                 // Einheit-abhängige Mengen-Umrechnung — EINE Stelle (Konsistenz zu ConcepterAggregate/Paket).
                 $pae = ConcepterAggregateService::portionsAequivalent(
                     $slot->quantity !== null ? (float) $slot->quantity : null,
@@ -519,14 +519,14 @@ class ConceptService
                         : (float) ($slot->gericht->ek_total_eur ?? 0) / $anzahl * $pae);
                 $hatEkLuecke = $hatEkLuecke || $ekFehlt;
                 $zeilen[] = ['slot_id' => $slot->id, 'type' => 'gericht', 'role' => $slot->role, 'wording' => $slot->wording,
-                    'label' => $slot->gericht->name, 'preis' => round($vk, 2),
+                    'label' => $slot->gericht->name, 'price' => round($vk, 2),
                     'ek' => $ekFehlt ? null : round($ek, 2), 'ek_fehlt' => $ekFehlt, 'stale' => false];
             } else {
                 $vk = 0.0;
                 $ek = 0.0;
                 $hatLeer = true;
                 $zeilen[] = ['slot_id' => $slot->id, 'type' => 'leer', 'role' => $slot->role,
-                    'label' => $slot->titel ?? '(leer)', 'preis' => null, 'ek' => null, 'ek_fehlt' => false, 'stale' => false];
+                    'label' => $slot->title ?? '(leer)', 'price' => null, 'ek' => null, 'ek_fehlt' => false, 'stale' => false];
             }
             $vkTotal += $vk;
             $ekTotal += $ek;
@@ -534,15 +534,15 @@ class ConceptService
 
         $summe = round($vkTotal, 2);
         // Manueller Concept-VK (z. B. Lunchbuffet, Preis auf EK-Basis) überschreibt die Summe; EK bleibt aus den Positionen.
-        $manuell = ($concept->preis_modus ?? 'auto') === 'manuell' && $concept->preis_pro_person_manuell !== null;
-        $preis = $manuell ? round((float) $concept->preis_pro_person_manuell, 2) : $summe;
+        $manuell = ($concept->price_mode ?? 'auto') === 'manuell' && $concept->price_per_person_manual !== null;
+        $preis = $manuell ? round((float) $concept->price_per_person_manual, 2) : $summe;
 
         return [
             'zeilen' => $zeilen,
-            'preis_pro_person' => $preis,
+            'price_per_person' => $preis,
             'summe_pro_person' => $summe,        // berechnete Summe der Positionen (auch im manuellen Modus, zur Anzeige)
-            'preis_modus' => $manuell ? 'manuell' : 'auto',
-            'ek_pro_person' => round($ekTotal, 2),
+            'price_mode' => $manuell ? 'manuell' : 'auto',
+            'ek_per_person' => round($ekTotal, 2),
             'hat_stale' => $hatStale,
             'hat_leer' => $hatLeer,
             'hat_ek_luecke' => $hatEkLuecke,   // ≥1 Gramm-Position ohne Portionsgewicht → EK unvollständig
@@ -629,10 +629,10 @@ class ConceptService
         // M10R-1: Preis-Cache + Voll-Aggregat-Caches (Nährwerte/Person, Arbeitszeit, EK).
         $agg = app(ConcepterAggregateService::class)->conceptAggregat($concept);
         $concept->update([
-            'preis_pro_person_cache' => $this->preisCockpit($concept)['preis_pro_person'],
-            'naehrwerte_cache' => $agg['naehrwerte'],
+            'price_per_person_cache' => $this->preisCockpit($concept)['price_per_person'],
+            'nutrition_cache' => $agg['naehrwerte'],
             'work_time_min_cache' => $agg['work_time_min'],
-            'ek_pro_person_cache' => $agg['ek_pro_person'],
+            'ek_per_person_cache' => $agg['ek_per_person'],
         ]);
     }
 
@@ -646,12 +646,12 @@ class ConceptService
         return DB::transaction(function () use ($team, $vorlage, $name) {
             $neu = FoodAlchemistConcept::create([
                 'team_id' => $team->id, 'name' => $name,
-                'anlass' => $vorlage->anlass, 'level' => $vorlage->level,
+                'occasion' => $vorlage->occasion, 'level' => $vorlage->level,
                 'status' => 'draft', 'is_template' => false, 'template_source_id' => $vorlage->id,
             ]);
             foreach ($vorlage->slots as $slot) {
                 $neu->slots()->create([
-                    'team_id' => $team->id, 'role' => $slot->role, 'titel' => $slot->titel,
+                    'team_id' => $team->id, 'role' => $slot->role, 'title' => $slot->title,
                     'position' => $slot->position, 'is_pflicht' => $slot->is_pflicht,
                     'package_id' => $slot->package_id,          // Paket bleibt Referenz (zieht durch)
                     'sales_recipe_id' => $slot->sales_recipe_id, 'quantity' => $slot->quantity,
@@ -671,16 +671,16 @@ class ConceptService
 
         return DB::transaction(function () use ($team, $orig) {
             $felder = array_intersect_key($orig->attributesToArray(), array_flip([
-                'consumer_name', 'anlass', 'level', 'class', 'taste_direction', 'writing_style_id',
-                'category_id', 'description', 'additional_text', 'brief', 'diaet_vorgabe', 'struktur_vorgabe',
-                'season', 'target_group', 'zielpreis_pro_person', 'is_template',
+                'consumer_name', 'occasion', 'level', 'class', 'taste_direction', 'writing_style_id',
+                'category_id', 'description', 'additional_text', 'brief', 'diet_requirement', 'structure_requirement',
+                'season', 'target_group', 'target_price_per_person', 'is_template',
             ]));
             $neu = FoodAlchemistConcept::create($felder + [
                 'team_id' => $team->id, 'name' => $orig->name . ' (Kopie)', 'status' => 'draft',
             ]);
             foreach ($orig->slots as $slot) {
                 $neu->slots()->create([
-                    'team_id' => $team->id, 'role' => $slot->role, 'titel' => $slot->titel,
+                    'team_id' => $team->id, 'role' => $slot->role, 'title' => $slot->title,
                     'position' => $slot->position, 'is_pflicht' => $slot->is_pflicht,
                     'package_id' => $slot->package_id, 'sales_recipe_id' => $slot->sales_recipe_id,
                     'quantity' => $slot->quantity, 'unit_vocab_id' => $slot->unit_vocab_id,
@@ -721,10 +721,10 @@ class ConceptService
         $slots = [];   // adjustable: ['slot_id', 'current_paket_id', 'kandidaten' => [package_id => preis]]
         foreach ($concept->slots as $slot) {
             $kandidaten = $this->tauschbarePakete($team, $slot)
-                ->mapWithKeys(fn ($p) => [(int) $p->id => (float) ($p->preis_pro_person ?? 0)])->all();
+                ->mapWithKeys(fn ($p) => [(int) $p->id => (float) ($p->price_per_person ?? 0)])->all();
             // aktuelles Paket aufnehmen, falls (z. B. inaktiv) nicht in den Kandidaten
             if ($slot->package_id !== null && ! isset($kandidaten[$slot->package_id]) && $slot->paket) {
-                $kandidaten[(int) $slot->package_id] = (float) ($slot->paket->preis_pro_person ?? 0);
+                $kandidaten[(int) $slot->package_id] = (float) ($slot->paket->price_per_person ?? 0);
             }
             if (! empty($kandidaten)) {
                 $slots[] = ['slot_id' => (int) $slot->id, 'current' => $slot->package_id !== null ? (int) $slot->package_id : null, 'kandidaten' => $kandidaten];
@@ -736,7 +736,7 @@ class ConceptService
             }
         }
 
-        $aktuell = $this->preisCockpit($concept)['preis_pro_person'];
+        $aktuell = $this->preisCockpit($concept)['price_per_person'];
         $zielRest = $ziel - $fix;
 
         // erreichbare Spanne (Σ min/max je Slot)
@@ -757,7 +757,7 @@ class ConceptService
 
         return [
             'vorschlag' => $wahl,
-            'preis' => round($preis, 2),
+            'price' => round($preis, 2),
             'aktuell' => $aktuell,
             'ziel' => round($ziel, 2),
             'aenderungen' => $aenderungen,

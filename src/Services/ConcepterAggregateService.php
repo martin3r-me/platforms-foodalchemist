@@ -207,7 +207,7 @@ class ConcepterAggregateService
             }
 
             $dar = $r['darreichung'] ?? null;
-            $darPortionG = $dar?->quantity_pro_unit_g !== null ? (float) $dar->quantity_pro_unit_g : null;
+            $darPortionG = $dar?->quantity_per_unit_g !== null ? (float) $dar->quantity_per_unit_g : null;
             $pae = self::portionsAequivalent(
                 $r['quantity'] !== null ? (float) $r['quantity'] : null,
                 $r['unit'] ?? null,
@@ -258,7 +258,7 @@ class ConcepterAggregateService
             'n_gerichte' => $distinkt->count(),
             'naehrwerte' => $this->naehrwertAggregat($mitMenge),
             'allergene' => $this->allergenRollupFromGerichte($distinkt),
-            'ek_pro_person' => round($ek, 4),
+            'ek_per_person' => round($ek, 4),
             'ek_n_positionen' => $ekPositionen,               // kostentragende Positionen gesamt
             'ek_n_beitragend' => $ekBeitragend,               // davon mit belastbarem EK (Lücke = ehrlich aus)
             'vk_summe' => round($vk, 2),
@@ -397,7 +397,7 @@ class ConcepterAggregateService
     {
         $agg = $this->paketAggregat($paket);
         $paket->update([
-            'naehrwerte_cache' => $agg['naehrwerte'],
+            'nutrition_cache' => $agg['naehrwerte'],
             'work_time_min_cache' => $agg['work_time_min'],
         ]);
 
@@ -408,9 +408,9 @@ class ConcepterAggregateService
     {
         $agg = $this->conceptAggregat($concept);
         $concept->update([
-            'naehrwerte_cache' => $agg['naehrwerte'],
+            'nutrition_cache' => $agg['naehrwerte'],
             'work_time_min_cache' => $agg['work_time_min'],
-            'ek_pro_person_cache' => $agg['ek_pro_person'],
+            'ek_per_person_cache' => $agg['ek_per_person'],
         ]);
 
         return $concept->refresh();

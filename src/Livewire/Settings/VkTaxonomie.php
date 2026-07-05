@@ -69,7 +69,7 @@ class VkTaxonomie extends Component
         try {
             app(VocabularyService::class)->createDishClass($this->team(), $this->hauptgruppeId, [
                 'label' => $this->neuKlasse,
-                'diaetform' => $this->neuKlasseDiaet,
+                'diet_form' => $this->neuKlasseDiaet,
             ]);
             $this->reset('neuKlasse', 'fehler');
             $this->neuKlasseDiaet = 'neutral';

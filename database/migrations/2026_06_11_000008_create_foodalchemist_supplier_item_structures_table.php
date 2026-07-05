@@ -34,9 +34,9 @@ return new class extends Migration
             $table->string('form')->nullable();
             $table->string('groesse')->nullable();
             $table->string('convenience_host')->nullable();
-            $table->boolean('ist_bio')->nullable();
-            $table->boolean('ist_halal')->nullable();
-            $table->boolean('ist_vegan')->nullable();
+            $table->boolean('is_bio')->nullable();
+            $table->boolean('is_halal')->nullable();
+            $table->boolean('is_vegan')->nullable();
             $table->string('commodity_group_suggestion')->nullable();
             $table->decimal('commodity_group_confidence', 4, 3)->nullable();
             $table->string('gp_key')->nullable();

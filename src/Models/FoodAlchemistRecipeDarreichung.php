@@ -26,7 +26,7 @@ class FoodAlchemistRecipeDarreichung extends Model
 
     protected $casts = [
         'is_standard' => 'bool',
-        'quantity_pro_unit_g' => 'float',
+        'quantity_per_unit_g' => 'float',
         'unit_count' => 'float',
         'ek_portion' => 'float',
         'sales_net' => 'float',

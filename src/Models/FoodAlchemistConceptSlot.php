@@ -26,7 +26,7 @@ class FoodAlchemistConceptSlot extends Model
     protected $casts = [
         'uuid' => 'string',
         'position' => 'integer',
-        'ebene' => 'integer',
+        'level' => 'integer',
         'is_pflicht' => 'boolean',
         'quantity' => 'decimal:3',
         'price_value' => 'decimal:2',
@@ -75,7 +75,7 @@ class FoodAlchemistConceptSlot extends Model
     /** Staffelpreise (nur bei type=header_preis + preis_basis='staffel'). */
     public function staffel(): HasMany
     {
-        return $this->hasMany(FoodAlchemistConceptSlotStaffel::class, 'slot_id')->orderBy('min_personen');
+        return $this->hasMany(FoodAlchemistConceptSlotStaffel::class, 'slot_id')->orderBy('min_persons');
     }
 
     /** True, wenn der Slot durch einen austauschbaren Paket gefüllt ist. */

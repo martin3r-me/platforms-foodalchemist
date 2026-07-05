@@ -23,11 +23,11 @@
             @if($item->class)<span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ $item->class }}</span>@endif
             @if($item->level)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $item->level }}</span>@endif
             @if($concept)
-                @if($concept->anlass)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $concept->anlass }}</span>@endif
+                @if($concept->occasion)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $concept->occasion }}</span>@endif
                 <span class="{{ $pill }} {{ ['draft' => $variantPill['secondary'], 'active' => $variantPill['success'], 'archiviert' => $variantPill['warning']][$concept->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'][$concept->status] ?? $concept->status }}</span>
             @elseif($paket)
                 @if($paket->role)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $paket->role }}</span>@endif
-                <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $paket->preis_modus === 'auto' ? 'Auto-Preis' : 'Manueller Preis' }}</span>
+                <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $paket->price_mode === 'auto' ? 'Auto-Preis' : 'Manueller Preis' }}</span>
             @endif
         </div>
 
@@ -54,17 +54,17 @@
             @if($concept && $cockpit)
                 <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2">
                     <span class="text-[10px] font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">€/Person</span>
-                    <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ number_format($cockpit['preis_pro_person'], 2, ',', '.') }} €</p>
+                    <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ number_format($cockpit['price_per_person'], 2, ',', '.') }} €</p>
                 </div>
             @elseif($paket)
                 <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2">
                     <span class="text-[10px] font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">€/Person</span>
-                    <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ $paket->preis_pro_person !== null ? number_format((float) $paket->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</p>
+                    <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ $paket->price_per_person !== null ? number_format((float) $paket->price_per_person, 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
             @endif
             <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                 <span class="{{ $dt }}">EK/Person</span>
-                <p class="text-xs font-semibold tabular-nums">{{ $aggregat !== null ? number_format((float) $aggregat['ek_pro_person'], 2, ',', '.') . ' €' : '—' }}</p>
+                <p class="text-xs font-semibold tabular-nums">{{ $aggregat !== null ? number_format((float) $aggregat['ek_per_person'], 2, ',', '.') . ' €' : '—' }}</p>
             </div>
             <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                 <span class="{{ $dt }}">Arbeitszeit</span>
@@ -147,7 +147,7 @@
                             <span class="text-[10px] text-gray-400 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
                             @if($z['type'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['type'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
                         </span>
-                        <span class="shrink-0 tabular-nums {{ $z['preis'] === null ? 'text-gray-300' : '' }}">{{ $z['preis'] !== null ? number_format($z['preis'], 2, ',', '.') . ' €' : '—' }}</span>
+                        <span class="shrink-0 tabular-nums {{ $z['price'] === null ? 'text-gray-300' : '' }}">{{ $z['price'] !== null ? number_format($z['price'], 2, ',', '.') . ' €' : '—' }}</span>
                     </div>
                 @endforeach
             </div>
@@ -175,7 +175,7 @@
                     @forelse($concept->slots as $slot)
                         <div class="py-0.5">
                             <span class="text-[9px] uppercase tracking-wider text-gray-400">{{ $slot->role ?: '—' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
-                            <p class="text-xs text-gray-800 dark:text-gray-200">{{ $slot->titel ?: ($slot->paket?->name ?? $slot->gericht?->name ?? '(leer)') }}</p>
+                            <p class="text-xs text-gray-800 dark:text-gray-200">{{ $slot->title ?: ($slot->paket?->name ?? $slot->gericht?->name ?? '(leer)') }}</p>
                         </div>
                     @empty
                         <p class="text-[11px] text-gray-400">Noch keine Positionen.</p>
@@ -190,7 +190,7 @@
             @forelse($verwendung as $v)
                 <div class="flex items-center justify-between gap-2 text-xs py-0.5">
                     <span class="min-w-0 truncate">{{ $concept ? ($v->label ?? '—') : $v->name }}</span>
-                    <span class="shrink-0 text-[10px] text-gray-400">{{ $concept ? ('Foodbook' . ($v->jahr ? ' ' . $v->jahr : '') . ($v->kunde ? ' · ' . $v->kunde : '')) : 'Concept' }}</span>
+                    <span class="shrink-0 text-[10px] text-gray-400">{{ $concept ? ('Foodbook' . ($v->jahr ? ' ' . $v->jahr : '') . ($v->customer ? ' · ' . $v->customer : '')) : 'Concept' }}</span>
                 </div>
             @empty
                 <p class="text-[11px] text-gray-400 py-0.5">{{ $concept ? 'In keinem Foodbook referenziert.' : 'In keinem Concept verwendet.' }}</p>

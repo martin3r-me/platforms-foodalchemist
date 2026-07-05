@@ -28,7 +28,7 @@ class ItemModal extends Component
 
     public array $eigenschaften = [];
 
-    public array $preisNeu = ['preis' => '', 'status' => '0'];
+    public array $preisNeu = ['price' => '', 'status' => '0'];
 
     /** M2-10: 14 EU-Allergene (tri-state-Binding, GL-01) */
     public array $allergene = [];
@@ -49,7 +49,7 @@ class ItemModal extends Component
         $this->fehler = null;
         $this->stammdaten = $item->only(['designation', 'article_number', 'brand', 'manufacturer', 'origin', 'marketing_name', 'additional_text']);
         $this->verpackung = $item->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering']);
-        $this->eigenschaften = $item->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder', 'vat', 'origin_country', 'organic_control_number', 'preorder_days', 'ingredients_lieferant']);
+        $this->eigenschaften = $item->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder', 'vat', 'origin_country', 'organic_control_number', 'preorder_days', 'ingredients_supplier']);
         $this->allergene = app(SupplierItemService::class)->getAllergens($item);
         $this->deklarationen = app(SupplierItemService::class)->getDeclarations($item);
         $this->naehrwerte = app(SupplierItemService::class)->getNutrition($item);
@@ -82,7 +82,7 @@ class ItemModal extends Component
                     ->map(fn ($v) => $v === '' ? null : $v)->all(),
                 ...collect($this->eigenschaften)->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder'])
                     ->map(fn ($v) => $v === '' || $v === null ? null : (bool) (int) $v)->all(),
-                ...collect($this->eigenschaften)->only(['origin_country', 'organic_control_number', 'ingredients_lieferant'])
+                ...collect($this->eigenschaften)->only(['origin_country', 'organic_control_number', 'ingredients_supplier'])
                     ->map(fn ($v) => $v === '' ? null : $v)->all(),
                 'vat' => ($this->eigenschaften['vat'] ?? '') !== '' ? (float) str_replace(',', '.', (string) $this->eigenschaften['vat']) : null,
                 'preorder_days' => ($this->eigenschaften['preorder_days'] ?? '') !== '' ? (int) $this->eigenschaften['preorder_days'] : null,
@@ -133,14 +133,14 @@ class ItemModal extends Component
             // Numerik-Guard wie in preisUpdate() — sonst castet (float) einen Tippfehler
             // still auf 0,00 € (0 < 0 ist false → rutscht durch createFor) und vergiftet
             // den GP-Leitpreis an der Wurzel der Kostenkette.
-            $roh = str_replace(',', '.', trim((string) $this->preisNeu['preis']));
+            $roh = str_replace(',', '.', trim((string) $this->preisNeu['price']));
             if ($roh === '' || ! is_numeric($roh) || (float) $roh < 0) {
                 $this->fehler = 'Preis braucht eine Zahl ≥ 0.';
 
                 return;
             }
             app(PriceService::class)->createFor($this->team(), $this->item($this->itemId), (float) $roh, $this->preisNeu['status']);
-            $this->preisNeu = ['preis' => '', 'status' => '0'];
+            $this->preisNeu = ['price' => '', 'status' => '0'];
             $this->fehler = null;
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -151,7 +151,7 @@ class ItemModal extends Component
     public ?int $preisEditId = null;
 
     /** @var array{preis: string, valid_to: string, note: string} */
-    public array $preisEdit = ['preis' => '', 'valid_to' => '', 'note' => ''];
+    public array $preisEdit = ['price' => '', 'valid_to' => '', 'note' => ''];
 
     public function preisBearbeiten(int $priceId): void
     {
@@ -161,7 +161,7 @@ class ItemModal extends Component
         }
         $this->preisEditId = $priceId;
         $this->preisEdit = [
-            'preis' => $p->price !== null ? number_format((float) $p->price, 2, ',', '') : '',
+            'price' => $p->price !== null ? number_format((float) $p->price, 2, ',', '') : '',
             'valid_to' => $p->valid_to ? \Illuminate\Support\Carbon::parse($p->valid_to)->format('Y-m-d') : '',
             'note' => (string) ($p->note ?? ''),
         ];
@@ -175,7 +175,7 @@ class ItemModal extends Component
 
             return;
         }
-        $preis = str_replace(',', '.', trim($this->preisEdit['preis']));
+        $preis = str_replace(',', '.', trim($this->preisEdit['price']));
         if (! is_numeric($preis) || (float) $preis < 0) {
             $this->fehler = 'Preis braucht eine Zahl ≥ 0.';
 

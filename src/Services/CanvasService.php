@@ -21,7 +21,7 @@ class CanvasService
      */
     public const TEMPLATES = [
         'food_dna' => [
-            'titel' => 'Food DNA (Team)',
+            'title' => 'Food DNA (Team)',
             'kontext_label' => 'Küchen-/Marken-DNA des Mandanten (verbindlicher Stil-/Geschmacks-Rahmen)',
             'felder' => [
                 ['key' => 'leitbild', 'label' => 'Leitbild / Positionierung', 'group_name' => 'Identität', 'type' => 'longtext'],
@@ -35,7 +35,7 @@ class CanvasService
             ],
         ],
         'foodbook' => [
-            'titel' => 'Foodbook-Leitidee',
+            'title' => 'Foodbook-Leitidee',
             'kontext_label' => 'Foodbook-Leitidee (was das Foodbook erfüllen muss)',
             'felder' => [
                 ['key' => 'leitidee', 'label' => 'Leitidee / roter Faden', 'group_name' => 'Idee', 'type' => 'longtext'],
@@ -47,7 +47,7 @@ class CanvasService
             ],
         ],
         'concept' => [
-            'titel' => 'Konzept-Brief (kreativ)',
+            'title' => 'Konzept-Brief (kreativ)',
             'kontext_label' => 'Kreatives Foodkonzept (Leitidee, Inszenierung, Geschmackswelten)',
             'felder' => [
                 ['key' => 'name_claim', 'label' => 'Name + Claim', 'group_name' => 'Idee', 'type' => 'text'],
@@ -59,7 +59,7 @@ class CanvasService
             ],
         ],
         'angebot' => [
-            'titel' => 'Angebot — Business Case',
+            'title' => 'Angebot — Business Case',
             'kontext_label' => 'Kundenprojekt / Business Case dieses Angebots',
             'felder' => [
                 ['key' => 'kunde_beziehung', 'label' => 'Kunde & Beziehung', 'group_name' => 'Kunde & Ziel', 'type' => 'longtext'],
@@ -74,7 +74,7 @@ class CanvasService
 
     public function template(string $type): array
     {
-        return self::TEMPLATES[$type] ?? ['titel' => $type, 'kontext_label' => $type, 'felder' => []];
+        return self::TEMPLATES[$type] ?? ['title' => $type, 'kontext_label' => $type, 'felder' => []];
     }
 
     /** Existierenden Canvas finden (KEIN Create) — für Lese-/Kontext-Pfad. */

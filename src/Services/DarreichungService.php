@@ -51,11 +51,11 @@ class DarreichungService
             'serving_form_id' => $servierformId,
             'is_standard' => $standard === null,               // erste Form = Standard
             // Vorbefüllung aus der Standard-Form (F2: KEIN Pauschal-Faktor — User passt an)
-            'quantity_pro_unit_g' => $attrs['quantity_pro_unit_g'] ?? $standard?->quantity_pro_unit_g,
+            'quantity_per_unit_g' => $attrs['quantity_per_unit_g'] ?? $standard?->quantity_per_unit_g,
             'unit_vocab_id' => $attrs['unit_vocab_id'] ?? $standard?->unit_vocab_id,
             'unit_count' => $attrs['unit_count'] ?? $standard?->unit_count,
             'markup_class_id' => $attrs['markup_class_id'] ?? $standard?->markup_class_id,
-            'preis_modus' => $attrs['preis_modus'] ?? 'auto',
+            'price_mode' => $attrs['price_mode'] ?? 'auto',
             'sales_net' => $attrs['sales_net'] ?? null,
             'note' => $attrs['note'] ?? null,
             'created_via' => $createdVia,
@@ -67,8 +67,8 @@ class DarreichungService
     }
 
     private const FELDER = [
-        'quantity_pro_unit_g', 'unit_vocab_id', 'unit_count',
-        'markup_class_id', 'preis_modus', 'sales_net',
+        'quantity_per_unit_g', 'unit_vocab_id', 'unit_count',
+        'markup_class_id', 'price_mode', 'sales_net',
         'container_warm_vocab_id', 'container_cold_vocab_id',
         'regeneration_temp_c', 'regeneration_duration_min', 'regeneration_core_temp_c',
         'regeneration_device_vocab_id', 'serving_vehicle_vocab_id',
@@ -151,8 +151,8 @@ class DarreichungService
         if ($deltas->isEmpty()) {
             // Stufe 1: proportional — EK/g des Rezepts × Grammatur × Anzahl
             $ekProG = $recipe->ek_per_kg_eur !== null ? (float) $recipe->ek_per_kg_eur / 1000.0 : null;
-            $ekPortion = ($ekProG !== null && (float) $darreichung->quantity_pro_unit_g > 0)
-                ? round($ekProG * (float) $darreichung->quantity_pro_unit_g
+            $ekPortion = ($ekProG !== null && (float) $darreichung->quantity_per_unit_g > 0)
+                ? round($ekProG * (float) $darreichung->quantity_per_unit_g
                     * (float) ($darreichung->unit_count ?: 1), 4)
                 : null;
         } else {
@@ -177,7 +177,7 @@ class DarreichungService
                 $masse += $m;
             }
             // Auto-Grammatur: g/Einheit = Summe der Komponenten dieser Form
-            $darreichung->quantity_pro_unit_g = $masse > 0 ? round($masse, 1) : $darreichung->quantity_pro_unit_g;
+            $darreichung->quantity_per_unit_g = $masse > 0 ? round($masse, 1) : $darreichung->quantity_per_unit_g;
             $ekPortion = $nBepreist > 0
                 ? round($kosten * (float) ($darreichung->unit_count ?: 1), 4)
                 : ($recipe->ek_per_kg_eur !== null && $masse > 0
@@ -187,7 +187,7 @@ class DarreichungService
         }
 
         $klasse = $darreichung->aufschlagsklasse;
-        $vkNetto = $darreichung->preis_modus === 'manuell'
+        $vkNetto = $darreichung->price_mode === 'manuell'
             ? $darreichung->sales_net
             : (($ekPortion !== null && $klasse !== null)
                 ? round($ekPortion * (1 + ((float) $klasse->raw_markup_pct) / 100), 2)
@@ -196,7 +196,7 @@ class DarreichungService
             ? round((float) $vkNetto * (1 + ((float) $klasse->vat_rate) / 100), 2)
             : null;
 
-        $darreichung->update(['quantity_pro_unit_g' => $darreichung->quantity_pro_unit_g,
+        $darreichung->update(['quantity_per_unit_g' => $darreichung->quantity_per_unit_g,
             'ek_portion' => $ekPortion, 'sales_net' => $vkNetto, 'sales_gross' => $vkBrutto]);
 
         if ($darreichung->is_standard) {
@@ -226,7 +226,7 @@ class DarreichungService
         // Referenz = Grammatur der Standard-Form — aber nur, wenn diese selbst delta-frei
         // ist (sonst wäre die Referenz zirkulär, weil ihre Grammatur aus Deltas entsteht).
         $standard = $recipe->standardDarreichung()->first();
-        $stdG = ($standard !== null && ! $standard->deltas()->exists()) ? $standard->quantity_pro_unit_g : null;
+        $stdG = ($standard !== null && ! $standard->deltas()->exists()) ? $standard->quantity_per_unit_g : null;
         $faktor = ($batchG > 0 && $stdG !== null && (float) $stdG > 0) ? (float) $stdG / $batchG : 1.0;
 
         $out = [];

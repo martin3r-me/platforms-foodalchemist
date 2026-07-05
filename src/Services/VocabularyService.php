@@ -423,8 +423,8 @@ class VocabularyService
             throw new RuntimeException('Klasse braucht eine Bezeichnung.');
         }
 
-        $diaet = in_array($input['diaetform'] ?? '', ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'], true)
-            ? $input['diaetform'] : 'neutral';
+        $diaet = in_array($input['diet_form'] ?? '', ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'], true)
+            ? $input['diet_form'] : 'neutral';
 
         $basis = mb_substr(Str::slug($label, '_') ?: 'class', 0, 30);
         $code = $basis;
@@ -438,7 +438,7 @@ class VocabularyService
             'dish_main_group_id' => $hg->id,
             'code' => $code,
             'label' => $label,
-            'diaetform' => $diaet,
+            'diet_form' => $diaet,
             'is_vegi' => in_array($diaet, ['vegi', 'vegan'], true),
             'is_vegan' => $diaet === 'vegan',
         ]);
@@ -481,11 +481,11 @@ class VocabularyService
             throw new RuntimeException('Geerbte Klasse — Pflege nur durch das Besitzer-Team (D1).');
         }
         $label = trim($input['label'] ?? '');
-        $diaet = in_array($input['diaetform'] ?? '', ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'], true)
-            ? $input['diaetform'] : $klasse->diaetform;
+        $diaet = in_array($input['diet_form'] ?? '', ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'], true)
+            ? $input['diet_form'] : $klasse->diet_form;
         $klasse->update([
             'label' => $label !== '' ? $label : $klasse->label,
-            'diaetform' => $diaet,
+            'diet_form' => $diaet,
             'is_vegi' => in_array($diaet, ['vegi', 'vegan'], true),
             'is_vegan' => $diaet === 'vegan',
         ]);

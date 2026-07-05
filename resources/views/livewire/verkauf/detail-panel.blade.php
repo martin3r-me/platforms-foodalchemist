@@ -24,7 +24,7 @@
                 <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
                 @if($rezept->speisenKlasse !== null)
                     <span class="{{ $pill }} {{ $variantPill['info'] }}" title="{{ $rezept->speisenKlasse->label }}">{{ $rezept->speisenKlasse->hauptgruppe?->code ?? 'HG?' }} · {{ $rezept->speisenKlasse->label }}</span>
-                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $rezept->speisenKlasse->diaetform }}</span>
+                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $rezept->speisenKlasse->diet_form }}</span>
                 @else
                     <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="V-22-Seed-Gate: Klassifikation fehlt">ohne Speisen-Klasse</span>
                 @endif

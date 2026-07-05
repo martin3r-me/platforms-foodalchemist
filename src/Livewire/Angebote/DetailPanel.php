@@ -21,9 +21,9 @@ class DetailPanel extends Component
     public ?int $selectedId = null;
 
     public array $form = [
-        'name' => '', 'status' => 'anfrage', 'anlass' => '', 'personen' => null,
-        'budget' => null, 'event_date' => null, 'location' => '', 'diaet_vorgabe' => '',
-        'brief' => '', 'gesamtpreis' => null, 'valid_until' => null, 'preis_modus' => 'auto',
+        'name' => '', 'status' => 'anfrage', 'occasion' => '', 'personen' => null,
+        'budget' => null, 'event_date' => null, 'location' => '', 'diet_requirement' => '',
+        'brief' => '', 'total_price' => null, 'valid_until' => null, 'price_mode' => 'auto',
     ];
 
     public string $firmaSuche = '';
@@ -60,16 +60,16 @@ class DetailPanel extends Component
         $this->form = [
             'name' => $a->name,
             'status' => $a->status?->value ?? 'anfrage',
-            'anlass' => $a->anlass,
+            'occasion' => $a->occasion,
             'personen' => $a->personen,
             'budget' => $a->budget,
             'event_date' => $a->event_date?->format('Y-m-d'),
             'location' => $a->location,
-            'diaet_vorgabe' => $a->diaet_vorgabe,
+            'diet_requirement' => $a->diet_requirement,
             'brief' => $a->brief,
-            'gesamtpreis' => $a->gesamtpreis,
+            'total_price' => $a->total_price,
             'valid_until' => $a->valid_until?->format('Y-m-d'),
-            'preis_modus' => $a->preis_modus ?? 'auto',
+            'price_mode' => $a->price_mode ?? 'auto',
         ];
     }
 

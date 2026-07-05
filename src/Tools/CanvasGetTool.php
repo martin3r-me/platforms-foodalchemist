@@ -57,7 +57,7 @@ class CanvasGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         $template = $svc->template($type);
 
         return ToolResult::success([
-            'titel' => $template['titel'],
+            'title' => $template['title'],
             'felder' => array_map(fn ($f) => ['key' => $f['key'], 'label' => $f['label'], 'group_name' => $f['group_name'] ?? null, 'type' => $f['type']], $template['felder']),
             'werte' => $canvas !== null ? $svc->werte($canvas) : [],
             'existiert' => $canvas !== null,

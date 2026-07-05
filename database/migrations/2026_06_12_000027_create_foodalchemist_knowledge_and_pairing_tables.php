@@ -19,9 +19,9 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index()->comment('NULL = global/BHG-kuratiert (D1)');
             $table->string('slug')->unique();
-            $table->string('titel');
+            $table->string('title');
             $table->string('category', 24)->index()->comment('cross_cutting|domain|pairing|regelwerk_snippet');
-            $table->longText('inhalt_md');
+            $table->longText('content_md');
             $table->unsignedInteger('version')->default(1);
             $table->string('content_hash', 64)->comment('sha256 — unverändert ⇒ skip (idempotent)');
             $table->unsignedInteger('char_count');
@@ -42,7 +42,7 @@ return new class extends Migration
             $table->id();
             $table->string('feature', 64);
             $table->string('category', 24);
-            $table->string('modus', 16)->comment('always|discovery|grounding|none');
+            $table->string('mode', 16)->comment('always|discovery|grounding|none');
             $table->unsignedInteger('max_docs')->nullable();
             $table->unsignedInteger('max_chars_per_doc')->nullable();
             $table->timestamps();
@@ -73,7 +73,7 @@ return new class extends Migration
             $table->foreignId('anchor_a_id')->constrained('foodalchemist_vocab_pairing_anchors')->cascadeOnDelete();
             $table->foreignId('anchor_b_id')->constrained('foodalchemist_vocab_pairing_anchors')->cascadeOnDelete();
             $table->string('type', 16)->comment('klassisch|modern|kontrast (GL-10)');
-            $table->text('evidenz')->nullable();
+            $table->text('evidence')->nullable();
             $table->string('source_slug')->nullable();
             $table->timestamps();
 

@@ -36,7 +36,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
             'properties' => [
                 'concept_id' => ['type' => 'integer'],
                 'role' => ['type' => 'string', 'description' => 'z. B. vorspeise, hauptgang, dessert, snack'],
-                'titel' => ['type' => 'string'],
+                'title' => ['type' => 'string'],
                 'is_pflicht' => ['type' => 'boolean', 'default' => true],
                 'sales_recipe_id' => ['type' => 'integer'],
                 'package_id' => ['type' => 'integer'],
@@ -73,7 +73,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
         try {
             $slot = $svc->addSlot($team, $concept->id, [
                 'role' => $arguments['role'] ?? null,
-                'titel' => $arguments['titel'] ?? null,
+                'title' => $arguments['title'] ?? null,
                 'is_pflicht' => (bool) ($arguments['is_pflicht'] ?? true),
             ]);
             if (isset($arguments['sales_recipe_id']) || isset($arguments['package_id'])) {

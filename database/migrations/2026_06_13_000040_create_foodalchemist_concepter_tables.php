@@ -57,12 +57,12 @@ return new class extends Migration
             $table->string('role')->nullable()->index();             // frei; nur gleiche Rolle ist tauschbar (M13)
             $table->string('level', 16)->nullable();                 // haute|gehoben|klassisch (Tag)
             // Gespeicherter Per-Person-Preis (Einzelpreis) — Concept summiert NUR diesen
-            $table->decimal('preis_pro_person', 10, 2)->nullable();
-            $table->decimal('ek_pro_person', 10, 4)->nullable();      // Wareneinsatz/Person (Cache)
+            $table->decimal('price_per_person', 10, 2)->nullable();
+            $table->decimal('ek_per_person', 10, 4)->nullable();      // Wareneinsatz/Person (Cache)
             $table->decimal('food_cost_percent', 5, 2)->nullable();// W% = EK/VK (Cache)
-            $table->string('preis_modus', 12)->default('manuell');    // manuell | auto (aus Gerichten)
-            $table->timestamp('preis_berechnet_am')->nullable();
-            $table->boolean('preis_stale')->default(false);           // GP-Preis-Änderung → neu rechnen (GL-02-Muster)
+            $table->string('price_mode', 12)->default('manuell');    // manuell | auto (aus Gerichten)
+            $table->timestamp('price_calculated_at')->nullable();
+            $table->boolean('price_stale')->default(false);           // GP-Preis-Änderung → neu rechnen (GL-02-Muster)
             $table->text('description')->nullable();
             $table->text('note')->nullable();
             $table->boolean('is_inactive')->default(false);
@@ -92,13 +92,13 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->string('name');
-            $table->string('anlass')->nullable();                     // Anlass-Tag
+            $table->string('occasion')->nullable();                     // Anlass-Tag
             $table->string('level', 16)->nullable();                 // haute|gehoben|klassisch
             $table->string('status', 16)->default('draft');           // draft|aktiv|archiviert
             $table->boolean('is_template')->default(false)->index();   // Vorlage = gespeichertes Slot-Gerüst
             $table->foreignId('template_source_id')->nullable()        // woher geforkt (Lineage, optional)
                 ->constrained('foodalchemist_concepts')->nullOnDelete();
-            $table->decimal('preis_pro_person_cache', 10, 2)->nullable(); // Σ Slot-Preise (optionaler Cache)
+            $table->decimal('price_per_person_cache', 10, 2)->nullable(); // Σ Slot-Preise (optionaler Cache)
             $table->text('description')->nullable();
             $table->text('note')->nullable();
             $table->timestamps();
@@ -112,7 +112,7 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->foreignId('concept_id')->constrained('foodalchemist_concepts')->cascadeOnDelete();
             $table->string('role')->nullable();                      // Rolle dieses Slots (frei)
-            $table->string('titel')->nullable();                      // Anzeige-Label (optional)
+            $table->string('title')->nullable();                      // Anzeige-Label (optional)
             $table->integer('position')->default(0);
             $table->boolean('is_pflicht')->default(true);             // Pflicht vs. optional
             // Befüllung: genau EINES gesetzt (Service-validiert — Doc 15 §M10)

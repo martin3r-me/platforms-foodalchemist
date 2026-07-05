@@ -56,7 +56,7 @@ class BulkEnrichService
                 $vorschlag = $this->proposeFeld($team, $r, $feld);
                 DB::table('foodalchemist_bulk_proposals')->insert([
                     'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-                    'team_id' => $team->id, 'run_id' => $runId, 'recipe_id' => $r->id, 'feld' => $feld,
+                    'team_id' => $team->id, 'run_id' => $runId, 'recipe_id' => $r->id, 'field' => $feld,
                     'value' => json_encode($vorschlag['value']),
                     'confidence' => $vorschlag['confidence'],
                     'reasoning' => $vorschlag['reasoning'],
@@ -68,7 +68,7 @@ class BulkEnrichService
                 $fehler = true;
                 DB::table('foodalchemist_bulk_proposals')->insert([
                     'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-                    'team_id' => $team->id, 'run_id' => $runId, 'recipe_id' => $recipeId, 'feld' => $feld,
+                    'team_id' => $team->id, 'run_id' => $runId, 'recipe_id' => $recipeId, 'field' => $feld,
                     'status' => 'leer', 'fehler' => mb_strimwidth($e->getMessage(), 0, 500),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
@@ -124,7 +124,7 @@ class BulkEnrichService
         }
         $wert = json_decode((string) $prop->value, true);
 
-        $update = match ($prop->feld) {
+        $update = match ($prop->field) {
             'description' => $r->description_source === 'manual' ? null
                 : ['description' => (string) $wert, 'description_source' => 'ki', 'description_ai_confidence' => $prop->confidence],
             'category' => $r->category_source === 'manual' || FoodAlchemistRecipeCategory::find((int) $wert) === null ? null
@@ -206,7 +206,7 @@ class BulkEnrichService
                 $leer = $vorschlag['value'] === null || $vorschlag['value'] === '' || $vorschlag['value'] === [];
                 DB::table('foodalchemist_bulk_gp_proposals')->insert([
                     'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-                    'team_id' => $team->id, 'run_id' => $runId, 'gp_id' => $gp->id, 'feld' => $feld,
+                    'team_id' => $team->id, 'run_id' => $runId, 'gp_id' => $gp->id, 'field' => $feld,
                     'value' => json_encode($vorschlag['value']),
                     'confidence' => $vorschlag['confidence'],
                     'reasoning' => $vorschlag['reasoning'],
@@ -218,7 +218,7 @@ class BulkEnrichService
                 $fehler = true;
                 DB::table('foodalchemist_bulk_gp_proposals')->insert([
                     'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-                    'team_id' => $team->id, 'run_id' => $runId, 'gp_id' => $gpId, 'feld' => $feld,
+                    'team_id' => $team->id, 'run_id' => $runId, 'gp_id' => $gpId, 'field' => $feld,
                     'status' => 'leer', 'fehler' => mb_strimwidth($e->getMessage(), 0, 500),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
@@ -276,13 +276,13 @@ class BulkEnrichService
         $wert = json_decode((string) $prop->value, true);
         $ok = false;
 
-        if ($prop->feld === 'condition') {
+        if ($prop->field === 'condition') {
             $z = app(GpNamingService::class)->normalisiereZustand(is_array($wert) ? ($wert['condition'] ?? null) : $wert);
             if ($z !== null && in_array($z, GpNamingService::ZUSTAND_VOCAB, true) && $gp->condition_source !== 'manual') {
                 $gp->update(['condition' => $z, 'condition_source' => 'ki', 'condition_ai_confidence' => $prop->confidence, 'condition_ai_reasoning' => $prop->reasoning]);
                 $ok = true;
             }
-        } elseif ($prop->feld === 'tags' && is_array($wert) && $gp->tag_source !== 'manual') {
+        } elseif ($prop->field === 'tags' && is_array($wert) && $gp->tag_source !== 'manual') {
             $tagWerte = $wert['tags'] ?? $wert;
             $update = [];
             foreach (FoodAlchemistGp::TAG_FIELDS as $tag) {
@@ -294,7 +294,7 @@ class BulkEnrichService
                 $gp->update([...$update, 'tag_source' => 'ki', 'tag_ai_confidence' => $prop->confidence, 'tag_ai_reasoning' => $prop->reasoning, 'tag_aggregated_at' => now()]);
                 $ok = true;
             }
-        } elseif ($prop->feld === 'allergene' && is_array($wert)) {
+        } elseif ($prop->field === 'allergene' && is_array($wert)) {
             $update = [];
             foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
                 $v = $wert['allergene'][$feld] ?? $wert[$feld] ?? null;
@@ -307,7 +307,7 @@ class BulkEnrichService
                 $gp->update([...$update, 'allergens_confidence' => $prop->confidence]);
                 $ok = true;
             }
-        } elseif ($prop->feld === 'naehrwerte' && is_array($wert) && $gp->nutri_source !== 'manual') {
+        } elseif ($prop->field === 'naehrwerte' && is_array($wert) && $gp->nutri_source !== 'manual') {
             $num = fn ($v) => is_numeric($v) && (float) $v >= 0 ? round((float) $v, 2) : null;
             if ($num($wert['kcal'] ?? null) !== null) {                // kcal = Leit-Indikator (GL-08)
                 $gp->update([
@@ -362,6 +362,6 @@ class BulkEnrichService
     public function gpVorschlaege(Team $team, int $runId): \Illuminate\Support\Collection
     {
         return DB::table('foodalchemist_bulk_gp_proposals')->where('run_id', $runId)->where('team_id', $team->id)
-            ->whereIn('status', ['offen', 'uebernommen'])->orderBy('feld')->get();
+            ->whereIn('status', ['offen', 'uebernommen'])->orderBy('field')->get();
     }
 }

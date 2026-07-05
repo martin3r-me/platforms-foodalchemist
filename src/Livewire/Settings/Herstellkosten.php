@@ -57,7 +57,7 @@ class Herstellkosten extends Component
             $wert = $b['type'] === 'arbeitszeit' && $b['value'] <= 0 ? $stundensatz : $b['value'];
             $this->schema[] = [
                 'key' => $b['key'], 'label' => $b['label'], 'type' => $b['type'],
-                'active' => $b['active'], 'modus' => $b['modus'], 'value' => $this->fmt((float) $wert),
+                'active' => $b['active'], 'mode' => $b['mode'], 'value' => $this->fmt((float) $wert),
             ];
         }
 
@@ -106,7 +106,7 @@ class Herstellkosten extends Component
         // #379+: Gemeinkosten-Blöcke werden standardmäßig AUTOMATISCH aus den Fixkosten abgeleitet
         // (€ rein → % selbst gerechnet). Nur Direkt-Typen (Lohn/€-Portion) bleiben manuell.
         $istGk = in_array($typ, ['pct_mek', 'pct_fek', 'pct_hk'], true);
-        $this->schema[] = ['key' => $key, 'label' => $label, 'type' => $typ, 'active' => true, 'modus' => $istGk ? 'abgeleitet' : 'manuell', 'value' => '0'];
+        $this->schema[] = ['key' => $key, 'label' => $label, 'type' => $typ, 'active' => true, 'mode' => $istGk ? 'abgeleitet' : 'manuell', 'value' => '0'];
         $this->neuBlock = ['label' => '', 'type' => 'pct_mek'];
         $this->fehler = null;
     }
@@ -116,7 +116,7 @@ class Herstellkosten extends Component
     {
         foreach ($this->schema as $i => $b) {
             if (in_array($b['type'], ['pct_mek', 'pct_fek', 'pct_hk'], true)) {
-                $this->schema[$i]['modus'] = 'abgeleitet';
+                $this->schema[$i]['mode'] = 'abgeleitet';
             }
         }
         $this->meldung = 'Alle Gemeinkosten werden jetzt automatisch aus den Fixkosten berechnet.';
@@ -189,7 +189,7 @@ class Herstellkosten extends Component
                 'key' => $b['key'], 'label' => $b['label'], 'type' => $b['type'],
                 'value' => $this->num((string) $b['value']),
                 'active' => (bool) ($b['active'] ?? false),
-                'modus' => in_array($b['modus'] ?? 'manuell', ['manuell', 'abgeleitet'], true) ? $b['modus'] : 'manuell',
+                'mode' => in_array($b['mode'] ?? 'manuell', ['manuell', 'abgeleitet'], true) ? $b['mode'] : 'manuell',
                 'sort' => $sort,
             ];
             $sort += 10;
@@ -212,7 +212,7 @@ class Herstellkosten extends Component
         ];
         $abgeleitet = [];
         foreach ($this->schema as $b) {
-            if (($b['modus'] ?? 'manuell') === 'abgeleitet') {
+            if (($b['mode'] ?? 'manuell') === 'abgeleitet') {
                 $abgeleitet[$b['key']] = $fix->abgeleiteterSatz($team, $b, $summen, $liveBasen);
             }
         }

@@ -209,7 +209,7 @@
                                                 <td class="px-1.5 py-0.5 text-gray-900 dark:text-gray-100" x-text="la.label"></td>
                                                 <td class="px-1.5 py-0.5 text-gray-500" x-text="la.marke ?? '—'"></td>
                                                 <td class="px-1.5 py-0.5 text-gray-500 italic" x-text="la.vpe ?? '—'"></td>
-                                                <td class="px-1.5 py-0.5 text-right tabular-nums" x-text="la.preis ?? '—'"></td>
+                                                <td class="px-1.5 py-0.5 text-right tabular-nums" x-text="la.price ?? '—'"></td>
                                                 <td class="px-1.5 py-0.5 text-right tabular-nums text-gray-500" x-text="la.vergleichspreis ?? '—'"></td>
                                                 <td class="px-1.5 py-0.5 text-right text-gray-500" x-text="la.match ?? '—'"></td>
                                             </tr>

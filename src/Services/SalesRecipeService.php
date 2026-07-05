@@ -161,14 +161,14 @@ class SalesRecipeService
                 return;
             }
             $standard = app(DarreichungService::class)->anlegen($team, $recipe->id, (int) $unbestimmt, [
-                'quantity_pro_unit_g' => $update['sales_quantity_per_unit_g'] ?? $recipe->sales_quantity_per_unit_g,
+                'quantity_per_unit_g' => $update['sales_quantity_per_unit_g'] ?? $recipe->sales_quantity_per_unit_g,
                 'unit_vocab_id' => $update['sales_unit_vocab_id'] ?? $recipe->sales_unit_vocab_id,
                 'unit_count' => $update['sales_unit_count'] ?? $recipe->sales_unit_count,
                 'markup_class_id' => $update['markup_class_id'] ?? $recipe->markup_class_id,
             ], 'fa_ui');
         }
         $map = [
-            'sales_quantity_per_unit_g' => 'quantity_pro_unit_g',
+            'sales_quantity_per_unit_g' => 'quantity_per_unit_g',
             'sales_unit_vocab_id' => 'unit_vocab_id',
             'sales_unit_count' => 'unit_count',
             'markup_class_id' => 'markup_class_id',
@@ -184,7 +184,7 @@ class SalesRecipeService
         }
         if (array_key_exists('sales_net', $update)) {
             $dUpdate['sales_net'] = $update['sales_net'];
-            $dUpdate['preis_modus'] = $update['sales_net'] !== null ? 'manuell' : 'auto';
+            $dUpdate['price_mode'] = $update['sales_net'] !== null ? 'manuell' : 'auto';
         }
         if ($dUpdate !== []) {
             app(DarreichungService::class)->aktualisieren($team, $standard->id, $dUpdate);

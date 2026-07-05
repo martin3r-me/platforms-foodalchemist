@@ -30,7 +30,7 @@ class FoodAlchemistTeamSetting extends Model
         'lead_la_strategie' => LeadLaStrategie::class,
         'lead_la_strategie_per_wg' => 'array',
         'lead_la_prioritaeten' => 'array',
-        'ausweich_kette_anzeigen' => 'boolean',
+        'show_fallback_chain' => 'boolean',
         'cooking_loss_defaults' => 'array',
         'trimming_loss_defaults' => 'array',
         'vat_defaults' => 'array',

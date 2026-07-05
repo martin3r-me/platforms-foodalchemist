@@ -58,14 +58,14 @@ class FoodbookService
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'label', 'jahr', 'kunde', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id'];
+    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
         return FoodAlchemistFoodbook::create([
             'team_id' => $team->id,
             'label' => trim((string) ($in['label'] ?? 'Neues Foodbook')) ?: 'Neues Foodbook',
-            'kunde' => $in['kunde'] ?? null,
+            'customer' => $in['customer'] ?? null,
             'jahr' => $in['jahr'] ?? null,
             'personen' => $in['personen'] ?? null,
             'status' => $in['status'] ?? 'draft',
@@ -127,12 +127,12 @@ class FoodbookService
     public function kapitelTree(Team $team, int $foodbookId): array
     {
         $alle = FoodAlchemistFoodbookKapitel::visibleToTeam($team)
-            ->where('foodbook_id', $foodbookId)->orderBy('position')->get(['id', 'titel', 'parent_id']);
+            ->where('foodbook_id', $foodbookId)->orderBy('position')->get(['id', 'title', 'parent_id']);
         $byParent = $alle->groupBy(fn ($k) => $k->parent_id ?? 0);
         $out = [];
         $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$out) {
             foreach ($byParent[$parentId] ?? [] as $k) {
-                $out[] = ['id' => (int) $k->id, 'titel' => $k->titel, 'parent_id' => $k->parent_id !== null ? (int) $k->parent_id : null, 'depth' => $depth];
+                $out[] = ['id' => (int) $k->id, 'title' => $k->title, 'parent_id' => $k->parent_id !== null ? (int) $k->parent_id : null, 'depth' => $depth];
                 $walk((int) $k->id, $depth + 1);
             }
         };
@@ -148,15 +148,15 @@ class FoodbookService
 
         return FoodAlchemistFoodbookKapitel::create([
             'team_id' => $fb->team_id, 'foodbook_id' => $fb->id, 'parent_id' => $parentId ?: null,
-            'titel' => trim((string) ($in['titel'] ?? 'Neues Kapitel')) ?: 'Neues Kapitel',
-            'preis_modus' => $in['preis_modus'] ?? 'auto',
+            'title' => trim((string) ($in['title'] ?? 'Neues Kapitel')) ?: 'Neues Kapitel',
+            'price_mode' => $in['price_mode'] ?? 'auto',
             'position' => (int) FoodAlchemistFoodbookKapitel::where('foodbook_id', $fb->id)
                 ->when($parentId, fn ($q, $p) => $q->where('parent_id', $p), fn ($q) => $q->whereNull('parent_id'))
                 ->max('position') + 1,
         ]);
     }
 
-    private const KAPITEL_FELDER = ['titel', 'konsumententitel', 'claim', 'description', 'preis_pro_person', 'preis_modus'];
+    private const KAPITEL_FELDER = ['title', 'consumer_title', 'claim', 'description', 'price_per_person', 'price_mode'];
 
     public function updateKapitel(Team $team, int $id, array $in): FoodAlchemistFoodbookKapitel
     {
@@ -224,8 +224,8 @@ class FoodbookService
      */
     public const BLOCK_TYPES = ['concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text', 'image'];
 
-    private const BLOCK_FELDER = ['type', 'ebene', 'sichtbar', 'label', 'wording', 'kundentext', 'interne_bemerkung',
-        'variant_group_id', 'concept_id', 'sales_recipe_id', 'quantity', 'unit_vocab_id', 'price_value', 'preis_basis', 'hoehe', 'header_source', 'payload_json'];
+    private const BLOCK_FELDER = ['type', 'level', 'visible', 'label', 'wording', 'customer_text', 'interne_bemerkung',
+        'variant_group_id', 'concept_id', 'sales_recipe_id', 'quantity', 'unit_vocab_id', 'price_value', 'price_basis', 'height', 'header_source', 'payload_json'];
 
     public function addBlock(Team $team, int $kapitelId, array $in): FoodAlchemistFoodbookBlock
     {
@@ -315,8 +315,8 @@ class FoodbookService
             foreach ($rows as $row) {
                 $block->staffel()->create([
                     'team_id' => $block->team_id,
-                    'min_personen' => max(1, (int) ($row['min_personen'] ?? 1)),
-                    'preis' => (float) ($row['preis'] ?? 0),
+                    'min_persons' => max(1, (int) ($row['min_persons'] ?? 1)),
+                    'price' => (float) ($row['price'] ?? 0),
                     'position' => $i++,
                 ]);
             }
@@ -347,17 +347,17 @@ class FoodbookService
                 $zeit('coffee_break', 'Coffee Break'), $zeit('dinner', 'Dinner'), $zeit('after_work', 'After Work'),
             ],
             'Konzept / Format (+ Preis)' => [
-                ['slug' => 'format.menue_paket', 'label' => 'Menü-Paket', 'type' => 'header_frei_preis', 'preis_basis' => 'person'],
-                ['slug' => 'format.buffet_paket', 'label' => 'Buffet-Paket', 'type' => 'header_frei_preis', 'preis_basis' => 'person'],
-                ['slug' => 'format.flat_rate', 'label' => 'Flat-Rate', 'type' => 'header_frei_preis', 'preis_basis' => 'pauschal'],
-                ['slug' => 'format.staffelpreis_block', 'label' => 'Staffelpreis-Block', 'type' => 'header_frei_preis', 'preis_basis' => 'staffel'],
+                ['slug' => 'format.menue_paket', 'label' => 'Menü-Paket', 'type' => 'header_frei_preis', 'price_basis' => 'person'],
+                ['slug' => 'format.buffet_paket', 'label' => 'Buffet-Paket', 'type' => 'header_frei_preis', 'price_basis' => 'person'],
+                ['slug' => 'format.flat_rate', 'label' => 'Flat-Rate', 'type' => 'header_frei_preis', 'price_basis' => 'pauschal'],
+                ['slug' => 'format.staffelpreis_block', 'label' => 'Staffelpreis-Block', 'type' => 'header_frei_preis', 'price_basis' => 'staffel'],
             ],
             'Intern (nicht sichtbar)' => [
-                ['slug' => 'intern.kalkulation', 'label' => 'Interne Kalkulation', 'type' => 'header_neutral', 'sichtbar' => false],
-                ['slug' => 'intern.personal', 'label' => 'Personal', 'type' => 'header_neutral', 'sichtbar' => false],
-                ['slug' => 'intern.logistik', 'label' => 'Logistik', 'type' => 'header_neutral', 'sichtbar' => false],
-                ['slug' => 'intern.equipment', 'label' => 'Equipment', 'type' => 'header_neutral', 'sichtbar' => false],
-                ['slug' => 'intern.bemerkungen', 'label' => 'Bemerkungen', 'type' => 'header_neutral', 'sichtbar' => false],
+                ['slug' => 'intern.kalkulation', 'label' => 'Interne Kalkulation', 'type' => 'header_neutral', 'visible' => false],
+                ['slug' => 'intern.personal', 'label' => 'Personal', 'type' => 'header_neutral', 'visible' => false],
+                ['slug' => 'intern.logistik', 'label' => 'Logistik', 'type' => 'header_neutral', 'visible' => false],
+                ['slug' => 'intern.equipment', 'label' => 'Equipment', 'type' => 'header_neutral', 'visible' => false],
+                ['slug' => 'intern.bemerkungen', 'label' => 'Bemerkungen', 'type' => 'header_neutral', 'visible' => false],
             ],
         ];
     }
@@ -378,7 +378,7 @@ class FoodbookService
         if ($block->type === 'concept_ref' && $block->concept) {
             $cockpit = $this->concepts->preisCockpit($block->concept);
 
-            return ['vk_pp' => (float) $cockpit['preis_pro_person'], 'ek_pp' => (float) $cockpit['ek_pro_person'], 'pauschal' => 0.0];
+            return ['vk_pp' => (float) $cockpit['price_per_person'], 'ek_pp' => (float) $cockpit['ek_per_person'], 'pauschal' => 0.0];
         }
         if ($block->type === 'recipe_ref' && $block->gericht) {
             $faktor = $block->quantity !== null ? (float) $block->quantity : 1.0;
@@ -387,7 +387,7 @@ class FoodbookService
                 'ek_pp' => round((float) ($block->gericht->ek_total_eur ?? 0) * $faktor, 2), 'pauschal' => 0.0];
         }
         if ($block->type === 'header_frei_preis') {
-            return match ($block->preis_basis) {
+            return match ($block->price_basis) {
                 'pauschal' => ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => (float) ($block->price_value ?? 0)],
                 'staffel' => ['vk_pp' => $this->resolveStaffel($block, $pax), 'ek_pp' => 0.0, 'pauschal' => 0.0],
                 default => ['vk_pp' => (float) ($block->price_value ?? 0), 'ek_pp' => 0.0, 'pauschal' => 0.0], // person
@@ -405,11 +405,11 @@ class FoodbookService
             return 0.0;
         }
         if ($pax === null) {
-            return (float) $stufen->sortBy('min_personen')->first()->preis;
+            return (float) $stufen->sortBy('min_persons')->first()->price;
         }
-        $treffer = $stufen->where('min_personen', '<=', $pax)->sortByDesc('min_personen')->first();
+        $treffer = $stufen->where('min_persons', '<=', $pax)->sortByDesc('min_persons')->first();
 
-        return (float) ($treffer?->preis ?? $stufen->sortBy('min_personen')->first()->preis);
+        return (float) ($treffer?->price ?? $stufen->sortBy('min_persons')->first()->price);
     }
 
     /**
@@ -421,7 +421,7 @@ class FoodbookService
      */
     public function kapitelAggregat(Team $team, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null): array
     {
-        $kapitel->loadMissing(['blocks' => fn ($q) => $q->where('sichtbar', true),
+        $kapitel->loadMissing(['blocks' => fn ($q) => $q->where('visible', true),
             'blocks.concept:id,name,preis_pro_person_cache', 'blocks.gericht:id,sales_net,ek_total_eur',
             'blocks.staffel', 'children']);
 
@@ -437,17 +437,17 @@ class FoodbookService
         foreach ($kapitel->children as $kind) {
             $kindAgg = $this->kapitelAggregat($team, $kind, $pax);
             $vk += $kindAgg['vk_pro_person'];
-            $ek += $kindAgg['ek_pro_person'];
+            $ek += $kindAgg['ek_per_person'];
             $pauschal += $kindAgg['pauschal'];
         }
 
-        if ($kapitel->preis_modus === 'manuell' && $kapitel->preis_pro_person !== null) {
-            $vk = (float) $kapitel->preis_pro_person;
+        if ($kapitel->price_mode === 'manuell' && $kapitel->price_per_person !== null) {
+            $vk = (float) $kapitel->price_per_person;
         }
 
         return [
             'vk_pro_person' => round($vk, 2),
-            'ek_pro_person' => round($ek, 2),
+            'ek_per_person' => round($ek, 2),
             'pauschal' => round($pauschal, 2),
             'food_cost_percent' => $vk > 0 ? round($ek / $vk * 100, 1) : null,
         ];
@@ -468,13 +468,13 @@ class FoodbookService
         foreach ($fb->kapitel()->whereNull('parent_id')->get() as $top) {
             $agg = $this->kapitelAggregat($team, $top, $pax);
             $vk += $agg['vk_pro_person'];
-            $ek += $agg['ek_pro_person'];
+            $ek += $agg['ek_per_person'];
             $pauschal += $agg['pauschal'];
         }
 
         return [
             'vk_pro_person' => round($vk, 2),
-            'ek_pro_person' => round($ek, 2),
+            'ek_per_person' => round($ek, 2),
             'pauschal' => round($pauschal, 2),
             'personen' => $pax,
             'gesamt_vk' => $pax !== null ? round($vk * $pax + $pauschal, 2) : null,
@@ -496,7 +496,7 @@ class FoodbookService
     {
         $fb->loadMissing([
             'kapitel' => fn ($q) => $q->orderBy('position'),
-            'kapitel.blocks' => fn ($q) => $q->where('sichtbar', true)->orderBy('position'),
+            'kapitel.blocks' => fn ($q) => $q->where('visible', true)->orderBy('position'),
             // Wording-Kette: Slots (inkl. Paket-Gerichte) fürs Auflösen der Gericht-Zeilen
             'kapitel.blocks.concept.slots.gericht:id,name,sales_wording_standard',
             'kapitel.blocks.concept.slots.paket.gerichte.gericht:id,name,sales_wording_standard',
@@ -517,7 +517,7 @@ class FoodbookService
                         continue; // spacer/image/leerer Header
                     }
                     // Untertitel: kundentext zusätzlich, wenn er nicht schon das Label ist (Legacy-Doppelrolle)
-                    $untertitel = trim((string) $b->kundentext);
+                    $untertitel = trim((string) $b->customer_text);
                     $untertitel = ($untertitel !== '' && $untertitel !== $label) ? $untertitel : null;
                     // concept_ref: Gerichte des Concepts mit aufgelöster Wording-Kette als Kundenzeilen
                     $gerichte = ($b->type === 'concept_ref' && $b->concept !== null)
@@ -528,7 +528,7 @@ class FoodbookService
                 }
                 $agg = $this->kapitelAggregat($team, $k, $pax);
                 $rows[] = [
-                    'titel' => $k->konsumententitel ?: $k->titel,
+                    'title' => $k->consumer_title ?: $k->title,
                     'depth' => $depth,
                     'bloecke' => $bloecke,
                     'vk_pro_person' => $agg['vk_pro_person'],
@@ -543,7 +543,7 @@ class FoodbookService
             'kapitel' => $rows,
             'gesamt' => $this->gesamt($team, $fb),
             // #369: CRM-Firma bevorzugt, sonst Freitext-kunde; Kontaktperson separat.
-            'kunde' => $fb->crmCompany?->display_name ?: $fb->kunde,
+            'customer' => $fb->crmCompany?->display_name ?: $fb->customer,
             'kontakt' => $fb->crmContact?->display_name,
             // Kundendokument-Vollständigkeit: gesetzlicher MwSt-Satz + Stand-Datum.
             'mwst' => app(TeamSettingsService::class)->mwst($team),
@@ -560,8 +560,8 @@ class FoodbookService
     {
         return match (true) {
             in_array($b->type, ['concept_ref', 'recipe_ref'], true) => app(WordingResolver::class)->blockTitel($b)['text'],
-            str_starts_with((string) $b->type, 'header') => $b->kundentext ?: null,
-            $b->type === 'text' => $b->kundentext ?: null,
+            str_starts_with((string) $b->type, 'header') => $b->customer_text ?: null,
+            $b->type === 'text' => $b->customer_text ?: null,
             default => null,
         };
     }
@@ -577,7 +577,7 @@ class FoodbookService
         return FoodAlchemistConcept::visibleToTeam($team)->echte()
             ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
             ->when($categoryId !== null, fn ($q) => $q->whereIn('category_id', $this->concepts->descendantIds($team, $categoryId)))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'preis_pro_person_cache', 'category_id']);
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'category_id']);
     }
 
     /** Einzelne Gerichte (VK-Rezepte) für den recipe_ref-Picker. */
@@ -600,7 +600,7 @@ class FoodbookService
     {
         $fb = $this->detail($team, $foodbookId);
         if ($fb === null) {
-            return ['kunde' => null, 'briefing' => null, 'personen' => null, 'concepts' => [], 'kapitel' => []];
+            return ['customer' => null, 'briefing' => null, 'personen' => null, 'concepts' => [], 'kapitel' => []];
         }
 
         $conceptNamen = collect();
@@ -613,11 +613,11 @@ class FoodbookService
         }
 
         return [
-            'kunde' => $fb->kunde,
+            'customer' => $fb->customer,
             'briefing' => $fb->description,
             'personen' => $fb->personen,
             'concepts' => $conceptNamen->unique()->values()->all(),
-            'kapitel' => $fb->kapitel->pluck('titel')->values()->all(),
+            'kapitel' => $fb->kapitel->pluck('title')->values()->all(),
         ];
     }
 

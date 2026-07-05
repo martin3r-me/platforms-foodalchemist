@@ -61,7 +61,7 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             'requires_auth' => true,
             'requires_team' => true,
             'cost_class' => 'local_db',
-            'tags' => ['foodalchemist', 'gp', 'grundprodukt', 'detail', 'allergene', 'preis'],
+            'tags' => ['foodalchemist', 'gp', 'grundprodukt', 'detail', 'allergene', 'price'],
             'examples' => ['Zeig mir Details zu GP 123', 'Welche Allergene hat das Zanderfilet-GP?'],
         ];
     }

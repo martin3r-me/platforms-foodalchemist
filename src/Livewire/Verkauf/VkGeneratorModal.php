@@ -22,7 +22,7 @@ class VkGeneratorModal extends Component
     public array $parameter = [
         'convenience' => 'standard', 'frische' => 'frisch', 'bio' => false,
         'level' => '', 'sektor' => '', 'diaet_hart' => '', 'aroma' => '',
-        'anlass' => '', 'serviceform' => '', 'kompositions_stil' => '',
+        'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
     ];
 
     public ?string $fehler = null;

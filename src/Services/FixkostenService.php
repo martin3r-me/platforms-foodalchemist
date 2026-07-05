@@ -108,7 +108,7 @@ class FixkostenService
         $basen = $this->settings->bezugsbasen($team);
 
         return array_map(function ($b) use ($team, $summen, $basen) {
-            if (($b['modus'] ?? 'manuell') === 'abgeleitet') {
+            if (($b['mode'] ?? 'manuell') === 'abgeleitet') {
                 $b['value'] = $this->abgeleiteterSatz($team, $b, $summen, $basen);
             }
 

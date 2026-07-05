@@ -37,7 +37,7 @@ class Index extends Component
 
     public string $editKatName = '';
 
-    public array $form = ['name' => '', 'anlass' => '', 'level' => '', 'category_id' => null, 'status' => 'draft', 'description' => ''];
+    public array $form = ['name' => '', 'occasion' => '', 'level' => '', 'category_id' => null, 'status' => 'draft', 'description' => ''];
 
     /** Pro Slot editierbare Rolle/Titel (keyed by slot-id). */
     public array $slotForm = [];
@@ -91,10 +91,10 @@ class Index extends Component
         }
         $this->selectedId = $id;
         $this->form = [
-            'name' => $c->name, 'anlass' => $c->anlass ?? '', 'level' => $c->level ?? '',
+            'name' => $c->name, 'occasion' => $c->occasion ?? '', 'level' => $c->level ?? '',
             'category_id' => $c->category_id, 'status' => $c->status, 'description' => $c->description ?? '',
         ];
-        $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'titel' => $s->titel ?? '']])->all();
+        $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'title' => $s->title ?? '']])->all();
         $this->fillSlotId = null;
         $this->gerichtSuche = '';
         $this->zielModus = false;
@@ -150,7 +150,7 @@ class Index extends Component
         if ($this->selectedId === null) {
             return;
         }
-        $svc->addSlot($this->team(), $this->selectedId, ['role' => $this->neuerSlotRolle ?: null, 'titel' => $this->neuerSlotRolle ?: null]);
+        $svc->addSlot($this->team(), $this->selectedId, ['role' => $this->neuerSlotRolle ?: null, 'title' => $this->neuerSlotRolle ?: null]);
         $this->neuerSlotRolle = '';
         $this->waehle($this->selectedId, $svc);
     }

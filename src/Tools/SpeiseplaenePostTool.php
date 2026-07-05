@@ -61,7 +61,7 @@ class SpeiseplaenePostTool extends FoodAlchemistTool implements ToolContract, To
                 'id' => $plan->id, 'name' => $plan->name, 'status' => $plan->status,
                 'start_date' => (string) $plan->start_date, 'zyklus_wochen' => $plan->zyklus_wochen,
             ],
-            'linien' => $plan->linien->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'ist_vegetarisch' => (bool) $l->ist_vegetarisch])->all(),
+            'linien' => $plan->linien->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'is_vegetarian' => (bool) $l->is_vegetarian])->all(),
         ]);
     }
 

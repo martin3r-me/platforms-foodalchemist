@@ -25,7 +25,7 @@ return new class extends Migration
             // ── M1-05: Lead-LA-Wahl (V-27)
             $table->string('lead_la_strategie', 32)->default('stamm_lieferant'); // V-27: Default = Ist-Verhalten (GL-03 §6)
             $table->json('lead_la_prioritaeten')->nullable()->comment('geordnete supplier_ids für Strategie prioritaets_kette');
-            $table->boolean('ausweich_kette_anzeigen')->default(false);
+            $table->boolean('show_fallback_chain')->default(false);
 
             // ── M1-07: Kalkulations-Defaults (GL-02)
             $table->json('cooking_loss_defaults')->nullable()->comment('{commodity_group_code|*: prozent}');

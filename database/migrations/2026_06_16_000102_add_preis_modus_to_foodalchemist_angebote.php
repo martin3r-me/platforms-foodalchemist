@@ -16,14 +16,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('foodalchemist_offers', function (Blueprint $table) {
-            $table->string('preis_modus', 12)->default('auto');
+            $table->string('price_mode', 12)->default('auto');
         });
     }
 
     public function down(): void
     {
         Schema::table('foodalchemist_offers', function (Blueprint $table) {
-            $table->dropColumn('preis_modus');
+            $table->dropColumn('price_mode');
         });
     }
 };

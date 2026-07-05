@@ -56,7 +56,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'type' => $s->type instanceof \BackedEnum ? $s->type->value : $s->type,
                 'severity' => $s->severity instanceof \BackedEnum ? $s->severity->value : $s->severity,
                 'status' => $s->status instanceof \BackedEnum ? $s->status->value : $s->status,
-                'titel' => $s->titel,
+                'title' => $s->title,
                 'created_at' => (string) $s->created_at,
             ])->all(),
         ]);
@@ -66,7 +66,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
     {
         return [
             'category' => 'query',
-            'tags' => ['foodalchemist', 'signal', 'alert', 'preis', 'marge', 'datenqualität'],
+            'tags' => ['foodalchemist', 'signal', 'alert', 'price', 'marge', 'datenqualität'],
             'read_only' => true, 'idempotent' => true, 'risk_level' => 'safe',
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'related_tools' => ['foodalchemist.signale.PUT'],

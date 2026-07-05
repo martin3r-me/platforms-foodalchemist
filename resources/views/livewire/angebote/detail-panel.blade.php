@@ -32,13 +32,13 @@
             <span class="{{ $label }}">Anfrage</span>
             <div><label class="{{ $label }}">Name</label><input type="text" wire:model="form.name" class="{{ $input }}" /></div>
             <div><label class="{{ $label }}">Pax</label><input type="number" min="0" wire:model="form.personen" wire:change="speichern" class="{{ $input }} text-right tabular-nums" title="treibt den Auto-Gesamtpreis" /></div>
-            <div><label class="{{ $label }}">Anlass</label><input type="text" wire:model="form.anlass" class="{{ $input }}" placeholder="Hochzeit, Firmenfeier …" /></div>
+            <div><label class="{{ $label }}">Anlass</label><input type="text" wire:model="form.occasion" class="{{ $input }}" placeholder="Hochzeit, Firmenfeier …" /></div>
             <div class="grid grid-cols-2 gap-2">
                 <div><label class="{{ $label }}">Event-Datum</label><input type="date" wire:model="form.event_date" class="{{ $input }}" /></div>
                 <div><label class="{{ $label }}">Budget €</label><input type="number" step="0.01" wire:model="form.budget" class="{{ $input }} text-right tabular-nums" /></div>
             </div>
             <div><label class="{{ $label }}">Location</label><input type="text" wire:model="form.location" class="{{ $input }}" /></div>
-            <div><label class="{{ $label }}">Diät / Allergien</label><input type="text" wire:model="form.diaet_vorgabe" class="{{ $input }}" /></div>
+            <div><label class="{{ $label }}">Diät / Allergien</label><input type="text" wire:model="form.diet_requirement" class="{{ $input }}" /></div>
             <div><label class="{{ $label }}">Briefing</label><textarea rows="3" wire:model="form.brief" class="{{ $input }}"></textarea></div>
         </div>
 
@@ -56,19 +56,19 @@
                     <div class="{{ $row }}"><span class="{{ $dt }}">HK2/P</span><span class="{{ $dd }} tabular-nums">{{ number_format($kalkulation['hk2_pro_person'],2,',','.') }} €</span></div>
                 </div>
                 <div class="flex items-center justify-between rounded-lg bg-violet-500/5 px-3 py-2">
-                    <span class="text-xs text-gray-500">Gesamt · {{ $kalkulation['preis_modus']==='auto' ? 'auto' : 'manuell' }}</span>
+                    <span class="text-xs text-gray-500">Gesamt · {{ $kalkulation['price_mode']==='auto' ? 'auto' : 'manuell' }}</span>
                     <span class="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ number_format($kalkulation['gesamt_vk'],2,',','.') }} €</span>
                 </div>
                 <div class="text-[11px] text-gray-400 text-right">Deckungsbeitrag {{ number_format($kalkulation['gesamt_db'],2,',','.') }} € · EK {{ number_format($kalkulation['gesamt_ek'],2,',','.') }} €</div>
             @endif
             <div class="grid grid-cols-2 gap-2">
                 <div><label class="{{ $label }}">Preis-Modus</label>
-                    <select wire:model="form.preis_modus" wire:change="speichern" class="{{ $input }}"><option value="auto">Auto (Pax × Menü)</option><option value="manuell">Manuell</option></select></div>
+                    <select wire:model="form.price_mode" wire:change="speichern" class="{{ $input }}"><option value="auto">Auto (Pax × Menü)</option><option value="manuell">Manuell</option></select></div>
                 <div><label class="{{ $label }}">Gültig bis</label><input type="date" wire:model="form.valid_until" class="{{ $input }}" /></div>
             </div>
-            @if($kalkulation['preis_modus']==='manuell')
+            @if($kalkulation['price_mode']==='manuell')
                 <div><label class="{{ $label }}">Gesamtpreis € (manuell)</label>
-                    <input type="number" step="0.01" wire:model="form.gesamtpreis" wire:change="speichern" class="{{ $input }} text-right tabular-nums" /></div>
+                    <input type="number" step="0.01" wire:model="form.total_price" wire:change="speichern" class="{{ $input }} text-right tabular-nums" /></div>
             @endif
         </div>
         @endif
@@ -183,7 +183,7 @@
                             <button type="button" wire:key="acd-{{ $kt->id }}" wire:click="referenziereConcept({{ $kt->id }})"
                                     class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
                                 <span class="truncate text-gray-900 dark:text-gray-100">+ {{ $kt->name }}</span>
-                                <span class="text-gray-400 tabular-nums shrink-0">{{ $kt->preis_pro_person_cache !== null ? number_format((float) $kt->preis_pro_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                <span class="text-gray-400 tabular-nums shrink-0">{{ $kt->price_per_person_cache !== null ? number_format((float) $kt->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
                             </button>
                         @endforeach
                     @elseif($conceptSuche !== '' || $conceptKategorie !== null)

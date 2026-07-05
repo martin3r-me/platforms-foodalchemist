@@ -25,7 +25,7 @@
                         <button type="button" wire:key="fb-{{ $f->id }}" wire:click="waehle({{ $f->id }})"
                                 class="w-full text-left px-2 py-1 rounded-lg text-xs {{ $selectedId === $f->id ? $aktiv : $hover }}">
                             <span class="truncate block">{{ $f->label }}</span>
-                            <span class="text-[10px] text-gray-400">{{ $f->kunde ?? 'ohne Kunde' }} · {{ $f->kapitel_count }} Kapitel</span>
+                            <span class="text-[10px] text-gray-400">{{ $f->customer ?? 'ohne Kunde' }} · {{ $f->kapitel_count }} Kapitel</span>
                         </button>
                     @empty
                         <p class="px-2 py-3 text-[11px] text-gray-400">Noch keine Foodbooks.</p>
@@ -42,7 +42,7 @@
                         @foreach($kapitelTree as $kt)
                             <div wire:key="kt-{{ $kt['id'] }}" class="group flex items-center gap-1" style="padding-left: {{ $kt['depth'] * 12 }}px">
                                 <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})"
-                                        class="flex-1 min-w-0 text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['titel'] }}</button>
+                                        class="flex-1 min-w-0 text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['title'] }}</button>
                                 <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[10px]" title="hoch">▲</button>
                                 <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[10px]" title="runter">▼</button>
                                 <button type="button" wire:click="kapitelNeu({{ $kt['id'] }})" class="shrink-0 text-violet-400 hover:text-violet-600 text-xs px-1 leading-none" title="Unterkapitel anlegen">＋</button>
@@ -61,14 +61,14 @@
                 <div class="p-4 space-y-3">
                     <div class="text-center py-2">
                         <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</div>
-                        <div class="{{ $label }}">pro Person · EK {{ number_format($gesamt['ek_pro_person'], 2, ',', '.') }} €</div>
+                        <div class="{{ $label }}">pro Person · EK {{ number_format($gesamt['ek_per_person'], 2, ',', '.') }} €</div>
                         <div class="text-[11px] text-gray-400 mt-1">Portfolio — person-unabhängig. Pax + Gesamtpreis liegen im Angebot.</div>
                     </div>
                     @if($kapitel && $kapitelAgg)
                         <div class="pt-2 border-t border-black/5 dark:border-white/10 text-xs space-y-1">
-                            <div class="{{ $label }}">Kapitel „{{ $kapitel->titel }}"</div>
+                            <div class="{{ $label }}">Kapitel „{{ $kapitel->title }}"</div>
                             <div class="flex justify-between"><span class="text-gray-500">€/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['vk_pro_person'], 2, ',', '.') }} €</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">EK/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['ek_pro_person'], 2, ',', '.') }} €</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">EK/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['ek_per_person'], 2, ',', '.') }} €</span></div>
                             @if($kapitelAgg['food_cost_percent'] !== null)<div class="flex justify-between"><span class="text-gray-500">Wareneinsatz</span><span class="tabular-nums">{{ number_format($kapitelAgg['food_cost_percent'], 1, ',', '.') }} %</span></div>@endif
                         </div>
                     @endif
@@ -86,7 +86,7 @@
                 <div class="{{ $cardAccent }}"></div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div class="md:col-span-2"><label class="{{ $label }}">Bezeichnung</label><input type="text" wire:model="form.label" class="{{ $input }}" /></div>
-                    <div><label class="{{ $label }}">Kunde</label><input type="text" wire:model="form.kunde" class="{{ $input }}" /></div>
+                    <div><label class="{{ $label }}">Kunde</label><input type="text" wire:model="form.customer" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Status</label>
                         <select wire:model="form.status" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
                     </div>
@@ -171,14 +171,14 @@
                 <div class="flex items-baseline justify-between border-b border-black/5 dark:border-white/10 pb-3">
                     <div>
                         <h2 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">{{ $fb->label }}</h2>
-                        @if($menue['kunde'] ?? null)<p class="text-xs text-gray-400">{{ $menue['kunde'] }}@if(($menue['kontakt'] ?? null) && $menue['kontakt'] !== $menue['kunde']) · {{ $menue['kontakt'] }}@endif</p>@endif
+                        @if($menue['customer'] ?? null)<p class="text-xs text-gray-400">{{ $menue['customer'] }}@if(($menue['kontakt'] ?? null) && $menue['kontakt'] !== $menue['customer']) · {{ $menue['kontakt'] }}@endif</p>@endif
                     </div>
                     @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)<span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
                 </div>
                 @forelse($menue['kapitel'] ?? [] as $k)
                     <section style="margin-left: {{ $k['depth'] * 16 }}px">
                         <div class="flex items-baseline gap-2 border-b border-black/5 dark:border-white/10 pb-1 mb-2">
-                            <h3 class="text-sm font-semibold text-violet-700 dark:text-violet-300">{{ $k['titel'] }}</h3>
+                            <h3 class="text-sm font-semibold text-violet-700 dark:text-violet-300">{{ $k['title'] }}</h3>
                             @if($k['vk_pro_person'] > 0)<span class="ml-auto text-[11px] text-gray-400 tabular-nums">{{ number_format((float) $k['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
                         </div>
                         @forelse($k['bloecke'] as $b)
@@ -209,10 +209,10 @@
                 {{-- Kapitel-Kopf --}}
                 <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="kaphdr-{{ $kapitel->id }}">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        <div><label class="{{ $label }}">Kapitel (intern)</label><input type="text" wire:model.blur="kapitelForm.titel" wire:change="kapitelSpeichern" class="{{ $input }}" /></div>
-                        <div class="md:col-span-2"><label class="{{ $label }}">Konsumententitel</label><input type="text" wire:model.blur="kapitelForm.konsumententitel" wire:change="kapitelSpeichern" class="{{ $input }}" placeholder="Marketing-Titel (PDF)" /></div>
+                        <div><label class="{{ $label }}">Kapitel (intern)</label><input type="text" wire:model.blur="kapitelForm.title" wire:change="kapitelSpeichern" class="{{ $input }}" /></div>
+                        <div class="md:col-span-2"><label class="{{ $label }}">Konsumententitel</label><input type="text" wire:model.blur="kapitelForm.consumer_title" wire:change="kapitelSpeichern" class="{{ $input }}" placeholder="Marketing-Titel (PDF)" /></div>
                         <div><label class="{{ $label }}">Preis-Modus</label>
-                            <select wire:model.live="kapitelForm.preis_modus" wire:change="kapitelSpeichern" class="{{ $input }}"><option value="auto">auto (Σ Inhalt)</option><option value="manuell">manuell</option></select>
+                            <select wire:model.live="kapitelForm.price_mode" wire:change="kapitelSpeichern" class="{{ $input }}"><option value="auto">auto (Σ Inhalt)</option><option value="manuell">manuell</option></select>
                         </div>
                     </div>
                 </div>
@@ -237,7 +237,7 @@
                                         <div class="{{ $label }} px-2 pt-2 pb-0.5">{{ $gruppe }}</div>
                                         @foreach($items as $p)
                                             <button type="button" @click="presets=false"
-                                                    wire:click="presetHinzu(@js($p['type']), @js($p['slug']), @js($p['label']), @js($p['preis_basis'] ?? null), {{ ($p['sichtbar'] ?? true) ? 'true' : 'false' }})"
+                                                    wire:click="presetHinzu(@js($p['type']), @js($p['slug']), @js($p['label']), @js($p['price_basis'] ?? null), {{ ($p['visible'] ?? true) ? 'true' : 'false' }})"
                                                     class="block w-full text-left px-3 py-0.5 rounded hover:bg-violet-500/10 truncate">{{ $p['label'] }}</button>
                                         @endforeach
                                     @endforeach
@@ -250,8 +250,8 @@
                     <div class="space-y-1">
                         @forelse($kapitel->blocks as $block)
                             <div wire:key="block-{{ $block->id }}"
-                                 class="rounded-lg border {{ $block->variant_group_id ? 'border-amber-400/60' : 'border-black/5 dark:border-white/10' }} px-2 py-1 {{ $block->sichtbar ? '' : 'opacity-60' }}"
-                                 style="margin-left: {{ $block->ebene * 20 }}px">
+                                 class="rounded-lg border {{ $block->variant_group_id ? 'border-amber-400/60' : 'border-black/5 dark:border-white/10' }} px-2 py-1 {{ $block->visible ? '' : 'opacity-60' }}"
+                                 style="margin-left: {{ $block->level * 20 }}px">
                                 <div class="flex items-center gap-2 text-xs">
                                     <span class="flex flex-col -my-0.5 shrink-0">
                                         <button type="button" wire:click="blockHoch({{ $block->id }})" class="text-gray-400 hover:text-violet-500 leading-none">▲</button>
@@ -266,7 +266,7 @@
                                         @switch($block->type)
                                             @case('concept_ref')
                                                 <span class="{{ $pill }} {{ $variantPill['primary'] }} mr-1">Concept</span>{{ $block->concept?->name ?? '—' }}
-                                                <span class="text-gray-400 tabular-nums">{{ $block->concept?->preis_pro_person_cache !== null ? '· ' . number_format((float) $block->concept->preis_pro_person_cache, 2, ',', '.') . ' €/P' : '' }}</span>
+                                                <span class="text-gray-400 tabular-nums">{{ $block->concept?->price_per_person_cache !== null ? '· ' . number_format((float) $block->concept->price_per_person_cache, 2, ',', '.') . ' €/P' : '' }}</span>
                                                 @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600 dark:text-violet-400">· „{{ $block->wording }}“</span>@endif
                                                 @break
                                             @case('header_neutral') @case('header_frei')
@@ -274,17 +274,17 @@
                                                 @break
                                             @case('header_frei_preis')
                                                 <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
-                                                <span class="text-gray-500">· {{ $block->preis_basis === 'staffel' ? 'Staffel' : number_format((float) ($block->price_value ?? 0), 2, ',', '.') . ' € ' . ($block->preis_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
+                                                <span class="text-gray-500">· {{ $block->price_basis === 'staffel' ? 'Staffel' : number_format((float) ($block->price_value ?? 0), 2, ',', '.') . ' € ' . ($block->price_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
                                                 @break
-                                            @case('spacer') <span class="italic text-gray-400">Leerzeile ({{ $block->hoehe ?? 'mittel' }})</span> @break
+                                            @case('spacer') <span class="italic text-gray-400">Leerzeile ({{ $block->height ?? 'mittel' }})</span> @break
                                             @case('image') <span class="text-gray-500">🖼 Bild</span> @break
-                                            @default <span class="italic">{{ \Illuminate\Support\Str::limit($block->kundentext ?? '(Text)', 80) }}</span>
+                                            @default <span class="italic">{{ \Illuminate\Support\Str::limit($block->customer_text ?? '(Text)', 80) }}</span>
                                         @endswitch
                                     </span>
                                     @if($block->variant_group_id)<button type="button" wire:click="wahlGruppeAufheben({{ $block->id }})" class="{{ $pill }} {{ $variantPill['warning'] }} shrink-0" title="aus Wahl-Gruppe">Wahl #{{ $block->variant_group_id }}</button>@endif
                                     <button type="button" wire:click="blockEbene({{ $block->id }}, -1)" class="text-gray-400 hover:text-violet-500 shrink-0" title="ausrücken">←</button>
                                     <button type="button" wire:click="blockEbene({{ $block->id }}, 1)" class="text-gray-400 hover:text-violet-500 shrink-0" title="einrücken">→</button>
-                                    <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="shrink-0 text-[10px] {{ $block->sichtbar ? 'text-gray-400' : 'text-amber-500' }}" title="sichtbar/intern">{{ $block->sichtbar ? '👁' : 'intern' }}</button>
+                                    <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="shrink-0 text-[10px] {{ $block->visible ? 'text-gray-400' : 'text-amber-500' }}" title="sichtbar/intern">{{ $block->visible ? '👁' : 'intern' }}</button>
                                     @if($block->type !== 'spacer')
                                         <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="shrink-0 text-gray-400 hover:text-violet-500" title="bearbeiten / Notiz">✎</button>
                                     @endif
@@ -298,7 +298,7 @@
                                         @endif
                                         @if($block->type === 'header_frei_preis')
                                             <div class="flex gap-2">
-                                                <select wire:model="blockForm.preis_basis" class="{{ $input }} w-32"><option value="person">pro Person</option><option value="pauschal">Pauschal</option><option value="staffel">Staffel</option></select>
+                                                <select wire:model="blockForm.price_basis" class="{{ $input }} w-32"><option value="person">pro Person</option><option value="pauschal">Pauschal</option><option value="staffel">Staffel</option></select>
                                                 <input type="number" step="0.01" wire:model="blockForm.price_value" class="{{ $input }} w-28 text-right tabular-nums" placeholder="0,00 €" />
                                             </div>
                                         @endif
@@ -307,10 +307,10 @@
                                             <input type="text" wire:model="blockForm.wording" class="{{ $input }}" placeholder="Anzeigename (Kunde) — leer = Wording-Kette (Konzept → Standard → Name)" data-fb-block-wording />
                                         @endif
                                         @if($block->type === 'text')
-                                            <textarea wire:model="blockForm.kundentext" rows="3" class="{{ $input }}" placeholder="Marketing-Text (kundensichtbar)"></textarea>
+                                            <textarea wire:model="blockForm.customer_text" rows="3" class="{{ $input }}" placeholder="Marketing-Text (kundensichtbar)"></textarea>
                                         @else
                                             <div class="flex gap-1.5 items-start">
-                                                <textarea wire:model="blockForm.kundentext" rows="2" class="{{ $input }}" placeholder="Beschreibungstext / Untertitel (kundensichtbar, optional)"></textarea>
+                                                <textarea wire:model="blockForm.customer_text" rows="2" class="{{ $input }}" placeholder="Beschreibungstext / Untertitel (kundensichtbar, optional)"></textarea>
                                                 @if($block->type === 'concept_ref')
                                                     <button type="button" wire:click="kiKundentext" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" data-fb-ki-kundentext>✨</button>
                                                 @endif
@@ -355,7 +355,7 @@
                                         <button type="button" wire:key="dck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})"
                                                 class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
                                             <span class="truncate text-gray-900 dark:text-gray-100">+ {{ $ck->name }}</span>
-                                            <span class="text-gray-400 tabular-nums shrink-0">{{ $ck->preis_pro_person_cache !== null ? number_format((float) $ck->preis_pro_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                            <span class="text-gray-400 tabular-nums shrink-0">{{ $ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
                                         </button>
                                     @endforeach
                                 @elseif($conceptSuche !== '' || $conceptKategorie !== null)

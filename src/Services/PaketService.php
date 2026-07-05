@@ -85,7 +85,7 @@ class PaketService
 
     public function create(Team $team, array $in): FoodAlchemistPaket
     {
-        $modus = $in['preis_modus'] ?? 'manuell';
+        $modus = $in['price_mode'] ?? 'manuell';
 
         return FoodAlchemistPaket::create([
             'team_id' => $team->id,
@@ -93,14 +93,14 @@ class PaketService
             'role' => $this->normalizeRolle($in['role'] ?? null),
             'class' => $this->normalizeRolle($in['class'] ?? null),
             'level' => $in['level'] ?? null,
-            'preis_modus' => in_array($modus, ['auto', 'manuell'], true) ? $modus : 'manuell',
+            'price_mode' => in_array($modus, ['auto', 'manuell'], true) ? $modus : 'manuell',
         ]);
     }
 
     /** Editierbare Paket-Felder (Stamm + Klasse/Konsumenten-Name + manuelle Preise). */
     private const FELDER = [
-        'name', 'consumer_name', 'role', 'class', 'level', 'preis_modus', 'preis_pro_person',
-        'ek_pro_person', 'food_cost_percent', 'description', 'note', 'is_inactive',
+        'name', 'consumer_name', 'role', 'class', 'level', 'price_mode', 'price_per_person',
+        'ek_per_person', 'food_cost_percent', 'description', 'note', 'is_inactive',
     ];
 
     public function update(Team $team, int $id, array $in): FoodAlchemistPaket
@@ -118,7 +118,7 @@ class PaketService
         $paket->update($update);
 
         // Auto-Modus: Preis wird abgeleitet, manuelle Eingaben werden überschrieben
-        if ($paket->preis_modus === 'auto') {
+        if ($paket->price_mode === 'auto') {
             $this->recomputePrice($paket);
         }
 
@@ -139,8 +139,8 @@ class PaketService
 
         return DB::transaction(function () use ($team, $orig) {
             $felder = array_intersect_key($orig->attributesToArray(), array_flip([
-                'consumer_name', 'role', 'class', 'level', 'preis_modus', 'preis_pro_person',
-                'ek_pro_person', 'food_cost_percent', 'description', 'note',
+                'consumer_name', 'role', 'class', 'level', 'price_mode', 'price_per_person',
+                'ek_per_person', 'food_cost_percent', 'description', 'note',
             ]));
             $neu = FoodAlchemistPaket::create($felder + [
                 'team_id' => $team->id, 'name' => $orig->name . ' (Kopie)',
@@ -232,7 +232,7 @@ class PaketService
      */
     public function recomputePrice(FoodAlchemistPaket $paket): FoodAlchemistPaket
     {
-        $auto = $paket->preis_modus === 'auto';
+        $auto = $paket->price_mode === 'auto';
         $gerichte = $paket->gerichte()->with([
             'gericht:id,sales_net,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg',
             'unit:id,slug,dimension,default_in_g',
@@ -255,7 +255,7 @@ class PaketService
             }
             // Umbau-Spec Phase 5: geltende Darreichung auflösen (explizit → Standard)
             $dar = app(DarreichungResolver::class)->fuerPaketGericht($g);
-            $darPortionG = $dar?->quantity_pro_unit_g !== null ? (float) $dar->quantity_pro_unit_g : null;
+            $darPortionG = $dar?->quantity_per_unit_g !== null ? (float) $dar->quantity_per_unit_g : null;
             $pae = ConcepterAggregateService::portionsAequivalent(
                 $g->quantity !== null ? (float) $g->quantity : null,
                 $g->unit,
@@ -273,16 +273,16 @@ class PaketService
         }
 
         $vkBezug = $auto ? ($vkSum > 0 ? $vkSum : null)
-            : ($paket->preis_pro_person !== null ? (float) $paket->preis_pro_person : null);
+            : ($paket->price_per_person !== null ? (float) $paket->price_per_person : null);
         $marge = $this->marge->marge($vkBezug, $ekSum);
 
-        $update = ['preis_berechnet_am' => now(), 'preis_stale' => false];
+        $update = ['price_calculated_at' => now(), 'price_stale' => false];
         if ($gerichte->isNotEmpty()) {
-            $update['ek_pro_person'] = $ekSum > 0 ? round($ekSum, 4) : null;
+            $update['ek_per_person'] = $ekSum > 0 ? round($ekSum, 4) : null;
             $update['food_cost_percent'] = $marge['wareneinsatz_pct'] ?? null;
         }
         if ($auto) {
-            $update['preis_pro_person'] = $vkSum > 0 ? round($vkSum, 2) : null;
+            $update['price_per_person'] = $vkSum > 0 ? round($vkSum, 2) : null;
         }
         $paket->update($update);
 
@@ -301,7 +301,7 @@ class PaketService
             ->distinct()->pluck('package_id');
 
         return FoodAlchemistPaket::whereIn('id', $paketIds)
-            ->where('preis_modus', 'auto')->update(['preis_stale' => true]);
+            ->where('price_mode', 'auto')->update(['price_stale' => true]);
     }
 
     /**
@@ -348,7 +348,7 @@ class PaketService
             ->when(($filter['class'] ?? '') !== '', fn ($q) => $q->where('class', $filter['class']))
             ->when(($filter['role'] ?? '') !== '', fn ($q) => $q->where('role', $filter['role']))
             ->orderBy('name')->limit($limit)
-            ->get(['id', 'name', 'preis_pro_person', 'class', 'role']);
+            ->get(['id', 'name', 'price_per_person', 'class', 'role']);
     }
 
     /**

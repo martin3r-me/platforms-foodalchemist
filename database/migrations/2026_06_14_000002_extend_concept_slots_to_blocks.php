@@ -25,20 +25,20 @@ return new class extends Migration
             if (! Schema::hasColumn('foodalchemist_concept_slots', 'type')) {
                 $table->string('type', 24)->default('gericht')->after('concept_id');
             }
-            if (! Schema::hasColumn('foodalchemist_concept_slots', 'ebene')) {
-                $table->integer('ebene')->default(0)->after('position');
+            if (! Schema::hasColumn('foodalchemist_concept_slots', 'level')) {
+                $table->integer('level')->default(0)->after('position');
             }
-            if (! Schema::hasColumn('foodalchemist_concept_slots', 'text_inhalt')) {
-                $table->text('text_inhalt')->nullable()->after('titel');
+            if (! Schema::hasColumn('foodalchemist_concept_slots', 'text_content')) {
+                $table->text('text_content')->nullable()->after('title');
             }
             if (! Schema::hasColumn('foodalchemist_concept_slots', 'price_value')) {
                 $table->decimal('price_value', 10, 2)->nullable()->after('quantity');
             }
-            if (! Schema::hasColumn('foodalchemist_concept_slots', 'preis_basis')) {
-                $table->string('preis_basis', 12)->nullable()->after('price_value'); // person|pauschal|staffel
+            if (! Schema::hasColumn('foodalchemist_concept_slots', 'price_basis')) {
+                $table->string('price_basis', 12)->nullable()->after('price_value'); // person|pauschal|staffel
             }
-            if (! Schema::hasColumn('foodalchemist_concept_slots', 'hoehe')) {
-                $table->string('hoehe', 12)->nullable()->after('preis_basis'); // spacer: klein|mittel|gross
+            if (! Schema::hasColumn('foodalchemist_concept_slots', 'height')) {
+                $table->string('height', 12)->nullable()->after('price_basis'); // spacer: klein|mittel|gross
             }
         });
 
@@ -53,8 +53,8 @@ return new class extends Migration
                 $table->unsignedBigInteger('team_id')->nullable()->index();
                 $table->foreignId('slot_id')->constrained('foodalchemist_concept_slots')->cascadeOnDelete();
                 $table->integer('position')->default(0);
-                $table->unsignedInteger('min_personen')->default(1);
-                $table->decimal('preis', 10, 2)->default(0);
+                $table->unsignedInteger('min_persons')->default(1);
+                $table->decimal('price', 10, 2)->default(0);
                 $table->timestamps();
                 $table->softDeletes();
             });
@@ -67,7 +67,7 @@ return new class extends Migration
 
         // SQLite kann mehrere Spalten nur in EINEM dropColumn-Aufruf droppen (sonst FAIL).
         $cols = array_values(array_filter(
-            ['type', 'ebene', 'text_inhalt', 'price_value', 'preis_basis', 'hoehe'],
+            ['type', 'level', 'text_content', 'price_value', 'price_basis', 'height'],
             fn ($c) => Schema::hasColumn('foodalchemist_concept_slots', $c)
         ));
         if ($cols !== []) {

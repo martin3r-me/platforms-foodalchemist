@@ -65,7 +65,7 @@
             <div class="flex items-center gap-3"><span class="w-40 text-xs text-gray-600 dark:text-gray-300">Nachkommastellen</span>
                 <input type="number" min="0" max="4" wire:model="rundung.nachkommastellen" class="{{ $input }} !w-20" /></div>
             <div class="flex items-center gap-3"><span class="w-40 text-xs text-gray-600 dark:text-gray-300">Modus</span>
-                <select wire:model="rundung.modus" class="{{ $input }} !w-44">
+                <select wire:model="rundung.mode" class="{{ $input }} !w-44">
                     <option value="kaufmaennisch">kaufmännisch</option>
                     <option value="auf">immer aufrunden</option>
                     <option value="ab">immer abrunden</option>

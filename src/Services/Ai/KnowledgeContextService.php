@@ -46,7 +46,7 @@ class KnowledgeContextService
     {
         $routing = DB::table('foodalchemist_knowledge_routings')
             ->where('feature', $feature)
-            ->get()->keyBy(fn ($r) => $r->category . ':' . $r->modus);
+            ->get()->keyBy(fn ($r) => $r->category . ':' . $r->mode);
 
         $filesUsed = [];
         $parts = [];
@@ -55,13 +55,13 @@ class KnowledgeContextService
         $blocks = [];
         if ($routing->has('cross_cutting:always')) {
             foreach ($this->crossCuttingDocs() as $doc) {
-                $blocks[] = "## CROSS_CUTTING: {$doc->slug}\n\n" . $this->truncate($doc->inhalt_md, self::CROSS_CUTTING_TRUNCATE_CHARS);
+                $blocks[] = "## CROSS_CUTTING: {$doc->slug}\n\n" . $this->truncate($doc->content_md, self::CROSS_CUTTING_TRUNCATE_CHARS);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
         }
         if ($routing->has('domain:discovery')) {
             foreach ($this->discoverDomains($description) as $doc) {
-                $blocks[] = "## DOMAIN: {$doc->slug}\n\n" . $this->truncate($doc->inhalt_md, self::DOMAIN_TRUNCATE_CHARS);
+                $blocks[] = "## DOMAIN: {$doc->slug}\n\n" . $this->truncate($doc->content_md, self::DOMAIN_TRUNCATE_CHARS);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
         }
@@ -237,7 +237,7 @@ class KnowledgeContextService
         $docs = DB::table('foodalchemist_knowledge_documents')
             ->where('category', 'cross_cutting')->where('active', 1)->whereNull('deleted_at')
             ->whereIn('slug', self::ALWAYS_LOAD_CROSS_CUTTING)
-            ->get(['slug', 'inhalt_md', 'version'])->keyBy('slug');
+            ->get(['slug', 'content_md', 'version'])->keyBy('slug');
 
         return array_values(array_filter(array_map(fn ($slug) => $docs->get($slug), self::ALWAYS_LOAD_CROSS_CUTTING)));
     }
@@ -313,7 +313,7 @@ class KnowledgeContextService
     {
         return DB::table('foodalchemist_knowledge_documents')
             ->where('category', 'domain')->where('active', 1)->whereNull('deleted_at')
-            ->get(['slug', 'inhalt_md', 'version'])->keyBy('slug');
+            ->get(['slug', 'content_md', 'version'])->keyBy('slug');
     }
 
     /**
@@ -378,7 +378,7 @@ class KnowledgeContextService
             if ($doc === null) {
                 continue;
             }
-            $names = $this->extractPairingNames($doc->inhalt_md, $sectionFilter);
+            $names = $this->extractPairingNames($doc->content_md, $sectionFilter);
             if ($names !== []) {
                 $zeilen[] = "- {$stem}: " . implode(' · ', array_slice($names, 0, self::MAX_PARTNERS));
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
@@ -424,7 +424,7 @@ class KnowledgeContextService
                     $doc = $this->pairingDoc($stem);
                     if ($doc !== null) {
                         $geladen[$stem] = true;
-                        $blocks[] = "### Pairing-Doku: {$stem}\n" . $this->truncate($doc->inhalt_md, $maxChars);
+                        $blocks[] = "### Pairing-Doku: {$stem}\n" . $this->truncate($doc->content_md, $maxChars);
                         $filesUsed[] = "{$doc->slug}@v{$doc->version}";
                     }
                 }
@@ -457,7 +457,7 @@ class KnowledgeContextService
         return DB::table('foodalchemist_knowledge_documents')
             ->where('category', 'pairing')->where('active', 1)->whereNull('deleted_at')
             ->whereIn('slug', ["pairing.{$stem}", $stem])
-            ->first(['slug', 'inhalt_md', 'version']);
+            ->first(['slug', 'content_md', 'version']);
     }
 
     // ── MCP-Discovery (Phase K): Wissens-Suche für externe LLM-Clients ──────
@@ -487,9 +487,9 @@ class KnowledgeContextService
         $docs = DB::table('foodalchemist_knowledge_documents')
             ->where('active', 1)->whereNull('deleted_at')
             ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie))
-            ->get(['id', 'slug', 'titel', 'category', 'version', 'char_count']);
+            ->get(['id', 'slug', 'title', 'category', 'version', 'char_count']);
         foreach ($docs as $doc) {
-            $haystack = $this->tokenize($doc->slug . ' ' . $doc->titel);
+            $haystack = $this->tokenize($doc->slug . ' ' . $doc->title);
             $score = count(array_intersect($tokens, $haystack))
                 + 2.0 * ($aliasHits[$doc->id] ?? 0);
             if ($score > 0) {
@@ -500,7 +500,7 @@ class KnowledgeContextService
 
         return array_map(fn ($item) => [
             'slug' => $item['doc']->slug,
-            'titel' => $item['doc']->titel,
+            'title' => $item['doc']->title,
             'category' => $item['doc']->category,
             'version' => (int) $item['doc']->version,
             'char_count' => (int) $item['doc']->char_count,
@@ -513,6 +513,6 @@ class KnowledgeContextService
     {
         return DB::table('foodalchemist_knowledge_documents')
             ->where('slug', $slug)->where('active', 1)->whereNull('deleted_at')
-            ->first(['slug', 'titel', 'category', 'version', 'char_count', 'inhalt_md']);
+            ->first(['slug', 'title', 'category', 'version', 'char_count', 'content_md']);
     }
 }

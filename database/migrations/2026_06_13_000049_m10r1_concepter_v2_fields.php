@@ -85,17 +85,17 @@ return new class extends Migration
             if (! Schema::hasColumn('foodalchemist_concepts', 'brief')) {
                 $table->text('brief')->nullable()->after('additional_text');
             }
-            if (! Schema::hasColumn('foodalchemist_concepts', 'zielpreis_pro_person')) {
-                $table->decimal('zielpreis_pro_person', 10, 2)->nullable()->after('preis_pro_person_cache');
+            if (! Schema::hasColumn('foodalchemist_concepts', 'target_price_per_person')) {
+                $table->decimal('target_price_per_person', 10, 2)->nullable()->after('price_per_person_cache');
             }
-            if (! Schema::hasColumn('foodalchemist_concepts', 'diaet_vorgabe')) {
-                $table->string('diaet_vorgabe')->nullable()->after('zielpreis_pro_person');
+            if (! Schema::hasColumn('foodalchemist_concepts', 'diet_requirement')) {
+                $table->string('diet_requirement')->nullable()->after('target_price_per_person');
             }
-            if (! Schema::hasColumn('foodalchemist_concepts', 'struktur_vorgabe')) {
-                $table->string('struktur_vorgabe')->nullable()->after('diaet_vorgabe');
+            if (! Schema::hasColumn('foodalchemist_concepts', 'structure_requirement')) {
+                $table->string('structure_requirement')->nullable()->after('diet_requirement');
             }
             if (! Schema::hasColumn('foodalchemist_concepts', 'season')) {
-                $table->string('season', 32)->nullable()->after('struktur_vorgabe');
+                $table->string('season', 32)->nullable()->after('structure_requirement');
             }
             if (! Schema::hasColumn('foodalchemist_concepts', 'target_group')) {
                 $table->string('target_group')->nullable()->after('season');
@@ -111,14 +111,14 @@ return new class extends Migration
                 $table->text('ai_reasoning')->nullable()->after('ai_confidence');
             }
             // §10.5/§10.9 Voll-Aggregat-Caches (Nährwerte/Person, Arbeitszeit, EK)
-            if (! Schema::hasColumn('foodalchemist_concepts', 'naehrwerte_cache')) {
-                $table->json('naehrwerte_cache')->nullable();
+            if (! Schema::hasColumn('foodalchemist_concepts', 'nutrition_cache')) {
+                $table->json('nutrition_cache')->nullable();
             }
             if (! Schema::hasColumn('foodalchemist_concepts', 'work_time_min_cache')) {
                 $table->unsignedInteger('work_time_min_cache')->nullable();
             }
-            if (! Schema::hasColumn('foodalchemist_concepts', 'ek_pro_person_cache')) {
-                $table->decimal('ek_pro_person_cache', 10, 4)->nullable();
+            if (! Schema::hasColumn('foodalchemist_concepts', 'ek_per_person_cache')) {
+                $table->decimal('ek_per_person_cache', 10, 4)->nullable();
             }
         });
 
@@ -133,15 +133,15 @@ return new class extends Migration
             if (! Schema::hasColumn('foodalchemist_packages', 'work_time_min_cache')) {
                 $table->unsignedInteger('work_time_min_cache')->nullable();
             }
-            if (! Schema::hasColumn('foodalchemist_packages', 'naehrwerte_cache')) {
-                $table->json('naehrwerte_cache')->nullable();
+            if (! Schema::hasColumn('foodalchemist_packages', 'nutrition_cache')) {
+                $table->json('nutrition_cache')->nullable();
             }
         });
 
         // ── Foodbook: Schreibstil-Override je Kunde/Foodbook (§10.8) ──────────
         Schema::table('foodalchemist_foodbooks', function (Blueprint $table) {
             if (! Schema::hasColumn('foodalchemist_foodbooks', 'writing_style_id')) {
-                $table->foreignId('writing_style_id')->nullable()->after('kunde')
+                $table->foreignId('writing_style_id')->nullable()->after('customer')
                     ->constrained('foodalchemist_writing_styles')->nullOnDelete();
             }
         });
@@ -156,7 +156,7 @@ return new class extends Migration
         });
 
         Schema::table('foodalchemist_packages', function (Blueprint $table) {
-            foreach (['class', 'consumer_name', 'work_time_min_cache', 'naehrwerte_cache'] as $col) {
+            foreach (['class', 'consumer_name', 'work_time_min_cache', 'nutrition_cache'] as $col) {
                 if (Schema::hasColumn('foodalchemist_packages', $col)) {
                     $table->dropColumn($col);
                 }
@@ -169,9 +169,9 @@ return new class extends Migration
             }
             foreach ([
                 'class', 'taste_direction', 'consumer_name', 'additional_text', 'brief',
-                'zielpreis_pro_person', 'diaet_vorgabe', 'struktur_vorgabe', 'season', 'target_group',
+                'target_price_per_person', 'diet_requirement', 'structure_requirement', 'season', 'target_group',
                 'composition_source', 'ai_confidence', 'ai_reasoning',
-                'naehrwerte_cache', 'work_time_min_cache', 'ek_pro_person_cache',
+                'nutrition_cache', 'work_time_min_cache', 'ek_per_person_cache',
             ] as $col) {
                 if (Schema::hasColumn('foodalchemist_concepts', $col)) {
                     $table->dropColumn($col);

@@ -90,7 +90,7 @@
                         </div></div>
                 </div>
                 <div class="mt-3"><label class="block {{ $label }} mb-1">Zutatenliste (vom Lieferanten)</label>
-                    <textarea wire:model="eigenschaften.ingredients_lieferant" rows="3" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60"></textarea></div>
+                    <textarea wire:model="eigenschaften.ingredients_supplier" rows="3" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60"></textarea></div>
             </x-foodalchemist::modal-section>
 
             <x-foodalchemist::modal-section title="Nährwerte (je 100 g)">
@@ -217,7 +217,7 @@
                 @if($darfEdit)
                     <div class="hidden flex items-end gap-2 mb-3" data-preis-neu>
                         <div><label class="block {{ $label }} mb-1">Neuer Preis (€, netto)</label>
-                            <input type="text" wire:model="preisNeu.preis" placeholder="z. B. 47,50" class="{{ $input }} !w-36" /></div>
+                            <input type="text" wire:model="preisNeu.price" placeholder="z. B. 47,50" class="{{ $input }} !w-36" /></div>
                         <div><label class="block {{ $label }} mb-1">Kategorie</label>
                             <select wire:model="preisNeu.status" class="{{ $input }} !w-40">
                                 <option value="0">Standard-EK</option>
@@ -238,7 +238,7 @@
                                         bis: <input type="date" wire:model="preisEdit.valid_to" class="{{ $input }} !py-1 !w-36 inline-block" />
                                     </td>
                                     <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $p->category->label() }}</span></td>
-                                    <td class="{{ $td }} !px-2 text-right"><input type="text" wire:model="preisEdit.preis" class="{{ $input }} !py-1 !w-24 text-right" /></td>
+                                    <td class="{{ $td }} !px-2 text-right"><input type="text" wire:model="preisEdit.price" class="{{ $input }} !py-1 !w-24 text-right" /></td>
                                     <td class="{{ $td }} !px-2"><input type="text" wire:model="preisEdit.note" placeholder="Notiz" class="{{ $input }} !py-1 !w-32" /></td>
                                     <td class="{{ $td }} !px-2 text-right whitespace-nowrap">
                                         <button type="button" wire:click="preisUpdate" class="{{ $btnGhostXs }} text-emerald-600" data-preis-update>Speichern</button>

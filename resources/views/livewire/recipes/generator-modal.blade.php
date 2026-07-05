@@ -19,15 +19,15 @@
             @php($pillRuhe = 'border-black/10 dark:border-white/15 text-gray-500 dark:text-gray-400 hover:border-violet-400')
             <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-generator-parameter>
                 @foreach(\Platform\FoodAlchemist\Livewire\Recipes\GeneratorModal::RICHTUNGEN as $g)
-                    <div data-richtung="{{ $g['feld'] }}">
+                    <div data-richtung="{{ $g['field'] }}">
                         <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">{{ $g['label'] }}</p>
                         <div class="flex flex-wrap gap-1.5">
                             @foreach($g['optionen'] as $wert => $lbl)
-                                <button type="button" wire:click="togglePill('{{ $g['feld'] }}', '{{ $wert }}')"
-                                        class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ $parameter[$g['feld']] === $wert ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
+                                <button type="button" wire:click="togglePill('{{ $g['field'] }}', '{{ $wert }}')"
+                                        class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ $parameter[$g['field']] === $wert ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
                             @endforeach
                         </div>
-                        <p class="text-[11px] text-gray-400 mt-1">{{ $g['hint'][$parameter[$g['feld']]] ?? '' }}</p>
+                        <p class="text-[11px] text-gray-400 mt-1">{{ $g['hint'][$parameter[$g['field']]] ?? '' }}</p>
                     </div>
                 @endforeach
 

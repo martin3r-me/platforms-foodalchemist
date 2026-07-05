@@ -23,13 +23,13 @@ class FoodAlchemistGeschirrItem extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'durchmesser_mm' => 'decimal:1',
-        'laenge_mm' => 'decimal:1',
-        'breite_mm' => 'decimal:1',
-        'hoehe_mm' => 'decimal:1',
+        'diameter_mm' => 'decimal:1',
+        'length_mm' => 'decimal:1',
+        'width_mm' => 'decimal:1',
+        'height_mm' => 'decimal:1',
         'volumen_ml' => 'decimal:1',
-        'gewicht_g' => 'decimal:1',
-        'leihpreis' => 'decimal:2',
+        'weight_g' => 'decimal:1',
+        'rental_price' => 'decimal:2',
         'pfand' => 'decimal:2',
         'is_inactive' => 'boolean',
     ];
@@ -43,11 +43,11 @@ class FoodAlchemistGeschirrItem extends Model
     public function getMasseLabelAttribute(): ?string
     {
         $teile = [];
-        if ($this->durchmesser_mm !== null) {
-            $teile[] = 'Ø ' . rtrim(rtrim((string) $this->durchmesser_mm, '0'), '.') . ' mm';
+        if ($this->diameter_mm !== null) {
+            $teile[] = 'Ø ' . rtrim(rtrim((string) $this->diameter_mm, '0'), '.') . ' mm';
         }
-        if ($this->laenge_mm !== null || $this->breite_mm !== null || $this->hoehe_mm !== null) {
-            $lbh = collect([$this->laenge_mm, $this->breite_mm, $this->hoehe_mm])
+        if ($this->length_mm !== null || $this->width_mm !== null || $this->height_mm !== null) {
+            $lbh = collect([$this->length_mm, $this->width_mm, $this->height_mm])
                 ->filter(fn ($v) => $v !== null)
                 ->map(fn ($v) => rtrim(rtrim((string) $v, '0'), '.'))
                 ->implode(' × ');

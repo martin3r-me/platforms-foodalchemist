@@ -103,9 +103,9 @@ class KnowledgeImportCommand extends Command
                 DB::table('foodalchemist_knowledge_documents')->insert([
                     'uuid' => (string) UuidV7::generate(),
                     'slug' => $slug,
-                    'titel' => $this->titel($inhalt, $basis),
+                    'title' => $this->titel($inhalt, $basis),
                     'category' => $kategorie,
-                    'inhalt_md' => $inhalt,
+                    'content_md' => $inhalt,
                     'version' => 1,
                     'content_hash' => $hash,
                     'char_count' => mb_strlen($inhalt),
@@ -116,8 +116,8 @@ class KnowledgeImportCommand extends Command
                 $neu++;
             } elseif ($vorhanden->content_hash !== $hash) {
                 DB::table('foodalchemist_knowledge_documents')->where('id', $vorhanden->id)->update([
-                    'inhalt_md' => $inhalt,
-                    'titel' => $this->titel($inhalt, $basis),
+                    'content_md' => $inhalt,
+                    'title' => $this->titel($inhalt, $basis),
                     'version' => $vorhanden->version + 1,            // monoton bei Inhalts-Änderung
                     'content_hash' => $hash,
                     'char_count' => mb_strlen($inhalt),
@@ -204,7 +204,7 @@ class KnowledgeImportCommand extends Command
         $now = now()->toDateTimeString();
         foreach ($routings as [$feature, $kategorie, $modus, $maxDocs, $maxChars]) {
             $ok = DB::table('foodalchemist_knowledge_routings')->insertOrIgnore([
-                'feature' => $feature, 'category' => $kategorie, 'modus' => $modus,
+                'feature' => $feature, 'category' => $kategorie, 'mode' => $modus,
                 'max_docs' => $maxDocs, 'max_chars_per_doc' => $maxChars,
                 'created_at' => $now, 'updated_at' => $now,
             ]);

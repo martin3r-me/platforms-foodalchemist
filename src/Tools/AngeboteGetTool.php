@@ -47,7 +47,7 @@ class AngeboteGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'angebot' => [
                 'id' => $a->id, 'name' => $a->name,
                 'status' => $a->status instanceof \BackedEnum ? $a->status->value : $a->status,
-                'anlass' => $a->anlass, 'personen' => $a->personen,
+                'occasion' => $a->occasion, 'personen' => $a->personen,
             ],
             'kalkulation' => $svc->kalkulation($team, $a),
         ]);

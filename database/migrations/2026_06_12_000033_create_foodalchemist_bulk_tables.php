@@ -31,7 +31,7 @@ return new class extends Migration
             $table->unsignedBigInteger('team_id')->nullable()->index();
             $table->foreignId('run_id')->constrained('foodalchemist_bulk_runs')->cascadeOnDelete();
             $table->foreignId('recipe_id')->constrained('foodalchemist_recipes')->cascadeOnDelete();
-            $table->string('feld', 32);                                // description | kategorie | geschmack …
+            $table->string('field', 32);                                // description | kategorie | geschmack …
             $table->json('value')->nullable();                          // Vorschlagswert (feld-spezifisch)
             $table->decimal('confidence', 4, 3)->nullable();
             $table->text('reasoning')->nullable();

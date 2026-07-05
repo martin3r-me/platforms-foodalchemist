@@ -55,31 +55,31 @@
                     {{-- Preis-Block --}}
                     <div class="space-y-2 pt-2 border-t border-black/5 dark:border-white/10">
                         <label class="{{ $label }}">Preis-Modus</label>
-                        <select wire:model.live="form.preis_modus" class="{{ $input }}">
+                        <select wire:model.live="form.price_mode" class="{{ $input }}">
                             <option value="manuell">manuell (Per-Person-Preis setzen)</option>
                             <option value="auto">auto (Σ aus den Gerichten)</option>
                         </select>
                         <div class="grid grid-cols-3 gap-2">
                             <div>
                                 <label class="{{ $label }}">€ / Person</label>
-                                <input type="number" step="0.01" wire:model="form.preis_pro_person" class="{{ $input }} text-right tabular-nums" @disabled($form['preis_modus'] === 'auto') />
+                                <input type="number" step="0.01" wire:model="form.price_per_person" class="{{ $input }} text-right tabular-nums" @disabled($form['price_mode'] === 'auto') />
                             </div>
                             <div>
                                 <label class="{{ $label }}">EK / Person</label>
-                                <input type="number" step="0.0001" wire:model="form.ek_pro_person" class="{{ $input }} text-right tabular-nums" @disabled($form['preis_modus'] === 'auto') />
+                                <input type="number" step="0.0001" wire:model="form.ek_per_person" class="{{ $input }} text-right tabular-nums" @disabled($form['price_mode'] === 'auto') />
                             </div>
                             <div>
                                 <label class="{{ $label }}">W %</label>
-                                <input type="number" step="0.1" wire:model="form.food_cost_percent" class="{{ $input }} text-right tabular-nums" @disabled($form['preis_modus'] === 'auto') />
+                                <input type="number" step="0.1" wire:model="form.food_cost_percent" class="{{ $input }} text-right tabular-nums" @disabled($form['price_mode'] === 'auto') />
                             </div>
                         </div>
-                        @if($form['preis_modus'] === 'auto')
+                        @if($form['price_mode'] === 'auto')
                             <div class="flex items-center justify-between">
                                 <span class="text-[11px] text-gray-400">Preis wird aus den Gerichten berechnet.</span>
                                 <button type="button" wire:click="neuBerechnen" class="{{ $btnGhostXs }}">↻ Neu berechnen</button>
                             </div>
                         @endif
-                        @if($selected->preis_stale)
+                        @if($selected->price_stale)
                             <p class="{{ $pill }} {{ $variantPill['warning'] }}">Preis veraltet — neu berechnen</p>
                         @endif
                     </div>
@@ -97,7 +97,7 @@
                         <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
                             <span><span class="{{ $label }}">Gerichte</span> <span class="tabular-nums">{{ $selected->gerichte->count() }}</span></span>
                             <span><span class="{{ $label }}">Σ Gerichte-VK</span> <span class="tabular-nums">{{ number_format($sumVk, 2, ',', '.') }} €</span></span>
-                            <span><span class="{{ $label }}">Paket €/P</span> <span class="tabular-nums">{{ $selected->preis_pro_person !== null ? number_format((float) $selected->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</span></span>
+                            <span><span class="{{ $label }}">Paket €/P</span> <span class="tabular-nums">{{ $selected->price_per_person !== null ? number_format((float) $selected->price_per_person, 2, ',', '.') . ' €' : '—' }}</span></span>
                             <span><span class="{{ $label }}">W%</span> <span class="tabular-nums">{{ $selected->food_cost_percent !== null ? number_format((float) $selected->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</span></span>
                         </div>
                         <label class="{{ $label }}">Gerichte in diesem Paket (nur Gerichte, keine Basisrezepte)</label>
@@ -160,9 +160,9 @@
                                 <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $b->role ?? '—' }}</td>
                                 <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $b->level ?? '—' }}</td>
                                 <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $b->gerichte_count }}</td>
-                                <td class="{{ $td }} text-gray-900 dark:text-gray-100 text-right tabular-nums whitespace-nowrap">{{ $b->preis_pro_person !== null ? number_format((float) $b->preis_pro_person, 2, ',', '.') . ' €' : '—' }}</td>
+                                <td class="{{ $td }} text-gray-900 dark:text-gray-100 text-right tabular-nums whitespace-nowrap">{{ $b->price_per_person !== null ? number_format((float) $b->price_per_person, 2, ',', '.') . ' €' : '—' }}</td>
                                 <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $b->food_cost_percent !== null ? number_format((float) $b->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
-                                <td class="{{ $td }}"><span class="{{ $pill }} {{ $b->preis_modus === 'auto' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $b->preis_modus }}</span></td>
+                                <td class="{{ $td }}"><span class="{{ $pill }} {{ $b->price_mode === 'auto' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $b->price_mode }}</span></td>
                             </tr>
                         @empty
                             <tr><td colspan="7" class="px-5 py-10 text-center text-gray-400">Noch keine Pakete. Oben „+ Neuer Paket".</td></tr>
