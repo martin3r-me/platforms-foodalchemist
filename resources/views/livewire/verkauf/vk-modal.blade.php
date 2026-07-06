@@ -7,6 +7,8 @@
         <x-slot:actions>
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-vk-speichern>Speichern</button>
             <button type="button" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-zutaten>Komponenten bearbeiten</button>
+            <button type="button" wire:click="loeschen" wire:confirm="Gericht wirklich löschen? Nur der VK-Layer wird entfernt — Basisrezepte und GP-Verknüpfungen bleiben bestehen."
+                    class="{{ $btnGhostXs }} text-rose-600 dark:text-rose-400" data-vk-loeschen>Löschen</button>
         </x-slot:actions>
     @endif
 

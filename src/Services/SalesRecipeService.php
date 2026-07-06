@@ -291,6 +291,58 @@ class SalesRecipeService
             ->update(['deleted_at' => now()]);
     }
 
+    /**
+     * VK-Layer lösen (D-6): entfernt NUR das Verkaufsgericht selbst — die referenzierten
+     * Basisrezepte und GPs bleiben unangetastet (sie sind eigene Datensätze, das Gericht
+     * hält nur Zutaten-Verweise darauf). Gelöscht werden die recipe-Row (verkauf-Scope),
+     * ihre Zutaten-Verweise und die VK-Facetten (Darreichungen inkl. Deltas, Kunden-Wordings,
+     * Regenerationen, Niveau-/Sektor-Eignungen). Alles Soft-Delete in einer Transaktion.
+     *
+     * Guard: hängt das Gericht noch in einem Foodbook-Block, Concept-Slot oder Speiseplan-
+     * Eintrag, wird abgebrochen (kein stilles Verwaisen) — dort erst lösen.
+     */
+    public function deleteDish(Team $team, int $recipeId): void
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        if ((int) $recipe->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Geerbtes Gericht — Löschen nur durchs Besitzer-Team (D1).');
+        }
+
+        // Referenz-Guard — Schema::hasTable-gesichert, weil nicht jede Umgebung alle Module
+        // ausgerollt hat (z. B. Speiseplan-Tabellen fehlen auf der aktuellen Master-DB).
+        $refs = [];
+        foreach ([
+            [\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::class, 'Foodbook'],
+            [\Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::class, 'Konzept'],
+            [\Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag::class, 'Speiseplan'],
+        ] as [$model, $label]) {
+            $table = (new $model)->getTable();
+            if (! \Illuminate\Support\Facades\Schema::hasTable($table)) {
+                continue;
+            }
+            if (($n = $model::where('sales_recipe_id', $recipe->id)->count()) > 0) {
+                $refs[] = "{$n}× {$label}";
+            }
+        }
+        if ($refs !== []) {
+            throw new \RuntimeException('Gericht wird noch verwendet (' . implode(', ', $refs) . ') — dort erst entfernen.');
+        }
+
+        DB::transaction(function () use ($recipe) {
+            $darIds = $recipe->darreichungen()->pluck('id');
+            if ($darIds->isNotEmpty()) {
+                \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungDelta::whereIn('presentation_id', $darIds)->delete();
+            }
+            $recipe->darreichungen()->delete();
+            $recipe->customerNames()->delete();
+            $recipe->regenerations()->delete();
+            $recipe->niveauEignungen()->delete();
+            $recipe->sektorEignungen()->delete();
+            $recipe->ingredients()->delete();
+            $recipe->delete();
+        });
+    }
+
     /** @return list<string> Autocomplete, team-scoped (§7.7) */
     public function distinctCustomerNames(Team $team): array
     {

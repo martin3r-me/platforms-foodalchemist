@@ -254,6 +254,24 @@ class VkModal extends Component
         $this->dispatch('modal.close', name: 'vk-modal');
     }
 
+    /** VK-Layer lösen (D-6): löscht NUR das Gericht — Basisrezepte + GP-Verknüpfungen bleiben. */
+    public function loeschen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        try {
+            app(SalesRecipeService::class)->deleteDish($team, $this->recipeId);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->dispatch('recipe-gespeichert');
+        $this->dispatch('modal.close', name: 'vk-modal');
+    }
+
     // ── M9-01i: ✨-Aktionen — Vorschlag in die Form-Felder (Save = Accept, RecipeModal-Muster) ──
 
     /** Re-Mount-Zähler für den eingebetteten Zutaten-Editor (Client-rows). */
