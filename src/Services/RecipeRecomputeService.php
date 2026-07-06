@@ -20,7 +20,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
  *   3. Zusatzstoffe (GL-09: gleicher Guard, MAX über Roh-Domäne)
  *   4. Kosten (GL-02 §3.2, T3-Kaskade; I7: Nenner = GERUNDETES yield)
  *   5. Nährwerte (GL-08: KEIN Guard, Rohmasse-Basis, 0-Substitution GT-02)
- *   6. Spec-Flags (normativ nur spec_is_gluten_free aus GL-01; Rest = Nachtrag, Spec fehlt)
+ *   6. Spec-Flags: spec_is_gluten_free normativ aus GL-01 (in allergene()); vegan/
+ *      vegetarisch/halal/laktosefrei + Schwein/Rind dynamisch aus GP-Tags über alle
+ *      Ebenen (specFlags(), 2026-07-06 — löst die statische recipes-Spalte ab).
  *
  * Entscheid A-1 (Empfehlung umgesetzt, 08_ENTSCHEIDUNGEN): Verluste MULTIPLIKATIV
  * (1−putz)×(1−gar) aus den Zutat-Feldern — DB-verifiziert über GT-1/GT-2.
@@ -68,6 +70,7 @@ class RecipeRecomputeService
             $this->zusatzstoffe($recipe, $zutaten);
             $this->kosten($recipe, $zutaten);
             $this->naehrwerte($recipe, $zutaten);
+            $this->specFlags($recipe, $zutaten);
             $recipe->save();
         });
 
@@ -563,6 +566,103 @@ class RecipeRecomputeService
             default => 'low',
         };
         $recipe->nutri_aggregated_at = now();
+    }
+
+    // ── 6. Spec-Flags (Diät/Herkunft, dynamisch über alle Ebenen) ───────
+    //
+    // Tags sind DYNAMISCH aus der Rezeptur (User-Prinzip 2026-07-06): kommt ein
+    // nicht-veganer GP in ein Gericht, ist es nicht mehr vegan. Quelle = GP-Tags
+    // (FoodAlchemistGp.tag_is_*); Sub-Rezepte liefern ihre bereits berechneten
+    // spec_is_*-Werte (topologische Ordnung garantiert Kinder-vor-Eltern).
+    //
+    // Zwei Logiken:
+    //  - ZUSICHERUNG (vegan/vegetarisch/halal/laktosefrei): AND mit NULL-Propagation —
+    //    1 nur wenn ALLE bekannten Zutaten zusichern und NICHTS unbekannt ist;
+    //    0 sobald eine verletzt; sonst NULL (unbekannt).
+    //  - WARNUNG (enthält Schwein/Rind): OR — 1 sobald eine Zutat es trägt;
+    //    0 nur wenn alles bekannt und nichts trägt; sonst NULL.
+    // spec_is_gluten_free bleibt normativ aus der Allergen-Kette (allergene()).
+    private const SPEC_ASSURE = ['is_vegan', 'is_vegetarian', 'is_halal', 'is_lactose_free'];
+
+    private const SPEC_WARN = ['contains_pork', 'contains_beef'];
+
+    private function specFlags(FoodAlchemistRecipe $recipe, Collection $zutaten): void
+    {
+        $felder = [...self::SPEC_ASSURE, ...self::SPEC_WARN];
+        /** @var array<string, list<bool|null>> $werte */
+        $werte = array_fill_keys($felder, []);
+        $nTotal = 0;
+        $nMapped = 0;
+
+        foreach ($zutaten as $z) {
+            if ($z->is_optional) {
+                continue;
+            }
+            $nTotal++;
+            if ($z->gp_id !== null && $z->gp !== null) {
+                $nMapped++;
+                foreach ($felder as $f) {
+                    $werte[$f][] = $this->boolOrNull($z->gp->{"tag_{$f}"});
+                }
+            } elseif ($z->referencedRecipe !== null) {
+                $nMapped++;
+                foreach ($felder as $f) {
+                    $werte[$f][] = $this->boolOrNull($z->referencedRecipe->{"spec_{$f}"});
+                }
+            } else {                                               // ungemappt ⇒ NULL-Beitrag
+                foreach ($felder as $f) {
+                    $werte[$f][] = null;
+                }
+            }
+        }
+
+        foreach (self::SPEC_ASSURE as $f) {
+            $recipe->{"spec_{$f}"} = $this->mergeAssure($werte[$f]);
+        }
+        foreach (self::SPEC_WARN as $f) {
+            $recipe->{"spec_{$f}"} = $this->mergeWarn($werte[$f]);
+        }
+
+        $recipe->spec_n_total = $nTotal;
+        $recipe->spec_n_mapped = $nMapped;
+        $recipe->spec_confidence = match (true) {
+            $nTotal === 0, $nMapped === 0 => 'low',
+            $nMapped === $nTotal => 'high',
+            $nMapped / $nTotal >= 0.8 => 'medium',
+            default => 'low',
+        };
+        $recipe->spec_aggregated_at = now();
+    }
+
+    private function boolOrNull(mixed $v): ?bool
+    {
+        return $v === null ? null : (bool) $v;
+    }
+
+    /** Zusicherung: 0 wenn eine verletzt, NULL wenn eine unbekannt, sonst 1. */
+    private function mergeAssure(array $werte): ?bool
+    {
+        if (in_array(false, $werte, true)) {
+            return false;
+        }
+        if (in_array(null, $werte, true)) {
+            return null;
+        }
+
+        return true;
+    }
+
+    /** Warnung: 1 wenn eine trägt, NULL wenn eine unbekannt, sonst 0. */
+    private function mergeWarn(array $werte): ?bool
+    {
+        if (in_array(true, $werte, true)) {
+            return true;
+        }
+        if (in_array(null, $werte, true)) {
+            return null;
+        }
+
+        return false;
     }
 
     /** T3-Kaskade für EINE Zutat: [kosten €, priced?]. */
