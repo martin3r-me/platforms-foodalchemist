@@ -25,10 +25,15 @@ class SupplierItemService
 
         return $this->baseQuery($team, $filters)
             ->where('supplier_id', $supplierId)
-            // M2-14: Suche INNERHALB des Lieferanten (Ist-App-Screen 2)
-            ->when($q !== '', fn (Builder $w) => $w->where(fn (Builder $x) => $x
-                ->whereRaw('LOWER(designation) LIKE ?', ['%' . mb_strtolower($q) . '%'])
-                ->orWhere('article_number', 'like', $q . '%')))
+            // M2-14: Suche INNERHALB des Lieferanten (Ist-App-Screen 2) — Multi-Wort:
+            // jedes Token muss treffen (Bezeichnung ODER Artikelnummer-Präfix)
+            ->when($q !== '', function (Builder $w) use ($q) {
+                foreach (\Platform\FoodAlchemist\Support\Suche::tokens($q) as $token) {
+                    $w->where(fn (Builder $x) => $x
+                        ->whereRaw('LOWER(designation) LIKE ?', ['%' . $token . '%'])
+                        ->orWhere('article_number', 'like', $token . '%'));
+                }
+            })
             ->orderBy('designation')
             ->paginate($perPage)
             ->withQueryString();
@@ -37,11 +42,15 @@ class SupplierItemService
     /** P-7: Suche über ALLE Lieferanten (eigene „Route" via ?q=, V-17). */
     public function searchGlobal(Team $team, string $q, array $filters = [], int $perPage = 25): LengthAwarePaginator
     {
-        return $this->baseQuery($team, $filters)
-            ->with('supplier:id,name')
-            ->where(fn (Builder $w) => $w
-                ->whereRaw('LOWER(designation) LIKE ?', ['%' . mb_strtolower($q) . '%'])
-                ->orWhere('article_number', 'like', $q . '%'))
+        $query = $this->baseQuery($team, $filters)->with('supplier:id,name');
+        // Multi-Wort: jedes Token muss treffen (Bezeichnung ODER Artikelnummer-Präfix)
+        foreach (\Platform\FoodAlchemist\Support\Suche::tokens($q) as $token) {
+            $query->where(fn (Builder $x) => $x
+                ->whereRaw('LOWER(designation) LIKE ?', ['%' . $token . '%'])
+                ->orWhere('article_number', 'like', $token . '%'));
+        }
+
+        return $query
             ->orderBy('designation')
             ->paginate($perPage)
             ->withQueryString();

@@ -410,8 +410,8 @@ class DetailPanel extends Component
             // Verwaltung (2026-07-02): Referenz-Zähler fürs Lösch-Gate + Kandidaten für den Rezept-Tausch
             'referenzen' => $gp !== null ? app(\Platform\FoodAlchemist\Services\GpService::class)->referenzen($gp) : null,
             'tauschKandidaten' => $gp !== null && $team !== null && $this->tauschSuche !== ''
-                ? FoodAlchemistGp::visibleToTeam($team)
-                    ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($this->tauschSuche)) . '%'])
+                ? \Platform\FoodAlchemist\Support\Suche::like(
+                    FoodAlchemistGp::visibleToTeam($team), 'name', $this->tauschSuche)
                     ->whereNotIn('status', ['merged', 'rejected'])
                     ->where('id', '!=', $gp->id)
                     ->where('is_platzhalter', false)

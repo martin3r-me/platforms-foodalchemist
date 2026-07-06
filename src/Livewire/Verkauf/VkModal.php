@@ -596,8 +596,8 @@ class VkModal extends Component
                 ? DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $this->recipeId)->whereNull('deleted_at')->orderBy('customer_name')->get()
                 : collect(),
             'basisTreffer' => $this->recipeId === null && trim($this->basisSuche) !== '' && $team !== null
-                ? FoodAlchemistRecipe::visibleToTeam($team)->basis()
-                    ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($this->basisSuche)) . '%'])
+                ? \Platform\FoodAlchemist\Support\Suche::like(
+                    FoodAlchemistRecipe::visibleToTeam($team)->basis(), 'name', $this->basisSuche)
                     ->orderBy('name')->limit(6)->get(['id', 'name', 'yield_kg', 'ek_total_eur'])
                 : collect(),
             // Darreichungen-Tab (Umbau-Spec Phase 5)

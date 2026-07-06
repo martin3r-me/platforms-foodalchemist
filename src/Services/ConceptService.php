@@ -36,12 +36,7 @@ class ConceptService
             ->with(['eventtyp:id,name', 'servierform:id,label']) // 4c: Facetten-Spalte im Browser
             ->withCount('slots')
             ->when(($filters['vorlagen'] ?? false), fn ($q) => $q->vorlagen(), fn ($q) => $q->echte())
-            ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
-                $s = '%' . mb_strtolower($filters['search']) . '%';
-                $q->where(fn ($w) => $w
-                    ->whereRaw('LOWER(name) LIKE ?', [$s])
-                    ->orWhereRaw('LOWER(COALESCE(anlass, \'\')) LIKE ?', [$s]));
-            })
+            ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', "COALESCE(occasion, '')"], $filters['search']))
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
             ->when(($filters['class'] ?? '') !== '', fn ($q) => $q->where('class', $filters['class']))
             ->when(($filters['category'] ?? null) === 'none', fn ($q) => $q->whereNull('category_id'))

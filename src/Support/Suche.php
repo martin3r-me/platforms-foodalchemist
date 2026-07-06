@@ -41,4 +41,31 @@ final class Suche
 
         return $query;
     }
+
+    /**
+     * Wie like(), aber über MEHRERE Spalten: jedes Token muss treffen (AND), pro Token
+     * reicht EINE der Spalten (OR). So bleibt Mehr-Wort-Suche korrekt, wenn Treffer über
+     * Name + Nebenfeld (Rolle, Anlass, Slug …) verteilt sein dürfen. Spalten kommen aus
+     * vertrauenswürdigem Aufrufer-Code (auch Ausdrücke wie "COALESCE(role, '')" erlaubt).
+     *
+     * @template T of \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder
+     *
+     * @param  T  $query
+     * @param  array<int, string>  $columns
+     * @return T
+     */
+    public static function likeAny($query, array $columns, string $suche)
+    {
+        foreach (self::tokens($suche) as $token) {
+            $query->where(function ($w) use ($columns, $token) {
+                foreach (array_values($columns) as $i => $col) {
+                    $i === 0
+                        ? $w->whereRaw("LOWER({$col}) LIKE ?", ['%' . $token . '%'])
+                        : $w->orWhereRaw("LOWER({$col}) LIKE ?", ['%' . $token . '%']);
+                }
+            });
+        }
+
+        return $query;
+    }
 }

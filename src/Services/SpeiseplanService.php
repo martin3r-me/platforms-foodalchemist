@@ -29,7 +29,7 @@ class SpeiseplanService
     {
         return FoodAlchemistSpeiseplan::visibleToTeam($team)
             ->withCount('eintraege')
-            ->when(($filters['search'] ?? '') !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($filters['search']) . '%']))
+            ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $filters['search']))
             ->orderBy('name')->paginate($perPage);
     }
 

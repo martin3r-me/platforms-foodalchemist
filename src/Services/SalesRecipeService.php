@@ -29,14 +29,18 @@ class SalesRecipeService
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->with(['speisenKlasse:id,label,diet_form', 'speisenHauptgruppe:id,code,label'])
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
-                $s = '%' . mb_strtolower($filters['search']) . '%';
-                $q->where(fn ($w) => $w
-                    ->whereRaw('LOWER(name) LIKE ?', [$s])
-                    ->orWhereRaw('LOWER(COALESCE(sales_wording_standard, \'\')) LIKE ?', [$s])
-                    ->orWhereRaw('LOWER(COALESCE(marketing_text, \'\')) LIKE ?', [$s])
-                    ->orWhereExists(fn ($e) => $e->from('foodalchemist_recipe_customer_names AS cn')
-                        ->whereColumn('cn.recipe_id', 'foodalchemist_recipes.id')->whereNull('cn.deleted_at')
-                        ->whereRaw('(LOWER(cn.customer_name) LIKE ? OR LOWER(cn.marketing_name) LIKE ?)', [$s, $s])));
+                // Multi-Wort: jedes Token muss treffen (Name / Standard-Wording / Marketing /
+                // Kunden-Wording). §4.1 — Treffer dürfen über die Felder verteilt sein.
+                foreach (\Platform\FoodAlchemist\Support\Suche::tokens($filters['search']) as $token) {
+                    $t = '%' . $token . '%';
+                    $q->where(fn ($w) => $w
+                        ->whereRaw('LOWER(name) LIKE ?', [$t])
+                        ->orWhereRaw('LOWER(COALESCE(sales_wording_standard, \'\')) LIKE ?', [$t])
+                        ->orWhereRaw('LOWER(COALESCE(marketing_text, \'\')) LIKE ?', [$t])
+                        ->orWhereExists(fn ($e) => $e->from('foodalchemist_recipe_customer_names AS cn')
+                            ->whereColumn('cn.recipe_id', 'foodalchemist_recipes.id')->whereNull('cn.deleted_at')
+                            ->whereRaw('(LOWER(cn.customer_name) LIKE ? OR LOWER(cn.marketing_name) LIKE ?)', [$t, $t])));
+                }
             })
             ->when($filters['hauptgruppe'] ?? null, fn ($q, $hg) => $q->where('dish_main_group_id', $hg))
             ->when($filters['class'] ?? null, fn ($q, $k) => $q->where('dish_class_id', $k))

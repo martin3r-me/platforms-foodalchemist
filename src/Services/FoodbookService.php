@@ -575,7 +575,7 @@ class FoodbookService
     public function conceptKandidaten(Team $team, string $suche, ?int $categoryId = null, int $limit = 20): Collection
     {
         return FoodAlchemistConcept::visibleToTeam($team)->echte()
-            ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when($categoryId !== null, fn ($q) => $q->whereIn('category_id', $this->concepts->descendantIds($team, $categoryId)))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'category_id']);
     }
@@ -584,7 +584,7 @@ class FoodbookService
     public function gerichtKandidaten(Team $team, string $suche, int $limit = 20): Collection
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
     }
 

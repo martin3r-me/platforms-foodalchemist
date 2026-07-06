@@ -39,12 +39,7 @@ class PaketService
         return FoodAlchemistPaket::visibleToTeam($team)
             ->standardisiert()   // #380: angebots-lokale Entwürfe gehören nicht in den Katalog
             ->withCount('gerichte')
-            ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
-                $s = '%' . mb_strtolower($filters['search']) . '%';
-                $q->where(fn ($w) => $w
-                    ->whereRaw('LOWER(name) LIKE ?', [$s])
-                    ->orWhereRaw('LOWER(COALESCE(role, \'\')) LIKE ?', [$s]));
-            })
+            ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', "COALESCE(role, '')"], $filters['search']))
             ->when(($filters['role'] ?? '') !== '', fn ($q) => $q->where('role', $filters['role']))
             ->when(($filters['class'] ?? '') !== '', fn ($q) => $q->where('class', $filters['class']))
             ->when(($filters['level'] ?? '') !== '', fn ($q) => $q->where('level', $filters['level']))
@@ -329,7 +324,7 @@ class PaketService
     public function gerichtKandidaten(Team $team, string $suche, array $filter = [], int $limit = 60): Collection
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($suche) . '%']))
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when($filter['hauptgruppe'] ?? null, fn ($q, $hg) => $q
                 ->whereIn('dish_class_id', FoodAlchemistDishClass::where('dish_main_group_id', $hg)->pluck('id')))
             ->when($filter['class'] ?? null, fn ($q, $k) => $q->where('dish_class_id', $k))
@@ -342,9 +337,7 @@ class PaketService
     public function paketKandidaten(Team $team, string $suche, array $filter = [], int $limit = 60): Collection
     {
         return FoodAlchemistPaket::visibleToTeam($team)
-            ->when($suche !== '', fn ($q) => $q->where(fn ($w) => $w
-                ->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($suche).'%'])
-                ->orWhereRaw('LOWER(COALESCE(role, \'\')) LIKE ?', ['%'.mb_strtolower($suche).'%'])))
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', "COALESCE(role, '')"], $suche))
             ->when(($filter['class'] ?? '') !== '', fn ($q) => $q->where('class', $filter['class']))
             ->when(($filter['role'] ?? '') !== '', fn ($q) => $q->where('role', $filter['role']))
             ->orderBy('name')->limit($limit)
@@ -358,7 +351,7 @@ class PaketService
     public function basisKandidaten(Team $team, string $suche, array $filter = [], int $limit = 60): Collection
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->basis()
-            ->when($suche !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($suche).'%']))
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when(($filter['hauptgruppe'] ?? null), fn ($q, $hg) => $q->whereHas('category', fn ($k) => $k->where('main_group_id', (int) $hg)))
             ->when(($filter['category'] ?? null), fn ($q, $kat) => $q->where('category_id', (int) $kat))
             ->when(($filter['level'] ?? '') !== '', fn ($q) => $q->whereHas('niveauEignungen', fn ($n) => $n->where('level_slug', $filter['level'])))

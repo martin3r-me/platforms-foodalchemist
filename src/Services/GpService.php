@@ -36,12 +36,8 @@ class GpService
 
         $search = trim((string) ($filters['search'] ?? ''));
         if ($search !== '') {
-            // LOWER()-Vergleich statt LIKE-Collation-Annahmen (02_DATENMODELL Typ-Port / NOCASE-Ersatz)
-            $needle = mb_strtolower($search);
-            $query->where(function ($q) use ($needle) {
-                $q->whereRaw('LOWER(name) LIKE ?', ["%{$needle}%"])
-                    ->orWhereRaw('LOWER(main_ingredient_slug) LIKE ?', ["%{$needle}%"]);
-            });
+            // Multi-Wort: jedes Token muss treffen (Name ODER main_ingredient_slug)
+            \Platform\FoodAlchemist\Support\Suche::likeAny($query, ['name', 'main_ingredient_slug'], $search);
         }
 
         if (! empty($filters['commodity_group'])) {
@@ -362,12 +358,7 @@ class GpService
             // Merged-GPs sind System-Tombstones des Merge-Werkzeugs — im Browser
             // komplett unsichtbar (User-Entscheidung 2026-07-02): kein Filter, keine Zeilen.
             ->where('foodalchemist_gps.status', '!=', GpStatus::Merged->value)
-            ->when(($filters['search'] ?? '') !== '', function (Builder $q) use ($filters) {
-                $such = mb_strtolower(trim($filters['search']));
-                $q->where(fn (Builder $w) => $w
-                    ->whereRaw('LOWER(name) LIKE ?', ['%' . $such . '%'])
-                    ->orWhereRaw('LOWER(main_ingredient_slug) LIKE ?', ['%' . $such . '%']));
-            })
+            ->when(($filters['search'] ?? '') !== '', fn (Builder $q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', 'main_ingredient_slug'], $filters['search']))
             ->when(($filters['commodity_group'] ?? '') !== '', fn (Builder $q) => $q->where('commodity_group_code', $filters['commodity_group']))
             ->when(($filters['sub_category'] ?? '') !== '', fn (Builder $q) => $q->where('sub_category', $filters['sub_category']))
             ->when(($filters['status'] ?? '') !== '', fn (Builder $q) => $q->where('status', $filters['status']));

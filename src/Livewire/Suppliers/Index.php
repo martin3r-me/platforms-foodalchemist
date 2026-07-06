@@ -325,8 +325,8 @@ class Index extends Component
                     ->where('status', 'offen')->count()
                 : 0,
             'bulkGpKandidaten' => $this->bulkGpSuche !== ''
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)
-                    ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($this->bulkGpSuche) . '%'])
+                ? \Platform\FoodAlchemist\Support\Suche::like(
+                    \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team), 'name', $this->bulkGpSuche)
                     ->orderBy('name')->limit(6)->get()
                 : collect(),
         ])->layout('platform::layouts.app');

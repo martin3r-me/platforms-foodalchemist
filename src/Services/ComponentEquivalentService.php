@@ -95,14 +95,12 @@ class ComponentEquivalentService
         if ($such === '') {
             return collect();
         }
-        $gps = FoodAlchemistGp::visibleToTeam($team)
-            ->whereRaw('LOWER(name) LIKE ?', ['%' . $such . '%'])
+        $gps = \Platform\FoodAlchemist\Support\Suche::like(FoodAlchemistGp::visibleToTeam($team), 'name', $suche)
             ->when($exceptKind === Equiv::KIND_GP, fn ($q) => $q->where('id', '!=', $exceptId))
             ->orderBy('name')->limit($limit)->get(['id', 'name'])
             ->map(fn ($g) => (object) ['kind' => Equiv::KIND_GP, 'id' => (int) $g->id, 'name' => $g->name]);
 
-        $rez = FoodAlchemistRecipe::visibleToTeam($team)
-            ->whereRaw('LOWER(name) LIKE ?', ['%' . $such . '%'])
+        $rez = \Platform\FoodAlchemist\Support\Suche::like(FoodAlchemistRecipe::visibleToTeam($team), 'name', $suche)
             ->when($exceptKind === Equiv::KIND_RECIPE, fn ($q) => $q->where('id', '!=', $exceptId))
             ->orderBy('name')->limit($limit)->get(['id', 'name'])
             ->map(fn ($r) => (object) ['kind' => Equiv::KIND_RECIPE, 'id' => (int) $r->id, 'name' => $r->name]);

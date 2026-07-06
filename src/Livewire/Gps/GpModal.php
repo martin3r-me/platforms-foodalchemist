@@ -446,7 +446,7 @@ class GpModal extends Component
             'bulkOffen' => $this->bulkRunId !== null && $team !== null ? app(BulkEnrichService::class)->offeneGpVorschlaege($team, $this->bulkRunId) : 0,
             'zustandVocab' => GpNamingService::ZUSTAND_VOCAB,
             'derivatKandidaten' => $this->derivatSuche !== '' && $team !== null
-                ? FoodAlchemistGp::visibleToTeam($team)->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($this->derivatSuche) . '%'])->orderBy('name')->limit(6)->get()
+                ? \Platform\FoodAlchemist\Support\Suche::like(FoodAlchemistGp::visibleToTeam($team), 'name', $this->derivatSuche)->orderBy('name')->limit(6)->get()
                 : collect(),
             'sensorik' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerGp($this->gpId) : null,
             'pairing' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelGp($this->gpId) : null,

@@ -37,12 +37,7 @@ class AngebotService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistAngebot::visibleToTeam($team)
-            ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
-                $s = '%' . mb_strtolower($filters['search']) . '%';
-                $q->where(fn ($w) => $w
-                    ->whereRaw('LOWER(name) LIKE ?', [$s])
-                    ->orWhereRaw('LOWER(COALESCE(anlass, \'\')) LIKE ?', [$s]));
-            })
+            ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', "COALESCE(occasion, '')"], $filters['search']))
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
             ->orderByDesc('updated_at')
             ->paginate($perPage);
@@ -331,7 +326,7 @@ class AngebotService
     public function katalogConcepts(Team $team, string $suche, ?int $kategorieId = null, int $limit = 50): Collection
     {
         return FoodAlchemistConcept::visibleToTeam($team)->standardisiert()->echte()
-            ->when(trim($suche) !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($suche)) . '%']))
+            ->when(trim($suche) !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when($kategorieId !== null, fn ($q) => $q->where('category_id', $kategorieId))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'category_id']);
     }
