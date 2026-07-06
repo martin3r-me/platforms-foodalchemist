@@ -296,8 +296,8 @@ class ItemModal extends Component
                 : null,
             // R9: manuelle GP-Suche fürs Mapping
             'gpKandidaten' => $item !== null && trim($this->gpSuche) !== ''
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($this->team())
-                    ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(trim($this->gpSuche)) . '%'])
+                ? \Platform\FoodAlchemist\Support\Suche::like(   // Multi-Wort: jedes Token muss treffen
+                    \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($this->team()), 'name', $this->gpSuche)
                     ->orderBy('name')->limit(6)->get(['id', 'name'])
                 : collect(),
         ]);

@@ -212,7 +212,7 @@ class IngredientEditor extends Component
         $suche = mb_strtolower(trim($q));
 
         $gpQuery = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)
-            ->when($suche !== '', fn ($w) => $w->whereRaw('LOWER(name) LIKE ?', ['%' . $suche . '%']))
+            ->when($suche !== '', fn ($w) => \Platform\FoodAlchemist\Support\Suche::like($w, 'name', $suche))
             ->when(($gpFilter['wg'] ?? '') !== '', fn ($w) => $w->where('commodity_group_code', $gpFilter['wg']))
             ->when(($gpFilter['sub'] ?? '') !== '', fn ($w) => $w->where('sub_category', $gpFilter['sub']))
             ->when(($gpFilter['condition'] ?? '') !== '', fn ($w) => $w->where('condition', $gpFilter['condition']))
@@ -251,7 +251,7 @@ class IngredientEditor extends Component
 
         $rezQuery = FoodAlchemistRecipe::visibleToTeam($team)->basis()
             ->where('id', '!=', (int) $this->recipeId)
-            ->when($suche !== '', fn ($w) => $w->whereRaw('LOWER(foodalchemist_recipes.name) LIKE ?', ['%' . $suche . '%']))
+            ->when($suche !== '', fn ($w) => \Platform\FoodAlchemist\Support\Suche::like($w, 'foodalchemist_recipes.name', $suche))
             ->when(($rezFilter['hg'] ?? '') !== '', fn ($w) => $w->whereHas('category', fn ($k) => $k->where('main_group_id', (int) $rezFilter['hg'])))
             ->when(($rezFilter['kat'] ?? '') !== '', fn ($w) => $w->where('category_id', (int) $rezFilter['kat']))
             ->when(($rezFilter['level'] ?? '') !== '', fn ($w) => $w->whereHas('niveauEignungen', fn ($n) => $n->where('level_slug', $rezFilter['level'])));

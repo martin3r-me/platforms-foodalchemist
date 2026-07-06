@@ -495,11 +495,10 @@ class RecipeService
         if (trim($suche) === '') {
             return [];
         }
-        $q = '%' . mb_strtolower(trim($suche)) . '%';
         $recompute = app(RecipeRecomputeService::class);
 
-        $gps = FoodAlchemistGp::visibleToTeam($team)
-            ->whereRaw('LOWER(name) LIKE ?', [$q])
+        $gps = \Platform\FoodAlchemist\Support\Suche::like(
+            FoodAlchemistGp::visibleToTeam($team), 'name', $suche)   // Multi-Wort: jedes Token muss treffen
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'lead_la_supplier_item_id', 'piece_default_g', 'team_id'])
             ->map(fn ($gp) => [
@@ -508,9 +507,9 @@ class RecipeService
                 'url' => \Platform\FoodAlchemist\Support\Sprungziel::gp($gp->id),  // R5: Sprung-Ziel
             ]);
 
-        $subs = FoodAlchemistRecipe::visibleToTeam($team)->basis()
-            ->where('id', '!=', $ohneRecipeId)
-            ->whereRaw('LOWER(name) LIKE ?', [$q])
+        $subs = \Platform\FoodAlchemist\Support\Suche::like(
+            FoodAlchemistRecipe::visibleToTeam($team)->basis()
+                ->where('id', '!=', $ohneRecipeId), 'name', $suche)
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'ek_per_kg_eur'])
             ->map(fn ($r) => [
@@ -531,10 +530,12 @@ class RecipeService
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->basis()
             ->when(($filters['search'] ?? '') !== '', function (Builder $q) use ($filters) {
-                $such = mb_strtolower(trim($filters['search']));
-                $q->where(fn (Builder $w) => $w
-                    ->whereRaw('LOWER(foodalchemist_recipes.name) LIKE ?', ['%' . $such . '%'])
-                    ->orWhereRaw('LOWER(foodalchemist_recipes.recipe_key) LIKE ?', ['%' . $such . '%']));
+                // Multi-Wort: jedes Token muss treffen (Name ODER recipe_key)
+                foreach (\Platform\FoodAlchemist\Support\Suche::tokens($filters['search']) as $token) {
+                    $q->where(fn (Builder $w) => $w
+                        ->whereRaw('LOWER(foodalchemist_recipes.name) LIKE ?', ['%' . $token . '%'])
+                        ->orWhereRaw('LOWER(foodalchemist_recipes.recipe_key) LIKE ?', ['%' . $token . '%']));
+                }
             })
             ->when(($filters['hauptgruppe'] ?? null) !== null && $filters['hauptgruppe'] !== '', fn (Builder $q) => $q
                 ->whereIn('category_id', DB::table('foodalchemist_recipe_categories')

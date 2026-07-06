@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistGpLaPreference;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 
 /**
  * M3-06: Lead-LA-Wahl (GL-03) + V-27-Auflösung.
@@ -178,18 +179,27 @@ class LeadLaService
     /** LA an GP verknüpfen (Gegenstück, M3-07-Aktion): Struktur-Update + Lead-Neuwahl-Trigger (T3). */
     public function verknuepfen(Team $team, FoodAlchemistGp $gp, int $laId): void
     {
-        $struktur = DB::table('foodalchemist_supplier_item_structures')
-            ->where('supplier_item_id', $laId)->whereNull('deleted_at')->first();
+        DB::transaction(function () use ($gp, $laId, $team) {
+            // Unique-Index auf supplier_item_id filtert NICHT nach deleted_at ⇒ evtl. Soft-Delete-
+            // Leiche mitziehen, sonst kracht ein Neu-Insert. Gros der LAs (aus WaWi-Sync) hat noch
+            // GAR keine Struktur-Zeile — Verknüpfen legt sie dann an, statt zu scheitern (GL-05:
+            // das Mapping darf die Struktur erzeugen).
+            $struktur = FoodAlchemistSupplierItemStructure::withTrashed()
+                ->where('supplier_item_id', $laId)->first();
 
-        DB::transaction(function () use ($gp, $laId, $struktur, $team) {
-            if ($struktur === null) {
-                throw new \RuntimeException("LA [{$laId}] hat keine Struktur-Zeile — Anlage fehlt (M2).");
-            }
-            if ($struktur->gp_id !== null && (int) $struktur->gp_id !== $gp->id) {
+            if ($struktur !== null && $struktur->deleted_at === null
+                && $struktur->gp_id !== null && (int) $struktur->gp_id !== $gp->id) {
                 throw new \RuntimeException('LA ist bereits einem anderen GP zugeordnet — erst dort lösen (GL-05).');
             }
-            DB::table('foodalchemist_supplier_item_structures')->where('id', $struktur->id)
-                ->update(['gp_id' => $gp->id, 'updated_at' => now()]);
+
+            if ($struktur === null) {
+                $struktur = new FoodAlchemistSupplierItemStructure(['supplier_item_id' => $laId]);
+            }
+            $struktur->team_id ??= $team->id;
+            $struktur->gp_id = $gp->id;
+            $struktur->deleted_at = null;                                  // evtl. Leiche reaktivieren
+            $struktur->save();
+
             $gp->update(['n_las_total' => (int) $gp->n_las_total + 1]);
             $this->applyLeadLa($gp->refresh(), $team);                     // T3: Verknüpfen triggert Neuwahl
         });
@@ -241,12 +251,14 @@ class LeadLaService
             return collect();
         }
 
-        return FoodAlchemistSupplierItem::query()
+        $query = FoodAlchemistSupplierItem::query()
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->whereNull('s.gp_id')
-            ->whereNull('s.deleted_at')
-            ->whereRaw('LOWER(foodalchemist_supplier_items.designation) LIKE ?', ['%' . mb_strtolower(trim($suche)) . '%'])
+            ->whereNull('s.deleted_at');
+        \Platform\FoodAlchemist\Support\Suche::like($query, 'foodalchemist_supplier_items.designation', $suche);
+
+        return $query
             ->orderBy('foodalchemist_supplier_items.designation')
             ->limit($limit)
             ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
