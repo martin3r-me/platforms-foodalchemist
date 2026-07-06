@@ -1,5 +1,5 @@
 {{-- M9-03 / V-10: Review-Queue — alles, was eine menschliche Entscheidung braucht, auf EINER Seite --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+@php extract(\Platform\FoodAlchemist\Support\Ui::maps()); @endphp
 
 <x-ui-page>
     <x-slot name="navbar">
@@ -57,15 +57,21 @@
                             <span class="font-medium text-gray-900 dark:text-gray-100 truncate">{{ $sig->title }}</span>
                         </div>
                         @if($sig->description)<p class="text-gray-500 mt-0.5">{{ \Illuminate\Support\Str::limit($sig->description, 140) }}</p>@endif
-                        @php $pl = is_array($sig->payload) ? $sig->payload : []; @endphp
+                        @php
+                            $pl = is_array($sig->payload) ? $sig->payload : [];
+                            $md = (float) ($pl['marge_delta_eur'] ?? 0);
+                            $wd = (float) ($pl['wpct_delta'] ?? 0);
+                            $mdClass = $md < 0 ? 'text-rose-600' : 'text-emerald-600';
+                            $wdSign = $wd > 0 ? '+' : '';
+                        @endphp
                         @if($sig->type->value === 'preis_sprung_marge_impact' && $pl)
                             <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-gray-500">
                                 @isset($pl['preis_alt'], $pl['preis_neu'])
                                     <span>{{ number_format($pl['preis_alt'], 2, ',', '.') }} € → <span class="font-medium text-gray-700 dark:text-gray-300">{{ number_format($pl['preis_neu'], 2, ',', '.') }} €</span></span>
                                 @endisset
                                 <span>{{ $pl['n_gerichte'] ?? 0 }} Gericht(e) · {{ $pl['n_concepts'] ?? 0 }} Konzept(e)</span>
-                                @if(($pl['marge_delta_eur'] ?? 0) != 0)
-                                    <span class="font-medium {{ $pl['marge_delta_eur'] < 0 ? 'text-rose-600' : 'text-emerald-600' }}">Marge {{ number_format($pl['marge_delta_eur'], 2, ',', '.') }} €@if(($pl['wpct_delta'] ?? 0) != 0) ({{ $pl['wpct_delta'] > 0 ? '+' : '' }}{{ number_format($pl['wpct_delta'], 1, ',', '.') }} W%-Pkt.)@endif</span>
+                                @if($md != 0.0)
+                                    <span class="font-medium {{ $mdClass }}">Marge {{ number_format($md, 2, ',', '.') }} €@if($wd != 0.0) ({{ $wdSign }}{{ number_format($wd, 1, ',', '.') }} W%-Pkt.)@endif</span>
                                 @endif
                                 @if(!empty($pl['guenstigere_alternative']['label']))
                                     <span class="text-sky-600 dark:text-sky-400" title="günstigere Alternative">↓ {{ \Illuminate\Support\Str::limit($pl['guenstigere_alternative']['label'], 28) }} ({{ $pl['guenstigere_alternative']['diff_pct'] }} %)</span>

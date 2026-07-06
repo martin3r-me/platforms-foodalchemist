@@ -74,13 +74,13 @@ class Browser extends Component
     public function waehleHauptgruppe(?int $id): void
     {
         $this->hauptgruppe = $this->hauptgruppe === $id ? null : $id;
-        $this->category = null;
+        $this->kategorie = null;
         $this->resetPage();
     }
 
     public function waehleKategorie(int $id): void
     {
-        $this->category = $this->category === $id ? null : $id;
+        $this->kategorie = $this->kategorie === $id ? null : $id;
         $this->resetPage();
     }
 
@@ -199,7 +199,7 @@ class Browser extends Component
         $filters = [
             'search' => $this->search,
             'hauptgruppe' => $this->hauptgruppe,
-            'category' => $this->category,
+            'category' => $this->kategorie,
             'status' => $this->status,
             'geschmack' => $this->geschmack,
             'fertigung' => $this->fertigung,

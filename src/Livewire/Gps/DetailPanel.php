@@ -57,7 +57,7 @@ class DetailPanel extends Component
         $this->ersatzSuche = '';
         $this->tauschSuche = '';
         $this->fehler = null;
-        $this->note = null;
+        $this->hinweis = null;
         $this->kiVorschlag = null;
         $this->laKandidaten = null;
     }
@@ -274,7 +274,7 @@ class DetailPanel extends Component
             return;
         }
         $this->tauschSuche = '';
-        $this->note = "{$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en) auf „{$ziel->name}\" umgehängt — Rezepte neu berechnet.";
+        $this->hinweis = "{$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en) auf „{$ziel->name}\" umgehängt — Rezepte neu berechnet.";
         $this->dispatch('gp-gespeichert'); // Browser: Rezept-Zähler/Zeile aktualisieren
     }
 
