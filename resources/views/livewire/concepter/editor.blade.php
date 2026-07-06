@@ -151,6 +151,16 @@
                                 class="{{ $pill }} {{ in_array($sa->id, $form['saison_ids'] ?? []) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
                         @endforeach
                     </div>
+                    {{-- Schreibstil (Tonalität) — 2026-07-06 aus Tab „Notizen" hierher (immer sichtbar):
+                         Stil fürs ganze Konzept + ✨ erzeugt je Position Brand-Voice-Wording (WordingResolver-Kette). --}}
+                    <div class="flex items-center gap-1.5" data-konzept-schreibstil>
+                        <span class="{{ $label }} !mb-0 mr-1">Schreibstil</span>
+                        <select wire:model="form.writing_style_id" class="{{ $input }} !w-auto !py-0.5 !text-[11px]" title="Tonalität fürs Wording des ganzen Konzepts — Foodbook kann je Kunde überschreiben">
+                            <option value="">— neutral —</option>
+                            @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
+                        </select>
+                        <button type="button" wire:click="wordingGenerieren" class="{{ $btnGhostXs }} shrink-0 text-violet-600 dark:text-violet-400" title="Wording übers ganze Konzept erzeugen: pro Position einen Brand-Voice-Namen + Konzept-Einleitung (echter Text mit LLM-Key)" data-ki-concept-wording>✨ Wording</button>
+                    </div>
                 </div>
             @endif
 
@@ -949,17 +959,7 @@
             @if($tab === 'notes')
                 @if($concept)
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                            <label class="{{ $label }}">Schreibstil (Wording fürs ganze Konzept)</label>
-                            <div class="flex items-center gap-2">
-                                <select wire:model="form.writing_style_id" class="{{ $input }}">
-                                    <option value="">— neutral —</option>
-                                    @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
-                                </select>
-                                <button type="button" wire:click="wordingGenerieren" class="{{ $btnGhostXs }} shrink-0 text-violet-600 dark:text-violet-400" title="Wording übers ganze Konzept erzeugen: pro Position einen Brand-Voice-Namen + Konzept-Einleitung (echter Text mit LLM-Key)" data-ki-concept-wording>✨ Wording (ganzes Konzept)</button>
-                            </div>
-                            <p class="text-[10px] text-gray-400 mt-0.5">Erzeugt stimmig je Position einen Anzeigenamen + die Konzept-Einleitung. Foodbook kann den Stil je Kunde überschreiben. Text-Veredelung mit LLM-Key.</p>
-                        </div>
+                        {{-- Schreibstil (Tonalität) lebt seit 2026-07-06 im Kopfbereich (Hauptseite, User-Wunsch) --}}
                         <div>
                             <label class="{{ $label }}">Diät-Vorgabe (KI-Brief)</label>
                             <input type="text" wire:model="form.diet_requirement" class="{{ $input }}" placeholder="z. B. „je Gang ≥1 vegan"" />
