@@ -67,11 +67,17 @@ class SalesRecipeService
             ->map(fn ($n) => (int) $n)->all();
     }
 
-    /** @return array<int, int> recipe-Counts je Diät-Klasse (Modell A: global, 4 flache Klassen) */
-    public function klassenCounts(Team $team): array
+    /**
+     * recipe-Counts je Diät-Klasse — optional auf eine Hauptgruppe gescoped
+     * (Baum-Ansicht 2026-07-06: Klassen als aufklappbare Ebene unterm aktiven HG-Knoten).
+     *
+     * @return array<int, int>
+     */
+    public function klassenCounts(Team $team, ?int $hauptgruppe = null): array
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->whereNotNull('dish_class_id')
+            ->when($hauptgruppe, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
             ->groupBy('dish_class_id')
             ->pluck(DB::raw('COUNT(*) AS n'), 'dish_class_id')
             ->map(fn ($n) => (int) $n)->all();

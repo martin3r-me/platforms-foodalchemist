@@ -31,14 +31,9 @@
                                 class="{{ $pill }} transition-colors {{ $geschmack === $wert ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $lbl }}</button>
                     @endforeach
                 </div>
-                {{-- Diät-Pills = Klasse (Modell A: 4 flache Diätformen, HG-unabhängig) --}}
-                <div class="flex flex-wrap gap-1.5" data-diaet-pills>
-                    @foreach($klassen as $k)
-                        <button type="button" wire:key="vkk-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
-                                class="{{ $pill }} transition-colors {{ $klasse === $k->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $k->label }} <span class="opacity-60">{{ $klassenCounts[$k->id] ?? 0 }}</span></button>
-                    @endforeach
-                </div>
-
+                {{-- Baum-Ansicht (2026-07-06, User-Wunsch — Parität zum Basisrezept-Browser):
+                     Diät-Klassen sind die aufklappbare Ebene unter dem AKTIVEN Knoten.
+                     „Alle Hauptgruppen" offen → globale Klassen-Counts; HG offen → auf die HG gescoped. --}}
                 <button type="button" wire:click="waehleHauptgruppe(null)"
                         class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === null
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
@@ -46,6 +41,19 @@
                     <span class="font-medium">Alle Hauptgruppen</span>
                     <span class="text-[11px] text-gray-400">{{ number_format(array_sum($hgCounts), 0, ',', '.') }}</span>
                 </button>
+                @if($hauptgruppe === null)
+                    <div class="ml-4 -mt-1 space-y-0.5" data-vk-klassen-ast>
+                        @foreach($klassen as $k)
+                            <button type="button" wire:key="vkk-alle-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
+                                    class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $klasse === $k->id
+                                        ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
+                                        : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                                <span class="min-w-0 truncate">{{ $k->label }}</span>
+                                <span class="text-gray-400 shrink-0 ml-2">{{ $klassenCounts[$k->id] ?? 0 }}</span>
+                            </button>
+                        @endforeach
+                    </div>
+                @endif
 
                 <div class="space-y-0.5 -mx-1" data-vk-hg-liste>
                     @foreach($hauptgruppen as $hg)
@@ -57,6 +65,21 @@
                                 <span class="min-w-0 truncate"><span class="font-mono text-[10px] text-gray-400 mr-1">[{{ $hg->code }}]</span>{{ $hg->label }}</span>
                                 <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
                             </button>
+                            @if($hauptgruppe === $hg->id)
+                                <div class="ml-4 mt-0.5 space-y-0.5" data-vk-klassen-ast>
+                                    @foreach($klassen as $k)
+                                        @if(($klassenCounts[$k->id] ?? 0) > 0 || $klasse === $k->id)
+                                            <button type="button" wire:key="vkk-{{ $hg->id }}-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
+                                                    class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $klasse === $k->id
+                                                        ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
+                                                        : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                                                <span class="min-w-0 truncate">{{ $k->label }}</span>
+                                                <span class="text-gray-400 shrink-0 ml-2">{{ $klassenCounts[$k->id] ?? 0 }}</span>
+                                            </button>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            @endif
                         </div>
                     @endforeach
                 </div>
