@@ -24,8 +24,10 @@ class SalesRecipeService
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
+        // Modell A (Regelwerk_Verkaufsgerichte v1.1): HG = Kategorie (recipes.dish_main_group_id),
+        // Klasse = Diätform (recipes.dish_class_id) — beide Achsen unabhängig filterbar.
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->with(['speisenKlasse:id,label,dish_main_group_id', 'speisenKlasse.hauptgruppe:id,code,label'])
+            ->with(['speisenKlasse:id,label,diet_form', 'speisenHauptgruppe:id,code,label'])
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
                 $s = '%' . mb_strtolower($filters['search']) . '%';
                 $q->where(fn ($w) => $w
@@ -36,8 +38,7 @@ class SalesRecipeService
                         ->whereColumn('cn.recipe_id', 'foodalchemist_recipes.id')->whereNull('cn.deleted_at')
                         ->whereRaw('(LOWER(cn.customer_name) LIKE ? OR LOWER(cn.marketing_name) LIKE ?)', [$s, $s])));
             })
-            ->when($filters['hauptgruppe'] ?? null, fn ($q, $hg) => $q
-                ->whereIn('dish_class_id', FoodAlchemistDishClass::where('dish_main_group_id', $hg)->pluck('id')))
+            ->when($filters['hauptgruppe'] ?? null, fn ($q, $hg) => $q->where('dish_main_group_id', $hg))
             ->when($filters['class'] ?? null, fn ($q, $k) => $q->where('dish_class_id', $k))
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
             ->when(($filters['geschmack'] ?? '') !== '', fn ($q) => $q->where('taste_direction', $filters['geschmack']))
@@ -52,25 +53,23 @@ class SalesRecipeService
             ->where('is_inactive', false)->orderBy('sort_order')->orderBy('code')->get();
     }
 
-    /** @return array<int, int> recipe-Counts je VK-Hauptgruppe (über die Klassen) */
+    /** @return array<int, int> recipe-Counts je VK-Hauptgruppe (Modell A: direkt über dish_main_group_id) */
     public function hauptgruppenCounts(Team $team): array
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->join('foodalchemist_dish_classes AS dc', 'dc.id', '=', 'foodalchemist_recipes.dish_class_id')
-            ->whereNotNull('dc.dish_main_group_id')
-            ->groupBy('dc.dish_main_group_id')
-            ->pluck(DB::raw('COUNT(*) AS n'), 'dc.dish_main_group_id')
+            ->whereNotNull('dish_main_group_id')
+            ->groupBy('dish_main_group_id')
+            ->pluck(DB::raw('COUNT(*) AS n'), 'dish_main_group_id')
             ->map(fn ($n) => (int) $n)->all();
     }
 
-    /** @return array<int, int> recipe-Counts je Klasse einer HG */
-    public function klassenCounts(Team $team, int $hauptgruppeId): array
+    /** @return array<int, int> recipe-Counts je Diät-Klasse (Modell A: global, 4 flache Klassen) */
+    public function klassenCounts(Team $team): array
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->join('foodalchemist_dish_classes AS dc', 'dc.id', '=', 'foodalchemist_recipes.dish_class_id')
-            ->where('dc.dish_main_group_id', $hauptgruppeId)
-            ->groupBy('foodalchemist_recipes.dish_class_id')
-            ->pluck(DB::raw('COUNT(*) AS n'), 'foodalchemist_recipes.dish_class_id')
+            ->whereNotNull('dish_class_id')
+            ->groupBy('dish_class_id')
+            ->pluck(DB::raw('COUNT(*) AS n'), 'dish_class_id')
             ->map(fn ($n) => (int) $n)->all();
     }
 

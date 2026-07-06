@@ -31,6 +31,13 @@
                                 class="{{ $pill }} transition-colors {{ $geschmack === $wert ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $lbl }}</button>
                     @endforeach
                 </div>
+                {{-- Diät-Pills = Klasse (Modell A: 4 flache Diätformen, HG-unabhängig) --}}
+                <div class="flex flex-wrap gap-1.5" data-diaet-pills>
+                    @foreach($klassen as $k)
+                        <button type="button" wire:key="vkk-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
+                                class="{{ $pill }} transition-colors {{ $klasse === $k->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $k->label }} <span class="opacity-60">{{ $klassenCounts[$k->id] ?? 0 }}</span></button>
+                    @endforeach
+                </div>
 
                 <button type="button" wire:click="waehleHauptgruppe(null)"
                         class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === null
@@ -50,21 +57,6 @@
                                 <span class="min-w-0 truncate"><span class="font-mono text-[10px] text-gray-400 mr-1">[{{ $hg->code }}]</span>{{ $hg->label }}</span>
                                 <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
                             </button>
-                            @if($hauptgruppe === $hg->id && $klassen->isNotEmpty())
-                                <div class="ml-4 mt-0.5 space-y-0.5" data-vk-klassen-liste>
-                                    @foreach($klassen as $k)
-                                        @if(($klassenCounts[$k->id] ?? 0) > 0)
-                                            <button type="button" wire:key="vkk-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
-                                                    class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $klasse === $k->id
-                                                        ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
-                                                        : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                                                <span class="min-w-0 truncate">{{ $k->label }}</span>
-                                                <span class="text-gray-400 shrink-0 ml-2">{{ $klassenCounts[$k->id] }}</span>
-                                            </button>
-                                        @endif
-                                    @endforeach
-                                </div>
-                            @endif
                         </div>
                     @endforeach
                 </div>
@@ -110,7 +102,7 @@
             <table class="{{ $table }}">
                 <thead><tr class="text-left">
                     {{-- R13 (Jarvis-Dichte): Name flexibel, Geld/Zahlen rechtsbündig --}}
-                    @foreach([['Name', 'w-full'], ['Hauptgruppe', ''], ['Klasse', ''], ['Geschmack', ''], ['Status', ''], ['VK netto', 'text-right'], ['EK', 'text-right'], ['Zutaten', 'text-right'], ['Allergen-Konf.', '']] as [$head, $align])
+                    @foreach([['Name', 'w-full'], ['Klasse', ''], ['Geschmack', ''], ['Status', ''], ['VK netto', 'text-right'], ['EK', 'text-right'], ['Zutaten', 'text-right'], ['Allergen-Konf.', ''], ['Hauptgruppe', '']] as [$head, $align])
                         <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
                     @endforeach
                 </tr></thead>
@@ -121,11 +113,10 @@
                             class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                             data-vk-zeile="{{ $r->id }}">
                             {{-- R6: Namens-Klick öffnet direkt den VK-Editor --}}
-                            <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
+                            <td class="{{ $td }} font-medium w-full min-w-[24rem] whitespace-normal break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-vk-name>{{ $r->name }}</span>
                             </td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->speisenKlasse?->hauptgruppe?->code ?? '—' }}</td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-500 truncate max-w-[10rem] whitespace-nowrap">{{ $r->speisenKlasse?->label ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-500 whitespace-nowrap">{{ $r->speisenKlasse?->label ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
@@ -146,6 +137,7 @@
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
                             </td>
+                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->speisenHauptgruppe?->code ?? '—' }}</td>
                         </tr>
                     @empty
                         <tr><td colspan="9" class="px-5 py-10 text-center text-gray-400">Keine Gerichte gefunden.</td></tr>

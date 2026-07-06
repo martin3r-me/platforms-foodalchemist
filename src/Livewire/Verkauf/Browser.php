@@ -47,8 +47,8 @@ class Browser extends Component
 
     public function waehleHauptgruppe(?int $id): void
     {
+        // Modell A: HG und Klasse(Diät) sind unabhängige Achsen — kein Kaskaden-Reset mehr.
         $this->hauptgruppe = $this->hauptgruppe === $id ? null : $id;
-        $this->klasse = null;                                        // Kaskade Reset-korrekt (§4.1)
         $this->resetPage();
     }
 
@@ -137,10 +137,9 @@ class Browser extends Component
             ], $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100),
             'hauptgruppen' => $verkauf->dishMainGroups($team),
             'hgCounts' => $verkauf->hauptgruppenCounts($team),
-            'klassen' => $this->hauptgruppe !== null
-                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppe)->orderBy('label')->get()
-                : collect(),
-            'klassenCounts' => $this->hauptgruppe !== null ? $verkauf->klassenCounts($team, $this->hauptgruppe) : [],
+            // Modell A: Klasse = die 4 flachen Diätformen (global, HG-unabhängig).
+            'klassen' => FoodAlchemistDishClass::whereNull('dish_main_group_id')->orderBy('id')->get(),
+            'klassenCounts' => $verkauf->klassenCounts($team),
             'statusFaelle' => RecipeStatus::cases(),
             'statusCounts' => $verkauf->statusCounts($team),
         ])->layout('platform::layouts.app');

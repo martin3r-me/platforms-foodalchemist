@@ -37,7 +37,7 @@
                 <input type="text" wire:model="neuHg" wire:keydown.enter="createHg" placeholder="Neue Hauptgruppe …" class="{{ $input }} flex-1" />
                 <button type="button" wire:click="createHg" class="{{ $btnGhostXs }}">+ HG</button>
             </div>
-            <p class="text-[10px] text-gray-400 px-2 pt-2 leading-snug">Klassen = HG × Diätform. Aufschlagsklassen, Schreibstile, Behälter: eigene Seiten (R5).</p>
+            <p class="text-[10px] text-gray-400 px-2 pt-2 leading-snug">Kategorie = Hauptgruppe (trägt den Aufschlag). Klasse = Diätform (4, global). Zähler = Gerichte je HG. Aufschlagsklassen, Schreibstile, Behälter: eigene Seiten (R5).</p>
         </div>
 
         {{-- Klassen der gewählten HG rechts --}}
@@ -45,8 +45,8 @@
             <div class="relative overflow-hidden {{ $card }}" data-taxo-klassen>
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Klassen</h3>
-                    <span class="{{ $label }}">{{ optional($hauptgruppen->firstWhere('id', $hauptgruppeId))->label ?? 'Hauptgruppe wählen' }}</span>
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Klassen = Diätformen</h3>
+                    <span class="{{ $label }}">4 global (HG-unabhängig)</span>
                 </div>
                 @if($klassen->isNotEmpty())
                     <table class="{{ $table }}">
@@ -84,15 +84,9 @@
                 @else
                     <div class="px-5 pb-5 text-xs text-gray-400">Links eine Speisen-Hauptgruppe wählen, um ihre Klassen zu sehen.</div>
                 @endif
-                @if($hauptgruppeId !== null)
-                    <div class="px-5 py-3 border-t border-black/5 dark:border-white/10 flex items-center gap-1.5">
-                        <input type="text" wire:model="neuKlasse" wire:keydown.enter="createKlasse" placeholder="Neue Klasse …" class="{{ $input }} flex-1" />
-                        <select wire:model="neuKlasseDiaet" class="{{ $input }} w-32">
-                            @foreach(['neutral', 'fleisch', 'fisch', 'vegi', 'vegan', 'allergie'] as $d)<option value="{{ $d }}">{{ $d }}</option>@endforeach
-                        </select>
-                        <button type="button" wire:click="createKlasse" class="{{ $btnGhostXs }}">+ Klasse</button>
-                    </div>
-                @endif
+                <div class="px-5 py-3 border-t border-black/5 dark:border-white/10 text-[11px] text-gray-400">
+                    Die Diätform wird am Gericht gewählt (Modell A) — Klassen sind fix: Fleisch · Fisch · Vegetarisch · Vegan.
+                </div>
             </div>
         </div>
     </div>

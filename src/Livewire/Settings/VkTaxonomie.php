@@ -58,25 +58,14 @@ class VkTaxonomie extends Component
         }
     }
 
-    /** #372: neue Klasse zur gewählten Hauptgruppe anlegen. */
+    /**
+     * Modell A (Regelwerk_Verkaufsgerichte v1.1): Klassen = die 4 fixen Diätformen
+     * (Fleisch/Fisch/Vegi/Vegan), global und HG-unabhängig. Es werden keine neuen,
+     * HG-gebundenen Klassen mehr angelegt. Diät wird am Gericht gewählt.
+     */
     public function createKlasse(): void
     {
-        if ($this->hauptgruppeId === null) {
-            $this->fehler = 'Erst eine Speisen-Hauptgruppe wählen.';
-
-            return;
-        }
-        try {
-            app(VocabularyService::class)->createDishClass($this->team(), $this->hauptgruppeId, [
-                'label' => $this->neuKlasse,
-                'diet_form' => $this->neuKlasseDiaet,
-            ]);
-            $this->reset('neuKlasse', 'fehler');
-            $this->neuKlasseDiaet = 'neutral';
-            $this->meldung = 'Klasse angelegt.';
-        } catch (RuntimeException $e) {
-            $this->fehler = $e->getMessage();
-        }
+        $this->fehler = 'Klassen sind unter Modell A die 4 fixen Diätformen (Fleisch/Fisch/Vegi/Vegan) — es werden keine neuen Klassen mehr angelegt. Die Hauptgruppe ist die Kategorie.';
     }
 
     /** VK-Hauptgruppe umbenennen (Inline; Code bleibt stabil). */
@@ -157,18 +146,22 @@ class VkTaxonomie extends Component
 
     public function render()
     {
+        // Modell A (Regelwerk_Verkaufsgerichte v1.1): Klasse = Diätform (4 flache Klassen, global).
         $klassenZaehler = DB::table('foodalchemist_recipes')->whereNull('deleted_at')
             ->whereNotNull('dish_class_id')->selectRaw('dish_class_id, COUNT(*) AS n')
             ->groupBy('dish_class_id')->pluck('n', 'dish_class_id');
 
+        // Rezept-Zähler je Hauptgruppe (HG direkt am Rezept via dish_main_group_id).
+        $rezepteJeHg = DB::table('foodalchemist_recipes')->whereNull('deleted_at')
+            ->whereNotNull('dish_main_group_id')->selectRaw('dish_main_group_id, COUNT(*) AS n')
+            ->groupBy('dish_main_group_id')->pluck('n', 'dish_main_group_id');
+
         return view('foodalchemist::livewire.settings.vk-taxonomie', [
             'hauptgruppen' => FoodAlchemistDishMainGroup::orderBy('sort_order')->orderBy('code')->get(),
-            'klassen' => $this->hauptgruppeId !== null
-                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppeId)->orderBy('label')->get()
-                : collect(),
+            // Die 4 globalen Diät-Klassen (HG-unabhängig), immer sichtbar.
+            'klassen' => FoodAlchemistDishClass::whereNull('dish_main_group_id')->orderBy('id')->get(),
             'klassenZaehler' => $klassenZaehler,
-            'klassenJeHg' => FoodAlchemistDishClass::selectRaw('dish_main_group_id, COUNT(*) AS n')
-                ->groupBy('dish_main_group_id')->pluck('n', 'dish_main_group_id'),
+            'klassenJeHg' => $rezepteJeHg,
         ]);
     }
 }

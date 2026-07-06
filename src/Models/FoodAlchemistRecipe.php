@@ -111,6 +111,15 @@ class FoodAlchemistRecipe extends Model
         return $this->belongsTo(FoodAlchemistDishClass::class, 'dish_class_id');
     }
 
+    /**
+     * VK-Taxonomie Modell A (Regelwerk_Verkaufsgerichte v1.1): Die Hauptgruppe ist die
+     * Kategorie und wird direkt am Rezept geführt (Klasse = nur noch Diätform).
+     */
+    public function speisenHauptgruppe(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistDishMainGroup::class, 'dish_main_group_id');
+    }
+
     public function aufschlagsklasse(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistMarkupClass::class, 'markup_class_id');

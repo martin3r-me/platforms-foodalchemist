@@ -127,10 +127,15 @@ class RecipeGeneratorService
                 'description_source' => ! empty($kiRezept['description']) ? 'ki' : null,
             ]);
 
-            // M6-06: Klasse/AK aus dem Vorschlag — beides validiert, Lineage ki (GL-07)
+            // M6-06: Klasse/HG/AK aus dem Vorschlag — validiert, Lineage ki (GL-07).
+            // Modell A (Regelwerk_Verkaufsgerichte v1.1): Klasse = Diätform; die Hauptgruppe
+            // ist die Kategorie und trägt den Aufschlag-Default (nicht mehr die Klasse).
             if ($vkModus) {
                 $klasse = isset($kiRezept['dish_class_id'])
                     ? \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::find((int) $kiRezept['dish_class_id'])
+                    : null;
+                $hg = isset($kiRezept['dish_main_group_id'])
+                    ? \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::find((int) $kiRezept['dish_main_group_id'])
                     : null;
                 $ak = isset($kiRezept['aufschlagsklasse_code'])
                     ? \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('code', $kiRezept['aufschlagsklasse_code'])->first()
@@ -138,7 +143,8 @@ class RecipeGeneratorService
                 $recipe->update(array_filter([
                     'dish_class_id' => $klasse?->id,
                     'dish_class_source' => $klasse !== null ? 'ki' : null,
-                    'markup_class_id' => $ak?->id ?? $klasse?->default_markup_class_id,
+                    'dish_main_group_id' => $hg?->id,
+                    'markup_class_id' => $ak?->id ?? $hg?->default_markup_class_id,
                     'vat_rate' => $ak?->vat_rate,
                 ], fn ($v) => $v !== null));
             }
