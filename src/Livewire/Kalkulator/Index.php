@@ -59,7 +59,7 @@ class Index extends Component
             return;
         }
         $this->selectedId = $k->id;
-        $this->title = (string) $k->title;
+        $this->titel = (string) $k->title;
         $this->margeOverride = $k->marge_override_pct !== null
             ? rtrim(rtrim(number_format((float) $k->marge_override_pct, 2, '.', ''), '0'), '.') : '';
         $this->note = (string) ($k->note ?? '');
@@ -73,7 +73,7 @@ class Index extends Component
             return;
         }
         $this->svc()->update($this->team(), $this->selectedId, [
-            'title' => $this->title,
+            'title' => $this->titel,
             'marge_override_pct' => $this->margeOverride,
             'note' => $this->note,
         ]);

@@ -85,7 +85,7 @@ class Browser extends Component
         }
         $this->tab = $tab;
         $this->selectedId = null;
-        $this->class = '';
+        $this->klasse = '';
         $this->categoryFilter = '';
         $this->rolleFilter = '';
         $this->servierformFilter = '';
@@ -118,7 +118,7 @@ class Browser extends Component
 
     public function waehleKlasse(string $wert): void
     {
-        $this->class = $this->class === $wert ? '' : $wert;
+        $this->klasse = $this->klasse === $wert ? '' : $wert;
         $this->resetPage();
     }
 
@@ -200,7 +200,7 @@ class Browser extends Component
         if ($this->tab === 'pakete') {
             $items = $pakete->paginateBrowser([
                 'search' => $this->search,
-                'class' => $this->class,
+                'class' => $this->klasse,
                 'role' => $this->rolleFilter,
             ], $team);
             $klassen = $pakete->klassen($team);
@@ -209,7 +209,7 @@ class Browser extends Component
         } else {
             $items = $concepts->paginateBrowser([
                 'search' => $this->search,
-                'class' => $this->class,
+                'class' => $this->klasse,
                 'vorlagen' => $this->showVorlagen,
                 'category' => $this->categoryFilter !== '' ? $this->categoryFilter : null,
                 'servierform' => $this->servierformFilter !== '' ? $this->servierformFilter : null,
