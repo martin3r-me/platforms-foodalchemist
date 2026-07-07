@@ -62,6 +62,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 \Platform\FoodAlchemist\Console\ImportSliceCommand::class,
+                \Platform\FoodAlchemist\Console\ImportMasterCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 \Platform\FoodAlchemist\Console\TeamOnboardingCommand::class,
