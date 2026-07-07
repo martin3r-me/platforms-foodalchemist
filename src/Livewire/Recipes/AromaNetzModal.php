@@ -18,15 +18,15 @@ use Platform\FoodAlchemist\Services\PairingService;
  */
 class AromaNetzModal extends Component
 {
-    private const W = 900;
+    private const W = 1000;
 
-    private const H = 640;
+    private const H = 760;
 
-    private const R_ANKER = 200;
+    private const R_ANKER = 210;
 
-    private const R_VERWANDT = 292;
+    private const R_VERWANDT = 345;
 
-    private const R_VORSCHLAG = 248;
+    private const R_VORSCHLAG = 280;
 
     public ?int $recipeId = null;
 

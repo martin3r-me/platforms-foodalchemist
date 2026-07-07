@@ -23,7 +23,7 @@
                 <span class="text-gray-400">Hover über Anker = dessen Brücken · Klick auf Rezept = öffnen</span>
             </div>
 
-            <svg viewBox="0 0 900 640" class="w-full rounded-xl bg-black/[0.02] dark:bg-white/[0.03]" data-netz-svg>
+            <svg viewBox="0 0 1000 760" class="w-full rounded-xl bg-black/[0.02] dark:bg-white/[0.03]" data-netz-svg>
                 {{-- 1. Zentrum→Anker (Grundgerüst, dezent) --}}
                 @foreach($anker as $a)
                     <line x1="{{ $cx }}" y1="{{ $cy }}" x2="{{ $a['x'] }}" y2="{{ $a['y'] }}"
