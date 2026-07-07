@@ -15,6 +15,10 @@
         </x-foodalchemist::modal>
     @endif
 
+    {{-- @assets: global registrieren, damit window.zutatenEditor VOR Alpine existiert —
+         auch wenn die Komponente per Livewire-Morph kommt (VK-Modal). Inline-Script wurde
+         bei Re-Renders nicht ausgeführt → Alpine-x-data schlug fehl (rezFilter/vokabular undefined). --}}
+    @assets
     <script>
     window.zutatenEditor = function (zeilen, standalone, einheiten, vokabular) {
         return {
@@ -249,4 +253,5 @@
         };
     };
 </script>
+    @endassets
 </div>
