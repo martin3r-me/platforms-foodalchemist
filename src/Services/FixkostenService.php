@@ -32,7 +32,7 @@ class FixkostenService
         return FoodAlchemistFixkosten::create([
             'team_id' => $team->id,
             'label' => trim((string) ($in['label'] ?? 'Fixkosten')) ?: 'Fixkosten',
-            'betrag' => max(0, (float) str_replace(',', '.', (string) ($in['betrag'] ?? 0))),
+            'amount' => max(0, (float) str_replace(',', '.', (string) ($in['amount'] ?? 0))),
             'periode' => in_array($p = $in['periode'] ?? 'monatlich', ['monatlich', 'jaehrlich'], true) ? $p : 'monatlich',
             'block_key' => (string) ($in['block_key'] ?? 'gemeinkosten'),
         ]);
@@ -46,8 +46,8 @@ class FixkostenService
         if (array_key_exists('label', $in)) {
             $update['label'] = trim((string) $in['label']) ?: $row->label;
         }
-        if (array_key_exists('betrag', $in)) {
-            $update['betrag'] = max(0, (float) str_replace(',', '.', (string) $in['betrag']));
+        if (array_key_exists('amount', $in)) {
+            $update['amount'] = max(0, (float) str_replace(',', '.', (string) $in['amount']));
         }
         if (array_key_exists('periode', $in) && in_array($in['periode'], ['monatlich', 'jaehrlich'], true)) {
             $update['periode'] = $in['periode'];

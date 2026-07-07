@@ -163,14 +163,14 @@ class SpeiseplanService
         return $plan->eintraege()->create([
             'team_id' => $plan->team_id,
             'entry_date' => $tag,
-            'woche' => 1, 'wochentag' => (int) $datum->isoWeekday(),   // Back-Compat-Spalten
-            'mahlzeit' => $mahlzeit,
+            'week' => 1, 'weekday' => (int) $datum->isoWeekday(),   // Back-Compat-Spalten
+            'meal' => $mahlzeit,
             'line_id' => $linieId,
             'concept_id' => $in['concept_id'] ?? null,
             'package_id' => empty($in['concept_id']) ? ($in['package_id'] ?? null) : null,
             'sales_recipe_id' => empty($in['concept_id']) && empty($in['package_id']) ? ($in['sales_recipe_id'] ?? null) : null,
             'position' => (int) $plan->eintraege()
-                ->where('entry_date', $tag)->where('mahlzeit', $mahlzeit)
+                ->where('entry_date', $tag)->where('meal', $mahlzeit)
                 ->when($linieId !== null, fn ($q) => $q->where('line_id', $linieId))->max('position') + 1,
         ]);
     }
@@ -196,7 +196,7 @@ class SpeiseplanService
         $ende = $start->copy()->addDays(6);
         $grid = [];
         foreach ($plan->eintraege as $e) {
-            if ($e->entry_date === null || $e->mahlzeit !== $mahlzeit || ! $e->entry_date->between($start, $ende)) {
+            if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->between($start, $ende)) {
                 continue;
             }
             $grid[(int) $e->line_id][$e->entry_date->format('Y-m-d')][] = $e;
@@ -217,7 +217,7 @@ class SpeiseplanService
             if ($e->entry_date === null || (int) $e->entry_date->year !== $jahr || (int) $e->entry_date->month !== $monat) {
                 continue;
             }
-            if ($mahlzeit !== null && $e->mahlzeit !== $mahlzeit) {
+            if ($mahlzeit !== null && $e->meal !== $mahlzeit) {
                 continue;
             }
             $key = $e->entry_date->format('Y-m-d');
@@ -260,7 +260,7 @@ class SpeiseplanService
         $wVk = 0.0;
         $wEk = 0.0;
         foreach ($plan->eintraege as $e) {
-            if ($e->entry_date === null || $e->mahlzeit !== $mahlzeit || ! $e->entry_date->between($start, $ende)) {
+            if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->between($start, $ende)) {
                 continue;
             }
             $p = $this->eintragPreis($e);
@@ -289,7 +289,7 @@ class SpeiseplanService
         $fehl = [];
         for ($i = 0; $i < $tage; $i++) {
             $tag = $montag->copy()->addDays($i)->startOfDay();
-            $hat = $plan->eintraege->first(fn ($e) => $e->entry_date !== null && $e->mahlzeit === $mahlzeit
+            $hat = $plan->eintraege->first(fn ($e) => $e->entry_date !== null && $e->meal === $mahlzeit
                 && in_array((int) $e->line_id, $veggie, true) && $e->entry_date->isSameDay($tag));
             if ($hat === null) {
                 $fehl[] = $tag->format('Y-m-d');
@@ -367,7 +367,7 @@ class SpeiseplanService
         $vorhanden = [];
         foreach ($plan->eintraege as $e) {
             if ($e->entry_date !== null) {
-                $vorhanden[$e->entry_date->format('Y-m-d') . '|' . $e->mahlzeit . '|' . (int) $e->line_id . '|' . $e->inhaltKey()] = true;
+                $vorhanden[$e->entry_date->format('Y-m-d') . '|' . $e->meal . '|' . (int) $e->line_id . '|' . $e->inhaltKey()] = true;
             }
         }
 
@@ -382,13 +382,13 @@ class SpeiseplanService
                 if ($ziel->gt($bis)) {
                     continue;
                 }
-                $sig = $ziel->format('Y-m-d') . '|' . $e->mahlzeit . '|' . (int) $e->line_id . '|' . $e->inhaltKey();
+                $sig = $ziel->format('Y-m-d') . '|' . $e->meal . '|' . (int) $e->line_id . '|' . $e->inhaltKey();
                 if (isset($vorhanden[$sig])) {
                     continue;
                 }
                 $plan->eintraege()->create([
                     'team_id' => $plan->team_id, 'entry_date' => $ziel->format('Y-m-d'),
-                    'woche' => 1, 'wochentag' => (int) $ziel->isoWeekday(), 'mahlzeit' => $e->mahlzeit,
+                    'week' => 1, 'weekday' => (int) $ziel->isoWeekday(), 'meal' => $e->meal,
                     'line_id' => $e->line_id, 'concept_id' => $e->concept_id, 'package_id' => $e->package_id,
                     'sales_recipe_id' => $e->sales_recipe_id, 'position' => $e->position,
                 ]);

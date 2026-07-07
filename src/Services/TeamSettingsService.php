@@ -310,7 +310,7 @@ class TeamSettingsService
     /** Marge % auf die HK → VK-Vorschlag (Doc 16). */
     public function margePct(Team $team): float
     {
-        $v = $this->for($team)->marge_pct;
+        $v = $this->for($team)->margin_pct;
 
         return $v !== null ? (float) $v : self::MARGE_DEFAULT;
     }

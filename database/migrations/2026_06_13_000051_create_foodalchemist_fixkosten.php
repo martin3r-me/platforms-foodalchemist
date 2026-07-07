@@ -20,7 +20,7 @@ return new class extends Migration
                 $table->uuid('uuid')->unique();
                 $table->unsignedBigInteger('team_id')->nullable()->index();
                 $table->string('label');
-                $table->decimal('betrag', 12, 2)->default(0);
+                $table->decimal('amount', 12, 2)->default(0);
                 $table->string('periode', 12)->default('monatlich');   // monatlich | jaehrlich
                 $table->string('block_key')->index();                  // Zuordnung zu einem GK-Block
                 $table->text('note')->nullable();

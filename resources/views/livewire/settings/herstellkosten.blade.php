@@ -142,7 +142,7 @@
                     <tr wire:key="fix-{{ $f['id'] }}" class="{{ $tr }}">
                         <td class="{{ $td }}">{{ $f['label'] }}</td>
                         <td class="{{ $td }} text-gray-500">{{ collect($gkBloecke)->firstWhere('key', $f['block_key'])['label'] ?? $f['block_key'] }}</td>
-                        <td class="{{ $td }} text-right tabular-nums">{{ number_format((float) $f['betrag'], 2, ',', '.') }} €</td>
+                        <td class="{{ $td }} text-right tabular-nums">{{ number_format((float) $f['amount'], 2, ',', '.') }} €</td>
                         <td class="{{ $td }} text-gray-500">
                             {{ $f['periode'] === 'jaehrlich' ? 'jährlich' : 'monatlich' }}
                             @if($f['periode'] === 'jaehrlich')
@@ -163,7 +163,7 @@
                             @foreach($gkBloecke as $gk)<option value="{{ $gk['key'] }}">{{ $gk['label'] }}</option>@endforeach
                         </select>
                     </td>
-                    <td class="{{ $td }} text-right"><input type="text" wire:model="neuFix.betrag" wire:keydown.enter="fixHinzu" placeholder="0" class="{{ $input }} !w-24 text-right tabular-nums" /></td>
+                    <td class="{{ $td }} text-right"><input type="text" wire:model="neuFix.amount" wire:keydown.enter="fixHinzu" placeholder="0" class="{{ $input }} !w-24 text-right tabular-nums" /></td>
                     <td class="{{ $td }}">
                         <select wire:model="neuFix.periode" class="{{ $input }} !w-32 !py-1">
                             <option value="monatlich">monatlich</option>

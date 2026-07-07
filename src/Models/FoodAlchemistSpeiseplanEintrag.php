@@ -23,8 +23,8 @@ class FoodAlchemistSpeiseplanEintrag extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'woche' => 'integer',
-        'wochentag' => 'integer',
+        'week' => 'integer',
+        'weekday' => 'integer',
         'position' => 'integer',
         'entry_date' => 'date',
     ];

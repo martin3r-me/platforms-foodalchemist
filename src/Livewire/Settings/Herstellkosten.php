@@ -36,7 +36,7 @@ class Herstellkosten extends Component
 
     public array $fixListe = [];
 
-    public array $neuFix = ['label' => '', 'betrag' => '', 'periode' => 'monatlich', 'block_key' => ''];
+    public array $neuFix = ['label' => '', 'amount' => '', 'periode' => 'monatlich', 'block_key' => ''];
 
     /** Neuer Kostenblock (Phase 4 — vorher gab es nur das feste Default-Set). */
     public array $neuBlock = ['label' => '', 'type' => 'pct_mek'];
@@ -70,7 +70,7 @@ class Herstellkosten extends Component
     {
         $this->fixListe = app(FixkostenService::class)->liste($this->team())->map(fn ($f) => [
             'id' => $f->id, 'label' => $f->label,
-            'betrag' => $this->fmt((float) $f->betrag), 'periode' => $f->periode, 'block_key' => $f->block_key,
+            'amount' => $this->fmt((float) $f->amount), 'periode' => $f->periode, 'block_key' => $f->block_key,
             'monatsbetrag' => round((float) $f->monatsbetrag(), 2),   // #379+: normalisiert (jährlich/12) für Σ-Anzeige
         ])->all();
     }
@@ -136,7 +136,7 @@ class Herstellkosten extends Component
             return;
         }
         app(FixkostenService::class)->create($this->team(), $this->neuFix);
-        $this->neuFix = ['label' => '', 'betrag' => '', 'periode' => 'monatlich', 'block_key' => ''];
+        $this->neuFix = ['label' => '', 'amount' => '', 'periode' => 'monatlich', 'block_key' => ''];
         $this->ladeFix();
         $this->dispatch('kosten-aktualisiert');   // #379+: Werkstatt-Cockpit live nachziehen
     }
@@ -165,7 +165,7 @@ class Herstellkosten extends Component
         $svc->update($this->team(), [
             'hk2_surcharge_pct' => $gemeinWert,                  // Rückwärtskompatibel (= Material-GK manuell)
             'stundensatz_eur' => $stundensatz,
-            'marge_pct' => $this->num($this->marge),
+            'margin_pct' => $this->num($this->marge),
             'target_food_cost_pct' => $this->num($this->zielWe),
             'labor_overhead_pct' => $this->num($this->lnk),
             'calculation_schema' => $this->baueSchema(),

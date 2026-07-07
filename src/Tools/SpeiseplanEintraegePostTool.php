@@ -73,7 +73,7 @@ class SpeiseplanEintraegePostTool extends FoodAlchemistTool implements ToolContr
         }
 
         return ToolResult::success(['eintrag' => [
-            'id' => $e->id, 'entry_date' => (string) $e->entry_date, 'mahlzeit' => $e->mahlzeit,
+            'id' => $e->id, 'entry_date' => (string) $e->entry_date, 'mahlzeit' => $e->meal,
             'line_id' => $e->line_id, 'concept_id' => $e->concept_id,
             'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
         ]]);

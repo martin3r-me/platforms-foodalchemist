@@ -44,9 +44,9 @@ return new class extends Migration
                 $table->uuid('uuid')->unique();
                 $table->unsignedBigInteger('team_id')->nullable()->index();
                 $table->foreignId('menu_plan_id')->constrained('foodalchemist_menu_plans')->cascadeOnDelete();
-                $table->unsignedInteger('woche')->default(1);             // 1..zyklus_wochen
-                $table->unsignedTinyInteger('wochentag')->default(1);     // 1=Mo … 7=So
-                $table->string('mahlzeit', 24)->default('mittag');        // fruehstueck|mittag|abend|snack (frei)
+                $table->unsignedInteger('week')->default(1);              // 1..cycle_weeks
+                $table->unsignedTinyInteger('weekday')->default(1);       // 1=Mo … 7=So
+                $table->string('meal', 24)->default('mittag');            // fruehstueck|mittag|abend|snack (frei)
                 $table->integer('position')->default(0);
                 // Belegung: genau EINES (Service-validiert)
                 $table->foreignId('concept_id')->nullable()->constrained('foodalchemist_concepts')->nullOnDelete();
@@ -63,7 +63,7 @@ return new class extends Migration
         if (! $this->hasIndex('foodalchemist_menu_plan_entries', 'fa_speiseplan_eintr_plan_woche_tag_mahlz_idx')) {
             Schema::table('foodalchemist_menu_plan_entries', function (Blueprint $table) {
                 $table->index(
-                    ['menu_plan_id', 'woche', 'wochentag', 'mahlzeit'],
+                    ['menu_plan_id', 'week', 'weekday', 'meal'],
                     'fa_speiseplan_eintr_plan_woche_tag_mahlz_idx',
                 );
             });

@@ -39,7 +39,7 @@ class FoodAlchemistTeamSetting extends Model
         // M-K1: Kalkulations-Block-Schema (Doc 16)
         'calculation_schema' => 'array',
         'stundensatz_eur' => 'decimal:2',
-        'marge_pct' => 'decimal:2',
+        'margin_pct' => 'decimal:2',
         // #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — Controlling-Ziel + Break-even-Treiber
         'target_food_cost_pct' => 'decimal:2',
         // #379+: Lohnnebenkosten-Zuschlag % (AG-/Sozialabgaben auf den Produktionslohn)

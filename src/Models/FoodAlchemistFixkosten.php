@@ -24,12 +24,12 @@ class FoodAlchemistFixkosten extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'betrag' => 'decimal:2',
+        'amount' => 'decimal:2',
     ];
 
     /** Betrag auf Monatsbasis normalisiert (jährlich ÷ 12). */
     public function monatsbetrag(): float
     {
-        return $this->periode === 'jaehrlich' ? (float) $this->betrag / 12 : (float) $this->betrag;
+        return $this->periode === 'jaehrlich' ? (float) $this->amount / 12 : (float) $this->amount;
     }
 }

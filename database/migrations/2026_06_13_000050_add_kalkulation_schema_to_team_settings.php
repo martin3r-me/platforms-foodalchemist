@@ -21,8 +21,8 @@ return new class extends Migration
             if (! Schema::hasColumn('foodalchemist_team_settings', 'stundensatz_eur')) {
                 $table->decimal('stundensatz_eur', 10, 2)->nullable();   // Default-Lohnsatz für den arbeitszeit-Block
             }
-            if (! Schema::hasColumn('foodalchemist_team_settings', 'marge_pct')) {
-                $table->decimal('marge_pct', 7, 2)->nullable();          // Marge auf HK → VK-Vorschlag
+            if (! Schema::hasColumn('foodalchemist_team_settings', 'margin_pct')) {
+                $table->decimal('margin_pct', 7, 2)->nullable();          // Marge auf HK → VK-Vorschlag
             }
         });
     }
@@ -30,7 +30,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('foodalchemist_team_settings', function (Blueprint $table) {
-            foreach (['calculation_schema', 'stundensatz_eur', 'marge_pct'] as $col) {
+            foreach (['calculation_schema', 'stundensatz_eur', 'margin_pct'] as $col) {
                 if (Schema::hasColumn('foodalchemist_team_settings', $col)) {
                     $table->dropColumn($col);
                 }
