@@ -44,7 +44,7 @@ class Ki extends Component
         $statistik = $team !== null
             ? DB::table('foodalchemist_ai_call_log')->where('team_id', $team->id)
                 ->selectRaw('feature, tier, COUNT(*) AS calls, SUM(COALESCE(tokens_in,0)) AS t_in, '
-                    . 'SUM(COALESCE(tokens_out,0)) AS t_out, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS fehler, '
+                    . 'SUM(COALESCE(tokens_out,0)) AS t_out, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS errors, '
                     . 'SUM(CASE WHEN accepted_at IS NOT NULL THEN 1 ELSE 0 END) AS accepted')
                 ->groupBy('feature', 'tier')->orderByDesc('calls')->limit(30)->get()
             : collect();

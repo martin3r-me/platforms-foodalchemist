@@ -419,7 +419,7 @@
                                         @foreach($rezept->ingredients as $z)
                                             @continue(! isset($darZeilen[$z->id]))
                                             @php($delta = $deltaMap->get($z->id))
-                                            <tr wire:key="delta-{{ $d->id }}-{{ $z->id }}" class="border-t border-black/5 dark:border-white/5 {{ $delta?->weggelassen ? 'opacity-40 line-through' : '' }}">
+                                            <tr wire:key="delta-{{ $d->id }}-{{ $z->id }}" class="border-t border-black/5 dark:border-white/5 {{ $delta?->omitted ? 'opacity-40 line-through' : '' }}">
                                                 <td class="py-1 pr-2">{{ $z->display_name ?? $z->gp?->gp_name ?? $z->referencedRecipe?->name ?? $z->raw_text }}</td>
                                                 <td class="py-1 pr-2 text-right tabular-nums text-gray-400">{{ number_format($darZeilen[$z->id]['masse_g'], 0, ',', '.') }}</td>
                                                 <td class="py-1 pr-2 text-right">
@@ -428,7 +428,7 @@
                                                            class="{{ $input }} !py-0.5 !w-20 text-right" placeholder="—" />
                                                 </td>
                                                 <td class="py-1 text-center">
-                                                    <input type="checkbox" @checked($delta?->weggelassen)
+                                                    <input type="checkbox" @checked($delta?->omitted)
                                                            wire:click="darDeltaWeg({{ $d->id }}, {{ $z->id }})" />
                                                 </td>
                                             </tr>

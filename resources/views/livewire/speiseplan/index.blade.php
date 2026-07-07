@@ -27,7 +27,7 @@
                         <button type="button" wire:key="sp-{{ $p->id }}" wire:click="waehle({{ $p->id }})"
                                 class="w-full text-left px-2 py-1 rounded-lg text-xs {{ $selectedId === $p->id ? $aktiv : $hover }}">
                             <span class="truncate block">{{ $p->name }}</span>
-                            <span class="text-[10px] text-gray-400">{{ $p->zyklus_wochen }} Wo.-Zyklus · {{ $p->eintraege_count }} Einträge</span>
+                            <span class="text-[10px] text-gray-400">{{ $p->cycle_weeks }} Wo.-Zyklus · {{ $p->eintraege_count }} Einträge</span>
                         </button>
                     @empty
                         <p class="px-2 py-3 text-[11px] text-gray-400">Noch keine Speisepläne.</p>
@@ -81,7 +81,7 @@
                 <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
                     <div class="md:col-span-2"><label class="{{ $label }}">Name</label><input type="text" wire:model="form.name" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Start (Montag)</label><input type="date" wire:model.live="form.start_date" wire:change="speichern" class="{{ $input }}" /></div>
-                    <div><label class="{{ $label }}">Zyklus (Wochen)</label><input type="number" min="1" wire:model.live="form.zyklus_wochen" wire:change="speichern" class="{{ $input }} text-right tabular-nums" /></div>
+                    <div><label class="{{ $label }}">Zyklus (Wochen)</label><input type="number" min="1" wire:model.live="form.cycle_weeks" wire:change="speichern" class="{{ $input }} text-right tabular-nums" /></div>
                     <div><label class="{{ $label }}">Min. Abstand (T.)</label><input type="number" min="0" wire:model.live="form.min_abstand_tage" wire:change="speichern" class="{{ $input }} text-right tabular-nums" title="0 = keine Wiederholungsregel" /></div>
                     <div><label class="{{ $label }}">Status</label>
                         <select wire:model="form.status" wire:change="speichern" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select></div>
@@ -91,7 +91,7 @@
                     <button type="button" wire:click="loeschen({{ $sp->id }})" wire:confirm="Speiseplan löschen?" class="{{ $btnGhost }} text-red-600 dark:text-red-400">Löschen</button>
                     <span class="flex items-center gap-2 ml-auto">
                         <input type="date" wire:model="ausrollenBis" class="{{ $input }} w-40" title="Zyklus-Vorlage bis zu diesem Datum ausrollen" />
-                        <button type="button" wire:click="ausrollen" class="{{ $btnGhost }}" title="Den {{ $sp->zyklus_wochen }}-Wochen-Block ab Start auf alle Folgewochen kopieren">⟳ Zyklus ausrollen</button>
+                        <button type="button" wire:click="ausrollen" class="{{ $btnGhost }}" title="Den {{ $sp->cycle_weeks }}-Wochen-Block ab Start auf alle Folgewochen kopieren">⟳ Zyklus ausrollen</button>
                     </span>
                 </div>
                 @if($ausrollenInfo)<p class="text-[11px] text-violet-600 dark:text-violet-400">{{ $ausrollenInfo }}</p>@endif

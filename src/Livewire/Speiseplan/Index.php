@@ -26,7 +26,7 @@ class Index extends Component
     #[Url(as: 'sp')]
     public ?int $selectedId = null;
 
-    public array $form = ['name' => '', 'start_date' => null, 'zyklus_wochen' => 4, 'min_abstand_tage' => 0, 'status' => 'draft'];
+    public array $form = ['name' => '', 'start_date' => null, 'cycle_weeks' => 4, 'min_abstand_tage' => 0, 'status' => 'draft'];
 
     public string $mahlzeit = 'mittag';
 
@@ -87,7 +87,7 @@ class Index extends Component
         $this->form = [
             'name' => $sp->name,
             'start_date' => optional($sp->start_date)->format('Y-m-d'),
-            'zyklus_wochen' => $sp->zyklus_wochen,
+            'cycle_weeks' => $sp->cycle_weeks,
             'min_abstand_tage' => $sp->min_abstand_tage,
             'status' => $sp->status,
         ];

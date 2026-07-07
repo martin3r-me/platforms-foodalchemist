@@ -28,7 +28,7 @@ return new class extends Migration
                 $table->unsignedBigInteger('team_id')->nullable()->index();
                 $table->string('name');
                 $table->date('start_date')->nullable();
-                $table->unsignedInteger('zyklus_wochen')->default(1);
+                $table->unsignedInteger('cycle_weeks')->default(1);
                 $table->unsignedInteger('min_abstand_tage')->default(0);  // Wiederholungsregel (0 = aus)
                 $table->string('status', 16)->default('draft');
                 $table->text('description')->nullable();

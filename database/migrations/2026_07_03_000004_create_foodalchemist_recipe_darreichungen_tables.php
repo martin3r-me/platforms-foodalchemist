@@ -104,7 +104,7 @@ return new class extends Migration
                 $table->foreign('recipe_ingredient_id', 'fa_darreichung_deltas_recipe_zutat_fk')
                     ->references('id')->on('foodalchemist_recipe_ingredients')->cascadeOnDelete();
                 $table->decimal('quantity_override_g', 12, 3)->nullable();     // NULL = Menge unverändert
-                $table->boolean('weggelassen')->default(false);
+                $table->boolean('omitted')->default(false);
                 $table->text('note')->nullable();
                 $table->timestamps();
                 $table->softDeletes();

@@ -60,8 +60,8 @@ class Index extends Component
         }
         $this->selectedId = $k->id;
         $this->titel = (string) $k->title;
-        $this->margeOverride = $k->marge_override_pct !== null
-            ? rtrim(rtrim(number_format((float) $k->marge_override_pct, 2, '.', ''), '0'), '.') : '';
+        $this->margeOverride = $k->margin_override_pct !== null
+            ? rtrim(rtrim(number_format((float) $k->margin_override_pct, 2, '.', ''), '0'), '.') : '';
         $this->note = (string) ($k->note ?? '');
         $this->addSuche = '';
         $this->meldung = null;
@@ -74,7 +74,7 @@ class Index extends Component
         }
         $this->svc()->update($this->team(), $this->selectedId, [
             'title' => $this->titel,
-            'marge_override_pct' => $this->margeOverride,
+            'margin_override_pct' => $this->margeOverride,
             'note' => $this->note,
         ]);
         $this->meldung = 'Gespeichert.';

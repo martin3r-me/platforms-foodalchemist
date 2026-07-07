@@ -60,7 +60,7 @@
             @if($bulkRun->status === 'running')
                 <span>✨ Anreicherung läuft …</span>
             @else
-                <span>✨ {{ $bulkOffen }} Vorschläge offen{{ $bulkRun->fehler > 0 ? " · {$bulkRun->fehler} Fehler" : '' }}</span>
+                <span>✨ {{ $bulkOffen }} Vorschläge offen{{ $bulkRun->failed > 0 ? " · {$bulkRun->failed} Fehler" : '' }}</span>
                 <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-anreichern-uebernehmen>Alle übernehmen</button>
             @endif
         </div>

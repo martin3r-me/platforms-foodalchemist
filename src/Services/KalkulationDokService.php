@@ -53,9 +53,9 @@ class KalkulationDokService
         if (array_key_exists('note', $data)) {
             $patch['note'] = $data['note'];
         }
-        if (array_key_exists('marge_override_pct', $data)) {
-            $v = $data['marge_override_pct'];
-            $patch['marge_override_pct'] = ($v === '' || $v === null) ? null : (float) $v;
+        if (array_key_exists('margin_override_pct', $data)) {
+            $v = $data['margin_override_pct'];
+            $patch['margin_override_pct'] = ($v === '' || $v === null) ? null : (float) $v;
         }
         if ($patch) {
             $k->update($patch);
@@ -187,8 +187,8 @@ class KalkulationDokService
 
         $r = $this->kalk->berechne($team, $hk1, $azTotal, 0.0);
 
-        $marge = $kalkulation->marge_override_pct !== null
-            ? (float) $kalkulation->marge_override_pct
+        $marge = $kalkulation->margin_override_pct !== null
+            ? (float) $kalkulation->margin_override_pct
             : (float) $r['marge_pct'];
         $vkVorschlag = round((float) $r['hk2'] * (1 + $marge / 100), 2);
 

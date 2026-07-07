@@ -24,7 +24,7 @@ class FoodAlchemistSpeiseplan extends Model
     protected $casts = [
         'uuid' => 'string',
         'start_date' => 'date',
-        'zyklus_wochen' => 'integer',
+        'cycle_weeks' => 'integer',
         'min_abstand_tage' => 'integer',
     ];
 

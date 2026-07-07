@@ -30,7 +30,7 @@ class SpeiseplaenePostTool extends FoodAlchemistTool implements ToolContract, To
             'properties' => [
                 'name' => ['type' => 'string'],
                 'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD, Default: aktueller Wochenstart'],
-                'zyklus_wochen' => ['type' => 'integer', 'minimum' => 1, 'default' => 4],
+                'cycle_weeks' => ['type' => 'integer', 'minimum' => 1, 'default' => 4],
                 'min_abstand_tage' => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => 'Wiederholungs-Sperre pro Gericht'],
             ],
             'required' => ['name'],
@@ -48,7 +48,7 @@ class SpeiseplaenePostTool extends FoodAlchemistTool implements ToolContract, To
             $plan = app(SpeiseplanService::class)->create($team, [
                 'name' => (string) $arguments['name'],
                 'start_date' => $arguments['start_date'] ?? null,
-                'zyklus_wochen' => $arguments['zyklus_wochen'] ?? 4,
+                'cycle_weeks' => $arguments['cycle_weeks'] ?? 4,
                 'min_abstand_tage' => $arguments['min_abstand_tage'] ?? 0,
                 'status' => 'draft',
             ]);
@@ -59,7 +59,7 @@ class SpeiseplaenePostTool extends FoodAlchemistTool implements ToolContract, To
         return ToolResult::success([
             'speiseplan' => [
                 'id' => $plan->id, 'name' => $plan->name, 'status' => $plan->status,
-                'start_date' => (string) $plan->start_date, 'zyklus_wochen' => $plan->zyklus_wochen,
+                'start_date' => (string) $plan->start_date, 'cycle_weeks' => $plan->cycle_weeks,
             ],
             'linien' => $plan->linien->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'is_vegetarian' => (bool) $l->is_vegetarian])->all(),
         ]);

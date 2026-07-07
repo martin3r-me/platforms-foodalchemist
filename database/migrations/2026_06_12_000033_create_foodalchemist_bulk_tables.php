@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('status', 16)->default('running');         // running | done
             $table->unsignedInteger('total')->default(0);             // Rezepte
             $table->unsignedInteger('done')->default(0);
-            $table->unsignedInteger('fehler')->default(0);            // Items mit Fehler (Kill-Switch, Provider …)
+            $table->unsignedInteger('failed')->default(0);            // Items mit Fehler (Kill-Switch, Provider …)
             $table->timestamps();
         });
 
@@ -37,7 +37,7 @@ return new class extends Migration
             $table->text('reasoning')->nullable();
             $table->unsignedBigInteger('call_log_id')->nullable();     // Accept stempelt (06_KI §5 P3)
             $table->string('status', 16)->default('offen');            // offen | uebernommen | verworfen | leer
-            $table->text('fehler')->nullable();
+            $table->text('error')->nullable();
             $table->timestamps();
 
             $table->index(['run_id', 'status']);

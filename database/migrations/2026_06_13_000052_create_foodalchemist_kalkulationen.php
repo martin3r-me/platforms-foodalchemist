@@ -21,7 +21,7 @@ return new class extends Migration
                 $table->uuid('uuid')->unique();
                 $table->unsignedBigInteger('team_id')->nullable()->index();
                 $table->string('title');
-                $table->decimal('marge_override_pct', 7, 2)->nullable();   // sonst Team-Marge
+                $table->decimal('margin_override_pct', 7, 2)->nullable();   // sonst Team-Marge
                 $table->text('note')->nullable();
                 $table->timestamps();
                 $table->softDeletes();

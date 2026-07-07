@@ -27,7 +27,7 @@ return new class extends Migration
             $table->string('code', 16);
             $table->string('label');
             $table->decimal('raw_markup_pct', 7, 2)->default(0);
-            $table->decimal('bedienung_pct', 7, 2)->default(0);
+            $table->decimal('service_pct', 7, 2)->default(0);
             $table->decimal('profit_pct', 7, 2)->default(0);
             $table->decimal('vat_rate', 5, 2)->default(19);
             $table->string('formula_type', 24)->default('aufschlag');   // aufschlag | deckungsbeitrag (W-1)

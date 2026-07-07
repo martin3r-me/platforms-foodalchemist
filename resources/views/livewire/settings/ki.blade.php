@@ -50,7 +50,7 @@
                             <td class="{{ $td }}">{{ number_format($z->calls, 0, ',', '.') }}</td>
                             <td class="{{ $td }} text-gray-500">{{ number_format($z->t_in, 0, ',', '.') }}</td>
                             <td class="{{ $td }} text-gray-500">{{ number_format($z->t_out, 0, ',', '.') }}</td>
-                            <td class="{{ $td }} {{ $z->fehler > 0 ? 'text-rose-500' : 'text-gray-500' }}">{{ $z->fehler }}</td>
+                            <td class="{{ $td }} {{ $z->errors > 0 ? 'text-rose-500' : 'text-gray-500' }}">{{ $z->errors }}</td>
                             <td class="{{ $td }} text-gray-500">{{ $z->accepted }}</td>
                             <td class="{{ $td }} text-right tabular-nums" data-ki-kosten>{{ number_format($kosten[$z->feature . '|' . $z->tier] ?? 0, 4, ',', '.') }} €</td>
                         </tr>

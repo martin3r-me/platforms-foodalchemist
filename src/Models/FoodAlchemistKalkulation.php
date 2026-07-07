@@ -24,7 +24,7 @@ class FoodAlchemistKalkulation extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'marge_override_pct' => 'decimal:2',
+        'margin_override_pct' => 'decimal:2',
     ];
 
     public function positionen(): HasMany

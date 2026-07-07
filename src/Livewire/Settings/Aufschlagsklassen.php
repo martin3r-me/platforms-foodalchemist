@@ -20,11 +20,11 @@ class Aufschlagsklassen extends Component
 
     public array $form = [];
 
-    public array $neu = ['code' => '', 'label' => '', 'raw_markup_pct' => '', 'bedienung_pct' => '0', 'profit_pct' => '0', 'vat_rate' => '19', 'formula_type' => 'aufschlag', 'note' => ''];
+    public array $neu = ['code' => '', 'label' => '', 'raw_markup_pct' => '', 'service_pct' => '0', 'profit_pct' => '0', 'vat_rate' => '19', 'formula_type' => 'aufschlag', 'note' => ''];
 
     public ?string $fehler = null;
 
-    private const PROZENT_FELDER = ['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'vat_rate'];
+    private const PROZENT_FELDER = ['raw_markup_pct', 'service_pct', 'profit_pct', 'vat_rate'];
 
     public function edit(int $id): void
     {
@@ -37,7 +37,7 @@ class Aufschlagsklassen extends Component
         $this->form = [
             'label' => $ak->label,
             'raw_markup_pct' => (string) $ak->raw_markup_pct,
-            'bedienung_pct' => (string) $ak->bedienung_pct,
+            'service_pct' => (string) $ak->service_pct,
             'profit_pct' => (string) $ak->profit_pct,
             'vat_rate' => (string) $ak->vat_rate,
             'formula_type' => $ak->formula_type,

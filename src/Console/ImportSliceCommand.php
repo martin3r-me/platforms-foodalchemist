@@ -835,7 +835,7 @@ class ImportSliceCommand extends Command
                 'code' => $r['code'],
                 'label' => $r['bezeichnung'],
                 'raw_markup_pct' => $r['rohaufschlag_pct'] ?? 0,
-                'bedienung_pct' => $r['bedienung_pct'] ?? 0,
+                'service_pct' => $r['bedienung_pct'] ?? 0,
                 'profit_pct' => $r['profit_pct'] ?? 0,
                 'vat_rate' => $r['mwst_satz'] ?? 19,
                 'formula_type' => $r['formel_typ'] ?? 'aufschlag',      // 'deckungsbeitrag' bleibt anlegbar — Vorschlags-Pfad wirft (W-1)
@@ -952,7 +952,7 @@ class ImportSliceCommand extends Command
                 'presentation_id' => $darreichungMap[(int) $r['darreichung_id']] ?? null,
                 'recipe_ingredient_id' => $ingredientMap[(int) $r['recipe_ingredient_id']] ?? null,
                 'quantity_override_g' => $r['menge_override_g'],
-                'weggelassen' => (bool) $r['weggelassen'],
+                'omitted' => (bool) $r['weggelassen'],
                 'note' => self::nullIfBlank($r['note'] ?? null),
             ], skipRow: fn (array $r) => ! isset($darreichungMap[(int) $r['darreichung_id']])
                 || ! isset($ingredientMap[(int) $r['recipe_ingredient_id']]));

@@ -148,7 +148,7 @@
                         @if($run->status === 'running')
                             <span class="{{ $pill }} {{ $variantPill['info'] }}">✨ Bulk läuft … {{ $run->done }}/{{ $run->total }}</span>
                         @else
-                            <span class="{{ $pill }} {{ $variantPill['success'] }}">✨ Bulk fertig: {{ $run->done }}/{{ $run->total }}{{ $run->fehler > 0 ? " · {$run->fehler} Fehler" : '' }}</span>
+                            <span class="{{ $pill }} {{ $variantPill['success'] }}">✨ Bulk fertig: {{ $run->done }}/{{ $run->total }}{{ $run->failed > 0 ? " · {$run->failed} Fehler" : '' }}</span>
                             <span class="text-[11px] text-gray-500">{{ $bulkSvc->offeneVorschlaege(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId) }} Vorschläge offen</span>
                             <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-bulk-alle-uebernehmen>Alle übernehmen</button>
                             <button type="button" wire:click="bulkSchliessen" class="{{ $btnGhostXs }}" title="Vorschläge bleiben offen (Review)">Schließen</button>

@@ -16,7 +16,7 @@
                     @if($editId === $ak->id)
                         <td class="{{ $td }} !px-2 font-mono text-[11px]">{{ $ak->code }}</td>
                         <td class="{{ $td }} !px-2"><input type="text" wire:model="form.label" class="{{ $input }} !py-1" /></td>
-                        @foreach(['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'vat_rate'] as $feld)
+                        @foreach(['raw_markup_pct', 'service_pct', 'profit_pct', 'vat_rate'] as $feld)
                             <td class="{{ $td }} !px-2"><input type="text" wire:model="form.{{ $feld }}" class="{{ $input }} !py-1 !w-16 text-right" /></td>
                         @endforeach
                         <td class="{{ $td }} !px-2">
@@ -33,7 +33,7 @@
                     @else
                         <td class="{{ $td }} !px-2 font-mono text-[11px]">{{ $ak->code }}</td>
                         <td class="{{ $td }} !px-2">{{ $ak->label }}</td>
-                        @foreach(['raw_markup_pct', 'bedienung_pct', 'profit_pct', 'vat_rate'] as $feld)
+                        @foreach(['raw_markup_pct', 'service_pct', 'profit_pct', 'vat_rate'] as $feld)
                             <td class="{{ $td }} !px-2 text-right tabular-nums">{{ rtrim(rtrim(number_format((float) $ak->{$feld}, 2, ',', '.'), '0'), ',') }}</td>
                         @endforeach
                         <td class="{{ $td }} !px-2">
@@ -64,7 +64,7 @@
             <input type="text" wire:model="neu.code" placeholder="Code (z. B. AK_NEU)" class="{{ $input }} !py-1 w-32 font-mono" data-ak-neu-code />
             <input type="text" wire:model="neu.label" placeholder="Bezeichnung" class="{{ $input }} !py-1 w-44" />
             <input type="text" wire:model="neu.raw_markup_pct" placeholder="Rohaufschlag %" class="{{ $input }} !py-1 w-28 text-right" />
-            <input type="text" wire:model="neu.bedienung_pct" placeholder="Bedienung %" class="{{ $input }} !py-1 w-24 text-right" />
+            <input type="text" wire:model="neu.service_pct" placeholder="Bedienung %" class="{{ $input }} !py-1 w-24 text-right" />
             <input type="text" wire:model="neu.profit_pct" placeholder="Profit %" class="{{ $input }} !py-1 w-20 text-right" />
             <input type="text" wire:model="neu.vat_rate" placeholder="MwSt %" class="{{ $input }} !py-1 w-20 text-right" />
             <button type="button" wire:click="create" class="{{ $btnPrimary }}" data-ak-neu-anlegen>+ Anlegen</button>

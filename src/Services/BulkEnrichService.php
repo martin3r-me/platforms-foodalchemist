@@ -69,7 +69,7 @@ class BulkEnrichService
                 DB::table('foodalchemist_bulk_proposals')->insert([
                     'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
                     'team_id' => $team->id, 'run_id' => $runId, 'recipe_id' => $recipeId, 'field' => $feld,
-                    'status' => 'leer', 'fehler' => mb_strimwidth($e->getMessage(), 0, 500),
+                    'status' => 'leer', 'error' => mb_strimwidth($e->getMessage(), 0, 500),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
             }
@@ -77,7 +77,7 @@ class BulkEnrichService
 
         DB::table('foodalchemist_bulk_runs')->where('id', $runId)->update([
             'done' => DB::raw('done + 1'),
-            'fehler' => DB::raw('fehler + ' . ($fehler || $r === null ? 1 : 0)),
+            'failed' => DB::raw('failed + ' . ($fehler || $r === null ? 1 : 0)),
             'updated_at' => now(),
         ]);
         DB::table('foodalchemist_bulk_runs')->where('id', $runId)->whereColumn('done', '>=', 'total')
@@ -219,7 +219,7 @@ class BulkEnrichService
                 DB::table('foodalchemist_bulk_gp_proposals')->insert([
                     'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
                     'team_id' => $team->id, 'run_id' => $runId, 'gp_id' => $gpId, 'field' => $feld,
-                    'status' => 'leer', 'fehler' => mb_strimwidth($e->getMessage(), 0, 500),
+                    'status' => 'leer', 'error' => mb_strimwidth($e->getMessage(), 0, 500),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
             }
@@ -227,7 +227,7 @@ class BulkEnrichService
 
         DB::table('foodalchemist_bulk_runs')->where('id', $runId)->update([
             'done' => DB::raw('done + 1'),
-            'fehler' => DB::raw('fehler + ' . ($fehler || $gp === null ? 1 : 0)),
+            'failed' => DB::raw('failed + ' . ($fehler || $gp === null ? 1 : 0)),
             'updated_at' => now(),
         ]);
         DB::table('foodalchemist_bulk_runs')->where('id', $runId)->whereColumn('done', '>=', 'total')

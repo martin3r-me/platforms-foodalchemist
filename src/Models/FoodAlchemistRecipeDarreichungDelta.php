@@ -24,7 +24,7 @@ class FoodAlchemistRecipeDarreichungDelta extends Model
 
     protected $casts = [
         'quantity_override_g' => 'float',
-        'weggelassen' => 'bool',
+        'omitted' => 'bool',
     ];
 
     public function darreichung()

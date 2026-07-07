@@ -44,7 +44,7 @@ class SpeiseplanService
             ->find($id);
     }
 
-    private const FELDER = ['name', 'start_date', 'zyklus_wochen', 'min_abstand_tage', 'status', 'description', 'note'];
+    private const FELDER = ['name', 'start_date', 'cycle_weeks', 'min_abstand_tage', 'status', 'description', 'note'];
 
     public function create(Team $team, array $in): FoodAlchemistSpeiseplan
     {
@@ -52,7 +52,7 @@ class SpeiseplanService
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neuer Speiseplan')) ?: 'Neuer Speiseplan',
             'start_date' => $in['start_date'] ?? Carbon::now()->startOfWeek()->format('Y-m-d'),
-            'zyklus_wochen' => max(1, (int) ($in['zyklus_wochen'] ?? 4)),
+            'cycle_weeks' => max(1, (int) ($in['cycle_weeks'] ?? 4)),
             'min_abstand_tage' => max(0, (int) ($in['min_abstand_tage'] ?? 0)),
             'status' => $in['status'] ?? 'draft',
         ]);
@@ -70,7 +70,7 @@ class SpeiseplanService
         $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($id);
         $this->guard($plan, $team);
         $update = array_intersect_key($in, array_flip(self::FELDER));
-        foreach (['zyklus_wochen' => 1, 'min_abstand_tage' => 0] as $f => $min) {
+        foreach (['cycle_weeks' => 1, 'min_abstand_tage' => 0] as $f => $min) {
             if (array_key_exists($f, $update)) {
                 $update[$f] = max($min, (int) $update[$f]);
             }
@@ -342,7 +342,7 @@ class SpeiseplanService
     }
 
     /**
-     * Zyklus-Vorlage ausrollen: den Block [start_date, +zyklus_wochen Wochen) auf alle
+     * Zyklus-Vorlage ausrollen: den Block [start_date, +cycle_weeks Wochen) auf alle
      * folgenden Zyklen bis $bisDatum kopieren. Dedupe je (Datum|Mahlzeit|Linie|Inhalt).
      *
      * @return int Anzahl neu erzeugter Einträge
@@ -356,7 +356,7 @@ class SpeiseplanService
         }
         $start = $plan->start_date->copy()->startOfDay();
         $bis = Carbon::parse($bisDatum)->startOfDay();
-        $blockTage = max(1, (int) $plan->zyklus_wochen) * 7;
+        $blockTage = max(1, (int) $plan->cycle_weeks) * 7;
         $blockEnde = $start->copy()->addDays($blockTage - 1);
 
         $basis = $plan->eintraege->filter(fn ($e) => $e->entry_date !== null && $e->entry_date->between($start, $blockEnde));

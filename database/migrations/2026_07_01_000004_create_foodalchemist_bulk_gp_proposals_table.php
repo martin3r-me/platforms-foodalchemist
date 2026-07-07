@@ -30,7 +30,7 @@ return new class extends Migration
             $table->text('reasoning')->nullable();
             $table->unsignedBigInteger('call_log_id')->nullable();
             $table->string('status', 16)->default('offen');            // offen | uebernommen | verworfen | leer
-            $table->text('fehler')->nullable();
+            $table->text('error')->nullable();
             $table->timestamps();
 
             $table->index(['run_id', 'status'], 'fa_bulk_gp_prop_run_status_idx');

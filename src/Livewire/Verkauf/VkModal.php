@@ -183,7 +183,7 @@ class VkModal extends Component
         $quantity = is_numeric(str_replace(',', '.', (string) $wert)) ? (float) str_replace(',', '.', (string) $wert) : null;
         $this->darServiceCall(function ($svc, $team) use ($darId, $ingId, $quantity) {
             $weg = (bool) \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungDelta::where('presentation_id', $darId)
-                ->where('recipe_ingredient_id', $ingId)->value('weggelassen');
+                ->where('recipe_ingredient_id', $ingId)->value('omitted');
             $svc->setzeDelta($team, $darId, $ingId, $quantity, $weg);
         });
     }
@@ -195,7 +195,7 @@ class VkModal extends Component
                 ->where('recipe_ingredient_id', $ingId)->first();
             $svc->setzeDelta($team, $darId, $ingId,
                 $delta?->quantity_override_g !== null ? (float) $delta->quantity_override_g : null,
-                ! (bool) ($delta?->weggelassen ?? false));
+                ! (bool) ($delta?->omitted ?? false));
         });
     }
 

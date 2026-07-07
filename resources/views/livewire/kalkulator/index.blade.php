@@ -147,7 +147,7 @@
                     {{-- Ergebnis: HK1 → Zuschläge → HK2 → VK --}}
                     <div class="relative overflow-hidden {{ $card }} p-4">
                         <div class="{{ $cardAccent }}"></div>
-                        <p class="{{ $label }} mb-2">Kalkulation · Marge {{ rtrim(rtrim(number_format((float) $berechnung['marge_pct'], 2, ',', '.'), '0'), ',') }} %{{ $active->marge_override_pct !== null ? ' (Override)' : '' }}</p>
+                        <p class="{{ $label }} mb-2">Kalkulation · Marge {{ rtrim(rtrim(number_format((float) $berechnung['marge_pct'], 2, ',', '.'), '0'), ',') }} %{{ $active->margin_override_pct !== null ? ' (Override)' : '' }}</p>
                         <div class="max-w-md space-y-1">
                             <div class="flex items-center justify-between text-xs py-0.5 font-medium text-gray-900 dark:text-gray-100">
                                 <span>HK1 — Wareneinsatz (Σ Positionen)</span>

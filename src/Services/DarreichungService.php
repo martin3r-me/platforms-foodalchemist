@@ -20,7 +20,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungDelta;
  *
  * Preise (spiegelt WaWi-Recompute 206 Stufe 4):
  *  - Stufe 1 (keine Deltas): ek_portion = EK/g des Rezepts × Grammatur × Anzahl
- *  - Stufe 2 (Deltas): Misch-Preis/g über Komponenten NACH Delta (weggelassen raus,
+ *  - Stufe 2 (Deltas): Misch-Preis/g über Komponenten NACH Delta (omitted raus,
  *    Kosten skalieren linear mit der Masse), dann × Grammatur × Anzahl
  *  - preis_modus auto: sales_net = ek_portion × (1 + rohaufschlag/100); manuell bleibt
  *  - sales_gross in beiden Modi aus MwSt der Aufschlagsklasse
@@ -114,7 +114,7 @@ class DarreichungService
     }
 
     /** Delta setzen/ändern — nur Zutatenzeilen des eigenen Rezepts (E5 strukturell). */
-    public function setzeDelta(Team $team, int $darreichungId, int $recipeIngredientId, ?float $mengeOverrideG, bool $weggelassen): void
+    public function setzeDelta(Team $team, int $darreichungId, int $recipeIngredientId, ?float $mengeOverrideG, bool $omitted): void
     {
         $darreichung = $this->find($team, $darreichungId);
         $gehoertZumRezept = $darreichung->recipe->ingredients()
@@ -122,7 +122,7 @@ class DarreichungService
         if (! $gehoertZumRezept) {
             throw new \RuntimeException('Zutat gehört nicht zum Kernrezept (E5: keine neuen Zutaten).');
         }
-        if ($mengeOverrideG === null && ! $weggelassen) {
+        if ($mengeOverrideG === null && ! $omitted) {
             $this->entferneDelta($team, $darreichungId, $recipeIngredientId);
 
             return;
@@ -130,7 +130,7 @@ class DarreichungService
         FoodAlchemistRecipeDarreichungDelta::withTrashed()->updateOrCreate(
             ['presentation_id' => $darreichung->id, 'recipe_ingredient_id' => $recipeIngredientId],
             ['team_id' => $darreichung->team_id, 'quantity_override_g' => $mengeOverrideG,
-                'weggelassen' => $weggelassen, 'deleted_at' => null],
+                'omitted' => $omitted, 'deleted_at' => null],
         );
         $this->recomputePreise($darreichung);
     }
@@ -166,7 +166,7 @@ class DarreichungService
             $nBepreist = 0;
             foreach ($proEinheit as $ingId => $zeile) {
                 $delta = $deltaMap->get($ingId);
-                if ($delta !== null && $delta->weggelassen) {
+                if ($delta !== null && $delta->omitted) {
                     continue;
                 }
                 $m = $delta?->quantity_override_g !== null ? (float) $delta->quantity_override_g : $zeile['masse_g'];
