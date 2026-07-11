@@ -85,6 +85,8 @@ class KnowledgeContextService
             $parts[] = $this->groundingBlock($hauptzutatSlugs, (int) $r->max_docs, (int) $r->max_chars_per_doc, $filesUsed);
         }
 
+        // (#469-Bindungs-Injektion passiert jetzt zentral im AiGatewayService::propose für ALLE Prompts.)
+
         $block = implode("\n\n", $parts);
 
         return ['block' => $block, 'files_used' => $filesUsed, 'total_chars' => mb_strlen($block)];

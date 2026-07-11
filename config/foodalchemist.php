@@ -194,6 +194,17 @@ return [
             ],
         ],
         [
+            // #469: Wissens-Modul — operatives Prosa-Wissen (Regelwerke/Domains/Cross-Cutting) pflegen.
+            'group' => 'Wissen',
+            'items' => [
+                [
+                    'label' => 'Wissen',
+                    'route' => 'foodalchemist.knowledge.index',
+                    'icon'  => 'heroicon-o-academic-cap',
+                ],
+            ],
+        ],
+        [
             'group' => 'Einstellungen',
             'items' => [
                 [

@@ -40,6 +40,11 @@ class KnowledgeImportCommand extends Command
         $stats['cross_cutting'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Cross_Cutting", 'cross_cutting', $dryRun);
         $stats['domain'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Domains", 'domain', $dryRun);
         $stats['pairing'] = $this->importOrdner("{$vault}/07.02_Flavor_Pairing/pairings", 'pairing', $dryRun, slugPrefix: 'pairing.');
+        // #469-Erweiterung: operatives Prosa-Wissen. Weiterbildung/Literatur/Marktstudien bewusst NICHT (Referenz-Material).
+        $stats['regelwerk'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Regelwerke", 'regelwerk', $dryRun, slugPrefix: 'regelwerk.');
+        $stats['niveau'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Niveau_System", 'niveau', $dryRun, slugPrefix: 'niveau.');
+        // Trends nur food-basiert — Tech/Automatisierung bewusst NICHT (Dominique 2026-07-11).
+        $stats['trend'] = $this->importOrdner("{$vault}/07.03_Trend_Scouting", 'trend', $dryRun, slugPrefix: 'trend.', recursive: true, excludeDirs: ['Food_Tech_&_Automatisierung']);
 
         $stats['aliases'] = $this->importAliases($dryRun);
         $stats['routings'] = $this->seedRoutings($dryRun);
@@ -63,14 +68,27 @@ class KnowledgeImportCommand extends Command
         return self::SUCCESS;
     }
 
-    private function importOrdner(string $pfad, string $kategorie, bool $dryRun, string $slugPrefix = ''): array
+    private function importOrdner(string $pfad, string $kategorie, bool $dryRun, string $slugPrefix = '', bool $recursive = false, array $excludeDirs = []): array
     {
         if (! is_dir($pfad)) {
             $this->warn("Ordner fehlt: {$pfad}");
 
             return ['source' => 0, 'neu' => 0, 'geaendert' => 0, 'skip' => 0];
         }
-        $dateien = glob("{$pfad}/*.md");
+        if ($recursive) {
+            $dateien = [];
+            $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($pfad, \FilesystemIterator::SKIP_DOTS));
+            foreach ($it as $f) {
+                if (! $f->isFile() || strtolower($f->getExtension()) !== 'md') continue;
+                foreach ($excludeDirs as $ex) {
+                    if (str_contains($f->getPathname(), '/' . $ex . '/')) continue 2;
+                }
+                $dateien[] = $f->getPathname();
+            }
+            sort($dateien);
+        } else {
+            $dateien = glob("{$pfad}/*.md");
+        }
         $neu = $geaendert = $skip = 0;
         $now = now()->toDateTimeString();
 

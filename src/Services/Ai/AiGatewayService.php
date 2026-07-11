@@ -82,8 +82,36 @@ class AiGatewayService
         $wissen = isset($options['knowledge']) && is_string($options['knowledge']) && $options['knowledge'] !== ''
             ? $options['knowledge'] . "\n\n"
             : '';
+
+        // #469: an diesen Layer gebundenes Wissen additiv laden — Prompt-Key (fein) ODER Bereich (Präfix, grob).
+        // Macht „einbinden" für JEDEN Prompt wirksam (zentraler Punkt, alle Prompts laufen durch propose()).
+        $boundSlugs = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_bindings')) {
+            $bereich = str_contains($promptKey, '.') ? explode('.', $promptKey, 2)[0] : $promptKey;
+            $bound = \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_bindings as b')
+                ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
+                ->whereNull('b.deleted_at')->where('b.active', 1)
+                ->where('b.binding_type', 'layer')->whereIn('b.target_key', array_unique([$promptKey, $bereich]))
+                ->where('d.active', 1)->whereNull('d.deleted_at')
+                ->orderByDesc('b.weight')
+                ->get(['d.slug', 'd.version', 'd.content_md']);
+            $bBlocks = [];
+            foreach ($bound as $doc) {
+                $bBlocks[] = "## GEBUNDEN: {$doc->slug}\n\n" . mb_substr((string) $doc->content_md, 0, 2000);
+                $boundSlugs[] = "{$doc->slug}@v{$doc->version}";
+            }
+            if ($bBlocks !== []) {
+                $wissen .= "# DIREKT GEBUNDENES WISSEN (an diesen Layer verdrahtet)\n\n"
+                    . implode("\n\n---\n\n", $bBlocks) . "\n\n";
+            }
+        }
+
+        $knowledgeUsed = $options['knowledge_used'] ?? null;
+        if ($boundSlugs !== []) {
+            $knowledgeUsed = array_values(array_unique(array_merge(is_array($knowledgeUsed) ? $knowledgeUsed : [], $boundSlugs)));
+        }
         $audit = [
-            'knowledge_used' => $options['knowledge_used'] ?? null,
+            'knowledge_used' => $knowledgeUsed,
             'target_table' => $options['target_table'] ?? null,
             'target_id' => $options['target_id'] ?? null,
         ];

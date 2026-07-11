@@ -71,6 +71,13 @@ Route::get('/food-dna', \Platform\FoodAlchemist\Livewire\FoodDna\Index::class)
     ->name('foodalchemist.food-dna.index');
 
 /**
+ * Wissens-Modul (#469) — Pflege-Browser für operatives Prosa-Wissen
+ * (Regelwerke/Domains/Cross-Cutting). Auswahl/Filter in der URL (V-17).
+ */
+Route::get('/wissen', \Platform\FoodAlchemist\Livewire\Knowledge\Browser::class)
+    ->name('foodalchemist.knowledge.index');
+
+/**
  * Einstellungen (M1-01, D-1 §4) — Sektion in der URL (V-17: kein Tab-State-Verlust).
  */
 Route::get('/einstellungen/{sektion?}', \Platform\FoodAlchemist\Livewire\Settings\Index::class)
