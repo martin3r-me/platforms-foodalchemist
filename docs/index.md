@@ -36,7 +36,7 @@ Quer dazu liegen zwei Werkzeuge, die jede Ebene nutzen: die **Kalkulation** (was
 Du pflegst Preise nur einmal — beim Lieferantenartikel. Von dort rollt der Wareneinsatz automatisch ins Basisrezept, ins Gericht und ins Concept. Ändert ein Lieferant seinen Preis, ist die Kalkulation überall aktuell.
 
 ### 🤖 KI schlägt vor, du entscheidest
-An vielen Stellen hilft die KI (Allergene ableiten, Rezepte entwerfen, Pairings vorschlagen). Diese Vorschläge werden **nie blind übernommen** — sie landen zur Kontrolle unter **„Zu prüfen"**, und jeder Wert merkt sich, ob er von Hand oder von der KI kommt und wie sicher er ist.
+An vielen Stellen hilft die KI (Allergene ableiten, Rezepte entwerfen, Pairings vorschlagen). Diese Vorschläge werden **nie blind übernommen** — sie landen zur Kontrolle unter **„Zu prüfen"**, und jeder Wert merkt sich, ob er von Hand oder von der KI kommt und wie sicher er ist. Woraus die KI ihr Fachwissen zieht, pflegst du im **[Wissen](wissen.md)**-Modul (Regelwerke, Domänen, Cross-Cutting) — direkt an KI-Einsatzorte gebunden.
 
 ### 👥 Deine Daten gehören deinem Team
 Was dein Team anlegt, sieht dein Team. Übergreifende Stammdaten (z. B. ein zentraler Grundprodukt-Katalog) können team-übergreifend bereitgestellt werden.
