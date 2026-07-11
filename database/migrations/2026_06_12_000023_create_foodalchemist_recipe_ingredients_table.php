@@ -28,7 +28,7 @@ return new class extends Migration
             $table->foreignId('referenced_recipe_id')->nullable()->constrained('foodalchemist_recipes')->nullOnDelete();
 
             $table->text('raw_text');
-            $table->string('display_name')->nullable()->comment('D-5 §2.2 — Anzeige-Name (neu, Backfill via V-03)');
+            $table->string('display_name', 512)->nullable()->comment('D-5 §2.2 — Anzeige-Name (neu, Backfill via V-03)');
 
             $table->decimal('quantity', 12, 4);
             $table->decimal('quantity_max', 12, 4)->nullable()->comment('Mengen-Bereich (§6.4: Mittelwert)');

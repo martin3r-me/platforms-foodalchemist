@@ -32,7 +32,7 @@ return new class extends Migration
             $table->string('form')->nullable();
 
             // ── Klassifikation (§3/§9 GP-Regelwerk)
-            $table->string('commodity_group_code', 8)->nullable()->index()->comment('FK-leicht auf lookup_warengruppen.code');
+            $table->string('commodity_group_code', 32)->nullable()->index()->comment('FK-leicht auf lookup_warengruppen.code');
             $table->string('sub_category')->nullable();
             $table->string('condition', 16)->nullable()->comment('frisch|TK|trocken|konserviert (§9); WG 15 ausgenommen (Regelwerk-Rev. v3.3.3 geplant)');
             $table->string('bio', 16)->nullable();

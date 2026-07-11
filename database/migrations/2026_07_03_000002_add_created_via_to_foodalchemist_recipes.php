@@ -18,7 +18,7 @@ return new class extends Migration
             return;
         }
         Schema::table('foodalchemist_recipes', function (Blueprint $table) {
-            $table->string('created_via', 24)->nullable()->index()   // editor | mcp | import | generator
+            $table->string('created_via', 48)->nullable()->index()   // editor | mcp | import | generator
                 ->after('last_modified_by');
         });
     }

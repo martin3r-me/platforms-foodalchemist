@@ -102,7 +102,7 @@ return new class extends Migration
                 $table->unsignedBigInteger('legacy_id')->nullable()->unique();
                 $table->string('slug');
                 $table->string('name');
-                $table->string('gruppe')->nullable();
+                $table->string('group_name')->nullable();
                 if ($mitKapazitaet) {
                     $table->decimal('kapazitaet_kg', 8, 3)->nullable();
                 }

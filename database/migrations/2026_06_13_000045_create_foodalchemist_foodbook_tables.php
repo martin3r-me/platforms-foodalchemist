@@ -82,7 +82,7 @@ return new class extends Migration
             $table->string('price_basis', 12)->nullable();            // person | pauschal
             $table->string('height', 12)->nullable();                  // spacer: klein|mittel|gross
             $table->json('payload_json')->nullable();                 // image u. a.
-            $table->string('header_source', 16)->nullable();          // KI-Lineage (GL-07)
+            $table->string('header_source', 48)->nullable();          // KI-Lineage (GL-07)
             $table->timestamps();
             $table->softDeletes();
         });
