@@ -22,6 +22,7 @@ class KnowledgeImportCommand extends Command
     protected $signature = 'foodalchemist:knowledge-import
         {--vault= : Pfad zum 07_WISSEN-Ordner}
         {--rust-src= : Pfad zu vault_context.rs (Alias-Quelle, 258 Paare)}
+        {--force : Import-Guard aufheben — in der App editierte Docs mit dem Vault-Stand überschreiben}
         {--dry-run : nur zählen}';
 
     protected $description = 'D4-Wissens-Import (Klasse A): Cross_Cutting + Domains + Pairings + Aliasse + Routings';
@@ -35,23 +36,33 @@ class KnowledgeImportCommand extends Command
             return self::FAILURE;
         }
         $dryRun = (bool) $this->option('dry-run');
+        $force = (bool) $this->option('force');
 
         $stats = [];
-        $stats['cross_cutting'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Cross_Cutting", 'cross_cutting', $dryRun);
-        $stats['domain'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Domains", 'domain', $dryRun);
-        $stats['pairing'] = $this->importOrdner("{$vault}/07.02_Flavor_Pairing/pairings", 'pairing', $dryRun, slugPrefix: 'pairing.');
+        $stats['cross_cutting'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Cross_Cutting", 'cross_cutting', $dryRun, force: $force);
+        $stats['domain'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Domains", 'domain', $dryRun, force: $force);
+        $stats['pairing'] = $this->importOrdner("{$vault}/07.02_Flavor_Pairing/pairings", 'pairing', $dryRun, slugPrefix: 'pairing.', force: $force);
         // #469-Erweiterung: operatives Prosa-Wissen. Weiterbildung/Literatur/Marktstudien bewusst NICHT (Referenz-Material).
-        $stats['regelwerk'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Regelwerke", 'regelwerk', $dryRun, slugPrefix: 'regelwerk.');
-        $stats['niveau'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Niveau_System", 'niveau', $dryRun, slugPrefix: 'niveau.');
+        $stats['regelwerk'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Regelwerke", 'regelwerk', $dryRun, slugPrefix: 'regelwerk.', force: $force);
+        $stats['niveau'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Niveau_System", 'niveau', $dryRun, slugPrefix: 'niveau.', force: $force);
         // Trends nur food-basiert — Tech/Automatisierung bewusst NICHT (Dominique 2026-07-11).
-        $stats['trend'] = $this->importOrdner("{$vault}/07.03_Trend_Scouting", 'trend', $dryRun, slugPrefix: 'trend.', recursive: true, excludeDirs: ['Food_Tech_&_Automatisierung']);
+        $stats['trend'] = $this->importOrdner("{$vault}/07.03_Trend_Scouting", 'trend', $dryRun, slugPrefix: 'trend.', recursive: true, excludeDirs: ['Food_Tech_&_Automatisierung'], force: $force);
 
         $stats['aliases'] = $this->importAliases($dryRun);
         $stats['routings'] = $this->seedRoutings($dryRun);
         $stats['anker_links'] = $this->verdrahteAnker($dryRun);
 
-        $this->table(['Phase', 'Quelle', 'neu', 'aktualisiert', 'unverändert/übersprungen'],
-            collect($stats)->map(fn ($s, $k) => [$k, $s['source'] ?? '—', $s['neu'] ?? '—', $s['geaendert'] ?? '—', $s['skip'] ?? '—'])->all());
+        $this->table(['Phase', 'Quelle', 'neu', 'aktualisiert', 'unverändert/übersprungen', 'geschützt'],
+            collect($stats)->map(fn ($s, $k) => [$k, $s['source'] ?? '—', $s['neu'] ?? '—', $s['geaendert'] ?? '—', $s['skip'] ?? '—', $s['geschuetzt'] ?? '—'])->all());
+
+        // Import-Guard-Report: welche App-kuratierten Docs wurden NICHT überschrieben?
+        $geschuetzt = collect($stats)->sum(fn ($s) => $s['geschuetzt'] ?? 0);
+        if ($geschuetzt > 0) {
+            $slugs = collect($stats)->flatMap(fn ($s) => $s['konflikte'] ?? [])->all();
+            $this->warn("🛡  {$geschuetzt} in der App editierte Doc(s) NICHT überschrieben (Import-Guard): "
+                . implode(', ', array_slice($slugs, 0, 20)) . (count($slugs) > 20 ? ' …' : ''));
+            $this->line('    → mit --force würde der Vault-Stand diese Docs überschreiben.');
+        }
 
         // Gates (07 §5-Stil)
         if (! $dryRun) {
@@ -68,12 +79,12 @@ class KnowledgeImportCommand extends Command
         return self::SUCCESS;
     }
 
-    private function importOrdner(string $pfad, string $kategorie, bool $dryRun, string $slugPrefix = '', bool $recursive = false, array $excludeDirs = []): array
+    private function importOrdner(string $pfad, string $kategorie, bool $dryRun, string $slugPrefix = '', bool $recursive = false, array $excludeDirs = [], bool $force = false): array
     {
         if (! is_dir($pfad)) {
             $this->warn("Ordner fehlt: {$pfad}");
 
-            return ['source' => 0, 'neu' => 0, 'geaendert' => 0, 'skip' => 0];
+            return ['source' => 0, 'neu' => 0, 'geaendert' => 0, 'skip' => 0, 'geschuetzt' => 0, 'konflikte' => []];
         }
         if ($recursive) {
             $dateien = [];
@@ -89,7 +100,8 @@ class KnowledgeImportCommand extends Command
         } else {
             $dateien = glob("{$pfad}/*.md");
         }
-        $neu = $geaendert = $skip = 0;
+        $neu = $geaendert = $skip = $geschuetzt = 0;
+        $konflikte = [];
         $now = now()->toDateTimeString();
 
         foreach ($dateien as $datei) {
@@ -126,6 +138,7 @@ class KnowledgeImportCommand extends Command
                     'content_md' => $inhalt,
                     'version' => 1,
                     'content_hash' => $hash,
+                    'imported_hash' => $hash,                         // Guard-Baseline = importierter Stand
                     'char_count' => mb_strlen($inhalt),
                     'active' => true,
                     'source_path' => $this->relativ($datei),
@@ -133,22 +146,39 @@ class KnowledgeImportCommand extends Command
                 ]);
                 $neu++;
             } elseif ($vorhanden->content_hash !== $hash) {
+                // Import-Guard (App-wins): das Doc gilt als in der App editiert, wenn sein
+                // aktueller Inhalt nicht mehr dem letzten Import-Snapshot entspricht. Dann
+                // gewinnt die App-Kuration — Vault überschreibt NICHT (außer --force).
+                $inAppEditiert = $vorhanden->imported_hash !== null
+                    && $vorhanden->content_hash !== $vorhanden->imported_hash;
+                if ($inAppEditiert && ! $force) {
+                    $geschuetzt++;
+                    $konflikte[] = $slug;
+
+                    continue;
+                }
                 DB::table('foodalchemist_knowledge_documents')->where('id', $vorhanden->id)->update([
                     'content_md' => $inhalt,
                     'title' => $this->titel($inhalt, $basis),
                     'version' => $vorhanden->version + 1,            // monoton bei Inhalts-Änderung
                     'content_hash' => $hash,
+                    'imported_hash' => $hash,                         // Snapshot nachziehen (auch bei --force)
                     'char_count' => mb_strlen($inhalt),
                     'source_path' => $this->relativ($datei),
                     'updated_at' => $now,
                 ]);
                 $geaendert++;
             } else {
-                $skip++;                                              // idempotent
+                // idempotent: Inhalt == Vault. Guard-Baseline backfillen, falls noch NULL.
+                if ($vorhanden->imported_hash === null) {
+                    DB::table('foodalchemist_knowledge_documents')->where('id', $vorhanden->id)
+                        ->update(['imported_hash' => $hash]);
+                }
+                $skip++;
             }
         }
 
-        return ['source' => count($dateien), 'neu' => $neu, 'geaendert' => $geaendert, 'skip' => $skip];
+        return ['source' => count($dateien), 'neu' => $neu, 'geaendert' => $geaendert, 'skip' => $skip, 'geschuetzt' => $geschuetzt, 'konflikte' => $konflikte];
     }
 
     /** Die 258 Paare aus vault_context.rs (HAUPTZUTAT_TO_DOMAIN) → alias → Domain-Dokument. */

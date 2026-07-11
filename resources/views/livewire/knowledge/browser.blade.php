@@ -24,7 +24,13 @@
         <div class="flex gap-4 items-start">
             {{-- LINKS: Liste + Filter --}}
             <div class="w-96 shrink-0 {{ $card }} p-3 space-y-3" data-wissen-liste>
-                <input type="text" wire:model.live.debounce.300ms="search" placeholder="Suche (Titel · Slug · Inhalt)…" class="{{ $input }} !py-1 w-full" data-wissen-suche />
+                <input type="text" wire:model.live.debounce.300ms="search" placeholder="{{ $semantic ? 'Semantisch suchen (Bedeutung · Synonyme)…' : 'Suche (Titel · Slug · Inhalt)…' }}" class="{{ $input }} !py-1 w-full" data-wissen-suche />
+                <label class="flex items-center gap-1.5 text-[11px] text-gray-600 dark:text-gray-300 cursor-pointer" title="Semantische Suche: findet auch bedeutungsähnliche Docs (z.B. «Erdapfel» → Kartoffel). Braucht einen indizierten Korpus.">
+                    <input type="checkbox" wire:model.live="semantic" data-wissen-semantik /> semantisch suchen
+                </label>
+                @if($semanticNote !== null)
+                    <p class="text-[11px] text-amber-600 dark:text-amber-400" data-wissen-semantik-hinweis>{{ $semanticNote }}</p>
+                @endif
                 <div class="flex gap-2">
                     <select wire:model.live="filterCategory" class="{{ $input }} !py-1 flex-1 text-xs">
                         <option value="">Alle Kategorien</option>
@@ -38,7 +44,7 @@
                         <option value="inactive">Inaktiv</option>
                     </select>
                 </div>
-                <p class="text-[11px] text-gray-400">{{ $docs->count() }} Dokument(e)</p>
+                <p class="text-[11px] text-gray-400">{{ $docs->count() }} Dokument(e)@if($semanticAktiv) · nach Relevanz @endif</p>
 
                 <div class="space-y-0.5 max-h-[62vh] overflow-y-auto -mx-1 px-1">
                     @forelse($docs as $doc)

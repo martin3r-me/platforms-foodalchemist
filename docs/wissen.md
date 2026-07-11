@@ -49,22 +49,61 @@ Jeder KI-Aufruf läuft durch **einen** Punkt (`AiGatewayService::propose($prompt
 
 ---
 
+## Suche im Browser — Text oder semantisch
+
+Die Dokumentenliste kennt zwei Such-Modi:
+
+- **Textsuche (Default):** klassisches Substring-Matching über Titel, Slug und Inhalt.
+- **Semantisch suchen (Schalter):** findet auch **bedeutungsähnliche** Docs, deren Wortlaut nicht wörtlich passt — z. B. „Erdapfel" → das Kartoffel-Dokument, „Topinambur" → Wurzelgemüse. Grundlage sind Embeddings des gesamten indizierten Korpus (alle Kategorien), sortiert nach Relevanz.
+
+Der semantische Modus braucht einen **indizierten Korpus** und einen **Embedding-Provider**. Ist keiner verfügbar (oder der Korpus noch nicht indiziert), fällt die Suche sauber auf die Textsuche zurück und sagt es an. Korpus indizieren:
+
+```
+php artisan foodalchemist:knowledge-embed        # alle Kategorien (idempotent, überspringt Unverändertes)
+```
+
+> Das ist unabhängig vom KI-Hot-Path-Flag `FOODALCHEMIST_SEMANTIC_SEARCH`: die **manuelle** Browser-Suche wirkt, sobald ein Provider da ist; das Flag steuert nur, ob die KI-Kontext-Injektion zusätzlich semantisch recallt.
+
+---
+
+## Import-Guard — „das Modul gewinnt" wörtlich genommen
+
+Weil das Modul die Wahrheit ist, darf ein wiederholter Vault-Import **nichts überschreiben, was im Browser kuratiert wurde**. Mechanik (App-wins-per-Snapshot):
+
+- Jedes importierte Doc trägt einen `imported_hash` = Inhalts-Snapshot des letzten Imports.
+- Der Import überschreibt ein Doc nur, wenn der **Vault-Inhalt sich geändert hat** *und* der **aktuelle Inhalt noch dem Snapshot entspricht** (das Doc wurde seit dem Import nicht in der App editiert).
+- Sobald jemand ein Doc im Browser speichert, weicht sein Inhalt vom Snapshot ab → der Import lässt es **unangetastet** und meldet es im Report („🛡 … NICHT überschrieben").
+- Bewusstes Überschreiben mit dem Vault-Stand: `--force` (zieht den Vault-Stand nach und setzt den Snapshot neu).
+
+---
+
+## Wissen per MCP wachsen lassen (v3)
+
+Externe KI-Clients können über die Platform-MCP **neues** Wissen anlegen und pflegen:
+
+- **`foodalchemist.knowledge.POST`** — legt ein Dokument an. Immer **inaktiv** (Quarantäne) und `created_via='mcp'`; es wirkt erst im KI-Kontext, wenn ein Mensch es im Browser **aktiviert**. Kategorie muss im Vokabular stehen. Optional gleich Aliase + Einsatzort-Bindungen (`source='mcp'`).
+- **`foodalchemist.knowledge.PUT`** — aktualisiert ein per MCP/Browser angelegtes Dokument (Inhalt ⇒ version+1).
+
+**Guard:** Der MCP-Pfad darf **Vault-verwaltete Dokumente nicht anfassen** (`source_path` gesetzt → gesperrt). MCP wächst nur *neues* Wissen bzw. editiert sein eigenes; die kanonischen Regelwerke bleiben Vault/Browser. `created_via` (`import`/`ui`/`mcp`) macht die Herkunft überall auswertbar.
+
+---
+
 ## Datenmodell
 
 | Tabelle | Zweck |
 |---------|-------|
-| `knowledge_documents` | die Wissens-Einträge (slug, title, category, content_md, version, content_hash, active) |
+| `knowledge_documents` | die Wissens-Einträge (slug, title, category, content_md, version, content_hash, **imported_hash** = Import-Guard-Snapshot, **created_via** = Herkunft import/ui/mcp, active) |
 | `knowledge_categories` | pflegbares Kategorien-Vokabular (such-/filterbar) |
 | `knowledge_layers` | Einsatzorte: Bereiche (grob) + KI-Prompts (fein, aus der Registry) |
 | `knowledge_bindings` | Doc → Einsatzort (`binding_type='layer'`, mode, weight, source, Provenienz) |
 | `knowledge_aliases` | Begriff → Dokument (Findbarkeit) |
 | `knowledge_routings` | grobe Auto-Ebene: Feature × Kategorie |
 
-Import aus dem Vault: `php artisan foodalchemist:knowledge-import --vault=<pfad zu 07_WISSEN>` (Regelwerke, Domänen, Cross-Cutting, Niveau, food-basierte Trends; Tech-Trends/Weiterbildung/Literatur/Marktstudien bewusst ausgeschlossen).
+Import aus dem Vault: `php artisan foodalchemist:knowledge-import --vault=<pfad zu 07_WISSEN>` (Regelwerke, Domänen, Cross-Cutting, Niveau, food-basierte Trends; Tech-Trends/Weiterbildung/Literatur/Marktstudien bewusst ausgeschlossen). Wiederholbar — der **Import-Guard** schützt dabei im Browser editierte Docs (`--force` hebt ihn auf). Danach für die Semantiksuche indizieren: `php artisan foodalchemist:knowledge-embed`.
 
 ---
 
 ## Ausblick
 
 - **Bearbeiten der groben Auto-Ebene (Routings)** aus der UI.
-- **MCP-Schreiben:** Wissen „von außen" wachsen lassen (Trends/Know-how per KI anlegen, `source='mcp'`).
+- **Semantik-Scope:** `searchDocIds` sucht heute nur im globalen Korpus (team_id-Sentinel) — team-eigene Docs erscheinen semantisch noch nicht (lexikalisch schon). Wartet auf nativen Global-∪-Team-Scope im Core.

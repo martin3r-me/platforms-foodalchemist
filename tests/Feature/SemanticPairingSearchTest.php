@@ -76,6 +76,21 @@ it('embeddet Pairing-Docs und rankt das semantisch passende zuerst', function ()
         ->and($hits)->not->toContain('schokolade');
 });
 
+it('durchsucht den ganzen Korpus kategorieübergreifend (Browser-Semantiksuche, searchDocIds + Default alle Kategorien)', function () {
+    $rw = ($this->mkDoc)('regelwerk.pfeffer', 'regelwerk', 'Pfeffer-Regel', "# Pfeffer\nSchwarzer Pfeffer, Grundprodukt-Naming und Zuschnitt.\n");
+    ($this->mkDoc)('zitrus', 'domain', 'Zitrus', "# Zitrus\nOrange, Zitrone, Limette.\n");
+
+    // embedCorpus() ohne Argument = ALLE indizierbaren Kategorien (nicht nur domain/pairing).
+    $stats = $this->svc->embedCorpus();
+    expect($stats['available'])->toBeTrue()
+        ->and(array_keys($stats['kategorien']))->toContain('regelwerk', 'domain')
+        ->and($this->svc->indexableKategorien())->toContain('regelwerk', 'domain');
+
+    // searchDocIds gibt geordnete Doc-IDs quer über alle Kategorien zurück.
+    $ids = $this->svc->searchDocIds('Pfeffer Naming Grundprodukt Zuschnitt', 5);
+    expect($ids)->not->toBeEmpty()->and($ids[0])->toBe($rw);
+});
+
 it('findet ein Domain-Doc über einen Token im Inhalt, den der Slug nicht trägt', function () {
     // "topinambur" steht NUR im Inhalt — die Lexik (Slug/Titel/Alias) würde es verfehlen.
     ($this->mkDoc)('wurzelgemuese', 'domain', 'Wurzelgemüse', "# Wurzelgemüse\nTopinambur, Pastinake, Petersilienwurzel.\n");

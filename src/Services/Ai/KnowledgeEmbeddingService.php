@@ -49,7 +49,12 @@ class KnowledgeEmbeddingService
     /** entity_type für das Anker-Vokabular (semantische Anker-Auflösung, B). */
     public const ENTITY_TYPE_ANKER = 'foodalchemist_pairing_anker';
 
-    /** Kategorien mit Discovery-Bedarf — diese werden indiziert. */
+    /**
+     * Kategorien mit Discovery-Bedarf im KI-Hot-Path (semanticSlugs).
+     * Der Embedding-LAUF (embedCorpus) indiziert dagegen per Default ALLE aktiven
+     * Kategorien — die manuelle Browser-Semantiksuche (#469) durchsucht den
+     * ganzen Korpus, nicht nur Discovery-Kategorien.
+     */
     public const INDEXED_KATEGORIEN = ['domain', 'pairing'];
 
     /** Lead-Budget für Domain-Docs (Titel + erste N Zeichen). */
@@ -108,19 +113,42 @@ class KnowledgeEmbeddingService
     }
 
     /**
-     * Indiziert den Wissens-Korpus (domain + pairing) im Core-Embedding-Store.
-     * Idempotent über Cores source_hash (unveränderter Text ⇒ kein API-Call,
-     * kein DB-Write). Global (team_id NULL) → Sentinel; team-eigene Docs unter
-     * ihrer realen team_id.
+     * Alle aktiven, nicht-leeren Kategorien mit indizierbaren Docs (Default-Scope
+     * des Embedding-Laufs). Für die Browser-Volltext-Semantiksuche über den
+     * gesamten Korpus (#469), nicht nur die Discovery-Kategorien.
      *
-     * @param  list<string>  $kategorien
+     * @return list<string>
+     */
+    public function indexableKategorien(): array
+    {
+        return DB::table('foodalchemist_knowledge_documents')
+            ->where('active', 1)
+            ->whereNull('deleted_at')
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->orderBy('category')
+            ->pluck('category')
+            ->map(static fn ($c) => (string) $c)
+            ->all();
+    }
+
+    /**
+     * Indiziert den Wissens-Korpus im Core-Embedding-Store. Default = ALLE aktiven
+     * Kategorien (Browser-Semantiksuche über den ganzen Korpus). Idempotent über
+     * Cores source_hash (unveränderter Text ⇒ kein API-Call, kein DB-Write).
+     * Global (team_id NULL) → Sentinel; team-eigene Docs unter ihrer realen team_id.
+     *
+     * @param  list<string>|null  $kategorien  null = alle indizierbaren Kategorien
      * @return array{available: bool, candidates: int, kategorien: array<string,int>}
      */
-    public function embedCorpus(array $kategorien = self::INDEXED_KATEGORIEN): array
+    public function embedCorpus(?array $kategorien = null): array
     {
         if (! $this->isProviderAvailable()) {
             return ['available' => false, 'candidates' => 0, 'kategorien' => []];
         }
+
+        $kategorien ??= $this->indexableKategorien();
 
         $service = app(EmbeddingService::class);
         $providerName = $this->providerName();
@@ -303,6 +331,41 @@ class KnowledgeEmbeddingService
         }
 
         return array_map('strval', array_keys($slugs));
+    }
+
+    /**
+     * Manuelle Browser-Semantiksuche (#469): Freitext → geordnete Liste von
+     * knowledge_documents-IDs über den gesamten indizierten Korpus (bestes Match
+     * zuerst), OHNE Kategorie-Filter — der Browser filtert selbst nach Kategorie/
+     * Status. Leeres Ergebnis bei fehlendem Provider / leerer Query / Fehler
+     * (GL-13 Invariante 6: nie Fehler nach oben).
+     *
+     * @return list<int>  Doc-IDs, Score-sortiert
+     */
+    public function searchDocIds(string $query, int $limit = 50, ?float $minScore = null): array
+    {
+        $query = trim($query);
+        if ($query === '' || $limit <= 0 || ! $this->isProviderAvailable()) {
+            return [];
+        }
+        $minScore ??= (float) config('foodalchemist.semantic_search.min_score', 0.30);
+
+        try {
+            $hits = app(EmbeddingService::class)->search(
+                teamId: $this->globalTeamId(),
+                queryText: $query,
+                entityTypes: [self::ENTITY_TYPE],
+                limit: $limit,
+                minScore: $minScore,
+                providerName: $this->providerName(),
+            );
+        } catch (Throwable $e) {
+            Log::warning('[KnowledgeEmbeddingService] doc search failed', ['error' => $e->getMessage()]);
+
+            return [];
+        }
+
+        return array_values(array_map(static fn ($h) => (int) $h['entity_id'], $hits));
     }
 
     /**

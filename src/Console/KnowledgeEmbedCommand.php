@@ -15,7 +15,7 @@ use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
 class KnowledgeEmbedCommand extends Command
 {
     protected $signature = 'foodalchemist:knowledge-embed
-        {--kategorie=* : Nur diese Kategorien indizieren (Default: domain, pairing)}';
+        {--kategorie=* : Nur diese Kategorien indizieren (Default: ALLE aktiven Kategorien)}';
 
     protected $description = 'Embeddet den Wissens-Korpus für die semantische Pairing-/Domain-Suche';
 
@@ -28,11 +28,11 @@ class KnowledgeEmbedCommand extends Command
             return self::FAILURE;
         }
 
-        $kategorien = (array) $this->option('category');
-        $kategorien = $kategorien !== [] ? $kategorien : KnowledgeEmbeddingService::INDEXED_KATEGORIEN;
+        // FIX: Signatur heißt --kategorie (nicht --category); Default = null ⇒ ALLE Kategorien.
+        $kategorien = array_values(array_filter((array) $this->option('kategorie')));
 
         $this->info('Embedding-Lauf (idempotent — unveränderte Einträge werden übersprungen) …');
-        $stats = $service->embedCorpus($kategorien);
+        $stats = $service->embedCorpus($kategorien !== [] ? $kategorien : null);
 
         $rows = [];
         foreach ($stats['kategorien'] as $kat => $count) {
@@ -47,7 +47,8 @@ class KnowledgeEmbedCommand extends Command
 
         $this->line('Provider: ' . ($service->providerName() ?? 'core-default')
             . ' · Sentinel-Team (global): ' . $service->globalTeamId());
-        $this->info('Fertig. Suche aktivieren mit: FOODALCHEMIST_SEMANTIC_SEARCH=true');
+        $this->info('Fertig. Browser-Semantiksuche (/foodalchemist/wissen) wirkt sofort, sobald ein Provider verfügbar ist.');
+        $this->line('KI-Hot-Path zusätzlich aktivieren mit: FOODALCHEMIST_SEMANTIC_SEARCH=true');
 
         return self::SUCCESS;
     }

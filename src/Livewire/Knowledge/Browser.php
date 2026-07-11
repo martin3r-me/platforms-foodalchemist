@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
 
 /**
  * Wissens-Modul #469 — Pflege-Browser. v1: Doc-CRUD + Aliase + sichtbare Verdrahtung.
@@ -23,6 +24,10 @@ class Browser extends Component
 
     #[Url(as: 'status')]
     public string $filterStatus = 'all';
+
+    /** Semantik-Suche (#469): Embedding-Recall statt SQL-LIKE, wenn ein Provider verfügbar ist. */
+    #[Url(as: 'sem')]
+    public bool $semantic = false;
 
     #[Url(as: 'doc')]
     public ?int $selectedId = null;
@@ -105,6 +110,7 @@ class Browser extends Component
                 'slug' => $slug,
                 'version' => 1,
                 'source_path' => null,
+                'created_via' => 'ui',
                 'created_at' => now(),
             ]);
             $this->creating = false;
@@ -199,16 +205,51 @@ class Browser extends Component
         $kategorien = DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
             ->orderBy('sort_order')->orderBy('label')->get();
 
-        $docs = DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at')
+        $suche = trim($this->search);
+        $spalten = ['id', 'slug', 'title', 'category', 'active', 'char_count'];
+
+        // Semantik-Modus (#469): Embedding-Recall, sofern aktiviert, Query nicht leer
+        // und ein Provider verfügbar ist. Sonst graceful Fallback auf SQL-LIKE + Hinweis.
+        $semanticNote = null;
+        $semanticIds = null;
+        $semanticAktiv = false;
+        if ($this->semantic && $suche !== '') {
+            $svc = app(KnowledgeEmbeddingService::class);
+            if ($svc->isProviderAvailable()) {
+                $semanticAktiv = true;
+                $semanticIds = $svc->searchDocIds($suche, 50);
+                if ($semanticIds === []) {
+                    $semanticNote = 'Keine semantischen Treffer — evtl. ist der Korpus noch nicht indiziert '
+                        . '(php artisan foodalchemist:knowledge-embed).';
+                }
+            } else {
+                $semanticNote = 'Semantische Suche nicht verfügbar (kein Embedding-Provider) — es wird die Textsuche genutzt.';
+            }
+        }
+
+        $basis = DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at')
             ->when($this->filterCategory !== '', fn ($q) => $q->where('category', $this->filterCategory))
             ->when($this->filterStatus === 'active', fn ($q) => $q->where('active', true))
-            ->when($this->filterStatus === 'inactive', fn ($q) => $q->where('active', false))
-            ->when($this->search !== '', function ($q) {
-                $s = '%' . $this->search . '%';
-                $q->where(fn ($w) => $w->where('title', 'like', $s)->orWhere('slug', 'like', $s)->orWhere('content_md', 'like', $s));
-            })
-            ->orderBy('category')->orderBy('title')
-            ->get(['id', 'slug', 'title', 'category', 'active', 'char_count']);
+            ->when($this->filterStatus === 'inactive', fn ($q) => $q->where('active', false));
+
+        if ($semanticAktiv) {
+            // Score-Reihenfolge in PHP herstellen (DB-agnostisch, kein FIELD()).
+            // Kategorie-/Status-Filter greifen weiter, der LIKE-Filter entfällt (Recall-Zweck).
+            if ($semanticIds === null || $semanticIds === []) {
+                $docs = collect();
+            } else {
+                $rows = $basis->whereIn('id', $semanticIds)->get($spalten)->keyBy('id');
+                $docs = collect($semanticIds)->map(fn ($id) => $rows->get($id))->filter()->values();
+            }
+        } else {
+            $docs = $basis
+                ->when($suche !== '', function ($q) use ($suche) {
+                    $s = '%' . $suche . '%';
+                    $q->where(fn ($w) => $w->where('title', 'like', $s)->orWhere('slug', 'like', $s)->orWhere('content_md', 'like', $s));
+                })
+                ->orderBy('category')->orderBy('title')
+                ->get($spalten);
+        }
 
         $selected = $this->selectedId !== null
             ? DB::table('foodalchemist_knowledge_documents')->where('id', $this->selectedId)->first()
@@ -256,6 +297,8 @@ class Browser extends Component
             'layers' => $layers,
             'layerLabels' => $layerLabels,
             'traceResults' => $traceResults,
+            'semanticNote' => $semanticNote,
+            'semanticAktiv' => $semanticAktiv,
         ])->layout('platform::layouts.app');
     }
 }

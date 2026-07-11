@@ -241,6 +241,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Phase K: Wissen + Pairing-Graph für externe LLM-Clients
                     \Platform\FoodAlchemist\Tools\KnowledgeSearchTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeGetTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeCreateTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeUpdateTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsSuggestTool::class,
                     // Phase A: Rezept-Schreibkaskade (Weg-A-Ausnahme, Draft-Quarantäne)
