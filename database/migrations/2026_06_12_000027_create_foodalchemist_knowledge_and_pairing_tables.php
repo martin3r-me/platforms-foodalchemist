@@ -57,7 +57,7 @@ return new class extends Migration
             $table->unsignedBigInteger('legacy_id')->nullable()->unique();
             $table->string('slug')->unique();
             $table->string('display_de');
-            $table->foreignId('knowledge_document_id')->nullable()->constrained('foodalchemist_knowledge_documents')->nullOnDelete()
+            $table->foreignId('knowledge_document_id')->nullable()->constrained('foodalchemist_knowledge_documents', 'id', 'fa_vpa_kdoc_fk')->nullOnDelete()
                 ->comment('ersetzt file_path (D4/GL-13 §4.3)');
             $table->string('source_path')->nullable()->comment('Vault-file_path bis zum Knowledge-Link');
             $table->text('note')->nullable();

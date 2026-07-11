@@ -52,7 +52,7 @@ return new class extends Migration
                 $table->timestamps();
                 $table->softDeletes();
 
-                $table->unique(['recipe_id', $slugSpalte]);
+                $table->unique(['recipe_id', $slugSpalte], 'fa_recipe_' . $slugSpalte . '_uq');
             });
         }
     }

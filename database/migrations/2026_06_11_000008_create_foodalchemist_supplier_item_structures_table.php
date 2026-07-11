@@ -23,7 +23,7 @@ return new class extends Migration
 
             $table->boolean('is_food')->nullable();
             $table->string('exclusion_reason')->nullable();
-            $table->string('main_ingredient_slug')->nullable()->index();
+            $table->string('main_ingredient_slug')->nullable()->index('fa_sis_main_ing_slug_idx');
             $table->string('main_ingredient_display')->nullable();
             $table->decimal('main_ingredient_confidence', 4, 3)->nullable();
             $table->boolean('is_primary_flavor_carrier')->nullable();

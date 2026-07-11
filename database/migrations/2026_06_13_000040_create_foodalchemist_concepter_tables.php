@@ -83,7 +83,7 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->unique(['baustein_id', 'sales_recipe_id']);
+            $table->unique(['baustein_id', 'sales_recipe_id'], 'fa_baustein_gericht_uq');
         });
 
         // Concept = die ganze verkäufliche Komposition über mehrere Rollen
