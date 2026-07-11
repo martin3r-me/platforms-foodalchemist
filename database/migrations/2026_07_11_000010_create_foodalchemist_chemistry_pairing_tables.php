@@ -5,8 +5,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Chemie-/Pairing-Labor (26 Tabellen, von FoodBrain-Python gebaut, jetzt FA-nativ).
- * Auto-generiert aus der Sandbox-SQLite (Schema-Spiegel). Review vor Push an Martin.
+ * Chemie-/Pairing-Labor (26 Tabellen) — FA-nativ, aus der FoodBrain-SQLite abgeleitet.
+ * Nullability + 0/1-Booleans + Integer-Dimensionierung an der Quelle orientiert.
+ * Hinweis: Quelle ist ein analytischer Datensatz (Python-gebaut, locker typisiert) —
+ * keine harten FKs (indizierte Referenz-Spalten; Import via foodalchemist:import-master).
  */
 return new class extends Migration
 {
@@ -17,28 +19,28 @@ return new class extends Migration
             $table->string('slug_de', 64)->nullable();
             $table->bigInteger('ingredient_id')->nullable();
             $table->string('label_en', 128)->nullable();
-            $table->bigInteger('has_profile')->nullable();
-            $table->bigInteger('n_key_components')->nullable();
+            $table->boolean('has_profile')->nullable();
+            $table->integer('n_key_components')->nullable();
             $table->string('match_method', 64)->nullable();
         });
         Schema::create('foodalchemist_anchor_taste_axis', function (Blueprint $table) {
             $table->bigInteger('anchor_id')->nullable();
             $table->string('axis', 32)->nullable();
             $table->double('weight')->nullable();
-            $table->bigInteger('n_hits')->nullable();
-            $table->bigInteger('n_edges')->nullable();
+            $table->integer('n_hits')->nullable();
+            $table->integer('n_edges')->nullable();
             $table->index(['anchor_id'], 'fa_anchor_taste_axis_anchor_id_ix');
         });
         Schema::create('foodalchemist_anchor_taste_vectors', function (Blueprint $table) {
             $table->bigIncrements('id');
-            $table->bigInteger('anchor_id')->nullable();
-            $table->double('suess')->nullable();
-            $table->double('salzig')->nullable();
-            $table->double('sauer')->nullable();
-            $table->double('bitter')->nullable();
-            $table->double('umami')->nullable();
-            $table->double('fettig')->nullable();
-            $table->double('scharf')->nullable();
+            $table->bigInteger('anchor_id');
+            $table->double('suess');
+            $table->double('salzig');
+            $table->double('sauer');
+            $table->double('bitter');
+            $table->double('umami');
+            $table->double('fettig');
+            $table->double('scharf');
             $table->string('source', 32)->nullable();
             $table->double('ai_confidence')->nullable();
             $table->string('ai_reasoning', 32)->nullable();
@@ -69,8 +71,8 @@ return new class extends Migration
             $table->string('prep_b', 32)->nullable();
             $table->string('dec_a', 32)->nullable();
             $table->string('dec_b', 32)->nullable();
-            $table->bigInteger('n_vorkommen')->nullable();
-            $table->bigInteger('n_kapitel')->nullable();
+            $table->integer('n_vorkommen')->nullable();
+            $table->integer('n_kapitel')->nullable();
             $table->string('source', 32)->nullable();
         });
         Schema::create('foodalchemist_chem_ingredients', function (Blueprint $table) {
@@ -94,7 +96,7 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->bigInteger('molecule_id')->nullable();
             $table->text('taste')->nullable();
-            $table->bigInteger('bitter')->nullable();
+            $table->boolean('bitter')->nullable();
             $table->string('super_sweet', 32)->nullable();
             $table->string('odor', 512)->nullable();
             $table->string('flavor_profile', 512)->nullable();
@@ -106,7 +108,7 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->bigInteger('ingredient_id')->nullable();
             $table->string('method', 32)->nullable();
-            $table->bigInteger('n_molecules_typed')->nullable();
+            $table->integer('n_molecules_typed')->nullable();
             $table->double('coverage_ratio')->nullable();
             $table->double('fruity')->nullable();
             $table->double('citrus')->nullable();
@@ -136,7 +138,7 @@ return new class extends Migration
         Schema::create('foodalchemist_ingredient_key_component', function (Blueprint $table) {
             $table->bigInteger('ingredient_id')->nullable();
             $table->bigInteger('component_id')->nullable();
-            $table->bigInteger('n_molecules')->nullable();
+            $table->integer('n_molecules')->nullable();
             $table->index(['component_id'], 'fa_ingredient_key_component_component_id_ix');
             $table->index(['ingredient_id'], 'fa_ingredient_key_component_ingredient_id_ix');
         });
@@ -173,8 +175,8 @@ return new class extends Migration
             $table->string('aroma_type', 32)->nullable();
             $table->string('character', 128)->nullable();
             $table->string('kind', 32)->nullable();
-            $table->bigInteger('n_molecules')->nullable();
-            $table->bigInteger('n_ingredients')->nullable();
+            $table->integer('n_molecules')->nullable();
+            $table->integer('n_ingredients')->nullable();
             $table->unique(['key'], 'fa_key_components_key_uq');
         });
         Schema::create('foodalchemist_miskg_ingredients', function (Blueprint $table) {
@@ -249,7 +251,7 @@ return new class extends Migration
             $table->string('display_de', 32)->nullable();
             $table->string('family', 32)->nullable();
             $table->string('mechanism', 128)->nullable();
-            $table->bigInteger('n_occurrences')->nullable();
+            $table->integer('n_occurrences')->nullable();
             $table->unique(['slug'], 'fa_preparations_slug_uq');
         });
         Schema::create('foodalchemist_substitutions', function (Blueprint $table) {
