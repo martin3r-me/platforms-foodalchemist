@@ -35,9 +35,14 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'description' => ['type' => 'string'],
                 'brief' => ['type' => 'string', 'description' => 'KI-Brief: was soll das Konzept leisten'],
                 'target_price_per_person' => ['type' => 'number'],
-                'season' => ['type' => 'string'],
+                'season' => ['type' => 'string', 'description' => 'Freitext-Saison als KI-Brief-Hinweis (NICHT die Saison-Facette)'],
                 'target_group' => ['type' => 'string'],
                 'diet_requirement' => ['type' => 'string'],
+                // Umbau-Spec Phase 4: flache Facetten-Dimensionen (koppeln Slot-Darreichungs-Auflösung).
+                'serving_form' => ['type' => 'string', 'description' => 'Servierform-Code/Label (z. B. buffet, flying, teller) — steuert die Slot-Darreichung'],
+                'event_type' => ['type' => 'string', 'description' => 'Eventtyp-Name (Vokabular)'],
+                'service_moments' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Einsatzmomente (Namen, mehrfach)'],
+                'seasons' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Saison-Facetten (Namen, mehrfach) — nicht die season-Freitextangabe'],
             ],
             'required' => ['name'],
         ];
@@ -62,16 +67,29 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             $extras = array_intersect_key($arguments, array_flip([
                 'description', 'brief', 'target_price_per_person', 'season', 'target_group', 'diet_requirement',
             ]));
+            // Facetten (Phase 4): Slug/Name → id.
+            if (($arguments['serving_form'] ?? '') !== '') {
+                $extras['serving_form_id'] = $this->resolveServierformId($team, (string) $arguments['serving_form']);
+            }
+            if (($arguments['event_type'] ?? '') !== '') {
+                $extras['event_type_id'] = $this->resolveFacetId($team, 'foodalchemist_event_types', (string) $arguments['event_type']);
+            }
             if ($extras !== []) {
                 $c = $svc->update($team, $c->id, $extras);
+            }
+            if (! empty($arguments['service_moments'])) {
+                $svc->syncEinsatzmomente($team, $c->id, $this->resolveFacetIds($team, 'foodalchemist_service_moments', (array) $arguments['service_moments']));
+            }
+            if (! empty($arguments['seasons'])) {
+                $svc->syncSaisons($team, $c->id, $this->resolveFacetIds($team, 'foodalchemist_seasons', (array) $arguments['seasons']));
             }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
         return ToolResult::success([
-            'concept' => ['id' => $c->id, 'name' => $c->name, 'status' => $c->status],
-            'note' => 'Entwurf: aktiv setzen macht ein Mensch im Concepter.',
+            'concept' => ['id' => $c->id, 'name' => $c->name, 'status' => $c->status, 'serving_form_id' => $c->serving_form_id],
+            'note' => 'Entwurf: aktiv setzen macht ein Mensch im Concepter. Servierform steuert die Slot-Darreichungs-Auflösung.',
         ]);
     }
 

@@ -370,6 +370,10 @@ return [
             'tier' => 'B',
             'task' => 'Klassifiziere das Verkaufsrezept in GENAU EINE Speisen-Klasse aus der '
                 . 'mitgegebenen Taxonomie (Kontext: Name, Komponenten, Diät-Eigenschaften). '
+                . 'ENTSCHEIDUNGSREGEL (E7-Bauart): Frage IMMER „Wie ist das Gericht GEBAUT?", '
+                . 'NIE „Wo/wann wird es eingesetzt?" — der Einsatzkontext (Apéro, Snack, Buffet) '
+                . 'ist eine Darreichungs-/Konzept-Facette, KEINE Speisen-Klasse. Wähle nur aus der '
+                . 'mitgegebenen (bereits auf aktive Hauptgruppen gefilterten) Taxonomie. '
                 . 'Kein sicherer Treffer => dish_class_id = null (NICHT raten): '
                 . 'werte = {dish_class_id, klasse_name}.',
         ],

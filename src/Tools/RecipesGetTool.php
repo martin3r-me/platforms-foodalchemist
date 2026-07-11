@@ -42,7 +42,7 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             return ToolResult::error('Rezept nicht sichtbar/vorhanden (Basis-Sicht).', 'NOT_FOUND');
         }
 
-        return ToolResult::success([
+        $daten = [
             'id' => $r->id, 'name' => $r->name, 'status' => $r->status->value,
             'description' => $r->description, 'yield_kg' => $r->yield_kg,
             'ek_total_eur' => $r->ek_total_eur, 'ek_per_kg_eur' => $r->ek_per_kg_eur,
@@ -52,7 +52,14 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'name' => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name,
                 'gp_id' => $z->gp_id, 'sub_recipe_id' => $z->referenced_recipe_id,
             ])->all(),
-        ]);
+        ];
+        // M1: Darreichungen/Formen je Gericht (bei VK-Gerichten gefüllt, bei Basisrezepten leer).
+        $presentations = $this->darreichungenSummary($r);
+        if ($presentations !== []) {
+            $daten['presentations'] = $presentations;
+        }
+
+        return ToolResult::success($daten);
     }
 
     public function getMetadata(): array

@@ -66,6 +66,37 @@ class DarreichungService
         return $darreichung->refresh();
     }
 
+    /**
+     * Stellt sicher, dass ein (VK-)Gericht eine Standard-Darreichung hat. Legt sonst
+     * eine auf der Form „unbestimmt" an (Review-Queue, kein teller-Default — Servierform-
+     * Regel der Umbau-Spec) und übernimmt die Legacy-VK-Felder als Startwerte. Idempotent.
+     * Gibt die Standard-Darreichung zurück (oder null, wenn die unbestimmt-Form fehlt).
+     */
+    public function ensureStandard(Team $team, int $recipeId, string $createdVia = 'mcp'): ?FoodAlchemistRecipeDarreichung
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+
+        $standard = $recipe->standardDarreichung()->first();
+        if ($standard !== null) {
+            return $standard;
+        }
+        if ($recipe->darreichungen()->exists()) {
+            return null; // Varianten ohne Standard-Flag: nichts raten (wie syncStandardDarreichung)
+        }
+
+        $unbestimmt = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('code', 'unbestimmt')->value('id');
+        if ($unbestimmt === null) {
+            return null;
+        }
+
+        return $this->anlegen($team, $recipe->id, (int) $unbestimmt, [
+            'quantity_per_unit_g' => $recipe->sales_quantity_per_unit_g,
+            'unit_vocab_id' => $recipe->sales_unit_vocab_id,
+            'unit_count' => $recipe->sales_unit_count,
+            'markup_class_id' => $recipe->markup_class_id,
+        ], $createdVia);
+    }
+
     private const FELDER = [
         'quantity_per_unit_g', 'unit_vocab_id', 'unit_count',
         'markup_class_id', 'price_mode', 'sales_net',

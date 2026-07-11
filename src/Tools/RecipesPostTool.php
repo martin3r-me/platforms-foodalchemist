@@ -93,6 +93,14 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
             if (! empty($arguments['zutaten'])) {
                 $recipe = $svc->syncIngredients($team, $recipe->id, $this->normalisiereZutatZeilen($team, $arguments['zutaten']));
             }
+            // M4: VK-Gericht bekommt sofort eine Standard-Darreichung (Preis-Wahrheit) — created_via=mcp.
+            $standardForm = null;
+            if ((bool) ($arguments['is_sales_recipe'] ?? false)) {
+                $standard = app(\Platform\FoodAlchemist\Services\DarreichungService::class)
+                    ->ensureStandard($team, $recipe->id, 'mcp');
+                $standardForm = $standard?->serving_form_id;
+                $recipe = $recipe->refresh();
+            }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
@@ -103,8 +111,10 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'status' => $this->statusWert($recipe), 'created_via' => $recipe->created_via,
                 'yield_kg' => $recipe->yield_kg, 'ek_total_eur' => $recipe->ek_total_eur,
                 'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_unmapped' => $recipe->n_ingredients_unmapped,
+                'standard_presentation_form_id' => $standardForm,
             ],
-            'note' => 'Entwurf (Draft-Quarantäne): fließt erst nach menschlichem Review in Verkauf/Kalkulation.',
+            'note' => 'Entwurf (Draft-Quarantäne): fließt erst nach menschlichem Review in Verkauf/Kalkulation.'
+                . ($standardForm !== null ? ' Standard-Darreichung (Form „unbestimmt") angelegt — Servierform kuratieren.' : ''),
         ]);
     }
 

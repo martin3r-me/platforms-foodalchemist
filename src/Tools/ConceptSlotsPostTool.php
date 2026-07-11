@@ -43,6 +43,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
                 'quantity' => ['type' => 'number'],
                 'unit' => ['type' => 'string', 'description' => 'Einheiten-Slug, z. B. stk, portion'],
                 'wording' => ['type' => 'string', 'description' => 'Kundenseitiger Anzeigename der Position'],
+                'presentation' => ['type' => 'string', 'description' => 'Servierform-Code/Label — pinnt die Darreichung dieses Gerichts am Slot (überschreibt die Konzept-Servierform-Auflösung). Nur mit sales_recipe_id.'],
             ],
             'required' => ['concept_id'],
         ];
@@ -90,6 +91,18 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
             if (($arguments['wording'] ?? '') !== '') {
                 $slot = $svc->setSlotWording($team, $slot->id, (string) $arguments['wording']);
             }
+            // M3: Darreichung am Slot pinnen (Servierform des Gerichts).
+            if (($arguments['presentation'] ?? '') !== '' && $slot->sales_recipe_id !== null) {
+                $formId = $this->resolveServierformId($team, (string) $arguments['presentation']);
+                $darreichung = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $slot->sales_recipe_id)
+                    ->where('serving_form_id', $formId)->first();
+                if ($darreichung === null) {
+                    $formen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $slot->sales_recipe_id)
+                        ->with('servierform')->get()->map(fn ($d) => $d->servierform?->code)->filter()->implode(', ');
+                    return ToolResult::error("Gericht hat keine Darreichung „{$arguments['presentation']}\". Vorhandene Formen: " . ($formen ?: '—'), 'VALIDATION_ERROR');
+                }
+                $slot = $svc->setSlotDarreichung($team, $slot->id, $darreichung->id);
+            }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
@@ -97,6 +110,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
         return ToolResult::success(['slot' => [
             'id' => $slot->id, 'position' => $slot->position, 'type' => $slot->type,
             'role' => $slot->role, 'sales_recipe_id' => $slot->sales_recipe_id, 'package_id' => $slot->package_id,
+            'presentation_id' => $slot->presentation_id,
         ]]);
     }
 

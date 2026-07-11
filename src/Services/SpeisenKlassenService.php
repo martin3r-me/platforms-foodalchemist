@@ -35,11 +35,20 @@ class SpeisenKlassenService
             ->with(['ingredients' => fn ($q) => $q->whereNull('deleted_at'), 'ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name'])
             ->findOrFail($recipeId);
 
+        // M5: nur AKTIVE Hauptgruppen (E7-Neutralisierung: APE/SNK/ALC/BVK/ALL sind is_inactive).
+        // Label DB-agnostisch in PHP zusammenbauen — SQLites `||` ist auf MySQL logisches OR (Bug).
         $taxonomie = FoodAlchemistDishClass::query()
             ->join('foodalchemist_dish_main_groups AS hg', 'hg.id', '=', 'foodalchemist_dish_classes.dish_main_group_id')
-            ->selectRaw("foodalchemist_dish_classes.id AS id, hg.code || ' / ' || foodalchemist_dish_classes.label || ' (' || foodalchemist_dish_classes.diet_form || ')' AS label")
+            ->where('hg.is_inactive', false)
             ->orderBy('foodalchemist_dish_classes.id')
-            ->pluck('label', 'id')->all();
+            ->get([
+                'foodalchemist_dish_classes.id AS id',
+                'hg.code AS hg_code',
+                'foodalchemist_dish_classes.label AS klasse_label',
+                'foodalchemist_dish_classes.diet_form AS diet_form',
+            ])
+            ->mapWithKeys(fn ($row) => [(int) $row->id => "{$row->hg_code} / {$row->klasse_label} ({$row->diet_form})"])
+            ->all();
 
         $vorschlag = $this->ki->propose('vk.speisen_klasse', [
             'name' => $r->name,

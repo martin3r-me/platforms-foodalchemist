@@ -50,6 +50,7 @@ class VerkaufsrezepteSearchTool extends FoodAlchemistTool implements ToolContrac
                 'id' => $r->id, 'name' => $r->name, 'sales_net' => $r->sales_net,
                 'ek_total_eur' => $r->ek_total_eur,
                 'speisen_klasse' => $r->speisenKlasse?->label,
+                'presentations' => $this->darreichungenSummary($r),   // M1: Formen je Gericht
             ])->all(),
         ]);
     }

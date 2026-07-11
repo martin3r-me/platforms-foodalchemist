@@ -27,6 +27,7 @@ class KalkulationService
         private ConceptService $concepts,
         private ConcepterAggregateService $aggregat,
         private FixkostenService $fixkosten,
+        private DarreichungResolver $resolver,
     ) {
     }
 
@@ -135,7 +136,10 @@ class KalkulationService
         $r = $this->berechne($team, $hk1Total / $anzahl, $azTotal / $anzahl, $nebenTotal / $anzahl);
         $hk1Pp = round($hk1Total / $anzahl, 4);
         $hk2Pp = $r['hk2'];
-        $vk = $recipe->sales_net !== null ? (float) $recipe->sales_net : null;
+        // M2: VK-Wahrheit liegt an der Standard-Darreichung (Resolver), recipes.sales_net nur Fallback.
+        $standard = $this->resolver->standardFuer($recipe);
+        $vk = $standard?->sales_net !== null ? (float) $standard->sales_net
+            : ($recipe->sales_net !== null ? (float) $recipe->sales_net : null);
 
         return [
             'hk1_total' => round($hk1Total, 4),
