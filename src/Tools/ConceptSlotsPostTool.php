@@ -98,7 +98,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
                     ->where('serving_form_id', $formId)->first();
                 if ($darreichung === null) {
                     $formen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $slot->sales_recipe_id)
-                        ->with('servierform')->get()->map(fn ($d) => $d->servierform?->code)->filter()->implode(', ');
+                        ->with('servingForm')->get()->map(fn ($d) => $d->servingForm?->code)->filter()->implode(', ');
                     return ToolResult::error("Gericht hat keine Darreichung „{$arguments['presentation']}\". Vorhandene Formen: " . ($formen ?: '—'), 'VALIDATION_ERROR');
                 }
                 $slot = $svc->setSlotDarreichung($team, $slot->id, $darreichung->id);

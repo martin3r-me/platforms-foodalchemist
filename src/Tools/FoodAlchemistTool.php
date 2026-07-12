@@ -76,15 +76,15 @@ abstract class FoodAlchemistTool
      */
     protected function darreichungenSummary(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe): array
     {
-        return $recipe->darreichungen()->with('servierform')->orderByDesc('is_standard')->orderBy('id')->get()
+        return $recipe->presentations()->with('servingForm')->orderByDesc('is_standard')->orderBy('id')->get()
             ->map(function ($d) {
                 $ek = $d->ek_portion !== null ? (float) $d->ek_portion : null;
                 $vk = $d->sales_net !== null ? (float) $d->sales_net : null;
 
                 return [
                     'presentation_id' => $d->id,
-                    'form' => $d->servierform?->code,
-                    'form_label' => $d->servierform?->label,
+                    'form' => $d->servingForm?->code,
+                    'form_label' => $d->servingForm?->label,
                     'is_standard' => (bool) $d->is_standard,
                     'ek_portion' => $ek,
                     'sales_net' => $vk,
