@@ -74,7 +74,7 @@ class Index extends Component
             'label' => $fb->label, 'customer' => $fb->customer ?? '', 'jahr' => $fb->jahr,
             'personen' => $fb->personen, 'status' => $fb->status, 'description' => $fb->description ?? '',
         ];
-        $this->selectedKapitelId = $fb->kapitel->first()->id ?? null;
+        $this->selectedKapitelId = $fb->chapters->first()->id ?? null;
         $this->ladeKapitelForm($svc);
         $this->editBlockId = null;
         $this->markiert = [];
@@ -267,7 +267,7 @@ class Index extends Component
         if ($this->editBlockId === null) {
             return;
         }
-        $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::visibleToTeam($this->team())->with('concept.slots.gericht:id,name,sales_wording_standard')->find($this->editBlockId);
+        $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::visibleToTeam($this->team())->with('concept.slots.dish:id,name,sales_wording_standard')->find($this->editBlockId);
         if ($block === null || $block->concept === null) {
             return;
         }
@@ -376,7 +376,7 @@ class Index extends Component
         $team = $this->team();
         $fb = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
         $kapitel = $fb !== null && $this->selectedKapitelId !== null
-            ? $fb->kapitel->firstWhere('id', $this->selectedKapitelId) : null;
+            ? $fb->chapters->firstWhere('id', $this->selectedKapitelId) : null;
 
         // #389/Canvas: Foodbook-Leitidee-Canvas nur bei Selektions-WECHSEL (re)laden — kein Edit-Verlust je Roundtrip.
         if ($fb !== null && $this->canvasOwnerId !== $fb->id) {

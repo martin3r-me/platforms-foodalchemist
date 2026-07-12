@@ -255,9 +255,9 @@ class IngredientEditor extends Component
             ->when($suche !== '', fn ($w) => \Platform\FoodAlchemist\Support\Suche::like($w, 'foodalchemist_recipes.name', $suche))
             ->when(($rezFilter['hg'] ?? '') !== '', fn ($w) => $w->whereHas('category', fn ($k) => $k->where('main_group_id', (int) $rezFilter['hg'])))
             ->when(($rezFilter['kat'] ?? '') !== '', fn ($w) => $w->where('category_id', (int) $rezFilter['kat']))
-            ->when(($rezFilter['level'] ?? '') !== '', fn ($w) => $w->whereHas('niveauEignungen', fn ($n) => $n->where('level_slug', $rezFilter['level'])));
+            ->when(($rezFilter['level'] ?? '') !== '', fn ($w) => $w->whereHas('levelSuitabilities', fn ($n) => $n->where('level_slug', $rezFilter['level'])));
         $rezTotal = (clone $rezQuery)->count();
-        $rezepte = $rezQuery->with('niveauEignungen:id,recipe_id,level_slug')->orderBy('name')->limit(200)
+        $rezepte = $rezQuery->with('levelSuitabilities:id,recipe_id,level_slug')->orderBy('name')->limit(200)
             ->get(['id', 'name', 'ek_per_kg_eur', 'yield_kg', 'yield_pieces'])
             ->map(function ($r) {
                 $hatStueck = $r->yield_pieces !== null && (float) $r->yield_pieces > 0 && $r->yield_kg !== null;
@@ -269,7 +269,7 @@ class IngredientEditor extends Component
                     // Stück-Ertrag → Einheit beim Einfügen auf „stk" vorbelegen + g/Stück fürs Live-Rechnen
                     'einheit_slug' => $hatStueck ? 'stk' : 'g',
                     'g_pro_stueck' => $hatStueck ? (float) $r->yield_kg * 1000 / (float) $r->yield_pieces : null,
-                    'niveaus' => $r->niveauEignungen->pluck('level_slug')->values()->all(),
+                    'niveaus' => $r->levelSuitabilities->pluck('level_slug')->values()->all(),
                 ];
             })->values()->all();
 

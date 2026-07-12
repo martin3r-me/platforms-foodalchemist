@@ -166,7 +166,7 @@ class Index extends Component
     public function linieEdit(int $id, SpeiseplanService $svc): void
     {
         $sp = $svc->detail($this->team(), (int) $this->selectedId);
-        $linie = $sp?->linien->firstWhere('id', $id);
+        $linie = $sp?->lines->firstWhere('id', $id);
         if ($linie === null) {
             return;
         }
@@ -268,7 +268,7 @@ class Index extends Component
         return view('foodalchemist::livewire.speiseplan.index', [
             'plaene' => $svc->paginateBrowser(['search' => $this->search], $team),
             'sp' => $sp,
-            'linien' => $sp !== null ? $sp->linien : collect(),
+            'linien' => $sp !== null ? $sp->lines : collect(),
             'wochenTage' => $wochenTage,
             'montagDt' => $montag,
             'monatStart' => $monatStart,

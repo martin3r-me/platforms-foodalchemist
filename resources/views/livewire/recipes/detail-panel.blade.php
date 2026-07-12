@@ -124,8 +124,8 @@
         @if($nurEignung || ! ($embedded ?? false))
         @php($eignungVokab = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular())
         @php($eignungAktiv = [
-            'level' => $rezept->niveauEignungen->keyBy('level_slug'),
-            'sektor' => $rezept->sektorEignungen->keyBy('sector_slug'),
+            'level' => $rezept->levelSuitabilities->keyBy('level_slug'),
+            'sektor' => $rezept->sectorSuitabilities->keyBy('sector_slug'),
         ])
         <div data-eignungen>
             @unless($nurEignung){{-- im Eigenschaften-Tab liefert die modal-section den Titel --}}

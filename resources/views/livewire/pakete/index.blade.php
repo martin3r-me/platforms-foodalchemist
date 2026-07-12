@@ -91,27 +91,27 @@
                     </div>
 
                     {{-- Gerichte im Paket (B-03: einfügen wie im Gerichte-Screen) --}}
-                    @php($sumVk = $selected->gerichte->sum(fn ($g) => (float) ($g->gericht?->sales_net ?? 0)))
+                    @php($sumVk = $selected->dishes->sum(fn ($g) => (float) ($g->dish?->sales_net ?? 0)))
                     <div class="space-y-2 pt-2 border-t border-black/5 dark:border-white/10">
                         {{-- B-07: KPI-Leiste --}}
                         <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-                            <span><span class="{{ $label }}">Gerichte</span> <span class="tabular-nums">{{ $selected->gerichte->count() }}</span></span>
+                            <span><span class="{{ $label }}">Gerichte</span> <span class="tabular-nums">{{ $selected->dishes->count() }}</span></span>
                             <span><span class="{{ $label }}">Σ Gerichte-VK</span> <span class="tabular-nums">{{ number_format($sumVk, 2, ',', '.') }} €</span></span>
                             <span><span class="{{ $label }}">Paket €/P</span> <span class="tabular-nums">{{ $selected->price_per_person !== null ? number_format((float) $selected->price_per_person, 2, ',', '.') . ' €' : '—' }}</span></span>
                             <span><span class="{{ $label }}">W%</span> <span class="tabular-nums">{{ $selected->food_cost_percent !== null ? number_format((float) $selected->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</span></span>
                         </div>
                         <label class="{{ $label }}">Gerichte in diesem Paket (nur Gerichte, keine Basisrezepte)</label>
                         <div class="space-y-1">
-                            @forelse($selected->gerichte as $g)
+                            @forelse($selected->dishes as $g)
                                 <div wire:key="bg-{{ $g->id }}" class="flex items-center gap-2 px-2 py-1 rounded-lg bg-black/[0.03] dark:bg-white/5 text-xs">
                                     <span class="flex flex-col -my-0.5 shrink-0">
                                         <button type="button" wire:click="gerichtHoch({{ $g->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="hoch">▲</button>
                                         <button type="button" wire:click="gerichtRunter({{ $g->id }})" class="text-gray-400 hover:text-violet-500 leading-none" title="runter">▼</button>
                                     </span>
-                                    <span class="flex-1 min-w-0 truncate">{{ $g->gericht?->name ?? '—' }}</span>
+                                    <span class="flex-1 min-w-0 truncate">{{ $g->dish?->name ?? '—' }}</span>
                                     <input type="number" step="1" min="0" wire:model.blur="mengeForm.{{ $g->id }}" wire:change="gerichtMengeSpeichern({{ $g->id }})"
                                            class="{{ $input }} w-16 text-right tabular-nums py-0.5" placeholder="g/P" title="Menge pro Person" />
-                                    <span class="text-gray-400 tabular-nums shrink-0 w-14 text-right">{{ $g->gericht?->sales_net !== null ? number_format((float) $g->gericht->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                    <span class="text-gray-400 tabular-nums shrink-0 w-14 text-right">{{ $g->dish?->sales_net !== null ? number_format((float) $g->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                                     <button type="button" wire:click="gerichtRaus({{ $g->sales_recipe_id }})" class="text-gray-400 hover:text-red-500 shrink-0" title="Entfernen">✕</button>
                                 </div>
                             @empty

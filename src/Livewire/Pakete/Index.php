@@ -64,7 +64,7 @@ class Index extends Component
             'ek_per_person' => $b->ek_per_person, 'food_cost_percent' => $b->food_cost_percent,
             'description' => $b->description ?? '',
         ];
-        $this->mengeForm = $b->gerichte->mapWithKeys(fn ($g) => [$g->id => $g->quantity !== null ? (float) $g->quantity : null])->all();
+        $this->mengeForm = $b->dishes->mapWithKeys(fn ($g) => [$g->id => $g->quantity !== null ? (float) $g->quantity : null])->all();
         $this->gerichtSuche = '';
     }
 
@@ -92,7 +92,7 @@ class Index extends Component
         if ($this->selectedId === null) {
             return;
         }
-        $ids = $svc->detail($this->team(), $this->selectedId)->gerichte->pluck('id')->all();
+        $ids = $svc->detail($this->team(), $this->selectedId)->dishes->pluck('id')->all();
         $pos = array_search($rowId, $ids, true);
         $ziel = $pos + $richtung;
         if ($pos === false || $ziel < 0 || $ziel >= count($ids)) {
@@ -127,7 +127,7 @@ class Index extends Component
             return;
         }
         $b = $svc->detail($this->team(), $this->selectedId);
-        $ids = $b->gerichte->pluck('sales_recipe_id')->push($vkRecipeId)->unique()->values();
+        $ids = $b->dishes->pluck('sales_recipe_id')->push($vkRecipeId)->unique()->values();
         $svc->syncGerichte($this->team(), $this->selectedId, $ids->map(fn ($id) => ['sales_recipe_id' => (int) $id])->all());
         $this->gerichtSuche = '';
         $this->waehle($this->selectedId, $svc);
@@ -139,7 +139,7 @@ class Index extends Component
             return;
         }
         $b = $svc->detail($this->team(), $this->selectedId);
-        $ids = $b->gerichte->pluck('sales_recipe_id')->reject(fn ($id) => (int) $id === $vkRecipeId)->values();
+        $ids = $b->dishes->pluck('sales_recipe_id')->reject(fn ($id) => (int) $id === $vkRecipeId)->values();
         $svc->syncGerichte($this->team(), $this->selectedId, $ids->map(fn ($id) => ['sales_recipe_id' => (int) $id])->all());
         $this->waehle($this->selectedId, $svc);
     }
@@ -165,7 +165,7 @@ class Index extends Component
             'selected' => $selected,
             'kandidaten' => $selected !== null
                 ? $svc->gerichtKandidaten($team, $this->gerichtSuche)->reject(
-                    fn ($r) => $selected->gerichte->pluck('sales_recipe_id')->contains($r->id))
+                    fn ($r) => $selected->dishes->pluck('sales_recipe_id')->contains($r->id))
                 : collect(),
         ])->layout('platform::layouts.app');
     }
