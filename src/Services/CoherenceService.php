@@ -123,7 +123,7 @@ class CoherenceService
                 ->map(fn ($z) => ($z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name ?? $z->raw_text))
                 ->filter()->values()->all(),
             'geschmack' => $r->taste_direction,
-            'speisen_klasse' => $r->speisenKlasse?->label,
+            'speisen_klasse' => $r->dishClass?->label,
         ];
     }
 

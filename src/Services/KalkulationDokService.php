@@ -31,7 +31,7 @@ class KalkulationDokService
     {
         return FoodAlchemistKalkulation::query()
             ->where('team_id', $team->id)
-            ->withCount('positionen')
+            ->withCount('positions')
             ->orderByDesc('updated_at')
             ->get();
     }
@@ -68,7 +68,7 @@ class KalkulationDokService
     public function delete(Team $team, int $id): void
     {
         $k = $this->find($team, $id);
-        $k->positionen()->delete();
+        $k->positions()->delete();
         $k->delete();
     }
 
@@ -86,9 +86,9 @@ class KalkulationDokService
         }
 
         $snap = $typ === 'frei' ? $this->leereZeile() : $this->snapshot($team, $typ, $refId);
-        $next = (int) $k->positionen()->max('position') + 1;
+        $next = (int) $k->positions()->max('position') + 1;
 
-        $pos = $k->positionen()->create([
+        $pos = $k->positions()->create([
             'team_id' => $team->id,
             'type' => $typ,
             'ref_id' => $typ === 'frei' ? null : $refId,
@@ -124,7 +124,7 @@ class KalkulationDokService
         }
         if ($patch) {
             $pos->update($patch);
-            $pos->kalkulation?->touch();
+            $pos->calculation?->touch();
         }
 
         return $pos->refresh();
@@ -133,7 +133,7 @@ class KalkulationDokService
     public function removePosition(Team $team, int $positionId): void
     {
         $pos = $this->findPosition($team, $positionId);
-        $k = $pos->kalkulation;
+        $k = $pos->calculation;
         $pos->delete();
         $k?->touch();
     }
@@ -145,7 +145,7 @@ class KalkulationDokService
         if ($pos->type !== 'frei' && $pos->ref_id) {
             $snap = $this->snapshot($team, $pos->type, (int) $pos->ref_id);
             $pos->update(['einzel_ek' => $snap['einzel_ek'], 'work_time_min' => $snap['work_time_min']]);
-            $pos->kalkulation?->touch();
+            $pos->calculation?->touch();
         }
 
         return $pos->refresh();
@@ -162,7 +162,7 @@ class KalkulationDokService
      */
     public function berechne(Team $team, FoodAlchemistKalkulation $kalkulation): array
     {
-        $positionen = $kalkulation->positionen()->get();
+        $positionen = $kalkulation->positions()->get();
 
         $hk1 = 0.0;
         $azTotal = 0.0;

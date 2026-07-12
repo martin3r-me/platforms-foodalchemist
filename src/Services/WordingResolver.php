@@ -46,7 +46,7 @@ class WordingResolver
             return ['text' => $w, 'source' => 'konzept'];
         }
 
-        return $this->fuerGericht($slot->gericht);
+        return $this->fuerGericht($slot->dish);
     }
 
     /**
@@ -87,7 +87,7 @@ class WordingResolver
 
         return match ($block->type) {
             'concept_ref' => ['text' => (string) ($block->concept?->name ?? '—'), 'source' => 'name'],
-            'recipe_ref' => $this->fuerGericht($block->gericht),
+            'recipe_ref' => $this->fuerGericht($block->dish),
             default => ['text' => (string) ($block->label ?? '—'), 'source' => 'name'],
         };
     }
@@ -103,11 +103,11 @@ class WordingResolver
     {
         $zeilen = [];
         foreach ($concept->slots->sortBy('position') as $slot) {
-            if ($slot->package_id !== null && $slot->paket !== null) {
-                $zeilen[] = ['type' => 'paket', 'text' => (string) $slot->paket->name, 'source' => null, 'einrueckung' => 0];
-                foreach ($slot->paket->gerichte as $pg) {
-                    $r = $this->fuerGericht($pg->gericht);
-                    $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 1, 'recipe_id' => $pg->gericht?->id];
+            if ($slot->package_id !== null && $slot->package !== null) {
+                $zeilen[] = ['type' => 'paket', 'text' => (string) $slot->package->name, 'source' => null, 'einrueckung' => 0];
+                foreach ($slot->package->dishes as $pg) {
+                    $r = $this->fuerGericht($pg->dish);
+                    $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 1, 'recipe_id' => $pg->dish?->id];
                 }
 
                 continue;
@@ -117,7 +117,7 @@ class WordingResolver
 
                 continue;
             }
-            if ($slot->sales_recipe_id === null || $slot->gericht === null) {
+            if ($slot->sales_recipe_id === null || $slot->dish === null) {
                 continue; // spacer/text/leere Slots sind im Kundendokument unsichtbar
             }
             $r = $block !== null ? $this->fuerBlockSlot($block, $slot) : $this->fuerSlot($slot);

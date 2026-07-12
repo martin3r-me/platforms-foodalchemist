@@ -38,7 +38,7 @@ class PaketService
     {
         return FoodAlchemistPaket::visibleToTeam($team)
             ->standardisiert()   // #380: angebots-lokale Entwürfe gehören nicht in den Katalog
-            ->withCount('gerichte')
+            ->withCount('dishes')
             ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', "COALESCE(role, '')"], $filters['search']))
             ->when(($filters['role'] ?? '') !== '', fn ($q) => $q->where('role', $filters['role']))
             ->when(($filters['class'] ?? '') !== '', fn ($q) => $q->where('class', $filters['class']))
@@ -72,9 +72,9 @@ class PaketService
     public function detail(Team $team, int $id): ?FoodAlchemistPaket
     {
         return FoodAlchemistPaket::visibleToTeam($team)
-            ->with(['gerichte' => fn ($q) => $q->orderBy('position'),
-                'gerichte.gericht:id,name,sales_net,sales_gross,ek_total_eur,vat_rate,is_sales_recipe,yield_kg',
-                'gerichte.unit:id,slug,display_de'])
+            ->with(['dishes' => fn ($q) => $q->orderBy('position'),
+                'dishes.dish:id,name,sales_net,sales_gross,ek_total_eur,vat_rate,is_sales_recipe,yield_kg',
+                'dishes.unit:id,slug,display_de'])
             ->find($id);
     }
 
@@ -130,7 +130,7 @@ class PaketService
     /** B-10: Paket duplizieren (Stamm + Gerichte, „(Kopie)"). */
     public function duplicate(Team $team, int $id): FoodAlchemistPaket
     {
-        $orig = FoodAlchemistPaket::visibleToTeam($team)->with('gerichte')->findOrFail($id);
+        $orig = FoodAlchemistPaket::visibleToTeam($team)->with('dishes')->findOrFail($id);
 
         return DB::transaction(function () use ($team, $orig) {
             $felder = array_intersect_key($orig->attributesToArray(), array_flip([
@@ -140,8 +140,8 @@ class PaketService
             $neu = FoodAlchemistPaket::create($felder + [
                 'team_id' => $team->id, 'name' => $orig->name . ' (Kopie)',
             ]);
-            foreach ($orig->gerichte as $g) {
-                $neu->gerichte()->create([
+            foreach ($orig->dishes as $g) {
+                $neu->dishes()->create([
                     'team_id' => $team->id, 'sales_recipe_id' => $g->sales_recipe_id,
                     'quantity' => $g->quantity, 'unit_vocab_id' => $g->unit_vocab_id, 'position' => $g->position,
                 ]);
@@ -164,12 +164,12 @@ class PaketService
         $this->guardOwner($paket, $team);
 
         DB::transaction(function () use ($paket, $items) {
-            $paket->gerichte()->forceDelete();
+            $paket->dishes()->forceDelete();
             foreach (array_values($items) as $i => $row) {
                 if (empty($row['sales_recipe_id'])) {
                     continue;
                 }
-                $paket->gerichte()->create([
+                $paket->dishes()->create([
                     'team_id' => $paket->team_id,
                     'sales_recipe_id' => (int) $row['sales_recipe_id'],
                     'quantity' => $row['quantity'] ?? null,
@@ -194,7 +194,7 @@ class PaketService
     {
         $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($paketId);
         $this->guardOwner($paket, $team);
-        $paket->gerichte()->where('id', $gerichtRowId)->update(['quantity' => $quantity]);
+        $paket->dishes()->where('id', $gerichtRowId)->update(['quantity' => $quantity]);
 
         // M10R-1: Mengen-Faktor fließt in Nährwert-/Kosten-Rollup → EK + Cache neu.
         $this->recomputePrice($paket->refresh());
@@ -228,7 +228,7 @@ class PaketService
     public function recomputePrice(FoodAlchemistPaket $paket): FoodAlchemistPaket
     {
         $auto = $paket->price_mode === 'auto';
-        $gerichte = $paket->gerichte()->with([
+        $gerichte = $paket->dishes()->with([
             'gericht:id,sales_net,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg',
             'unit:id,slug,dimension,default_in_g',
         ])->get();
@@ -239,11 +239,11 @@ class PaketService
             // Basisrezept-Posten (z. B. Hausbrot im Brotkorb-Paket): Menge/Person = GRAMM,
             // EK = g/Person ÷ Batch-Gramm × Batch-EK; kein Einzel-VK (Basis wird nicht solo verkauft).
             // Zweig greift nur für is_sales_recipe=0 → Gericht-Pfad unverändert (keine Regression).
-            if (! (bool) ($g->gericht->is_sales_recipe ?? true)) {
-                $yieldG = (float) ($g->gericht->yield_kg ?? 0) * 1000;
+            if (! (bool) ($g->dish->is_sales_recipe ?? true)) {
+                $yieldG = (float) ($g->dish->yield_kg ?? 0) * 1000;
                 $mengeG = $g->quantity !== null ? (float) $g->quantity : null;
                 if ($yieldG > 0 && $mengeG !== null && $mengeG > 0) {
-                    $ekSum += (float) ($g->gericht->ek_total_eur ?? 0) * ($mengeG / $yieldG);
+                    $ekSum += (float) ($g->dish->ek_total_eur ?? 0) * ($mengeG / $yieldG);
                 }
 
                 continue;
@@ -254,17 +254,17 @@ class PaketService
             $pae = ConcepterAggregateService::portionsAequivalent(
                 $g->quantity !== null ? (float) $g->quantity : null,
                 $g->unit,
-                $g->gericht,
+                $g->dish,
                 $darPortionG,
             );
             if ($pae === null) {
                 continue; // Gramm-Position ohne Portionsgewicht → trägt ehrlich nicht bei
             }
-            $anzahl = max(1, (int) ($g->gericht->sales_unit_count ?? 1));
-            $vkSum += (float) ($dar?->sales_net ?? $g->gericht->sales_net ?? 0) * $pae;
+            $anzahl = max(1, (int) ($g->dish->sales_unit_count ?? 1));
+            $vkSum += (float) ($dar?->sales_net ?? $g->dish->sales_net ?? 0) * $pae;
             $ekSum += ($dar?->ek_portion !== null
                 ? (float) $dar->ek_portion * $pae
-                : (float) ($g->gericht->ek_total_eur ?? 0) / $anzahl * $pae);
+                : (float) ($g->dish->ek_total_eur ?? 0) / $anzahl * $pae);
         }
 
         $vkBezug = $auto ? ($vkSum > 0 ? $vkSum : null)
@@ -354,7 +354,7 @@ class PaketService
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when(($filter['hauptgruppe'] ?? null), fn ($q, $hg) => $q->whereHas('category', fn ($k) => $k->where('main_group_id', (int) $hg)))
             ->when(($filter['category'] ?? null), fn ($q, $kat) => $q->where('category_id', (int) $kat))
-            ->when(($filter['level'] ?? '') !== '', fn ($q) => $q->whereHas('niveauEignungen', fn ($n) => $n->where('level_slug', $filter['level'])))
+            ->when(($filter['level'] ?? '') !== '', fn ($q) => $q->whereHas('levelSuitabilities', fn ($n) => $n->where('level_slug', $filter['level'])))
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'ek_total_eur']);
     }

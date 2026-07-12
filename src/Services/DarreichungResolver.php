@@ -22,18 +22,18 @@ class DarreichungResolver
 {
     public function fuerSlot(FoodAlchemistConceptSlot $slot): ?FoodAlchemistRecipeDarreichung
     {
-        if ($slot->presentation_id !== null && $slot->darreichung !== null) {
-            return $slot->darreichung;
+        if ($slot->presentation_id !== null && $slot->presentation !== null) {
+            return $slot->presentation;
         }
 
-        if ($slot->gericht === null) {
+        if ($slot->dish === null) {
             return null;
         }
 
         // Phase 4: Servierform des Konzepts → passende Darreichung des Gerichts
         $konzeptServierformId = $slot->concept?->serving_form_id;
         if ($konzeptServierformId !== null) {
-            $passend = $slot->gericht->darreichungen()
+            $passend = $slot->dish->presentations()
                 ->where('serving_form_id', $konzeptServierformId)
                 ->first();
             if ($passend !== null) {
@@ -41,21 +41,21 @@ class DarreichungResolver
             }
         }
 
-        return $this->standardFuer($slot->gericht);
+        return $this->standardFuer($slot->dish);
     }
 
     public function fuerPaketGericht(FoodAlchemistPaketGericht $pg): ?FoodAlchemistRecipeDarreichung
     {
-        if ($pg->presentation_id !== null && $pg->darreichung !== null) {
-            return $pg->darreichung;
+        if ($pg->presentation_id !== null && $pg->presentation !== null) {
+            return $pg->presentation;
         }
 
-        return $pg->gericht !== null ? $this->standardFuer($pg->gericht) : null;
+        return $pg->dish !== null ? $this->standardFuer($pg->dish) : null;
     }
 
     public function standardFuer(FoodAlchemistRecipe $recipe): ?FoodAlchemistRecipeDarreichung
     {
-        return $recipe->standardDarreichung ?? $recipe->darreichungen()->orderBy('id')->first();
+        return $recipe->standardPresentation ?? $recipe->presentations()->orderBy('id')->first();
     }
 
     /** VK netto im Kontext (Darreichung zuerst, Legacy-Spalte als Fallback). */
@@ -67,6 +67,6 @@ class DarreichungResolver
             return (float) $darreichung->sales_net;
         }
 
-        return $slot->gericht?->sales_net !== null ? (float) $slot->gericht->sales_net : null;
+        return $slot->dish?->sales_net !== null ? (float) $slot->dish->sales_net : null;
     }
 }

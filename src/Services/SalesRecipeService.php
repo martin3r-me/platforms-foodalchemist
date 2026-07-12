@@ -96,7 +96,7 @@ class SalesRecipeService
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->with([
                 'speisenKlasse:id,label,diet_form,dish_main_group_id',
-                'speisenKlasse.hauptgruppe:id,code,label',
+                'dishClass.mainGroup:id,code,label',
                 'aufschlagsklasse',
                 'vkEinheit:id,slug,display_de',
                 'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
@@ -160,8 +160,8 @@ class SalesRecipeService
     /** VK-Felder des Legacy-Editors in die Standard-Darreichung spiegeln (eine Wahrheit). */
     private function syncStandardDarreichung(Team $team, FoodAlchemistRecipe $recipe, array $update): void
     {
-        $standard = $recipe->standardDarreichung()->first();
-        if ($standard === null && $recipe->darreichungen()->exists()) {
+        $standard = $recipe->standardPresentation()->first();
+        if ($standard === null && $recipe->presentations()->exists()) {
             return; // Varianten ohne Standard-Flag: nichts raten
         }
         if ($standard === null) {
@@ -340,15 +340,15 @@ class SalesRecipeService
         }
 
         DB::transaction(function () use ($recipe) {
-            $darIds = $recipe->darreichungen()->pluck('id');
+            $darIds = $recipe->presentations()->pluck('id');
             if ($darIds->isNotEmpty()) {
                 \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungDelta::whereIn('presentation_id', $darIds)->delete();
             }
-            $recipe->darreichungen()->delete();
+            $recipe->presentations()->delete();
             $recipe->customerNames()->delete();
             $recipe->regenerations()->delete();
-            $recipe->niveauEignungen()->delete();
-            $recipe->sektorEignungen()->delete();
+            $recipe->levelSuitabilities()->delete();
+            $recipe->sectorSuitabilities()->delete();
             $recipe->ingredients()->delete();
             $recipe->delete();
         });
@@ -377,7 +377,7 @@ class SalesRecipeService
 
         $verkauftAls = $anzahl !== null || $mengeProEinheitG !== null ? [
             'anzahl' => $anzahl,
-            'unit' => $r->vkEinheit?->display_de ?? $r->vkEinheit?->slug ?? 'Einheit',
+            'unit' => $r->salesUnit?->display_de ?? $r->salesUnit?->slug ?? 'Einheit',
             'g_pro_einheit' => $mengeProEinheitG,
             'yield_kg' => $r->yield_kg !== null ? (float) $r->yield_kg : null,
         ] : null;
@@ -389,7 +389,7 @@ class SalesRecipeService
                 $r->sales_net !== null ? (float) $r->sales_net : null,
                 $r->ek_per_kg_eur !== null ? (float) $r->ek_per_kg_eur : null,
                 $mengeProEinheitG,
-                $r->aufschlagsklasse,
+                $r->markupClass,
                 $r->vat_rate !== null ? (float) $r->vat_rate : null,
             );
         } catch (\Platform\FoodAlchemist\Exceptions\FormelNichtDefiniertException) {
@@ -399,7 +399,7 @@ class SalesRecipeService
             }
         }
 
-        $mwst = $r->vat_rate !== null ? (float) $r->vat_rate : (float) ($r->aufschlagsklasse->vat_rate ?? 19);
+        $mwst = $r->vat_rate !== null ? (float) $r->vat_rate : (float) ($r->markupClass->vat_rate ?? 19);
 
         return [
             'verkauft_als' => $verkauftAls,

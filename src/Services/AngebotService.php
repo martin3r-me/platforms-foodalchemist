@@ -49,7 +49,7 @@ class AngebotService
             ->with([
                 'crmCompany', 'crmContact',
                 'concepts' => fn ($q) => $q->withCount('slots')->orderBy('name'),
-                'referenzierteConcepts' => fn ($q) => $q->withCount('slots'),
+                'referencedConcepts' => fn ($q) => $q->withCount('slots'),
                 'pakete:id,name,offer_id',
             ])
             ->find($id);
@@ -244,7 +244,7 @@ class AngebotService
         if (($angebot->price_mode ?? 'auto') !== 'auto') {
             return;
         }
-        $auto = $this->kalkulation($team, $angebot)['auto_gesamt'];
+        $auto = $this->calculation($team, $angebot)['auto_gesamt'];
         if (round((float) ($angebot->total_price ?? -1), 2) !== $auto) {
             $angebot->update(['total_price' => $auto]);
         }
@@ -261,7 +261,7 @@ class AngebotService
     {
         $conceptSvc = app(ConceptService::class);
         $angebot->loadMissing(['crmCompany', 'crmContact', 'concepts', 'referenzierteConcepts']);
-        $kalk = $this->kalkulation($team, $angebot);
+        $kalk = $this->calculation($team, $angebot);
 
         $menues = [];
         foreach ($this->menueConcepts($angebot) as $c) {
@@ -294,7 +294,7 @@ class AngebotService
     public function menueConcepts(FoodAlchemistAngebot $angebot): Collection
     {
         $adhoc = $angebot->relationLoaded('concepts') ? $angebot->concepts : $angebot->concepts()->get();
-        $ref = $angebot->relationLoaded('referenzierteConcepts') ? $angebot->referenzierteConcepts : $angebot->referenzierteConcepts()->get();
+        $ref = $angebot->relationLoaded('referencedConcepts') ? $angebot->referencedConcepts : $angebot->referencedConcepts()->get();
 
         return collect($adhoc)->merge($ref)->values();
     }
@@ -310,7 +310,7 @@ class AngebotService
             throw new \RuntimeException('Nur standardisierte Katalog-Concepts können referenziert werden.');
         }
         $pos = (int) (DB::table('foodalchemist_offer_concept')->where('offer_id', $angebot->id)->max('position') ?? -1) + 1;
-        $angebot->referenzierteConcepts()->syncWithoutDetaching([$conceptId => ['team_id' => $team->id, 'position' => $pos]]);
+        $angebot->referencedConcepts()->syncWithoutDetaching([$conceptId => ['team_id' => $team->id, 'position' => $pos]]);
         $this->aktualisiereAutoPreis($team, $angebot);
     }
 
@@ -318,7 +318,7 @@ class AngebotService
     {
         $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($angebotId);
         $this->guardOwner($angebot, $team);
-        $angebot->referenzierteConcepts()->detach($conceptId);
+        $angebot->referencedConcepts()->detach($conceptId);
         $this->aktualisiereAutoPreis($team, $angebot);
     }
 

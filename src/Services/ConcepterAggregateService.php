@@ -116,14 +116,14 @@ class ConcepterAggregateService
         // load() statt loadMissing(): erzwingt den vollen Spalten-Satz, auch wenn der
         // Aufrufer die Gerichte schon mit reduzierten Spalten geladen hat (z. B. detail()).
         $paket->load([
-            'gerichte' => fn ($q) => $q->orderBy('position'),
-            'gerichte.unit' => fn ($q) => $q->select($this->einheitCols()),
-            'gerichte.gericht' => fn ($q) => $q->select($this->recipeCols()),
+            'dishes' => fn ($q) => $q->orderBy('position'),
+            'dishes.unit' => fn ($q) => $q->select($this->einheitCols()),
+            'dishes.dish' => fn ($q) => $q->select($this->recipeCols()),
         ]);
 
-        $mitMenge = $paket->gerichte
-            ->map(fn ($pg) => ['gericht' => $pg->gericht, 'quantity' => $pg->quantity, 'unit' => $pg->unit,
-                'darreichung' => $pg->gericht !== null ? $this->darreichungen->fuerPaketGericht($pg) : null])
+        $mitMenge = $paket->dishes
+            ->map(fn ($pg) => ['gericht' => $pg->dish, 'quantity' => $pg->quantity, 'unit' => $pg->unit,
+                'darreichung' => $pg->dish !== null ? $this->presentations->fuerPaketGericht($pg) : null])
             ->filter(fn ($r) => $r['gericht'] !== null)->values();
 
         return $this->aggregat($mitMenge);
@@ -142,25 +142,25 @@ class ConcepterAggregateService
         $concept->load([
             'slots' => fn ($q) => $q->orderBy('position'),
             'slots.unit' => fn ($q) => $q->select($this->einheitCols()),
-            'slots.paket.gerichte' => fn ($q) => $q->orderBy('position'),
-            'slots.paket.gerichte.unit' => fn ($q) => $q->select($this->einheitCols()),
-            'slots.paket.gerichte.gericht' => fn ($q) => $q->select($this->recipeCols()),
-            'slots.gericht' => fn ($q) => $q->select($this->recipeCols()),
+            'slots.package.dishes' => fn ($q) => $q->orderBy('position'),
+            'slots.package.dishes.unit' => fn ($q) => $q->select($this->einheitCols()),
+            'slots.package.dishes.dish' => fn ($q) => $q->select($this->recipeCols()),
+            'slots.dish' => fn ($q) => $q->select($this->recipeCols()),
         ]);
 
         $mitMenge = collect();
         foreach ($concept->slots as $slot) {
             $slot->setRelation('concept', $concept); // Resolver braucht die Konzept-Servierform ohne Lazy-Load
-            if ($slot->paket) {
-                foreach ($slot->paket->gerichte as $pg) {
-                    if ($pg->gericht) {
-                        $mitMenge->push(['gericht' => $pg->gericht, 'quantity' => $pg->quantity, 'unit' => $pg->unit,
-                            'darreichung' => $this->darreichungen->fuerPaketGericht($pg)]);
+            if ($slot->package) {
+                foreach ($slot->package->dishes as $pg) {
+                    if ($pg->dish) {
+                        $mitMenge->push(['gericht' => $pg->dish, 'quantity' => $pg->quantity, 'unit' => $pg->unit,
+                            'darreichung' => $this->presentations->fuerPaketGericht($pg)]);
                     }
                 }
-            } elseif ($slot->gericht) {
-                $mitMenge->push(['gericht' => $slot->gericht, 'quantity' => $slot->quantity, 'unit' => $slot->unit,
-                    'darreichung' => $this->darreichungen->fuerSlot($slot)]);
+            } elseif ($slot->dish) {
+                $mitMenge->push(['gericht' => $slot->dish, 'quantity' => $slot->quantity, 'unit' => $slot->unit,
+                    'darreichung' => $this->presentations->fuerSlot($slot)]);
             }
         }
 

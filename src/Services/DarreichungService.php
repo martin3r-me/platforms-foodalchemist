@@ -33,7 +33,7 @@ class DarreichungService
     public function anlegen(Team $team, int $recipeId, int $servierformId, array $attrs = [], string $createdVia = 'fa_ui'): FoodAlchemistRecipeDarreichung
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
-        if ($recipe->darreichungen()->where('serving_form_id', $servierformId)->exists()) {
+        if ($recipe->presentations()->where('serving_form_id', $servierformId)->exists()) {
             throw new \RuntimeException('Diese Servierform existiert schon an diesem Gericht.');
         }
 
@@ -44,7 +44,7 @@ class DarreichungService
             $trashed->forceDelete();
         }
 
-        $standard = $recipe->standardDarreichung;
+        $standard = $recipe->standardPresentation;
         $darreichung = FoodAlchemistRecipeDarreichung::create([
             'team_id' => $recipe->team_id,
             'recipe_id' => $recipe->id,
@@ -76,11 +76,11 @@ class DarreichungService
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
 
-        $standard = $recipe->standardDarreichung()->first();
+        $standard = $recipe->standardPresentation()->first();
         if ($standard !== null) {
             return $standard;
         }
-        if ($recipe->darreichungen()->exists()) {
+        if ($recipe->presentations()->exists()) {
             return null; // Varianten ohne Standard-Flag: nichts raten (wie syncStandardDarreichung)
         }
 
@@ -125,7 +125,7 @@ class DarreichungService
     public function loeschen(Team $team, int $darreichungId): void
     {
         $darreichung = $this->find($team, $darreichungId);
-        if ($darreichung->is_standard && $darreichung->recipe->darreichungen()->count() > 1) {
+        if ($darreichung->is_standard && $darreichung->recipe->presentations()->count() > 1) {
             throw new \RuntimeException('Standard-Darreichung zuerst auf eine andere Form übertragen.');
         }
         $darreichung->delete();
@@ -136,7 +136,7 @@ class DarreichungService
         $darreichung = $this->find($team, $darreichungId);
         DB::transaction(function () use ($darreichung) {
             // Reihenfolge wichtig: partieller Unique-Index erlaubt nur EIN is_standard=1
-            $darreichung->recipe->darreichungen()
+            $darreichung->recipe->presentations()
                 ->where('id', '!=', $darreichung->id)
                 ->update(['is_standard' => false]);
             $darreichung->update(['is_standard' => true]);
@@ -217,7 +217,7 @@ class DarreichungService
                     : null);
         }
 
-        $klasse = $darreichung->aufschlagsklasse;
+        $klasse = $darreichung->markupClass;
         $vkNetto = $darreichung->price_mode === 'manuell'
             ? $darreichung->sales_net
             : (($ekPortion !== null && $klasse !== null)
@@ -256,7 +256,7 @@ class DarreichungService
         $batchG = array_sum(array_map(fn ($z) => $z['masse_g'], $zeilen));
         // Referenz = Grammatur der Standard-Form — aber nur, wenn diese selbst delta-frei
         // ist (sonst wäre die Referenz zirkulär, weil ihre Grammatur aus Deltas entsteht).
-        $standard = $recipe->standardDarreichung()->first();
+        $standard = $recipe->standardPresentation()->first();
         $stdG = ($standard !== null && ! $standard->deltas()->exists()) ? $standard->quantity_per_unit_g : null;
         $faktor = ($batchG > 0 && $stdG !== null && (float) $stdG > 0) ? (float) $stdG / $batchG : 1.0;
 
@@ -274,7 +274,7 @@ class DarreichungService
     /** recipes.sales_net = Anzeige-Cache der Standard-Darreichung (Preis-Wahrheit = Darreichung). */
     private function spiegleStandardVk(FoodAlchemistRecipe $recipe): void
     {
-        $standard = $recipe->standardDarreichung()->first();
+        $standard = $recipe->standardPresentation()->first();
         if ($standard !== null) {
             DB::table('foodalchemist_recipes')->where('id', $recipe->id)
                 ->update(['sales_net' => $standard->sales_net]);

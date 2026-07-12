@@ -122,7 +122,7 @@ class SensorikService
      */
     public function rollenCheck(int $recipeId, array $geschmack): ?array
     {
-        $hg = $this->hauptgruppe($recipeId);
+        $hg = $this->mainGroup($recipeId);
         if ($hg === null) {
             return null;
         }

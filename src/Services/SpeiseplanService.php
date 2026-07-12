@@ -28,7 +28,7 @@ class SpeiseplanService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistSpeiseplan::visibleToTeam($team)
-            ->withCount('eintraege')
+            ->withCount('entries')
             ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $filters['search']))
             ->orderBy('name')->paginate($perPage);
     }
@@ -37,10 +37,10 @@ class SpeiseplanService
     {
         return FoodAlchemistSpeiseplan::visibleToTeam($team)
             ->with(['linien',
-                'eintraege.concept:id,name,price_per_person_cache',
-                'eintraege.paket:id,name,price_per_person,ek_per_person',
-                'eintraege.gericht:id,name,sales_net,ek_total_eur',
-                'eintraege.linie:id,name,farbe,ist_vegetarisch'])
+                'entries.concept:id,name,price_per_person_cache',
+                'entries.package:id,name,price_per_person,ek_per_person',
+                'entries.dish:id,name,sales_net,ek_total_eur',
+                'entries.line:id,name,farbe,ist_vegetarisch'])
             ->find($id);
     }
 
@@ -59,7 +59,7 @@ class SpeiseplanService
 
         // Starter-Linien (Kantinen-Standard) — pro Plan frei änderbar
         foreach ([['Menü 1', '#D85A30', false], ['Vegetarisch', '#639922', true], ['Dessert', '#EF9F27', false]] as $i => [$n, $f, $v]) {
-            $plan->linien()->create(['team_id' => $team->id, 'name' => $n, 'color' => $f, 'is_vegetarian' => $v, 'sort_order' => $i + 1]);
+            $plan->lines()->create(['team_id' => $team->id, 'name' => $n, 'color' => $f, 'is_vegetarian' => $v, 'sort_order' => $i + 1]);
         }
 
         return $plan;
@@ -94,19 +94,19 @@ class SpeiseplanService
         $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($planId);
         $this->guard($plan, $team);
 
-        return $plan->linien()->create([
+        return $plan->lines()->create([
             'team_id' => $plan->team_id,
             'name' => trim((string) ($in['name'] ?? 'Neue Linie')) ?: 'Neue Linie',
             'color' => $in['color'] ?? null,
             'is_vegetarian' => (bool) ($in['is_vegetarian'] ?? false),
-            'sort_order' => (int) $plan->linien()->max('sort_order') + 1,
+            'sort_order' => (int) $plan->lines()->max('sort_order') + 1,
         ]);
     }
 
     public function updateLinie(Team $team, int $linieId, array $in): FoodAlchemistSpeiseplanLinie
     {
-        $linie = FoodAlchemistSpeiseplanLinie::visibleToTeam($team)->with('speiseplan')->findOrFail($linieId);
-        $this->guard($linie->speiseplan, $team);
+        $linie = FoodAlchemistSpeiseplanLinie::visibleToTeam($team)->with('mealPlan')->findOrFail($linieId);
+        $this->guard($linie->mealPlan, $team);
         $upd = array_intersect_key($in, array_flip(['name', 'color', 'is_vegetarian']));
         if (isset($upd['name'])) {
             $upd['name'] = trim((string) $upd['name']) ?: $linie->name;
@@ -121,8 +121,8 @@ class SpeiseplanService
 
     public function removeLinie(Team $team, int $linieId): void
     {
-        $linie = FoodAlchemistSpeiseplanLinie::visibleToTeam($team)->with('speiseplan')->findOrFail($linieId);
-        $this->guard($linie->speiseplan, $team);
+        $linie = FoodAlchemistSpeiseplanLinie::visibleToTeam($team)->with('mealPlan')->findOrFail($linieId);
+        $this->guard($linie->mealPlan, $team);
         // FK app-seitig: Einträge der Linie entkoppeln statt löschen
         FoodAlchemistSpeiseplanEintrag::where('line_id', $linie->id)->update(['line_id' => null]);
         $linie->delete();
@@ -131,8 +131,8 @@ class SpeiseplanService
     /** Linie um eine Position verschieben ($richtung < 0 = hoch, sonst runter). */
     public function reorderLinie(Team $team, int $linieId, int $richtung): void
     {
-        $linie = FoodAlchemistSpeiseplanLinie::visibleToTeam($team)->with('speiseplan')->findOrFail($linieId);
-        $this->guard($linie->speiseplan, $team);
+        $linie = FoodAlchemistSpeiseplanLinie::visibleToTeam($team)->with('mealPlan')->findOrFail($linieId);
+        $this->guard($linie->mealPlan, $team);
         $nachbar = FoodAlchemistSpeiseplanLinie::where('menu_plan_id', $linie->menu_plan_id)->whereNull('deleted_at')
             ->when($richtung < 0,
                 fn ($q) => $q->where('sort_order', '<', $linie->sort_order)->orderByDesc('sort_order'),
@@ -155,12 +155,12 @@ class SpeiseplanService
         $datum = Carbon::parse($in['entry_date'])->startOfDay();
         $mahlzeit = in_array($in['mahlzeit'] ?? '', array_keys(self::MAHLZEITEN), true) ? $in['mahlzeit'] : 'mittag';
         $linieId = $in['line_id'] ?? null;
-        if ($linieId !== null && ! $plan->linien->contains('id', (int) $linieId)) {
+        if ($linieId !== null && ! $plan->lines->contains('id', (int) $linieId)) {
             $linieId = null;
         }
         $tag = $datum->format('Y-m-d');
 
-        return $plan->eintraege()->create([
+        return $plan->entries()->create([
             'team_id' => $plan->team_id,
             'entry_date' => $tag,
             'week' => 1, 'weekday' => (int) $datum->isoWeekday(),   // Back-Compat-Spalten
@@ -169,7 +169,7 @@ class SpeiseplanService
             'concept_id' => $in['concept_id'] ?? null,
             'package_id' => empty($in['concept_id']) ? ($in['package_id'] ?? null) : null,
             'sales_recipe_id' => empty($in['concept_id']) && empty($in['package_id']) ? ($in['sales_recipe_id'] ?? null) : null,
-            'position' => (int) $plan->eintraege()
+            'position' => (int) $plan->entries()
                 ->where('entry_date', $tag)->where('meal', $mahlzeit)
                 ->when($linieId !== null, fn ($q) => $q->where('line_id', $linieId))->max('position') + 1,
         ]);
@@ -177,8 +177,8 @@ class SpeiseplanService
 
     public function removeEintrag(Team $team, int $id): void
     {
-        $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with('speiseplan')->findOrFail($id);
-        $this->guard($e->speiseplan, $team);
+        $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with('mealPlan')->findOrFail($id);
+        $this->guard($e->mealPlan, $team);
         $e->delete();
     }
 
@@ -195,7 +195,7 @@ class SpeiseplanService
         $start = $montag->copy()->startOfDay();
         $ende = $start->copy()->addDays(6);
         $grid = [];
-        foreach ($plan->eintraege as $e) {
+        foreach ($plan->entries as $e) {
             if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->between($start, $ende)) {
                 continue;
             }
@@ -213,7 +213,7 @@ class SpeiseplanService
     public function monatsRaster(FoodAlchemistSpeiseplan $plan, int $jahr, int $monat, ?string $mahlzeit = null): array
     {
         $out = [];
-        foreach ($plan->eintraege as $e) {
+        foreach ($plan->entries as $e) {
             if ($e->entry_date === null || (int) $e->entry_date->year !== $jahr || (int) $e->entry_date->month !== $monat) {
                 continue;
             }
@@ -237,11 +237,11 @@ class SpeiseplanService
 
             return ['vk' => (float) $c['price_per_person'], 'ek' => (float) $c['ek_per_person']];
         }
-        if ($e->package_id !== null && $e->paket) {
-            return ['vk' => (float) ($e->paket->price_per_person ?? 0), 'ek' => (float) ($e->paket->ek_per_person ?? 0)];
+        if ($e->package_id !== null && $e->package) {
+            return ['vk' => (float) ($e->package->price_per_person ?? 0), 'ek' => (float) ($e->package->ek_per_person ?? 0)];
         }
-        if ($e->sales_recipe_id !== null && $e->gericht) {
-            return ['vk' => (float) ($e->gericht->sales_net ?? 0), 'ek' => (float) ($e->gericht->ek_total_eur ?? 0)];
+        if ($e->sales_recipe_id !== null && $e->dish) {
+            return ['vk' => (float) ($e->dish->sales_net ?? 0), 'ek' => (float) ($e->dish->ek_total_eur ?? 0)];
         }
 
         return ['vk' => 0.0, 'ek' => 0.0];
@@ -259,7 +259,7 @@ class SpeiseplanService
         $proTag = [];
         $wVk = 0.0;
         $wEk = 0.0;
-        foreach ($plan->eintraege as $e) {
+        foreach ($plan->entries as $e) {
             if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->between($start, $ende)) {
                 continue;
             }
@@ -282,14 +282,14 @@ class SpeiseplanService
      */
     public function veggieCheck(FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, int $tage = 5): array
     {
-        $veggie = $plan->linien->where('is_vegetarian', true)->pluck('id')->map(fn ($i) => (int) $i)->all();
+        $veggie = $plan->lines->where('is_vegetarian', true)->pluck('id')->map(fn ($i) => (int) $i)->all();
         if ($veggie === []) {
             return ['active' => false, 'erfuellt' => false, 'fehltage' => []];
         }
         $fehl = [];
         for ($i = 0; $i < $tage; $i++) {
             $tag = $montag->copy()->addDays($i)->startOfDay();
-            $hat = $plan->eintraege->first(fn ($e) => $e->entry_date !== null && $e->meal === $mahlzeit
+            $hat = $plan->entries->first(fn ($e) => $e->entry_date !== null && $e->meal === $mahlzeit
                 && in_array((int) $e->line_id, $veggie, true) && $e->entry_date->isSameDay($tag));
             if ($hat === null) {
                 $fehl[] = $tag->format('Y-m-d');
@@ -308,7 +308,7 @@ class SpeiseplanService
     {
         $minRegel = (int) $plan->min_abstand_tage;
         $proInhalt = [];
-        foreach ($plan->eintraege as $e) {
+        foreach ($plan->entries as $e) {
             if ($e->entry_date === null) {
                 continue;
             }
@@ -359,13 +359,13 @@ class SpeiseplanService
         $blockTage = max(1, (int) $plan->cycle_weeks) * 7;
         $blockEnde = $start->copy()->addDays($blockTage - 1);
 
-        $basis = $plan->eintraege->filter(fn ($e) => $e->entry_date !== null && $e->entry_date->between($start, $blockEnde));
+        $basis = $plan->entries->filter(fn ($e) => $e->entry_date !== null && $e->entry_date->between($start, $blockEnde));
         if ($basis->isEmpty()) {
             return 0;
         }
 
         $vorhanden = [];
-        foreach ($plan->eintraege as $e) {
+        foreach ($plan->entries as $e) {
             if ($e->entry_date !== null) {
                 $vorhanden[$e->entry_date->format('Y-m-d') . '|' . $e->meal . '|' . (int) $e->line_id . '|' . $e->inhaltKey()] = true;
             }
@@ -386,7 +386,7 @@ class SpeiseplanService
                 if (isset($vorhanden[$sig])) {
                     continue;
                 }
-                $plan->eintraege()->create([
+                $plan->entries()->create([
                     'team_id' => $plan->team_id, 'entry_date' => $ziel->format('Y-m-d'),
                     'week' => 1, 'weekday' => (int) $ziel->isoWeekday(), 'meal' => $e->meal,
                     'line_id' => $e->line_id, 'concept_id' => $e->concept_id, 'package_id' => $e->package_id,
