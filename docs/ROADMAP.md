@@ -45,8 +45,11 @@ Quellen: `Datenmodell Food.Alchemist.md` (5 Ebenen) + `07.02_Flavor_Pairing/Date
 
 > **Nachtrag 2026-07-11 Abend:** Der Seeder-first-Ansatz oben wurde in der Praxis übersprungen — Dominique wollte die lokale MySQL „so vorbereiten, dass sie steht", darum Volldaten via `import-master` importiert. #469 komplett gebaut. Nächster Hebel: Wissens-Modul auf demo sichtbar machen (Server-Schritte/Martin) + VK-Preise R1.2.
 
-**Station 2 — Pairing-Projektion (Coverage-Loch schließen)** ◻️
-- computed-Kanten → FA `pairing_anchor_edges` Lückenfüllung (Plan `w0rox0ps0`, ~12.461 Kanten, `source='computed'`); `edgeBest()`: kuratiert gewinnt, computed füllt (Inv. 3+5). Schließt das 0,2 %-Kohärenz-Loch. + 233 Buch-Anker→GP · 67 fuzzy Substrate.
+**Station 2 — Pairing-Projektion (Coverage-Loch schließen)** ✅ **DONE (2026-07-12)**
+- computed-Kanten → FA `pairing_anchor_edges` als Lückenfüllung. Real **~145k** Kanten projiziert (nicht ~12k — die Label→Anker-Multiplizität + permissive harmonie-Kanten trieben die Menge), `source_slug='computed'` (keine `source`-Spalte), **gradiertes Gewicht** `weight = 0.6 × Molekül-confidence` (nullable Spalte) statt binärer Schwelle; `edgeBest()`/`componentSuggestions()`: `weight ?? GEWICHTE[type]`, **holes-only → kuratiert nie berührt** (Inv. 3+5). Gemessen am **Master (foodalchemist_full, 2.559 Rezepte): Coverage 36,6 %→58,1 %, Ø-Score 92→67 (ehrlich, kein Rauschen), 159 Rezepte aus 0 %-Coverage gerettet.** Command `foodalchemist:pairing-project-computed` (--apply/--purge, idempotent). Graph zudem **global** (`team_id=NULL`) + `import-master` bewahrt global.
+  - **Station 3 (Anker-Reichweite):** molekular **ausgereizt** — von 187 unmapped Ankern nur 67 recipe-relevant, davon FooDB nur ~9 (grob); 8 saubere Mappings gesetzt → +2.642 Kanten. Exoten (yuzu/tomatillo/perilla/gochujang…) sind NICHT in FooDB, aber **kuratiert dicht** via `book_pairings` (9.034 geladene Buch-Kanten) — kein Mapping-Loch.
+  - **Taxonomie (2026-07-12):** Kanten-Typen final **aroma / kontrast / erprobt** (klassisch+modern→`erprobt` verschmolzen, Ära ist kein Fit-Kriterium). Migration `000040` beide DBs + recipe_pairings; Code/Blades/Tests nachgezogen (627/628 grün).
+  - **⚠️ „0,2 %-Kohärenz-Loch" war eine Metrik-Verwechslung:** Station 2 schloss das **Coverage/Dichte-Loch** (37 %→58 %). Die „0,2 %" aus Q5 ist etwas anderes — **% Rezepte mit *persistiertem* KI-Kohärenz-Score** (Tabelle `recipe_culinary_coherence`, aktuell 0 Zeilen). Das ist der **Q5-Batch-Lauf**, noch offen (KI-Judge, braucht echten Gemini-Provider — Dev = `fake`). Station 2 war die Vorarbeit; der Batch-Lauf ist die Ernte.
 
 **Station 3 — Ebene 3 Rezept-Werkstatt komplett** ◻️
 - Muttersaucen `ABGELEITET_VON` (Aroma/Allergen/Finanz-Vererbung) · **Geschmacks-Editoren als Kanten-Modifikatoren** (Säure→Frucht-Ester-OAV↑, Salz→Bitter↓, trigeminal-Multiplikator = Phase-4-Matrix-Effekte) · Hybrid-Fertigprodukte (virtuelles Aroma-Profil) · Rezept-als-eigene-Aroma-Identität (über Signatur-Netz hinaus).
@@ -401,7 +404,7 @@ Die Zeilen-Funktionen des Zutaten-Editors (**⇄ Produkt tauschen, ♻ Äquivale
 
 > **Warum-Layer (Querschnitts-DoD für R6, hängt an Q4):** Jeder suggestionserzeugende R6-Output (R6.1 Konzept, R6.3/R6.8 Substitution, R6.4 Idee, R6.11 Hypothese) trägt eine **zitierte Begründung** — Mechanismus + Quelle + Evidenz-Stufe (aus Q4). Kein Beleg → als Hypothese (T3/T0) markiert, nie als Fakt. Kann als Begründungstext in Foodbook/Kundensicht (R3, im Kunden-Wording) einfließen. Gilt zusätzlich zur jeweiligen Paket-DoD.
 >
-> **Konnektivität (Pairing-Offense R6.8–R6.10 + Kohäsion, hängt an Q5):** Diese Pakete brauchen graph-*erreichbare* Gerichte — ohne Anker-Erdung (Q5) sieht der Graph das Gericht nicht. Baseline 2026-07-04: Kohärenz nur **0,2 %** berechnet, Rezept-Anker-Reichweite **60 %** → Q5 ist harte Voraussetzung, nicht Kür.
+> **Konnektivität (Pairing-Offense R6.8–R6.10 + Kohäsion, hängt an Q5):** Diese Pakete brauchen graph-*erreichbare* Gerichte — ohne Anker-Erdung (Q5) sieht der Graph das Gericht nicht. Baseline 2026-07-04: Kohärenz nur **0,2 %** berechnet, Rezept-Anker-Reichweite **60 %** → Q5 ist harte Voraussetzung, nicht Kür. → **Update 2026-07-12:** Die **Graph-Dichte/Coverage-Seite ist gelöst** (Station 2: 37 %→58 %, ~179k Kanten, global). Von Q5 offen bleiben nur noch (a) der **Kohärenz-Score-Batch-Lauf** (KI-Judge, blockiert auf echten Gemini-Provider) und (b) **Zutaten-Anker-Reichweite** (60 %). Damit sind R6.8–R6.10 **halb entblockt** — die Dichte steht, es fehlt der Score-Lauf.
 
 ### R6.1 Brief → fertiges Konzept mit Kohäsions-Beweis · Größe XL · Hängt an: R1, R4, R0.2
 
@@ -549,6 +552,8 @@ Der Warum-Layer ist nur so gut wie seine Evidenz. Statt dünne Datenlage zu vers
 
 **Baseline gemessen 2026-07-04 (WaWi-DB) — was wir für dünn hielten, ist es nicht; dünn ist woanders:**
 
+> *Werte unten = alte WaWi-DB. **FA-Master 2026-07-12: 1.000 Anker / ~179k Kanten (global, `team_id=NULL`)** nach Station 2 — die Graph-Dichte/Coverage-Seite (37 %→58 %) ist damit erledigt. Offen bleibt der Kohärenz-**Score-Lauf** (Zeile unten) + Anker-Reichweite.*
+
 | Kennzahl | Ist | Urteil |
 |---|---|---|
 | GP-Erdung (approved mit Anker) | 6.679 / 6.802 = 98 % | ✅ stark |
@@ -560,8 +565,8 @@ Der Warum-Layer ist nur so gut wie seine Evidenz. Statt dünne Datenlage zu vers
 | Rezepte mit Kohärenz-Score | 5 / 2.322 = 0,2 % | 🔴 Feature leer |
 
 **DoD (nach Hebel sortiert):**
-- [ ] **Kohärenz-Score über das Portfolio berechnen** (heute 0,2 %): Batch-Compute für alle Gerichte mit Ankern; Ziel ≥ 90 % der VK-Gerichte mit Score. **Größter Einzel-Hebel** — die Logik existiert (`recipe_culinary_coherence`), es fehlt nur der Lauf.
-- [ ] **Rezept-Anker-Reichweite schließen** (heute 60 %): erst „sollte-Anker-haben"-Menge bestimmen (echte Gerichte, nicht triviale Ein-Zutat-Sub-Rezepte), dann Lücke erden → ~100 % der should-have. Graph-blinde Gerichte werden geflaggt, nicht still auf 0 gesetzt.
+- [~] **Kohärenz-Score über das Portfolio berechnen** (heute 0,2 % = 0 Zeilen in `recipe_culinary_coherence`): Batch-Compute für alle Gerichte mit Ankern; Ziel ≥ 90 % der VK-Gerichte mit Score. **Größter Einzel-Hebel.** → **Stand 2026-07-12:** Graph-Dichte-Vorarbeit erledigt (Station 2, Coverage 58 %) → der Lauf liefert jetzt *belastbare* Scores. ABER: der Score ist ein **KI-Judge** (`CoherenceService::judge` via Gemini, 1 Call/Gericht) → **blockiert auf echten Gemini-Provider** (Dev = `FOODALCHEMIST_AI_PROVIDER=fake`). Batch-Command + Real-Lauf im Gemini-Env stehen aus.
+- [~] **Rezept-Anker-Reichweite schließen** (heute 60 %): erst „sollte-Anker-haben"-Menge bestimmen (echte Gerichte, nicht triviale Ein-Zutat-Sub-Rezepte), dann Lücke erden → ~100 % der should-have. → **Stand 2026-07-12:** die **molekulare** Route ist ausgereizt (FooDB deckt die recipe-relevanten Reste nicht — Exoten kommen kuratiert übers Buch). Reichweite-Schließen heißt ab jetzt **Anker-Erdung der Zutaten** (Zutat→Anker-Auflösung), nicht mehr FooDB-Mapping.
 - [ ] **Mapping-Qualität heben** (heute ~64 % unverifiziert): Verifikations-Ampel „% verifiziert" je Rezept; `gemini_proposed`-Zutaten nutzungspriorisiert auf `manual`/verifiziert heben (Muster Skript 215, §2-Kontext, Review-Gate)
 - [ ] **NICHT blanket erweitern:** Kanten-Graph + GP-Erdung sind stark (98 %/gesund) → keine Blanket-Ausweitung; nur gemessene weiße Flecken aus FlavorDB2/Ahn ergänzen (fließt in Q4). Docs (836) bleiben niedrigste Prio.
 - [ ] **Priorisierung nach Nutzung × Dünne:** erst Rezepte/GPs, die in vielen VK-Gerichten hängen
