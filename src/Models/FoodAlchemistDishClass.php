@@ -20,9 +20,15 @@ class FoodAlchemistDishClass extends Model
 
     protected $guarded = ['id'];
 
-    public function hauptgruppe()
+    public function mainGroup()
     {
         return $this->belongsTo(FoodAlchemistDishMainGroup::class, 'dish_main_group_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → mainGroup() */
+    public function hauptgruppe()
+    {
+        return $this->mainGroup();
     }
 
     public function defaultMarkupClass()

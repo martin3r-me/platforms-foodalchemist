@@ -20,6 +20,12 @@ class FoodAlchemistDishMainGroup extends Model
 
     protected $guarded = ['id'];
 
+    public function dishClasses()
+    {
+        return $this->hasMany(FoodAlchemistDishClass::class, 'dish_main_group_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → dishClasses() */
     public function klassen()
     {
         return $this->hasMany(FoodAlchemistDishClass::class, 'dish_main_group_id');

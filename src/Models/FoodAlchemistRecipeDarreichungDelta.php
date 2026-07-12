@@ -27,9 +27,15 @@ class FoodAlchemistRecipeDarreichungDelta extends Model
         'omitted' => 'bool',
     ];
 
-    public function darreichung()
+    public function presentation()
     {
         return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'presentation_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → presentation() */
+    public function darreichung()
+    {
+        return $this->presentation();
     }
 
     public function ingredient()

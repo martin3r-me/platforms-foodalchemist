@@ -38,14 +38,26 @@ class FoodAlchemistRecipeDarreichung extends Model
         return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id');
     }
 
-    public function servierform()
+    public function servingForm()
     {
         return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
     }
 
-    public function aufschlagsklasse()
+    /** @deprecated #486 deutscher Alias → servingForm() */
+    public function servierform()
+    {
+        return $this->servingForm();
+    }
+
+    public function markupClass()
     {
         return $this->belongsTo(FoodAlchemistMarkupClass::class, 'markup_class_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → markupClass() */
+    public function aufschlagsklasse()
+    {
+        return $this->markupClass();
     }
 
     public function unit()
@@ -59,8 +71,14 @@ class FoodAlchemistRecipeDarreichung extends Model
     }
 
     /** Default-Geschirr der Form — der Concepter schlägt es am Slot vor. */
-    public function geschirrItem()
+    public function dishwareItem()
     {
         return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'tableware_item_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → dishwareItem() */
+    public function geschirrItem()
+    {
+        return $this->dishwareItem();
     }
 }
