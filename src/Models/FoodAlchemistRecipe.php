@@ -77,9 +77,15 @@ class FoodAlchemistRecipe extends Model
         return $this->hasMany(FoodAlchemistRecipeIngredient::class, 'recipe_id')->orderBy('position');
     }
 
-    public function kategorie(): BelongsTo
+    public function category(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipeCategory::class, 'category_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → category() */
+    public function kategorie(): BelongsTo
+    {
+        return $this->category();
     }
 
     public function equipment(): BelongsToMany
@@ -94,53 +100,101 @@ class FoodAlchemistRecipe extends Model
         return $this->hasMany(FoodAlchemistRecipeIngredient::class, 'referenced_recipe_id');
     }
 
-    public function niveauEignungen(): HasMany
+    public function levelSuitabilities(): HasMany
     {
         return $this->hasMany(FoodAlchemistRecipeNiveauEignung::class, 'recipe_id');
     }
 
-    public function sektorEignungen(): HasMany
+    /** @deprecated #486 deutscher Alias → levelSuitabilities() */
+    public function niveauEignungen(): HasMany
+    {
+        return $this->levelSuitabilities();
+    }
+
+    public function sectorSuitabilities(): HasMany
     {
         return $this->hasMany(FoodAlchemistRecipeSektorEignung::class, 'recipe_id');
     }
 
+    /** @deprecated #486 deutscher Alias → sectorSuitabilities() */
+    public function sektorEignungen(): HasMany
+    {
+        return $this->sectorSuitabilities();
+    }
+
     // ── M6-03: Verkaufslayer (D-6) ───────────────────────────────────────
 
-    public function speisenKlasse(): BelongsTo
+    public function dishClass(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistDishClass::class, 'dish_class_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → dishClass() */
+    public function speisenKlasse(): BelongsTo
+    {
+        return $this->dishClass();
     }
 
     /**
      * VK-Taxonomie Modell A (Regelwerk_Verkaufsgerichte v1.1): Die Hauptgruppe ist die
      * Kategorie und wird direkt am Rezept geführt (Klasse = nur noch Diätform).
      */
-    public function speisenHauptgruppe(): BelongsTo
+    public function dishMainGroup(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistDishMainGroup::class, 'dish_main_group_id');
     }
 
-    public function aufschlagsklasse(): BelongsTo
+    /** @deprecated #486 deutscher Alias → dishMainGroup() */
+    public function speisenHauptgruppe(): BelongsTo
+    {
+        return $this->dishMainGroup();
+    }
+
+    public function markupClass(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistMarkupClass::class, 'markup_class_id');
     }
 
-    public function vkEinheit(): BelongsTo
+    /** @deprecated #486 deutscher Alias → markupClass() */
+    public function aufschlagsklasse(): BelongsTo
+    {
+        return $this->markupClass();
+    }
+
+    public function salesUnit(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'sales_unit_vocab_id');
     }
 
+    /** @deprecated #486 deutscher Alias → salesUnit() */
+    public function vkEinheit(): BelongsTo
+    {
+        return $this->salesUnit();
+    }
+
     /** Darreichungs-Varianten des Gerichts (Umbau-Spec Phase 3). */
-    public function darreichungen(): HasMany
+    public function presentations(): HasMany
     {
         return $this->hasMany(FoodAlchemistRecipeDarreichung::class, 'recipe_id');
     }
 
+    /** @deprecated #486 deutscher Alias → presentations() */
+    public function darreichungen(): HasMany
+    {
+        return $this->presentations();
+    }
+
     /** Die Standard-Darreichung (genau eine pro Gericht; Preis-Wahrheit). */
-    public function standardDarreichung(): HasOne
+    public function standardPresentation(): HasOne
     {
         return $this->hasOne(FoodAlchemistRecipeDarreichung::class, 'recipe_id')
             ->where('is_standard', true);
+    }
+
+    /** @deprecated #486 deutscher Alias → standardPresentation() */
+    public function standardDarreichung(): HasOne
+    {
+        return $this->standardPresentation();
     }
 
     public function customerNames(): HasMany
