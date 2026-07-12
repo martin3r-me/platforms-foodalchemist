@@ -95,3 +95,24 @@ it('getParents liefert die ↑-Navigation (DoD: Rekursion sichtbar)', function (
     expect($this->svc->getParents($this->rootTeam, $sub->id)->pluck('name')->all())
         ->toBe(['Suppe: A', 'Suppe: B']);
 });
+
+it('#2 §7: unsicheres Sub-Rezept deckelt Allergen-Konfidenz des Eltern auf low + Felder unbekannt', function () {
+    // Sub mit unbekannter Allergen-Konfidenz (Stub-artig, F7.3).
+    $sub = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Unsicherer Fond', 'recipe_key' => 'test-unsicherer-fond', 'status' => 'stub',
+        'allergens_confidence' => 'unknown', 'allergen_gluten' => 'unbekannt',
+    ]);
+    // Eltern referenziert NUR das Sub (alles „gemappt", nUngemappt=0 → ohne Fix wäre die Konfidenz 'high').
+    $eltern = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'name' => 'Eltern auf Sub', 'recipe_key' => 'test-eltern-sub', 'status' => 'draft']);
+    FoodAlchemistRecipeIngredient::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $eltern->id, 'position' => 1,
+        'raw_text' => 'Fond', 'quantity' => 500, 'unit_vocab_id' => $this->g->id,
+        'referenced_recipe_id' => $sub->id, 'match_method' => 'recipe_ref',
+    ]);
+
+    app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeAndPropagate($eltern->id);
+
+    $eltern->refresh();
+    expect($eltern->allergens_confidence)->toBe('low')              // NICHT 'high' — §7 schwächstes Glied
+        ->and($eltern->allergen_gluten)->toBe('unbekannt');         // Totalreset, keine falsche Sicherheit
+});

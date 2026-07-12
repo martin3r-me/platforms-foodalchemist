@@ -82,8 +82,7 @@ class RecipeRecomputeService
     /** §3.3: Pipeline + alle transitiven Eltern per BFS (best effort, I8). */
     public function recomputeAndPropagate(int $recipeId): void
     {
-        $this->recomputePipeline($recipeId);
-
+        // 1. Betroffene Menge sammeln (Start + alle transitiven Eltern), NOCH nicht rechnen.
         $besucht = [$recipeId => true];
         $ebene = [$recipeId];
         for ($tiefe = 0; $tiefe < self::PROPAGATION_LIMIT && $ebene !== []; $tiefe++) {
@@ -92,13 +91,19 @@ class RecipeRecomputeService
                 ->reject(fn ($id) => isset($besucht[$id]))->values()->all();
             foreach ($eltern as $parentId) {
                 $besucht[$parentId] = true;
-                try {
-                    $this->recomputePipeline($parentId);
-                } catch (\Throwable $e) {
-                    Log::warning("Recompute-Propagation: Eltern-Rezept {$parentId} fehlgeschlagen — {$e->getMessage()} (I8: Edit nicht geblockt)");
-                }
             }
             $ebene = $eltern;
+        }
+
+        // 2. Topologisch ordnen (Kinder vor Eltern) INNERHALB der betroffenen Menge und in
+        //    dieser Reihenfolge rechnen. Diamond-sicher (P→Y→X ∧ P→X): sonst läse P ein noch
+        //    nicht neu berechnetes Geschwister-Sub und bliebe dauerhaft stale (I8-Härtung).
+        foreach ($this->topoOrder(array_keys($besucht)) as $id) {
+            try {
+                $this->recomputePipeline($id);
+            } catch (\Throwable $e) {
+                Log::warning("Recompute-Propagation: Rezept {$id} fehlgeschlagen — {$e->getMessage()} (I8: Edit nicht geblockt)");
+            }
         }
 
         // K-07 / Doc 15 §M12: Auto-Pakete, die ein neu berechnetes Gericht enthalten,
@@ -156,6 +161,53 @@ class RecipeRecomputeService
         }
 
         return ['berechnet' => count($order), 'reihenfolge_ok' => true];
+    }
+
+    /**
+     * Kahn-Topo (Kinder vor Eltern) über eine TEILMENGE der Rezepte — nur Kanten
+     * innerhalb der Menge zählen. Für den Inkrement-Propagations-Pfad, damit auch
+     * Diamond-Abhängigkeiten korrekt geordnet neu berechnet werden. Bei (eigentlich
+     * durch pruefeVerknuepfung ausgeschlossenem) Zyklus: Rest in Eingabereihenfolge anhängen.
+     *
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    private function topoOrder(array $ids): array
+    {
+        $set = array_flip($ids);
+        $kanten = FoodAlchemistRecipeIngredient::whereIn('recipe_id', $ids)
+            ->whereNotNull('referenced_recipe_id')->whereNull('deleted_at')
+            ->distinct()->get(['recipe_id', 'referenced_recipe_id']);
+
+        $inDegree = array_fill_keys($ids, 0);
+        $parentsVon = [];
+        foreach ($kanten as $k) {
+            if (isset($set[$k->referenced_recipe_id]) && isset($set[$k->recipe_id])) {
+                $inDegree[$k->recipe_id]++;
+                $parentsVon[$k->referenced_recipe_id][] = $k->recipe_id;
+            }
+        }
+
+        $queue = array_keys(array_filter($inDegree, fn ($d) => $d === 0));
+        $order = [];
+        while ($queue !== []) {
+            $node = array_shift($queue);
+            $order[] = $node;
+            foreach ($parentsVon[$node] ?? [] as $parent) {
+                if (--$inDegree[$parent] === 0) {
+                    $queue[] = $parent;
+                }
+            }
+        }
+        if (count($order) < count($ids)) {                          // Zyklus-Fallback: Rest anhängen
+            foreach ($ids as $id) {
+                if (! in_array($id, $order, true)) {
+                    $order[] = $id;
+                }
+            }
+        }
+
+        return $order;
     }
 
     /**
@@ -270,12 +322,14 @@ class RecipeRecomputeService
         $recipe->yield_kg = $yieldG > 0 ? round($yieldG / 1000, 3) : null;
         $recipe->n_ingredients_total = $nTotal;
         $recipe->n_ingredients_unmapped = $nUngemappt;
-        $recipe->allergens_confidence = match (true) {              // GL-01 §4.4 (erste zutreffende)
-            $nTotal === 0 => 'unknown',
-            $nUngemappt > 0 => 'low',
-            $geminiDabei => 'medium',
-            default => 'high',
+        $ownRang = match (true) {                                   // GL-01 §4.4 (erste zutreffende)
+            $nTotal === 0 => 0,
+            $nUngemappt > 0 => 1,
+            $geminiDabei => 2,
+            default => 3,
         };
+        // §7 rekursiv „kein false-confident": schwächstes Glied — unsichere Sub-Rezepte ziehen runter.
+        $recipe->allergens_confidence = self::RANG_KONF[min($ownRang, $this->subKonfidenzRang($zutaten, 'allergens_confidence'))];
     }
 
     /** Verlust-Kaskade (GL-02): Zutat-Wert → GP-Default → Team-WG-Default → 0. */
@@ -330,7 +384,8 @@ class RecipeRecomputeService
     {
         $felder = FoodAlchemistGp::ALLERGEN_FIELDS;
 
-        if ($recipe->n_ingredients_unmapped > 0) {                    // F7.1-Guard: Totalreset
+        if ($recipe->n_ingredients_unmapped > 0                       // F7.1-Guard: Totalreset
+            || $this->subKonfidenzRang($zutaten, 'allergens_confidence') <= self::KONF_RANG['low']) { // §7 rekursiv: unsicheres Sub → unbekannt
             foreach ($felder as $f) {
                 $recipe->{"allergen_{$f}"} = 'unbekannt';
             }
@@ -379,7 +434,8 @@ class RecipeRecomputeService
     {
         $stoffe = array_keys(FoodAlchemistItemDeclaration::STOFFE);
 
-        if ($recipe->n_ingredients_unmapped > 0) {                    // F7.1-Guard: alle 18 NULL
+        if ($recipe->n_ingredients_unmapped > 0                       // F7.1-Guard: alle 18 NULL
+            || $this->subKonfidenzRang($zutaten, 'allergens_confidence') <= self::KONF_RANG['low']) { // §7 rekursiv: unsicheres Sub → unbekannt
             foreach ($stoffe as $s) {
                 $recipe->{"additive_{$s}"} = null;
             }
@@ -625,12 +681,14 @@ class RecipeRecomputeService
 
         $recipe->spec_n_total = $nTotal;
         $recipe->spec_n_mapped = $nMapped;
-        $recipe->spec_confidence = match (true) {
-            $nTotal === 0, $nMapped === 0 => 'low',
-            $nMapped === $nTotal => 'high',
-            $nMapped / $nTotal >= 0.8 => 'medium',
-            default => 'low',
+        $ownRang = match (true) {
+            $nTotal === 0, $nMapped === 0 => 1,
+            $nMapped === $nTotal => 3,
+            $nMapped / $nTotal >= 0.8 => 2,
+            default => 1,
         };
+        // §7 rekursiv: schwächstes Glied unter den Sub-Rezepten; spec kennt kein 'unknown' → min 'low'.
+        $recipe->spec_confidence = self::RANG_KONF[max(1, min($ownRang, $this->subKonfidenzRang($zutaten, 'spec_confidence')))];
         $recipe->spec_aggregated_at = now();
     }
 
@@ -723,6 +781,31 @@ class RecipeRecomputeService
 
         return $z->match_method !== MatchMethod::GeminiProposed
             || (float) ($z->match_confidence ?? 0) >= 0.85;
+    }
+
+    private const KONF_RANG = ['unknown' => 0, 'low' => 1, 'medium' => 2, 'high' => 3];
+
+    private const RANG_KONF = [0 => 'unknown', 1 => 'low', 2 => 'medium', 3 => 'high'];
+
+    /**
+     * §7 „kein false-confident", rekursiv: schwächstes Glied unter den aggregierten
+     * (nicht-optionalen, gemappten) Sub-Rezepten im gegebenen Konfidenz-Feld
+     * ('allergens_confidence' | 'spec_confidence'). 3 (high) wenn kein Sub referenziert wird.
+     * Ein unsicheres/unberechnetes Sub deckelt auf 'low' (1) — NICHT auf 'unknown', denn das
+     * Eltern-Rezept hat über seine übrigen Zutaten reale (wenn auch schwache) Info; 'unknown'
+     * bleibt dem völlig leeren Rezept (nTotal===0) vorbehalten.
+     */
+    private function subKonfidenzRang(Collection $zutaten, string $feld): int
+    {
+        $rang = 3;
+        foreach ($this->aggregationsZutaten($zutaten) as $z) {
+            if ($z->referencedRecipe === null) {
+                continue;
+            }
+            $rang = min($rang, max(1, self::KONF_RANG[$z->referencedRecipe->{$feld}] ?? 0));
+        }
+
+        return $rang;
     }
 
     /** I6 / F6.4: Mittelwert bei Mengen-Bereich. */
