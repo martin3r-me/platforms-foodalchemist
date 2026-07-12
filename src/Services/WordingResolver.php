@@ -107,7 +107,7 @@ class WordingResolver
                 $zeilen[] = ['type' => 'paket', 'text' => (string) $slot->paket->name, 'source' => null, 'einrueckung' => 0];
                 foreach ($slot->paket->gerichte as $pg) {
                     $r = $this->fuerGericht($pg->gericht);
-                    $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 1];
+                    $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 1, 'recipe_id' => $pg->gericht?->id];
                 }
 
                 continue;
@@ -121,7 +121,7 @@ class WordingResolver
                 continue; // spacer/text/leere Slots sind im Kundendokument unsichtbar
             }
             $r = $block !== null ? $this->fuerBlockSlot($block, $slot) : $this->fuerSlot($slot);
-            $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 0, 'slot_id' => $slot->id];
+            $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 0, 'slot_id' => $slot->id, 'recipe_id' => $slot->sales_recipe_id];
         }
 
         return $zeilen;

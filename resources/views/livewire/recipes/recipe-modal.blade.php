@@ -75,6 +75,7 @@
             {{-- 'details'-Key bleibt stabil (Marker/Alpine), Label seit 2026-07-02 „Deklaration" (Allergene · Zusatzstoffe · Nährwerte) --}}
             @php($rezTabs = ['aufbau' => 'Aufbau', 'preparation' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'details' => 'Deklaration'])
             @if(! $neu)@php($rezTabs['sensorik'] = 'Sensorik & Pairing')@endif
+            @if(! $neu)@php($rezTabs['feedback'] = 'Feedback')@endif
             @php($rezTabs['notes'] = 'Notizen')
             @foreach($rezTabs as $tabKey => $tabLabel)
                 <button type="button" @click="tab = '{{ $tabKey }}'"
@@ -464,6 +465,13 @@
         <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mt-5 mb-2">Pairing</h3>
         @include('foodalchemist::livewire.concepter.partials.pairing')
     </div>
+
+    {{-- ── Tab: FEEDBACK (R2.6 — Praxis-Feedback Küche/Kunde/Event) ───── --}}
+    @if(! $neu && $recipeId !== null)
+    <div x-show="tab === 'feedback'" x-cloak class="pt-4">
+        <livewire:foodalchemist.recipes.feedback-panel :recipe-id="$recipeId" wire:key="feedback-rez-{{ $recipeId }}" />
+    </div>
+    @endif
 
     {{-- ── Tab: NOTIZEN ──────────────────────────────────────────────── --}}
     <div x-show="tab === 'notes'" x-cloak class="pt-4 space-y-4">

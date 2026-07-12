@@ -560,10 +560,10 @@ class VkModal extends Component
                     continue;
                 }
                 $totalG += $g;
-                if ($z->gp?->is_organic) {
+                if ($z->gp?->tag_is_organic) {
                     $summen['bio'] += $g;
                 }
-                if ($z->gp?->is_regional) {
+                if ($z->gp?->tag_is_regional) {
                     $summen['regional'] += $g;
                 }
             }

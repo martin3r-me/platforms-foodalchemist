@@ -383,11 +383,23 @@ class Index extends Component
             $this->canvasInit('foodbook', 'foodbook', $fb->id);
         }
 
+        $menue = $fb !== null ? $svc->dokumentDaten($team, $fb) : null;
+
+        // R2.6: Ø-Feedback je Gericht fürs interne Foodbook (Bulk über alle Menü-Zeilen).
+        // $menue ist assoziativ (customer/gesamt/kapitel…) → über $menue['kapitel'] laufen.
+        $menueRecipeIds = collect($menue['kapitel'] ?? [])
+            ->flatMap(fn ($k) => collect($k['bloecke'] ?? [])->flatMap(fn ($b) => collect($b['gerichte'] ?? [])->pluck('recipe_id')))
+            ->filter()->map(fn ($v) => (int) $v)->unique()->values()->all();
+        $feedbackAgg = $menueRecipeIds !== []
+            ? app(\Platform\FoodAlchemist\Services\FeedbackService::class)->aggregatBulk($team, $menueRecipeIds)
+            : [];
+
         return view('foodalchemist::livewire.foodbooks.index', [
             'foodbooks' => $svc->paginateBrowser(['search' => $this->search], $team),
             'fb' => $fb,
             // D (UX-Umbau): Kunden-Vorschau (Menü-Ansicht) mit aufgelöster Wording-Kette — dieselbe Quelle wie das Druck-Dokument
-            'menue' => $fb !== null ? $svc->dokumentDaten($team, $fb) : null,
+            'menue' => $menue,
+            'feedbackAgg' => $feedbackAgg,
             'kapitelTree' => $fb !== null ? $svc->kapitelTree($team, $fb->id) : [],
             'kapitel' => $kapitel,
             'kapitelAgg' => $kapitel !== null ? $svc->kapitelAggregat($team, $kapitel, $fb?->personen) : null,

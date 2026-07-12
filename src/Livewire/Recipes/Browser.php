@@ -193,7 +193,7 @@ class Browser extends Component
         }
     }
 
-    public function render(RecipeService $recipes)
+    public function render(RecipeService $recipes, \Platform\FoodAlchemist\Services\FeedbackService $feedback)
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $filters = [
@@ -206,8 +206,11 @@ class Browser extends Component
             'nur_templates' => $this->nurTemplates,
         ];
 
+        $rezepte = $recipes->paginateBrowser($filters, $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100);
+
         return view('foodalchemist::livewire.recipes.browser', [
-            'rezepte' => $recipes->paginateBrowser($filters, $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100),
+            'rezepte' => $rezepte,
+            'feedbackAgg' => $feedback->aggregatBulk($team, collect($rezepte->items())->pluck('id')->all()),
             'templateAnzahl' => \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()->where('is_template', true)->count(),
             'templateListe' => $this->templateWahlOffen
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()->where('is_template', true)->orderBy('name')->get(['id', 'name', 'yield_kg', 'n_ingredients_total'])

@@ -189,7 +189,8 @@
                                     @if($g['type'] === 'paket' || $g['type'] === 'header')
                                         <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 ml-3 mt-1">{{ $g['text'] }}</p>
                                     @else
-                                        <p class="text-xs text-gray-600 dark:text-gray-300 {{ $g['source'] === 'name' ? 'italic text-amber-600 dark:text-amber-400' : '' }}" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}@if($g['source'] === 'name')<span class="ml-1 text-[10px]">· Wording fehlt</span>@endif</p>
+                                        @php($gfb = ($g['recipe_id'] ?? null) ? ($feedbackAgg[$g['recipe_id']] ?? null) : null)
+                                        <p class="text-xs text-gray-600 dark:text-gray-300 {{ $g['source'] === 'name' ? 'italic text-amber-600 dark:text-amber-400' : '' }}" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}@if($g['source'] === 'name')<span class="ml-1 text-[10px]">· Wording fehlt</span>@endif@if($gfb && $gfb['count'] > 0)<span class="ml-1.5 text-[10px] {{ ($gfb['avg'] ?? 0) >= 4 ? 'text-emerald-600 dark:text-emerald-400' : (($gfb['avg'] ?? 0) >= 3 ? 'text-amber-600 dark:text-amber-400' : 'text-red-500') }}" title="{{ $gfb['count'] }} Feedback-Einträge">★ {{ $gfb['avg'] !== null ? number_format((float) $gfb['avg'], 1, ',', '.') : '–' }}</span>@endif</p>
                                     @endif
                                 @endforeach
                             </div>

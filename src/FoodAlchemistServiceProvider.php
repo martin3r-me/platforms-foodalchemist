@@ -263,6 +263,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\AngebotePostTool::class,
                     \Platform\FoodAlchemist\Tools\KalkulationGetTool::class,
                     \Platform\FoodAlchemist\Tools\SimulationPostTool::class,
+                    // R2.6: Praxis-Feedback (Küche/Kunde/Event) je Gericht/Rezept
+                    \Platform\FoodAlchemist\Tools\FeedbackSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\FeedbackPostTool::class,
                     \Platform\FoodAlchemist\Tools\SettingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\SignaleSearchTool::class,
                     \Platform\FoodAlchemist\Tools\SignalePutTool::class,

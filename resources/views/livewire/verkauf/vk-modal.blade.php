@@ -101,6 +101,7 @@
                 {{-- 'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" — bündelt Allergene · Zusatzstoffe · Nährwerte · Spezifikation (Rezept-Modal-Parität) --}}
                 @php($vkTabs = ['aufbau' => 'Aufbau', 'allergene' => 'Deklaration', 'kalkulation' => 'Kalkulation', 'darreichungen' => 'Darreichungen', 'service' => 'Service'])
                 @if($rezept !== null)@php($vkTabs['sensorik'] = 'Sensorik & Pairing')@endif
+                @if($rezept !== null)@php($vkTabs['feedback'] = 'Feedback')@endif
                 @php($vkTabs['notes'] = 'Notizen')
                 @foreach($vkTabs as $tabKey => $tabLabel)
                     <button type="button" @click="tab = '{{ $tabKey }}'"
@@ -618,6 +619,13 @@
             <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mt-5 mb-2">Pairing</h3>
             @include('foodalchemist::livewire.concepter.partials.pairing')
         </div>
+
+        {{-- ── Tab: FEEDBACK (R2.6 — Praxis-Feedback Küche/Kunde/Event) ── --}}
+        @if($rezept !== null)
+        <div x-show="tab === 'feedback'" x-cloak class="pt-4">
+            @livewire('foodalchemist.recipes.feedback-panel', ['recipeId' => $rezept->id], key('feedback-vk-'.$rezept->id))
+        </div>
+        @endif
 
         {{-- ── Tab: NOTIZEN (Notizen + Verwendungsnachweise) ───────────── --}}
         <div x-show="tab === 'notes'" x-cloak class="pt-4 space-y-4">

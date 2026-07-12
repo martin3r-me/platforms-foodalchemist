@@ -152,4 +152,10 @@ class FoodAlchemistRecipe extends Model
     {
         return $this->hasMany(FoodAlchemistRecipeRegeneration::class, 'recipe_id')->orderBy('sort_order');
     }
+
+    /** R2.6: Praxis-Feedback (Küche/Kunde/Event), neueste zuerst. */
+    public function feedbacks(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistRecipeFeedback::class, 'recipe_id')->latest();
+    }
 }

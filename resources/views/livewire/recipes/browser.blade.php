@@ -182,7 +182,7 @@
                 <thead><tr class="text-left">
                     <th class="{{ $th }} !pr-0 w-8"></th>
                     {{-- R13 (Jarvis-Dichte): Name flexibel, Zahlen rechtsbündig --}}
-                    @foreach([['Name', 'w-full'], ['Kategorie', ''], ['Geschmack', ''], ['Fertigung', ''], ['Status', ''], ['Zutaten', 'text-right'], ['Yield', 'text-right'], ['Allergen-Konf.', '']] as [$head, $align])
+                    @foreach([['Name', 'w-full'], ['Kategorie', ''], ['Geschmack', ''], ['Fertigung', ''], ['Status', ''], ['Zutaten', 'text-right'], ['Yield', 'text-right'], ['Allergen-Konf.', ''], ['Feedback', 'text-right']] as [$head, $align])
                         <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
                     @endforeach
                 </tr></thead>
@@ -224,9 +224,17 @@
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
                             </td>
+                            <td class="{{ $td }} whitespace-nowrap text-right tabular-nums">
+                                @php($fb = $feedbackAgg[$r->id] ?? null)
+                                @if($fb && $fb['count'] > 0)
+                                    <span class="{{ $pill }} {{ ($fb['avg'] ?? 0) >= 4 ? $variantPill['success'] : (($fb['avg'] ?? 0) >= 3 ? $variantPill['warning'] : $variantPill['danger']) }}" title="{{ $fb['count'] }} Feedback-Einträge">★ {{ $fb['avg'] !== null ? number_format((float) $fb['avg'], 1, ',', '.') : '–' }} <span class="opacity-60">({{ $fb['count'] }})</span></span>
+                                @else
+                                    <span class="text-gray-300 dark:text-gray-600">—</span>
+                                @endif
+                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="9" class="px-5 py-10 text-center text-gray-400">Keine Rezepte gefunden.</td></tr>
+                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-400">Keine Rezepte gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>

@@ -95,13 +95,13 @@ class SalesRecipeService
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->with([
-                'speisenKlasse:id,label,diaetform,dish_main_group_id',
+                'speisenKlasse:id,label,diet_form,dish_main_group_id',
                 'speisenKlasse.hauptgruppe:id,code,label',
                 'aufschlagsklasse',
                 'vkEinheit:id,slug,display_de',
                 'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
                 // M9-01e: Bio-/Regional-Anteil braucht die GP-Tags; Nährwert-Faktor die Einheit
-                'ingredients.gp:id,name,is_organic,is_regional', 'ingredients.referencedRecipe:id,name',
+                'ingredients.gp:id,name,tag_is_organic,tag_is_regional', 'ingredients.referencedRecipe:id,name',
                 'ingredients.unit:id,slug,display_de,default_in_g,default_in_ml',
             ])
             ->find($id);
