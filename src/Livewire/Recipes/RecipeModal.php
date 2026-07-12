@@ -265,7 +265,7 @@ class RecipeModal extends Component
             'name' => $r?->name ?? $this->form['name'],
             'category_id' => $this->form['category_id'],
             'kategorien' => $team !== null
-                ? FoodAlchemistRecipeCategory::orderBy('id')->limit(200)->pluck('label', 'id')->all()
+                ? FoodAlchemistRecipeCategory::visibleToTeam($team)->orderBy('id')->limit(200)->pluck('label', 'id')->all()
                 : [],
         ]);
         $this->kiVorschlag['category'] = [
@@ -684,8 +684,8 @@ class RecipeModal extends Component
             ],
             'equipmentListe' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'group_name']),
             'hauptgruppen' => $team !== null ? $recipes->mainGroups($team) : collect(),
-            'kategorien' => $this->form['hauptgruppe_id'] !== null
-                ? FoodAlchemistRecipeCategory::where('main_group_id', $this->form['hauptgruppe_id'])->orderBy('sort_order')->get()
+            'kategorien' => $this->form['hauptgruppe_id'] !== null && $team !== null
+                ? FoodAlchemistRecipeCategory::visibleToTeam($team)->where('main_group_id', $this->form['hauptgruppe_id'])->orderBy('sort_order')->get()
                 : collect(),
             'keyVorschau' => trim($this->form['name']) !== '' ? $recipes->rezeptKey($this->form['name']) : '',
             'sensorik' => $this->recipeId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($this->recipeId) : null,

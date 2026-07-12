@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * R5 (Dominique): Aufschlagsklassen als EIGENE Settings-Seite, jetzt
@@ -141,8 +142,11 @@ class Aufschlagsklassen extends Component
 
     public function render()
     {
+        // Mandanten-Sichtbarkeit (D1): globaler Seed (team_id NULL) + eigenes Team/Master-Kette.
+        $team = Auth::user()?->currentTeamRelation;
+
         return view('foodalchemist::livewire.settings.aufschlagsklassen', [
-            'klassen' => FoodAlchemistMarkupClass::orderBy('code')->get(),
+            'klassen' => TeamScope::applyVisible(FoodAlchemistMarkupClass::query(), 'team_id', $team)->orderBy('code')->get(),
             'zaehler' => DB::table('foodalchemist_recipes')->whereNull('deleted_at')
                 ->whereNotNull('markup_class_id')->selectRaw('markup_class_id, COUNT(*) AS n')
                 ->groupBy('markup_class_id')->pluck('n', 'markup_class_id'),

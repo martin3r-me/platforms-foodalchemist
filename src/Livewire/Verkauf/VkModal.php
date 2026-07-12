@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * M6-04 / D-6 §4.2–4.5: VK-Editor — Anlage-Modus (»VK aus Basisrezept«,
@@ -302,10 +303,10 @@ class VkModal extends Component
                 'plating' => $this->uebernehmePlating($gateway->propose('vk.plating', $kontext + ['portion_g' => $this->form['sales_quantity_per_unit_g'] ?? null])),
                 'eigenschaften' => $this->uebernehmeEigenschaften($gateway, $kontext),
                 'behaelter' => $this->uebernehmeBehaelter($gateway->propose('vk.behaelter', $kontext + [
-                    'vokabular' => DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->where('is_inactive', false)->pluck('name', 'id')->all(),
+                    'vokabular' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)->pluck('name', 'id')->all(),
                 ])),
                 'vehikel' => $this->uebernehmeVehikel($gateway->propose('vk.servier_vehikel', $kontext + [
-                    'vokabular' => DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->where('is_inactive', false)->pluck('name', 'id')->all(),
+                    'vokabular' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)->pluck('name', 'id')->all(),
                 ])),
                 default => null,
             };
@@ -354,7 +355,8 @@ class VkModal extends Component
 
     private function uebernehmeBehaelter(\Platform\FoodAlchemist\Services\Ai\AiProposal $v): void
     {
-        $gueltig = DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->pluck('id')->flip();
+        $team = Auth::user()?->currentTeamRelation;
+        $gueltig = TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at'), 'team_id', $team)->pluck('id')->flip();
         $gesetzt = false;
         // AI-Contract-Keys bleiben deutsch (behaelter_warm/kalt = KI-Ausgabe); Form-Keys englisch (container_warm/cold, wie Form-Load Z.86-89).
         foreach (['warm' => 'warm', 'kalt' => 'cold'] as $aiSeite => $formSeite) {
@@ -373,8 +375,9 @@ class VkModal extends Component
 
     private function uebernehmeVehikel(\Platform\FoodAlchemist\Services\Ai\AiProposal $v): void
     {
+        $team = Auth::user()?->currentTeamRelation;
         $id = $v->werte['servier_vehikel_id'] ?? null;
-        if ($id !== null && DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->where('id', (int) $id)->exists()) {
+        if ($id !== null && TeamScope::applyVisible(DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->where('id', (int) $id), 'team_id', $team)->exists()) {
             $this->form['serving_vehicle_vocab_id'] = (int) $id;
         } else {
             $this->fehler = 'KI lieferte kein gültiges Servier-Vehikel — echter Provider nötig.';
@@ -397,9 +400,9 @@ class VkModal extends Component
         $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.regeneration', [
             'name' => $r->name,
             'komponenten' => $r->ingredients->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all(),
-            'vokabular' => DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at')->where('is_inactive', false)->pluck('name', 'id')->all(),
+            'vokabular' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)->pluck('name', 'id')->all(),
         ]);
-        $gueltig = DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at')->pluck('id')->flip();
+        $gueltig = TeamScope::applyVisible(DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at'), 'team_id', $team)->pluck('id')->flip();
         $this->regenVorschlaege = collect((array) ($v->werte['programme'] ?? []))
             ->filter(fn ($z) => is_array($z) && ! empty($z['component_label']))
             ->map(fn ($z) => [
@@ -583,9 +586,9 @@ class VkModal extends Component
                 : collect(),
             'aufschlagsklassen' => FoodAlchemistMarkupClass::where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'raw_markup_pct', 'formula_type']),
             'einheiten' => $team !== null ? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)->orderBy('slug')->get(['id', 'slug', 'display_de']) : collect(),
-            'behaelter' => DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
-            'geraete' => DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at')->orderBy('sort_order')->get(['id', 'name', 'is_inactive']),
-            'vehikel' => DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
+            'behaelter' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at'), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
+            'geraete' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['id', 'name', 'is_inactive']),
+            'vehikel' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at'), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
             'regenZeilen' => $this->recipeId !== null
                 ? DB::table('foodalchemist_recipe_regenerations AS rr')
                     ->leftJoin('foodalchemist_vocab_regeneration_devices AS g', 'g.id', '=', 'rr.device_vocab_id')
@@ -593,7 +596,7 @@ class VkModal extends Component
                     ->orderBy('rr.sort_order')->get(['rr.id', 'rr.component_label', 'rr.temp_c', 'rr.duration_min', 'rr.core_temp_c', 'rr.note', 'g.name AS geraet'])
                 : collect(),
             'kunden' => $this->recipeId !== null
-                ? DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $this->recipeId)->whereNull('deleted_at')->orderBy('customer_name')->get()
+                ? TeamScope::applyVisible(DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $this->recipeId)->whereNull('deleted_at'), 'team_id', $team)->orderBy('customer_name')->get()
                 : collect(),
             'basisTreffer' => $this->recipeId === null && trim($this->basisSuche) !== '' && $team !== null
                 ? \Platform\FoodAlchemist\Support\Suche::like(

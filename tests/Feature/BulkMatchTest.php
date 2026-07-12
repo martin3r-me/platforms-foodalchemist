@@ -91,7 +91,7 @@ it('Verwerfen lässt die Struktur unangetastet; verworfene Items werden neu gepr
 
     $this->svc->bulkFuerLieferant($this->rootTeam, $this->supplier->id);
     $proposal = FoodAlchemistMatchProposal::where('supplier_item_id', $neu->id)->firstOrFail();
-    $this->svc->verwerfeVorschlag($proposal->id);
+    $this->svc->verwerfeVorschlag($this->rootTeam, $proposal->id);
 
     expect($proposal->fresh()->status)->toBe('verworfen')
         ->and(FoodAlchemistSupplierItemStructure::where('supplier_item_id', $neu->id)->value('gp_id'))->toBeNull();
@@ -110,4 +110,23 @@ it('mehrdeutige EAN-Brücken (gleiche EAN → verschiedene GPs) werden NICHT als
     $stats = $this->svc->bulkFuerLieferant($this->rootTeam, $this->supplier->id);
 
     expect($stats['exact'])->toBe(0);                               // Brücke verworfen, kein falsches Mapping
+});
+
+it('#4 Leak: fremdes Team kann einen Match-Vorschlag NICHT verwerfen (Cross-Team-Write geblockt)', function () {
+    // Vorschlag gehoert Kind A; Geschwister Kind B darf ihn nicht anfassen.
+    $item = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->childA->id, 'supplier_id' => $this->supplier->id, 'designation' => 'Fremd-LA',
+    ]);
+    $proposal = FoodAlchemistMatchProposal::create([
+        'team_id' => $this->childA->id, 'supplier_item_id' => $item->id,
+        'gp_id' => $this->makeGp($this->childA, 'Fremd-GP')->id,
+        'score' => 0.9, 'band' => 'gruen', 'methode' => 'fuzzy_name', 'status' => 'offen',
+    ]);
+
+    expect(fn () => $this->svc->verwerfeVorschlag($this->childB, $proposal->id))
+        ->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    expect($proposal->fresh()->status)->toBe('offen');             // unangetastet
+
+    $this->svc->verwerfeVorschlag($this->childA, $proposal->id);    // Eigentuemer darf
+    expect($proposal->fresh()->status)->toBe('verworfen');
 });

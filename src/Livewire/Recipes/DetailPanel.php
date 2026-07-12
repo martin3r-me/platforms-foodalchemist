@@ -8,6 +8,7 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Services\RecipeService;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * M4-05 / P-1: Rezept-DetailPanel (rechte Page-Sidebar) — KPI-Karte
@@ -241,14 +242,14 @@ class DetailPanel extends Component
             'nachbarn' => $rezept !== null && ($this->offen['nachbarn'] ?? false)
                 ? app(\Platform\FoodAlchemist\Services\PairingService::class)->componentSuggestions($rezept) : null,
             'ankerKandidaten' => $this->ankerSuche !== ''
-                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
+                ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
-                    ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
+                    ->whereNull('deleted_at'), 'team_id', $team)->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),
             'pairingKandidaten' => $this->pairingSuche !== '' && ($this->offen['pairing'] ?? false)
-                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
+                ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->pairingSuche) . '%'])
-                    ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
+                    ->whereNull('deleted_at'), 'team_id', $team)->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),
         ]);
     }

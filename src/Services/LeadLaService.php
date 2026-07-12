@@ -222,6 +222,7 @@ class LeadLaService
         $alsWort = fn (string $name, string $token): bool => (bool) preg_match('/\b' . preg_quote($token, '/') . '\b/u', $name);
 
         $query = FoodAlchemistSupplierItem::query()
+            ->visibleToTeam($team)                                     // D1: globaler Seed + eigenes Team/Master-Kette
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->whereNull('s.gp_id')->whereNull('s.deleted_at')
@@ -252,6 +253,7 @@ class LeadLaService
         }
 
         $query = FoodAlchemistSupplierItem::query()
+            ->visibleToTeam($team)                                     // D1: globaler Seed + eigenes Team/Master-Kette
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->whereNull('s.gp_id')

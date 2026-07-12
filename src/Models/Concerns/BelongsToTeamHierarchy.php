@@ -29,7 +29,14 @@ trait BelongsToTeamHierarchy
 
     public function scopeVisibleToTeam(Builder $query, Team $team): Builder
     {
-        return $query->whereIn($query->getModel()->getTable() . '.team_id', self::teamAncestryIds($team));
+        $col = $query->getModel()->getTable() . '.team_id';
+
+        // Sichtbar = globaler Seed (team_id NULL) ODER eigenes Team + Master-Kette (Ancestry bis
+        // BHG.DIGITAL). Editierbar bleibt allein das eigene Team (isOwnedBy) — Master/Seed sind
+        // für Kind-Teams read-only. In Klammer gruppiert, damit nachfolgende where() nicht am OR hängen.
+        return $query->where(function (Builder $q) use ($col, $team) {
+            $q->whereNull($col)->orWhereIn($col, self::teamAncestryIds($team));
+        });
     }
 
     public function isOwnedBy(Team $team): bool

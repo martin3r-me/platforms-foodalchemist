@@ -219,7 +219,7 @@ class Browser extends Component
             'hgCounts' => $recipes->hauptgruppenCounts($team, $filters),
             'katCounts' => $this->hauptgruppe !== null ? $recipes->kategorieCounts($team, $this->hauptgruppe) : [],
             'kategorien' => $this->hauptgruppe !== null
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::where('main_group_id', $this->hauptgruppe)->orderBy('sort_order')->get()
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::visibleToTeam($team)->where('main_group_id', $this->hauptgruppe)->orderBy('sort_order')->get()
                 : collect(),
             'statusFaelle' => RecipeStatus::cases(),
             'statusCounts' => $recipes->statusCounts($team),

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * M6-03 / 13_REFERENZ N2: VK-DetailPanel — Titel + Komponentenliste, Status/
@@ -283,9 +284,9 @@ class DetailPanel extends Component
             'kohaesion' => $rezept !== null && ($this->offen['anker'] ?? false) ? $pairing->recipeCohesion($rezept) : null,
             'pairings' => $rezept !== null && ($this->offen['pairing'] ?? false) ? $pairing->recipePairings($rezept->id) : null,
             'ankerKandidaten' => $this->ankerSuche !== ''
-                ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
+                ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
-                    ->whereNull('deleted_at')->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
+                    ->whereNull('deleted_at'), 'team_id', $team)->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),
             // D-6 §5.x: Judge-Achse (gecacht) + deterministische Aroma-Nachbarn (lazy)
             'kohaerenzStatus' => $rezept !== null && (($this->offen['kohaerenz'] ?? false) || ($this->offen['heber'] ?? false))

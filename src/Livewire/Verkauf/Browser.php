@@ -142,7 +142,7 @@ class Browser extends Component
             'hgCounts' => $verkauf->hauptgruppenCounts($team),
             // Modell A: Klasse = die 4 flachen Diätformen (unabhängige Achse). Baum-Ansicht
             // 2026-07-06: Counts auf die gewählte HG gescoped, wenn ein HG-Knoten offen ist.
-            'klassen' => FoodAlchemistDishClass::whereNull('dish_main_group_id')->orderBy('id')->get(),
+            'klassen' => FoodAlchemistDishClass::visibleToTeam($team)->whereNull('dish_main_group_id')->orderBy('id')->get(),
             'klassenCounts' => $verkauf->klassenCounts($team, $this->hauptgruppe),
             'statusFaelle' => RecipeStatus::cases(),
             'statusCounts' => $verkauf->statusCounts($team),

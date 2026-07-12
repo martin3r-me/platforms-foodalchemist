@@ -267,7 +267,7 @@ class Index extends Component
         if ($this->editBlockId === null) {
             return;
         }
-        $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::with('concept.slots.gericht:id,name,sales_wording_standard')->find($this->editBlockId);
+        $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::visibleToTeam($this->team())->with('concept.slots.gericht:id,name,sales_wording_standard')->find($this->editBlockId);
         if ($block === null || $block->concept === null) {
             return;
         }

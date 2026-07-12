@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Component;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * R5 (Dominique): Schreibstile als EIGENE Settings-Seite mit Anlegen +
@@ -43,6 +44,12 @@ class Schreibstile extends Component
     {
         if (trim((string) ($this->form['name'] ?? '')) === '' || trim((string) ($this->form['sprach_duktus'] ?? '')) === '') {
             $this->fehler = 'Name und Sprach-Duktus sind Pflicht (Prompt-Material).';
+
+            return;
+        }
+        $besitz = DB::table('foodalchemist_writing_styles')->where('id', $this->editId)->first(['team_id']);
+        if ($besitz === null || ! TeamScope::owns($besitz->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbter/Master-Schreibstil — nur das Besitzer-Team kann ändern.';
 
             return;
         }
@@ -85,11 +92,17 @@ class Schreibstile extends Component
 
     public function toggleInactive(int $id): void
     {
-        $zeile = DB::table('foodalchemist_writing_styles')->where('id', $id)->first(['is_inactive']);
-        if ($zeile !== null) {
-            DB::table('foodalchemist_writing_styles')->where('id', $id)
-                ->update(['is_inactive' => ! $zeile->is_inactive, 'updated_at' => now()]);
+        $zeile = DB::table('foodalchemist_writing_styles')->where('id', $id)->first(['is_inactive', 'team_id']);
+        if ($zeile === null) {
+            return;
         }
+        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbter/Master-Schreibstil — nur das Besitzer-Team kann ändern.';
+
+            return;
+        }
+        DB::table('foodalchemist_writing_styles')->where('id', $id)
+            ->update(['is_inactive' => ! $zeile->is_inactive, 'updated_at' => now()]);
     }
 
     /** Phase 5: hart löschen, wenn nicht von Concepts/Foodbooks referenziert (sonst locked). */
@@ -99,9 +112,8 @@ class Schreibstile extends Component
         if ($zeile === null) {
             return;
         }
-        $team = Auth::user()?->currentTeamRelation;
-        if ($zeile->team_id !== null && $team !== null && (int) $zeile->team_id !== (int) $team->id) {
-            $this->fehler = 'Geerbter Schreibstil — nur das Besitzer-Team kann löschen.';
+        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbter/Master-Schreibstil — nur das Besitzer-Team kann löschen.';
 
             return;
         }
@@ -121,8 +133,10 @@ class Schreibstile extends Component
     public function render()
     {
         return view('foodalchemist::livewire.settings.schreibstile', [
-            'stile' => DB::table('foodalchemist_writing_styles')->whereNull('deleted_at')
-                ->orderBy('sort_order')->orderBy('name')->get(),
+            'stile' => TeamScope::applyVisible(
+                DB::table('foodalchemist_writing_styles')->whereNull('deleted_at'),
+                'team_id', Auth::user()?->currentTeamRelation
+            )->orderBy('sort_order')->orderBy('name')->get(),
         ]);
     }
 }

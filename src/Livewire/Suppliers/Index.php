@@ -217,7 +217,7 @@ class Index extends Component
 
     public function vorschlagVerwerfen(int $proposalId): void
     {
-        app(\Platform\FoodAlchemist\Services\MatchService::class)->verwerfeVorschlag($proposalId);
+        app(\Platform\FoodAlchemist\Services\MatchService::class)->verwerfeVorschlag(Auth::user()->currentTeamRelation, $proposalId);
     }
 
     // ── M3-11-Nachtrag: Bulk-Leiste (D-2 §4) ────────────────────────────

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Component;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * Umbau-Spec Darreichungen Phase 4b (Review F3–F6): Pflege der Concepter-Facetten —
@@ -78,12 +79,18 @@ class ConcepterDimensionen extends Component
         if ($meta === null) {
             return;
         }
-        $zeile = DB::table($meta['tabelle'])->where('id', $id)->first(['is_inactive']);
-        if ($zeile !== null) {
-            DB::table($meta['tabelle'])->where('id', $id)
-                ->update(['is_inactive' => ! $zeile->is_inactive, 'updated_at' => now()]);
-            $this->meldung = 'Aktualisiert.';
+        $zeile = DB::table($meta['tabelle'])->where('id', $id)->first(['is_inactive', 'team_id']);
+        if ($zeile === null) {
+            return;
         }
+        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbter/Master-Eintrag — nur das Besitzer-Team kann ändern.';
+
+            return;
+        }
+        DB::table($meta['tabelle'])->where('id', $id)
+            ->update(['is_inactive' => ! $zeile->is_inactive, 'updated_at' => now()]);
+        $this->meldung = 'Aktualisiert.';
     }
 
     /** Hart löschen nur wenn ungenutzt; Servierform-Import-Einträge (legacy_id) nie löschen. */
@@ -98,6 +105,11 @@ class ConcepterDimensionen extends Component
             return;
         }
         $name = $zeile->label ?? $zeile->name;
+        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = "«{$name}» ist geerbt/Master — nur das Besitzer-Team kann löschen.";
+
+            return;
+        }
         if ($vokabular === 'servierformen' && $zeile->legacy_id !== null) {
             $this->fehler = "«{$name}» kommt aus der WaWi (Master) — nur deaktivieren.";
 
@@ -131,8 +143,10 @@ class ConcepterDimensionen extends Component
         $listen = [];
         foreach (self::VOKABULARE as $key => $meta) {
             $listen[$key] = $meta + [
-                'zeilen' => DB::table($meta['tabelle'])->whereNull('deleted_at')
-                    ->orderBy('sort_order')->orderBy($key === 'servierformen' ? 'label' : 'name')->get(),
+                'zeilen' => TeamScope::applyVisible(
+                    DB::table($meta['tabelle'])->whereNull('deleted_at'),
+                    'team_id', Auth::user()?->currentTeamRelation
+                )->orderBy('sort_order')->orderBy($key === 'servierformen' ? 'label' : 'name')->get(),
             ];
         }
 

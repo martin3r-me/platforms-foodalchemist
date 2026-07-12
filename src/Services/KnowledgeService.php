@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Support\TeamScope;
 use RuntimeException;
 use Symfony\Component\Uid\UuidV7;
 
@@ -90,6 +91,11 @@ class KnowledgeService
         if ($doc->source_path !== null) {
             throw new RuntimeException("\"{$slug}\" ist Vault-verwaltet — via MCP nicht editierbar. "
                 . 'Pflege es über den Vault-Import oder im Browser.');
+        }
+        // Nur EIGENE Dokumente editierbar — Master/Seed (team_id NULL) + Fremd-Teams read-only.
+        // Bewusst als "nicht gefunden" (NOT_FOUND, kein Existenz-Leak über die Teamgrenze).
+        if (! TeamScope::owns($doc->team_id, $team)) {
+            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
         }
 
         $payload = ['updated_at' => now()];

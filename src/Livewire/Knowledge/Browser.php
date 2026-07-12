@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * Wissens-Modul #469 — Pflege-Browser. v1: Doc-CRUD + Aliase + sichtbare Verdrahtung.
@@ -116,6 +117,12 @@ class Browser extends Component
             $this->creating = false;
             $this->selectedId = $id;
         } else {
+            $besitz = DB::table('foodalchemist_knowledge_documents')->where('id', $this->selectedId)->first(['team_id']);
+            if ($besitz === null || ! TeamScope::owns($besitz->team_id, Auth::user()?->currentTeamRelation)) {
+                $this->fehler = 'Geerbtes/Master-Wissen — nur das Besitzer-Team kann bearbeiten.';
+
+                return;
+            }
             DB::table('foodalchemist_knowledge_documents')->where('id', $this->selectedId)
                 ->update($payload + ['version' => DB::raw('version + 1')]);
         }
@@ -124,13 +131,19 @@ class Browser extends Component
 
     public function toggleActive(int $id): void
     {
-        $doc = DB::table('foodalchemist_knowledge_documents')->where('id', $id)->first(['active']);
-        if ($doc !== null) {
-            DB::table('foodalchemist_knowledge_documents')->where('id', $id)
-                ->update(['active' => ! $doc->active, 'updated_at' => now()]);
-            if ($this->selectedId === $id) {
-                $this->form['active'] = ! $doc->active;
-            }
+        $doc = DB::table('foodalchemist_knowledge_documents')->where('id', $id)->first(['active', 'team_id']);
+        if ($doc === null) {
+            return;
+        }
+        if (! TeamScope::owns($doc->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbtes/Master-Wissen — nur das Besitzer-Team kann (de)aktivieren.';
+
+            return;
+        }
+        DB::table('foodalchemist_knowledge_documents')->where('id', $id)
+            ->update(['active' => ! $doc->active, 'updated_at' => now()]);
+        if ($this->selectedId === $id) {
+            $this->form['active'] = ! $doc->active;
         }
     }
 

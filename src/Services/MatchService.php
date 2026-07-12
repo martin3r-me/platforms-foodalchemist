@@ -58,6 +58,7 @@ class MatchService
     public function bulkFuerLieferant(Team $team, int $supplierId): array
     {
         $items = FoodAlchemistSupplierItem::query()
+            ->visibleToTeam($team)
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->where('foodalchemist_supplier_items.supplier_id', $supplierId)
             ->whereNull('s.gp_id')
@@ -154,16 +155,18 @@ class MatchService
     /** Review-Entscheidung: Übernehmen mappt die Struktur + triggert Lead-Neuwahl (GL-03 T3). */
     public function uebernehmeVorschlag(Team $team, int $proposalId): void
     {
-        $proposal = \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::where('status', 'offen')->findOrFail($proposalId);
+        $proposal = \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::where('status', 'offen')
+            ->where('team_id', $team->id)->findOrFail($proposalId);
         $gp = FoodAlchemistGp::visibleToTeam($team)->findOrFail($proposal->gp_id);
 
         app(LeadLaService::class)->verknuepfen($team, $gp, $proposal->supplier_item_id);
         $proposal->update(['status' => 'akzeptiert']);
     }
 
-    public function verwerfeVorschlag(int $proposalId): void
+    public function verwerfeVorschlag(Team $team, int $proposalId): void
     {
         \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::where('status', 'offen')
+            ->where('team_id', $team->id)
             ->findOrFail($proposalId)->update(['status' => 'verworfen']);
     }
 

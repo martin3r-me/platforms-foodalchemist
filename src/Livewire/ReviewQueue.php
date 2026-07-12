@@ -41,7 +41,7 @@ class ReviewQueue extends Component
 
     public function matchVerwerfen(int $proposalId): void
     {
-        $this->aktion(fn () => app(MatchService::class)->verwerfeVorschlag($proposalId), 'Match verworfen.');
+        $this->aktion(fn ($team) => app(MatchService::class)->verwerfeVorschlag($team, $proposalId), 'Match verworfen.');
     }
 
     public function bulkUebernehmen(int $proposalId): void

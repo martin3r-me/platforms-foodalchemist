@@ -146,6 +146,8 @@ class VkTaxonomie extends Component
 
     public function render()
     {
+        $team = $this->team();   // Mandanten-Sichtbarkeit (D1): globaler Seed + eigenes Team/Master-Kette.
+
         // Modell A (Regelwerk_Verkaufsgerichte v1.1): Klasse = Diätform (4 flache Klassen, global).
         $klassenZaehler = DB::table('foodalchemist_recipes')->whereNull('deleted_at')
             ->whereNotNull('dish_class_id')->selectRaw('dish_class_id, COUNT(*) AS n')
@@ -157,9 +159,9 @@ class VkTaxonomie extends Component
             ->groupBy('dish_main_group_id')->pluck('n', 'dish_main_group_id');
 
         return view('foodalchemist::livewire.settings.vk-taxonomie', [
-            'hauptgruppen' => FoodAlchemistDishMainGroup::orderBy('sort_order')->orderBy('code')->get(),
+            'hauptgruppen' => FoodAlchemistDishMainGroup::visibleToTeam($team)->orderBy('sort_order')->orderBy('code')->get(),
             // Die 4 globalen Diät-Klassen (HG-unabhängig), immer sichtbar.
-            'klassen' => FoodAlchemistDishClass::whereNull('dish_main_group_id')->orderBy('id')->get(),
+            'klassen' => FoodAlchemistDishClass::visibleToTeam($team)->whereNull('dish_main_group_id')->orderBy('id')->get(),
             'klassenZaehler' => $klassenZaehler,
             'klassenJeHg' => $rezepteJeHg,
         ]);

@@ -7,6 +7,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Services\GeschirrService;
+use Platform\FoodAlchemist\Support\TeamScope;
 use RuntimeException;
 
 /**
@@ -202,8 +203,8 @@ class Index extends Component
             'aktiverLieferant' => $aktiverLieferant,
             'darfLieferantEdit' => $aktiverLieferant !== null && $aktiverLieferant->isOwnedBy($team),
             // A2: Servier-Vehikel-Typen fürs Artikel-Formular (Darreichungs-Scharnier)
-            'vehikelListe' => \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_serving_vehicles')
-                ->whereNull('deleted_at')->where('is_inactive', false)
+            'vehikelListe' => TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_serving_vehicles')
+                ->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)
                 ->orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'group_name']),
         ])->layout('platform::layouts.app');
     }

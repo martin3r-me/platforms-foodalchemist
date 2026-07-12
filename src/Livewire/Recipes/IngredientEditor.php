@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Services\RecipeService;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * M4-07/08 / P-8: Zutaten-Editor — Alpine-first: Tippen/Reorder/Add laufen
@@ -380,16 +381,16 @@ class IngredientEditor extends Component
             // M9-01a: VK-Kontext zeigt die Rollen-Spalte (V-21 — Gesamt-Gericht-Sicht)
             'vkKontext' => (bool) ($rezept?->is_sales_recipe ?? false),
             'browserVokabular' => $team === null ? null : [
-                'warengruppen' => $db->whereNull('deleted_at')->orderBy('sort_order')->get(['code', 'name'])->all(),
-                'subKategorien' => \Illuminate\Support\Facades\DB::table('foodalchemist_gps')
-                    ->whereNull('deleted_at')->whereNotNull('sub_category')
+                'warengruppen' => TeamScope::applyVisible($db->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['code', 'name'])->all(),
+                'subKategorien' => TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_gps')
+                    ->whereNull('deleted_at')->whereNotNull('sub_category'), 'team_id', $team)
                     ->distinct()->orderBy('sub_category')
                     ->get(['commodity_group_code', 'sub_category'])->all(),
                 'zustande' => ['frisch', 'TK', 'trocken', 'konserviert'],
-                'hauptgruppen' => \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_main_groups')
-                    ->whereNull('deleted_at')->orderBy('sort_order')->get(['id', 'label'])->all(),
-                'kategorien' => \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_categories')
-                    ->whereNull('deleted_at')->orderBy('label')->get(['id', 'label', 'main_group_id'])->all(),
+                'hauptgruppen' => TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_recipe_main_groups')
+                    ->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['id', 'label'])->all(),
+                'kategorien' => TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_recipe_categories')
+                    ->whereNull('deleted_at'), 'team_id', $team)->orderBy('label')->get(['id', 'label', 'main_group_id'])->all(),
                 'niveaus' => [['slug' => 'haute_cuisine', 'label' => 'Haute'], ['slug' => 'gehoben', 'label' => 'Gehoben'], ['slug' => 'klassisch', 'label' => 'Klassisch']],
             ],
         ]);

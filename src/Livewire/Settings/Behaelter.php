@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Component;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * R5 (Dominique): Behälter & Geräte als EIGENE Settings-Seite mit Anlegen —
@@ -79,12 +80,18 @@ class Behaelter extends Component
         if ($meta === null) {
             return;
         }
-        $zeile = DB::table($meta['tabelle'])->where('id', $id)->first(['is_inactive']);
-        if ($zeile !== null) {
-            DB::table($meta['tabelle'])->where('id', $id)
-                ->update(['is_inactive' => ! $zeile->is_inactive, 'updated_at' => now()]);
-            $this->meldung = 'Aktualisiert — inaktive Einträge bleiben an Rezepten sichtbar (V-06).';
+        $zeile = DB::table($meta['tabelle'])->where('id', $id)->first(['is_inactive', 'team_id']);
+        if ($zeile === null) {
+            return;
         }
+        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbter/Master-Eintrag — nur das Besitzer-Team kann ändern.';
+
+            return;
+        }
+        DB::table($meta['tabelle'])->where('id', $id)
+            ->update(['is_inactive' => ! $zeile->is_inactive, 'updated_at' => now()]);
+        $this->meldung = 'Aktualisiert — inaktive Einträge bleiben an Rezepten sichtbar (V-06).';
     }
 
     /** Phase 5: hart löschen, wenn von keinem Rezept genutzt (sonst locked → deaktivieren). */
@@ -98,9 +105,8 @@ class Behaelter extends Component
         if ($zeile === null) {
             return;
         }
-        $team = Auth::user()?->currentTeamRelation;
-        if ($zeile->team_id !== null && $team !== null && (int) $zeile->team_id !== (int) $team->id) {
-            $this->fehler = 'Geerbter Eintrag — nur das Besitzer-Team kann löschen.';
+        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbter/Master-Eintrag — nur das Besitzer-Team kann löschen.';
 
             return;
         }
@@ -146,8 +152,10 @@ class Behaelter extends Component
         $listen = [];
         foreach (self::VOKABULARE as $key => $meta) {
             $listen[$key] = $meta + [
-                'zeilen' => DB::table($meta['tabelle'])->whereNull('deleted_at')
-                    ->orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get(),
+                'zeilen' => TeamScope::applyVisible(
+                    DB::table($meta['tabelle'])->whereNull('deleted_at'),
+                    'team_id', Auth::user()?->currentTeamRelation
+                )->orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get(),
             ];
         }
 
