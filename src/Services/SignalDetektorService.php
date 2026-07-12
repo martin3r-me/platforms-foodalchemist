@@ -284,7 +284,13 @@ class SignalDetektorService
             }
         }
 
-        return $expCache[$recipeId] = $exp;
+        $expCache[$recipeId] = $exp;
+        // Speicher: schweres Rezept-Modell (inkl. Zutaten) + Zeilenkosten nach dem
+        // Memoisieren freigeben — Wiederbesuche treffen den expCache-Early-Return.
+        // Spiegelt MargeImpactService::gpSetExposure (Peak-Kappung bei großen Bäumen).
+        unset($recCache[$recipeId], $lineCache[$recipeId]);
+
+        return $exp;
     }
 
     /**

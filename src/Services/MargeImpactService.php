@@ -110,7 +110,14 @@ class MargeImpactService
             }
         }
 
-        return $expCache[$recipeId] = $exp;
+        $expCache[$recipeId] = $exp;
+        // Speicher: das schwere Rezept-Modell (inkl. eager-geladener Zutaten) + die
+        // Zeilenkosten-Map werden nach dem Memoisieren nie wieder gebraucht — Wiederbesuche
+        // treffen oben den expCache-Early-Return. Nur die Skalare (exp/totalCache) bleiben.
+        // Kappt den Peak bei Mega-Szenarien (1000+ GPs) ohne Recompute/Ergebnis-Änderung.
+        unset($recCache[$recipeId], $lineCache[$recipeId]);
+
+        return $exp;
     }
 
     /**
