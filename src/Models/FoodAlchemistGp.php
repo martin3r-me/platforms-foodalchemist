@@ -28,7 +28,7 @@ class FoodAlchemistGp extends Model
 
     public const TAG_FIELDS = [
         'is_vegan', 'is_vegetarian', 'is_halal', 'contains_pork', 'contains_beef',
-        'is_organic', 'is_regional', 'is_grundnahrungsmittel', 'is_convenience',
+        'is_organic', 'is_regional', 'is_staple_food', 'is_convenience',
         'is_lactose_free', 'is_gluten_free',
     ];
 
