@@ -32,7 +32,7 @@ it('liefert IMMER 14 Werte — ohne Zeile alles unbekannt (GL-01: nie Lücken)',
 
 it('Set-Roundtrip: unbekannt ⇒ NULL in DB, manuelle Pflege stempelt quelle=manual (GL-07)', function () {
     $this->svc->setAllergens($this->rootTeam, $this->la, [
-        'milch' => 'enthalten', 'soja' => 'spuren', 'fisch' => 'nicht_enthalten',
+        'milk' => 'enthalten', 'soy' => 'spuren', 'fish' => 'nicht_enthalten',
     ]);
 
     $zeile = $this->la->fresh()->allergens;
@@ -42,20 +42,20 @@ it('Set-Roundtrip: unbekannt ⇒ NULL in DB, manuelle Pflege stempelt quelle=man
         ->and($zeile->allergen_mustard)->toBeNull() // unbekannt ⇒ NULL
         ->and($zeile->source)->toBe('manual');
 
-    expect($this->svc->getAllergens($this->la->fresh())['senf'])->toBe('unbekannt');
+    expect($this->svc->getAllergens($this->la->fresh())['mustard'])->toBe('unbekannt');
 });
 
 it('Edit ändert die Werte (DoD M2-10 — Aggregations-Quelle für M3-04/05)', function () {
-    $this->svc->setAllergens($this->rootTeam, $this->la, ['milch' => 'enthalten']);
-    $this->svc->setAllergens($this->rootTeam, $this->la, ['milch' => 'spuren']);
+    $this->svc->setAllergens($this->rootTeam, $this->la, ['milk' => 'enthalten']);
+    $this->svc->setAllergens($this->rootTeam, $this->la, ['milk' => 'spuren']);
 
     expect($this->la->fresh()->allergens->allergen_milk)->toBe('spuren')
         ->and(FoodAlchemistItemAllergen::where('supplier_item_id', $this->la->id)->count())->toBe(1); // Upsert, keine Duplikate
 });
 
 it('Kind-Team darf geerbte LA-Allergene nicht pflegen (D1); ungültige Werte typisiert abgelehnt (V-06)', function () {
-    expect(fn () => $this->svc->setAllergens($this->childA, $this->la, ['milch' => 'enthalten']))
+    expect(fn () => $this->svc->setAllergens($this->childA, $this->la, ['milk' => 'enthalten']))
         ->toThrow(RuntimeException::class, 'Besitzer-Team');
-    expect(fn () => $this->svc->setAllergens($this->rootTeam, $this->la, ['milch' => 'vielleicht']))
+    expect(fn () => $this->svc->setAllergens($this->rootTeam, $this->la, ['milk' => 'vielleicht']))
         ->toThrow(RuntimeException::class, 'Ungültiger Allergen-Wert');
 });

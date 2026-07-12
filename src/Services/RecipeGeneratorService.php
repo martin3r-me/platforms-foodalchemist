@@ -144,7 +144,7 @@ class RecipeGeneratorService
                     'dish_class_id' => $klasse?->id,
                     'dish_class_source' => $klasse !== null ? 'ki' : null,
                     'dish_main_group_id' => $hg?->id,
-                    'markup_class_id' => $ak?->id ?? $hg?->default_markup_class_id,
+                    'markup_class_id' => $ak?->id ?? $klasse?->default_markup_class_id ?? $hg?->default_markup_class_id,
                     'vat_rate' => $ak?->vat_rate,
                 ], fn ($v) => $v !== null));
             }

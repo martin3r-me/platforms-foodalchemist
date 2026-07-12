@@ -17,7 +17,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->actingAs($this->makeUser($this->rootTeam));
-    app(TeamSettingsService::class)->update($this->rootTeam, ['hk2_surcharge_pct' => 20, 'stundensatz_eur' => 30, 'marge_pct' => 15]);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['hk2_surcharge_pct' => 20, 'stundensatz_eur' => 30, 'margin_pct' => 15]);
 });
 
 it('legt eine Kalkulation an', function () {
@@ -73,5 +73,5 @@ it('Marge-Override speichern wirkt auf den VK-Vorschlag', function () {
     $kId = $comp->get('selectedId');
     $comp->set('margeOverride', '25')->call('speichereKopf');
 
-    expect((float) FoodAlchemistKalkulation::find($kId)->marge_override_pct)->toBe(25.0);
+    expect((float) FoodAlchemistKalkulation::find($kId)->margin_override_pct)->toBe(25.0);
 });

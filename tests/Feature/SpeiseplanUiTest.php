@@ -42,6 +42,6 @@ it('Speiseplan-Raster: anlegen, Zelle (Datum × Mittag) mit Gericht belegen', fu
     $e = $sp->eintraege()->first();
     expect($e)->not->toBeNull()
         ->and($e->entry_date->format('Y-m-d'))->toBe($montag)
-        ->and($e->mahlzeit)->toBe('mittag')
+        ->and($e->meal)->toBe('mittag')
         ->and($e->sales_recipe_id)->toBe($this->gericht->id);
 });

@@ -33,8 +33,8 @@ it('Kind-User sieht für geerbte Einheiten KEINE Edit-Buttons, nur die geerbt-Pi
 
     $html = renderEinheitenView($this);
 
-    expect($html)->toContain('data-einheit-aktionen="readonly"')
-        ->and($html)->not->toContain('data-einheit-aktionen="edit"')
+    expect($html)->toContain('data-unit-aktionen="readonly"')
+        ->and($html)->not->toContain('data-unit-aktionen="edit"')
         ->and($html)->toContain('geerbt')
         ->and($html)->not->toContain('wire:click="edit(');
 });
@@ -44,7 +44,7 @@ it('Besitzer-User sieht die Edit-Buttons', function () {
 
     $html = renderEinheitenView($this);
 
-    expect($html)->toContain('data-einheit-aktionen="edit"')
+    expect($html)->toContain('data-unit-aktionen="edit"')
         ->and($html)->toContain('wire:click="edit(')
-        ->and($html)->not->toContain('data-einheit-aktionen="readonly"');
+        ->and($html)->not->toContain('data-unit-aktionen="readonly"');
 });

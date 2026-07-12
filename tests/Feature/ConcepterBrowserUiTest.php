@@ -63,7 +63,7 @@ it('Klasse-Filter grenzt die Liste ein', function () {
 
     Livewire::test(Browser::class)
         ->call('waehleKlasse', 'Buffet')
-        ->assertSet('class', 'Buffet')
+        ->assertSet('klasse', 'Buffet')
         ->assertSee('Grill-Buffet')
         ->assertDontSee('Fingerfood-Linie');
 });

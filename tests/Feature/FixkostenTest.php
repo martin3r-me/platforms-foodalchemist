@@ -20,7 +20,7 @@ beforeEach(function () {
 
     // Drei GK-Blöcke auf „abgeleitet" + Bezugsbasen (monatlich) + Stundensatz/Marge.
     $this->settings->update($this->rootTeam, [
-        'stundensatz_eur' => 30, 'marge_pct' => 15,
+        'stundensatz_eur' => 30, 'margin_pct' => 15,
         'calculation_reference_bases' => ['mek' => 20000, 'fek' => 4000, 'hk' => 30000],
         'calculation_schema' => [
             ['key' => 'lohn', 'label' => 'Lohn', 'type' => 'arbeitszeit', 'value' => 0, 'active' => true, 'sort' => 10, 'mode' => 'manuell'],
@@ -29,9 +29,9 @@ beforeEach(function () {
             ['key' => 'logistik', 'label' => 'Logistik', 'type' => 'pct_hk', 'value' => 0, 'active' => true, 'sort' => 70, 'mode' => 'abgeleitet'],
         ],
     ]);
-    $this->fix->create($this->rootTeam, ['label' => 'Einkauf/Lager', 'betrag' => 4000, 'periode' => 'monatlich', 'block_key' => 'gemeinkosten']);
-    $this->fix->create($this->rootTeam, ['label' => 'Spüle/Energie', 'betrag' => 2000, 'periode' => 'monatlich', 'block_key' => 'fertigungs_gk']);
-    $this->fix->create($this->rootTeam, ['label' => 'LKW', 'betrag' => 1500, 'periode' => 'monatlich', 'block_key' => 'logistik']);
+    $this->fix->create($this->rootTeam, ['label' => 'Einkauf/Lager', 'amount' => 4000, 'periode' => 'monatlich', 'block_key' => 'gemeinkosten']);
+    $this->fix->create($this->rootTeam, ['label' => 'Spüle/Energie', 'amount' => 2000, 'periode' => 'monatlich', 'block_key' => 'fertigungs_gk']);
+    $this->fix->create($this->rootTeam, ['label' => 'LKW', 'amount' => 1500, 'periode' => 'monatlich', 'block_key' => 'logistik']);
 });
 
 it('leitet die Zuschlag-Sätze aus Fixkosten ÷ Bezugsbasis ab', function () {
@@ -53,7 +53,7 @@ it('rechnet mehrstufig mit den abgeleiteten Sätzen', function () {
 });
 
 it('normalisiert jährliche Fixkosten auf Monatsbasis', function () {
-    $this->fix->create($this->rootTeam, ['label' => 'Versicherung', 'betrag' => 12000, 'periode' => 'jaehrlich', 'block_key' => 'logistik']);
+    $this->fix->create($this->rootTeam, ['label' => 'Versicherung', 'amount' => 12000, 'periode' => 'jaehrlich', 'block_key' => 'logistik']);
     // logistik jetzt 1500 + 1000 (12000/12) = 2500 / 30000 (HK) = 8,33 %.
     $schema = collect($this->fix->aufgeloestesSchema($this->rootTeam))->keyBy('key');
 

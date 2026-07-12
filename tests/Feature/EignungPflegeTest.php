@@ -65,6 +65,13 @@ it('Panel: ✨ Eignung übernimmt nur «geeignet»-Urteile aus dem Vokabular', f
 });
 
 it('Panel: ✨ Marketing schreibt mit Lineage ki; manual blockt (Override-First)', function () {
+    // R0.5 2026-07-12: übersprungen — die KI-Marketing-Aktion im Panel (kiMarketing/
+    // marketingUebernehmen) ist NICHT implementiert. marketing_text wurde beim UX-Umbau
+    // 2026-07-03 aus dem VK-Editor genommen; die ✨-KI-Aktionen sind für M6-05 vorgemerkt
+    // (VkModal-Header). Test bleibt als Spec stehen, bis M6-05 gebaut ODER der Case
+    // bewusst verworfen wird (Entscheid Dominique) — kein Fake-Pass.
+    $this->markTestSkipped('KI-Marketing im Panel nicht implementiert (M6-05 offen; marketing_text UX-Umbau 2026-07-03 entfernt).');
+
     $this->mock(AiGatewayService::class, function ($mock) {
         $mock->shouldReceive('propose')->andReturn(new AiProposal(['marketing_text' => 'Knusprig gewickelt.'], 0.9));
     });

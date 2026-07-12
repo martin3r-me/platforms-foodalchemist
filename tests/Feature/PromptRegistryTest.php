@@ -19,7 +19,7 @@ const REGISTRY_SOLL = [
     'recipe.generator' => 'B', 'recipe.description' => 'C', 'recipe.category' => 'D',
     'recipe.garverlust' => 'C', 'recipe.name_putzen' => 'D', 'recipe.sektor' => 'B',
     'recipe.level' => 'B', 'recipe.sub_typ' => 'B', 'recipe.production_depth' => 'B',
-    'recipe.preparation' => 'A', 'recipe.eigenschaften' => 'B', 'recipe.taste' => 'B',
+    'recipe.preparation' => 'A', 'recipe.eigenschaften' => 'B', 'recipe.geschmack' => 'B',
     'recipe.review' => 'A', 'recipe.pairing' => 'A', 'recipe.anker' => 'B',
     'recipe.equipment' => 'B', 'recipe.extract' => 'C',
     'recipe.ueberarbeiten' => 'A',                                    // R6: KI-Überarbeiten (freie Anweisung, Ist-Button)

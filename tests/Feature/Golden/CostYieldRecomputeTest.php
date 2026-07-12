@@ -171,7 +171,7 @@ it('GT-6: Zyklen-Schutz — Bulk bricht mit beteiligten IDs ab, Inspector lehnt 
         ->toThrow(RuntimeException::class, 'Zyklus');
 
     expect($this->svc->pruefeVerknuepfung($a->id, $b->id))
-        ->toMatchArray(['erlaubt' => false, 'reason' => 'Zyklus']);
+        ->toMatchArray(['erlaubt' => false, 'grund' => 'Zyklus']);
 });
 
 it('GT-7 (A-5-Ziel): Kette A→B→C erlaubt (Tiefe 3); Link C→D blockt (projiziert 4)', function () {
@@ -185,7 +185,7 @@ it('GT-7 (A-5-Ziel): Kette A→B→C erlaubt (Tiefe 3); Link C→D blockt (proji
     $pruefung = $this->svc->pruefeVerknuepfung($c->id, $d->id);
     expect($pruefung['erlaubt'])->toBeFalse()
         ->and($pruefung['projizierte_tiefe'])->toBe(4)
-        ->and($pruefung['reason'])->toContain('Tiefe');
+        ->and($pruefung['grund'])->toContain('Tiefe');
 });
 
 it('I5-Gate: gemini_proposed < 0.85 zählt als ungemappt ⇒ F7.1-Reset + Kosten ohne die Zutat', function () {

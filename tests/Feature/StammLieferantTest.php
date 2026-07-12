@@ -33,7 +33,7 @@ it('setStamm ist idempotent und verlangt sichtbaren Lieferanten', function () {
     expect($a->id)->toBe($b->id);
 
     expect(fn () => $this->stamm->setStamm($this->rootTeam, 99999))
-        ->toThrow(RuntimeException::class, 'visible');
+        ->toThrow(RuntimeException::class, 'sichtbar');
 });
 
 it('D1: Kind erbt die Eltern-Matrix lesend und ergänzt Eigenes — Geschwister getrennt', function () {

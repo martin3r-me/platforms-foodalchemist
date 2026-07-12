@@ -18,12 +18,12 @@ beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->user = $this->makeUser($this->rootTeam);
     $this->actingAs($this->user);
-    app(TeamSettingsService::class)->update($this->rootTeam, ['hk2_surcharge_pct' => 20, 'marge_pct' => 15]);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['hk2_surcharge_pct' => 20, 'margin_pct' => 15]);
 });
 
 it('Werkstatt rendert Controlling-Kennzahlen: effektiver Zuschlag, Regeln, Break-even', function () {
     // Fixkosten 3.000 €/Monat + Ziel-Wareneinsatz 30 % → Break-even = 3000 ÷ 0,7
-    app(FixkostenService::class)->create($this->rootTeam, ['label' => 'Miete', 'betrag' => 3000, 'block_key' => 'gemeinkosten']);
+    app(FixkostenService::class)->create($this->rootTeam, ['label' => 'Miete', 'amount' => 3000, 'block_key' => 'gemeinkosten']);
     app(TeamSettingsService::class)->update($this->rootTeam, ['target_food_cost_pct' => 30]);
 
     Livewire::test(KalkulationIndex::class)

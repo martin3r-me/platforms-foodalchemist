@@ -61,11 +61,11 @@ it('M9-Felder speichern über die Whitelist; Plating/Marketing manuell ⇒ Linea
 
 it('Rollen-Spalte rendert NUR im VK-Kontext; Rollen-Wert geht durch den Sync (V-21)', function () {
     $html = Livewire::test(IngredientEditor::class, ['recipeId' => $this->vk->id, 'eingebettet' => true])->html();
-    expect($html)->toContain('data-rolle-select');
+    expect($html)->toContain('data-role-select');
 
     $basis = app(\Platform\FoodAlchemist\Services\RecipeService::class)->create($this->rootTeam, ['name' => 'Fond: Basis']);
     $htmlBasis = Livewire::test(IngredientEditor::class, ['recipeId' => $basis->id, 'eingebettet' => true])->html();
-    expect($htmlBasis)->not->toContain('data-rolle-select');
+    expect($htmlBasis)->not->toContain('data-role-select');
 
     // Rolle über den Editor-Payload (rows enthalten rolle) — syncIngredients schreibt sie
     Livewire::test(IngredientEditor::class, ['recipeId' => $this->vk->id, 'eingebettet' => true])
@@ -100,7 +100,7 @@ it('✨ Behälter übernimmt validierte Vokabular-IDs in die Form (Mock-Gateway)
     ]);
     $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($mock) use ($warmId) {
         $mock->shouldReceive('propose')->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(
-            ['behaelter_warm_id' => $warmId, 'container_warm_count' => 2, 'behaelter_kalt_id' => 999999], 0.9,
+            ['behaelter_warm_id' => $warmId, 'behaelter_warm_anzahl' => 2, 'behaelter_kalt_id' => 999999], 0.9,
         ));
     });
 

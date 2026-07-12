@@ -51,25 +51,25 @@ it('kiNaehrwerte: Vorschlag validiert → Übernehmen schreibt Fallback-Schicht;
 it('kiAllergene: nur gültige Werte werden Vorschlag, unbekannt fliegt; Übernehmen schreibt den Override (GL-01 Prio 1)', function () {
     $this->mock(AiGatewayService::class, function ($mock) {
         $mock->shouldReceive('propose')->andReturn(new AiProposal(
-            ['allergene' => ['glutenhaltiges_getreide' => 'enthalten', 'milch' => 'spuren', 'fisch' => 'unbekannt', 'eier' => 'kaese']], 0.9,
+            ['allergene' => ['gluten' => 'enthalten', 'milk' => 'spuren', 'fish' => 'unbekannt', 'eggs' => 'kaese']], 0.9,
         ));
     });
 
     Livewire::test(DetailPanel::class, ['gpId' => $this->gp->id])
         ->call('kiAllergene')
         ->assertSet('fehler', null)
-        ->assertSet('kiVorschlag.werte', ['glutenhaltiges_getreide' => 'enthalten', 'milch' => 'spuren'])
+        ->assertSet('kiVorschlag.werte', ['gluten' => 'enthalten', 'milk' => 'spuren'])
         ->call('kiUebernehmen');
 
     $gp = $this->gp->fresh();
     expect($gp->allergen_gluten)->toBe('enthalten')
         ->and($gp->allergen_milk)->toBe('spuren')
         ->and($gp->allergen_fish)->toBeNull()                                 // unbekannt ⇒ KEIN Override (F7.1)
-        ->and((float) $gp->allergene_ki_confidence)->toBe(0.9);
+        ->and((float) $gp->allergens_confidence)->toBe(0.9);
 
     // Aggregat zeigt Override-Quelle
     $allergene = app(GpAggregateService::class)->allergene($gp);
-    expect($allergene['glutenhaltiges_getreide']['source'])->toBe('override');
+    expect($allergene['gluten']['source'])->toBe('override');
 });
 
 it('FakeProvider-Echo ⇒ ehrlicher Fehler, nichts geschrieben; Kind-Team blockt am Curate-Gate', function () {

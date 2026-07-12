@@ -17,7 +17,7 @@ beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->svc = app(KalkulationDokService::class);
     app(TeamSettingsService::class)->update($this->rootTeam, [
-        'hk2_surcharge_pct' => 20, 'stundensatz_eur' => 30, 'marge_pct' => 15,
+        'hk2_surcharge_pct' => 20, 'stundensatz_eur' => 30, 'margin_pct' => 15,
     ]);
 });
 
@@ -73,7 +73,7 @@ it('berechne: HK1 = Σ Wareneinsatz, Lohn aus Arbeitszeit-Rollup, HK2 + Marge-Ov
         ->and($r['vk_vorschlag'])->toBe(152.72);                  // 132,80 × 1,15 (Team-Marge)
 
     // Marge-Override 25 % → 132,80 × 1,25 = 166,00.
-    $this->svc->update($this->rootTeam, $k->id, ['marge_override_pct' => 25]);
+    $this->svc->update($this->rootTeam, $k->id, ['margin_override_pct' => 25]);
     $r2 = $this->svc->berechne($this->rootTeam, $k->refresh());
     expect($r2['vk_vorschlag'])->toBe(166.0)->and($r2['marge_pct'])->toBe(25.0);
 });

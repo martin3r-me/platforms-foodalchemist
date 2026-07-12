@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Enums\FeedbackQuelle;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
@@ -17,7 +18,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistRecipeFeedback extends Model
 {
-    use HasUuidV7, BelongsToTeamHierarchy, SoftDeletes;
+    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
     protected $table = 'foodalchemist_recipe_feedback';
 

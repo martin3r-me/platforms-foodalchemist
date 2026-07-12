@@ -46,7 +46,7 @@ it('DoD: 50er-Bulk läuft durch — Fortschritt done/total, Vorschläge offen, K
     expect($run->status)->toBe('done')                                // Queue sync ⇒ sofort fertig
         ->and((int) $run->total)->toBe(50)
         ->and((int) $run->done)->toBe(50)
-        ->and((int) $run->fehler)->toBe(0);
+        ->and((int) $run->failed)->toBe(0);
 
     // 50 × beschreibung/geschmack offen; kategorie (null vom Provider) als leer markiert
     expect(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('status', 'offen')->count())->toBe(100)
@@ -80,6 +80,6 @@ it('Kill-Switch mitten im Bulk: Items zählen als Fehler, Run wird trotzdem done
     $run = $this->svc->status($this->rootTeam, $runId);
 
     expect($run->status)->toBe('done')
-        ->and((int) $run->fehler)->toBe(5)
-        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->whereNotNull('fehler')->count())->toBe(15);
+        ->and((int) $run->failed)->toBe(5)
+        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->whereNotNull('error')->count())->toBe(15);
 });
