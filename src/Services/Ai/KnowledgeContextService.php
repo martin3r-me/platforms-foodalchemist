@@ -328,16 +328,20 @@ class KnowledgeContextService
      */
     private function pairingBlock(string $description, ?string $stil, array &$filesUsed): ?string
     {
-        $sectionFilter = match ($stil) {
-            'klassisch' => ['Klassisch'],
-            'kreativ' => ['Klassisch', 'Modern'],
-            'gewagt' => ['Modern', 'Kontrast'],
-            default => null,
+        // Graph-first (2026-07-13): Partner kommen aus dem Anker-Graphen (PairingService),
+        // NICHT mehr aus dem Markdown-Volltext. Der Graph ist das Gehirn (kuratiert + Buch +
+        // computed, ~179k Kanten); die md-Prosa liefert nur noch Grounding (groundingBlock).
+        // Stil → Kanten-Typen (neue Taxonomie aroma/kontrast/erprobt).
+        $typen = match ($stil) {
+            'klassisch' => ['erprobt'],
+            'kreativ' => ['erprobt', 'aroma'],
+            'gewagt' => ['aroma', 'kontrast'],
+            default => ['erprobt', 'aroma', 'kontrast'],
         };
         $stilHint = match ($stil) {
-            'klassisch' => ' (Stil KLASSISCH — etablierte, traditionelle Kombinationen)',
-            'kreativ' => ' (Stil KREATIV — klassische Basis + moderne, Foodpairing-belegte Twists)',
-            'gewagt' => ' (Stil GEWAGT — moderne + kontrastreiche Paarungen, bewusst mutig, aber NUR belegte aus dieser Liste)',
+            'klassisch' => ' (Stil KLASSISCH — etablierte, erprobte Kombinationen)',
+            'kreativ' => ' (Stil KREATIV — erprobte Basis + Aroma-belegte Twists)',
+            'gewagt' => ' (Stil GEWAGT — Aroma + Kontrast, bewusst mutig, aber NUR belegte aus dieser Liste)',
             default => '',
         };
 
@@ -374,23 +378,35 @@ class KnowledgeContextService
         }
         sort($matched);
 
+        $svc = app(\Platform\FoodAlchemist\Services\PairingService::class);
+        $typSet = array_flip($typen);
         $zeilen = [];
         foreach (array_slice($matched, 0, self::PAIRING_TOP_K) as $stem) {
-            $doc = $this->pairingDoc($stem);
-            if ($doc === null) {
+            // Stem (Doc-Slug, evtl. mit »-«) → Anker-Slug (»_«) für die Graph-Auflösung.
+            $res = $svc->neighborsForName(str_replace('-', '_', $stem), null, self::MAX_PARTNERS * 4);
+            if ($res['anker'] === null) {
                 continue;
             }
-            $names = $this->extractPairingNames($doc->content_md, $sectionFilter);
-            if ($names !== []) {
-                $zeilen[] = "- {$stem}: " . implode(' · ', array_slice($names, 0, self::MAX_PARTNERS));
-                $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+            $namen = [];                                             // display_de → true (Typ-Prio-sortiert: erprobt vor aroma vor kontrast)
+            foreach ($res['partner'] as $p) {
+                if (! isset($typSet[$p->type])) {
+                    continue;
+                }
+                $namen[$p->display_de ?: $p->slug] = true;
+                if (count($namen) >= self::MAX_PARTNERS) {
+                    break;
+                }
+            }
+            if ($namen !== []) {
+                $zeilen[] = "- {$stem}: " . implode(' · ', array_keys($namen));
+                $filesUsed[] = "graph:{$res['anker']['slug']}";
             }
         }
         if ($zeilen === []) {
             return null;
         }
 
-        return "# FLAVOR-PAIRING (verifizierte Kombinationen aus der Wissensbasis{$stilHint}"
+        return "# FLAVOR-PAIRING (verifizierte Kombinationen aus dem Anker-Graphen{$stilHint}"
             . " — bevorzuge diese fuer Komponenten + Garnitur; erfinde KEINE unbelegten Paarungen):\n"
             . implode("\n", $zeilen);
     }

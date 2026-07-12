@@ -145,7 +145,30 @@ it('GT-13-9: Wissens-Quelle komplett leer → leerer Kontext, Call läuft weiter
 
 it('GT-13-10: Pairing-Block klassisch — eine salbei-Zeile, nur Klassisch-Partner, Header-Hinweise', function () {
     ($this->seedGenerator)();
-    ($this->mkDoc)('pairing.salbei', 'pairing', PAIRING_FIXTURE);
+    ($this->mkDoc)('pairing.salbei', 'pairing', PAIRING_FIXTURE);        // Stem-Quelle (pairingStems)
+
+    // Graph-first (2026-07-13): Partner kommen aus dem Anker-Graphen, nicht aus der md.
+    $mkAnker = function (string $slug, string $disp) {
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert([
+            'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'display_de' => $disp,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return (int) DB::getPdo()->lastInsertId();
+    };
+    $mkKante = function (int $a, int $b, string $typ) {
+        foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
+            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+                'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
+                'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+    };
+    $salbei = $mkAnker('salbei', 'Salbei');
+    $butter = $mkAnker('butter', 'Butter');
+    $yuzu = $mkAnker('yuzu', 'Yuzu');
+    $mkKante($salbei, $butter, 'erprobt');                             // klassisch → erprobt: sichtbar
+    $mkKante($salbei, $yuzu, 'aroma');                                 // aroma → unter »klassisch« rausgefiltert
 
     $ctx = $this->svc->contextFor('ai_generate_recipe', 'Salbei-Gnocchi', 'klassisch');
 
