@@ -50,7 +50,7 @@
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
                     <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Komplettiert den Teller</h3>
-                    <p class="text-[11px] text-gray-400">Aromen, die zu mehreren Komponenten klassisch passen — Vorschlag, keine Pflicht.</p>
+                    <p class="text-[11px] text-gray-400">Aromen, die zu mehreren Komponenten erprobt passen — Vorschlag, keine Pflicht.</p>
                     <div class="flex flex-wrap gap-1">
                         @foreach($pairing['vorschlaege'] as $v)
                             <span class="{{ $pill }} {{ $v['allrounder'] ? $variantPill['secondary'] : $variantPill['info'] }}" title="passt zu {{ $v['cover'] }}/{{ $v['dish_n'] }} Komponenten{{ $v['allrounder'] ? ' · Allrounder (passt zu fast allem)' : '' }}">{{ $v['slug'] }} <span class="opacity-60">{{ $v['cover'] }}/{{ $v['dish_n'] }}</span></span>
@@ -80,8 +80,8 @@
             <div class="relative overflow-hidden {{ $card }} mt-3">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Passt klassisch zu</h3>
-                    <p class="text-[11px] text-gray-400">Aroma-Nachbarn dieser Komponente im Pairing-Graphen — womit sie klassisch harmoniert.</p>
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Passt erprobt zu</h3>
+                    <p class="text-[11px] text-gray-400">Aroma-Nachbarn dieser Komponente im Pairing-Graphen — womit sie erprobt harmoniert.</p>
                     <div class="flex flex-wrap gap-1">
                         @foreach($pairing['nachbarn'] as $n)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $n }}</span>@endforeach
                     </div>
@@ -150,7 +150,7 @@
             <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Passt klassisch zu</h3>
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Passt erprobt zu</h3>
                     <div class="flex flex-wrap gap-1">
                         @foreach($pairing['nachbarn'] as $n)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $n }}</span>@endforeach
                     </div>

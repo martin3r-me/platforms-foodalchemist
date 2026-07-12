@@ -51,13 +51,13 @@ it('T3: Identitäts-Anker GERICHTET — nie eine Sorte für den generischen GP',
         ->and($this->svc->bestIdentityAnchor('aepfel', $vokabular))->toBe('apfel');
 });
 
-it('T4: Kohäsion durchgerechnet — 92/75/100 %, fits 88/88/100, weakest modern', function () {
+it('T4: Kohäsion durchgerechnet — 83/50/100 %, fits 75/75/100, weakest kontrast', function () {
     $e = ($this->mkAnker)('erdbeere');
     $b = ($this->mkAnker)('basilikum');
     $bal = ($this->mkAnker)('balsamico');
-    ($this->mkKante)($e, $b, 'modern');
-    ($this->mkKante)($e, $bal, 'klassisch');
-    ($this->mkKante)($b, $bal, 'klassisch');
+    ($this->mkKante)($e, $b, 'kontrast');            // 0.5 (schwächstes Paar)
+    ($this->mkKante)($e, $bal, 'erprobt');           // 1.0
+    ($this->mkKante)($b, $bal, 'erprobt');           // 1.0
 
     $k = $this->svc->cohesionFor([
         ['label' => 'Erdbeere', 'kern' => $e, 'prozess' => [], 'via' => 'name_match'],
@@ -65,13 +65,13 @@ it('T4: Kohäsion durchgerechnet — 92/75/100 %, fits 88/88/100, weakest modern
         ['label' => 'Balsamico', 'kern' => $bal, 'prozess' => [], 'via' => 'name_match'],
     ]);
 
-    expect($k['score'])->toBe(92)
-        ->and($k['min_score'])->toBe(75)
+    expect($k['score'])->toBe(83)                    // (0.5+1.0+1.0)/3
+        ->and($k['min_score'])->toBe(50)
         ->and($k['coverage_pct'])->toBe(100)
         ->and($k['rated_pairs'])->toBe(3)
-        ->and(collect($k['komponenten'])->pluck('fit', 'label')->all())->toBe(['Erdbeere' => 88, 'Basilikum' => 88, 'Balsamico' => 100])
-        ->and($k['weakest_pair']['type'])->toBe('modern')
-        ->and($k['weakest_pair']['score'])->toBe(75)
+        ->and(collect($k['komponenten'])->pluck('fit', 'label')->all())->toBe(['Erdbeere' => 75, 'Basilikum' => 75, 'Balsamico' => 100])
+        ->and($k['weakest_pair']['type'])->toBe('kontrast')
+        ->and($k['weakest_pair']['score'])->toBe(50)
         ->and(collect($k['komponenten'])->contains(fn ($c) => $c['is_orphan']))->toBeFalse();
 });
 

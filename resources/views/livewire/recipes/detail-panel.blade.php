@@ -254,7 +254,7 @@
             @if($pairings !== null)
                 <div class="flex flex-wrap gap-1 mt-1" data-pairing-chips>
                     @foreach($pairings as $p)
-                        <span wire:key="pp-{{ $p->id }}-{{ $p->type }}" class="{{ $pill }} group {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->type] ?? $variantPill['secondary'] }}"
+                        <span wire:key="pp-{{ $p->id }}-{{ $p->type }}" class="{{ $pill }} group {{ ['erprobt' => $variantPill['success'], 'aroma' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->type] ?? $variantPill['secondary'] }}"
                               title="{{ $p->type }} · {{ $p->confidence }}{{ $p->created_via === 'manual' ? ' · manuell' : '' }}">{{ $p->display_de }}@if($p->created_via === 'manual')<span class="opacity-60"> ✎</span>@endif
                             <button type="button" wire:click="pairingLoesen({{ $p->id }}, '{{ $p->type }}')" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
                         </span>
@@ -263,8 +263,8 @@
                 {{-- manuelles Pairing verknüpfen (Typ wählbar, created_via='manual') --}}
                 <div class="mt-1.5 flex items-center gap-1" data-pairing-add>
                     <select wire:model="pairingTyp" class="{{ $input }} !py-0.5 !text-[11px] !w-24 shrink-0">
-                        <option value="klassisch">klassisch</option>
-                        <option value="modern">modern</option>
+                        <option value="erprobt">erprobt</option>
+                        <option value="aroma">aroma</option>
                         <option value="kontrast">kontrast</option>
                     </select>
                     <input type="search" wire:model.live.debounce.300ms="pairingSuche" placeholder="Pairing verknüpfen …" class="{{ $input }} !py-1 flex-1" data-pairing-suche />

@@ -27,7 +27,7 @@ beforeEach(function () {
 
         return (int) DB::getPdo()->lastInsertId();
     };
-    $this->mkKante = function (int $a, int $b, string $typ = 'klassisch') {
+    $this->mkKante = function (int $a, int $b, string $typ = 'erprobt') {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {                  // bidirektional (Inv. 4)
             DB::table('foodalchemist_pairing_anchor_edges')->insert([
                 'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,

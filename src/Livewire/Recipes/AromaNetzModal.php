@@ -11,7 +11,7 @@ use Platform\FoodAlchemist\Services\PairingService;
  * M5-07 / D-7: Aroma-Netz-Modal — Quell-Rezept zentral (orange), Ring aus
  * Pairing-Ankern (rosa, Kern-Anker ★), äußerer Ring verwandte Rezepte
  * (grün = Basis, blau = VK) mit Kanten zu gemeinsamen Ankern. Brücken-Typen
- * klassisch/modern/kontrast (GL-10); Hover über Anker = dessen Brücken,
+ * aroma/erprobt/kontrast; Hover über Anker = dessen Brücken,
  * Klick auf Rezept = öffnen; Toggle »Alle Aroma-Brücken« + Vorschlags-Modus
  * je Anker. Layout serverseitig (deterministisch), Interaktion Alpine-only —
  * nur der Vorschlags-Select macht einen Roundtrip.

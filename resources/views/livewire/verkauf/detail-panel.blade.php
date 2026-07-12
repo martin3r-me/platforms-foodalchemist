@@ -230,7 +230,7 @@
             @if($pairings !== null)
                 <div class="flex flex-wrap gap-1 mt-1" data-vk-pairing-chips>
                     @foreach($pairings as $p)
-                        <span wire:key="vkpp-{{ $loop->index }}" class="{{ $pill }} {{ ['klassisch' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->type] ?? $variantPill['secondary'] }}"
+                        <span wire:key="vkpp-{{ $loop->index }}" class="{{ $pill }} {{ ['erprobt' => $variantPill['success'], 'aroma' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->type] ?? $variantPill['secondary'] }}"
                               title="{{ $p->type }} · {{ $p->confidence }}">{{ $p->display_de }}</span>
                     @endforeach
                 </div>

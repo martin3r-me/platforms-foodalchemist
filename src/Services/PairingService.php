@@ -15,11 +15,12 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class PairingService
 {
-    // +aroma (2026-07-11): geteiltes Aromamolekül (Foodpairing-Buch). Starke Harmonie-Relation,
-    // knapp unter kulinarisch-klassisch, über modern. Fließt via GEWICHTE in Kohäsion/Vorschläge/Bridge.
-    private const GEWICHTE = ['klassisch' => 1.0, 'aroma' => 0.9, 'modern' => 0.75, 'kontrast' => 0.5]; // Tabelle 1
+    // Taxonomie 2026-07-12: drei zeitlose Kanten-Typen. erprobt = in der Küche bewährt
+    // (verschmilzt das frühere klassisch+modern — Ära ist kein Fit-Kriterium), aroma =
+    // geteiltes Aromamolekül (Buch/computed), kontrast = passt durch Gegensatz.
+    private const GEWICHTE = ['erprobt' => 1.0, 'aroma' => 0.9, 'kontrast' => 0.5]; // Tabelle 1
 
-    private const TYP_PRIO = ['klassisch' => 1, 'aroma' => 2, 'modern' => 3, 'kontrast' => 4];
+    private const TYP_PRIO = ['erprobt' => 1, 'aroma' => 2, 'kontrast' => 3];
 
     /** Geschmacks-Achsen (anchor_taste_vectors / vocab_process_sensory_deltas). */
     private const TASTE_ACHSEN = ['suess', 'salzig', 'sauer', 'bitter', 'umami', 'fettig', 'scharf'];
@@ -387,7 +388,7 @@ class PairingService
         $indirekte = DB::table('foodalchemist_pairing_anchor_edges')
             ->whereIn('anchor_a_id', $ankerA)->whereIn('anchor_b_id', $ankerB)
             ->whereColumn('anchor_a_id', '!=', 'anchor_b_id')
-            ->orderByRaw("CASE type WHEN 'klassisch' THEN 1 WHEN 'aroma' THEN 2 WHEN 'modern' THEN 3 ELSE 4 END")
+            ->orderByRaw("CASE type WHEN 'erprobt' THEN 1 WHEN 'aroma' THEN 2 WHEN 'kontrast' THEN 3 ELSE 4 END")
             ->limit(30)->get(['id'])->count();
 
         return [
@@ -443,7 +444,7 @@ class PairingService
             ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
             ->where('e.anchor_a_id', $ankerId)
             ->when($typ !== null, fn ($q) => $q->where('e.type', $typ))
-            ->orderByRaw("CASE e.type WHEN 'klassisch' THEN 1 WHEN 'aroma' THEN 2 WHEN 'modern' THEN 3 ELSE 4 END")
+            ->orderByRaw("CASE e.type WHEN 'erprobt' THEN 1 WHEN 'aroma' THEN 2 WHEN 'kontrast' THEN 3 ELSE 4 END")
             ->orderBy('a.slug')->limit($limit)
             ->get(['a.id', 'a.slug', 'a.display_de', 'e.type', 'e.evidence']);
     }
@@ -490,16 +491,16 @@ class PairingService
         return DB::table('foodalchemist_recipe_pairings AS rp')
             ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
             ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
-            ->orderByRaw("CASE rp.type WHEN 'klassisch' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
+            ->orderByRaw("CASE rp.type WHEN 'erprobt' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
             ->orderBy('a.slug')
             ->get(['a.id', 'a.slug', 'a.display_de', 'rp.type', 'rp.confidence', 'rp.created_via']);
     }
 
     /** Manuelles Pairing setzen (recipe_pairings, created_via='manual' — bewusst gesetzt, gewinnt). */
-    public function setRecipePairing(Team $team, int $recipeId, int $ankerId, string $typ = 'klassisch'): void
+    public function setRecipePairing(Team $team, int $recipeId, int $ankerId, string $typ = 'erprobt'): void
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
-        $typ = in_array($typ, ['klassisch', 'modern', 'kontrast', 'verbund', 'trinitas'], true) ? $typ : 'klassisch';
+        $typ = in_array($typ, ['erprobt', 'aroma', 'kontrast', 'verbund', 'trinitas'], true) ? $typ : 'erprobt';
         DB::table('foodalchemist_recipe_pairings')->updateOrInsert(
             ['recipe_id' => $recipe->id, 'anchor_id' => $ankerId, 'type' => $typ],
             ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
@@ -600,7 +601,7 @@ class PairingService
             $vorschlaege = collect($sug['klassiker'])->map($mapV)->all();
             $signature = collect($sug['signature'])->map($mapV)->all();
         } else {
-            $nachbarn = $this->ankerNachbarnAggregiert($slugs, $eigene, 'klassisch');
+            $nachbarn = $this->ankerNachbarnAggregiert($slugs, $eigene, 'erprobt');
             $team = Team::find((int) $recipe->team_id);
             $verwandte = $team !== null
                 ? $this->recipesSharingPairings($team, $recipe->id)->all()
@@ -641,7 +642,7 @@ class PairingService
         return [
             'type' => 'gp',
             'anker' => $anker->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'source' => $a->source])->all(),
-            'nachbarn' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'klassisch'),
+            'nachbarn' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'erprobt'),
             'aroma' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma'),
             'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
             'geschmack' => $this->aggregatedTaste($eigene),
@@ -671,7 +672,7 @@ class PairingService
             ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
             ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
             ->whereNotIn('a.id', $kern->pluck('id'))
-            ->orderByRaw("CASE rp.type WHEN 'klassisch' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
+            ->orderByRaw("CASE rp.type WHEN 'erprobt' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
             ->orderBy('a.slug')->distinct()
             ->get(['a.id', 'a.slug', 'a.display_de']);
 

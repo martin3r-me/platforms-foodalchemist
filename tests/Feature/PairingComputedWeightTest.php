@@ -38,13 +38,13 @@ beforeEach(function () {
     $this->komp = fn (int $id) => ['label' => "k{$id}", 'kern' => $id, 'prozess' => [], 'via' => 'test'];
 });
 
-it('kuratiert (weight NULL) bleibt typ-getrieben — modern = 75', function () {
+it('kuratiert (weight NULL) bleibt typ-getrieben — erprobt = 100', function () {
     $a = ($this->mkAnker)('erdbeere');
     $b = ($this->mkAnker)('minze');
-    ($this->mkKante)($a, $b, 'modern');            // GEWICHTE['modern'] = 0.75
+    ($this->mkKante)($a, $b, 'erprobt');           // GEWICHTE['erprobt'] = 1.0
 
     $k = $this->svc->cohesionFor([($this->komp)($a), ($this->komp)($b)]);
-    expect($k['score'])->toBe(75)->and($k['rated_pairs'])->toBe(1);
+    expect($k['score'])->toBe(100)->and($k['rated_pairs'])->toBe(1);
 });
 
 it('computed weight gewinnt über GEWICHTE — aroma mit weight 0.42 = 42, nicht 90', function () {
@@ -59,7 +59,7 @@ it('computed weight gewinnt über GEWICHTE — aroma mit weight 0.42 = 42, nicht
 it('kuratiert gewinnt bei Kollision — stärkere kuratierte Kante schlägt schwache computed', function () {
     $a = ($this->mkAnker)('tomate');
     $b = ($this->mkAnker)('basilikum');
-    ($this->mkKante)($a, $b, 'klassisch');          // 1.0 kuratiert
+    ($this->mkKante)($a, $b, 'erprobt');            // 1.0 kuratiert
     ($this->mkKante)($a, $b, 'aroma', 0.42);        // schwache computed daneben
 
     // edgeBest nimmt das MAX → kuratiert 1.0 gewinnt, computed verzerrt nicht nach unten.

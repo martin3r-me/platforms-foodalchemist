@@ -48,8 +48,8 @@
                               data-bruecke="{{ $k['type'] }}"
                               :opacity="(alle || hov === {{ $k['a'] }} || hov === {{ $k['b'] }}) ? 0.85 : 0"
                               @switch($k['type'])
-                                  @case('klassisch') stroke="#d6409f" stroke-width="1.8" @break
-                                  @case('modern') stroke="#d6409f" stroke-width="1.4" stroke-dasharray="2 4" @break
+                                  @case('erprobt') stroke="#d6409f" stroke-width="1.8" @break
+                                  @case('aroma') stroke="#d6409f" stroke-width="1.4" stroke-dasharray="2 4" @break
                                   @case('kontrast') stroke="#06b6d4" stroke-width="1.4" stroke-dasharray="2 4" @break
                                   @default stroke="#9ca3af" stroke-width="1" stroke-dasharray="5 4"
                               @endswitch
@@ -111,8 +111,8 @@
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-pink-300 border border-pink-600"></span> Pairing-Anker (★ Kern)</span>
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-300 border border-amber-600"></span> Vorschlag über Anker</span>
                 <span class="text-gray-300 dark:text-gray-600">|</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#d6409f" stroke-width="2"/></svg> klassisch</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#d6409f" stroke-width="1.5" stroke-dasharray="2 3"/></svg> modern</span>
+                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#d6409f" stroke-width="2"/></svg> erprobt</span>
+                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#d6409f" stroke-width="1.5" stroke-dasharray="2 3"/></svg> aroma</span>
                 <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="2 3"/></svg> kontrast</span>
                 <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#9ca3af" stroke-width="1" stroke-dasharray="5 4"/></svg> sonstige</span>
             </div>
