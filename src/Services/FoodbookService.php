@@ -32,7 +32,7 @@ class FoodbookService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistFoodbook::visibleToTeam($team)
-            ->withCount('kapitel')
+            ->withCount('chapters')
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
                 $s = '%' . mb_strtolower($filters['search']) . '%';
                 $q->where(fn ($w) => $w
@@ -48,10 +48,10 @@ class FoodbookService
     public function detail(Team $team, int $id): ?FoodAlchemistFoodbook
     {
         return FoodAlchemistFoodbook::visibleToTeam($team)
-            ->with(['kapitel' => fn ($q) => $q->orderBy('position'),
-                'kapitel.blocks' => fn ($q) => $q->orderBy('position'),
-                'kapitel.blocks.concept:id,name,price_per_person_cache',
-                'kapitel.blocks.gericht:id,name,sales_net',
+            ->with(['chapters' => fn ($q) => $q->orderBy('position'),
+                'chapters.blocks' => fn ($q) => $q->orderBy('position'),
+                'chapters.blocks.concept:id,name,price_per_person_cache',
+                'chapters.blocks.dish:id,name,sales_net',
                 'crmCompany', 'crmContact'])   // #369: CRM-Kunde-Link
             ->find($id);
     }
@@ -380,11 +380,11 @@ class FoodbookService
 
             return ['vk_pp' => (float) $cockpit['price_per_person'], 'ek_pp' => (float) $cockpit['ek_per_person'], 'pauschal' => 0.0];
         }
-        if ($block->type === 'recipe_ref' && $block->gericht) {
+        if ($block->type === 'recipe_ref' && $block->dish) {
             $faktor = $block->quantity !== null ? (float) $block->quantity : 1.0;
 
-            return ['vk_pp' => round((float) ($block->gericht->sales_net ?? 0) * $faktor, 2),
-                'ek_pp' => round((float) ($block->gericht->ek_total_eur ?? 0) * $faktor, 2), 'pauschal' => 0.0];
+            return ['vk_pp' => round((float) ($block->dish->sales_net ?? 0) * $faktor, 2),
+                'ek_pp' => round((float) ($block->dish->ek_total_eur ?? 0) * $faktor, 2), 'pauschal' => 0.0];
         }
         if ($block->type === 'header_frei_preis') {
             return match ($block->price_basis) {
@@ -422,7 +422,7 @@ class FoodbookService
     public function kapitelAggregat(Team $team, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null): array
     {
         $kapitel->loadMissing(['blocks' => fn ($q) => $q->where('visible', true),
-            'blocks.concept:id,name,price_per_person_cache', 'blocks.gericht:id,sales_net,ek_total_eur',
+            'blocks.concept:id,name,price_per_person_cache', 'blocks.dish:id,sales_net,ek_total_eur',
             'blocks.staffel', 'children']);
 
         $vk = 0.0;
@@ -465,7 +465,7 @@ class FoodbookService
         $vk = 0.0;
         $ek = 0.0;
         $pauschal = 0.0;
-        foreach ($fb->kapitel()->whereNull('parent_id')->get() as $top) {
+        foreach ($fb->chapters()->whereNull('parent_id')->get() as $top) {
             $agg = $this->kapitelAggregat($team, $top, $pax);
             $vk += $agg['vk_pro_person'];
             $ek += $agg['ek_per_person'];
@@ -522,24 +522,24 @@ class FoodbookService
         // Dish-Drill-down (concept.slots→gericht/paket) + Diät/Allergen-Attribute.
         $gerichtCols = array_merge(['id', 'name', 'sales_net', 'ek_total_eur', 'dish_class_id'], $allergenCols);
         $fb->loadMissing([
-            'kapitel' => fn ($q) => $q->orderBy('position'),
-            'kapitel.blocks' => fn ($q) => $q->where('visible', true)->orderBy('position'),
-            'kapitel.blocks.concept:id,name,price_per_person_cache',
-            'kapitel.blocks.concept.slots:id,concept_id,sales_recipe_id,package_id',
-            'kapitel.blocks.concept.slots.gericht:' . implode(',', $gerichtCols),
-            'kapitel.blocks.concept.slots.gericht.speisenKlasse:id,diet_form',
-            'kapitel.blocks.concept.slots.gericht.darreichungen:id,recipe_id,serving_form_id',
-            'kapitel.blocks.concept.slots.paket:id',
-            'kapitel.blocks.concept.slots.paket.gerichte:id,package_id,sales_recipe_id',
-            'kapitel.blocks.concept.slots.paket.gerichte.gericht:' . implode(',', $gerichtCols),
-            'kapitel.blocks.concept.slots.paket.gerichte.gericht.speisenKlasse:id,diet_form',
-            'kapitel.blocks.concept.slots.paket.gerichte.gericht.darreichungen:id,recipe_id,serving_form_id',
-            'kapitel.blocks.gericht:' . implode(',', $gerichtCols),
-            'kapitel.blocks.gericht.speisenKlasse:id,diet_form',
-            'kapitel.blocks.gericht.darreichungen:id,recipe_id,serving_form_id',
-            'kapitel.blocks.staffel',
+            'chapters' => fn ($q) => $q->orderBy('position'),
+            'chapters.blocks' => fn ($q) => $q->where('visible', true)->orderBy('position'),
+            'chapters.blocks.concept:id,name,price_per_person_cache',
+            'chapters.blocks.concept.slots:id,concept_id,sales_recipe_id,package_id',
+            'chapters.blocks.concept.slots.dish:' . implode(',', $gerichtCols),
+            'chapters.blocks.concept.slots.dish.dishClass:id,diet_form',
+            'chapters.blocks.concept.slots.dish.presentations:id,recipe_id,serving_form_id',
+            'chapters.blocks.concept.slots.package:id',
+            'chapters.blocks.concept.slots.package.dishes:id,package_id,sales_recipe_id',
+            'chapters.blocks.concept.slots.package.dishes.dish:' . implode(',', $gerichtCols),
+            'chapters.blocks.concept.slots.package.dishes.dish.dishClass:id,diet_form',
+            'chapters.blocks.concept.slots.package.dishes.dish.presentations:id,recipe_id,serving_form_id',
+            'chapters.blocks.dish:' . implode(',', $gerichtCols),
+            'chapters.blocks.dish.dishClass:id,diet_form',
+            'chapters.blocks.dish.presentations:id,recipe_id,serving_form_id',
+            'chapters.blocks.staffel',
         ]);
-        $byParent = $fb->kapitel->groupBy(fn ($k) => $k->parent_id ?? 0);
+        $byParent = $fb->chapters->groupBy(fn ($k) => $k->parent_id ?? 0);
 
         $rows = [];
         $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax, $f, $aktiv) {
@@ -570,14 +570,14 @@ class FoodbookService
                     // Gerichte des Blocks sammeln (recipe_ref = 1, concept_ref = alle Slot-Gerichte).
                     $dishes = [];
                     if ($b->type === 'recipe_ref') {
-                        $dishes[] = $this->gerichtAttrs($b->gericht);
+                        $dishes[] = $this->gerichtAttrs($b->dish);
                     } elseif ($b->type === 'concept_ref' && $b->concept !== null) {
                         foreach ($b->concept->slots as $slot) {
-                            if ($slot->gericht !== null) {
-                                $dishes[] = $this->gerichtAttrs($slot->gericht);
-                            } elseif ($slot->paket !== null) {
-                                foreach ($slot->paket->gerichte as $pg) {
-                                    $dishes[] = $this->gerichtAttrs($pg->gericht);
+                            if ($slot->dish !== null) {
+                                $dishes[] = $this->gerichtAttrs($slot->dish);
+                            } elseif ($slot->package !== null) {
+                                foreach ($slot->package->dishes as $pg) {
+                                    $dishes[] = $this->gerichtAttrs($pg->dish);
                                 }
                             }
                         }
@@ -643,11 +643,11 @@ class FoodbookService
             $allergene[$k] = (string) $g->getAttribute('allergen_' . $k);
         }
         // Servierformen des Gerichts = distinkte serving_form_id über alle Darreichungen.
-        $formIds = $g->relationLoaded('darreichungen')
-            ? $g->darreichungen->pluck('serving_form_id')->filter()->map(fn ($i) => (int) $i)->unique()->values()->all()
+        $formIds = $g->relationLoaded('presentations')
+            ? $g->presentations->pluck('serving_form_id')->filter()->map(fn ($i) => (int) $i)->unique()->values()->all()
             : [];
 
-        return ['id' => (int) $g->id, 'name' => (string) $g->name, 'diet' => $g->speisenKlasse?->diet_form,
+        return ['id' => (int) $g->id, 'name' => (string) $g->name, 'diet' => $g->dishClass?->diet_form,
             'allergene' => $allergene, 'form_ids' => $formIds];
     }
 
@@ -687,16 +687,16 @@ class FoodbookService
     public function dokumentDaten(Team $team, FoodAlchemistFoodbook $fb): array
     {
         $fb->loadMissing([
-            'kapitel' => fn ($q) => $q->orderBy('position'),
-            'kapitel.blocks' => fn ($q) => $q->where('visible', true)->orderBy('position'),
+            'chapters' => fn ($q) => $q->orderBy('position'),
+            'chapters.blocks' => fn ($q) => $q->where('visible', true)->orderBy('position'),
             // Wording-Kette: Slots (inkl. Paket-Gerichte) fürs Auflösen der Gericht-Zeilen
-            'kapitel.blocks.concept.slots.gericht:id,name,sales_wording_standard',
-            'kapitel.blocks.concept.slots.paket.gerichte.gericht:id,name,sales_wording_standard',
-            'kapitel.blocks.gericht:id,name,sales_wording_standard',
+            'chapters.blocks.concept.slots.dish:id,name,sales_wording_standard',
+            'chapters.blocks.concept.slots.package.dishes.dish:id,name,sales_wording_standard',
+            'chapters.blocks.dish:id,name,sales_wording_standard',
             'crmCompany', 'crmContact',
         ]);
         $pax = $fb->personen;
-        $byParent = $fb->kapitel->groupBy(fn ($k) => $k->parent_id ?? 0);
+        $byParent = $fb->chapters->groupBy(fn ($k) => $k->parent_id ?? 0);
         $wording = app(WordingResolver::class);
 
         $rows = [];
@@ -796,7 +796,7 @@ class FoodbookService
         }
 
         $conceptNamen = collect();
-        foreach ($fb->kapitel as $k) {
+        foreach ($fb->chapters as $k) {
             foreach ($k->blocks as $b) {
                 if ($b->type === 'concept_ref' && $b->concept) {
                     $conceptNamen->push($b->concept->name);
@@ -809,7 +809,7 @@ class FoodbookService
             'briefing' => $fb->description,
             'personen' => $fb->personen,
             'concepts' => $conceptNamen->unique()->values()->all(),
-            'kapitel' => $fb->kapitel->pluck('title')->values()->all(),
+            'kapitel' => $fb->chapters->pluck('title')->values()->all(),
         ];
     }
 
