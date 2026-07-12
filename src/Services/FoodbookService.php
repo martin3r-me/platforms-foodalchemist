@@ -482,6 +482,198 @@ class FoodbookService
         ];
     }
 
+    // ── R3.1: interne navigierbare Lese-Ansicht ────────────────────────────────
+
+    /** 14 EU-Allergen-Schlüssel = Suffixe der recipes.allergen_*-Spalten (Aggregat aus Recompute). */
+    public const ALLERGEN_KEYS = ['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk',
+        'tree_nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs'];
+
+    /** Diät-Formen (dish_classes.diet_form) — Filter-Vokabular der Ansicht. */
+    public const DIET_FORMS = ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'];
+
+    /**
+     * Daten für die INTERNE Foodbook-Lese-Ansicht (R3.1): Kapitel-Baum (Pre-Order,
+     * Tiefe) mit sichtbaren Blöcken, je Block/Kapitel EK/VK/W% (Live-Resolver, Pax-
+     * abhängig) + interne Titel (NICHT Kunden-Wording). Gegenstück zu dokumentDaten
+     * (Kundensicht ohne EK). Preise über dieselbe blockPreis/kapitelAggregat/gesamt-
+     * Kette wie der Editor → eine Wahrheit.
+     *
+     * Slice 2: dish-level Filter (Volltext $q · Diät $diaet · allergenfrei $ohne) mit
+     * Gericht-Drill-down. Filter blenden nicht passende Gerichte/Blöcke aus; Kapitel
+     * ohne Treffer bleiben sichtbar (Baum-Kontext), markiert per `n_treffer`. Preise/
+     * Aggregate bleiben die des GANZEN Kapitels (Filter = Sicht-Linse, keine Neupreisung).
+     *
+     * @param  array{q?:string, diaet?:list<string>, ohne?:list<string>}  $filter
+     * @return array{fb:FoodAlchemistFoodbook, kapitel:list<array>, gesamt:array, pax:?int, filter_aktiv:bool}
+     */
+    public function ansichtDaten(Team $team, FoodAlchemistFoodbook $fb, ?int $pax = null, array $filter = []): array
+    {
+        $pax ??= $fb->personen;
+        $f = [
+            'q' => trim((string) ($filter['q'] ?? '')),
+            'diaet' => array_values(array_filter((array) ($filter['diaet'] ?? []))),
+            'ohne' => array_values(array_filter((array) ($filter['ohne'] ?? []))),
+            'formen' => array_values(array_filter(array_map('intval', (array) ($filter['formen'] ?? [])))),
+        ];
+        $aktiv = $f['q'] !== '' || $f['diaet'] !== [] || $f['ohne'] !== [] || $f['formen'] !== [];
+
+        $allergenCols = array_map(fn ($k) => 'allergen_' . $k, self::ALLERGEN_KEYS);
+        // Superset-Load: deckt blockPreis (concept/gericht/staffel) + interne Labels +
+        // Dish-Drill-down (concept.slots→gericht/paket) + Diät/Allergen-Attribute.
+        $gerichtCols = array_merge(['id', 'name', 'sales_net', 'ek_total_eur', 'dish_class_id'], $allergenCols);
+        $fb->loadMissing([
+            'kapitel' => fn ($q) => $q->orderBy('position'),
+            'kapitel.blocks' => fn ($q) => $q->where('visible', true)->orderBy('position'),
+            'kapitel.blocks.concept:id,name,price_per_person_cache',
+            'kapitel.blocks.concept.slots:id,concept_id,sales_recipe_id,package_id',
+            'kapitel.blocks.concept.slots.gericht:' . implode(',', $gerichtCols),
+            'kapitel.blocks.concept.slots.gericht.speisenKlasse:id,diet_form',
+            'kapitel.blocks.concept.slots.gericht.darreichungen:id,recipe_id,serving_form_id',
+            'kapitel.blocks.concept.slots.paket:id',
+            'kapitel.blocks.concept.slots.paket.gerichte:id,package_id,sales_recipe_id',
+            'kapitel.blocks.concept.slots.paket.gerichte.gericht:' . implode(',', $gerichtCols),
+            'kapitel.blocks.concept.slots.paket.gerichte.gericht.speisenKlasse:id,diet_form',
+            'kapitel.blocks.concept.slots.paket.gerichte.gericht.darreichungen:id,recipe_id,serving_form_id',
+            'kapitel.blocks.gericht:' . implode(',', $gerichtCols),
+            'kapitel.blocks.gericht.speisenKlasse:id,diet_form',
+            'kapitel.blocks.gericht.darreichungen:id,recipe_id,serving_form_id',
+            'kapitel.blocks.staffel',
+        ]);
+        $byParent = $fb->kapitel->groupBy(fn ($k) => $k->parent_id ?? 0);
+
+        $rows = [];
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax, $f, $aktiv) {
+            foreach ($byParent[$parentId] ?? [] as $k) {
+                $bloecke = [];
+                $treffer = 0;
+                foreach ($k->blocks as $b) {
+                    if (in_array($b->type, ['spacer', 'image'], true)) {
+                        continue;
+                    }
+                    $istHeader = str_starts_with((string) $b->type, 'header') || $b->type === 'text';
+                    if ($istHeader) {
+                        $label = trim((string) $b->customer_text);
+                        if ($label === '') {
+                            continue;
+                        }
+                        // Header/Text sind strukturell (kein Gericht): bei aktivem Volltext nur zeigen,
+                        // wenn das Suchwort trifft; Diät/Allergen betreffen sie nicht.
+                        if ($f['q'] !== '' && ! str_contains(mb_strtolower($label), mb_strtolower($f['q']))) {
+                            continue;
+                        }
+                        $bloecke[] = ['type' => $b->type, 'label' => $label, 'ist_header' => true,
+                            'vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => 0.0, 'wpct' => null, 'gerichte' => []];
+
+                        continue;
+                    }
+
+                    // Gerichte des Blocks sammeln (recipe_ref = 1, concept_ref = alle Slot-Gerichte).
+                    $dishes = [];
+                    if ($b->type === 'recipe_ref') {
+                        $dishes[] = $this->gerichtAttrs($b->gericht);
+                    } elseif ($b->type === 'concept_ref' && $b->concept !== null) {
+                        foreach ($b->concept->slots as $slot) {
+                            if ($slot->gericht !== null) {
+                                $dishes[] = $this->gerichtAttrs($slot->gericht);
+                            } elseif ($slot->paket !== null) {
+                                foreach ($slot->paket->gerichte as $pg) {
+                                    $dishes[] = $this->gerichtAttrs($pg->gericht);
+                                }
+                            }
+                        }
+                    }
+                    $dishes = array_values(array_filter($dishes));
+                    $sichtbar = $aktiv ? array_values(array_filter($dishes, fn ($d) => $this->dishMatches($d, $f))) : $dishes;
+
+                    // Filter aktiv + Block hat Gerichte, aber keins passt → Block ausblenden.
+                    if ($aktiv && $dishes !== [] && $sichtbar === []) {
+                        continue;
+                    }
+
+                    $p = $this->blockPreis($b, $pax);
+                    $label = (string) ($b->type === 'concept_ref' ? ($b->concept?->name ?? '') : ($dishes[0]['name'] ?? ''));
+                    $bloecke[] = [
+                        'type' => $b->type,
+                        'label' => $label !== '' ? $label : '—',
+                        'ist_header' => false,
+                        'vk_pp' => $p['vk_pp'],
+                        'ek_pp' => $p['ek_pp'],
+                        'pauschal' => $p['pauschal'],
+                        'wpct' => $p['vk_pp'] > 0 ? round($p['ek_pp'] / $p['vk_pp'] * 100, 1) : null,
+                        // Drill-down nur für concept_ref (recipe_ref = das Gericht selbst ist der Block).
+                        'gerichte' => $b->type === 'concept_ref'
+                            ? array_map(fn ($d) => ['name' => $d['name'], 'diet' => $d['diet']], $sichtbar)
+                            : [],
+                        'n_gesamt' => count($dishes),
+                        'n_sichtbar' => count($sichtbar),
+                    ];
+                    $treffer++;
+                }
+                $agg = $this->kapitelAggregat($team, $k, $pax);
+                $rows[] = [
+                    'id' => (int) $k->id,
+                    'title' => $k->title,
+                    'depth' => $depth,
+                    'bloecke' => $bloecke,
+                    'agg' => $agg,
+                    'n_treffer' => $treffer,
+                ];
+                $walk((int) $k->id, $depth + 1);
+            }
+        };
+        $walk(0, 0);
+
+        $servierFormen = DB::table('foodalchemist_serving_forms')
+            ->where('is_inactive', false)->whereNull('deleted_at')
+            ->where('code', '!=', 'unbestimmt')
+            ->orderBy('sort_order')->get(['id', 'label'])->all();
+
+        return ['fb' => $fb, 'kapitel' => $rows, 'gesamt' => $this->gesamt($team, $fb), 'pax' => $pax,
+            'filter_aktiv' => $aktiv, 'servier_formen' => $servierFormen];
+    }
+
+    /** Filter-/Anzeige-Attribute eines Gerichts (Name · Diät · 14 Allergen-Werte). */
+    private function gerichtAttrs(?FoodAlchemistRecipe $g): ?array
+    {
+        if ($g === null) {
+            return null;
+        }
+        $allergene = [];
+        foreach (self::ALLERGEN_KEYS as $k) {
+            $allergene[$k] = (string) $g->getAttribute('allergen_' . $k);
+        }
+        // Servierformen des Gerichts = distinkte serving_form_id über alle Darreichungen.
+        $formIds = $g->relationLoaded('darreichungen')
+            ? $g->darreichungen->pluck('serving_form_id')->filter()->map(fn ($i) => (int) $i)->unique()->values()->all()
+            : [];
+
+        return ['id' => (int) $g->id, 'name' => (string) $g->name, 'diet' => $g->speisenKlasse?->diet_form,
+            'allergene' => $allergene, 'form_ids' => $formIds];
+    }
+
+    /** Trifft ein Gericht die aktive Filter-Kombination? (Volltext ∧ Diät ∧ allergenfrei) */
+    private function dishMatches(array $d, array $f): bool
+    {
+        if ($f['q'] !== '' && ! str_contains(mb_strtolower($d['name']), mb_strtolower($f['q']))) {
+            return false;
+        }
+        if ($f['diaet'] !== [] && ! in_array($d['diet'], $f['diaet'], true)) {
+            return false;
+        }
+        // «ohne X» = X nicht als Zutat und nicht in Spuren (bekanntes Vorkommen ausgeschlossen).
+        foreach ($f['ohne'] as $k) {
+            if (in_array($d['allergene'][$k] ?? '', ['enthalten', 'spuren'], true)) {
+                return false;
+            }
+        }
+        // Servierform: Gericht passt, wenn EINE seiner Darreichungsformen gewählt ist.
+        if ($f['formen'] !== [] && array_intersect($f['formen'], $d['form_ids']) === []) {
+            return false;
+        }
+
+        return true;
+    }
+
     // ── #384/Folge: versendbares Foodbook/Portfolio-Dokument ───────────────────
 
     /**

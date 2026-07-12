@@ -131,6 +131,12 @@ Route::get('/foodbooks/{id}/dokument', function (int $id, \Platform\FoodAlchemis
 })->whereNumber('id')->name('foodalchemist.foodbooks.dokument');
 
 /**
+ * R3.1: Interne navigierbare Foodbook-Lese-Ansicht (Kapitel-Baum + EK/VK/W%, Live-Resolver).
+ */
+Route::get('/foodbooks/{id}/ansicht', \Platform\FoodAlchemist\Livewire\Foodbooks\Ansicht::class)
+    ->whereNumber('id')->name('foodalchemist.foodbooks.ansicht');
+
+/**
  * #380: Angebote — individuelle Anfrage → maßgeschneidertes Angebot (CRM + Concepter).
  * Eigenständig neben Foodbook (Portfolio); 3-Panel-Browser am Concepter orientiert.
  */
