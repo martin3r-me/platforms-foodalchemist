@@ -104,6 +104,19 @@
             </div>
         @endif
 
+        @if(count($pairing['aroma'] ?? []))
+            <div class="relative overflow-hidden {{ $card }} mt-3">
+                <div class="{{ $cardAccent }}"></div>
+                <div class="px-5 py-4 space-y-2">
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Molekular verwandt (Aroma-Layer)</h3>
+                    <p class="text-[11px] text-gray-400">Aromen mit gemeinsamem Aromamolekül (Foodpairing) — harmonieren über die Molekülebene, knapp unter der kulinarischen Klassik.</p>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($pairing['aroma'] as $n)<span class="{{ $pill }} {{ $variantPill['primary'] }}">≈ {{ $n }}</span>@endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
+
         @if(count($pairing['kontrast'] ?? []))
             <div class="relative overflow-hidden {{ $card }} mt-3">
                 <div class="{{ $cardAccent }}"></div>
@@ -116,6 +129,8 @@
                 </div>
             </div>
         @endif
+
+        @include('foodalchemist::livewire.concepter.partials.geschmack', ['geschmack' => $pairing['geschmack'] ?? []])
     @endif
 @elseif(($pairing['type'] ?? null) === 'gp')
     @if(count($pairing['anker']) === 0)
@@ -143,6 +158,19 @@
             </div>
         @endif
 
+        @if(count($pairing['aroma'] ?? []))
+            <div class="relative overflow-hidden {{ $card }} mt-3">
+                <div class="{{ $cardAccent }}"></div>
+                <div class="px-5 py-4 space-y-2">
+                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Molekular verwandt (Aroma-Layer)</h3>
+                    <p class="text-[11px] text-gray-400">Aromen mit gemeinsamem Aromamolekül (Foodpairing) — harmonieren über die Molekülebene.</p>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($pairing['aroma'] as $n)<span class="{{ $pill }} {{ $variantPill['primary'] }}">≈ {{ $n }}</span>@endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
+
         @if(count($pairing['kontrast'] ?? []))
             <div class="relative overflow-hidden {{ $card }} mt-3">
                 <div class="{{ $cardAccent }}"></div>
@@ -154,5 +182,7 @@
                 </div>
             </div>
         @endif
+
+        @include('foodalchemist::livewire.concepter.partials.geschmack', ['geschmack' => $pairing['geschmack'] ?? []])
     @endif
 @endif
