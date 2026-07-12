@@ -53,6 +53,10 @@
              Fixkosten + Bezugsbasen, Marge. Speichern dispatched 'kosten-aktualisiert' → Kacheln oben ziehen nach. --}}
         @livewire('foodalchemist.settings.herstellkosten')
 
+        {{-- R2.2: Was-wäre-wenn-Preissimulation — hypothetischer Preissprung (WG/GP/Artikel ± X %)
+             → Portfolio-Marge-Delta + Top-20. Read-only, spiegelt das MCP-Tool simulation.POST. --}}
+        @livewire('foodalchemist.kalkulation.simulation')
+
         <p class="text-[11px] text-gray-400 px-1 pt-1">
             Die gerichts- und mengenbezogene Kalkulation (HK1 → HK2 → VK-Vorschlag → Deckungsbeitrag) läuft im
             <a href="{{ route('foodalchemist.concepter.index') }}" class="text-violet-600 dark:text-violet-400 hover:underline" wire:navigate>Concepter</a>
