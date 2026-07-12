@@ -57,4 +57,6 @@ Was dein Team anlegt, sieht dein Team. Übergreifende Stammdaten (z. B. ein zent
 
 ---
 
-> **Wo wird das Modul weiterentwickelt?** Die laufende Planung — Features, Bugs, Entscheidungen und die technische Doku — liegt im **Dev-Modul** auf `office.bhgdigital.de` (Package `platforms-food-alchemist`). Dieses Handbuch beschreibt, wie das Modul **benutzt** wird; das *Wie-es-gebaut-ist* steht dort.
+> **Wo wird das Modul weiterentwickelt?** Dieses Handbuch beschreibt, wie das Modul **benutzt** wird. Das *Wie-es-gebaut-ist* + *Warum/Wohin*:
+> [`ARCHITEKTUR.md`](ARCHITEKTUR.md) (System-/Datenarchitektur) · [`VISION.md`](VISION.md) (Zielbild) · [`ROADMAP.md`](ROADMAP.md) (Pakete/DoD).
+> Die laufende Planung (Features, Bugs, Entscheidungen) trackt das **Dev-Modul** auf `office.bhgdigital.de` (Package `platforms-food-alchemist`).
