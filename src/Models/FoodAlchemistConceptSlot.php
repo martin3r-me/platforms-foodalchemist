@@ -37,16 +37,28 @@ class FoodAlchemistConceptSlot extends Model
         return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id');
     }
 
-    /** Befüllung A: austauschbarer Paket. */
-    public function paket(): BelongsTo
+    /** Befüllung A: austauschbares Paket. */
+    public function package(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistPaket::class, 'package_id');
     }
 
+    /** @deprecated #486 deutscher Alias → package() */
+    public function paket(): BelongsTo
+    {
+        return $this->package();
+    }
+
     /** Befüllung B: fest gesetztes Gericht (VK-Rezept). */
-    public function gericht(): BelongsTo
+    public function dish(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → dish() */
+    public function gericht(): BelongsTo
+    {
+        return $this->dish();
     }
 
     public function unit(): BelongsTo
@@ -55,21 +67,39 @@ class FoodAlchemistConceptSlot extends Model
     }
 
     /** Optional: explizit gewählte Darreichung des Gerichts (Umbau-Spec Phase 3). */
-    public function darreichung(): BelongsTo
+    public function presentation(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'presentation_id');
     }
 
+    /** @deprecated #486 deutscher Alias → presentation() */
+    public function darreichung(): BelongsTo
+    {
+        return $this->presentation();
+    }
+
     /** #388: direktes Geschirr je Gericht. */
-    public function geschirrItem(): BelongsTo
+    public function dishwareItem(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'tableware_item_id');
     }
 
+    /** @deprecated #486 deutscher Alias → dishwareItem() */
+    public function geschirrItem(): BelongsTo
+    {
+        return $this->dishwareItem();
+    }
+
     /** #388: Alternativ-Geschirr (z. B. anderer Leih-Caterer). */
-    public function geschirrAltItem(): BelongsTo
+    public function dishwareAltItem(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'tableware_alt_item_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → dishwareAltItem() */
+    public function geschirrAltItem(): BelongsTo
+    {
+        return $this->dishwareAltItem();
     }
 
     /** Staffelpreise (nur bei type=header_preis + preis_basis='staffel'). */

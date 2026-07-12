@@ -42,9 +42,15 @@ class FoodAlchemistPaket extends Model
     ];
 
     /** Die Gerichte (VK-Rezepte) in diesem Paket. */
-    public function gerichte(): HasMany
+    public function dishes(): HasMany
     {
         return $this->hasMany(FoodAlchemistPaketGericht::class, 'package_id')->orderBy('position');
+    }
+
+    /** @deprecated #486 deutscher Alias → dishes() */
+    public function gerichte(): HasMany
+    {
+        return $this->dishes();
     }
 
     /** Slots, die diesen Paket referenzieren (für „wo verwendet?" / Löschschutz). */
@@ -57,9 +63,15 @@ class FoodAlchemistPaket extends Model
      * #380 — Angebot, dem dieses Paket als angebots-lokaler Entwurf gehört.
      * NULL = standardisiert (im Concepter-Katalog). „Promote" = Flip auf NULL.
      */
-    public function angebot(): BelongsTo
+    public function offer(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistAngebot::class, 'offer_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → offer() */
+    public function angebot(): BelongsTo
+    {
+        return $this->offer();
     }
 
     /** #380 — Standardisierter Katalog (offer_id NULL). */

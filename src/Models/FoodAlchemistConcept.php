@@ -54,9 +54,15 @@ class FoodAlchemistConcept extends Model
      * NULL = standardisiert (im Concepter-Katalog). „Promote/live gehen" = Flip
      * auf NULL (vom Angebot lösen).
      */
-    public function angebot(): BelongsTo
+    public function offer(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistAngebot::class, 'offer_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → offer() */
+    public function angebot(): BelongsTo
+    {
+        return $this->offer();
     }
 
     /** #380 — Standardisierter Katalog (offer_id NULL). Concepter-Browser MUSS hierauf filtern. */
@@ -77,9 +83,15 @@ class FoodAlchemistConcept extends Model
     }
 
     /** Vorlage, aus der dieses Concept geforkt wurde (Lineage, optional). */
-    public function vorlageQuelle(): BelongsTo
+    public function templateSource(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistConcept::class, 'template_source_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → templateSource() */
+    public function vorlageQuelle(): BelongsTo
+    {
+        return $this->templateSource();
     }
 
     /** Organisatorische Kategorie (M10c-B, Baum). */
@@ -89,27 +101,45 @@ class FoodAlchemistConcept extends Model
     }
 
     /** Schreibstil am Concept (M10R-1, §10.8) — Foodbook kann ihn überschreiben. */
-    public function schreibstil(): BelongsTo
+    public function writingStyle(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistWritingStyle::class, 'writing_style_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → writingStyle() */
+    public function schreibstil(): BelongsTo
+    {
+        return $this->writingStyle();
     }
 
     // ── Facetten-Dimensionen (Umbau-Spec Phase 4) ────────────────────────
 
     /** Servierform (einfach) — Scharnier zur Darreichungs-Auflösung der Slots. */
-    public function servierform(): BelongsTo
+    public function servingForm(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
     }
 
+    /** @deprecated #486 deutscher Alias → servingForm() */
+    public function servierform(): BelongsTo
+    {
+        return $this->servingForm();
+    }
+
     /** Eventtyp (einfach). */
-    public function eventtyp(): BelongsTo
+    public function eventType(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistEventtyp::class, 'event_type_id');
     }
 
+    /** @deprecated #486 deutscher Alias → eventType() */
+    public function eventtyp(): BelongsTo
+    {
+        return $this->eventType();
+    }
+
     /** Einsatzmomente (mehrfach): Frühstück/Lunch/Apéro/…. */
-    public function einsatzmomente()
+    public function serviceMoments()
     {
         return $this->belongsToMany(
             FoodAlchemistEinsatzmoment::class,
@@ -119,8 +149,14 @@ class FoodAlchemistConcept extends Model
         );
     }
 
+    /** @deprecated #486 deutscher Alias → serviceMoments() */
+    public function einsatzmomente()
+    {
+        return $this->serviceMoments();
+    }
+
     /** Saisons (mehrfach). */
-    public function saisons()
+    public function seasons()
     {
         return $this->belongsToMany(
             FoodAlchemistSaison::class,
@@ -130,9 +166,21 @@ class FoodAlchemistConcept extends Model
         );
     }
 
+    /** @deprecated #486 deutscher Alias → seasons() */
+    public function saisons()
+    {
+        return $this->seasons();
+    }
+
     /** Mehrwertige Sektor-Eignung (M10R-1, §10.8 — VK-Parität). */
-    public function sektorEignungen(): HasMany
+    public function sectorSuitabilities(): HasMany
     {
         return $this->hasMany(FoodAlchemistConceptSektorEignung::class, 'concept_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → sectorSuitabilities() */
+    public function sektorEignungen(): HasMany
+    {
+        return $this->sectorSuitabilities();
     }
 }

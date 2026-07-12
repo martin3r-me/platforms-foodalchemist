@@ -27,15 +27,27 @@ class FoodAlchemistPaketGericht extends Model
         'position' => 'integer',
     ];
 
-    public function paket(): BelongsTo
+    public function package(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistPaket::class, 'package_id');
     }
 
+    /** @deprecated #486 deutscher Alias → package() */
+    public function paket(): BelongsTo
+    {
+        return $this->package();
+    }
+
     /** Das verknüpfte Gericht (VK-Rezept). */
-    public function gericht(): BelongsTo
+    public function dish(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → dish() */
+    public function gericht(): BelongsTo
+    {
+        return $this->dish();
     }
 
     public function unit(): BelongsTo
@@ -44,8 +56,14 @@ class FoodAlchemistPaketGericht extends Model
     }
 
     /** Optional: explizit gewählte Darreichung des Gerichts (Umbau-Spec Phase 3). */
-    public function darreichung(): BelongsTo
+    public function presentation(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'presentation_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → presentation() */
+    public function darreichung(): BelongsTo
+    {
+        return $this->presentation();
     }
 }
