@@ -163,8 +163,8 @@ class Editor extends Component
                 'note' => $c->note ?? '',
                 // Facetten (Umbau-Spec Phase 4b)
                 'serving_form_id' => $c->serving_form_id, 'event_type_id' => $c->event_type_id,
-                'einsatzmoment_ids' => $c->einsatzmomente()->pluck('foodalchemist_service_moments.id')->all(),
-                'saison_ids' => $c->saisons()->pluck('foodalchemist_seasons.id')->all(),
+                'einsatzmoment_ids' => $c->serviceMoments()->pluck('foodalchemist_service_moments.id')->all(),
+                'saison_ids' => $c->seasons()->pluck('foodalchemist_seasons.id')->all(),
             ];
             $this->slotForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => ['role' => $s->role ?? '', 'title' => $s->title ?? '', 'is_pflicht' => (bool) $s->is_pflicht, 'quantity' => $s->quantity, 'unit_vocab_id' => $s->unit_vocab_id, 'wording' => $s->wording ?? '']])->all();
             $this->blockForm = $c->slots->mapWithKeys(fn ($s) => [$s->id => [
@@ -349,8 +349,8 @@ class Editor extends Component
             'class' => $concept->class,
             'schreibstil' => $stil ? optional(FoodAlchemistWritingStyle::find($stil))->name : null,
             'positionen' => $concept->slots
-                ->filter(fn ($s) => $s->sales_recipe_id !== null && $s->gericht)
-                ->map(fn ($s) => ['slot_id' => $s->id, 'name' => $s->gericht->name, 'sales_wording_standard' => $s->gericht->sales_wording_standard ?? null])
+                ->filter(fn ($s) => $s->sales_recipe_id !== null && $s->dish)
+                ->map(fn ($s) => ['slot_id' => $s->id, 'name' => $s->dish->name, 'sales_wording_standard' => $s->dish->sales_wording_standard ?? null])
                 ->values()->all(),
         ];
         try {
@@ -761,7 +761,7 @@ class Editor extends Component
         }
         $svc = app(PaketService::class);
         $paket = $svc->detail($this->team(), $this->id);
-        $items = $paket->gerichte->map(fn ($g) => ['sales_recipe_id' => $g->sales_recipe_id, 'quantity' => $g->quantity, 'unit_vocab_id' => $g->unit_vocab_id])->all();
+        $items = $paket->dishes->map(fn ($g) => ['sales_recipe_id' => $g->sales_recipe_id, 'quantity' => $g->quantity, 'unit_vocab_id' => $g->unit_vocab_id])->all();
         if (! collect($items)->pluck('sales_recipe_id')->contains($vkRecipeId)) {
             $items[] = ['sales_recipe_id' => $vkRecipeId, 'quantity' => ($quantity !== null && $quantity !== '') ? (float) $quantity : null];
         }
@@ -774,7 +774,7 @@ class Editor extends Component
     {
         $svc = app(PaketService::class);
         $paket = $svc->detail($this->team(), $this->id);
-        $items = $paket->gerichte->reject(fn ($g) => (int) $g->sales_recipe_id === $vkRecipeId)
+        $items = $paket->dishes->reject(fn ($g) => (int) $g->sales_recipe_id === $vkRecipeId)
             ->map(fn ($g) => ['sales_recipe_id' => $g->sales_recipe_id, 'quantity' => $g->quantity, 'unit_vocab_id' => $g->unit_vocab_id])->values()->all();
         $svc->syncGerichte($this->team(), $this->id, $items);
         $this->dispatch('concepter-gespeichert', id: $this->id);
@@ -799,7 +799,7 @@ class Editor extends Component
     private function verschiebeGericht(int $rowId, int $richtung): void
     {
         $svc = app(PaketService::class);
-        $ids = $svc->detail($this->team(), $this->id)->gerichte->pluck('id')->all();
+        $ids = $svc->detail($this->team(), $this->id)->dishes->pluck('id')->all();
         $pos = array_search($rowId, $ids, true);
         $ziel = $pos + $richtung;
         if ($pos === false || $ziel < 0 || $ziel >= count($ids)) {
@@ -910,26 +910,26 @@ class Editor extends Component
                         continue;
                     }
                     $slot->setRelation('concept', $concept);
-                    $formen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servierform')
+                    $formen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm')
                         ->where('recipe_id', $slot->sales_recipe_id)->orderByDesc('is_standard')->get();
                     if ($formen->count() > 1) {
                         // A1: Form-Picker je Position (nur sinnvoll bei mehreren Formen)
                         $darreichungOptionen[$slot->id] = $formen
-                            ->map(fn ($f) => ['id' => $f->id, 'label' => $f->servierform?->label ?? '—'])->all();
+                            ->map(fn ($f) => ['id' => $f->id, 'label' => $f->servingForm?->label ?? '—'])->all();
                     }
                     $dar = $resolver->fuerSlot($slot);
                     if ($dar !== null) {
                         $passtZurKonzeptForm = $concept->serving_form_id !== null
                             && (int) $dar->serving_form_id === (int) $concept->serving_form_id;
                         $darreichungInfo[$slot->id] = ($passtZurKonzeptForm || $concept->serving_form_id === null)
-                            ? ($dar->servierform?->label ?? '—')
-                            : 'Standard: ' . ($dar->servierform?->label ?? '—');
+                            ? ($dar->servingForm?->label ?? '—')
+                            : 'Standard: ' . ($dar->servingForm?->label ?? '—');
                         // Default-Geschirr der Form → Vorschlag am Slot (nur wenn dort noch keins gesetzt)
-                        if ($dar->tableware_item_id !== null && $slot->tableware_item_id === null && $dar->geschirrItem !== null) {
+                        if ($dar->tableware_item_id !== null && $slot->tableware_item_id === null && $dar->dishwareItem !== null) {
                             $geschirrVorschlag[$slot->id] = [
                                 'id' => $dar->tableware_item_id,
-                                'label' => $dar->geschirrItem->label,
-                                'form' => $dar->servierform?->label,
+                                'label' => $dar->dishwareItem->label,
+                                'form' => $dar->servingForm?->label,
                             ];
                         }
                     }

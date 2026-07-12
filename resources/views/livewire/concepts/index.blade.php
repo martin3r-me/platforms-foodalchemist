@@ -209,14 +209,14 @@
 
                             {{-- Befüllung --}}
                             <div class="flex flex-wrap items-center gap-2">
-                                @if($slot->package_id && $slot->paket)
+                                @if($slot->package_id && $slot->package)
                                     <span class="{{ $pill }} {{ $variantPill['info'] }}">Paket</span>
-                                    <span class="text-sm font-medium">{{ $slot->paket->name }}</span>
-                                    <span class="text-gray-400 text-xs tabular-nums">{{ $slot->paket->price_per_person !== null ? number_format((float) $slot->paket->price_per_person, 2, ',', '.') . ' €' : '—' }}</span>
-                                @elseif($slot->sales_recipe_id && $slot->gericht)
+                                    <span class="text-sm font-medium">{{ $slot->package->name }}</span>
+                                    <span class="text-gray-400 text-xs tabular-nums">{{ $slot->package->price_per_person !== null ? number_format((float) $slot->package->price_per_person, 2, ',', '.') . ' €' : '—' }}</span>
+                                @elseif($slot->sales_recipe_id && $slot->dish)
                                     <span class="{{ $pill }} {{ $variantPill['secondary'] }}">festes Gericht</span>
-                                    <span class="text-sm font-medium">{{ $slot->gericht->name }}</span>
-                                    <span class="text-gray-400 text-xs tabular-nums">{{ $slot->gericht->sales_net !== null ? number_format((float) $slot->gericht->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
+                                    <span class="text-sm font-medium">{{ $slot->dish->name }}</span>
+                                    <span class="text-gray-400 text-xs tabular-nums">{{ $slot->dish->sales_net !== null ? number_format((float) $slot->dish->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
                                 @else
                                     <span class="text-xs text-gray-400">leer — Paket wählen oder festes Gericht setzen</span>
                                 @endif

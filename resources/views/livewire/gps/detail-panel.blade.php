@@ -72,7 +72,7 @@
 
         @if($section === null && ($gp->is_derivat || $gp->is_platzhalter))
             <div class="flex gap-1.5">
-                @if($gp->is_derivat)<span class="{{ $pill }} {{ $variantPill['info'] }}">Derivat{{ $gp->derivatVon ? ' von ' . $gp->derivatVon->name : '' }}</span>@endif
+                @if($gp->is_derivat)<span class="{{ $pill }} {{ $variantPill['info'] }}">Derivat{{ $gp->derivedFrom ? ' von ' . $gp->derivedFrom->name : '' }}</span>@endif
                 @if($gp->is_platzhalter)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">Platzhalter</span>@endif
             </div>
         @endif

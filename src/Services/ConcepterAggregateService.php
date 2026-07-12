@@ -123,7 +123,7 @@ class ConcepterAggregateService
 
         $mitMenge = $paket->dishes
             ->map(fn ($pg) => ['gericht' => $pg->dish, 'quantity' => $pg->quantity, 'unit' => $pg->unit,
-                'darreichung' => $pg->dish !== null ? $this->presentations->fuerPaketGericht($pg) : null])
+                'darreichung' => $pg->dish !== null ? $this->darreichungen->fuerPaketGericht($pg) : null])
             ->filter(fn ($r) => $r['gericht'] !== null)->values();
 
         return $this->aggregat($mitMenge);
@@ -155,12 +155,12 @@ class ConcepterAggregateService
                 foreach ($slot->package->dishes as $pg) {
                     if ($pg->dish) {
                         $mitMenge->push(['gericht' => $pg->dish, 'quantity' => $pg->quantity, 'unit' => $pg->unit,
-                            'darreichung' => $this->presentations->fuerPaketGericht($pg)]);
+                            'darreichung' => $this->darreichungen->fuerPaketGericht($pg)]);
                     }
                 }
             } elseif ($slot->dish) {
                 $mitMenge->push(['gericht' => $slot->dish, 'quantity' => $slot->quantity, 'unit' => $slot->unit,
-                    'darreichung' => $this->presentations->fuerSlot($slot)]);
+                    'darreichung' => $this->darreichungen->fuerSlot($slot)]);
             }
         }
 

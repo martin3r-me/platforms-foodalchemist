@@ -273,17 +273,17 @@
                             @if(in_array($s->type, ['header', 'header_preis'], true))
                                 @php($menueGruppen[] = $aktuelleGruppe)
                                 @php($aktuelleGruppe = ['type' => 'header', 'title' => $s->title ?: '(Überschrift)', 'headerSlotId' => $s->id, 'slots' => []])
-                            @elseif($s->package_id && $s->paket)
+                            @elseif($s->package_id && $s->package)
                                 @php($menueGruppen[] = $aktuelleGruppe)
-                                @php($menueGruppen[] = ['type' => 'paket', 'title' => $s->paket->name, 'price' => $s->paket->price_per_person, 'headerSlotId' => null, 'slots' => [], 'paket' => $s->paket])
+                                @php($menueGruppen[] = ['type' => 'paket', 'title' => $s->package->name, 'price' => $s->package->price_per_person, 'headerSlotId' => null, 'slots' => [], 'paket' => $s->package])
                                 @php($aktuelleGruppe = ['type' => 'sektion', 'title' => null, 'headerSlotId' => null, 'slots' => []])
-                            @elseif($s->sales_recipe_id && $s->gericht)
+                            @elseif($s->sales_recipe_id && $s->dish)
                                 @php($aktuelleGruppe['slots'][] = $s)
                             @endif
                         @endforeach
                         @php($menueGruppen[] = $aktuelleGruppe)
                         {{-- Gäste-Sicht: leere Gruppen (Paket ohne Gerichte, Header ohne Positionen) sind unsichtbar --}}
-                        @php($menueGruppen = collect($menueGruppen)->filter(fn ($g) => $g['type'] === 'paket' ? $g['paket']->gerichte->isNotEmpty() : count($g['slots']) > 0)->values())
+                        @php($menueGruppen = collect($menueGruppen)->filter(fn ($g) => $g['type'] === 'paket' ? $g['paket']->dishes->isNotEmpty() : count($g['slots']) > 0)->values())
 
                         @php($quelleBadge = ['konzept' => ['Konzept-Wording', 'text-violet-600 dark:text-violet-400', 'bg-violet-500'], 'standard' => ['VK-Wording (Standard)', 'text-gray-400', 'bg-gray-400'], 'name' => ['Wording fehlt — interner Name', 'text-amber-600 dark:text-amber-400', 'bg-amber-500']])
                         @php($wres = app(\Platform\FoodAlchemist\Services\WordingResolver::class))
@@ -297,7 +297,7 @@
                                     @if($g['type'] === 'paket')
                                         <span class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0">📦 Paket</span>
                                         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['title'] }}</h4>
-                                        <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ $g['paket']->gerichte->count() }} {{ $g['paket']->gerichte->count() === 1 ? 'Gericht' : 'Gerichte' }}{{ $g['price'] !== null ? ' · ' . number_format((float) $g['price'], 2, ',', '.') . ' €/P fix' : '' }}</span>
+                                        <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ $g['paket']->dishes->count() }} {{ $g['paket']->dishes->count() === 1 ? 'Gericht' : 'Gerichte' }}{{ $g['price'] !== null ? ' · ' . number_format((float) $g['price'], 2, ',', '.') . ' €/P fix' : '' }}</span>
                                     @elseif($g['title'])
                                         <span class="{{ $pill }} {{ $variantPill['info'] }} shrink-0">Sektion</span>
                                         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['title'] }}</h4>
@@ -309,8 +309,8 @@
                                 </div>
                                 <div class="grid gap-2.5" style="grid-template-columns:repeat(auto-fill,minmax(270px,1fr))">
                                     @if($g['type'] === 'paket')
-                                        @foreach($g['paket']->gerichte as $pg)
-                                            @php($pgG = $pg->gericht)
+                                        @foreach($g['paket']->dishes as $pg)
+                                            @php($pgG = $pg->dish)
                                             @php($pw = $wres->fuerGericht($pgG))
                                             @php($qb = $quelleBadge[$pw['source']] ?? $quelleBadge['name'])
                                             @php($pgEnthaelt = collect(['Schwein' => $pgG?->spec_contains_pork, 'Rind' => $pgG?->spec_contains_beef])->filter()->keys()->all())
@@ -334,7 +334,7 @@
                                         @endforeach
                                     @else
                                         @foreach($g['slots'] as $s)
-                                            @php($g0 = $s->gericht)
+                                            @php($g0 = $s->dish)
                                             @php($w = $slotWording[$s->id] ?? ['text' => $g0->name, 'source' => 'name'])
                                             @php($qb = $quelleBadge[$w['source']] ?? $quelleBadge['name'])
                                             @php($enthaelt = collect(['Schwein' => $g0->spec_contains_pork, 'Rind' => $g0->spec_contains_beef])->filter()->keys()->all())
@@ -352,7 +352,7 @@
                                                     @if(isset($darreichungInfo[$s->id]))
                                                         <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$s->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}">🍴 {{ $darreichungInfo[$s->id] }}</span>
                                                     @endif
-                                                    @if($g0->speisenKlasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g0->speisenKlasse->label }}</span>@endif
+                                                    @if($g0->dishClass)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g0->dishClass->label }}</span>@endif
                                                     @if($g0->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($g0->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
                                                     <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="Allergene / Diät{{ count($enthaelt) ? ' — enthält ' . implode(', ', $enthaelt) : '' }} · Konfidenz {{ $g0->allergens_confidence ?? 'unbekannt' }}">A</span>
                                                     @if(isset($varianteFehlt[$s->id]))<button type="button" wire:click="varianteAnlegen({{ $s->id }})" class="{{ $pill }} {{ $variantPill['warning'] }}" title="Konzept-Servierform fehlt als Darreichung — anlegen">⚠ Form fehlt</button>@endif
@@ -474,20 +474,20 @@
                                         @else<span class="text-gray-300">—</span>@endif
                                     </td>
                                     <td class="{{ $td }} !px-2 align-top">
-                                        @if($slot->package_id && $slot->paket)
+                                        @if($slot->package_id && $slot->package)
                                             {{-- Paket = Abschnitts-Header (Gerichte stehen als eingerückte Zeilen darunter) --}}
                                             <span class="{{ $pill }} {{ $variantPill['info'] }}">📦 Paket</span>
-                                            <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $slot->paket->name }}</span>
+                                            <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $slot->package->name }}</span>
                                             <button type="button" wire:click="paketOeffnen({{ $slot->package_id }})" class="text-gray-400 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">📦</button>
-                                            @if($slot->paket->class)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->paket->class }}</span>@endif
-                                            <span class="text-gray-400 text-[11px] tabular-nums">{{ $slot->paket->price_per_person !== null ? number_format((float) $slot->paket->price_per_person, 2, ',', '.') . ' €/P' : '' }}</span>
-                                        @elseif($slot->sales_recipe_id && $slot->gericht)
-                                            @php($g = $slot->gericht)
+                                            @if($slot->package->class)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->package->class }}</span>@endif
+                                            <span class="text-gray-400 text-[11px] tabular-nums">{{ $slot->package->price_per_person !== null ? number_format((float) $slot->package->price_per_person, 2, ',', '.') . ' €/P' : '' }}</span>
+                                        @elseif($slot->sales_recipe_id && $slot->dish)
+                                            @php($g = $slot->dish)
                                             @php($enthaelt = collect(['Schwein' => $g->spec_contains_pork, 'Rind' => $g->spec_contains_beef])->filter()->keys()->all())
                                             @php($allTitle = 'Allergene / Diät' . (count($enthaelt) ? ' — enthält ' . implode(', ', $enthaelt) : '') . ' · Konfidenz ' . ($g->allergens_confidence ?? 'unbekannt'))
                                             <span class="{{ $pill }} font-medium" style="{{ $typStyle($slot->type === 'basisrezept' ? 'basisrezept' : 'gericht') }}">{{ $slot->type === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
                                             <span class="text-sm font-medium">{{ $g->name }}</span>
-                                            @if($g->speisenKlasse)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g->speisenKlasse->label }}</span>@endif
+                                            @if($g->dishClass)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g->dishClass->label }}</span>@endif
                                             @if(isset($darreichungInfo[$slot->id]))
                                                 <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$slot->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}"
                                                       title="Aufgelöste Darreichung dieser Position (explizit → Konzept-Servierform → Standard)" data-darreichung-pill>🍴 {{ $darreichungInfo[$slot->id] }}</span>
@@ -511,7 +511,7 @@
                                             @if(isset($varianteFehlt[$slot->id]))
                                                 <button type="button" wire:click="varianteAnlegen({{ $slot->id }})"
                                                         class="{{ $pill }} {{ $variantPill['warning'] }}" data-variante-fehlt
-                                                        title="Gericht hat keine Darreichung für „{{ $concept->servierform?->label }}" — Klick legt sie an (vorbefüllt aus der Standard-Form, danach Grammatur prüfen)">⚠ {{ $concept->servierform?->label }} fehlt — anlegen</button>
+                                                        title="Gericht hat keine Darreichung für „{{ $concept->servingForm?->label }}" — Klick legt sie an (vorbefüllt aus der Standard-Form, danach Grammatur prüfen)">⚠ {{ $concept->servingForm?->label }} fehlt — anlegen</button>
                                             @endif
                                             {{-- Concept-Wording: Brand-Voice-Anzeigename je Position (leer = Standardname; ✨ oben füllt alle) --}}
                                             <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.wording" wire:change="wordingSpeichern({{ $slot->id }})" class="{{ $input }} !py-0.5 !text-[11px] italic mt-1 w-full" placeholder="Anzeigename im Konzept-Wording … (leer = „{{ $g->name }}“)" data-slot-wording />
@@ -536,17 +536,17 @@
                                 </td>
                             </tr>
                             {{-- Paket-Position = Abschnitt: seine Gerichte stehen immer read-only als eingerückte Zeilen darunter --}}
-                            @if($slot->package_id && $slot->paket)
+                            @if($slot->package_id && $slot->package)
                                 <tr wire:key="epaket-{{ $slot->id }}">
                                     <td></td>
                                     <td colspan="8" class="!px-2 !pb-2 align-top">
                                         <div class="ml-2 rounded-lg border border-gray-900/15 dark:border-white/15 bg-black/[0.02] dark:bg-white/[0.03] divide-y divide-black/5 dark:divide-white/10">
-                                            @forelse($slot->paket->gerichte as $pg)
+                                            @forelse($slot->package->dishes as $pg)
                                                 <div wire:key="epaketg-{{ $slot->id }}-{{ $pg->id }}" class="flex items-center gap-2 px-3 py-1 text-[11px]">
                                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gericht') }}">G</span>
-                                                    <span class="flex-1 min-w-0 break-words leading-snug text-gray-700 dark:text-gray-200">{{ $pg->gericht?->name ?? '—' }}</span>
+                                                    <span class="flex-1 min-w-0 break-words leading-snug text-gray-700 dark:text-gray-200">{{ $pg->dish?->name ?? '—' }}</span>
                                                     <span class="shrink-0 text-gray-400 tabular-nums">{{ $pg->quantity !== null ? rtrim(rtrim(number_format((float) $pg->quantity, 2, ',', '.'), '0'), ',') . '×' : '' }}</span>
-                                                    <span class="shrink-0 text-gray-400 tabular-nums w-16 text-right">{{ $pg->gericht?->sales_net !== null ? number_format((float) $pg->gericht->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                                    <span class="shrink-0 text-gray-400 tabular-nums w-16 text-right">{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                                                     @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="Gericht einsehen">🍽️</button>@endif
                                                 </div>
                                             @empty
@@ -637,19 +637,19 @@
                         <span class="text-[11px] text-gray-400">Gerichte (VK) + Basisrezepte (Menge = g/Person).</span>
                     </div>
                     <div class="space-y-1">
-                        @forelse($paket->gerichte as $pg)
-                            @php($istBasis = ! ($pg->gericht?->is_sales_recipe ?? true))
+                        @forelse($paket->dishes as $pg)
+                            @php($istBasis = ! ($pg->dish?->is_sales_recipe ?? true))
                             <div wire:key="epg-{{ $pg->id }}" class="flex items-center gap-2 rounded-lg border border-black/5 dark:border-white/10 px-3 py-1.5">
                                 <span class="flex flex-col -my-0.5 shrink-0">
                                     <button type="button" wire:click="gerichtHoch({{ $pg->id }})" class="text-gray-400 hover:text-violet-500 leading-none">▲</button>
                                     <button type="button" wire:click="gerichtRunter({{ $pg->id }})" class="text-gray-400 hover:text-violet-500 leading-none">▼</button>
                                 </span>
                                 <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle($istBasis ? 'basisrezept' : 'gericht') }}">{{ $istBasis ? 'BR' : 'G' }}</span>
-                                <span class="flex-1 min-w-0 truncate text-sm">{{ $pg->gericht?->name ?? '—' }}</span>
+                                <span class="flex-1 min-w-0 truncate text-sm">{{ $pg->dish?->name ?? '—' }}</span>
                                 @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('{{ $istBasis ? 'recipe-modal.oeffnen' : 'vk-modal.oeffnen' }}', { id: {{ $pg->sales_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="{{ $istBasis ? 'Basisrezept' : 'Gericht' }} einsehen">{{ $istBasis ? '📋' : '🍽️' }}</button>@endif
                                 <span class="text-[10px] text-gray-400">{{ $istBasis ? 'g/Person' : 'Menge/Person' }}</span>
                                 <input type="number" step="0.01" min="0" wire:model.blur="" value="{{ $pg->quantity }}" wire:change="gerichtMengeSpeichern({{ $pg->id }}, $event.target.value)" class="{{ $input }} w-24 text-right tabular-nums" />
-                                <span class="text-gray-400 text-xs tabular-nums w-16 text-right">@if($istBasis){{ $pg->gericht?->ek_total_eur !== null ? 'EK ' . number_format((float) $pg->gericht->ek_total_eur, 2, ',', '.') . ' €' : '' }}@else{{ $pg->gericht?->sales_net !== null ? number_format((float) $pg->gericht->sales_net, 2, ',', '.') . ' €' : '' }}@endif</span>
+                                <span class="text-gray-400 text-xs tabular-nums w-16 text-right">@if($istBasis){{ $pg->dish?->ek_total_eur !== null ? 'EK ' . number_format((float) $pg->dish->ek_total_eur, 2, ',', '.') . ' €' : '' }}@else{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}@endif</span>
                                 <button type="button" wire:click="gerichtRaus({{ $pg->sales_recipe_id }})" class="text-gray-400 hover:text-red-500 px-1" title="entfernen">✕</button>
                             </div>
                         @empty
@@ -846,18 +846,18 @@
                                 <th class="text-right font-medium">VK</th>
                             </tr></thead>
                             <tbody>
-                            @forelse($paket->gerichte as $pg)
-                                @php($istBasis = ! ($pg->gericht?->is_sales_recipe ?? true))
+                            @forelse($paket->dishes as $pg)
+                                @php($istBasis = ! ($pg->dish?->is_sales_recipe ?? true))
                                 @php($faktor = $pg->quantity !== null ? (float) $pg->quantity : 1.0)
-                                @php($yieldG = (float) ($pg->gericht?->yield_kg ?? 0) * 1000)
+                                @php($yieldG = (float) ($pg->dish?->yield_kg ?? 0) * 1000)
                                 @php($postenEk = $istBasis
-                                    ? (($pg->gericht?->ek_total_eur !== null && $yieldG > 0 && $pg->quantity !== null) ? (float) $pg->gericht->ek_total_eur * ((float) $pg->quantity / $yieldG) : null)
-                                    : ($pg->gericht?->ek_total_eur !== null ? (float) $pg->gericht->ek_total_eur * $faktor : null))
+                                    ? (($pg->dish?->ek_total_eur !== null && $yieldG > 0 && $pg->quantity !== null) ? (float) $pg->dish->ek_total_eur * ((float) $pg->quantity / $yieldG) : null)
+                                    : ($pg->dish?->ek_total_eur !== null ? (float) $pg->dish->ek_total_eur * $faktor : null))
                                 <tr class="border-t border-black/5 dark:border-white/10">
-                                    <td class="py-1">{{ $pg->gericht?->name ?? '—' }}</td>
+                                    <td class="py-1">{{ $pg->dish?->name ?? '—' }}</td>
                                     <td class="text-right tabular-nums text-gray-500">{{ $pg->quantity !== null ? (rtrim(rtrim(number_format($faktor, 2, ',', '.'), '0'), ',') . ($istBasis ? ' g' : '')) : ($istBasis ? '— g' : '1') }}</td>
                                     <td class="text-right tabular-nums">{{ $postenEk !== null ? number_format($postenEk, 2, ',', '.') . ' €' : '—' }}</td>
-                                    <td class="text-right tabular-nums text-gray-500">{{ $istBasis ? '—' : ($pg->gericht?->sales_net !== null ? number_format((float) $pg->gericht->sales_net * $faktor, 2, ',', '.') . ' €' : '—') }}</td>
+                                    <td class="text-right tabular-nums text-gray-500">{{ $istBasis ? '—' : ($pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net * $faktor, 2, ',', '.') . ' €' : '—') }}</td>
                                 </tr>
                             @empty
                                 <tr><td colspan="4" class="py-2 text-center text-gray-400">Noch keine Posten.</td></tr>
@@ -1088,10 +1088,10 @@
                     <p class="text-[11px] text-gray-400 mb-2">Pro Gericht ein Haupt-Geschirr + optional eine Alternative (z. B. anderer Leih-Caterer). Pflege den Geschirr-Katalog unter <span class="font-medium">Stammdaten → Geschirr</span>.</p>
                     @forelse($gerichtSlots as $slot)
                         <div wire:key="geschirr-slot-{{ $slot->id }}" class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2 mb-2">
-                            <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1.5 truncate">{{ $slot->wording ?: ($slot->gericht?->name ?: ($slot->title ?: 'Position')) }}</p>
+                            <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1.5 truncate">{{ $slot->wording ?: ($slot->dish?->name ?: ($slot->title ?: 'Position')) }}</p>
                             <div class="grid grid-cols-2 gap-3">
                                 @foreach(['haupt' => 'Haupt-Geschirr', 'alt' => 'Alternative'] as $role => $rolleLabel)
-                                    @php($item = $role === 'haupt' ? $slot->geschirrItem : $slot->geschirrAltItem)
+                                    @php($item = $role === 'haupt' ? $slot->dishwareItem : $slot->dishwareAltItem)
                                     <div>
                                         <label class="{{ $label }} block mb-0.5">{{ $rolleLabel }}</label>
                                         @if($item)

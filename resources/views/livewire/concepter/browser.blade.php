@@ -165,7 +165,7 @@
                                 <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->food_cost_percent !== null ? number_format((float) $it->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
                             @else
                                 <td class="{{ $td }} text-gray-500">{{ $it->class ?: '—' }}</td>
-                                <td class="{{ $td }} text-gray-500">{{ collect([$it->eventtyp?->name, $it->servierform?->label])->filter()->join(' · ') ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-500">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
                                 {{-- Inline-Status-Pflege wie bei GP (Concepts; Server gated canCurate/D1) --}}
                                 <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                     @php($stMap = ['draft' => $variantPill['secondary'], 'active' => $variantPill['success'], 'archiviert' => $variantPill['warning']])

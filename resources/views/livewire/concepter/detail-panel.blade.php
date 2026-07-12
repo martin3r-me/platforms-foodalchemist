@@ -154,10 +154,10 @@
         @elseif($paket)
             <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
                 <span class="{{ $label }}">Gerichte im Paket</span>
-                @forelse($paket->gerichte as $pg)
+                @forelse($paket->dishes as $pg)
                     <div class="flex items-center justify-between gap-2 text-xs py-1">
-                        <span class="min-w-0 truncate">{{ $pg->gericht?->name ?? '—' }}</span>
-                        <span class="shrink-0 tabular-nums text-gray-400">{{ $pg->gericht?->sales_net !== null ? number_format((float) $pg->gericht->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                        <span class="min-w-0 truncate">{{ $pg->dish?->name ?? '—' }}</span>
+                        <span class="shrink-0 tabular-nums text-gray-400">{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                     </div>
                 @empty
                     <p class="text-[11px] text-gray-400 py-1">Noch keine Gerichte im Paket.</p>
@@ -175,7 +175,7 @@
                     @forelse($concept->slots as $slot)
                         <div class="py-0.5">
                             <span class="text-[9px] uppercase tracking-wider text-gray-400">{{ $slot->role ?: '—' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
-                            <p class="text-xs text-gray-800 dark:text-gray-200">{{ $slot->title ?: ($slot->paket?->name ?? $slot->gericht?->name ?? '(leer)') }}</p>
+                            <p class="text-xs text-gray-800 dark:text-gray-200">{{ $slot->title ?: ($slot->package?->name ?? $slot->dish?->name ?? '(leer)') }}</p>
                         </div>
                     @empty
                         <p class="text-[11px] text-gray-400">Noch keine Positionen.</p>
