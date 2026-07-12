@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Tools;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * M8-01: Basis für Modul-Tools (ToolContract) — Naming `<modul>.resource.VERB`
@@ -105,12 +106,12 @@ abstract class FoodAlchemistTool
             return null;
         }
         $id = DB::table('foodalchemist_serving_forms')->whereNull('deleted_at')->where('is_inactive', false)
-            ->where(fn ($q) => $q->whereNull('team_id')->orWhere('team_id', $team->id))
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
             ->where(fn ($q) => $q->where('code', $wert)->orWhereRaw('LOWER(label) = ?', [mb_strtolower($wert)]))
             ->value('id');
         if ($id === null) {
             $verf = DB::table('foodalchemist_serving_forms')->whereNull('deleted_at')->where('is_inactive', false)
-                ->where(fn ($q) => $q->whereNull('team_id')->orWhere('team_id', $team->id))
+                ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
                 ->orderBy('code')->pluck('code')->implode(', ');
             throw new \RuntimeException("Unbekannte Servierform \"{$wert}\". Verfügbar: {$verf}");
         }
@@ -126,11 +127,11 @@ abstract class FoodAlchemistTool
             return null;
         }
         $id = DB::table($tabelle)->whereNull('deleted_at')->where('is_inactive', false)
-            ->where(fn ($q) => $q->whereNull('team_id')->orWhere('team_id', $team->id))
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
             ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->value('id');
         if ($id === null) {
             $verf = DB::table($tabelle)->whereNull('deleted_at')->where('is_inactive', false)
-                ->where(fn ($q) => $q->whereNull('team_id')->orWhere('team_id', $team->id))
+                ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
                 ->orderBy('name')->pluck('name')->implode(', ');
             throw new \RuntimeException("Unbekannt: \"{$name}\". Verfügbar: {$verf}");
         }
