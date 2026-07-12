@@ -81,9 +81,15 @@ class FoodAlchemistGp extends Model
         return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'preferred_count_unit_id');
     }
 
-    public function derivatVon(): BelongsTo
+    public function derivedFrom(): BelongsTo
     {
         return $this->belongsTo(self::class, 'derivat_von_gp_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → derivedFrom() */
+    public function derivatVon(): BelongsTo
+    {
+        return $this->derivedFrom();
     }
 
     public function mergedInto(): BelongsTo

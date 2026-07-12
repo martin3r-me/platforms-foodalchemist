@@ -26,6 +26,12 @@ class FoodAlchemistServierform extends Model
         'is_inactive' => 'bool',
     ];
 
+    public function presentations()
+    {
+        return $this->hasMany(FoodAlchemistRecipeDarreichung::class, 'serving_form_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → presentations() */
     public function darreichungen()
     {
         return $this->hasMany(FoodAlchemistRecipeDarreichung::class, 'serving_form_id');
