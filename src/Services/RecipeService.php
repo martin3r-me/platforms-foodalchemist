@@ -51,7 +51,7 @@ class RecipeService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return $this->browserQuery($team, $filters)
-            ->with('kategorie:id,main_group_id,label')
+            ->with('category:id,main_group_id,label')
             ->orderBy('foodalchemist_recipes.name')
             ->paginate($perPage)
             ->withQueryString();
