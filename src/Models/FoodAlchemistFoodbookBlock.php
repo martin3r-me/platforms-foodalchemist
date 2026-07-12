@@ -35,9 +35,15 @@ class FoodAlchemistFoodbookBlock extends Model
         'payload_json' => 'array',
     ];
 
-    public function kapitel(): BelongsTo
+    public function chapter(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistFoodbookKapitel::class, 'chapter_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → chapter() */
+    public function kapitel(): BelongsTo
+    {
+        return $this->chapter();
     }
 
     /** concept_ref: das referenzierte Concept (live). */
@@ -47,9 +53,15 @@ class FoodAlchemistFoodbookBlock extends Model
     }
 
     /** recipe_ref: einzelnes Gericht (VK-Rezept). */
-    public function gericht(): BelongsTo
+    public function dish(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → dish() */
+    public function gericht(): BelongsTo
+    {
+        return $this->dish();
     }
 
     public function unit(): BelongsTo

@@ -30,15 +30,27 @@ class FoodAlchemistFoodbook extends Model
     ];
 
     /** Top-Kapitel (parent_id NULL), Baum baut der Service/die UI. */
-    public function kapitel(): HasMany
+    public function chapters(): HasMany
     {
         return $this->hasMany(FoodAlchemistFoodbookKapitel::class, 'foodbook_id')->orderBy('position');
     }
 
+    /** @deprecated #486 deutscher Alias → chapters() */
+    public function kapitel(): HasMany
+    {
+        return $this->chapters();
+    }
+
     /** Schreibstil-Override je Kunde/Foodbook (M10R-1, §10.8). */
-    public function schreibstil(): BelongsTo
+    public function writingStyle(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistWritingStyle::class, 'writing_style_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → writingStyle() */
+    public function schreibstil(): BelongsTo
+    {
+        return $this->writingStyle();
     }
 
     /** #369: CRM-Firma (verlinkt, MVP — kein Rücksync). */
