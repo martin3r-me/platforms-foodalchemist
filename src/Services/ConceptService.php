@@ -58,7 +58,7 @@ class ConceptService
         return FoodAlchemistConcept::visibleToTeam($team)
             ->with([
                 'slots' => fn ($q) => $q->orderBy('position'),
-                'slots.paket:id,name,role,klasse,preis_pro_person,ek_pro_person,food_cost_percent,preis_modus,preis_stale',
+                'slots.paket:id,name,role,class,price_per_person,ek_per_person,food_cost_percent,price_mode,price_stale',
                 // Menü-Ansicht: Paket-Gerichte mit Wording-Feldern (Wording-Kette)
                 'slots.paket.gerichte.gericht:id,name,sales_wording_standard',
                 'slots.gericht:id,name,sales_wording_standard,sales_net,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergens_confidence',
@@ -469,7 +469,7 @@ class ConceptService
     {
         $concept->loadMissing(['slots' => fn ($q) => $q->orderBy('position'),
             'slots.unit:id,slug,dimension,default_in_g',
-            'slots.paket:id,name,preis_pro_person,ek_pro_person,preis_stale',
+            'slots.paket:id,name,price_per_person,ek_per_person,price_stale',
             'slots.gericht:id,name,sales_net,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces']);
 
         $zeilen = [];

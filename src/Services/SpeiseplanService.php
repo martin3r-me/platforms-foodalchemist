@@ -37,8 +37,8 @@ class SpeiseplanService
     {
         return FoodAlchemistSpeiseplan::visibleToTeam($team)
             ->with(['linien',
-                'eintraege.concept:id,name,preis_pro_person_cache',
-                'eintraege.paket:id,name,preis_pro_person,ek_pro_person',
+                'eintraege.concept:id,name,price_per_person_cache',
+                'eintraege.paket:id,name,price_per_person,ek_per_person',
                 'eintraege.gericht:id,name,sales_net,ek_total_eur',
                 'eintraege.linie:id,name,farbe,ist_vegetarisch'])
             ->find($id);

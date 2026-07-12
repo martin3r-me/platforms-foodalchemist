@@ -50,7 +50,7 @@ class FoodbookService
         return FoodAlchemistFoodbook::visibleToTeam($team)
             ->with(['kapitel' => fn ($q) => $q->orderBy('position'),
                 'kapitel.blocks' => fn ($q) => $q->orderBy('position'),
-                'kapitel.blocks.concept:id,name,preis_pro_person_cache',
+                'kapitel.blocks.concept:id,name,price_per_person_cache',
                 'kapitel.blocks.gericht:id,name,sales_net',
                 'crmCompany', 'crmContact'])   // #369: CRM-Kunde-Link
             ->find($id);
@@ -422,7 +422,7 @@ class FoodbookService
     public function kapitelAggregat(Team $team, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null): array
     {
         $kapitel->loadMissing(['blocks' => fn ($q) => $q->where('visible', true),
-            'blocks.concept:id,name,preis_pro_person_cache', 'blocks.gericht:id,sales_net,ek_total_eur',
+            'blocks.concept:id,name,price_per_person_cache', 'blocks.gericht:id,sales_net,ek_total_eur',
             'blocks.staffel', 'children']);
 
         $vk = 0.0;

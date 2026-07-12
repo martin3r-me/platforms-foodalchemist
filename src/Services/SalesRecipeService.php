@@ -130,10 +130,11 @@ class SalesRecipeService
 
         return DB::transaction(function () use ($team, $recipe, $in) {
             $update = array_intersect_key($in, array_flip(self::VK_FELDER));
-            // Wording/Marketing/Plating manuell editiert → Lineage auf manual (GL-07)
-            foreach (['sales_wording_standard' => 'vk_wording', 'marketing_text' => 'marketing_text', 'plating_text' => 'plating'] as $feld => $praefix) {
+            // Wording/Marketing/Plating manuell editiert → Lineage auf manual (GL-07).
+            // Spalten-Muster: <feld>_source + <feld>_ai_confidence (English-Rename).
+            foreach (['sales_wording_standard' => 'sales_wording', 'marketing_text' => 'marketing_text', 'plating_text' => 'plating'] as $feld => $praefix) {
                 if (array_key_exists($feld, $update) && $update[$feld] !== $recipe->{$feld}) {
-                    $update["{$praefix}_quelle"] = 'manual';
+                    $update["{$praefix}_source"] = 'manual';
                     $update["{$praefix}_ai_confidence"] = null;
                 }
             }
