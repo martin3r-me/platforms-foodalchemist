@@ -76,5 +76,33 @@
             </div>
         </div>
 
+        {{-- R2.7: Portfolio-Benchmark (BHG-intern) — eigen vs. anonymer Peer-Median der Team-Kette --}}
+        @if($benchmark !== null)
+            <div class="relative overflow-hidden {{ $card }} px-4 py-3" data-dashboard-benchmark>
+                <div class="{{ $cardAccent }}"></div>
+                <div class="flex items-baseline justify-between gap-2 flex-wrap">
+                    <span class="{{ $dt }}">📊 Portfolio-Benchmark (intern)</span>
+                    <span class="text-[10px] text-gray-400">
+                        {{ $benchmark['n_peers'] > 0 ? 'vs. Median von ' . $benchmark['n_peers'] . ' anonymen Peer-Team(s)' : 'kein Peer-Team mit Portfolio — Vergleich erst ab 2 Teams' }}
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 mt-3">
+                    @foreach($benchmark['kennzahlen'] as $key => $meta)
+                        @php($eigen = $benchmark['team_kpis'][$key])
+                        @php($peer = $benchmark['peer_median'][$key])
+                        @php($besserHoch = $meta['besser'] === 'hoch')
+                        @php($vgl = ($eigen !== null && $peer !== null) ? ($besserHoch ? $eigen <=> $peer : $peer <=> $eigen) : 0)
+                        <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+                            <div class="{{ $label }}">{{ $meta['label'] }}</div>
+                            <div class="text-lg font-semibold tabular-nums {{ $vgl > 0 ? 'text-emerald-600 dark:text-emerald-400' : ($vgl < 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100') }}">
+                                {{ $eigen !== null ? number_format((float) $eigen, $meta['unit'] === '' ? 0 : 1, ',', '.') . $meta['unit'] : '—' }}
+                            </div>
+                            <div class="text-[10px] text-gray-400">Peer-Median: {{ $peer !== null ? number_format((float) $peer, $meta['unit'] === '' ? 0 : 1, ',', '.') . $meta['unit'] : '—' }}</div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
     </x-ui-page-container>
 </x-ui-page>

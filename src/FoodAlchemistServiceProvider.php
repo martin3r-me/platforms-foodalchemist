@@ -266,6 +266,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // R2.6: Praxis-Feedback (Küche/Kunde/Event) je Gericht/Rezept
                     \Platform\FoodAlchemist\Tools\FeedbackSearchTool::class,
                     \Platform\FoodAlchemist\Tools\FeedbackPostTool::class,
+                    // R2.7: Portfolio-Benchmark (BHG-intern, read-only)
+                    \Platform\FoodAlchemist\Tools\BenchmarkGetTool::class,
                     \Platform\FoodAlchemist\Tools\SettingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\SignaleSearchTool::class,
                     \Platform\FoodAlchemist\Tools\SignalePutTool::class,

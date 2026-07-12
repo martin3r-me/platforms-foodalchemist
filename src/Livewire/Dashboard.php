@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Services\BenchmarkService;
 use Platform\FoodAlchemist\Services\KpiService;
 
 /**
@@ -31,7 +32,7 @@ class Dashboard extends Component
         ]);
     }
 
-    public function render(KpiService $kpis)
+    public function render(KpiService $kpis, BenchmarkService $benchmark)
     {
         $team = Auth::user()?->currentTeamRelation;
         $kette = $team !== null ? FoodAlchemistGp::teamAncestryIds($team) : [];
@@ -62,6 +63,7 @@ class Dashboard extends Component
             'kpis' => $kpis->forTeam($team),
             'workflow' => $workflow,
             'ki' => $ki,
+            'benchmark' => $team !== null ? $benchmark->benchmark($team) : null, // R2.7
         ])->layout('platform::layouts.app');
     }
 }
