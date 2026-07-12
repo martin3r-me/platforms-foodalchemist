@@ -590,7 +590,7 @@ class VocabularyService
         }
 
         return (int) \Illuminate\Support\Facades\DB::table('foodalchemist_recipes')
-            ->where('recipe_category_id', $kategorieId)->whereNull('deleted_at')->count();
+            ->where('category_id', $kategorieId)->whereNull('deleted_at')->count();
     }
 
     private static function dezimalOrNull(mixed $wert): ?float

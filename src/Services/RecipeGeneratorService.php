@@ -77,7 +77,7 @@ class RecipeGeneratorService
                 // M6-06: VK-Achsen + Taxonomie-Vorrat für Klasse/AK-Vorschlag
                 $kontext['speisen_klassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::query()
                     ->join('foodalchemist_dish_main_groups AS hg', 'hg.id', '=', 'foodalchemist_dish_classes.dish_main_group_id')
-                    ->selectRaw("foodalchemist_dish_classes.id AS id, hg.code || ' / ' || foodalchemist_dish_classes.label AS label")
+                    ->selectRaw("foodalchemist_dish_classes.id AS id, CONCAT(hg.code, ' / ', foodalchemist_dish_classes.label) AS label")
                     ->orderBy('foodalchemist_dish_classes.id')->pluck('label', 'id')->all();
                 $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
                     ->orderBy('code')->pluck('label', 'code')->all();
