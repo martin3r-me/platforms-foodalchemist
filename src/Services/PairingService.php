@@ -332,8 +332,9 @@ class PairingService
         $kandidaten = [];
         foreach (DB::table('foodalchemist_pairing_anchor_edges')->whereIn('anchor_b_id', $dishIds)
             ->whereNotIn('anchor_a_id', $dishIds)
-            ->get(['anchor_a_id', 'anchor_b_id', 'type']) as $kante) {
-            $w = self::GEWICHTE[$kante->type] ?? 0.5;
+            ->get(['anchor_a_id', 'anchor_b_id', 'type', 'weight']) as $kante) {
+            // wie edgeBest(): computed-Gewicht gewinnt, sonst typ-getrieben.
+            $w = $kante->weight !== null ? (float) $kante->weight : (self::GEWICHTE[$kante->type] ?? 0.5);
             $k = &$kandidaten[$kante->anchor_a_id];
             $k['best'][$kante->anchor_b_id] = max($k['best'][$kante->anchor_b_id] ?? 0, $w);
         }
@@ -914,8 +915,9 @@ class PairingService
         $out = [];
         foreach (DB::table('foodalchemist_pairing_anchor_edges')
             ->whereIn('anchor_a_id', $ankerIds)->whereIn('anchor_b_id', $ankerIds)
-            ->get(['anchor_a_id', 'anchor_b_id', 'type']) as $kante) {
-            $w = self::GEWICHTE[$kante->type] ?? 0.5;                 // unbekannter typ defensiv 0.5
+            ->get(['anchor_a_id', 'anchor_b_id', 'type', 'weight']) as $kante) {
+            // computed-Kante trägt ihr eigenes (gradiertes) Gewicht; kuratiert (weight NULL) = typ-getrieben.
+            $w = $kante->weight !== null ? (float) $kante->weight : (self::GEWICHTE[$kante->type] ?? 0.5);
             foreach ([[$kante->anchor_a_id, $kante->anchor_b_id], [$kante->anchor_b_id, $kante->anchor_a_id]] as [$a, $b]) {
                 if (! isset($out[$a][$b]) || $out[$a][$b][0] < $w) {
                     $out[$a][$b] = [$w, $kante->type];

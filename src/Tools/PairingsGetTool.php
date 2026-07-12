@@ -8,7 +8,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\PairingService;
 
-/** Phase K: Pairing-Partner einer Zutat aus dem Anker-Graph (767 Anker, 24k Kanten). */
+/** Phase K: Pairing-Partner einer Zutat aus dem Anker-Graph (1000 Anker; kuratiert + abgeleitete Molekül-Kanten). */
 class PairingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -19,7 +19,8 @@ class PairingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
     public function getDescription(): string
     {
         return 'Liefert Flavor-Pairing-Partner für eine Zutat (Name oder Anker-Slug) aus dem '
-            . 'kuratierten Anker-Graph. typ filtert auf klassisch|modern. Bei Geschmacks-Kombinationen '
+            . 'Anker-Graph (kuratiert + abgeleitete Molekül-Kanten). typ filtert auf '
+            . 'klassisch|aroma|modern|kontrast. Bei Geschmacks-Kombinationen '
             . '(Rezept, Komposition, Menü) IMMER zuerst hier nachschlagen statt zu raten.';
     }
 
@@ -29,7 +30,7 @@ class PairingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'type' => 'object',
             'properties' => [
                 'zutat' => ['type' => 'string', 'description' => 'Zutat-Name oder Anker-Slug, z. B. "Kürbis" oder "kuerbis"'],
-                'type' => ['type' => 'string', 'enum' => ['klassisch', 'modern'], 'description' => 'Optionaler Kanten-Filter'],
+                'type' => ['type' => 'string', 'enum' => ['klassisch', 'aroma', 'modern', 'kontrast'], 'description' => 'Optionaler Kanten-Filter'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'default' => 20],
             ],
             'required' => ['zutat'],

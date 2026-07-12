@@ -20,8 +20,9 @@ use PDO;
  *   Spalten bleiben Default, in der Quelle entfernte werden ignoriert).
  * - PKs werden VERBATIM übernommen → alle FKs bleiben intern konsistent.
  *   Voraussetzung: Ziel-Tabellen sind leer (--fresh oder frisch migriert).
- * - team_id wird auf --team umgeschrieben (Master ist Single-Team = Sandbox-Team 1);
- *   Tabellen ohne team_id-Spalte werden verbatim kopiert.
+ * - team_id: team-eigene Zeilen werden auf --team umgeschrieben; globale Seed-Zeilen
+ *   (team_id NULL, D1 — z. B. Pairing-Graph, globale Knowledge-Docs, GP-Seeds) BLEIBEN
+ *   global. Tabellen ohne team_id-Spalte werden verbatim kopiert.
  * - FK-Checks während des Loads aus (MySQL: FOREIGN_KEY_CHECKS, SQLite: PRAGMA).
  * - Streaming-Read + Chunk-Insert → 264k-Artikel-Tabelle sprengt den Speicher nicht.
  * - Row-Count-Gate am Ende: Quelle == Ziel je Tabelle, sonst ❌ BLOCKER.
@@ -169,6 +170,15 @@ class ImportMasterCommand extends Command
         return array_map(fn ($r) => $r['name'], $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
+    /**
+     * D1-Team-Rewrite beim Import: globale Seed-Zeile (Quelle team_id NULL) bleibt global;
+     * team-eigene Zeile bekommt das Ziel-Team. So überlebt der Global-Marker den Deploy.
+     */
+    public static function rewriteTeamId(mixed $srcTeamId, int $targetTeamId): ?int
+    {
+        return $srcTeamId === null ? null : $targetTeamId;
+    }
+
     /** Eine Tabelle streamend kopieren: Schnittmengen-Spalten, team_id-Rewrite, Chunk-Insert. */
     private function copyTable(PDO $pdo, string $table, bool $dryRun): array
     {
@@ -210,7 +220,7 @@ class ImportMasterCommand extends Command
         $imported = 0;
         while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
             if ($hasTeam) {
-                $row['team_id'] = $this->teamId;
+                $row['team_id'] = self::rewriteTeamId($row['team_id'], $this->teamId);
             }
             $chunk[] = $row;
             if (count($chunk) >= $chunkRows) {
