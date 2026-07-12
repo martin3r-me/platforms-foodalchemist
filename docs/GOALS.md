@@ -8,10 +8,10 @@
 
 | Asset | Was es ist |
 |---|---|
-| **Datenqualitäts-Motor** | Kuratierter GP/LA-Stamm (WaWi-Master, LA-First-Kuration) mit Regelwerken, Preis-Pipeline, Lead-LA-Logik |
+| **Datenqualitäts-Motor** | Kuratierter GP/LA-Stamm (FA-Master; WaWi = Read-only-Archiv; LA-First-Kuration) mit Regelwerken, Preis-Pipeline, Lead-LA-Logik |
 | **Deklarationsfeste Aggregation** | 14 EU-Allergene + 18 Zusatzstoffe + Nährwerte/Label, ALL-MAXIMAL mit Konfidenz-Modell und KI/Manual-Lineage |
-| **Pairing-Wissenschaft** | Anker-Graph (~24k Kanten, Ahn/Foodpairing-basiert) + 836 Wissens-Docs — als MCP-Tools abrufbar |
-| **KI-nativ** | 36 MCP-Tools, LLM legt Rezepte/Konzepte/Foodbooks an (`created_via`-Lineage, draft-only, Mensch gibt frei) |
+| **Pairing-Wissenschaft** | Anker-Kantennetz (~34k Kanten in SQL, Ahn/Foodpairing-basiert) + ~1.010 Wissens-Docs — als MCP-Tools abrufbar |
+| **KI-nativ** | 43 MCP-Tools, LLM legt Rezepte/Konzepte/Foodbooks an (`created_via`-Lineage, draft-only, Mensch gibt frei) |
 | **Verkaufs-Modell** | Gericht = Kern + Darreichungen (Formen mit eigenem EK/VK/Komponenten-Delta), Concepter mit Facetten (Servierform · Eventtyp · Einsatzmoment · Saison), Slot-Auflösung bis in den Preis |
 | **Multi-Tenant** | Team-Hierarchie: Eltern-Katalog → Kinder-Caterer (D1) |
 
