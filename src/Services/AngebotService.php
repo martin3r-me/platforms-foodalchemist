@@ -244,7 +244,7 @@ class AngebotService
         if (($angebot->price_mode ?? 'auto') !== 'auto') {
             return;
         }
-        $auto = $this->calculation($team, $angebot)['auto_gesamt'];
+        $auto = $this->kalkulation($team, $angebot)['auto_gesamt'];
         if (round((float) ($angebot->total_price ?? -1), 2) !== $auto) {
             $angebot->update(['total_price' => $auto]);
         }
@@ -261,7 +261,7 @@ class AngebotService
     {
         $conceptSvc = app(ConceptService::class);
         $angebot->loadMissing(['crmCompany', 'crmContact', 'concepts', 'referenzierteConcepts']);
-        $kalk = $this->calculation($team, $angebot);
+        $kalk = $this->kalkulation($team, $angebot);
 
         $menues = [];
         foreach ($this->menueConcepts($angebot) as $c) {
