@@ -107,7 +107,7 @@ class SensorikService
     // ── B: Gericht als KOMPOSITION (statt Blend) + Rollen-Soll-Check ─────────
 
     /** Hauptgruppe/Rolle eines Rezepts (Vorspeise/Hauptgang/Dessert …) via Speisen-Klasse. */
-    private function hauptgruppe(int $recipeId): ?string
+    private function mainGroup(int $recipeId): ?string
     {
         return DB::table('foodalchemist_recipes AS r')
             ->leftJoin('foodalchemist_dish_classes AS dc', 'dc.id', '=', 'r.dish_class_id')

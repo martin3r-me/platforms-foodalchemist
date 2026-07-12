@@ -139,7 +139,7 @@
                             <td class="{{ $td }} font-medium w-full min-w-[24rem] whitespace-normal break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-vk-name>{{ $r->name }}</span>
                             </td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-500 whitespace-nowrap">{{ $r->speisenKlasse?->label ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-500 whitespace-nowrap">{{ $r->dishClass?->label ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
@@ -160,7 +160,7 @@
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
                             </td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->speisenHauptgruppe?->code ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->dishMainGroup?->code ?? '—' }}</td>
                             <td class="{{ $td }} whitespace-nowrap text-right tabular-nums">
                                 @php($fb = $feedbackAgg[$r->id] ?? null)
                                 @if($fb && $fb['count'] > 0)

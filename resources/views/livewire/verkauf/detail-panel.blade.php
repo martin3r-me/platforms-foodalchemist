@@ -22,9 +22,9 @@
             </div>
             <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
                 <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
-                @if($rezept->speisenKlasse !== null)
-                    <span class="{{ $pill }} {{ $variantPill['info'] }}" title="{{ $rezept->speisenKlasse->label }}">{{ $rezept->speisenKlasse->hauptgruppe?->code ?? 'HG?' }} · {{ $rezept->speisenKlasse->label }}</span>
-                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $rezept->speisenKlasse->diet_form }}</span>
+                @if($rezept->dishClass !== null)
+                    <span class="{{ $pill }} {{ $variantPill['info'] }}" title="{{ $rezept->dishClass->label }}">{{ $rezept->dishClass->mainGroup?->code ?? 'HG?' }} · {{ $rezept->dishClass->label }}</span>
+                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $rezept->dishClass->diet_form }}</span>
                 @else
                     <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="V-22-Seed-Gate: Klassifikation fehlt">ohne Speisen-Klasse</span>
                 @endif
@@ -117,12 +117,12 @@
 
         {{-- Formel-Klartext bzw. Leer-/W-1-Hinweis --}}
         @if($cockpit['formel_fehlt'])
-            <p class="text-[11px] text-amber-600 dark:text-amber-400" data-formel-fehlt>⚠ Aufschlagsklasse {{ $rezept->aufschlagsklasse?->code }}: Formel »deckungsbeitrag« nicht definiert (W-1) — Entscheid ausstehend, VK nur manuell.</p>
-        @elseif($rezept->aufschlagsklasse !== null && $cockpit['vk']['vorschlag'] !== null)
-            <p class="text-[11px] text-gray-400" data-formel-klartext>{{ $rezept->aufschlagsklasse->code }} · {{ $rezept->aufschlagsklasse->label }} · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
+            <p class="text-[11px] text-amber-600 dark:text-amber-400" data-formel-fehlt>⚠ Aufschlagsklasse {{ $rezept->markupClass?->code }}: Formel »deckungsbeitrag« nicht definiert (W-1) — Entscheid ausstehend, VK nur manuell.</p>
+        @elseif($rezept->markupClass !== null && $cockpit['vk']['vorschlag'] !== null)
+            <p class="text-[11px] text-gray-400" data-formel-klartext>{{ $rezept->markupClass->code }} · {{ $rezept->markupClass->label }} · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
         @elseif($rezept->ek_total_eur === null)
             <p class="text-[11px] text-gray-400" data-cockpit-leer>Kein EK berechnet — Zutaten ergänzen oder Lead-LAs setzen.</p>
-        @elseif($rezept->aufschlagsklasse === null)
+        @elseif($rezept->markupClass === null)
             <p class="text-[11px] text-gray-400" data-cockpit-leer>Keine Aufschlagsklasse gesetzt — VK-Vorschlag erst nach Klassifikation (M6-04).</p>
         @endif
 

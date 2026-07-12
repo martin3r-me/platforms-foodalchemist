@@ -296,8 +296,8 @@ class DetailPanel extends Component
                 ? $pairing->componentSuggestions($rezept)
                 : null,
             // M9-01k: Eignungen + Vokabular für die Pflege-Selects
-            'niveauEignungen' => $rezept !== null ? $rezept->niveauEignungen()->get() : collect(),
-            'sektorEignungen' => $rezept !== null ? $rezept->sektorEignungen()->get() : collect(),
+            'niveauEignungen' => $rezept !== null ? $rezept->levelSuitabilities()->get() : collect(),
+            'sektorEignungen' => $rezept !== null ? $rezept->sectorSuitabilities()->get() : collect(),
             'eignungVokabular' => \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular(),
         ]);
     }

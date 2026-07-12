@@ -101,7 +101,7 @@ class VkModal extends Component
                 'plating_text' => $r->plating_text,
                 'notes_manual' => $r->notes_manual,
             ];
-            $this->hauptgruppeId = $r->speisenKlasse?->dish_main_group_id;
+            $this->hauptgruppeId = $r->dishClass?->dish_main_group_id;
         }
         $this->ladeDarreichungen();
         $this->dispatch('modal.open', name: 'vk-modal');
@@ -294,7 +294,7 @@ class VkModal extends Component
             'name' => $this->form['name'] ?? $r->name,
             'sales_wording_standard' => $this->form['sales_wording_standard'] ?? null,
             'komponenten' => $r->ingredients->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all(),
-            'speisen_klasse' => $r->speisenKlasse?->label,
+            'speisen_klasse' => $r->dishClass?->label,
         ];
 
         try {
@@ -605,7 +605,7 @@ class VkModal extends Component
                 : collect(),
             // Darreichungen-Tab (Umbau-Spec Phase 5)
             'darreichungen' => $this->recipeId !== null
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servierform', 'deltas')
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm', 'deltas')
                     ->where('recipe_id', $this->recipeId)->orderByDesc('is_standard')->orderBy('id')->get()
                 : collect(),
             'servierformenAlle' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)

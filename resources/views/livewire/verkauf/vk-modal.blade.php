@@ -332,7 +332,7 @@
                 @forelse($darreichungen as $d)
                     <tr wire:key="dar-{{ $d->id }}" class="border-t border-black/5 dark:border-white/10 align-top">
                         <td class="py-1.5 pr-2">
-                            <span class="font-medium">{{ $d->servierform?->label ?? '—' }}</span>
+                            <span class="font-medium">{{ $d->servingForm?->label ?? '—' }}</span>
                             @if($d->created_via)<span class="block text-[10px] text-gray-400">{{ $d->created_via }}</span>@endif
                         </td>
                         <td class="py-1.5 pr-2 text-center">
