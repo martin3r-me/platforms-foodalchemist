@@ -27,8 +27,14 @@ class FoodAlchemistKalkulation extends Model
         'margin_override_pct' => 'decimal:2',
     ];
 
-    public function positionen(): HasMany
+    public function positions(): HasMany
     {
         return $this->hasMany(FoodAlchemistKalkulationPosition::class, 'calculation_id')->orderBy('position');
+    }
+
+    /** @deprecated #486 deutscher Alias → positions() */
+    public function positionen(): HasMany
+    {
+        return $this->positions();
     }
 }

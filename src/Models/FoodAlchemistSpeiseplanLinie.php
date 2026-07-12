@@ -29,13 +29,25 @@ class FoodAlchemistSpeiseplanLinie extends Model
         'sort_order' => 'integer',
     ];
 
-    public function speiseplan(): BelongsTo
+    public function mealPlan(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistSpeiseplan::class, 'menu_plan_id');
     }
 
-    public function eintraege(): HasMany
+    /** @deprecated #486 deutscher Alias → mealPlan() */
+    public function speiseplan(): BelongsTo
+    {
+        return $this->mealPlan();
+    }
+
+    public function entries(): HasMany
     {
         return $this->hasMany(FoodAlchemistSpeiseplanEintrag::class, 'line_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → entries() */
+    public function eintraege(): HasMany
+    {
+        return $this->entries();
     }
 }

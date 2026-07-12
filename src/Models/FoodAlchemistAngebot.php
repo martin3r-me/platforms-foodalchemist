@@ -61,17 +61,29 @@ class FoodAlchemistAngebot extends Model
     }
 
     /** Angebots-lokale (spekulative) Paket-Entwürfe dieses Angebots. */
-    public function pakete(): HasMany
+    public function packages(): HasMany
     {
         return $this->hasMany(FoodAlchemistPaket::class, 'offer_id');
     }
 
+    /** @deprecated #486 deutscher Alias → packages() */
+    public function pakete(): HasMany
+    {
+        return $this->packages();
+    }
+
     /** #380 DoD-5: zusätzlich referenzierte STANDARDISIERTE Katalog-Concepts (geteilt, nicht besessen). */
-    public function referenzierteConcepts(): BelongsToMany
+    public function referencedConcepts(): BelongsToMany
     {
         return $this->belongsToMany(FoodAlchemistConcept::class, 'foodalchemist_offer_concept', 'offer_id', 'concept_id')
             ->withPivot('position')->withTimestamps()
             ->orderBy('foodalchemist_offer_concept.position');
+    }
+
+    /** @deprecated #486 deutscher Alias → referencedConcepts() */
+    public function referenzierteConcepts(): BelongsToMany
+    {
+        return $this->referencedConcepts();
     }
 
     /** Noch nicht final entschiedene Angebote (nicht angenommen/abgelehnt). */

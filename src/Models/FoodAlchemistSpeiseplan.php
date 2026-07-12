@@ -28,15 +28,27 @@ class FoodAlchemistSpeiseplan extends Model
         'min_abstand_tage' => 'integer',
     ];
 
-    public function eintraege(): HasMany
+    public function entries(): HasMany
     {
         return $this->hasMany(FoodAlchemistSpeiseplanEintrag::class, 'menu_plan_id')
             ->orderBy('entry_date')->orderBy('week')->orderBy('weekday')->orderBy('position');
     }
 
-    public function linien(): HasMany
+    /** @deprecated #486 deutscher Alias → entries() */
+    public function eintraege(): HasMany
+    {
+        return $this->entries();
+    }
+
+    public function lines(): HasMany
     {
         return $this->hasMany(FoodAlchemistSpeiseplanLinie::class, 'menu_plan_id')
             ->orderBy('sort_order')->orderBy('id');
+    }
+
+    /** @deprecated #486 deutscher Alias → lines() */
+    public function linien(): HasMany
+    {
+        return $this->lines();
     }
 }

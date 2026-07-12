@@ -29,14 +29,26 @@ class FoodAlchemistSpeiseplanEintrag extends Model
         'entry_date' => 'date',
     ];
 
-    public function speiseplan(): BelongsTo
+    public function mealPlan(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistSpeiseplan::class, 'menu_plan_id');
     }
 
-    public function linie(): BelongsTo
+    /** @deprecated #486 deutscher Alias → mealPlan() */
+    public function speiseplan(): BelongsTo
+    {
+        return $this->mealPlan();
+    }
+
+    public function line(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistSpeiseplanLinie::class, 'line_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → line() */
+    public function linie(): BelongsTo
+    {
+        return $this->line();
     }
 
     public function concept(): BelongsTo
@@ -44,14 +56,26 @@ class FoodAlchemistSpeiseplanEintrag extends Model
         return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id');
     }
 
-    public function paket(): BelongsTo
+    public function package(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistPaket::class, 'package_id');
     }
 
-    public function gericht(): BelongsTo
+    /** @deprecated #486 deutscher Alias → package() */
+    public function paket(): BelongsTo
+    {
+        return $this->package();
+    }
+
+    public function dish(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → dish() */
+    public function gericht(): BelongsTo
+    {
+        return $this->dish();
     }
 
     /** Identitäts-Schlüssel des Inhalts (für Wiederholungs-Check). */

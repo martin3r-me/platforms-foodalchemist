@@ -30,9 +30,15 @@ class FoodAlchemistKalkulationPosition extends Model
         'position' => 'integer',
     ];
 
-    public function kalkulation(): BelongsTo
+    public function calculation(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistKalkulation::class, 'calculation_id');
+    }
+
+    /** @deprecated #486 deutscher Alias → calculation() */
+    public function kalkulation(): BelongsTo
+    {
+        return $this->calculation();
     }
 
     /** Wareneinsatz dieser Position (Snapshot-Einzelpreis × Menge). */
