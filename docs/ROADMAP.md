@@ -104,16 +104,15 @@ gegen die die KI in R6 baut. R3 und R5 sind nach R1 parallelisierbar (unabhängi
 
 ## R0 — Fundament sichern *(sofort; alles hier blockiert Sichtbarkeit oder Datenvertrauen)*
 
-### R0.1 Deploy auf demo.bhgdigital.de — **Owner: Martin** · Größe S · Hängt an: nichts
-
-Alle 14+ Commits sind gepusht (`bca6d95`), aber live sieht niemand die 36 MCP-Tools noch den Darreichungen-Umbau.
+### R0.1 Deploy auf demo.bhgdigital.de — Owner: Martin + Dominique · Größe S · ✅ **ABGESCHLOSSEN 2026-07-13 (inkl. DATEN)**
 
 **DoD:**
-- [ ] `git pull` + `composer update` auf demo, `composer.lock` committet
-- [ ] Alle Modul-Migrationen (inkl. 000003–000008) auf MySQL fehlerfrei durch — MySQL-Eigenheiten (partieller Index → Service-Invariante) verifiziert
-- [ ] `/mcp/info` listet 36 FA-Tools
-- [ ] Smoke-Test auf demo: `recipes.POST` → `foodbooks.POST` → `foodbook_blocks.POST`-Kaskade legt Draft-Foodbook an
-- [ ] Queue-Worker läuft (Bulk-Autopilot-Voraussetzung, Issue #403)
+- [x] Code live: demo läuft auf HEAD (519d7a6 inkl. R4/R6.1 — `concepts.GENERATE`/`coverage.GET` im Tool-Katalog live verifiziert); Schema-Reset + Frisch-Migrate durch Martin
+- [x] Alle Modul-Migrationen fehlerfrei durch — `migrate:status` 0 pending, inkl. der 5 Migrationen vom 2026-07-13 (Forge-Deploy migriert jetzt automatisch)
+- [x] MCP listet die FA-Tools (40+, Registry live geprüft)
+- [x] Smoke: `foodbooks.POST` → `foodbook_kapitel` → `foodbook_blocks.POST` legt Draft-Foodbook mit echtem Gericht an (FB #9 auf demo; `recipes.POST`-Schreibpfad war schon durch R0.2-E2E bewiesen)
+- [x] Queue-Worker läuft (2 Worker: database + attachments, per ps verifiziert)
+- [x] **BONUS — Daten-Import (Etappe 2, war der eigentliche Rest):** `fa_master_export_2026-07-13.sqlite` (HEAD-Schema, R1.2-Preise) via `import-master --team=6 --fresh` auf demo — dry-run-gecheckt, Row-Count-Gate, Transport-Dateien wieder gelöscht. Live: 7.943 GPs, 3.220 Rezepte, 929 VK-Gerichte MIT Presentations+Preisen, 2.265 Basisrezepte in der UI. SSH-Zugang Dominique eingerichtet (Forge, Key auf BHG.DIGITAL.DEV1 = 49.13.90.76).
 
 ### R0.2 MCP-Darreichungs-Nachzug M1–M6 · Größe M · Hängt an: nichts (parallel zu R0.1) · ✅ **ABGESCHLOSSEN 2026-07-12**
 
