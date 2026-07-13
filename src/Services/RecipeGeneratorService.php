@@ -4,7 +4,9 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
@@ -155,7 +157,7 @@ class RecipeGeneratorService
                 ], fn ($v) => $v !== null));
             }
 
-            $statistik = ['bestand_gp' => 0, 'bestand_sub' => 0, 'stub_neu' => 0, 'offen' => 0];
+            $statistik = ['bestand_gp' => 0, 'bestand_sub' => 0, 'stub_neu' => 0, 'gp_neu_aus_la' => 0, 'offen' => 0];
             $offene = [];
             $zeilen = [];
             foreach (array_values($kiRezept['zutaten']) as $i => $z) {
@@ -190,6 +192,12 @@ class RecipeGeneratorService
                     $zeile['match_method'] = 'recipe_ref';
                     $statistik['stub_neu'] += $stub['neu'] ? 1 : 0;
                     $statistik['bestand_sub'] += $stub['neu'] ? 0 : 1;
+                } elseif (($autoGp = $this->versucheLaZuGp($team, $text, $z['slug'] ?? null)) !== null) {
+                    // #505 Slice 2: Lücke ohne GP → FA-nativ GP aus passender LA angelegt/wiederverwendet
+                    // (tentative, LA-verknüpft → Allergene/Nährwerte/EK fließen LA-abgeleitet). Direkt nutzbar.
+                    $zeile['gp_id'] = $autoGp->id;
+                    $zeile['match_method'] = 'gemini_proposed';   // KI-Pipeline-Provenienz (gültiger MatchMethod-Case)
+                    $statistik['gp_neu_aus_la']++;
                 } else {
                     // Hard-Stop-Zeile: Button-Heuristik entscheidet die primäre Aktion (P8)
                     $zeile['match_method'] = 'unmatched';
@@ -206,8 +214,63 @@ class RecipeGeneratorService
 
             $recipe = $this->recipes->syncIngredients($team, $recipe->id, $zeilen);   // inkl. Recompute
 
+            // #505 Slice 2: VK-Kohärenz nach Zutaten-Sync (recipeCohesion braucht persistierte Zeilen).
+            if ($vkModus) {
+                try {
+                    $statistik['kohaerenz'] = app(PairingService::class)->recipeCohesion($recipe);
+                } catch (\Throwable $e) {
+                    // Kohärenz ist Diagnose, kein Blocker der Generierung.
+                }
+            }
+
             return ['recipe' => $recipe, 'statistik' => $statistik, 'offene' => $offene];
         });
+    }
+
+    /**
+     * #505 Slice 2: Lücke ohne GP-Treffer → passende LA suchen und FA-nativ ein GP
+     * anlegen (status=tentative, §6-Naming, Dedup-Reuse via anlageGuard) + LA
+     * verknüpfen — dann fließen Allergene/Nährwerte/EK LA-abgeleitet. FA=Master
+     * (gp_proposals war staging-only; Entscheid Dominique 2026-07-13). Direkt als
+     * gp_id nutzbar, Freigabe (approved) bleibt menschlich (tentative-Quarantäne).
+     * Jede Fehlerquelle → null: die Generierung darf NIE hieran scheitern.
+     */
+    private function versucheLaZuGp(Team $team, string $text, ?string $slug): ?FoodAlchemistGp
+    {
+        try {
+            $la = app(SupplierItemService::class)->searchGlobal($team, $text, [], 3)->items()[0] ?? null;
+            if ($la === null) {
+                return null;
+            }
+            // LA bereits einem GP zugeordnet? → dieses GP direkt nutzen (kein Neu-Anlegen).
+            $struktur = FoodAlchemistSupplierItemStructure::where('supplier_item_id', $la->id)
+                ->whereNull('deleted_at')->first();
+            if ($struktur !== null && $struktur->gp_id !== null) {
+                return FoodAlchemistGp::visibleToTeam($team)->find($struktur->gp_id);
+            }
+
+            $naming = app(GpNamingService::class);
+            $hauptzutat = trim($this->stubName($text));
+            if ($hauptzutat === '') {
+                return null;
+            }
+            // Dedup-first: existiert schon ein passendes GP (gp_key/Jaccard) → wiederverwenden.
+            $guard = $naming->anlageGuard($team, $naming->buildGpKey($naming->slugify($hauptzutat), null, null), $hauptzutat);
+            $gp = ($guard['blockiert'] && $guard['vorhandenes_gp'] !== null)
+                ? $guard['vorhandenes_gp']
+                : $naming->createGp($team, ['hauptzutat' => $hauptzutat]);   // wirft bei §6-Verstoß → catch → null
+
+            // LA verknüpfen (legt Struktur an, falls fehlend) → Anreicherung LA-abgeleitet.
+            try {
+                app(LeadLaService::class)->verknuepfen($team, $gp, (int) $la->id);
+            } catch (\RuntimeException $e) {
+                // LA schon woanders gemappt o. ä. — GP bleibt trotzdem nutzbar.
+            }
+
+            return $gp;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**
