@@ -328,16 +328,16 @@ Multi-Tenant *aggregieren* statt nur *trennen* — Netzwerk-Effekt, der mit jede
 
 ## R4 — Geführte Planung *(die Vault-Skill-Kaskade wird Produkt; Fundament für R6 Brief→Konzept)*
 
-### R4.1 Planungs-Gerüst-Datenmodell (Canvas-Ausbau) · Größe L · Hängt an: R0 (Facetten live)
+### R4.1 Planungs-Gerüst-Datenmodell (Canvas-Ausbau) · Größe L · Hängt an: R0 (Facetten live) · ✅ **ABGESCHLOSSEN 2026-07-13**
 
 Kern des Pakets: Das Gerüst ist **strukturierte Daten**, kein Freitext-Canvas — sonst kann R4.2 nichts messen und R6 nichts prompten.
 
 **DoD:**
-- [ ] Datenmodell: Mengengerüst (n Gerichte je Kapitel/Gang inkl. Diät-Quoten), Preisarchitektur (Anker, Spannen, Zielpreis p. P.), Kunden-Politik (No-Gos, Allergen-Linie), Saison-Abdeckung, Dramaturgie (Gang-Folge/Buffet-Stationen als Slot-Gerüst-Regel)
-- [ ] Am Foodbook UND am Konzept anhängbar (ein Gerüst, zwei Konsumenten)
-- [ ] Erfassungs-UI im Canvas-Kontext; jedes Feld optional (Gerüst wächst, zwingt nicht)
-- [ ] MCP: Gerüst via `canvas.GET/PUT` (oder eigenem Tool) les- und setzbar — KI kann Briefs in Gerüste übersetzen
-- [ ] Migration bestehender food_dna-Canvas-Werte kollisionsfrei
+- [x] Datenmodell: Mengengerüst (n Gerichte je Kapitel/Gang inkl. Diät-Quoten), Preisarchitektur (Anker, Spannen, Zielpreis p. P.), Kunden-Politik (No-Gos, Allergen-Linie), Saison-Abdeckung, Dramaturgie (Gang-Folge/Buffet-Stationen als Slot-Gerüst-Regel) — 3 Tabellen `planning_frames` (Kopf + Preis p. P.) / `planning_frame_slots` (Dramaturgie + Mengen + Preis je Slot) / `planning_frame_rules` (diet_quota gegen `diet_form`-Vokabular · season_coverage · nogo_ingredient/nogo_allergen (EU-14-Keys) · allergen_line; je Frame oder je Slot)
+- [x] Am Foodbook UND am Konzept anhängbar (ein Gerüst, zwei Konsumenten) — owner polymorph, unique je Owner
+- [x] Erfassungs-UI im Canvas-Kontext; jedes Feld optional (Gerüst wächst, zwingt nicht) — Trait `ManagesPlanningFrame` + Partial `planning/partials/frame-board` im Foodbook-Editor (Modal neben Leitidee-Canvas) und Concepter-Konzept-Tab
+- [x] MCP: `foodalchemist.planning.GET/PUT` — PUT übersetzt ein Brief in EINEM Call (head + slots + rules deklarativ/idempotent), Lineage `created_via=mcp_tool` + draft, status-Freigabe bleibt menschlich; GET liefert zusätzlich `prompt_kontext` (fertiger R6-KI-Block)
+- [x] Migration bestehender food_dna-Canvas-Werte kollisionsfrei — Canvas-Tabellen/-Templates unangetastet (Prosa bleibt Kontext-Ebene), per Test bewiesen
 
 ### R4.2 Soll/Ist-Coverage live · Größe L · Hängt an: R4.1
 
@@ -707,6 +707,8 @@ Gleiches Muster wie der N-Track: FA liefert den **Warum-Motor** (`knowledge.EXPL
 ---
 
 ## Changelog
+
+- 2026-07-13: **R4.1 Planungs-Gerüst abgeschlossen** (Einstieg in den R4-Track als R6.1-Vorarbeit, Entscheid Dominique). Strukturierte Soll-Ebene neben dem Freitext-Canvas: `planning_frames`/`_slots`/`_rules` (Mengengerüst + Diät-Quoten, Preisarchitektur p. P. + je Slot, No-Gos/Allergen-Linie, Saison, Dramaturgie), Service mit D1-Write-Guard + deklarativem `replaceStructure`, UI in Foodbook-Editor + Concepter, MCP `planning.GET/PUT` im Lockstep (Brief→Gerüst in einem Call, `prompt_kontext` fürs R6-Prompting). 15 neue Pest-Tests (inkl. UI-Klick→DB via Livewire-Host + Kollisionsfreiheits-Beweis), MySQL-Kanon migriert + Smoke. Nächster Schritt: R4.2 Soll/Ist-Coverage misst gegen dieses Gerüst.
 
 - 2026-07-12: **R0.2 abgeschlossen + Wissens-Modul komplett** (gepusht `178d299..d5409a6`). R0.2 MCP-Darreichungs-Nachzug M1–M6: die 38 Tools sind darreichungs-fähig (recipes.POST→Standard-Darreichung, SEARCH/GET liefern Formen, kalkulation.GET über Resolver, Concept-Facetten + Slot-Darreichung, Klassifikator Bauart-Regel + nur aktive HGs; latenter MySQL-`||`-Bug gefixt). Wissens-Modul #469: Import-Guard (`imported_hash`, App-wins) + Browser-Semantiksuche (alle Kategorien) + v3 MCP-Schreiben (`knowledge.POST/PUT`, `created_via`). Tests grün; Buffet-Preis-Beweis per MySQL-Smoke. Offen: demo-Deploy (R0.1, Martin) macht beides live sichtbar.
 - 2026-07-05: **Zwei neue Pakete (Dominique).** (1) **R8.1 LA-Multi-Select → Bulk-GP-Erstellung/Matching** — LA-First-Kuration FA-nativ ins Produkt (mehrere LAs markieren → Bulk-Run legt tentative GPs an / matched gegen approved), neues Paket R8. (2) **R2.6 erweitert** von „Kunden-/Event-Bewertung" auf **Feedback je Gericht/Rezept (Küche · Kunde · Event)** — explizit Küchenmitarbeiter-Feedback als Entwicklungs-Motor (Rezepte auf Praxis-Basis weiterentwickeln), Feedback auch am Basisrezept + „Weiterentwickeln"-Brücke zur Rezept-Iteration. — Kontext: DB komplett auf Englisch gezogen (Batch 3, Commit 72ca7f1) + Migration-Drift-Deploy-Blocker gefixt (4bdb308); Master-Roadmap als Doc #227 im Dev-Modul gespiegelt.

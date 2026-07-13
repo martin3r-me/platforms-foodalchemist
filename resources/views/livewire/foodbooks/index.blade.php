@@ -156,6 +156,18 @@
                 </x-slot:footer>
             </x-foodalchemist::modal>
 
+            {{-- R4.1: Planungs-Gerüst — messbarer Soll-Rahmen (Mengen · Preise · Quoten · Dramaturgie) neben der Freitext-Leitidee --}}
+            <button type="button" @click="$dispatch('modal.open', { name: 'fb-geruest' })"
+                    class="{{ $btnGhost }} w-full justify-center" wire:key="fbframe-btn-{{ $fb->id }}" data-fb-geruest-btn>
+                Planungs-Gerüst — Soll-Mengen · Preisrahmen · Diät-Quoten · Dramaturgie
+            </button>
+            <x-foodalchemist::modal name="fb-geruest" title="Planungs-Gerüst (Soll-Rahmen)" size="max-w-4xl">
+                @include('foodalchemist::livewire.planning.partials.frame-board')
+                <x-slot:footer>
+                    <button type="button" @click="$dispatch('modal.close', { name: 'fb-geruest' })" class="{{ $btnGhost }}">Schließen</button>
+                </x-slot:footer>
+            </x-foodalchemist::modal>
+
             {{-- UX-Umbau 2026-07-03: Toggle Bearbeiten ⇄ Menü — Kunden-Vorschau mit aufgelöster Wording-Kette (dieselbe Quelle wie das Druck-Dokument) --}}
             <div x-data="{ fbMenue: false }">
             <div class="flex items-center justify-between flex-wrap gap-2">

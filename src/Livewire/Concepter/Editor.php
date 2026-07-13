@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
+use Platform\FoodAlchemist\Livewire\Concerns\ManagesPlanningFrame;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
 use Platform\FoodAlchemist\Services\ConcepterBewertungService;
@@ -28,7 +29,7 @@ use Platform\FoodAlchemist\Services\SalesRecipeService;
  */
 class Editor extends Component
 {
-    use ManagesCanvas;
+    use ManagesCanvas, ManagesPlanningFrame;
 
     public string $type = 'concepts';   // concepts | pakete
 
@@ -173,6 +174,8 @@ class Editor extends Component
             ]])->all();
             // #389/Canvas: Concept-Canvas (kreatives Foodkonzept) über die zentrale Mechanik laden.
             $this->canvasInit('concept', 'concept', $id);
+            // R4.1: Planungs-Gerüst (Soll-Rahmen) des Konzepts.
+            $this->frameInit('concept', $id);
         }
 
         $this->dispatch('modal.open', name: 'concepter-editor');

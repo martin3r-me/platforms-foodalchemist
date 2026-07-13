@@ -1022,6 +1022,10 @@
                 @if($concept)
                     <p class="text-[11px] text-gray-400 mb-2">Das kreative Foodkonzept (Leitidee, Inszenierung, Geschmackswelten) — fließt als Kontext in alle KI-Texte dieses Konzepts. Stil/Geschmack erbt es aus der Team-Food-DNA.</p>
                     @include('foodalchemist::livewire.canvas.partials.board')
+
+                    {{-- R4.1: Planungs-Gerüst — messbarer Soll-Rahmen neben dem Freitext-Canvas --}}
+                    <p class="text-[11px] text-gray-400 mt-4 mb-2">Planungs-Gerüst — das messbare SOLL (Mengen, Preisrahmen, Diät-Quoten, Saison, No-Gos, Dramaturgie). Messlatte für Coverage (R4.2) und KI-Konzepte (R6).</p>
+                    @include('foodalchemist::livewire.planning.partials.frame-board')
                 @endif
             @endif
 

@@ -7,6 +7,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
+use Platform\FoodAlchemist\Livewire\Concerns\ManagesPlanningFrame;
 use Platform\FoodAlchemist\Services\FoodbookService;
 
 /**
@@ -16,7 +17,7 @@ use Platform\FoodAlchemist\Services\FoodbookService;
  */
 class Index extends Component
 {
-    use WithPagination, ManagesCanvas;
+    use WithPagination, ManagesCanvas, ManagesPlanningFrame;
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -381,6 +382,11 @@ class Index extends Component
         // #389/Canvas: Foodbook-Leitidee-Canvas nur bei Selektions-WECHSEL (re)laden — kein Edit-Verlust je Roundtrip.
         if ($fb !== null && $this->canvasOwnerId !== $fb->id) {
             $this->canvasInit('foodbook', 'foodbook', $fb->id);
+        }
+
+        // R4.1: Planungs-Gerüst (Soll-Rahmen) — gleiche Wechsel-Logik wie der Canvas.
+        if ($fb !== null && $this->frameOwnerId !== $fb->id) {
+            $this->frameInit('foodbook', $fb->id);
         }
 
         $menue = $fb !== null ? $svc->dokumentDaten($team, $fb) : null;

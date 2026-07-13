@@ -55,6 +55,7 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         'FoodAlchemistRecipeIngredient', 'FoodAlchemistRecipeNiveauEignung', 'FoodAlchemistRecipeSektorEignung',
         'FoodAlchemistConceptSektorEignung', 'FoodAlchemistTeamSetting',
         'FoodAlchemistCanvasEntry',                                    // Zugriff nur via Canvas-Aggregat (CanvasService)
+        'FoodAlchemistPlanningFrameSlot', 'FoodAlchemistPlanningFrameRule', // R4.1: Zugriff nur via Frame-Aggregat (PlanningFrameService-Guard)
     ];
     $modelDir = dirname((new ReflectionClass(FoodAlchemistRecipe::class))->getFileName());
     $fehlend = [];
