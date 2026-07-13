@@ -41,6 +41,7 @@ class FoodbookService
                     ->orWhereRaw('LOWER(COALESCE(code, \'\')) LIKE ?', [$s]));
             })
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
+            ->when(($filters['phase'] ?? '') !== '', fn ($q) => $q->where('phase', $filters['phase'])) // R4.3
             ->orderByDesc('jahr')->orderBy('label')
             ->paginate($perPage);
     }
@@ -776,6 +777,7 @@ class FoodbookService
     public function gerichtKandidaten(Team $team, string $suche, int $limit = 20): Collection
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
+            ->whereNull('variant_source_recipe_id') // R4.4: Slot-Varianten sind konzept-lokal, nicht pickbar
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
     }

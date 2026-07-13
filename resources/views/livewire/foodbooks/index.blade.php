@@ -19,13 +19,18 @@
         <x-ui-page-sidebar title="Foodbooks" width="w-80">
             <div class="p-3 space-y-2">
                 <input type="search" wire:model.live.debounce.300ms="search" placeholder="Foodbook / Kunde suchen …" class="{{ $input }}" />
+                {{-- R4.3: Phasen-Filter (Statusmaschine Kontext→…→Freigabe) --}}
+                <select wire:model.live="phaseFilter" class="{{ $input }}" data-phase-filter>
+                    <option value="">Alle Phasen</option>
+                    @foreach(\Platform\FoodAlchemist\Services\PhaseService::LABELS as $pk => $pl)<option value="{{ $pk }}">{{ $pl }}</option>@endforeach
+                </select>
                 <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ Neues Foodbook</button>
                 <div class="space-y-0.5 -mx-1">
                     @forelse($foodbooks as $f)
                         <button type="button" wire:key="fb-{{ $f->id }}" wire:click="waehle({{ $f->id }})"
                                 class="w-full text-left px-2 py-1 rounded-lg text-xs {{ $selectedId === $f->id ? $aktiv : $hover }}">
                             <span class="truncate block">{{ $f->label }}</span>
-                            <span class="text-[10px] text-gray-400">{{ $f->customer ?? 'ohne Kunde' }} · {{ $f->kapitel_count }} Kapitel</span>
+                            <span class="text-[10px] text-gray-400">{{ $f->customer ?? 'ohne Kunde' }} · {{ $f->kapitel_count }} Kapitel · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$f->phase] ?? $f->phase }}</span></span>
                         </button>
                     @empty
                         <p class="px-2 py-3 text-[11px] text-gray-400">Noch keine Foodbooks.</p>
@@ -91,6 +96,9 @@
                         <select wire:model="form.status" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
                     </div>
                 </div>
+
+                {{-- R4.3: Phasen-Statusmaschine (ergänzt den Sichtbarkeits-Status, ersetzt ihn nicht) --}}
+                @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $fb->phase ?? 'kontext'])
                 {{-- #369: CRM-Kunde-Link (MVP, nur verlinken) — ergänzt das Freitext-Feld „Kunde" --}}
                 <div class="space-y-2 pt-1 border-t border-black/5 dark:border-white/10">
                     <span class="{{ $label }}">Kunde (CRM)</span>
@@ -167,6 +175,11 @@
                     <button type="button" @click="$dispatch('modal.close', { name: 'fb-geruest' })" class="{{ $btnGhost }}">Schließen</button>
                 </x-slot:footer>
             </x-foodalchemist::modal>
+
+            {{-- R4.2: Soll/Ist-Coverage live beim Befüllen — Lücken-Klick öffnet den VK-Browser gefiltert --}}
+            @if(($coverage ?? null) !== null && $coverage['hat_geruest'])
+                @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillRoute' => route('foodalchemist.verkauf.index')])
+            @endif
 
             {{-- UX-Umbau 2026-07-03: Toggle Bearbeiten ⇄ Menü — Kunden-Vorschau mit aufgelöster Wording-Kette (dieselbe Quelle wie das Druck-Dokument) --}}
             <div x-data="{ fbMenue: false }">

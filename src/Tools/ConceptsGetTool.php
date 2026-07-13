@@ -48,7 +48,7 @@ class ConceptsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
 
         return ToolResult::success([
             'concept' => [
-                'id' => $c->id, 'name' => $c->name, 'status' => $c->status, 'class' => $c->class,
+                'id' => $c->id, 'name' => $c->name, 'status' => $c->status, 'phase' => $c->phase, 'class' => $c->class,
                 'occasion' => $c->occasion, 'level' => $c->level, 'description' => $c->description,
                 'target_price_per_person' => $c->target_price_per_person, 'season' => $c->season,
                 'target_group' => $c->target_group, 'sektor_eignung' => $svc->sektorEignungSlugs($c),

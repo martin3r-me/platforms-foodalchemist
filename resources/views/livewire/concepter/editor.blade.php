@@ -135,6 +135,11 @@
             </div>
 
             @if($concept)
+                {{-- R4.3: Phasen-Statusmaschine (ergänzt den Sichtbarkeits-Status) --}}
+                <div class="mt-2">
+                    @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $concept->phase ?? 'kontext'])
+                </div>
+
                 {{-- Facetten: Einsatzmomente + Saisons (mehrfach, Umbau-Spec Phase 4b) --}}
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2">
                     <div class="flex flex-wrap items-center gap-1.5">
@@ -184,6 +189,12 @@
             @if($tab === 'aufbau')
                 {{-- Live-Kosten-Streifen ist jetzt fix im Modal-Kopf (Phase 1, x-slot:kpiHeader). --}}
                 @if($concept)
+                {{-- R4.2: Soll/Ist-Coverage gegen das Planungs-Gerüst — live beim Befüllen, Lücken-Klick filtert den Picker --}}
+                @if($coverage !== null && $coverage['hat_geruest'])
+                    <div class="mb-3">
+                        @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillAction' => 'coverageFuellen'])
+                    </div>
+                @endif
                 {{-- x-data hält den Drag-Zustand: dragTyp/dragId = Liste→einfügen, dragSlotId = Position umsortieren.
                      bauModus schaltet zwischen Bearbeiten (Tabelle + Einfüge-Listen) und Menü-Ansicht (Gäste-Sicht,
                      UX-Umbau 2026-07-03) — Alpine statt Livewire: kein Re-Mount, ungespeicherte Eingaben bleiben. --}}
@@ -507,6 +518,12 @@
                                             <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium align-middle {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="{{ $allTitle }}">A</span>
                                             {{-- Phase 6: einsehen — Basisrezept → Rezept-Fenster, VK-Gericht → Gericht-Fenster (über dem Editor) --}}
                                             <button type="button" @click="Livewire.dispatch('{{ $slot->type === 'basisrezept' ? 'recipe-modal' : 'vk-modal' }}.oeffnen', { id: {{ $slot->sales_recipe_id }} })" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="{{ $slot->type === 'basisrezept' ? 'Rezept' : 'Gericht' }} einsehen">{{ $slot->type === 'basisrezept' ? '📖' : '🍽️' }}</button>
+                                            {{-- R4.4: Zutaten-Baum (read-first) + konzept-lokale Slot-Variante --}}
+                                            <button type="button" wire:click="zutatenToggle({{ $slot->id }})" class="text-[11px] ml-1 align-middle {{ $zutatenOffenSlotId === $slot->id ? 'text-violet-600 dark:text-violet-400' : 'text-gray-300 hover:text-violet-500' }}" title="Zutaten-Zeilen zeigen (Tausch erzeugt eine konzept-lokale Variante — Quell-Gericht bleibt unangetastet)" data-slot-zutaten-toggle>🧾</button>
+                                            @if($slot->variant_source_recipe_id !== null)
+                                                <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="Konzept-lokale Variante — das Quell-Gericht ist unverändert" data-slot-variiert>variiert</span>
+                                                <button type="button" wire:click="slotVarianteZuruecksetzen({{ $slot->id }})" wire:confirm="Variante verwerfen und Original-Gericht wiederherstellen?" class="text-[10px] text-gray-400 hover:text-rose-500 align-middle" data-slot-variante-reset>↩ Original</button>
+                                            @endif
                                             {{-- Umbau-Spec Phase 5: Konzept-Servierform ohne passende Darreichung → 1-Klick-Anlage --}}
                                             @if(isset($varianteFehlt[$slot->id]))
                                                 <button type="button" wire:click="varianteAnlegen({{ $slot->id }})"
@@ -556,6 +573,36 @@
                                     </td>
                                 </tr>
                             @endif
+                            {{-- R4.4: Zutaten-Zeilen des Gerichts (read-first) — ♻ Tausch läuft IMMER über die Slot-Variante --}}
+                            @if($zutatenOffenSlotId === $slot->id && $slot->sales_recipe_id !== null)
+                                <tr wire:key="ezutaten-{{ $slot->id }}">
+                                    <td></td>
+                                    <td colspan="8" class="!px-2 !pb-2 align-top">
+                                        <div class="ml-2 rounded-lg border border-violet-500/20 bg-violet-500/[0.03] divide-y divide-black/5 dark:divide-white/10" data-slot-zutaten>
+                                            @forelse($slotZutaten as $z)
+                                                <div wire:key="ezutat-{{ $slot->id }}-{{ $z['id'] }}" class="flex items-center gap-2 px-3 py-1 text-[11px]">
+                                                    <span class="flex-1 min-w-0 truncate text-gray-700 dark:text-gray-200">{{ $z['name'] }}</span>
+                                                    <span class="shrink-0 text-gray-400 tabular-nums">{{ $z['menge'] }}</span>
+                                                    @if($z['swap_locked'])
+                                                        <span class="shrink-0" title="swap-gesperrt — bewusst gewählte Realisierung">🔒</span>
+                                                    @elseif($z['ersatz'] !== null)
+                                                        <button type="button" wire:click="slotZutatTauschen({{ $slot->id }}, {{ $z['id'] }})"
+                                                                class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0"
+                                                                title="Konzept-lokal tauschen (erzeugt/nutzt die Slot-Variante — Quell-Gericht bleibt unangetastet)" data-slot-zutat-tausch>
+                                                            ♻ {{ $z['ersatz'] }}
+                                                        </button>
+                                                    @endif
+                                                    @if($z['peek_recipe_id'] !== null)
+                                                        <button type="button" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $z['peek_recipe_id'] }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="Sub-Rezept einsehen">📖</button>
+                                                    @endif
+                                                </div>
+                                            @empty
+                                                <p class="px-3 py-1.5 text-[11px] text-gray-400">Keine Zutaten-Zeilen an diesem Gericht.</p>
+                                            @endforelse
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endif
                             @if(! $istStruktur && ($fillOpenId === $slot->id || (! $slot->package_id && ! $slot->sales_recipe_id)))
                                 <tr wire:key="efill-{{ $slot->id }}">
                                     <td></td>
@@ -593,7 +640,7 @@
                                                             </button>
                                                         @endforeach
                                                     </div>
-                                                @elseif($gerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '')
+                                                @elseif($gerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '' || $pickDiaet !== '')
                                                     <p class="text-[11px] text-gray-400 px-2 py-1">Keine Treffer für diese Auswahl.</p>
                                                 @endif
                                             </div>
@@ -689,7 +736,7 @@
                                         </div>
                                     @endforeach
                                 </div>
-                            @elseif($paketGerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '')
+                            @elseif($paketGerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '' || $pickDiaet !== '')
                                 <p class="text-[11px] text-gray-400 px-2 py-1 mt-1">Keine Treffer für diese Auswahl.</p>
                             @endif
                         </div>

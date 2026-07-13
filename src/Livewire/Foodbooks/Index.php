@@ -7,6 +7,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
+use Platform\FoodAlchemist\Livewire\Concerns\ManagesPhase;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPlanningFrame;
 use Platform\FoodAlchemist\Services\FoodbookService;
 
@@ -17,10 +18,20 @@ use Platform\FoodAlchemist\Services\FoodbookService;
  */
 class Index extends Component
 {
-    use WithPagination, ManagesCanvas, ManagesPlanningFrame;
+    use WithPagination, ManagesCanvas, ManagesPlanningFrame, ManagesPhase;
+
+    /** R4.3: Owner für den Phasen-Stepper (Trait ManagesPhase). */
+    protected function phaseOwner(): array
+    {
+        return ['foodbook', $this->selectedId];
+    }
 
     #[Url(as: 'q')]
     public string $search = '';
+
+    /** R4.3: Phasen-Filter der Browser-Liste. */
+    #[Url(as: 'phase')]
+    public string $phaseFilter = '';
 
     #[Url(as: 'fb')]
     public ?int $selectedId = null;
@@ -400,8 +411,15 @@ class Index extends Component
             ? app(\Platform\FoodAlchemist\Services\FeedbackService::class)->aggregatBulk($team, $menueRecipeIds)
             : [];
 
+        // R4.2: Soll/Ist-Coverage live gegen das Planungs-Gerüst (nur wenn eines existiert).
+        $coverage = null;
+        if ($fb !== null && $this->frameId !== null) {
+            $coverage = app(\Platform\FoodAlchemist\Services\CoverageService::class)->coverage($team, 'foodbook', $fb->id);
+        }
+
         return view('foodalchemist::livewire.foodbooks.index', [
-            'foodbooks' => $svc->paginateBrowser(['search' => $this->search], $team),
+            'coverage' => $coverage,
+            'foodbooks' => $svc->paginateBrowser(['search' => $this->search, 'phase' => $this->phaseFilter], $team),
             'fb' => $fb,
             // D (UX-Umbau): Kunden-Vorschau (Menü-Ansicht) mit aufgelöster Wording-Kette — dieselbe Quelle wie das Druck-Dokument
             'menue' => $menue,

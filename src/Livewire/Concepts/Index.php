@@ -31,6 +31,10 @@ class Index extends Component
     #[Url(as: 'kat')]
     public string $categoryFilter = '';   // '' = alle · 'none' = ohne Kategorie · sonst Kategorie-ID
 
+    /** R4.3: Phasen-Filter (Statusmaschine Kontext→…→Freigabe). */
+    #[Url(as: 'phase')]
+    public string $phaseFilter = '';
+
     public string $neueKategorie = '';
 
     public ?int $editKatId = null;
@@ -288,6 +292,7 @@ class Index extends Component
             'concepts' => $svc->paginateBrowser([
                 'search' => $this->search, 'vorlagen' => $this->showVorlagen,
                 'category' => $this->categoryFilter !== '' ? $this->categoryFilter : null,
+                'phase' => $this->phaseFilter,
             ], $team),
             'selected' => $selected,
             'cockpit' => $cockpit,

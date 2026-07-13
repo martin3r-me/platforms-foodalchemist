@@ -274,9 +274,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SignalePutTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasGetTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasPutTool::class,
-                    // R4.1 Planungs-Gerüst (Soll-Rahmen) — MCP im Lockstep
+                    // R4.1–R4.3 Planungs-Gerüst + Coverage + Phase — MCP im Lockstep
                     \Platform\FoodAlchemist\Tools\PlanningGetTool::class,
                     \Platform\FoodAlchemist\Tools\PlanningPutTool::class,
+                    \Platform\FoodAlchemist\Tools\CoverageGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PhasePutTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptSlotVariantePostTool::class, // R4.4
                     \Platform\FoodAlchemist\Tools\SpeiseplaenePostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanEintraegePostTool::class,
                 ] as $toolClass) {

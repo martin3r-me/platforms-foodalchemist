@@ -40,4 +40,13 @@
                     class="{{ $pillBtn }} {{ $pickGeschmack === $v ? $pillOn : $pillOff }}">{{ $l }}</button>
         @endforeach
     </div>
+
+    {{-- R4.2: Diät (kanonische diet_form-Achse) — auch Ziel des Coverage-Lücken-Klicks --}}
+    <div class="flex flex-wrap items-center gap-1" data-pick-diaet>
+        <span class="text-[10px] text-gray-400 uppercase tracking-wider mr-0.5">Diät</span>
+        @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameRule::DIET_FORMS as $v)
+            <button type="button" wire:click="pickDiaetWaehle('{{ $v }}')"
+                    class="{{ $pillBtn }} {{ $pickDiaet === $v ? $pillOn : $pillOff }}">{{ $v }}</button>
+        @endforeach
+    </div>
 </div>

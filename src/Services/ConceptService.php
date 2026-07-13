@@ -38,6 +38,7 @@ class ConceptService
             ->when(($filters['vorlagen'] ?? false), fn ($q) => $q->vorlagen(), fn ($q) => $q->echte())
             ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', "COALESCE(occasion, '')"], $filters['search']))
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
+            ->when(($filters['phase'] ?? '') !== '', fn ($q) => $q->where('phase', $filters['phase'])) // R4.3
             ->when(($filters['class'] ?? '') !== '', fn ($q) => $q->where('class', $filters['class']))
             ->when(($filters['category'] ?? null) === 'none', fn ($q) => $q->whereNull('category_id'))
             ->when(is_numeric($filters['category'] ?? null), fn ($q) => $q

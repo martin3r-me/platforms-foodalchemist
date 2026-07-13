@@ -50,6 +50,8 @@ class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'customer' => $fb->customer,
             'personen' => $fb->personen,
             'status' => $fb->status instanceof \BackedEnum ? $fb->status->value : $fb->status,
+            'phase' => $fb->phase, // R4.3 Statusmaschine
+
             'price' => $svc->gesamt($team, $fb),
             'kapitel' => $fb->chapters->map(fn ($k) => [
                 'id' => $k->id,

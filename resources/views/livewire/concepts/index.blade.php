@@ -17,6 +17,11 @@
         <x-ui-page-sidebar title="Concepts" width="w-80">
             <div class="p-3 space-y-2">
                 <input type="search" wire:model.live.debounce.300ms="search" placeholder="Concept suchen …" class="{{ $input }}" />
+                {{-- R4.3: Phasen-Filter --}}
+                <select wire:model.live="phaseFilter" class="{{ $input }}" data-phase-filter>
+                    <option value="">Alle Phasen</option>
+                    @foreach(\Platform\FoodAlchemist\Services\PhaseService::LABELS as $pk => $pl)<option value="{{ $pk }}">{{ $pl }}</option>@endforeach
+                </select>
                 <div class="flex gap-1.5">
                     <button type="button" wire:click="$set('showVorlagen', false)"
                             class="{{ $pill }} {{ ! $showVorlagen ? $variantPill['primary'] : $variantPill['secondary'] }}">Concepts</button>
@@ -57,7 +62,7 @@
                              class="group flex items-center justify-between px-2 py-1 rounded-lg text-xs {{ $selectedId === $c->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                             <button type="button" wire:click="waehle({{ $c->id }})" class="min-w-0 flex-1 text-left truncate">
                                 {{ $c->name }}
-                                <span class="text-[10px] text-gray-400">· {{ $c->slots_count }} Slots{{ $c->price_per_person_cache !== null ? ' · ' . number_format((float) $c->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                <span class="text-[10px] text-gray-400">· {{ $c->slots_count }} Slots{{ $c->price_per_person_cache !== null ? ' · ' . number_format((float) $c->price_per_person_cache, 2, ',', '.') . ' €' : '' }} · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$c->phase] ?? $c->phase }}</span></span>
                             </button>
                             @if($showVorlagen)
                                 <button type="button" wire:click="ausVorlage({{ $c->id }})" class="shrink-0 text-[10px] text-violet-500 opacity-0 group-hover:opacity-100" title="Aus Vorlage starten">↧ nutzen</button>

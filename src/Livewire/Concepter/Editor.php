@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
+use Platform\FoodAlchemist\Livewire\Concerns\ManagesPhase;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPlanningFrame;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
@@ -29,7 +30,13 @@ use Platform\FoodAlchemist\Services\SalesRecipeService;
  */
 class Editor extends Component
 {
-    use ManagesCanvas, ManagesPlanningFrame;
+    use ManagesCanvas, ManagesPlanningFrame, ManagesPhase;
+
+    /** R4.3: Owner für den Phasen-Stepper (nur Concepts — Pakete haben keine Phase). */
+    protected function phaseOwner(): array
+    {
+        return ['concept', $this->type === 'concepts' ? $this->id : null];
+    }
 
     public string $type = 'concepts';   // concepts | pakete
 
@@ -106,6 +113,9 @@ class Editor extends Component
 
     public string $pickGeschmack = '';
 
+    /** R4.2 Lücken-Klick: Diät-Filter (diet_form) im Gericht-Picker. */
+    public string $pickDiaet = '';
+
     // Kalkulation (Concept): Zielpreis-Modus (M13)
     public bool $zielModus = false;
 
@@ -124,7 +134,7 @@ class Editor extends Component
     public function oeffnen(string $type, ?int $id): void
     {
         $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'einfuegenNachId', 'linkeListe', 'paketKlasse', 'basisSuche', 'kombiSuche', 'basisHg', 'basisKat', 'basisNiveau', 'gerichtSuche', 'pickTyp',
-            'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack',
+            'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack', 'pickDiaet', 'zutatenOffenSlotId',
             'zielModus', 'zielPreis', 'zielVorschlag', 'rueckSprungConceptId', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
         $this->id = $id;
@@ -270,6 +280,42 @@ class Editor extends Component
         $dar = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->fuerSlot($slot);
 
         return $dar?->serving_vehicle_vocab_id !== null ? (int) $dar->serving_vehicle_vocab_id : null;
+    }
+
+    // ── R4.4: Zutaten-Baum + konzept-lokale Slot-Variante ──────────────
+
+    /** Slot, dessen Zutaten-Zeilen aufgeklappt sind (read-first). */
+    public ?int $zutatenOffenSlotId = null;
+
+    public function zutatenToggle(int $slotId): void
+    {
+        $this->zutatenOffenSlotId = $this->zutatenOffenSlotId === $slotId ? null : $slotId;
+    }
+
+    /** ♻ Konzept-lokaler Äquivalenz-Tausch — erzeugt/nutzt die Slot-Variante, Quell-Gericht bleibt unangetastet. */
+    public function slotZutatTauschen(int $slotId, int $ingredientId): void
+    {
+        try {
+            app(\Platform\FoodAlchemist\Services\ConceptVariantService::class)
+                ->tauscheZutatKonzeptLokal($this->team(), $slotId, $ingredientId);
+            $this->fehler = null;
+            $this->dispatch('concepter-gespeichert', id: $this->id);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /** ↩ Variante verwerfen: Original-Gericht wieder in den Slot. */
+    public function slotVarianteZuruecksetzen(int $slotId): void
+    {
+        try {
+            app(\Platform\FoodAlchemist\Services\ConceptVariantService::class)
+                ->zuruecksetzen($this->team(), $slotId);
+            $this->fehler = null;
+            $this->dispatch('concepter-gespeichert', id: $this->id);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     /** „Variante fehlt" (Umbau-Spec Phase 5): Darreichung zur Konzept-Servierform per 1-Klick anlegen. */
@@ -505,11 +551,28 @@ class Editor extends Component
         $this->pickGeschmack = $this->pickGeschmack === $wert ? '' : $wert;
     }
 
+    public function pickDiaetWaehle(string $wert): void
+    {
+        $this->pickDiaet = $this->pickDiaet === $wert ? '' : $wert;
+    }
+
     private function pickFilterReset(): void
     {
         $this->pickHg = null;
         $this->pickKlasse = null;
         $this->pickGeschmack = '';
+        $this->pickDiaet = '';
+    }
+
+    /**
+     * R4.2 Lücken-Klick: Coverage-Befund → gefilterte Gericht-Suche. Springt in den
+     * Aufbau-Tab und setzt den Diät-Filter des Pickers (weitere Filter zurückgesetzt).
+     */
+    public function coverageFuellen(?string $dietForm = null): void
+    {
+        $this->tab = 'aufbau';
+        $this->pickFilterReset();
+        $this->pickDiaet = (string) ($dietForm ?? '');
     }
 
     public function fuelleGericht(int $slotId, int $vkRecipeId, string $typ = 'gericht'): void
@@ -891,8 +954,8 @@ class Editor extends Component
         $paketKandidaten = collect();
 
         // Gericht-Baum (geteilt von beiden Pickern): aktiv, sobald ein Filter ODER Suchtext gesetzt ist.
-        $pickFilter = ['hauptgruppe' => $this->pickHg, 'class' => $this->pickKlasse, 'geschmack' => $this->pickGeschmack];
-        $pickAktiv = fn (string $suche) => $suche !== '' || $this->pickHg !== null || $this->pickKlasse !== null || $this->pickGeschmack !== '';
+        $pickFilter = ['hauptgruppe' => $this->pickHg, 'class' => $this->pickKlasse, 'geschmack' => $this->pickGeschmack, 'diet_form' => $this->pickDiaet];
+        $pickAktiv = fn (string $suche) => $suche !== '' || $this->pickHg !== null || $this->pickKlasse !== null || $this->pickGeschmack !== '' || $this->pickDiaet !== '';
 
         if ($this->id !== null && $this->type === 'concepts') {
             $concept = $concepts->detail($team, $this->id);
@@ -980,7 +1043,41 @@ class Editor extends Component
             }
         }
 
+        // R4.2: Soll/Ist-Coverage live gegen das Planungs-Gerüst (nur wenn eines existiert).
+        $coverage = null;
+        if ($concept !== null && $this->frameId !== null) {
+            $coverage = app(\Platform\FoodAlchemist\Services\CoverageService::class)->coverage($team, 'concept', $concept->id);
+        }
+
+        // R4.4: Zutaten-Zeilen des aufgeklappten Gericht-Slots (read-first) + Ersatz-Hinweise.
+        $slotZutaten = [];
+        if ($this->zutatenOffenSlotId !== null && $concept !== null) {
+            $zSlot = $concept->slots->firstWhere('id', $this->zutatenOffenSlotId);
+            if ($zSlot?->sales_recipe_id !== null) {
+                $zutaten = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::where('recipe_id', $zSlot->sales_recipe_id)
+                    ->with(['gp:id,name', 'referencedRecipe:id,name', 'unit:id,slug'])
+                    ->orderBy('position')->get();
+                $paare = $zutaten->map(fn ($z) => $z->gp_id !== null ? ['gp', (int) $z->gp_id] : ['recipe', (int) $z->referenced_recipe_id])
+                    ->filter(fn ($p) => $p[1] !== 0)->values()->all();
+                $ersatz = app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->ersatzHinweise($team, $paare);
+                $slotZutaten = $zutaten->map(function ($z) use ($ersatz) {
+                    $key = $z->gp_id !== null ? 'gp:' . $z->gp_id : 'recipe:' . $z->referenced_recipe_id;
+
+                    return [
+                        'id' => $z->id,
+                        'name' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text ?? '—',
+                        'menge' => trim(($z->quantity !== null ? rtrim(rtrim(number_format((float) $z->quantity, 2, ',', '.'), '0'), ',') : '') . ' ' . ($z->unit?->slug ?? '')),
+                        'swap_locked' => (bool) $z->swap_locked,
+                        'ersatz' => isset($ersatz[$key]) ? $ersatz[$key]->name : null,
+                        'peek_recipe_id' => $z->referenced_recipe_id,
+                    ];
+                })->all();
+            }
+        }
+
         return view('foodalchemist::livewire.concepter.editor', [
+            'slotZutaten' => $slotZutaten,
+            'coverage' => $coverage,
             'pickHauptgruppen' => $sales->dishMainGroups($team),
             'pickHgCounts' => $sales->hauptgruppenCounts($team),
             'pickKlassen' => $this->pickHg !== null

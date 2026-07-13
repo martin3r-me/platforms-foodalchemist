@@ -27,6 +27,7 @@ class SalesRecipeService
         // Modell A (Regelwerk_Verkaufsgerichte v1.1): HG = Kategorie (recipes.dish_main_group_id),
         // Klasse = Diätform (recipes.dish_class_id) — beide Achsen unabhängig filterbar.
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
+            ->whereNull('variant_source_recipe_id') // R4.4: konzept-lokale Slot-Varianten bleiben aus dem Katalog
             ->with(['speisenKlasse:id,label,diet_form', 'speisenHauptgruppe:id,code,label'])
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
                 // Multi-Wort: jedes Token muss treffen (Name / Standard-Wording / Marketing /

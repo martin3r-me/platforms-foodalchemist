@@ -74,6 +74,31 @@ it('PUT blockt status-Setzen (Freigabe bleibt menschlich) und validiert Regeln t
     expect($kaputteRegel->success)->toBeFalse();
 });
 
+it('coverage.GET: dieselbe Messlatte für die KI — verletzte Regel kommt als Befund zurück', function () {
+    // Gerüst via PUT (KI-Pfad) mit unerfüllbarer Vorgabe → Coverage meldet verletzt
+    $this->registry->get('foodalchemist.planning.PUT')->execute([
+        'owner_type' => 'foodbook', 'owner_id' => $this->foodbook->id,
+        'slots' => [['label' => 'Dessert', 'slot_type' => 'gang', 'target_count' => 2, 'is_pflicht' => true]],
+    ], $this->kontext);
+
+    $cov = $this->registry->get('foodalchemist.coverage.GET')->execute([
+        'owner_type' => 'foodbook', 'owner_id' => $this->foodbook->id,
+    ], $this->kontext);
+
+    expect($cov->success)->toBeTrue()
+        ->and($cov->data['hat_geruest'])->toBeTrue()
+        ->and($cov->data['ampel_gesamt'])->toBe('verletzt')
+        ->and(collect($cov->data['befunde'])->firstWhere('dimension', 'dramaturgie')['ist'])->toBe('kein Ist-Bezug');
+
+    // Ohne Gerüst: ehrlicher Hinweis statt leerer Erfolg
+    $fb2 = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'label' => 'Ohne Gerüst']);
+    $leer = $this->registry->get('foodalchemist.coverage.GET')->execute([
+        'owner_type' => 'foodbook', 'owner_id' => $fb2->id,
+    ], $this->kontext);
+    expect($leer->data['hat_geruest'])->toBeFalse()
+        ->and($leer->data['hinweis'])->toContain('planning.PUT');
+});
+
 it('GET: fremdes Konzept (Geschwister-Team) ist NOT_FOUND — kein Cross-Team-Leak', function () {
     $conceptB = FoodAlchemistConcept::create(['team_id' => $this->childB->id, 'name' => 'Fremd-Konzept']);
     $kindUser = $this->makeUser($this->childA, 'Kind A');

@@ -324,11 +324,15 @@ class PaketService
     public function gerichtKandidaten(Team $team, string $suche, array $filter = [], int $limit = 60): Collection
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
+            ->whereNull('variant_source_recipe_id') // R4.4: Slot-Varianten sind konzept-lokal, nicht pickbar
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when($filter['hauptgruppe'] ?? null, fn ($q, $hg) => $q
                 ->whereIn('dish_class_id', FoodAlchemistDishClass::where('dish_main_group_id', $hg)->pluck('id')))
             ->when($filter['class'] ?? null, fn ($q, $k) => $q->where('dish_class_id', $k))
             ->when(($filter['geschmack'] ?? '') !== '', fn ($q) => $q->where('taste_direction', $filter['geschmack']))
+            // R4.2 Lücken-Klick: Diät-Filter über die kanonische Klassen-Achse (dish_classes.diet_form)
+            ->when(($filter['diet_form'] ?? '') !== '', fn ($q) => $q
+                ->whereIn('dish_class_id', FoodAlchemistDishClass::where('diet_form', $filter['diet_form'])->pluck('id')))
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'sales_net']);
     }
