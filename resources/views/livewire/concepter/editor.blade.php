@@ -195,6 +195,10 @@
                         @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillAction' => 'coverageFuellen'])
                     </div>
                 @endif
+                {{-- R6.1: Kohäsions-Beweis über die Menüfolge (on-demand) --}}
+                <div class="mb-3">
+                    @include('foodalchemist::livewire.planning.partials.kohaesion-panel')
+                </div>
                 {{-- x-data hält den Drag-Zustand: dragTyp/dragId = Liste→einfügen, dragSlotId = Position umsortieren.
                      bauModus schaltet zwischen Bearbeiten (Tabelle + Einfüge-Listen) und Menü-Ansicht (Gäste-Sicht,
                      UX-Umbau 2026-07-03) — Alpine statt Livewire: kein Re-Mount, ungespeicherte Eingaben bleiben. --}}
@@ -534,6 +538,10 @@
                                             <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.wording" wire:change="wordingSpeichern({{ $slot->id }})" class="{{ $input }} !py-0.5 !text-[11px] italic mt-1 w-full" placeholder="Anzeigename im Konzept-Wording … (leer = „{{ $g->name }}“)" data-slot-wording />
                                         @else
                                             <span class="text-xs text-gray-400">leer — links/rechts aus den Listen einfügen</span>
+                                            @if($slot->note)
+                                                {{-- R6.1: Generator-Begründung, warum der Slot bewusst leer blieb --}}
+                                                <div class="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5" data-slot-leer-begruendung>⚠ {{ $slot->note }}</div>
+                                            @endif
                                         @endif
                                     </td>
                                     <td class="{{ $td }} !px-2 align-top"><input type="text" wire:model.blur="slotForm.{{ $slot->id }}.role" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} !w-28" placeholder="Rolle" /></td>

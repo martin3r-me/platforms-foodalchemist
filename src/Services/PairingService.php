@@ -314,6 +314,47 @@ class PairingService
         return $this->cohesionFor($this->resolveRecipeAnchors($recipe));
     }
 
+    /** R6.1: flache, eindeutige Anker-IDs eines Rezepts (kern + prozess über alle Zutaten). */
+    public function anchorsForRecipe(FoodAlchemistRecipe $recipe): array
+    {
+        $ids = [];
+        foreach ($this->resolveRecipeAnchors($recipe) as $k) {
+            foreach (array_merge($k['kern'] !== null ? [$k['kern']] : [], $k['prozess']) as $a) {
+                $ids[$a] = true;
+            }
+        }
+
+        return array_keys($ids);
+    }
+
+    /** R6.1: beste Kanten zwischen Anker-IDs (öffentlicher Zugriff auf edgeBest — Menü-Ranking im Generator). */
+    public function edgesFor(array $ankerIds): array
+    {
+        return $this->edgeBest($ankerIds);
+    }
+
+    /**
+     * R6.1 Kohäsions-Beweis über eine MENÜFOLGE: jedes Gericht ist EINE Komponente
+     * (Anker = Union seiner Zutaten-Anker), Score/Coverage/schwächstes Paar über die
+     * Gericht-Paare. Gleiche Mechanik wie der Teller-Score (cohesionFor), eine Ebene höher.
+     *
+     * @param  list<FoodAlchemistRecipe>  $dishes
+     */
+    public function menuCohesion(array $dishes): array
+    {
+        $komponenten = [];
+        foreach ($dishes as $dish) {
+            $komponenten[] = [
+                'label' => $dish->name,
+                'via' => 'menu',
+                'kern' => null,
+                'prozess' => $this->anchorsForRecipe($dish),
+            ];
+        }
+
+        return $this->cohesionFor($komponenten);
+    }
+
     // ── Suggest (3.3 — T8) ───────────────────────────────────────────────
 
     /** @return array{klassiker: array, signature: array} */

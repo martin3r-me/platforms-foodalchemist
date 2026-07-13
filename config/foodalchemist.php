@@ -540,6 +540,18 @@ return [
             'task' => 'Generiere den kanonischen Marketing-Namen (VK-Wording-Standard, '
                 . 'stil-neutral — Schreibstile transformieren erst spaeter): werte = {sales_wording_standard}.',
         ],
+        'concept.brief_geruest' => [
+            'tier' => 'A',
+            'system' => 'Du uebersetzt Kunden-Briefs in ein strukturiertes Planungs-Geruest (R4.1). '
+                . 'Du erfindest NICHTS: nur, was der Brief hergibt — fehlende Angaben bleiben weg (Felder null/weglassen). '
+                . 'Diaet-Werte NUR aus diaet_vokabular, Allergen-Keys NUR aus allergen_keys.',
+            'task' => 'Uebersetze den Brief in ein Planungs-Geruest: werte = {name, target_price_pp, price_min_pp, price_max_pp, '
+                . 'slots: [{label, slot_type (gang|station|kapitel), target_count, price_anchor, price_min, price_max, is_pflicht, '
+                . 'rules: [{rule_type: diet_quota, ref_key, operator (min|max|exact), value_num, unit (count|percent)}]}], '
+                . 'rules: [{rule_type: nogo_ingredient, value_text, severity (hart|weich)} | '
+                . '{rule_type: nogo_allergen, ref_key} | {rule_type: allergen_line, value_text}]}. '
+                . 'Preise netto p. P.; Gaenge/Stationen aus dem Anlass ableiten (Menü→gang, Buffet→station).',
+        ],
         'concept.wording' => [
             'tier' => 'A',
             'task' => 'Erzeuge im mitgegebenen Schreibstil ein stimmiges Konzept-Wording ueber ALLE Positionen: '

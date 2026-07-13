@@ -55,6 +55,39 @@
                 </div>
 
                 <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ {{ $showVorlagen ? 'Neue Vorlage' : 'Neues Concept' }}</button>
+                {{-- R6.1: Brief → Konzept aus echten VK-Gerichten (KI baut den Rahmen, Graph wählt die Gerichte) --}}
+                <button type="button" wire:click="generatorOeffnen" class="{{ $btnGhost }} w-full justify-center" data-generator-oeffnen>✨ Konzept aus Brief</button>
+
+                @if($generatorOffen)
+                    <div class="rounded-xl border border-violet-500/25 bg-violet-500/[0.04] p-2.5 space-y-2" data-generator-panel>
+                        <textarea wire:model="generatorBrief" rows="5" class="{{ $input }}" placeholder="Kunden-Brief einfügen … (Anlass, Gäste, Budget p. P., Diät-Anforderungen, No-Gos)"></textarea>
+                        <input type="text" wire:model="generatorName" class="{{ $input }}" placeholder="Konzept-Name (optional)" />
+                        <div class="flex gap-2">
+                            <button type="button" wire:click="generatorStart" class="{{ $btnPrimary }} flex-1 justify-center" wire:loading.attr="disabled" data-generator-start>
+                                <span wire:loading.remove wire:target="generatorStart">Konzept generieren</span>
+                                <span wire:loading wire:target="generatorStart">Baue Gerüst + wähle Gerichte …</span>
+                            </button>
+                            <button type="button" wire:click="$set('generatorOffen', false)" class="{{ $btnGhost }}">✕</button>
+                        </div>
+                        <p class="text-[10px] text-gray-400">Ausschließlich echte VK-Gerichte — Slots ohne Treffer bleiben leer mit Begründung. Ergebnis ist ein Draft.</p>
+
+                        @if($generatorFehler)
+                            <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700 dark:text-rose-300" data-generator-fehler>{{ $generatorFehler }}</div>
+                        @endif
+                        @if($generatorErgebnis)
+                            <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-2 space-y-1 text-[11px]" data-generator-ergebnis>
+                                <div class="font-medium text-gray-800 dark:text-gray-100">„{{ $generatorErgebnis['concept_name'] }}“ (Draft)</div>
+                                <div class="text-gray-500">Kohäsion {{ $generatorErgebnis['kohaesion_score'] ?? '—' }} ({{ $generatorErgebnis['kohaesion_coverage'] ?? 0 }} % Graph) · Coverage: {{ $generatorErgebnis['coverage_gesamt'] ?? '—' }}</div>
+                                @foreach($generatorErgebnis['protokoll'] as $p)
+                                    <div class="{{ $p['status'] === 'leer' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500' }}">
+                                        {{ $p['slot'] }}: {{ $p['status'] === 'leer' ? 'LEER — ' . $p['begruendung'] : collect($p['gerichte'])->pluck('name')->implode(', ') }}
+                                    </div>
+                                @endforeach
+                                <button type="button" wire:click="waehle({{ $generatorErgebnis['concept_id'] }})" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">→ Konzept öffnen (Kohäsion + Coverage im Editor)</button>
+                            </div>
+                        @endif
+                    </div>
+                @endif
 
                 <div class="space-y-0.5 -mx-1 pt-1">
                     @forelse($concepts as $c)

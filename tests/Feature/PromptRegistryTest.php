@@ -32,6 +32,7 @@ const REGISTRY_SOLL = [
     'vk.review' => 'A', 'vk.kohaerenz' => 'A', 'vk.teller_heber' => 'A',
     // Concepter
     'concept.wording' => 'A',                                         // Concept-übergreifendes Wording (Schreibstil → Position-Namen + Intro)
+    'concept.brief_geruest' => 'A',                                   // R6.1: Kunden-Brief → Planungs-Gerüst (Rahmen; Gericht-Wahl bleibt deterministisch)
     // Sonstiges
     'price.plausi' => 'B', 'chat.message' => 'A',
 ];

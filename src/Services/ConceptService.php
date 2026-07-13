@@ -237,6 +237,7 @@ class ConceptService
             'role' => array_key_exists('role', $in) ? $this->norm($in['role']) : $slot->role,
             'title' => array_key_exists('title', $in) ? $this->norm($in['title']) : $slot->title,
             'is_pflicht' => array_key_exists('is_pflicht', $in) ? (bool) $in['is_pflicht'] : $slot->is_pflicht,
+            'note' => array_key_exists('note', $in) ? $this->norm($in['note']) : $slot->note, // R6.1: Leer-Begründung des Generators
         ]);
 
         return $slot->refresh();

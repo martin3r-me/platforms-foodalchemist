@@ -26,6 +26,40 @@ class Index extends Component
         return ['foodbook', $this->selectedId];
     }
 
+    // ── R6.1: Konzept aus dem Foodbook-Gerüst generieren ────────────────
+    public ?array $generatorErgebnis = null;
+
+    public ?string $generatorFehler = null;
+
+    public function konzeptAusGeruest(): void
+    {
+        $this->generatorFehler = null;
+        $this->generatorErgebnis = null;
+        if ($this->selectedId === null || $this->frameId === null) {
+            return;
+        }
+        $frame = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame::find($this->frameId);
+        if ($frame === null) {
+            return;
+        }
+        try {
+            $fb = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::find($this->selectedId);
+            $ergebnis = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
+                ->generiereAusGeruest($this->team(), $frame, 'Konzept-Entwurf: ' . ($fb?->label ?? 'Foodbook'));
+        } catch (\RuntimeException $e) {
+            $this->generatorFehler = $e->getMessage();
+
+            return;
+        }
+        $this->generatorErgebnis = [
+            'concept_id' => $ergebnis['concept']->id,
+            'concept_name' => $ergebnis['concept']->name,
+            'protokoll' => $ergebnis['protokoll'],
+            'kohaesion_score' => $ergebnis['kohaesion']['score'] ?? null,
+            'coverage_gesamt' => $ergebnis['coverage']['ampel_gesamt'] ?? null,
+        ];
+    }
+
     #[Url(as: 'q')]
     public string $search = '';
 

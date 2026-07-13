@@ -35,6 +35,53 @@ class Index extends Component
     #[Url(as: 'phase')]
     public string $phaseFilter = '';
 
+    // ── R6.1: Konzept-Generator (Brief → Konzept aus echten Gerichten) ──
+    public bool $generatorOffen = false;
+
+    public string $generatorBrief = '';
+
+    public string $generatorName = '';
+
+    public ?array $generatorErgebnis = null;
+
+    public ?string $generatorFehler = null;
+
+    public function generatorStart(): void
+    {
+        $this->generatorFehler = null;
+        $this->generatorErgebnis = null;
+        try {
+            $ergebnis = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
+                ->generiereAusBrief($this->team(), $this->generatorBrief, $this->generatorName !== '' ? $this->generatorName : null);
+        } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException) {
+            $this->generatorFehler = 'KI ist für dieses Team deaktiviert (Einstellungen) — Brief-Übersetzung braucht sie. Alternativ: Gerüst manuell anlegen und daraus generieren.';
+
+            return;
+        } catch (\RuntimeException $e) {
+            $this->generatorFehler = $e->getMessage();
+
+            return;
+        }
+        $this->generatorErgebnis = [
+            'concept_id' => $ergebnis['concept']->id,
+            'concept_name' => $ergebnis['concept']->name,
+            'protokoll' => $ergebnis['protokoll'],
+            'kohaesion_score' => $ergebnis['kohaesion']['score'] ?? null,
+            'kohaesion_coverage' => $ergebnis['kohaesion']['coverage_pct'] ?? null,
+            'coverage' => $ergebnis['coverage']['zusammenfassung'] ?? [],
+            'coverage_gesamt' => $ergebnis['coverage']['ampel_gesamt'] ?? null,
+        ];
+        $this->generatorBrief = '';
+        $this->generatorName = '';
+    }
+
+    public function generatorOeffnen(): void
+    {
+        $this->generatorOffen = true;
+        $this->generatorErgebnis = null;
+        $this->generatorFehler = null;
+    }
+
     public string $neueKategorie = '';
 
     public ?int $editKatId = null;

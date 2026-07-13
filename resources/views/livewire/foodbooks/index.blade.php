@@ -179,6 +179,26 @@
             {{-- R4.2: Soll/Ist-Coverage live beim Befüllen — Lücken-Klick öffnet den VK-Browser gefiltert --}}
             @if(($coverage ?? null) !== null && $coverage['hat_geruest'])
                 @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillRoute' => route('foodalchemist.verkauf.index')])
+
+                {{-- R6.1: Gerüst-Pfad des Konzept-Generators — baut ein Draft-Konzept aus echten VK-Gerichten --}}
+                <div class="space-y-1.5">
+                    <button type="button" wire:click="konzeptAusGeruest" class="{{ $btnGhost }} w-full justify-center" wire:loading.attr="disabled" data-konzept-aus-geruest>
+                        <span wire:loading.remove wire:target="konzeptAusGeruest">✨ Konzept aus diesem Gerüst generieren</span>
+                        <span wire:loading wire:target="konzeptAusGeruest">Wähle Gerichte …</span>
+                    </button>
+                    @if($generatorFehler)
+                        <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700 dark:text-rose-300">{{ $generatorFehler }}</div>
+                    @endif
+                    @if($generatorErgebnis)
+                        <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-2 space-y-1 text-[11px]" data-generator-ergebnis>
+                            <div class="font-medium text-gray-800 dark:text-gray-100">„{{ $generatorErgebnis['concept_name'] }}“ (Draft) · Kohäsion {{ $generatorErgebnis['kohaesion_score'] ?? '—' }} · Coverage {{ $generatorErgebnis['coverage_gesamt'] ?? '—' }}</div>
+                            @foreach($generatorErgebnis['protokoll'] as $p)
+                                <div class="{{ $p['status'] === 'leer' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500' }}">{{ $p['slot'] }}: {{ $p['status'] === 'leer' ? 'LEER — ' . $p['begruendung'] : collect($p['gerichte'])->pluck('name')->implode(', ') }}</div>
+                            @endforeach
+                            <a href="{{ route('foodalchemist.concepts.index') }}?c={{ $generatorErgebnis['concept_id'] }}" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">→ im Concepter öffnen</a>
+                        </div>
+                    @endif
+                </div>
             @endif
 
             {{-- UX-Umbau 2026-07-03: Toggle Bearbeiten ⇄ Menü — Kunden-Vorschau mit aufgelöster Wording-Kette (dieselbe Quelle wie das Druck-Dokument) --}}

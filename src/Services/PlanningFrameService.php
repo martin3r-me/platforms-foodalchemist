@@ -54,6 +54,46 @@ class PlanningFrameService
         }
     }
 
+    /**
+     * R6.1: Gerüst auf einen anderen Owner KOPIEREN (Kopf + Slots + Regeln, inkl.
+     * Slot-Regel-Zuordnung). Nutzt der Konzept-Generator: das Quell-Gerüst (z. B. am
+     * Foodbook) bleibt, das generierte Konzept bekommt seine eigene Kopie — damit
+     * läuft der R4.2-Coverage-Check direkt am Konzept.
+     */
+    public function kopiereZu(Team $team, FoodAlchemistPlanningFrame $quelle, string $ownerType, int $ownerId, string $createdVia = 'concept_generator'): FoodAlchemistPlanningFrame
+    {
+        $quelle->loadMissing(['slots.rules', 'rules']);
+        $ziel = $this->frameFor($team, $ownerType, $ownerId, $createdVia);
+        $this->setHead($team, $ziel, [
+            'target_price_pp' => $quelle->target_price_pp,
+            'price_min_pp' => $quelle->price_min_pp,
+            'price_max_pp' => $quelle->price_max_pp,
+            'note' => $quelle->note,
+        ]);
+
+        $slotMap = [];  // Quell-Slot-ID → Ziel-Slot
+        foreach ($quelle->slots as $slot) {
+            $slotMap[$slot->id] = $this->addSlot($team, $ziel, [
+                'position' => $slot->position, 'label' => $slot->label, 'slot_type' => $slot->slot_type,
+                'target_count' => $slot->target_count, 'price_anchor' => $slot->price_anchor,
+                'price_min' => $slot->price_min, 'price_max' => $slot->price_max,
+                'is_pflicht' => (bool) $slot->is_pflicht, 'note' => $slot->note,
+                // chapter_id bewusst NICHT kopiert — der Ist-Bezug gilt nur beim Quell-Owner
+            ]);
+        }
+        // rules (hasMany über frame_id) enthält frame- UND slot-scoped Regeln — kein Merge nötig
+        foreach ($quelle->rules as $rule) {
+            $this->addRule($team, $ziel, [
+                'slot_id' => $rule->slot_id !== null ? ($slotMap[$rule->slot_id]->id ?? null) : null,
+                'rule_type' => $rule->rule_type, 'ref_key' => $rule->ref_key, 'ref_id' => $rule->ref_id,
+                'operator' => $rule->operator, 'value_num' => $rule->value_num, 'unit' => $rule->unit,
+                'value_text' => $rule->value_text, 'severity' => $rule->severity,
+            ]);
+        }
+
+        return $ziel->refresh();
+    }
+
     // ── Kopf (Preisarchitektur p. P.) ──────────────────────────────────
 
     /** Kopf-Felder setzen; nur bekannte Keys, leer/null löscht den Wert. */

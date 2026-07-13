@@ -134,7 +134,7 @@ class Editor extends Component
     public function oeffnen(string $type, ?int $id): void
     {
         $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'einfuegenNachId', 'linkeListe', 'paketKlasse', 'basisSuche', 'kombiSuche', 'basisHg', 'basisKat', 'basisNiveau', 'gerichtSuche', 'pickTyp',
-            'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack', 'pickDiaet', 'zutatenOffenSlotId',
+            'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack', 'pickDiaet', 'zutatenOffenSlotId', 'menueKohaesion',
             'zielModus', 'zielPreis', 'zielVorschlag', 'rueckSprungConceptId', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
         $this->id = $id;
@@ -280,6 +280,37 @@ class Editor extends Component
         $dar = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->fuerSlot($slot);
 
         return $dar?->serving_vehicle_vocab_id !== null ? (int) $dar->serving_vehicle_vocab_id : null;
+    }
+
+    // ── R6.1: Kohäsions-Beweis über die Menüfolge (Pairing-Graph) ──────
+
+    /** Ergebnis von menuCohesion — on-demand berechnet (Graph-Auflösung ist nicht Roundtrip-frei). */
+    public ?array $menueKohaesion = null;
+
+    public function kohaesionPruefen(): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        $concept = app(ConceptService::class)->detail($this->team(), $this->id);
+        if ($concept === null) {
+            return;
+        }
+        $dishes = [];
+        foreach ($concept->slots as $slot) {
+            if ($slot->dish) {
+                $dishes[$slot->dish->id] = $slot->dish;
+            } elseif ($slot->package) {
+                foreach ($slot->package->dishes as $pg) {
+                    if ($pg->dish) {
+                        $dishes[$pg->dish->id] = $pg->dish;
+                    }
+                }
+            }
+        }
+        $this->menueKohaesion = count($dishes) >= 2
+            ? app(\Platform\FoodAlchemist\Services\PairingService::class)->menuCohesion(array_values($dishes))
+            : ['score' => 0, 'rated_pairs' => 0, 'total_pairs' => 0, 'coverage_pct' => 0, 'weakest_pair' => null, 'unrated_pairs' => [], 'komponenten' => [], 'zu_wenig' => true];
     }
 
     // ── R4.4: Zutaten-Baum + konzept-lokale Slot-Variante ──────────────

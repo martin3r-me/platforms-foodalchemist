@@ -280,6 +280,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\CoverageGetTool::class,
                     \Platform\FoodAlchemist\Tools\PhasePutTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptSlotVariantePostTool::class, // R4.4
+                    \Platform\FoodAlchemist\Tools\ConceptsGenerateTool::class, // R6.1
                     \Platform\FoodAlchemist\Tools\SpeiseplaenePostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanEintraegePostTool::class,
                 ] as $toolClass) {
