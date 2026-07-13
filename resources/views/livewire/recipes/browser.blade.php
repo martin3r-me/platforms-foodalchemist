@@ -182,7 +182,7 @@
                 <thead><tr class="text-left">
                     <th class="{{ $th }} !pr-0 w-8"></th>
                     {{-- R13 (Jarvis-Dichte): Name flexibel, Zahlen rechtsbündig --}}
-                    @foreach([['Name', 'w-full'], ['Kategorie', ''], ['Geschmack', ''], ['Fertigung', ''], ['Status', ''], ['Zutaten', 'text-right'], ['Yield', 'text-right'], ['Allergen-Konf.', ''], ['Feedback', 'text-right']] as [$head, $align])
+                    @foreach([['Name', 'w-full'], ['Kategorie', ''], ['Geschmack', ''], ['Fertigung', ''], ['Status', ''], ['Zutaten', 'text-right'], ['Yield', 'text-right'], ['Allergen-Konf.', '']] as [$head, $align])
                         <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
                     @endforeach
                 </tr></thead>
@@ -196,7 +196,7 @@
                                 <input type="checkbox" wire:model.live="auswahl.{{ $r->id }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-rezept-checkbox="{{ $r->id }}" />
                             </td>
                             {{-- R6: Namens-Klick öffnet direkt den Voll-Editor (Zeilen-Klick bleibt Panel-Selektion) --}}
-                            <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
+                            <td class="{{ $td }} font-medium w-full min-w-[18rem] break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
                                 <span class="text-gray-900 hover:text-violet-600 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
                                 @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>📐 Template</span>@endif
                             </td>
@@ -224,17 +224,9 @@
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
                             </td>
-                            <td class="{{ $td }} whitespace-nowrap text-right tabular-nums">
-                                @php($fb = $feedbackAgg[$r->id] ?? null)
-                                @if($fb && $fb['count'] > 0)
-                                    <span class="{{ $pill }} {{ ($fb['avg'] ?? 0) >= 4 ? $variantPill['success'] : (($fb['avg'] ?? 0) >= 3 ? $variantPill['warning'] : $variantPill['danger']) }}" title="{{ $fb['count'] }} Feedback-Einträge">★ {{ $fb['avg'] !== null ? number_format((float) $fb['avg'], 1, ',', '.') : '–' }} <span class="opacity-60">({{ $fb['count'] }})</span></span>
-                                @else
-                                    <span class="text-gray-300">—</span>
-                                @endif
-                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-500">Keine Rezepte gefunden.</td></tr>
+                        <tr><td colspan="9" class="px-5 py-10 text-center text-gray-500">Keine Rezepte gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>

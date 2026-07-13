@@ -1,30 +1,31 @@
-{{-- #379+ (Dominique 2026-06-16): Kalkulations-Werkstatt = Controlling-Zentrum.
-     Stehende Kosten (Stundensatz · Fixkosten wie Strom/Nebenkosten · Aufschlagsätze · Marge)
-     an EINEM Ort pflegen → rollen auf alle Kalkulationen aus. Reine Kalkulation: Concepter. --}}
+{{-- #502 (Dominique 2026-07-13): eigener „Was-wäre-wenn"-Preissimulations-Screen.
+     Der Regel-Editor (Zuschläge/Fixkosten/Marge) ist zurück unter Einstellungen → Herstellkosten;
+     hier bleibt nur die Simulation + die Kennzahlen als Kontext (Werkstatt aufgelöst). --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Kalkulations-Werkstatt" icon="heroicon-o-calculator" />
+        <x-ui-page-navbar title="Preissimulation" icon="heroicon-o-arrows-right-left" />
     </x-slot:navbar>
 
     <x-slot name="actionbar">
         <x-ui-page-actionbar :breadcrumbs="[
             ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Kalkulations-Werkstatt'],
+            ['label' => 'Preissimulation'],
         ]" />
     </x-slot>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        {{-- Cockpit: die rolled-up Kosten-Wahrheit, die auf alle Kalkulationen ausrollt --}}
+        {{-- Kennzahlen-Kontext (read-only): die rolled-up Kosten-Regeln, gegen die simuliert wird.
+             Gepflegt werden sie in den Einstellungen → Herstellkosten. --}}
         <div class="relative overflow-hidden {{ $card }} px-5 py-4">
             <div class="{{ $cardAccent }}"></div>
             <div class="flex items-start justify-between gap-3 flex-wrap">
                 <div>
-                    <h3 class="font-medium tracking-tight text-gray-900">Controlling-Zentrum — stehende Kosten</h3>
-                    <p class="text-[11px] text-gray-500 max-w-2xl">Pflege deine dauerhaften Kosten an <strong>einem Ort</strong> — Stundensatz/Personal, Fixkosten (Strom, Nebenkosten, Logistik …), Aufschlagsätze und Marge. Sie rollen automatisch auf HK2, VK-Vorschlag und das „Marge unter Ziel"-Signal in <strong>jedem</strong> Gericht &amp; Concept aus.</p>
+                    <h3 class="font-medium tracking-tight text-gray-900">Kalkulations-Kennzahlen</h3>
+                    <p class="text-[11px] text-gray-500 max-w-2xl">Die aktuellen, ausgerollten Kosten-Regeln — Grundlage jeder Kalkulation und dieser Simulation. Bearbeitet werden sie unter <strong>Einstellungen → Herstellkosten</strong>.</p>
                 </div>
-                <a href="{{ route('foodalchemist.concepter.index') }}" class="{{ $btnGhost }}" wire:navigate>Kalkulation im Concepter →</a>
+                <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'herstellkosten']) }}" class="{{ $btnGhost }}" wire:navigate>Regeln in den Einstellungen pflegen →</a>
             </div>
             <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 mt-3">
                 <div class="rounded-lg bg-black/[0.03] px-3 py-2"><div class="{{ $label }}">Zielmarge</div><div class="text-lg font-semibold tabular-nums text-gray-900">{{ number_format((float) $regeln['marge_pct'], 1, ',', '.') }} %</div></div>
@@ -49,12 +50,9 @@
             @endif
         </div>
 
-        {{-- Eingebetteter Kosten-Editor (vormals Einstellungen → Herstellkosten): Zuschlagsschema,
-             Fixkosten + Bezugsbasen, Marge. Speichern dispatched 'kosten-aktualisiert' → Kacheln oben ziehen nach. --}}
-        @livewire('foodalchemist.settings.herstellkosten')
-
         {{-- R2.2: Was-wäre-wenn-Preissimulation — hypothetischer Preissprung (WG/GP/Artikel ± X %)
-             → Portfolio-Marge-Delta + Top-20. Read-only, spiegelt das MCP-Tool simulation.POST. --}}
+             → Portfolio-Marge-Delta + Top-20. Read-only, spiegelt das MCP-Tool simulation.POST.
+             #502: eigener Screen; Regel-Editor lebt jetzt in den Einstellungen. --}}
         @livewire('foodalchemist.kalkulation.simulation')
 
         <p class="text-[11px] text-gray-500 px-1 pt-1">
@@ -62,7 +60,8 @@
             <a href="{{ route('foodalchemist.concepter.index') }}" class="text-violet-600 hover:underline" wire:navigate>Concepter</a>
             und je Einzelgericht in den
             <a href="{{ route('foodalchemist.verkauf.index') }}" class="text-violet-600 hover:underline" wire:navigate>Gerichten</a>.
-            Diese Werkstatt liefert die Regeln dafür.
+            Die Kosten-Regeln pflegst du unter
+            <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'herstellkosten']) }}" class="text-violet-600 hover:underline" wire:navigate>Einstellungen → Herstellkosten</a>.
         </p>
     </x-ui-page-container>
 </x-ui-page>

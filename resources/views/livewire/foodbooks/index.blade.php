@@ -146,7 +146,8 @@
                 </div>
                 <div class="flex gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
-                    <a href="{{ route('foodalchemist.foodbooks.ansicht', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Interne Lese-Ansicht (Kapitel-Navigation, EK/VK/W%)">Ansicht</a>
+                    {{-- #501 (2026-07-13): standalone interne Ansicht entfernt — die Kunden-Vorschau
+                         lebt im Editor als „🍽 Menü"-Toggle (rechts), das versendbare Dokument im „Dokument"-Link. --}}
                     <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Versendbares Foodbook-Dokument (Druck/PDF)">Dokument</a>
                     <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
                 </div>

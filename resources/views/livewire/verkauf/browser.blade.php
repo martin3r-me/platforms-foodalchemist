@@ -125,7 +125,7 @@
             <table class="{{ $table }}">
                 <thead><tr class="text-left">
                     {{-- R13 (Jarvis-Dichte): Name flexibel, Geld/Zahlen rechtsbündig --}}
-                    @foreach([['Name', 'w-full'], ['Klasse', ''], ['Geschmack', ''], ['Status', ''], ['VK netto', 'text-right'], ['EK', 'text-right'], ['Zutaten', 'text-right'], ['Allergen-Konf.', ''], ['Hauptgruppe', ''], ['Feedback', 'text-right']] as [$head, $align])
+                    @foreach([['Name', 'w-full'], ['Klasse', ''], ['Geschmack', ''], ['Status', ''], ['VK netto', 'text-right'], ['EK', 'text-right'], ['Zutaten', 'text-right'], ['Allergen-Konf.', ''], ['Hauptgruppe', '']] as [$head, $align])
                         <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
                     @endforeach
                 </tr></thead>
@@ -161,17 +161,9 @@
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
                             </td>
                             <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->dishMainGroup?->code ?? '—' }}</td>
-                            <td class="{{ $td }} whitespace-nowrap text-right tabular-nums">
-                                @php($fb = $feedbackAgg[$r->id] ?? null)
-                                @if($fb && $fb['count'] > 0)
-                                    <span class="{{ $pill }} {{ ($fb['avg'] ?? 0) >= 4 ? $variantPill['success'] : (($fb['avg'] ?? 0) >= 3 ? $variantPill['warning'] : $variantPill['danger']) }}" title="{{ $fb['count'] }} Feedback-Einträge">★ {{ $fb['avg'] !== null ? number_format((float) $fb['avg'], 1, ',', '.') : '–' }} <span class="opacity-60">({{ $fb['count'] }})</span></span>
-                                @else
-                                    <span class="text-gray-300">—</span>
-                                @endif
-                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-500">Keine Gerichte gefunden.</td></tr>
+                        <tr><td colspan="9" class="px-5 py-10 text-center text-gray-500">Keine Gerichte gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>

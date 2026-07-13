@@ -45,7 +45,7 @@
     </div>
 
     <table class="meta">
-        @if($kunde)<tr><td class="k">Kunde</td><td>{{ $kunde }}@if(($kontakt ?? null) && $kontakt !== $kunde) · {{ $kontakt }}@endif</td></tr>@endif
+        @if($customer)<tr><td class="k">Kunde</td><td>{{ $customer }}@if(($kontakt ?? null) && $kontakt !== $customer) · {{ $kontakt }}@endif</td></tr>@endif
         @if($fb->jahr)<tr><td class="k">Jahr</td><td>{{ $fb->jahr }}</td></tr>@endif
         @if($gesamt['personen'])<tr><td class="k">Personen</td><td>{{ $gesamt['personen'] }}</td></tr>@endif
         @if($stand ?? null)<tr><td class="k">Stand</td><td>{{ $stand->format('d.m.Y') }}</td></tr>@endif

@@ -78,8 +78,14 @@ class IngredientEditor extends Component
      */
     public function garverlustVorschlag(array $zutaten): array
     {
-        $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)
-            ->propose('recipe.garverlust', ['zutaten' => $zutaten, 'verluste' => new \stdClass]);
+        try {
+            $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)
+                ->propose('recipe.garverlust', ['zutaten' => $zutaten, 'verluste' => new \stdClass]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();                          // JS-Helfer: leer zurück statt 500
+
+            return ['verluste' => [], 'confidence' => 0.0];
+        }
         $verluste = [];
         foreach (($vorschlag->werte['verluste'] ?? []) as $idx => $pct) {
             if (is_numeric($pct)) {

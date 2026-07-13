@@ -123,7 +123,7 @@ class Browser extends Component
         }
     }
 
-    public function render(SalesRecipeService $verkauf, \Platform\FoodAlchemist\Services\FeedbackService $feedback)
+    public function render(SalesRecipeService $verkauf)
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
 
@@ -137,7 +137,6 @@ class Browser extends Component
 
         return view('foodalchemist::livewire.verkauf.browser', [
             'rezepte' => $rezepte,
-            'feedbackAgg' => $feedback->aggregatBulk($team, collect($rezepte->items())->pluck('id')->all()),
             'hauptgruppen' => $verkauf->dishMainGroups($team),
             'hgCounts' => $verkauf->hauptgruppenCounts($team),
             // Modell A: Klasse = die 4 flachen Diätformen (unabhängige Achse). Baum-Ansicht

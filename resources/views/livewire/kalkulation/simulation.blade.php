@@ -3,7 +3,9 @@
      betroffene Gerichte. Spiegelt das MCP-Tool foodalchemist.simulation.POST. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<div class="relative overflow-hidden {{ $card }} px-5 py-4" wire:key="sim-panel">
+{{-- #502: KEIN overflow-hidden auf dem Panel — sonst clippt es das GP-Autocomplete-Dropdown
+     am Seitenende. Die cardAccent-Haarlinie (1px, top) fällt an den Ecken nicht ins Gewicht. --}}
+<div class="relative {{ $card }} px-5 py-4" wire:key="sim-panel">
     <div class="{{ $cardAccent }}"></div>
 
     <div class="flex items-start justify-between gap-3 flex-wrap">

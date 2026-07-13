@@ -327,6 +327,12 @@ class AiGatewayService
         $treppe = config('foodalchemist.ai.backoff', [1, 3, 10]);
         $fallback = config('foodalchemist.ai.fallback_model');
 
+        // #499: Provider EINMAL vor der Treppe auflösen — ohne gebundenen Provider
+        // (demo) bubbelt die typisierte KiNichtVerfuegbarException sofort durch,
+        // statt in die Backoff-Sleeps (~28 s) zu laufen und als un-catchbare
+        // BindingResolutionException wieder rauszufallen.
+        $provider = $this->provider();
+
         $letzter = null;
         foreach ([null, $fallback] as $stufe => $modellWechsel) {
             if ($stufe === 1 && ($modellWechsel === null || ($options['model'] ?? null) === $modellWechsel)) {
@@ -338,7 +344,7 @@ class AiGatewayService
                     sleep((int) $warte);
                 }
                 try {
-                    return $this->provider()->chat($messages, $opts);
+                    return $provider->chat($messages, $opts);
                 } catch (\Throwable $e) {
                     $letzter = $e;
                 }
@@ -427,10 +433,21 @@ class AiGatewayService
 
     public function provider(): LLMProviderContract
     {
-        return match (config('foodalchemist.ai.provider', 'core')) {
-            'fake' => app(FakeAiProvider::class),
-            // Plattform-Binding — lazy aufgelöst, damit Sandbox/Tests ohne Core-LLM-Setup laufen
-            default => app(LLMProviderContract::class),
-        };
+        if (config('foodalchemist.ai.provider', 'core') === 'fake') {
+            return app(FakeAiProvider::class);
+        }
+
+        // #499: Plattform-Binding graceful — ist kein LLM-Provider gebunden (z. B.
+        // demo ohne Core-LLM-Setup), typisiert werfen statt roher
+        // BindingResolutionException (die als reine Exception jeden
+        // catch(\RuntimeException)-Guard der Entry-Points durchschlägt → 500).
+        if (! app()->bound(LLMProviderContract::class)) {
+            throw new \Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException();
+        }
+        try {
+            return app(LLMProviderContract::class);
+        } catch (\Throwable $e) {
+            throw new \Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException($e);
+        }
     }
 }

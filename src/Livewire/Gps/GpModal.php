@@ -189,7 +189,11 @@ class GpModal extends Component
 
             return;
         }
-        $this->bulkRunId = app(BulkEnrichService::class)->starteGp($team, [$gp->id]);
+        try {
+            $this->bulkRunId = app(BulkEnrichService::class)->starteGp($team, [$gp->id]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();                          // sync-Queue (demo) ohne Provider → graceful
+        }
     }
 
     public function bulkAlleUebernehmen(): void
@@ -212,11 +216,18 @@ class GpModal extends Component
 
     public function ai_zustand(AiGatewayService $ki): void
     {
+        $this->fehler = null;
         $gp = $this->gp();
-        $vorschlag = $ki->propose('gp.condition', [
-            'name' => $gp?->name ?? $this->vorschauName(),
-            'condition' => $this->builder['condition'] ?: null,
-        ]);
+        try {
+            $vorschlag = $ki->propose('gp.condition', [
+                'name' => $gp?->name ?? $this->vorschauName(),
+                'condition' => $this->builder['condition'] ?: null,
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         $this->kiVorschlag['condition'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),     // GL-07 Confidence-Clamp
@@ -279,11 +290,18 @@ class GpModal extends Component
 
     public function ai_tags(AiGatewayService $ki): void
     {
+        $this->fehler = null;
         $gp = $this->gp();
-        $vorschlag = $ki->propose('gp.tags', [
-            'name' => $gp?->name ?? $this->vorschauName(),
-            'tags' => collect($this->tags)->filter(fn ($v) => $v !== '')->map(fn ($v) => $v === '1')->all(),
-        ]);
+        try {
+            $vorschlag = $ki->propose('gp.tags', [
+                'name' => $gp?->name ?? $this->vorschauName(),
+                'tags' => collect($this->tags)->filter(fn ($v) => $v !== '')->map(fn ($v) => $v === '1')->all(),
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         $this->kiVorschlag['tags'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
@@ -352,7 +370,14 @@ class GpModal extends Component
         if (trim($this->kiRohtext) === '') {
             return;
         }
-        $vorschlag = $ki->propose('gp.suggest', ['label' => trim($this->kiRohtext)]);
+        $this->fehler = null;
+        try {
+            $vorschlag = $ki->propose('gp.suggest', ['label' => trim($this->kiRohtext)]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         foreach (['hauptzutat', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
             if (! empty($vorschlag->werte[$feld]) && is_string($vorschlag->werte[$feld])) {
                 $this->builder[$feld] = $vorschlag->werte[$feld];
@@ -383,7 +408,13 @@ class GpModal extends Component
             return;
         }
 
-        $vorschlag = $ki->propose('gp.suggest', ['label' => trim($designation)]);
+        try {
+            $vorschlag = $ki->propose('gp.suggest', ['label' => trim($designation)]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         $builder = $this->builder;
         foreach (['hauptzutat', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
             if (! empty($vorschlag->werte[$feld]) && is_string($vorschlag->werte[$feld])) {

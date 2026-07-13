@@ -54,8 +54,12 @@ class DetailPanel extends Component
             return;
         }
         $this->kiFehler = null;
-        $this->klasseVorschlag = app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)
-            ->classify($team, $this->recipeId);
+        try {
+            $this->klasseVorschlag = app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)
+                ->classify($team, $this->recipeId);
+        } catch (\RuntimeException $e) {
+            $this->kiFehler = $e->getMessage();
+        }
     }
 
     public function accept_klasse(): void
@@ -91,8 +95,12 @@ class DetailPanel extends Component
             return;
         }
         $this->kiFehler = null;
-        $this->rollenVorschlag = app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)
-            ->verteileRollen($team, $this->recipeId);
+        try {
+            $this->rollenVorschlag = app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)
+                ->verteileRollen($team, $this->recipeId);
+        } catch (\RuntimeException $e) {
+            $this->kiFehler = $e->getMessage();
+        }
     }
 
     public function accept_rollen(): void

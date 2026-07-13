@@ -167,15 +167,16 @@ return [
             ],
         ],
         [
-            // M12 GEBAUT: Kalkulations-Übersicht (HK1 Wareneinsatz → HK2 Vollkosten + Deckungsbeitrag).
+            // M12/#502: Was-wäre-wenn-Preissimulation als eigener Screen.
             'group' => 'Kalkulation',
             'items' => [
                 [
-                    // #379: „Kalkulation (HK2)" → Werkstatt (Regel-Cockpit + HK2-Ergebnis-Übersicht).
-                    // Kalkulator (Scratchpad) entfernt — Ad-hoc-Rechnen lebt im Angebote-Modul.
-                    'label' => 'Kalkulations-Werkstatt',
+                    // #502 (2026-07-13): Werkstatt aufgelöst — Regel-Editor zog zurück in die
+                    //   Einstellungen (→ Herstellkosten); hier bleibt die Preissimulation als
+                    //   eigener Screen. Ad-hoc-Rechnen lebt im Angebote-Modul.
+                    'label' => 'Preissimulation',
                     'route' => 'foodalchemist.kalkulation.index',
-                    'icon'  => 'heroicon-o-calculator',
+                    'icon'  => 'heroicon-o-arrows-right-left',
                 ],
             ],
         ],

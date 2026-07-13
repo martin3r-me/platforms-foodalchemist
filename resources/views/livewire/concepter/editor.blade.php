@@ -1096,7 +1096,9 @@
                         <div class="relative overflow-hidden {{ $card }} mb-3">
                             <div class="{{ $cardAccent }}"></div>
                             <div class="px-5 py-4 space-y-2">
-                                <h3 class="font-medium tracking-tight text-gray-900">Geschmacks-Balance</h3>
+                                <h3 class="font-medium tracking-tight text-gray-900">Geschmacks-Balance <span class="text-[11px] font-normal text-gray-400">· sensorisch</span></h3>
+                                {{-- #503: klar vom Aroma-Anker-„Geschmacks-Profil" abgrenzen — andere Quelle + Skala. --}}
+                                <p class="text-[11px] text-gray-500">Sensorische Grundgeschmack-Achsen (0–1) — nicht das Aroma-Anker-Profil.</p>
                                 @foreach($dimLabel as $d => $l)
                                     @php($v = (float) ($sensorik['geschmack'][$d] ?? 0))
                                     @php($istDom = in_array($d, $sensorik['dominant'], true))

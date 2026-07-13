@@ -131,10 +131,12 @@ Route::get('/foodbooks/{id}/dokument', function (int $id, \Platform\FoodAlchemis
 })->whereNumber('id')->name('foodalchemist.foodbooks.dokument');
 
 /**
- * R3.1: Interne navigierbare Foodbook-Lese-Ansicht (Kapitel-Baum + EK/VK/W%, Live-Resolver).
+ * #501 (2026-07-13): Die standalone interne R3.1-Lese-Ansicht (/foodbooks/{id}/ansicht,
+ * interne Pipe-Namen + EK/VK/W%) wurde ENTFERNT — Route, Livewire\Foodbooks\Ansicht,
+ * die ansicht-Blade und FoodbookService::ansichtDaten (inkl. Filter-Helfer) sind gelöscht.
+ * Kunden-Wording-Vorschau lebt jetzt im Editor (Menü-Toggle), Marge im Editor-Pax-Cockpit,
+ * Versand über das Foodbook-Dokument.
  */
-Route::get('/foodbooks/{id}/ansicht', \Platform\FoodAlchemist\Livewire\Foodbooks\Ansicht::class)
-    ->whereNumber('id')->name('foodalchemist.foodbooks.ansicht');
 
 /**
  * #380: Angebote — individuelle Anfrage → maßgeschneidertes Angebot (CRM + Concepter).

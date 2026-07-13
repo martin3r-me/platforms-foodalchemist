@@ -538,8 +538,13 @@ class VkModal extends Component
     /** ✨ Sensorik: KI bewertet das GEGARTE Gericht (Zutaten + Zubereitung) → Recipe-Sensorik-Tabellen. */
     public function sensorikBewerten(): void
     {
+        $this->fehler = null;
         if ($this->recipeId !== null) {
-            app(\Platform\FoodAlchemist\Services\SensorikService::class)->bewerteRezept($this->recipeId, true);
+            try {
+                app(\Platform\FoodAlchemist\Services\SensorikService::class)->bewerteRezept($this->recipeId, true);
+            } catch (\RuntimeException $e) {
+                $this->fehler = $e->getMessage();
+            }
         }
     }
 

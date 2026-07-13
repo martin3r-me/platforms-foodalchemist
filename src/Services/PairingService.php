@@ -714,7 +714,7 @@ class PairingService
             ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
             ->whereNotIn('a.id', $kern->pluck('id'))
             ->orderByRaw("CASE rp.type WHEN 'erprobt' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
-            ->orderBy('a.slug')->distinct()
+            ->orderBy('a.slug')
             ->get(['a.id', 'a.slug', 'a.display_de']);
 
         $anker = $kern->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de, 'kern' => true])

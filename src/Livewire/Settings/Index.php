@@ -26,8 +26,9 @@ class Index extends Component
         'concepter-dimensionen' => ['label' => 'Concepter-Dimensionen', 'hint' => 'Facetten: Einsatzmoment · Eventtyp · Saison · Servierform (Darreichungs-Scharnier)'],
         'einkauf' => ['label' => 'Einkauf & Lead-LA', 'hint' => 'Lead-Strategie (V-27) · Stamm-Lieferanten-Matrix'],
         'kalkulation' => ['label' => 'Kalkulation', 'hint' => 'Gar-/Putzverlust-, MwSt-Defaults, Rundung (GL-02)'],
-        // #379+ (2026-06-16): 'herstellkosten' zog ins Controlling-Zentrum (Kalkulations-Werkstatt) um.
-        //   Der Editor wird dort eingebettet; /einstellungen/herstellkosten leitet via mount() dorthin um.
+        // #502 (2026-07-13): Regel-Cockpit zurück unter Einstellungen (Werkstatt aufgelöst) —
+        //   Zuschläge, Fixkosten, Stundensatz, Marge. MwSt-Defaults liegen unter 'kalkulation'.
+        'herstellkosten' => ['label' => 'Herstellkosten & Zuschläge', 'hint' => 'Zuschlagsschema, Fixkosten, Stundensatz, Marge — rollt auf HK2/VK aus (#379/#502)'],
         'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Mandanten-Tendenz für den Generator (M7-07, Hooks gewinnen)'],
         'ki' => ['label' => 'KI', 'hint' => 'Provider · Tiering (V-01) · Nutzung · Kill-Switch (M7-08)'],
         'vk-taxonomie' => ['label' => 'VK-Taxonomie', 'hint' => 'Speisen-Hauptgruppen → Klassen mit Rezept-Zählern (D-6 §4.6)'],
@@ -41,14 +42,6 @@ class Index extends Component
 
     public function mount(string $sektion = 'einheiten'): void
     {
-        // #379+ (2026-06-16): Herstellkosten ist ins Controlling-Zentrum (Kalkulations-Werkstatt)
-        // umgezogen — alte Deep-Links/Lesezeichen sauber dorthin umleiten statt 404.
-        if ($sektion === 'herstellkosten') {
-            $this->redirect(route('foodalchemist.kalkulation.index'), navigate: true);
-
-            return;
-        }
-
         abort_unless(array_key_exists($sektion, self::SEKTIONEN), 404);
         $this->sektion = $sektion;
     }

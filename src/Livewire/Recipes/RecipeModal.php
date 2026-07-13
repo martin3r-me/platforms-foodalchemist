@@ -151,12 +151,19 @@ class RecipeModal extends Component
 
     public function ai_beschreibung(AiGatewayService $ki): void
     {
+        $this->fehler = null;
         $r = $this->rezept();
-        $vorschlag = $ki->propose('recipe.description', [
-            'name' => $r?->name ?? $this->form['name'],
-            'description' => $this->form['description'] ?: null,
-            'zutaten' => $r?->ingredients?->pluck('raw_text')->take(20)->all() ?? [],
-        ]);
+        try {
+            $vorschlag = $ki->propose('recipe.description', [
+                'name' => $r?->name ?? $this->form['name'],
+                'description' => $this->form['description'] ?: null,
+                'zutaten' => $r?->ingredients?->pluck('raw_text')->take(20)->all() ?? [],
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         $this->kiVorschlag['description'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
@@ -205,12 +212,19 @@ class RecipeModal extends Component
 
     public function ai_zubereitung(AiGatewayService $ki): void
     {
+        $this->fehler = null;
         $r = $this->rezept();
-        $vorschlag = $ki->propose('recipe.preparation', [
-            'name' => $r?->name ?? $this->form['name'],
-            'preparation' => $this->form['preparation'] ?: null,
-            'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
-        ]);
+        try {
+            $vorschlag = $ki->propose('recipe.preparation', [
+                'name' => $r?->name ?? $this->form['name'],
+                'preparation' => $this->form['preparation'] ?: null,
+                'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         $this->kiVorschlag['preparation'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
@@ -259,15 +273,22 @@ class RecipeModal extends Component
 
     public function ai_kategorie(AiGatewayService $ki, RecipeService $recipes): void
     {
+        $this->fehler = null;
         $r = $this->rezept();
         $team = Auth::user()?->currentTeamRelation;
-        $vorschlag = $ki->propose('recipe.category', [
-            'name' => $r?->name ?? $this->form['name'],
-            'category_id' => $this->form['category_id'],
-            'kategorien' => $team !== null
-                ? FoodAlchemistRecipeCategory::visibleToTeam($team)->orderBy('id')->limit(200)->pluck('label', 'id')->all()
-                : [],
-        ]);
+        try {
+            $vorschlag = $ki->propose('recipe.category', [
+                'name' => $r?->name ?? $this->form['name'],
+                'category_id' => $this->form['category_id'],
+                'kategorien' => $team !== null
+                    ? FoodAlchemistRecipeCategory::visibleToTeam($team)->orderBy('id')->limit(200)->pluck('label', 'id')->all()
+                    : [],
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         $this->kiVorschlag['category'] = [
             'werte' => $vorschlag->werte,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
@@ -532,12 +553,19 @@ class RecipeModal extends Component
     /** ✨ Fertigung: Vorschlag direkt ins Feld (wie namePutzen — nichts persistiert). */
     public function kiFertigung(AiGatewayService $ki): void
     {
+        $this->fehler = null;
         $r = $this->rezept();
-        $vorschlag = $ki->propose('recipe.production_depth', [
-            'name' => $this->form['name'],
-            'production_depth' => $this->form['production_depth'] ?: null,
-            'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
-        ]);
+        try {
+            $vorschlag = $ki->propose('recipe.production_depth', [
+                'name' => $this->form['name'],
+                'production_depth' => $this->form['production_depth'] ?: null,
+                'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         $wert = $vorschlag->werte['production_depth'] ?? null;
         if (in_array($wert, ['from_scratch', 'teilfertig', 'convenience'], true)) {
             $this->form['production_depth'] = $wert;
@@ -547,22 +575,29 @@ class RecipeModal extends Component
     /** ✨ Eigenschaften: Arbeitszeit/Temperatur/Funktion + Geschmack in die Form (Ist-App-Pendant). */
     public function kiEigenschaften(AiGatewayService $ki): void
     {
+        $this->fehler = null;
         $r = $this->rezept();
         $zutaten = $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [];
-        $eigenschaften = $ki->propose('recipe.eigenschaften', [
-            'name' => $this->form['name'],
-            'haltbarkeit_tage' => null, 'regenerierbarkeit' => null, 'transportstabilitaet' => null,
-            'work_time_min' => $this->form['work_time_min'], 'temperature' => $this->form['temperature'] ?: null,
-            'function' => $this->form['function'] ?: null, 'zutaten' => $zutaten,
-        ]);
-        foreach (['work_time_min', 'temperature', 'function'] as $feld) {
-            if (! empty($eigenschaften->werte[$feld])) {
-                $this->form[$feld] = $eigenschaften->werte[$feld];
+        try {
+            $eigenschaften = $ki->propose('recipe.eigenschaften', [
+                'name' => $this->form['name'],
+                'haltbarkeit_tage' => null, 'regenerierbarkeit' => null, 'transportstabilitaet' => null,
+                'work_time_min' => $this->form['work_time_min'], 'temperature' => $this->form['temperature'] ?: null,
+                'function' => $this->form['function'] ?: null, 'zutaten' => $zutaten,
+            ]);
+            foreach (['work_time_min', 'temperature', 'function'] as $feld) {
+                if (! empty($eigenschaften->werte[$feld])) {
+                    $this->form[$feld] = $eigenschaften->werte[$feld];
+                }
             }
+            $geschmack = $ki->propose('recipe.geschmack', [
+                'name' => $this->form['name'], 'taste_direction' => $this->form['taste_direction'] ?: null, 'zutaten' => $zutaten,
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
         }
-        $geschmack = $ki->propose('recipe.geschmack', [
-            'name' => $this->form['name'], 'taste_direction' => $this->form['taste_direction'] ?: null, 'zutaten' => $zutaten,
-        ]);
         if (in_array($geschmack->werte['taste_direction'] ?? null, ['suess', 'herzhaft', 'neutral'], true)) {
             $this->form['taste_direction'] = $geschmack->werte['taste_direction'];
         }
@@ -571,13 +606,20 @@ class RecipeModal extends Component
     /** ✨ Equipment: Slug-Vorschläge → Auswahl-Pills (nichts persistiert). */
     public function kiEquipment(AiGatewayService $ki): void
     {
+        $this->fehler = null;
         $r = $this->rezept();
-        $vorschlag = $ki->propose('recipe.equipment', [
-            'name' => $this->form['name'],
-            'equipment_slugs' => [],
-            'vokabular' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::pluck('slug')->all(),
-            'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
-        ]);
+        try {
+            $vorschlag = $ki->propose('recipe.equipment', [
+                'name' => $this->form['name'],
+                'equipment_slugs' => [],
+                'vokabular' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::pluck('slug')->all(),
+                'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         $slugs = array_filter((array) ($vorschlag->werte['equipment_slugs'] ?? []), 'is_string');
         if ($slugs !== []) {
             $ids = \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::whereIn('slug', $slugs)
@@ -589,8 +631,13 @@ class RecipeModal extends Component
     /** ✨ Sensorik: KI bewertet das GEGARTE Rezept (Zutaten + Zubereitung) → Recipe-Sensorik-Tabellen. */
     public function sensorikBewerten(): void
     {
+        $this->fehler = null;
         if ($this->recipeId !== null) {
-            app(\Platform\FoodAlchemist\Services\SensorikService::class)->bewerteRezept($this->recipeId, true);
+            try {
+                app(\Platform\FoodAlchemist\Services\SensorikService::class)->bewerteRezept($this->recipeId, true);
+            } catch (\RuntimeException $e) {
+                $this->fehler = $e->getMessage();
+            }
         }
     }
 
@@ -600,12 +647,17 @@ class RecipeModal extends Component
 
     public function allesAnreichern(): void
     {
+        $this->fehler = null;
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null || $this->recipeId === null) {
             return;
         }
-        $this->bulkRunId = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)
-            ->starte($team, [$this->recipeId]);
+        try {
+            $this->bulkRunId = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)
+                ->starte($team, [$this->recipeId]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();                          // sync-Queue (demo) ohne Provider → graceful
+        }
     }
 
     public function bulkAlleUebernehmen(): void
@@ -636,7 +688,14 @@ class RecipeModal extends Component
         if (trim($this->form['name']) === '') {
             return;
         }
-        $vorschlag = $ki->propose('recipe.name_putzen', ['name' => trim($this->form['name'])]);
+        $this->fehler = null;
+        try {
+            $vorschlag = $ki->propose('recipe.name_putzen', ['name' => trim($this->form['name'])]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         if (! empty($vorschlag->werte['name']) && is_string($vorschlag->werte['name'])) {
             $this->form['name'] = $vorschlag->werte['name'];
         }

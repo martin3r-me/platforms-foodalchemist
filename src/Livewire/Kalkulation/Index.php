@@ -10,21 +10,21 @@ use Platform\FoodAlchemist\Services\KalkulationService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 
 /**
- * M12 / #379+ (Dominique 2026-06-16): Kalkulations-Werkstatt = Controlling-Zentrum.
+ * M12 / #502 (Dominique 2026-07-13): Preissimulations-Screen („Was-wäre-wenn").
  *
- * EIN zentraler Ort, an dem der F&B-Manager seine stehenden Kosten pflegt —
- * Personal/Stundensatz, Fixkosten (Strom, Nebenkosten, Logistik …), Aufschlag-
- * sätze und Marge — und von dem aus sie auf ALLE Kalkulationen ausrollen
- * (HK2, VK-Vorschlag, „Marge unter Ziel"-Signal). Der eigentliche Kosten-Editor
- * (vormals Einstellungen → Herstellkosten) ist hier eingebettet.
+ * Eigener Screen für die hypothetische Preissimulation (WG/GP/Artikel ± X % →
+ * Portfolio-Marge-Delta). Zeigt oben die ausgerollten Kalkulations-Kennzahlen
+ * als read-only Kontext (Zielmarge, Wareneinsatz, HK2-Zuschlag, Fixkosten,
+ * Break-even, MwSt). Der eigentliche Regel-Editor (Zuschläge/Fixkosten/Marge)
+ * lebt seit #502 wieder in den Einstellungen → Herstellkosten (Werkstatt
+ * aufgelöst).
  *
  * Die reine, gerichts-/mengenbezogene Kalkulation (HK1 → HK2 → VK → DB) findet
- * im Concepter (Concepts) bzw. je Einzelgericht im Verkaufs-Browser statt — die
- * Werkstatt liefert nur die Regeln dafür.
+ * im Concepter (Concepts) bzw. je Einzelgericht im Verkaufs-Browser statt.
  */
 class Index extends Component
 {
-    /** Re-Render der Cockpit-Kacheln, sobald der eingebettete Editor speichert. */
+    /** Re-Render der Kennzahlen-Kacheln nach Regel-Änderung (Einstellungen). */
     #[On('kosten-aktualisiert')]
     public function aktualisiert(): void
     {

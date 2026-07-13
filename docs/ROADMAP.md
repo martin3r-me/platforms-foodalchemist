@@ -29,6 +29,19 @@ Erledigt + beschlossen (Dominique). Details: Memory `project_fa_bug_audit_2026-0
 - **Bulk-Skripte (105/206/layer2): NICHT auf MySQL portieren** — 206-Recompute läuft in FA (`RecipeRecomputeService::recomputeAll`); 105/layer2 als Legacy/Beleg ablegen.
 - **Board-Hygiene offen:** ~17 Issues im „Done"-Slot sind nie auf `is_done` geflippt (blähen die Feature-Zahl auf, „83" ≠ 83 offen); #470 „MySQL migrieren" ist erledigt, steht aber noch in „To Do".
 
+## ⭐ Update 2026-07-13 (Session: FA-Demo-Testrunde abgearbeitet)
+
+Dominiques Demo-Test auf demo.bhgdigital.de → 9 Befunde (#496–#504). **8/9 umgesetzt** (Details: Memory `project_fa_demo_testrunde_2026-07-13.md` + `00_INBOX/_FA_Demo_Testrunde_TODO_2026-07-13.md`). Pest **668/669** grün (1 skip), je Fix MySQL-/Livewire-Smoke, null Regressionen.
+- **#497** Aroma-Netz-Crash: `PairingService::aromaNetz` `distinct()` + `ORDER BY rp.type` (nicht im SELECT) = MySQL-3065 → `distinct()` raus (Downstream dedupt via `unique('id')`); Modul-`distinct()`-Sweep sauber.
+- **#500** Foodbook-Dokument-Crash: Blade `$kunde` → `$customer` (dokumentDaten liefert seit #486-Rename `customer`).
+- **#499** Alle KI-Funktionen auf demo down (kein LLM-Provider gebunden → un-catchbare `BindingResolutionException`): neue typisierte `KiNichtVerfuegbarException` (RuntimeException); `AiGatewayService::provider()` guarded (`app()->bound(...)`) + **vor** dem Backoff aufgelöst (28 ms statt 28 s Sinnlos-Sleeps); alle bare KI-Entry-Points gewrappt → graceful statt 500. **Martin-Teil offen: LLM-Provider auf demo binden** (entblockt zugleich R6.1-Blindtest #492).
+- **#498** Basisrezepte-Liste: Feedback-Spalte raus (leer) + Name-Spalte flexibel (kein truncate); VK-Browser identisch nachgezogen; `feedbackAgg`-Query entfernt.
+- **#496** MCP `knowledge.LIST` neu (`KnowledgeContextService::listDocuments`, Paging + Frontmatter-Parse thema/sub_thema/relevanz/recherche_datum/tags) — Bestand (~1.010 Docs) jetzt voll abrufbar (SEARCH cappt bei 50).
+- **#503** Doppeltes Geschmacks-Chart: beide behalten, klar differenziert (Heading „· sensorisch" vs „· Aroma-Anker" + Skalen-/Quell-Subtitles).
+- **#502** Kalkulations-Werkstatt aufgelöst: Regel-Editor zurück in Einstellungen → Herstellkosten; „Was-wäre-wenn" = eigener Preissimulations-Screen; Nav umbenannt; Autocomplete-Dropdown-`overflow`-Bug gefixt.
+- **#501** Standalone interne R3.1-Ansicht **entfernt** (Route + Link + `Livewire\Foodbooks\Ansicht` + Blade + `FoodbookService::ansichtDaten`) — Kunden-Wording-Vorschau lebt im Editor-Menü-Toggle, Marge im Editor-Pax-Cockpit.
+- **#504** MCP-Audit aller 49 Tools → eigenes Arbeitspaket (eigene Session), noch offen.
+
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 
 Quellen: `Datenmodell Food.Alchemist.md` (5 Ebenen) + `07.02_Flavor_Pairing/Datenbank Foodalchemist/_Plan_Datenmodell_Chemie-Pairing-DB.md` (Chemie-first Phase 1–4). Stationen von hier bis Voll-Ausbau:

@@ -6,8 +6,8 @@
     <div class="relative overflow-hidden {{ $card }} mt-3">
         <div class="{{ $cardAccent }}"></div>
         <div class="px-5 py-4 space-y-2">
-            <h3 class="font-medium tracking-tight text-gray-900">Geschmacks-Profil</h3>
-            <p class="text-[11px] text-gray-500">Gemittelte Geschmacks-Achsen der Kern-Anker (0–100 %). Grundlage: kuratierte Anker-Vektoren.</p>
+            <h3 class="font-medium tracking-tight text-gray-900">Geschmacks-Profil <span class="text-[11px] font-normal text-gray-400">· Aroma-Anker</span></h3>
+            <p class="text-[11px] text-gray-500">Gemittelte Geschmacks-Achsen der Kern-Anker (0–100 %). Grundlage: kuratierte Anker-Vektoren — nicht die sensorische Balance oben.</p>
             <div class="space-y-1.5 pt-1">
                 @foreach($tasteLabels as $key => $label)
                     @php($pct = (int) round(((float) ($tasteVals[$key] ?? 0)) * 100))

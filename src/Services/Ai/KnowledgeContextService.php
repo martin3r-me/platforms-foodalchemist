@@ -526,6 +526,141 @@ class KnowledgeContextService
         ], array_slice($scored, 0, $limit));
     }
 
+    /**
+     * #496: Vollständige, seiten-basierte Enumeration des Wissens-Bestands
+     * (ohne Suchbegriff, ohne 50er-Cap) — für MCP-Clients, die den ganzen
+     * Katalog abrufen wollen. Optional pro Kategorie gefiltert; Frontmatter
+     * (thema/sub_thema/relevanz/recherche_datum/tags) wird bei Bedarf aus dem
+     * content_md geparst.
+     *
+     * @return array{total: int, offset: int, limit: int, next_offset: ?int, categories: array<string,int>, documents: list<array>}
+     */
+    public function listDocuments(?string $kategorie, int $offset, int $limit, bool $mitFrontmatter = true): array
+    {
+        $limit = max(1, min(200, $limit));
+        $offset = max(0, $offset);
+
+        $base = DB::table('foodalchemist_knowledge_documents')
+            ->where('active', 1)->whereNull('deleted_at')
+            ->when($kategorie !== null, fn ($q) => $q->where('category', $kategorie));
+
+        $total = (clone $base)->count();
+        $categories = DB::table('foodalchemist_knowledge_documents')
+            ->where('active', 1)->whereNull('deleted_at')
+            ->select('category', DB::raw('COUNT(*) AS c'))->groupBy('category')
+            ->pluck('c', 'category')->map(fn ($c) => (int) $c)->all();
+
+        $spalten = ['slug', 'title', 'category', 'version', 'char_count', 'updated_at'];
+        if ($mitFrontmatter) {
+            $spalten[] = 'content_md';
+        }
+        $docs = (clone $base)->orderBy('category')->orderBy('slug')
+            ->offset($offset)->limit($limit)->get($spalten);
+
+        $documents = $docs->map(function ($doc) use ($mitFrontmatter) {
+            $row = [
+                'slug' => $doc->slug,
+                'title' => $doc->title,
+                'category' => $doc->category,
+                'version' => (int) $doc->version,
+                'char_count' => (int) $doc->char_count,
+                'updated_at' => $doc->updated_at,
+            ];
+            if ($mitFrontmatter) {
+                $fm = $this->parseFrontmatter((string) $doc->content_md);
+                $row['frontmatter'] = [
+                    'thema' => $fm['thema'] ?? null,
+                    'sub_thema' => $fm['sub_thema'] ?? null,
+                    'relevanz' => $fm['relevanz'] ?? null,
+                    'recherche_datum' => $fm['recherche_datum'] ?? null,
+                    'tags' => $this->normalizeTags($fm['tags'] ?? []),
+                ];
+            }
+
+            return $row;
+        })->all();
+
+        $next = ($offset + count($documents) < $total) ? $offset + count($documents) : null;
+
+        return [
+            'total' => $total,
+            'offset' => $offset,
+            'limit' => $limit,
+            'next_offset' => $next,
+            'categories' => $categories,
+            'documents' => $documents,
+        ];
+    }
+
+    /**
+     * Minimaler, dependency-freier YAML-Frontmatter-Parser (Skalar-Keys +
+     * Block-Sequenzen `- item`). Reicht für die geSyncten Research-/Domain-
+     * Header; kein voller YAML-Support (bewusst schlank, keine Symfony-Yaml-
+     * Abhängigkeit).
+     *
+     * @return array<string, string|list<string>>
+     */
+    private function parseFrontmatter(string $md): array
+    {
+        if (! preg_match('/\A\x{FEFF}?\s*---\R(.*?)\R---\s*(\R|$)/su', $md, $m)) {
+            return [];
+        }
+        $fm = [];
+        $listKey = null;
+        foreach (preg_split('/\R/', $m[1]) as $line) {
+            if ($listKey !== null && preg_match('/^\s*-\s+(.*\S)\s*$/', $line, $lm)) {
+                $fm[$listKey][] = $this->frontmatterScalar($lm[1]);
+
+                continue;
+            }
+            if (preg_match('/^([A-Za-z0-9_]+):\s*(.*)$/', $line, $km)) {
+                $wert = trim($km[2]);
+                if ($wert === '') {
+                    $listKey = $km[1];
+                    $fm[$listKey] = [];
+                } else {
+                    $fm[$km[1]] = $this->frontmatterScalar($wert);
+                    $listKey = null;
+                }
+            }
+        }
+
+        return $fm;
+    }
+
+    /**
+     * tags-Frontmatter auf eine Liste bringen — deckt Block-Sequenz (schon
+     * Array), Flow-Sequenz `[a, b, c]` und Einzel-Skalar ab.
+     *
+     * @param  string|list<string>  $tags
+     * @return list<string>
+     */
+    private function normalizeTags($tags): array
+    {
+        if (is_array($tags)) {
+            return array_values(array_filter(array_map(fn ($t) => $this->frontmatterScalar((string) $t), $tags), fn ($t) => $t !== ''));
+        }
+        $s = trim((string) $tags);
+        if ($s === '') {
+            return [];
+        }
+        if (str_starts_with($s, '[') && str_ends_with($s, ']')) {
+            $s = substr($s, 1, -1);
+        }
+
+        return array_values(array_filter(array_map(fn ($t) => $this->frontmatterScalar($t), explode(',', $s)), fn ($t) => $t !== ''));
+    }
+
+    private function frontmatterScalar(string $s): string
+    {
+        $s = trim($s);
+        if (strlen($s) >= 2 && ($s[0] === '"' || $s[0] === "'") && $s[-1] === $s[0]) {
+            $s = substr($s, 1, -1);
+        }
+
+        return trim($s);
+    }
+
     /** Einzelnes Wissens-Dokument per Slug (aktiv, nicht gelöscht). */
     public function getDocument(string $slug): ?object
     {
