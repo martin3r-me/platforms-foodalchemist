@@ -14,7 +14,7 @@
                 <div>
                     <div class="{{ $label }}">Foodbook · interne Ansicht</div>
                     <h1 class="text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">{{ $fb->label }}</h1>
-                    <p class="text-[11px] text-gray-400 mt-0.5">
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                         {{ count($kapitel) }} Kapitel{{ $fb->jahr ? ' · ' . $fb->jahr : '' }} · Live-Preise aus dem Resolver
                     </p>
                 </div>
@@ -98,7 +98,7 @@
             @endif
             @if($filter_aktiv)
                 <div class="flex items-center gap-3 pt-1">
-                    <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ $trefferGesamt }} Gericht-Treffer · Preise = ganzes Kapitel (Filter ist Sicht-Linse)</span>
+                    <span class="text-[11px] text-gray-600 dark:text-gray-400">{{ $trefferGesamt }} Gericht-Treffer · Preise = ganzes Kapitel (Filter ist Sicht-Linse)</span>
                     <button type="button" wire:click="filterZuruecksetzen" class="{{ $btnGhostXs }}">Filter zurücksetzen</button>
                 </div>
             @endif
@@ -106,7 +106,7 @@
     </div>
 
     @if(count($kapitel) === 0)
-        <p class="text-sm text-gray-400 py-10 text-center">Noch keine Kapitel in diesem Foodbook.</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400 py-10 text-center">Noch keine Kapitel in diesem Foodbook.</p>
     @else
     <div class="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4">
         {{-- ── Kapitel-Baum-Navigation (sticky) ─────────────────────────────── --}}
@@ -119,7 +119,7 @@
                             <a href="#kap-{{ $k['id'] }}" style="padding-left: {{ $k['depth'] * 12 + 4 }}px"
                                class="block py-1 pr-2 text-xs rounded hover:bg-violet-500/5 truncate {{ $filter_aktiv && $k['n_treffer'] === 0 ? 'text-gray-300 dark:text-gray-600' : 'text-gray-600 dark:text-gray-300' }}">
                                 {{ $k['title'] ?: '(ohne Titel)' }}
-                                @if($filter_aktiv)<span class="text-gray-400"> · {{ $k['n_treffer'] }}</span>@elseif($k['agg']['vk_pro_person'] > 0)<span class="text-gray-400"> · {{ number_format($k['agg']['vk_pro_person'], 2, ',', '.') }} €</span>@endif
+                                @if($filter_aktiv)<span class="text-gray-500 dark:text-gray-400"> · {{ $k['n_treffer'] }}</span>@elseif($k['agg']['vk_pro_person'] > 0)<span class="text-gray-500 dark:text-gray-400"> · {{ number_format($k['agg']['vk_pro_person'], 2, ',', '.') }} €</span>@endif
                             </a>
                         </li>
                     @endforeach
@@ -135,13 +135,13 @@
                     <div class="{{ $cardAccent }}"></div>
                     <button type="button" @click="open = !open" class="w-full flex items-center justify-between gap-3 px-5 py-3 text-left">
                         <span class="flex items-center gap-2 min-w-0">
-                            <span class="text-gray-400 text-xs transition-transform" :class="open || 'rotate-[-90deg]'">▾</span>
+                            <span class="text-gray-500 dark:text-gray-400 text-xs transition-transform" :class="open || 'rotate-[-90deg]'">▾</span>
                             <span class="font-medium tracking-tight text-gray-900 dark:text-gray-100 truncate">{{ $k['title'] ?: '(ohne Titel)' }}</span>
-                            <span class="text-[11px] text-gray-400 shrink-0">{{ $filter_aktiv ? $k['n_treffer'] . ' Treffer' : count($k['bloecke']) }}</span>
+                            <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0">{{ $filter_aktiv ? $k['n_treffer'] . ' Treffer' : count($k['bloecke']) }}</span>
                         </span>
                         <span class="flex items-center gap-2 shrink-0 text-xs tabular-nums">
-                            <span class="text-gray-500 dark:text-gray-400">VK {{ number_format($k['agg']['vk_pro_person'], 2, ',', '.') }} €</span>
-                            <span class="text-gray-400">EK {{ number_format($k['agg']['ek_per_person'], 2, ',', '.') }} €</span>
+                            <span class="text-gray-600 dark:text-gray-400">VK {{ number_format($k['agg']['vk_pro_person'], 2, ',', '.') }} €</span>
+                            <span class="text-gray-500 dark:text-gray-400">EK {{ number_format($k['agg']['ek_per_person'], 2, ',', '.') }} €</span>
                             <span class="{{ $pill }} {{ $variantPill[$wfarbe($wKap)] }}">{{ $wKap !== null ? number_format($wKap, 1, ',', '.') . ' %' : '—' }}</span>
                         </span>
                     </button>
@@ -149,7 +149,7 @@
                     <div x-show="open" x-cloak class="px-5 pb-3">
                         @php($sichtbareBloecke = $filter_aktiv ? collect($k['bloecke'])->reject(fn ($b) => $b['ist_header'] && $k['n_treffer'] === 0)->all() : $k['bloecke'])
                         @if($filter_aktiv && $k['n_treffer'] === 0)
-                            <p class="text-[11px] text-gray-400 py-2 italic">Keine Treffer in diesem Kapitel.</p>
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400 py-2 italic">Keine Treffer in diesem Kapitel.</p>
                         @else
                             @forelse($sichtbareBloecke as $b)
                                 <div class="py-1.5 border-t border-black/5 dark:border-white/10 {{ $b['ist_header'] ? 'mt-1' : '' }}">
@@ -160,16 +160,16 @@
                                             @endunless
                                             <span class="truncate {{ $b['ist_header'] ? 'font-semibold text-gray-700 dark:text-gray-200' : 'text-gray-800 dark:text-gray-100' }}">{{ $b['label'] }}</span>
                                             @if(($b['n_gesamt'] ?? 0) > 0 && $filter_aktiv && $b['n_sichtbar'] < $b['n_gesamt'])
-                                                <span class="text-[10px] text-gray-400 shrink-0">{{ $b['n_sichtbar'] }}/{{ $b['n_gesamt'] }}</span>
+                                                <span class="text-[10px] text-gray-500 dark:text-gray-400 shrink-0">{{ $b['n_sichtbar'] }}/{{ $b['n_gesamt'] }}</span>
                                             @endif
                                         </div>
                                         @unless($b['ist_header'])
-                                            <div class="flex items-center gap-2 shrink-0 text-xs tabular-nums text-gray-500 dark:text-gray-400">
+                                            <div class="flex items-center gap-2 shrink-0 text-xs tabular-nums text-gray-600 dark:text-gray-400">
                                                 @if($b['pauschal'] > 0)
                                                     <span title="Pauschalpreis">{{ number_format($b['pauschal'], 2, ',', '.') }} € pausch.</span>
                                                 @else
                                                     <span title="VK / Person">{{ number_format($b['vk_pp'], 2, ',', '.') }} €</span>
-                                                    <span class="text-gray-400" title="EK / Person">EK {{ number_format($b['ek_pp'], 2, ',', '.') }} €</span>
+                                                    <span class="text-gray-500 dark:text-gray-400" title="EK / Person">EK {{ number_format($b['ek_pp'], 2, ',', '.') }} €</span>
                                                     <span class="{{ $pill }} {{ $variantPill[$wfarbe($b['wpct'])] }}" title="Wareneinsatz">{{ $b['wpct'] !== null ? number_format($b['wpct'], 1, ',', '.') . ' %' : '—' }}</span>
                                                 @endif
                                             </div>
@@ -187,7 +187,7 @@
                                     @endif
                                 </div>
                             @empty
-                                <p class="text-[11px] text-gray-400 py-2">Keine sichtbaren Blöcke.</p>
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 py-2">Keine sichtbaren Blöcke.</p>
                             @endforelse
                         @endif
                     </div>

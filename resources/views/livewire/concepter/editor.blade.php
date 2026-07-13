@@ -3,7 +3,7 @@
 @php($item = $concept ?? $paket)
 @php($titel = $item?->name ?? 'Editor')
 @php($tabAktiv = 'border-violet-500 text-violet-700 dark:text-violet-300')
-@php($tabIdle = 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300')
+@php($tabIdle = 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300')
 @php($konfPill = ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']])
 {{-- Phase 5: Typ-Farbe als Inline-Style (dynamisch aus Settings) — Text = Hex, Hintergrund = Hex+1a (10%). --}}
 @php($typStyle = fn (string $t) => isset($typFarben[$t]) ? 'color:' . $typFarben[$t] . ';background-color:' . $typFarben[$t] . '1a' : '')
@@ -67,7 +67,7 @@
         @endif
 
         @if($item === null)
-            <p class="text-sm text-gray-400 py-10 text-center">Nichts geladen.</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 py-10 text-center">Nichts geladen.</p>
         @else
             {{-- ── Kopf ──────────────────────────────────────────────────── --}}
             <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -222,11 +222,11 @@
                                 <div wire:key="kpk-{{ $pk->id }}" draggable="true" @dragstart="dragTyp = 'paket'; dragId = {{ $pk->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px] cursor-grab active:cursor-grabbing">
                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider {{ $variantPill['info'] }}">PK</span>
                                     <span class="min-w-0 flex-1 break-words leading-snug text-gray-700 dark:text-gray-200" title="{{ $pk->name }}{{ $pk->role ? ' · ' . $pk->role : '' }}">{{ $pk->name }}</span>
-                                    <span class="shrink-0 text-[10px] text-gray-400 tabular-nums">{{ $pk->price_per_person !== null ? number_format((float) $pk->price_per_person, 2, ',', '.') . ' €' : '' }}</span>
+                                    <span class="shrink-0 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">{{ $pk->price_per_person !== null ? number_format((float) $pk->price_per_person, 2, ',', '.') . ' €' : '' }}</span>
                                     <button type="button" wire:click="positionEinfuegen('paket', {{ $pk->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
                                 </div>
                             @empty
-                                <p class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
+                                <p class="text-[10px] text-gray-500 dark:text-gray-400 px-1">— keine Treffer —</p>
                             @endforelse
                         </div>
                     @else
@@ -251,12 +251,12 @@
                                 <div wire:key="kbr-{{ $br->id }}" draggable="true" @dragstart="dragTyp = 'basisrezept'; dragId = {{ $br->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px] cursor-grab active:cursor-grabbing">
                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('basisrezept') }}">BR</span>
                                     <span class="min-w-0 flex-1 break-words leading-snug text-gray-700 dark:text-gray-200" title="{{ $br->name }}">{{ $br->name }}</span>
-                                    <span class="shrink-0 text-[10px] text-gray-400 tabular-nums">{{ $br->ek_total_eur !== null ? number_format((float) $br->ek_total_eur, 2, ',', '.') . ' €' : '' }}</span>
+                                    <span class="shrink-0 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">{{ $br->ek_total_eur !== null ? number_format((float) $br->ek_total_eur, 2, ',', '.') . ' €' : '' }}</span>
                                     <button type="button" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $br->id }} })" class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Rezept einsehen">📖</button>
                                     <button type="button" wire:click="positionEinfuegen('basisrezept', {{ $br->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
                                 </div>
                             @empty
-                                <p class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
+                                <p class="text-[10px] text-gray-500 dark:text-gray-400 px-1">— keine Treffer —</p>
                             @endforelse
                         </div>
                     @endif
@@ -274,8 +274,8 @@
                             @endif
                             {{-- UX-Umbau 2026-07-03: Toggle Bearbeiten ⇄ Menü (Gäste-Perspektive mit aufgelöstem Wording) --}}
                             <div class="inline-flex rounded-lg bg-black/[0.05] dark:bg-white/[0.06] p-0.5" role="group" aria-label="Ansicht" data-konzept-ansicht-toggle>
-                                <button type="button" @click="bauModus = true" :class="bauModus ? 'bg-white dark:bg-white/10 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-ansicht-bearbeiten>⚙ Bearbeiten</button>
-                                <button type="button" @click="bauModus = false" :class="!bauModus ? 'bg-white dark:bg-white/10 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-ansicht-menue>🍽 Menü</button>
+                                <button type="button" @click="bauModus = true" :class="bauModus ? 'bg-white dark:bg-white/10 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-ansicht-bearbeiten>⚙ Bearbeiten</button>
+                                <button type="button" @click="bauModus = false" :class="!bauModus ? 'bg-white dark:bg-white/10 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-ansicht-menue>🍽 Menü</button>
                             </div>
                         </div>
                     </div>
@@ -300,7 +300,7 @@
                         {{-- Gäste-Sicht: leere Gruppen (Paket ohne Gerichte, Header ohne Positionen) sind unsichtbar --}}
                         @php($menueGruppen = collect($menueGruppen)->filter(fn ($g) => $g['type'] === 'paket' ? $g['paket']->dishes->isNotEmpty() : count($g['slots']) > 0)->values())
 
-                        @php($quelleBadge = ['konzept' => ['Konzept-Wording', 'text-violet-600 dark:text-violet-400', 'bg-violet-500'], 'standard' => ['VK-Wording (Standard)', 'text-gray-400', 'bg-gray-400'], 'name' => ['Wording fehlt — interner Name', 'text-amber-600 dark:text-amber-400', 'bg-amber-500']])
+                        @php($quelleBadge = ['konzept' => ['Konzept-Wording', 'text-violet-600 dark:text-violet-400', 'bg-violet-500'], 'standard' => ['VK-Wording (Standard)', 'text-gray-500 dark:text-gray-400', 'bg-gray-400'], 'name' => ['Wording fehlt — interner Name', 'text-amber-600 dark:text-amber-400', 'bg-amber-500']])
                         @php($wres = app(\Platform\FoodAlchemist\Services\WordingResolver::class))
 
                         @forelse($menueGruppen as $g)
@@ -312,14 +312,14 @@
                                     @if($g['type'] === 'paket')
                                         <span class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0">📦 Paket</span>
                                         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['title'] }}</h4>
-                                        <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ $g['paket']->dishes->count() }} {{ $g['paket']->dishes->count() === 1 ? 'Gericht' : 'Gerichte' }}{{ $g['price'] !== null ? ' · ' . number_format((float) $g['price'], 2, ',', '.') . ' €/P fix' : '' }}</span>
+                                        <span class="ml-auto text-[11px] text-gray-500 dark:text-gray-400 tabular-nums shrink-0">{{ $g['paket']->dishes->count() }} {{ $g['paket']->dishes->count() === 1 ? 'Gericht' : 'Gerichte' }}{{ $g['price'] !== null ? ' · ' . number_format((float) $g['price'], 2, ',', '.') . ' €/P fix' : '' }}</span>
                                     @elseif($g['title'])
                                         <span class="{{ $pill }} {{ $variantPill['info'] }} shrink-0">Sektion</span>
                                         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $g['title'] }}</h4>
-                                        <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ $slotVks->isNotEmpty() ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}{{ $slotEks->isNotEmpty() ? ' · Σ EK ' . number_format($slotEks->sum(), 2, ',', '.') . ' €' : '' }}</span>
+                                        <span class="ml-auto text-[11px] text-gray-500 dark:text-gray-400 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ $slotVks->isNotEmpty() ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}{{ $slotEks->isNotEmpty() ? ' · Σ EK ' . number_format($slotEks->sum(), 2, ',', '.') . ' €' : '' }}</span>
                                     @else
-                                        <h4 class="text-[11px] font-medium uppercase tracking-wider text-gray-400">Gerichte</h4>
-                                        <span class="ml-auto text-[11px] text-gray-400 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ $slotVks->isNotEmpty() ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}</span>
+                                        <h4 class="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Gerichte</h4>
+                                        <span class="ml-auto text-[11px] text-gray-500 dark:text-gray-400 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ $slotVks->isNotEmpty() ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}</span>
                                     @endif
                                 </div>
                                 <div class="grid gap-2.5" style="grid-template-columns:repeat(auto-fill,minmax(270px,1fr))">
@@ -335,15 +335,15 @@
                                                     @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" class="text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Gericht öffnen">🍽️</button>@endif
                                                 </div>
                                                 <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug mt-1 {{ $pw['source'] === 'name' ? 'italic text-amber-700 dark:text-amber-300 font-medium' : '' }}">{{ $pw['text'] }}</p>
-                                                <p class="text-[10.5px] text-gray-400 font-mono truncate mt-0.5" title="{{ $pgG?->name }}">{{ $pgG?->name }}</p>
+                                                <p class="text-[10.5px] text-gray-500 dark:text-gray-400 font-mono truncate mt-0.5" title="{{ $pgG?->name }}">{{ $pgG?->name }}</p>
                                                 <div class="flex flex-wrap items-center gap-1.5 mt-2">
                                                     @if($pgG?->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($pgG?->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
-                                                    <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($pgEnthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="Allergene / Diät{{ count($pgEnthaelt) ? ' — enthält ' . implode(', ', $pgEnthaelt) : '' }} · Konfidenz {{ $pgG?->allergens_confidence ?? 'unbekannt' }}">A</span>
+                                                    <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($pgEnthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-500 dark:text-gray-400' }}" title="Allergene / Diät{{ count($pgEnthaelt) ? ' — enthält ' . implode(', ', $pgEnthaelt) : '' }} · Konfidenz {{ $pgG?->allergens_confidence ?? 'unbekannt' }}">A</span>
                                                     @if($pw['source'] === 'name')<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" class="{{ $pill }} {{ $variantPill['warning'] }}" title="VK-Wording am Gericht ergänzen">✎ Wording ergänzen</button>@endif
                                                 </div>
                                                 <div class="flex gap-3 mt-2.5 pt-2 border-t border-black/5 dark:border-white/10 tabular-nums">
-                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">VK/P</span><span class="text-xs font-semibold text-gray-500 dark:text-gray-400">im Paket</span></span>
-                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">EK</span><span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{{ $pgG?->ek_total_eur !== null ? number_format((float) $pgG->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</span></span>
+                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">VK/P</span><span class="text-xs font-semibold text-gray-600 dark:text-gray-400">im Paket</span></span>
+                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">EK</span><span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{{ $pgG?->ek_total_eur !== null ? number_format((float) $pgG->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</span></span>
                                                 </div>
                                             </article>
                                         @endforeach
@@ -362,21 +362,21 @@
                                                     <button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $s->sales_recipe_id }} })" class="text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Gericht öffnen">🍽️</button>
                                                 </div>
                                                 <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug mt-1 {{ $w['source'] === 'name' ? 'italic text-amber-700 dark:text-amber-300 font-medium' : '' }}">{{ $w['text'] }}</p>
-                                                <p class="text-[10.5px] text-gray-400 font-mono truncate mt-0.5" title="{{ $g0->name }}">{{ $g0->name }}</p>
+                                                <p class="text-[10.5px] text-gray-500 dark:text-gray-400 font-mono truncate mt-0.5" title="{{ $g0->name }}">{{ $g0->name }}</p>
                                                 <div class="flex flex-wrap gap-1.5 mt-2">
                                                     @if(isset($darreichungInfo[$s->id]))
                                                         <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$s->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}">🍴 {{ $darreichungInfo[$s->id] }}</span>
                                                     @endif
                                                     @if($g0->dishClass)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g0->dishClass->label }}</span>@endif
                                                     @if($g0->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($g0->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
-                                                    <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="Allergene / Diät{{ count($enthaelt) ? ' — enthält ' . implode(', ', $enthaelt) : '' }} · Konfidenz {{ $g0->allergens_confidence ?? 'unbekannt' }}">A</span>
+                                                    <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-500 dark:text-gray-400' }}" title="Allergene / Diät{{ count($enthaelt) ? ' — enthält ' . implode(', ', $enthaelt) : '' }} · Konfidenz {{ $g0->allergens_confidence ?? 'unbekannt' }}">A</span>
                                                     @if(isset($varianteFehlt[$s->id]))<button type="button" wire:click="varianteAnlegen({{ $s->id }})" class="{{ $pill }} {{ $variantPill['warning'] }}" title="Konzept-Servierform fehlt als Darreichung — anlegen">⚠ Form fehlt</button>@endif
                                                     @if($w['source'] === 'name')<button type="button" @click="bauModus = true" class="{{ $pill }} {{ $variantPill['warning'] }}" title="In der Bearbeiten-Ansicht Wording ergänzen">✎ Wording ergänzen</button>@endif
                                                 </div>
                                                 <div class="flex gap-3 mt-2.5 pt-2 border-t border-black/5 dark:border-white/10 tabular-nums">
-                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">VK/P</span><span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</span></span>
-                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">EK</span><span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{{ $ekz !== null ? number_format((float) $ekz, 2, ',', '.') . ' €' : '—' }}</span></span>
-                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-400">W%</span><span class="text-xs font-semibold {{ $wpct !== null && $wpct > 35 ? 'text-rose-500' : 'text-gray-700 dark:text-gray-200' }}">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</span></span>
+                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">VK/P</span><span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</span></span>
+                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">EK</span><span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{{ $ekz !== null ? number_format((float) $ekz, 2, ',', '.') . ' €' : '—' }}</span></span>
+                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">W%</span><span class="text-xs font-semibold {{ $wpct !== null && $wpct > 35 ? 'text-rose-500' : 'text-gray-700 dark:text-gray-200' }}">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</span></span>
                                                 </div>
                                             </article>
                                         @endforeach
@@ -384,10 +384,10 @@
                                 </div>
                             </section>
                         @empty
-                            <p class="text-xs text-gray-400 py-8 text-center">Noch keine Gerichte im Konzept — links in der Bearbeiten-Ansicht einfügen.</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 py-8 text-center">Noch keine Gerichte im Konzept — links in der Bearbeiten-Ansicht einfügen.</p>
                         @endforelse
 
-                        <div class="flex flex-wrap gap-3 text-[11px] text-gray-500 dark:text-gray-400 pt-1 border-t border-black/5 dark:border-white/10">
+                        <div class="flex flex-wrap gap-3 text-[11px] text-gray-600 dark:text-gray-400 pt-1 border-t border-black/5 dark:border-white/10">
                             <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>Konzept-Wording</span>
                             <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>VK-Wording Standard</span>
                             <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>kein Wording — Handlungsbedarf</span>
@@ -437,11 +437,11 @@
                                 class="{{ $tr }} {{ $istStruktur ? 'bg-violet-500/[0.03]' : '' }} {{ $slot->package_id ? 'bg-violet-500/[0.06] border-t-2 !border-t-violet-500/30' : '' }} {{ $einfuegenNachId === $slot->id ? 'border-b-2 !border-b-violet-400' : '' }}">
                                 <td class="{{ $td }} !px-1.5 !py-0.5 whitespace-nowrap align-top">
                                     {{-- Ziehgriff: Position per Drag umsortieren (▲▼ bleibt als zuverlässige Alternative) --}}
-                                    <span class="inline-block cursor-grab active:cursor-grabbing text-gray-400 hover:text-violet-500 select-none align-middle mr-0.5" draggable="true"
+                                    <span class="inline-block cursor-grab active:cursor-grabbing text-gray-500 dark:text-gray-400 hover:text-violet-500 select-none align-middle mr-0.5" draggable="true"
                                           @dragstart="dragSlotId = {{ $slot->id }}; $event.dataTransfer.effectAllowed = 'move'" @dragend="dragSlotId = null" title="ziehen zum Umsortieren">⠿</span>
                                     <span class="inline-flex flex-col align-middle leading-none">
-                                        <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-[9px] text-gray-500 hover:text-violet-500 leading-none" title="hoch">▲</button>
-                                        <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-[9px] text-gray-500 hover:text-violet-500 leading-none" title="runter">▼</button>
+                                        <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-[9px] text-gray-600 dark:text-gray-400 hover:text-violet-500 leading-none" title="hoch">▲</button>
+                                        <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-[9px] text-gray-600 dark:text-gray-400 hover:text-violet-500 leading-none" title="runter">▼</button>
                                     </span>
                                     @if(! $istStruktur && $slot->sales_recipe_id)
                                         <input type="checkbox" wire:click="toggleAuswahl({{ $slot->id }})" @checked(in_array($slot->id, $auswahl)) class="ml-1 align-middle rounded border-gray-300 text-violet-500 focus:ring-violet-500/30" title="für „Paket bilden“ markieren" />
@@ -493,9 +493,9 @@
                                             {{-- Paket = Abschnitts-Header (Gerichte stehen als eingerückte Zeilen darunter) --}}
                                             <span class="{{ $pill }} {{ $variantPill['info'] }}">📦 Paket</span>
                                             <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $slot->package->name }}</span>
-                                            <button type="button" wire:click="paketOeffnen({{ $slot->package_id }})" class="text-gray-400 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">📦</button>
+                                            <button type="button" wire:click="paketOeffnen({{ $slot->package_id }})" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">📦</button>
                                             @if($slot->package->class)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->package->class }}</span>@endif
-                                            <span class="text-gray-400 text-[11px] tabular-nums">{{ $slot->package->price_per_person !== null ? number_format((float) $slot->package->price_per_person, 2, ',', '.') . ' €/P' : '' }}</span>
+                                            <span class="text-gray-500 dark:text-gray-400 text-[11px] tabular-nums">{{ $slot->package->price_per_person !== null ? number_format((float) $slot->package->price_per_person, 2, ',', '.') . ' €/P' : '' }}</span>
                                         @elseif($slot->sales_recipe_id && $slot->dish)
                                             @php($g = $slot->dish)
                                             @php($enthaelt = collect(['Schwein' => $g->spec_contains_pork, 'Rind' => $g->spec_contains_beef])->filter()->keys()->all())
@@ -519,14 +519,14 @@
                                                 </select>
                                             @endif
                                             @if($g->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($g->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
-                                            <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium align-middle {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-400' }}" title="{{ $allTitle }}">A</span>
+                                            <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium align-middle {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-black/5 dark:bg-white/10 text-gray-500 dark:text-gray-400' }}" title="{{ $allTitle }}">A</span>
                                             {{-- Phase 6: einsehen — Basisrezept → Rezept-Fenster, VK-Gericht → Gericht-Fenster (über dem Editor) --}}
                                             <button type="button" @click="Livewire.dispatch('{{ $slot->type === 'basisrezept' ? 'recipe-modal' : 'vk-modal' }}.oeffnen', { id: {{ $slot->sales_recipe_id }} })" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="{{ $slot->type === 'basisrezept' ? 'Rezept' : 'Gericht' }} einsehen">{{ $slot->type === 'basisrezept' ? '📖' : '🍽️' }}</button>
                                             {{-- R4.4: Zutaten-Baum (read-first) + konzept-lokale Slot-Variante --}}
                                             <button type="button" wire:click="zutatenToggle({{ $slot->id }})" class="text-[11px] ml-1 align-middle {{ $zutatenOffenSlotId === $slot->id ? 'text-violet-600 dark:text-violet-400' : 'text-gray-300 hover:text-violet-500' }}" title="Zutaten-Zeilen zeigen (Tausch erzeugt eine konzept-lokale Variante — Quell-Gericht bleibt unangetastet)" data-slot-zutaten-toggle>🧾</button>
                                             @if($slot->variant_source_recipe_id !== null)
                                                 <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="Konzept-lokale Variante — das Quell-Gericht ist unverändert" data-slot-variiert>variiert</span>
-                                                <button type="button" wire:click="slotVarianteZuruecksetzen({{ $slot->id }})" wire:confirm="Variante verwerfen und Original-Gericht wiederherstellen?" class="text-[10px] text-gray-400 hover:text-rose-500 align-middle" data-slot-variante-reset>↩ Original</button>
+                                                <button type="button" wire:click="slotVarianteZuruecksetzen({{ $slot->id }})" wire:confirm="Variante verwerfen und Original-Gericht wiederherstellen?" class="text-[10px] text-gray-500 dark:text-gray-400 hover:text-rose-500 align-middle" data-slot-variante-reset>↩ Original</button>
                                             @endif
                                             {{-- Umbau-Spec Phase 5: Konzept-Servierform ohne passende Darreichung → 1-Klick-Anlage --}}
                                             @if(isset($varianteFehlt[$slot->id]))
@@ -537,7 +537,7 @@
                                             {{-- Concept-Wording: Brand-Voice-Anzeigename je Position (leer = Standardname; ✨ oben füllt alle) --}}
                                             <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.wording" wire:change="wordingSpeichern({{ $slot->id }})" class="{{ $input }} !py-0.5 !text-[11px] italic mt-1 w-full" placeholder="Anzeigename im Konzept-Wording … (leer = „{{ $g->name }}“)" data-slot-wording />
                                         @else
-                                            <span class="text-xs text-gray-400">leer — links/rechts aus den Listen einfügen</span>
+                                            <span class="text-xs text-gray-500 dark:text-gray-400">leer — links/rechts aus den Listen einfügen</span>
                                             @if($slot->note)
                                                 {{-- R6.1: Generator-Begründung, warum der Slot bewusst leer blieb --}}
                                                 <div class="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5" data-slot-leer-begruendung>⚠ {{ $slot->note }}</div>
@@ -547,17 +547,17 @@
                                     <td class="{{ $td }} !px-2 align-top"><input type="text" wire:model.blur="slotForm.{{ $slot->id }}.role" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} !w-28" placeholder="Rolle" /></td>
                                     <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $ekz !== null ? number_format((float) $ekz, 2, ',', '.') . ' €' : '—' }}</td>
-                                    <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top text-gray-400">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</td>
+                                    <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top text-gray-500 dark:text-gray-400">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</td>
                                 @endif
                                 <td class="{{ $td }} !px-2 text-right whitespace-nowrap align-top">
                                     @if(! $istStruktur)
-                                        <label class="inline-flex items-center gap-0.5 text-[10px] text-gray-400 mr-1" title="Pflicht-Position">
+                                        <label class="inline-flex items-center gap-0.5 text-[10px] text-gray-500 dark:text-gray-400 mr-1" title="Pflicht-Position">
                                             <input type="checkbox" wire:model="slotForm.{{ $slot->id }}.is_pflicht" wire:change="slotSpeichern({{ $slot->id }})" class="rounded border-gray-300 !w-3 !h-3" />P
                                         </label>
-                                        <button type="button" wire:click="fillToggle({{ $slot->id }})" class="text-gray-400 hover:text-violet-500 text-[11px]" title="Befüllung ändern">⚙</button>
+                                        <button type="button" wire:click="fillToggle({{ $slot->id }})" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[11px]" title="Befüllung ändern">⚙</button>
                                     @endif
                                     <button type="button" wire:click="zielSetzen({{ $slot->id }})" class="text-[11px] ml-1 align-middle {{ $einfuegenNachId === $slot->id ? 'text-violet-600 dark:text-violet-400' : 'text-gray-300 hover:text-violet-500' }}" title="{{ $einfuegenNachId === $slot->id ? 'Einfügeziel aktiv — nächste Position landet hier darunter (Klick = abwählen)' : 'Hier einfügen — die nächste neue Position landet unter dieser Zeile' }}">📍</button>
-                                    <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-400 hover:text-red-500 ml-1" title="entfernen">✕</button>
+                                    <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-500 dark:text-gray-400 hover:text-red-500 ml-1" title="entfernen">✕</button>
                                 </td>
                             </tr>
                             {{-- Paket-Position = Abschnitt: seine Gerichte stehen immer read-only als eingerückte Zeilen darunter --}}
@@ -570,12 +570,12 @@
                                                 <div wire:key="epaketg-{{ $slot->id }}-{{ $pg->id }}" class="flex items-center gap-2 px-3 py-1 text-[11px]">
                                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gericht') }}">G</span>
                                                     <span class="flex-1 min-w-0 break-words leading-snug text-gray-700 dark:text-gray-200">{{ $pg->dish?->name ?? '—' }}</span>
-                                                    <span class="shrink-0 text-gray-400 tabular-nums">{{ $pg->quantity !== null ? rtrim(rtrim(number_format((float) $pg->quantity, 2, ',', '.'), '0'), ',') . '×' : '' }}</span>
-                                                    <span class="shrink-0 text-gray-400 tabular-nums w-16 text-right">{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                                    <span class="shrink-0 text-gray-500 dark:text-gray-400 tabular-nums">{{ $pg->quantity !== null ? rtrim(rtrim(number_format((float) $pg->quantity, 2, ',', '.'), '0'), ',') . '×' : '' }}</span>
+                                                    <span class="shrink-0 text-gray-500 dark:text-gray-400 tabular-nums w-16 text-right">{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                                                     @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="Gericht einsehen">🍽️</button>@endif
                                                 </div>
                                             @empty
-                                                <p class="px-3 py-1.5 text-[11px] text-gray-400">Paket ohne Gerichte — im Paket-Editor pflegen.</p>
+                                                <p class="px-3 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Paket ohne Gerichte — im Paket-Editor pflegen.</p>
                                             @endforelse
                                         </div>
                                     </td>
@@ -590,7 +590,7 @@
                                             @forelse($slotZutaten as $z)
                                                 <div wire:key="ezutat-{{ $slot->id }}-{{ $z['id'] }}" class="flex items-center gap-2 px-3 py-1 text-[11px]">
                                                     <span class="flex-1 min-w-0 truncate text-gray-700 dark:text-gray-200">{{ $z['name'] }}</span>
-                                                    <span class="shrink-0 text-gray-400 tabular-nums">{{ $z['menge'] }}</span>
+                                                    <span class="shrink-0 text-gray-500 dark:text-gray-400 tabular-nums">{{ $z['menge'] }}</span>
                                                     @if($z['swap_locked'])
                                                         <span class="shrink-0" title="swap-gesperrt — bewusst gewählte Realisierung">🔒</span>
                                                     @elseif($z['ersatz'] !== null)
@@ -605,7 +605,7 @@
                                                     @endif
                                                 </div>
                                             @empty
-                                                <p class="px-3 py-1.5 text-[11px] text-gray-400">Keine Zutaten-Zeilen an diesem Gericht.</p>
+                                                <p class="px-3 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Keine Zutaten-Zeilen an diesem Gericht.</p>
                                             @endforelse
                                         </div>
                                     </td>
@@ -625,7 +625,7 @@
                                             <button type="button" wire:click="gerichtPicker({{ $slot->id }})" class="{{ $btnGhostXs }}">Gericht / Basisrezept …</button>
                                             <button type="button" wire:click="neuesPaketImSlot({{ $slot->id }})" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Inline ein neues Paket schnüren">+ neues Paket</button>
                                             @if($slot->package_id || $slot->sales_recipe_id)
-                                                <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-400 hover:text-red-500">leeren</button>
+                                                <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-500 dark:text-gray-400 hover:text-red-500">leeren</button>
                                             @endif
                                         </div>
                                         @if($fillSlotId === $slot->id)
@@ -644,12 +644,12 @@
                                                         @foreach($kandidaten as $kand)
                                                             <button type="button" wire:key="ek-{{ $slot->id }}-{{ $kand->id }}" wire:click="fuelleGericht({{ $slot->id }}, {{ $kand->id }}, '{{ $pickTyp }}')" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
                                                                 <span class="truncate">{{ $kand->name }}</span>
-                                                                <span class="text-gray-400 tabular-nums shrink-0">@if($pickTyp === 'gericht'){{ $kand->sales_net !== null ? number_format((float) $kand->sales_net, 2, ',', '.') . ' €' : '' }}@else{{ $kand->ek_total_eur !== null ? 'EK ' . number_format((float) $kand->ek_total_eur, 2, ',', '.') . ' €' : '' }}@endif</span>
+                                                                <span class="text-gray-500 dark:text-gray-400 tabular-nums shrink-0">@if($pickTyp === 'gericht'){{ $kand->sales_net !== null ? number_format((float) $kand->sales_net, 2, ',', '.') . ' €' : '' }}@else{{ $kand->ek_total_eur !== null ? 'EK ' . number_format((float) $kand->ek_total_eur, 2, ',', '.') . ' €' : '' }}@endif</span>
                                                             </button>
                                                         @endforeach
                                                     </div>
                                                 @elseif($gerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '' || $pickDiaet !== '')
-                                                    <p class="text-[11px] text-gray-400 px-2 py-1">Keine Treffer für diese Auswahl.</p>
+                                                    <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-1">Keine Treffer für diese Auswahl.</p>
                                                 @endif
                                             </div>
                                         @endif
@@ -657,7 +657,7 @@
                                 </tr>
                             @endif
                         @empty
-                            <tr><td colspan="9" class="text-xs text-gray-400 py-4 text-center">Noch keine Positionen — links/rechts aus den Listen mit „+" einfügen (oder ziehen), Abschnitte über „+ Paket".</td></tr>
+                            <tr><td colspan="9" class="text-xs text-gray-500 dark:text-gray-400 py-4 text-center">Noch keine Positionen — links/rechts aus den Listen mit „+" einfügen (oder ziehen), Abschnitte über „+ Paket".</td></tr>
                         @endforelse
                         </tbody>
                     </table>
@@ -673,12 +673,12 @@
                             <div wire:key="kgr-{{ $gr->id }}" draggable="true" @dragstart="dragTyp = 'gericht'; dragId = {{ $gr->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px] cursor-grab active:cursor-grabbing">
                                 <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gericht') }}">G</span>
                                 <span class="min-w-0 flex-1 break-words leading-snug text-gray-700 dark:text-gray-200" title="{{ $gr->name }}">{{ $gr->name }}</span>
-                                <span class="shrink-0 text-[10px] text-gray-400 tabular-nums">{{ $gr->sales_net !== null ? number_format((float) $gr->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                <span class="shrink-0 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">{{ $gr->sales_net !== null ? number_format((float) $gr->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                                 <button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $gr->id }} })" class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Gericht einsehen">🍽️</button>
                                 <button type="button" wire:click="positionEinfuegen('gericht', {{ $gr->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
                             </div>
                         @empty
-                            <p class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400 px-1">— keine Treffer —</p>
                         @endforelse
                     </div>
                 </aside>
@@ -689,26 +689,26 @@
                     <div class="flex-1 min-w-0 space-y-2">
                     <div class="flex items-center justify-between">
                         <h3 class="font-medium text-gray-900 dark:text-gray-100">Posten im Paket</h3>
-                        <span class="text-[11px] text-gray-400">Gerichte (VK) + Basisrezepte (Menge = g/Person).</span>
+                        <span class="text-[11px] text-gray-500 dark:text-gray-400">Gerichte (VK) + Basisrezepte (Menge = g/Person).</span>
                     </div>
                     <div class="space-y-1">
                         @forelse($paket->dishes as $pg)
                             @php($istBasis = ! ($pg->dish?->is_sales_recipe ?? true))
                             <div wire:key="epg-{{ $pg->id }}" class="flex items-center gap-2 rounded-lg border border-black/5 dark:border-white/10 px-3 py-1.5">
                                 <span class="flex flex-col -my-0.5 shrink-0">
-                                    <button type="button" wire:click="gerichtHoch({{ $pg->id }})" class="text-gray-400 hover:text-violet-500 leading-none">▲</button>
-                                    <button type="button" wire:click="gerichtRunter({{ $pg->id }})" class="text-gray-400 hover:text-violet-500 leading-none">▼</button>
+                                    <button type="button" wire:click="gerichtHoch({{ $pg->id }})" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 leading-none">▲</button>
+                                    <button type="button" wire:click="gerichtRunter({{ $pg->id }})" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 leading-none">▼</button>
                                 </span>
                                 <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle($istBasis ? 'basisrezept' : 'gericht') }}">{{ $istBasis ? 'BR' : 'G' }}</span>
                                 <span class="flex-1 min-w-0 truncate text-sm">{{ $pg->dish?->name ?? '—' }}</span>
                                 @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('{{ $istBasis ? 'recipe-modal.oeffnen' : 'vk-modal.oeffnen' }}', { id: {{ $pg->sales_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="{{ $istBasis ? 'Basisrezept' : 'Gericht' }} einsehen">{{ $istBasis ? '📋' : '🍽️' }}</button>@endif
-                                <span class="text-[10px] text-gray-400">{{ $istBasis ? 'g/Person' : 'Menge/Person' }}</span>
+                                <span class="text-[10px] text-gray-500 dark:text-gray-400">{{ $istBasis ? 'g/Person' : 'Menge/Person' }}</span>
                                 <input type="number" step="0.01" min="0" wire:model.blur="" value="{{ $pg->quantity }}" wire:change="gerichtMengeSpeichern({{ $pg->id }}, $event.target.value)" class="{{ $input }} w-24 text-right tabular-nums" />
-                                <span class="text-gray-400 text-xs tabular-nums w-16 text-right">@if($istBasis){{ $pg->dish?->ek_total_eur !== null ? 'EK ' . number_format((float) $pg->dish->ek_total_eur, 2, ',', '.') . ' €' : '' }}@else{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}@endif</span>
-                                <button type="button" wire:click="gerichtRaus({{ $pg->sales_recipe_id }})" class="text-gray-400 hover:text-red-500 px-1" title="entfernen">✕</button>
+                                <span class="text-gray-500 dark:text-gray-400 text-xs tabular-nums w-16 text-right">@if($istBasis){{ $pg->dish?->ek_total_eur !== null ? 'EK ' . number_format((float) $pg->dish->ek_total_eur, 2, ',', '.') . ' €' : '' }}@else{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}@endif</span>
+                                <button type="button" wire:click="gerichtRaus({{ $pg->sales_recipe_id }})" class="text-gray-500 dark:text-gray-400 hover:text-red-500 px-1" title="entfernen">✕</button>
                             </div>
                         @empty
-                            <p class="text-xs text-gray-400 py-4 text-center">Noch keine Posten. Rechts Gericht oder Basisrezept suchen und hinzufügen.</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 py-4 text-center">Noch keine Posten. Rechts Gericht oder Basisrezept suchen und hinzufügen.</p>
                         @endforelse
                     </div>
                     </div>{{-- /Mitte Paket-Inhalt --}}
@@ -731,21 +731,21 @@
                             @else
                                 @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'paketGerichtSuche'])
                             @endif
-                            <p class="text-[10px] text-gray-400 mt-0.5">Treffer: <span class="text-violet-500 font-bold">+</span> parken → {{ $paketQuelle === 'basisrezept' ? 'g/Person' : 'Menge/Person' }} → Enter.</p>
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Treffer: <span class="text-violet-500 font-bold">+</span> parken → {{ $paketQuelle === 'basisrezept' ? 'g/Person' : 'Menge/Person' }} → Enter.</p>
                             @if($paketKandidaten->isNotEmpty())
                                 <div class="space-y-0.5 max-h-56 overflow-y-auto mt-1">
                                     @foreach($paketKandidaten as $kand)
                                         <div wire:key="epk-{{ $paketQuelle }}-{{ $kand->id }}" class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">
                                             <span class="truncate">{{ $kand->name }}</span>
                                             <span class="flex items-center gap-2 shrink-0">
-                                                <span class="text-gray-400 tabular-nums">@if($paketQuelle === 'basisrezept'){{ $kand->ek_total_eur !== null ? 'EK ' . number_format((float) $kand->ek_total_eur, 2, ',', '.') . ' €' : '' }}@else{{ $kand->sales_net !== null ? number_format((float) $kand->sales_net, 2, ',', '.') . ' €' : '' }}@endif</span>
+                                                <span class="text-gray-500 dark:text-gray-400 tabular-nums">@if($paketQuelle === 'basisrezept'){{ $kand->ek_total_eur !== null ? 'EK ' . number_format((float) $kand->ek_total_eur, 2, ',', '.') . ' €' : '' }}@else{{ $kand->sales_net !== null ? number_format((float) $kand->sales_net, 2, ',', '.') . ' €' : '' }}@endif</span>
                                                 <button type="button" @click="park({{ $kand->id }}, @js($kand->name))" class="text-violet-500 font-bold px-1" title="parken">+</button>
                                             </span>
                                         </div>
                                     @endforeach
                                 </div>
                             @elseif($paketGerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '' || $pickDiaet !== '')
-                                <p class="text-[11px] text-gray-400 px-2 py-1 mt-1">Keine Treffer für diese Auswahl.</p>
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-1 mt-1">Keine Treffer für diese Auswahl.</p>
                             @endif
                         </div>
                         <div x-show="geparkt !== null" x-cloak class="flex items-center gap-2" data-park-zeile>
@@ -777,7 +777,7 @@
                         <span class="{{ $pill }} {{ $konfPill[$aggregat['allergene']['confidence']] ?? $variantPill['secondary'] }}">Konf. {{ $aggregat['allergene']['confidence'] }}</span>
                     </div>
                 @else
-                    <p class="text-sm text-gray-400 py-6 text-center">Noch keine Gerichte für den Allergen-Rollup.</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">Noch keine Gerichte für den Allergen-Rollup.</p>
                 @endif
 
                 <div class="border-t border-black/5 dark:border-white/10 mt-4 pt-3 space-y-2">
@@ -790,7 +790,7 @@
                         @foreach(['kcal' => 'kcal', 'protein_g' => 'Eiweiß (g)', 'fett_g' => 'Fett (g)', 'gesfett_g' => 'dav. ges. (g)', 'kh_g' => 'KH (g)', 'zucker_g' => 'dav. Zucker (g)', 'salz_g' => 'Salz (g)'] as $k => $l)
                             <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 text-center">
                                 <p class="text-base font-semibold tabular-nums">{{ $aggregat['naehrwerte'][$k] !== null ? number_format((float) $aggregat['naehrwerte'][$k], $k === 'kcal' ? 0 : 1, ',', '.') : '—' }}</p>
-                                <p class="text-[10px] text-gray-400 uppercase">{{ $l }}</p>
+                                <p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase">{{ $l }}</p>
                             </div>
                         @endforeach
                     </div>
@@ -798,7 +798,7 @@
                         <p class="text-[11px] text-amber-600 dark:text-amber-400">⚠ Nur {{ $aggregat['naehrwerte']['n_mit_naehrwerten'] }}/{{ $aggregat['naehrwerte']['n_gerichte'] }} Gerichte haben Nährwert + Portionsgramm — Werte sind eine Untergrenze.</p>
                     @endunless
                 @else
-                    <p class="text-sm text-gray-400 py-6 text-center">Keine Nährwerte — den Gerichten fehlen Werte oder Portionsgramm.</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">Keine Nährwerte — den Gerichten fehlen Werte oder Portionsgramm.</p>
                 @endif
                 </div>
             @endif
@@ -816,14 +816,14 @@
                             </div>
                         </div>
                         <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
-                            <span class="text-gray-500 dark:text-gray-400">Berechnete Summe: <span class="tabular-nums font-medium text-gray-900 dark:text-gray-100">{{ number_format((float) ($cockpit['summe_pro_person'] ?? 0), 2, ',', '.') }} €</span></span>
-                            <span class="text-gray-500 dark:text-gray-400">Wareneinsatz: <span class="tabular-nums">{{ number_format((float) ($cockpit['ek_per_person'] ?? 0), 2, ',', '.') }} €</span></span>
+                            <span class="text-gray-600 dark:text-gray-400">Berechnete Summe: <span class="tabular-nums font-medium text-gray-900 dark:text-gray-100">{{ number_format((float) ($cockpit['summe_pro_person'] ?? 0), 2, ',', '.') }} €</span></span>
+                            <span class="text-gray-600 dark:text-gray-400">Wareneinsatz: <span class="tabular-nums">{{ number_format((float) ($cockpit['ek_per_person'] ?? 0), 2, ',', '.') }} €</span></span>
                         </div>
                         @if(($form['price_mode'] ?? 'auto') === 'manuell')
                             <div class="flex items-center gap-2">
                                 <label class="{{ $label }}">Fixer VK / Person</label>
                                 <input type="number" step="0.01" min="0" wire:model.blur="form.price_per_person_manual" wire:change="speichern" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 24,90" />
-                                <span class="text-[11px] text-gray-400">überschreibt die Summe — EK bleibt als Basis sichtbar</span>
+                                <span class="text-[11px] text-gray-500 dark:text-gray-400">überschreibt die Summe — EK bleibt als Basis sichtbar</span>
                             </div>
                         @endif
                     </div>
@@ -833,7 +833,7 @@
                     <div class="rounded-xl border border-black/5 dark:border-white/10 p-3 space-y-1">
                         <div class="flex items-center justify-between">
                             <span class="{{ $label }}">Herstellkosten (HK2) — Aufschlüsselung / {{ $concept ? 'Person' : 'Person' }}</span>
-                            <span class="text-[11px] text-gray-400">Marge {{ rtrim(rtrim(number_format((float) $kalkulation['marge_pct'], 2, ',', '.'), '0'), ',') }} %</span>
+                            <span class="text-[11px] text-gray-500 dark:text-gray-400">Marge {{ rtrim(rtrim(number_format((float) $kalkulation['marge_pct'], 2, ',', '.'), '0'), ',') }} %</span>
                         </div>
                         @foreach($kalkulation['bloecke'] as $blk)
                             <div class="flex items-center justify-between text-xs py-0.5 {{ $blk['key'] === 'we' ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300' }}">
@@ -845,16 +845,16 @@
                             <span>= HK2</span><span class="tabular-nums">{{ number_format((float) $kalkulation['hk2_pro_person'] ?? $kalkulation['hk2_pro_portion'] ?? 0, 2, ',', '.') }} €</span>
                         </div>
                         <div class="flex items-center justify-between text-xs">
-                            <span class="text-gray-500">VK-Vorschlag (HK2 × Marge)</span>
+                            <span class="text-gray-600 dark:text-gray-400">VK-Vorschlag (HK2 × Marge)</span>
                             <span class="tabular-nums text-violet-700 dark:text-violet-300 font-medium">{{ number_format((float) $kalkulation['vk_vorschlag'], 2, ',', '.') }} €</span>
                         </div>
                         @if($kalkulation['db_eur'] !== null)
                             <div class="flex items-center justify-between text-xs">
-                                <span class="text-gray-500">Deckungsbeitrag (gesetzter VK − HK2)</span>
+                                <span class="text-gray-600 dark:text-gray-400">Deckungsbeitrag (gesetzter VK − HK2)</span>
                                 <span class="tabular-nums {{ $kalkulation['db_eur'] >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400' }}">{{ number_format((float) $kalkulation['db_eur'], 2, ',', '.') }} €{{ $kalkulation['db_pct'] !== null ? ' · ' . number_format((float) $kalkulation['db_pct'], 1, ',', '.') . ' %' : '' }}</span>
                             </div>
                         @endif
-                        <p class="text-[10px] text-gray-400 pt-0.5">Blöcke pflegst du in Einstellungen → Kalkulation.</p>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 pt-0.5">Blöcke pflegst du in Einstellungen → Kalkulation.</p>
                     </div>
                 @endif
 
@@ -863,7 +863,7 @@
                     <div class="rounded-xl border border-black/5 dark:border-white/10 p-3">
                         <p class="{{ $label }} mb-1.5">Wareneinsatz je Position / Person</p>
                         <table class="w-full text-xs">
-                            <thead><tr class="text-gray-400 text-[10px] uppercase tracking-wider">
+                            <thead><tr class="text-gray-500 dark:text-gray-400 text-[10px] uppercase tracking-wider">
                                 <th class="text-left font-medium py-1">Position</th>
                                 <th class="text-right font-medium">Wareneinsatz</th>
                                 <th class="text-right font-medium">VK</th>
@@ -873,9 +873,9 @@
                             @foreach($cockpit['zeilen'] as $z)
                                 @php($zw = (($z['price'] ?? 0) > 0 && $z['ek'] !== null) ? $z['ek'] / $z['price'] * 100 : null)
                                 <tr class="border-t border-black/5 dark:border-white/10">
-                                    <td class="py-1">@if($z['role'])<span class="text-gray-400">{{ $z['role'] }}:</span> @endif{{ $z['label'] }}</td>
+                                    <td class="py-1">@if($z['role'])<span class="text-gray-500 dark:text-gray-400">{{ $z['role'] }}:</span> @endif{{ $z['label'] }}</td>
                                     <td class="text-right tabular-nums">{{ $z['ek'] !== null ? number_format((float) $z['ek'], 2, ',', '.') . ' €' : '—' }}</td>
-                                    <td class="text-right tabular-nums text-gray-500">{{ $z['price'] !== null ? number_format((float) $z['price'], 2, ',', '.') . ' €' : '—' }}</td>
+                                    <td class="text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $z['price'] !== null ? number_format((float) $z['price'], 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="text-right tabular-nums">{{ $zw !== null ? number_format($zw, 1, ',', '.') . ' %' : '—' }}</td>
                                 </tr>
                             @endforeach
@@ -884,7 +884,7 @@
                                 <tr class="border-t border-black/10 dark:border-white/15 font-semibold text-gray-900 dark:text-gray-100">
                                     <td class="py-1">Summe / Person</td>
                                     <td class="text-right tabular-nums">{{ number_format((float) $cockpit['ek_per_person'], 2, ',', '.') }} €</td>
-                                    <td class="text-right tabular-nums text-gray-500">{{ number_format((float) $cockpit['price_per_person'], 2, ',', '.') }} €</td>
+                                    <td class="text-right tabular-nums text-gray-600 dark:text-gray-400">{{ number_format((float) $cockpit['price_per_person'], 2, ',', '.') }} €</td>
                                     <td class="text-right tabular-nums">{{ $cockpit['price_per_person'] > 0 ? number_format($cockpit['ek_per_person'] / $cockpit['price_per_person'] * 100, 1, ',', '.') . ' %' : '—' }}</td>
                                 </tr>
                             </tfoot>
@@ -894,7 +894,7 @@
                     <div class="rounded-xl border border-black/5 dark:border-white/10 p-3">
                         <p class="{{ $label }} mb-1.5">Wareneinsatz je Posten / Person</p>
                         <table class="w-full text-xs">
-                            <thead><tr class="text-gray-400 text-[10px] uppercase tracking-wider">
+                            <thead><tr class="text-gray-500 dark:text-gray-400 text-[10px] uppercase tracking-wider">
                                 <th class="text-left font-medium py-1">Posten</th>
                                 <th class="text-right font-medium">Menge</th>
                                 <th class="text-right font-medium">Wareneinsatz</th>
@@ -910,12 +910,12 @@
                                     : ($pg->dish?->ek_total_eur !== null ? (float) $pg->dish->ek_total_eur * $faktor : null))
                                 <tr class="border-t border-black/5 dark:border-white/10">
                                     <td class="py-1">{{ $pg->dish?->name ?? '—' }}</td>
-                                    <td class="text-right tabular-nums text-gray-500">{{ $pg->quantity !== null ? (rtrim(rtrim(number_format($faktor, 2, ',', '.'), '0'), ',') . ($istBasis ? ' g' : '')) : ($istBasis ? '— g' : '1') }}</td>
+                                    <td class="text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $pg->quantity !== null ? (rtrim(rtrim(number_format($faktor, 2, ',', '.'), '0'), ',') . ($istBasis ? ' g' : '')) : ($istBasis ? '— g' : '1') }}</td>
                                     <td class="text-right tabular-nums">{{ $postenEk !== null ? number_format($postenEk, 2, ',', '.') . ' €' : '—' }}</td>
-                                    <td class="text-right tabular-nums text-gray-500">{{ $istBasis ? '—' : ($pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net * $faktor, 2, ',', '.') . ' €' : '—') }}</td>
+                                    <td class="text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $istBasis ? '—' : ($pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net * $faktor, 2, ',', '.') . ' €' : '—') }}</td>
                                 </tr>
                             @empty
-                                <tr><td colspan="4" class="py-2 text-center text-gray-400">Noch keine Posten.</td></tr>
+                                <tr><td colspan="4" class="py-2 text-center text-gray-500 dark:text-gray-400">Noch keine Posten.</td></tr>
                             @endforelse
                             </tbody>
                             <tfoot>
@@ -923,7 +923,7 @@
                                     <td class="py-1">Summe / Person</td>
                                     <td></td>
                                     <td class="text-right tabular-nums">{{ $paket->ek_per_person !== null ? number_format((float) $paket->ek_per_person, 2, ',', '.') . ' €' : '—' }}</td>
-                                    <td class="text-right tabular-nums text-gray-500">{{ $aggregat !== null ? number_format((float) $aggregat['vk_summe'], 2, ',', '.') . ' €' : '—' }}</td>
+                                    <td class="text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $aggregat !== null ? number_format((float) $aggregat['vk_summe'], 2, ',', '.') . ' €' : '—' }}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -964,7 +964,7 @@
                                     <input type="number" step="0.01" min="0" wire:model="zielPreis" wire:keydown.enter="zielpreisBerechnen" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 36,00" />
                                 </div>
                                 <button type="button" wire:click="zielpreisBerechnen" class="{{ $btnPrimary }}">Vorschlag</button>
-                                <span class="text-[11px] text-gray-400">Tauscht Pakete derselben Rolle; feste Gerichte = Fixkosten.</span>
+                                <span class="text-[11px] text-gray-500 dark:text-gray-400">Tauscht Pakete derselben Rolle; feste Gerichte = Fixkosten.</span>
                             </div>
                             @if($zielVorschlag)
                                 <div class="text-xs space-y-1 pt-1 border-t border-violet-500/20">
@@ -995,17 +995,17 @@
                             <input type="number" step="0.01" min="0" wire:model="form.price_per_person" @disabled($form['price_mode'] === 'auto') class="{{ $input }} text-right tabular-nums" />
                         </div>
                         <div>
-                            <label class="{{ $label }}">EK/Person <span class="text-gray-400 normal-case">· aus Gerichten</span></label>
+                            <label class="{{ $label }}">EK/Person <span class="text-gray-500 dark:text-gray-400 normal-case">· aus Gerichten</span></label>
                             <input type="number" step="0.0001" min="0" wire:model="form.ek_per_person" disabled class="{{ $input }} text-right tabular-nums opacity-70" />
                         </div>
                         <div>
-                            <label class="{{ $label }}">Wareneinsatz % <span class="text-gray-400 normal-case">· abgeleitet</span></label>
+                            <label class="{{ $label }}">Wareneinsatz % <span class="text-gray-500 dark:text-gray-400 normal-case">· abgeleitet</span></label>
                             <input type="number" step="0.1" min="0" wire:model="form.food_cost_percent" disabled class="{{ $input }} text-right tabular-nums opacity-70" />
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
                         <button type="button" wire:click="neuBerechnen" class="{{ $btnGhost }}">↻ EK aus Gerichten neu berechnen</button>
-                        <span class="text-[10px] text-gray-400">Kosten folgen den Gerichten; nur der €/Person ist im manuell-Modus (Buffet) frei.</span>
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400">Kosten folgen den Gerichten; nur der €/Person ist im manuell-Modus (Buffet) frei.</span>
                     </div>
                 @endif
             @endif
@@ -1075,11 +1075,11 @@
             {{-- ── Tab: KONZEPT (#389/Canvas — kreatives Foodkonzept) ── --}}
             @if($tab === 'konzept')
                 @if($concept)
-                    <p class="text-[11px] text-gray-400 mb-2">Das kreative Foodkonzept (Leitidee, Inszenierung, Geschmackswelten) — fließt als Kontext in alle KI-Texte dieses Konzepts. Stil/Geschmack erbt es aus der Team-Food-DNA.</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-2">Das kreative Foodkonzept (Leitidee, Inszenierung, Geschmackswelten) — fließt als Kontext in alle KI-Texte dieses Konzepts. Stil/Geschmack erbt es aus der Team-Food-DNA.</p>
                     @include('foodalchemist::livewire.canvas.partials.board')
 
                     {{-- R4.1: Planungs-Gerüst — messbarer Soll-Rahmen neben dem Freitext-Canvas --}}
-                    <p class="text-[11px] text-gray-400 mt-4 mb-2">Planungs-Gerüst — das messbare SOLL (Mengen, Preisrahmen, Diät-Quoten, Saison, No-Gos, Dramaturgie). Messlatte für Coverage (R4.2) und KI-Konzepte (R6).</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-4 mb-2">Planungs-Gerüst — das messbare SOLL (Mengen, Preisrahmen, Diät-Quoten, Saison, No-Gos, Dramaturgie). Messlatte für Coverage (R4.2) und KI-Konzepte (R6).</p>
                     @include('foodalchemist::livewire.planning.partials.frame-board')
                 @endif
             @endif
@@ -1088,10 +1088,10 @@
             @if($tab === 'sensorik')
                 @if($concept && $sensorik)
                     @if($sensorik['leer'])
-                        <p class="text-xs text-gray-400 py-6 text-center">Noch keine Gerichte mit Sensorik-Daten — erst im Aufbau Gerichte/Basisrezepte einfügen.</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 py-6 text-center">Noch keine Gerichte mit Sensorik-Daten — erst im Aufbau Gerichte/Basisrezepte einfügen.</p>
                     @else
                         @php($dimLabel = ['suess' => 'Süß', 'salzig' => 'Salzig', 'sauer' => 'Sauer', 'bitter' => 'Bitter', 'umami' => 'Umami', 'fettig' => 'Fettig', 'scharf' => 'Scharf'])
-                        <p class="text-[11px] text-gray-400 mb-2">Aggregiert über {{ $sensorik['abdeckung']['gesamt'] }} Grundprodukte ({{ $sensorik['abdeckung']['mit'] }} mit Sensorik-Daten) — MAX je Dimension = „im Teller vorhanden?". Quelle: Sensorik-Graph.</p>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-2">Aggregiert über {{ $sensorik['abdeckung']['gesamt'] }} Grundprodukte ({{ $sensorik['abdeckung']['mit'] }} mit Sensorik-Daten) — MAX je Dimension = „im Teller vorhanden?". Quelle: Sensorik-Graph.</p>
 
                         <div class="relative overflow-hidden {{ $card }} mb-3">
                             <div class="{{ $cardAccent }}"></div>
@@ -1102,11 +1102,11 @@
                                     @php($istDom = in_array($d, $sensorik['dominant'], true))
                                     @php($istLueck = in_array($d, $sensorik['luecken'], true))
                                     <div class="flex items-center gap-2">
-                                        <span class="text-[11px] w-14 shrink-0 {{ $istLueck ? 'text-gray-400' : 'text-gray-700 dark:text-gray-200' }}">{{ $l }}</span>
+                                        <span class="text-[11px] w-14 shrink-0 {{ $istLueck ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-200' }}">{{ $l }}</span>
                                         <div class="flex-1 h-2 rounded-full bg-black/[0.06] dark:bg-white/10 overflow-hidden">
                                             <div class="h-full rounded-full {{ $istDom ? 'bg-violet-500' : ($istLueck ? 'bg-gray-300 dark:bg-gray-600' : 'bg-violet-400/60') }}" style="width: {{ (int) round($v * 100) }}%"></div>
                                         </div>
-                                        <span class="text-[11px] w-8 text-right tabular-nums text-gray-500">{{ number_format($v, 2, ',', '.') }}</span>
+                                        <span class="text-[11px] w-8 text-right tabular-nums text-gray-600 dark:text-gray-400">{{ number_format($v, 2, ',', '.') }}</span>
                                     </div>
                                 @endforeach
                                 @if(count($sensorik['dominant']) || count($sensorik['luecken']))
@@ -1127,7 +1127,7 @@
                                         @foreach($sensorik['textur'] as $t)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $t['label'] }}</span>@endforeach
                                     </div>
                                 @else
-                                    <p class="text-[11px] text-gray-400">Keine Textur-Daten.</p>
+                                    <p class="text-[11px] text-gray-500 dark:text-gray-400">Keine Textur-Daten.</p>
                                 @endif
                                 @if($sensorik['monotonie'])
                                     <p class="text-[11px] text-amber-600 dark:text-amber-400">⚠ {{ $sensorik['monotonie'] }}</p>
@@ -1144,7 +1144,7 @@
             @if($tab === 'geschirr')
                 @if($concept)
                     @php($gerichtSlots = $concept->slots->filter(fn ($s) => $s->sales_recipe_id !== null || in_array($s->type, ['gericht', 'basisrezept'], true)))
-                    <p class="text-[11px] text-gray-400 mb-2">Pro Gericht ein Haupt-Geschirr + optional eine Alternative (z. B. anderer Leih-Caterer). Pflege den Geschirr-Katalog unter <span class="font-medium">Stammdaten → Geschirr</span>.</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-2">Pro Gericht ein Haupt-Geschirr + optional eine Alternative (z. B. anderer Leih-Caterer). Pflege den Geschirr-Katalog unter <span class="font-medium">Stammdaten → Geschirr</span>.</p>
                     @forelse($gerichtSlots as $slot)
                         <div wire:key="geschirr-slot-{{ $slot->id }}" class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2 mb-2">
                             <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1.5 truncate">{{ $slot->wording ?: ($slot->dish?->name ?: ($slot->title ?: 'Position')) }}</p>
@@ -1180,10 +1180,10 @@
                                                                 wire:click="geschirrWaehle({{ $slot->id }}, '{{ $role }}', {{ $kandidat->id }})"
                                                                 class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors">
                                                             {{ $kandidat->label }}
-                                                            <span class="text-gray-400">· {{ $kandidat->supplier?->name }}{{ $kandidat->rental_price !== null ? ' · ' . number_format((float) $kandidat->rental_price, 2, ',', '.') . ' €' : '' }}</span>
+                                                            <span class="text-gray-500 dark:text-gray-400">· {{ $kandidat->supplier?->name }}{{ $kandidat->rental_price !== null ? ' · ' . number_format((float) $kandidat->rental_price, 2, ',', '.') . ' €' : '' }}</span>
                                                         </button>
                                                     @empty
-                                                        <p class="text-[11px] text-gray-400 px-2 py-1">{{ trim($geschirrSuche) === '' ? 'Tippen zum Suchen …' : 'Kein Geschirr gefunden.' }}</p>
+                                                        <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-1">{{ trim($geschirrSuche) === '' ? 'Tippen zum Suchen …' : 'Kein Geschirr gefunden.' }}</p>
                                                     @endforelse
                                                 </div>
                                             </div>
@@ -1193,7 +1193,7 @@
                             </div>
                         </div>
                     @empty
-                        <p class="text-xs text-gray-400 py-6 text-center">Noch keine Gerichte im Konzept — erst im Aufbau-Tab Gerichte/Basisrezepte einfügen.</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 py-6 text-center">Noch keine Gerichte im Konzept — erst im Aufbau-Tab Gerichte/Basisrezepte einfügen.</p>
                     @endforelse
                 @endif
             @endif

@@ -27,10 +27,10 @@
                         <button type="button" wire:key="sp-{{ $p->id }}" wire:click="waehle({{ $p->id }})"
                                 class="w-full text-left px-2 py-1 rounded-lg text-xs {{ $selectedId === $p->id ? $aktiv : $hover }}">
                             <span class="truncate block">{{ $p->name }}</span>
-                            <span class="text-[10px] text-gray-400">{{ $p->cycle_weeks }} Wo.-Zyklus · {{ $p->eintraege_count }} Einträge</span>
+                            <span class="text-[10px] text-gray-500 dark:text-gray-400">{{ $p->cycle_weeks }} Wo.-Zyklus · {{ $p->eintraege_count }} Einträge</span>
                         </button>
                     @empty
-                        <p class="px-2 py-3 text-[11px] text-gray-400">Noch keine Speisepläne.</p>
+                        <p class="px-2 py-3 text-[11px] text-gray-500 dark:text-gray-400">Noch keine Speisepläne.</p>
                     @endforelse
                 </div>
             </div>
@@ -63,12 +63,12 @@
                                 <p class="text-[11px] {{ $variantPill['warning'] }} {{ $pill }} w-full justify-between"><span class="truncate">{{ $w['name'] }}</span><span class="shrink-0 ml-2">{{ $w['vorkommen'] }}× · {{ $w['min_abstand'] }} T.</span></p>
                             @endforeach
                         @else
-                            <p class="text-[11px] text-gray-400 text-center">Keine Wiederholungs-Konflikte.</p>
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400 text-center">Keine Wiederholungs-Konflikte.</p>
                         @endif
                     </div>
                 </div>
             @else
-                <div class="p-6 text-center text-sm text-gray-400">Plan auswählen.</div>
+                <div class="p-6 text-center text-sm text-gray-500 dark:text-gray-400">Plan auswählen.</div>
             @endif
         </x-ui-page-sidebar>
     </x-slot>
@@ -101,7 +101,7 @@
             <div class="relative overflow-hidden {{ $card }} p-5 space-y-2" wire:key="splinien-{{ $sp->id }}">
                 <div class="flex items-center justify-between">
                     <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Menü-Linien</h3>
-                    <span class="text-[11px] text-gray-400">Zeilen der Matrix · pro Plan frei</span>
+                    <span class="text-[11px] text-gray-500 dark:text-gray-400">Zeilen der Matrix · pro Plan frei</span>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     @foreach($linien as $linie)
@@ -111,8 +111,8 @@
                             @if($linie->is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg</span>@endif
                             <button type="button" wire:click="linieVerschieben({{ $linie->id }}, -1)" class="text-gray-300 hover:text-violet-500 text-[10px]" title="hoch">▲</button>
                             <button type="button" wire:click="linieVerschieben({{ $linie->id }}, 1)" class="text-gray-300 hover:text-violet-500 text-[10px]" title="runter">▼</button>
-                            <button type="button" wire:click="linieEdit({{ $linie->id }})" class="text-gray-400 hover:text-violet-500 text-xs" title="bearbeiten">✎</button>
-                            <button type="button" wire:click="linieRaus({{ $linie->id }})" wire:confirm="Linie entfernen? Einträge bleiben (ohne Linie)." class="text-gray-400 hover:text-red-500 text-xs" title="entfernen">✕</button>
+                            <button type="button" wire:click="linieEdit({{ $linie->id }})" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 text-xs" title="bearbeiten">✎</button>
+                            <button type="button" wire:click="linieRaus({{ $linie->id }})" wire:confirm="Linie entfernen? Einträge bleiben (ohne Linie)." class="text-gray-500 dark:text-gray-400 hover:text-red-500 text-xs" title="entfernen">✕</button>
                         </div>
                     @endforeach
                     <div class="flex items-center gap-1">
@@ -135,7 +135,7 @@
             <div class="flex items-center gap-3 flex-wrap">
                 <span class="inline-flex rounded-lg overflow-hidden border border-black/10 dark:border-white/10">
                     @foreach(['woche' => 'Woche', 'monat' => 'Monat'] as $av => $al)
-                        <button type="button" wire:click="ansichtSetzen('{{ $av }}')" class="px-3 py-1.5 text-xs {{ $ansicht === $av ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 font-medium' : 'text-gray-500 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">{{ $al }}</button>
+                        <button type="button" wire:click="ansichtSetzen('{{ $av }}')" class="px-3 py-1.5 text-xs {{ $ansicht === $av ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 font-medium' : 'text-gray-600 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">{{ $al }}</button>
                     @endforeach
                 </span>
                 <span class="flex items-center gap-1">
@@ -165,7 +165,7 @@
                             <thead><tr class="text-left">
                                 <th class="{{ $th }}" style="width:104px">Linie</th>
                                 @foreach($wochenTage as $tag)
-                                    <th class="{{ $th }} text-center {{ $tag->isToday() ? 'text-violet-600 dark:text-violet-300' : '' }}">{{ $tagKurz[$tag->isoWeekday()] }} <span class="text-gray-400 font-normal">{{ $tag->format('d.m.') }}</span></th>
+                                    <th class="{{ $th }} text-center {{ $tag->isToday() ? 'text-violet-600 dark:text-violet-300' : '' }}">{{ $tagKurz[$tag->isoWeekday()] }} <span class="text-gray-500 dark:text-gray-400 font-normal">{{ $tag->format('d.m.') }}</span></th>
                                 @endforeach
                             </tr></thead>
                             <tbody>
@@ -185,11 +185,11 @@
                                                         <div wire:key="e-{{ $e->id }}" class="group flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px]"
                                                              style="background: {{ ($zl['color'] ?? null) ? $zl['color'].'22' : 'rgba(0,0,0,0.04)' }}">
                                                             <span class="flex-1 min-w-0 truncate" title="{{ $e->inhaltName() }}">{{ $e->inhaltName() }}</span>
-                                                            <button type="button" wire:click="eintragRaus({{ $e->id }})" class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 shrink-0">✕</button>
+                                                            <button type="button" wire:click="eintragRaus({{ $e->id }})" class="opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-red-500 shrink-0">✕</button>
                                                         </div>
                                                     @endforeach
                                                     @if($zl['id'] !== 0)
-                                                        <button type="button" wire:click="zelleOeffnen('{{ $ymd }}', {{ $zl['id'] }})" class="w-full text-[11px] text-gray-400 hover:text-violet-500 rounded border border-dashed border-black/10 dark:border-white/10 py-0.5">+</button>
+                                                        <button type="button" wire:click="zelleOeffnen('{{ $ymd }}', {{ $zl['id'] }})" class="w-full text-[11px] text-gray-500 dark:text-gray-400 hover:text-violet-500 rounded border border-dashed border-black/10 dark:border-white/10 py-0.5">+</button>
                                                     @endif
                                                 </div>
                                             </td>
@@ -197,7 +197,7 @@
                                     </tr>
                                 @endforeach
                                 @if($zeilenLinien->isEmpty())
-                                    <tr><td colspan="6" class="{{ $td }} text-center text-gray-400 text-xs py-4">Oben eine Menü-Linie anlegen, dann Gerichte in die Tage ziehen.</td></tr>
+                                    <tr><td colspan="6" class="{{ $td }} text-center text-gray-500 dark:text-gray-400 text-xs py-4">Oben eine Menü-Linie anlegen, dann Gerichte in die Tage ziehen.</td></tr>
                                 @endif
                             </tbody>
                         </table>
@@ -224,7 +224,7 @@
                                     @endforeach
                                 </div>
                             @elseif($pickerSuche !== '')
-                                <p class="text-[11px] text-gray-400">Keine Treffer.</p>
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400">Keine Treffer.</p>
                             @endif
                         </div>
                     @endif
@@ -245,20 +245,20 @@
                             <button type="button" wire:key="cal-{{ $ymd }}" wire:click="tagOeffnen('{{ $ymd }}')"
                                     class="text-left rounded-lg border p-1.5 h-20 transition-colors {{ $imMonat ? 'border-black/5 dark:border-white/10 hover:bg-violet-500/5' : 'border-transparent opacity-40' }} {{ $tag->isToday() ? 'ring-1 ring-violet-400' : '' }}">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-[11px] {{ $tag->isToday() ? 'text-violet-600 dark:text-violet-300 font-semibold' : 'text-gray-500' }}">{{ $tag->format('j') }}</span>
+                                    <span class="text-[11px] {{ $tag->isToday() ? 'text-violet-600 dark:text-violet-300 font-semibold' : 'text-gray-600 dark:text-gray-400' }}">{{ $tag->format('j') }}</span>
                                     @if($info)<span class="{{ $pill }} {{ $variantPill['secondary'] }} text-[9px]">{{ $info['count'] }}</span>@endif
                                 </div>
                                 @if($info && $info['vk'] > 0)
-                                    <div class="mt-1 text-[10px] text-gray-400 tabular-nums">{{ number_format($info['vk'], 2, ',', '.') }} €</div>
+                                    <div class="mt-1 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">{{ number_format($info['vk'], 2, ',', '.') }} €</div>
                                 @endif
                             </button>
                         @endfor
                     </div>
-                    <p class="mt-3 text-[11px] text-gray-400">Tag anklicken → springt in die Wochenansicht. Belegung der Mahlzeit „{{ $mahlzeiten[$mahlzeit] ?? '' }}".</p>
+                    <p class="mt-3 text-[11px] text-gray-500 dark:text-gray-400">Tag anklicken → springt in die Wochenansicht. Belegung der Mahlzeit „{{ $mahlzeiten[$mahlzeit] ?? '' }}".</p>
                 </div>
             @endif
         @else
-            <div class="{{ $card }} p-10 text-center text-sm text-gray-400">
+            <div class="{{ $card }} p-10 text-center text-sm text-gray-500 dark:text-gray-400">
                 Links einen Speiseplan wählen oder „+ Neuer Plan". Speiseplan v2 verteilt Gerichte/Concepts/Pakete über <strong>Menü-Linien × echte Wochentage</strong> — mit Monats-Kalender, Kosten/Person, Veggie-Tagescheck und ausrollbarem Wochen-Zyklus.
             </div>
         @endif

@@ -27,7 +27,7 @@
      style="padding-left: {{ $depth * 12 }}px">
     @if($hasChildren)
         <button type="button" @click="toggle({{ (int) $nodeId }})"
-                class="shrink-0 w-4 text-gray-400 hover:text-violet-500 text-[10px] leading-none"
+                class="shrink-0 w-4 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[10px] leading-none"
                 title="auf-/zuklappen">
             <span x-text="isCollapsed({{ (int) $nodeId }}) ? '▸' : '▾'">▾</span>
         </button>
@@ -38,6 +38,6 @@
     <div class="flex-1 min-w-0 flex items-center gap-1">{{ $slot }}</div>
 
     @if($count !== null)
-        <span class="shrink-0 text-[11px] text-gray-400 ml-2 mr-1 tabular-nums">{{ $count }}</span>
+        <span class="shrink-0 text-[11px] text-gray-500 dark:text-gray-400 ml-2 mr-1 tabular-nums">{{ $count }}</span>
     @endif
 </div>

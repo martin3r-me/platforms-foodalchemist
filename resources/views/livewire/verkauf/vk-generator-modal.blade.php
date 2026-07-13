@@ -10,7 +10,7 @@
         <x-foodalchemist::modal-section title="Beschreibung">
             <textarea wire:model="description" rows="3" class="{{ $input }}" data-vk-generator-description
                       placeholder="z. B. Herbstlicher Hauptgang mit geschmortem Rind, Wurzelgemüse und Kartoffelkomponente für Bankett …"></textarea>
-            <p class="text-[10px] text-gray-400 mt-1">Aus Foto/PDF: blockiert auf die Vision-Frage bei Martin — bis dahin Text.</p>
+            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Aus Foto/PDF: blockiert auf die Vision-Frage bei Martin — bis dahin Text.</p>
         </x-foodalchemist::modal-section>
 
         <x-foodalchemist::modal-section title="Richtungs-Parameter">
@@ -100,12 +100,12 @@
                         <p class="text-[11px] text-gray-600 dark:text-gray-300">
                             🔴 {{ $offen['text'] }} —
                             <span class="text-violet-600 dark:text-violet-400">{{ $offen['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}</span>
-                            @if(count($offen['shortlist']) > 0)<span class="text-gray-400">· {{ count($offen['shortlist']) }} Shortlist-Kandidaten</span>@endif
+                            @if(count($offen['shortlist']) > 0)<span class="text-gray-500 dark:text-gray-400">· {{ count($offen['shortlist']) }} Shortlist-Kandidaten</span>@endif
                         </p>
                     @endforeach
                 </div>
             @endif
-            <p class="text-[10px] text-gray-400 mt-2">VK-Daten (Klasse/Aufschlagsklasse) aus dem Vorschlag übernommen, soweit valide — Rest im VK-Editor pflegen.</p>
+            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-2">VK-Daten (Klasse/Aufschlagsklasse) aus dem Vorschlag übernommen, soweit valide — Rest im VK-Editor pflegen.</p>
         </x-foodalchemist::modal-section>
     @endif
 

@@ -39,7 +39,7 @@
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                             : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                     <span class="font-medium">Alle Hauptgruppen</span>
-                    <span class="text-[11px] text-gray-400">{{ number_format(array_sum($hgCounts), 0, ',', '.') }}</span>
+                    <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ number_format(array_sum($hgCounts), 0, ',', '.') }}</span>
                 </button>
                 @if($hauptgruppe === null)
                     <div class="ml-4 -mt-1 space-y-0.5" data-vk-klassen-ast>
@@ -47,9 +47,9 @@
                             <button type="button" wire:key="vkk-alle-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
                                     class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $klasse === $k->id
                                         ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
-                                        : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                                        : 'text-gray-600 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                                 <span class="min-w-0 truncate">{{ $k->label }}</span>
-                                <span class="text-gray-400 shrink-0 ml-2">{{ $klassenCounts[$k->id] ?? 0 }}</span>
+                                <span class="text-gray-500 dark:text-gray-400 shrink-0 ml-2">{{ $klassenCounts[$k->id] ?? 0 }}</span>
                             </button>
                         @endforeach
                     </div>
@@ -62,8 +62,8 @@
                                     class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === $hg->id
                                         ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                                         : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                                <span class="min-w-0 truncate"><span class="font-mono text-[10px] text-gray-400 mr-1">[{{ $hg->code }}]</span>{{ $hg->label }}</span>
-                                <span class="text-[11px] text-gray-400 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
+                                <span class="min-w-0 truncate"><span class="font-mono text-[10px] text-gray-500 dark:text-gray-400 mr-1">[{{ $hg->code }}]</span>{{ $hg->label }}</span>
+                                <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
                             </button>
                             @if($hauptgruppe === $hg->id)
                                 <div class="ml-4 mt-0.5 space-y-0.5" data-vk-klassen-ast>
@@ -72,9 +72,9 @@
                                             <button type="button" wire:key="vkk-{{ $hg->id }}-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
                                                     class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $klasse === $k->id
                                                         ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
-                                                        : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                                                        : 'text-gray-600 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                                                 <span class="min-w-0 truncate">{{ $k->label }}</span>
-                                                <span class="text-gray-400 shrink-0 ml-2">{{ $klassenCounts[$k->id] ?? 0 }}</span>
+                                                <span class="text-gray-500 dark:text-gray-400 shrink-0 ml-2">{{ $klassenCounts[$k->id] ?? 0 }}</span>
                                             </button>
                                         @endif
                                     @endforeach
@@ -108,7 +108,7 @@
                 <button type="button" wire:click="$dispatch('vk-modal.oeffnen')" class="{{ $btnPrimary }}" data-vk-anlegen>+ Neues Gericht</button>
                 <button type="button" wire:click="$dispatch('vk-generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-vk-generator>✨ KI-Rezept</button>
             </div>
-            <p class="text-[11px] text-gray-400">Speisen mit VK-Preis. Zutaten = Grundprodukte und/oder Basisrezepte. Live-Marge aus EK × Aufschlagsklasse.</p>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400">Speisen mit VK-Preis. Zutaten = Grundprodukte und/oder Basisrezepte. Live-Marge aus EK × Aufschlagsklasse.</p>
         </div>
         <div class="relative overflow-hidden {{ $card }}" data-vk-tabelle>
             <div class="{{ $cardAccent }}"></div>
@@ -116,7 +116,7 @@
                 <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Gerichte</h3>
                 <span class="{{ $label }} flex items-center gap-2">
                     {{ number_format($rezepte->total(), 0, ',', '.') }} Treffer ·
-                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
+                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer focus:ring-0" data-per-page>
                         @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
                     </select>
                 </span>
@@ -139,8 +139,8 @@
                             <td class="{{ $td }} font-medium w-full min-w-[24rem] whitespace-normal break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
                                 <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-vk-name>{{ $r->name }}</span>
                             </td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-500 whitespace-nowrap">{{ $r->dishClass?->label ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ $r->dishClass?->label ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
@@ -155,12 +155,12 @@
                                 @endif
                             </td>
                             <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap text-right tabular-nums">{{ $r->sales_net !== null ? number_format((float) $r->sales_net, 2, ',', '.') . ' €' : '—' }}</td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums">{{ $r->ek_total_eur !== null ? number_format((float) $r->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</td>
-                            <td class="{{ $td }} text-gray-500 text-right tabular-nums">{{ $r->n_ingredients_total }}</td>
+                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap text-right tabular-nums">{{ $r->ek_total_eur !== null ? number_format((float) $r->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 text-right tabular-nums">{{ $r->n_ingredients_total }}</td>
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
                             </td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">{{ $r->dishMainGroup?->code ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ $r->dishMainGroup?->code ?? '—' }}</td>
                             <td class="{{ $td }} whitespace-nowrap text-right tabular-nums">
                                 @php($fb = $feedbackAgg[$r->id] ?? null)
                                 @if($fb && $fb['count'] > 0)
@@ -171,7 +171,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-400">Keine Gerichte gefunden.</td></tr>
+                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-500 dark:text-gray-400">Keine Gerichte gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>

@@ -18,7 +18,7 @@
     <div class="relative overflow-hidden {{ $card }}">
         <div class="{{ $cardAccent }}"></div>
         <div class="px-4 py-3 space-y-2.5">
-            <p class="text-[11px] uppercase tracking-wider text-gray-400">Preisarchitektur (netto, pro Person)</p>
+            <p class="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Preisarchitektur (netto, pro Person)</p>
             <div class="grid grid-cols-3 gap-2">
                 <div>
                     <label class="block {{ $label }} mb-1">Zielpreis p. P.</label>
@@ -45,7 +45,7 @@
     <div class="relative overflow-hidden {{ $card }}">
         <div class="{{ $cardAccent }}"></div>
         <div class="px-4 py-3 space-y-2.5">
-            <p class="text-[11px] uppercase tracking-wider text-gray-400">Dramaturgie & Mengengerüst — Gänge / Stationen in Soll-Reihenfolge</p>
+            <p class="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Dramaturgie & Mengengerüst — Gänge / Stationen in Soll-Reihenfolge</p>
 
             @forelse($frameSlots as $i => $slot)
                 <div wire:key="frame-slot-{{ $slot['id'] }}" class="rounded-lg border border-black/5 dark:border-white/10 px-2.5 py-2 space-y-1.5">
@@ -77,7 +77,7 @@
                             </div>
                         </div>
                         <div class="col-span-2 flex items-center gap-2 pb-1.5">
-                            <label class="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                            <label class="inline-flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-400">
                                 <input type="checkbox" wire:model="frameSlots.{{ $i }}.is_pflicht" /> Pflicht
                             </label>
                             <button type="button" wire:click="frameSlotSpeichern({{ $i }})" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Slot speichern">✓</button>
@@ -96,7 +96,7 @@
                     @endif
                 </div>
             @empty
-                <p class="text-[11px] text-gray-400">Noch keine Slots — unten den ersten Gang / die erste Station anlegen.</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine Slots — unten den ersten Gang / die erste Station anlegen.</p>
             @endforelse
 
             <div class="grid grid-cols-12 gap-2 items-end border-t border-black/5 dark:border-white/10 pt-2">
@@ -123,7 +123,7 @@
     <div class="relative overflow-hidden {{ $card }}">
         <div class="{{ $cardAccent }}"></div>
         <div class="px-4 py-3 space-y-2.5">
-            <p class="text-[11px] uppercase tracking-wider text-gray-400">Quoten & Kunden-Politik — Diät · Saison · No-Gos · Allergen-Linie</p>
+            <p class="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Quoten & Kunden-Politik — Diät · Saison · No-Gos · Allergen-Linie</p>
 
             @if($frameRules !== [])
                 <div class="flex flex-wrap gap-1.5">
@@ -135,7 +135,7 @@
                     @endforeach
                 </div>
             @else
-                <p class="text-[11px] text-gray-400">Noch keine Regeln — unten hinzufügen. Regeln gelten fürs ganze Gerüst oder (per Slot-Wahl) für einen Gang.</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine Regeln — unten hinzufügen. Regeln gelten fürs ganze Gerüst oder (per Slot-Wahl) für einen Gang.</p>
             @endif
 
             <div class="grid grid-cols-12 gap-2 items-end border-t border-black/5 dark:border-white/10 pt-2">

@@ -31,17 +31,17 @@
                     </template>
                 </select>
                 <button type="button" @click="gpFilter.mehr = !gpFilter.mehr"
-                        class="text-[10px] text-gray-400 hover:text-violet-500" data-gp-mehr-filter
+                        class="text-[10px] text-gray-500 dark:text-gray-400 hover:text-violet-500" data-gp-mehr-filter
                         x-text="gpFilter.mehr ? '− Weniger Filter' : '+ Mehr Filter'"></button>
                 <div x-show="gpFilter.mehr" x-cloak class="space-y-1">
                     <select x-model="gpFilter.condition" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]">
                         <option value="">Jeder Zustand</option>
                         <template x-for="z in (vokabular?.zustande ?? [])" :key="z"><option :value="z" x-text="z"></option></template>
                     </select>
-                    <label class="flex items-center gap-1.5 text-[11px] text-gray-500">
+                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600 dark:text-gray-400">
                         <input type="checkbox" x-model="gpFilter.bio" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> Bio
                     </label>
-                    <label class="flex items-center gap-1.5 text-[11px] text-gray-500">
+                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600 dark:text-gray-400">
                         <input type="checkbox" x-model="gpFilter.regional" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> Regional
                     </label>
                 </div>
@@ -51,7 +51,7 @@
                     <div class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px]">
                         <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gp') }}">GP</span>
                         <span class="min-w-0 flex-1 break-words leading-snug text-gray-700 dark:text-gray-200" x-text="ziel.name" :title="ziel.name"></span>
-                        <span class="shrink-0 text-[10px] text-gray-400 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
+                        <span class="shrink-0 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
                         <button type="button" x-show="ziel.id" @click="Livewire.dispatch('gp-modal.oeffnen', { id: ziel.id })"
                                 class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Produkt einsehen">📦</button>
                         <button type="button" @click="parke(ziel)" data-parke
@@ -59,8 +59,8 @@
                                 title="übernehmen → Menge eingeben">+</button>
                     </div>
                 </template>
-                <p x-show="gpListe.length === 0" class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
-                <p x-show="gpTotal > 200" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (gpTotal - 200) + ' weitere — Filter verengen'"></p>
+                <p x-show="gpListe.length === 0" class="text-[10px] text-gray-500 dark:text-gray-400 px-1">— keine Treffer —</p>
+                <p x-show="gpTotal > 200" x-cloak class="text-[10px] text-gray-500 dark:text-gray-400 px-1" x-text="'… ' + (gpTotal - 200) + ' weitere — Filter verengen'"></p>
             </div>
         </aside>
         <div class="flex-1 min-w-0">
@@ -85,13 +85,13 @@
                 <select x-model.number="neu.unit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]" data-park-unit>
                     @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
                 </select>
-                <label class="inline-flex items-center gap-1 text-[11px] text-gray-400 shrink-0">
+                <label class="inline-flex items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400 shrink-0">
                     <input type="checkbox" x-model="neu.is_optional" class="rounded border-gray-300" /> optional
                 </label>
                 <button type="button" @click="einfuegen()" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-park-einfuegen>Einfügen ⏎</button>
                 <button type="button" @click="verwerfen()" class="{{ $btnGhostXs }} shrink-0" title="Verwerfen" data-park-verwerfen>✕</button>
             </div>
-            <p class="text-[10px] text-gray-400 mt-1">Erst Produkt/Rezept per [+] wählen — Einheit kommt automatisch mit, dann Menge + Enter (§1.2)</p>
+            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Erst Produkt/Rezept per [+] wählen — Einheit kommt automatisch mit, dann Menge + Enter (§1.2)</p>
             <button type="button" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 mt-1" @click="garverluste()" data-garverlust-ki
                     title="M4-11: KI-Schätzung je Zutat (GL-07 — geschrieben erst beim Speichern, source=ki)">✨ Garverluste vorschlagen</button>
         </div>
@@ -114,17 +114,17 @@
                     <tr class="{{ $tr }} !border-b-0 transition-colors duration-500" :class="(zeile.is_optional ? 'opacity-60 ' : '') + (zeile._flash ? 'bg-emerald-500/15' : '')">
                         <td class="{{ $td }} !px-1.5 !py-0.5 whitespace-nowrap">
                             {{-- R4: setData ist PFLICHT, sonst startet Safari den Drag gar nicht --}}
-                            <span class="inline-block cursor-grab active:cursor-grabbing text-gray-500 dark:text-gray-400 hover:text-violet-500 select-none" draggable="true"
+                            <span class="inline-block cursor-grab active:cursor-grabbing text-gray-600 dark:text-gray-400 hover:text-violet-500 select-none" draggable="true"
                                   @dragstart="dragIdx = i; $event.dataTransfer.setData('text/plain', String(i)); $event.dataTransfer.effectAllowed = 'move'"
                                   @dragend="dragIdx = null" title="ziehen zum Sortieren" data-drag-handle>⠿</span>
                             {{-- R15 (Jarvis moveUpDown): ▲▼ als zuverlässige Sortier-Alternative zu DnD --}}
                             <span class="inline-flex flex-col align-middle leading-none">
-                                <button type="button" class="text-[9px] text-gray-500 dark:text-gray-400 hover:text-violet-500 leading-none disabled:opacity-20"
+                                <button type="button" class="text-[9px] text-gray-600 dark:text-gray-400 hover:text-violet-500 leading-none disabled:opacity-20"
                                         :disabled="i === 0" @click="verschiebe(i, -1)" title="nach oben" data-zeile-hoch>▲</button>
-                                <button type="button" class="text-[9px] text-gray-500 dark:text-gray-400 hover:text-violet-500 leading-none disabled:opacity-20"
+                                <button type="button" class="text-[9px] text-gray-600 dark:text-gray-400 hover:text-violet-500 leading-none disabled:opacity-20"
                                         :disabled="i === rows.length - 1" @click="verschiebe(i, 1)" title="nach unten" data-zeile-runter>▼</button>
                             </span>
-                            <span class="text-gray-400 tabular-nums text-[11px] ml-0.5" x-text="i + 1"></span>
+                            <span class="text-gray-500 dark:text-gray-400 tabular-nums text-[11px] ml-0.5" x-text="i + 1"></span>
                         </td>
                         <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.quantity" class="{{ $input }} !w-20 !py-0.5 !text-[11px] text-right" data-quantity /></td>
                         <td class="{{ $td }} !px-2 !py-0.5">
@@ -147,7 +147,7 @@
                                         data-ziel-link></button>
                             </template>
                             <template x-if="!zeile.gp_id && !zeile.referenced_recipe_id">
-                                <span class="text-[11px] text-gray-400" x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
+                                <span class="text-[11px] text-gray-500 dark:text-gray-400" x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
                                       :title="zeile.lineage ? 'Verknüpfung via ' + zeile.lineage : ''"></span>
                             </template>
                             <button type="button" x-show="zeile.gp_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Lieferantenartikel hinter dem GP (Peek)"
@@ -168,16 +168,16 @@
                         @endif
                         <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.cooking_loss_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" /></td>
                         <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
-                            <span x-text="zeilenEk(zeile) ?? '—'" :class="zeilenEk(zeile) ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'"></span>
+                            <span x-text="zeilenEk(zeile) ?? '—'" :class="zeilenEk(zeile) ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'"></span>
                         </td>
-                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap text-gray-500" data-zeilen-ek-min>
+                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap text-gray-600 dark:text-gray-400" data-zeilen-ek-min>
                             <span x-text="zeilenEk(zeile, 'ek_pro_g_min') ?? '—'"></span>
                         </td>
-                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap text-gray-500" data-zeilen-ek-avg>
+                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap text-gray-600 dark:text-gray-400" data-zeilen-ek-avg>
                             <span x-text="zeilenEk(zeile, 'ek_pro_g_avg') ?? '—'"></span>
                         </td>
                         <td class="{{ $td }} !px-2 !py-0.5 whitespace-nowrap">
-                            <label class="inline-flex items-center gap-1 text-[10px] text-gray-400 mr-1" title="optional: zählt nicht in Yield/Kosten">
+                            <label class="inline-flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400 mr-1" title="optional: zählt nicht in Yield/Kosten">
                                 <input type="checkbox" x-model="zeile.is_optional" class="rounded border-gray-300 !w-3 !h-3" />opt
                             </label>
                             {{-- ♻ Ersatz (Äquivalenz-Katalog): nur sichtbar wenn hinterlegt — 1 Klick tauscht um, Menge × Faktor --}}
@@ -195,7 +195,7 @@
                                     📦 <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
                                 </p>
                                 <table class="w-full text-[11px]">
-                                    <thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-400">
+                                    <thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400">
                                         <th class="px-1.5 py-0.5"></th><th class="px-1.5 py-0.5">Lieferant</th><th class="px-1.5 py-0.5">Art.-Nr</th>
                                         <th class="px-1.5 py-0.5">Bezeichnung</th><th class="px-1.5 py-0.5">Marke</th><th class="px-1.5 py-0.5">VPE</th>
                                         <th class="px-1.5 py-0.5 text-right">Preis</th><th class="px-1.5 py-0.5 text-right">Vergleichspreis</th><th class="px-1.5 py-0.5 text-right">Match</th>
@@ -205,13 +205,13 @@
                                             <tr class="border-t border-black/5 dark:border-white/5" :class="la.lead ? 'bg-orange-500/10' : ''">
                                                 <td class="px-1.5 py-0.5"><span x-show="la.lead" class="text-orange-500" title="Lead-LA (GL-03)">★</span></td>
                                                 <td class="px-1.5 py-0.5 text-gray-600 dark:text-gray-300" x-text="la.lieferant"></td>
-                                                <td class="px-1.5 py-0.5 font-mono text-gray-500" x-text="la.artikelnr"></td>
+                                                <td class="px-1.5 py-0.5 font-mono text-gray-600 dark:text-gray-400" x-text="la.artikelnr"></td>
                                                 <td class="px-1.5 py-0.5 text-gray-900 dark:text-gray-100" x-text="la.label"></td>
-                                                <td class="px-1.5 py-0.5 text-gray-500" x-text="la.marke ?? '—'"></td>
-                                                <td class="px-1.5 py-0.5 text-gray-500 italic" x-text="la.vpe ?? '—'"></td>
+                                                <td class="px-1.5 py-0.5 text-gray-600 dark:text-gray-400" x-text="la.marke ?? '—'"></td>
+                                                <td class="px-1.5 py-0.5 text-gray-600 dark:text-gray-400 italic" x-text="la.vpe ?? '—'"></td>
                                                 <td class="px-1.5 py-0.5 text-right tabular-nums" x-text="la.price ?? '—'"></td>
-                                                <td class="px-1.5 py-0.5 text-right tabular-nums text-gray-500" x-text="la.vergleichspreis ?? '—'"></td>
-                                                <td class="px-1.5 py-0.5 text-right text-gray-500" x-text="la.match ?? '—'"></td>
+                                                <td class="px-1.5 py-0.5 text-right tabular-nums text-gray-600 dark:text-gray-400" x-text="la.vergleichspreis ?? '—'"></td>
+                                                <td class="px-1.5 py-0.5 text-right text-gray-600 dark:text-gray-400" x-text="la.match ?? '—'"></td>
                                             </tr>
                                         </template>
                                     </tbody>
@@ -223,17 +223,17 @@
                 </template>
             <tfoot>
                 <tr class="border-t border-black/10 dark:border-white/10">
-                    <td colspan="{{ $vkKontext ? 6 : 5 }}" class="{{ $td }} !px-2 text-right text-[11px] text-gray-400">
+                    <td colspan="{{ $vkKontext ? 6 : 5 }}" class="{{ $td }} !px-2 text-right text-[11px] text-gray-500 dark:text-gray-400">
                         <span data-yield-live>Yield ≈ <span class="font-medium text-gray-700 dark:text-gray-200" x-text="yieldLive()"></span></span>
                         · Σ live (Näherung — Putzverlust-Defaults & Brücken rechnet der Save-Recompute)
                     </td>
                     <td class="{{ $td }} !px-2 text-right font-medium tabular-nums text-gray-900 dark:text-gray-100" data-summe-live>
                         <span x-text="summe()"></span>
                     </td>
-                    <td class="{{ $td }} !px-2 text-right tabular-nums text-gray-500" data-summe-min>
+                    <td class="{{ $td }} !px-2 text-right tabular-nums text-gray-600 dark:text-gray-400" data-summe-min>
                         <span x-text="summe('ek_pro_g_min')"></span>
                     </td>
-                    <td class="{{ $td }} !px-2 text-right tabular-nums text-gray-500" data-summe-avg>
+                    <td class="{{ $td }} !px-2 text-right tabular-nums text-gray-600 dark:text-gray-400" data-summe-avg>
                         <span x-text="summe('ek_pro_g_avg')"></span>
                     </td>
                     <td></td>
@@ -247,7 +247,7 @@
         {{-- R4-Fix: dieser Block saß IM Picker-Dropdown (x-show) — der Button war praktisch nie sichtbar --}}
         @if($eingebettet)
             <div class="mt-3 flex items-center justify-end gap-2" data-zutaten-eingebettet-aktionen>
-                <span class="text-[10px] text-gray-400">Zutaten speichern synct + rechnet GL-02 neu (eigener Schritt, P-8)</span>
+                <span class="text-[10px] text-gray-500 dark:text-gray-400">Zutaten speichern synct + rechnet GL-02 neu (eigener Schritt, P-8)</span>
                 <button type="button" @click="$wire.speichern(payload())" class="{{ $btnPrimary }}" data-zutaten-speichern-inline>Zutaten speichern</button>
             </div>
         @endif
@@ -282,7 +282,7 @@
                         <span class="shrink-0 w-1.5 h-1.5 rounded-full" x-show="(ziel.niveaus ?? []).length > 0"
                               :class="niveauFarbe(ziel.niveaus?.[0])" :title="(ziel.niveaus ?? []).join(' · ')"></span>
                         <span class="min-w-0 flex-1 break-words leading-snug text-gray-700 dark:text-gray-200" x-text="ziel.name.replace('↳ ', '')" :title="ziel.name"></span>
-                        <span class="shrink-0 text-[10px] text-gray-400 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
+                        <span class="shrink-0 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
                         <button type="button" x-show="ziel.id" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: ziel.id })"
                                 class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Rezept einsehen">📖</button>
                         <button type="button" @click="parke(ziel)" data-parke
@@ -290,8 +290,8 @@
                                 title="übernehmen → Menge eingeben">+</button>
                     </div>
                 </template>
-                <p x-show="rezListe.length === 0" class="text-[10px] text-gray-400 px-1">— keine Treffer —</p>
-                <p x-show="rezTotal > 200" x-cloak class="text-[10px] text-gray-400 px-1" x-text="'… ' + (rezTotal - 200) + ' weitere — Filter verengen'"></p>
+                <p x-show="rezListe.length === 0" class="text-[10px] text-gray-500 dark:text-gray-400 px-1">— keine Treffer —</p>
+                <p x-show="rezTotal > 200" x-cloak class="text-[10px] text-gray-500 dark:text-gray-400 px-1" x-text="'… ' + (rezTotal - 200) + ' weitere — Filter verengen'"></p>
             </div>
         </aside>
         </div>{{-- /Drei-Spalten-Flex --}}

@@ -13,12 +13,12 @@
     <div class="px-4 py-3 space-y-2" x-data="{ covAuf: {{ ($z['verletzt'] ?? 0) > 0 ? 'true' : 'false' }} }">
         <button type="button" @click="covAuf = !covAuf" class="w-full flex items-center gap-2 text-left">
             <span class="w-2.5 h-2.5 rounded-full shrink-0 {{ $ampelDot[$coverage['ampel_gesamt']] ?? 'bg-gray-400' }}"></span>
-            <span class="text-[11px] uppercase tracking-wider text-gray-400">Soll/Ist-Coverage (Planungs-Gerüst)</span>
+            <span class="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Soll/Ist-Coverage (Planungs-Gerüst)</span>
             <span class="ml-auto flex items-center gap-2 text-[11px] tabular-nums">
                 @if(($z['erfuellt'] ?? 0) > 0)<span class="text-emerald-600 dark:text-emerald-400">● {{ $z['erfuellt'] }}</span>@endif
                 @if(($z['teilerfuellt'] ?? 0) > 0)<span class="text-amber-600 dark:text-amber-400">● {{ $z['teilerfuellt'] }}</span>@endif
                 @if(($z['verletzt'] ?? 0) > 0)<span class="text-rose-600 dark:text-rose-400">● {{ $z['verletzt'] }}</span>@endif
-                <span class="text-gray-400" x-text="covAuf ? '▾' : '▸'"></span>
+                <span class="text-gray-500 dark:text-gray-400" x-text="covAuf ? '▾' : '▸'"></span>
             </span>
         </button>
 
@@ -28,8 +28,8 @@
                     <span class="mt-1 w-2 h-2 rounded-full shrink-0 {{ $ampelDot[$b['ampel']] ?? 'bg-gray-400' }}"></span>
                     <div class="flex-1 min-w-0">
                         <span class="font-medium text-gray-800 dark:text-gray-200">{{ $b['label'] }}</span>
-                        <span class="text-gray-500"> — Soll: {{ $b['soll'] }} · Ist: {{ $b['ist'] }}</span>
-                        @if($b['hinweis'])<div class="text-gray-400">{{ $b['hinweis'] }}</div>@endif
+                        <span class="text-gray-600 dark:text-gray-400"> — Soll: {{ $b['soll'] }} · Ist: {{ $b['ist'] }}</span>
+                        @if($b['hinweis'])<div class="text-gray-500 dark:text-gray-400">{{ $b['hinweis'] }}</div>@endif
                     </div>
                     @if($b['fill_filter'] !== null && $coverageFillAction !== null)
                         <button type="button" wire:click="{{ $coverageFillAction }}('{{ $b['fill_filter']['diet_form'] ?? '' }}')"
@@ -47,7 +47,7 @@
                     @endif
                 </div>
             @empty
-                <p class="text-[11px] text-gray-400">Gerüst vorhanden, aber ohne prüfbare Vorgaben — im Planungs-Gerüst Soll-Werte setzen.</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">Gerüst vorhanden, aber ohne prüfbare Vorgaben — im Planungs-Gerüst Soll-Werte setzen.</p>
             @endforelse
         </div>
     </div>

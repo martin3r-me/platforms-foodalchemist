@@ -4,7 +4,7 @@
 
 <div class="{{ $embedded ? 'space-y-4' : 'p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]' }}" data-gp-panel>
     @if($gp === null)
-        <div class="text-center text-xs text-gray-400 py-12">
+        <div class="text-center text-xs text-gray-500 dark:text-gray-400 py-12">
             <div class="text-2xl mb-2">⌘</div>
             Grundprodukt in der Tabelle anklicken —<br>Details erscheinen hier.
         </div>
@@ -17,7 +17,7 @@
                 <span class="{{ $pill }} font-medium shrink-0 {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
             </div>
             @if($gp->main_ingredient_slug !== null)
-                <span class="inline-block mt-1.5 rounded-md bg-black/5 dark:bg-white/10 px-2 py-0.5 text-[11px] font-mono text-gray-500 dark:text-gray-400" data-gp-slug>{{ $gp->main_ingredient_slug }}</span>
+                <span class="inline-block mt-1.5 rounded-md bg-black/5 dark:bg-white/10 px-2 py-0.5 text-[11px] font-mono text-gray-600 dark:text-gray-400" data-gp-slug>{{ $gp->main_ingredient_slug }}</span>
             @endif
             @if($kannKuratieren)
                 <div class="mt-2">
@@ -61,11 +61,11 @@
                     @if($gp->piece_default_g !== null)
                         ≈ <span class="font-semibold">{{ number_format((float) $gp->piece_default_g, 0, ',', '.') }} g</span>
                     @else
-                        <span class="text-gray-400">— Gewicht nicht hinterlegt</span>
+                        <span class="text-gray-500 dark:text-gray-400">— Gewicht nicht hinterlegt</span>
                     @endif
                 </p>
             @else
-                <p class="text-xs text-gray-400">— keine Zähleinheit hinterlegt —</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">— keine Zähleinheit hinterlegt —</p>
             @endif
         </div>
         @endif
@@ -105,7 +105,7 @@
             @if(($preisBand ?? null) !== null && $preisBand['max'] > 0)
                 <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-2.5 py-1.5 mb-2 text-[11px]" data-preis-band>
                     <div class="flex items-baseline justify-between">
-                        <span class="text-gray-500 dark:text-gray-400">Preis-Spanne <span class="text-gray-400">({{ $preisBand['n'] }} LA{{ $preisBand['n'] === 1 ? '' : 's' }})</span></span>
+                        <span class="text-gray-600 dark:text-gray-400">Preis-Spanne <span class="text-gray-500 dark:text-gray-400">({{ $preisBand['n'] }} LA{{ $preisBand['n'] === 1 ? '' : 's' }})</span></span>
                         <span class="tabular-nums text-gray-900 dark:text-gray-100">
                             <span class="text-emerald-600 dark:text-emerald-400 font-medium">{{ number_format($preisBand['min'], 2, ',', '.') }}</span>
                             – {{ number_format($preisBand['max'], 2, ',', '.') }} {{ $preisBand['unit'] }}
@@ -137,7 +137,7 @@
                             <div class="min-w-0 flex-1 cursor-pointer" wire:click="$dispatch('item-modal.oeffnen', { id: {{ $la->id }} })"
                                  title="Lieferantenartikel öffnen — Allergene/Preise dort pflegen" data-la-oeffnen>
                                 <p class="text-xs font-medium text-gray-900 dark:text-gray-100 leading-snug hover:text-violet-600 dark:hover:text-violet-400 hover:underline" title="{{ $la->designation }}">{{ $la->designation }}</p>
-                                <p class="text-[11px] text-gray-400 truncate mt-0.5">
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
                                     {{ $la->supplier_name ?? '—' }}
                                     @if($la->qty !== null && $la->unit_code !== null) · {{ rtrim(rtrim(number_format((float) $la->qty, 3, ',', '.'), '0'), ',') }} {{ $la->unit_code }}@endif
                                     @if($la->order_number !== null) · Art-Nr {{ $la->order_number }}@endif
@@ -158,7 +158,7 @@
                                         @isset($preisTrend[$la->id])
                                             @if($preisTrend[$la->id]['plausibel'])
                                                 @php($d = $preisTrend[$la->id]['delta_pct'])
-                                                <span class="text-[10px] font-medium tabular-nums {{ $d > 0 ? 'text-rose-500' : ($d < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400') }}"
+                                                <span class="text-[10px] font-medium tabular-nums {{ $d > 0 ? 'text-rose-500' : ($d < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400') }}"
                                                       title="vorher {{ number_format($preisTrend[$la->id]['vorher'], 2, ',', '.') }} €">{{ $d > 0 ? '▲' : ($d < 0 ? '▼' : '') }}{{ number_format(abs($d), 1, ',', '.') }} %</span>
                                             @else
                                                 <span class="text-[10px] text-amber-500 cursor-help" title="Vorpreis unplausibel ({{ number_format($preisTrend[$la->id]['vorher'], 2, ',', '.') }} € — vermutl. Platzhalter/Dummy). Preis-Historie prüfen." data-preis-trend-warnung>⚠</span>
@@ -166,12 +166,12 @@
                                         @endisset
                                     </p>
                                     @if($la->vergleichspreis !== null)
-                                        <p class="text-[11px] tabular-nums text-gray-400">{{ number_format($la->vergleichspreis['value'], 2, ',', '.') }} {{ $la->vergleichspreis['unit'] }}</p>
+                                        <p class="text-[11px] tabular-nums text-gray-500 dark:text-gray-400">{{ number_format($la->vergleichspreis['value'], 2, ',', '.') }} {{ $la->vergleichspreis['unit'] }}</p>
                                     @else
-                                        <p class="text-[11px] text-gray-400" title="kein Vergleichspreis — qty fehlt (GL-03 A-2)">⚠ ohne €/kg</p>
+                                        <p class="text-[11px] text-gray-500 dark:text-gray-400" title="kein Vergleichspreis — qty fehlt (GL-03 A-2)">⚠ ohne €/kg</p>
                                     @endif
                                 @else
-                                    <p class="text-xs text-gray-400">—</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">—</p>
                                 @endif
                             </div>
                         </div>
@@ -184,17 +184,17 @@
                         </div>
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-400">Keine LAs verknüpft{{ !$gp->requires_la ? ' — bewusst LA-frei' : '' }}.</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400">Keine LAs verknüpft{{ !$gp->requires_la ? ' — bewusst LA-frei' : '' }}.</p>
                 @endforelse
 
                 {{-- R12: ✨-Kandidaten — Klick = verknüpfen (GL-03 verknuepfen, Kurations-Gate in der Aktion) --}}
                 @if($laKandidaten !== null)
                     <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-2.5 py-2" data-la-kandidaten>
-                        <p class="text-[11px] text-gray-900 dark:text-gray-100 mb-1">✨ Passende unverknüpfte Artikel <span class="text-gray-400">· Klick = verknüpfen</span></p>
+                        <p class="text-[11px] text-gray-900 dark:text-gray-100 mb-1">✨ Passende unverknüpfte Artikel <span class="text-gray-500 dark:text-gray-400">· Klick = verknüpfen</span></p>
                         @foreach($laKandidaten as $kandidat)
                             <button type="button" wire:key="lakand-{{ $kandidat['id'] }}" wire:click="verknuepfe({{ $kandidat['id'] }})"
                                     class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/15 transition-colors duration-150 flex items-baseline gap-2">
-                                <span class="min-w-0 flex-1 truncate">{{ $kandidat['designation'] }} <span class="text-gray-400">· {{ $kandidat['supplier'] ?? '—' }}</span></span>
+                                <span class="min-w-0 flex-1 truncate">{{ $kandidat['designation'] }} <span class="text-gray-500 dark:text-gray-400">· {{ $kandidat['supplier'] ?? '—' }}</span></span>
                                 <span class="shrink-0 tabular-nums text-violet-500">{{ round($kandidat['score'] * 100) }} %</span>
                             </button>
                         @endforeach
@@ -209,11 +209,11 @@
                         @foreach($verknuepfbare as $kandidat)
                             <button type="button" wire:key="vk-{{ $kandidat->id }}" wire:click="verknuepfe({{ $kandidat->id }})"
                                     class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150">
-                                {{ $kandidat->designation }} <span class="text-gray-400">· {{ $kandidat->supplier_name ?? '—' }}</span>
+                                {{ $kandidat->designation }} <span class="text-gray-500 dark:text-gray-400">· {{ $kandidat->supplier_name ?? '—' }}</span>
                             </button>
                         @endforeach
                         @if($laSuche !== '' && $verknuepfbare->isEmpty())
-                            <p class="text-[11px] text-gray-400 px-2 py-1" data-la-suche-leer>Kein ungemappter Artikel zu „{{ $laSuche }}" — ein LA gehört zu genau einem GP, evtl. ist er schon zugeordnet.</p>
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-1" data-la-suche-leer>Kein ungemappter Artikel zu „{{ $laSuche }}" — ein LA gehört zu genau einem GP, evtl. ist er schon zugeordnet.</p>
                         @endif
                     </div>
                 @endif
@@ -225,7 +225,7 @@
         @if($kiVorschlag !== null && ($section === null || $section === $kiVorschlag['type']))
             <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs" data-gp-ki-vorschlag>
                 <p class="text-gray-900 dark:text-gray-100">✨ {{ $kiVorschlag['type'] === 'allergene' ? 'Allergen-Schätzung' : 'Nährwert-Schätzung' }}
-                    <span class="text-[11px] text-gray-400">· {{ round($kiVorschlag['confidence'] * 100) }} % · schreibt als Override (GL-01 Prio 1)</span></p>
+                    <span class="text-[11px] text-gray-500 dark:text-gray-400">· {{ round($kiVorschlag['confidence'] * 100) }} % · schreibt als Override (GL-01 Prio 1)</span></p>
                 <div class="flex flex-wrap gap-1 mt-1">
                     @foreach($kiVorschlag['werte'] as $feld => $wert)
                         <span class="{{ $pill }} {{ $kiVorschlag['type'] === 'allergene' ? (['enthalten' => $variantPill['danger'], 'spuren' => $variantPill['warning'], 'nicht_enthalten' => $variantPill['secondary']][$wert] ?? $variantPill['secondary']) : $variantPill['info'] }}"
@@ -252,10 +252,10 @@
             <p class="{{ $dt }} mb-1 flex items-center gap-2">Allergene <span class="normal-case">(effektiv)</span>
                 @if($nurKiOverride)
                     <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case ml-1" title="KI-geschätzt — keine LA-Daten{{ $allergKiConf !== null ? ' · ' . round($allergKiConf * 100) . ' %' : '' }}" data-allergene-ki-marker>✨ KI</span>
-                    <span class="normal-case text-gray-400 font-normal"> · aus 0/{{ $gp->n_las_total }} LAs</span>
+                    <span class="normal-case text-gray-500 dark:text-gray-400 font-normal"> · aus 0/{{ $gp->n_las_total }} LAs</span>
                 @elseif($allergenKonfidenz !== null)
-                    <span class="ml-1 font-semibold normal-case {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$allergenKonfidenz['confidence']] ?? 'text-gray-400' }}">{{ strtoupper($allergenKonfidenz['confidence']) }}</span>
-                    <span class="normal-case text-gray-400 font-normal"> · aus {{ $allergenKonfidenz['n_las_mit_daten'] }}/{{ $gp->n_las_total }} LAs</span>
+                    <span class="ml-1 font-semibold normal-case {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$allergenKonfidenz['confidence']] ?? 'text-gray-500 dark:text-gray-400' }}">{{ strtoupper($allergenKonfidenz['confidence']) }}</span>
+                    <span class="normal-case text-gray-500 dark:text-gray-400 font-normal"> · aus {{ $allergenKonfidenz['n_las_mit_daten'] }}/{{ $gp->n_las_total }} LAs</span>
                     @if($allergenKonfidenz['needs_review'])<span class="{{ $pill }} {{ $variantPill['danger'] }} ml-1" title="enthalten ↔ nicht_enthalten ohne spuren-Mittelweg: {{ implode(', ', $allergenKonfidenz['konflikt_felder']) }}">Review nötig</span>@endif
                 @endif
                 @if($kannKuratieren && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0)
@@ -297,7 +297,7 @@
                                title="Keine LA-Angabe für diese Allergene — LMIV: unbekannt ist NICHT gleich frei von. Per KI schätzen oder LA-Daten ergänzen.">⚠ {{ $unbekannt->count() }} von 14 ohne LA-Angabe (unbekannt)</p>
                         @endif
                         @if($freiAnzahl > 0)
-                            <p class="text-[11px] text-gray-400">✓ frei von den übrigen {{ $freiAnzahl }} EU-Allergen{{ $freiAnzahl === 1 ? '' : 'en' }}</p>
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400">✓ frei von den übrigen {{ $freiAnzahl }} EU-Allergen{{ $freiAnzahl === 1 ? '' : 'en' }}</p>
                         @endif
                     </div>
                 @endif
@@ -332,7 +332,7 @@
                                title="Keine LA-Angabe zu diesen Zusatzstoffen — nicht als frei werten.">⚠ {{ $zsUnbekannt->count() }} ohne LA-Angabe</p>
                         @endif
                         @if($zsFrei > 0)
-                            <p class="text-[11px] text-gray-400">✓ frei von {{ $zsFrei }} weiteren</p>
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400">✓ frei von {{ $zsFrei }} weiteren</p>
                         @endif
                     </div>
                 @endif
@@ -365,19 +365,19 @@
                         ['salt_g', 'Salz', 'g', 3],
                     ] as [$key, $label, $unit, $stellen])
                         <div class="flex items-baseline justify-between">
-                            <dt class="text-[11px] text-gray-500 dark:text-gray-400">{{ $label }}</dt>
+                            <dt class="text-[11px] text-gray-600 dark:text-gray-400">{{ $label }}</dt>
                             <dd class="text-[11px] text-gray-900 dark:text-gray-100 tabular-nums">
                                 @if($naehrwerte[$key]['avg'] !== null)
-                                    {{ number_format($naehrwerte[$key]['avg'], $stellen, ',', '.') }} {{ $unit }} <span class="text-gray-400">({{ $naehrwerte[$key]['n'] }} LA{{ $naehrwerte[$key]['n'] === 1 ? '' : 's' }})</span>
+                                    {{ number_format($naehrwerte[$key]['avg'], $stellen, ',', '.') }} {{ $unit }} <span class="text-gray-500 dark:text-gray-400">({{ $naehrwerte[$key]['n'] }} LA{{ $naehrwerte[$key]['n'] === 1 ? '' : 's' }})</span>
                                 @else
-                                    <span class="text-gray-400">—</span>
+                                    <span class="text-gray-500 dark:text-gray-400">—</span>
                                 @endif
                             </dd>
                         </div>
                     @endforeach
                 </dl>
             @else
-                <p class="text-[11px] text-gray-400" data-naehrwerte-leer>— keine Nährwert-Daten —</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400" data-naehrwerte-leer>— keine Nährwert-Daten —</p>
             @endif
         </div>
         @endif
@@ -391,11 +391,11 @@
                     <div class="flex items-center gap-2 text-[11px]" wire:key="equiv-{{ $e->id }}">
                         <span class="{{ $pill }} {{ $e->gegen_kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }} shrink-0">{{ $e->gegen_kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
                         <span class="min-w-0 flex-1 truncate text-gray-900 dark:text-gray-100" title="{{ $e->gegen_name }}">{{ $e->gegen_name }}</span>
-                        @if((float) $e->umrechnungsfaktor !== 1.0)<span class="text-gray-400 tabular-nums shrink-0">×{{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
+                        @if((float) $e->umrechnungsfaktor !== 1.0)<span class="text-gray-500 dark:text-gray-400 tabular-nums shrink-0">×{{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
                         @if($kannKuratieren)<button type="button" wire:click="ersatzLoesen({{ $e->id }})" class="{{ $btnGhostXs }} text-rose-500 shrink-0" title="Ersatz-Verknüpfung lösen">✕</button>@endif
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-400" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
                 @endforelse
 
                 @if($kannKuratieren)
@@ -425,7 +425,7 @@
                     {{ $v->is_sales_recipe ? '💶' : '📖' }} {{ $v->name }}
                 </button>
             @empty
-                <p class="text-[11px] text-gray-400" data-verwendungen-leer>— in keinem Rezept eingesetzt —</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400" data-verwendungen-leer>— in keinem Rezept eingesetzt —</p>
             @endforelse
         </div>
         @endif
@@ -438,9 +438,9 @@
                 <button type="button" wire:click="gpLoeschen"
                         wire:confirm="„{{ $gp->name }}“ endgültig löschen? (Keine Referenzen vorhanden)"
                         class="{{ $btnGhostXs }} text-rose-600 dark:text-rose-400" data-gp-loeschen>🗑 GP löschen</button>
-                <p class="text-[11px] text-gray-400 mt-1">Keine Referenzen — Löschen möglich (Soft-Delete).</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Keine Referenzen — Löschen möglich (Soft-Delete).</p>
             @else
-                <p class="text-[11px] text-gray-500 dark:text-gray-400" data-ref-zusammenfassung>
+                <p class="text-[11px] text-gray-600 dark:text-gray-400" data-ref-zusammenfassung>
                     Löschen blockiert — wird referenziert:
                     {{ implode(' · ', array_filter([
                         $referenzen['las'] > 0 ? $referenzen['las'] . ' LA(s)' : null,
@@ -452,7 +452,7 @@
                 </p>
                 @if($referenzen['rezept_zeilen'] > 0)
                     <div class="pt-1.5" data-gp-tausch>
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-1">In allen Rezepten ersetzen durch …</p>
+                        <p class="text-[11px] text-gray-600 dark:text-gray-400 mb-1">In allen Rezepten ersetzen durch …</p>
                         <input type="search" wire:model.live.debounce.300ms="tauschSuche" placeholder="Ersatz-GP suchen …" class="{{ $input }} !py-1" data-tausch-suche />
                         @foreach($tauschKandidaten as $k)
                             <button type="button" wire:key="tausch-{{ $k->id }}" wire:click="gpErsetzen({{ $k->id }})"
@@ -469,7 +469,7 @@
         @endif
 
         @if($section === null)
-        <p class="text-[11px] text-gray-400 border-t border-black/5 dark:border-white/10 pt-2">
+        <p class="text-[11px] text-gray-500 dark:text-gray-400 border-t border-black/5 dark:border-white/10 pt-2">
             UUID {{ $gp->uuid }}@if($gp->team_id === null) · global/BHG-kuratiert (D1)@endif
         </p>
         @endif

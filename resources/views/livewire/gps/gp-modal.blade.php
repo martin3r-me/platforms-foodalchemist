@@ -68,7 +68,7 @@
             <div class="flex items-center gap-1 border-b border-black/5 dark:border-white/10 mb-1 overflow-x-auto" data-gp-tabbar>
                 @foreach($gpTabs as $tabKey => $tabLabel)
                     <button type="button" @click="tab = '{{ $tabKey }}'"
-                            :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+                            :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
                             class="px-2 py-2 text-xs font-medium border-b-2 -mb-px whitespace-nowrap transition-colors" data-gp-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
                 @endforeach
             </div>
@@ -126,7 +126,7 @@
                 {{-- AUTO-SYNC-Vorschau: Name + Slug + gp_key --}}
                 <div class="mt-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 space-y-0.5" data-naming-vorschau>
                     <p class="text-xs text-gray-900 dark:text-gray-100 font-medium" data-vorschau-name>{{ $vorschauName !== '' ? $vorschauName : '—' }}</p>
-                    <p class="text-[11px] text-gray-400 font-mono">slug: {{ $vorschauSlug !== '' ? $vorschauSlug : '—' }} · gp_key: {{ $vorschauKey !== '' && $vorschauKey !== '||' ? $vorschauKey : '—' }}</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 font-mono">slug: {{ $vorschauSlug !== '' ? $vorschauSlug : '—' }} · gp_key: {{ $vorschauKey !== '' && $vorschauKey !== '||' ? $vorschauKey : '—' }}</p>
                 </div>
                 @foreach($liveFehler as $f)
                     <p class="text-[11px] text-rose-600 dark:text-rose-400 mt-1" data-live-fehler>{{ $f }}</p>
@@ -176,7 +176,7 @@
                                 <option value="{{ $builder['sub_category'] }}" selected>{{ $builder['sub_category'] }} (Bestand)</option>
                             @endif
                         </select>
-                        <p class="text-[11px] text-gray-400 mt-1">
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
                             @if(($builder['commodity_group_code'] ?? '') === '') Erst Warengruppe wählen. @else Neue Werte in Einstellungen → Warengruppen pflegen. @endif
                         </p>
                     </div>
@@ -245,7 +245,7 @@
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1.5" data-tags-grid>
                                 @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistGp::TAG_FIELDS as $tag)
                                     <div class="flex items-center justify-between gap-1">
-                                        <span class="text-[11px] text-gray-500 dark:text-gray-400 truncate">{{ str_replace(['is_', 'contains_', '_'], ['', 'enth. ', ' '], $tag) }}</span>
+                                        <span class="text-[11px] text-gray-600 dark:text-gray-400 truncate">{{ str_replace(['is_', 'contains_', '_'], ['', 'enth. ', ' '], $tag) }}</span>
                                         <select wire:model.live="tags.{{ $tag }}" class="bg-transparent border-0 text-[11px] text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-0 py-0">
                                             <option value="">unbewertet</option>
                                             <option value="1">ja</option>
@@ -287,7 +287,7 @@
             <div x-show="tab === 'sensorik'" x-cloak class="pt-2">
                 <x-foodalchemist::modal-section title="Sensorik & Pairing">
                     @include('foodalchemist::livewire.concepter.partials.sensorik')
-                    <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mt-5 mb-2">Pairing</h3>
+                    <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-5 mb-2">Pairing</h3>
                     @include('foodalchemist::livewire.concepter.partials.pairing')
                 </x-foodalchemist::modal-section>
             </div>{{-- /Tab SENSORIK --}}
@@ -295,7 +295,7 @@
             {{-- ── Tab: KALKULATION (Defaults, Phase 2 — speisen die Verlust-Kaskade GL-02) ── --}}
             <div x-show="tab === 'kalkulation'" x-cloak class="pt-2">
                 <x-foodalchemist::modal-section title="Kalkulations-Defaults (GL-02)">
-                    <p class="text-[11px] text-gray-400 mb-2">Greifen, wenn eine Rezept-Zutat keinen eigenen Wert hat. Leer = nächste Stufe (Team-WG-Default → 0).</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-2">Greifen, wenn eine Rezept-Zutat keinen eigenen Wert hat. Leer = nächste Stufe (Team-WG-Default → 0).</p>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3" data-gp-defaults>
                         <div>
                             <label class="{{ $label }}">Garverlust-Default %</label>
@@ -317,7 +317,7 @@
 
     <x-slot:footer>
         <div class="flex items-center justify-between gap-3 w-full">
-            <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-400" title="GT-12-10: HARD_STOP bei vorhandenem gp_key/Jaccard ≥ 0.92 — force legt bewusst trotzdem an">
+            <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400" title="GT-12-10: HARD_STOP bei vorhandenem gp_key/Jaccard ≥ 0.92 — force legt bewusst trotzdem an">
                 @if($neu)<input type="checkbox" wire:model.live="force" class="rounded border-gray-300 text-rose-500 focus:ring-rose-400" data-force-flag /> bewusst trotzdem anlegen (force)@endif
             </label>
             <div class="flex items-center gap-2">

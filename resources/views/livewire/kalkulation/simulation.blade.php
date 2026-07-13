@@ -11,7 +11,7 @@
             <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">
                 Was-wäre-wenn — Preissimulation
             </h3>
-            <p class="text-[11px] text-gray-400 max-w-2xl">
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 max-w-2xl">
                 Spiel einen hypothetischen Preissprung durch — <strong>Warengruppe</strong>, <strong>Grundprodukt</strong> oder einzelnen <strong>Artikel</strong> ± X % —
                 und sieh sofort, wie sich die Marge übers ganze Portfolio verschiebt. <strong>Rein lesend</strong>: keine Echtdaten werden verändert.
             </p>
@@ -108,7 +108,7 @@
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div><div class="{{ $label }}">Preis-Faktor</div><div class="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">×{{ number_format((float) ($result['ratio'] ?? 1), 3, ',', '.') }}</div></div>
             </div>
 
-            <p class="text-[11px] text-gray-400 mt-2">
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-2">
                 Szenario: <strong>{{ $result['scope'] }}</strong> „{{ $result['ref'] }}" {{ $teurer ? '+' : '' }}{{ number_format((float) $deltaPct, 1, ',', '.') }} % →
                 {{ $teurer ? 'Marge sinkt' : 'Marge steigt' }} in den betroffenen Gerichten.
                 @if($dauerMs !== null) <span class="text-gray-300 dark:text-gray-600">·</span> berechnet in {{ number_format($dauerMs, 0, ',', '.') }} ms @endif
@@ -148,7 +148,7 @@
                     </table>
                 </div>
             @else
-                <p class="text-xs text-gray-400 mt-3 {{ $sectionCard }}">
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-3 {{ $sectionCard }}">
                     Keine bepreisten Gerichte betroffen. (Nur Gerichte mit hinterlegtem Verkaufspreis fließen in das Marge-Delta ein.)
                 </p>
             @endif

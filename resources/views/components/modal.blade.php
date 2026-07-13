@@ -31,7 +31,7 @@
 ])
 
 @php
-    $label = 'text-[11px] font-medium uppercase tracking-wider text-gray-400';
+    $label = 'text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400';
 @endphp
 
 <div x-data="{
@@ -68,7 +68,7 @@
             <div class="px-6 pt-4 pb-3 flex items-center justify-between gap-4">
                 <h2 class="font-medium tracking-tight text-gray-900 dark:text-gray-100 truncate">{{ $title }}</h2>
                 <button type="button" @click="{{ $closeVia ? '$wire.' . $closeVia . '()' : 'close()' }}"
-                        class="p-1.5 rounded-md text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-150"
+                        class="p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-150"
                         aria-label="Schließen">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />

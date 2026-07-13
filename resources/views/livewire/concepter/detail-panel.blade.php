@@ -4,7 +4,7 @@
 
 <div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]">
     @if($concept === null && $paket === null)
-        <div class="py-16 text-center text-sm text-gray-400">
+        <div class="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
             <div class="text-2xl mb-2">🍽️</div>
             {{ $type === 'pakete' ? 'Paket auswählen.' : 'Concept auswählen.' }}
         </div>
@@ -15,7 +15,7 @@
                 <h3 class="text-[15px] font-semibold text-gray-900 dark:text-gray-100">{{ $item->name }}</h3>
                 @if($concept && $concept->is_template)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">Vorlage</span>@endif
             </div>
-            @if($item->consumer_name)<p class="text-[11px] italic text-gray-400">„{{ $item->consumer_name }}"</p>@endif
+            @if($item->consumer_name)<p class="text-[11px] italic text-gray-500 dark:text-gray-400">„{{ $item->consumer_name }}"</p>@endif
         </div>
 
         {{-- Stamm-Pills --}}
@@ -107,7 +107,7 @@
                         @foreach(['kcal' => 'kcal', 'protein_g' => 'Eiweiß', 'fett_g' => 'Fett', 'gesfett_g' => 'dav. ges.', 'kh_g' => 'KH', 'zucker_g' => 'dav. Zucker', 'salz_g' => 'Salz'] as $k => $lbl)
                             <div class="rounded-md bg-black/[0.03] dark:bg-white/5 py-1">
                                 <p class="text-xs font-semibold tabular-nums">{{ $aggregat['naehrwerte'][$k] !== null ? rtrim(rtrim(number_format((float) $aggregat['naehrwerte'][$k], $k === 'kcal' ? 0 : 1, ',', '.'), '0'), ',') : '—' }}</p>
-                                <p class="text-[9px] text-gray-400 uppercase">{{ $lbl }}</p>
+                                <p class="text-[9px] text-gray-500 dark:text-gray-400 uppercase">{{ $lbl }}</p>
                             </div>
                         @endforeach
                     </div>
@@ -121,7 +121,7 @@
         {{-- Deterministische Menü-Bewertung (§10.8) --}}
         @if($concept && $bewertung)
             @php($statusIcon = ['ok' => '✓', 'warn' => '!', 'fail' => '✕', 'info' => 'ℹ'])
-            @php($statusColor = ['ok' => 'text-emerald-600 dark:text-emerald-400', 'warn' => 'text-amber-600 dark:text-amber-400', 'fail' => 'text-red-600 dark:text-red-400', 'info' => 'text-gray-400'])
+            @php($statusColor = ['ok' => 'text-emerald-600 dark:text-emerald-400', 'warn' => 'text-amber-600 dark:text-amber-400', 'fail' => 'text-red-600 dark:text-red-400', 'info' => 'text-gray-500 dark:text-gray-400'])
             @php($scorePill = $bewertung['score'] >= 80 ? $variantPill['success'] : ($bewertung['score'] >= 50 ? $variantPill['warning'] : $variantPill['danger']))
             <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
                 <div class="flex items-center justify-between">
@@ -144,7 +144,7 @@
                 @foreach($cockpit['zeilen'] as $z)
                     <div class="flex items-center justify-between gap-2 text-xs py-1">
                         <span class="min-w-0 truncate">
-                            <span class="text-[10px] text-gray-400 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
+                            <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
                             @if($z['type'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['type'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
                         </span>
                         <span class="shrink-0 tabular-nums {{ $z['price'] === null ? 'text-gray-300' : '' }}">{{ $z['price'] !== null ? number_format($z['price'], 2, ',', '.') . ' €' : '—' }}</span>
@@ -157,10 +157,10 @@
                 @forelse($paket->dishes as $pg)
                     <div class="flex items-center justify-between gap-2 text-xs py-1">
                         <span class="min-w-0 truncate">{{ $pg->dish?->name ?? '—' }}</span>
-                        <span class="shrink-0 tabular-nums text-gray-400">{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                        <span class="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-400 py-1">Noch keine Gerichte im Paket.</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 py-1">Noch keine Gerichte im Paket.</p>
                 @endforelse
             </div>
         @endif
@@ -171,14 +171,14 @@
                 <span class="{{ $label }}">Menü-Karte (Konsumenten-Sicht)</span>
                 <div class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2 bg-white/40 dark:bg-white/[0.03]">
                     <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $concept->consumer_name ?: $concept->name }}</p>
-                    @if($concept->additional_text)<p class="text-[11px] italic text-gray-500 mb-1">{{ $concept->additional_text }}</p>@endif
+                    @if($concept->additional_text)<p class="text-[11px] italic text-gray-600 dark:text-gray-400 mb-1">{{ $concept->additional_text }}</p>@endif
                     @forelse($concept->slots as $slot)
                         <div class="py-0.5">
-                            <span class="text-[9px] uppercase tracking-wider text-gray-400">{{ $slot->role ?: '—' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
+                            <span class="text-[9px] uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ $slot->role ?: '—' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
                             <p class="text-xs text-gray-800 dark:text-gray-200">{{ $slot->title ?: ($slot->package?->name ?? $slot->dish?->name ?? '(leer)') }}</p>
                         </div>
                     @empty
-                        <p class="text-[11px] text-gray-400">Noch keine Positionen.</p>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine Positionen.</p>
                     @endforelse
                 </div>
             </div>
@@ -190,10 +190,10 @@
             @forelse($verwendung as $v)
                 <div class="flex items-center justify-between gap-2 text-xs py-0.5">
                     <span class="min-w-0 truncate">{{ $concept ? ($v->label ?? '—') : $v->name }}</span>
-                    <span class="shrink-0 text-[10px] text-gray-400">{{ $concept ? ('Foodbook' . ($v->jahr ? ' ' . $v->jahr : '') . ($v->customer ? ' · ' . $v->customer : '')) : 'Concept' }}</span>
+                    <span class="shrink-0 text-[10px] text-gray-500 dark:text-gray-400">{{ $concept ? ('Foodbook' . ($v->jahr ? ' ' . $v->jahr : '') . ($v->customer ? ' · ' . $v->customer : '')) : 'Concept' }}</span>
                 </div>
             @empty
-                <p class="text-[11px] text-gray-400 py-0.5">{{ $concept ? 'In keinem Foodbook referenziert.' : 'In keinem Concept verwendet.' }}</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 py-0.5">{{ $concept ? 'In keinem Foodbook referenziert.' : 'In keinem Concept verwendet.' }}</p>
             @endforelse
         </div>
     @endif

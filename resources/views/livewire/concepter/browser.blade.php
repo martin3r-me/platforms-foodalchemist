@@ -22,9 +22,9 @@
                 {{-- Umschalter Concepts | Pakete (§10.2) --}}
                 <div class="flex gap-1.5 p-0.5 rounded-lg bg-black/[0.03] dark:bg-white/5">
                     <button type="button" wire:click="wechselTab('concepts')"
-                            class="flex-1 text-xs py-1 rounded-md transition-all {{ $tab === 'concepts' ? 'bg-white dark:bg-white/10 shadow-sm font-medium text-violet-700 dark:text-violet-300' : 'text-gray-500' }}">Concepts</button>
+                            class="flex-1 text-xs py-1 rounded-md transition-all {{ $tab === 'concepts' ? 'bg-white dark:bg-white/10 shadow-sm font-medium text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-400' }}">Concepts</button>
                     <button type="button" wire:click="wechselTab('pakete')"
-                            class="flex-1 text-xs py-1 rounded-md transition-all {{ $tab === 'pakete' ? 'bg-white dark:bg-white/10 shadow-sm font-medium text-violet-700 dark:text-violet-300' : 'text-gray-500' }}">Pakete</button>
+                            class="flex-1 text-xs py-1 rounded-md transition-all {{ $tab === 'pakete' ? 'bg-white dark:bg-white/10 shadow-sm font-medium text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-400' }}">Pakete</button>
                 </div>
 
                 <input type="search" wire:model.live.debounce.300ms="search"
@@ -158,14 +158,14 @@
                                 @if($tab === 'concepts' && $it->is_template)<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Vorlage</span>@endif
                             </td>
                             @if($tab === 'pakete')
-                                <td class="{{ $td }} text-gray-500">{{ $it->role ?: '—' }}</td>
-                                <td class="{{ $td }} text-gray-500">{{ $it->class ?: '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->gerichte_count }}</td>
+                                <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $it->role ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $it->class ?: '—' }}</td>
+                                <td class="{{ $td }} text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $it->gerichte_count }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person !== null ? number_format((float) $it->price_per_person, 2, ',', '.') . ' €' : '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->food_cost_percent !== null ? number_format((float) $it->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
+                                <td class="{{ $td }} text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $it->food_cost_percent !== null ? number_format((float) $it->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
                             @else
-                                <td class="{{ $td }} text-gray-500">{{ $it->class ?: '—' }}</td>
-                                <td class="{{ $td }} text-gray-500">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $it->class ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
                                 {{-- Inline-Status-Pflege wie bei GP (Concepts; Server gated canCurate/D1) --}}
                                 <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                     @php($stMap = ['draft' => $variantPill['secondary'], 'active' => $variantPill['success'], 'archiviert' => $variantPill['warning']])
@@ -180,12 +180,12 @@
                                         <span class="{{ $pill }} {{ $stMap[$it->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'][$it->status] ?? $it->status }}</span>
                                     @endif
                                 </td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $it->slots_count }}</td>
+                                <td class="{{ $td }} text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $it->slots_count }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person_cache !== null ? number_format((float) $it->price_per_person_cache, 2, ',', '.') . ' €' : '—' }}</td>
                             @endif
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-400">
+                        <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                             {{ $tab === 'pakete' ? 'Keine Pakete. Oben „+ Neues Paket".' : ($showVorlagen ? 'Keine Vorlagen.' : 'Keine Concepts. Oben „+ Neues Concept".') }}
                         </td></tr>
                     @endforelse

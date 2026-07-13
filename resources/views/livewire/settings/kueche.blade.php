@@ -4,7 +4,7 @@
 <div class="space-y-4" data-settings-kueche>
     <div>
         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Küchen-Profil</h3>
-        <p class="text-[11px] text-gray-400 mt-0.5">Mandanten-Profil als Soft-Default für den Rezept-Generator (Chargengrößen-, Convenience-, Technik-Tendenz). Explizite Richtungs-Parameter im Generator haben immer Vorrang.</p>
+        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Mandanten-Profil als Soft-Default für den Rezept-Generator (Chargengrößen-, Convenience-, Technik-Tendenz). Explizite Richtungs-Parameter im Generator haben immer Vorrang.</p>
     </div>
 
     @if($meldung !== null)
@@ -14,7 +14,7 @@
     <div class="max-w-xl space-y-2" data-kueche-typen>
         <label class="flex items-start gap-2 text-xs text-gray-700 dark:text-gray-200 cursor-pointer">
             <input type="radio" wire:model="kuechenTyp" value="" class="mt-0.5 border-gray-300 text-violet-600 focus:ring-violet-500" />
-            <span><span class="font-medium">Kein Profil</span> <span class="text-gray-400">— Generator ohne Mandanten-Tendenz</span></span>
+            <span><span class="font-medium">Kein Profil</span> <span class="text-gray-500 dark:text-gray-400">— Generator ohne Mandanten-Tendenz</span></span>
         </label>
         @foreach($typen as $slug => $description)
             <label class="flex items-start gap-2 text-xs text-gray-700 dark:text-gray-200 cursor-pointer" wire:key="kt-{{ $slug }}">
@@ -27,7 +27,7 @@
     {{-- Phase 5: Typ-Farben — GP / Basisrezept / Gericht durchgängig im Editor + Concepter --}}
     <div class="pt-3 border-t border-black/5 dark:border-white/10" data-settings-typfarben>
         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Typ-Farben</h3>
-        <p class="text-[11px] text-gray-400 mt-0.5">Farbe je Positions-Typ — wirkt überall: Seiten-Listen, Positions-Tabellen und Badges im Rezept-/Gerichte-Editor und Concepter.</p>
+        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Farbe je Positions-Typ — wirkt überall: Seiten-Listen, Positions-Tabellen und Badges im Rezept-/Gerichte-Editor und Concepter.</p>
         <div class="flex flex-wrap gap-4 mt-3 max-w-xl">
             @foreach($farbTypen as $key => $label)
                 <label class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200" wire:key="tf-{{ $key }}">

@@ -25,7 +25,7 @@
     {{ $attributes->merge(['class' => 'space-y-0.5']) }}
 >
     @if($heading !== null)
-        <span class="text-[10px] font-medium uppercase tracking-wider text-gray-400 block px-1 pb-0.5">{{ $heading }}</span>
+        <span class="text-[10px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 block px-1 pb-0.5">{{ $heading }}</span>
     @endif
     {{ $slot }}
 </div>

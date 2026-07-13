@@ -7,11 +7,11 @@
     @endif
 
     @if($templateId === null)
-        <p class="text-xs text-gray-400">Kein Template gewählt.</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Kein Template gewählt.</p>
     @else
         <x-foodalchemist::modal-section title="Vorlage">
             <p class="text-xs text-gray-900 dark:text-gray-100 font-medium" data-template-name>{{ $templateName }}</p>
-            <p class="text-[11px] text-gray-400 mt-0.5">{{ $slotAnzahl }} Platzhalter · Bindemittel-Verhältnis & Zubereitung bleiben fix</p>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{{ $slotAnzahl }} Platzhalter · Bindemittel-Verhältnis & Zubereitung bleiben fix</p>
         </x-foodalchemist::modal-section>
 
         {{-- Variante + Vorschläge --}}
@@ -27,7 +27,7 @@
                     <span wire:loading wire:target="vorschlaege">sucht …</span>
                 </button>
             </div>
-            <p class="text-[11px] text-gray-400 mt-1">
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
                 Deterministisch (Body = Variante, Träger = Default). KI-Vorschläge folgen mit der LLM-Anbindung.
             </p>
         </x-foodalchemist::modal-section>
@@ -43,7 +43,7 @@
                 @foreach($slotListe as $rid => $slot)
                     @php($b = $bindings[$rid] ?? ['query' => '', 'target' => 'none', 'id' => null, 'name' => null, 'score' => 0.0])
                     <div class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2" wire:key="slot-{{ $rid }}" data-template-slot="{{ $rid }}">
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                        <p class="text-[11px] text-gray-600 dark:text-gray-400 mb-1">
                             <strong class="text-gray-700 dark:text-gray-200">{{ $slot['placeholder_name'] }}</strong>
                             · {{ rtrim(rtrim(number_format($slot['quantity'], 2, ',', '.'), '0'), ',') }} {{ $slot['unit'] }}
                             @if($slot['raw_text'] !== '')<span class="italic">· „{{ $slot['raw_text'] }}"</span>@endif
@@ -60,7 +60,7 @@
                                 @elseif(trim($b['query']) !== '')
                                     <span class="text-orange-600 dark:text-orange-400">kein Treffer → bleibt Platzhalter</span>
                                 @else
-                                    <span class="text-gray-400">ungebunden</span>
+                                    <span class="text-gray-500 dark:text-gray-400">ungebunden</span>
                                 @endif
                             </div>
                         </div>

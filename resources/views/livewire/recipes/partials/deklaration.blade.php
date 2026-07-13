@@ -11,7 +11,7 @@
             'spec_is_lactose_free' => 'Laktosefrei',
         ] as $feld => $lbl)
             @php($wert = $rezept->{$feld})
-            <span class="font-medium uppercase tracking-wide text-[11px] {{ $wert === true ? 'text-green-600 dark:text-green-400' : ($wert === false ? 'text-gray-400 line-through decoration-1' : 'text-gray-400 italic') }}"
+            <span class="font-medium uppercase tracking-wide text-[11px] {{ $wert === true ? 'text-green-600 dark:text-green-400' : ($wert === false ? 'text-gray-500 dark:text-gray-400 line-through decoration-1' : 'text-gray-500 dark:text-gray-400 italic') }}"
                   title="{{ $wert === null ? 'unbewertet' : ($wert ? 'ja' : 'nein') }}">{{ $lbl }} {{ $wert === true ? '✓' : ($wert === false ? '✕' : '?') }}</span>
         @endforeach
         @foreach(['spec_contains_pork' => 'enth. Schwein', 'spec_contains_beef' => 'enth. Rind'] as $feld => $lbl)
@@ -24,7 +24,7 @@
 
 <div data-deklaration-allergene>
     <p class="{{ $dt }} mb-1">Allergene
-        <span class="normal-case ml-1 font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergens_confidence] ?? 'text-gray-400' }}">{{ strtoupper($rezept->allergens_confidence) }}</span>
+        <span class="normal-case ml-1 font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergens_confidence] ?? 'text-gray-500 dark:text-gray-400' }}">{{ strtoupper($rezept->allergens_confidence) }}</span>
     </p>
     <div class="grid grid-cols-2 gap-x-4 gap-y-0.5" data-allergen-grid>
         @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $feld => $lbl)
@@ -32,8 +32,8 @@
             <span class="text-xs px-1.5 py-0.5 rounded {{ [
                     'enthalten' => 'bg-rose-500/10 text-rose-600 dark:text-rose-400 font-medium',
                     'spuren' => 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                    'nicht_enthalten' => 'text-gray-400',
-                ][$wert] ?? 'text-gray-400 italic opacity-60' }}"
+                    'nicht_enthalten' => 'text-gray-500 dark:text-gray-400',
+                ][$wert] ?? 'text-gray-500 dark:text-gray-400 italic opacity-60' }}"
                   title="{{ $lbl }} — {{ str_replace('_', ' ', $wert ?? 'unbekannt') }}">{{ explode(' ', $lbl)[0] }}</span>
         @endforeach
     </div>
@@ -45,10 +45,10 @@
         @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE as $stoff => $lbl)
             @php($wert = $rezept->{"additive_{$stoff}"})
             <span class="text-[11px] px-1.5 py-0.5 rounded border truncate {{ $wert === null
-                    ? 'border-dashed border-black/15 dark:border-white/15 text-gray-400 italic'
+                    ? 'border-dashed border-black/15 dark:border-white/15 text-gray-500 dark:text-gray-400 italic'
                     : ((int) $wert === 3
                         ? 'border-rose-300 dark:border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-medium'
-                        : 'border-black/5 dark:border-white/10 text-gray-400') }}"
+                        : 'border-black/5 dark:border-white/10 text-gray-500 dark:text-gray-400') }}"
                   title="{{ $lbl }} — {{ $wert === null ? 'unbewertet' : ((int) $wert === 3 ? 'enthalten' : 'nicht enthalten') }}">{{ ucfirst(str_replace(['mit ', 'enthält eine ', 'enthält ', 'kann bei übermäßigem Verzehr ', 'unter ', ' verpackt', 'kann Aktivität/Aufmerksamkeit bei Kindern beeinträchtigen', 'mit Zuckerart(en) und Süßungsmittel(n)'], ['', '', '', '', '', '', 'Kinder-Aufmerksamkeit', 'Zucker+Süßstoff'], $lbl)) }}</span>
         @endforeach
     </div>

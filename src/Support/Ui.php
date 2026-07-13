@@ -38,17 +38,17 @@ final class Ui
             'input' => 'w-full px-3 py-1.5 text-xs bg-black/[0.03] dark:bg-white/5 rounded-lg border-0 placeholder-gray-400 focus:ring-2 focus:ring-violet-500/20 focus:bg-white dark:focus:bg-white/10 transition-all duration-150',
 
             // ── Typo
-            'label' => 'text-[10px] font-medium uppercase tracking-wider text-gray-400',
+            'label' => 'text-[10px] font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400',
 
             // ── Tabelle (R14 Jarvis-Skala: 12px wie .data-table, Header 11px, py-1/px-3)
             'table' => 'w-full text-xs',
-            'th' => 'px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-gray-400 whitespace-nowrap',
+            'th' => 'px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400 whitespace-nowrap',
             'td' => 'px-3 py-1',
             'tr' => 'border-t border-black/5 dark:border-white/10 hover:bg-gradient-to-r hover:from-violet-500/5 hover:to-indigo-500/5 transition-all duration-150',
 
             // ── Definition-Listen (Detail-Sektionen)
             'row' => 'flex justify-between gap-4 py-1.5',
-            'dt' => 'text-[10px] font-medium uppercase tracking-wider text-gray-400',   // Jarvis .detail h3
+            'dt' => 'text-[10px] font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400',   // Jarvis .detail h3
             'dd' => 'text-gray-900 dark:text-gray-100 text-right',
 
             // ── Pills
@@ -57,13 +57,13 @@ final class Ui
                 'approved' => 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
                 'tentative' => 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
                 'rejected' => 'bg-red-500/10 text-red-600 dark:text-red-400',
-                'merged' => 'bg-black/5 dark:bg-white/10 text-gray-500 dark:text-gray-400',
+                'merged' => 'bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-400',
             ],
             'variantPill' => [
                 'danger' => 'bg-red-500/10 text-red-600 dark:text-red-400',
                 'warning' => 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
                 'success' => 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-                'secondary' => 'bg-black/5 dark:bg-white/10 text-gray-500 dark:text-gray-400',
+                'secondary' => 'bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-400',
                 'info' => 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
                 'primary' => 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
             ],

@@ -20,11 +20,11 @@
                         <button type="button" wire:click="hgSave" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0">OK</button>
                     @else
                         <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $hg->label }}</button>
-                        <span class="text-[11px] text-gray-400 shrink-0">{{ $hg->kategorie_count }}</span>
+                        <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0">{{ $hg->kategorie_count }}</span>
                         @if($darfEditHg)
-                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
                             <button type="button" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" @disabled($hg->kategorie_count > 0)
-                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $hg->kategorie_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500' }}"
+                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $hg->kategorie_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 dark:text-gray-400 hover:text-red-500' }}"
                                     title="{{ $hg->kategorie_count > 0 ? 'Hat Kategorien — erst dort entfernen' : 'löschen' }}">✕</button>
                         @endif
                     @endif
@@ -65,9 +65,9 @@
                                     </td>
                                 @else
                                     <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $kat->label }}</td>
-                                    <td class="{{ $td }} text-gray-500">{{ $kat->technik ?? '—' }}</td>
-                                    <td class="{{ $td }} text-gray-400">{{ $kat->sort_order }}</td>
-                                    <td class="{{ $td }} text-gray-500">{{ $kat->recipe_count }}</td>
+                                    <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $kat->technik ?? '—' }}</td>
+                                    <td class="{{ $td }} text-gray-500 dark:text-gray-400">{{ $kat->sort_order }}</td>
+                                    <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $kat->recipe_count }}</td>
                                     <td class="{{ $td }} text-right whitespace-nowrap">
                                         @if($darfEdit)
                                             <button type="button" wire:click="edit({{ $kat->id }})" class="{{ $btnGhostXs }}">Bearbeiten</button>

@@ -20,14 +20,14 @@
                         <button type="button" wire:click="hgSave" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0">OK</button>
                     @else
                         <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-2 py-1.5 text-xs">
-                            <span class="font-mono text-[10px] text-gray-400">{{ $hg->code }}</span>
+                            <span class="font-mono text-[10px] text-gray-500 dark:text-gray-400">{{ $hg->code }}</span>
                             <span class="min-w-0 truncate">{{ $hg->label }}</span>
                         </button>
-                        <span class="text-[11px] text-gray-400 shrink-0">{{ $nKl }}</span>
+                        <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0">{{ $nKl }}</span>
                         @if($darfEditHg)
-                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
                             <button type="button" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" @disabled($nKl > 0)
-                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $nKl > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500' }}"
+                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $nKl > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 dark:text-gray-400 hover:text-red-500' }}"
                                     title="{{ $nKl > 0 ? 'Hat Klassen — erst dort entfernen' : 'löschen' }}">✕</button>
                         @endif
                     @endif
@@ -37,7 +37,7 @@
                 <input type="text" wire:model="neuHg" wire:keydown.enter="createHg" placeholder="Neue Hauptgruppe …" class="{{ $input }} flex-1" />
                 <button type="button" wire:click="createHg" class="{{ $btnGhostXs }}">+ HG</button>
             </div>
-            <p class="text-[10px] text-gray-400 px-2 pt-2 leading-snug">Kategorie = Hauptgruppe (trägt den Aufschlag). Klasse = Diätform (4, global). Zähler = Gerichte je HG. Aufschlagsklassen, Schreibstile, Behälter: eigene Seiten (R5).</p>
+            <p class="text-[10px] text-gray-500 dark:text-gray-400 px-2 pt-2 leading-snug">Kategorie = Hauptgruppe (trägt den Aufschlag). Klasse = Diätform (4, global). Zähler = Gerichte je HG. Aufschlagsklassen, Schreibstile, Behälter: eigene Seiten (R5).</p>
         </div>
 
         {{-- Klassen der gewählten HG rechts --}}
@@ -58,16 +58,16 @@
                                 <tr class="{{ $tr }}" wire:key="tk-{{ $k->id }}">
                                     @if($klasseEditId === $k->id)
                                         <td class="{{ $td }}" colspan="3"><input type="text" wire:model="klasseEditName" wire:keydown.enter="klasseSave" wire:keydown.escape="$set('klasseEditId', null)" class="{{ $input }} !py-1" autofocus /></td>
-                                        <td class="{{ $td }} text-gray-500">{{ $nRez }}</td>
+                                        <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $nRez }}</td>
                                         <td class="{{ $td }} text-right whitespace-nowrap">
                                             <button type="button" wire:click="klasseSave" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">OK</button>
                                             <button type="button" wire:click="$set('klasseEditId', null)" class="{{ $btnGhostXs }}">Abbrechen</button>
                                         </td>
                                     @else
-                                        <td class="{{ $td }} text-gray-900 dark:text-gray-100">{{ $k->label }} <span class="text-[10px] font-mono text-gray-400">{{ $k->code }}</span></td>
+                                        <td class="{{ $td }} text-gray-900 dark:text-gray-100">{{ $k->label }} <span class="text-[10px] font-mono text-gray-500 dark:text-gray-400">{{ $k->code }}</span></td>
                                         <td class="{{ $td }}"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $k->diet_form }}</span></td>
-                                        <td class="{{ $td }} text-[11px] text-gray-400">{{ collect(['vegan' => $k->is_vegan, 'vegi' => $k->is_vegi, 'halal' => $k->is_halal, 'koscher' => $k->is_koscher])->filter()->keys()->implode(' · ') ?: '—' }}</td>
-                                        <td class="{{ $td }} text-gray-500">{{ $nRez }}</td>
+                                        <td class="{{ $td }} text-[11px] text-gray-500 dark:text-gray-400">{{ collect(['vegan' => $k->is_vegan, 'vegi' => $k->is_vegi, 'halal' => $k->is_halal, 'koscher' => $k->is_koscher])->filter()->keys()->implode(' · ') ?: '—' }}</td>
+                                        <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $nRez }}</td>
                                         <td class="{{ $td }} text-right whitespace-nowrap">
                                             @if($darfEditK)
                                                 <button type="button" wire:click="startKlasseEdit({{ $k->id }}, @js($k->label))" class="{{ $btnGhostXs }}">Umbenennen</button>
@@ -82,9 +82,9 @@
                         </tbody>
                     </table>
                 @else
-                    <div class="px-5 pb-5 text-xs text-gray-400">Links eine Speisen-Hauptgruppe wählen, um ihre Klassen zu sehen.</div>
+                    <div class="px-5 pb-5 text-xs text-gray-500 dark:text-gray-400">Links eine Speisen-Hauptgruppe wählen, um ihre Klassen zu sehen.</div>
                 @endif
-                <div class="px-5 py-3 border-t border-black/5 dark:border-white/10 text-[11px] text-gray-400">
+                <div class="px-5 py-3 border-t border-black/5 dark:border-white/10 text-[11px] text-gray-500 dark:text-gray-400">
                     Die Diätform wird am Gericht gewählt (Modell A) — Klassen sind fix: Fleisch · Fisch · Vegetarisch · Vegan.
                 </div>
             </div>

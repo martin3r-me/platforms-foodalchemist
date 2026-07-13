@@ -11,7 +11,7 @@
             <div class="flex-1">
                 <input type="text" wire:model="neuName" wire:keydown.enter.prevent="anlegen"
                        placeholder="z. B. Flüssigkeit/Fond, Aromat, Stärke …" class="{{ $input }}" data-platzhalter-neu />
-                <p class="text-[11px] text-gray-400 mt-1">„(neutral)" wird automatisch angehängt. Abstrakt — kein Lieferantenartikel, vom Matcher ausgeschlossen.</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">„(neutral)" wird automatisch angehängt. Abstrakt — kein Lieferantenartikel, vom Matcher ausgeschlossen.</p>
             </div>
             <button type="button" wire:click="anlegen" wire:loading.attr="disabled" class="{{ $btnPrimary }} shrink-0" data-platzhalter-anlegen>+ Anlegen</button>
         </div>
@@ -36,7 +36,7 @@
                     @endif
                 </div>
             @empty
-                <p class="text-[11px] text-gray-400">Noch keine Platzhalter. Lege oben den ersten an.</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine Platzhalter. Lege oben den ersten an.</p>
             @endforelse
         </div>
     </x-foodalchemist::modal-section>

@@ -43,7 +43,7 @@
                 </div>
                 <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
                     <span class="{{ $dt }}">Allergen-Konf.</span>
-                    <p class="text-xs font-semibold {{ ['high' => 'text-emerald-600', 'medium' => 'text-amber-600', 'low' => 'text-rose-600'][$voll->allergens_confidence] ?? 'text-gray-400' }}">{{ strtoupper((string) $voll->allergens_confidence) }}</p>
+                    <p class="text-xs font-semibold {{ ['high' => 'text-emerald-600', 'medium' => 'text-amber-600', 'low' => 'text-rose-600'][$voll->allergens_confidence] ?? 'text-gray-500 dark:text-gray-400' }}">{{ strtoupper((string) $voll->allergens_confidence) }}</p>
                 </div>
             </div>
         </x-slot:kpiHeader>
@@ -79,7 +79,7 @@
             @php($rezTabs['notes'] = 'Notizen')
             @foreach($rezTabs as $tabKey => $tabLabel)
                 <button type="button" @click="tab = '{{ $tabKey }}'"
-                        :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+                        :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
                         class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors" data-rezept-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
             @endforeach
         </div>
@@ -99,13 +99,13 @@
         <div>
             <label class="block {{ $label }} mb-1">Name *</label>
             <input type="text" wire:model.live.debounce.300ms="form.name" placeholder="Schaumsauce: Beurre Blanc" class="{{ $input }} !text-base" data-rezept-name />
-            <p class="text-[11px] text-gray-400 mt-1">Syntax §1.2: <code>Typ: Bezeichnung (Variante)</code>, Title Case.
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Syntax §1.2: <code>Typ: Bezeichnung (Variante)</code>, Title Case.
                 @if($keyVorschau !== '')<span class="font-mono" data-key-vorschau>recipe_key: {{ $keyVorschau }}{{ $neu ? '' : ' (bleibt beim Edit stabil)' }}</span>@endif
             </p>
         </div>
         <div class="grid grid-cols-2 gap-3 mt-3">
             <div>
-                <label class="block {{ $label }} mb-1">Herkunft / Quelle <span class="normal-case text-gray-400">(nicht im Namen — §1.6)</span></label>
+                <label class="block {{ $label }} mb-1">Herkunft / Quelle <span class="normal-case text-gray-500 dark:text-gray-400">(nicht im Namen — §1.6)</span></label>
                 <input type="text" wire:model="form.origin_source" placeholder="z. B. Broich, nach Paul, nach Omas Art" class="{{ $input }}" />
             </div>
             <div>
@@ -117,14 +117,14 @@
                 </select>
             </div>
             <div>
-                <label class="block {{ $label }} mb-1">Hauptgruppe * <span class="normal-case text-gray-400">({{ $hauptgruppen->count() }} kuratiert)</span></label>
+                <label class="block {{ $label }} mb-1">Hauptgruppe * <span class="normal-case text-gray-500 dark:text-gray-400">({{ $hauptgruppen->count() }} kuratiert)</span></label>
                 <select wire:model.live="form.hauptgruppe_id" class="{{ $input }}">
                     <option value="">—</option>
                     @foreach($hauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->label }}</option>@endforeach
                 </select>
             </div>
             <div>
-                <label class="block {{ $label }} mb-1">Kategorie * <span class="normal-case text-gray-400">({{ $kategorien->count() }} in dieser Hauptgruppe)</span></label>
+                <label class="block {{ $label }} mb-1">Kategorie * <span class="normal-case text-gray-500 dark:text-gray-400">({{ $kategorien->count() }} in dieser Hauptgruppe)</span></label>
                 <select wire:model.live="form.category_id" class="{{ $input }}" @disabled($kategorien->isEmpty())>
                     <option value="">—</option>
                     @foreach($kategorien as $kat)<option value="{{ $kat->id }}">{{ $kat->label }}</option>@endforeach
@@ -173,7 +173,7 @@
                                     @if(is_array($z))
                                         <p class="text-[11px] text-gray-600 dark:text-gray-300" wire:key="uz-{{ $loop->index }}">
                                             {{ $z['quantity'] ?? '?' }} {{ $z['einheit_slug'] ?? '' }} · {{ $z['text'] ?? '—' }}
-                                            <span class="text-gray-400">{{ isset($z['id']) ? '(bestehend #' . $z['id'] . ')' : '(neu)' }}</span>
+                                            <span class="text-gray-500 dark:text-gray-400">{{ isset($z['id']) ? '(bestehend #' . $z['id'] . ')' : '(neu)' }}</span>
                                         </p>
                                     @endif
                                 @endforeach
@@ -190,7 +190,7 @@
                         <div class="flex items-center gap-1.5">
                             <button type="button" wire:click="ueberarbeitungUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-ueberarbeiten-uebernehmen>Übernehmen ({{ round($ueberarbeitung['confidence'] * 100) }} %)</button>
                             <button type="button" wire:click="ueberarbeitungVerwerfen" class="{{ $btnGhostXs }}" data-ueberarbeiten-verwerfen>Verwerfen</button>
-                            <span class="text-[10px] text-gray-400">Übernehmen schreibt Zutaten-Sync + Texte mit Lineage ki — manuell Gepflegtes bleibt (GL-07).</span>
+                            <span class="text-[10px] text-gray-500 dark:text-gray-400">Übernehmen schreibt Zutaten-Sync + Texte mit Lineage ki — manuell Gepflegtes bleibt (GL-07).</span>
                         </div>
                     @endif
                 </div>
@@ -209,7 +209,7 @@
                         <input type="text" wire:model.live.debounce.500ms="form.yield_pieces" placeholder="z. B. 50 (Törtchen)" class="{{ $input }} !w-40" data-ertrag-stueck />
                         @php($es = is_numeric(str_replace(',', '.', (string) ($form['yield_pieces'] ?? ''))) ? (float) str_replace(',', '.', (string) $form['yield_pieces']) : null)
                         @if($es !== null && $es > 0 && $voll->yield_kg !== null)
-                            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">1 Stück ≈ {{ number_format((float) $voll->yield_kg / $es * 1000, 0, ',', '.') }} g{{ $voll->ek_total_eur !== null ? ' · EK/Stück ≈ ' . number_format((float) $voll->ek_total_eur / $es, 2, ',', '.') . ' €' : '' }}</p>
+                            <p class="text-[11px] text-gray-600 dark:text-gray-400 mt-1">1 Stück ≈ {{ number_format((float) $voll->yield_kg / $es * 1000, 0, ',', '.') }} g{{ $voll->ek_total_eur !== null ? ' · EK/Stück ≈ ' . number_format((float) $voll->ek_total_eur / $es, 2, ',', '.') . ' €' : '' }}</p>
                         @endif
                     </div>
                 </div>
@@ -257,7 +257,7 @@
             <div class="flex items-center gap-1 mb-1.5">
                 <button type="button" @click="tab = 'schreiben'" :class="tab === 'schreiben' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'" class="{{ $pill }}">Schreiben</button>
                 <button type="button" @click="tab = 'vorschau'; $wire.vorschauZubereitung()" :class="tab === 'vorschau' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'" class="{{ $pill }}" data-tab-vorschau>Vorschau</button>
-                <span class="text-[10px] text-gray-400 ml-2">Markdown — <code>##</code> für Phasen (Mise en Place / Finish), nummerierte Schritte</span>
+                <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-2">Markdown — <code>##</code> für Phasen (Mise en Place / Finish), nummerierte Schritte</span>
                 <span class="ml-auto" x-show="tab === 'schreiben'">
                     @include('foodalchemist::livewire.recipes.partials.md-toolbar', ['ziel' => 'preparation-text'])
                 </span>
@@ -267,7 +267,7 @@
             </div>
             <div x-show="tab === 'vorschau'" x-cloak class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-4 py-3" data-preparation-vorschau>
                 <div class="prose prose-sm dark:prose-invert max-w-none">
-                    {!! $zubereitungVorschau ?? '<p class="text-gray-400">Vorschau lädt …</p>' !!}
+                    {!! $zubereitungVorschau ?? '<p class="text-gray-500 dark:text-gray-400">Vorschau lädt …</p>' !!}
                 </div>
                 {{-- R6: Schritt-Fotos in der Vorschau, gruppiert an der Anleitung --}}
                 @foreach($schrittFotos as $schritt => $fotos)
@@ -277,7 +277,7 @@
                             @foreach($fotos as $foto)
                                 <figure class="w-32" wire:key="vf-{{ $foto->id }}">
                                     <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? "Schritt {$schritt}" }}" class="w-32 h-24 object-cover rounded-lg border border-black/10 dark:border-white/10" loading="lazy" />
-                                    @if($foto->caption)<figcaption class="text-[10px] text-gray-400 mt-0.5 truncate">{{ $foto->caption }}</figcaption>@endif
+                                    @if($foto->caption)<figcaption class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">{{ $foto->caption }}</figcaption>@endif
                                 </figure>
                             @endforeach
                         </div>
@@ -294,7 +294,7 @@
                     <div class="space-y-1.5 mb-2">
                         @foreach($schrittFotos as $schritt => $fotos)
                             <div class="flex items-start gap-2" wire:key="sfg-{{ $schritt }}">
-                                <span class="shrink-0 w-20 text-[11px] text-gray-400 pt-1">{{ $schritt === 0 ? 'allgemein' : "Schritt {$schritt}" }}</span>
+                                <span class="shrink-0 w-20 text-[11px] text-gray-500 dark:text-gray-400 pt-1">{{ $schritt === 0 ? 'allgemein' : "Schritt {$schritt}" }}</span>
                                 <div class="flex flex-wrap gap-1.5">
                                     @foreach($fotos as $foto)
                                         <span class="relative group" wire:key="sf-{{ $foto->id }}">
@@ -310,7 +310,7 @@
                 @endif
                 <div class="flex flex-wrap items-center gap-2" data-foto-upload>
                     <input type="number" min="0" max="99" wire:model="fotoSchritt" placeholder="Schritt-Nr" title="Schritt-Nummer aus der Zubereitung (leer/0 = allgemeines Rezept-Foto)" class="{{ $input }} !py-1 !w-24" />
-                    <input type="file" wire:model="fotoUpload" accept="image/*" class="text-[11px] text-gray-500 file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-violet-500/10 file:text-violet-600 dark:file:text-violet-300 file:text-[11px] file:cursor-pointer" data-foto-datei />
+                    <input type="file" wire:model="fotoUpload" accept="image/*" class="text-[11px] text-gray-600 dark:text-gray-400 file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-violet-500/10 file:text-violet-600 dark:file:text-violet-300 file:text-[11px] file:cursor-pointer" data-foto-datei />
                     <input type="text" wire:model="fotoCaption" placeholder="Bildunterschrift (optional)" class="{{ $input }} !py-1 w-56" />
                     <button type="button" wire:click="fotoHochladen" wire:loading.attr="disabled" wire:target="fotoUpload, fotoHochladen" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-foto-hochladen>
                         <span wire:loading.remove wire:target="fotoUpload, fotoHochladen">Hochladen</span>
@@ -326,7 +326,7 @@
                 <button type="button" wire:click="accept_zubereitung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['preparation']['confidence'] * 100) }} %)</button>
             </div>
         @endif
-        @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['preparation'] }}</p>@endif
+        @if(!$neu)<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Lineage: {{ $zustaende['preparation'] }}</p>@endif
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab ZUBEREITUNG --}}
 
@@ -357,14 +357,14 @@
                 </datalist>
             </div>
             <div>
-                <label class="block {{ $label }} mb-1">Geschmacksrichtung <span class="normal-case text-gray-400">(via ✨ oder manuell)</span></label>
+                <label class="block {{ $label }} mb-1">Geschmacksrichtung <span class="normal-case text-gray-500 dark:text-gray-400">(via ✨ oder manuell)</span></label>
                 <select wire:model="form.taste_direction" class="{{ $input }}">
                     <option value="">—</option>
                     <option value="suess">süß</option><option value="herzhaft">herzhaft</option><option value="neutral">neutral</option>
                 </select>
             </div>
             <div>
-                <label class="block {{ $label }} mb-1">Fertigungstiefe <span class="normal-case text-gray-400">(via ✨ Fertigung oder manuell)</span></label>
+                <label class="block {{ $label }} mb-1">Fertigungstiefe <span class="normal-case text-gray-500 dark:text-gray-400">(via ✨ Fertigung oder manuell)</span></label>
                 <select wire:model="form.production_depth" class="{{ $input }}">
                     <option value="">—</option>
                     <option value="from_scratch">From Scratch</option><option value="teilfertig">teilfertig</option><option value="convenience">Convenience</option>
@@ -378,7 +378,7 @@
         @if($recipeId !== null)
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" section="eignung" wire:key="reignung-{{ $recipeId }}" />
         @else
-            <p class="text-xs text-gray-400">Eignung lässt sich nach dem ersten Speichern pflegen.</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Eignung lässt sich nach dem ersten Speichern pflegen.</p>
         @endif
     </x-foodalchemist::modal-section>
 
@@ -398,7 +398,7 @@
                 <button type="button" wire:click="accept_beschreibung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['description']['confidence'] * 100) }} %)</button>
             </div>
         @endif
-        @if(!$neu)<p class="text-[10px] text-gray-400 mt-1">Lineage: {{ $zustaende['description'] }}</p>@endif
+        @if(!$neu)<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Lineage: {{ $zustaende['description'] }}</p>@endif
     </x-foodalchemist::modal-section>
 
     {{-- ERSATZ (make-or-buy / Artikel-Ersatz) — Detail-Panel-Kartei via section-Prop (eine Quelle, keine Duplikation) --}}
@@ -406,7 +406,7 @@
         @if($recipeId !== null)
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" section="ersatz" wire:key="rersatz-{{ $recipeId }}" />
         @else
-            <p class="text-xs text-gray-400">Ersatz lässt sich nach dem ersten Speichern verknüpfen.</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Ersatz lässt sich nach dem ersten Speichern verknüpfen.</p>
         @endif
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab EIGENSCHAFTEN --}}
@@ -419,7 +419,7 @@
             {{-- NÄHRWERTE (GL-08-Aggregat, read-only — Quelle: Zutaten-Recompute; hierher verschoben 2026-07-02, gehört zur Deklaration) --}}
             <x-foodalchemist::modal-section title="Nährwerte (pro 100 g)">
                 @if($voll?->nutri_kcal_per_100g === null)
-                    <p class="text-[11px] text-gray-400" data-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400" data-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
                 @else
                     <div class="grid grid-cols-5 gap-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2" data-naehrwerte>
                         @foreach([
@@ -430,15 +430,15 @@
                             ['Salz', $voll->nutri_salt_g_per_100g, 'g', 2, null, null],
                         ] as [$lbl, $wert, $unit, $dez, $subLbl, $subWert])
                             <div class="text-center" wire:key="rn-{{ $lbl }}">
-                                <p class="text-[10px] uppercase tracking-wider text-gray-400">{{ $lbl }}</p>
+                                <p class="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ $lbl }}</p>
                                 <p class="text-xs font-medium text-gray-900 dark:text-gray-100 tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $unit : '—' }}</p>
                                 @if($subLbl !== null)
-                                    <p class="text-[10px] text-gray-400 tabular-nums" data-naehrwert-sub="{{ $subLbl }}">{{ $subLbl }} {{ $subWert !== null ? number_format((float) $subWert, 1, ',', '.') . ' g' : '—' }}</p>
+                                    <p class="text-[10px] text-gray-500 dark:text-gray-400 tabular-nums" data-naehrwert-sub="{{ $subLbl }}">{{ $subLbl }} {{ $subWert !== null ? number_format((float) $subWert, 1, ',', '.') . ' g' : '—' }}</p>
                                 @endif
                             </div>
                         @endforeach
                     </div>
-                    <p class="text-[10px] text-gray-400 mt-1">
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
                         Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$voll->nutri_confidence] ?? '' }}">{{ strtoupper($voll->nutri_confidence ?? '—') }}</span>
                         · {{ $voll->nutri_n_ingredients_mapped ?? 0 }}/{{ $voll->nutri_n_ingredients_total ?? 0 }} Zutaten mit Nährwert-Daten
                         — BLS-Rohwerte, Garverlust/Putzverlust nicht angewendet (GL-08)
@@ -446,7 +446,7 @@
                 @endif
             </x-foodalchemist::modal-section>
         @else
-            <p class="text-xs text-gray-400 py-6 text-center">Deklaration erscheint nach dem ersten Speichern.</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 py-6 text-center">Deklaration erscheint nach dem ersten Speichern.</p>
         @endif
     </div>
 
@@ -454,7 +454,7 @@
     <div x-show="tab === 'sensorik'" x-cloak class="pt-4">
         @unless($neu)
             <div class="flex items-center justify-between gap-2 mb-2">
-                <span class="text-[11px] text-gray-400">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
+                <span class="text-[11px] text-gray-500 dark:text-gray-400">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
                 <button type="button" wire:click="sensorikBewerten" wire:loading.attr="disabled" wire:target="sensorikBewerten" class="{{ $btnGhostXs }}">
                     <span wire:loading.remove wire:target="sensorikBewerten">✨ Sensorik neu bewerten</span>
                     <span wire:loading wire:target="sensorikBewerten">… bewertet</span>
@@ -462,7 +462,7 @@
             </div>
         @endunless
         @include('foodalchemist::livewire.concepter.partials.sensorik')
-        <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mt-5 mb-2">Pairing</h3>
+        <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-5 mb-2">Pairing</h3>
         @include('foodalchemist::livewire.concepter.partials.pairing')
     </div>
 

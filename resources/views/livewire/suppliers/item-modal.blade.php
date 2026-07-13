@@ -12,11 +12,11 @@
 
             {{-- Modal-Kopf: EK + Vergleichspreis (M2-05) + Lieferant + GP --}}
             <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 -mt-1" data-modal-kopf>
-                <span class="text-xs text-gray-500">{{ $item->supplier?->name }}</span>
+                <span class="text-xs text-gray-600 dark:text-gray-400">{{ $item->supplier?->name }}</span>
                 <span class="text-xs font-medium text-gray-900 dark:text-gray-100">
                     EK: {{ $aktiverPreis?->price !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}
                 </span>
-                <span class="text-xs text-gray-500" data-vergleichspreis-kopf>
+                <span class="text-xs text-gray-600 dark:text-gray-400" data-vergleichspreis-kopf>
                     {{ $vergleichspreis ? number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : 'kein Vergleichspreis' }}
                 </span>
                 @if($item->structure?->gp)
@@ -95,7 +95,7 @@
 
             <x-foodalchemist::modal-section title="Nährwerte (je 100 g)">
                 <div class="flex items-center justify-between mb-2">
-                    <p class="text-[11px] text-gray-400">Fließen in die GP-Nährwert-Aggregation (Ø über die LAs, GL-08).</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400">Fließen in die GP-Nährwert-Aggregation (Ø über die LAs, GL-08).</p>
                     @if($darfEdit)
                         <button type="button" wire:click="naehrwerteSpeichern" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">Nährwerte speichern</button>
                     @endif
@@ -113,7 +113,7 @@
 
             <x-foodalchemist::modal-section title="Allergene (14 EU-Pflichtangaben)">
                 <div class="flex items-center justify-between mb-2" data-allergen-kopf>
-                    <p class="text-[11px] text-gray-400">− nicht enthalten · ≈ Spuren · ✓ enthalten · ungesetzt = unbekannt (GL-01). Quelle:
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400">− nicht enthalten · ≈ Spuren · ✓ enthalten · ungesetzt = unbekannt (GL-01). Quelle:
                         <span class="{{ $pill }} {{ $allergenQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $allergenQuelle ?? 'Import' }}</span>
                     </p>
                     @if($darfEdit)
@@ -130,7 +130,7 @@
 
             <x-foodalchemist::modal-section title="Zusatzstoffe (18 deklarationspflichtige Stoffe, LMIV)">
                 <div class="flex items-center justify-between mb-2" data-deklaration-kopf>
-                    <p class="text-[11px] text-gray-400">− nein · ✓ ja · ungesetzt = keine Angabe (GL-09). Quelle:
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400">− nein · ✓ ja · ungesetzt = keine Angabe (GL-09). Quelle:
                         <span class="{{ $pill }} {{ $deklarationQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $deklarationQuelle ?? 'Import' }}</span>
                     </p>
                     @if($darfEdit)
@@ -176,7 +176,7 @@
                                 class="{{ $btnGhostXs }} text-rose-500 shrink-0" data-gp-loesen>✕ lösen</button>
                     </div>
                 @else
-                    <p class="text-xs text-gray-400 italic" data-gp-mapping-leer>— kein GP zugeordnet —</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 italic" data-gp-mapping-leer>— kein GP zugeordnet —</p>
                 @endif
 
                 @if($gpVorschlaege !== [])
@@ -187,7 +187,7 @@
                                     class="flex items-center gap-2 w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10" data-gp-vorschlag>
                                 <span class="font-semibold {{ $v['score'] >= 90 ? 'text-green-600' : 'text-amber-500' }} shrink-0">{{ $v['score'] }} %</span>
                                 <span class="min-w-0 truncate">{{ $v['name'] }}</span>
-                                <span class="text-gray-400 shrink-0">{{ $v['grund'] }}</span>
+                                <span class="text-gray-500 dark:text-gray-400 shrink-0">{{ $v['grund'] }}</span>
                             </button>
                         @endforeach
                     </div>
@@ -207,8 +207,8 @@
                 {{-- R12 (Jarvis): EK-aktuell-Box + Tabelle gültig von/bis · Kategorie · Preis (+€/kg) · Notiz · ✎ --}}
                 <div class="flex items-center justify-end gap-3 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 mb-2" data-ek-aktuell>
                     <p class="text-xs text-gray-900 dark:text-gray-100">EK aktuell:
-                        <span class="font-semibold {{ $aktiverPreis !== null ? 'text-green-600 dark:text-green-400' : 'text-gray-400' }}">{{ $aktiverPreis !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}</span>
-                        <span class="text-gray-400">pro {{ $item->ordering_unit ?? $item->unit_code ?? 'Einheit' }}{{ $vergleichspreis !== null ? ' · ' . number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : '' }}</span>
+                        <span class="font-semibold {{ $aktiverPreis !== null ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400' }}">{{ $aktiverPreis !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}</span>
+                        <span class="text-gray-500 dark:text-gray-400">pro {{ $item->ordering_unit ?? $item->unit_code ?? 'Einheit' }}{{ $vergleichspreis !== null ? ' · ' . number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : '' }}</span>
                     </p>
                     @if($darfEdit)
                         <button type="button" x-data @click="$el.closest('[data-modal]').querySelector('[data-preis-neu]')?.classList.toggle('hidden')" class="{{ $btnPrimary }}" data-preis-neu-toggle>+ Neuer Preis</button>
@@ -234,7 +234,7 @@
                         @forelse($historie as $p)
                             <tr wire:key="preis-{{ $p->id }}" class="{{ $tr }}">
                                 @if($preisEditId === $p->id)
-                                    <td class="{{ $td }} !px-2 text-gray-500" colspan="2">
+                                    <td class="{{ $td }} !px-2 text-gray-600 dark:text-gray-400" colspan="2">
                                         bis: <input type="date" wire:model="preisEdit.valid_to" class="{{ $input }} !py-1 !w-36 inline-block" />
                                     </td>
                                     <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $p->category->label() }}</span></td>
@@ -245,16 +245,16 @@
                                         <button type="button" wire:click="preisEditAbbrechen" class="{{ $btnGhostXs }}">Abbrechen</button>
                                     </td>
                                 @else
-                                    <td class="{{ $td }} !px-2 text-gray-500">{{ $p->status_valid_from ? \Illuminate\Support\Carbon::parse($p->status_valid_from)->format('Y-m-d') : ($p->creation_date ? \Illuminate\Support\Carbon::parse($p->creation_date)->format('Y-m-d') : '—') }}</td>
-                                    <td class="{{ $td }} !px-2 text-gray-500">{{ $p->valid_to ? \Illuminate\Support\Carbon::parse($p->valid_to)->format('Y-m-d') : '—' }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-600 dark:text-gray-400">{{ $p->status_valid_from ? \Illuminate\Support\Carbon::parse($p->status_valid_from)->format('Y-m-d') : ($p->creation_date ? \Illuminate\Support\Carbon::parse($p->creation_date)->format('Y-m-d') : '—') }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-600 dark:text-gray-400">{{ $p->valid_to ? \Illuminate\Support\Carbon::parse($p->valid_to)->format('Y-m-d') : '—' }}</td>
                                     <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $p->category->istAktiv() ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $p->category->label() }}</span></td>
                                     <td class="{{ $td }} !px-2 text-right">
                                         <span class="text-gray-900 dark:text-gray-100 font-medium tabular-nums">{{ $p->price !== null ? number_format((float) $p->price, 2, ',', '.') . ' €' : '—' }}</span>
                                         @if($p->price !== null && $item->qty !== null && in_array($item->unit_code, ['kg', 'l', 'Stk'], true))
-                                            <span class="block text-[11px] text-gray-400">= {{ number_format((float) $p->price / (float) $item->qty, 2, ',', '.') }} €/{{ $item->unit_code }}</span>
+                                            <span class="block text-[11px] text-gray-500 dark:text-gray-400">= {{ number_format((float) $p->price / (float) $item->qty, 2, ',', '.') }} €/{{ $item->unit_code }}</span>
                                         @endif
                                     </td>
-                                    <td class="{{ $td }} !px-2 text-gray-500 text-[11px] max-w-[10rem] truncate" title="{{ $p->note ?? '' }}">{{ $p->note ?? '—' }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-600 dark:text-gray-400 text-[11px] max-w-[10rem] truncate" title="{{ $p->note ?? '' }}">{{ $p->note ?? '—' }}</td>
                                     <td class="{{ $td }} !px-2 text-right whitespace-nowrap">
                                         @if($darfEdit)
                                             <button type="button" wire:click="preisBearbeiten({{ $p->id }})" class="{{ $btnGhostXs }}" title="bearbeiten" data-preis-edit>✎</button>
@@ -264,7 +264,7 @@
                                 @endif
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="px-2 py-6 text-center text-gray-400">Keine Preiszeilen.</td></tr>
+                            <tr><td colspan="6" class="px-2 py-6 text-center text-gray-500 dark:text-gray-400">Keine Preiszeilen.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

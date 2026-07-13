@@ -44,7 +44,7 @@
                         <option value="inactive">Inaktiv</option>
                     </select>
                 </div>
-                <p class="text-[11px] text-gray-400">{{ $docs->count() }} Dokument(e)@if($semanticAktiv) · nach Relevanz @endif</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ $docs->count() }} Dokument(e)@if($semanticAktiv) · nach Relevanz @endif</p>
 
                 <div class="space-y-0.5 max-h-[62vh] overflow-y-auto -mx-1 px-1">
                     @forelse($docs as $doc)
@@ -55,12 +55,12 @@
                             <span class="block text-xs font-medium text-gray-900 dark:text-gray-100 truncate">{{ $doc->title }}</span>
                             <span class="flex items-center gap-1.5 mt-0.5">
                                 <span class="text-[10px] {{ $pill }}">{{ $doc->category }}</span>
-                                <span class="text-[10px] text-gray-400">{{ $doc->char_count }} Z.</span>
+                                <span class="text-[10px] text-gray-500 dark:text-gray-400">{{ $doc->char_count }} Z.</span>
                                 @unless($doc->active)<span class="text-[10px] text-amber-500">inaktiv</span>@endunless
                             </span>
                         </button>
                     @empty
-                        <p class="text-xs text-gray-400 px-2 py-4">Keine Treffer.</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 px-2 py-4">Keine Treffer.</p>
                     @endforelse
                 </div>
             </div>
@@ -74,7 +74,7 @@
                                 {{ $creating ? 'Neues Wissen anlegen' : 'Bearbeiten' }}
                             </h3>
                             @if($selected)
-                                <span class="text-[10px] font-mono text-gray-400">{{ $selected->slug }} · v{{ $selected->version }}</span>
+                                <span class="text-[10px] font-mono text-gray-500 dark:text-gray-400">{{ $selected->slug }} · v{{ $selected->version }}</span>
                             @endif
                         </div>
 
@@ -111,15 +111,15 @@
                     @if($selected)
                         {{-- Aliases (pflegbar) --}}
                         <div class="{{ $card }} p-4 space-y-2" data-wissen-aliases>
-                            <p class="{{ $dt }}">Aliase <span class="text-[10px] text-gray-400">— Begriffe, unter denen die KI dieses Wissen findet</span></p>
+                            <p class="{{ $dt }}">Aliase <span class="text-[10px] text-gray-500 dark:text-gray-400">— Begriffe, unter denen die KI dieses Wissen findet</span></p>
                             <div class="flex flex-wrap gap-1.5">
                                 @forelse($aliases as $a)
                                     <span class="inline-flex items-center gap-1 text-[11px] {{ $pill }}" wire:key="alias-{{ $a->id }}">
                                         {{ $a->alias_slug }}
-                                        <button type="button" wire:click="removeAlias({{ $a->id }})" class="text-gray-400 hover:text-red-500" title="entfernen">&times;</button>
+                                        <button type="button" wire:click="removeAlias({{ $a->id }})" class="text-gray-500 dark:text-gray-400 hover:text-red-500" title="entfernen">&times;</button>
                                     </span>
                                 @empty
-                                    <span class="text-[11px] text-gray-400">Noch keine Aliase.</span>
+                                    <span class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine Aliase.</span>
                                 @endforelse
                             </div>
                             <div class="flex gap-2">
@@ -130,29 +130,29 @@
 
                         {{-- Verdrahtung / nachvollziehbar (read-only v1) --}}
                         <div class="{{ $card }} p-4 space-y-3" data-wissen-verdrahtung>
-                            <p class="{{ $dt }}">Verdrahtung <span class="text-[10px] text-gray-400">— wo dieses Wissen wirkt</span></p>
+                            <p class="{{ $dt }}">Verdrahtung <span class="text-[10px] text-gray-500 dark:text-gray-400">— wo dieses Wissen wirkt</span></p>
 
                             <div>
-                                <p class="text-[11px] font-medium text-gray-500 mb-1">Grobe Ebene — KI-Features via Kategorie «{{ $selected->category }}» (automatisch)</p>
+                                <p class="text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1">Grobe Ebene — KI-Features via Kategorie «{{ $selected->category }}» (automatisch)</p>
                                 @forelse($routings as $r)
                                     <span class="inline-flex items-center gap-1 text-[11px] {{ $pill }} mr-1.5" wire:key="rt-{{ $r->id }}">
-                                        {{ $r->feature }} <span class="text-gray-400">· {{ $r->mode }}</span>
+                                        {{ $r->feature }} <span class="text-gray-500 dark:text-gray-400">· {{ $r->mode }}</span>
                                     </span>
                                 @empty
-                                    <span class="text-[11px] text-gray-400">Keine Feature-Routings für diese Kategorie.</span>
+                                    <span class="text-[11px] text-gray-500 dark:text-gray-400">Keine Feature-Routings für diese Kategorie.</span>
                                 @endforelse
                             </div>
 
                             <div>
-                                <p class="text-[11px] font-medium text-gray-500 mb-1">Feine Ebene — an Einsatzorte gebunden (direkt einbinden)</p>
+                                <p class="text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1">Feine Ebene — an Einsatzorte gebunden (direkt einbinden)</p>
                                 <div class="flex flex-wrap gap-1.5 mb-2">
                                     @forelse($bindings as $b)
                                         <span class="inline-flex items-center gap-1 text-[11px] {{ $pill }}" wire:key="bd-{{ $b->id }}">
-                                            {{ $layerLabels[$b->target_key] ?? $b->target_key }}@if($b->mode) <span class="text-gray-400">· {{ $b->mode }}</span>@endif
-                                            <button type="button" wire:click="removeBinding({{ $b->id }})" class="text-gray-400 hover:text-red-500" title="Bindung lösen">&times;</button>
+                                            {{ $layerLabels[$b->target_key] ?? $b->target_key }}@if($b->mode) <span class="text-gray-500 dark:text-gray-400">· {{ $b->mode }}</span>@endif
+                                            <button type="button" wire:click="removeBinding({{ $b->id }})" class="text-gray-500 dark:text-gray-400 hover:text-red-500" title="Bindung lösen">&times;</button>
                                         </span>
                                     @empty
-                                        <span class="text-[11px] text-gray-400">Noch keine Bindungen.</span>
+                                        <span class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine Bindungen.</span>
                                     @endforelse
                                 </div>
                                 {{-- Bindung hinzufügen: Bereich (grob) oder Einzel-Prompt (fein) --}}
@@ -176,7 +176,7 @@
 
                         {{-- Rückwärts-Traceability: was hängt an einem Ziel? --}}
                         <div class="{{ $card }} p-4 space-y-2" data-wissen-trace>
-                            <p class="{{ $dt }}">Rückwärts nachvollziehen <span class="text-[10px] text-gray-400">— was hängt an einem KI-Layer / einer Warengruppe?</span></p>
+                            <p class="{{ $dt }}">Rückwärts nachvollziehen <span class="text-[10px] text-gray-500 dark:text-gray-400">— was hängt an einem KI-Layer / einer Warengruppe?</span></p>
                             <div class="flex flex-wrap items-center gap-2">
                                 <select wire:model.live="traceTarget" class="{{ $input }} !py-1 text-xs w-64">
                                     <option value="">— Einsatzort wählen —</option>
@@ -192,17 +192,17 @@
                                 <div class="space-y-0.5">
                                     @forelse($traceResults as $t)
                                         <button type="button" wire:click="select({{ $t->id }})" class="block w-full text-left text-[11px] px-2 py-1 rounded hover:bg-black/[0.03] dark:hover:bg-white/5" wire:key="tr-{{ $t->id }}">
-                                            {{ $t->title }} <span class="text-gray-400">· {{ $t->category }}@if($t->mode) · {{ $t->mode }}@endif</span>
+                                            {{ $t->title }} <span class="text-gray-500 dark:text-gray-400">· {{ $t->category }}@if($t->mode) · {{ $t->mode }}@endif</span>
                                         </button>
                                     @empty
-                                        <p class="text-[11px] text-gray-400">Nichts an diesem Ziel gebunden.</p>
+                                        <p class="text-[11px] text-gray-500 dark:text-gray-400">Nichts an diesem Ziel gebunden.</p>
                                     @endforelse
                                 </div>
                             @endif
                         </div>
                     @endif
                 @else
-                    <div class="{{ $card }} p-10 text-center text-sm text-gray-400" data-wissen-empty>
+                    <div class="{{ $card }} p-10 text-center text-sm text-gray-500 dark:text-gray-400" data-wissen-empty>
                         Links ein Wissens-Dokument wählen oder oben rechts «+ Neues Wissen».
                     </div>
                 @endif

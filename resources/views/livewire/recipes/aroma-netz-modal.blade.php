@@ -1,7 +1,7 @@
 {{-- M5-07 / D-7: Aroma-Netz — Quell-Rezept zentral, Anker-Ring, Verwandte außen; Brücken-Typen GL-10 --}}
 <x-foodalchemist::modal name="aroma-netz" title="Aroma-Netz: {{ $zentrum['name'] ?? '' }}" size="max-w-5xl">
     @if($zentrum === null)
-        <p class="text-xs text-gray-400">Kein Rezept gewählt.</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Kein Rezept gewählt.</p>
     @else
         <div x-data="{ alle: false, hov: null }" wire:key="aroma-netz-{{ $zentrum['id'] }}-{{ $vorschlaege }}">
             {{-- Kopf: Brücken-Toggle · Vorschlags-Modus · Bedien-Hint --}}
@@ -20,7 +20,7 @@
                         <option value="3">3</option>
                     </select>
                 </label>
-                <span class="text-gray-400">Hover über Anker = dessen Brücken · Klick auf Rezept = öffnen</span>
+                <span class="text-gray-500 dark:text-gray-400">Hover über Anker = dessen Brücken · Klick auf Rezept = öffnen</span>
             </div>
 
             <svg viewBox="0 0 1000 760" class="w-full rounded-xl bg-black/[0.02] dark:bg-white/[0.03]" data-netz-svg>
@@ -104,7 +104,7 @@
             </svg>
 
             {{-- Legende (Referenz: Knoten-Typen | Brücken-Typen) --}}
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] text-gray-500 dark:text-gray-400" data-netz-legende>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] text-gray-600 dark:text-gray-400" data-netz-legende>
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-orange-300 border border-orange-600"></span> Quell-Rezept</span>
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-300 border border-blue-600"></span> Gericht</span>
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-green-300 border border-green-600"></span> Basisrezept</span>

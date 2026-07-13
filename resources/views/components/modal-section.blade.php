@@ -13,7 +13,7 @@
 
 <section {{ $attributes->merge(['class' => $sectionCard . ' mt-4 first:mt-0']) }} data-modal-zone="section">
     <div class="flex items-center justify-between mb-2">
-        <h3 class="text-[11px] font-medium uppercase tracking-wider text-gray-400">{{ $title }}</h3>
+        <h3 class="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ $title }}</h3>
         @isset($actions)
             <div class="flex items-center gap-1.5" data-section-actions>{{ $actions }}</div>
         @endisset

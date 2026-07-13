@@ -7,7 +7,7 @@
 
 <div class="space-y-1.5" data-phase-stepper data-phase-aktuell="{{ $phaseAktuell }}">
     <div class="flex items-center gap-1 flex-wrap">
-        <span class="text-[10px] text-gray-400 uppercase tracking-wider mr-1">Phase</span>
+        <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">Phase</span>
         @foreach($phasen as $key => $lbl)
             @php($i = array_search($key, array_keys($phasen), true))
             <button type="button" wire:click="phaseSetzen('{{ $key }}')"
@@ -16,7 +16,7 @@
                             ? 'bg-violet-500/15 border-violet-500/40 text-violet-700 dark:text-violet-300 font-medium'
                             : ($i < (int) $aktuellerIndex
                                 ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-400'
-                                : 'bg-black/[0.03] dark:bg-white/5 border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300') }}"
+                                : 'bg-black/[0.03] dark:bg-white/5 border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300') }}"
                     title="{{ $key === 'freigabe' ? 'Gate: nur ohne rote Coverage-Ampeln (Override mit Begründung möglich)' : $lbl }}"
                     data-phase-btn="{{ $key }}">
                 {{ $lbl }}

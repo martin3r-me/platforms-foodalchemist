@@ -7,7 +7,7 @@
 
 <div class="{{ $nurSektion ? 'space-y-2' : 'p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]' }}" data-rezept-panel>
     @if($rezept === null)
-        <div class="text-center text-xs text-gray-400 py-12">
+        <div class="text-center text-xs text-gray-500 dark:text-gray-400 py-12">
             <div class="text-2xl mb-2">⌘</div>
             Rezept in der Tabelle anklicken —<br>Details erscheinen hier.
         </div>
@@ -24,7 +24,7 @@
                     <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
                 </div>
             </div>
-            <p class="text-[11px] text-gray-400 mt-0.5">{{ $rezept->category?->label ?? '—' }} · {{ $rezept->recipe_key }}</p>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{{ $rezept->category?->label ?? '—' }} · {{ $rezept->recipe_key }}</p>
         </div>
 
         {{-- KPI-Karte (EK/kg · EK · Yield · Konfidenz) --}}
@@ -37,7 +37,7 @@
                 ['mit Preis', ($rezept->ek_n_ingredients_priced ?? '—') . '/' . ($rezept->ek_n_ingredients_total ?? '—')],
             ] as [$lbl, $wert])
                 <div class="text-center">
-                    <p class="text-[10px] uppercase tracking-wider text-gray-400">{{ $lbl }}</p>
+                    <p class="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ $lbl }}</p>
                     <p class="text-xs font-medium text-gray-900 dark:text-gray-100 tabular-nums">{{ $wert }}</p>
                 </div>
             @endforeach
@@ -56,18 +56,18 @@
             <div class="space-y-0.5">
                 @foreach($rezept->ingredients as $z)
                     <div wire:key="z-{{ $z->id }}" class="flex items-baseline gap-2 text-[11px] py-0.5 border-b border-black/5 dark:border-white/5 last:border-0 {{ $z->is_optional ? 'opacity-60' : '' }}">
-                        <span class="text-gray-500 tabular-nums shrink-0 w-20 text-right">{{ rtrim(rtrim(number_format((float) $z->quantity, 2, ',', '.'), '0'), ',') }}{{ $z->quantity_max !== null ? '–' . rtrim(rtrim(number_format((float) $z->quantity_max, 2, ',', '.'), '0'), ',') : '' }} {{ $z->unit?->slug }}</span>
+                        <span class="text-gray-600 dark:text-gray-400 tabular-nums shrink-0 w-20 text-right">{{ rtrim(rtrim(number_format((float) $z->quantity, 2, ',', '.'), '0'), ',') }}{{ $z->quantity_max !== null ? '–' . rtrim(rtrim(number_format((float) $z->quantity_max, 2, ',', '.'), '0'), ',') : '' }} {{ $z->unit?->slug }}</span>
                         <span class="min-w-0 flex-1">
                             @if($z->gp !== null)
                                 <a href="{{ route('foodalchemist.gps.index', ['gp' => $z->gp_id]) }}" class="text-violet-600 dark:text-violet-400 hover:underline">{{ $z->gp->name }}</a>
                             @elseif($z->referencedRecipe !== null)
                                 <button type="button" wire:click="zeige({{ $z->referenced_recipe_id }})" class="text-sky-600 dark:text-sky-400 hover:underline" title="Sub-Rezept">↳ {{ $z->referencedRecipe->name }}</button>
                             @else
-                                <span class="text-gray-400" title="ungemappt">{{ $z->display_name ?? $z->raw_text }}</span>
+                                <span class="text-gray-500 dark:text-gray-400" title="ungemappt">{{ $z->display_name ?? $z->raw_text }}</span>
                             @endif
-                            <span class="block text-[10px] text-gray-400 italic truncate" title="{{ $z->raw_text }}">{{ $z->raw_text }}</span>
+                            <span class="block text-[10px] text-gray-500 dark:text-gray-400 italic truncate" title="{{ $z->raw_text }}">{{ $z->raw_text }}</span>
                         </span>
-                        <span class="shrink-0 tabular-nums {{ isset($zeilenEk[$z->id]) ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400' }}" data-zeilen-ek>
+                        <span class="shrink-0 tabular-nums {{ isset($zeilenEk[$z->id]) ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400' }}" data-zeilen-ek>
                             {{ isset($zeilenEk[$z->id]) ? number_format($zeilenEk[$z->id], 2, ',', '.') . ' €' : '—' }}
                         </span>
                     </div>
@@ -82,7 +82,7 @@
                 <div class="space-y-1.5">
                     @foreach($schrittFotos as $schritt => $fotos)
                         <div class="flex items-start gap-2" wire:key="psfg-{{ $schritt }}">
-                            <span class="shrink-0 w-16 text-[10px] text-gray-400 pt-1">{{ $schritt === 0 ? 'allgemein' : "Schritt {$schritt}" }}</span>
+                            <span class="shrink-0 w-16 text-[10px] text-gray-500 dark:text-gray-400 pt-1">{{ $schritt === 0 ? 'allgemein' : "Schritt {$schritt}" }}</span>
                             <div class="flex flex-wrap gap-1.5">
                                 @foreach($fotos as $foto)
                                     <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}"
@@ -135,13 +135,13 @@
             <div class="space-y-1.5">
                 @foreach(['level' => 'Niveau', 'sektor' => 'Sektor'] as $typ => $typLabel)
                     <div class="flex items-center gap-1 flex-wrap">
-                        <span class="text-[10px] uppercase tracking-wider text-gray-400 w-12 shrink-0">{{ $typLabel }}</span>
+                        <span class="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 w-12 shrink-0">{{ $typLabel }}</span>
                         @foreach($eignungVokab[$typ]['slugs'] as $slug)
                             @php($eintrag = $eignungAktiv[$typ][$slug] ?? null)
                             <button type="button" wire:key="eig-{{ $typ }}-{{ $slug }}" wire:click="eignungToggle('{{ $typ }}', '{{ $slug }}')"
                                     class="{{ $pill }} transition-colors {{ $eintrag !== null
                                         ? ($typ === 'level' ? $variantPill['info'] : $variantPill['primary'])
-                                        : 'border border-black/10 dark:border-white/15 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300' }}"
+                                        : 'border border-black/10 dark:border-white/15 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300' }}"
                                     title="{{ $eintrag !== null
                                         ? 'geeignet · ' . $eintrag->source . ($eintrag->ai_confidence !== null ? ' ' . round($eintrag->ai_confidence * 100) . '%' : '') . ' — Klick entfernt'
                                         : 'Klick markiert als geeignet' }}"
@@ -165,11 +165,11 @@
                     <div class="flex items-center gap-2 text-[11px]" wire:key="rq-equiv-{{ $e->id }}">
                         <span class="{{ $pill }} {{ $e->gegen_kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }} shrink-0">{{ $e->gegen_kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
                         <span class="min-w-0 flex-1 truncate text-gray-900 dark:text-gray-100" title="{{ $e->gegen_name }}">{{ $e->gegen_name }}</span>
-                        @if((float) $e->umrechnungsfaktor !== 1.0)<span class="text-gray-400 tabular-nums shrink-0">×{{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
+                        @if((float) $e->umrechnungsfaktor !== 1.0)<span class="text-gray-500 dark:text-gray-400 tabular-nums shrink-0">×{{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
                         <button type="button" wire:click="ersatzLoesen({{ $e->id }})" class="{{ $btnGhostXs }} text-rose-500 shrink-0" title="Ersatz-Verknüpfung lösen">✕</button>
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-400" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
                 @endforelse
                 <div class="pt-1" data-ersatz-verknuepfen>
                     <input type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="+ Ersatz verknüpfen — Fertig-GP/Rezept suchen …" class="{{ $input }} !py-1" data-ersatz-suche />
@@ -201,7 +201,7 @@
         {{-- M5-04: Kern-Anker (★-Chips, Cap 5, Verknüpfen-Flow) + Kohäsion lazy --}}
         <div data-kern-anker>
             <button type="button" wire:click="toggleSektion('anker')"
-                    class="w-full flex items-center justify-between py-1 text-[11px] font-medium uppercase tracking-wider text-gray-400 hover:text-violet-500 transition-colors">
+                    class="w-full flex items-center justify-between py-1 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:text-violet-500 transition-colors">
                 <span>Kern-Anker ({{ $kernAnker->count() }}/5)</span>
                 <span>{{ ($offen['anker'] ?? false) ? '▾' : '▸' }}</span>
             </button>
@@ -219,7 +219,7 @@
                     <input type="search" wire:model.live.debounce.300ms="ankerSuche" placeholder="Anker verknüpfen …" class="{{ $input }} !py-1" data-anker-suche />
                     @foreach($ankerKandidaten as $kandidat)
                         <button type="button" wire:key="ak-{{ $kandidat->id }}" wire:click="ankerVerknuepfen({{ $kandidat->id }})"
-                                class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">{{ $kandidat->display_de }} <span class="text-gray-400">{{ $kandidat->slug }}</span></button>
+                                class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">{{ $kandidat->display_de }} <span class="text-gray-500 dark:text-gray-400">{{ $kandidat->slug }}</span></button>
                     @endforeach
                 </div>
                 @if($kohaesion !== null)
@@ -229,7 +229,7 @@
                             @if($kohaesion['coverage_pct'] < 30)<span class="text-amber-500">· dünne Datenlage</span>@endif
                         </p>
                         @if($kohaesion['weakest_pair'] !== null)
-                            <p class="text-gray-400">Schwächstes Glied: {{ $kohaesion['weakest_pair']['a'] }} ↔ {{ $kohaesion['weakest_pair']['b'] }} ({{ $kohaesion['weakest_pair']['score'] }}, {{ $kohaesion['weakest_pair']['type'] }})</p>
+                            <p class="text-gray-500 dark:text-gray-400">Schwächstes Glied: {{ $kohaesion['weakest_pair']['a'] }} ↔ {{ $kohaesion['weakest_pair']['b'] }} ({{ $kohaesion['weakest_pair']['score'] }}, {{ $kohaesion['weakest_pair']['type'] }})</p>
                         @endif
                         @php($orphans = collect($kohaesion['komponenten'])->filter(fn ($k) => $k['is_orphan']))
                         @if($orphans->isNotEmpty())
@@ -244,7 +244,7 @@
         <div data-pairing-sektion>
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="toggleSektion('pairing')"
-                        class="flex-1 flex items-center justify-between py-1 text-[11px] font-medium uppercase tracking-wider text-gray-400 hover:text-violet-500 transition-colors">
+                        class="flex-1 flex items-center justify-between py-1 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:text-violet-500 transition-colors">
                     <span>Pairings</span>
                     <span>{{ ($offen['pairing'] ?? false) ? '▾' : '▸' }}</span>
                 </button>
@@ -271,7 +271,7 @@
                 </div>
                 @foreach($pairingKandidaten as $kandidat)
                     <button type="button" wire:key="pk-{{ $kandidat->id }}" wire:click="pairingVerknuepfen({{ $kandidat->id }})"
-                            class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-emerald-500/10" data-pairing-kandidat="{{ $kandidat->id }}">{{ $kandidat->display_de }} <span class="text-gray-400">{{ $kandidat->slug }}</span></button>
+                            class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-emerald-500/10" data-pairing-kandidat="{{ $kandidat->id }}">{{ $kandidat->display_de }} <span class="text-gray-500 dark:text-gray-400">{{ $kandidat->slug }}</span></button>
                 @endforeach
                 @if($verwandte->isNotEmpty())
                     <p class="{{ $dt }} mt-2 mb-1">Verwandte Rezepte</p>
@@ -279,7 +279,7 @@
                         @foreach($verwandte as $v)
                             <button type="button" wire:key="vw-{{ $v['recipe_id'] }}" wire:click="zeige({{ $v['recipe_id'] }})"
                                     class="block w-full text-left text-[11px] text-sky-600 dark:text-sky-400 hover:underline truncate"
-                                    title="{{ implode(', ', $v['shared_slugs']) }}">{{ $v['name'] }} <span class="text-gray-400">· {{ $v['shared'] }} gemeinsam</span></button>
+                                    title="{{ implode(', ', $v['shared_slugs']) }}">{{ $v['name'] }} <span class="text-gray-500 dark:text-gray-400">· {{ $v['shared'] }} gemeinsam</span></button>
                         @endforeach
                     </div>
                 @endif
@@ -289,7 +289,7 @@
         {{-- M5-05-Nachtrag: Aroma-Nachbarn (Klassiker/Signature, % = Ø-Kantenstärke) --}}
         <div data-nachbarn-sektion>
             <button type="button" wire:click="toggleSektion('nachbarn')"
-                    class="w-full flex items-center justify-between py-1 text-[11px] font-medium uppercase tracking-wider text-gray-400 hover:text-violet-500 transition-colors">
+                    class="w-full flex items-center justify-between py-1 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:text-violet-500 transition-colors">
                 <span>Aroma-Nachbarn</span>
                 <span>{{ ($offen['nachbarn'] ?? false) ? '▾' : '▸' }}</span>
             </button>
@@ -323,7 +323,7 @@
             </button>
         </div>
 
-        <p class="text-[11px] text-gray-400 border-t border-black/5 dark:border-white/10 pt-2">
+        <p class="text-[11px] text-gray-500 dark:text-gray-400 border-t border-black/5 dark:border-white/10 pt-2">
             Nährwerte {{ $rezept->nutri_kcal_per_100g !== null ? number_format((float) $rezept->nutri_kcal_per_100g, 0, ',', '.') . ' kcal/100 g (' . $rezept->nutri_confidence . ')' : '—' }}
             · v{{ $rezept->version }}{{ $rezept->work_time_min ? ' · ' . $rezept->work_time_min . ' min' : '' }}
         </p>

@@ -29,7 +29,7 @@
         ['<>', '`', '`', false, 'Code/Maß'],
     ] as [$lbl, $vor, $nach, $block, $tip])
         <button type="button" @click="md(@js($vor), @js($nach), @js($block))"
-                class="px-1.5 py-0.5 rounded text-[11px] {{ $lbl === 'B' ? 'font-bold' : ($lbl === 'I' ? 'italic' : '') }} text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-violet-600"
+                class="px-1.5 py-0.5 rounded text-[11px] {{ $lbl === 'B' ? 'font-bold' : ($lbl === 'I' ? 'italic' : '') }} text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-violet-600"
                 title="{{ $tip }}">{{ $lbl }}</button>
     @endforeach
 </div>

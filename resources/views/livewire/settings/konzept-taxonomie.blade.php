@@ -15,7 +15,7 @@
                 class="{{ $pill }} {{ $achse === 'category' ? $variantPill['primary'] : $variantPill['secondary'] }}">Kategorien</button>
         <button type="button" wire:click="setAchse('class')"
                 class="{{ $pill }} {{ $achse === 'class' ? $variantPill['primary'] : $variantPill['secondary'] }}">Klassen</button>
-        <span class="text-[10px] text-gray-400 ml-2 leading-snug">Rein organisatorisch — Filter-/Gruppier-Achse im Concept-Browser &amp; Foodbook/Angebots-Picker, ohne Preis-Einfluss.</span>
+        <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-2 leading-snug">Rein organisatorisch — Filter-/Gruppier-Achse im Concept-Browser &amp; Foodbook/Angebots-Picker, ohne Preis-Einfluss.</span>
     </div>
 
     @if($achse === 'category')
@@ -34,13 +34,13 @@
                             <button type="button" wire:click="katRename" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0">OK</button>
                         @else
                             <button type="button" wire:click="katWaehlen({{ $kat['id'] }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $kat['name'] }}</button>
-                            <span class="text-[11px] text-gray-400 shrink-0" title="Unterkategorien">{{ $kinder }}</span>
-                            <button type="button" wire:click="katEditStart({{ $kat['id'] }}, @js($kat['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
-                            <button type="button" wire:click="katLoeschen({{ $kat['id'] }})" wire:confirm="Kategorie „{{ $kat['name'] }}" löschen? (Unterkategorien & Concepts rücken zum Eltern)" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-[11px] px-1" title="Löschen">✕</button>
+                            <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0" title="Unterkategorien">{{ $kinder }}</span>
+                            <button type="button" wire:click="katEditStart({{ $kat['id'] }}, @js($kat['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="katLoeschen({{ $kat['id'] }})" wire:confirm="Kategorie „{{ $kat['name'] }}" löschen? (Unterkategorien & Concepts rücken zum Eltern)" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-red-500 text-[11px] px-1" title="Löschen">✕</button>
                         @endif
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-400 px-2 py-2">Noch keine Kategorien.</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-2">Noch keine Kategorien.</p>
                 @endforelse
                 <div class="flex gap-1 pt-2 mt-1 border-t border-black/5 dark:border-white/10">
                     <input type="text" wire:model="neuTopKat" wire:keydown.enter="katNeuTop" placeholder="Neue Kategorie …" class="{{ $input }} !py-0.5" />
@@ -71,7 +71,7 @@
                                             </td>
                                         @else
                                             <td class="{{ $td }} text-gray-900 dark:text-gray-100">{{ $sub['name'] }}</td>
-                                            <td class="{{ $td }} text-gray-500">{{ $katCounts[$sub['id']] ?? 0 }}</td>
+                                            <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $katCounts[$sub['id']] ?? 0 }}</td>
                                             <td class="{{ $td }} text-right whitespace-nowrap">
                                                 <button type="button" wire:click="katEditStart({{ $sub['id'] }}, @js($sub['name']))" class="{{ $btnGhostXs }}">Bearbeiten</button>
                                                 <button type="button" wire:click="katLoeschen({{ $sub['id'] }})" wire:confirm="Unterkategorie „{{ $sub['name'] }}" löschen?" class="{{ $btnGhostXs }} text-red-500">Löschen</button>
@@ -79,7 +79,7 @@
                                         @endif
                                     </tr>
                                 @empty
-                                    <tr><td colspan="3" class="{{ $td }} text-gray-400 py-4 text-center">Noch keine Unterkategorien — unten anlegen.</td></tr>
+                                    <tr><td colspan="3" class="{{ $td }} text-gray-500 dark:text-gray-400 py-4 text-center">Noch keine Unterkategorien — unten anlegen.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -88,7 +88,7 @@
                             <button type="button" wire:click="katNeuSub" class="{{ $btnGhostXs }}">+ Unterkategorie</button>
                         </div>
                     @else
-                        <div class="px-5 pb-5 text-xs text-gray-400">Links eine Kategorie wählen, um ihre Unterkategorien zu sehen und zu pflegen.</div>
+                        <div class="px-5 pb-5 text-xs text-gray-500 dark:text-gray-400">Links eine Kategorie wählen, um ihre Unterkategorien zu sehen und zu pflegen.</div>
                     @endif
                 </div>
             </div>
@@ -109,13 +109,13 @@
                             <button type="button" wire:click="klasseRename" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0">OK</button>
                         @else
                             <button type="button" wire:click="klasseWaehlen({{ $kl['id'] }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $kl['name'] }}</button>
-                            <span class="text-[11px] text-gray-400 shrink-0" title="Unterklassen">{{ $kinder }}</span>
-                            <button type="button" wire:click="klasseEditStart({{ $kl['id'] }}, @js($kl['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
-                            <button type="button" wire:click="klasseLoeschen({{ $kl['id'] }})" wire:confirm="Klasse „{{ $kl['name'] }}" löschen? (Unterklassen rücken zum Eltern)" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-[11px] px-1" title="Löschen">✕</button>
+                            <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0" title="Unterklassen">{{ $kinder }}</span>
+                            <button type="button" wire:click="klasseEditStart({{ $kl['id'] }}, @js($kl['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="klasseLoeschen({{ $kl['id'] }})" wire:confirm="Klasse „{{ $kl['name'] }}" löschen? (Unterklassen rücken zum Eltern)" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-red-500 text-[11px] px-1" title="Löschen">✕</button>
                         @endif
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-400 px-2 py-2">Noch keine Klassen.</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-2">Noch keine Klassen.</p>
                 @endforelse
                 <div class="flex gap-1 pt-2 mt-1 border-t border-black/5 dark:border-white/10">
                     <input type="text" wire:model="neuTopKlasse" wire:keydown.enter="klasseNeuTop" placeholder="Neue Klasse …" class="{{ $input }} !py-0.5" />
@@ -146,7 +146,7 @@
                                             </td>
                                         @else
                                             <td class="{{ $td }} text-gray-900 dark:text-gray-100">{{ $sub['name'] }}</td>
-                                            <td class="{{ $td }} text-gray-500">{{ $klasseCounts[$sub['name']] ?? 0 }}</td>
+                                            <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $klasseCounts[$sub['name']] ?? 0 }}</td>
                                             <td class="{{ $td }} text-right whitespace-nowrap">
                                                 <button type="button" wire:click="klasseEditStart({{ $sub['id'] }}, @js($sub['name']))" class="{{ $btnGhostXs }}">Bearbeiten</button>
                                                 <button type="button" wire:click="klasseLoeschen({{ $sub['id'] }})" wire:confirm="Unterklasse „{{ $sub['name'] }}" löschen?" class="{{ $btnGhostXs }} text-red-500">Löschen</button>
@@ -154,7 +154,7 @@
                                         @endif
                                     </tr>
                                 @empty
-                                    <tr><td colspan="3" class="{{ $td }} text-gray-400 py-4 text-center">Noch keine Unterklassen — unten anlegen.</td></tr>
+                                    <tr><td colspan="3" class="{{ $td }} text-gray-500 dark:text-gray-400 py-4 text-center">Noch keine Unterklassen — unten anlegen.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -163,7 +163,7 @@
                             <button type="button" wire:click="klasseNeuSub" class="{{ $btnGhostXs }}">+ Unterklasse</button>
                         </div>
                     @else
-                        <div class="px-5 pb-5 text-xs text-gray-400">Links eine Klasse wählen, um ihre Unterklassen zu sehen und zu pflegen.</div>
+                        <div class="px-5 pb-5 text-xs text-gray-500 dark:text-gray-400">Links eine Klasse wählen, um ihre Unterklassen zu sehen und zu pflegen.</div>
                     @endif
                 </div>
             </div>

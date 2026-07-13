@@ -13,7 +13,7 @@
         <div class="relative overflow-hidden {{ $card }}">
             <div class="{{ $cardAccent }}"></div>
             <div class="px-4 py-3 space-y-2.5">
-                <p class="text-[11px] uppercase tracking-wider text-gray-400">{{ $gruppe }}</p>
+                <p class="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ $gruppe }}</p>
 
                 @foreach($felder as $f)
                     @if(($f['type'] ?? 'text') === 'repeatable')
@@ -25,13 +25,13 @@
                                     <div wire:key="welt-{{ $w['id'] }}" class="flex items-start gap-2 rounded-lg border border-black/5 dark:border-white/10 px-2.5 py-1.5">
                                         <div class="flex-1 min-w-0">
                                             <span class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ $w['value'] }}</span>
-                                            @if($w['claim'])<span class="text-[11px] text-gray-400"> · {{ $w['claim'] }}</span>@endif
-                                            @if($w['description'])<div class="text-[11px] text-gray-500 truncate">{{ $w['description'] }}</div>@endif
+                                            @if($w['claim'])<span class="text-[11px] text-gray-500 dark:text-gray-400"> · {{ $w['claim'] }}</span>@endif
+                                            @if($w['description'])<div class="text-[11px] text-gray-600 dark:text-gray-400 truncate">{{ $w['description'] }}</div>@endif
                                         </div>
                                         <button type="button" wire:click="weltLoeschen({{ $w['id'] }})" class="{{ $btnGhostXs }} text-rose-500 shrink-0">✕</button>
                                     </div>
                                 @empty
-                                    <p class="text-[11px] text-gray-400">Noch keine — unten hinzufügen.</p>
+                                    <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine — unten hinzufügen.</p>
                                 @endforelse
                             </div>
                             <div class="grid grid-cols-3 gap-2">
@@ -70,6 +70,6 @@
 
     <div class="flex items-center gap-3">
         <button type="button" wire:click="canvasSpeichern" class="{{ $btnPrimary }}" data-canvas-speichern>Speichern</button>
-        <span wire:loading wire:target="canvasSpeichern" class="text-[11px] text-gray-400">speichere …</span>
+        <span wire:loading wire:target="canvasSpeichern" class="text-[11px] text-gray-500 dark:text-gray-400">speichere …</span>
     </div>
 </div>

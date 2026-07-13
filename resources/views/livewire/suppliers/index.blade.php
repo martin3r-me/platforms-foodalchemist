@@ -34,8 +34,8 @@
                                 class="w-full px-2 py-1.5 rounded-lg text-left transition-all duration-150 {{ !$globaleSuche && $supplierId === $l->id
                                     ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10'
                                     : 'hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                            <span class="block text-xs {{ $l->is_inactive ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-200' }} truncate">{{ $l->name }}</span>
-                            <span class="block text-[11px] text-gray-400">{{ number_format($l->item_count, 0, ',', '.') }} Artikel ·
+                            <span class="block text-xs {{ $l->is_inactive ? 'text-gray-500 dark:text-gray-400 line-through' : 'text-gray-700 dark:text-gray-200' }} truncate">{{ $l->name }}</span>
+                            <span class="block text-[11px] text-gray-500 dark:text-gray-400">{{ number_format($l->item_count, 0, ',', '.') }} Artikel ·
                                 <span class="text-emerald-600 dark:text-emerald-400">{{ number_format($l->mapped_count, 0, ',', '.') }} gemapped</span></span>
                         </button>
                     @endforeach
@@ -94,7 +94,7 @@
                     <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">
                         Match-Vorschläge
                         @if($bulkStats !== null)
-                            <span class="text-gray-400 font-normal text-xs">— Lauf: {{ $bulkStats['geprueft'] }} geprüft · {{ $bulkStats['exact'] }} exact · {{ $bulkStats['fuzzy'] }} fuzzy · {{ $bulkStats['ohne_treffer'] }} ohne Treffer · {{ $bulkStats['uebersprungen'] }} übersprungen</span>
+                            <span class="text-gray-500 dark:text-gray-400 font-normal text-xs">— Lauf: {{ $bulkStats['geprueft'] }} geprüft · {{ $bulkStats['exact'] }} exact · {{ $bulkStats['fuzzy'] }} fuzzy · {{ $bulkStats['ohne_treffer'] }} ohne Treffer · {{ $bulkStats['uebersprungen'] }} übersprungen</span>
                         @endif
                     </h3>
                     <button type="button" wire:click="$set('reviewOffen', false)" class="{{ $btnGhostXs }}">Schließen</button>
@@ -105,13 +105,13 @@
                             <span class="{{ $pill }} shrink-0 {{ ['exact' => $variantPill['success'], 'fuzzy_high' => $variantPill['info'], 'fuzzy_low' => $variantPill['warning']][$v->band] ?? $variantPill['secondary'] }}"
                                   title="{{ $v->methode }}">{{ number_format((float) $v->score, 2, ',', '.') }}</span>
                             <span class="text-[11px] text-gray-900 dark:text-gray-100 truncate flex-1" title="{{ $v->item?->designation }}">{{ $v->item?->designation }}</span>
-                            <span class="text-[11px] text-gray-400 shrink-0">→</span>
+                            <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0">→</span>
                             <span class="text-[11px] text-violet-600 dark:text-violet-400 truncate flex-1" title="{{ $v->gp?->name }}">{{ $v->gp?->name }}</span>
                             <button type="button" wire:click="vorschlagUebernehmen({{ $v->id }})" class="{{ $btnGhostXs }} shrink-0">Übernehmen</button>
                             <button type="button" wire:click="vorschlagVerwerfen({{ $v->id }})" class="{{ $btnGhostXs }} shrink-0 text-rose-500">Verwerfen</button>
                         </div>
                     @empty
-                        <p class="text-xs text-gray-400 py-3">Keine offenen Vorschläge — Bulk-Match starten oder alles entschieden.</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 py-3">Keine offenen Vorschläge — Bulk-Match starten oder alles entschieden.</p>
                     @endforelse
                 </div>
             </div>
@@ -147,7 +147,7 @@
                 <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Artikel</h3>
                 <span class="{{ $label }} flex items-center gap-2">
                     {{ $artikel ? number_format($artikel->total(), 0, ',', '.') : 0 }} Treffer ·
-                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-400 cursor-pointer focus:ring-0" data-per-page>
+                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer focus:ring-0" data-per-page>
                         @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
                     </select>
                 </span>
@@ -172,14 +172,14 @@
                                        class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-artikel-checkbox="{{ $item->id }}" />
                             </td>
                             @if($globaleSuche)
-                                <td class="{{ $td }} text-gray-500">{{ $item->supplier?->name ?? '—' }}</td>
+                                <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $item->supplier?->name ?? '—' }}</td>
                             @endif
-                            <td class="{{ $td }} font-mono text-[11px] text-gray-500">{{ $item->article_number ?? '—' }}</td>
+                            <td class="{{ $td }} font-mono text-[11px] text-gray-600 dark:text-gray-400">{{ $item->article_number ?? '—' }}</td>
                             <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" title="{{ $item->designation }}">
                                 <button type="button" wire:click="$dispatch('item-modal.oeffnen', { id: {{ $item->id }} })"
                                         class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150 truncate max-w-full text-left">{{ $item->designation }}</button>
                             </td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap">
+                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap">
                                 {{ $item->qty !== null ? rtrim(rtrim((string) $item->qty, '0'), '.') : '—' }} {{ $item->unit_code ?? $item->ordering_unit }}
                                 @if($item->qty === null)<span class="ml-1 {{ $pill }} {{ $variantPill['warning'] }}" title="Gebinde-Menge fehlt (GL-03 A-2)">qty?</span>@endif
                             </td>
@@ -191,7 +191,7 @@
                             <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap text-right tabular-nums">
                                 {{ $item->aktiver_preis !== null ? number_format((float) $item->aktiver_preis, 2, ',', '.') . ' €' : '—' }}
                             </td>
-                            <td class="{{ $td }} text-gray-500 whitespace-nowrap text-right tabular-nums" data-vergleichspreis>
+                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap text-right tabular-nums" data-vergleichspreis>
                                 {{ $item->vergleichspreis !== null ? number_format($item->vergleichspreis['value'], 2, ',', '.') . ' ' . $item->vergleichspreis['unit'] : '—' }}
                             </td>
                             <td class="{{ $td }} max-w-48 truncate">
@@ -199,7 +199,7 @@
                                     <a href="{{ \Platform\FoodAlchemist\Support\Sprungziel::gp($item->structure->gp_id) }}"
                                        class="text-violet-600 dark:text-violet-400 hover:underline" title="{{ $item->structure->gp->name }}">{{ $item->structure->gp->name }}</a>
                                 @else
-                                    <span class="text-gray-400">— nicht gemappt —</span>
+                                    <span class="text-gray-500 dark:text-gray-400">— nicht gemappt —</span>
                                 @endif
                             </td>
                             {{-- R12 (Jarvis): ★ klickbar = Lead-LA des GPs setzen --}}
@@ -213,7 +213,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="{{ $globaleSuche ? 10 : 9 }}" class="px-5 py-10 text-center text-gray-400">Keine Artikel gefunden.</td></tr>
+                        <tr><td colspan="{{ $globaleSuche ? 10 : 9 }}" class="px-5 py-10 text-center text-gray-500 dark:text-gray-400">Keine Artikel gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -237,7 +237,7 @@
                     <div><label class="block {{ $label }} mb-1">Bestell-E-Mail</label>
                         <input type="text" wire:model="neuLieferant.email_order" class="{{ $input }}" /></div>
                 </div>
-                <p class="text-[11px] text-gray-400 mt-2">Gehört deinem Team (D1). Artikel danach über „+ Neuer Artikel".</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-2">Gehört deinem Team (D1). Artikel danach über „+ Neuer Artikel".</p>
             </x-foodalchemist::modal-section>
             <x-slot:footer>
                 <button type="button" @click="$dispatch('modal.close', { name: 'lieferant-neu' })" class="{{ $btnGhost }}">Abbrechen</button>
@@ -291,7 +291,7 @@
                             </select></div>
                     </div>
                 </div>
-                <p class="text-[11px] text-gray-400 mt-2">Wird für <strong>{{ $aktiverLieferant?->name ?? '—' }}</strong> angelegt und gehört deinem Team — Eltern-/Geschwister-Teams sehen ihn nicht (D1).</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-2">Wird für <strong>{{ $aktiverLieferant?->name ?? '—' }}</strong> angelegt und gehört deinem Team — Eltern-/Geschwister-Teams sehen ihn nicht (D1).</p>
             </x-foodalchemist::modal-section>
             <x-slot:footer>
                 <button type="button" @click="$dispatch('modal.close', { name: 'artikel-neu' })" class="{{ $btnGhost }}">Abbrechen</button>
@@ -302,7 +302,7 @@
         {{-- M2-12: Preis-Anomalien-Report --}}
         <x-foodalchemist::modal name="preis-anomalien" title="Preis-Anomalien" size="max-w-5xl">
             @if($anomalien === null)
-                <p class="text-xs text-gray-500">Wird berechnet …</p>
+                <p class="text-xs text-gray-600 dark:text-gray-400">Wird berechnet …</p>
             @else
                 <x-foodalchemist::modal-section title="Vergleichspreis-Ausreißer je Warengruppe (Faktor ≥ 4 vom Median)">
                     <table class="{{ $table }}" data-ausreisser>
@@ -311,14 +311,14 @@
                             @forelse($anomalien['ausreisser'] as $a)
                                 <tr class="{{ $tr }}">
                                     <td class="{{ $td }} !px-2 max-w-sm truncate">{{ $a['label'] }}</td>
-                                    <td class="{{ $td }} !px-2 text-gray-500">{{ $a['lieferant'] }}</td>
-                                    <td class="{{ $td }} !px-2 text-gray-500">{{ $a['wg'] }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-600 dark:text-gray-400">{{ $a['lieferant'] }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-600 dark:text-gray-400">{{ $a['wg'] }}</td>
                                     <td class="{{ $td }} !px-2">{{ number_format($a['value'], 2, ',', '.') }} {{ $a['unit'] }}</td>
-                                    <td class="{{ $td }} !px-2 text-gray-500">{{ number_format($a['median'], 2, ',', '.') }} {{ $a['unit'] }}</td>
+                                    <td class="{{ $td }} !px-2 text-gray-600 dark:text-gray-400">{{ number_format($a['median'], 2, ',', '.') }} {{ $a['unit'] }}</td>
                                     <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $variantPill['warning'] }}">×{{ $a['faktor'] }}</span></td>
                                 </tr>
                             @empty
-                                <tr><td colspan="6" class="px-2 py-6 text-center text-gray-400">Keine Ausreißer.</td></tr>
+                                <tr><td colspan="6" class="px-2 py-6 text-center text-gray-500 dark:text-gray-400">Keine Ausreißer.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -327,7 +327,7 @@
                     @forelse($anomalien['spruenge'] as $sp)
                         <p class="text-xs text-gray-700 dark:text-gray-300 py-1">LA #{{ $sp->supplier_item_id }}: {{ number_format($sp->von, 2, ',', '.') }} € → {{ number_format($sp->nach, 2, ',', '.') }} € <span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $sp->sprung_pct }} %</span></p>
                     @empty
-                        <p class="text-xs text-gray-400">Keine Generationen-Sprünge (Bestand ist Single-Snapshot — Historie wächst ab jetzt, GL-11 §3.3).</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Keine Generationen-Sprünge (Bestand ist Single-Snapshot — Historie wächst ab jetzt, GL-11 §3.3).</p>
                     @endforelse
                 </x-foodalchemist::modal-section>
             @endif

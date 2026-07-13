@@ -10,13 +10,13 @@
         <x-foodalchemist::modal-section title="Beschreibung">
             <textarea wire:model="description" rows="3" class="{{ $input }}" data-generator-description
                       placeholder="z. B. Dunkle Rotwein-Schalotten-Reduktion als Saucenbasis für Schmorgerichte …"></textarea>
-            <p class="text-[10px] text-gray-400 mt-1">Aus Foto/PDF: blockiert auf die Vision-Frage bei Martin (Offene Entscheide) — bis dahin Text.</p>
+            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Aus Foto/PDF: blockiert auf die Vision-Frage bei Martin (Offene Entscheide) — bis dahin Text.</p>
         </x-foodalchemist::modal-section>
 
         {{-- R5 (Ist-App «Richtung (optional)»): Pill-Gruppen mit Hilfetexten statt Selects --}}
         <x-foodalchemist::modal-section title="Richtung (optional)">
             @php($pillAktiv = 'border-emerald-500 text-emerald-700 dark:text-emerald-300 font-medium')
-            @php($pillRuhe = 'border-black/10 dark:border-white/15 text-gray-500 dark:text-gray-400 hover:border-violet-400')
+            @php($pillRuhe = 'border-black/10 dark:border-white/15 text-gray-600 dark:text-gray-400 hover:border-violet-400')
             <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-generator-parameter>
                 @foreach(\Platform\FoodAlchemist\Livewire\Recipes\GeneratorModal::RICHTUNGEN as $g)
                     <div data-richtung="{{ $g['field'] }}">
@@ -27,14 +27,14 @@
                                         class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ $parameter[$g['field']] === $wert ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
                             @endforeach
                         </div>
-                        <p class="text-[11px] text-gray-400 mt-1">{{ $g['hint'][$parameter[$g['field']]] ?? '' }}</p>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{{ $g['hint'][$parameter[$g['field']]] ?? '' }}</p>
                     </div>
                 @endforeach
 
                 <div data-richtung="aroma">
                     <p class="text-xs font-medium text-gray-900 dark:text-gray-100 mb-1">Aroma-Richtung</p>
                     <input type="text" wire:model="parameter.aroma" placeholder="frei — z. B. rauchig-karamellig, mediterran …" class="{{ $input }} !py-1.5" />
-                    <p class="text-[11px] text-gray-400 mt-1">{{ $parameter['aroma'] === '' ? 'Keine Aroma-Vorgabe — KI wählt passend zur Beschreibung' : '' }}</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{{ $parameter['aroma'] === '' ? 'Keine Aroma-Vorgabe — KI wählt passend zur Beschreibung' : '' }}</p>
                 </div>
 
                 <div data-richtung="sektor">
@@ -47,7 +47,7 @@
                         <option value="care">Care / Klinik</option>
                         <option value="schule_kita">Schule / Kita</option>
                     </select>
-                    <p class="text-[11px] text-gray-400 mt-1">{{ $parameter['sektor'] === '' ? 'Kein Sektor-Constraint' : '' }}</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{{ $parameter['sektor'] === '' ? 'Kein Sektor-Constraint' : '' }}</p>
                 </div>
 
                 <div class="md:col-span-2" data-richtung="diaet">
@@ -77,7 +77,7 @@
                         <p class="text-[11px] text-gray-600 dark:text-gray-300">
                             🔴 {{ $offen['text'] }} —
                             <span class="text-violet-600 dark:text-violet-400">{{ $offen['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}</span>
-                            @if(count($offen['shortlist']) > 0)<span class="text-gray-400">· {{ count($offen['shortlist']) }} Shortlist-Kandidaten</span>@endif
+                            @if(count($offen['shortlist']) > 0)<span class="text-gray-500 dark:text-gray-400">· {{ count($offen['shortlist']) }} Shortlist-Kandidaten</span>@endif
                         </p>
                     @endforeach
                 </div>

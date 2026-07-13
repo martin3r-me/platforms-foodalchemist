@@ -24,20 +24,20 @@
                 @php($istParagraf3 = in_array($wg->code, $paragraf3, true))
                 <div wire:key="wg-{{ $wg->id }}" class="group flex items-center gap-1 rounded-lg {{ $subWg === $wg->code ? $katAktiv : $katHover }}">
                     @if($editId === $wg->id)
-                        <span class="font-mono text-[11px] text-gray-400 pl-2">{{ $wg->code }}</span>
+                        <span class="font-mono text-[11px] text-gray-500 dark:text-gray-400 pl-2">{{ $wg->code }}</span>
                         <input type="text" wire:model="editName" wire:keydown.enter="saveName" wire:keydown.escape="$set('editId', null)" class="{{ $input }} !py-0.5 flex-1" autofocus />
                         <button type="button" wire:click="saveName" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0">OK</button>
                     @else
                         <button type="button" wire:click="waehleWg('{{ $wg->code }}')" class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-2 py-1 text-xs">
-                            <span class="font-mono text-[10px] text-gray-400">{{ $wg->code }}</span>
+                            <span class="font-mono text-[10px] text-gray-500 dark:text-gray-400">{{ $wg->code }}</span>
                             <span class="min-w-0 truncate">{{ $wg->name }}</span>
                             @if($istParagraf3)<span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="Kanonische §3-Empfehlung (Seed) — frei änderbar">§3</span>@endif
                         </button>
-                        <span class="text-[11px] text-gray-400 shrink-0">{{ $wg->gp_count }}</span>
+                        <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0">{{ $wg->gp_count }}</span>
                         @if($darfEdit)
-                            <button type="button" wire:click="startEditName({{ $wg->id }}, @js($wg->name))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Name ändern">✎</button>
+                            <button type="button" wire:click="startEditName({{ $wg->id }}, @js($wg->name))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Name ändern">✎</button>
                             <button type="button" wire:click="deleteWg({{ $wg->id }})" wire:confirm="Diese Warengruppe löschen?" @disabled($wg->gp_count > 0)
-                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $wg->gp_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500' }}"
+                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $wg->gp_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 dark:text-gray-400 hover:text-red-500' }}"
                                     title="{{ $wg->gp_count > 0 ? 'Wird von GPs genutzt — erst umhängen' : 'löschen' }}">✕</button>
                         @endif
                     @endif
@@ -52,7 +52,7 @@
                 <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                     <div>
                         <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Sub-Kategorien</h3>
-                        <p class="text-[11px] text-gray-400 mt-0.5">Verwaltete Liste je Warengruppe — anlegbar, plus vorhandene GP-Freitextwerte. Rename propagiert auf alle EIGENEN GPs (geerbte bleiben unberührt, D1).</p>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Verwaltete Liste je Warengruppe — anlegbar, plus vorhandene GP-Freitextwerte. Rename propagiert auf alle EIGENEN GPs (geerbte bleiben unberührt, D1).</p>
                     </div>
                     <span class="{{ $label }}">{{ optional($warengruppen->firstWhere('code', $subWg))->name }}</span>
                 </div>
@@ -67,14 +67,14 @@
                             <tr wire:key="sub-{{ md5($sub->sub_category) }}" class="{{ $tr }}">
                                 @if($renameAlt === $sub->sub_category)
                                     <td class="{{ $td }}"><input type="text" wire:model="renameNeu" wire:keydown.enter="rename" wire:keydown.escape="$set('renameAlt', null)" class="{{ $input }} !py-1" autofocus /></td>
-                                    <td class="{{ $td }} text-gray-500">{{ $sub->n }}</td>
+                                    <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $sub->n }}</td>
                                     <td class="{{ $td }} text-right whitespace-nowrap">
                                         <button type="button" wire:click="rename" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">Umbenennen</button>
                                         <button type="button" wire:click="$set('renameAlt', null)" class="{{ $btnGhostXs }}">Abbrechen</button>
                                     </td>
                                 @else
                                     <td class="{{ $td }} text-gray-700 dark:text-gray-300">{{ $sub->sub_category }}</td>
-                                    <td class="{{ $td }} text-gray-500">{{ $sub->n }}</td>
+                                    <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $sub->n }}</td>
                                     <td class="{{ $td }} text-right whitespace-nowrap">
                                         <button type="button" wire:click="startRename('{{ addslashes($sub->sub_category) }}')" class="{{ $btnGhostXs }}">Umbenennen</button>
                                         <button type="button" wire:click="clearWert('{{ addslashes($sub->sub_category) }}')" wire:confirm="„{{ $sub->sub_category }}" auf allen eigenen GPs auf NULL setzen?" class="{{ $btnGhostXs }} text-red-500">→ NULL</button>
@@ -82,7 +82,7 @@
                                 @endif
                             </tr>
                         @empty
-                            <tr><td colspan="3" class="{{ $td }} text-gray-400 py-4 text-center">Keine Sub-Kategorien in dieser Warengruppe.</td></tr>
+                            <tr><td colspan="3" class="{{ $td }} text-gray-500 dark:text-gray-400 py-4 text-center">Keine Sub-Kategorien in dieser Warengruppe.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

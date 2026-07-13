@@ -9,7 +9,7 @@
     <div class="{{ $card }} p-5 space-y-4" data-einkauf-strategie>
         <div>
             <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Lead-LA-Strategie</h3>
-            <p class="text-[11px] text-gray-400 mt-0.5">Entscheidet, welcher Lieferantenartikel je GP kalkulationsführend wird (V-27, speist die GL-03-Kette ab M3-06). Gilt nur für dein Team.</p>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Entscheidet, welcher Lieferantenartikel je GP kalkulationsführend wird (V-27, speist die GL-03-Kette ab M3-06). Gilt nur für dein Team.</p>
         </div>
 
         <div class="space-y-2">
@@ -18,7 +18,7 @@
                     <input type="radio" wire:model.live="strategie" value="{{ $s->value }}" class="mt-0.5" />
                     <span>
                         <span class="block text-xs font-medium text-gray-900 dark:text-gray-100">{{ $s->label() }}</span>
-                        <span class="block text-[11px] text-gray-400 mt-0.5">{{ $s->description() }}</span>
+                        <span class="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{{ $s->description() }}</span>
                     </span>
                 </label>
             @endforeach
@@ -29,13 +29,13 @@
                 <div class="{{ $label }}">Prioritäts-Kette (oben = höchste Priorität)</div>
                 @forelse($prioritaeten as $i => $supplierId)
                     <div class="flex items-center gap-2" wire:key="prio-{{ $supplierId }}">
-                        <span class="text-[11px] text-gray-400 w-5">{{ $i + 1 }}.</span>
+                        <span class="text-[11px] text-gray-500 dark:text-gray-400 w-5">{{ $i + 1 }}.</span>
                         <span class="text-xs text-gray-700 dark:text-gray-300 flex-1">{{ $lieferantenNamen[$supplierId] ?? "Lieferant #{$supplierId}" }}</span>
                         <button type="button" wire:click="prioHoch({{ $i }})" class="{{ $btnGhostXs }}" @if($i === 0) disabled @endif>↑</button>
                         <button type="button" wire:click="prioEntfernen({{ $i }})" class="{{ $btnGhostXs }} text-red-500">×</button>
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-400">Noch keine Lieferanten in der Kette.</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine Lieferanten in der Kette.</p>
                 @endforelse
                 <div class="flex gap-2">
                     <select wire:model="neuerPrioLieferant" class="{{ $input }} !w-72">
@@ -75,7 +75,7 @@
     <div class="{{ $card }} p-5 space-y-1" data-stamm-matrix>
         <div class="mb-3">
             <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Stamm-Lieferanten-Matrix</h3>
-            <p class="text-[11px] text-gray-400 mt-0.5">Je Warengruppe (+ global) — gewinnt bei Strategie „Stamm-Lieferant zuerst" (GL-03/V-27). Geerbte Einträge des Eltern-Teams sind fixiert.</p>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Je Warengruppe (+ global) — gewinnt bei Strategie „Stamm-Lieferant zuerst" (GL-03/V-27). Geerbte Einträge des Eltern-Teams sind fixiert.</p>
         </div>
         @if($fehler)
             <p class="text-xs text-red-600 dark:text-red-400 pb-2">{{ $fehler }}</p>

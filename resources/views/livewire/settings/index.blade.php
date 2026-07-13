@@ -33,7 +33,7 @@
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
                             : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
                         <span class="block text-xs font-medium">{{ $meta['label'] }}</span>
-                        <span class="block text-[11px] text-gray-400 mt-0.5">{{ $meta['hint'] }}</span>
+                        <span class="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{{ $meta['hint'] }}</span>
                     </a>
                 @endforeach
             </nav>
