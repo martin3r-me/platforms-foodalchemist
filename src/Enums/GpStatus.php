@@ -9,6 +9,7 @@ enum GpStatus: string
 {
     case Approved = 'approved';
     case Tentative = 'tentative';
+    case Review = 'review';
     case Rejected = 'rejected';
     case Merged = 'merged';
 
@@ -17,6 +18,7 @@ enum GpStatus: string
         return match ($this) {
             self::Approved => 'Freigegeben',
             self::Tentative => 'Vorläufig',
+            self::Review => 'In Prüfung',
             self::Rejected => 'Abgelehnt',
             self::Merged => 'Zusammengeführt',
         };
@@ -28,6 +30,7 @@ enum GpStatus: string
         return match ($this) {
             self::Approved => 'success',
             self::Tentative => 'warning',
+            self::Review => 'info',
             self::Rejected => 'danger',
             self::Merged => 'secondary',
         };

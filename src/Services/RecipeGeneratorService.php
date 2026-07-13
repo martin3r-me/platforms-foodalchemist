@@ -82,6 +82,12 @@ class RecipeGeneratorService
                 $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
                     ->orderBy('code')->pluck('label', 'code')->all();
             }
+            // #505 Slice 1: hybrides Grounding — reale GP-/Rezept-Kandidaten + Anker-Graph-
+            // Pairing (rollenabhängig) additiv in den Prompt, damit die KI auf EXISTIERENDE
+            // GPs benennt (weniger Drift) statt Namen zu erfinden. Food DNA injiziert propose() selbst.
+            foreach (app(GenerationContextService::class)->forGeneration($team, $description, $vkModus) as $gKey => $gVal) {
+                $kontext[$gKey] = $gVal;
+            }
             $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [
                 'knowledge' => $wissen['block'],
                 'knowledge_used' => $wissen['files_used'],            // M7-01: GL-13-§6-Audit-Lücke geschlossen

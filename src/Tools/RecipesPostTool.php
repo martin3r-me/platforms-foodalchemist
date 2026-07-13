@@ -73,6 +73,23 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        // Robustheit: die KI rät oft englische/alternative Keys → sonst stiller Datenverlust
+        // (Kopf angelegt, aber 0 Zutaten). Gängige Aliasse auf die Schema-Keys mappen.
+        $arguments['zutaten'] = $arguments['zutaten'] ?? $arguments['ingredients'] ?? $arguments['zutaten_liste'] ?? null;
+        $arguments['preparation'] = $arguments['preparation'] ?? $arguments['steps'] ?? $arguments['instructions'] ?? $arguments['zubereitung'] ?? null;
+        if (is_array($arguments['zutaten'] ?? null)) {
+            $arguments['zutaten'] = array_map(function ($z) {
+                if (! is_array($z)) {
+                    return $z;
+                }
+                $z['name'] = $z['name'] ?? $z['bezeichnung'] ?? $z['zutat'] ?? null;
+                $z['quantity'] = $z['quantity'] ?? $z['menge'] ?? $z['amount'] ?? null;
+                $z['unit'] = $z['unit'] ?? $z['einheit'] ?? $z['einheit_slug'] ?? null;
+                $z['gp_id'] = $z['gp_id'] ?? $z['gp'] ?? null;
+
+                return $z;
+            }, $arguments['zutaten']);
+        }
         $svc = app(RecipeService::class);
 
         try {
@@ -113,7 +130,10 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_unmapped' => $recipe->n_ingredients_unmapped,
                 'standard_presentation_form_id' => $standardForm,
             ],
-            'note' => 'Entwurf (Draft-Quarantäne): fließt erst nach menschlichem Review in Verkauf/Kalkulation.'
+            'note' => ((int) ($recipe->n_ingredients_total ?? 0) === 0
+                    ? '⚠ 0 Zutaten übernommen — zutaten[] (name/quantity/unit, optional gp_id via foodalchemist.gps.MATCH) mitgeben oder mit foodalchemist.recipe_ingredients.PUT nachladen. '
+                    : '')
+                . 'Entwurf (Draft-Quarantäne): fließt erst nach menschlichem Review in Verkauf/Kalkulation.'
                 . ($standardForm !== null ? ' Standard-Darreichung (Form „unbestimmt") angelegt — Servierform kuratieren.' : ''),
         ]);
     }
