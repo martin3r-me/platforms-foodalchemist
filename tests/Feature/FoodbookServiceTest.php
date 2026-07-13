@@ -194,3 +194,41 @@ it('M11-08: kiAndockKontext assembliert Kunde + Briefing + Concept-Liste (kein L
         ->and($ctx['concepts'])->toContain('Grill-Buffet')
         ->and($ctx['kapitel'])->toContain('Menü');
 });
+
+it('R3.1 intern: dokumentDaten(intern) liefert EK/W% + Anker pro Kapitel; Kundensicht ohne EK', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Angebot Adler', 'personen' => 100]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü']);
+    $kap->update(['consumer_title' => 'Unser Menü']); // Kunden-Titel separat (nicht über addKapitel)
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+
+    // Intern: Marge (Concept 4,50 €/P VK, 1,35 €/P EK → W 30 %) + Sprungziel-Anker + interner Titel
+    $intern = $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), true);
+    $row = $intern['kapitel'][0];
+    expect($intern['intern'])->toBeTrue()
+        ->and($row['vk_pro_person'])->toBe(4.50)
+        ->and($row['ek_pro_person'])->toBe(1.35)
+        ->and($row['food_cost_percent'])->toBe(30.0)
+        ->and($row['anker'])->toBe('k' . $kap->id)
+        ->and($row['title_intern'])->toBe('Menü');
+
+    // Kundensicht: KEIN EK/W% in den Daten, Konsumententitel
+    $kunde = $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), false);
+    expect($kunde['intern'])->toBeFalse()
+        ->and($kunde['kapitel'][0])->not->toHaveKey('ek_pro_person')
+        ->and($kunde['kapitel'][0]['title'])->toBe('Unser Menü');
+});
+
+it('R3.1 intern-Dokument-Blade zeigt Marge + Navleiste; Kundensicht-Blade nicht', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Angebot Adler', 'personen' => 100]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü']);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+
+    $internHtml = view('foodalchemist::dokumente.foodbook',
+        $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), true) + ['istPdf' => false])->render();
+    expect($internHtml)->toContain('INTERN')->toContain('Wareneinsatz')->toContain('Navigation')
+        ->toContain('id="k' . $kap->id . '"');
+
+    $kundeHtml = view('foodalchemist::dokumente.foodbook',
+        $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), false) + ['istPdf' => false])->render();
+    expect($kundeHtml)->not->toContain('Wareneinsatz pro Person')->not->toContain('INTERN');
+});

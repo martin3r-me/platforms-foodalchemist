@@ -271,6 +271,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\AngebotePostTool::class,
                     \Platform\FoodAlchemist\Tools\KalkulationGetTool::class,
                     \Platform\FoodAlchemist\Tools\SimulationPostTool::class,
+                    // R7.1: Operative Planungs-Blätter (read-only, rein rechnend)
+                    \Platform\FoodAlchemist\Tools\ProduktionsblattGetTool::class,
+                    \Platform\FoodAlchemist\Tools\BestellvorschlagGetTool::class,
+                    \Platform\FoodAlchemist\Tools\EinkaufslisteGetTool::class,
                     // R2.6: Praxis-Feedback (Küche/Kunde/Event) je Gericht/Rezept
                     \Platform\FoodAlchemist\Tools\FeedbackSearchTool::class,
                     \Platform\FoodAlchemist\Tools\FeedbackPostTool::class,

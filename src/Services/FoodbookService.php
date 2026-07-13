@@ -496,7 +496,7 @@ class FoodbookService
      *
      * @return array{fb:FoodAlchemistFoodbook, kapitel:list<array>, gesamt:array, kunde:?string}
      */
-    public function dokumentDaten(Team $team, FoodAlchemistFoodbook $fb): array
+    public function dokumentDaten(Team $team, FoodAlchemistFoodbook $fb, bool $intern = false): array
     {
         $fb->loadMissing([
             'chapters' => fn ($q) => $q->orderBy('position'),
@@ -512,7 +512,7 @@ class FoodbookService
         $wording = app(WordingResolver::class);
 
         $rows = [];
-        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax, $wording) {
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax, $wording, $intern) {
             foreach ($byParent[$parentId] ?? [] as $k) {
                 $bloecke = [];
                 foreach ($k->blocks as $b) {
@@ -531,12 +531,20 @@ class FoodbookService
                         'gerichte' => $gerichte, 'ist_header' => str_starts_with((string) $b->type, 'header')];
                 }
                 $agg = $this->kapitelAggregat($team, $k, $pax);
-                $rows[] = [
+                $row = [
                     'title' => $k->consumer_title ?: $k->title,
+                    'title_intern' => $k->title,           // interner Titel für die Projektleitung-Sicht
+                    'anker' => 'k' . $k->id,               // Navleiste-Sprungziel (klickbar in HTML + PDF)
                     'depth' => $depth,
                     'bloecke' => $bloecke,
                     'vk_pro_person' => $agg['vk_pro_person'],
                 ];
+                if ($intern) {
+                    // Marge nur in der internen Projektion (Projektleitung/Vertrieb) — NIE im Kundendokument.
+                    $row['ek_pro_person'] = $agg['ek_per_person'];
+                    $row['food_cost_percent'] = $agg['food_cost_percent'];
+                }
+                $rows[] = $row;
                 $walk((int) $k->id, $depth + 1);
             }
         };
@@ -544,6 +552,7 @@ class FoodbookService
 
         return [
             'fb' => $fb,
+            'intern' => $intern,
             'kapitel' => $rows,
             'gesamt' => $this->gesamt($team, $fb),
             // #369: CRM-Firma bevorzugt, sonst Freitext-kunde; Kontaktperson separat.

@@ -319,14 +319,17 @@ Multi-Tenant *aggregieren* statt nur *trennen* — Netzwerk-Effekt, der mit jede
 
 ## R3 — Digitales Foodbook *(vorgezogen — interner Use Case zuerst; parallelisierbar zu R2 nach R1)*
 
-### R3.1 Web-Foodbook intern · Größe XL · Hängt an: R1 (braucht Masse zum Beweis)
+### R3.1 Web-Foodbook intern · Größe XL · Hängt an: R1 · 🟢 **intern-Dokument GEBAUT 2026-07-13 (lokal ungepusht)**
+
+> **Richtungs-Entscheid Dominique 2026-07-13 (#501-konform):** Das „interne Foodbook" ist **kein Standalone-Livewire-View** (der wurde in #501 bewusst gelöscht), sondern das **aufgewertete Dokument** — navigierbar/klickbar + Marge. Der Editor bleibt die Bau-/Filterfläche. Die *externe* Sicht (R3.2) wird eine eigene, gebrandete **Web-Seite** (Bilder/KI, Preise pro Person, kein Pax) — größerer Neubau.
 
 **DoD:**
-- [ ] Foodbook als navigierbare Web-Ansicht: Kapitel-Baum, Volltextsuche, Blättern
-- [ ] Filter: Facetten (Servierform/Eventtyp/Saison/Einsatzmoment), Diät, Allergene — kombinierbar
-- [ ] Interne Sicht zeigt EK/VK/W% je Gericht und Staffel
-- [ ] Preise/Allergene kommen live aus dem Resolver (kein Redaktions-Snapshot) — Preisänderung am LA ist ohne Re-Publish sichtbar
-- [ ] Lasttest: Foodbook mit 500+ Blöcken lädt < 3 s (Pagination/Lazy-Load statt Voll-Render)
+- [x] Navigierbares/klickbares Dokument: **Navleiste** (Kapitel-Sprungziele, klickbar in HTML UND PDF via Anker) + Kapitel-Baum mit Tiefe. Volltextsuche = Editor/Browser-Sache (Dokument ist Lese-/Versand-Fassung)
+- [x] **Interne Sicht zeigt EK/VK/W% pro Person** je Kapitel + Gesamt (`dokumentDaten($intern=true)` → `/foodbooks/{id}/dokument?intern=1`, Kunde/Intern-Umschalter, „INTERN"-Badge + „nicht weitergeben"-Fuß). Marge NIE im Kundendokument (per-Test bewiesen: Kundensicht ohne `ek_pro_person`)
+- [x] Preise/W% live aus der bestehenden Kaskade (`kapitelAggregat`/`gesamt`, Resolver) — kein Snapshot
+- [ ] Facetten-Filter (Servierform/Eventtyp/Saison/Diät/Allergen) — **offen** (gehört eher zur R3.2-Web-Seite / einem filterbaren Foodbook-Browser; Taxonomie-Modelle da, nicht am Foodbook verdrahtet)
+- [ ] Lasttest 500+ Blöcke < 3 s — offen (Dokument rendert derzeit voll; relevant erst bei der Web-Seite mit Lazy-Load)
+- [x] Test: interne Projektion (EK/W%/Anker) + Blade-Render intern vs. Kunde — `FoodbookServiceTest` (2 neue Tests) grün; Editor-Link „Dokument (intern)"
 
 ### R3.2 Kunden-Ansicht = Sichtbarkeits-Schalter · Größe L · Hängt an: R3.1
 
@@ -600,16 +603,19 @@ FA rechnet, das Event-Modul führt aus. Geschirr: Bedarf hier, Beschaffung dort.
 
 Reine Kaskaden-Ausgaben — Konzept + Gäste → Mengen/Listen/Blätter. Kein Modul, kein Contract; zugleich die Vorstufe, die N0 de-riskt (der Contract kapselt später genau diese Tools).
 
-### R7.1 Blätter als read-only FA-Tools · Größe M · Hängt an: R1 (+ Darreichungs-Resolver)
+### R7.1 Blätter als read-only FA-Tools · Größe M · Hängt an: R1 (+ Darreichungs-Resolver) · 🟢 **GEBAUT 2026-07-13 (lokal, ungepusht; 2 Teil-Punkte offen)**
+
+**Kern-Entscheid Dominique 2026-07-13:** „so wie das Rezept in FA angelegt ist" — VK-Gericht linear auf die Menge skaliert, **Basisrezepte in GANZEN Ansätzen** (nicht runter-fraktioniert; man kocht keinen 20-g-Ansatz), Bedarf über Ziele **vor** der Rundung zusammengeführt. Skalierung frei wählbar: **Personen ODER Portionen** (Default 100). `PlanungsblattService` explodiert den Rezeptbaum über `RecipeRecomputeService::bruttoMasseG` (neuer Public-Helper, T1-Roh-Eingangsmasse) — eine Rechen-Wahrheit, kein Neubau.
 
 **DoD:**
-- [ ] `produktionsblatt.GET`: Konzept/Gericht + Gästezahl → skalierte Komponenten-Mengen über den Rezeptbaum (GP-Verlust-Faktor berücksichtigt), gruppiert nach Zubereitungsschritt
-- [ ] `bestellvorschlag.GET`: dieselbe Skalierung → Bedarf je GP → Lead-LA je Lieferant (`pick_lead_la`-Logik), gruppiert nach Lieferant, mit EK-Summe
-- [ ] `einkaufsliste.GET`: über mehrere Konzepte / ein Event aggregiert (Sammelbestellung), Mengen zusammengeführt
-- [ ] Arbeitszeiten + Regenerations-Parameter je Darreichung mit ausgegeben (Felder existieren)
-- [ ] Strikt read-only, rein rechnend — kein Bestand, keine Bestellung, kein Schreib-Zustand (das ist der N-Track)
-- [ ] PDF/Export je Blatt (küchentauglich)
-- [ ] Test: Konzept mit bekannten Mengen × Gästezahl → Blätter gegen Hand-Rechnung verifiziert (Skalierung + Lead-LA-Wahl)
+- [~] `produktionsblatt.GET`: Konzept/Gericht + Menge → skalierte Rezepturen über den Rezeptbaum. **Rezept-orientiert** (Top-Gericht + Basisrezepte in ganzen Ansätzen, „benötigt gesamt"-Vermerk) = Übergabe zum Nachbauen/Anlegen in anderem System (Dominique-Wunsch). ⚠ „gruppiert nach Zubereitungsschritt" NICHT umgesetzt — es gibt keine strukturierten Steps (nur Freitext `preparation`); gruppiert nach Rezept + Zutaten-`role`/`note`. Folgepaket falls Steps gewünscht.
+- [x] `bestellvorschlag.GET`: Bedarf je GP → Lead-LA je Lieferant (`LeadLaService::rangliste`), gruppiert nach Lieferant, mit EK-Summe + **Ausweichquelle** (Rang 2 der Kette; Voll-Substitution = R6.3/R6.8)
+- [x] `einkaufsliste.GET`: über mehrere Konzepte / ein Event aggregiert, Mengen zusammengeführt (Merge VOR Ansatz-Rundung = weniger Verschnitt)
+- [~] Arbeitszeiten + Regenerations-Parameter je Darreichung: **Arbeitszeit** ausgegeben (je Rezept × Ansätze); Regenerations-/Behälter-Parameter je Darreichung noch nicht im Blatt (Felder existieren) → Nachzug
+- [x] Strikt read-only, rein rechnend — kein Bestand, keine Bestellung, kein Schreib-Zustand
+- [x] PDF/Export je Blatt (DomPDF, `/blaetter/dokument?typ=…&…&pdf=1`, Druck-HTML + istPdf-Flag); Einkaufsliste-PDF via Route noch nachzuziehen (MCP liefert sie schon)
+- [x] Test: Konzept/Gericht × Menge → Blätter gegen Hand-Rechnung (Skalierung + Ganze-Ansätze-Rundung 1,5→2 + Lead-LA-Gruppierung + Konzept×Pax) — `PlanungsblattServiceTest` (8 Tests) grün, Voll-Suite 678/679, 0 Regressionen
+- **Neu:** UI `/blaetter` (Sidebar „Planung"), 3 MCP-Tools (`produktionsblatt`/`bestellvorschlag`/`einkaufsliste.GET`, `read_only`) im ServiceProvider registriert (MCP-Lockstep)
 
 ---
 
@@ -722,6 +728,8 @@ Gleiches Muster wie der N-Track: FA liefert den **Warum-Motor** (`knowledge.EXPL
 
 ## Changelog
 
+- 2026-07-14: **R3.1 intern-Dokument GEBAUT (lokal, ungepusht).** Das interne Foodbook = aufgewertetes **Dokument** (nicht der in #501 gelöschte Standalone-View, Entscheid Dominique): `FoodbookService::dokumentDaten($intern)` liefert EK/VK/W% pro Person je Kapitel + Gesamt + Kapitel-Anker; Blade `dokumente/foodbook` bekam **Navleiste** (klickbar HTML+PDF), Marge-Spalten (nur intern, NIE im Kundendokument), Kunde/Intern-Umschalter, „INTERN"-Badge. Route `?intern=1`, Editor-Link „Dokument (intern)". 2 neue Pest-Tests, Suite grün. Teil der R3+R7-Ausgabe-Schicht (Block B von A→B→C); als Nächstes Block C = externe gebrandete Web-Seite (Bilder/KI, pro Person, Share-Link = Martin). Offen R3.1: Facetten-Filter + Lasttest (gehören zur Web-Seite).
+- 2026-07-13 (4): **R7.1 Operative Planungs-Blätter GEBAUT (lokal, ungepusht).** `PlanungsblattService` (Explosions-Engine über den Rezeptbaum) + 3 read-only MCP-Tools (`produktionsblatt`/`bestellvorschlag`/`einkaufsliste.GET`) + UI `/blaetter` (Sidebar „Planung") + DomPDF-Blätter + `RecipeRecomputeService::bruttoMasseG` (neuer Public-Helper). Kern-Entscheid Dominique: „so wie das Rezept angelegt ist" — VK linear, Basisrezepte in GANZEN Ansätzen, Merge vor Rundung, Skalierung Personen ODER Portionen. Ausweichquelle aus der Lead-Kette (Voll-Substitution → R6.3/R6.8). 8 neue Pest-Tests, Voll-Suite **678/679** (1 Skip), 0 Regressionen. Offen: „gruppiert nach Zubereitungsschritt" (keine strukturierten Steps im Datenmodell), Regenerations-/Behälter-Params je Darreichung im Blatt, Einkaufsliste-PDF-Route. Gelernt: Blade kompiliert `@directive` NICHT, wenn ein Wortzeichen direkt davorsteht (`\B@`-Regex) → `min@endif` blieb literal; Pest-Harness registriert Closure-`dokument`-Routen nicht (Blade per View-Render testen, nicht per HTTP-`get`).
 - 2026-07-13 (3): **R6.1 GEBAUT (Blindtest offen)** — `ConceptGeneratorService`: Gerüst-Pfad (deterministisch, ohne KI lauffähig) + Brief-Pfad (KI übersetzt Brief→Gerüst via neuem Prompt `concept.brief_geruest`, Werte sanitized; Auswahl bleibt deterministisch = „Keine Erfindungen"). Slot-Semantik-Ranking (Label↔Speisen-HG via recipes.dish_main_group_id, Modell A) vor Pairing-Kanten-Gewinn. `PairingService::menuCohesion` + Kohäsions-Panel im Concepter; Gerüst-Kopie ans Konzept (`kopiereZu`) → Auto-Coverage. UI-Einstiege: Concepts-Browser (Brief-Modal) + Foodbook (aus Gerüst); MCP `concepts.GENERATE`. Neue Spalten: `concepts.created_via`, `concept_slots.note` (Leer-Begründung). 9 neue Tests, Suite 668/669 grün, MySQL-Smoke (Fixture) mit Draft-Aufräumung. Gelernt: Collection::merge renummeriert Integer-Keys (put() nutzen); Dev-Fixture hat nur 31 VK — Blindtest braucht Master.
 - 2026-07-13 (2): **R4 KOMPLETT — R4.2 Coverage + R4.3 Phasen + R4.4 Slot-Varianten** (ein Zug nach R4.1, Entscheid Dominique „R4 komplett fertig"). R4.2: `CoverageService` misst Foodbook-/Konzept-Ist gegen das Gerüst (Menge/Diät/Preis/Saison/Dramaturgie/No-Gos, Ampeln + ehrliche Degradation), live in beiden Editoren, Lücken-Klick → Diät-gefilterte Gericht-Suche (neuer `pickDiaet`-Filter), MCP `coverage.GET`. R4.3: Phasen-Statusmaschine mit Freigabe-Gate gegen rote Ampeln (Override durabel protokolliert), Browser-Badges + Filter, MCP `phase.PUT` (Freigabe menschlich). R4.4: konzept-lokale Slot-Varianten (`ConceptVariantService`, Voll-Kopie + Katalog-Filter), 🧾 Zutaten-Baum im Concepter mit ♻ Äquivalenz-Tausch, MCP `concept_slot_variante.POST`; Rest-Parität der Zeilen-Aktionen → R6.3. 26 neue Tests, Gesamt-Suite 663/664 grün, MySQL-Kanon migriert (000020/000030) + Smoke (Coverage-Befunde + Gate auf FB 1). **Damit ist R6.1 nur noch durch R0.2 ✅ gedeckt → Brief→Konzept ist entblockt.**
 - 2026-07-13: **R4.1 Planungs-Gerüst abgeschlossen** (Einstieg in den R4-Track als R6.1-Vorarbeit, Entscheid Dominique). Strukturierte Soll-Ebene neben dem Freitext-Canvas: `planning_frames`/`_slots`/`_rules` (Mengengerüst + Diät-Quoten, Preisarchitektur p. P. + je Slot, No-Gos/Allergen-Linie, Saison, Dramaturgie), Service mit D1-Write-Guard + deklarativem `replaceStructure`, UI in Foodbook-Editor + Concepter, MCP `planning.GET/PUT` im Lockstep (Brief→Gerüst in einem Call, `prompt_kontext` fürs R6-Prompting). 15 neue Pest-Tests (inkl. UI-Klick→DB via Livewire-Host + Kollisionsfreiheits-Beweis), MySQL-Kanon migriert + Smoke. Nächster Schritt: R4.2 Soll/Ist-Coverage misst gegen dieses Gerüst.

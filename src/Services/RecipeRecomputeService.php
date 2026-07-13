@@ -856,6 +856,21 @@ class RecipeRecomputeService
         return $this->preisProGrammFuer($gp);
     }
 
+    /**
+     * R7-Planungs-Blätter: Brutto-Eingangsmasse einer Zutat in Gramm für EINE
+     * Charge des Rezepts — mengeAvg × grammFaktor, IDENTISCHE T1-Kaskade wie
+     * Yield/Kosten (eine Regel-Stelle). Bewusst VOR Verlust: eingekauft/eingewogen
+     * wird die Roh-Eingangsmenge; Putz-/Garverlust reduziert nur den Yield, nicht
+     * den Einkauf (spiegelt zutatKosten, das ebenfalls ohne Verlust rechnet).
+     * 0.0 wenn keine Gramm-Umrechnung möglich (Zähl-Einheit ohne Default) —
+     * der Aufrufer flaggt das dann als Bedarfs-Lücke. Relationen (unit/gp/
+     * referencedRecipe) müssen geladen sein.
+     */
+    public function bruttoMasseG(FoodAlchemistRecipeIngredient $z): float
+    {
+        return $this->mengeAvg($z) * $this->grammFaktor($z);
+    }
+
     /** T3: Lead-€/g, sonst AVG-€/g über aktive kg/l-LAs (GL-11-Normalisierung). */
     private function preisProGrammFuer(FoodAlchemistGp $gp): ?float
     {

@@ -1,0 +1,491 @@
+<?php
+
+namespace Platform\FoodAlchemist\Services;
+
+use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+
+/**
+ * R7.1 — Operative Planungs-Blätter (read-only, rein rechnend; kein Bestand,
+ * keine Bestellung). Kaskaden-Ausgabe: Konzept/Gericht + Skalierung (Personen
+ * ODER Portionen) → drei Sichten aus EINER Explosion:
+ *
+ *   - produktionsblatt: Rezept-Übergabe zum Nachbauen/Anlegen. Top-Gericht auf
+ *     die Produktionsmenge skaliert, referenzierte BASISREZEPTE in GANZEN
+ *     Basis-Ansätzen (wie in FA angelegt — man kocht keinen 20-g-Ansatz), mit
+ *     transparentem „benötigt gesamt"-Vermerk.
+ *   - bestellvorschlag: GP-Bedarf gruppiert nach Lead-LA-Lieferant + EK-Summe,
+ *     inkl. Ausweichquelle (Rang 2 der Lead-Kette).
+ *   - einkaufsliste: dieselbe GP-Aggregation über MEHRERE Konzepte / ein Event.
+ *
+ * Rechen-Prinzip (Dominique 2026-07-13): „so wie das Rezept in FA angelegt ist."
+ * Nichts wird künstlich runter-fraktioniert — VK-Gerichte skalieren linear auf
+ * die Menge, Basisrezepte werden auf GANZE Ansätze aufgerundet. Mengen/Preise
+ * kommen ausschließlich aus der bestehenden Kaskade (RecipeRecomputeService::
+ * bruttoMasseG = T1-Roh-Eingangsmasse, preisProGrammPublic = Lead-€/g,
+ * LeadLaService = Lieferanten-Rangliste) — keine eigene Rechen-Wahrheit.
+ *
+ * Read-only: der Service liest + rechnet, schreibt NIE (kein Recompute, kein
+ * Persist). Team-Scoping erfolgt beim Laden der Ziele durch den Aufrufer/Tool
+ * (visibleToTeam); die Lead-LA-Wahl ist team-abhängig (rangliste).
+ */
+class PlanungsblattService
+{
+    private const MAX_TIEFE = 4; // Regelwerk BR §4: Sub-Rezept-Tiefe ≤ 3 + Top-Ebene
+
+    /** @var array<int, FoodAlchemistRecipe> Rezept-Memo (mit geladenen Zutaten) je Lauf. */
+    private array $recipeCache = [];
+
+    public function __construct(
+        private RecipeRecomputeService $recompute,
+        private LeadLaService $leadLa,
+        private DarreichungResolver $darreichungen,
+    ) {
+    }
+
+    // ── Öffentliche Blätter ──────────────────────────────────────────────
+
+    /**
+     * Produktionsblatt für EIN Ziel (Konzept + Personen ODER Gericht + Portionen/Personen).
+     * Liefert die zu produzierenden Rezepte in Reihenfolge (Top zuerst, dann Basisrezepte)
+     * + eine GP-Bedarfs-Zusammenfassung. Rezept-orientiert = Übergabe zum Anlegen.
+     *
+     * @param  array{concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}  $ziel
+     */
+    public function produktionsblatt(Team $team, array $ziel): array
+    {
+        $this->recipeCache = [];
+        $tops = $this->topsAus($team, [$ziel]);
+        $ex = $this->explodiere($team, $tops['tops']);
+
+        return [
+            'skalierung' => $tops['skalierung'],
+            'rezepte' => $ex['production'],
+            'gp_bedarf' => array_values($ex['gp']),
+            'warnungen' => array_merge($tops['warnungen'], $ex['warnings']),
+        ];
+    }
+
+    /**
+     * Bestellvorschlag für EIN Ziel: GP-Bedarf → Lead-LA je Lieferant, gruppiert
+     * nach Lieferant, mit EK-Summe + Ausweichquelle.
+     *
+     * @param  array{concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}  $ziel
+     */
+    public function bestellvorschlag(Team $team, array $ziel): array
+    {
+        $this->recipeCache = [];
+        $tops = $this->topsAus($team, [$ziel]);
+        $ex = $this->explodiere($team, $tops['tops']);
+
+        return [
+            'skalierung' => $tops['skalierung'],
+            'lieferanten' => $this->gruppiereNachLieferant($team, $ex['gp']),
+            'warnungen' => array_merge($tops['warnungen'], $ex['warnings']),
+        ];
+    }
+
+    /**
+     * Einkaufsliste über MEHRERE Ziele (Event / mehrere Konzepte): GP-Bedarf
+     * zusammengeführt, gruppiert nach Lieferant.
+     *
+     * @param  list<array{concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}>  $ziele
+     */
+    public function einkaufsliste(Team $team, array $ziele): array
+    {
+        $this->recipeCache = [];
+        $tops = $this->topsAus($team, $ziele);
+        $ex = $this->explodiere($team, $tops['tops']);
+
+        return [
+            'ziele' => $tops['ziel_labels'],
+            'lieferanten' => $this->gruppiereNachLieferant($team, $ex['gp']),
+            'positionen_gesamt' => count($ex['gp']),
+            'warnungen' => array_merge($tops['warnungen'], $ex['warnings']),
+        ];
+    }
+
+    // ── Ziele → Top-Ebene (Skalierung auf Batches) ────────────────────────
+
+    /**
+     * Löst eine Liste von Zielen in Top-Produktionen [recipe, batches] auf.
+     * VK-Gericht: batches = Portionen ÷ Portionszahl (linear). Basisrezept:
+     * batches = Gesamt-Gramm ÷ Basis-Yield (wird bei der Explosion gerundet).
+     *
+     * @return array{tops:list<array{recipe:FoodAlchemistRecipe,batches:float,label:string}>, warnungen:list<string>, skalierung:?array, ziel_labels:list<string>}
+     */
+    private function topsAus(Team $team, array $ziele): array
+    {
+        $tops = [];
+        $warnungen = [];
+        $zielLabels = [];
+        $skalierung = null;
+
+        foreach ($ziele as $ziel) {
+            if (! empty($ziel['concept_id'])) {
+                $concept = FoodAlchemistConcept::visibleToTeam($team)->find((int) $ziel['concept_id']);
+                if ($concept === null) {
+                    $warnungen[] = "Konzept #{$ziel['concept_id']} nicht sichtbar/vorhanden — übersprungen.";
+
+                    continue;
+                }
+                $personen = max(1, (int) ($ziel['persons'] ?? 0));
+                $skalierung ??= ['modus' => 'personen', 'wert' => $personen];
+                $zielLabels[] = "{$concept->name} ({$personen} P.)";
+                foreach ($this->konzeptTops($concept, $personen, $warnungen) as $t) {
+                    $tops[] = $t;
+                }
+            } elseif (! empty($ziel['recipe_id'])) {
+                $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find((int) $ziel['recipe_id']);
+                if ($recipe === null) {
+                    $warnungen[] = "Rezept #{$ziel['recipe_id']} nicht sichtbar/vorhanden — übersprungen.";
+
+                    continue;
+                }
+                [$batches, $meta] = $this->rezeptTopBatches($recipe, $ziel);
+                $skalierung ??= $meta;
+                $zielLabels[] = "{$recipe->name} ({$meta['wert']} {$meta['modus']})";
+                $tops[] = ['recipe' => $recipe, 'batches' => $batches, 'label' => $recipe->name];
+            } else {
+                $warnungen[] = 'Ziel ohne concept_id/recipe_id — übersprungen.';
+            }
+        }
+
+        return ['tops' => $tops, 'warnungen' => $warnungen, 'skalierung' => $skalierung, 'ziel_labels' => $zielLabels];
+    }
+
+    /** Konzept-Slots (Pakete + feste Gerichte) → Top-Produktionen für N Personen. */
+    private function konzeptTops(FoodAlchemistConcept $concept, int $personen, array &$warnungen): array
+    {
+        $concept->load([
+            'slots' => fn ($q) => $q->orderBy('position'),
+            'slots.unit:id,slug,dimension,default_in_g',
+            'slots.package.dishes' => fn ($q) => $q->orderBy('position'),
+            'slots.package.dishes.unit:id,slug,dimension,default_in_g',
+            'slots.package.dishes.dish:id,name,is_sales_recipe,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces',
+            'slots.dish:id,name,is_sales_recipe,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces',
+        ]);
+
+        $tops = [];
+        foreach ($concept->slots as $slot) {
+            $slot->setRelation('concept', $concept);
+            if ($slot->package) {
+                foreach ($slot->package->dishes as $pg) {
+                    if ($pg->dish) {
+                        $dar = $this->darreichungen->fuerPaketGericht($pg);
+                        $tops[] = $this->positionTop($pg->dish, $pg->quantity, $pg->unit, $dar, $personen, $warnungen);
+                    }
+                }
+            } elseif ($slot->dish) {
+                $dar = $this->darreichungen->fuerSlot($slot);
+                $tops[] = $this->positionTop($slot->dish, $slot->quantity, $slot->unit, $dar, $personen, $warnungen);
+            }
+        }
+
+        return array_values(array_filter($tops));
+    }
+
+    /** Eine Konzept-Position (Gericht + Menge/Person) → [recipe, batches] für N Personen. */
+    private function positionTop($gericht, $quantity, $unit, $dar, int $personen, array &$warnungen): ?array
+    {
+        $q = $quantity !== null ? (float) $quantity : null;
+
+        // Basisrezept-Position: Menge = GRAMM/Person → Batches = Gesamt-Gramm ÷ Basis-Yield.
+        if (! (bool) ($gericht->is_sales_recipe ?? true)
+            && ! ConcepterAggregateService::stueckModus($unit, $gericht)) {
+            $basisG = (float) ($gericht->yield_kg ?? 0) * 1000;
+            if ($q === null || $q <= 0 || $basisG <= 0) {
+                $warnungen[] = "Position „{$gericht->name}“: Menge/Basis-Yield fehlt — nicht skalierbar.";
+
+                return null;
+            }
+
+            return ['recipe' => $this->ladeRezept((int) $gericht->id), 'batches' => ($q * $personen) / $basisG, 'label' => $gericht->name];
+        }
+
+        // VK-Gericht (oder Stück-Modus): Portions-Äquivalent × Personen → Portionen → Batches.
+        $darPortionG = $dar?->quantity_per_unit_g !== null ? (float) $dar->quantity_per_unit_g : null;
+        $pae = ConcepterAggregateService::portionsAequivalent($q, $unit, $gericht, $darPortionG);
+        if ($pae === null) {
+            $warnungen[] = "Position „{$gericht->name}“: Gramm-Menge ohne Portionsgewicht — nicht skalierbar.";
+
+            return null;
+        }
+        $stueck = ConcepterAggregateService::stueckModus($unit, $gericht);
+        $anzahl = $stueck ? (float) $gericht->yield_pieces : max(1, (int) ($gericht->sales_unit_count ?? 1));
+        if ($anzahl <= 0) {
+            $anzahl = 1.0;
+        }
+
+        return ['recipe' => $this->ladeRezept((int) $gericht->id), 'batches' => ($pae * $personen) / $anzahl, 'label' => $gericht->name];
+    }
+
+    /** Einzel-Rezept-Ziel → Top-Batches. VK: Portionen ÷ Portionszahl; Basisrezept: Ziel = # Ansätze. */
+    private function rezeptTopBatches(FoodAlchemistRecipe $recipe, array $ziel): array
+    {
+        $istVk = (bool) $recipe->is_sales_recipe;
+        if ($istVk) {
+            $portionen = (float) ($ziel['portions'] ?? $ziel['persons'] ?? 0);
+            $portionen = $portionen > 0 ? $portionen : 1.0;
+            $anzahl = ($recipe->yield_pieces !== null && (float) $recipe->yield_pieces > 0)
+                ? (float) $recipe->yield_pieces
+                : max(1, (int) ($recipe->sales_unit_count ?? 1));
+
+            return [$portionen / $anzahl, ['modus' => 'portionen', 'wert' => $portionen]];
+        }
+        // Basisrezept solo: Ziel = Anzahl Basis-Ansätze (Default 1).
+        $ansaetze = (float) ($ziel['portions'] ?? $ziel['persons'] ?? 1);
+        $ansaetze = $ansaetze > 0 ? $ansaetze : 1.0;
+
+        return [$ansaetze, ['modus' => 'ansätze', 'wert' => $ansaetze]];
+    }
+
+    // ── Explosion über den Rezeptbaum ─────────────────────────────────────
+
+    /**
+     * Kern: Top-Produktionen → Bedarf. VK-Gerichte skalieren linear, Basisrezepte
+     * runden auf GANZE Ansätze. Verarbeitung streng von der Top-Ebene nach unten
+     * (Longest-Path-Tiefe), damit der Bedarf eines Basisrezepts erst gerundet wird,
+     * wenn ALLE Eltern beigetragen haben (Diamond-sicher).
+     *
+     * @param  list<array{recipe:FoodAlchemistRecipe,batches:float,label:string}>  $tops
+     * @return array{production:list<array>, gp:array<int,array>, warnings:list<string>}
+     */
+    private function explodiere(Team $team, array $tops): array
+    {
+        if ($tops === []) {
+            return ['production' => [], 'gp' => [], 'warnings' => ['Keine skalierbaren Positionen — nichts zu rechnen.']];
+        }
+
+        // 1. Baum entdecken: Rezepte + Kanten (Eltern → [Sub, Gramm/Batch]).
+        /** @var array<int, list<array{sub:int, gpb:float}>> $kanten */
+        $kanten = [];
+        /** @var array<int, float> $needBatches Bedarf in Batch-Einheiten (Top-Beitrag + Eltern). */
+        $needBatches = [];
+        /** @var array<int, FoodAlchemistGp> $gpModelle */
+        $gpModelle = [];
+        $warnings = [];
+        $fehlenderYield = [];
+
+        foreach ($tops as $t) {
+            $needBatches[(int) $t['recipe']->id] = ($needBatches[(int) $t['recipe']->id] ?? 0.0) + (float) $t['batches'];
+        }
+
+        $entdeckt = [];
+        $stack = array_map(fn ($t) => (int) $t['recipe']->id, $tops);
+        while ($stack !== []) {
+            $rid = array_pop($stack);
+            if (isset($entdeckt[$rid])) {
+                continue;
+            }
+            $entdeckt[$rid] = true;
+            $recipe = $this->ladeRezept($rid);
+            if ($recipe === null) {
+                continue;
+            }
+            foreach ($recipe->ingredients as $z) {
+                if ($z->referenced_recipe_id !== null) {
+                    $kanten[$rid][] = ['sub' => (int) $z->referenced_recipe_id, 'gpb' => $this->recompute->bruttoMasseG($z)];
+                    if (! isset($entdeckt[(int) $z->referenced_recipe_id])) {
+                        $stack[] = (int) $z->referenced_recipe_id;
+                    }
+                }
+            }
+        }
+
+        // 2. Longest-Path-Tiefe von den Tops.
+        $tiefe = [];
+        foreach ($tops as $t) {
+            $tiefe[(int) $t['recipe']->id] = 0;
+        }
+        for ($pass = 0; $pass < self::MAX_TIEFE + 1; $pass++) {
+            foreach ($kanten as $pid => $subs) {
+                if (! isset($tiefe[$pid])) {
+                    continue;
+                }
+                foreach ($subs as $e) {
+                    $tiefe[$e['sub']] = max($tiefe[$e['sub']] ?? 0, $tiefe[$pid] + 1);
+                }
+            }
+        }
+        asort($tiefe); // Verarbeitung nach Tiefe aufsteigend (Top zuerst)
+
+        // 3. Von oben nach unten: Batches finalisieren, GP-Bedarf sammeln, Sub-Bedarf weiterreichen.
+        $produktion = [];
+        /** @var array<int, array{grams:float}> $gpGram */
+        $gpGram = [];
+        foreach (array_keys($tiefe) as $rid) {
+            $recipe = $this->ladeRezept($rid);
+            if ($recipe === null) {
+                continue;
+            }
+            $roh = $needBatches[$rid] ?? 0.0;
+            if ($roh <= 0) {
+                continue;
+            }
+            $istVk = (bool) $recipe->is_sales_recipe;
+            // VK-Gericht linear; Basisrezept auf ganze Ansätze aufrunden (Kern-Entscheid).
+            $batches = $istVk ? $roh : (float) max(1, (int) ceil($roh - 1e-9));
+
+            $zeilen = [];
+            foreach ($recipe->ingredients as $z) {
+                $mengeAvg = $z->quantity_max !== null
+                    ? ((float) $z->quantity + (float) $z->quantity_max) / 2
+                    : (float) $z->quantity;
+                $skalMenge = $mengeAvg * $batches;
+                $qsOderOpt = $z->is_optional || $z->unit?->slug === 'qs';
+                $name = $z->display_name ?: ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->raw_text);
+
+                if ($z->referenced_recipe_id !== null) {
+                    $sub = $z->referencedRecipe;
+                    $basisG = (float) ($sub?->yield_kg ?? 0) * 1000;
+                    $bruttoProBatch = $this->recompute->bruttoMasseG($z);
+                    if ($basisG > 0) {
+                        $needBatches[(int) $z->referenced_recipe_id] = ($needBatches[(int) $z->referenced_recipe_id] ?? 0.0)
+                            + ($bruttoProBatch * $batches) / $basisG;
+                    } else {
+                        $fehlenderYield[(int) $z->referenced_recipe_id] = $sub?->name ?? "#{$z->referenced_recipe_id}";
+                        $needBatches[(int) $z->referenced_recipe_id] = max($needBatches[(int) $z->referenced_recipe_id] ?? 0.0, 1.0);
+                    }
+                    $zeilen[] = ['typ' => 'sub', 'name' => $name, 'menge' => round($skalMenge, 3),
+                        'einheit' => $z->unit?->slug, 'role' => $z->role, 'note' => $z->note,
+                        'ref_recipe_id' => (int) $z->referenced_recipe_id, 'optional' => $qsOderOpt];
+
+                    continue;
+                }
+
+                if ($z->gp_id !== null && $z->gp !== null) {
+                    if (! $qsOderOpt) {
+                        $g = $this->recompute->bruttoMasseG($z) * $batches;
+                        if ($g > 0) {
+                            $gpGram[$z->gp_id]['grams'] = ($gpGram[$z->gp_id]['grams'] ?? 0.0) + $g;
+                            $gpModelle[$z->gp_id] = $z->gp;
+                        }
+                    }
+                    $zeilen[] = ['typ' => 'gp', 'name' => $name, 'menge' => round($skalMenge, 3),
+                        'einheit' => $z->unit?->slug, 'role' => $z->role, 'note' => $z->note,
+                        'gp_id' => (int) $z->gp_id, 'optional' => $qsOderOpt];
+
+                    continue;
+                }
+
+                // ungemappt (weder GP noch Sub) — Bedarfs-Lücke, ehrlich zeigen.
+                $warnings[] = "Rezept „{$recipe->name}“: Zutat „{$name}“ ist ungemappt — fehlt im Bedarf.";
+                $zeilen[] = ['typ' => 'ungemappt', 'name' => $name, 'menge' => round($skalMenge, 3),
+                    'einheit' => $z->unit?->slug, 'role' => $z->role, 'note' => $z->note, 'optional' => $qsOderOpt];
+            }
+
+            $basisYieldKg = $recipe->yield_kg !== null ? (float) $recipe->yield_kg : null;
+            $produktion[] = [
+                'recipe_id' => $rid,
+                'name' => $recipe->name,
+                'ist_basisrezept' => ! $istVk,
+                'tiefe' => $tiefe[$rid],
+                'ansaetze' => $istVk ? round($batches, 3) : (int) $batches,
+                'benoetigt_ansaetze' => round($roh, 3),      // fraktional — Transparenz „ganze Ansätze vs. Bedarf"
+                'basis_yield_kg' => $basisYieldKg,
+                'produzierte_menge_kg' => $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null,
+                'arbeitszeit_min' => $recipe->work_time_min !== null ? (int) round((float) $recipe->work_time_min * $batches) : null,
+                'zutaten' => $zeilen,
+            ];
+        }
+
+        foreach ($fehlenderYield as $name) {
+            $warnings[] = "Basisrezept „{$name}“: kein Basis-Yield hinterlegt — 1 Ansatz angenommen (Menge prüfen).";
+        }
+
+        // GP-Bedarf mit Namen/EK anreichern.
+        $gp = [];
+        foreach ($gpGram as $gpId => $d) {
+            $model = $gpModelle[$gpId];
+            $euroProG = $this->recompute->preisProGrammPublic($model);
+            $gp[$gpId] = [
+                'gp_id' => $gpId,
+                'name' => $model->name,
+                'warengruppe' => $model->commodity_group_code,
+                'menge_g' => round($d['grams'], 1),
+                'menge_kg' => round($d['grams'] / 1000, 3),
+                'ek_eur' => $euroProG !== null ? round($d['grams'] * $euroProG, 2) : null,
+                'ek_bekannt' => $euroProG !== null,
+            ];
+        }
+        uasort($gp, fn ($a, $b) => strcmp((string) $a['name'], (string) $b['name']));
+
+        return ['production' => $produktion, 'gp' => $gp, 'warnings' => $warnings];
+    }
+
+    // ── GP-Bedarf → Lieferanten-Gruppierung (Lead-LA) ─────────────────────
+
+    /**
+     * Gruppiert den GP-Bedarf nach Lead-LA-Lieferant. Lead + Ausweich (Rang 2)
+     * aus der team-abhängigen Rangliste. EK aus der Lead-€/g-Quelle (identisch
+     * zur Rezept-Kalkulation). GPs ohne Lead/Preis → Bucket „ohne Quelle".
+     *
+     * @param  array<int, array>  $gpBedarf
+     */
+    private function gruppiereNachLieferant(Team $team, array $gpBedarf): array
+    {
+        $gruppen = [];
+        foreach ($gpBedarf as $b) {
+            $gpModel = FoodAlchemistGp::find($b['gp_id']);
+            $kette = $gpModel !== null ? $this->leadLa->rangliste($gpModel, $team) : collect();
+            $lead = $kette->first(fn ($la) => $la->gepinnt && ! $la->locked) ?? $kette->first(fn ($la) => ! $la->locked);
+            $ausweich = $kette->first(fn ($la) => $lead !== null && $la->id !== $lead->id && ! $la->locked);
+
+            $key = $lead?->supplier_id ?? 0;
+            $lieferant = $lead?->supplier_name ?? 'ohne Lieferant/Lead-LA';
+            $gruppen[$key] ??= ['lieferant' => $lieferant, 'supplier_id' => $lead?->supplier_id, 'positionen' => [], 'ek_summe' => 0.0, 'ek_vollstaendig' => true];
+
+            $gruppen[$key]['positionen'][] = [
+                'gp_id' => $b['gp_id'],
+                'gp' => $b['name'],
+                'menge_kg' => $b['menge_kg'],
+                'menge_g' => $b['menge_g'],
+                'ek_eur' => $b['ek_eur'],
+                'ek_bekannt' => $b['ek_bekannt'],
+                'lead_artikel' => $lead?->designation,
+                'lead_artikel_nr' => $lead?->article_number,
+                'ausweich' => $ausweich !== null
+                    ? ['artikel' => $ausweich->designation, 'lieferant' => $ausweich->supplier_name]
+                    : null,
+            ];
+            if ($b['ek_bekannt']) {
+                $gruppen[$key]['ek_summe'] += (float) $b['ek_eur'];
+            } else {
+                $gruppen[$key]['ek_vollstaendig'] = false;
+            }
+        }
+
+        foreach ($gruppen as &$g) {
+            $g['ek_summe'] = round($g['ek_summe'], 2);
+            usort($g['positionen'], fn ($a, $b) => strcmp((string) $a['gp'], (string) $b['gp']));
+        }
+        unset($g);
+        // Lieferanten mit Lead zuerst (Bucket „ohne" ans Ende), sonst alphabetisch.
+        uasort($gruppen, function ($a, $b) {
+            if (($a['supplier_id'] === null) !== ($b['supplier_id'] === null)) {
+                return $a['supplier_id'] === null ? 1 : -1;
+            }
+
+            return strcmp((string) $a['lieferant'], (string) $b['lieferant']);
+        });
+
+        return array_values($gruppen);
+    }
+
+    // ── Rezept-Laden (memoisiert, mit Explosions-Relationen) ──────────────
+
+    private function ladeRezept(int $id): ?FoodAlchemistRecipe
+    {
+        return $this->recipeCache[$id] ??= FoodAlchemistRecipe::query()
+            ->with([
+                'ingredients' => fn ($q) => $q->orderBy('position'),
+                'ingredients.unit',
+                'ingredients.gp',
+                'ingredients.referencedRecipe:id,name,is_sales_recipe,yield_kg,yield_pieces,sales_unit_count',
+            ])
+            ->find($id);
+    }
+}

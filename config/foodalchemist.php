@@ -195,6 +195,17 @@ return [
             ],
         ],
         [
+            // R7.1: Operative Planungs-Blätter — Konzept/Gericht + Menge → Produktion/Bestellung/Einkauf.
+            'group' => 'Planung',
+            'items' => [
+                [
+                    'label' => 'Planungs-Blätter',
+                    'route' => 'foodalchemist.blaetter.index',
+                    'icon'  => 'heroicon-o-clipboard-document-list',
+                ],
+            ],
+        ],
+        [
             // #469: Wissens-Modul — operatives Prosa-Wissen (Regelwerke/Domains/Cross-Cutting) pflegen.
             'group' => 'Wissen',
             'items' => [

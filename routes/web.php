@@ -120,11 +120,13 @@ Route::get('/foodbooks', \Platform\FoodAlchemist\Livewire\Foodbooks\Index::class
 Route::get('/foodbooks/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\FoodbookService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     $fb = $svc->detail($team, $id) ?? abort(404);
-    $data = $svc->dokumentDaten($team, $fb);
+    // ?intern=1 → interne Projektion (EK/VK/W% pro Person, Projektleitung/Vertrieb). Default = Kundensicht (ohne EK).
+    $intern = request()->boolean('intern');
+    $data = $svc->dokumentDaten($team, $fb, $intern);
 
     if (request()->boolean('pdf') && class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.foodbook', $data + ['istPdf' => true])
-            ->download('Foodbook-' . $id . '.pdf');
+            ->download('Foodbook-' . $id . ($intern ? '-intern' : '') . '.pdf');
     }
 
     return view('foodalchemist::dokumente.foodbook', $data + ['istPdf' => false]);
@@ -184,6 +186,53 @@ Route::get('/kalkulator', fn () => redirect()->route('foodalchemist.kalkulation.
  */
 Route::get('/speiseplan', \Platform\FoodAlchemist\Livewire\Speiseplan\Index::class)
     ->name('foodalchemist.speiseplan.index');
+
+/**
+ * R7.1: Operative Planungs-Blätter — Ziel + Skalierung → Produktionsblatt +
+ * Bestellvorschlag + Einkaufsliste (read-only, rein rechnend).
+ */
+Route::get('/blaetter', \Platform\FoodAlchemist\Livewire\Blaetter\Index::class)
+    ->name('foodalchemist.blaetter.index');
+
+/**
+ * Versendbares/druckbares Planungs-Blatt — Druck-HTML; ?pdf=1 = PDF (DomPDF, guarded).
+ * typ=produktion|bestellung, Ziel via concept_id+persons ODER recipe_id+portions.
+ */
+Route::get('/blaetter/dokument', function (\Platform\FoodAlchemist\Services\PlanungsblattService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $typ = request('typ') === 'bestellung' ? 'bestellung' : 'produktion';
+    $ziel = array_filter([
+        'concept_id' => request()->integer('concept_id') ?: null,
+        'recipe_id' => request()->integer('recipe_id') ?: null,
+        'persons' => request()->integer('persons') ?: null,
+        'portions' => (float) request('portions') ?: null,
+    ]);
+    if (empty($ziel['concept_id']) && empty($ziel['recipe_id'])) {
+        abort(404);
+    }
+
+    $blatt = $typ === 'bestellung' ? $svc->bestellvorschlag($team, $ziel) : $svc->produktionsblatt($team, $ziel);
+
+    $name = ! empty($ziel['concept_id'])
+        ? optional(\Platform\FoodAlchemist\Models\FoodAlchemistConcept::visibleToTeam($team)->find($ziel['concept_id']))->name
+        : optional(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->find($ziel['recipe_id']))->name;
+    $mengeTxt = ! empty($ziel['concept_id'])
+        ? (($ziel['persons'] ?? 0) . ' Personen')
+        : (rtrim(rtrim(number_format((float) ($ziel['portions'] ?? 0), 2, ',', '.'), '0'), ',') . ' Portionen');
+    $data = [
+        'blatt' => $blatt,
+        'typ' => $typ,
+        'titel' => $typ === 'bestellung' ? 'Bestellvorschlag' : 'Produktionsblatt',
+        'untertitel' => trim(($name ?? 'Ziel') . ' · ' . $mengeTxt),
+    ];
+
+    if (request()->boolean('pdf') && class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.blatt', $data + ['istPdf' => true])
+            ->download($data['titel'] . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.blatt', $data + ['istPdf' => false]);
+})->name('foodalchemist.blaetter.dokument');
 
 /**
  * R7: «In Planung» — Vorschau der Phase-2-Domänen (14_ROADMAP_PHASE2).
