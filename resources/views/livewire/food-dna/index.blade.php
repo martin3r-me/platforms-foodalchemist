@@ -15,7 +15,7 @@
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="max-w-3xl space-y-4">
-            <p class="text-[11px] text-gray-500 dark:text-gray-400">
+            <p class="text-[11px] text-gray-500">
                 Der „Markenkern Küche" deines Teams. Diese DNA wird <strong>allen KI-Generatoren</strong>
                 (Rezept, Wording, Komposition, Angebot) als verbindlicher Stil-/Geschmacks-Rahmen vorangestellt —
                 kaskadiert mit Foodbook- und Concept-Canvas.
@@ -25,10 +25,10 @@
 
             <div class="relative overflow-hidden {{ $card }}">
                 <div class="px-4 py-3">
-                    <p class="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Referenziert (nicht dupliziert)</p>
-                    <p class="text-xs text-gray-700 dark:text-gray-200">
+                    <p class="text-[11px] uppercase tracking-wider text-gray-500 mb-1">Referenziert (nicht dupliziert)</p>
+                    <p class="text-xs text-gray-700">
                         Küchen-Profil: {{ $kuechenTypLabel ?? '— nicht gesetzt —' }}
-                        <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'kueche']) }}" class="ml-2 text-violet-600 dark:text-violet-400 hover:underline text-[11px]">in Einstellungen ändern</a>
+                        <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'kueche']) }}" class="ml-2 text-violet-600 hover:underline text-[11px]">in Einstellungen ändern</a>
                     </p>
                 </div>
             </div>

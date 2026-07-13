@@ -31,7 +31,7 @@
 ])
 
 @php
-    $label = 'text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400';
+    $label = 'text-[11px] font-medium uppercase tracking-wider text-gray-500';
 @endphp
 
 <div x-data="{
@@ -60,15 +60,15 @@
     {{-- max-h: 85vh — Wert MUSS im Host-CSS-Build existieren (arbitrary value!);
          92vh war nie gebaut ⇒ Panel ohne Höhen-Limit ⇒ innerer Scroll tot (Bug 2026-06-12).
          fullscreen: h-full füllt den fixed-Wrapper (Viewport minus p-4) — nur Standard-Klassen. --}}
-    <div class="relative w-full {{ $fullscreen ? 'max-w-none h-full' : $size . ' max-h-[85vh]' }} flex flex-col overflow-hidden rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-2xl shadow-black/20">
+    <div class="relative w-full {{ $fullscreen ? 'max-w-none h-full' : $size . ' max-h-[85vh]' }} flex flex-col overflow-hidden rounded-2xl bg-white/80 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black/20">
         <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
 
         {{-- Kopf: Titel + Schließen, darunter fixe Aktionen oben links (P-2) --}}
-        <div class="shrink-0 border-b border-black/5 dark:border-white/5">
+        <div class="shrink-0 border-b border-black/5">
             <div class="px-6 pt-4 pb-3 flex items-center justify-between gap-4">
-                <h2 class="font-medium tracking-tight text-gray-900 dark:text-gray-100 truncate">{{ $title }}</h2>
+                <h2 class="font-medium tracking-tight text-gray-900 truncate">{{ $title }}</h2>
                 <button type="button" @click="{{ $closeVia ? '$wire.' . $closeVia . '()' : 'close()' }}"
-                        class="p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-150"
+                        class="p-1.5 rounded-md text-gray-500 hover:text-violet-600 hover:bg-black/5 transition-colors duration-150"
                         aria-label="Schließen">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -82,7 +82,7 @@
             @endisset
             {{-- KPI-Streifen: fix im Kopf (scrollt nie weg) — geteilt über alle Editoren --}}
             @isset($kpiHeader)
-                <div class="px-6 pb-3 border-t border-black/5 dark:border-white/5 pt-3" data-modal-zone="kpi-header">
+                <div class="px-6 pb-3 border-t border-black/5 pt-3" data-modal-zone="kpi-header">
                     {{ $kpiHeader }}
                 </div>
             @endisset
@@ -95,7 +95,7 @@
 
         {{-- Footer-Aktionen-Slot (optional) --}}
         @isset($footer)
-            <div class="shrink-0 px-6 py-4 border-t border-black/5 dark:border-white/5 flex items-center justify-end gap-2" data-modal-zone="footer">
+            <div class="shrink-0 px-6 py-4 border-t border-black/5 flex items-center justify-end gap-2" data-modal-zone="footer">
                 {{ $footer }}
             </div>
         @endisset

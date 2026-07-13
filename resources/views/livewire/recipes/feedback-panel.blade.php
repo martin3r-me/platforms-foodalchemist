@@ -11,12 +11,12 @@
         <div class="{{ $kpiTile }} min-w-[7rem]">
             <div class="{{ $kpiTileAccent }}"></div>
             <div class="{{ $label }}">Ø-Score</div>
-            <div class="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+            <div class="text-lg font-semibold tabular-nums text-gray-900">
                 {{ $aggregat['avg'] !== null ? number_format((float) $aggregat['avg'], 1, ',', '.') : '—' }}
-                <span class="text-[11px] font-normal text-gray-500 dark:text-gray-400">/ 5</span>
+                <span class="text-[11px] font-normal text-gray-500">/ 5</span>
             </div>
         </div>
-        <div class="text-xs text-gray-600 dark:text-gray-400">
+        <div class="text-xs text-gray-600">
             {{ $aggregat['count'] }} {{ $aggregat['count'] === 1 ? 'Eintrag' : 'Einträge' }}
             @foreach($aggregat['per_source'] as $q => $n)
                 <span class="{{ $pill }} {{ $quellePill[$q] ?? $variantPill['secondary'] }} ml-1">{{ $quelleLabels[$q] ?? $q }}: {{ $n }}</span>
@@ -35,8 +35,8 @@
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-2 flex-wrap">
                         <span class="{{ $pill }} {{ $quellePill[$f->quelle->value] ?? $variantPill['secondary'] }}">{{ $f->quelle->label() }}</span>
-                        @if($f->score !== null)<span class="text-xs font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ $f->score }}/5</span>@endif
-                        @if($f->created_at)<span class="text-[11px] text-gray-500 dark:text-gray-400">{{ $f->created_at->format('d.m.Y') }}</span>@endif
+                        @if($f->score !== null)<span class="text-xs font-semibold tabular-nums text-gray-900">{{ $f->score }}/5</span>@endif
+                        @if($f->created_at)<span class="text-[11px] text-gray-500">{{ $f->created_at->format('d.m.Y') }}</span>@endif
                         @if($f->created_via === 'mcp')<span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="via KI/MCP angelegt">KI</span>@endif
                     </div>
                     <div class="flex items-center gap-1">
@@ -54,12 +54,12 @@
                         @if($f->gaeste_reaktion)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">Gäste {{ $f->gaeste_reaktion }}</span>@endif
                     </div>
                 @endif
-                @if($f->comment)<p class="text-xs text-gray-600 dark:text-gray-300 mt-1.5">{{ $f->comment }}</p>@endif
-                @if($f->kontext_label)<p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Kontext: {{ $f->kontext_label }}</p>@endif
+                @if($f->comment)<p class="text-xs text-gray-600 mt-1.5">{{ $f->comment }}</p>@endif
+                @if($f->kontext_label)<p class="text-[11px] text-gray-500 mt-0.5">Kontext: {{ $f->kontext_label }}</p>@endif
                 @if($f->spawned_recipe_id)<p class="text-[11px] text-violet-500 mt-0.5">→ Draft-Iteration #{{ $f->spawned_recipe_id }} abgeleitet</p>@endif
             </div>
         @empty
-            <p class="text-xs text-gray-500 dark:text-gray-400 {{ $sectionCard }} !p-3">Noch kein Feedback. Der erste Eintrag unten — die Küche, die es kocht, ist die ehrlichste Quelle.</p>
+            <p class="text-xs text-gray-500 {{ $sectionCard }} !p-3">Noch kein Feedback. Der erste Eintrag unten — die Küche, die es kocht, ist die ehrlichste Quelle.</p>
         @endforelse
     </div>
 
@@ -92,7 +92,7 @@
                 <div><label class="{{ $label }} block mb-1">Geschmack</label><input type="number" min="1" max="5" wire:model="geschmack" class="{{ $input }} tabular-nums" /></div>
                 <div><label class="{{ $label }} block mb-1">Gäste-Reaktion</label><input type="number" min="1" max="5" wire:model="gaeste_reaktion" class="{{ $input }} tabular-nums" /></div>
             </div>
-            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Küchen-Feedback = Entwicklungs-Motor. Kein Gesamt-Score gesetzt? → Mittel aus Machbarkeit/Geschmack/Gäste-Reaktion.</p>
+            <p class="text-[11px] text-gray-500 mt-1">Küchen-Feedback = Entwicklungs-Motor. Kein Gesamt-Score gesetzt? → Mittel aus Machbarkeit/Geschmack/Gäste-Reaktion.</p>
         @endif
 
         <div class="mt-2">

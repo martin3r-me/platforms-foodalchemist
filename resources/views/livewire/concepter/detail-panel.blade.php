@@ -2,9 +2,9 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 @php($konfPill = ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']])
 
-<div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04] dark:bg-white/[0.02]">
+<div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04]">
     @if($concept === null && $paket === null)
-        <div class="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
+        <div class="py-16 text-center text-sm text-gray-500">
             <div class="text-2xl mb-2">🍽️</div>
             {{ $type === 'pakete' ? 'Paket auswählen.' : 'Concept auswählen.' }}
         </div>
@@ -12,10 +12,10 @@
         @php($item = $concept ?? $paket)
         <div>
             <div class="flex items-start justify-between gap-2">
-                <h3 class="text-[15px] font-semibold text-gray-900 dark:text-gray-100">{{ $item->name }}</h3>
+                <h3 class="text-[15px] font-semibold text-gray-900">{{ $item->name }}</h3>
                 @if($concept && $concept->is_template)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">Vorlage</span>@endif
             </div>
-            @if($item->consumer_name)<p class="text-[11px] italic text-gray-500 dark:text-gray-400">„{{ $item->consumer_name }}"</p>@endif
+            @if($item->consumer_name)<p class="text-[11px] italic text-gray-500">„{{ $item->consumer_name }}"</p>@endif
         </div>
 
         {{-- Stamm-Pills --}}
@@ -36,16 +36,16 @@
             @if($concept)
                 <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ $concept->id }} })" class="{{ $btnGhostXs }}">✎ Bearbeiten</button>
                 @if($concept->is_template)
-                    <button type="button" wire:click="ausVorlage" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">↧ Als Concept nutzen</button>
+                    <button type="button" wire:click="ausVorlage" class="{{ $btnGhostXs }} text-violet-600">↧ Als Concept nutzen</button>
                 @else
                     <button type="button" wire:click="alsVorlage" class="{{ $btnGhostXs }}">Als Vorlage</button>
                 @endif
                 <button type="button" wire:click="dupliziere" class="{{ $btnGhostXs }}">⎘ Duplizieren</button>
-                <button type="button" wire:click="loeschen" wire:confirm="Concept löschen?" class="{{ $btnGhostXs }} text-red-600 dark:text-red-400">Löschen</button>
+                <button type="button" wire:click="loeschen" wire:confirm="Concept löschen?" class="{{ $btnGhostXs }} text-red-600">Löschen</button>
             @else
                 <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'pakete', id: {{ $paket->id }} })" class="{{ $btnGhostXs }}">✎ Bearbeiten</button>
                 <button type="button" wire:click="dupliziere" class="{{ $btnGhostXs }}">⎘ Duplizieren</button>
-                <button type="button" wire:click="loeschen" wire:confirm="Paket löschen?" class="{{ $btnGhostXs }} text-red-600 dark:text-red-400">Löschen</button>
+                <button type="button" wire:click="loeschen" wire:confirm="Paket löschen?" class="{{ $btnGhostXs }} text-red-600">Löschen</button>
             @endif
         </div>
 
@@ -53,20 +53,20 @@
         <div class="grid grid-cols-2 gap-2">
             @if($concept && $cockpit)
                 <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2">
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">€/Person</span>
-                    <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ number_format($cockpit['price_per_person'], 2, ',', '.') }} €</p>
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-violet-600">€/Person</span>
+                    <p class="text-base font-bold text-violet-700 tabular-nums">{{ number_format($cockpit['price_per_person'], 2, ',', '.') }} €</p>
                 </div>
             @elseif($paket)
                 <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2">
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-violet-600 dark:text-violet-400">€/Person</span>
-                    <p class="text-base font-bold text-violet-700 dark:text-violet-300 tabular-nums">{{ $paket->price_per_person !== null ? number_format((float) $paket->price_per_person, 2, ',', '.') . ' €' : '—' }}</p>
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-violet-600">€/Person</span>
+                    <p class="text-base font-bold text-violet-700 tabular-nums">{{ $paket->price_per_person !== null ? number_format((float) $paket->price_per_person, 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
             @endif
-            <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+            <div class="rounded-lg bg-black/[0.03] px-3 py-2">
                 <span class="{{ $dt }}">EK/Person</span>
                 <p class="text-xs font-semibold tabular-nums">{{ $aggregat !== null ? number_format((float) $aggregat['ek_per_person'], 2, ',', '.') . ' €' : '—' }}</p>
             </div>
-            <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+            <div class="rounded-lg bg-black/[0.03] px-3 py-2">
                 <span class="{{ $dt }}">Arbeitszeit</span>
                 <p class="text-xs font-semibold tabular-nums">{{ $aggregat !== null ? $aggregat['work_time_min'] . ' min' : '—' }}</p>
             </div>
@@ -77,7 +77,7 @@
                         ? ' · ' . number_format((float) $paket->food_cost_percent, 1, ',', '.') . ' % W'
                         : '')
             )
-            <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2">
+            <div class="rounded-lg bg-black/[0.03] px-3 py-2">
                 <span class="{{ $dt }}">Gerichte</span>
                 <p class="text-xs font-semibold tabular-nums">{{ ($aggregat['n_gerichte'] ?? 0) . $gerichteSuffix }}</p>
             </div>
@@ -85,7 +85,7 @@
 
         @if($aggregat !== null && $aggregat['n_gerichte'] > 0)
             {{-- Allergen-/Diät-Rollup --}}
-            <div class="flex flex-wrap gap-1 pt-2 border-t border-black/5 dark:border-white/10">
+            <div class="flex flex-wrap gap-1 pt-2 border-t border-black/5">
                 @if($aggregat['allergene']['is_vegan'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>
                 @elseif($aggregat['allergene']['is_vegetarian'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegetarisch</span>@endif
                 @if($aggregat['allergene']['is_gluten_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">glutenfrei</span>@endif
@@ -97,7 +97,7 @@
             </div>
 
             {{-- Nährwerte/Person (ehrliche Degradation) --}}
-            <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
+            <div class="space-y-1 pt-2 border-t border-black/5">
                 <div class="flex items-center justify-between">
                     <span class="{{ $label }}">Nährwerte / Person</span>
                     <span class="{{ $pill }} {{ $konfPill[$aggregat['naehrwerte']['confidence']] ?? $variantPill['secondary'] }}">{{ $aggregat['naehrwerte']['confidence'] }}</span>
@@ -105,15 +105,15 @@
                 @if($aggregat['naehrwerte']['kcal'] !== null)
                     <div class="grid grid-cols-7 gap-1 text-center">
                         @foreach(['kcal' => 'kcal', 'protein_g' => 'Eiweiß', 'fett_g' => 'Fett', 'gesfett_g' => 'dav. ges.', 'kh_g' => 'KH', 'zucker_g' => 'dav. Zucker', 'salz_g' => 'Salz'] as $k => $lbl)
-                            <div class="rounded-md bg-black/[0.03] dark:bg-white/5 py-1">
+                            <div class="rounded-md bg-black/[0.03] py-1">
                                 <p class="text-xs font-semibold tabular-nums">{{ $aggregat['naehrwerte'][$k] !== null ? rtrim(rtrim(number_format((float) $aggregat['naehrwerte'][$k], $k === 'kcal' ? 0 : 1, ',', '.'), '0'), ',') : '—' }}</p>
-                                <p class="text-[9px] text-gray-500 dark:text-gray-400 uppercase">{{ $lbl }}</p>
+                                <p class="text-[9px] text-gray-500 uppercase">{{ $lbl }}</p>
                             </div>
                         @endforeach
                     </div>
                 @endif
                 @unless($aggregat['naehrwerte']['vollstaendig'])
-                    <p class="text-[10px] text-amber-600 dark:text-amber-400">⚠ {{ $aggregat['naehrwerte']['n_mit_naehrwerten'] }}/{{ $aggregat['naehrwerte']['n_gerichte'] }} Gerichten mit Nährwert + Portionsgramm — Rest fehlt noch.</p>
+                    <p class="text-[10px] text-amber-600">⚠ {{ $aggregat['naehrwerte']['n_mit_naehrwerten'] }}/{{ $aggregat['naehrwerte']['n_gerichte'] }} Gerichten mit Nährwert + Portionsgramm — Rest fehlt noch.</p>
                 @endunless
             </div>
         @endif
@@ -121,9 +121,9 @@
         {{-- Deterministische Menü-Bewertung (§10.8) --}}
         @if($concept && $bewertung)
             @php($statusIcon = ['ok' => '✓', 'warn' => '!', 'fail' => '✕', 'info' => 'ℹ'])
-            @php($statusColor = ['ok' => 'text-emerald-600 dark:text-emerald-400', 'warn' => 'text-amber-600 dark:text-amber-400', 'fail' => 'text-red-600 dark:text-red-400', 'info' => 'text-gray-500 dark:text-gray-400'])
+            @php($statusColor = ['ok' => 'text-emerald-600', 'warn' => 'text-amber-600', 'fail' => 'text-red-600', 'info' => 'text-gray-500'])
             @php($scorePill = $bewertung['score'] >= 80 ? $variantPill['success'] : ($bewertung['score'] >= 50 ? $variantPill['warning'] : $variantPill['danger']))
-            <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
+            <div class="space-y-1 pt-2 border-t border-black/5">
                 <div class="flex items-center justify-between">
                     <span class="{{ $label }}">Menü-Bewertung</span>
                     <span class="{{ $pill }} {{ $scorePill }}" title="Anteil bestandener Checks">Score {{ $bewertung['score'] }}</span>
@@ -131,7 +131,7 @@
                 @foreach($bewertung['checks'] as $c)
                     <div class="flex items-start gap-2 text-[11px] py-0.5">
                         <span class="{{ $statusColor[$c['status']] ?? '' }} font-bold w-3 shrink-0 text-center">{{ $statusIcon[$c['status']] ?? '·' }}</span>
-                        <span class="text-gray-600 dark:text-gray-300"><span class="font-medium">{{ $c['label'] }}:</span> {{ $c['detail'] }}</span>
+                        <span class="text-gray-600"><span class="font-medium">{{ $c['label'] }}:</span> {{ $c['detail'] }}</span>
                     </div>
                 @endforeach
             </div>
@@ -139,12 +139,12 @@
 
         {{-- Slot-/Gericht-Aufbau (kompakt) --}}
         @if($concept && $cockpit)
-            <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
+            <div class="space-y-1 pt-2 border-t border-black/5">
                 <span class="{{ $label }}">Aufbau</span>
                 @foreach($cockpit['zeilen'] as $z)
                     <div class="flex items-center justify-between gap-2 text-xs py-1">
                         <span class="min-w-0 truncate">
-                            <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
+                            <span class="text-[10px] text-gray-500 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
                             @if($z['type'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['type'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
                         </span>
                         <span class="shrink-0 tabular-nums {{ $z['price'] === null ? 'text-gray-300' : '' }}">{{ $z['price'] !== null ? number_format($z['price'], 2, ',', '.') . ' €' : '—' }}</span>
@@ -152,48 +152,48 @@
                 @endforeach
             </div>
         @elseif($paket)
-            <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
+            <div class="space-y-1 pt-2 border-t border-black/5">
                 <span class="{{ $label }}">Gerichte im Paket</span>
                 @forelse($paket->dishes as $pg)
                     <div class="flex items-center justify-between gap-2 text-xs py-1">
                         <span class="min-w-0 truncate">{{ $pg->dish?->name ?? '—' }}</span>
-                        <span class="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                        <span class="shrink-0 tabular-nums text-gray-500">{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-500 dark:text-gray-400 py-1">Noch keine Gerichte im Paket.</p>
+                    <p class="text-[11px] text-gray-500 py-1">Noch keine Gerichte im Paket.</p>
                 @endforelse
             </div>
         @endif
 
         {{-- Menü-Karte (Konsumenten-Sicht · C-10) --}}
         @if($concept)
-            <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
+            <div class="space-y-1 pt-2 border-t border-black/5">
                 <span class="{{ $label }}">Menü-Karte (Konsumenten-Sicht)</span>
-                <div class="rounded-lg border border-black/5 dark:border-white/10 px-3 py-2 bg-white/40 dark:bg-white/[0.03]">
-                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $concept->consumer_name ?: $concept->name }}</p>
-                    @if($concept->additional_text)<p class="text-[11px] italic text-gray-600 dark:text-gray-400 mb-1">{{ $concept->additional_text }}</p>@endif
+                <div class="rounded-lg border border-black/5 px-3 py-2 bg-white/40">
+                    <p class="text-sm font-semibold text-gray-900">{{ $concept->consumer_name ?: $concept->name }}</p>
+                    @if($concept->additional_text)<p class="text-[11px] italic text-gray-600 mb-1">{{ $concept->additional_text }}</p>@endif
                     @forelse($concept->slots as $slot)
                         <div class="py-0.5">
-                            <span class="text-[9px] uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ $slot->role ?: '—' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
-                            <p class="text-xs text-gray-800 dark:text-gray-200">{{ $slot->title ?: ($slot->package?->name ?? $slot->dish?->name ?? '(leer)') }}</p>
+                            <span class="text-[9px] uppercase tracking-wider text-gray-500">{{ $slot->role ?: '—' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
+                            <p class="text-xs text-gray-800">{{ $slot->title ?: ($slot->package?->name ?? $slot->dish?->name ?? '(leer)') }}</p>
                         </div>
                     @empty
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine Positionen.</p>
+                        <p class="text-[11px] text-gray-500">Noch keine Positionen.</p>
                     @endforelse
                 </div>
             </div>
         @endif
 
         {{-- Wo verwendet? (Verwendungsnachweis · Politur B-09/F-11) --}}
-        <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
+        <div class="space-y-1 pt-2 border-t border-black/5">
             <span class="{{ $label }}">Wo verwendet? ({{ $verwendung->count() }})</span>
             @forelse($verwendung as $v)
                 <div class="flex items-center justify-between gap-2 text-xs py-0.5">
                     <span class="min-w-0 truncate">{{ $concept ? ($v->label ?? '—') : $v->name }}</span>
-                    <span class="shrink-0 text-[10px] text-gray-500 dark:text-gray-400">{{ $concept ? ('Foodbook' . ($v->jahr ? ' ' . $v->jahr : '') . ($v->customer ? ' · ' . $v->customer : '')) : 'Concept' }}</span>
+                    <span class="shrink-0 text-[10px] text-gray-500">{{ $concept ? ('Foodbook' . ($v->jahr ? ' ' . $v->jahr : '') . ($v->customer ? ' · ' . $v->customer : '')) : 'Concept' }}</span>
                 </div>
             @empty
-                <p class="text-[11px] text-gray-500 dark:text-gray-400 py-0.5">{{ $concept ? 'In keinem Foodbook referenziert.' : 'In keinem Concept verwendet.' }}</p>
+                <p class="text-[11px] text-gray-500 py-0.5">{{ $concept ? 'In keinem Foodbook referenziert.' : 'In keinem Concept verwendet.' }}</p>
             @endforelse
         </div>
     @endif

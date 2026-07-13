@@ -30,9 +30,9 @@
                 </div>
 
                 {{-- M10c-B: Kategorie-Baum (Filter + Pflege) --}}
-                @php($katAktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300')
-                @php($katHover = 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5')
-                <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                @php($katAktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700')
+                @php($katHover = 'text-gray-600 hover:bg-black/[0.03]')
+                <div class="space-y-0.5 pt-2 border-t border-black/5">
                     <span class="{{ $label }}">Kategorien</span>
                     <button type="button" wire:click="kategorieWaehlen('')" class="w-full text-left text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === '' ? $katAktiv : $katHover }}">Alle</button>
                     <button type="button" wire:click="kategorieWaehlen('none')" class="w-full text-left text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === 'none' ? $katAktiv : $katHover }}">Ohne Kategorie</button>
@@ -42,8 +42,8 @@
                                 <input type="text" wire:model="editKatName" wire:keydown.enter="kategorieRename" wire:blur="kategorieRename" class="{{ $input }} py-0.5 flex-1" autofocus />
                             @else
                                 <button type="button" wire:click="kategorieWaehlen('{{ $kat['id'] }}')" class="flex-1 min-w-0 text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === (string) $kat['id'] ? $katAktiv : $katHover }}">{{ $kat['name'] }}</button>
-                                <button type="button" wire:click="kategorieEditStart({{ $kat['id'] }}, @js($kat['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[11px]" title="umbenennen">✎</button>
-                                <button type="button" wire:click="kategorieLoeschen({{ $kat['id'] }})" wire:confirm="Kategorie löschen? (Untergruppen & Concepts rücken zum Eltern)" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-red-500 text-[11px]" title="löschen">✕</button>
+                                <button type="button" wire:click="kategorieEditStart({{ $kat['id'] }}, @js($kat['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px]" title="umbenennen">✎</button>
+                                <button type="button" wire:click="kategorieLoeschen({{ $kat['id'] }})" wire:confirm="Kategorie löschen? (Untergruppen & Concepts rücken zum Eltern)" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 text-[11px]" title="löschen">✕</button>
                             @endif
                         </div>
                     @endforeach
@@ -69,21 +69,21 @@
                             </button>
                             <button type="button" wire:click="$set('generatorOffen', false)" class="{{ $btnGhost }}">✕</button>
                         </div>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400">Ausschließlich echte VK-Gerichte — Slots ohne Treffer bleiben leer mit Begründung. Ergebnis ist ein Draft.</p>
+                        <p class="text-[10px] text-gray-500">Ausschließlich echte VK-Gerichte — Slots ohne Treffer bleiben leer mit Begründung. Ergebnis ist ein Draft.</p>
 
                         @if($generatorFehler)
-                            <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700 dark:text-rose-300" data-generator-fehler>{{ $generatorFehler }}</div>
+                            <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700" data-generator-fehler>{{ $generatorFehler }}</div>
                         @endif
                         @if($generatorErgebnis)
                             <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-2 space-y-1 text-[11px]" data-generator-ergebnis>
-                                <div class="font-medium text-gray-800 dark:text-gray-100">„{{ $generatorErgebnis['concept_name'] }}“ (Draft)</div>
-                                <div class="text-gray-600 dark:text-gray-400">Kohäsion {{ $generatorErgebnis['kohaesion_score'] ?? '—' }} ({{ $generatorErgebnis['kohaesion_coverage'] ?? 0 }} % Graph) · Coverage: {{ $generatorErgebnis['coverage_gesamt'] ?? '—' }}</div>
+                                <div class="font-medium text-gray-800">„{{ $generatorErgebnis['concept_name'] }}“ (Draft)</div>
+                                <div class="text-gray-600">Kohäsion {{ $generatorErgebnis['kohaesion_score'] ?? '—' }} ({{ $generatorErgebnis['kohaesion_coverage'] ?? 0 }} % Graph) · Coverage: {{ $generatorErgebnis['coverage_gesamt'] ?? '—' }}</div>
                                 @foreach($generatorErgebnis['protokoll'] as $p)
-                                    <div class="{{ $p['status'] === 'leer' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400' }}">
+                                    <div class="{{ $p['status'] === 'leer' ? 'text-amber-600' : 'text-gray-600' }}">
                                         {{ $p['slot'] }}: {{ $p['status'] === 'leer' ? 'LEER — ' . $p['begruendung'] : collect($p['gerichte'])->pluck('name')->implode(', ') }}
                                     </div>
                                 @endforeach
-                                <button type="button" wire:click="waehle({{ $generatorErgebnis['concept_id'] }})" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">→ Konzept öffnen (Kohäsion + Coverage im Editor)</button>
+                                <button type="button" wire:click="waehle({{ $generatorErgebnis['concept_id'] }})" class="{{ $btnGhostXs }} text-violet-600">→ Konzept öffnen (Kohäsion + Coverage im Editor)</button>
                             </div>
                         @endif
                     </div>
@@ -92,17 +92,17 @@
                 <div class="space-y-0.5 -mx-1 pt-1">
                     @forelse($concepts as $c)
                         <div wire:key="c-{{ $c->id }}"
-                             class="group flex items-center justify-between px-2 py-1 rounded-lg text-xs {{ $selectedId === $c->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                             class="group flex items-center justify-between px-2 py-1 rounded-lg text-xs {{ $selectedId === $c->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">
                             <button type="button" wire:click="waehle({{ $c->id }})" class="min-w-0 flex-1 text-left truncate">
                                 {{ $c->name }}
-                                <span class="text-[10px] text-gray-500 dark:text-gray-400">· {{ $c->slots_count }} Slots{{ $c->price_per_person_cache !== null ? ' · ' . number_format((float) $c->price_per_person_cache, 2, ',', '.') . ' €' : '' }} · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$c->phase] ?? $c->phase }}</span></span>
+                                <span class="text-[10px] text-gray-500">· {{ $c->slots_count }} Slots{{ $c->price_per_person_cache !== null ? ' · ' . number_format((float) $c->price_per_person_cache, 2, ',', '.') . ' €' : '' }} · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$c->phase] ?? $c->phase }}</span></span>
                             </button>
                             @if($showVorlagen)
                                 <button type="button" wire:click="ausVorlage({{ $c->id }})" class="shrink-0 text-[10px] text-violet-500 opacity-0 group-hover:opacity-100" title="Aus Vorlage starten">↧ nutzen</button>
                             @endif
                         </div>
                     @empty
-                        <p class="px-2 py-3 text-[11px] text-gray-500 dark:text-gray-400">{{ $showVorlagen ? 'Keine Vorlagen.' : 'Keine Concepts. Oben „+ Neues Concept".' }}</p>
+                        <p class="px-2 py-3 text-[11px] text-gray-500">{{ $showVorlagen ? 'Keine Vorlagen.' : 'Keine Concepts. Oben „+ Neues Concept".' }}</p>
                     @endforelse
                 </div>
             </div>
@@ -114,16 +114,16 @@
             @if($selected && $cockpit)
                 <div class="p-4 space-y-3">
                     <div class="text-center py-2">
-                        <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($cockpit['price_per_person'], 2, ',', '.') }} €</div>
+                        <div class="text-2xl font-semibold text-gray-900 tabular-nums">{{ number_format($cockpit['price_per_person'], 2, ',', '.') }} €</div>
                         <div class="{{ $label }}">pro Person · EK {{ number_format($cockpit['ek_per_person'], 2, ',', '.') }} €</div>
-                        <div class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Gästezahl &amp; Gesamtpreis erst im Foodbook/Angebot</div>
+                        <div class="text-[10px] text-gray-500 mt-1">Gästezahl &amp; Gesamtpreis erst im Foodbook/Angebot</div>
                     </div>
                     @if($cockpit['hat_leer'])<p class="{{ $pill }} {{ $variantPill['secondary'] }} w-full justify-center">Es gibt noch leere Slots</p>@endif
                     @if($cockpit['hat_stale'])<p class="{{ $pill }} {{ $variantPill['warning'] }} w-full justify-center">Ein Paket-Preis ist veraltet</p>@endif
 
                     {{-- C-09: Allergen-/Diät-Rollup übers ganze Concept --}}
                     @if($rollup && $rollup['n_gerichte'] > 0)
-                        <div class="flex flex-wrap gap-1 pt-1 border-t border-black/5 dark:border-white/10">
+                        <div class="flex flex-wrap gap-1 pt-1 border-t border-black/5">
                             @if($rollup['is_vegan'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>
                             @elseif($rollup['is_vegetarian'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegetarisch</span>@endif
                             @if($rollup['is_gluten_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">glutenfrei</span>@endif
@@ -136,12 +136,12 @@
                     @endif
                     <div class="space-y-1 pt-1">
                         @foreach($cockpit['zeilen'] as $z)
-                            <div class="flex items-center justify-between gap-2 text-xs py-1 border-t border-black/5 dark:border-white/10">
+                            <div class="flex items-center justify-between gap-2 text-xs py-1 border-t border-black/5">
                                 <span class="min-w-0 truncate">
-                                    <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
+                                    <span class="text-[10px] text-gray-500 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
                                     @if($z['type'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['type'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
                                 </span>
-                                <span class="shrink-0 tabular-nums {{ $z['price'] === null ? 'text-gray-300' : 'text-gray-900 dark:text-gray-100' }}">{{ $z['price'] !== null ? number_format($z['price'], 2, ',', '.') . ' €' : '—' }}</span>
+                                <span class="shrink-0 tabular-nums {{ $z['price'] === null ? 'text-gray-300' : 'text-gray-900' }}">{{ $z['price'] !== null ? number_format($z['price'], 2, ',', '.') . ' €' : '—' }}</span>
                             </div>
                         @endforeach
                     </div>
@@ -150,7 +150,7 @@
                     @endunless
                 </div>
             @else
-                <div class="p-6 text-center text-sm text-gray-500 dark:text-gray-400">Concept auswählen.</div>
+                <div class="p-6 text-center text-sm text-gray-500">Concept auswählen.</div>
             @endif
         </x-ui-page-sidebar>
     </x-slot>
@@ -185,8 +185,8 @@
                 </div>
                 <div class="flex gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
-                    <button type="button" wire:click="zielpreisToggle" class="{{ $btnGhost }} {{ $zielModus ? 'text-violet-600 dark:text-violet-400' : '' }}">🎯 Zielpreis</button>
-                    <button type="button" wire:click="loeschen({{ $selected->id }})" wire:confirm="Concept löschen?" class="{{ $btnGhost }} text-red-600 dark:text-red-400">Löschen</button>
+                    <button type="button" wire:click="zielpreisToggle" class="{{ $btnGhost }} {{ $zielModus ? 'text-violet-600' : '' }}">🎯 Zielpreis</button>
+                    <button type="button" wire:click="loeschen({{ $selected->id }})" wire:confirm="Concept löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
                 </div>
 
                 {{-- M13: Zielpreis-Konfigurator (greift nur an Paket-Slots) --}}
@@ -198,18 +198,18 @@
                                 <input type="number" step="0.01" min="0" wire:model="zielPreis" wire:keydown.enter="zielpreisBerechnen" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 36,00" />
                             </div>
                             <button type="button" wire:click="zielpreisBerechnen" class="{{ $btnPrimary }}">Vorschlag berechnen</button>
-                            <span class="text-[11px] text-gray-500 dark:text-gray-400">Tauscht Pakete derselben Rolle; feste Gerichte bleiben Fixkosten.</span>
+                            <span class="text-[11px] text-gray-500">Tauscht Pakete derselben Rolle; feste Gerichte bleiben Fixkosten.</span>
                         </div>
                         @if($zielVorschlag)
                             <div class="text-xs space-y-1 pt-1 border-t border-violet-500/20">
                                 <div class="flex flex-wrap gap-x-6 gap-y-1">
                                     <span><span class="{{ $label }}">Aktuell</span> <span class="tabular-nums">{{ number_format($zielVorschlag['aktuell'], 2, ',', '.') }} €</span></span>
-                                    <span><span class="{{ $label }}">Vorschlag</span> <span class="tabular-nums font-semibold text-gray-900 dark:text-gray-100">{{ number_format($zielVorschlag['price'], 2, ',', '.') }} €</span></span>
+                                    <span><span class="{{ $label }}">Vorschlag</span> <span class="tabular-nums font-semibold text-gray-900">{{ number_format($zielVorschlag['price'], 2, ',', '.') }} €</span></span>
                                     <span><span class="{{ $label }}">Ziel</span> <span class="tabular-nums">{{ number_format($zielVorschlag['ziel'], 2, ',', '.') }} €</span></span>
-                                    <span><span class="{{ $label }}">Δ Ziel</span> <span class="tabular-nums {{ abs($zielVorschlag['price'] - $zielVorschlag['ziel']) < 0.01 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400' }}">{{ number_format($zielVorschlag['price'] - $zielVorschlag['ziel'], 2, ',', '.') }} €</span></span>
+                                    <span><span class="{{ $label }}">Δ Ziel</span> <span class="tabular-nums {{ abs($zielVorschlag['price'] - $zielVorschlag['ziel']) < 0.01 ? 'text-emerald-600' : 'text-amber-600' }}">{{ number_format($zielVorschlag['price'] - $zielVorschlag['ziel'], 2, ',', '.') }} €</span></span>
                                     <span><span class="{{ $label }}">Tausche</span> <span class="tabular-nums">{{ $zielVorschlag['aenderungen'] }}</span></span>
                                 </div>
-                                <p class="text-[11px] text-gray-500 dark:text-gray-400">Erreichbar mit den Paketen: {{ number_format($zielVorschlag['min'], 2, ',', '.') }} – {{ number_format($zielVorschlag['max'], 2, ',', '.') }} €/Person{{ $zielVorschlag['fix'] > 0 ? ' (inkl. ' . number_format($zielVorschlag['fix'], 2, ',', '.') . ' € feste Gerichte)' : '' }}.</p>
+                                <p class="text-[11px] text-gray-500">Erreichbar mit den Paketen: {{ number_format($zielVorschlag['min'], 2, ',', '.') }} – {{ number_format($zielVorschlag['max'], 2, ',', '.') }} €/Person{{ $zielVorschlag['fix'] > 0 ? ' (inkl. ' . number_format($zielVorschlag['fix'], 2, ',', '.') . ' € feste Gerichte)' : '' }}.</p>
                                 <div class="flex gap-2 pt-1">
                                     <button type="button" wire:click="zielpreisUebernehmen" @disabled($zielVorschlag['aenderungen'] === 0) class="{{ $btnPrimary }}">Übernehmen ({{ $zielVorschlag['aenderungen'] }} Tausch)</button>
                                     <button type="button" wire:click="$set('zielVorschlag', null)" class="{{ $btnGhost }}">Verwerfen</button>
@@ -223,7 +223,7 @@
             {{-- Slot-Gerüst --}}
             <div class="relative overflow-hidden {{ $card }} p-5 space-y-3">
                 <div class="flex items-center justify-between">
-                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Slots</h3>
+                    <h3 class="font-medium tracking-tight text-gray-900">Slots</h3>
                     <div class="flex items-center gap-2">
                         <input type="text" wire:model="neuerSlotRolle" placeholder="Rolle, z. B. Vorspeise" class="{{ $input }} w-48" />
                         <button type="button" wire:click="slotHinzu" class="{{ $btnGhost }}">+ Slot</button>
@@ -232,17 +232,17 @@
 
                 <div class="space-y-2">
                     @forelse($selected->slots as $slot)
-                        <div wire:key="slot-{{ $slot->id }}" class="rounded-xl border border-black/5 dark:border-white/10 p-3 space-y-2">
+                        <div wire:key="slot-{{ $slot->id }}" class="rounded-xl border border-black/5 p-3 space-y-2">
                             <div class="flex items-center gap-2">
                                 <span class="flex flex-col -my-0.5 shrink-0">
-                                    <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 leading-none" title="hoch">▲</button>
-                                    <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 leading-none" title="runter">▼</button>
+                                    <button type="button" wire:click="slotHoch({{ $slot->id }})" class="text-gray-500 hover:text-violet-500 leading-none" title="hoch">▲</button>
+                                    <button type="button" wire:click="slotRunter({{ $slot->id }})" class="text-gray-500 hover:text-violet-500 leading-none" title="runter">▼</button>
                                 </span>
                                 <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.role" wire:change="slotSpeichern({{ $slot->id }})"
                                        class="{{ $input }} w-40" placeholder="Rolle" />
                                 <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.titel" wire:change="slotSpeichern({{ $slot->id }})"
                                        class="{{ $input }} flex-1" placeholder="Titel (optional)" />
-                                <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-500 dark:text-gray-400 hover:text-red-500 px-2" title="Slot entfernen">✕</button>
+                                <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-500 hover:text-red-500 px-2" title="Slot entfernen">✕</button>
                             </div>
 
                             {{-- Befüllung --}}
@@ -250,16 +250,16 @@
                                 @if($slot->package_id && $slot->package)
                                     <span class="{{ $pill }} {{ $variantPill['info'] }}">Paket</span>
                                     <span class="text-sm font-medium">{{ $slot->package->name }}</span>
-                                    <span class="text-gray-500 dark:text-gray-400 text-xs tabular-nums">{{ $slot->package->price_per_person !== null ? number_format((float) $slot->package->price_per_person, 2, ',', '.') . ' €' : '—' }}</span>
+                                    <span class="text-gray-500 text-xs tabular-nums">{{ $slot->package->price_per_person !== null ? number_format((float) $slot->package->price_per_person, 2, ',', '.') . ' €' : '—' }}</span>
                                 @elseif($slot->sales_recipe_id && $slot->dish)
                                     <span class="{{ $pill }} {{ $variantPill['secondary'] }}">festes Gericht</span>
                                     <span class="text-sm font-medium">{{ $slot->dish->name }}</span>
-                                    <span class="text-gray-500 dark:text-gray-400 text-xs tabular-nums">{{ $slot->dish->sales_net !== null ? number_format((float) $slot->dish->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
+                                    <span class="text-gray-500 text-xs tabular-nums">{{ $slot->dish->sales_net !== null ? number_format((float) $slot->dish->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
                                 @else
-                                    <span class="text-xs text-gray-500 dark:text-gray-400">leer — Paket wählen oder festes Gericht setzen</span>
+                                    <span class="text-xs text-gray-500">leer — Paket wählen oder festes Gericht setzen</span>
                                 @endif
                                 @if($slot->package_id || $slot->sales_recipe_id)
-                                    <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-500 dark:text-gray-400 hover:text-red-500">leeren</button>
+                                    <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-500 hover:text-red-500">leeren</button>
                                 @endif
                             </div>
 
@@ -284,7 +284,7 @@
                                                 <button type="button" wire:key="k-{{ $slot->id }}-{{ $k->id }}" wire:click="fuelleGericht({{ $slot->id }}, {{ $k->id }})"
                                                         class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10 text-left">
                                                     <span class="truncate">{{ $k->name }}</span>
-                                                    <span class="text-gray-500 dark:text-gray-400 tabular-nums shrink-0">{{ $k->sales_net !== null ? number_format((float) $k->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                                    <span class="text-gray-500 tabular-nums shrink-0">{{ $k->sales_net !== null ? number_format((float) $k->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                                                 </button>
                                             @endforeach
                                         </div>
@@ -293,13 +293,13 @@
                             @endif
                         </div>
                     @empty
-                        <p class="text-xs text-gray-500 dark:text-gray-400 py-4 text-center">Noch keine Slots. Oben eine Rolle eintragen und „+ Slot".</p>
+                        <p class="text-xs text-gray-500 py-4 text-center">Noch keine Slots. Oben eine Rolle eintragen und „+ Slot".</p>
                     @endforelse
                 </div>
             </div>
 
         @else
-            <div class="{{ $card }} p-10 text-center text-sm text-gray-500 dark:text-gray-400">
+            <div class="{{ $card }} p-10 text-center text-sm text-gray-500">
                 Links ein Concept auswählen oder „+ Neues Concept" anlegen. Vorlagen lassen sich per „↧ nutzen" zu einem eigenständigen Concept forken.
             </div>
         @endif

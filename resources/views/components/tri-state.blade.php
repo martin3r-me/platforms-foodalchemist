@@ -24,22 +24,22 @@
 
 @php
     $buttons = [
-        'nicht_enthalten' => ['−', 'nicht enthalten', 'bg-gray-500/20 text-gray-700 dark:bg-white/15 dark:text-gray-200 border-gray-500/30'],
-        'spuren' => ['≈', 'Spuren', 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'],
-        'enthalten' => ['✓', 'enthalten', 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30'],
+        'nicht_enthalten' => ['−', 'nicht enthalten', 'bg-gray-500/20 text-gray-700 border-gray-500/30'],
+        'spuren' => ['≈', 'Spuren', 'bg-amber-500/15 text-amber-600 border-amber-500/30'],
+        'enthalten' => ['✓', 'enthalten', 'bg-red-500/15 text-red-600 border-red-500/30'],
     ];
     $btnBase = 'w-5 h-5 inline-flex items-center justify-center text-[10px] font-medium rounded border transition-all duration-150';
-    $btnInaktiv = 'border-black/5 dark:border-white/10 text-gray-300 dark:text-gray-600';
+    $btnInaktiv = 'border-black/5 text-gray-300';
     // fehlende Keys = unbekannt (GL-01: nie NULL-Lücken im Binding)
     $initial = collect($items)->mapWithKeys(fn ($label, $key) => [$key => $values[$key] ?? 'unbekannt'])->all();
 @endphp
 
-<div {{ $attributes->merge(['class' => 'divide-y divide-black/5 dark:divide-white/5']) }}
+<div {{ $attributes->merge(['class' => 'divide-y divide-black/5']) }}
      x-data="{ werte: @if($model) $wire.entangle('{{ $model }}') @else {{ Js::from($initial) }} @endif }"
      data-tri-state>
     @foreach($items as $key => $label)
         <div class="flex items-center justify-between gap-3 py-1" data-tri-row="{{ $key }}">
-            <span class="text-xs text-gray-700 dark:text-gray-300 min-w-0 truncate">{{ $label }}</span>
+            <span class="text-xs text-gray-700 min-w-0 truncate">{{ $label }}</span>
             <div class="flex items-center gap-1 shrink-0">
                 @foreach($buttons as $wert => [$zeichen, $titel, $aktivKlasse])
                     <button type="button" title="{{ $titel }}"
@@ -48,7 +48,7 @@
                                 :class="(werte['{{ $key }}'] ?? 'unbekannt') === '{{ $wert }}' ? @js($aktivKlasse) : @js($btnInaktiv . ' opacity-60')"
                             @else
                                 @click="werte['{{ $key }}'] = (werte['{{ $key }}'] ?? 'unbekannt') === '{{ $wert }}' ? 'unbekannt' : '{{ $wert }}'"
-                                :class="(werte['{{ $key }}'] ?? 'unbekannt') === '{{ $wert }}' ? @js($aktivKlasse) : @js($btnInaktiv . ' hover:text-gray-500 hover:bg-black/5 dark:hover:bg-white/10')"
+                                :class="(werte['{{ $key }}'] ?? 'unbekannt') === '{{ $wert }}' ? @js($aktivKlasse) : @js($btnInaktiv . ' hover:text-gray-500 hover:bg-black/5')"
                             @endif
                             class="{{ $btnBase }}"
                             data-tri-btn="{{ $wert }}">{{ $zeichen }}</button>

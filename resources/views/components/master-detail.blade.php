@@ -50,7 +50,7 @@
                class="{{ $panelWidth }} shrink-0 flex flex-col {{ $card }}" data-zone="panel">
             <div class="shrink-0 flex items-center justify-end px-2 pt-2">
                 <button type="button" @click="panelOpen = false"
-                        class="p-1 rounded-md text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-150"
+                        class="p-1 rounded-md text-gray-500 hover:text-violet-600 hover:bg-black/5 transition-colors duration-150"
                         title="Detail-Panel einklappen">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
@@ -64,7 +64,7 @@
 
         {{-- eingeklappt: schmale Rail zum Wieder-Aufklappen --}}
         <button type="button" x-show="!panelOpen" x-cloak @click="panelOpen = true"
-                class="w-8 shrink-0 flex items-start justify-center pt-2 {{ $card }} text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150"
+                class="w-8 shrink-0 flex items-start justify-center pt-2 {{ $card }} text-gray-500 hover:text-violet-600 transition-colors duration-150"
                 title="Detail-Panel ausklappen" data-zone="panel-rail">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />

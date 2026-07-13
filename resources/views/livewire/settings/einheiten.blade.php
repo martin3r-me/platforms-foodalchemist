@@ -5,14 +5,14 @@
 <div class="space-y-4">
     @if($fehler)
         <div class="{{ $card }} p-3 border-red-500/20">
-            <p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p>
+            <p class="text-xs text-red-600">{{ $fehler }}</p>
         </div>
     @endif
 
     <div class="relative overflow-hidden {{ $card }}">
         <div class="{{ $cardAccent }}"></div>
         <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-            <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Einheiten</h3>
+            <h3 class="font-medium tracking-tight text-gray-900">Einheiten</h3>
             <label class="flex items-center gap-2 {{ $label }} cursor-pointer">
                 <input type="checkbox" wire:model.live="includeInactive" class="rounded border-gray-300" />
                 Inaktive zeigen
@@ -32,7 +32,7 @@
                     @php($darfEdit = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $unit))
                     <tr wire:key="unit-{{ $unit->id }}" class="{{ $tr }} {{ $unit->is_inactive ? 'opacity-50' : '' }}">
                         @if($editId === $unit->id)
-                            <td class="{{ $td }} text-gray-500 dark:text-gray-400">{{ $unit->slug }}</td>
+                            <td class="{{ $td }} text-gray-500">{{ $unit->slug }}</td>
                             <td class="{{ $td }}"><input type="text" wire:model="form.display_de" wire:keydown.enter="save" wire:keydown.escape="cancel" class="{{ $input }} !py-1" /></td>
                             <td class="{{ $td }}">
                                 <select wire:model="form.dimension" class="{{ $input }} !py-1">
@@ -44,18 +44,18 @@
                             <td class="{{ $td }}"><input type="text" wire:model="form.default_in_ml" wire:keydown.enter="save" class="{{ $input }} !py-1 w-20" /></td>
                             <td class="{{ $td }}"><input type="number" wire:model="form.sort_order" class="{{ $input }} !py-1 w-16" /></td>
                             <td class="{{ $td }} text-right whitespace-nowrap">
-                                <button type="button" wire:click="save" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">Speichern</button>
+                                <button type="button" wire:click="save" class="{{ $btnGhostXs }} text-violet-600">Speichern</button>
                                 <button type="button" wire:click="cancel" class="{{ $btnGhostXs }}">Abbrechen</button>
                             </td>
                         @else
-                            <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $unit->slug }}
+                            <td class="{{ $td }} font-medium text-gray-900">{{ $unit->slug }}
                                 @unless($darfEdit)<span class="ml-1.5 {{ $pill }} {{ $variantPill['secondary'] }}" title="Geerbter Katalog — Pflege nur Besitzer-Team (D1)">geerbt</span>@endunless
                             </td>
-                            <td class="{{ $td }} text-gray-700 dark:text-gray-300">{{ $unit->display_de }}</td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $unit->dimension ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $unit->default_in_g !== null ? rtrim(rtrim((string) $unit->default_in_g, '0'), '.') : '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $unit->default_in_ml !== null ? rtrim(rtrim((string) $unit->default_in_ml, '0'), '.') : '—' }}</td>
-                            <td class="{{ $td }} text-gray-500 dark:text-gray-400">{{ $unit->sort_order }}</td>
+                            <td class="{{ $td }} text-gray-700">{{ $unit->display_de }}</td>
+                            <td class="{{ $td }} text-gray-600">{{ $unit->dimension ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600">{{ $unit->default_in_g !== null ? rtrim(rtrim((string) $unit->default_in_g, '0'), '.') : '—' }}</td>
+                            <td class="{{ $td }} text-gray-600">{{ $unit->default_in_ml !== null ? rtrim(rtrim((string) $unit->default_in_ml, '0'), '.') : '—' }}</td>
+                            <td class="{{ $td }} text-gray-500">{{ $unit->sort_order }}</td>
                             <td class="{{ $td }} text-right whitespace-nowrap" data-unit-aktionen="{{ $darfEdit ? 'edit' : 'readonly' }}">
                                 @if($darfEdit)
                                     <button type="button" wire:click="edit({{ $unit->id }})" class="{{ $btnGhostXs }}">Bearbeiten</button>

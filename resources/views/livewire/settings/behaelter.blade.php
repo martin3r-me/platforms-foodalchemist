@@ -3,11 +3,11 @@
 
 <div class="space-y-6" data-settings-behaelter>
     <div>
-        <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Behälter & Geräte</h3>
-        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Behälter, Regenerations-Geräte und Servier-Vehikel (Gerichte) plus Koch-Equipment (Basisrezepte). ✕ deaktivieren · 🗑 löschen (nur wenn von keinem Rezept genutzt).</p>
+        <h3 class="font-medium tracking-tight text-gray-900">Behälter & Geräte</h3>
+        <p class="text-[11px] text-gray-500 mt-0.5">Behälter, Regenerations-Geräte und Servier-Vehikel (Gerichte) plus Koch-Equipment (Basisrezepte). ✕ deaktivieren · 🗑 löschen (nur wenn von keinem Rezept genutzt).</p>
     </div>
-    @if($fehler !== null)<p class="text-xs text-rose-600 dark:text-rose-400" data-behaelter-fehler>{{ $fehler }}</p>@endif
-    @if($meldung !== null)<p class="text-xs text-emerald-600 dark:text-emerald-400" data-behaelter-meldung>{{ $meldung }}</p>@endif
+    @if($fehler !== null)<p class="text-xs text-rose-600" data-behaelter-fehler>{{ $fehler }}</p>@endif
+    @if($meldung !== null)<p class="text-xs text-emerald-600" data-behaelter-meldung>{{ $meldung }}</p>@endif
 
     @foreach($listen as $key => $vokabular)
         <div data-vokabular="{{ $key }}">
@@ -16,7 +16,7 @@
             @foreach($vokabular['zeilen']->groupBy(fn ($z) => $z->group_name ?? 'sonstig') as $gruppe => $zeilen)
                 <div class="flex items-start gap-2 mb-1">
                     @if($vokabular['zeilen']->pluck('group_name')->filter()->isNotEmpty())
-                        <span class="shrink-0 w-28 text-[11px] text-gray-500 dark:text-gray-400 pt-0.5">{{ $gruppe }}</span>
+                        <span class="shrink-0 w-28 text-[11px] text-gray-500 pt-0.5">{{ $gruppe }}</span>
                     @endif
                     <div class="flex flex-wrap gap-1">
                         @foreach($zeilen as $zeile)
@@ -41,7 +41,7 @@
                 @if($vokabular['kapazitaet'])
                     <input type="text" wire:model="neu.{{ $key }}.kapazitaet_kg" placeholder="kg (optional)" class="{{ $input }} !py-1 w-24 text-right" />
                 @endif
-                <button type="button" wire:click="create('{{ $key }}')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-vokabular-neu="{{ $key }}">+ Anlegen</button>
+                <button type="button" wire:click="create('{{ $key }}')" class="{{ $btnGhostXs }} text-violet-600" data-vokabular-neu="{{ $key }}">+ Anlegen</button>
             </div>
         </div>
     @endforeach

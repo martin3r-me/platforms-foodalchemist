@@ -42,7 +42,7 @@
             <span class="{{ $ui['pill'] }} {{ $badge[1] }}"
                   @if($reasoning) title="{{ $reasoning }}" @endif>{{ $badge[0] }}</span>
             @if($source === 'ki' && $confidence !== null)
-                <span class="text-[11px] text-gray-500 dark:text-gray-400" data-ki-confidence>{{ round($confidence * 100) }}%</span>
+                <span class="text-[11px] text-gray-500" data-ki-confidence>{{ round($confidence * 100) }}%</span>
             @endif
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
@@ -58,7 +58,7 @@
                 </button>
             @endif
             {{-- „Manuell" entfernt (Dominique 2026-07-01): redundant — Editieren+Speichern setzt source=manual ohnehin. --}}
-            <button type="button" wire:click="ai_{{ $field }}" class="{{ $ghostBtn }} text-violet-600 dark:text-violet-400" title="KI-Vorschlag anfordern (persistiert nichts)">
+            <button type="button" wire:click="ai_{{ $field }}" class="{{ $ghostBtn }} text-violet-600" title="KI-Vorschlag anfordern (persistiert nichts)">
                 ✨ Autopilot
             </button>
         </div>

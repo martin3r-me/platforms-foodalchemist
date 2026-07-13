@@ -1,7 +1,7 @@
 {{-- M10R-2 / Doc 15 §10.2+§10.4: vereinheitlichter Concepter-Browser (Concepts | Pakete in einem Screen) --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($tabAktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300')
-@php($filterHover = 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5')
+@php($tabAktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700')
+@php($filterHover = 'text-gray-600 hover:bg-black/[0.03]')
 @php($niveauDot = ['klassisch' => 'bg-sky-400', 'gehoben' => 'bg-amber-400', 'haute' => 'bg-violet-500'])
 
 <x-ui-page>
@@ -20,11 +20,11 @@
         <x-ui-page-sidebar title="Concepter" width="w-80">
             <div class="p-3 space-y-3">
                 {{-- Umschalter Concepts | Pakete (§10.2) --}}
-                <div class="flex gap-1.5 p-0.5 rounded-lg bg-black/[0.03] dark:bg-white/5">
+                <div class="flex gap-1.5 p-0.5 rounded-lg bg-black/[0.03]">
                     <button type="button" wire:click="wechselTab('concepts')"
-                            class="flex-1 text-xs py-1 rounded-md transition-all {{ $tab === 'concepts' ? 'bg-white dark:bg-white/10 shadow-sm font-medium text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-400' }}">Concepts</button>
+                            class="flex-1 text-xs py-1 rounded-md transition-all {{ $tab === 'concepts' ? 'bg-white shadow-sm font-medium text-violet-700' : 'text-gray-600' }}">Concepts</button>
                     <button type="button" wire:click="wechselTab('pakete')"
-                            class="flex-1 text-xs py-1 rounded-md transition-all {{ $tab === 'pakete' ? 'bg-white dark:bg-white/10 shadow-sm font-medium text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-400' }}">Pakete</button>
+                            class="flex-1 text-xs py-1 rounded-md transition-all {{ $tab === 'pakete' ? 'bg-white shadow-sm font-medium text-violet-700' : 'text-gray-600' }}">Pakete</button>
                 </div>
 
                 <input type="search" wire:model.live.debounce.300ms="search"
@@ -41,7 +41,7 @@
 
                 {{-- Klasse-Filter (geteilte Dimension §10.3) --}}
                 @if(! empty($klassen))
-                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                    <div class="space-y-0.5 pt-2 border-t border-black/5">
                         <span class="{{ $label }}">Klasse</span>
                         <div class="flex flex-wrap gap-1">
                             <button type="button" wire:click="waehleKlasse('')" class="{{ $pill }} {{ $klasse === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
@@ -55,7 +55,7 @@
 
                 @if($tab === 'pakete' && ! empty($rollen))
                     {{-- Rollen-Filter (Pakete) --}}
-                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                    <div class="space-y-0.5 pt-2 border-t border-black/5">
                         <span class="{{ $label }}">Rolle</span>
                         <div class="flex flex-wrap gap-1">
                             <button type="button" wire:click="waehleRolle('')" class="{{ $pill }} {{ $rolleFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
@@ -69,7 +69,7 @@
 
                 @if($tab === 'concepts')
                     {{-- Facetten-Filter (Umbau-Spec Phase 4b): Eventtyp · Servierform · Einsatzmoment · Saison --}}
-                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                    <div class="space-y-0.5 pt-2 border-t border-black/5">
                         <span class="{{ $label }}">Eventtyp</span>
                         <div class="flex flex-wrap gap-1">
                             <button type="button" wire:click="waehleFacette('eventtypFilter', '')" class="{{ $pill }} {{ $eventtypFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
@@ -79,7 +79,7 @@
                             @endforeach
                         </div>
                     </div>
-                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                    <div class="space-y-0.5 pt-2 border-t border-black/5">
                         <span class="{{ $label }}">Servierform</span>
                         <div class="flex flex-wrap gap-1">
                             @foreach($facetteServierformen as $sf)
@@ -88,7 +88,7 @@
                             @endforeach
                         </div>
                     </div>
-                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                    <div class="space-y-0.5 pt-2 border-t border-black/5">
                         <span class="{{ $label }}">Einsatzmoment</span>
                         <div class="flex flex-wrap gap-1">
                             @foreach($facetteMomente as $em)
@@ -97,7 +97,7 @@
                             @endforeach
                         </div>
                     </div>
-                    <div class="space-y-0.5 pt-2 border-t border-black/5 dark:border-white/10">
+                    <div class="space-y-0.5 pt-2 border-t border-black/5">
                         <span class="{{ $label }}">Saison</span>
                         <div class="flex flex-wrap gap-1">
                             @foreach($facetteSaisons as $sa)
@@ -152,20 +152,20 @@
                         <tr wire:key="row-{{ $tab }}-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
                             x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $selectedId === $it->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}">
-                            <td wire:click.stop="bearbeite({{ $it->id }})" class="{{ $td }} font-medium text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer" title="Editor öffnen">
+                            <td wire:click.stop="bearbeite({{ $it->id }})" class="{{ $td }} font-medium text-gray-900 hover:text-violet-600 cursor-pointer" title="Editor öffnen">
                                 @if($it->level)<span class="inline-block w-1.5 h-1.5 rounded-full {{ $niveauDot[$it->level] ?? 'bg-gray-300' }} mr-1 align-middle" title="Niveau: {{ $it->level }}"></span>@endif
                                 {{ $it->name }}
                                 @if($tab === 'concepts' && $it->is_template)<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Vorlage</span>@endif
                             </td>
                             @if($tab === 'pakete')
-                                <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $it->role ?: '—' }}</td>
-                                <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $it->class ?: '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $it->gerichte_count }}</td>
+                                <td class="{{ $td }} text-gray-600">{{ $it->role ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-600">{{ $it->class ?: '—' }}</td>
+                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->gerichte_count }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person !== null ? number_format((float) $it->price_per_person, 2, ',', '.') . ' €' : '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $it->food_cost_percent !== null ? number_format((float) $it->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
+                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->food_cost_percent !== null ? number_format((float) $it->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
                             @else
-                                <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $it->class ?: '—' }}</td>
-                                <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-600">{{ $it->class ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-600">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
                                 {{-- Inline-Status-Pflege wie bei GP (Concepts; Server gated canCurate/D1) --}}
                                 <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                     @php($stMap = ['draft' => $variantPill['secondary'], 'active' => $variantPill['success'], 'archiviert' => $variantPill['warning']])
@@ -180,12 +180,12 @@
                                         <span class="{{ $pill }} {{ $stMap[$it->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'][$it->status] ?? $it->status }}</span>
                                     @endif
                                 </td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $it->slots_count }}</td>
+                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->slots_count }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person_cache !== null ? number_format((float) $it->price_per_person_cache, 2, ',', '.') . ' €' : '—' }}</td>
                             @endif
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                        <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-500">
                             {{ $tab === 'pakete' ? 'Keine Pakete. Oben „+ Neues Paket".' : ($showVorlagen ? 'Keine Vorlagen.' : 'Keine Concepts. Oben „+ Neues Concept".') }}
                         </td></tr>
                     @endforelse

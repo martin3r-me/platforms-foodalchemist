@@ -18,7 +18,7 @@
             <div class="p-3 space-y-3">
                 <input type="search" wire:model.live.debounce.300ms="search" placeholder="Angebot/Anfrage suchen …" class="{{ $input }}" />
 
-                <div class="space-y-1 pt-2 border-t border-black/5 dark:border-white/10">
+                <div class="space-y-1 pt-2 border-t border-black/5">
                     <span class="{{ $label }}">Status</span>
                     <div class="flex flex-wrap gap-1">
                         <button type="button" wire:click="waehleStatus('')" class="{{ $pill }} {{ $statusFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
@@ -59,17 +59,17 @@
                         <tr wire:key="ang-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
                             x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $selectedId === $it->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}">
-                            <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $it->name }}</td>
+                            <td class="{{ $td }} font-medium text-gray-900">{{ $it->name }}</td>
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ $variantPill[$it->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $it->status->label() }}</span>
                             </td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $it->occasion ?: '—' }}</td>
-                            <td class="{{ $td }} text-right tabular-nums text-gray-600 dark:text-gray-400">{{ $it->personen ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $it->event_date ? $it->event_date->format('d.m.Y') : '—' }}</td>
+                            <td class="{{ $td }} text-gray-600">{{ $it->occasion ?: '—' }}</td>
+                            <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->personen ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600">{{ $it->event_date ? $it->event_date->format('d.m.Y') : '—' }}</td>
                             <td class="{{ $td }} text-right tabular-nums">{{ $it->total_price !== null ? number_format((float) $it->total_price, 2, ',', '.') . ' €' : '—' }}</td>
                         </tr>
                     @empty
-                        <tr wire:key="ang-empty"><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-500 dark:text-gray-400">Keine Angebote. Oben „+ Neue Anfrage".</td></tr>
+                        <tr wire:key="ang-empty"><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-500">Keine Angebote. Oben „+ Neue Anfrage".</td></tr>
                     @endforelse
                 </tbody>
             </table>

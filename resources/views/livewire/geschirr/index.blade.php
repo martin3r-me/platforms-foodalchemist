@@ -26,19 +26,19 @@
                         <input type="checkbox" wire:model.live="includeInactive" class="rounded border-gray-300" /> Inaktive zeigen
                     </label>
                     <button type="button" @click="$dispatch('modal.open', { name: 'g-lieferant-neu' })"
-                            class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-neuer-lieferant-btn>+ Lieferant</button>
+                            class="{{ $btnGhostXs }} text-violet-600" data-neuer-lieferant-btn>+ Lieferant</button>
                 </div>
                 <div class="space-y-0.5 -mx-1">
                     @forelse($lieferanten as $l)
                         <button type="button" wire:key="gsup-{{ $l->id }}" wire:click="waehleLieferant({{ $l->id }})"
                                 class="w-full px-2 py-1.5 rounded-lg text-left transition-all duration-150 {{ !$globaleSuche && $supplierId === $l->id
                                     ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10'
-                                    : 'hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
-                            <span class="block text-xs {{ $l->is_inactive ? 'text-gray-500 dark:text-gray-400 line-through' : 'text-gray-700 dark:text-gray-200' }} truncate">{{ $l->name }}</span>
-                            <span class="block text-[11px] text-gray-500 dark:text-gray-400">{{ number_format($l->item_count, 0, ',', '.') }} Artikel</span>
+                                    : 'hover:bg-black/[0.03]' }}">
+                            <span class="block text-xs {{ $l->is_inactive ? 'text-gray-500 line-through' : 'text-gray-700' }} truncate">{{ $l->name }}</span>
+                            <span class="block text-[11px] text-gray-500">{{ number_format($l->item_count, 0, ',', '.') }} Artikel</span>
                         </button>
                     @empty
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-3">Noch kein Leih-Lieferant — „+ Lieferant" anlegen.</p>
+                        <p class="text-[11px] text-gray-500 px-2 py-3">Noch kein Leih-Lieferant — „+ Lieferant" anlegen.</p>
                     @endforelse
                 </div>
             </div>
@@ -48,7 +48,7 @@
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         {{-- Kopf-Aktionen --}}
         <div class="flex items-center justify-between gap-3 pt-1">
-            <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100 min-w-0 truncate">
+            <h3 class="font-medium tracking-tight text-gray-900 min-w-0 truncate">
                 @if($globaleSuche) Suche „{{ $q }}" über alle Lieferanten
                 @else {{ $aktiverLieferant?->name ?? '—' }}
                 @endif
@@ -66,7 +66,7 @@
                 <label class="flex items-center gap-2 {{ $label }} cursor-pointer">
                     <input type="checkbox" wire:model.live="onlyActive" class="rounded border-gray-300" /> Nur aktive
                 </label>
-                <button type="button" wire:click="artikelNeu" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-neuer-artikel-btn>+ Neuer Artikel</button>
+                <button type="button" wire:click="artikelNeu" class="{{ $btnGhostXs }} text-violet-600" data-neuer-artikel-btn>+ Neuer Artikel</button>
             </div>
         </div>
 
@@ -74,10 +74,10 @@
         <div class="relative overflow-hidden {{ $card }}" data-geschirr-tabelle>
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Geschirr-Artikel</h3>
+                <h3 class="font-medium tracking-tight text-gray-900">Geschirr-Artikel</h3>
                 <span class="{{ $label }} flex items-center gap-2">
                     {{ $artikel ? number_format($artikel->total(), 0, ',', '.') : 0 }} Treffer ·
-                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer focus:ring-0" data-per-page>
+                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 cursor-pointer focus:ring-0" data-per-page>
                         @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
                     </select>
                 </span>
@@ -96,20 +96,20 @@
                     @forelse($artikel ?? [] as $item)
                         <tr wire:key="gitem-{{ $item->id }}" class="{{ $tr }}">
                             @if($globaleSuche)
-                                <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $item->supplier?->name ?? '—' }}</td>
+                                <td class="{{ $td }} text-gray-600">{{ $item->supplier?->name ?? '—' }}</td>
                             @endif
-                            <td class="{{ $td }} font-mono text-[11px] text-gray-600 dark:text-gray-400">{{ $item->artikel_nr ?? '—' }}</td>
+                            <td class="{{ $td }} font-mono text-[11px] text-gray-600">{{ $item->artikel_nr ?? '—' }}</td>
                             <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" title="{{ $item->label }}">
                                 <button type="button" wire:click="artikelOeffnen({{ $item->id }})"
-                                        class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150 truncate max-w-full text-left">{{ $item->label }}</button>
+                                        class="text-gray-900 hover:text-violet-600 transition-colors duration-150 truncate max-w-full text-left">{{ $item->label }}</button>
                             </td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ $item->category ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ $item->material ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap text-[11px]">{{ $item->masse_label ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-900 dark:text-gray-100 whitespace-nowrap text-right tabular-nums">
+                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $item->category ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $item->material ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 whitespace-nowrap text-[11px]">{{ $item->masse_label ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-900 whitespace-nowrap text-right tabular-nums">
                                 {{ $item->rental_price !== null ? number_format((float) $item->rental_price, 2, ',', '.') . ' €' : '—' }}
                             </td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap text-right tabular-nums">
+                            <td class="{{ $td }} text-gray-600 whitespace-nowrap text-right tabular-nums">
                                 {{ $item->pfand !== null ? number_format((float) $item->pfand, 2, ',', '.') . ' €' : '—' }}
                             </td>
                             <td class="{{ $td }}">
@@ -122,19 +122,19 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-500 dark:text-gray-400">Kein Geschirr gefunden.</td></tr>
+                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-500">Kein Geschirr gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>
             </div>
             @if($artikel)
-                <div class="px-5 py-3 border-t border-black/5 dark:border-white/10">{{ $artikel->links() }}</div>
+                <div class="px-5 py-3 border-t border-black/5">{{ $artikel->links() }}</div>
             @endif
         </div>
 
         {{-- Neuer Leih-Lieferant --}}
         <x-foodalchemist::modal name="g-lieferant-neu" title="Neuer Leih-Lieferant" size="max-w-2xl">
-            @if($fehler)<p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
+            @if($fehler)<p class="text-xs text-red-600">{{ $fehler }}</p>@endif
             <x-foodalchemist::modal-section title="Stammdaten">
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Name *</label>
@@ -146,7 +146,7 @@
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Bestell-E-Mail</label>
                         <input type="text" wire:model="neuLieferant.email_order" class="{{ $input }}" /></div>
                 </div>
-                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-2">Gehört deinem Team. Geschirr danach über „+ Neuer Artikel".</p>
+                <p class="text-[11px] text-gray-500 mt-2">Gehört deinem Team. Geschirr danach über „+ Neuer Artikel".</p>
             </x-foodalchemist::modal-section>
             <x-slot:footer>
                 <button type="button" @click="$dispatch('modal.close', { name: 'g-lieferant-neu' })" class="{{ $btnGhost }}">Abbrechen</button>
@@ -156,7 +156,7 @@
 
         {{-- Leih-Lieferant bearbeiten --}}
         <x-foodalchemist::modal name="g-lieferant-edit" title="Leih-Lieferant bearbeiten" size="max-w-2xl">
-            @if($fehler)<p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
+            @if($fehler)<p class="text-xs text-red-600">{{ $fehler }}</p>@endif
             <x-foodalchemist::modal-section title="Stammdaten">
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Name *</label>
@@ -185,7 +185,7 @@
 
         {{-- Geschirr-Artikel: Neu + Bearbeiten geteilt --}}
         <x-foodalchemist::modal name="g-artikel" title="Geschirr-Artikel" size="max-w-3xl">
-            @if($fehler)<p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p>@endif
+            @if($fehler)<p class="text-xs text-red-600">{{ $fehler }}</p>@endif
             <x-foodalchemist::modal-section title="Artikel">
                 <div class="grid grid-cols-3 gap-3">
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Bezeichnung *</label>

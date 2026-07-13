@@ -21,19 +21,19 @@
             {{-- ── Bibliothek ─────────────────────────────────────────────── --}}
             <div class="relative overflow-hidden {{ $card }} self-start">
                 <div class="{{ $cardAccent }}"></div>
-                <div class="flex items-center justify-between px-4 py-3 border-b border-black/5 dark:border-white/10">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-black/5">
                     <p class="{{ $label }}">Kalkulationen</p>
                     <button type="button" wire:click="neueKalkulation" class="{{ $btnGhostXs }}">+ Neu</button>
                 </div>
-                <div class="divide-y divide-black/5 dark:divide-white/10 max-h-[70vh] overflow-y-auto">
+                <div class="divide-y divide-black/5 max-h-[70vh] overflow-y-auto">
                     @forelse($kalkulationen as $k)
                         <button type="button" wire:key="kalk-{{ $k->id }}" wire:click="waehle({{ $k->id }})"
-                            class="w-full text-left px-4 py-2.5 transition-colors {{ $selectedId === $k->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : 'hover:bg-black/[0.02] dark:hover:bg-white/5' }}">
-                            <div class="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">{{ $k->title }}</div>
-                            <div class="text-[10px] text-gray-500 dark:text-gray-400">{{ $k->positionen_count }} {{ $k->positionen_count === 1 ? 'Position' : 'Positionen' }}</div>
+                            class="w-full text-left px-4 py-2.5 transition-colors {{ $selectedId === $k->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : 'hover:bg-black/[0.02]' }}">
+                            <div class="text-xs font-medium text-gray-900 truncate">{{ $k->title }}</div>
+                            <div class="text-[10px] text-gray-500">{{ $k->positionen_count }} {{ $k->positionen_count === 1 ? 'Position' : 'Positionen' }}</div>
                         </button>
                     @empty
-                        <p class="px-4 py-8 text-center text-xs text-gray-500 dark:text-gray-400">Noch keine Kalkulation.<br>Mit <strong>+ Neu</strong> anlegen.</p>
+                        <p class="px-4 py-8 text-center text-xs text-gray-500">Noch keine Kalkulation.<br>Mit <strong>+ Neu</strong> anlegen.</p>
                     @endforelse
                 </div>
             </div>
@@ -41,7 +41,7 @@
             {{-- ── Editor ─────────────────────────────────────────────────── --}}
             @if($active === null)
                 <div class="relative overflow-hidden {{ $card }} flex items-center justify-center min-h-[40vh]">
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Links eine Kalkulation wählen oder <strong>+ Neu</strong> anlegen.</p>
+                    <p class="text-sm text-gray-500">Links eine Kalkulation wählen oder <strong>+ Neu</strong> anlegen.</p>
                 </div>
             @else
                 <div class="space-y-4">
@@ -59,7 +59,7 @@
                             </div>
                             <button type="button" wire:click="speichereKopf" class="{{ $btnPrimary }}">Speichern</button>
                             <button type="button" wire:click="loeschen({{ $active->id }})" wire:confirm="Diese Kalkulation löschen?" class="{{ $btnGhost }} !text-red-500">Löschen</button>
-                            @if($meldung)<span class="text-[11px] text-emerald-600 dark:text-emerald-400">{{ $meldung }}</span>@endif
+                            @if($meldung)<span class="text-[11px] text-emerald-600">{{ $meldung }}</span>@endif
                         </div>
                         <div class="mt-3">
                             <label class="{{ $label }}">Notiz</label>
@@ -99,24 +99,24 @@
                                                     wire:change="updatePos({{ $p['id'] }}, 'einzel_ek', $event.target.value)"
                                                     class="{{ $input }} !py-1 !w-24 text-right tabular-nums" />
                                             </td>
-                                            <td class="{{ $td }} text-right tabular-nums font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">{{ number_format($p['wareneinsatz'], 2, ',', '.') }} €</td>
-                                            <td class="{{ $td }} text-right tabular-nums text-gray-500 dark:text-gray-400">{{ $p['work_time_min'] !== null ? $p['work_time_min'] : '—' }}</td>
+                                            <td class="{{ $td }} text-right tabular-nums font-medium text-gray-900 whitespace-nowrap">{{ number_format($p['wareneinsatz'], 2, ',', '.') }} €</td>
+                                            <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $p['work_time_min'] !== null ? $p['work_time_min'] : '—' }}</td>
                                             <td class="{{ $td }} whitespace-nowrap text-right">
                                                 @if($p['type'] !== 'frei')
-                                                    <button type="button" wire:click="aktualisierePos({{ $p['id'] }})" title="Snapshot neu ziehen" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 mr-1">↻</button>
+                                                    <button type="button" wire:click="aktualisierePos({{ $p['id'] }})" title="Snapshot neu ziehen" class="text-gray-500 hover:text-violet-500 mr-1">↻</button>
                                                 @endif
-                                                <button type="button" wire:click="entfernePos({{ $p['id'] }})" title="Entfernen" class="text-gray-500 dark:text-gray-400 hover:text-red-500">✕</button>
+                                                <button type="button" wire:click="entfernePos({{ $p['id'] }})" title="Entfernen" class="text-gray-500 hover:text-red-500">✕</button>
                                             </td>
                                         </tr>
                                     @empty
-                                        <tr><td colspan="8" class="px-5 py-8 text-center text-gray-500 dark:text-gray-400">Noch keine Positionen — unten hinzufügen.</td></tr>
+                                        <tr><td colspan="8" class="px-5 py-8 text-center text-gray-500">Noch keine Positionen — unten hinzufügen.</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>
                         </div>
 
                         {{-- Hinzufügen --}}
-                        <div class="px-4 py-3 border-t border-black/5 dark:border-white/10 bg-black/[0.015] dark:bg-white/[0.02]">
+                        <div class="px-4 py-3 border-t border-black/5 bg-black/[0.015]">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="{{ $label }}">Position hinzufügen:</span>
                                 @foreach(['gericht', 'basisrezept', 'gp', 'frei'] as $t)
@@ -137,7 +137,7 @@
                                         <button type="button" wire:key="q-{{ $addTyp }}-{{ $q['id'] }}" wire:click="addPosition({{ $q['id'] }})"
                                             class="{{ $btnGhostXs }}">+ {{ $q['label'] }}</button>
                                     @empty
-                                        <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ $addSuche !== '' ? 'Nichts gefunden.' : 'Tippe zum Suchen oder wähle aus der Liste.' }}</span>
+                                        <span class="text-[11px] text-gray-500">{{ $addSuche !== '' ? 'Nichts gefunden.' : 'Tippe zum Suchen oder wähle aus der Liste.' }}</span>
                                     @endforelse
                                 </div>
                             @endif
@@ -149,26 +149,26 @@
                         <div class="{{ $cardAccent }}"></div>
                         <p class="{{ $label }} mb-2">Kalkulation · Marge {{ rtrim(rtrim(number_format((float) $berechnung['marge_pct'], 2, ',', '.'), '0'), ',') }} %{{ $active->margin_override_pct !== null ? ' (Override)' : '' }}</p>
                         <div class="max-w-md space-y-1">
-                            <div class="flex items-center justify-between text-xs py-0.5 font-medium text-gray-900 dark:text-gray-100">
+                            <div class="flex items-center justify-between text-xs py-0.5 font-medium text-gray-900">
                                 <span>HK1 — Wareneinsatz (Σ Positionen)</span>
                                 <span class="tabular-nums">{{ number_format((float) $berechnung['hk1'], 2, ',', '.') }} €</span>
                             </div>
                             @foreach($berechnung['bloecke'] as $blk)
                                 @if($blk['key'] !== 'we')
-                                    <div class="flex items-center justify-between text-xs py-0.5 text-gray-600 dark:text-gray-300">
+                                    <div class="flex items-center justify-between text-xs py-0.5 text-gray-600">
                                         <span>+ {{ $blk['label'] }}</span>
                                         <span class="tabular-nums">{{ number_format((float) $blk['betrag'], 2, ',', '.') }} €</span>
                                     </div>
                                 @endif
                             @endforeach
-                            <div class="flex items-center justify-between text-sm py-1.5 border-t border-black/10 dark:border-white/10 font-semibold text-gray-900 dark:text-gray-100">
+                            <div class="flex items-center justify-between text-sm py-1.5 border-t border-black/10 font-semibold text-gray-900">
                                 <span>= HK2 (Selbstkosten)</span><span class="tabular-nums">{{ number_format((float) $berechnung['hk2'], 2, ',', '.') }} €</span>
                             </div>
                             <div class="flex items-center justify-between text-sm">
-                                <span class="text-gray-600 dark:text-gray-400">VK-Vorschlag (HK2 × Marge)</span>
-                                <span class="tabular-nums text-violet-700 dark:text-violet-300 font-medium">{{ number_format((float) $berechnung['vk_vorschlag'], 2, ',', '.') }} €</span>
+                                <span class="text-gray-600">VK-Vorschlag (HK2 × Marge)</span>
+                                <span class="tabular-nums text-violet-700 font-medium">{{ number_format((float) $berechnung['vk_vorschlag'], 2, ',', '.') }} €</span>
                             </div>
-                            <p class="text-[10px] text-gray-500 dark:text-gray-400 pt-1">Arbeitszeit-Rollup: {{ number_format((float) $berechnung['work_time_min'], 0, ',', '.') }} min · nicht-lineare Skalierung folgt mit der KI. Sätze/Gemeinkosten in Einstellungen → Kalkulation.</p>
+                            <p class="text-[10px] text-gray-500 pt-1">Arbeitszeit-Rollup: {{ number_format((float) $berechnung['work_time_min'], 0, ',', '.') }} min · nicht-lineare Skalierung folgt mit der KI. Sätze/Gemeinkosten in Einstellungen → Kalkulation.</p>
                         </div>
                     </div>
                 </div>

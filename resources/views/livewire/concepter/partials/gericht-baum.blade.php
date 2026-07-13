@@ -3,9 +3,9 @@
      $pickHauptgruppen, $pickHgCounts, $pickKlassen, $pickKlassenCounts. UI-Maps + pickHg/pickKlasse/
      pickGeschmack erbt der Include aus dem Editor-Scope. --}}
 @php($pillBtn = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors')
-@php($pillOn = 'bg-violet-500/15 border-violet-500/40 text-violet-700 dark:text-violet-300')
-@php($pillOff = 'bg-black/[0.03] dark:bg-white/5 border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300')
-<div class="space-y-1.5 rounded-lg bg-black/[0.02] dark:bg-white/[0.03] p-2">
+@php($pillOn = 'bg-violet-500/15 border-violet-500/40 text-violet-700')
+@php($pillOff = 'bg-black/[0.03] border-transparent text-gray-600 hover:text-gray-700')
+<div class="space-y-1.5 rounded-lg bg-black/[0.02] p-2">
     <input type="search" wire:model.live.debounce.300ms="{{ $sucheModel }}" placeholder="Gericht suchen — oder unten nach Gruppe browsen …" class="{{ $input }}" />
 
     {{-- VK-Hauptgruppen --}}
@@ -34,7 +34,7 @@
 
     {{-- Geschmack --}}
     <div class="flex flex-wrap items-center gap-1">
-        <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-0.5">Geschmack</span>
+        <span class="text-[10px] text-gray-500 uppercase tracking-wider mr-0.5">Geschmack</span>
         @foreach(['suess' => 'süß', 'herzhaft' => 'herzhaft', 'neutral' => 'neutral'] as $v => $l)
             <button type="button" wire:click="pickGeschmackWaehle('{{ $v }}')"
                     class="{{ $pillBtn }} {{ $pickGeschmack === $v ? $pillOn : $pillOff }}">{{ $l }}</button>
@@ -43,7 +43,7 @@
 
     {{-- R4.2: Diät (kanonische diet_form-Achse) — auch Ziel des Coverage-Lücken-Klicks --}}
     <div class="flex flex-wrap items-center gap-1" data-pick-diaet>
-        <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-0.5">Diät</span>
+        <span class="text-[10px] text-gray-500 uppercase tracking-wider mr-0.5">Diät</span>
         @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameRule::DIET_FORMS as $v)
             <button type="button" wire:click="pickDiaetWaehle('{{ $v }}')"
                     class="{{ $pillBtn }} {{ $pickDiaet === $v ? $pillOn : $pillOff }}">{{ $v }}</button>

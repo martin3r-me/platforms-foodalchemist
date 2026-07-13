@@ -7,23 +7,23 @@
         {{-- Kopf --}}
         <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
-                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{{ $angebot->name }}</div>
+                <div class="text-sm font-semibold text-gray-900 truncate">{{ $angebot->name }}</div>
                 <span class="{{ $pill }} {{ $variantPill[$angebot->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $angebot->status->label() }}</span>
             </div>
             <div class="flex items-center gap-1 shrink-0">
                 <a href="{{ route('foodalchemist.angebote.dokument', $angebot->id) }}" target="_blank" class="{{ $btnGhostXs }}" title="Versendbares Angebots-Dokument (Druck/PDF)">Dokument</a>
-                <button type="button" wire:click="loeschen" wire:confirm="Angebot löschen?" class="{{ $btnGhostXs }} text-red-600 dark:text-red-400">Löschen</button>
+                <button type="button" wire:click="loeschen" wire:confirm="Angebot löschen?" class="{{ $btnGhostXs }} text-red-600">Löschen</button>
             </div>
         </div>
 
         {{-- #380: Lifecycle-Workflow (anfrage → in Arbeit → Angebot → versendet → angenommen|abgelehnt) --}}
-        <div class="flex flex-wrap items-center gap-1.5 pb-1 border-b border-black/5 dark:border-white/10">
+        <div class="flex flex-wrap items-center gap-1.5 pb-1 border-b border-black/5">
             <span class="{{ $label }}">Workflow</span>
             <span class="{{ $pill }} {{ $variantPill[$angebot->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $angebot->status->label() }}</span>
             @forelse($angebot->status->uebergaenge() as $next)
                 <button type="button" wire:click="statusSetzen('{{ $next->value }}')" class="{{ $btnGhostXs }}">→ {{ $next->label() }}</button>
             @empty
-                <span class="text-[11px] text-gray-500 dark:text-gray-400">— abgeschlossen —</span>
+                <span class="text-[11px] text-gray-500">— abgeschlossen —</span>
             @endforelse
         </div>
 
@@ -44,10 +44,10 @@
 
         {{-- #383: Kalkulation (Pax × Menü) — aggregiert die Concepter-Engine --}}
         @if($kalkulation)
-        <div class="space-y-2 pt-2 border-t border-black/5 dark:border-white/10">
+        <div class="space-y-2 pt-2 border-t border-black/5">
             <span class="{{ $label }}">Kalkulation (Pax × Menü)</span>
             @if($kalkulation['leer'])
-                <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch kein Menü (unten „+ Menü"). Pax: {{ $kalkulation['pax'] ?: '—' }}.</p>
+                <p class="text-[11px] text-gray-500">Noch kein Menü (unten „+ Menü"). Pax: {{ $kalkulation['pax'] ?: '—' }}.</p>
             @else
                 <div class="grid grid-cols-2 gap-x-3">
                     <div class="{{ $row }}"><span class="{{ $dt }}">€/Person</span><span class="{{ $dd }} tabular-nums">{{ number_format($kalkulation['vk_pro_person'],2,',','.') }} €</span></div>
@@ -56,10 +56,10 @@
                     <div class="{{ $row }}"><span class="{{ $dt }}">HK2/P</span><span class="{{ $dd }} tabular-nums">{{ number_format($kalkulation['hk2_pro_person'],2,',','.') }} €</span></div>
                 </div>
                 <div class="flex items-center justify-between rounded-lg bg-violet-500/5 px-3 py-2">
-                    <span class="text-xs text-gray-600 dark:text-gray-400">Gesamt · {{ $kalkulation['price_mode']==='auto' ? 'auto' : 'manuell' }}</span>
-                    <span class="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ number_format($kalkulation['gesamt_vk'],2,',','.') }} €</span>
+                    <span class="text-xs text-gray-600">Gesamt · {{ $kalkulation['price_mode']==='auto' ? 'auto' : 'manuell' }}</span>
+                    <span class="text-sm font-semibold tabular-nums text-gray-900">{{ number_format($kalkulation['gesamt_vk'],2,',','.') }} €</span>
                 </div>
-                <div class="text-[11px] text-gray-500 dark:text-gray-400 text-right">Deckungsbeitrag {{ number_format($kalkulation['gesamt_db'],2,',','.') }} € · EK {{ number_format($kalkulation['gesamt_ek'],2,',','.') }} €</div>
+                <div class="text-[11px] text-gray-500 text-right">Deckungsbeitrag {{ number_format($kalkulation['gesamt_db'],2,',','.') }} € · EK {{ number_format($kalkulation['gesamt_ek'],2,',','.') }} €</div>
             @endif
             <div class="grid grid-cols-2 gap-2">
                 <div><label class="{{ $label }}">Preis-Modus</label>
@@ -88,14 +88,14 @@
         </x-foodalchemist::modal>
 
         {{-- CRM-Verknüpfung (MVP: nur verlinken) --}}
-        <div class="space-y-2 pt-3 border-t border-black/5 dark:border-white/10">
+        <div class="space-y-2 pt-3 border-t border-black/5">
             <span class="{{ $label }}">Kunde (CRM)</span>
             @if(! $crmVerfuegbar)
-                <p class="text-[11px] text-gray-500 dark:text-gray-400">CRM-Modul nicht verfügbar.</p>
+                <p class="text-[11px] text-gray-500">CRM-Modul nicht verfügbar.</p>
             @else
-                <div class="text-xs text-gray-600 dark:text-gray-300 space-y-0.5">
-                    <div>Firma: <span class="font-medium text-gray-900 dark:text-gray-100">{{ $angebot->crmCompany?->display_name ?? '—' }}</span></div>
-                    <div>Kontakt: <span class="font-medium text-gray-900 dark:text-gray-100">{{ $angebot->crmContact?->display_name ?? '—' }}</span></div>
+                <div class="text-xs text-gray-600 space-y-0.5">
+                    <div>Firma: <span class="font-medium text-gray-900">{{ $angebot->crmCompany?->display_name ?? '—' }}</span></div>
+                    <div>Kontakt: <span class="font-medium text-gray-900">{{ $angebot->crmContact?->display_name ?? '—' }}</span></div>
                     @if($angebot->crm_company_id || $angebot->crm_contact_id)
                         <button type="button" wire:click="loeseKunde" class="{{ $btnGhostXs }} mt-1">Verknüpfung lösen</button>
                     @endif
@@ -122,42 +122,42 @@
         </div>
 
         {{-- Menü-Composer: angebots-lokale Menüs, gebaut im wiederverwendeten Concepter-Editor (#380) --}}
-        <div class="space-y-1.5 pt-3 border-t border-black/5 dark:border-white/10">
+        <div class="space-y-1.5 pt-3 border-t border-black/5">
             <div class="flex items-center justify-between">
                 <span class="{{ $label }}">Menü (angebots-lokal)</span>
                 <button type="button" wire:click="neuesMenue" class="{{ $btnGhostXs }}">+ Menü</button>
             </div>
             @forelse($angebot->concepts as $c)
-                <div wire:key="amc-{{ $c->id }}" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/[0.03] dark:bg-white/5 text-xs">
+                <div wire:key="amc-{{ $c->id }}" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/[0.03] text-xs">
                     <button type="button" wire:click="bearbeiteMenue({{ $c->id }})"
-                            class="flex-1 min-w-0 text-left truncate hover:text-violet-600 dark:hover:text-violet-400" title="Im Concepter-Editor bearbeiten">
-                        {{ $c->name }} <span class="text-gray-500 dark:text-gray-400">· {{ $c->slots_count }} Pos.</span>
+                            class="flex-1 min-w-0 text-left truncate hover:text-violet-600" title="Im Concepter-Editor bearbeiten">
+                        {{ $c->name }} <span class="text-gray-500">· {{ $c->slots_count }} Pos.</span>
                     </button>
                     <button type="button" wire:click="uebernehmeMenue({{ $c->id }})" class="{{ $btnGhostXs }}"
                             title="In den Concepter-Katalog übernehmen (standardisieren)">übernehmen</button>
                     <button type="button" wire:click="entferneMenue({{ $c->id }})" wire:confirm="Menü entfernen?"
-                            class="text-gray-500 dark:text-gray-400 hover:text-red-500 shrink-0">✕</button>
+                            class="text-gray-500 hover:text-red-500 shrink-0">✕</button>
                 </div>
             @empty
-                <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch kein Menü. „+ Menü" legt einen angebots-lokalen Entwurf an (im Concepter-Editor bearbeitbar); „übernehmen" standardisiert ihn in den Katalog.</p>
+                <p class="text-[11px] text-gray-500">Noch kein Menü. „+ Menü" legt einen angebots-lokalen Entwurf an (im Concepter-Editor bearbeitbar); „übernehmen" standardisiert ihn in den Katalog.</p>
             @endforelse
         </div>
 
         {{-- #380 DoD-5: Katalog-Concepts referenzieren — Picker im Livewire-sicheren Modal
              (roomy, escaped das enge Panel; der x-teleport-Drawer brach die Live-Suche, weil
              Livewire-morph teleportierten Inhalt nicht zuverlässig aktualisiert). --}}
-        <div class="space-y-1.5 pt-3 border-t border-black/5 dark:border-white/10">
+        <div class="space-y-1.5 pt-3 border-t border-black/5">
             <div class="flex items-center justify-between">
                 <span class="{{ $label }}">Aus Katalog (referenziert)</span>
-                <button type="button" @click="$dispatch('modal.open', { name: 'angebot-katalog' })" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">+ Concept einbinden</button>
+                <button type="button" @click="$dispatch('modal.open', { name: 'angebot-katalog' })" class="{{ $btnGhostXs }} text-violet-600">+ Concept einbinden</button>
             </div>
             @forelse($angebot->referencedConcepts as $rc)
-                <div wire:key="refc-{{ $rc->id }}" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/[0.03] dark:bg-white/5 text-xs">
-                    <span class="flex-1 min-w-0 truncate">{{ $rc->consumer_name ?: $rc->name }} <span class="text-gray-500 dark:text-gray-400">· {{ $rc->slots_count ?? 0 }} Pos.</span></span>
-                    <button type="button" wire:click="entferneReferenz({{ $rc->id }})" class="text-gray-500 dark:text-gray-400 hover:text-red-500 shrink-0" title="Referenz lösen">✕</button>
+                <div wire:key="refc-{{ $rc->id }}" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/[0.03] text-xs">
+                    <span class="flex-1 min-w-0 truncate">{{ $rc->consumer_name ?: $rc->name }} <span class="text-gray-500">· {{ $rc->slots_count ?? 0 }} Pos.</span></span>
+                    <button type="button" wire:click="entferneReferenz({{ $rc->id }})" class="text-gray-500 hover:text-red-500 shrink-0" title="Referenz lösen">✕</button>
                 </div>
             @empty
-                <p class="text-[11px] text-gray-500 dark:text-gray-400">Keine referenziert. „+ Concept einbinden" öffnet den Katalog-Filter (Portfolio wiederverwenden).</p>
+                <p class="text-[11px] text-gray-500">Keine referenziert. „+ Concept einbinden" öffnet den Katalog-Filter (Portfolio wiederverwenden).</p>
             @endforelse
         </div>
 
@@ -165,9 +165,9 @@
         <x-foodalchemist::modal name="angebot-katalog" title="Katalog-Concept einbinden" size="max-w-3xl">
             <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-3" />
             <div class="flex gap-3 min-h-[20rem]">
-                <div class="w-44 shrink-0 overflow-y-auto border-r border-black/5 dark:border-white/10 pr-2 space-y-0.5 max-h-[26rem]">
+                <div class="w-44 shrink-0 overflow-y-auto border-r border-black/5 pr-2 space-y-0.5 max-h-[26rem]">
                     <button type="button" wire:click="$set('conceptKategorie', null)"
-                            class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $conceptKategorie === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">Alle Kategorien</button>
+                            class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $conceptKategorie === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">Alle Kategorien</button>
                     <x-foodalchemist::tree :initial-collapsed="collect($conceptKategorien)->where('has_children', true)->pluck('id')->all()">
                         @foreach($conceptKategorien as $kat)
                             <x-foodalchemist::tree-node :node-id="$kat['id']" :depth="$kat['depth']" :ancestors="$kat['ancestors'] ?? []"
@@ -182,14 +182,14 @@
                         @foreach($katalogTreffer as $kt)
                             <button type="button" wire:key="acd-{{ $kt->id }}" wire:click="referenziereConcept({{ $kt->id }})"
                                     class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                <span class="truncate text-gray-900 dark:text-gray-100">+ {{ $kt->name }}</span>
-                                <span class="text-gray-500 dark:text-gray-400 tabular-nums shrink-0">{{ $kt->price_per_person_cache !== null ? number_format((float) $kt->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                <span class="truncate text-gray-900">+ {{ $kt->name }}</span>
+                                <span class="text-gray-500 tabular-nums shrink-0">{{ $kt->price_per_person_cache !== null ? number_format((float) $kt->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
                             </button>
                         @endforeach
                     @elseif($conceptSuche !== '' || $conceptKategorie !== null)
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-2">Keine Concepts für diese Auswahl.</p>
+                        <p class="text-[11px] text-gray-500 px-2 py-2">Keine Concepts für diese Auswahl.</p>
                     @else
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-2">Kategorie wählen oder oben suchen.</p>
+                        <p class="text-[11px] text-gray-500 px-2 py-2">Kategorie wählen oder oben suchen.</p>
                     @endif
                 </div>
             </div>
@@ -200,13 +200,13 @@
 
         {{-- #383: Mengen-Hochrechnung für die Pax (Einkaufs-/Produktionssicht) --}}
         @if($kalkulation && ! $kalkulation['leer'] && $kalkulation['pax'] > 0 && count($kalkulation['mengen']))
-        <div class="space-y-1 pt-3 border-t border-black/5 dark:border-white/10">
+        <div class="space-y-1 pt-3 border-t border-black/5">
             <span class="{{ $label }}">Mengen für {{ $kalkulation['pax'] }} Pax</span>
             <div class="space-y-0.5 max-h-48 overflow-y-auto">
                 @foreach($kalkulation['mengen'] as $m)
                     <div wire:key="mng-{{ $loop->index }}" class="flex items-center justify-between gap-2 text-[11px]">
-                        <span class="truncate text-gray-600 dark:text-gray-300">{{ $m['gericht'] ?? '—' }}</span>
-                        <span class="tabular-nums text-gray-600 dark:text-gray-400 shrink-0">{{ $m['gesamt_menge'] !== null ? rtrim(rtrim(number_format($m['gesamt_menge'],2,',','.'),'0'),',').' '.($m['unit'] ?? '') : '—' }}</span>
+                        <span class="truncate text-gray-600">{{ $m['gericht'] ?? '—' }}</span>
+                        <span class="tabular-nums text-gray-600 shrink-0">{{ $m['gesamt_menge'] !== null ? rtrim(rtrim(number_format($m['gesamt_menge'],2,',','.'),'0'),',').' '.($m['unit'] ?? '') : '—' }}</span>
                     </div>
                 @endforeach
             </div>
@@ -214,6 +214,6 @@
         @endif
     </div>
 @else
-    <div class="p-6 text-center text-sm text-gray-500 dark:text-gray-400">Links ein Angebot wählen oder „+ Neue Anfrage".</div>
+    <div class="p-6 text-center text-sm text-gray-500">Links ein Angebot wählen oder „+ Neue Anfrage".</div>
 @endif
 </div>

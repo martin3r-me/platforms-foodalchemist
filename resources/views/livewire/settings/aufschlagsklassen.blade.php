@@ -3,10 +3,10 @@
 
 <div class="space-y-5" data-settings-aufschlagsklassen>
     <div>
-        <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Aufschlagsklassen</h3>
-        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Rohaufschlag · Bedienung · Profit · MwSt fließen direkt in die Marge-Rechnung (GT-8). Formel «deckungsbeitrag» bleibt W-1-locked, bis die Formel entschieden ist.</p>
+        <h3 class="font-medium tracking-tight text-gray-900">Aufschlagsklassen</h3>
+        <p class="text-[11px] text-gray-500 mt-0.5">Rohaufschlag · Bedienung · Profit · MwSt fließen direkt in die Marge-Rechnung (GT-8). Formel «deckungsbeitrag» bleibt W-1-locked, bis die Formel entschieden ist.</p>
     </div>
-    @if($fehler !== null)<p class="text-xs text-rose-600 dark:text-rose-400" data-ak-fehler>{{ $fehler }}</p>@endif
+    @if($fehler !== null)<p class="text-xs text-rose-600" data-ak-fehler>{{ $fehler }}</p>@endif
 
     <table class="{{ $table }}" data-ak-tabelle>
         <thead><tr class="text-left">@foreach(['Code', 'Bezeichnung', 'Rohaufschlag %', 'Bedienung %', 'Profit %', 'MwSt %', 'Formel', 'Rezepte', ''] as $h)<th class="{{ $th }} !px-2">{{ $h }}</th>@endforeach</tr></thead>
@@ -58,7 +58,7 @@
     </table>
 
     {{-- Anlegen --}}
-    <div class="rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 space-y-1.5" data-ak-anlegen>
+    <div class="rounded-lg bg-black/[0.03] px-3 py-2 space-y-1.5" data-ak-anlegen>
         <p class="{{ $dt }}">Neue Aufschlagsklasse</p>
         <div class="flex flex-wrap items-center gap-2">
             <input type="text" wire:model="neu.code" placeholder="Code (z. B. AK_NEU)" class="{{ $input }} !py-1 w-32 font-mono" data-ak-neu-code />

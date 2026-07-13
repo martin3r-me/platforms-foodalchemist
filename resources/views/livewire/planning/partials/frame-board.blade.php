@@ -6,19 +6,19 @@
 
 <div class="space-y-3" data-planning-frame-board="{{ $frameOwnerType }}">
     @if($frameGespeichert)
-        <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 text-[11px] text-emerald-700 dark:text-emerald-300" data-frame-gespeichert>
+        <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 text-[11px] text-emerald-700" data-frame-gespeichert>
             ✓ Gespeichert — Messlatte für Coverage (R4.2) und KI-Konzepte (R6).
         </div>
     @endif
     @if($frameFehler)
-        <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 text-[11px] text-rose-700 dark:text-rose-300" data-frame-fehler>{{ $frameFehler }}</div>
+        <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 text-[11px] text-rose-700" data-frame-fehler>{{ $frameFehler }}</div>
     @endif
 
     {{-- ── Preisarchitektur (p. P.) ── --}}
     <div class="relative overflow-hidden {{ $card }}">
         <div class="{{ $cardAccent }}"></div>
         <div class="px-4 py-3 space-y-2.5">
-            <p class="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Preisarchitektur (netto, pro Person)</p>
+            <p class="text-[11px] uppercase tracking-wider text-gray-500">Preisarchitektur (netto, pro Person)</p>
             <div class="grid grid-cols-3 gap-2">
                 <div>
                     <label class="block {{ $label }} mb-1">Zielpreis p. P.</label>
@@ -45,10 +45,10 @@
     <div class="relative overflow-hidden {{ $card }}">
         <div class="{{ $cardAccent }}"></div>
         <div class="px-4 py-3 space-y-2.5">
-            <p class="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Dramaturgie & Mengengerüst — Gänge / Stationen in Soll-Reihenfolge</p>
+            <p class="text-[11px] uppercase tracking-wider text-gray-500">Dramaturgie & Mengengerüst — Gänge / Stationen in Soll-Reihenfolge</p>
 
             @forelse($frameSlots as $i => $slot)
-                <div wire:key="frame-slot-{{ $slot['id'] }}" class="rounded-lg border border-black/5 dark:border-white/10 px-2.5 py-2 space-y-1.5">
+                <div wire:key="frame-slot-{{ $slot['id'] }}" class="rounded-lg border border-black/5 px-2.5 py-2 space-y-1.5">
                     <div class="grid grid-cols-12 gap-2 items-end">
                         <div class="col-span-3">
                             <label class="block {{ $label }} mb-1">Slot</label>
@@ -77,17 +77,17 @@
                             </div>
                         </div>
                         <div class="col-span-2 flex items-center gap-2 pb-1.5">
-                            <label class="inline-flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-400">
+                            <label class="inline-flex items-center gap-1 text-[11px] text-gray-600">
                                 <input type="checkbox" wire:model="frameSlots.{{ $i }}.is_pflicht" /> Pflicht
                             </label>
-                            <button type="button" wire:click="frameSlotSpeichern({{ $i }})" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Slot speichern">✓</button>
+                            <button type="button" wire:click="frameSlotSpeichern({{ $i }})" class="{{ $btnGhostXs }} text-violet-600" title="Slot speichern">✓</button>
                             <button type="button" wire:click="frameSlotLoeschen({{ $slot['id'] }})" wire:confirm="Slot samt Regeln löschen?" class="{{ $btnGhostXs }} text-rose-500" title="Slot löschen">✕</button>
                         </div>
                     </div>
                     @if(($slot['rules'] ?? []) !== [])
                         <div class="flex flex-wrap gap-1.5">
                             @foreach($slot['rules'] as $r)
-                                <span wire:key="frame-slot-rule-{{ $r['id'] }}" class="inline-flex items-center gap-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2 py-0.5 text-[11px] text-gray-600 dark:text-gray-300">
+                                <span wire:key="frame-slot-rule-{{ $r['id'] }}" class="inline-flex items-center gap-1 rounded-full bg-black/[0.04] px-2 py-0.5 text-[11px] text-gray-600">
                                     {{ $this->frameRegelLabel($r) }}
                                     <button type="button" wire:click="frameRegelLoeschen({{ $r['id'] }})" class="text-rose-500">✕</button>
                                 </span>
@@ -96,10 +96,10 @@
                     @endif
                 </div>
             @empty
-                <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine Slots — unten den ersten Gang / die erste Station anlegen.</p>
+                <p class="text-[11px] text-gray-500">Noch keine Slots — unten den ersten Gang / die erste Station anlegen.</p>
             @endforelse
 
-            <div class="grid grid-cols-12 gap-2 items-end border-t border-black/5 dark:border-white/10 pt-2">
+            <div class="grid grid-cols-12 gap-2 items-end border-t border-black/5 pt-2">
                 <div class="col-span-4">
                     <input type="text" wire:model="frameNeuSlot.label" placeholder="Neuer Slot (z. B. Vorspeisen)" class="{{ $input }}" />
                 </div>
@@ -113,7 +113,7 @@
                     <input type="number" wire:model="frameNeuSlot.target_count" placeholder="n Gerichte" class="{{ $input }}" />
                 </div>
                 <div class="col-span-3">
-                    <button type="button" wire:click="frameSlotHinzu" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-frame-slot-hinzu>+ Slot</button>
+                    <button type="button" wire:click="frameSlotHinzu" class="{{ $btnGhostXs }} text-violet-600" data-frame-slot-hinzu>+ Slot</button>
                 </div>
             </div>
         </div>
@@ -123,22 +123,22 @@
     <div class="relative overflow-hidden {{ $card }}">
         <div class="{{ $cardAccent }}"></div>
         <div class="px-4 py-3 space-y-2.5">
-            <p class="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400">Quoten & Kunden-Politik — Diät · Saison · No-Gos · Allergen-Linie</p>
+            <p class="text-[11px] uppercase tracking-wider text-gray-500">Quoten & Kunden-Politik — Diät · Saison · No-Gos · Allergen-Linie</p>
 
             @if($frameRules !== [])
                 <div class="flex flex-wrap gap-1.5">
                     @foreach($frameRules as $r)
-                        <span wire:key="frame-rule-{{ $r['id'] }}" class="inline-flex items-center gap-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2 py-0.5 text-[11px] text-gray-600 dark:text-gray-300">
+                        <span wire:key="frame-rule-{{ $r['id'] }}" class="inline-flex items-center gap-1 rounded-full bg-black/[0.04] px-2 py-0.5 text-[11px] text-gray-600">
                             {{ $this->frameRegelLabel($r) }}
                             <button type="button" wire:click="frameRegelLoeschen({{ $r['id'] }})" class="text-rose-500">✕</button>
                         </span>
                     @endforeach
                 </div>
             @else
-                <p class="text-[11px] text-gray-500 dark:text-gray-400">Noch keine Regeln — unten hinzufügen. Regeln gelten fürs ganze Gerüst oder (per Slot-Wahl) für einen Gang.</p>
+                <p class="text-[11px] text-gray-500">Noch keine Regeln — unten hinzufügen. Regeln gelten fürs ganze Gerüst oder (per Slot-Wahl) für einen Gang.</p>
             @endif
 
-            <div class="grid grid-cols-12 gap-2 items-end border-t border-black/5 dark:border-white/10 pt-2">
+            <div class="grid grid-cols-12 gap-2 items-end border-t border-black/5 pt-2">
                 <div class="col-span-3">
                     <label class="block {{ $label }} mb-1">Regel-Typ</label>
                     <select wire:model.live="frameNeuRule.rule_type" class="{{ $input }}">
@@ -215,7 +215,7 @@
                 @endif
 
                 <div class="col-span-2">
-                    <button type="button" wire:click="frameRegelHinzu" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-frame-regel-hinzu>+ Regel</button>
+                    <button type="button" wire:click="frameRegelHinzu" class="{{ $btnGhostXs }} text-violet-600" data-frame-regel-hinzu>+ Regel</button>
                 </div>
             </div>
         </div>

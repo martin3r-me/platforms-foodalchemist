@@ -1,7 +1,7 @@
 {{-- M11-03 / Doc 15 §9.3: Foodbook-Editor — stellt Concepts zu einem Kunden-Angebot zusammen --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($aktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300')
-@php($hover = 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5')
+@php($aktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700')
+@php($hover = 'text-gray-600 hover:bg-black/[0.03]')
 
 <x-ui-page>
     <x-slot:navbar>
@@ -30,16 +30,16 @@
                         <button type="button" wire:key="fb-{{ $f->id }}" wire:click="waehle({{ $f->id }})"
                                 class="w-full text-left px-2 py-1 rounded-lg text-xs {{ $selectedId === $f->id ? $aktiv : $hover }}">
                             <span class="truncate block">{{ $f->label }}</span>
-                            <span class="text-[10px] text-gray-500 dark:text-gray-400">{{ $f->customer ?? 'ohne Kunde' }} · {{ $f->kapitel_count }} Kapitel · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$f->phase] ?? $f->phase }}</span></span>
+                            <span class="text-[10px] text-gray-500">{{ $f->customer ?? 'ohne Kunde' }} · {{ $f->kapitel_count }} Kapitel · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$f->phase] ?? $f->phase }}</span></span>
                         </button>
                     @empty
-                        <p class="px-2 py-3 text-[11px] text-gray-500 dark:text-gray-400">Noch keine Foodbooks.</p>
+                        <p class="px-2 py-3 text-[11px] text-gray-500">Noch keine Foodbooks.</p>
                     @endforelse
                 </div>
 
                 {{-- Kapitel-Baum des gewählten Foodbooks --}}
                 @if($fb)
-                    <div class="pt-2 border-t border-black/5 dark:border-white/10 space-y-0.5">
+                    <div class="pt-2 border-t border-black/5 space-y-0.5">
                         <div class="flex items-center gap-1">
                             <input type="text" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu" placeholder="Neues Kapitel …" class="{{ $input }} py-0.5" />
                             <button type="button" wire:click="kapitelNeu" class="{{ $btnGhostXs }}" title="Top-Kapitel">+</button>
@@ -48,10 +48,10 @@
                             <div wire:key="kt-{{ $kt['id'] }}" class="group flex items-center gap-1" style="padding-left: {{ $kt['depth'] * 12 }}px">
                                 <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})"
                                         class="flex-1 min-w-0 text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['title'] }}</button>
-                                <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[10px]" title="hoch">▲</button>
-                                <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[10px]" title="runter">▼</button>
+                                <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[10px]" title="hoch">▲</button>
+                                <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[10px]" title="runter">▼</button>
                                 <button type="button" wire:click="kapitelNeu({{ $kt['id'] }})" class="shrink-0 text-violet-400 hover:text-violet-600 text-xs px-1 leading-none" title="Unterkapitel anlegen">＋</button>
-                                <button type="button" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-red-500 text-[11px]" title="löschen">✕</button>
+                                <button type="button" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 text-[11px]" title="löschen">✕</button>
                             </div>
                         @endforeach
                     </div>
@@ -65,21 +65,21 @@
             @if($fb && $gesamt)
                 <div class="p-4 space-y-3">
                     <div class="text-center py-2">
-                        <div class="text-2xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</div>
+                        <div class="text-2xl font-semibold text-gray-900 tabular-nums">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</div>
                         <div class="{{ $label }}">pro Person · EK {{ number_format($gesamt['ek_per_person'], 2, ',', '.') }} €</div>
-                        <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Portfolio — person-unabhängig. Pax + Gesamtpreis liegen im Angebot.</div>
+                        <div class="text-[11px] text-gray-500 mt-1">Portfolio — person-unabhängig. Pax + Gesamtpreis liegen im Angebot.</div>
                     </div>
                     @if($kapitel && $kapitelAgg)
-                        <div class="pt-2 border-t border-black/5 dark:border-white/10 text-xs space-y-1">
+                        <div class="pt-2 border-t border-black/5 text-xs space-y-1">
                             <div class="{{ $label }}">Kapitel „{{ $kapitel->title }}"</div>
-                            <div class="flex justify-between"><span class="text-gray-600 dark:text-gray-400">€/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['vk_pro_person'], 2, ',', '.') }} €</span></div>
-                            <div class="flex justify-between"><span class="text-gray-600 dark:text-gray-400">EK/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['ek_per_person'], 2, ',', '.') }} €</span></div>
-                            @if($kapitelAgg['food_cost_percent'] !== null)<div class="flex justify-between"><span class="text-gray-600 dark:text-gray-400">Wareneinsatz</span><span class="tabular-nums">{{ number_format($kapitelAgg['food_cost_percent'], 1, ',', '.') }} %</span></div>@endif
+                            <div class="flex justify-between"><span class="text-gray-600">€/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['vk_pro_person'], 2, ',', '.') }} €</span></div>
+                            <div class="flex justify-between"><span class="text-gray-600">EK/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['ek_per_person'], 2, ',', '.') }} €</span></div>
+                            @if($kapitelAgg['food_cost_percent'] !== null)<div class="flex justify-between"><span class="text-gray-600">Wareneinsatz</span><span class="tabular-nums">{{ number_format($kapitelAgg['food_cost_percent'], 1, ',', '.') }} %</span></div>@endif
                         </div>
                     @endif
                 </div>
             @else
-                <div class="p-6 text-center text-sm text-gray-500 dark:text-gray-400">Foodbook auswählen.</div>
+                <div class="p-6 text-center text-sm text-gray-500">Foodbook auswählen.</div>
             @endif
         </x-ui-page-sidebar>
     </x-slot>
@@ -100,14 +100,14 @@
                 {{-- R4.3: Phasen-Statusmaschine (ergänzt den Sichtbarkeits-Status, ersetzt ihn nicht) --}}
                 @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $fb->phase ?? 'kontext'])
                 {{-- #369: CRM-Kunde-Link (MVP, nur verlinken) — ergänzt das Freitext-Feld „Kunde" --}}
-                <div class="space-y-2 pt-1 border-t border-black/5 dark:border-white/10">
+                <div class="space-y-2 pt-1 border-t border-black/5">
                     <span class="{{ $label }}">Kunde (CRM)</span>
                     @if(! $crmVerfuegbar)
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400">CRM-Modul nicht verfügbar — Freitext-Feld „Kunde" oben nutzen.</p>
+                        <p class="text-[11px] text-gray-500">CRM-Modul nicht verfügbar — Freitext-Feld „Kunde" oben nutzen.</p>
                     @else
-                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
-                            <div>Firma: <span class="font-medium text-gray-900 dark:text-gray-100">{{ $fb->crmCompany?->display_name ?? '—' }}</span></div>
-                            <div>Kontakt: <span class="font-medium text-gray-900 dark:text-gray-100">{{ $fb->crmContact?->display_name ?? '—' }}</span></div>
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+                            <div>Firma: <span class="font-medium text-gray-900">{{ $fb->crmCompany?->display_name ?? '—' }}</span></div>
+                            <div>Kontakt: <span class="font-medium text-gray-900">{{ $fb->crmContact?->display_name ?? '—' }}</span></div>
                             @if($fb->crm_company_id || $fb->crm_contact_id)
                                 <button type="button" wire:click="loeseKunde" class="{{ $btnGhostXs }}">Verknüpfung lösen</button>
                             @endif
@@ -148,7 +148,7 @@
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
                     <a href="{{ route('foodalchemist.foodbooks.ansicht', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Interne Lese-Ansicht (Kapitel-Navigation, EK/VK/W%)">Ansicht</a>
                     <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Versendbares Foodbook-Dokument (Druck/PDF)">Dokument</a>
-                    <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhost }} text-red-600 dark:text-red-400">Löschen</button>
+                    <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
                 </div>
             </div>
 
@@ -187,15 +187,15 @@
                         <span wire:loading wire:target="konzeptAusGeruest">Wähle Gerichte …</span>
                     </button>
                     @if($generatorFehler)
-                        <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700 dark:text-rose-300">{{ $generatorFehler }}</div>
+                        <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700">{{ $generatorFehler }}</div>
                     @endif
                     @if($generatorErgebnis)
                         <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-2 space-y-1 text-[11px]" data-generator-ergebnis>
-                            <div class="font-medium text-gray-800 dark:text-gray-100">„{{ $generatorErgebnis['concept_name'] }}“ (Draft) · Kohäsion {{ $generatorErgebnis['kohaesion_score'] ?? '—' }} · Coverage {{ $generatorErgebnis['coverage_gesamt'] ?? '—' }}</div>
+                            <div class="font-medium text-gray-800">„{{ $generatorErgebnis['concept_name'] }}“ (Draft) · Kohäsion {{ $generatorErgebnis['kohaesion_score'] ?? '—' }} · Coverage {{ $generatorErgebnis['coverage_gesamt'] ?? '—' }}</div>
                             @foreach($generatorErgebnis['protokoll'] as $p)
-                                <div class="{{ $p['status'] === 'leer' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400' }}">{{ $p['slot'] }}: {{ $p['status'] === 'leer' ? 'LEER — ' . $p['begruendung'] : collect($p['gerichte'])->pluck('name')->implode(', ') }}</div>
+                                <div class="{{ $p['status'] === 'leer' ? 'text-amber-600' : 'text-gray-600' }}">{{ $p['slot'] }}: {{ $p['status'] === 'leer' ? 'LEER — ' . $p['begruendung'] : collect($p['gerichte'])->pluck('name')->implode(', ') }}</div>
                             @endforeach
-                            <a href="{{ route('foodalchemist.concepts.index') }}?c={{ $generatorErgebnis['concept_id'] }}" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">→ im Concepter öffnen</a>
+                            <a href="{{ route('foodalchemist.concepts.index') }}?c={{ $generatorErgebnis['concept_id'] }}" class="{{ $btnGhostXs }} text-violet-600">→ im Concepter öffnen</a>
                         </div>
                     @endif
                 </div>
@@ -204,50 +204,50 @@
             {{-- UX-Umbau 2026-07-03: Toggle Bearbeiten ⇄ Menü — Kunden-Vorschau mit aufgelöster Wording-Kette (dieselbe Quelle wie das Druck-Dokument) --}}
             <div x-data="{ fbMenue: false }">
             <div class="flex items-center justify-between flex-wrap gap-2">
-                <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100" x-text="fbMenue ? 'Menü-Vorschau (Kundensicht)' : 'Inhalt bearbeiten'">Inhalt bearbeiten</h3>
-                <div class="inline-flex rounded-lg bg-black/[0.05] dark:bg-white/[0.06] p-0.5" role="group" aria-label="Ansicht" data-fb-ansicht-toggle>
-                    <button type="button" @click="fbMenue = false" :class="!fbMenue ? 'bg-white dark:bg-white/10 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-fb-bearbeiten>⚙ Bearbeiten</button>
-                    <button type="button" @click="fbMenue = true" :class="fbMenue ? 'bg-white dark:bg-white/10 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-fb-menue>🍽 Menü</button>
+                <h3 class="font-medium tracking-tight text-gray-900" x-text="fbMenue ? 'Menü-Vorschau (Kundensicht)' : 'Inhalt bearbeiten'">Inhalt bearbeiten</h3>
+                <div class="inline-flex rounded-lg bg-black/[0.05] p-0.5" role="group" aria-label="Ansicht" data-fb-ansicht-toggle>
+                    <button type="button" @click="fbMenue = false" :class="!fbMenue ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-600 hover:text-gray-700'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-fb-bearbeiten>⚙ Bearbeiten</button>
+                    <button type="button" @click="fbMenue = true" :class="fbMenue ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-600 hover:text-gray-700'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-fb-menue>🍽 Menü</button>
                 </div>
             </div>
 
             {{-- ═══ MENÜ-VORSCHAU (Kundensicht, read-only) ═══ --}}
             <div x-show="fbMenue" x-cloak class="relative overflow-hidden {{ $card }} p-6 space-y-5 mt-3" data-fb-menue-vorschau>
                 <div class="{{ $cardAccent }}"></div>
-                <div class="flex items-baseline justify-between border-b border-black/5 dark:border-white/10 pb-3">
+                <div class="flex items-baseline justify-between border-b border-black/5 pb-3">
                     <div>
-                        <h2 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">{{ $fb->label }}</h2>
-                        @if($menue['customer'] ?? null)<p class="text-xs text-gray-500 dark:text-gray-400">{{ $menue['customer'] }}@if(($menue['kontakt'] ?? null) && $menue['kontakt'] !== $menue['customer']) · {{ $menue['kontakt'] }}@endif</p>@endif
+                        <h2 class="text-lg font-semibold tracking-tight text-gray-900">{{ $fb->label }}</h2>
+                        @if($menue['customer'] ?? null)<p class="text-xs text-gray-500">{{ $menue['customer'] }}@if(($menue['kontakt'] ?? null) && $menue['kontakt'] !== $menue['customer']) · {{ $menue['kontakt'] }}@endif</p>@endif
                     </div>
-                    @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)<span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
+                    @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)<span class="text-sm font-semibold text-emerald-600 tabular-nums">{{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
                 </div>
                 @forelse($menue['kapitel'] ?? [] as $k)
                     <section style="margin-left: {{ $k['depth'] * 16 }}px">
-                        <div class="flex items-baseline gap-2 border-b border-black/5 dark:border-white/10 pb-1 mb-2">
-                            <h3 class="text-sm font-semibold text-violet-700 dark:text-violet-300">{{ $k['title'] }}</h3>
-                            @if($k['vk_pro_person'] > 0)<span class="ml-auto text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">{{ number_format((float) $k['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
+                        <div class="flex items-baseline gap-2 border-b border-black/5 pb-1 mb-2">
+                            <h3 class="text-sm font-semibold text-violet-700">{{ $k['title'] }}</h3>
+                            @if($k['vk_pro_person'] > 0)<span class="ml-auto text-[11px] text-gray-500 tabular-nums">{{ number_format((float) $k['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
                         </div>
                         @forelse($k['bloecke'] as $b)
                             <div class="py-0.5">
-                                <p class="text-sm {{ $b['ist_header'] ? 'font-semibold text-gray-700 dark:text-gray-200 mt-2' : 'text-gray-900 dark:text-gray-100' }}">{{ $b['label'] }}</p>
-                                @if($b['untertitel'] ?? null)<p class="text-[11px] text-gray-500 dark:text-gray-400 italic">{{ $b['untertitel'] }}</p>@endif
+                                <p class="text-sm {{ $b['ist_header'] ? 'font-semibold text-gray-700 mt-2' : 'text-gray-900' }}">{{ $b['label'] }}</p>
+                                @if($b['untertitel'] ?? null)<p class="text-[11px] text-gray-500 italic">{{ $b['untertitel'] }}</p>@endif
                                 @foreach($b['gerichte'] ?? [] as $g)
                                     @if($g['type'] === 'paket' || $g['type'] === 'header')
-                                        <p class="text-xs font-semibold text-gray-600 dark:text-gray-300 ml-3 mt-1">{{ $g['text'] }}</p>
+                                        <p class="text-xs font-semibold text-gray-600 ml-3 mt-1">{{ $g['text'] }}</p>
                                     @else
                                         @php($gfb = ($g['recipe_id'] ?? null) ? ($feedbackAgg[$g['recipe_id']] ?? null) : null)
-                                        <p class="text-xs text-gray-600 dark:text-gray-300 {{ $g['source'] === 'name' ? 'italic text-amber-600 dark:text-amber-400' : '' }}" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}@if($g['source'] === 'name')<span class="ml-1 text-[10px]">· Wording fehlt</span>@endif@if($gfb && $gfb['count'] > 0)<span class="ml-1.5 text-[10px] {{ ($gfb['avg'] ?? 0) >= 4 ? 'text-emerald-600 dark:text-emerald-400' : (($gfb['avg'] ?? 0) >= 3 ? 'text-amber-600 dark:text-amber-400' : 'text-red-500') }}" title="{{ $gfb['count'] }} Feedback-Einträge">★ {{ $gfb['avg'] !== null ? number_format((float) $gfb['avg'], 1, ',', '.') : '–' }}</span>@endif</p>
+                                        <p class="text-xs text-gray-600 {{ $g['source'] === 'name' ? 'italic text-amber-600' : '' }}" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}@if($g['source'] === 'name')<span class="ml-1 text-[10px]">· Wording fehlt</span>@endif@if($gfb && $gfb['count'] > 0)<span class="ml-1.5 text-[10px] {{ ($gfb['avg'] ?? 0) >= 4 ? 'text-emerald-600' : (($gfb['avg'] ?? 0) >= 3 ? 'text-amber-600' : 'text-red-500') }}" title="{{ $gfb['count'] }} Feedback-Einträge">★ {{ $gfb['avg'] !== null ? number_format((float) $gfb['avg'], 1, ',', '.') : '–' }}</span>@endif</p>
                                     @endif
                                 @endforeach
                             </div>
                         @empty
-                            <p class="text-xs text-gray-500 dark:text-gray-400">—</p>
+                            <p class="text-xs text-gray-500">—</p>
                         @endforelse
                     </section>
                 @empty
-                    <p class="text-xs text-gray-500 dark:text-gray-400 py-6 text-center">Noch keine Kapitel — links anlegen und Concepts einfügen.</p>
+                    <p class="text-xs text-gray-500 py-6 text-center">Noch keine Kapitel — links anlegen und Concepts einfügen.</p>
                 @endforelse
-                <p class="text-[11px] text-gray-500 dark:text-gray-400 pt-2 border-t border-black/5 dark:border-white/10">Gericht-Namen aus der Wording-Kette: Foodbook-Override → Konzept-Wording → VK-Standard → interner Name. Amber = kein Wording gepflegt.</p>
+                <p class="text-[11px] text-gray-500 pt-2 border-t border-black/5">Gericht-Namen aus der Wording-Kette: Foodbook-Override → Konzept-Wording → VK-Standard → interner Name. Amber = kein Wording gepflegt.</p>
             </div>
 
             {{-- ═══ BEARBEITEN (Kapitel + Blöcke) ═══ --}}
@@ -267,7 +267,7 @@
                 {{-- Block-Liste --}}
                 <div class="relative overflow-hidden {{ $card }} p-5 space-y-3">
                     <div class="flex items-center justify-between flex-wrap gap-2">
-                        <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Inhalt <span class="text-gray-500 dark:text-gray-400 text-xs">({{ $kapitel->blocks->count() }})</span></h3>
+                        <h3 class="font-medium tracking-tight text-gray-900">Inhalt <span class="text-gray-500 text-xs">({{ $kapitel->blocks->count() }})</span></h3>
                         <div class="flex items-center gap-2" x-data="{ presets: false }">
                             @if(count($markiert) >= 2)
                                 <button type="button" wire:click="wahlGruppeBilden" class="{{ $btnGhostXs }} text-amber-600">Wahl-Gruppe ({{ count($markiert) }})</button>
@@ -297,12 +297,12 @@
                     <div class="space-y-1">
                         @forelse($kapitel->blocks as $block)
                             <div wire:key="block-{{ $block->id }}"
-                                 class="rounded-lg border {{ $block->variant_group_id ? 'border-amber-400/60' : 'border-black/5 dark:border-white/10' }} px-2 py-1 {{ $block->visible ? '' : 'opacity-60' }}"
+                                 class="rounded-lg border {{ $block->variant_group_id ? 'border-amber-400/60' : 'border-black/5' }} px-2 py-1 {{ $block->visible ? '' : 'opacity-60' }}"
                                  style="margin-left: {{ $block->level * 20 }}px">
                                 <div class="flex items-center gap-2 text-xs">
                                     <span class="flex flex-col -my-0.5 shrink-0">
-                                        <button type="button" wire:click="blockHoch({{ $block->id }})" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 leading-none">▲</button>
-                                        <button type="button" wire:click="blockRunter({{ $block->id }})" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 leading-none">▼</button>
+                                        <button type="button" wire:click="blockHoch({{ $block->id }})" class="text-gray-500 hover:text-violet-500 leading-none">▲</button>
+                                        <button type="button" wire:click="blockRunter({{ $block->id }})" class="text-gray-500 hover:text-violet-500 leading-none">▼</button>
                                     </span>
                                     @if($block->type === 'concept_ref')
                                         <input type="checkbox" wire:click="markiere({{ $block->id }})" @checked(in_array($block->id, $markiert)) title="Für Wahl-Gruppe markieren" class="shrink-0" />
@@ -313,29 +313,29 @@
                                         @switch($block->type)
                                             @case('concept_ref')
                                                 <span class="{{ $pill }} {{ $variantPill['primary'] }} mr-1">Concept</span>{{ $block->concept?->name ?? '—' }}
-                                                <span class="text-gray-500 dark:text-gray-400 tabular-nums">{{ $block->concept?->price_per_person_cache !== null ? '· ' . number_format((float) $block->concept->price_per_person_cache, 2, ',', '.') . ' €/P' : '' }}</span>
-                                                @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600 dark:text-violet-400">· „{{ $block->wording }}“</span>@endif
+                                                <span class="text-gray-500 tabular-nums">{{ $block->concept?->price_per_person_cache !== null ? '· ' . number_format((float) $block->concept->price_per_person_cache, 2, ',', '.') . ' €/P' : '' }}</span>
+                                                @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600">· „{{ $block->wording }}“</span>@endif
                                                 @break
                                             @case('header_neutral') @case('header_frei')
                                                 <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
                                                 @break
                                             @case('header_frei_preis')
                                                 <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
-                                                <span class="text-gray-600 dark:text-gray-400">· {{ $block->price_basis === 'staffel' ? 'Staffel' : number_format((float) ($block->price_value ?? 0), 2, ',', '.') . ' € ' . ($block->price_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
+                                                <span class="text-gray-600">· {{ $block->price_basis === 'staffel' ? 'Staffel' : number_format((float) ($block->price_value ?? 0), 2, ',', '.') . ' € ' . ($block->price_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
                                                 @break
-                                            @case('spacer') <span class="italic text-gray-500 dark:text-gray-400">Leerzeile ({{ $block->height ?? 'mittel' }})</span> @break
-                                            @case('image') <span class="text-gray-600 dark:text-gray-400">🖼 Bild</span> @break
+                                            @case('spacer') <span class="italic text-gray-500">Leerzeile ({{ $block->height ?? 'mittel' }})</span> @break
+                                            @case('image') <span class="text-gray-600">🖼 Bild</span> @break
                                             @default <span class="italic">{{ \Illuminate\Support\Str::limit($block->customer_text ?? '(Text)', 80) }}</span>
                                         @endswitch
                                     </span>
                                     @if($block->variant_group_id)<button type="button" wire:click="wahlGruppeAufheben({{ $block->id }})" class="{{ $pill }} {{ $variantPill['warning'] }} shrink-0" title="aus Wahl-Gruppe">Wahl #{{ $block->variant_group_id }}</button>@endif
-                                    <button type="button" wire:click="blockEbene({{ $block->id }}, -1)" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 shrink-0" title="ausrücken">←</button>
-                                    <button type="button" wire:click="blockEbene({{ $block->id }}, 1)" class="text-gray-500 dark:text-gray-400 hover:text-violet-500 shrink-0" title="einrücken">→</button>
-                                    <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="shrink-0 text-[10px] {{ $block->visible ? 'text-gray-500 dark:text-gray-400' : 'text-amber-500' }}" title="sichtbar/intern">{{ $block->visible ? '👁' : 'intern' }}</button>
+                                    <button type="button" wire:click="blockEbene({{ $block->id }}, -1)" class="text-gray-500 hover:text-violet-500 shrink-0" title="ausrücken">←</button>
+                                    <button type="button" wire:click="blockEbene({{ $block->id }}, 1)" class="text-gray-500 hover:text-violet-500 shrink-0" title="einrücken">→</button>
+                                    <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="shrink-0 text-[10px] {{ $block->visible ? 'text-gray-500' : 'text-amber-500' }}" title="sichtbar/intern">{{ $block->visible ? '👁' : 'intern' }}</button>
                                     @if($block->type !== 'spacer')
-                                        <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="shrink-0 text-gray-500 dark:text-gray-400 hover:text-violet-500" title="bearbeiten / Notiz">✎</button>
+                                        <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-violet-500" title="bearbeiten / Notiz">✎</button>
                                     @endif
-                                    <button type="button" wire:click="blockRaus({{ $block->id }})" class="shrink-0 text-gray-500 dark:text-gray-400 hover:text-red-500" title="entfernen">✕</button>
+                                    <button type="button" wire:click="blockRaus({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-red-500" title="entfernen">✕</button>
                                 </div>
 
                                 @if($editBlockId === $block->id)
@@ -359,7 +359,7 @@
                                             <div class="flex gap-1.5 items-start">
                                                 <textarea wire:model="blockForm.customer_text" rows="2" class="{{ $input }}" placeholder="Beschreibungstext / Untertitel (kundensichtbar, optional)"></textarea>
                                                 @if($block->type === 'concept_ref')
-                                                    <button type="button" wire:click="kiKundentext" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" data-fb-ki-kundentext>✨</button>
+                                                    <button type="button" wire:click="kiKundentext" class="{{ $btnGhostXs }} text-violet-600 shrink-0 mt-0.5" title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" data-fb-ki-kundentext>✨</button>
                                                 @endif
                                             </div>
                                         @endif
@@ -372,7 +372,7 @@
                                 @endif
                             </div>
                         @empty
-                            <p class="text-xs text-gray-500 dark:text-gray-400 py-4 text-center">Noch kein Inhalt. Oben „+ Concept einfügen" oder Header/Text/Preis-Block hinzufügen.</p>
+                            <p class="text-xs text-gray-500 py-4 text-center">Noch kein Inhalt. Oben „+ Concept einfügen" oder Header/Text/Preis-Block hinzufügen.</p>
                         @endforelse
                     </div>
 
@@ -383,9 +383,9 @@
                         <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-3" />
                         <div class="flex gap-3 min-h-[20rem]">
                             {{-- Kategorie-Tree (collapsible, wie Concepter-Browser) --}}
-                            <div class="w-44 shrink-0 overflow-y-auto border-r border-black/5 dark:border-white/10 pr-2 space-y-0.5 max-h-[26rem]">
+                            <div class="w-44 shrink-0 overflow-y-auto border-r border-black/5 pr-2 space-y-0.5 max-h-[26rem]">
                                 <button type="button" wire:click="$set('conceptKategorie', null)"
-                                        class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $conceptKategorie === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">Alle Kategorien</button>
+                                        class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $conceptKategorie === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">Alle Kategorien</button>
                                 <x-foodalchemist::tree :initial-collapsed="collect($conceptKategorien)->where('has_children', true)->pluck('id')->all()">
                                     @foreach($conceptKategorien as $kat)
                                         <x-foodalchemist::tree-node :node-id="$kat['id']" :depth="$kat['depth']" :ancestors="$kat['ancestors'] ?? []"
@@ -401,30 +401,30 @@
                                     @foreach($conceptKandidaten as $ck)
                                         <button type="button" wire:key="dck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})"
                                                 class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                            <span class="truncate text-gray-900 dark:text-gray-100">+ {{ $ck->name }}</span>
-                                            <span class="text-gray-500 dark:text-gray-400 tabular-nums shrink-0">{{ $ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                            <span class="truncate text-gray-900">+ {{ $ck->name }}</span>
+                                            <span class="text-gray-500 tabular-nums shrink-0">{{ $ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
                                         </button>
                                     @endforeach
                                 @elseif($conceptSuche !== '' || $conceptKategorie !== null)
-                                    <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-2">Keine Concepts für diese Auswahl.</p>
+                                    <p class="text-[11px] text-gray-500 px-2 py-2">Keine Concepts für diese Auswahl.</p>
                                 @else
-                                    <p class="text-[11px] text-gray-500 dark:text-gray-400 px-2 py-2">Kategorie wählen oder oben suchen.</p>
+                                    <p class="text-[11px] text-gray-500 px-2 py-2">Kategorie wählen oder oben suchen.</p>
                                 @endif
                             </div>
                         </div>
                         <x-slot:footer>
-                            <span class="text-[10px] text-gray-500 dark:text-gray-400 mr-auto">Eingefügte Concepts erscheinen links im Inhalt. Bleibt offen für mehrere.</span>
+                            <span class="text-[10px] text-gray-500 mr-auto">Eingefügte Concepts erscheinen links im Inhalt. Bleibt offen für mehrere.</span>
                             <button type="button" @click="$dispatch('modal.close', { name: 'fb-concept' })" class="{{ $btnGhost }}">Schließen</button>
                         </x-slot:footer>
                     </x-foodalchemist::modal>
                 </div>
             @else
-                <div class="{{ $card }} p-8 text-center text-sm text-gray-500 dark:text-gray-400">Links ein Kapitel wählen oder anlegen.</div>
+                <div class="{{ $card }} p-8 text-center text-sm text-gray-500">Links ein Kapitel wählen oder anlegen.</div>
             @endif
             </div>{{-- /BEARBEITEN (x-show !fbMenue) --}}
             </div>{{-- /x-data fbMenue --}}
         @else
-            <div class="{{ $card }} p-10 text-center text-sm text-gray-500 dark:text-gray-400">
+            <div class="{{ $card }} p-10 text-center text-sm text-gray-500">
                 Links ein Foodbook wählen oder „+ Neues Foodbook". Das Foodbook bündelt fertige <strong>Concepts</strong> zu einem <strong>person-unabhängigen Portfolio</strong> (Kapitel, €/Person) — Pax &amp; Gesamtpreis liegen im <strong>Angebot</strong>, Einzel-Gerichte im Concepter.
             </div>
         @endif

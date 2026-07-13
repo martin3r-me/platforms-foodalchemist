@@ -10,13 +10,13 @@
                 <input type="text" wire:model="kiRohtext" placeholder="Roh-Bezeichnung, z. B. Lieferanten-Text …"
                        class="{{ $input }} !w-72" />
                 <button type="button" wire:click="kiVorschlagNaming"
-                        class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="gp.suggest: Builder-Felder aus Roh-Bezeichnung (§6)">✨ KI-Vorschlag</button>
+                        class="{{ $btnGhostXs }} text-violet-600" title="gp.suggest: Builder-Felder aus Roh-Bezeichnung (§6)">✨ KI-Vorschlag</button>
             </div>
         </x-slot:actions>
     @endif
 
     @if($fehler !== null)
-        <p class="text-xs text-rose-600 dark:text-rose-400 mb-3" data-modal-fehler>{{ $fehler }}</p>
+        <p class="text-xs text-rose-600 mb-3" data-modal-fehler>{{ $fehler }}</p>
     @endif
 
     <div x-data="{ tab: 'allgemein' }" data-gp-tabs>
@@ -39,7 +39,7 @@
                 {{-- ✨ Alles anreichern — globaler Autopilot über alle KI-Felder (Review, nie Auto-Persistenz) --}}
                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp))
                     <button type="button" wire:click="allesAnreichern" wire:loading.attr="disabled" wire:target="allesAnreichern"
-                            class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 ml-auto"
+                            class="{{ $btnGhostXs }} text-violet-600 ml-auto"
                             title="Zustand + Tags + Allergene + Nährwerte in EINEM Lauf vorschlagen (Review-Liste, Übernahme bleibt manuell)" data-gp-alles-anreichern>
                         <span wire:loading.remove wire:target="allesAnreichern">✨ Alles anreichern</span>
                         <span wire:loading wire:target="allesAnreichern">… läuft</span>
@@ -53,9 +53,9 @@
             <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 mb-2 text-xs flex items-center gap-2"
                  @if($bulkRun->status === 'running') wire:poll.2s @endif data-gp-anreichern-status>
                 @if($bulkRun->status === 'running')
-                    <span class="text-gray-900 dark:text-gray-100">✨ Anreicherung läuft …</span>
+                    <span class="text-gray-900">✨ Anreicherung läuft …</span>
                 @else
-                    <span class="text-gray-900 dark:text-gray-100">✨ Fertig — {{ $bulkOffen }} Vorschlag/Vorschläge zum Übernehmen</span>
+                    <span class="text-gray-900">✨ Fertig — {{ $bulkOffen }} Vorschlag/Vorschläge zum Übernehmen</span>
                     <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600 ml-auto" data-gp-anreichern-uebernehmen>Alle übernehmen</button>
                     <button type="button" wire:click="bulkVerwerfen" class="{{ $btnGhostXs }}">Schließen</button>
                 @endif
@@ -65,10 +65,10 @@
         {{-- Tab-Leiste (nur Edit — Neuanlage hat nur „Allgemein") --}}
         @if(! $neu && $gp !== null)
             @php($gpTabs = ['allgemein' => 'Allgemein', 'eigenschaften' => 'Eigenschaften', 'allergene' => 'Allergene', 'zusatzstoffe' => 'Zusatzstoffe', 'price' => 'Preis & Lieferanten', 'ersatz' => 'Ersatz', 'sensorik' => 'Sensorik & Pairing', 'kalkulation' => 'Kalkulation'])
-            <div class="flex items-center gap-1 border-b border-black/5 dark:border-white/10 mb-1 overflow-x-auto" data-gp-tabbar>
+            <div class="flex items-center gap-1 border-b border-black/5 mb-1 overflow-x-auto" data-gp-tabbar>
                 @foreach($gpTabs as $tabKey => $tabLabel)
                     <button type="button" @click="tab = '{{ $tabKey }}'"
-                            :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                            :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700' : 'border-transparent text-gray-600 hover:text-gray-700'"
                             class="px-2 py-2 text-xs font-medium border-b-2 -mb-px whitespace-nowrap transition-colors" data-gp-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
                 @endforeach
             </div>
@@ -110,7 +110,7 @@
                     </div>
                     <div class="flex flex-wrap gap-4 mt-2" data-zusatz-klammern>
                         @foreach(['bio' => '(Bio)', 'vegan' => '(Vegan)', 'glutenfrei' => '(Glutenfrei)', 'laktosefrei' => '(Laktosefrei)'] as $flag => $klammer)
-                            <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                            <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
                                 <input type="checkbox" wire:model.live="builder.{{ $flag }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
                                 {{ $klammer }}
                             </label>
@@ -124,25 +124,25 @@
                 </div>
 
                 {{-- AUTO-SYNC-Vorschau: Name + Slug + gp_key --}}
-                <div class="mt-2 rounded-lg bg-black/[0.03] dark:bg-white/5 px-3 py-2 space-y-0.5" data-naming-vorschau>
-                    <p class="text-xs text-gray-900 dark:text-gray-100 font-medium" data-vorschau-name>{{ $vorschauName !== '' ? $vorschauName : '—' }}</p>
-                    <p class="text-[11px] text-gray-500 dark:text-gray-400 font-mono">slug: {{ $vorschauSlug !== '' ? $vorschauSlug : '—' }} · gp_key: {{ $vorschauKey !== '' && $vorschauKey !== '||' ? $vorschauKey : '—' }}</p>
+                <div class="mt-2 rounded-lg bg-black/[0.03] px-3 py-2 space-y-0.5" data-naming-vorschau>
+                    <p class="text-xs text-gray-900 font-medium" data-vorschau-name>{{ $vorschauName !== '' ? $vorschauName : '—' }}</p>
+                    <p class="text-[11px] text-gray-500 font-mono">slug: {{ $vorschauSlug !== '' ? $vorschauSlug : '—' }} · gp_key: {{ $vorschauKey !== '' && $vorschauKey !== '||' ? $vorschauKey : '—' }}</p>
                 </div>
                 @foreach($liveFehler as $f)
-                    <p class="text-[11px] text-rose-600 dark:text-rose-400 mt-1" data-live-fehler>{{ $f }}</p>
+                    <p class="text-[11px] text-rose-600 mt-1" data-live-fehler>{{ $f }}</p>
                 @endforeach
                 @foreach($warnungen as $w)
-                    <p class="text-[11px] text-amber-600 dark:text-amber-400 mt-1" data-live-warnung>{{ $w }}</p>
+                    <p class="text-[11px] text-amber-600 mt-1" data-live-warnung>{{ $w }}</p>
                 @endforeach
 
                 {{-- Wording aus dem Lieferantenartikel ableiten (Override-First: Vorschlag → Übernehmen) --}}
                 @if(! $neu)
                     <div class="mt-2" data-name-aus-la>
-                        <button type="button" wire:click="nameAusLeadLa" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400"
+                        <button type="button" wire:click="nameAusLeadLa" class="{{ $btnGhostXs }} text-violet-600"
                                 title="gp.suggest: §6-Namensvorschlag aus der Bezeichnung des Lead-Lieferantenartikels">✨ Name aus Lieferantenartikel ableiten</button>
                         @if($nameVorschlag !== null)
                             <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-2.5 py-1.5 text-[11px]" data-name-vorschlag>
-                                <p class="text-gray-900 dark:text-gray-100">Vorschlag: <span class="font-medium">{{ $nameVorschlag }}</span></p>
+                                <p class="text-gray-900">Vorschlag: <span class="font-medium">{{ $nameVorschlag }}</span></p>
                                 <div class="flex gap-1.5 mt-1">
                                     <button type="button" wire:click="nameVorschlagUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-name-vorschlag-uebernehmen>Übernehmen</button>
                                     <button type="button" wire:click="nameVorschlagVerwerfen" class="{{ $btnGhostXs }}">Verwerfen</button>
@@ -176,7 +176,7 @@
                                 <option value="{{ $builder['sub_category'] }}" selected>{{ $builder['sub_category'] }} (Bestand)</option>
                             @endif
                         </select>
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                        <p class="text-[11px] text-gray-500 mt-1">
                             @if(($builder['commodity_group_code'] ?? '') === '') Erst Warengruppe wählen. @else Neue Werte in Einstellungen → Warengruppen pflegen. @endif
                         </p>
                     </div>
@@ -206,7 +206,7 @@
 
             {{-- Derivat (§11) --}}
             <x-foodalchemist::modal-section title="Derivat (§11)">
-                <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
                     <input type="checkbox" wire:model.live="builder.is_derivat" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-derivat-toggle />
                     Küchen-Nebenprodukt (Schale, Saft, Parüren, Karkasse …) — <code class="text-[11px]">requires_la=0</code>, erbt Allergene LIVE vom Mutter-GP (§16)
                 </label>
@@ -214,7 +214,7 @@
                     <div class="mt-2" data-derivat-mutter>
                         <label class="block {{ $label }} mb-1">Mutter-GP</label>
                         @if($builder['derivat_von_gp_id'])
-                            <p class="text-xs text-gray-900 dark:text-gray-100">
+                            <p class="text-xs text-gray-900">
                                 {{ \Platform\FoodAlchemist\Models\FoodAlchemistGp::find($builder['derivat_von_gp_id'])?->name ?? '—' }}
                                 <button type="button" wire:click="$set('builder.derivat_von_gp_id', null)" class="{{ $btnGhostXs }} ml-1">ändern</button>
                             </p>
@@ -223,7 +223,7 @@
                             @foreach($derivatKandidaten as $kandidat)
                                 <button type="button" wire:key="dk-{{ $kandidat->id }}"
                                         wire:click="$set('builder.derivat_von_gp_id', {{ $kandidat->id }})"
-                                        class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10 transition-colors duration-150">
+                                        class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10 transition-colors duration-150">
                                     {{ $kandidat->name }}
                                 </button>
                             @endforeach
@@ -245,8 +245,8 @@
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1.5" data-tags-grid>
                                 @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistGp::TAG_FIELDS as $tag)
                                     <div class="flex items-center justify-between gap-1">
-                                        <span class="text-[11px] text-gray-600 dark:text-gray-400 truncate">{{ str_replace(['is_', 'contains_', '_'], ['', 'enth. ', ' '], $tag) }}</span>
-                                        <select wire:model.live="tags.{{ $tag }}" class="bg-transparent border-0 text-[11px] text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-0 py-0">
+                                        <span class="text-[11px] text-gray-600 truncate">{{ str_replace(['is_', 'contains_', '_'], ['', 'enth. ', ' '], $tag) }}</span>
+                                        <select wire:model.live="tags.{{ $tag }}" class="bg-transparent border-0 text-[11px] text-gray-700 cursor-pointer focus:ring-0 py-0">
                                             <option value="">unbewertet</option>
                                             <option value="1">ja</option>
                                             <option value="0">nein</option>
@@ -287,7 +287,7 @@
             <div x-show="tab === 'sensorik'" x-cloak class="pt-2">
                 <x-foodalchemist::modal-section title="Sensorik & Pairing">
                     @include('foodalchemist::livewire.concepter.partials.sensorik')
-                    <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-5 mb-2">Pairing</h3>
+                    <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Pairing</h3>
                     @include('foodalchemist::livewire.concepter.partials.pairing')
                 </x-foodalchemist::modal-section>
             </div>{{-- /Tab SENSORIK --}}
@@ -295,7 +295,7 @@
             {{-- ── Tab: KALKULATION (Defaults, Phase 2 — speisen die Verlust-Kaskade GL-02) ── --}}
             <div x-show="tab === 'kalkulation'" x-cloak class="pt-2">
                 <x-foodalchemist::modal-section title="Kalkulations-Defaults (GL-02)">
-                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-2">Greifen, wenn eine Rezept-Zutat keinen eigenen Wert hat. Leer = nächste Stufe (Team-WG-Default → 0).</p>
+                    <p class="text-[11px] text-gray-500 mb-2">Greifen, wenn eine Rezept-Zutat keinen eigenen Wert hat. Leer = nächste Stufe (Team-WG-Default → 0).</p>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3" data-gp-defaults>
                         <div>
                             <label class="{{ $label }}">Garverlust-Default %</label>
@@ -317,7 +317,7 @@
 
     <x-slot:footer>
         <div class="flex items-center justify-between gap-3 w-full">
-            <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400" title="GT-12-10: HARD_STOP bei vorhandenem gp_key/Jaccard ≥ 0.92 — force legt bewusst trotzdem an">
+            <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-500" title="GT-12-10: HARD_STOP bei vorhandenem gp_key/Jaccard ≥ 0.92 — force legt bewusst trotzdem an">
                 @if($neu)<input type="checkbox" wire:model.live="force" class="rounded border-gray-300 text-rose-500 focus:ring-rose-400" data-force-flag /> bewusst trotzdem anlegen (force)@endif
             </label>
             <div class="flex items-center gap-2">

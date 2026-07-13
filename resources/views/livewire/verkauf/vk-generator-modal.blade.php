@@ -3,14 +3,14 @@
 
 <x-foodalchemist::modal name="vk-generator-modal" title="✨ Gericht generieren" size="max-w-2xl">
     @if($fehler !== null)
-        <p class="text-xs text-rose-600 dark:text-rose-400 mb-3" data-vk-generator-fehler>{{ $fehler }}</p>
+        <p class="text-xs text-rose-600 mb-3" data-vk-generator-fehler>{{ $fehler }}</p>
     @endif
 
     @if($ergebnis === null)
         <x-foodalchemist::modal-section title="Beschreibung">
             <textarea wire:model="description" rows="3" class="{{ $input }}" data-vk-generator-description
                       placeholder="z. B. Herbstlicher Hauptgang mit geschmortem Rind, Wurzelgemüse und Kartoffelkomponente für Bankett …"></textarea>
-            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Aus Foto/PDF: blockiert auf die Vision-Frage bei Martin — bis dahin Text.</p>
+            <p class="text-[10px] text-gray-500 mt-1">Aus Foto/PDF: blockiert auf die Vision-Frage bei Martin — bis dahin Text.</p>
         </x-foodalchemist::modal-section>
 
         <x-foodalchemist::modal-section title="Richtungs-Parameter">
@@ -74,7 +74,7 @@
                     <input type="text" wire:model="parameter.sektor" placeholder="z. B. catering" class="{{ $input }}" />
                 </div>
                 <div class="flex items-end pb-2 gap-3">
-                    <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                    <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
                         <input type="checkbox" wire:model="parameter.bio" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" /> Bio
                     </label>
                 </div>
@@ -86,7 +86,7 @@
         </x-foodalchemist::modal-section>
     @else
         <x-foodalchemist::modal-section title="Ergebnis">
-            <p class="text-xs text-gray-900 dark:text-gray-100 font-medium" data-vk-generator-ergebnis>{{ $ergebnis['name'] }}</p>
+            <p class="text-xs text-gray-900 font-medium" data-vk-generator-ergebnis>{{ $ergebnis['name'] }}</p>
             <div class="flex flex-wrap gap-1.5 mt-2">
                 <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $ergebnis['statistik']['bestand_sub'] }} Basisrezept-Komponenten</span>
                 <span class="{{ $pill }} {{ $variantPill['success'] }}">{{ $ergebnis['statistik']['bestand_gp'] }} GP aus Bestand</span>
@@ -97,15 +97,15 @@
                 <div class="mt-3 space-y-1" data-vk-generator-offene>
                     <p class="{{ $label }}">Hard-Stops (Bestand-Lücken ohne Halbfabrikat-Marker):</p>
                     @foreach($ergebnis['offene'] as $offen)
-                        <p class="text-[11px] text-gray-600 dark:text-gray-300">
+                        <p class="text-[11px] text-gray-600">
                             🔴 {{ $offen['text'] }} —
-                            <span class="text-violet-600 dark:text-violet-400">{{ $offen['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}</span>
-                            @if(count($offen['shortlist']) > 0)<span class="text-gray-500 dark:text-gray-400">· {{ count($offen['shortlist']) }} Shortlist-Kandidaten</span>@endif
+                            <span class="text-violet-600">{{ $offen['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}</span>
+                            @if(count($offen['shortlist']) > 0)<span class="text-gray-500">· {{ count($offen['shortlist']) }} Shortlist-Kandidaten</span>@endif
                         </p>
                     @endforeach
                 </div>
             @endif
-            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-2">VK-Daten (Klasse/Aufschlagsklasse) aus dem Vorschlag übernommen, soweit valide — Rest im VK-Editor pflegen.</p>
+            <p class="text-[10px] text-gray-500 mt-2">VK-Daten (Klasse/Aufschlagsklasse) aus dem Vorschlag übernommen, soweit valide — Rest im VK-Editor pflegen.</p>
         </x-foodalchemist::modal-section>
     @endif
 

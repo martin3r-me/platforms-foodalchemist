@@ -29,10 +29,10 @@
 
                 <button type="button" wire:click="waehleWg('')"
                         class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $commodity_group === ''
-                            ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
-                            : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                            ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
+                            : 'text-gray-700 hover:bg-black/[0.03]' }}">
                     <span class="font-medium">Alle Warengruppen</span>
-                    <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ number_format(array_sum($wgCounts), 0, ',', '.') }}</span>
+                    <span class="text-[11px] text-gray-500">{{ number_format(array_sum($wgCounts), 0, ',', '.') }}</span>
                 </button>
 
                 <div class="space-y-0.5 -mx-1" data-wg-liste>
@@ -40,20 +40,20 @@
                         <div wire:key="wg-{{ $wg->code }}">
                             <button type="button" wire:click="waehleWg('{{ $wg->code }}')"
                                     class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $commodity_group === $wg->code
-                                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
-                                        : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
+                                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
                                 <span class="min-w-0 truncate">{{ $wg->codedLabel() }}</span>
-                                <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0 ml-2">{{ $wgCounts[$wg->code] ?? 0 }}</span>
+                                <span class="text-[11px] text-gray-500 shrink-0 ml-2">{{ $wgCounts[$wg->code] ?? 0 }}</span>
                             </button>
                             @if($commodity_group === $wg->code && count($subCounts) > 0)
                                 <div class="ml-4 mt-0.5 space-y-0.5" data-sub-liste>
                                     @foreach($subCounts as $sub => $n)
                                         <button type="button" wire:key="sub-{{ md5($sub) }}" wire:click="waehleSub('{{ addslashes($sub) }}')"
                                                 class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $subKategorie === $sub
-                                                    ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
-                                                    : 'text-gray-600 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                                                    ? 'bg-violet-500/10 text-violet-700'
+                                                    : 'text-gray-600 hover:bg-black/[0.03]' }}">
                                             <span class="min-w-0 truncate">{{ $sub }}</span>
-                                            <span class="text-gray-500 dark:text-gray-400 shrink-0 ml-2">{{ $n }}</span>
+                                            <span class="text-gray-500 shrink-0 ml-2">{{ $n }}</span>
                                         </button>
                                     @endforeach
                                 </div>
@@ -95,13 +95,13 @@
         <div class="relative overflow-hidden {{ $card }}" data-gp-tabelle>
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">
+                <h3 class="font-medium tracking-tight text-gray-900">
                     Grundprodukte
-                    @if($commodity_group !== '')<span class="text-gray-500 dark:text-gray-400 font-normal">· {{ $commodity_group }}{{ $subKategorie !== '' ? ' · ' . $subKategorie : '' }}</span>@endif
+                    @if($commodity_group !== '')<span class="text-gray-500 font-normal">· {{ $commodity_group }}{{ $subKategorie !== '' ? ' · ' . $subKategorie : '' }}</span>@endif
                 </h3>
                 <span class="{{ $label }} flex items-center gap-2">
                     {{ number_format($gps->total(), 0, ',', '.') }} Treffer ·
-                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer focus:ring-0" data-per-page>
+                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 cursor-pointer focus:ring-0" data-per-page>
                         @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
                     </select>
                 </span>
@@ -123,10 +123,10 @@
                             {{-- R6: Namens-Klick öffnet direkt den GP-Editor (Zeilen-Klick bleibt Panel) --}}
                             {{-- R13: w-full + max-w-0 = Spalte nimmt allen Restplatz und truncated — Tabelle bläht NIE über den Container --}}
                             <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" wire:click.stop="bearbeite({{ $gp->id }})" title="{{ $gp->name }} — Klick: bearbeiten">
-                                <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-gp-name>{{ $gp->name }}</span>
+                                <span class="text-gray-900 hover:text-violet-600 hover:underline cursor-pointer" data-gp-name>{{ $gp->name }}</span>
                                 @if($gp->is_derivat)<span class="ml-1.5 {{ $pill }} {{ $variantPill['info'] }}">Derivat</span>@endif
                             </td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-600 dark:text-gray-400 whitespace-nowrap max-w-36 truncate" title="{{ $gp->commodity_group?->name ?? '' }}">{{ $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-600 whitespace-nowrap max-w-36 truncate" title="{{ $gp->commodity_group?->name ?? '' }}">{{ $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '—' }}</td>
                             {{-- Inline-Status-Pflege: Kuratoren editieren direkt (Beschleuniger), sonst Badge (D1) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp) && $gp->status !== \Platform\FoodAlchemist\Enums\GpStatus::Merged)
@@ -143,40 +143,40 @@
                                 @endif
                             </td>
                             <td class="{{ $td }} text-right tabular-nums">
-                                @if($gp->n_las_total > 0)<span class="text-gray-600 dark:text-gray-400">{{ $gp->n_las_total }}</span>
-                                @elseif(!$gp->requires_la)<span class="text-gray-500 dark:text-gray-400" title="bewusst LA-frei">n/a</span>
+                                @if($gp->n_las_total > 0)<span class="text-gray-600">{{ $gp->n_las_total }}</span>
+                                @elseif(!$gp->requires_la)<span class="text-gray-500" title="bewusst LA-frei">n/a</span>
                                 @else<span class="{{ $pill }} font-medium {{ $variantPill['warning'] }}" title="kein LA verknüpft — EK-/Allergen-Lücke">0</span>@endif
                             </td>
                             <td class="{{ $td }} whitespace-nowrap text-right tabular-nums" data-lead-preis>
                                 @if($gp->lead_vergleichspreis)
-                                    <span class="text-gray-900 dark:text-gray-100">{{ number_format($gp->lead_vergleichspreis['value'], 2, ',', '.') }} {{ $gp->lead_vergleichspreis['unit'] }}</span>
+                                    <span class="text-gray-900">{{ number_format($gp->lead_vergleichspreis['value'], 2, ',', '.') }} {{ $gp->lead_vergleichspreis['unit'] }}</span>
                                 @elseif($gp->lead_preis !== null)
-                                    <span class="text-gray-600 dark:text-gray-400" title="Gebinde-Preis — kein Vergleichspreis (qty fehlt, GL-03 A-2)">{{ number_format((float) $gp->lead_preis, 2, ',', '.') }} €</span>
+                                    <span class="text-gray-600" title="Gebinde-Preis — kein Vergleichspreis (qty fehlt, GL-03 A-2)">{{ number_format((float) $gp->lead_preis, 2, ',', '.') }} €</span>
                                 @else
-                                    <span class="text-gray-500 dark:text-gray-400">—</span>
+                                    <span class="text-gray-500">—</span>
                                 @endif
                             </td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 text-right tabular-nums">{{ $gp->rezepte_count ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $gp->rezepte_count ?? '—' }}</td>
                             {{-- 3-Status-Symbol (fixe Zeilenhöhe): vorhanden · frei · keine Daten. Effektivwerte (Override>Mutter>LA-MAX), read-only (Quelle = LA). --}}
                             <td class="{{ $td }} whitespace-nowrap" data-allergen-status="{{ $gp->allergen_status ?? 'keine_daten' }}">
                                 @php($kiSuffix = $gp->allergen_ki ? ' — ✨ KI-geschätzt' . ($gp->allergen_ki_conf !== null ? ' (' . round($gp->allergen_ki_conf * 100) . ' %)' : '') . ', nicht durch Lieferantenartikel belegt' : '')
                                 @if(($gp->allergen_status ?? 'keine_daten') === 'vorhanden')
-                                    <span class="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 text-[11px] font-medium"
-                                          title="Allergene enthalten: {{ collect($gp->allergen_badges)->map(fn ($f) => explode(' ', \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$f] ?? $f)[0])->implode(', ') ?: 'inkl. Spuren' }}{{ $kiSuffix }}">⚠ enthält @if($gp->allergen_ki)<span class="text-violet-500 dark:text-violet-400 font-normal" data-allergen-ki>✨ KI</span>@endif</span>
+                                    <span class="inline-flex items-center gap-1 text-rose-600 text-[11px] font-medium"
+                                          title="Allergene enthalten: {{ collect($gp->allergen_badges)->map(fn ($f) => explode(' ', \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$f] ?? $f)[0])->implode(', ') ?: 'inkl. Spuren' }}{{ $kiSuffix }}">⚠ enthält @if($gp->allergen_ki)<span class="text-violet-500 font-normal" data-allergen-ki>✨ KI</span>@endif</span>
                                 @elseif($gp->allergen_status === 'frei')
-                                    <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-[11px]" title="Keine der 14 EU-Allergene deklariert (allergenfrei){{ $kiSuffix }}">✓ frei @if($gp->allergen_ki)<span class="text-violet-500 dark:text-violet-400" data-allergen-ki>✨ KI</span>@endif</span>
+                                    <span class="inline-flex items-center gap-1 text-emerald-600 text-[11px]" title="Keine der 14 EU-Allergene deklariert (allergenfrei){{ $kiSuffix }}">✓ frei @if($gp->allergen_ki)<span class="text-violet-500" data-allergen-ki>✨ KI</span>@endif</span>
                                 @else
-                                    <span class="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400 text-[11px]" title="Keine Allergen-Angaben in den Lieferantenartikeln — nicht als frei werten">– keine Daten</span>
+                                    <span class="inline-flex items-center gap-1 text-gray-500 text-[11px]" title="Keine Allergen-Angaben in den Lieferantenartikeln — nicht als frei werten">– keine Daten</span>
                                 @endif
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="px-5 py-10 text-center text-gray-500 dark:text-gray-400">Keine Grundprodukte gefunden.</td></tr>
+                        <tr><td colspan="7" class="px-5 py-10 text-center text-gray-500">Keine Grundprodukte gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>
             </div>
-            <div class="px-5 py-3 border-t border-black/5 dark:border-white/10">{{ $gps->links() }}</div>
+            <div class="px-5 py-3 border-t border-black/5">{{ $gps->links() }}</div>
         </div>
     </x-ui-page-container>
 </x-ui-page>

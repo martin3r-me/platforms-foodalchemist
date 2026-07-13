@@ -42,18 +42,18 @@
                 {{-- R6: Template-Filter (Jarvis-Sidebar) --}}
                 <button type="button" wire:click="toggleTemplates"
                         class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $nurTemplates
-                            ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/15 text-orange-700 dark:text-orange-300'
-                            : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}" data-templates-toggle>
+                            ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/15 text-orange-700'
+                            : 'text-gray-700 hover:bg-black/[0.03]' }}" data-templates-toggle>
                     <span class="font-medium">📐 Templates</span>
-                    <span class="text-[11px] {{ $nurTemplates ? 'text-orange-500 font-medium' : 'text-gray-500 dark:text-gray-400' }}">{{ $nurTemplates ? 'active' : $templateAnzahl }}</span>
+                    <span class="text-[11px] {{ $nurTemplates ? 'text-orange-500 font-medium' : 'text-gray-500' }}">{{ $nurTemplates ? 'active' : $templateAnzahl }}</span>
                 </button>
 
                 <button type="button" wire:click="waehleHauptgruppe(null)"
                         class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === null
-                            ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
-                            : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                            ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
+                            : 'text-gray-700 hover:bg-black/[0.03]' }}">
                     <span class="font-medium">Alle Hauptgruppen</span>
-                    <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ number_format(array_sum($hgCounts), 0, ',', '.') }}</span>
+                    <span class="text-[11px] text-gray-500">{{ number_format(array_sum($hgCounts), 0, ',', '.') }}</span>
                 </button>
 
                 <div class="space-y-0.5 -mx-1" data-hg-liste>
@@ -61,10 +61,10 @@
                         <div wire:key="hg-{{ $hg->id }}">
                             <button type="button" wire:click="waehleHauptgruppe({{ $hg->id }})"
                                     class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === $hg->id
-                                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
-                                        : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
+                                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
                                 <span class="min-w-0 truncate">{{ $hg->label }}</span>
-                                <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
+                                <span class="text-[11px] text-gray-500 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
                             </button>
                             @if($hauptgruppe === $hg->id && $kategorien->isNotEmpty())
                                 <div class="ml-4 mt-0.5 space-y-0.5" data-kat-liste>
@@ -72,10 +72,10 @@
                                         @if(($katCounts[$kat->id] ?? 0) > 0)
                                             <button type="button" wire:key="kat-{{ $kat->id }}" wire:click="waehleKategorie({{ $kat->id }})"
                                                     class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $kategorie === $kat->id
-                                                        ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
-                                                        : 'text-gray-600 dark:text-gray-400 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                                                        ? 'bg-violet-500/10 text-violet-700'
+                                                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
                                                 <span class="min-w-0 truncate">{{ $kat->label }}</span>
-                                                <span class="text-gray-500 dark:text-gray-400 shrink-0 ml-2">{{ $katCounts[$kat->id] }}</span>
+                                                <span class="text-gray-500 shrink-0 ml-2">{{ $katCounts[$kat->id] }}</span>
                                             </button>
                                         @endif
                                     @endforeach
@@ -120,20 +120,20 @@
         <div class="flex items-center justify-between pt-1">
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
-                <button type="button" wire:click="$dispatch('generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-generator-oeffnen>✨ KI-Rezept</button>
+                <button type="button" wire:click="$dispatch('generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600" data-generator-oeffnen>✨ KI-Rezept</button>
                 {{-- R6: «Aus Template» — Liste der 📐-Templates, Klick dupliziert + öffnet den Editor --}}
                 <div class="relative">
                     <button type="button" wire:click="$toggle('templateWahlOffen')" class="{{ $btnGhostXs }}" data-aus-template>📐 Aus Template</button>
                     @if($templateWahlOffen)
-                        <div class="absolute left-0 top-full mt-1 z-30 w-80 max-h-80 overflow-y-auto rounded-lg bg-white dark:bg-gray-900 border border-black/10 dark:border-white/10 shadow-xl" data-template-liste>
+                        <div class="absolute left-0 top-full mt-1 z-30 w-80 max-h-80 overflow-y-auto rounded-lg bg-white border border-black/10 shadow-xl" data-template-liste>
                             @forelse($templateListe as $template)
                                 <button type="button" wire:key="tpl-{{ $template->id }}" wire:click="ausTemplate({{ $template->id }})"
-                                        class="block w-full text-left px-3 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 hover:bg-violet-500/10">
+                                        class="block w-full text-left px-3 py-1.5 text-[11px] text-gray-700 hover:bg-violet-500/10">
                                     {{ $template->name }}
-                                    <span class="text-gray-500 dark:text-gray-400">· {{ $template->n_ingredients_total }} Zutaten{{ $template->yield_kg !== null ? ' · ' . number_format((float) $template->yield_kg, 2, ',', '.') . ' kg' : '' }}</span>
+                                    <span class="text-gray-500">· {{ $template->n_ingredients_total }} Zutaten{{ $template->yield_kg !== null ? ' · ' . number_format((float) $template->yield_kg, 2, ',', '.') . ' kg' : '' }}</span>
                                 </button>
                             @empty
-                                <p class="px-3 py-2 text-[11px] text-gray-500 dark:text-gray-400">Keine Templates — im Editor «📐 Template» markieren.</p>
+                                <p class="px-3 py-2 text-[11px] text-gray-500">Keine Templates — im Editor «📐 Template» markieren.</p>
                             @endforelse
                         </div>
                     @endif
@@ -149,7 +149,7 @@
                             <span class="{{ $pill }} {{ $variantPill['info'] }}">✨ Bulk läuft … {{ $run->done }}/{{ $run->total }}</span>
                         @else
                             <span class="{{ $pill }} {{ $variantPill['success'] }}">✨ Bulk fertig: {{ $run->done }}/{{ $run->total }}{{ $run->failed > 0 ? " · {$run->failed} Fehler" : '' }}</span>
-                            <span class="text-[11px] text-gray-600 dark:text-gray-400">{{ $bulkSvc->offeneVorschlaege(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId) }} Vorschläge offen</span>
+                            <span class="text-[11px] text-gray-600">{{ $bulkSvc->offeneVorschlaege(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId) }} Vorschläge offen</span>
                             <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-bulk-alle-uebernehmen>Alle übernehmen</button>
                             <button type="button" wire:click="bulkSchliessen" class="{{ $btnGhostXs }}" title="Vorschläge bleiben offen (Review)">Schließen</button>
                         @endif
@@ -158,8 +158,8 @@
             @endif
             @if(count(array_filter($auswahl)) > 0)
                 <div class="flex items-center gap-1.5" data-bulk-status>
-                    <button type="button" wire:click="bulkAnreichern" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="Beschreibung · Kategorie · Geschmack als Review-Vorschläge (GL-07: nie Auto-Persistenz)" data-bulk-anreichern>✨ Bulk anreichern</button>
-                    <span class="text-xs text-gray-900 dark:text-gray-100 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt:</span>
+                    <button type="button" wire:click="bulkAnreichern" class="{{ $btnGhostXs }} text-violet-600" title="Beschreibung · Kategorie · Geschmack als Review-Vorschläge (GL-07: nie Auto-Persistenz)" data-bulk-anreichern>✨ Bulk anreichern</button>
+                    <span class="text-xs text-gray-900 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt:</span>
                     @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
                         <button type="button" wire:click="bulkStatus('{{ $wert }}')" class="{{ $btnGhostXs }}" data-bulk-status-btn="{{ $wert }}">→ {{ $lbl }}</button>
                     @endforeach
@@ -169,10 +169,10 @@
         <div class="relative overflow-hidden {{ $card }}" data-rezept-tabelle>
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Basisrezepte</h3>
+                <h3 class="font-medium tracking-tight text-gray-900">Basisrezepte</h3>
                 <span class="{{ $label }} flex items-center gap-2">
                     {{ number_format($rezepte->total(), 0, ',', '.') }} Treffer ·
-                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer focus:ring-0" data-per-page>
+                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 cursor-pointer focus:ring-0" data-per-page>
                         @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
                     </select>
                 </span>
@@ -197,12 +197,12 @@
                             </td>
                             {{-- R6: Namens-Klick öffnet direkt den Voll-Editor (Zeilen-Klick bleibt Panel-Selektion) --}}
                             <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
-                                <span class="text-gray-900 dark:text-gray-100 hover:text-violet-600 dark:hover:text-violet-400 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
+                                <span class="text-gray-900 hover:text-violet-600 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
                                 @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>📐 Template</span>@endif
                             </td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-600 dark:text-gray-400 truncate max-w-[12rem] whitespace-nowrap">{{ $r->category?->label ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ $r->production_depth ?? '—' }}</td>
+                            <td class="{{ $td }} text-[11px] italic text-gray-600 truncate max-w-[12rem] whitespace-nowrap">{{ $r->category?->label ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->production_depth ?? '—' }}</td>
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge — Auto-Zustand) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
@@ -216,11 +216,11 @@
                                     <span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span>
                                 @endif
                             </td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 text-right tabular-nums whitespace-nowrap">
+                            <td class="{{ $td }} text-gray-600 text-right tabular-nums whitespace-nowrap">
                                 {{ $r->n_ingredients_total }}
                                 @if($r->n_ingredients_unmapped > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }} ml-1" title="ungemappte Zutaten — F7.1: Allergene unbekannt">{{ $r->n_ingredients_unmapped }}?</span>@endif
                             </td>
-                            <td class="{{ $td }} text-gray-600 dark:text-gray-400 whitespace-nowrap text-right tabular-nums">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 whitespace-nowrap text-right tabular-nums">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '—' }}</td>
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
                             </td>
@@ -229,17 +229,17 @@
                                 @if($fb && $fb['count'] > 0)
                                     <span class="{{ $pill }} {{ ($fb['avg'] ?? 0) >= 4 ? $variantPill['success'] : (($fb['avg'] ?? 0) >= 3 ? $variantPill['warning'] : $variantPill['danger']) }}" title="{{ $fb['count'] }} Feedback-Einträge">★ {{ $fb['avg'] !== null ? number_format((float) $fb['avg'], 1, ',', '.') : '–' }} <span class="opacity-60">({{ $fb['count'] }})</span></span>
                                 @else
-                                    <span class="text-gray-300 dark:text-gray-600">—</span>
+                                    <span class="text-gray-300">—</span>
                                 @endif
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-500 dark:text-gray-400">Keine Rezepte gefunden.</td></tr>
+                        <tr><td colspan="10" class="px-5 py-10 text-center text-gray-500">Keine Rezepte gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>
             </div>
-            <div class="px-5 py-3 border-t border-black/5 dark:border-white/10">{{ $rezepte->links() }}</div>
+            <div class="px-5 py-3 border-t border-black/5">{{ $rezepte->links() }}</div>
         </div>
     </x-ui-page-container>
 </x-ui-page>

@@ -17,8 +17,8 @@
 ])
 
 @php
-    $aktivCls = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300';
-    $hoverCls = 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5';
+    $aktivCls = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700';
+    $hoverCls = 'text-gray-600 hover:bg-black/[0.03]';
 @endphp
 
 <div wire:key="tree-node-{{ $nodeId }}"
@@ -27,7 +27,7 @@
      style="padding-left: {{ $depth * 12 }}px">
     @if($hasChildren)
         <button type="button" @click="toggle({{ (int) $nodeId }})"
-                class="shrink-0 w-4 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[10px] leading-none"
+                class="shrink-0 w-4 text-gray-500 hover:text-violet-500 text-[10px] leading-none"
                 title="auf-/zuklappen">
             <span x-text="isCollapsed({{ (int) $nodeId }}) ? '▸' : '▾'">▾</span>
         </button>
@@ -38,6 +38,6 @@
     <div class="flex-1 min-w-0 flex items-center gap-1">{{ $slot }}</div>
 
     @if($count !== null)
-        <span class="shrink-0 text-[11px] text-gray-500 dark:text-gray-400 ml-2 mr-1 tabular-nums">{{ $count }}</span>
+        <span class="shrink-0 text-[11px] text-gray-500 ml-2 mr-1 tabular-nums">{{ $count }}</span>
     @endif
 </div>

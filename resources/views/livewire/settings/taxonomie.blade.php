@@ -3,7 +3,7 @@
 
 <div class="space-y-4">
     @if($fehler)
-        <div class="{{ $card }} p-3 border-red-500/20"><p class="text-xs text-red-600 dark:text-red-400">{{ $fehler }}</p></div>
+        <div class="{{ $card }} p-3 border-red-500/20"><p class="text-xs text-red-600">{{ $fehler }}</p></div>
     @endif
 
     <div class="flex gap-4 items-start">
@@ -13,25 +13,25 @@
             @foreach($hauptgruppen as $hg)
                 @php($darfEditHg = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $hg))
                 <div wire:key="hg-{{ $hg->id }}" class="group flex items-center gap-1 rounded-lg {{ $hauptgruppeId === $hg->id
-                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700 dark:text-violet-300'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/5' }}">
+                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
+                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
                     @if($hgEditId === $hg->id)
                         <input type="text" wire:model="hgEditName" wire:keydown.enter="hgSave" wire:keydown.escape="$set('hgEditId', null)" class="{{ $input }} !py-0.5 flex-1" autofocus />
-                        <button type="button" wire:click="hgSave" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400 shrink-0">OK</button>
+                        <button type="button" wire:click="hgSave" class="{{ $btnGhostXs }} text-violet-600 shrink-0">OK</button>
                     @else
                         <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $hg->label }}</button>
-                        <span class="text-[11px] text-gray-500 dark:text-gray-400 shrink-0">{{ $hg->kategorie_count }}</span>
+                        <span class="text-[11px] text-gray-500 shrink-0">{{ $hg->kategorie_count }}</span>
                         @if($darfEditHg)
-                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 dark:text-gray-400 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
                             <button type="button" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" @disabled($hg->kategorie_count > 0)
-                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $hg->kategorie_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 dark:text-gray-400 hover:text-red-500' }}"
+                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $hg->kategorie_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-500' }}"
                                     title="{{ $hg->kategorie_count > 0 ? 'Hat Kategorien — erst dort entfernen' : 'löschen' }}">✕</button>
                         @endif
                     @endif
                 </div>
             @endforeach
 
-            <div class="flex gap-1 pt-2 mt-1 border-t border-black/5 dark:border-white/10" data-taxonomie-hg-neu>
+            <div class="flex gap-1 pt-2 mt-1 border-t border-black/5" data-taxonomie-hg-neu>
                 <input type="text" wire:model="neueHauptgruppe" wire:keydown.enter="hgNeu"
                        placeholder="Neue Hauptgruppe …" class="{{ $input }} py-0.5" />
                 <button type="button" wire:click="hgNeu" class="{{ $btnGhostXs }}" title="Hauptgruppe anlegen">+</button>
@@ -43,7 +43,7 @@
             <div class="relative overflow-hidden {{ $card }}" data-taxonomie-kategorien>
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                    <h3 class="font-medium tracking-tight text-gray-900 dark:text-gray-100">Kategorien</h3>
+                    <h3 class="font-medium tracking-tight text-gray-900">Kategorien</h3>
                     <span class="{{ $label }}">{{ $kategorien->count() }} in dieser Hauptgruppe</span>
                 </div>
                 <table class="{{ $table }}">
@@ -60,14 +60,14 @@
                                     <td class="{{ $td }}"><input type="number" wire:model="form.sort_order" class="{{ $input }} !py-1 w-16" /></td>
                                     <td class="{{ $td }}"></td>
                                     <td class="{{ $td }} text-right whitespace-nowrap">
-                                        <button type="button" wire:click="save" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">Speichern</button>
+                                        <button type="button" wire:click="save" class="{{ $btnGhostXs }} text-violet-600">Speichern</button>
                                         <button type="button" wire:click="$set('editId', null)" class="{{ $btnGhostXs }}">Abbrechen</button>
                                     </td>
                                 @else
-                                    <td class="{{ $td }} font-medium text-gray-900 dark:text-gray-100">{{ $kat->label }}</td>
-                                    <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $kat->technik ?? '—' }}</td>
-                                    <td class="{{ $td }} text-gray-500 dark:text-gray-400">{{ $kat->sort_order }}</td>
-                                    <td class="{{ $td }} text-gray-600 dark:text-gray-400">{{ $kat->recipe_count }}</td>
+                                    <td class="{{ $td }} font-medium text-gray-900">{{ $kat->label }}</td>
+                                    <td class="{{ $td }} text-gray-600">{{ $kat->technik ?? '—' }}</td>
+                                    <td class="{{ $td }} text-gray-500">{{ $kat->sort_order }}</td>
+                                    <td class="{{ $td }} text-gray-600">{{ $kat->recipe_count }}</td>
                                     <td class="{{ $td }} text-right whitespace-nowrap">
                                         @if($darfEdit)
                                             <button type="button" wire:click="edit({{ $kat->id }})" class="{{ $btnGhostXs }}">Bearbeiten</button>

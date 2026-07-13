@@ -8,7 +8,7 @@
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-vk-speichern>Speichern</button>
             <button type="button" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-zutaten>Komponenten bearbeiten</button>
             <button type="button" wire:click="loeschen" wire:confirm="Gericht wirklich löschen? Nur der VK-Layer wird entfernt — Basisrezepte und GP-Verknüpfungen bleiben bestehen."
-                    class="{{ $btnGhostXs }} text-rose-600 dark:text-rose-400" data-vk-loeschen>Löschen</button>
+                    class="{{ $btnGhostXs }} text-rose-600" data-vk-loeschen>Löschen</button>
         </x-slot:actions>
     @endif
 
@@ -18,23 +18,23 @@
             <div class="grid grid-cols-2 md:grid-cols-5 gap-2" data-vk-editor-kpis>
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">Yield</span>
-                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
+                    <p class="text-xs font-semibold text-gray-900">{{ $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
                 </div>
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">EK gesamt</span>
-                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
+                    <p class="text-xs font-semibold text-gray-900">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
                 <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">EK / kg</span>
-                    <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600">EK / kg</span>
+                    <p class="text-xs font-bold text-orange-700">{{ $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
                 </div>
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">Mit Preis</span>
-                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $rezept->ek_n_ingredients_priced ?? 0 }}/{{ $rezept->ek_n_ingredients_total ?? 0 }}</p>
+                    <p class="text-xs font-semibold text-gray-900">{{ $rezept->ek_n_ingredients_priced ?? 0 }}/{{ $rezept->ek_n_ingredients_total ?? 0 }}</p>
                 </div>
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">Allergen-Konf.</span>
-                    <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergens_confidence] ?? 'text-gray-500 dark:text-gray-400' }}">{{ strtoupper($rezept->allergens_confidence) }}</p>
+                    <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergens_confidence] ?? 'text-gray-500' }}">{{ strtoupper($rezept->allergens_confidence) }}</p>
                 </div>
 
                 {{-- VK-Seite (2. Reihe): Verkaufspreis + Portion + Marge/Wareneinsatz.
@@ -42,30 +42,30 @@
                      Aufschlagsklasse/Portionsgröße gepflegt ist. --}}
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">VK netto</span>
-                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['vk']['sales_net'] ?? null) !== null ? number_format((float) $cockpit['vk']['sales_net'], 2, ',', '.') . ' €' : '—' }}</p>
+                    <p class="text-xs font-semibold text-gray-900">{{ ($cockpit['vk']['sales_net'] ?? null) !== null ? number_format((float) $cockpit['vk']['sales_net'], 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">VK brutto</span>
-                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">{{ ($cockpit['sales_gross'] ?? null) !== null ? number_format((float) $cockpit['sales_gross'], 2, ',', '.') . ' €' : '—' }}</p>
+                    <p class="text-xs font-semibold text-gray-900">{{ ($cockpit['sales_gross'] ?? null) !== null ? number_format((float) $cockpit['sales_gross'], 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
                 <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-2">
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">VK / Portion</span>
-                    <p class="text-xs font-bold text-emerald-700 dark:text-emerald-300">{{ ($cockpit['pro_einheit']['vk_netto_pro_einheit'] ?? null) !== null ? number_format((float) $cockpit['pro_einheit']['vk_netto_pro_einheit'], 2, ',', '.') . ' €' : '—' }}</p>
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-emerald-600">VK / Portion</span>
+                    <p class="text-xs font-bold text-emerald-700">{{ ($cockpit['pro_einheit']['vk_netto_pro_einheit'] ?? null) !== null ? number_format((float) $cockpit['pro_einheit']['vk_netto_pro_einheit'], 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
                 <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600 dark:text-orange-400">Wareneinsatz</span>
-                    <p class="text-xs font-bold text-orange-700 dark:text-orange-300">{{ ($cockpit['marge']['wareneinsatz_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—' }}</p>
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600">Wareneinsatz</span>
+                    <p class="text-xs font-bold text-orange-700">{{ ($cockpit['marge']['wareneinsatz_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—' }}</p>
                 </div>
                 <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
                     <span class="{{ $dt }}">Marge</span>
-                    <p class="text-xs font-semibold text-green-600 dark:text-green-400">{{ ($cockpit['marge']['marge_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['marge_pct'], 1, ',', '.') . ' %' : '—' }}</p>
+                    <p class="text-xs font-semibold text-green-600">{{ ($cockpit['marge']['marge_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['marge_pct'], 1, ',', '.') . ' %' : '—' }}</p>
                 </div>
             </div>
         </x-slot:kpiHeader>
     @endif
 
     @if($fehler !== null)
-        <p class="text-xs text-rose-600 dark:text-rose-400" data-vk-fehler>{{ $fehler }}</p>
+        <p class="text-xs text-rose-600" data-vk-fehler>{{ $fehler }}</p>
     @endif
 
     @if($rezept === null)
@@ -77,18 +77,18 @@
                     <input type="text" wire:model="neuName" class="{{ $input }}" placeholder="HG: Rinderfilet | Rotwein-Jus | Kartoffelgratin" data-vk-neu-name />
                 </div>
                 <div>
-                    <label class="block {{ $label }} mb-1">Basisrezept als erste Komponente <span class="normal-case text-gray-500 dark:text-gray-400">(optional)</span></label>
+                    <label class="block {{ $label }} mb-1">Basisrezept als erste Komponente <span class="normal-case text-gray-500">(optional)</span></label>
                     <input type="search" wire:model.live.debounce.300ms="basisSuche" class="{{ $input }}" placeholder="Basisrezept suchen …" data-vk-basis-suche />
                     @foreach($basisTreffer as $b)
                         <button type="button" wire:key="bt-{{ $b->id }}" wire:click="$set('basisId', {{ $b->id }})"
-                                class="block w-full text-left px-2 py-1 rounded text-xs {{ $basisId === $b->id ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.03] dark:hover:bg-white/5' }}"
+                                class="block w-full text-left px-2 py-1 rounded text-xs {{ $basisId === $b->id ? 'bg-violet-500/10 text-violet-700' : 'text-gray-700 hover:bg-black/[0.03]' }}"
                                 data-vk-basis-treffer="{{ $b->id }}">
-                            {{ $b->name }} <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ $b->yield_kg !== null ? number_format((float) $b->yield_kg, 2, ',', '.') . ' kg' : '' }} {{ $b->ek_total_eur !== null ? '· EK ' . number_format((float) $b->ek_total_eur, 2, ',', '.') . ' €' : '' }}</span>
+                            {{ $b->name }} <span class="text-[11px] text-gray-500">{{ $b->yield_kg !== null ? number_format((float) $b->yield_kg, 2, ',', '.') . ' kg' : '' }} {{ $b->ek_total_eur !== null ? '· EK ' . number_format((float) $b->ek_total_eur, 2, ',', '.') . ' €' : '' }}</span>
                         </button>
                     @endforeach
                 </div>
                 <button type="button" wire:click="anlegen" class="{{ $btnPrimary }}" data-vk-anlegen>Anlegen</button>
-                <p class="text-[10px] text-gray-500 dark:text-gray-400">Mit Basisrezept: dessen ganze Charge wird erste Komponente (Menge = Yield). Ohne: leeres Gericht — Komponenten danach im Editor hinzufügen.</p>
+                <p class="text-[10px] text-gray-500">Mit Basisrezept: dessen ganze Charge wird erste Komponente (Menge = Yield). Ohne: leeres Gericht — Komponenten danach im Editor hinzufügen.</p>
             </div>
         </x-foodalchemist::modal-section>
     @else
@@ -97,7 +97,7 @@
              der eingebettete <livewire ingredient-editor> wird NICHT neu gemountet, ungespeicherte Eingaben
              bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
         <div x-data="{ tab: 'aufbau' }" data-vk-tabs>
-            <div class="flex gap-4 border-b border-black/5 dark:border-white/10">
+            <div class="flex gap-4 border-b border-black/5">
                 {{-- 'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" — bündelt Allergene · Zusatzstoffe · Nährwerte · Spezifikation (Rezept-Modal-Parität) --}}
                 @php($vkTabs = ['aufbau' => 'Aufbau', 'allergene' => 'Deklaration', 'kalkulation' => 'Kalkulation', 'darreichungen' => 'Darreichungen', 'service' => 'Service'])
                 @if($rezept !== null)@php($vkTabs['sensorik'] = 'Sensorik & Pairing')@endif
@@ -105,7 +105,7 @@
                 @php($vkTabs['notes'] = 'Notizen')
                 @foreach($vkTabs as $tabKey => $tabLabel)
                     <button type="button" @click="tab = '{{ $tabKey }}'"
-                            :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700 dark:text-violet-300' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                            :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700' : 'border-transparent text-gray-600 hover:text-gray-700'"
                             class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors" data-vk-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
                 @endforeach
             </div>
@@ -116,7 +116,7 @@
             {{-- M9-01i: ✨-Vorschläge in die Form-Felder (Save = Accept).
                  ✨ Marketing ist raus (UX-Umbau 2026-07-03): Marketing-Text lebt am Foodbook-Block. --}}
             <x-slot:actions>
-                <button type="button" wire:click="ki('wording')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.wording: kanonischer Marketing-Name, stil-neutral" data-ki-wording>✨ Wording</button>
+                <button type="button" wire:click="ki('wording')" class="{{ $btnGhostXs }} text-violet-600" title="vk.wording: kanonischer Marketing-Name, stil-neutral" data-ki-wording>✨ Wording</button>
             </x-slot:actions>
             <div class="grid grid-cols-2 gap-3">
                 <div class="col-span-2">
@@ -126,7 +126,7 @@
                 <div class="col-span-2">
                     <label class="block {{ $label }} mb-1">VK-Wording (neutraler Standard — Fallback für Concepter &amp; Foodbook)</label>
                     <input type="text" wire:model="form.sales_wording_standard" class="{{ $input }}" data-vk-wording />
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Wording-Kette: Foodbook-Override → Konzept-Wording → dieser Standard → interner Name. Marketing-Texte werden am Foodbook-Block gepflegt.</p>
+                    <p class="text-[10px] text-gray-500 mt-0.5">Wording-Kette: Foodbook-Override → Konzept-Wording → dieser Standard → interner Name. Marketing-Texte werden am Foodbook-Block gepflegt.</p>
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Geschmack</label>
@@ -166,19 +166,19 @@
         {{-- M9-01a/b: Zutaten INLINE (P-8-Kern, VK-Kontext = Rollen-Spalte) + 🎭 + KPI-Leiste --}}
         <x-foodalchemist::modal-section title="Zutaten ({{ $rezept->ingredients->count() }})">
             <x-slot:actions>
-                <button type="button" wire:click="ai_rollen" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-editor-rollen>🎭 Rollen verteilen</button>
+                <button type="button" wire:click="ai_rollen" class="{{ $btnGhostXs }} text-violet-600" title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-editor-rollen>🎭 Rollen verteilen</button>
             </x-slot:actions>
 
             @if($rollenVorschlag !== null)
                 <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs" data-vk-editor-rollen-vorschlag>
-                    <p class="text-gray-900 dark:text-gray-100">🎭 Rollen-Verteilung <span class="text-[11px] text-gray-500 dark:text-gray-400">· {{ round($rollenVorschlag['confidence'] * 100) }} %</span></p>
+                    <p class="text-gray-900">🎭 Rollen-Verteilung <span class="text-[11px] text-gray-500">· {{ round($rollenVorschlag['confidence'] * 100) }} %</span></p>
                     @if($rollenVorschlag['rollen'] === [])
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Kein gültiger Vorschlag (Vokabular: aroma_treiber · komponente · beilage · garnitur).</p>
+                        <p class="text-[11px] text-gray-500 mt-0.5">Kein gültiger Vorschlag (Vokabular: aroma_treiber · komponente · beilage · garnitur).</p>
                     @else
                         <div class="mt-1 space-y-0.5">
                             @foreach($rollenVorschlag['rollen'] as $zeileId => $role)
                                 @php($zeile = $rezept->ingredients->firstWhere('id', $zeileId))
-                                <p class="text-[11px] text-gray-600 dark:text-gray-300" wire:key="vkmr-{{ $zeileId }}">{{ $zeile?->referencedRecipe?->name ?? $zeile?->gp?->name ?? $zeile?->display_name ?? "Zeile {$zeileId}" }} → <span class="font-medium">{{ $role }}</span></p>
+                                <p class="text-[11px] text-gray-600" wire:key="vkmr-{{ $zeileId }}">{{ $zeile?->referencedRecipe?->name ?? $zeile?->gp?->name ?? $zeile?->display_name ?? "Zeile {$zeileId}" }} → <span class="font-medium">{{ $role }}</span></p>
                             @endforeach
                         </div>
                     @endif
@@ -205,7 +205,7 @@
         {{-- M9-01d: Nährwerte (GL-08-Aggregate — pro 100 g + pro Stück; seit 2026-07-02 hier statt im eigenen Tab) --}}
         <x-foodalchemist::modal-section title="Nährwerte">
             @if($rezept->nutri_kcal_per_100g === null)
-                <p class="text-[11px] text-gray-500 dark:text-gray-400" data-vk-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
+                <p class="text-[11px] text-gray-500" data-vk-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
             @else
                 <table class="{{ $table }}" data-vk-naehrwerte>
                     <thead><tr class="text-left">
@@ -224,14 +224,14 @@
                             ['Salz', $rezept->nutri_salt_g_per_100g, 'g', 2],
                         ] as [$lbl, $wert, $unit, $dez])
                             <tr class="{{ $tr }}" wire:key="vkn-{{ $lbl }}">
-                                <td class="{{ $td }} {{ $lbl === 'Brennwert' ? 'font-medium text-gray-900 dark:text-gray-100' : '' }}">{{ $lbl }}</td>
+                                <td class="{{ $td }} {{ $lbl === 'Brennwert' ? 'font-medium text-gray-900' : '' }}">{{ $lbl }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $unit : '—' }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $wert !== null && $gProStueck !== null ? number_format((float) $wert * $gProStueck / 100, $dez, ',', '.') . ' ' . $unit : '—' }}</td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                <p class="text-[10px] text-gray-500 mt-1">
                     Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->nutri_confidence] ?? '' }}">{{ strtoupper($rezept->nutri_confidence ?? '—') }}</span>
                     · {{ $rezept->nutri_n_ingredients_mapped ?? 0 }}/{{ $rezept->nutri_n_ingredients_total ?? 0 }} Zutaten mit Nährwert-Daten
                     {{ $rezept->nutri_aggregated_at !== null ? '· aggregiert ' . $rezept->nutri_aggregated_at->format('Y-m-d H:i') : '' }}
@@ -245,11 +245,11 @@
             <div class="grid grid-cols-2 gap-3" data-vk-spezifikation>
                 <div>
                     <span class="{{ $dt }}">Bio-Anteil</span>
-                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ $anteile['bio'] !== null ? number_format($anteile['bio'], 1, ',', '.') . ' %' : '—' }}</p>
+                    <p class="text-lg font-semibold text-gray-900">{{ $anteile['bio'] !== null ? number_format($anteile['bio'], 1, ',', '.') . ' %' : '—' }}</p>
                 </div>
                 <div>
                     <span class="{{ $dt }}">Regional (DE)</span>
-                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ $anteile['regional'] !== null && $anteile['regional'] > 0 ? number_format($anteile['regional'], 1, ',', '.') . ' %' : '—' }}</p>
+                    <p class="text-lg font-semibold text-gray-900">{{ $anteile['regional'] !== null && $anteile['regional'] > 0 ? number_format($anteile['regional'], 1, ',', '.') . ' %' : '—' }}</p>
                 </div>
             </div>
         </x-foodalchemist::modal-section>
@@ -302,7 +302,7 @@
                 </div>
             </div>
             @if($cockpit !== null && $cockpit['vk']['vorschlag'] !== null)
-                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-2" data-vk-vorschau>Vorschlag aus Klasse: {{ number_format($cockpit['vk']['vorschlag']['sales_net'], 2, ',', '.') }} € netto · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
+                <p class="text-[11px] text-gray-500 mt-2" data-vk-vorschau>Vorschlag aus Klasse: {{ number_format($cockpit['vk']['vorschlag']['sales_net'], 2, ',', '.') }} € netto · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
             @endif
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab KALKULATION --}}
@@ -310,10 +310,10 @@
         {{-- ── Tab: DARREICHUNGEN (Umbau-Spec Phase 5 — Varianten je Servierform) ── --}}
         <div x-show="tab === 'darreichungen'" x-cloak class="pt-4 space-y-4" data-vk-darreichungen>
         <x-foodalchemist::modal-section title="Darreichungen">
-            <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-2">Ein Gericht = ein kulinarischer Kern; je Servierform eine Variante mit eigener Grammatur und eigenem EK/VK. Varianten entstehen nachfragegetrieben — meist per Klick aus dem Concepter. Komponenten dürfen nur reduziert oder weggelassen werden (neue Zutaten = neues Gericht).</p>
+            <p class="text-[11px] text-gray-500 mb-2">Ein Gericht = ein kulinarischer Kern; je Servierform eine Variante mit eigener Grammatur und eigenem EK/VK. Varianten entstehen nachfragegetrieben — meist per Klick aus dem Concepter. Komponenten dürfen nur reduziert oder weggelassen werden (neue Zutaten = neues Gericht).</p>
             <table class="w-full text-xs">
                 <thead>
-                    <tr class="text-left text-gray-500 dark:text-gray-400">
+                    <tr class="text-left text-gray-500">
                         <th class="py-1 pr-2 font-medium">Servierform</th>
                         <th class="py-1 pr-2 font-medium text-center">Standard</th>
                         <th class="py-1 pr-2 font-medium text-right">g/Einheit</th>
@@ -330,10 +330,10 @@
                 </thead>
                 <tbody>
                 @forelse($darreichungen as $d)
-                    <tr wire:key="dar-{{ $d->id }}" class="border-t border-black/5 dark:border-white/10 align-top">
+                    <tr wire:key="dar-{{ $d->id }}" class="border-t border-black/5 align-top">
                         <td class="py-1.5 pr-2">
                             <span class="font-medium">{{ $d->servingForm?->label ?? '—' }}</span>
-                            @if($d->created_via)<span class="block text-[10px] text-gray-500 dark:text-gray-400">{{ $d->created_via }}</span>@endif
+                            @if($d->created_via)<span class="block text-[10px] text-gray-500">{{ $d->created_via }}</span>@endif
                         </td>
                         <td class="py-1.5 pr-2 text-center">
                             <input type="radio" name="dar-standard" @checked($d->is_standard)
@@ -341,7 +341,7 @@
                         </td>
                         <td class="py-1.5 pr-2 text-right">
                             @if($d->deltas->count() > 0)
-                                <span class="tabular-nums text-gray-600 dark:text-gray-400" title="Ergibt sich automatisch aus der Komponenten-Summe (⚙)">{{ $d->quantity_per_unit_g !== null ? number_format($d->quantity_per_unit_g, 0, ',', '.') : '—' }} <span class="text-[10px] text-gray-500 dark:text-gray-400">Σ</span></span>
+                                <span class="tabular-nums text-gray-600" title="Ergibt sich automatisch aus der Komponenten-Summe (⚙)">{{ $d->quantity_per_unit_g !== null ? number_format($d->quantity_per_unit_g, 0, ',', '.') : '—' }} <span class="text-[10px] text-gray-500">Σ</span></span>
                             @else
                                 <input type="text" wire:model.blur="darForm.{{ $d->id }}.quantity_pro_unit_g"
                                        wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
@@ -373,7 +373,7 @@
                                 @foreach($geschirrItems as $gi)<option value="{{ $gi->id }}">{{ $gi->label }}</option>@endforeach
                             </select>
                         </td>
-                        <td class="py-1.5 pr-2 text-right tabular-nums text-orange-600 dark:text-orange-400">
+                        <td class="py-1.5 pr-2 text-right tabular-nums text-orange-600">
                             {{ $d->ek_portion !== null ? number_format($d->ek_portion, 2, ',', '.') . ' €' : '—' }}
                         </td>
                         <td class="py-1.5 pr-2 text-right tabular-nums">
@@ -381,21 +381,21 @@
                                 <input type="text" wire:model.blur="darForm.{{ $d->id }}.sales_net"
                                        wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
                             @else
-                                <span class="text-emerald-600 dark:text-emerald-400">{{ $d->sales_net !== null ? number_format($d->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
+                                <span class="text-emerald-600">{{ $d->sales_net !== null ? number_format($d->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
                             @endif
                         </td>
                         @php($darVkNetto = ($darForm[$d->id]['price_mode'] ?? 'auto') === 'manuell'
                             ? (is_numeric(str_replace(',', '.', (string) ($darForm[$d->id]['sales_net'] ?? ''))) ? (float) str_replace(',', '.', (string) $darForm[$d->id]['sales_net']) : null)
                             : $d->sales_net)
                         @php($darWpct = ($d->ek_portion !== null && $darVkNetto !== null && $darVkNetto > 0) ? 100 * $d->ek_portion / $darVkNetto : null)
-                        <td class="py-1.5 pr-2 text-right tabular-nums {{ $darWpct !== null && $darWpct > 35 ? 'text-rose-500' : 'text-gray-500 dark:text-gray-400' }}"
+                        <td class="py-1.5 pr-2 text-right tabular-nums {{ $darWpct !== null && $darWpct > 35 ? 'text-rose-500' : 'text-gray-500' }}"
                             title="Wareneinsatz dieser Form">{{ $darWpct !== null ? number_format($darWpct, 0) . ' %' : '—' }}</td>
-                        <td class="py-1.5 pr-2 text-right tabular-nums text-gray-500 dark:text-gray-400">
+                        <td class="py-1.5 pr-2 text-right tabular-nums text-gray-500">
                             {{ $d->sales_gross !== null ? number_format($d->sales_gross, 2, ',', '.') . ' €' : '—' }}
                         </td>
                         <td class="py-1.5 text-right whitespace-nowrap">
                             <button type="button" wire:click="darDeltaToggle({{ $d->id }})"
-                                    class="{{ $btnGhostXs }} {{ $d->deltas->count() > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-gray-500 dark:text-gray-400' }}"
+                                    class="{{ $btnGhostXs }} {{ $d->deltas->count() > 0 ? 'text-violet-600' : 'text-gray-500' }}"
                                     title="Komponenten dieser Form anpassen (weglassen/reduzieren)">⚙ {{ $d->deltas->count() ?: '' }}</button>
                             @unless($d->is_standard)
                                 <button type="button" wire:click="darreichungLoeschen({{ $d->id }})" wire:confirm="Diese Darreichung löschen?"
@@ -407,10 +407,10 @@
                         <tr wire:key="dar-delta-{{ $d->id }}">
                             <td colspan="12" class="pb-2">
                                 <div class="rounded-lg bg-violet-500/[0.04] border border-violet-500/10 p-2 mt-1" data-dar-delta="{{ $d->id }}">
-                                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-1.5">Komponenten in dieser Form — echte Gramm <strong>je Einheit</strong> eintragen oder weglassen (leer = Standard). g/Einheit der Form ergibt sich automatisch aus der Summe. Neue Zutaten sind bewusst nicht möglich.</p>
+                                    <p class="text-[11px] text-gray-500 mb-1.5">Komponenten in dieser Form — echte Gramm <strong>je Einheit</strong> eintragen oder weglassen (leer = Standard). g/Einheit der Form ergibt sich automatisch aus der Summe. Neue Zutaten sind bewusst nicht möglich.</p>
                                     @php($deltaMap = $d->deltas->keyBy('recipe_ingredient_id'))
                                     <table class="w-full text-xs">
-                                        <thead><tr class="text-left text-gray-500 dark:text-gray-400">
+                                        <thead><tr class="text-left text-gray-500">
                                             <th class="py-0.5 pr-2 font-medium">Komponente</th>
                                             <th class="py-0.5 pr-2 font-medium text-right">Standard (g)</th>
                                             <th class="py-0.5 pr-2 font-medium text-right">Override (g)</th>
@@ -420,9 +420,9 @@
                                         @foreach($rezept->ingredients as $z)
                                             @continue(! isset($darZeilen[$z->id]))
                                             @php($delta = $deltaMap->get($z->id))
-                                            <tr wire:key="delta-{{ $d->id }}-{{ $z->id }}" class="border-t border-black/5 dark:border-white/5 {{ $delta?->omitted ? 'opacity-40 line-through' : '' }}">
+                                            <tr wire:key="delta-{{ $d->id }}-{{ $z->id }}" class="border-t border-black/5 {{ $delta?->omitted ? 'opacity-40 line-through' : '' }}">
                                                 <td class="py-1 pr-2">{{ $z->display_name ?? $z->gp?->gp_name ?? $z->referencedRecipe?->name ?? $z->raw_text }}</td>
-                                                <td class="py-1 pr-2 text-right tabular-nums text-gray-500 dark:text-gray-400">{{ number_format($darZeilen[$z->id]['masse_g'], 0, ',', '.') }}</td>
+                                                <td class="py-1 pr-2 text-right tabular-nums text-gray-500">{{ number_format($darZeilen[$z->id]['masse_g'], 0, ',', '.') }}</td>
                                                 <td class="py-1 pr-2 text-right">
                                                     <input type="text" value="{{ $delta?->quantity_override_g }}"
                                                            wire:change="darDeltaMenge({{ $d->id }}, {{ $z->id }}, $event.target.value)"
@@ -441,7 +441,7 @@
                         </tr>
                     @endif
                 @empty
-                    <tr><td colspan="12" class="py-3 text-center text-gray-500 dark:text-gray-400">Noch keine Darreichung — beim Speichern der VK-Daten entsteht automatisch die Standard-Form.</td></tr>
+                    <tr><td colspan="12" class="py-3 text-center text-gray-500">Noch keine Darreichung — beim Speichern der VK-Daten entsteht automatisch die Standard-Form.</td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -455,7 +455,7 @@
                         <option value="{{ $sf->id }}">{{ $sf->label }}</option>
                     @endforeach
                 </select>
-                <button type="button" wire:click="darreichungNeu" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400">+ Anlegen</button>
+                <button type="button" wire:click="darreichungNeu" class="{{ $btnGhostXs }} text-violet-600">+ Anlegen</button>
             </div>
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab DARREICHUNGEN --}}
@@ -464,8 +464,8 @@
         <div x-show="tab === 'service'" x-cloak class="pt-4 space-y-4">
         <x-foodalchemist::modal-section title="Container & Service">
             <x-slot:actions>
-                <button type="button" wire:click="ki('behaelter')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.behaelter: warm/kalt + Anzahl fürs Catering" data-ki-behaelter>✨ Behälter</button>
-                <button type="button" wire:click="ki('vehikel')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.servier_vehikel: worauf wird angerichtet" data-ki-vehikel>✨ Servier-Vorschlag</button>
+                <button type="button" wire:click="ki('behaelter')" class="{{ $btnGhostXs }} text-violet-600" title="vk.behaelter: warm/kalt + Anzahl fürs Catering" data-ki-behaelter>✨ Behälter</button>
+                <button type="button" wire:click="ki('vehikel')" class="{{ $btnGhostXs }} text-violet-600" title="vk.servier_vehikel: worauf wird angerichtet" data-ki-vehikel>✨ Servier-Vorschlag</button>
             </x-slot:actions>
             <div class="grid grid-cols-2 gap-3" data-vk-container>
                 <div>
@@ -506,13 +506,13 @@
 
         <x-foodalchemist::modal-section title="Regeneration (je Komponente, V-19)">
             <x-slot:actions>
-                <button type="button" wire:click="kiRegeneration" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.regeneration: ein Programm je Komponente (Vorschlag, Übernahme je Zeile)" data-ki-regeneration>✨ Regeneration</button>
+                <button type="button" wire:click="kiRegeneration" class="{{ $btnGhostXs }} text-violet-600" title="vk.regeneration: ein Programm je Komponente (Vorschlag, Übernahme je Zeile)" data-ki-regeneration>✨ Regeneration</button>
             </x-slot:actions>
             @if($regenVorschlaege !== [])
                 <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 space-y-1" data-regen-vorschlaege>
-                    <p class="text-[11px] font-medium text-violet-700 dark:text-violet-300">✨ Programm-Vorschläge — je Zeile übernehmen:</p>
+                    <p class="text-[11px] font-medium text-violet-700">✨ Programm-Vorschläge — je Zeile übernehmen:</p>
                     @foreach($regenVorschlaege as $idx => $rv)
-                        <div class="flex items-center justify-between gap-2 text-[11px] text-gray-600 dark:text-gray-300" wire:key="rvz-{{ $idx }}">
+                        <div class="flex items-center justify-between gap-2 text-[11px] text-gray-600" wire:key="rvz-{{ $idx }}">
                             <span class="min-w-0 truncate">{{ $rv['component_label'] }}{{ $rv['temp_c'] !== null ? ' · ' . $rv['temp_c'] . ' °C' : '' }}{{ $rv['duration_min'] !== null ? ' · ' . $rv['duration_min'] . ' min' : '' }}{{ $rv['core_temp_c'] !== null ? ' · KT ' . $rv['core_temp_c'] . ' °C' : '' }}</span>
                             <button type="button" wire:click="regenVorschlagUebernehmen({{ $idx }})" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-regen-uebernehmen>+ Übernehmen</button>
                         </div>
@@ -521,10 +521,10 @@
             @endif
             <div class="space-y-1.5" data-vk-regen>
                 @foreach($regenZeilen as $z)
-                    <div wire:key="rg-{{ $z->id }}" class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200" data-regen-zeile="{{ $z->id }}">
+                    <div wire:key="rg-{{ $z->id }}" class="flex items-center gap-2 text-xs text-gray-700" data-regen-zeile="{{ $z->id }}">
                         <span class="flex-1 truncate">
                             <span class="font-medium">{{ $z->component_label }}</span>
-                            <span class="text-gray-500 dark:text-gray-400">· {{ $z->geraet ?? 'kalt servieren' }}{{ $z->temp_c !== null ? " · {$z->temp_c} °C" : '' }}{{ $z->duration_min !== null ? " · {$z->duration_min} min" : '' }}{{ $z->core_temp_c !== null ? " · KT {$z->core_temp_c} °C" : '' }}{{ $z->note ? " · {$z->note}" : '' }}</span>
+                            <span class="text-gray-500">· {{ $z->geraet ?? 'kalt servieren' }}{{ $z->temp_c !== null ? " · {$z->temp_c} °C" : '' }}{{ $z->duration_min !== null ? " · {$z->duration_min} min" : '' }}{{ $z->core_temp_c !== null ? " · KT {$z->core_temp_c} °C" : '' }}{{ $z->note ? " · {$z->note}" : '' }}</span>
                         </span>
                         <button type="button" wire:click="regenSchieben({{ $z->id }}, -1)" class="{{ $btnGhostXs }}" title="hoch">↑</button>
                         <button type="button" wire:click="regenSchieben({{ $z->id }}, 1)" class="{{ $btnGhostXs }}" title="runter">↓</button>
@@ -550,7 +550,7 @@
         {{-- M9-01f: Eigenschaften (+ ✨ recipe.eigenschaften/geschmack) --}}
         <x-foodalchemist::modal-section title="Eigenschaften">
             <x-slot:actions>
-                <button type="button" wire:click="ki('eigenschaften')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" data-ki-eigenschaften>✨ Eigenschaften</button>
+                <button type="button" wire:click="ki('eigenschaften')" class="{{ $btnGhostXs }} text-violet-600" data-ki-eigenschaften>✨ Eigenschaften</button>
             </x-slot:actions>
             <div class="grid grid-cols-2 gap-3" data-vk-eigenschaften>
                 <div>
@@ -588,11 +588,11 @@
         {{-- M9-01g: Plating & Service (Teller-Aufbau, Mengenverteilung — keine Produktion) --}}
         <x-foodalchemist::modal-section title="Plating &amp; Service">
             <x-slot:actions>
-                <button type="button" wire:click="ki('plating')" class="{{ $btnGhostXs }} text-violet-600 dark:text-violet-400" title="vk.plating: Hybrid-Plating-Anweisung" data-ki-plating>✨ Plating</button>
+                <button type="button" wire:click="ki('plating')" class="{{ $btnGhostXs }} text-violet-600" title="vk.plating: Hybrid-Plating-Anweisung" data-ki-plating>✨ Plating</button>
             </x-slot:actions>
             <div x-data data-vk-plating>
                 <div class="flex items-center justify-between mb-1">
-                    <span class="text-[10px] text-gray-500 dark:text-gray-400">Markdown — ## für Phasen, nummerierte Schritte</span>
+                    <span class="text-[10px] text-gray-500">Markdown — ## für Phasen, nummerierte Schritte</span>
                     @include('foodalchemist::livewire.recipes.partials.md-toolbar', ['ziel' => 'vk-plating-text'])
                 </div>
                 <textarea wire:model="form.plating_text" id="vk-plating-text" rows="7" class="{{ $input }} font-mono text-[11px]" data-vk-plating-text></textarea>
@@ -604,7 +604,7 @@
         <div x-show="tab === 'sensorik'" x-cloak class="pt-4">
             @if($rezept !== null)
                 <div class="flex items-center justify-between gap-2 mb-2">
-                    <span class="text-[11px] text-gray-500 dark:text-gray-400">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
+                    <span class="text-[11px] text-gray-500">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
                     <button type="button" wire:click="sensorikBewerten" wire:loading.attr="disabled" wire:target="sensorikBewerten" class="{{ $btnGhostXs }}">
                         <span wire:loading.remove wire:target="sensorikBewerten">✨ Sensorik neu bewerten</span>
                         <span wire:loading wire:target="sensorikBewerten">… bewertet</span>
@@ -616,7 +616,7 @@
             @else
                 @include('foodalchemist::livewire.concepter.partials.sensorik')
             @endif
-            <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-5 mb-2">Pairing</h3>
+            <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Pairing</h3>
             @include('foodalchemist::livewire.concepter.partials.pairing')
         </div>
 
@@ -637,8 +637,8 @@
         <x-foodalchemist::modal-section title="Verwendungsnachweise (Kunde × Marketing-Name)">
             <div class="space-y-1.5" data-vk-kunden>
                 @foreach($kunden as $k)
-                    <div wire:key="kn-{{ $k->id }}" class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200" data-kunde-zeile="{{ $k->id }}">
-                        <span class="flex-1 truncate"><span class="font-medium">{{ $k->customer_name }}</span> <span class="text-gray-500 dark:text-gray-400">· {{ $k->marketing_name }}</span></span>
+                    <div wire:key="kn-{{ $k->id }}" class="flex items-center gap-2 text-xs text-gray-700" data-kunde-zeile="{{ $k->id }}">
+                        <span class="flex-1 truncate"><span class="font-medium">{{ $k->customer_name }}</span> <span class="text-gray-500">· {{ $k->marketing_name }}</span></span>
                         <button type="button" wire:click="kundeLoeschen({{ $k->id }})" class="{{ $btnGhostXs }} text-rose-500">✕</button>
                     </div>
                 @endforeach
