@@ -19,7 +19,7 @@ class ConceptsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
 
     public function getDescription(): string
     {
-        return 'Liefert ein Gerichte-Konzept im Detail: Stammdaten (anlass, niveau, klasse, zielpreis) + '
+        return 'Liefert ein Gerichte-Konzept im Detail: Stammdaten (occasion, level, class, target_price_per_person) + '
             . 'alle Slots in Reihenfolge (type gericht|basisrezept|paket|Struktur, Gericht-Name, VK, Wording).';
     }
 

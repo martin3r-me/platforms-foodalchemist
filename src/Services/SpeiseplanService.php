@@ -40,7 +40,7 @@ class SpeiseplanService
                 'entries.concept:id,name,price_per_person_cache',
                 'entries.package:id,name,price_per_person,ek_per_person',
                 'entries.dish:id,name,sales_net,ek_total_eur',
-                'entries.line:id,name,farbe,ist_vegetarisch'])
+                'entries.line:id,name,color,is_vegetarian'])
             ->find($id);
     }
 

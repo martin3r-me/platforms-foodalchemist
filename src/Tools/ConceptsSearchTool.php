@@ -19,7 +19,7 @@ class ConceptsSearchTool extends FoodAlchemistTool implements ToolContract, Tool
     public function getDescription(): string
     {
         return 'Durchsucht die Gerichte-Konzepte (Concepter-Katalog) nach Name/Anlass. Liefert id, name, '
-            . 'status, klasse, anlass, slot-Anzahl — Details (Slots, Gerichte, Preise) via foodalchemist.concepts.GET. '
+            . 'status, class, occasion, slot-Anzahl — Details (Slots, Gerichte, Preise) via foodalchemist.concepts.GET. '
             . 'Konzepte sind die Bausteine für Foodbook-Blöcke (concept_ref) und Speiseplan-Einträge.';
     }
 

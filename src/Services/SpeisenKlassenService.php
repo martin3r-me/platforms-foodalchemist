@@ -74,6 +74,9 @@ class SpeisenKlassenService
     public function acceptKlasse(Team $team, int $recipeId, int $klasseId, float $confidence, ?string $reasoning, ?int $callLogId = null): void
     {
         $r = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        if (! $r->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbtes Gericht — Speisen-Klasse setzt nur das Besitzer-Team (D1).');
+        }
         if ($r->dish_class_source === 'manual') {
             throw new \RuntimeException('Speisen-Klasse ist manuell gepflegt — erst Reset, dann KI übernehmen.');
         }

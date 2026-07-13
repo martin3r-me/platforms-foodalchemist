@@ -6,6 +6,9 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Services\CanvasService;
 
 /**
@@ -51,6 +54,15 @@ class CanvasGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         $ownerId = $type === 'food_dna' ? $team->id : (int) ($arguments['owner_id'] ?? 0);
         if ($ownerId === 0) {
             return ToolResult::error('owner_id ist Pflicht für diesen Canvas-Typ.', 'VALIDATION_ERROR');
+        }
+        $ownerModel = match ($type) {
+            'foodbook' => FoodAlchemistFoodbook::class,
+            'concept' => FoodAlchemistConcept::class,
+            'angebot' => FoodAlchemistAngebot::class,
+            default => null,
+        };
+        if ($ownerModel !== null && ! $ownerModel::visibleToTeam($team)->whereKey($ownerId)->exists()) {
+            return ToolResult::error(ucfirst($type) . " {$ownerId} nicht sichtbar/vorhanden.", 'NOT_FOUND');
         }
 
         $canvas = $svc->find($type, $ownerType, $ownerId);

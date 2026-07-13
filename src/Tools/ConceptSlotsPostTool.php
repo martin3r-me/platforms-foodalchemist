@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\VocabularyService;
@@ -68,6 +69,10 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
         if (isset($arguments['sales_recipe_id'])
             && ! FoodAlchemistRecipe::visibleToTeam($team)->whereKey((int) $arguments['sales_recipe_id'])->exists()) {
             return ToolResult::error('sales_recipe_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        }
+        if (isset($arguments['package_id'])
+            && ! FoodAlchemistPaket::visibleToTeam($team)->whereKey((int) $arguments['package_id'])->exists()) {
+            return ToolResult::error('package_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
         $svc = app(ConceptService::class);
 

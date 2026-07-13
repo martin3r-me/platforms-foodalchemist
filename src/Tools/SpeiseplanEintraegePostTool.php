@@ -6,6 +6,9 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use Platform\FoodAlchemist\Services\SpeiseplanService;
 
@@ -57,6 +60,12 @@ class SpeiseplanEintraegePostTool extends FoodAlchemistTool implements ToolContr
         $ziele = array_values(array_intersect(['concept_id', 'package_id', 'sales_recipe_id'], array_keys(array_filter($arguments))));
         if (count($ziele) !== 1) {
             return ToolResult::error('Genau EINES von concept_id, package_id, sales_recipe_id angeben.', 'VALIDATION_ERROR');
+        }
+        $refModelle = ['concept_id' => FoodAlchemistConcept::class, 'package_id' => FoodAlchemistPaket::class, 'sales_recipe_id' => FoodAlchemistRecipe::class];
+        foreach ($refModelle as $key => $model) {
+            if (! empty($arguments[$key]) && ! $model::visibleToTeam($team)->whereKey((int) $arguments[$key])->exists()) {
+                return ToolResult::error("{$key} nicht sichtbar/vorhanden.", 'NOT_FOUND');
+            }
         }
 
         try {

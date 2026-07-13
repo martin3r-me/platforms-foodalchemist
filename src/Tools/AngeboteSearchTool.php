@@ -19,7 +19,7 @@ class AngeboteSearchTool extends FoodAlchemistTool implements ToolContract, Tool
     public function getDescription(): string
     {
         return 'Durchsucht die Angebote des Teams (Name/Anlass, optional Status-Filter). Liefert id, name, '
-            . 'status, personen, anlass — Details + Kalkulation via foodalchemist.angebote.GET.';
+            . 'status, personen, occasion — Details + Kalkulation via foodalchemist.angebote.GET.';
     }
 
     public function getSchema(): array

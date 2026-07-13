@@ -6,16 +6,17 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
-use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\VocabularyService;
 
 /**
- * Phase B: Block in einem Kapitel anlegen — das inhaltliche Atom des Foodbooks
- * (Gericht via sales_recipe_id, Konzept-Paket via concept_id, oder Text/Header/
- * Spacer). Nur solange das Foodbook draft ist. Optional mit Preis-Staffel.
+ * Phase B: Block in einem Kapitel anlegen — das inhaltliche Atom des Foodbooks.
+ * Foodbooks komponieren KONZEPTE (Dominique 2026-06-13), keine Einzel-Gerichte:
+ * Konzept-/Paket-Block via concept_id (type=concept_ref), dazu Text/Header/Spacer.
+ * Nur solange das Foodbook draft ist. Optional mit Preis-Staffel.
  */
 class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -27,9 +28,10 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
     public function getDescription(): string
     {
         return 'Legt einen Block in einem Kapitel eines draft-Foodbooks an (Position ans Ende). '
-            . 'type: text (mit sales_recipe_id = Gericht; vorher foodalchemist.verkaufsrezepte.SEARCH) | '
-            . 'concept_ref (concept_id = Konzept/Paket) | header_neutral | header_frei | header_frei_preis | spacer. '
-            . 'Optional staffel: [{min_personen, preis}] für Pax-abhängige Preise.';
+            . 'Foodbooks komponieren KONZEPTE, keine Einzel-Gerichte: der Gericht-/Preis-Block ist '
+            . 'concept_ref (concept_id = Konzept/Paket, via foodalchemist.concepts.SEARCH). '
+            . 'Weitere Typen: text (freier Text/Notiz) | header_neutral | header_frei | header_frei_preis | spacer. '
+            . 'Optional staffel: [{min_persons, price}] für Pax-abhängige Preise.';
     }
 
     public function getSchema(): array
@@ -41,7 +43,6 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
                 'type' => ['type' => 'string', 'enum' => ['text', 'concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer'], 'default' => 'text'],
                 'label' => ['type' => 'string', 'description' => 'Interner Titel des Blocks'],
                 'customer_text' => ['type' => 'string', 'description' => 'Kundenseitiger Angebotstext'],
-                'sales_recipe_id' => ['type' => 'integer', 'description' => 'Verkaufsrezept (Gericht) — via verkaufsrezepte.SEARCH ermitteln'],
                 'concept_id' => ['type' => 'integer', 'description' => 'Konzept/Paket bei type=concept_ref'],
                 'quantity' => ['type' => 'number'],
                 'unit' => ['type' => 'string', 'description' => 'Einheiten-Slug, z. B. stk, portion'],
@@ -81,13 +82,13 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
         if ((string) $fb->status !== 'draft') {
             return ToolResult::error("Foodbook hat Status \"{$fb->status}\" — via MCP ist nur draft editierbar.", 'ACCESS_DENIED');
         }
-        if (isset($arguments['sales_recipe_id'])
-            && ! FoodAlchemistRecipe::visibleToTeam($team)->whereKey((int) $arguments['sales_recipe_id'])->exists()) {
-            return ToolResult::error('sales_recipe_id nicht sichtbar/vorhanden — via foodalchemist.verkaufsrezepte.SEARCH ermitteln.', 'NOT_FOUND');
+        if (isset($arguments['concept_id'])
+            && ! FoodAlchemistConcept::visibleToTeam($team)->whereKey((int) $arguments['concept_id'])->exists()) {
+            return ToolResult::error('concept_id nicht sichtbar/vorhanden — via foodalchemist.concepts.SEARCH ermitteln.', 'NOT_FOUND');
         }
 
         $daten = array_intersect_key($arguments, array_flip([
-            'type', 'label', 'customer_text', 'interne_bemerkung', 'sales_recipe_id',
+            'type', 'label', 'customer_text', 'interne_bemerkung',
             'concept_id', 'quantity', 'price_value', 'price_basis', 'visible',
         ]));
         if (($arguments['unit'] ?? '') !== '') {

@@ -228,12 +228,16 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             $toolHook = function ($registry) {
                 foreach ([
                     \Platform\FoodAlchemist\Tools\GpsSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\GpsListTool::class,
                     \Platform\FoodAlchemist\Tools\GpsGetTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesListTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGetTool::class,
                     \Platform\FoodAlchemist\Tools\VerkaufsrezepteSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\VerkaufsrezepteListTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbooksGetTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelListTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeKlassePostTool::class,
                     \Platform\FoodAlchemist\Tools\UiOpenTool::class,
                     // Phase 0: GP-Ground-Truth (Match + NEW-GP-Staging, LA-First-konform)
@@ -257,10 +261,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksPostTool::class,
                     // Phase C: Concepter, Angebote, Kalkulation, Settings, Signale, Food DNA, Speiseplan
                     \Platform\FoodAlchemist\Tools\ConceptsSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsListTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsGetTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsPostTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptSlotsPostTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\AngeboteListTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteGetTool::class,
                     \Platform\FoodAlchemist\Tools\AngebotePostTool::class,
                     \Platform\FoodAlchemist\Tools\KalkulationGetTool::class,
@@ -272,6 +278,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\BenchmarkGetTool::class,
                     \Platform\FoodAlchemist\Tools\SettingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\SignaleSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\SignaleListTool::class,
                     \Platform\FoodAlchemist\Tools\SignalePutTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasGetTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasPutTool::class,

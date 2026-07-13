@@ -56,19 +56,19 @@ class SignalService
 
     public function abschliessen(Team $team, int $id): void
     {
-        $s = FoodAlchemistSignal::visibleToTeam($team)->findOrFail($id);
+        $s = FoodAlchemistSignal::where('team_id', $team->id)->findOrFail($id);
         $s->update(['status' => SignalStatus::Erledigt->value, 'erledigt_at' => now()]);
     }
 
     public function ignorieren(Team $team, int $id): void
     {
-        $s = FoodAlchemistSignal::visibleToTeam($team)->findOrFail($id);
+        $s = FoodAlchemistSignal::where('team_id', $team->id)->findOrFail($id);
         $s->update(['status' => SignalStatus::Ignoriert->value, 'ignoriert_at' => now()]);
     }
 
     public function wiederOeffnen(Team $team, int $id): void
     {
-        $s = FoodAlchemistSignal::visibleToTeam($team)->findOrFail($id);
+        $s = FoodAlchemistSignal::where('team_id', $team->id)->findOrFail($id);
         $s->update(['status' => SignalStatus::Offen->value, 'erledigt_at' => null, 'ignoriert_at' => null]);
     }
 

@@ -37,7 +37,7 @@ class FoodbookService
                 $s = '%' . mb_strtolower($filters['search']) . '%';
                 $q->where(fn ($w) => $w
                     ->whereRaw('LOWER(label) LIKE ?', [$s])
-                    ->orWhereRaw('LOWER(COALESCE(kunde, \'\')) LIKE ?', [$s])
+                    ->orWhereRaw('LOWER(COALESCE(customer, \'\')) LIKE ?', [$s])
                     ->orWhereRaw('LOWER(COALESCE(code, \'\')) LIKE ?', [$s]));
             })
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
@@ -146,6 +146,9 @@ class FoodbookService
     {
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
         $this->guard($fb, $team);
+        if ($parentId !== null && ! FoodAlchemistFoodbookKapitel::where('foodbook_id', $fb->id)->whereKey($parentId)->exists()) {
+            throw new \RuntimeException('parent_id gehört nicht zu diesem Foodbook.');
+        }
 
         return FoodAlchemistFoodbookKapitel::create([
             'team_id' => $fb->team_id, 'foodbook_id' => $fb->id, 'parent_id' => $parentId ?: null,
