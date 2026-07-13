@@ -133,6 +133,13 @@ Route::get('/foodbooks/{id}/dokument', function (int $id, \Platform\FoodAlchemis
 })->whereNumber('id')->name('foodalchemist.foodbooks.dokument');
 
 /**
+ * R3.2 (Block C, layout-first): Externe Kunden-Präsentation als Web-Seite (auth-gated;
+ * öffentlicher Share-Link = separater Core-Auth-Entscheid Martin). EK-frei (Kunden-Projektion).
+ */
+Route::get('/foodbooks/{id}/praesentation', \Platform\FoodAlchemist\Livewire\Foodbooks\Praesentation::class)
+    ->whereNumber('id')->name('foodalchemist.foodbooks.praesentation');
+
+/**
  * #501 (2026-07-13): Die standalone interne R3.1-Lese-Ansicht (/foodbooks/{id}/ansicht,
  * interne Pipe-Namen + EK/VK/W%) wurde ENTFERNT — Route, Livewire\Foodbooks\Ansicht,
  * die ansicht-Blade und FoodbookService::ansichtDaten (inkl. Filter-Helfer) sind gelöscht.

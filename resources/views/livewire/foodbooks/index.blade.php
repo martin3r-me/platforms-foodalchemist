@@ -150,6 +150,7 @@
                          lebt im Editor als „🍽 Menü"-Toggle (rechts), das versendbare Dokument im „Dokument"-Link. --}}
                     <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Kundendokument (Druck/PDF, ohne Interna)">Dokument</a>
                     <a href="{{ route('foodalchemist.foodbooks.dokument', ['id' => $fb->id, 'intern' => 1]) }}" target="_blank" class="{{ $btnGhost }}" title="Interne Fassung mit EK/VK/W% + Navigation (Projektleitung/Vertrieb)">Dokument (intern)</a>
+                    <a href="{{ route('foodalchemist.foodbooks.praesentation', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Externe Kunden-Präsentation (Web-Seite, Preise pro Person, ohne Interna)">Präsentation</a>
                     <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
                 </div>
             </div>

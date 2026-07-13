@@ -1,5 +1,7 @@
 <?php
 
+use Livewire\Livewire;
+use Platform\FoodAlchemist\Livewire\Foodbooks\Praesentation;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
@@ -231,4 +233,18 @@ it('R3.1 intern-Dokument-Blade zeigt Marge + Navleiste; Kundensicht-Blade nicht'
     $kundeHtml = view('foodalchemist::dokumente.foodbook',
         $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), false) + ['istPdf' => false])->render();
     expect($kundeHtml)->not->toContain('Wareneinsatz pro Person')->not->toContain('INTERN');
+});
+
+it('R3.2 Präsentation (Block C): rendert Kundensicht + Preis pro Person, KEINE Marge/Interna', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Sommerfest Adler', 'personen' => 100]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü']);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+
+    Livewire::test(Praesentation::class, ['id' => $fb->id])
+        ->assertSee('Sommerfest Adler')
+        ->assertSee('pro Person')
+        ->assertSee('Kulinarisches Angebot')
+        ->assertDontSee('Wareneinsatz')   // EK-Leak-Guard: interne Marge darf NIE erscheinen
+        ->assertDontSee('INTERN');
 });

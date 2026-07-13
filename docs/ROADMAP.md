@@ -331,13 +331,17 @@ Multi-Tenant *aggregieren* statt nur *trennen* — Netzwerk-Effekt, der mit jede
 - [ ] Lasttest 500+ Blöcke < 3 s — offen (Dokument rendert derzeit voll; relevant erst bei der Web-Seite mit Lazy-Load)
 - [x] Test: interne Projektion (EK/W%/Anker) + Blade-Render intern vs. Kunde — `FoodbookServiceTest` (2 neue Tests) grün; Editor-Link „Dokument (intern)"
 
-### R3.2 Kunden-Ansicht = Sichtbarkeits-Schalter · Größe L · Hängt an: R3.1
+### R3.2 Kunden-Ansicht = externe Web-Seite · Größe L · Hängt an: R3.1 · 🟢 **v1 layout-first GEBAUT 2026-07-14 (lokal)**
+
+> **Block C der Ausgabe-Schicht (Dominique):** die *externe* Sicht ist eine eigene **gebrandete Web-Seite** (Bilder/KI, Preise pro Person, kein Pax), NICHT nur ein Doc-Toggle. v1 = Layout/Struktur (auth-gated), Bilder + per-Kunde-CI + Share-Link folgen.
 
 **DoD:**
-- [ ] Dieselbe Foodbook-Instanz, umgeschaltet: EK/W%/Interna komplett unsichtbar (server-seitig gefiltert, nicht CSS-versteckt!)
-- [ ] Kunden-CI (Brand/Farben) + Wording über WordingResolver-Kette
-- [ ] Share-Link-Konzept entschieden (Auth-Frage: signierter Gast-Link vs. Kunden-Login — Discussion an Martin, betrifft Core-Auth) — Umsetzung darf in R6 rutschen, Entscheid nicht
-- [ ] Sichtbarkeits-Test: Gast-Rolle sieht im HTML-Response nachweislich keine EK-Daten (Response-Grep, nicht Augenschein)
+- [x] Eigenständige Kunden-Web-Seite `/foodbooks/{id}/praesentation` (Livewire-Full-Page): Hero + Kapitel (Konsumententitel + Preis pro Person) + Wording-Gericht-Zeilen + Preis-Fuß/MwSt. Serverseitige Kunden-Projektion (`dokumentDaten intern=false`) → **EK/W%/Interna nie im Response** (nicht CSS-versteckt)
+- [x] Wording über WordingResolver-Kette; **Kunden-CI (Brand/Farben) offen** (Foodbook hat nur `writingStyle`, keine Brand-Relation → neutrale Gestaltung v1)
+- [ ] **Bilder** (Hero/Gericht) — Platzhalter „Bild folgt"; echte Bilder = Iteration (kein Gericht-Bild-Feld; #461 Hero-Medien)
+- [ ] Share-Link-Konzept entschieden (signierter Gast-Link vs. Kunden-Login — Discussion Martin, Core-Auth) — **aktuell auth-gated**; Entscheid offen
+- [x] Sichtbarkeits-Test: Response zeigt Preis pro Person, aber nachweislich **kein „Wareneinsatz"/„INTERN"** (Response-Grep) — `FoodbookServiceTest`
+- Editor-Link „Präsentation" neben „Dokument" / „Dokument (intern)"
 
 ---
 
@@ -728,6 +732,7 @@ Gleiches Muster wie der N-Track: FA liefert den **Warum-Motor** (`knowledge.EXPL
 
 ## Changelog
 
+- 2026-07-14 (2): **R3.2 externe Web-Seite v1 (layout-first) GEBAUT (lokal).** Block C der Ausgabe-Schicht: Livewire-Full-Page `/foodbooks/{id}/praesentation` (auth-gated) rendert die serverseitige Kunden-Projektion (`dokumentDaten intern=false`, EK-frei) als gebrandete Seite — Hero, Kapitel + Preis pro Person, Wording-Zeilen, Preis-Fuß/MwSt, Bild-Platzhalter. Editor-Link „Präsentation". Kein Pax (Preise pro Person). Test `FoodbookServiceTest` (EK-Leak-Guard: kein „Wareneinsatz"/„INTERN"). Offen: echte Bilder (kein Gericht-Bild-Feld, #461), per-Kunde-CI (keine Brand-Relation), öffentlicher Share-Link (= Martin/Core-Auth). Damit A→B→C v1 komplett; Feinschliff (Bilder/CI/Share-Link/Facetten) = Folge-Iterationen.
 - 2026-07-14: **R3.1 intern-Dokument GEBAUT (lokal, ungepusht).** Das interne Foodbook = aufgewertetes **Dokument** (nicht der in #501 gelöschte Standalone-View, Entscheid Dominique): `FoodbookService::dokumentDaten($intern)` liefert EK/VK/W% pro Person je Kapitel + Gesamt + Kapitel-Anker; Blade `dokumente/foodbook` bekam **Navleiste** (klickbar HTML+PDF), Marge-Spalten (nur intern, NIE im Kundendokument), Kunde/Intern-Umschalter, „INTERN"-Badge. Route `?intern=1`, Editor-Link „Dokument (intern)". 2 neue Pest-Tests, Suite grün. Teil der R3+R7-Ausgabe-Schicht (Block B von A→B→C); als Nächstes Block C = externe gebrandete Web-Seite (Bilder/KI, pro Person, Share-Link = Martin). Offen R3.1: Facetten-Filter + Lasttest (gehören zur Web-Seite).
 - 2026-07-13 (4): **R7.1 Operative Planungs-Blätter GEBAUT (lokal, ungepusht).** `PlanungsblattService` (Explosions-Engine über den Rezeptbaum) + 3 read-only MCP-Tools (`produktionsblatt`/`bestellvorschlag`/`einkaufsliste.GET`) + UI `/blaetter` (Sidebar „Planung") + DomPDF-Blätter + `RecipeRecomputeService::bruttoMasseG` (neuer Public-Helper). Kern-Entscheid Dominique: „so wie das Rezept angelegt ist" — VK linear, Basisrezepte in GANZEN Ansätzen, Merge vor Rundung, Skalierung Personen ODER Portionen. Ausweichquelle aus der Lead-Kette (Voll-Substitution → R6.3/R6.8). 8 neue Pest-Tests, Voll-Suite **678/679** (1 Skip), 0 Regressionen. Offen: „gruppiert nach Zubereitungsschritt" (keine strukturierten Steps im Datenmodell), Regenerations-/Behälter-Params je Darreichung im Blatt, Einkaufsliste-PDF-Route. Gelernt: Blade kompiliert `@directive` NICHT, wenn ein Wortzeichen direkt davorsteht (`\B@`-Regex) → `min@endif` blieb literal; Pest-Harness registriert Closure-`dokument`-Routen nicht (Blade per View-Render testen, nicht per HTTP-`get`).
 - 2026-07-13 (3): **R6.1 GEBAUT (Blindtest offen)** — `ConceptGeneratorService`: Gerüst-Pfad (deterministisch, ohne KI lauffähig) + Brief-Pfad (KI übersetzt Brief→Gerüst via neuem Prompt `concept.brief_geruest`, Werte sanitized; Auswahl bleibt deterministisch = „Keine Erfindungen"). Slot-Semantik-Ranking (Label↔Speisen-HG via recipes.dish_main_group_id, Modell A) vor Pairing-Kanten-Gewinn. `PairingService::menuCohesion` + Kohäsions-Panel im Concepter; Gerüst-Kopie ans Konzept (`kopiereZu`) → Auto-Coverage. UI-Einstiege: Concepts-Browser (Brief-Modal) + Foodbook (aus Gerüst); MCP `concepts.GENERATE`. Neue Spalten: `concepts.created_via`, `concept_slots.note` (Leer-Begründung). 9 neue Tests, Suite 668/669 grün, MySQL-Smoke (Fixture) mit Draft-Aufräumung. Gelernt: Collection::merge renummeriert Integer-Keys (put() nutzen); Dev-Fixture hat nur 31 VK — Blindtest braucht Master.
