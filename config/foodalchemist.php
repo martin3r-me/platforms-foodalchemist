@@ -110,21 +110,6 @@ return [
             ],
         ],
         [
-            'group' => 'Rezepte',
-            'items' => [
-                [
-                    'label' => 'Basisrezepte',
-                    'route' => 'foodalchemist.recipes.index',
-                    'icon'  => 'heroicon-o-book-open',
-                ],
-                [
-                    'label' => 'Gerichte',
-                    'route' => 'foodalchemist.verkauf.index',
-                    'icon'  => 'heroicon-o-banknotes',
-                ],
-            ],
-        ],
-        [
             // Verdichtung 2026-07-14 (Dominique): früher je Einzel-Eintrag eine eigene
             // Sektion (Concepter/Foodbook/Angebote/Kalkulation …) → zu viele Ein-Item-Header.
             // Jetzt nach Workflow gebündelt: Rezepte & Konzepte / Verkauf / Planung / System.
