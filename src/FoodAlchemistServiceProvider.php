@@ -68,6 +68,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\TeamOnboardingCommand::class,
                 \Platform\FoodAlchemist\Console\SignaleDetektorCommand::class,
                 \Platform\FoodAlchemist\Console\PairingProjectComputedCommand::class,
+                \Platform\FoodAlchemist\Console\DataQualityCommand::class,
+                \Platform\FoodAlchemist\Console\LeadLaRepickCommand::class,
+                \Platform\FoodAlchemist\Console\RecomputeCommand::class,
+                \Platform\FoodAlchemist\Console\GpAllergenBackfillCommand::class,
             ]);
         }
     }

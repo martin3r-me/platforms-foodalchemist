@@ -141,15 +141,30 @@ Die Tools waren darreichungs-blind — für externe LLM-Clients existierte das n
 
 > **✅ Abschluss 2026-07-12 (gepusht, Commit `d5409a6`):** 38 Tools darreichungs-fähig. ⚠️ Zwei-Darreichungen-Fall im automatisierten Test nur auf MySQL abbildbar (In-Memory-SQLite behandelt den partiellen Ein-Standard-Index wie ein volles `unique(recipe_id)` — R0.5-Testbasis); Beweis darum per MySQL-Smoke. Detail: Memory `project_fa_mcp_schreibkaskade`.
 
-### R0.3 Datenqualitäts-Ampel auf Grün · Größe M · Hängt an: nichts
+### R0.3 Datenqualitäts-Kaskade (Ampel + bottom-up Remediation) · Größe L · Hängt an: nichts · 🟢 **Etappe 1 GEBAUT 2026-07-14 (lokal, verifiziert am Master)**
 
-**DoD:**
-- [ ] FA↔WaWi-EK-Divergenz: 0 Rezepte (aktuell ~9) — Ursache je Fall dokumentiert, nicht nur Werte angeglichen
-- [ ] Unbepreiste Ketten: Signal-Report leer ODER jeder Rest-Fall mit begründetem Park-Vermerk (z. B. **Petersilienöl von Hanos — geparkt, GP anlegen sobald im Lieferantenkatalog**; fb2027-VK: einzige verbliebene ungemappte Zeile 2026-07-05)
-- [ ] `unbestimmt`-Servierformen des Bestands kuratiert (Review-Queue = 0 vor R1-Massenimport)
-- [ ] Rest-Stubs fb2027: 10 Stubs + 2 Drafts aufgelöst (FILL-4 via staging-BOM+Gemini, Park-3 Derivat-Entscheid, 3 collapsed Leaves, 2 Drafts)
-- [ ] `206_recompute` danach grün: 0 verwaiste Refs, EK-Abdeckung fb2027 ≥ 95 %
-- [ ] Klärung: überschreibt Einbahn-Sync 235 die GP-`nutri_*`-Kuratierung? (offener Punkt aus Label-Migration) → Befund + ggf. Fix
+**Neuzuschnitt 2026-07-14 (Dominique):** Statt Top-down-Flickerei die ganze Kaskade **bottom-up** heilen — Lieferantenartikel → GP → Basisrezept → VK-Gericht — plus Anker-Erdung + volle Anreicherung. Die „unbepreisten Ketten" oben sind Symptome von GP/LA-Lücken unten. Ausführungsplan (2 Etappen, KI-Schritte lokal via OpenAI): siehe Session-Memory `project_datenqualitaet_kaskade_2026-07-14` (folgt) + Plan-Datei. Die 2 WaWi-Ära-Punkte (FA↔WaWi-EK-Divergenz, nutri-Sync 235) sind **obsolet gestrichen** (FA=Master, WaWi eingefroren, kein Sync mehr).
+
+**FA-native Commands (neu, thin wrappers um bestehende Services):**
+| Command | wrappt | Zweck |
+|---|---|---|
+| `foodalchemist:data-quality {--team --json --signals}` | neuer `DataQualityService` | Ampel: per-Ebene-Counts (LA/GP/BR/VK/Quer); `--signals` schreibt Lücken über `SignalService` in die ReviewQueue-Inbox (dedup, MCP-sichtbar via `signale.SEARCH`); schedulebar |
+| `foodalchemist:lead-la-repick {--team --used-only --apply}` | `LeadLaService::applyLeadLa` | chirurgischer Lead-Repick nur wo aktueller Lead nicht auflöst + ein bepreister LA existiert |
+| `foodalchemist:gp-allergen-backfill {--chunk --apply}` | `GpAggregateService::allergenKonfidenz` | persistiert NUR Allergen-Metadaten (`allergens_source/_confidence/_aggregated_at`), NIE die Wert-Spalten (Override-Schutz); Konflikte → Signal |
+| `foodalchemist:recompute {--all\|--recipe= --propagate --apply}` | `RecipeRecomputeService::recomputeAll` | fehlender Bulk-Recompute (war nur Golden-Test); propagiert geheilte GP-Preise nach oben |
+
+**Etappe-1-DoD (deterministisch, kein LLM):**
+- [x] **Mess-Ampel** gebaut (`DataQualityService` + Command + 3 Signal-Typen `AnkerFehlt`/`ServierformUnbestimmt`/`EkKetteUnvollstaendig`); 12 Befunde als dedup'te Signale am Master
+- [x] **Lead-LA-Repick:** 90 GP-Leads gefixt (auflösend 4.900 → 4.990); 405 echte Lücken sauber als „Park" erkannt (kein bepreister LA → Sourcing = Etappe 2)
+- [x] **GP-Allergen-Backfill:** „ohne Konfidenz" **6.947 → 0**; 289 Allergen-Konflikte (LA↔LA) als Signal; Wert-Spalten nachweislich unberührt (Guard-Test)
+- [x] **Bulk-Recompute** gelaufen (3.218 Rezepte, 0 Zyklen); EK propagiert
+- [x] Backups vor jedem Apply (`PRE_DQ_CASCADE` voll + `PRE_P3` gps); 13 neue Pest-Tests grün
+- [ ] `unbestimmt`-Servierformen (329) kuratiert → **Etappe 2** (KI je Gericht)
+- [ ] Rest-Stubs fb2027 (12) + tentative-in-Rezept (27) + itemisierte 405-Park-Sourcing-Liste → Review/Etappe 2
+- [~] Anker-Erdung (84 GP + 91 BR + 151 VK) + volle Anreicherung → **Etappe 2** (lokaler OpenAI-Provider)
+- ~~FA↔WaWi-EK-Divergenz~~ · ~~nutri-Sync 235~~ — obsolet (FA=Master)
+
+> **Ehrlicher Befund:** Der große EK-Rest-Stau (219 VK / 788 BR teil-unbepreist) hängt strukturell an den **405 Park-GPs** (kein bepreister LA irgendwo) → LA-Sourcing = Etappe 2, nichts, was Lead-Repick/Recompute deterministisch heben könnte. Etappe 1 hat die deterministischen Free-Wins gehoben. Master-Daten-Heilung → demo per Re-Export + `import-master` (separat).
 
 ### R0.4 Skill-Infrastruktur (Phase D abschließen) · Größe S · **Entscheid: Dominique/Martin (S3)**
 
@@ -732,6 +747,7 @@ Gleiches Muster wie der N-Track: FA liefert den **Warum-Motor** (`knowledge.EXPL
 
 ## Changelog
 
+- 2026-07-14 (4): **R0.3 neu geschnitten zur Datenqualitäts-Kaskade + Etappe 1 GEBAUT (lokal, verifiziert am Master).** Bottom-up-Remediation LA→GP→Basisrezept→VK statt Top-down. 4 neue Commands (`data-quality`/`lead-la-repick`/`gp-allergen-backfill`/`recompute`) + `DataQualityService` + 3 Signal-Typen. Am Master `foodalchemist_full` appliziert+verifiziert: 90 Lead-LAs gefixt (auflösend 4.900→4.990), GP-Allergen-Konfidenz 6.947→0 (nur Metadaten, Wert-Spalten unberührt — Override-Schutz), Bulk-Recompute 3.218/0 Zyklen, 12 Datenqualitäts-Signale in der Inbox (reisen per Re-Export nach demo). 13 neue Pest-Tests grün. Ehrlicher Befund: EK-Rest-Stau (219 VK/788 BR teil-unbepreist) hängt an 405 Park-GPs (kein bepreister LA) → LA-Sourcing = Etappe 2 (lokaler OpenAI-Provider: Anker-Erdung + Serving-Form-KI + GP-Lücken-Match). 2 WaWi-Ära-DoD-Punkte obsolet gestrichen. Gelernt: `allergens_source` ist varchar(16) → `derivat` statt `derivat_inherited`; `loestAuf` (Preiszeile) ≠ Recompute-`vergleichspreis` (braucht qty+unit) — grobe „teil-unbepreist"-Metrik ist gegenüber verstreuten GP-Fixes unempfindlich.
 - 2026-07-14 (3): **R7.1 Rest-Punkte geschlossen + Blätter-Filter.** Produktionsblatt zeigt jetzt Regenerations-/Behälter-/Vehikel-Parameter der Standard-Darreichung + Arbeitszeit-Zuschlag (Vokabel-Namen aufgelöst) + `preparation`-Freitext je Rezept. Einkaufsliste-PDF-Route (`typ=einkauf`) ergänzt. Neuer **Blätter-Filter** auf `/blaetter` (Mehrfach-Auswahl Produktion/Bestellung/Einkauf — steuert, welche Blätter erzeugt/gezeigt werden; Dominique-Wunsch). Einziger offener R7.1-Punkt bleibt echtes „Zubereitungsschritt"-Grouping (kein Schritt-Datenmodell). Tests erweitert (Filter + Regeneration/Einkauf-Blade), Voll-Suite grün.
 - 2026-07-14 (2): **R3.2 externe Web-Seite v1 (layout-first) GEBAUT (lokal).** Block C der Ausgabe-Schicht: Livewire-Full-Page `/foodbooks/{id}/praesentation` (auth-gated) rendert die serverseitige Kunden-Projektion (`dokumentDaten intern=false`, EK-frei) als gebrandete Seite — Hero, Kapitel + Preis pro Person, Wording-Zeilen, Preis-Fuß/MwSt, Bild-Platzhalter. Editor-Link „Präsentation". Kein Pax (Preise pro Person). Test `FoodbookServiceTest` (EK-Leak-Guard: kein „Wareneinsatz"/„INTERN"). Offen: echte Bilder (kein Gericht-Bild-Feld, #461), per-Kunde-CI (keine Brand-Relation), öffentlicher Share-Link (= Martin/Core-Auth). Damit A→B→C v1 komplett; Feinschliff (Bilder/CI/Share-Link/Facetten) = Folge-Iterationen.
 - 2026-07-14: **R3.1 intern-Dokument GEBAUT (lokal, ungepusht).** Das interne Foodbook = aufgewertetes **Dokument** (nicht der in #501 gelöschte Standalone-View, Entscheid Dominique): `FoodbookService::dokumentDaten($intern)` liefert EK/VK/W% pro Person je Kapitel + Gesamt + Kapitel-Anker; Blade `dokumente/foodbook` bekam **Navleiste** (klickbar HTML+PDF), Marge-Spalten (nur intern, NIE im Kundendokument), Kunde/Intern-Umschalter, „INTERN"-Badge. Route `?intern=1`, Editor-Link „Dokument (intern)". 2 neue Pest-Tests, Suite grün. Teil der R3+R7-Ausgabe-Schicht (Block B von A→B→C); als Nächstes Block C = externe gebrandete Web-Seite (Bilder/KI, pro Person, Share-Link = Martin). Offen R3.1: Facetten-Filter + Lasttest (gehören zur Web-Seite).

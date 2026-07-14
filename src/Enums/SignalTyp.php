@@ -16,6 +16,10 @@ enum SignalTyp: string
     case WareneinsatzUeberZiel = 'wareneinsatz_ueber_ziel';
     case DatenqualitaetGpLa = 'datenqualitaet_gp_la';
     case NaehrwertPlausi = 'naehrwert_plausi';
+    // Datenqualitäts-Kaskade (Ampel, DataQualityService) — Ebenen-übergreifende Lücken.
+    case AnkerFehlt = 'anker_fehlt';
+    case ServierformUnbestimmt = 'servierform_unbestimmt';
+    case EkKetteUnvollstaendig = 'ek_kette_unvollstaendig';
 
     public function label(): string
     {
@@ -27,6 +31,9 @@ enum SignalTyp: string
             self::WareneinsatzUeberZiel => 'Wareneinsatz über Ziel',
             self::DatenqualitaetGpLa => 'Datenqualität GP/LA',
             self::NaehrwertPlausi => 'Nährwert-Plausibilität',
+            self::AnkerFehlt => 'Flavor-Anker fehlt',
+            self::ServierformUnbestimmt => 'Servierform unbestimmt',
+            self::EkKetteUnvollstaendig => 'EK-Kette unvollständig',
         };
     }
 
@@ -41,6 +48,9 @@ enum SignalTyp: string
             self::WareneinsatzUeberZiel => 'heroicon-o-shopping-cart',
             self::DatenqualitaetGpLa => 'heroicon-o-exclamation-triangle',
             self::NaehrwertPlausi => 'heroicon-o-beaker',
+            self::AnkerFehlt => 'heroicon-o-link-slash',
+            self::ServierformUnbestimmt => 'heroicon-o-question-mark-circle',
+            self::EkKetteUnvollstaendig => 'heroicon-o-currency-euro',
         };
     }
 }
