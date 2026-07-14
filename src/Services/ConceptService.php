@@ -65,8 +65,8 @@ class ConceptService
                 'slots.dish:id,name,sales_wording_standard,sales_net,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergens_confidence',
                 'slots.dish.dishClass:id,label',
                 'slots.unit:id,slug,display_de',
-                'slots.dishwareItem:id,label,leihpreis,unit',
-                'slots.dishwareAltItem:id,label,leihpreis,unit',
+                'slots.dishwareItem:id,label,rental_price,unit',
+                'slots.dishwareAltItem:id,label,rental_price,unit',
                 'vorlageQuelle:id,name',
             ])
             ->find($id);
