@@ -48,7 +48,7 @@ class KnowledgeImportCommand extends Command
         // Trends nur food-basiert — Tech/Automatisierung bewusst NICHT (Dominique 2026-07-11).
         $stats['trend'] = $this->importOrdner("{$vault}/07.03_Trend_Scouting", 'trend', $dryRun, slugPrefix: 'trend.', recursive: true, excludeDirs: ['Food_Tech_&_Automatisierung'], force: $force);
         // #505: MCP-Orchestrierungs-Workflows (fa.*) — searchbar, NICHT always-geroutet (kein seedRoutings-Eintrag).
-        $stats['skill'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Skills", 'skill', $dryRun, slugPrefix: 'skill.', force: $force);
+        $stats['workflow'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Workflows", 'workflow', $dryRun, slugPrefix: 'workflow.', force: $force);
 
         $stats['aliases'] = $this->importAliases($dryRun);
         $stats['routings'] = $this->seedRoutings($dryRun);

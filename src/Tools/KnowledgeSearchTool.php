@@ -26,7 +26,7 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
             . 'Lebensmittel-Domains, Flavor-Pairings) nach Stichworten. Liefert slug/titel/kategorie — '
             . 'Volltext via foodalchemist.knowledge.GET. Vor Rezept-Kreation IMMER relevantes Wissen laden. '
             . 'ENTHÄLT AUCH HANDLUNGS-WORKFLOWS: bei komplexen Aufgaben (Rezept/Gericht/Konzept/Foodbook/Angebot/GP/Speiseplan '
-            . 'anlegen, Preis-Monitoring) ZUERST hier mit category=skill den passenden Schritt-für-Schritt-Workflow suchen.';
+            . 'anlegen, Preis-Monitoring) ZUERST hier mit category=workflow den passenden Schritt-für-Schritt-Workflow suchen.';
     }
 
     public function getSchema(): array
@@ -35,7 +35,7 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
             'type' => 'object',
             'properties' => [
                 'q' => ['type' => 'string', 'description' => 'Suchbegriffe, z. B. "Mengen Buffet" oder "Substitution Sahne"'],
-                'category' => ['type' => 'string', 'enum' => ['cross_cutting', 'domain', 'pairing', 'regelwerk', 'trend', 'niveau', 'kueche', 'skill'], 'description' => 'Optionaler Filter (skill = MCP-Workflows)'],
+                'category' => ['type' => 'string', 'enum' => ['cross_cutting', 'domain', 'pairing', 'regelwerk', 'trend', 'niveau', 'kueche', 'workflow'], 'description' => 'Optionaler Filter (workflow = MCP-Handlungs-Workflows)'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 10],
             ],
             'required' => ['q'],

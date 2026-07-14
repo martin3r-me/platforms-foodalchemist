@@ -39,7 +39,7 @@ class KnowledgeListTool extends FoodAlchemistTool implements ToolContract, ToolM
             'properties' => [
                 'category' => [
                     'type' => 'string',
-                    'enum' => ['trend', 'pairing', 'cross_cutting', 'domain', 'niveau', 'regelwerk', 'kueche', 'skill'],
+                    'enum' => ['trend', 'pairing', 'cross_cutting', 'domain', 'niveau', 'regelwerk', 'kueche', 'workflow'],
                     'description' => 'Optionaler Kategorie-Filter. Ohne Angabe: alle Kategorien.',
                 ],
                 'offset' => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => 'Start-Offset fürs Paging (next_offset aus der Vorantwort).'],
