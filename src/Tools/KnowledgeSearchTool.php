@@ -24,7 +24,9 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
     {
         return 'Durchsucht die Catering-Wissensbasis (Techniken, Mengen-Defaults, Substitutionen, '
             . 'Lebensmittel-Domains, Flavor-Pairings) nach Stichworten. Liefert slug/titel/kategorie — '
-            . 'Volltext via foodalchemist.knowledge.GET. Vor Rezept-Kreation IMMER relevantes Wissen laden.';
+            . 'Volltext via foodalchemist.knowledge.GET. Vor Rezept-Kreation IMMER relevantes Wissen laden. '
+            . 'ENTHÄLT AUCH HANDLUNGS-WORKFLOWS: bei komplexen Aufgaben (Rezept/Gericht/Konzept/Foodbook/Angebot/GP/Speiseplan '
+            . 'anlegen, Preis-Monitoring) ZUERST hier mit category=skill den passenden Schritt-für-Schritt-Workflow suchen.';
     }
 
     public function getSchema(): array

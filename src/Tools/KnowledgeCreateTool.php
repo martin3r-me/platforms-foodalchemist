@@ -36,7 +36,8 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
             'type' => 'object',
             'properties' => [
                 'title' => ['type' => 'string'],
-                'category' => ['type' => 'string', 'description' => 'Kategorie-Slug aus dem Vokabular, z. B. trend, domain, cross_cutting'],
+                'category' => ['type' => 'string', 'description' => 'Kategorie-Slug aus dem Vokabular, z. B. trend, domain, cross_cutting, skill'],
+                'slug' => ['type' => 'string', 'description' => 'Optionaler expliziter Slug (sonst aus Titel). Für Vault-Konsistenz nutzen, z. B. skill.rezept_anlegen_mcp — dann reconciled ein späterer Vault-Import statt zu duplizieren.'],
                 'content_md' => ['type' => 'string', 'description' => 'Inhalt als Markdown'],
                 'aliases' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Begriffe, unter denen die KI das Doc findet'],
                 'bind_layers' => [
@@ -67,6 +68,7 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
             $doc = app(KnowledgeService::class)->create($team, [
                 'title' => (string) $arguments['title'],
                 'category' => (string) $arguments['category'],
+                'slug' => isset($arguments['slug']) ? (string) $arguments['slug'] : null,
                 'content_md' => $arguments['content_md'] ?? '',
                 'aliases' => $arguments['aliases'] ?? [],
                 'bind_layers' => $arguments['bind_layers'] ?? [],

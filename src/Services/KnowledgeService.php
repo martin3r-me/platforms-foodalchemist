@@ -43,7 +43,9 @@ class KnowledgeService
 
         $content = (string) ($data['content_md'] ?? '');
         $source = ((string) ($data['source'] ?? 'mcp')) ?: 'mcp';
-        $slug = $this->uniqueSlug($title);
+        // #505: expliziter Slug (z. B. Vault-konsistent skill.foo_bar) hat Vorrang, damit MCP-Anlage
+        // und späterer Vault-Import denselben Slug treffen (reconcilebar, keine Dubletten).
+        $slug = $this->uniqueSlug($title, isset($data['slug']) ? (string) $data['slug'] : null);
         $now = now();
 
         $id = DB::table('foodalchemist_knowledge_documents')->insertGetId([
@@ -183,9 +185,14 @@ class KnowledgeService
         }
     }
 
-    private function uniqueSlug(string $title): string
+    private function uniqueSlug(string $title, ?string $explicit = null): string
     {
-        $base = Str::slug($title, '-') ?: 'wissen';
+        if ($explicit !== null && trim($explicit) !== '') {
+            // Expliziter Slug: leicht normalisieren, aber Punkte/Unterstriche erhalten (Vault-Format skill.foo_bar).
+            $base = mb_strtolower(trim((string) preg_replace('/[^a-zA-Z0-9._-]+/', '-', trim($explicit)), '-.')) ?: 'wissen';
+        } else {
+            $base = Str::slug($title, '-') ?: 'wissen';
+        }
         $slug = $base;
         for ($i = 2; DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->exists(); $i++) {
             $slug = $base . '-' . $i;
