@@ -11,19 +11,18 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * M10R-5 / Doc 15 §10.2: Sidebar zusammengeführt — die „Concepter"-Gruppe hat genau
- * EINEN Eintrag (der vereinheitlichte Screen), kein separater „Pakete"-Eintrag mehr.
+ * M10R-5 / Doc 15 §10.2 (Sidebar-Verdichtung 2026-07-14): der vereinheitlichte Concepter-
+ * Screen erscheint GENAU EINMAL in der Sidebar (jetzt Item der Gruppe „Rezepte & Konzepte",
+ * keine eigene Ein-Item-Gruppe mehr), kein separater „Pakete"-Eintrag.
  * Plus End-to-End-Smoke: anlegen → Slot → Paket → Tabelle zeigt beides.
  */
-it('Sidebar-Gruppe „Concepter" hat genau einen Eintrag (Pakete-Eintrag entfällt)', function () {
-    $gruppe = collect(config('foodalchemist.sidebar'))->firstWhere('group', 'Concepter');
+it('Concepter erscheint genau einmal in der Sidebar (Pakete-Eintrag entfällt)', function () {
+    $alleItems = collect(config('foodalchemist.sidebar'))->flatMap(fn ($g) => $g['items'] ?? []);
 
-    expect($gruppe)->not->toBeNull()
-        ->and($gruppe['items'])->toHaveCount(1)
-        ->and($gruppe['items'][0]['route'])->toBe('foodalchemist.concepter.index');
+    expect($alleItems->where('route', 'foodalchemist.concepter.index'))->toHaveCount(1);
 
-    // Kein anderer Sidebar-Eintrag zeigt mehr auf die alten Einzel-Screens.
-    $alleRouten = collect(config('foodalchemist.sidebar'))->flatMap(fn ($g) => collect($g['items'] ?? [])->pluck('route'));
+    // Kein Sidebar-Eintrag zeigt mehr auf die alten Einzel-Screens.
+    $alleRouten = $alleItems->pluck('route');
     expect($alleRouten)->not->toContain('foodalchemist.pakete.index')
         ->and($alleRouten)->not->toContain('foodalchemist.concepts.index');
 });

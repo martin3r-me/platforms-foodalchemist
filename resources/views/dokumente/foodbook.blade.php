@@ -112,6 +112,28 @@
         <p style="color:#9ca3af">Noch keine Kapitel angelegt.</p>
     @endforelse
 
+    {{-- Intern: Wareneinsatz je Konzept auf einen Blick (Top-Kapitel), plus Gesamt darunter. --}}
+    @if($istIntern && count($kapitel) > 0)
+        <div class="price" style="border-top:1px solid #ececec; margin-top:24px">
+            <div class="nav navtitle" style="background:none; border:none; padding:0; margin-bottom:6px">Wareneinsatz je Konzept</div>
+            <table>
+                <tr style="color:#6b7280; font-size:10px; text-transform:uppercase; letter-spacing:.04em">
+                    <td>Konzept</td><td class="right">€/P</td><td class="right" style="color:#9333ea">EK/P</td><td class="right" style="color:#059669">W %</td>
+                </tr>
+                @foreach($kapitel as $k)
+                    @if(($k['depth'] ?? 0) === 0)
+                        <tr>
+                            <td>{{ $k['title_intern'] ?: $k['title'] }}</td>
+                            <td class="right">{{ number_format($k['vk_pro_person'] ?? 0, 2, ',', '.') }} €</td>
+                            <td class="right" style="color:#9333ea">{{ ($k['ek_pro_person'] ?? null) !== null ? number_format($k['ek_pro_person'], 2, ',', '.') . ' €' : '—' }}</td>
+                            <td class="right" style="color:#059669">{{ ($k['food_cost_percent'] ?? null) !== null ? number_format($k['food_cost_percent'], 1, ',', '.') . ' %' : '—' }}</td>
+                        </tr>
+                    @endif
+                @endforeach
+            </table>
+        </div>
+    @endif
+
     <div class="price">
         <table>
             <tr><td>Preis pro Person</td><td class="right">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</td></tr>

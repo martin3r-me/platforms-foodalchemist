@@ -125,16 +125,23 @@ return [
             ],
         ],
         [
-            // M10 GEBAUT (Doc 15 §M10): Concepter ist das Rückgrat → eigene AKTIVE Gruppe
-            // über "In Planung". Concepts = Slot-Gerüst über mehrere Rollen; Pakete =
-            // bepreiste Bündel mehrerer Gerichte (im Konzeptpapier "Modul").
-            'group' => 'Concepter',
+            // Verdichtung 2026-07-14 (Dominique): früher je Einzel-Eintrag eine eigene
+            // Sektion (Concepter/Foodbook/Angebote/Kalkulation …) → zu viele Ein-Item-Header.
+            // Jetzt nach Workflow gebündelt: Rezepte & Konzepte / Verkauf / Planung / System.
+            'group' => 'Rezepte & Konzepte',
             'items' => [
                 [
-                    // M10R-5 (§10.2): EIN Eintrag — der vereinheitlichte Browser mit
-                    // Umschalter Concepts | Pakete + Voll-Editor-Modal (Tabs). Die
-                    // alten Einzel-Screens /concepts + /pakete bleiben als Deep-Link
-                    // erreichbar (nicht mehr in der Sidebar).
+                    'label' => 'Basisrezepte',
+                    'route' => 'foodalchemist.recipes.index',
+                    'icon'  => 'heroicon-o-book-open',
+                ],
+                [
+                    'label' => 'Gerichte',
+                    'route' => 'foodalchemist.verkauf.index',
+                    'icon'  => 'heroicon-o-banknotes',
+                ],
+                [
+                    // M10R-5: vereinheitlichter Browser (Concepts | Pakete) + Voll-Editor-Modal.
                     'label' => 'Concepter',
                     'route' => 'foodalchemist.concepter.index',
                     'icon'  => 'heroicon-o-square-3-stack-3d',
@@ -142,38 +149,21 @@ return [
             ],
         ],
         [
-            // M11 GEBAUT: Foodbook stellt fertige Concepts zu Kunden-Angeboten zusammen
-            // (Kapitel, Pax, Angebots-Preise) — KEINE Einzel-Gerichte (Concepter = Kern).
-            'group' => 'Foodbook',
+            // Verkauf: Portfolio (Foodbook) + Kunden-Angebote + Preissimulation.
+            'group' => 'Verkauf',
             'items' => [
                 [
                     'label' => 'Foodbook / Portfolio',
                     'route' => 'foodalchemist.foodbooks.index',
                     'icon'  => 'heroicon-o-book-open',
                 ],
-            ],
-        ],
-        [
-            // #380: Angebote — brief-getriebene Kunden-Angebote (individuelle Anfrage
-            // → maßgeschneidertes Angebot). Eigenständig neben Foodbook (Portfolio):
-            // gebaut wird im Concepter, hier kommt der Kunden-/Vertriebs-Mantel dazu.
-            'group' => 'Angebote',
-            'items' => [
                 [
                     'label' => 'Angebote',
                     'route' => 'foodalchemist.angebote.index',
                     'icon'  => 'heroicon-o-document-text',
                 ],
-            ],
-        ],
-        [
-            // M12/#502: Was-wäre-wenn-Preissimulation als eigener Screen.
-            'group' => 'Kalkulation',
-            'items' => [
                 [
-                    // #502 (2026-07-13): Werkstatt aufgelöst — Regel-Editor zog zurück in die
-                    //   Einstellungen (→ Herstellkosten); hier bleibt die Preissimulation als
-                    //   eigener Screen. Ad-hoc-Rechnen lebt im Angebote-Modul.
+                    // #502: Was-wäre-wenn-Preissimulation als eigener Screen.
                     'label' => 'Preissimulation',
                     'route' => 'foodalchemist.kalkulation.index',
                     'icon'  => 'heroicon-o-arrows-right-left',
@@ -181,23 +171,14 @@ return [
             ],
         ],
         [
-            // M14 GEBAUT: Speiseplan — Bausteine über die Zeitachse (Tag × Mahlzeit, Wochen-Zyklus).
-            // M10–M14 sind damit alle gebaut. M16+-Domänen (Produktionsplanung/Einkauf/Lager/
-            // Controlling) + Zielpreis-Konfigurator-Modus stehen in docs/15_MASTERPLAN_VISION.md;
-            // Sidebar zeigt nur Gebautes (Dominique 2026-06-13). Konfigurator = Modus im Concept-Editor.
-            'group' => 'Speiseplan',
+            // Planung: Zeitachse (Speiseplan) + operative Planungs-Blätter (R7.1).
+            'group' => 'Planung',
             'items' => [
                 [
                     'label' => 'Speiseplan',
                     'route' => 'foodalchemist.speiseplan.index',
                     'icon'  => 'heroicon-o-calendar-days',
                 ],
-            ],
-        ],
-        [
-            // R7.1: Operative Planungs-Blätter — Konzept/Gericht + Menge → Produktion/Bestellung/Einkauf.
-            'group' => 'Planung',
-            'items' => [
                 [
                     'label' => 'Planungs-Blätter',
                     'route' => 'foodalchemist.blaetter.index',
@@ -206,19 +187,14 @@ return [
             ],
         ],
         [
-            // #469: Wissens-Modul — operatives Prosa-Wissen (Regelwerke/Domains/Cross-Cutting) pflegen.
-            'group' => 'Wissen',
+            // System: Wissensbasis + Einstellungen.
+            'group' => 'System',
             'items' => [
                 [
                     'label' => 'Wissen',
                     'route' => 'foodalchemist.knowledge.index',
                     'icon'  => 'heroicon-o-academic-cap',
                 ],
-            ],
-        ],
-        [
-            'group' => 'Einstellungen',
-            'items' => [
                 [
                     'label' => 'Einstellungen',
                     'route' => 'foodalchemist.einstellungen',
