@@ -28,6 +28,10 @@ class Index extends Component
     #[Url(as: 'n')]
     public int $menge = 100;
 
+    /** Welche Blätter erzeugt/angezeigt werden (Filter — Dominique 2026-07-14). */
+    #[Url(as: 'b')]
+    public array $blaetter = ['produktion', 'bestellung', 'einkauf'];
+
     public string $suche = '';
 
     public function updatedZielTyp(): void
@@ -57,11 +61,20 @@ class Index extends Component
         $menge = max(1, $this->menge);
         $ziel = $this->aktuellesZiel($menge);
 
+        // Nur die ausgewählten Blätter rechnen (Filter).
         $produktion = null;
         $bestellung = null;
+        $einkauf = null;
         if ($ziel !== null) {
-            $produktion = $svc->produktionsblatt($team, $ziel);
-            $bestellung = $svc->bestellvorschlag($team, $ziel);
+            if (in_array('produktion', $this->blaetter, true)) {
+                $produktion = $svc->produktionsblatt($team, $ziel);
+            }
+            if (in_array('bestellung', $this->blaetter, true)) {
+                $bestellung = $svc->bestellvorschlag($team, $ziel);
+            }
+            if (in_array('einkauf', $this->blaetter, true)) {
+                $einkauf = $svc->einkaufsliste($team, [$ziel]);
+            }
         }
 
         return view('foodalchemist::livewire.blaetter.index', [
@@ -70,6 +83,7 @@ class Index extends Component
             'gewaehltesGericht' => $this->recipeId ? FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId) : null,
             'produktion' => $produktion,
             'bestellung' => $bestellung,
+            'einkauf' => $einkauf,
             'dokUrlParams' => $this->urlParams($menge),
             'mengeLabel' => $this->zielTyp === 'concept' ? 'Personen' : 'Portionen',
         ])->layout('platform::layouts.app');

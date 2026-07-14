@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
@@ -388,6 +389,8 @@ class PlanungsblattService
                 'basis_yield_kg' => $basisYieldKg,
                 'produzierte_menge_kg' => $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null,
                 'arbeitszeit_min' => $recipe->work_time_min !== null ? (int) round((float) $recipe->work_time_min * $batches) : null,
+                'zubereitung' => $recipe->preparation ?: null,        // Freitext-Anweisung (kein Step-Datenmodell)
+                'darreichung' => $istVk ? $this->darreichungsInfo($recipe) : null, // Regeneration/Behälter/Vehikel der Standard-Form
                 'zutaten' => $zeilen,
             ];
         }
@@ -473,6 +476,42 @@ class PlanungsblattService
         });
 
         return array_values($gruppen);
+    }
+
+    // ── Darreichungs-Info fürs Produktionsblatt (Regeneration/Behälter/Vehikel) ──
+
+    /** @var array<string, ?string> Vokabel-Namen-Memo. */
+    private array $vocabCache = [];
+
+    private function vocabName(string $table, $id): ?string
+    {
+        if ($id === null) {
+            return null;
+        }
+        $key = $table . ':' . $id;
+
+        return $this->vocabCache[$key] ??= (DB::table($table)->where('id', $id)->value('name') ?: null);
+    }
+
+    /** Regenerations-/Behälter-/Vehikel-Parameter der Standard-Darreichung (Küchen-Ausgabe). */
+    private function darreichungsInfo(FoodAlchemistRecipe $recipe): ?array
+    {
+        $dar = $this->darreichungen->standardFuer($recipe);
+        if ($dar === null) {
+            return null;
+        }
+        $info = array_filter([
+            'regeneration_temp_c' => $dar->regeneration_temp_c,
+            'regeneration_duration_min' => $dar->regeneration_duration_min,
+            'regeneration_core_temp_c' => $dar->regeneration_core_temp_c,
+            'geraet' => $this->vocabName('foodalchemist_vocab_regeneration_devices', $dar->regeneration_device_vocab_id),
+            'behaelter_warm' => $this->vocabName('foodalchemist_vocab_containers', $dar->container_warm_vocab_id),
+            'behaelter_kalt' => $this->vocabName('foodalchemist_vocab_containers', $dar->container_cold_vocab_id),
+            'vehikel' => $this->vocabName('foodalchemist_vocab_serving_vehicles', $dar->serving_vehicle_vocab_id),
+            'arbeitszeit_zuschlag_min' => $dar->work_time_surcharge_min,
+        ], fn ($v) => $v !== null && $v !== '');
+
+        return $info !== [] ? $info : null;
     }
 
     // ── Rezept-Laden (memoisiert, mit Explosions-Relationen) ──────────────

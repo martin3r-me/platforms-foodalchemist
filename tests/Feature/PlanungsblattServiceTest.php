@@ -63,6 +63,7 @@ beforeEach(function () {
     $this->kuchen = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'kuchen', 'name' => 'DES: Kuchen',
         'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 3.50, 'sales_unit_count' => 10,
+        'preparation' => 'Mehl mit Vanillesauce verrühren und backen.',
     ]);
     $this->kuchen->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'gp_id' => $this->mehl->id, 'raw_text' => 'Mehl', 'quantity' => 1000, 'unit_vocab_id' => $this->g->id]);
     $this->kuchen->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 1, 'referenced_recipe_id' => $this->sauce->id, 'raw_text' => 'Vanillesauce', 'quantity' => 150, 'unit_vocab_id' => $this->g->id]);
@@ -175,18 +176,32 @@ it('MCP: die drei Blätter-Tools sind registriert, read-only und liefern konsist
     expect($fehler->success)->toBeFalse()->and($fehler->errorCode)->toBe('VALIDATION_ERROR');
 });
 
-it('Blätter-UI: rendert und zeigt Produktion + Bestellung nach Gericht-Auswahl', function () {
+it('Blätter-UI: Gericht-Auswahl + Blätter-Filter (welche Blätter erzeugt werden)', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    Livewire::test(BlaetterIndex::class)
+    // Default: alle drei Blätter
+    $comp = Livewire::test(BlaetterIndex::class)
         ->set('zielTyp', 'recipe')
         ->call('waehleGericht', $this->kuchen->id)
         ->set('menge', 100)
         ->assertSee('Produktionsblatt')
         ->assertSee('Vanillesauce')
         ->assertSee('Bestellvorschlag')
+        ->assertSee('Einkaufsliste')
         ->assertSee('Chefs')
         ->assertSee('Hanos');
+
+    // Filter: nur Produktion → Lieferanten-Blätter verschwinden
+    $comp->set('blaetter', ['produktion'])
+        ->assertSee('Produktionsblatt')
+        ->assertDontSee('Bestellvorschlag')
+        ->assertDontSee('Einkaufsliste');
+
+    // Filter: nur Bestellung → Produktionsblatt verschwindet
+    $comp->set('blaetter', ['bestellung'])
+        ->assertDontSee('Produktionsblatt')
+        ->assertSee('Bestellvorschlag')
+        ->assertDontSee('Einkaufsliste');
 });
 
 it('Blätter-Dokument-Blade rendert (Produktion + Bestellung)', function () {
@@ -199,9 +214,19 @@ it('Blätter-Dokument-Blade rendert (Produktion + Bestellung)', function () {
     ])->render();
     expect($prodHtml)->toContain('Produktionsblatt')->toContain('Vanillesauce')->toContain('Basisrezept');
 
+    // Produktionsblatt zeigt die Zubereitungs-Anweisung (Freitext, kein Step-Modell)
+    expect($prodHtml)->toContain('Mehl mit Vanillesauce verrühren');
+
     $bestHtml = view('foodalchemist::dokumente.blatt', [
         'blatt' => $svc->bestellvorschlag($this->rootTeam, $ziel),
         'typ' => 'bestellung', 'titel' => 'Bestellvorschlag', 'untertitel' => 'Kuchen · 100 Portionen', 'istPdf' => false,
     ])->render();
     expect($bestHtml)->toContain('Bestellvorschlag')->toContain('Chefs')->toContain('Wareneinsatz gesamt');
+
+    // Einkaufsliste-Blatt (Lieferanten-Ansicht, mehrere Ziele zusammengeführt)
+    $einkHtml = view('foodalchemist::dokumente.blatt', [
+        'blatt' => $svc->einkaufsliste($this->rootTeam, [$ziel]),
+        'typ' => 'einkauf', 'titel' => 'Einkaufsliste', 'untertitel' => 'Event', 'istPdf' => false,
+    ])->render();
+    expect($einkHtml)->toContain('Einkaufsliste')->toContain('Chefs')->toContain('Wareneinsatz gesamt');
 });

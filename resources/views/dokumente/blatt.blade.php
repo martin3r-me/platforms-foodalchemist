@@ -78,6 +78,23 @@
                         @endforeach
                     </tbody>
                 </table>
+                @if($r['darreichung'] ?? null)
+                    @php($d = $r['darreichung'])
+                    <p class="meta" style="margin-top:4px">
+                        <strong>Ausgabe:</strong>
+                        @if(($d['regeneration_temp_c'] ?? null) !== null) Regeneration {{ $d['regeneration_temp_c'] }} °C @endif
+                        @if(($d['regeneration_duration_min'] ?? null) !== null) / {{ $d['regeneration_duration_min'] }} min @endif
+                        @if(($d['regeneration_core_temp_c'] ?? null) !== null) · Kerntemp. {{ $d['regeneration_core_temp_c'] }} °C @endif
+                        @if(($d['geraet'] ?? null)) · Gerät {{ $d['geraet'] }} @endif
+                        @if(($d['behaelter_warm'] ?? null)) · Behälter warm {{ $d['behaelter_warm'] }} @endif
+                        @if(($d['behaelter_kalt'] ?? null)) · Behälter kalt {{ $d['behaelter_kalt'] }} @endif
+                        @if(($d['vehikel'] ?? null)) · Vehikel {{ $d['vehikel'] }} @endif
+                        @if(($d['arbeitszeit_zuschlag_min'] ?? null) !== null) · +{{ $d['arbeitszeit_zuschlag_min'] }} min Ausgabe @endif
+                    </p>
+                @endif
+                @if($r['zubereitung'] ?? null)
+                    <p class="meta" style="margin-top:4px; white-space:pre-line">{{ $r['zubereitung'] }}</p>
+                @endif
             </div>
         @empty
             <p class="muted">Keine skalierbaren Positionen.</p>

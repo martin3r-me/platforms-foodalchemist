@@ -59,19 +59,29 @@
                     <input type="number" min="1" wire:model.live.debounce.400ms="menge" class="{{ $input }}">
                 </div>
 
+                <div>
+                    <label class="{{ $label }} block mb-1">Blätter</label>
+                    <div class="flex items-center gap-3 text-xs text-gray-700 h-[30px]">
+                        <label class="inline-flex items-center gap-1"><input type="checkbox" wire:model.live="blaetter" value="produktion"> Produktion</label>
+                        <label class="inline-flex items-center gap-1"><input type="checkbox" wire:model.live="blaetter" value="bestellung"> Bestellung</label>
+                        <label class="inline-flex items-center gap-1"><input type="checkbox" wire:model.live="blaetter" value="einkauf"> Einkauf</label>
+                    </div>
+                </div>
+
                 @if(!empty($dokUrlParams))
                     <div class="flex items-center gap-2 ml-auto">
-                        <a href="{{ route('foodalchemist.blaetter.dokument', array_merge(['typ' => 'produktion'], $dokUrlParams)) }}" target="_blank" class="{{ $btnGhost }}">🖨 Produktion</a>
-                        <a href="{{ route('foodalchemist.blaetter.dokument', array_merge(['typ' => 'bestellung'], $dokUrlParams)) }}" target="_blank" class="{{ $btnGhost }}">🖨 Bestellung</a>
+                        @if(in_array('produktion', $blaetter, true))<a href="{{ route('foodalchemist.blaetter.dokument', array_merge(['typ' => 'produktion'], $dokUrlParams)) }}" target="_blank" class="{{ $btnGhost }}">🖨 Produktion</a>@endif
+                        @if(in_array('bestellung', $blaetter, true))<a href="{{ route('foodalchemist.blaetter.dokument', array_merge(['typ' => 'bestellung'], $dokUrlParams)) }}" target="_blank" class="{{ $btnGhost }}">🖨 Bestellung</a>@endif
+                        @if(in_array('einkauf', $blaetter, true))<a href="{{ route('foodalchemist.blaetter.dokument', array_merge(['typ' => 'einkauf'], $dokUrlParams)) }}" target="_blank" class="{{ $btnGhost }}">🖨 Einkauf</a>@endif
                     </div>
                 @endif
             </div>
         </div>
 
-        @if($produktion === null)
-            <div class="{{ $sectionCard }} text-center text-xs text-gray-500 py-8">Ziel + Menge wählen, um die Blätter zu berechnen.</div>
+        @php($alleWarnungen = array_unique(array_merge($produktion['warnungen'] ?? [], $bestellung['warnungen'] ?? [], $einkauf['warnungen'] ?? [])))
+        @if($produktion === null && $bestellung === null && $einkauf === null)
+            <div class="{{ $sectionCard }} text-center text-xs text-gray-500 py-8">Ziel + Menge wählen und mindestens ein Blatt ankreuzen.</div>
         @else
-            @php($alleWarnungen = array_unique(array_merge($produktion['warnungen'] ?? [], $bestellung['warnungen'] ?? [])))
             @if($alleWarnungen)
                 <div class="{{ $sectionCard }} !bg-amber-500/[0.06] !border-amber-500/20">
                     <p class="{{ $label }} !text-amber-700 mb-1">Hinweise ({{ count($alleWarnungen) }})</p>
@@ -83,6 +93,7 @@
 
             <div class="grid lg:grid-cols-2 gap-4">
                 {{-- ── Produktionsblatt ────────────────────────────────── --}}
+                @if($produktion)
                 <div class="{{ $sectionCard }}">
                     <h3 class="font-medium tracking-tight text-gray-900 mb-0.5">Produktionsblatt</h3>
                     <p class="text-[11px] text-gray-500 mb-3">Rezepturen zum Anlegen — Basisrezepte in ganzen Ansätzen.</p>
@@ -121,43 +132,46 @@
                         </div>
                     @endforeach
                 </div>
+                @endif
 
-                {{-- ── Bestellvorschlag ────────────────────────────────── --}}
-                <div class="{{ $sectionCard }}">
-                    <h3 class="font-medium tracking-tight text-gray-900 mb-0.5">Bestellvorschlag</h3>
-                    <p class="text-[11px] text-gray-500 mb-3">GP-Bedarf je Lead-Lieferant + EK (netto).</p>
-                    @foreach($bestellung['lieferanten'] as $g)
-                        <div class="mb-4" wire:key="lief-{{ $g['supplier_id'] ?? 'none' }}">
-                            <div class="flex items-center justify-between gap-2">
-                                <p class="font-medium text-gray-900 text-[13px]">{{ $g['lieferant'] }}</p>
-                                <p class="text-[11px] text-right shrink-0">
-                                    <span class="font-medium text-gray-900">{{ number_format($g['ek_summe'], 2, ',', '.') }} €</span>
-                                    @unless($g['ek_vollstaendig'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">EK unvollst.</span>@endunless
-                                </p>
+                {{-- ── Bestellvorschlag + Einkaufsliste (Lieferanten-Ansicht) ── --}}
+                @foreach(array_filter(['Bestellvorschlag' => $bestellung, 'Einkaufsliste' => $einkauf]) as $titel => $blatt)
+                    <div class="{{ $sectionCard }}" wire:key="sblatt-{{ $titel }}">
+                        <h3 class="font-medium tracking-tight text-gray-900 mb-0.5">{{ $titel }}</h3>
+                        <p class="text-[11px] text-gray-500 mb-3">{{ $titel === 'Einkaufsliste' ? 'GP-Bedarf über die Ziele zusammengeführt (bei einem Ziel = Bestellvorschlag).' : 'GP-Bedarf je Lead-Lieferant + EK (netto).' }}</p>
+                        @foreach($blatt['lieferanten'] as $g)
+                            <div class="mb-4" wire:key="lief-{{ $titel }}-{{ $g['supplier_id'] ?? 'none' }}">
+                                <div class="flex items-center justify-between gap-2">
+                                    <p class="font-medium text-gray-900 text-[13px]">{{ $g['lieferant'] }}</p>
+                                    <p class="text-[11px] text-right shrink-0">
+                                        <span class="font-medium text-gray-900">{{ number_format($g['ek_summe'], 2, ',', '.') }} €</span>
+                                        @unless($g['ek_vollstaendig'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">EK unvollst.</span>@endunless
+                                    </p>
+                                </div>
+                                <table class="{{ $table }} mt-1">
+                                    <thead><tr>
+                                        <th class="{{ $th }} text-left">GP</th>
+                                        <th class="{{ $th }} text-right">Menge</th>
+                                        <th class="{{ $th }} text-right">EK</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        @foreach($g['positionen'] as $p)
+                                            <tr class="border-t border-black/5">
+                                                <td class="{{ $td }} text-gray-800">
+                                                    {{ $p['gp'] }}
+                                                    @if($p['lead_artikel'])<br><span class="text-[10px] text-gray-400">{{ $p['lead_artikel'] }}</span>@endif
+                                                    @if($p['ausweich'])<br><span class="text-[10px] text-sky-600">Ausweich: {{ $p['ausweich']['artikel'] }} ({{ $p['ausweich']['lieferant'] }})</span>@endif
+                                                </td>
+                                                <td class="{{ $td }} text-right whitespace-nowrap text-gray-900">{{ number_format($p['menge_kg'], 3, ',', '.') }} kg</td>
+                                                <td class="{{ $td }} text-right whitespace-nowrap {{ $p['ek_bekannt'] ? 'text-gray-900' : 'text-amber-600' }}">{{ $p['ek_bekannt'] ? number_format($p['ek_eur'], 2, ',', '.') . ' €' : '—' }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
                             </div>
-                            <table class="{{ $table }} mt-1">
-                                <thead><tr>
-                                    <th class="{{ $th }} text-left">GP</th>
-                                    <th class="{{ $th }} text-right">Menge</th>
-                                    <th class="{{ $th }} text-right">EK</th>
-                                </tr></thead>
-                                <tbody>
-                                    @foreach($g['positionen'] as $p)
-                                        <tr class="border-t border-black/5">
-                                            <td class="{{ $td }} text-gray-800">
-                                                {{ $p['gp'] }}
-                                                @if($p['lead_artikel'])<br><span class="text-[10px] text-gray-400">{{ $p['lead_artikel'] }}</span>@endif
-                                                @if($p['ausweich'])<br><span class="text-[10px] text-sky-600">Ausweich: {{ $p['ausweich']['artikel'] }} ({{ $p['ausweich']['lieferant'] }})</span>@endif
-                                            </td>
-                                            <td class="{{ $td }} text-right whitespace-nowrap text-gray-900">{{ number_format($p['menge_kg'], 3, ',', '.') }} kg</td>
-                                            <td class="{{ $td }} text-right whitespace-nowrap {{ $p['ek_bekannt'] ? 'text-gray-900' : 'text-amber-600' }}">{{ $p['ek_bekannt'] ? number_format($p['ek_eur'], 2, ',', '.') . ' €' : '—' }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @endforeach
-                </div>
+                        @endforeach
+                    </div>
+                @endforeach
             </div>
         @endif
 

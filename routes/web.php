@@ -207,7 +207,7 @@ Route::get('/blaetter', \Platform\FoodAlchemist\Livewire\Blaetter\Index::class)
  */
 Route::get('/blaetter/dokument', function (\Platform\FoodAlchemist\Services\PlanungsblattService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-    $typ = request('typ') === 'bestellung' ? 'bestellung' : 'produktion';
+    $typ = in_array(request('typ'), ['bestellung', 'einkauf'], true) ? request('typ') : 'produktion';
     $ziel = array_filter([
         'concept_id' => request()->integer('concept_id') ?: null,
         'recipe_id' => request()->integer('recipe_id') ?: null,
@@ -218,7 +218,11 @@ Route::get('/blaetter/dokument', function (\Platform\FoodAlchemist\Services\Plan
         abort(404);
     }
 
-    $blatt = $typ === 'bestellung' ? $svc->bestellvorschlag($team, $ziel) : $svc->produktionsblatt($team, $ziel);
+    $blatt = match ($typ) {
+        'bestellung' => $svc->bestellvorschlag($team, $ziel),
+        'einkauf' => $svc->einkaufsliste($team, [$ziel]),
+        default => $svc->produktionsblatt($team, $ziel),
+    };
 
     $name = ! empty($ziel['concept_id'])
         ? optional(\Platform\FoodAlchemist\Models\FoodAlchemistConcept::visibleToTeam($team)->find($ziel['concept_id']))->name
@@ -229,7 +233,7 @@ Route::get('/blaetter/dokument', function (\Platform\FoodAlchemist\Services\Plan
     $data = [
         'blatt' => $blatt,
         'typ' => $typ,
-        'titel' => $typ === 'bestellung' ? 'Bestellvorschlag' : 'Produktionsblatt',
+        'titel' => match ($typ) { 'bestellung' => 'Bestellvorschlag', 'einkauf' => 'Einkaufsliste', default => 'Produktionsblatt' },
         'untertitel' => trim(($name ?? 'Ziel') . ' · ' . $mengeTxt),
     ];
 
