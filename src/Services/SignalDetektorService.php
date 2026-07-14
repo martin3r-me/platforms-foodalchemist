@@ -16,8 +16,10 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class SignalDetektorService
 {
-    public function __construct(private SignalService $signals)
-    {
+    public function __construct(
+        private SignalService $signals,
+        private DataQualityService $dataQuality,
+    ) {
     }
 
     /** Alle Detektoren; Rückgabe = Anzahl erzeugter/aktualisierter Signale. */
@@ -29,7 +31,8 @@ class SignalDetektorService
             + $this->preisSprungMargeImpact($team)
             + $this->margeUnterZiel($team)
             + $this->wareneinsatzUeberZiel($team)
-            + $this->naehrwertPlausi($team);
+            + $this->naehrwertPlausi($team)
+            + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
     }
 
     /**

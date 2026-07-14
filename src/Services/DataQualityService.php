@@ -136,8 +136,9 @@ class DataQualityService
         return [
             $this->info('gp_approved', 'GPs approved', $approved),
             $this->info('gp_tentative', 'GPs tentative (Review-Queue)', $tentative),
-            $this->gap('gp_ohne_lead', 'approved-GPs ohne Lead-LA', $ohneLead, SignalTyp::DatenqualitaetGpLa, 'dq-gp-ohne-lead',
-                'GPs, die einen Lieferantenartikel brauchen, aber keinen Lead-LA/keine LAs haben — Kalkulation bleibt unvollständig.'),
+            // Signal-Emission bewusst ohne Deskriptor: SignalDetektorService::datenqualitaetGpLa
+            // besitzt diesen Befund bereits (kein Doppel-Signal im Scheduler). Bleibt Info-Metrik.
+            $this->gap('gp_ohne_lead', 'approved-GPs ohne Lead-LA', $ohneLead),
             $this->gap('gp_lead_ohne_preis', 'approved-GPs: Lead-LA ohne gültigen Preis', $leadOhnePreis, SignalTyp::DatenqualitaetGpLa, 'dq-gp-lead-ohne-preis',
                 'Lead-LA gesetzt, aber ohne aktiven Preis (>0, nicht gesperrt) → GP löst nicht auf einen EK auf.'),
             $this->gap('gp_allergen_konfidenz', 'approved-GPs ohne Allergen-Konfidenz', $allergenKonfidenzFehlt, SignalTyp::DatenqualitaetGpLa, 'dq-gp-allergen-konfidenz',
