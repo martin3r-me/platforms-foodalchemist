@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services\Ai;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
+use Platform\Core\Services\LLMProviderRegistry;
 use RuntimeException;
 
 /**
@@ -437,17 +438,39 @@ class AiGatewayService
             return app(FakeAiProvider::class);
         }
 
-        // #499: Plattform-Binding graceful — ist kein LLM-Provider gebunden (z. B.
-        // demo ohne Core-LLM-Setup), typisiert werfen statt roher
-        // BindingResolutionException (die als reine Exception jeden
-        // catch(\RuntimeException)-Guard der Entry-Points durchschlägt → 500).
-        if (! app()->bound(LLMProviderContract::class)) {
-            throw new \Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException();
+        // #499: Plattform-Binding graceful. Zwei Auflösungswege, in dieser Reihenfolge:
+        //
+        // (1) Explizites `LLMProviderContract`-Binding hat Vorrang — eine Host-App darf
+        //     bewusst einen konkreten Provider setzen.
+        // (2) Fallback auf Cores `LLMProviderRegistry` (Core-Commit 924e4088): der
+        //     Registry-Refactor bindet den bloßen Contract NICHT mehr, registriert
+        //     Provider aber in der Registry. Ohne diesen Pfad wäre FA-KI auf demo tot,
+        //     OBWOHL ein Provider verfügbar ist (Registry ist immer als Singleton gebunden;
+        //     getDefaultProvider() = erster key-konfigurierter Provider).
+        //     Root-Cause zu #499: das fehlende Contract-Binding, nicht nur ein fehlender Key.
+        //
+        // Reine FA-seitige Entkopplung, KEIN Core-Eingriff. Bleibt kein Provider übrig,
+        // typisiert werfen (KiNichtVerfuegbarException) statt roher BindingResolutionException,
+        // damit die catch(\RuntimeException)-Guards der Entry-Points greifen (kein 500).
+        if (app()->bound(LLMProviderContract::class)) {
+            try {
+                return app(LLMProviderContract::class);
+            } catch (\Throwable $e) {
+                throw new \Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException($e);
+            }
         }
-        try {
-            return app(LLMProviderContract::class);
-        } catch (\Throwable $e) {
-            throw new \Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException($e);
+
+        if (app()->bound(LLMProviderRegistry::class)) {
+            try {
+                $registryProvider = app(LLMProviderRegistry::class)->getDefaultProvider();
+            } catch (\Throwable $e) {
+                throw new \Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException($e);
+            }
+            if ($registryProvider !== null) {
+                return $registryProvider;
+            }
         }
+
+        throw new \Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException();
     }
 }
