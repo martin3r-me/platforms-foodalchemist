@@ -6,6 +6,8 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\MatchBand;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
+use Platform\FoodAlchemist\Services\Ai\SemanticRetrievalService;
 use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
 use Platform\FoodAlchemist\Services\Matching\TokenEngine;
 
@@ -24,7 +26,11 @@ class IngredientMatchService
     public function __construct(
         private TokenEngine $engine,
         private MatchHeuristics $heuristik,
+        // E2 (#507): nullable + container-resolved. Ohne Provider/Flag inert →
+        // candidatesFor bleibt byte-identisch zum Legacy-Verhalten (84 Goldens grün).
+        private ?SemanticRetrievalService $semantic = null,
     ) {
+        $this->semantic ??= app(SemanticRetrievalService::class);
     }
 
     /**
@@ -195,23 +201,112 @@ class IngredientMatchService
             return [];
         }
 
-        $out = [];
+        // Lexikalischer Pool (unverändert) → keyed map "kind\0id".
+        $lex = [];
         foreach ($this->gpPool($team, $queryTokens, $querySlug) as $gp) {
             $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
             $strict = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
             $score = max($strict, $this->heuristik->substringOverlap($queryTokens, $combined));
             if ($score > 0.0) {
-                $out[] = ['kind' => 'gp', 'id' => $gp->id, 'name' => $gp->name, 'score' => $score, 'reference' => "gp:{$gp->id}"];
+                $lex["gp\0{$gp->id}"] = ['kind' => 'gp', 'id' => (int) $gp->id, 'name' => $gp->name, 'score' => $score, 'reference' => "gp:{$gp->id}"];
             }
         }
         foreach ($this->subPool($team, $queryTokens, $querySlug) as $sub) {
             $strict = $this->scoreMitFloor($queryTokens, $querySlug, $sub->name, null, $sub->name);
             $score = max($strict, $this->heuristik->substringOverlap($queryTokens, $sub->name));
             if ($score > 0.0) {
-                $out[] = ['kind' => 'sub', 'id' => $sub->id, 'name' => $sub->name, 'score' => $score, 'reference' => "sub:{$sub->id}"];
+                $lex["sub\0{$sub->id}"] = ['kind' => 'sub', 'id' => (int) $sub->id, 'name' => $sub->name, 'score' => $score, 'reference' => "sub:{$sub->id}"];
             }
         }
 
+        // Legacy-Pfad: Semantik aus ⇒ exakt wie bisher (nur Herkunfts-Marker additiv).
+        if ($this->semantic === null || ! $this->semantic->enabled()) {
+            $out = array_map(static function ($c) {
+                $c['origin'] = 'lexical';
+
+                return $c;
+            }, array_values($lex));
+            usort($out, fn ($a, $b) => $b['score'] <=> $a['score']);
+
+            return array_slice($out, 0, $k);
+        }
+
+        return $this->hybridMerge($team, $ingredientName, $lex, $k);
+    }
+
+    /**
+     * E2 (#507): additiver Hybrid-Re-Rank (Plan §4 / GL-04 §6.1 V-04). Score:
+     *  both → max(lexikalisch, cosine) · nur semantisch → cosine ·
+     *  nur lexikalisch (kein Cosine für diese Query) → lexikalisch × 0.5.
+     * 'origin' trägt die Herkunft (lexical|semantic|both) für Audit/UI. Bleibt
+     * eine SHORTLIST — die Match-Entscheidung (matchIngredient) ist unberührt.
+     *
+     * @param  array<string, array{kind:string,id:int,name:string,score:float,reference:string}>  $lex
+     * @return array<int, array{kind: string, id: int, name: string, score: float, reference: string, origin: string}>
+     */
+    private function hybridMerge(Team $team, string $ingredientName, array $lex, int $k): array
+    {
+        $cap = max($k * 3, (int) config('foodalchemist.semantic_search.pool_cap', 15));
+        $hits = $this->semantic->candidates(
+            $team,
+            $ingredientName,
+            [PoolEmbeddingService::ENTITY_TYPE_GP, PoolEmbeddingService::ENTITY_TYPE_RECIPE],
+            $cap,
+        );
+
+        $cos = [];              // "kind\0id" => cosine
+        $gpIds = $subIds = [];
+        foreach ($hits as $h) {
+            if ($h['entity_type'] === PoolEmbeddingService::ENTITY_TYPE_GP) {
+                $cos["gp\0" . (int) $h['entity_id']] = (float) $h['score'];
+                $gpIds[] = (int) $h['entity_id'];
+            } elseif ($h['entity_type'] === PoolEmbeddingService::ENTITY_TYPE_RECIPE) {
+                $cos["sub\0" . (int) $h['entity_id']] = (float) $h['score'];
+                $subIds[] = (int) $h['entity_id'];
+            }
+        }
+
+        // Namen + Eligibilität der SEMANTIK-ONLY-Kandidaten (gleiche Filter wie die
+        // Lexik-Pools — nichts Unsichtbares/Rejected/VK darf durch die Semantik rein).
+        $names = [];
+        $gpMissing = array_values(array_filter($gpIds, static fn ($id) => ! isset($lex["gp\0$id"])));
+        if ($gpMissing !== []) {
+            foreach (FoodAlchemistGp::visibleToTeam($team)->whereIn('status', ['approved', 'tentative'])
+                ->where('is_platzhalter', false)->whereIn('id', $gpMissing)->get(['id', 'name']) as $g) {
+                $names["gp\0{$g->id}"] = $g->name;
+            }
+        }
+        $subMissing = array_values(array_filter($subIds, static fn ($id) => ! isset($lex["sub\0$id"])));
+        if ($subMissing !== []) {
+            foreach (FoodAlchemistRecipe::visibleToTeam($team)->basis()->whereIn('status', ['stub', 'draft', 'review', 'approved'])
+                ->whereIn('id', $subMissing)->get(['id', 'name']) as $r) {
+                $names["sub\0{$r->id}"] = $r->name;
+            }
+        }
+
+        $merged = [];
+        foreach ($lex as $key => $c) {
+            if (isset($cos[$key])) {
+                $c['score'] = max((float) $c['score'], $cos[$key]);
+                $c['origin'] = 'both';
+            } else {
+                $c['score'] = (float) $c['score'] * 0.5;
+                $c['origin'] = 'lexical';
+            }
+            $merged[$key] = $c;
+        }
+        foreach ($cos as $key => $score) {
+            if (isset($merged[$key]) || ! isset($names[$key])) {
+                continue;
+            }
+            [$kind, $id] = explode("\0", $key, 2);
+            $merged[$key] = [
+                'kind' => $kind, 'id' => (int) $id, 'name' => $names[$key],
+                'score' => $score, 'reference' => "{$kind}:{$id}", 'origin' => 'semantic',
+            ];
+        }
+
+        $out = array_values($merged);
         usort($out, fn ($a, $b) => $b['score'] <=> $a['score']);
 
         return array_slice($out, 0, $k);

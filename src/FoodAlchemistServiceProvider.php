@@ -65,6 +65,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ImportMasterCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
+                \Platform\FoodAlchemist\Console\EmbedCommand::class,
                 \Platform\FoodAlchemist\Console\TeamOnboardingCommand::class,
                 \Platform\FoodAlchemist\Console\SignaleDetektorCommand::class,
                 \Platform\FoodAlchemist\Console\PairingProjectComputedCommand::class,
@@ -95,6 +96,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             'assemblyai' => new \Platform\FoodAlchemist\Services\Stt\AssemblyAiSttService(),
             default => new \Platform\FoodAlchemist\Services\Stt\FakeSttService(),
         });
+
+        // E1 (#507): Embedding-Observer — halten die GP-/Rezept-Recall-Vektoren bei
+        // interaktiven Einzeledits synchron (Bulk = foodalchemist:embed). Unbedingt
+        // registriert (nicht table-guarded — der Guard liefe zur Boot-Zeit, bevor
+        // Migrationen durch sind). Ungefährlich: die Observer feuern nur auf Model-
+        // Events (nie während Migrationen), und queueGp/deleteGp no-oppen ohne Provider.
+        \Platform\FoodAlchemist\Models\FoodAlchemistGp::observe(\Platform\FoodAlchemist\Observers\GpEmbeddingObserver::class);
+        \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::observe(\Platform\FoodAlchemist\Observers\RecipeEmbeddingObserver::class);
 
         /**
          * SCHRITT 1: Modul-Registrierung prüfen

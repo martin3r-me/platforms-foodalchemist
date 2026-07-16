@@ -159,6 +159,37 @@ abstract class FoodAlchemistTool
         return $recipe->status instanceof \BackedEnum ? $recipe->status->value : (string) $recipe->status;
     }
 
+    /**
+     * E4 (#507): semantische Kandidaten-IDs für einen Pool-entity_type, die NOCH
+     * NICHT im lexikalischen Ergebnis stehen (entity_id => cosine, Score-sortiert).
+     * Leer wenn Semantik aus / kein Provider (graceful) — der lexikalische Pfad
+     * bleibt dann unverändert. Ergänzt Recall, ersetzt NIE das lexikalische Ranking.
+     *
+     * @param  list<int>  $existingIds  bereits lexikalisch gefundene IDs
+     * @return array<int, float>
+     */
+    protected function semanticPoolIds(Team $team, string $query, string $entityType, array $existingIds, int $limit): array
+    {
+        $query = trim($query);
+        if ($query === '' || $limit <= 0) {
+            return [];
+        }
+        $sem = app(\Platform\FoodAlchemist\Services\Ai\SemanticRetrievalService::class);
+        if (! $sem->enabled()) {
+            return [];
+        }
+        $existing = array_flip(array_map('intval', $existingIds));
+        $out = [];
+        foreach ($sem->candidates($team, $query, [$entityType], $limit) as $hit) {
+            $id = (int) $hit['entity_id'];
+            if (! isset($existing[$id])) {
+                $out[$id] = (float) $hit['score'];
+            }
+        }
+
+        return $out;
+    }
+
     /** Phase A: Draft-Quarantäne-Guard — approved/review/archived sind für den MCP-Pfad locked. */
     protected function kiEditGesperrt(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe): ?string
     {

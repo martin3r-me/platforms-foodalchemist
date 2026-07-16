@@ -410,7 +410,65 @@ class RecipeModal extends Component
 
             return;
         }
-        $this->ueberarbeitung = ['werte' => $vorschlag->werte, 'confidence' => max(0.0, min(1.0, $vorschlag->confidence))];
+        $this->ueberarbeitung = [
+            'werte' => $vorschlag->werte,
+            'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
+            // E3 (#508): Vorschau, wie das Grounding beim Übernehmen greift.
+            'match_vorschau' => $this->matchVorschau($team, $r, $vorschlag->werte['zutaten'] ?? []),
+        ];
+    }
+
+    /**
+     * E3 (#508): pro vorgeschlagener Zutat den künftigen Grounding-Status —
+     * spiegelt die Logik von ueberarbeitungUebernehmen/syncIngredients:
+     *  - matched  : bestehende GP/Sub-Verknüpfung des Originals bleibt
+     *  - grounded : Resolver findet ein GP/Sub-Rezept (wird beim Übernehmen verlinkt)
+     *  - hardstop : nichts über der Schwelle → nach dem Übernehmen „GP/Basisrezept
+     *               anlegen" (Button-Heuristik + Shortlist-Zähler, analog Generator)
+     *
+     * @param  array<int, mixed>  $zutaten
+     * @return array<int, array{status:string, kind:?string, ziel:?string, primaer:?string, shortlist:int}>
+     */
+    public function matchVorschau($team, $r, array $zutaten): array
+    {
+        if ($zutaten === [] || $r === null) {
+            return [];
+        }
+        $original = $r->ingredients->keyBy('id');
+        $matcher = app(\Platform\FoodAlchemist\Services\IngredientMatchService::class);
+        $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
+
+        $out = [];
+        foreach (array_values($zutaten) as $i => $z) {
+            if (! is_array($z)) {
+                continue;
+            }
+            $text = trim((string) ($z['text'] ?? ''));
+            $orig = isset($z['id']) ? $original->get((int) $z['id']) : null;
+
+            if ($orig !== null && ($orig->gp_id !== null || $orig->referenced_recipe_id !== null)) {
+                $out[$i] = ['status' => 'matched', 'kind' => $orig->gp_id !== null ? 'gp' : 'sub',
+                    'ziel' => $orig->gp?->name ?? $orig->referencedRecipe?->name, 'primaer' => null, 'shortlist' => 0];
+                continue;
+            }
+            if ($text === '') {
+                $out[$i] = ['status' => 'hardstop', 'kind' => null, 'ziel' => null, 'primaer' => 'gp_anlegen', 'shortlist' => 0];
+                continue;
+            }
+
+            $t = $matcher->matchIngredient($team, $text);
+            if ($t['target'] === 'gp') {
+                $out[$i] = ['status' => 'grounded', 'kind' => 'gp', 'ziel' => $t['gp_name'], 'primaer' => null, 'shortlist' => 0];
+            } elseif ($t['target'] === 'sub_recipe') {
+                $out[$i] = ['status' => 'grounded', 'kind' => 'sub', 'ziel' => $t['recipe_name'], 'primaer' => null, 'shortlist' => 0];
+            } else {
+                $out[$i] = ['status' => 'hardstop', 'kind' => null, 'ziel' => null,
+                    'primaer' => $heuristik->istSubRezeptKandidat($text) ? 'basisrezept_anlegen' : 'gp_anlegen',
+                    'shortlist' => count($matcher->candidatesFor($team, $text, null, 5))];
+            }
+        }
+
+        return $out;
     }
 
     /** Übernehmen = der EINE Schreib-Moment: Zutaten-Sync + Text-Felder mit Lineage ki. */

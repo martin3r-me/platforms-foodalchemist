@@ -444,6 +444,36 @@ class RecipeService
                 if ($gpId !== null && $subId !== null) {
                     throw new \RuntimeException('Zutat darf nicht GP UND Sub-Rezept zugleich sein (XOR, D-5 §2.2).');
                 }
+
+                // E3 (#508): Re-Grounding — eine Zeile OHNE GP/Sub (typisch KI-überarbeitet,
+                // sonst roh als 'unmatched' verloren) läuft durch den GL-04-Resolver. Nur
+                // zuversichtliche Treffer (matchIngredient hält die Schwelle); sonst bleibt
+                // sie unmatched → Hard-Stop-UI. Auto-gegroundete Subs werden zyklus-geprüft
+                // und bei Ablehnung stillschweigend verworfen (kein Throw fürs Auto-Grounding).
+                $groundedMethod = null;
+                $groundedConfidence = null;
+                if ($gpId === null && $subId === null) {
+                    $groundName = trim((string) ($z['display_name'] ?? '')) ?: trim((string) ($z['raw_text'] ?? ''));
+                    if ($groundName !== '') {
+                        $treffer = app(IngredientMatchService::class)->matchIngredient(
+                            $team, $groundName, $z['hauptzutat_slug'] ?? ($z['slug'] ?? null),
+                        );
+                        if ($treffer['target'] === 'gp') {
+                            $gpId = (int) $treffer['gp_id'];
+                            $groundedMethod = 'gp_v2_fk';
+                            $groundedConfidence = round((float) $treffer['score'], 3);
+                        } elseif ($treffer['target'] === 'sub_recipe') {
+                            $cand = (int) $treffer['recipe_id'];
+                            if ($cand !== $recipe->id
+                                && app(RecipeRecomputeService::class)->pruefeVerknuepfung($recipe->id, $cand)['erlaubt']) {
+                                $subId = $cand;
+                                $groundedMethod = 'recipe_ref';
+                                $groundedConfidence = round((float) $treffer['score'], 3);
+                            }
+                        }
+                    }
+                }
+
                 if ($subId !== null) {
                     if ($subId === $recipe->id) {
                         throw new \RuntimeException('Selbstreferenz — ein Rezept kann sich nicht selbst enthalten (GL-02 §3.5).');
@@ -476,6 +506,13 @@ class RecipeService
                     'is_value_relevant' => (bool) ($z['is_value_relevant'] ?? false),
                 ];
 
+                // E3: gegroundete Zeilen tragen die Resolver-Provenienz (gp_v2_fk|recipe_ref)
+                // + Konfidenz — auch beim UPDATE einer zuvor 'unmatched' Bestands-Zeile.
+                if ($groundedMethod !== null) {
+                    $attrs['match_method'] = $groundedMethod;
+                    $attrs['match_confidence'] = $groundedConfidence;
+                }
+
                 $id = ($z['id'] ?? null) !== null && $vorhanden->has((int) $z['id']) ? (int) $z['id'] : null;
                 if ($id !== null) {
                     $vorhanden[$id]->update($attrs);
@@ -483,7 +520,8 @@ class RecipeService
                 } else {
                     $neu = $recipe->ingredients()->create([...$attrs,
                         'team_id' => $team->id,
-                        'match_method' => $subId !== null ? 'recipe_ref' : ($gpId !== null ? 'manual' : 'unmatched'),
+                        'match_method' => $attrs['match_method']
+                            ?? ($subId !== null ? 'recipe_ref' : ($gpId !== null ? 'manual' : 'unmatched')),
                     ]);
                     $behalten[] = $neu->id;
                 }

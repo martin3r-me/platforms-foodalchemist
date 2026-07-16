@@ -261,6 +261,21 @@ return [
         // Anker-Auflösung (B): höhere Schwelle — eine FALSCHE Anker-Auflösung
         // injiziert falsche Pairing-Kanten, das ist schlimmer als „unbekannt".
         'anker_min_score' => (float) env('FOODALCHEMIST_SEMANTIC_ANKER_MIN_SCORE', 0.55),
+
+        // ── E2 (#507): Hybrider Retrieval-Layer über den GP-/Rezept-Pools ──────
+        // SEM_FLOOR aus GL-04 §6.1 (V-04). ⚠ 0.55 ist Gemini-768d-geeicht — für
+        // OpenAI (Entscheid A) am Golden-Set (E0/E5) NEU kalibrieren, hier nur
+        // Startwert. Config je Modell, KEIN Hardcode (Regelwerk-Auflage).
+        'pool_sem_floor'   => (float) env('FOODALCHEMIST_SEMANTIC_POOL_FLOOR', 0.55),
+        // Lexikalischer Kandidaten-Floor (V-04 Schritt 2, unverändert).
+        'pool_lexical_floor' => (float) env('FOODALCHEMIST_SEMANTIC_LEXICAL_FLOOR', 0.40),
+        // Cap der Hybrid-Shortlist (V-04 Schritt 4).
+        'pool_cap'         => (int) env('FOODALCHEMIST_SEMANTIC_POOL_CAP', 15),
+        // Master-/Katalog-Team-ID für die Partition-Merge-Suche (Entscheid B).
+        // NULL = nur eigene Team-Ahnenkette + Global-Sentinel.
+        'master_team_id'   => env('FOODALCHEMIST_SEMANTIC_MASTER_TEAM_ID') !== null
+            ? (int) env('FOODALCHEMIST_SEMANTIC_MASTER_TEAM_ID')
+            : null,
     ],
 
     /*

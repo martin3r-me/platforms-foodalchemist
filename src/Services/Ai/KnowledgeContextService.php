@@ -516,14 +516,45 @@ class KnowledgeContextService
         }
         usort($scored, fn ($a, $b) => ($b['score'] <=> $a['score']) ?: strcmp($a['doc']->slug, $b['doc']->slug));
 
-        return array_map(fn ($item) => [
+        $out = array_map(fn ($item) => [
             'slug' => $item['doc']->slug,
             'title' => $item['doc']->title,
             'category' => $item['doc']->category,
             'version' => (int) $item['doc']->version,
             'char_count' => (int) $item['doc']->char_count,
             'score' => $item['score'],
+            'via' => 'lexical',
         ], array_slice($scored, 0, $limit));
+
+        // E4 (#507): semantische Ergänzung (nutzte bisher nur der Browser) — Docs,
+        // die die Token-/Alias-Lexik verfehlt, werden angehängt. Graceful ohne Provider.
+        if (count($out) < $limit) {
+            $embed = app(KnowledgeEmbeddingService::class);
+            if ($embed->searchEnabled()) {
+                $vorhanden = array_flip(array_column($out, 'slug'));
+                $ids = $embed->searchDocIds($q, $limit * 2);
+                if ($ids !== []) {
+                    $semDocs = DB::table('foodalchemist_knowledge_documents')
+                        ->whereIn('id', $ids)->where('active', 1)->whereNull('deleted_at')
+                        ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie))
+                        ->get(['id', 'slug', 'title', 'category', 'version', 'char_count'])->keyBy('id');
+                    foreach ($ids as $id) {            // bereits Score-sortiert
+                        $doc = $semDocs->get($id);
+                        if ($doc === null || isset($vorhanden[$doc->slug]) || count($out) >= $limit) {
+                            continue;
+                        }
+                        $vorhanden[$doc->slug] = true;
+                        $out[] = [
+                            'slug' => $doc->slug, 'title' => $doc->title, 'category' => $doc->category,
+                            'version' => (int) $doc->version, 'char_count' => (int) $doc->char_count,
+                            'score' => 0, 'via' => 'semantic',
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $out;
     }
 
     /**

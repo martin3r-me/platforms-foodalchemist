@@ -171,12 +171,28 @@
                                 <p class="{{ $dt }}">Zutaten (neu)</p>
                                 @foreach($ueberarbeitung['werte']['zutaten'] as $z)
                                     @if(is_array($z))
-                                        <p class="text-[11px] text-gray-600" wire:key="uz-{{ $loop->index }}">
-                                            {{ $z['quantity'] ?? '?' }} {{ $z['einheit_slug'] ?? '' }} · {{ $z['text'] ?? '—' }}
+                                        @php($mv = $ueberarbeitung['match_vorschau'][$loop->index] ?? null)
+                                        <p class="text-[11px] text-gray-600 flex flex-wrap items-center gap-x-1.5" wire:key="uz-{{ $loop->index }}">
+                                            <span>{{ $z['quantity'] ?? '?' }} {{ $z['einheit_slug'] ?? '' }} · {{ $z['text'] ?? '—' }}</span>
                                             <span class="text-gray-500">{{ isset($z['id']) ? '(bestehend #' . $z['id'] . ')' : '(neu)' }}</span>
+                                            @if($mv)
+                                                @if($mv['status'] === 'matched')
+                                                    <span class="text-emerald-600" title="Bestehende Verknüpfung bleibt">✓ {{ $mv['kind'] === 'gp' ? 'GP' : 'Rezept' }}: {{ $mv['ziel'] ?? '—' }}</span>
+                                                @elseif($mv['status'] === 'grounded')
+                                                    <span class="text-emerald-600" title="Wird beim Übernehmen automatisch verknüpft">→ {{ $mv['kind'] === 'gp' ? 'GP' : 'Rezept' }}: {{ $mv['ziel'] ?? '—' }}</span>
+                                                @else
+                                                    <span class="text-violet-600" title="Kein Bestandstreffer — nach dem Übernehmen anlegen">⚠ {{ $mv['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}{{ ($mv['shortlist'] ?? 0) > 0 ? ' · ' . $mv['shortlist'] . ' Kandidaten' : '' }}</span>
+                                                @endif
+                                            @endif
                                         </p>
                                     @endif
                                 @endforeach
+                                @php($hardstops = collect($ueberarbeitung['match_vorschau'] ?? [])->where('status', 'hardstop')->count())
+                                @if($hardstops > 0)
+                                    <p class="text-[10px] text-violet-700 mt-0.5" data-ueberarbeiten-hardstops>
+                                        {{ $hardstops }} Zutat(en) ohne Bestandstreffer → nach dem Übernehmen als GP/Basisrezept anlegen (Hard-Stop). Alle anderen werden automatisch verknüpft.
+                                    </p>
+                                @endif
                             @endif
                             @if(is_string($ueberarbeitung['werte']['description'] ?? null))
                                 <p class="{{ $dt }}">Beschreibung (neu)</p>
