@@ -64,6 +64,12 @@ class IngredientEditor extends Component
             }
             $this->dispatch('recipe-gespeichert');
             $this->dispatch('recipe-selected', id: $this->recipeId);
+            // #511: das fehlende Glied im Live-Refresh. syncIngredients hat Kind +
+            // transitive Eltern server-seitig bereits neu gerechnet (recomputeAndPropagate);
+            // dieses Signal zieht die kosten-abhängigen Panels (Kalkulation, Eltern-Cockpits)
+            // gezielt nach — statt sich allein aufs generische Re-Render zu verlassen.
+            $betroffen = app(RecipeRecomputeService::class)->betroffeneRezepte($this->recipeId);
+            $this->dispatch('kosten-aktualisiert', recipe_id: $this->recipeId, ids: $betroffen);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

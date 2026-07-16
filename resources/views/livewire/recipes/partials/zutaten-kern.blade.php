@@ -168,6 +168,11 @@
                         @endif
                         <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.cooking_loss_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" /></td>
                         <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
+                            {{-- F2 (#511a): Tausch/Add auf einen unbepreisten GP zeigt jetzt einen sichtbaren
+                                 amber-Hinweis statt eines stillen grauen „—". Greift live, weil ekFuerZiel
+                                 beim Tausch genau dann null liefert (⇄ und ♻ setzen ek_pro_g=null vorher). --}}
+                            <span x-show="(zeile.gp_id || zeile.referenced_recipe_id) && (zeile.ek_pro_g === null || zeile.ek_pro_g === undefined) && !zeile.is_optional"
+                                  x-cloak class="mr-1 text-amber-600 cursor-help" title="Kein Preis hinterlegt — diese Zutat fehlt im EK" data-ek-unpriced>⚠︎</span>
                             <span x-text="zeilenEk(zeile) ?? '—'" :class="zeilenEk(zeile) ? 'text-gray-900' : 'text-gray-500'"></span>
                         </td>
                         <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap text-gray-600" data-zeilen-ek-min>
@@ -237,6 +242,14 @@
                         <span x-text="summe('ek_pro_g_avg')"></span>
                     </td>
                     <td></td>
+                </tr>
+                {{-- F2 (#511a): EK-Vollständigkeits-Zeile — sichtbar, sobald wert-relevante
+                     Zutaten ohne auflösbaren Preis dabei sind (der Server-Zähler
+                     ek_n_ingredients_priced < _total gespiegelt auf den Client). --}}
+                <tr x-show="bepreistInfo().total > bepreistInfo().priced" x-cloak class="border-t border-amber-500/20">
+                    <td colspan="{{ $vkKontext ? 10 : 9 }}" class="{{ $td }} !px-2 text-right text-[11px] text-amber-700" data-ek-unvollstaendig>
+                        ⚠︎ nur <span class="font-medium" x-text="bepreistInfo().priced"></span> von <span class="font-medium" x-text="bepreistInfo().total"></span> Zutaten bepreist — EK unvollständig (Preis am GP/Lieferantenartikel ergänzen)
+                    </td>
                 </tr>
             </tfoot>
         </table>

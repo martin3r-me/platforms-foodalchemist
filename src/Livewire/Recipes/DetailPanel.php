@@ -58,6 +58,18 @@ class DetailPanel extends Component
         $this->ersatzSuche = '';
     }
 
+    /**
+     * #511: nach jedem Save den Rezept-Kopf (EK/kg · EK · Yield · Allergene) neu
+     * rendern — greift AUCH im embedded Editor-Kontext, wo zeige() (recipe-selected)
+     * bewusst früh aussteigt und den Kopf sonst nur am generischen Re-Render hinge.
+     * Re-render liest die frischen Aggregate aus der DB (render() → detail()).
+     */
+    #[On('recipe-gespeichert')]
+    public function nachSpeichern(): void
+    {
+        // no-op: die Präsenz des Listeners löst das Re-Rendering des Panels aus.
+    }
+
     // ── Ersatz-Logik (make-or-buy): dieses Rezept ↔ Fertig-GP / Alternativ-Rezept ──
 
     public function ersatzVerknuepfen(string $kind, int $id): void

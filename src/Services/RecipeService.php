@@ -150,10 +150,21 @@ class RecipeService
             'production_depth' => ($in['production_depth'] ?? '') ?: null,
             'work_time_min' => $in['work_time_min'] ?? null,
             'yield_kg_manual' => $in['yield_kg_manual'] ?? null,
+            'yield_pieces' => ($in['yield_pieces'] ?? '') !== '' ? ($in['yield_pieces'] ?? null) : null,
             'description' => ($in['description'] ?? '') ?: null,
+            // #509 Create-Parität: dieselben Fachfelder wie update() — sonst verwirft
+            // die Anlage still, was der Nutzer im Anlege-Modal getippt hat (D-5 §4.2).
+            'temperature' => ($in['temperature'] ?? '') ?: null,
+            'function' => ($in['function'] ?? '') ?: null,
+            'preparation' => ($in['preparation'] ?? '') ?: null,
+            'notes_manual' => ($in['notes_manual'] ?? '') ?: null,
             'last_modified_by' => 'editor',
             'created_via' => ($in['created_via'] ?? '') ?: null,     // Phase A: mcp | editor | import | generator
         ]);
+        // Equipment (§4.2.6): M:N-Sync wie update(), nur wenn übergeben
+        if (array_key_exists('equipment_ids', $in) && is_array($in['equipment_ids'])) {
+            $recipe->equipment()->sync(array_map('intval', $in['equipment_ids']));
+        }
         app(RecipeRecomputeService::class)->recomputePipeline($recipe->id);
 
         return $recipe->refresh();

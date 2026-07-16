@@ -79,26 +79,21 @@ class RecipeRecomputeService
         app(DarreichungService::class)->recomputeFuerRezept($recipeId);
     }
 
-    /** §3.3: Pipeline + alle transitiven Eltern per BFS (best effort, I8). */
-    public function recomputeAndPropagate(int $recipeId): void
+    /**
+     * §3.3: Pipeline + alle transitiven Eltern per BFS (best effort, I8).
+     *
+     * @return array<int> betroffene recipe_ids (Kind + transitive Eltern) — für
+     *                    gezielte UI-Signale (#511 kosten-aktualisiert)
+     */
+    public function recomputeAndPropagate(int $recipeId): array
     {
         // 1. Betroffene Menge sammeln (Start + alle transitiven Eltern), NOCH nicht rechnen.
-        $besucht = [$recipeId => true];
-        $ebene = [$recipeId];
-        for ($tiefe = 0; $tiefe < self::PROPAGATION_LIMIT && $ebene !== []; $tiefe++) {
-            $eltern = FoodAlchemistRecipeIngredient::whereIn('referenced_recipe_id', $ebene)
-                ->whereNull('deleted_at')->distinct()->pluck('recipe_id')
-                ->reject(fn ($id) => isset($besucht[$id]))->values()->all();
-            foreach ($eltern as $parentId) {
-                $besucht[$parentId] = true;
-            }
-            $ebene = $eltern;
-        }
+        $betroffen = $this->betroffeneRezepte($recipeId);
 
         // 2. Topologisch ordnen (Kinder vor Eltern) INNERHALB der betroffenen Menge und in
         //    dieser Reihenfolge rechnen. Diamond-sicher (P→Y→X ∧ P→X): sonst läse P ein noch
         //    nicht neu berechnetes Geschwister-Sub und bliebe dauerhaft stale (I8-Härtung).
-        foreach ($this->topoOrder(array_keys($besucht)) as $id) {
+        foreach ($this->topoOrder($betroffen) as $id) {
             try {
                 $this->recomputePipeline($id);
             } catch (\Throwable $e) {
@@ -111,12 +106,38 @@ class RecipeRecomputeService
         // Best-effort, außerhalb der Recompute-Transaktion (I8: Edit nicht blocken).
         try {
             $paketSvc = app(PaketService::class);
-            foreach (array_keys($besucht) as $rid) {
+            foreach ($betroffen as $rid) {
                 $paketSvc->markStaleForRecipe((int) $rid);
             }
         } catch (\Throwable $e) {
             Log::warning("K-07 markStaleForRecipe fehlgeschlagen: {$e->getMessage()}");
         }
+
+        return $betroffen;
+    }
+
+    /**
+     * #511: die vom Recompute betroffene Menge (Start-Rezept + alle transitiven
+     * Eltern per BFS, PROPAGATION_LIMIT-begrenzt) — OHNE zu rechnen. Der Editor
+     * trägt damit das kosten-aktualisiert-Signal gezielt an die Eltern-Cockpits.
+     *
+     * @return array<int> recipe_ids (Start zuerst)
+     */
+    public function betroffeneRezepte(int $recipeId): array
+    {
+        $besucht = [$recipeId => true];
+        $ebene = [$recipeId];
+        for ($tiefe = 0; $tiefe < self::PROPAGATION_LIMIT && $ebene !== []; $tiefe++) {
+            $eltern = FoodAlchemistRecipeIngredient::whereIn('referenced_recipe_id', $ebene)
+                ->whereNull('deleted_at')->distinct()->pluck('recipe_id')
+                ->reject(fn ($id) => isset($besucht[$id]))->values()->all();
+            foreach ($eltern as $parentId) {
+                $besucht[$parentId] = true;
+            }
+            $ebene = $eltern;
+        }
+
+        return array_map('intval', array_keys($besucht));
     }
 
     /**

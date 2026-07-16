@@ -202,6 +202,18 @@
                 }
                 return s.toFixed(2).replace('.', ',') + ' €';
             },
+            // F2 (#511a): wie viele der wert-relevanten Zeilen (GP/Sub, nicht optional)
+            // haben einen auflösbaren Preis? priced < total ⇒ EK ist unvollständig.
+            bepreistInfo() {
+                let priced = 0, total = 0;
+                for (const z of this.rows) {
+                    if (z.is_optional) continue;
+                    if (!z.gp_id && !z.referenced_recipe_id) continue;
+                    total++;
+                    if (z.ek_pro_g !== null && z.ek_pro_g !== undefined) priced++;
+                }
+                return { priced, total };
+            },
             // Live-Yield (Näherung): Σ menge_g × (1−putz) × (1−garv) — reagiert sofort auf Garverlust/Stück,
             // ohne Save. Putzverlust-DEFAULTS (GP/Team) kennt der Client nicht → präzise erst beim Save-Recompute.
             yieldLive() {

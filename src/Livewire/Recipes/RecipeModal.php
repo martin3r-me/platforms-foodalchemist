@@ -132,11 +132,20 @@ class RecipeModal extends Component
                 'yield_kg_manual' => $rohYield !== '' ? (float) $rohYield : null,
                 'yield_pieces' => $rohStk !== '' ? (float) $rohStk : null,
             ];
-            $recipe = $this->recipeId === null
+            $warNeu = $this->recipeId === null;
+            $recipe = $warNeu
                 ? $recipes->create($team, $in)
                 : $recipes->update($team, $this->recipeId, $in);
 
-            $this->dispatch('modal.close', name: 'recipe-modal');
+            // #509 Create-Parität (VkModal::anlegen-Muster): nach dem Anlegen NICHT
+            // schließen, sondern nahtlos in den Edit-Modus springen — Zutaten/Deklaration/
+            // Darreichungen (allesamt @if($recipeId !== null)) werden sofort befüllbar,
+            // statt dass der Nutzer das frische Rezept erst wieder heraussuchen muss.
+            if ($warNeu) {
+                $this->ladeRezept($recipe->id);
+            } else {
+                $this->dispatch('modal.close', name: 'recipe-modal');
+            }
             $this->dispatch('recipe-gespeichert');
             $this->dispatch('recipe-selected', id: $recipe->id);
         } catch (\RuntimeException $e) {
