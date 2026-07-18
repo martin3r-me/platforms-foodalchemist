@@ -104,7 +104,7 @@ Phase 1: 07·M1 (Keystone) → 07·M2 ; 06·H1/H2        [blocker-frei]
 - **Kein GP ohne LA** (07-Doktrin) — Mint ist LA-belegt, tentative, ReviewQueue.
 - **Draft + menschliches Go** — nichts wird autonom committet/aktiviert; „propose, never autonomously commit".
 - **Kaskaden-Prinzip** — jede Stufe eigenständig lauffähig + ineinandergreifend.
-- **MCP im Lockstep** — jedes Feature zieht seine Tools mit (Präzedenz R0.2).
+- **MCP-Fähigkeit ist Pflicht-DoD für JEDES neue Feature** (Dominique 2026-07-18, verschärft R0.2): jede neue Fähigkeit muss auch **agentisch/headless über MCP nutzbar** sein — Tools entstehen MIT dem Feature (gleicher Commit), nie retrofitted. UI ist eine Oberfläche der Fähigkeit, nicht ihr einziger Zugang. Reads team-scoped (`visibleToTeam`), Writes `isOwnedBy` im Service, read-only bis expliziter Commit. Bewusste Ausnahme (reine UI-Kosmetik ohne neue Fähigkeit) wird im Spec **begründet**, nicht stillschweigend gelassen.
 - **Verify before claiming** — nie „gefixt/wirkt" ohne echten Lauf gegen echte Daten; Pest + (wo nötig) MySQL-Smoke.
 - **Keine Fremdmodul-Änderungen** — nur `platforms-foodalchemist` + Sandbox; Core-Wünsche an Martin.
 - **Commit-Sync** — bei jedem Push ROADMAP + Dev-Modul (#-Issue) mitziehen.

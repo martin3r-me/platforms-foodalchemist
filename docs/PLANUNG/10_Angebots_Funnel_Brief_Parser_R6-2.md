@@ -21,6 +21,7 @@ Kunden-Mail / Formular-Text
 - [ ] Unsichere Felder als **Rückfrage-Liste**, nicht geraten (spiegelt die „keine Erfindungen"-Haltung auf der Intake-Seite).
 - [ ] Brief mündet direkt in R6.1 (**ein Klick:** Brief → Konzept-Vorschlag).
 - [ ] **Grenze eingehalten:** Angebots-FÜHRUNG bleibt Event-Modul — FA liefert Brief + Konzept zu (Zuarbeits-Schnittstelle dokumentiert).
+- [ ] **MCP-Pflicht (00-Invariante):** Parser als MCP-Tool (z.B. `briefs.PARSE` — Mail-Text rein, strukturiertes Brief + Konfidenzen + Rückfragen raus, read-only) + Brief→Konzept-Kette über das bestehende `concepts.GENERATE` — der ganze Funnel ist damit agentisch fahrbar (z.B. Office-Assistent bekommt eine Kunden-Mail und liefert den Konzept-Draft).
 
 ## 3. Abhängigkeiten + Einordnung
 

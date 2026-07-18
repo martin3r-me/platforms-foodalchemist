@@ -86,7 +86,7 @@ Kreatives Planen ist nur so gut wie sein Wissen. Die Planungs-Ebene zieht — wi
 | **P5** | KI-Divergenz sauber vom Grounding trennen (Prompt „erfinde frei" vs. Assembler „keine Erfindungen") + Anker-Graph als Ideen-Quelle | M |
 | **P6** | Wissens-Ebene: Concepting-Wissen befüllen (Kategorie `concept`, Destillation 109/110/111) + `concept`/`konzept`-Dublette konsolidieren + Routings `concept.plan`/`foodbook.plan` (Concepting- + Food-/Pairing-Wissen) | M |
 
-**Globale DoD:** Skizze committet/erdet NICHTS bis „Go"; nach „Go" ist alles geerdet (Bestand/Generator/LA-First/Backlog); kein Auto-Go (Mensch drückt); erfundene Gerichte werden nie ohne Erdung Teil eines echten Konzepts.
+**Globale DoD:** Skizze committet/erdet NICHTS bis „Go"; nach „Go" ist alles geerdet (Bestand/Generator/LA-First/Backlog); kein Auto-Go (Mensch drückt); erfundene Gerichte werden nie ohne Erdung Teil eines echten Konzepts. **MCP-Pflicht (00-Invariante):** beide Planungs-Ebenen sind agentisch nutzbar — Tools für Plan anlegen/lesen/ergänzen (z.B. `concept_plans.POST/GET/PUT`, `foodbook_plans.*`) + divergente KI-Vorschläge; das „Go" bleibt auch via MCP ein expliziter, menschlich getriggerter Call. Tools entstehen MIT den Etappen, nicht retrofitted.
 
 ---
 

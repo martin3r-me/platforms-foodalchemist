@@ -20,6 +20,7 @@ Seit Necta raus ist, gibt es keinen automatischen Preis-Strom mehr. Alles, was a
 - [ ] **Preis-Import triggert R2.1-Alarm** (neuer EK → Marge-Impact-Signal, keine stille Drift).
 - [ ] *(Erweiterung, für R2.3):* **Verkaufs-Ist-Import-Format-Spec** dokumentiert + 1 echte Beispieldatei eines BHG-Caterers geladen (Wording-Matcher-Muster Skript 250 für das Zeilen-Matching; Unmatched → Review-Queue).
 - [ ] *(Hygiene):* Import idempotent + resumefähig; nach Preis-Import Recompute der betroffenen Ketten (Lead-LA → GP → Rezepte), Signale statt stiller Änderungen.
+- [ ] **MCP-Pflicht (00-Invariante):** Ingest agentisch fahrbar — Status/Report als Tool (z.B. `ingest.STATUS` read-only: letzte Läufe, Lücken-Liste, Preis-Deltas) + Trigger-Tool für den Datei-Import (explizit, menschlich angestoßen); Bulk bleibt artisan, MCP ist Steuer-/Sicht-Ebene.
 
 ## 3. Offene Vorfragen (vor Baustart)
 
