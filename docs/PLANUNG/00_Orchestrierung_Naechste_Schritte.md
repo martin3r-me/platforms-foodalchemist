@@ -129,20 +129,22 @@ Phase 1: 07·M1 (Keystone) → 07·M2 ; 06·H1/H2        [blocker-frei]
 - **01** 🟢 — Editor-Strecke #511/#509 (✅ gebaut/gepusht `0eac4fe`; offen: Live-Klickstrecke nach Deploy, F3=05-Etappe-2).
 - **02 / 02b** 🟢 — #507 RAG-Layer (gebaut) + Go-Live-Runbook.
 - **03** 🟢 — #512 KI-Erstell-Flächen L1–L8 (Update-Banner: #508 done, #507 gebaut).
-- **04** 🟡 — Modernist/Grammaturen #513 (ProportionService Tier 1 entschieden; Referenztabellen Tier 2; Tier 3 = max. Wissens-Doc).
-- **05** 🟢 — Datenqualitäts-Kaskade (Etappe 1 ✅ gebaut; offen: P5 Prozessanker-Parser, demo-Heilung, Etappe 2 KI — entblockt durch Martin-Key).
-- **06** 🟡 — Convenience-Highlights (opt-in KI-Baustein).
-- **07** 🟡 — LA-First-GP-Mint überall (Keystone-Fundament).
+- **04** ✅ — Modernist/Grammaturen #513 (ProportionService + Editor-UI + Referenztabellen C KOMPLETT, Dev #513 Done).
+- **05** 🟢 — Datenqualitäts-Kaskade (Etappe 1 + **P5 Prozessanker-Parser ✅ 2026-07-19**; offen: demo-Heilung, Etappe 2 KI — Martin-Key).
+- **06** ✅ — Convenience-Highlights (H1–H4 KOMPLETT 2026-07-19, Dev #528, ROADMAP R8.2).
+- **07** 🟡 — LA-First-GP-Mint überall (Keystone-Fundament, M1–M4 gebaut).
 - **08** 🟡 — Planungs-/Kreativ-Ebene (Doppel-Diamant + Wissens-Ebene).
-- **09** ⚪ — Pairing-Offense-Trio (R6.8 Aroma-treue Substitution · R6.9 Dish-Reverse-Engineering · R6.10 Überschuss-zu-Gericht).
-- **10** ⚪ — Angebots-Funnel / Brief-Parser (R6.2).
-- **11** ⚪ — Hypothesen-/Widerspruchs-Modus R&D (R6.11).
-- **12** ⚪ — Wirtschaftlichkeits-Intelligenz R2-Rest (R2.3 Menu-Engineering · R2.4 Marge-optimale Assemblierung · R2.5 Saison-Auto-Pricing).
-- **13** ⚪ — Preis-/Katalog-Ingest (Q2, Ex-Necta) — Daten-Nabelschnur der Engine; enthält das R2.3-Format-Spec-Gate.
-- **14** ⚪ — Lieferanten-Management (R9.1 Stammblatt/Absprachen · R9.2 Lead-Steuerung bedient).
+- **09** 🟢 — Pairing-Offense-Trio (bau-reif 2026-07-19: R6.8 Aroma-Subst. · R6.9 Dish-Reverse · R6.10 Überschuss; alle graph-code-verankert, R6.10 Mock-Bestand).
+- **10** 🟢 — Angebots-Funnel / Brief-Parser R6.2 (bau-reif 2026-07-19: `briefs.PARSE`-Prompt+Tool+Modal; scharf nach #492-Blindtest).
+- **11** 🟡 — Hypothesen-/Widerspruchs-Modus R6.11 (entscheidungs-reif 2026-07-19: Hypothesen-Ranking baubar, Widerspruch nur pairing-Docs v1; Blocker: Chem-Tabellen-Import + Lab-Notes-Tabelle neu).
+- **12** 🟢/🟡 — Wirtschaftlichkeits-Intelligenz R2-Rest (bau-reif 2026-07-19: R2.5 + R2.4 🟢; R2.3 🟡 gated auf Q2-Format-Spec, v0-Matrix auf Feedback interim).
+- **13** 🟢/🟡 — Preis-/Katalog-Ingest Q2 (bau-reif 2026-07-19: Kanal B Datei-Import 🟢, Sales-Ist 🟡 gated, Kanal A ⚪ extern).
+- **14** 🟢 — Lieferanten-Management R9 (bau-reif 2026-07-19: R9.2-Engine vorhanden, R9.1 Stammblatt/Absprachen/Konditionen neu; Volumen nur Nutzungs-Proxy).
 - *(Q4/Q5 Wissens-+Graph-Fundament → lebt in `_FoodBrain_Docs/`, kein eigenes Spec-File. GEPARKT/nicht-Kern: R5 Compliance · N Nachbar-Modul · A Academy.)*
 
 **Damit sind die Kern-Funktionen vollständig als Einzeldateien extrahiert (01–14).** Die ROADMAP im Modul-Repo bleibt vorerst unverändert (team-facing); Eindampfen auf eine schlanke Spine = separater, abgesprochener Schritt.
 - Memory: `project_fa_507_semantic_search`, `_la_first_gp_mint`, `_convenience_highlights`, `_planungs_kreativ_ebene`, `feedback_fa_composer_update_procedure` — alle in `MEMORY.md`.
+
+**Planungs-Runde 2026-07-19:** alle sechs ⚪-Dossiers (09–14) via Code-Kartierung auf 🟢 bau-reif (bzw. 🟡 mit benanntem Blocker) gehoben — jede Spec trägt jetzt eine „Code-Kartierung"-Sektion (Datei:Zeile), fixierte Entscheidungen (E1…), Etappen mit Größe + geschärfte DoD + Reuse-vs-Neu-Tabelle. Damit ist der ganze Ordner 01–14 bau-fähig (nur 08 + 11 tragen Rest-Blocker: LLM-Provider bzw. Chem-Import). Nächster Bau-Kandidat blocker-frei: **09·S1 (R6.8 Aroma-Substitution)**, **14·S1 (R9.1 Stammblatt)**, **12·S1 (R2.5)** oder **13·S1 (Kanal-B-Import)**.
 
 *Erstellt 2026-07-18. Einstiegspunkt für die Fortsetzung. Reihenfolge = Abhängigkeit + Blocker-Status, nicht in Stein — bei neuem Signal (z.B. Blindtest, Kundendruck) neu priorisieren.*
