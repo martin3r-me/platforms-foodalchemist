@@ -37,7 +37,7 @@ Backfill (`embed --pool=all`) → `embed-eval` (Floor messen) → Floor + Flag s
 Alles hier ist **ohne Key/Deploy** baubar (deterministisch bzw. Fake-Provider-testbar).
 
 1. ✅ **07 · M1 — LA-First-Mint befreien** (`versucheLaZuGp` → `LaFirstGpService::mintFromLa`; Generator delegiert). **Keystone-Unblock erledigt 2026-07-18** (18 Tests grün, ungepusht). Nächster Schritt darauf: M2. **Keystone-Unblock:** killt die Sackgassen (Ruby-Fall) und ist Vorbedingung für L7 + 08.
-2. **07 · M2 — Mint in `syncIngredients`** verdrahten → schließt die Lücke in der E3-Revise-Strecke (matcht heute nur, mintet nicht).
+2. ✅ **07 · M2 — Mint in `syncIngredients`** verdrahtet (E3-Re-Grounding-Block: Bestand-Miss + LA → LA-First-Mint) → **schließt die Revise-Lücke, erledigt 2026-07-18.** Nächster Schritt: M3 (MCP-Tool + `gps.MATCH` mint-if-missing).
 3. **06 · H1 + H2 — Convenience-Datenmodell + Kuratierungs-Score** (deterministisch) → du bekommst gleich eine echte Liste zum Pinnen.
 4. **05 · P5 — Prozessanker-Parser** (deterministisch, 0 LLM: Röst/Grill/Rauch/Karamell/Ferment aus dem Zubereitungstext; kein Zwangs-Anker) — der offene Etappe-1-Rest der DQ-Kaskade.
 5. **04 · #513 — `ProportionService`** (Bäckerprozent-Sicht + Extraprozent + Brining + Bloom): entschiedenes Dev-Issue, exakte Formeln als Code, Pest-getestet — sofortiger Küchen-Nutzen, null Abhängigkeit.

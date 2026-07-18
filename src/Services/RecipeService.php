@@ -471,6 +471,21 @@ class RecipeService
                                 $groundedConfidence = round((float) $treffer['score'], 3);
                             }
                         }
+
+                        // 07·M2: Bestand-Miss, aber passende LA vorhanden → LA-First-Mint
+                        // (geteilte Doktrin, schließt die Revise-Lücke: E3 matchte nur, mintete
+                        // nicht). Mint ist tentative + LA-verknüpft; keine LA → bleibt unmatched
+                        // (Hard-Stop / Sourcing-Wunsch beim Aufrufer). Provenienz wie im Generator.
+                        if ($gpId === null && $subId === null) {
+                            $mint = app(LaFirstGpService::class)->mintFromLa(
+                                $team, $groundName, $z['hauptzutat_slug'] ?? ($z['slug'] ?? null),
+                            );
+                            if ($mint !== null) {
+                                $gpId = $mint->id;
+                                $groundedMethod = 'gemini_proposed';   // LA-First-Mint-Provenienz (gültiger MatchMethod-Case)
+                                $groundedConfidence = null;
+                            }
+                        }
                     }
                 }
 

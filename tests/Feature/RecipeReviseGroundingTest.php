@@ -1,6 +1,9 @@
 <?php
 
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\RecipeService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -79,6 +82,33 @@ it('rehabilitiert eine bestehende unmatched Zeile beim Re-Sync, sobald das GP ex
     expect((int) $z2->id)->toBe((int) $z->id)               // dieselbe Zeile
         ->and((int) $z2->gp_id)->toBe((int) $gp->id)
         ->and($z2->match_method?->value ?? $z2->match_method)->toBe('gp_v2_fk');
+});
+
+it('07·M2: Bestand-Miss mit passender LA → mintet LA-First statt unmatched zu bleiben', function () {
+    // KEIN passendes GP im Bestand, aber eine LA mit gleicher Bezeichnung existiert.
+    $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);
+    $la = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
+        'designation' => 'Ruby-Schokolade', 'qty' => 1.0, 'unit_code' => 'kg',
+    ]);
+
+    $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
+        ['id' => null, 'gp_id' => null, 'display_name' => 'Ruby-Schokolade', 'raw_text' => '80 g Ruby-Schokolade',
+         'quantity' => '80', 'unit_vocab_id' => $this->g->id],
+    ]);
+
+    $z = ($this->firstIngredient)();
+    // Zeile ist jetzt an ein frisch gemintetes, tentatives GP geerdet (nicht mehr unmatched).
+    expect($z->gp_id)->not->toBeNull()
+        ->and($z->match_method?->value ?? $z->match_method)->toBe('gemini_proposed');
+
+    $gp = FoodAlchemistGp::find($z->gp_id);
+    expect($gp->status->value)->toBe('tentative')
+        ->and($gp->requires_la)->toBeTrue();
+
+    // Doktrin: der Mint ist LA-verknüpft (Struktur-Zeile LA→GP).
+    $struktur = FoodAlchemistSupplierItemStructure::where('supplier_item_id', $la->id)->first();
+    expect($struktur?->gp_id)->toBe($gp->id);
 });
 
 it('respektiert ein explizit gesetztes gp_id (kein Re-Grounding-Override)', function () {
