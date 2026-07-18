@@ -265,6 +265,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)
                     \Platform\FoodAlchemist\Tools\ProportionApplyTool::class,
+                    // #513 Tier 1 Punkt 2: Kerntemperatur-Referenz (Qualitäts-Zielwerte, weich)
+                    \Platform\FoodAlchemist\Tools\ReferenceGetTool::class,
                     // Phase K: Wissen + Pairing-Graph für externe LLM-Clients
                     \Platform\FoodAlchemist\Tools\KnowledgeSearchTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeListTool::class,
