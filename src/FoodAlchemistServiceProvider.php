@@ -259,6 +259,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\GpProposalsPostTool::class,
                     // 07·M3: LA-First-GP-Mint als MCP-Tool (löst den Ruby-Fall FA-nativ)
                     \Platform\FoodAlchemist\Tools\GpsMintFromLaTool::class,
+                    // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
+                    \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // Phase K: Wissen + Pairing-Graph für externe LLM-Clients
                     \Platform\FoodAlchemist\Tools\KnowledgeSearchTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeListTool::class,

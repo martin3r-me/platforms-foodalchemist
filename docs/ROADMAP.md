@@ -66,6 +66,8 @@ Keystone aus [`docs/PLANUNG/07_LA_First_GP_Mint_ueberall.md`](PLANUNG/07_LA_Firs
 - **M4 (✅):** Proposal-Reframe — `gp_new_proposals` = **Beschaffungs-Wunsch (Sourcing-Backlog)** statt „GP wartet auf Freigabe"; `gp_proposals.POST` steuert den Flow (MATCH → MINT_FROM_LA → erst bei fehlender LA Wunsch erfassen), Antwort-Key `sourcing_request`. Kein Schema-Change.
 - **Doktrin gewahrt:** kein GP ohne LA · Mint = `tentative` + ReviewQueue · Freigabe menschlich · unbelegter Wunsch wird NIE zum GP. Voll-Suite grün, 0 Regressionen.
 
+**+ #513 Tier 1 (Grammaturen-Rechner):** blocker-freies Phase-1-Stück nachgezogen — `ProportionService` (Bäckerprozent + Rückweg · Extraprozent · Brining · Gelatine-Bloom, Quelle Modernist Cuisine) + Bäckerprozent-Sicht je Rezept (Masse via `bruttoMasseG`, eine Regel-Stelle) + MCP-Tool `foodalchemist.proportion.CALC` (read-only). Grammatur bleibt Master, Prozent = abgeleitete Sicht; Bloom-Sorten als dokumentierte Referenz, nicht erfunden. Pest `ProportionServiceTest`. Offen: Bäckerprozent-Spalte im Editor-UI + Referenztabellen C (Kerntemp/Dosier).
+
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 
 Quellen: `Datenmodell Food.Alchemist.md` (5 Ebenen) + `07.02_Flavor_Pairing/Datenbank Foodalchemist/_Plan_Datenmodell_Chemie-Pairing-DB.md` (Chemie-first Phase 1–4). Stationen von hier bis Voll-Ausbau:
