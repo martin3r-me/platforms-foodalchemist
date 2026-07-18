@@ -24,9 +24,9 @@ Seit Necta raus ist, gibt es keinen automatischen Preis-Strom mehr. Alles, was a
 
 ## 3. Offene Vorfragen (vor Baustart)
 
-1. **Quellen-Inventar:** Welche Lieferanten liefern heute wie? (PDF-Preisliste / Excel / Portal-Export / gar nicht) — Bestandsaufnahme je Stamm-Lieferant.
-2. **Format-Spec Verkaufs-Ist** (Bankettprofi-Export o.ä.) — das harte R2.3-Gate.
-3. **Frequenz + Verantwortung:** wer lädt wann (manuell je Quartal? Watchfolder? Mail-Ingest?) — bewusst einfach starten.
+1. **Quellen-Inventar:** Welche Lieferanten liefern heute wie? (PDF-Preisliste / Excel / Portal-Export / gar nicht) — Bestandsaufnahme je Stamm-Lieferant. *(Aufgabe, kein Entscheid.)*
+2. **Format-Spec Verkaufs-Ist** (Bankettprofi-Export o.ä.) — das harte R2.3-Gate. *(Aufgabe: echte Beispieldatei beschaffen — Dominique.)*
+3. ~~Frequenz + Verantwortung~~ **✅ ENTSCHIEDEN (Dominique 2026-07-18): manuell, quartalsweise** — du/Team lädt Preislisten-Dateien quartalsweise (bzw. bei Lieferanten-Update); Import-Command verarbeitet. Automatisierung (Watchfolder/Mail) erst, wenn der Fluss steht — bewusst einfach starten.
 
 ## 4. Bewusste Nicht-Ziele
 - **Kein Rückkanal** (FA schreibt nichts zu Lieferanten/Necta zurück).

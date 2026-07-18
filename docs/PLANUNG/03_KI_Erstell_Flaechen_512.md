@@ -78,7 +78,7 @@ Bereits in **#369** getrackt — kein neues Issue. Der Block „LLM-Key" ist inz
 
 Der große Hebel, aber KEIN Neubau — Komposition existierender Teile: Brief → (R4.1) Planungs-Gerüst → Kapitel-Struktur-Vorschlag → je Kapitel `generiereAusGeruest`/`generiereAusBrief` (R6.1) → Foodbook-Draft mit Coverage-Ampel (R4.2) dran.
 
-**Vorentscheid nötig:** v1-Scope = nur Kapitel-Gerüst + Konzept-Slots aus Brief (deterministisch wo möglich), Texte via L2 nachziehen? Oder direkt Voll-Flow? Empfehlung: **v1 schlank** — Brief → Kapitel-Baum + je Kapitel ein generiertes Konzept, Status draft, Coverage sofort sichtbar. Erst nach R6.1-Blindtest (#492) starten — der validiert die Konzept-Qualität, auf der dieser Flow aufbaut.
+**✅ ENTSCHIEDEN (Dominique 2026-07-18): v1 schlank** — Brief → Kapitel-Baum + je Kapitel ein generiertes Konzept, Status draft, Coverage sofort sichtbar; Kapitel-Texte via L2 nachziehen (kein Voll-Flow in v1). Erst nach R6.1-Blindtest (#492) starten — der validiert die Konzept-Qualität, auf der dieser Flow aufbaut.
 
 **DoD (v1):**
 - [ ] Foodbook-Browser: `✨ Foodbook aus Brief` → Brief-Modal (wie Concepts-Browser)

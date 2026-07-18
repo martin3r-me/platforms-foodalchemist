@@ -53,7 +53,7 @@ Soft-Regel: `is_convenience_highlight=true` nur sinnvoll bei `is_convenience=tru
 
 1. **Auto-Score** je Convenience-GP: `Verwendungshäufigkeit × Lieferanten-Priorität (supplier_priorities via Lead-LA) × Lead-LA-Vollständigkeit`. Liefert eine Rangliste.
 2. **Mensch entscheidet:** pinnt aus der Rangliste die echten Highlights (`is_convenience_highlight=true` + `highlight_rank`), excludet Ungewolltes.
-3. MVP-Form: Command `foodalchemist:convenience-highlights --suggest` (Report-Rangliste) + Setzen der Flags via Kuratierungs-Screen ODER MCP-Tool. (Voll-Screen kann v2 werden.)
+3. **✅ ENTSCHIEDEN (Dominique 2026-07-18): Kuratierungs-Screen gleich in v1** — FA-Screen mit Score-Rangliste + Pin/Exclude je GP (+ `highlight_rank`-Reihenfolge), dazu Command `foodalchemist:convenience-highlights --suggest` (Report) und MCP-Tool als zweiter Zugang (MCP-Pflicht-Invariante).
 
 ---
 
@@ -82,7 +82,7 @@ Gilt für: `recipe.generate` (Gericht/Basisrezept) **und** `concepts.generate` (
 | # | Etappe | Größe | Abhängig |
 |---|---|---|---|
 | **H1** | Datenmodell: Migration `is_convenience_highlight` + `highlight_rank` | S | — |
-| **H2** | Kuratierung: `--suggest`-Score-Report + Flags setzen (MCP im Lockstep) | M | H1 |
+| **H2** | Kuratierung: `--suggest`-Score-Report + **Kuratierungs-Screen (v1, entschieden)** + MCP-Tool (Lockstep) | M–L | H1 |
 | **H3** | Generierungs-Modus: `use_convenience_list` in GenerationContextService + ConceptGeneratorService (eigener Prompt-Block, bevorzugt) | M | H1 |
 | **H4** | UI: Toggle an beiden Generator-Modals + Editor-Picker-Filter | S–M | H3 |
 
@@ -105,6 +105,6 @@ Gilt für: `recipe.generate` (Gericht/Basisrezept) **und** `concepts.generate` (
 
 - Auto-Score-Gewichtung (Nutzung vs. Umsatz-Priorität) — am realen Bestand kalibrieren.
 - `highlight_rank`: eine flache globale Reihenfolge — reicht das, oder später doch leichte WG-Gruppierung nur für die Anzeige?
-- Kuratierungs-Screen jetzt oder erst MCP-Put + später Screen?
+- ~~Kuratierungs-Screen jetzt oder erst MCP-Put?~~ ✅ entschieden 2026-07-18: Screen gleich in v1 (s. §5).
 
 *Erstellt 2026-07-17 (Diskussion Dominique). Begleitend zum #507-Retrieval-Layer — komplementärer Hebel.*

@@ -1,7 +1,7 @@
 # Lieferanten-Management — die kommerzielle Beziehungs-Ebene (R9)
 
 > **ROADMAP-Bezug:** R9.1 + R9.2 (eigener Track; Dominique-Wunsch 2026-07-05). **Ziel:** Die Beziehung zu einem Lieferanten aktiv **steuern** — Verträge, Konditionen, Absprachen, Zusagen, wer wofür Lead ist. Heute mündlich/verstreut, im System nicht führbar.
-> **Scope-Grenze (VOR Baustart bestätigen):** R9 = kommerzielle/strategische Ebene („**mit wem zu welchen Bedingungen**"). **NICHT** operatives Bestellen/Wareneingang/Lieferscheine/Rechnungskontrolle — das bleibt N-Track/Nachbar-Modul („was wann bestellt").
+> **Scope-Grenze ✅ ENTSCHIEDEN (Dominique 2026-07-18):** R9 = **nur** kommerzielle/strategische Ebene („**mit wem zu welchen Bedingungen**"). **NICHT** operatives Bestellen/Wareneingang/Lieferscheine/Rechnungskontrolle — das bleibt N-Track/Nachbar-Modul („was wann bestellt"). Entscheid #1 ist damit gefallen; die R9-Planungs-Session startet direkt mit der Kartierung.
 
 ---
 
