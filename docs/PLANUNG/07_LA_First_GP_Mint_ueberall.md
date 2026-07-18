@@ -59,7 +59,7 @@ Die LA-First-Mint-Logik **existiert bereits** — als `versucheLaZuGp()` (#505 S
 
 | # | Etappe | Größe |
 |---|---|---|
-| **M1** | `versucheLaZuGp` extrahieren → geteilter Service (aus Generator; Generator ruft künftig den Service) | S–M |
+| **M1** ✅ | `versucheLaZuGp` extrahiert → `LaFirstGpService::mintFromLa` (Generator injiziert + delegiert; 2 tote Imports raus). Pest `LaFirstGpMintTest` (Mint tentative+LA-verknüpft / Reuse-bei-gemapptem-GP / keine-LA→null / Generator-Integration `gp_neu_aus_la=1`). Verifiziert 2026-07-18: 18 Tests grün (4 neu + 14 Regression). **Ungepusht.** | S–M |
 | **M2** | In `syncIngredients` verdrahten (Editor/Revise/One-Shot minten LA-First) + Pest | M |
 | **M3** | MCP: LA→GP-Mint-Tool (menschlich getriggert / KI-vorbereitet) + `gps.MATCH` mint-if-missing; MCP-Lockstep | M |
 | **M4** | Proposal-Reframe: `GpProposalService`/Staging = Sourcing-Wunsch-Liste (Semantik + ggf. Screen/Signal „LA beschaffen") | S–M |
