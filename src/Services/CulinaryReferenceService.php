@@ -191,4 +191,93 @@ class CulinaryReferenceService
     {
         return array_values(array_unique(array_map(fn ($r) => $r['protein'], self::KERNTEMPERATUREN)));
     }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  #513 Punkt 3+7 — Hydrokolloid-Dosierungen + HLB (Landeplatz C)
+    //  Der praktische Kern: reale Dosier-Ranges, damit der Generator ein Gel/
+    //  Espuma/Sphäre baut statt zu raten. Verzahnt mit Punkt-1-Extraprozent
+    //  (Dosierung IST ein Extraprozent aufs Gesamtgewicht). Werte = publizierte
+    //  Ranges (Modernist Cuisine Bd. 4 / Herstellerangaben) — keine Erfindung,
+    //  konkrete Charge/Marke kann abweichen (Herstellerangabe hat Vorrang).
+    // ════════════════════════════════════════════════════════════════════
+
+    /**
+     * Hydrokolloid-Dosierungen. Felder: agent, label, application (Zweck),
+     * dose_min/dose_max (% vom Ansatzgewicht), dose_note (Range), needs
+     * (Cofaktor/Bedingung), thermoreversible (bool|null), source.
+     *
+     * @var list<array<string, mixed>>
+     */
+    public const HYDROCOLLOID_DOSAGES = [
+        ['agent' => 'agar', 'label' => 'Agar-Agar', 'application' => 'festes Gel', 'dose_min' => 0.5, 'dose_max' => 2.0, 'dose_note' => '0,5–2 %', 'needs' => 'aufkochen ~90 °C, geliert beim Abkühlen ~35–40 °C', 'thermoreversible' => true, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'agar', 'label' => 'Agar-Agar', 'application' => 'weiches Gel / Fluid Gel', 'dose_min' => 0.2, 'dose_max' => 0.8, 'dose_note' => '0,2–0,8 %', 'needs' => 'nach dem Gelieren mixen = Fluid Gel', 'thermoreversible' => true, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'xanthan', 'label' => 'Xanthan', 'application' => 'Verdickung / Suspension', 'dose_min' => 0.1, 'dose_max' => 0.5, 'dose_note' => '0,1–0,5 %', 'needs' => 'kalt löslich, mixen; Extraprozent-Logik', 'thermoreversible' => null, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'kappa_carrageen', 'label' => 'Kappa-Carrageen', 'application' => 'festes, sprödes Gel', 'dose_min' => 0.5, 'dose_max' => 1.5, 'dose_note' => '0,5–1,5 %', 'needs' => 'K⁺ verstärkt; mit Milch besonders wirksam', 'thermoreversible' => true, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'iota_carrageen', 'label' => 'Iota-Carrageen', 'application' => 'weiches, elastisches Gel', 'dose_min' => 0.5, 'dose_max' => 1.5, 'dose_note' => '0,5–1,5 %', 'needs' => 'Ca²⁺ verstärkt', 'thermoreversible' => true, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'gellan_low_acyl', 'label' => 'Gellan (low-acyl)', 'application' => 'festes, klares, sprödes Gel', 'dose_min' => 0.2, 'dose_max' => 1.0, 'dose_note' => '0,2–1 %', 'needs' => 'hitzestabil bis ~70 °C nach Gelieren; Ionen', 'thermoreversible' => false, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'gellan_high_acyl', 'label' => 'Gellan (high-acyl)', 'application' => 'weiches, elastisches Gel', 'dose_min' => 0.2, 'dose_max' => 1.0, 'dose_note' => '0,2–1 %', 'needs' => '—', 'thermoreversible' => false, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'natriumalginat', 'label' => 'Natriumalginat', 'application' => 'Sphärifikation (Basis-Bad)', 'dose_min' => 0.5, 'dose_max' => 1.0, 'dose_note' => '0,5–1 %', 'needs' => 'im Calciumbad (CaCl₂/Calciumlactat) gelieren; direkte vs. reverse Sphärifikation', 'thermoreversible' => false, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'calciumlactat', 'label' => 'Calciumlactat / CaCl₂', 'application' => 'Sphärifikation (Fäll-Bad bzw. reverse im Kern)', 'dose_min' => 0.5, 'dose_max' => 1.0, 'dose_note' => '0,5–1 %', 'needs' => 'Gegenion zu Alginat; CaCl₂ bitterer als Lactat', 'thermoreversible' => false, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'methylcellulose', 'label' => 'Methylcellulose', 'application' => 'HEISS-Gel / Bindung', 'dose_min' => 0.5, 'dose_max' => 2.0, 'dose_note' => '0,5–2 %', 'needs' => 'geliert BEIM ERHITZEN, löst kalt (invers) — kalt hydratisieren', 'thermoreversible' => true, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'lecithin', 'label' => 'Sojalecithin', 'application' => 'Luft / Espuma (Air)', 'dose_min' => 0.3, 'dose_max' => 1.0, 'dose_note' => '0,3–1 %', 'needs' => 'in wässriger Phase mixen (Stabmixer schräg an Oberfläche)', 'thermoreversible' => null, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'johannisbrotkernmehl', 'label' => 'Johannisbrotkernmehl (LBG)', 'application' => 'Verdickung (Synergie mit Xanthan/Carrageen)', 'dose_min' => 0.1, 'dose_max' => 0.5, 'dose_note' => '0,1–0,5 %', 'needs' => 'warm hydratisieren; mit Xanthan Gel', 'thermoreversible' => null, 'source' => 'Modernist Cuisine'],
+        ['agent' => 'pektin_hm', 'label' => 'Pektin HM (hochverestert)', 'application' => 'Gelee / Konfitüre', 'dose_min' => 0.5, 'dose_max' => 1.0, 'dose_note' => '0,5–1 %', 'needs' => 'braucht Zucker (>55 %) + Säure (pH ~3)', 'thermoreversible' => false, 'source' => 'BGS · Modernist Cuisine'],
+        ['agent' => 'pektin_lm', 'label' => 'Pektin LM (niederverestert)', 'application' => 'zuckerarmes Gel', 'dose_min' => 0.5, 'dose_max' => 1.5, 'dose_note' => '0,5–1,5 %', 'needs' => 'geliert mit Ca²⁺, ohne viel Zucker', 'thermoreversible' => false, 'source' => 'BGS'],
+    ];
+
+    /**
+     * HLB-Werte gängiger Emulgatoren (Hydrophilic-Lipophilic Balance). Skala 0–20:
+     * <6 → W/O (Wasser-in-Öl), >8 → O/W (Öl-in-Wasser). Felder: emulsifier, hlb,
+     * type (o_w|w_o|dual), use, source. Werte variieren je Quelle → evidence med.
+     *
+     * @var list<array<string, mixed>>
+     */
+    public const HLB_VALUES = [
+        ['emulsifier' => 'sojalecithin', 'label' => 'Sojalecithin', 'hlb' => 8.0, 'type' => 'o_w', 'use' => 'O/W-Emulsion, Schaum; je nach Fraktion ~4–9', 'source' => 'BGS'],
+        ['emulsifier' => 'mono_diglyceride', 'label' => 'Mono-/Diglyceride', 'hlb' => 3.5, 'type' => 'w_o', 'use' => 'W/O, Krumen/Backwaren', 'source' => 'BGS'],
+        ['emulsifier' => 'span60', 'label' => 'Sorbitanmonostearat (Span 60)', 'hlb' => 4.7, 'type' => 'w_o', 'use' => 'W/O-Emulgator', 'source' => 'Griffin/BGS'],
+        ['emulsifier' => 'span80', 'label' => 'Sorbitanmonooleat (Span 80)', 'hlb' => 4.3, 'type' => 'w_o', 'use' => 'W/O-Emulgator', 'source' => 'Griffin/BGS'],
+        ['emulsifier' => 'polysorbat80', 'label' => 'Polysorbat 80 (Tween 80)', 'hlb' => 15.0, 'type' => 'o_w', 'use' => 'starker O/W-Emulgator', 'source' => 'Griffin/BGS'],
+        ['emulsifier' => 'polysorbat60', 'label' => 'Polysorbat 60 (Tween 60)', 'hlb' => 14.9, 'type' => 'o_w', 'use' => 'O/W, Sahne/Toppings', 'source' => 'Griffin/BGS'],
+        ['emulsifier' => 'saccharoseester', 'label' => 'Saccharose-Ester', 'hlb' => 8.0, 'type' => 'dual', 'use' => 'breit einstellbar HLB ~1–16 je Veresterung', 'source' => 'Modernist Cuisine'],
+        ['emulsifier' => 'natriumcaseinat', 'label' => 'Natriumcaseinat', 'hlb' => null, 'type' => 'o_w', 'use' => 'protein-basiert, O/W-Stabilisierung (kein klassischer HLB)', 'source' => 'BGS'],
+    ];
+
+    /**
+     * Hydrokolloid-Dosierungen, optional nach agent gefiltert (Teilstring, case-insensitiv).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function hydrokolloidDosierungen(?string $agent = null): array
+    {
+        $rows = self::HYDROCOLLOID_DOSAGES;
+        if ($agent !== null && trim($agent) !== '') {
+            $a = mb_strtolower(trim($agent));
+            $rows = array_values(array_filter($rows, fn ($r) => str_contains($r['agent'], $a) || str_contains(mb_strtolower($r['label']), $a)));
+        }
+
+        return array_map(fn ($r) => $r + [
+            'evidence' => 'med',
+            'hinweis' => 'Publizierte Dosier-Range (% vom Ansatzgewicht = Extraprozent). Herstellerangabe/Charge hat Vorrang; im Zweifel Vorversuch.',
+        ], $rows);
+    }
+
+    /**
+     * HLB-Werte, optional gefiltert.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function hlbWerte(?string $emulsifier = null): array
+    {
+        $rows = self::HLB_VALUES;
+        if ($emulsifier !== null && trim($emulsifier) !== '') {
+            $e = mb_strtolower(trim($emulsifier));
+            $rows = array_values(array_filter($rows, fn ($r) => str_contains($r['emulsifier'], $e) || str_contains(mb_strtolower($r['label']), $e)));
+        }
+
+        return array_map(fn ($r) => $r + [
+            'evidence' => 'med',
+            'hinweis' => 'HLB-Skala 0–20: <6 W/O, >8 O/W. Werte variieren je Quelle — Richtwert, kein Absolutwert.',
+        ], $rows);
+    }
 }

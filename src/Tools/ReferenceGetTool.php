@@ -23,11 +23,12 @@ class ReferenceGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
     public function getDescription(): string
     {
-        return 'Kulinarische Referenz-Werte (deterministisch, mit Quelle). kind=core_temp: '
-            . 'Kerntemperaturen als QUALITÄTS-Zielwerte (z. B. Rind rosa 52 °C, Geflügel 68 °C) — '
-            . 'KEINE harte Sicherheitsvorschrift: Sicherheit ist Zeit-Temperatur (Pasteurisierung). '
-            . 'is_hard_safety=true nur bei Hackfleisch/Geflügel-Hack (durcherhitzen). Optional protein-Filter. '
-            . 'Jede Zeile trägt Hinweis + Quelle; amtliche/lokale HACCP-Grenzwerte haben Vorrang.';
+        return 'Kulinarische Referenz-Werte (deterministisch, mit Quelle). '
+            . 'kind=core_temp: Kerntemperaturen als QUALITÄTS-Zielwerte (Rind rosa 52 °C, Geflügel 68 °C) — '
+            . 'KEINE harte Vorschrift: Sicherheit ist Zeit-Temperatur; is_hard_safety nur bei Hack/Brät. '
+            . 'kind=hydrocolloid: Hydrokolloid-Dosier-Ranges (Agar/Xanthan/Gellan/Alginat …, % vom Ansatz). '
+            . 'kind=hlb: HLB-Werte von Emulgatoren (<6 W/O, >8 O/W). Optional filter (protein|agent|emulsifier). '
+            . 'Jede Zeile trägt Hinweis + Quelle; amtliche HACCP-Grenzwerte bzw. Herstellerangaben haben Vorrang.';
     }
 
     public function getSchema(): array
@@ -35,8 +36,9 @@ class ReferenceGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
         return [
             'type' => 'object',
             'properties' => [
-                'kind' => ['type' => 'string', 'enum' => ['core_temp'], 'default' => 'core_temp', 'description' => 'Referenz-Art (aktuell nur core_temp)'],
-                'protein' => ['type' => 'string', 'description' => 'Optionaler Protein-Filter (rind|kalb|lamm|schwein|gefluegel|ente|fisch|hackfleisch|gefluegel_hack|ei)'],
+                'kind' => ['type' => 'string', 'enum' => ['core_temp', 'hydrocolloid', 'hlb'], 'default' => 'core_temp', 'description' => 'Referenz-Art'],
+                'filter' => ['type' => 'string', 'description' => 'Optionaler Filter — Protein (core_temp) / Agent (hydrocolloid) / Emulgator (hlb)'],
+                'protein' => ['type' => 'string', 'description' => 'Alias für filter bei kind=core_temp'],
             ],
         ];
     }
@@ -44,28 +46,39 @@ class ReferenceGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
     public function execute(array $arguments, ToolContext $context): ToolResult
     {
         $kind = (string) ($arguments['kind'] ?? 'core_temp');
-        if ($kind !== 'core_temp') {
-            return ToolResult::error("Unbekannte kind »{$kind}« (aktuell nur core_temp).", 'VALIDATION_ERROR');
-        }
-
         $svc = app(CulinaryReferenceService::class);
-        $protein = isset($arguments['protein']) ? (string) $arguments['protein'] : null;
+        $filter = isset($arguments['filter']) ? (string) $arguments['filter']
+            : (isset($arguments['protein']) ? (string) $arguments['protein'] : null);
 
-        return ToolResult::success([
-            'kind' => 'core_temp',
-            'disclaimer' => 'Qualitäts-Zielwerte für Textur/Saftigkeit, KEINE Vorschrift. Lebensmittelsicherheit '
-                . '= Zeit-Temperatur (Pasteurisierung); amtliche/lokale HACCP-Grenzwerte haben Vorrang. '
-                . 'is_hard_safety=true = echter Sicherheitsboden (durcherhitzen).',
-            'proteine' => $svc->proteine(),
-            'rows' => $svc->kerntemperaturen($protein),
-        ]);
+        return match ($kind) {
+            'core_temp' => ToolResult::success([
+                'kind' => 'core_temp',
+                'disclaimer' => 'Qualitäts-Zielwerte für Textur/Saftigkeit, KEINE Vorschrift. Sicherheit = Zeit-Temperatur '
+                    . '(Pasteurisierung); amtliche/lokale HACCP-Grenzwerte haben Vorrang. is_hard_safety=true = echter '
+                    . 'Sicherheitsboden (durcherhitzen).',
+                'proteine' => $svc->proteine(),
+                'rows' => $svc->kerntemperaturen($filter),
+            ]),
+            'hydrocolloid' => ToolResult::success([
+                'kind' => 'hydrocolloid',
+                'disclaimer' => 'Publizierte Dosier-Ranges (% vom Ansatzgewicht = Extraprozent). Herstellerangabe/Charge '
+                    . 'hat Vorrang; im Zweifel Vorversuch.',
+                'rows' => $svc->hydrokolloidDosierungen($filter),
+            ]),
+            'hlb' => ToolResult::success([
+                'kind' => 'hlb',
+                'disclaimer' => 'HLB-Skala 0–20: <6 Wasser-in-Öl, >8 Öl-in-Wasser. Richtwerte, variieren je Quelle.',
+                'rows' => $svc->hlbWerte($filter),
+            ]),
+            default => ToolResult::error("Unbekannte kind »{$kind}« (core_temp|hydrocolloid|hlb).", 'VALIDATION_ERROR'),
+        };
     }
 
     public function getMetadata(): array
     {
         return [
             'category' => 'query',
-            'tags' => ['foodalchemist', 'kerntemperatur', 'garstufe', 'referenz', 'gastronomie', 'haccp', 'wissen'],
+            'tags' => ['foodalchemist', 'kerntemperatur', 'garstufe', 'hydrokolloid', 'dosierung', 'hlb', 'emulgator', 'referenz', 'gastronomie', 'wissen'],
             'read_only' => true,
             'idempotent' => true,
             'risk_level' => 'safe',
@@ -75,8 +88,8 @@ class ReferenceGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'related_tools' => ['foodalchemist.proportion.CALC', 'foodalchemist.recipes.GET'],
             'examples' => [
                 'Auf welche Kerntemperatur gare ich Rind rosa?',
-                'Kerntemperatur Geflügel — und ab wann ist es sicher?',
-                'Zeig die Kerntemperatur-Referenz für Fisch',
+                'Wie viel Agar für ein festes Gel? (kind=hydrocolloid)',
+                'HLB-Wert von Sojalecithin? (kind=hlb)',
             ],
         ];
     }
