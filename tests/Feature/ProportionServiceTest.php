@@ -17,6 +17,33 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 beforeEach(function () {
     $this->svc = app(ProportionService::class);
+
+    // Rezept mit Zutaten in wählbaren Einheiten (an $this gebunden → Zugriff auf rootTeam).
+    $this->mkRezept = function (array $zutaten) {
+        $this->seedTeamHierarchy();
+        $units = [];
+        foreach ([
+            ['slug' => 'g', 'dimension' => 'mass', 'default_in_g' => 1],
+            ['slug' => 'kg', 'dimension' => 'mass', 'default_in_g' => 1000],
+            ['slug' => 'l', 'dimension' => 'volume', 'default_in_ml' => 1000],
+            ['slug' => 'stk', 'dimension' => 'count'],
+        ] as $u) {
+            $units[$u['slug']] = FoodAlchemistVocabEinheit::create([
+                'team_id' => $this->rootTeam->id, 'display_de' => $u['slug'], ...$u,
+            ]);
+        }
+        $recipe = FoodAlchemistRecipe::create([
+            'team_id' => $this->rootTeam->id, 'recipe_key' => 'r_' . uniqid(), 'name' => 'Testrezept', 'status' => 'draft',
+        ]);
+        foreach (array_values($zutaten) as $i => [$name, $menge, $unitSlug]) {
+            $recipe->ingredients()->create([
+                'team_id' => $this->rootTeam->id, 'position' => $i + 1, 'raw_text' => $name, 'display_name' => $name,
+                'quantity' => $menge, 'unit_vocab_id' => $units[$unitSlug]->id, 'match_method' => 'unmatched',
+            ]);
+        }
+
+        return [$recipe->refresh(), $units];
+    };
 });
 
 it('Bäckerprozent: pct = m/ref×100 und Rückweg', function () {
@@ -73,6 +100,85 @@ it('Bäckerprozent-Sicht eines Rezepts: schwerste Zutat = 100 %', function () {
     expect($byName['Mehl']['baker_percent'])->toBe(100.0)
         ->and($byName['Wasser']['baker_percent'])->toBe(65.0)
         ->and($byName['Salz']['baker_percent'])->toBe(1.8);
+});
+
+it('Modus A — rescaleRecipe: alle Mengen × Faktor, %-Verhältnis bleibt', function () {
+    [$recipe] = ($this->mkRezept)([['Mehl', 1000, 'g'], ['Wasser', 650, 'g']]);
+
+    $res = $this->svc->rescaleRecipe($this->rootTeam, $recipe->id, 2.0);
+
+    $mengen = $recipe->refresh()->ingredients()->pluck('quantity', 'display_name');
+    expect((float) $mengen['Mehl'])->toBe(2000.0)
+        ->and((float) $mengen['Wasser'])->toBe(1300.0)
+        ->and($res['factor'])->toBe(2.0);
+    // %-Sicht unverändert (65 %) — Batch-Skalierung ändert Verhältnisse nicht
+    $sicht = $this->svc->bakerPercentagesForRecipe($this->rootTeam, $recipe->id);
+    expect(collect($sicht['lines'])->firstWhere('name', 'Wasser')['baker_percent'])->toBe(65.0);
+});
+
+it('Modus A — rescaleToReferenceMass: Referenzzutat auf Zielmasse, Rest proportional', function () {
+    [$recipe] = ($this->mkRezept)([['Mehl', 1000, 'g'], ['Wasser', 650, 'g']]);
+
+    $this->svc->rescaleToReferenceMass($this->rootTeam, $recipe->id, 1500);   // Mehl (schwerste) → 1500
+
+    $mengen = $recipe->refresh()->ingredients()->pluck('quantity', 'display_name');
+    expect((float) $mengen['Mehl'])->toBe(1500.0)
+        ->and((float) $mengen['Wasser'])->toBe(975.0);   // 650 × 1,5
+});
+
+it('Modus B — setIngredientBakerPercent: eine Zutat übers % justieren (Masse-Einheit)', function () {
+    [$recipe] = ($this->mkRezept)([['Mehl', 1000, 'g'], ['Wasser', 650, 'g']]);
+    $wasser = $recipe->ingredients()->where('display_name', 'Wasser')->first();
+
+    $res = $this->svc->setIngredientBakerPercent($this->rootTeam, $recipe->id, $wasser->id, 70);
+
+    expect($res['new_mass_g'])->toBe(700.0)                 // 70 % von 1000 g Mehl
+        ->and((float) $wasser->refresh()->quantity)->toBe(700.0)
+        ->and((float) $recipe->refresh()->ingredients()->where('display_name', 'Mehl')->value('quantity'))->toBe(1000.0);   // Ref unangetastet
+});
+
+it('Modus B — kg-Zutat: Gramm korrekt in kg-Menge zurückgerechnet', function () {
+    [$recipe] = ($this->mkRezept)([['Mehl', 1000, 'g'], ['Butter', 0.2, 'kg']]);
+    $butter = $recipe->ingredients()->where('display_name', 'Butter')->first();
+
+    $this->svc->setIngredientBakerPercent($this->rootTeam, $recipe->id, $butter->id, 30);   // 30 % von 1000 g = 300 g
+
+    expect((float) $butter->refresh()->quantity)->toBe(0.3);   // 300 g → 0,3 kg
+});
+
+it('Modus B — Einheiten-Guard: Stück/Liter sind read-only (% ist massebasiert)', function () {
+    [$recipe] = ($this->mkRezept)([['Mehl', 1000, 'g'], ['Eier', 6, 'stk'], ['Milch', 0.5, 'l']]);
+    $eier = $recipe->ingredients()->where('display_name', 'Eier')->first();
+    $milch = $recipe->ingredients()->where('display_name', 'Milch')->first();
+
+    expect(fn () => $this->svc->setIngredientBakerPercent($this->rootTeam, $recipe->id, $eier->id, 50))
+        ->toThrow(RuntimeException::class, 'nicht massebasiert');
+    expect(fn () => $this->svc->setIngredientBakerPercent($this->rootTeam, $recipe->id, $milch->id, 50))
+        ->toThrow(RuntimeException::class, 'read-only');
+    // Mengen unverändert
+    expect((float) $eier->refresh()->quantity)->toBe(6.0)->and((float) $milch->refresh()->quantity)->toBe(0.5);
+});
+
+it('MCP proportion.APPLY: rescale + set_baker_percent schreiben zurück; Guard meldet Fehler', function () {
+    [$recipe] = ($this->mkRezept)([['Mehl', 1000, 'g'], ['Wasser', 650, 'g'], ['Eier', 6, 'stk']]);
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $ctx = new ToolContext($user, $this->rootTeam);
+    $tool = app(ToolRegistry::class)->get('foodalchemist.proportion.APPLY');
+
+    expect($tool)->not->toBeNull()->and($tool->getMetadata()['read_only'])->toBeFalse();
+
+    $r = $tool->execute(['operation' => 'rescale', 'recipe_id' => $recipe->id, 'factor' => 3], $ctx);
+    expect($r->success)->toBeTrue()->and($r->data['changed'])->toBe(3)
+        ->and((float) $recipe->refresh()->ingredients()->where('display_name', 'Mehl')->value('quantity'))->toBe(3000.0);
+
+    $wasser = $recipe->ingredients()->where('display_name', 'Wasser')->first();   // jetzt 1950 g, Mehl 3000 g
+    $b = $tool->execute(['operation' => 'set_baker_percent', 'recipe_id' => $recipe->id, 'ingredient_id' => $wasser->id, 'pct' => 50], $ctx);
+    expect($b->success)->toBeTrue()->and($b->data['new_mass_g'])->toBe(1500.0);   // 50 % von 3000 g
+
+    $eier = $recipe->ingredients()->where('display_name', 'Eier')->first();
+    $guard = $tool->execute(['operation' => 'set_baker_percent', 'recipe_id' => $recipe->id, 'ingredient_id' => $eier->id, 'pct' => 20], $ctx);
+    expect($guard->success)->toBeFalse();   // Stück → Guard
 });
 
 it('MCP proportion.CALC: registriert + rechnet je operation (read-only)', function () {

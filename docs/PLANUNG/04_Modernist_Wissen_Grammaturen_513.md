@@ -23,7 +23,11 @@
 
 ### Punkt 1 — Prozentsystem / Skalierung · Landeplatz A (+ C) · ✅ GEBAUT (2026-07-18, Dev #513)
 
-> **Status 2026-07-18:** `ProportionService` gebaut — alle 4 Formeln (Bäckerprozent + Rückweg, Extraprozent, Brining Lake-Masse+Zielgewicht, Gelatine-Bloom via Wert oder Sorte bronze/silber/gold/platin) + Bäckerprozent-Sicht je Rezept (Masse via `RecipeRecomputeService::bruttoMasseG`, gleiche T1-Kaskade). MCP-Tool `foodalchemist.proportion.CALC` (read-only, 6 operations). Pest `ProportionServiceTest` gegen hand-gerechnete Fälle. Grammatur bleibt Master, Prozent = abgeleitete Sicht. Bloom-Sortenwerte als dokumentierte Referenz (DGF-Grade, Herstellerangabe hat Vorrang) — nicht erfunden. **Offen (Folge): Bäckerprozent-Spalte im Rezept-Editor-UI (Service + MCP stehen), Referenztabelle C (Kerntemp/Hydrokolloid-Dosier).**
+> **Status 2026-07-18:** `ProportionService` gebaut — alle 4 Formeln (Bäckerprozent + Rückweg, Extraprozent, Brining Lake-Masse+Zielgewicht, Gelatine-Bloom via Wert oder Sorte bronze/silber/gold/platin) + Bäckerprozent-Sicht je Rezept (Masse via `RecipeRecomputeService::bruttoMasseG`, gleiche T1-Kaskade). MCP-Tool `foodalchemist.proportion.CALC` (read-only, 6 operations). Pest `ProportionServiceTest` gegen hand-gerechnete Fälle. Grammatur bleibt Master, Prozent = abgeleitete Sicht. Bloom-Sortenwerte als dokumentierte Referenz (DGF-Grade, Herstellerangabe hat Vorrang) — nicht erfunden.
+>
+> **Status 2026-07-18 (2. Slice) — %→Gramm-Rückschreiben GEBAUT:** `rescaleRecipe`/`rescaleToReferenceMass` (Modus A Batch-Skalierung, einheiten-neutral) + `setIngredientBakerPercent` (Modus B Einzel-Zutat, **Einheiten-Guard**: nur g/kg, Stück/Liter read-only weil % massebasiert) + MCP-Write-Tool `foodalchemist.proportion.APPLY` (rescale/set_baker_percent). Schreibt NUR Mengen, nie ein Prozent → Recompute. Owner-Team-Guard (D1). Pest deckt A/B/Guard/kg-Rückrechnung/MCP ab. **Damit ist der Rechner-Kern von Punkt 1 bidirektional komplett — Gramm↔% synchron über die Grammatur.**
+>
+> **Offen (nur noch Präsentations-Schicht):** Bäckerprozent-**Spalte + %/g-Toggle im Rezept-Editor-UI** (Blade/Livewire; Service + beide MCP-Tools stehen bereits — reine UI-Verdrahtung, browser-verifiziert). Danach: Referenztabellen C (Punkt 2 Kerntemp / Punkt 3+7 Hydrokolloid-Dosier — je nach echtem Bedarf).
 
 
 **Was:** Bäckerprozent als abgeleitete Sicht (Referenzzutat = 100 %) + „Extraprozent" für hocheffektive Zutaten (Hydrokolloide, Salz, Säure — bezogen aufs Gesamtgewicht) + Brining-Formel + Gelatine-Bloom-Konvertierung.

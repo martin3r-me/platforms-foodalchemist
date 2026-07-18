@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
@@ -192,6 +193,138 @@ class ProportionService
             'ref_ingredient_id' => $ref['ingredient_id'] ?? null,
             'ref_mass_g' => round($refMassG, 3),
             'lines' => $lines,
+        ];
+    }
+
+    // ── %→Gramm-Rückschreiben (Grammatur bleibt Master, % ist der Editier-Hebel) ──
+    // Zwei bewusst getrennte Absichten (Entscheid Dominique 2026-07-18):
+    //  A rescaleRecipe/rescaleToReferenceMass — Batch-Skalierung: ALLE Mengen × Faktor,
+    //    %-Verhältnisse bleiben (Rezept auf 100 Pax). Einheiten-neutral (reine Multiplikation).
+    //  B setIngredientBakerPercent — Einzel-Zutat übers %: g = pct/100 × Referenzmasse,
+    //    zurück in die Zutat-Einheit. NUR Masse-Einheiten (Stück/Liter read-only, weil %
+    //    massebasiert ist). Beides schreibt NUR Gramm/Menge, nie ein Prozent → Recompute.
+
+    /** D1: Schreiben nur durchs Besitzer-Team (geerbte Katalog-Rezepte sind read-only). */
+    private function assertOwner(Team $team, FoodAlchemistRecipe $recipe): void
+    {
+        if ((int) $recipe->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Geerbtes Rezept — Mengen-Änderung nur durchs Besitzer-Team (D1).');
+        }
+    }
+
+    /**
+     * Modus A — Batch-Skalierung: jede Zutat-Menge × Faktor (auch quantity_max).
+     * Einheiten-neutral (Stück/Liter/g gleichermaßen), %-Verhältnisse bleiben erhalten.
+     * Faktor ≤ 0 verboten. Danach Recompute (Yield/Kosten/Allergene skalieren mit).
+     *
+     * @return array{recipe: FoodAlchemistRecipe, factor: float, changes: list<array{ingredient_id:int, name:string, old_quantity:float, new_quantity:float}>}
+     */
+    public function rescaleRecipe(Team $team, int $recipeId, float $factor): array
+    {
+        if ($factor <= 0.0) {
+            throw new \RuntimeException('Skalierungs-Faktor muss > 0 sein.');
+        }
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->with('ingredients')->findOrFail($recipeId);
+        $this->assertOwner($team, $recipe);
+
+        $changes = [];
+        DB::transaction(function () use ($recipe, $factor, &$changes) {
+            foreach ($recipe->ingredients as $z) {
+                $alt = (float) $z->quantity;
+                $neu = round($alt * $factor, 4);
+                $z->update([
+                    'quantity' => $neu,
+                    'quantity_max' => $z->quantity_max !== null ? round((float) $z->quantity_max * $factor, 4) : null,
+                ]);
+                $changes[] = [
+                    'ingredient_id' => (int) $z->id,
+                    'name' => (string) ($z->display_name ?: $z->raw_text ?: 'Zutat'),
+                    'old_quantity' => $alt,
+                    'new_quantity' => $neu,
+                ];
+            }
+        });
+        app(RecipeRecomputeService::class)->recomputeAndPropagate($recipe->id);
+
+        return ['recipe' => $recipe->refresh(), 'factor' => $factor, 'changes' => $changes];
+    }
+
+    /**
+     * Modus A bequem: „setze die Referenzzutat auf X g" → Faktor = X / aktuelle Ref-Masse,
+     * dann rescaleRecipe. Ref = $refIngredientId, sonst schwerste Zutat.
+     */
+    public function rescaleToReferenceMass(Team $team, int $recipeId, float $newRefMassG, ?int $refIngredientId = null): array
+    {
+        if ($newRefMassG <= 0.0) {
+            throw new \RuntimeException('Neue Referenzmasse muss > 0 g sein.');
+        }
+        $sicht = $this->bakerPercentagesForRecipe($team, $recipeId, $refIngredientId);
+        $aktuell = (float) $sicht['ref_mass_g'];
+        if ($aktuell <= 0.0) {
+            throw new \RuntimeException('Referenzzutat hat keine Gramm-Masse (Zähl-/Volumen-Einheit ohne Umrechnung).');
+        }
+
+        return $this->rescaleRecipe($team, $recipeId, $newRefMassG / $aktuell);
+    }
+
+    /**
+     * Modus B — eine Zutat übers Bäckerprozent justieren: Zielmasse = pct/100 × Ref-Masse,
+     * zurück in die Zutat-Einheit (quantity = g / default_in_g). Einheiten-Guard: NUR
+     * Masse-Dimension; Stück/Volumen → RuntimeException (% ist massebasiert, kein sauberer
+     * Rückweg). Setzt eine EXAKTE Menge → quantity_max wird geleert. Danach Recompute.
+     *
+     * @return array{recipe: FoodAlchemistRecipe, ingredient_id: int, baker_percent: float, ref_mass_g: float, new_mass_g: float, new_quantity: float}
+     */
+    public function setIngredientBakerPercent(Team $team, int $recipeId, int $ingredientId, float $pct, ?int $refIngredientId = null): array
+    {
+        if ($pct < 0.0) {
+            throw new \RuntimeException('Bäckerprozent darf nicht negativ sein.');
+        }
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)
+            ->with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
+            ->findOrFail($recipeId);
+        $this->assertOwner($team, $recipe);
+
+        $recompute = app(RecipeRecomputeService::class);
+
+        // Referenzmasse bestimmen (explizit oder schwerste Zutat) — dieselbe Logik wie die Sicht.
+        $refMassG = 0.0;
+        $refPick = null;
+        foreach ($recipe->ingredients as $z) {
+            $g = $recompute->bruttoMasseG($z);
+            if ($refIngredientId !== null ? ((int) $z->id === $refIngredientId) : ($refPick === null || $g > $refMassG)) {
+                $refMassG = $g;
+                $refPick = $z;
+            }
+        }
+        if ($refMassG <= 0.0) {
+            throw new \RuntimeException('Keine gültige Referenzmasse in Gramm — %-Edit nicht möglich.');
+        }
+
+        $target = $recipe->ingredients->firstWhere('id', $ingredientId);
+        if ($target === null) {
+            throw new \RuntimeException('Zutat gehört nicht zu diesem Rezept.');
+        }
+        $unit = $target->unit;
+        if ($unit?->dimension !== 'mass' || $unit->default_in_g === null || (float) $unit->default_in_g <= 0.0) {
+            throw new \RuntimeException(
+                'Einheit »' . ($unit?->slug ?? '—') . '« ist nicht massebasiert — %-Edit nur für g/kg. '
+                . 'Stück/Liter bleiben read-only (Prozent ist massebasiert).'
+            );
+        }
+
+        $zielG = $pct / 100.0 * $refMassG;
+        $neuQty = round($zielG / (float) $unit->default_in_g, 4);
+        DB::transaction(fn () => $target->update(['quantity' => $neuQty, 'quantity_max' => null]));
+        $recompute->recomputeAndPropagate($recipe->id);
+
+        return [
+            'recipe' => $recipe->refresh(),
+            'ingredient_id' => $ingredientId,
+            'baker_percent' => $pct,
+            'ref_mass_g' => round($refMassG, 3),
+            'new_mass_g' => round($zielG, 3),
+            'new_quantity' => $neuQty,
         ];
     }
 }
