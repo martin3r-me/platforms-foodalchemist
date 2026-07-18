@@ -3,6 +3,8 @@
 > Ausführungsplan zu [[GOALS]] (Stand 2026-07-03). Jedes Arbeitspaket hat eine **Definition of Done (DoD)** —
 > messbar, nicht verhandelbar. Ein Paket ohne erfüllte DoD ist „in Arbeit", nie „fertig".
 > Tracking: Dev-Modul, Package `platforms-food-alchemisten` (ID 23). Diese Datei ist die Landkarte, das Dev-Modul der Tacho.
+>
+> **📁 Tiefe Feature-Specs → [`docs/PLANUNG/`](PLANUNG/00_Orchestrierung_Naechste_Schritte.md)** (seit 2026-07-18): pro Thema eine Datei (01–14), Einstieg über `00_Orchestrierung` (Phasen 0–5, Abhängigkeiten, Blocker). Die ROADMAP bleibt die Landkarte; die Detail-Pläne, DoDs je Etappe und Session-Stände leben dort.
 
 ---
 
