@@ -54,14 +54,17 @@ Abgleich der lokalen Cooking-Jarvis-App (Tauri = Referenz-Implementierung) gegen
 - **Keystone #507:** Beide Lücken + die `gps.MATCH`-Fuzziness teilen dieselbe Wurzel — der fehlende semantische Layer. Infra existiert (`KnowledgeEmbeddingService` + Cores `EmbeddingProviderRegistry`, config `semantic_search`), heute nur an die Wissens-Suche gebunden, nicht an GP-/Rezept-Retrieval; Provider auf demo aus. → #507 = fehlende Hälfte von #505 + Qualitätshebel für den ganzen Generator.
 - **Kein Gap:** „Alles anreichern" (`BulkEnrichService`) ist sauber portiert.
 
-## ⭐ Update 2026-07-18 (Session: 07·M1+M2 — LA-First-GP-Mint befreit)
+## ⭐ Update 2026-07-18 (Session: 07·M1–M4 — LA-First-GP-Mint überall verdrahtet, Spec KOMPLETT)
 
 Keystone aus [`docs/PLANUNG/07_LA_First_GP_Mint_ueberall.md`](PLANUNG/07_LA_First_GP_Mint_ueberall.md) gebaut. Der LA-First-Mint (`versucheLaZuGp`, #505 Slice 2) war `private` im Generator eingesperrt → jeder andere Pfad lief in Sackgassen (Ruby-Schokolade-Fall #76).
 
+**Spec 07 KOMPLETT (M1–M4) in einer Session gebaut, getestet, gepusht.** Der Mint ist von einer `private` Generator-Methode zur überall-verdrahteten Fähigkeit geworden — Generator, Editor/Revise UND MCP-Assistent minten LA-First; der Ruby-Fall dead-endet nirgends mehr.
+
 - **M1 (✅ `df4d875`):** extrahiert nach `LaFirstGpService::mintFromLa` (geteilte Fähigkeit); Generator injiziert + delegiert. Behaviour-erhaltend.
 - **M2 (✅ `b0c1b59`):** in `RecipeService::syncIngredients` verdrahtet — der E3-Re-Grounding-Block (#508) mintet jetzt LA-First bei Bestand-Miss + passender LA (schließt die Revise-Lücke: matchte nur, mintete nicht). Keine LA → bleibt unmatched (Hard-Stop / Sourcing-Wunsch).
-- **Doktrin gewahrt:** kein GP ohne LA · Mint = `tentative` + LA-verknüpft · Freigabe (approved) bleibt menschlich. Voll-Suite 736/737 grün, 0 Regressionen.
-- **Offen:** M3 (MCP `gps.MINT_FROM_LA` + `gps.MATCH` mint-if-missing, Phase 2 — MCP-Lockstep) · M4 (Proposal-Reframe = Sourcing-Wunsch-Liste).
+- **M3 (✅):** MCP — neues Tool `foodalchemist.gps.MINT_FROM_LA` + `gps.MATCH` `mint_if_missing`-Flag (bei target=none minten), im Provider registriert, MCP-Lockstep (Metadata ehrlich schreibfähig). Der Office-Assistent löst den Ruby-Fall selbst.
+- **M4 (✅):** Proposal-Reframe — `gp_new_proposals` = **Beschaffungs-Wunsch (Sourcing-Backlog)** statt „GP wartet auf Freigabe"; `gp_proposals.POST` steuert den Flow (MATCH → MINT_FROM_LA → erst bei fehlender LA Wunsch erfassen), Antwort-Key `sourcing_request`. Kein Schema-Change.
+- **Doktrin gewahrt:** kein GP ohne LA · Mint = `tentative` + ReviewQueue · Freigabe menschlich · unbelegter Wunsch wird NIE zum GP. Voll-Suite grün, 0 Regressionen.
 
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 

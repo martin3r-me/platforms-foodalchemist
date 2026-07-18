@@ -6,10 +6,12 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGpNewProposal;
 
 /**
- * Phase 0: NEW-GP-Vorschläge (Staging-only). Kein GP-Write — die Queue wird
- * in der WaWi-LA-First-Kuration abgearbeitet. Dedup über normalisierten Namen,
- * damit wiederholte LLM-Calls keine Dubletten stapeln (macht den MCP-POST
- * effektiv idempotent).
+ * 07·M4 (reframed): BESCHAFFUNGS-WÜNSCHE (Sourcing-Backlog) — kein GP-Write.
+ * Ein Eintrag entsteht NUR, wenn eine Zutat weder einen Bestands-GP hat noch
+ * LA-First gemintet werden konnte (keine passende LA) → „diesen Artikel
+ * beschaffen", NICHT „GP kuratieren". GPs entstehen ausschließlich über den
+ * LA-First-Mint (LaFirstGpService); dieser Service promotet NIE einen Wunsch
+ * zum GP. Dedup über normalisierten Namen macht den MCP-POST idempotent.
  */
 class GpProposalService
 {

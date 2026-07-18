@@ -9,9 +9,11 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\GpProposalService;
 
 /**
- * Phase 0: NEW-GP-Vorschlag — STAGING-ONLY. Erzeugt NIE einen GP; die Queue
- * wird in der WaWi-LA-First-Kuration abgearbeitet, der fertige GP kommt per
- * Einbahn-Sync. Dedup über normalisierten Namen (idempotent).
+ * 07·M4 (reframed): BESCHAFFUNGS-WUNSCH erfassen (Sourcing-Backlog) — erzeugt NIE
+ * einen GP. NUR als LETZTE Stufe nutzen: erst foodalchemist.gps.MATCH (Bestand),
+ * dann foodalchemist.gps.MINT_FROM_LA (LA-First-Mint). Erst wenn KEINE passende
+ * LA existiert, fehlt Stammdaten → hier den Wunsch „Artikel beschaffen/anlegen"
+ * hinterlegen. Kein „GP wartet auf Freigabe". Dedup über Namen (idempotent).
  */
 class GpProposalsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -22,9 +24,10 @@ class GpProposalsPostTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Legt einen NEW-GP-Vorschlag in der Staging-Queue an (KEIN GP-Write — Kuration läuft '
-            . 'extern über LA-First). Nur nutzen, wenn foodalchemist.gps.MATCH keinen brauchbaren '
-            . 'Treffer lieferte. Gleicher Name + offener Vorschlag → gibt den bestehenden zurück (created=false).';
+        return 'Hinterlegt einen BESCHAFFUNGS-WUNSCH (Sourcing-Backlog: „Artikel beschaffen/anlegen") — '
+            . 'KEIN GP-Write. NUR als letzte Stufe nutzen, wenn foodalchemist.gps.MATCH keinen Treffer UND '
+            . 'foodalchemist.gps.MINT_FROM_LA keine passende LA fand (minted=false). Dann fehlt Stammdaten, '
+            . 'kein Kurations-Klick. Gleicher Name + offener Wunsch → gibt den bestehenden zurück (created=false).';
     }
 
     public function getSchema(): array
@@ -60,11 +63,13 @@ class GpProposalsPostTool extends FoodAlchemistTool implements ToolContract, Too
 
         return ToolResult::success([
             'created' => $ergebnis['created'],
-            'proposal' => [
+            'sourcing_request' => [
                 'id' => $p->id, 'name' => $p->name, 'status' => $p->status,
                 'commodity_group' => $p->commodity_group, 'condition' => $p->condition,
             ],
-            'note' => 'Staging-only: Der GP entsteht erst nach Kuration (LA-First, WaWi) und Sync.',
+            'note' => 'Beschaffungs-Wunsch erfasst (Sourcing-Backlog): Auftrag an Einkauf/WaWi, den Artikel '
+                . 'anzulegen. Es entsteht KEIN GP — sobald eine LA existiert, mintet foodalchemist.gps.MINT_FROM_LA '
+                . 'daraus LA-First ein GP.',
         ]);
     }
 
@@ -72,7 +77,7 @@ class GpProposalsPostTool extends FoodAlchemistTool implements ToolContract, Too
     {
         return [
             'category' => 'action',
-            'tags' => ['foodalchemist', 'gp', 'grundprodukt', 'proposal', 'staging', 'la-first'],
+            'tags' => ['foodalchemist', 'gp', 'grundprodukt', 'sourcing', 'beschaffung', 'backlog', 'la-first'],
             'read_only' => false,
             'idempotent' => true,
             'risk_level' => 'write',
@@ -80,8 +85,8 @@ class GpProposalsPostTool extends FoodAlchemistTool implements ToolContract, Too
             'requires_team' => true,
             'side_effects' => ['creates'],
             'cost_class' => 'local_db',
-            'related_tools' => ['foodalchemist.gps.MATCH'],
-            'examples' => ['Schlage einen neuen GP "Yuzu-Saft: konserviert" vor, weil kein Zitrus-GP passt'],
+            'related_tools' => ['foodalchemist.gps.MINT_FROM_LA', 'foodalchemist.gps.MATCH'],
+            'examples' => ['Für "Ruby-Schokolade" gibt es weder GP noch LA — erfasse den Beschaffungs-Wunsch (Artikel anlegen)'],
         ];
     }
 }

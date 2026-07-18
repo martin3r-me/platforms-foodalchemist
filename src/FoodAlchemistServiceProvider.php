@@ -257,6 +257,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Phase 0: GP-Ground-Truth (Match + NEW-GP-Staging, LA-First-konform)
                     \Platform\FoodAlchemist\Tools\GpsMatchTool::class,
                     \Platform\FoodAlchemist\Tools\GpProposalsPostTool::class,
+                    // 07·M3: LA-First-GP-Mint als MCP-Tool (löst den Ruby-Fall FA-nativ)
+                    \Platform\FoodAlchemist\Tools\GpsMintFromLaTool::class,
                     // Phase K: Wissen + Pairing-Graph für externe LLM-Clients
                     \Platform\FoodAlchemist\Tools\KnowledgeSearchTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeListTool::class,

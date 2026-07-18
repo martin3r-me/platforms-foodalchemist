@@ -61,8 +61,8 @@ Die LA-First-Mint-Logik **existiert bereits** — als `versucheLaZuGp()` (#505 S
 |---|---|---|
 | **M1** ✅ | `versucheLaZuGp` extrahiert → `LaFirstGpService::mintFromLa` (Generator injiziert + delegiert; 2 tote Imports raus). Pest `LaFirstGpMintTest` (Mint tentative+LA-verknüpft / Reuse-bei-gemapptem-GP / keine-LA→null / Generator-Integration `gp_neu_aus_la=1`). Verifiziert 2026-07-18: 18 Tests grün (4 neu + 14 Regression). **Ungepusht.** | S–M |
 | **M2** ✅ | In `RecipeService::syncIngredients` verdrahtet — E3-Re-Grounding-Block: Bestand-Miss + passende LA → `LaFirstGpService::mintFromLa` (tentative, LA-verknüpft, `match_method=gemini_proposed`); keine LA → bleibt unmatched (Hard-Stop). Schließt die Revise-Lücke (matchte nur, mintete nicht). Pest in `RecipeReviseGroundingTest`. Verifiziert 2026-07-18: 39 Tests grün über 6 sync-berührende Suiten. **Ungepusht.** | M |
-| **M3** | MCP: LA→GP-Mint-Tool (menschlich getriggert / KI-vorbereitet) + `gps.MATCH` mint-if-missing; MCP-Lockstep | M |
-| **M4** | Proposal-Reframe: `GpProposalService`/Staging = Sourcing-Wunsch-Liste (Semantik + ggf. Screen/Signal „LA beschaffen") | S–M |
+| **M3** ✅ | MCP: neues Tool `foodalchemist.gps.MINT_FROM_LA` (LA→GP-Mint, tentative) + `gps.MATCH` `mint_if_missing`-Flag (bei target=none minten); beide über `LaFirstGpService`, im Provider registriert, MCP-Lockstep (Metadata ehrlich schreibfähig). Pest `McpLaFirstMintTest`. Verifiziert 2026-07-18. **Ungepusht.** | M |
+| **M4** ✅ | Proposal-Reframe: `gp_new_proposals`/`GpProposalService`/`gp_proposals.POST` = **Beschaffungs-Wunsch (Sourcing-Backlog)** statt „GP wartet auf Freigabe". Tool steuert den Flow: MATCH → MINT_FROM_LA → erst bei fehlender LA hierher; Antwort-Key `sourcing_request` + reframte Note. Kein Screen (existierte nie; wäre unverhältnismäßig). Kein Schema-Change (Semantik). Pest in `McpLaFirstMintTest`. **Ungepusht.** | S–M |
 
 **Globale DoD:** GP nie ohne LA; jeder Mint `tentative` + ReviewQueue; Name aus LA (Necta-/§6-Naming); Tenancy; Pest inkl. „keine LA → kein GP, sondern Sourcing-Wunsch".
 
@@ -86,3 +86,13 @@ Die LA-First-Mint-Logik **existiert bereits** — als `versucheLaZuGp()` (#505 S
 - Regelwerk: `LA-First_Workflow.md` + `Regelwerk_Grundprodukte` (§6 Naming aus LA) + `Regelwerk_Lieferantenartikel`.
 
 *Erstellt 2026-07-18. Motivierender Fall: Ruby-Schokolade (Proposal #76, kein LA → korrekt kein GP → Sourcing-Wunsch, nicht Kuration). Dev-Issue-Kandidat (Board 53).*
+
+---
+
+## ✅ Status 2026-07-18 — Spec KOMPLETT gebaut (M1–M4)
+
+Alle vier Etappen gebaut, getestet, gepusht. Der LA-First-Mint ist von einer `private` Generator-Methode zur **geteilten, überall-verdrahteten Fähigkeit** geworden — Generator, Editor/Revise UND MCP-Assistent minten LA-First; der Ruby-Fall dead-endet nirgends mehr.
+
+- **M1** `df4d875` · **M2** `b0c1b59` · **M3+M4** (dieser Commit) — `LaFirstGpService` als Kern, verdrahtet in `RecipeGeneratorService`, `RecipeService::syncIngredients`, `gps.MINT_FROM_LA` + `gps.MATCH`; Proposals = Beschaffungs-Wunsch.
+- **Doktrin durchgehalten:** kein GP ohne LA · Mint = tentative + ReviewQueue · Freigabe bleibt menschlich · unbelegter Wunsch wird NIE zum GP.
+- **Offen (Folge-Prio, nicht Teil 07):** semantische LA-/GP-Kandidaten aus #507 würden den Mint-Match schärfen (orthogonal); L7 One-Shot (03) kann jetzt auf den überall-verfügbaren Mint bauen.

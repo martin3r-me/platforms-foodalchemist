@@ -12,7 +12,8 @@
 | **#507 E0–E5 + E5-Harness** | ✅ gebaut + gepusht (`main` `9c1bae2`, `ebc1aa4`), Suite 731/732 grün |
 | **#508 Revise-Grounding + Hard-Stop-Vorschau** | ✅ done, gepusht |
 | **Wartet auf Martin (extern)** | OpenAI-Key via Core-Contract + `update.sh`-Deploy auf demo |
-| **Spec, ungebaut** | 03 (#512 L1–L8) · 06 (Convenience) · 07 (LA-First-Mint) · 08 (Planungs-/Kreativ-Ebene) |
+| **07 (LA-First-Mint)** | ✅ **KOMPLETT M1–M4 (2026-07-18)** — Keystone geschlagen; Generator+Revise+MCP minten LA-First |
+| **Spec, ungebaut** | 03 (#512 L1–L8) · 06 (Convenience) · 08 (Planungs-/Kreativ-Ebene) |
 
 ---
 
@@ -48,7 +49,7 @@ Alles hier ist **ohne Key/Deploy** baubar (deterministisch bzw. Fake-Provider-te
 
 ## Phase 2 — Erstell-Flächen vervollständigen (#512)  · baut auf Phase 1
 
-4. **07 · M3 — LA-First-Mint als MCP-Tool** + `gps.MATCH` mint-if-missing → der Office-Assistent löst den Ruby-Fall selbst.
+4. ✅ **07 · M3 — LA-First-Mint als MCP-Tool** (`gps.MINT_FROM_LA` + `gps.MATCH` mint-if-missing) → **erledigt 2026-07-18**, der Office-Assistent löst den Ruby-Fall selbst. (+M4 Proposal-Reframe ✅)
 5. **#512 · L5 — `recipes.GENERATE`** (klein, MCP-Lockstep-Schuld aus #505).
 6. **#512 · L1 + L6 — VK-Revise + Rezept-Copilot** (teilen die #508-/Matching-Strecke — zusammen bauen, nicht doppelt).
 7. **#512 · L2 — Foodbook-Kapitel-Text** (klein, braucht LLM; #369).

@@ -9,10 +9,15 @@ use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
- * @ai.description NEW-GP-Vorschlag aus dem LLM-/MCP-Pfad (Phase-0-Staging).
- * Entsteht, wenn Zutat-Matching keinen GP findet. Wird NICHT zum GP —
- * die Kuration läuft in der WaWi (LA-First), der fertige GP kommt per
- * Einbahn-Sync zurück. Schreibwege über GpProposalService.
+ * @ai.description BESCHAFFUNGS-WUNSCH (Sourcing-Backlog) — reframed 07·M4.
+ * Entsteht, wenn eine Zutat WEDER einen Bestands-GP findet NOCH LA-First
+ * gemintet werden kann (keine passende Lieferantenartikel). Das ist der einzige
+ * echte Dead-End: es fehlt STAMMDATEN, kein Kurations-Klick. Ein Eintrag heißt
+ * „diesen Artikel beschaffen/anlegen" (Auftrag an Einkauf/WaWi), NICHT „GP wartet
+ * auf Freigabe". GPs entstehen ausschließlich über den LA-First-Mint
+ * (LaFirstGpService) — nie durch Promotion eines unbelegten Wunsches.
+ * status: offen (Wunsch offen) · uebernommen (Artikel beschafft) · verworfen.
+ * Schreibwege über GpProposalService.
  */
 class FoodAlchemistGpNewProposal extends Model
 {
