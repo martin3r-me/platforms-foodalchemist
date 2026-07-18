@@ -151,3 +151,20 @@ it('gpArtikel (GP-Peek): liefert LAs hinter dem GP mit ★-Lead zuerst, VPE, Pre
     $html = Livewire::test(IngredientEditor::class, ['recipeId' => $this->rezept->id, 'eingebettet' => true])->html();
     expect($html)->toContain('data-drag-handle')->toContain('data-gp-peek');
 });
+
+it('#513: Bäckerprozent-Spalte + Alpine-Verdrahtung im Editor-Markup', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));   // render() braucht Team für einheiten
+    $gp = ($this->mkGpMitPreis)('Mehl: Weizen 405', 1.20);
+    $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
+        ['id' => null, 'gp_id' => $gp->id, 'display_name' => 'Mehl', 'raw_text' => 'Mehl',
+         'quantity' => '1000', 'unit_vocab_id' => $this->g->id],
+    ]);
+
+    $html = Livewire::test(IngredientEditor::class, ['recipeId' => $this->rezept->id, 'eingebettet' => true])->html();
+
+    expect($html)
+        ->toContain('Bäcker-%')       // Spalten-Header neben Garv. %
+        ->toContain('data-baker-pct') // editierbares Feld (Masse-Zeilen)
+        ->toContain('setBakerPct(')   // %→Gramm-Rückschreiben (Modus B, client)
+        ->toContain('istMasse(');     // Einheiten-Guard (nur Masse editierbar)
+});

@@ -8,7 +8,7 @@
 
     {{-- wire:key: Alpine wertet x-data bei morphdom NICHT neu aus — Rezept-Wechsel muss das Element ersetzen --}}
     <div wire:key="zutaten-editor-{{ $rezept?->id ?? 0 }}"
-         x-data="zutatenEditor(@js($zeilenJson), @js(! $eingebettet), @js($einheiten->keyBy('id')->map(fn ($e) => ['slug' => $e->slug, 'g' => $e->default_in_g !== null ? (float) $e->default_in_g : ($e->default_in_ml !== null ? (float) $e->default_in_ml : null)])->all()), @js($browserVokabular ?? null))"
+         x-data="zutatenEditor(@js($zeilenJson), @js(! $eingebettet), @js($einheiten->keyBy('id')->map(fn ($e) => ['slug' => $e->slug, 'dim' => $e->dimension, 'g' => $e->default_in_g !== null ? (float) $e->default_in_g : ($e->default_in_ml !== null ? (float) $e->default_in_ml : null)])->all()), @js($browserVokabular ?? null))"
          data-zutaten-editor>
         {{-- R18: Drei-Spalten-Layout — Browsen (links GPs, rechts Basisrezepte) und Editieren
              (Mitte) konkurrieren nicht mehr um denselben Platz; Spalten scrollen intern. --}}
@@ -101,7 +101,7 @@
             <thead><tr class="text-left">
                 @php($koepfe = ['#' => null, 'Menge' => null, 'Einheit' => null, 'Verknüpfung / Beschreibung' => 'Klick auf den Namen öffnet GP/Rezept als Fenster über dem Editor']
                     + ($vkKontext ? ['Rolle' => 'V-21: aroma_treiber · komponente · beilage · garnitur (🎭 verteilt per KI)'] : [])
-                    + ['Garv. %' => null, 'EK €' => 'EK nach Lead-LA-Strategie (V-27 — damit rechnet das Rezept)', 'EK ↓' => 'günstigster Lieferantenartikel hinter dem GP', 'EK Ø' => 'Durchschnitt über alle Lieferantenartikel hinter dem GP', '' => null])
+                    + ['Garv. %' => null, 'Bäcker-%' => 'Bäckerprozent = % der schwersten Zutat (Referenz = 100 %). Grammatur bleibt Master — % wird nie gespeichert. Ändern schreibt die Gramm zurück; Stück/Liter sind read-only (% ist massebasiert).', 'EK €' => 'EK nach Lead-LA-Strategie (V-27 — damit rechnet das Rezept)', 'EK ↓' => 'günstigster Lieferantenartikel hinter dem GP', 'EK Ø' => 'Durchschnitt über alle Lieferantenartikel hinter dem GP', '' => null])
                 {{-- R22: schmale Spalten auf Inhaltsbreite (w-px) — der Restplatz gehört der Zutat --}}
                 @foreach($koepfe as $head => $tip)
                     <th class="{{ $th }} !px-2 {{ str_starts_with($head, 'Verknüpfung') ? 'w-full' : 'w-px' }} {{ $tip ? 'cursor-help underline decoration-dotted decoration-gray-300 underline-offset-2' : '' }}" @if($tip) title="{{ $tip }}" @endif>{{ $head }}</th>
@@ -167,6 +167,22 @@
                             </td>
                         @endif
                         <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.cooking_loss_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" /></td>
+                        {{-- #513: Bäckerprozent — abgeleitete Sicht (Referenz = schwerste Zutat). Ändern schreibt
+                             Gramm in die Menge zurück (Grammatur bleibt Master); Referenz + Stück/Liter read-only. --}}
+                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap">
+                            <template x-if="istRef(zeile)">
+                                <span class="text-[11px] text-gray-400" title="Referenzzutat = 100 %">100&nbsp;🔒</span>
+                            </template>
+                            <template x-if="!istRef(zeile) && istMasse(zeile)">
+                                <input type="text" :value="bakerPctFmt(zeile)" @change="setBakerPct(zeile, $event.target.value)"
+                                       placeholder="—" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" data-baker-pct
+                                       title="Bäckerprozent ändern → Gramm werden zurückgeschrieben (Grammatur bleibt Master)" />
+                            </template>
+                            <template x-if="!istRef(zeile) && !istMasse(zeile)">
+                                <span class="text-[11px] text-gray-400" title="% ist massebasiert — Stück/Liter read-only"
+                                      x-text="bakerPct(zeile) !== null ? bakerPctFmt(zeile) + ' 🔒' : '—'"></span>
+                            </template>
+                        </td>
                         <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
                             {{-- F2 (#511a): Tausch/Add auf einen unbepreisten GP zeigt jetzt einen sichtbaren
                                  amber-Hinweis statt eines stillen grauen „—". Greift live, weil ekFuerZiel
@@ -194,7 +210,7 @@
                     </tr>
                     {{-- GP-Peek (D-5 §4.2.3, Ist-App): LA-Tabelle hinter dem GP, ★ = Lead --}}
                     <tr x-show="zeile._peek" x-cloak>
-                        <td colspan="{{ $vkKontext ? 10 : 9 }}" class="!px-3 !py-1.5 bg-black/[0.02]">
+                        <td colspan="{{ $vkKontext ? 11 : 10 }}" class="!px-3 !py-1.5 bg-black/[0.02]">
                             <div class="rounded-lg border-l-2 border-orange-400 bg-white px-3 py-1.5" data-gp-peek-tabelle>
                                 <p class="text-[11px] font-medium text-gray-900 mb-1">
                                     📦 <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
@@ -228,7 +244,7 @@
                 </template>
             <tfoot>
                 <tr class="border-t border-black/10">
-                    <td colspan="{{ $vkKontext ? 6 : 5 }}" class="{{ $td }} !px-2 text-right text-[11px] text-gray-500">
+                    <td colspan="{{ $vkKontext ? 7 : 6 }}" class="{{ $td }} !px-2 text-right text-[11px] text-gray-500">
                         <span data-yield-live>Yield ≈ <span class="font-medium text-gray-700" x-text="yieldLive()"></span></span>
                         · Σ live (Näherung — Putzverlust-Defaults & Brücken rechnet der Save-Recompute)
                     </td>
@@ -247,7 +263,7 @@
                      Zutaten ohne auflösbaren Preis dabei sind (der Server-Zähler
                      ek_n_ingredients_priced < _total gespiegelt auf den Client). --}}
                 <tr x-show="bepreistInfo().total > bepreistInfo().priced" x-cloak class="border-t border-amber-500/20">
-                    <td colspan="{{ $vkKontext ? 10 : 9 }}" class="{{ $td }} !px-2 text-right text-[11px] text-amber-700" data-ek-unvollstaendig>
+                    <td colspan="{{ $vkKontext ? 11 : 10 }}" class="{{ $td }} !px-2 text-right text-[11px] text-amber-700" data-ek-unvollstaendig>
                         ⚠︎ nur <span class="font-medium" x-text="bepreistInfo().priced"></span> von <span class="font-medium" x-text="bepreistInfo().total"></span> Zutaten bepreist — EK unvollständig (Preis am GP/Lieferantenartikel ergänzen)
                     </td>
                 </tr>

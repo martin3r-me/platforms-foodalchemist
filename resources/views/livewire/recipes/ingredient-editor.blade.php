@@ -228,6 +228,28 @@
                 }
                 return g > 0 ? (g / 1000).toFixed(3).replace('.', ',') + ' kg' : '—';
             },
+            // ── #513: Bäckerprozent-Sicht (Grammatur bleibt Master — % nie gespeichert) ──
+            // Masse/Zeile = mengeAvg × gFaktor (spiegelt Server-bruttoMasseG). Referenz = schwerste
+            // Zeile (= 100 %). Ändern schreibt Gramm zurück in zeile.quantity (Modus B); Guard: nur
+            // Masse-Einheiten, nie die Referenz selbst.
+            mengeG(z) { const a = this.mengeAvg(z); const f = this.gFaktor(z); return (a === null || !f) ? null : a * f; },
+            istMasse(z) { return this.einheiten[z.unit_vocab_id]?.dim === 'mass'; },
+            refKey() {
+                let best = null, bestG = 0;
+                for (const z of this.rows) { const g = this.mengeG(z); if (g !== null && (best === null || g > bestG)) { best = z._key; bestG = g; } }
+                return best;
+            },
+            istRef(z) { return z._key === this.refKey() && this.mengeG(z) !== null; },
+            _refG() { const r = this.rows.find(z => z._key === this.refKey()); return r ? this.mengeG(r) : null; },
+            bakerPct(z) { const g = this.mengeG(z); const ref = this._refG(); return (g === null || !ref) ? null : g / ref * 100; },
+            bakerPctFmt(z) { const p = this.bakerPct(z); return p === null ? '' : (Math.round(p * 10) / 10).toString().replace('.', ','); },
+            setBakerPct(z, val) {
+                if (!this.istMasse(z) || this.istRef(z)) return;      // Guard: nur Masse, nie die Referenz
+                const pct = this.zahl(val); const f = this.gFaktor(z); const ref = this._refG();
+                if (pct === null || !f || !ref) return;
+                z.quantity = Math.round((pct / 100 * ref) / f * 10000) / 10000;   // g → Menge in Zeilen-Einheit
+                z.quantity_max = null;                                // exakter Wert → Bereich leeren (wie Server Modus B)
+            },
             hoch(i) { if (i > 0) this.rows.splice(i - 1, 0, this.rows.splice(i, 1)[0]); },
             runter(i) { if (i < this.rows.length - 1) this.rows.splice(i + 1, 0, this.rows.splice(i, 1)[0]); },
             async garverluste() {  // M4-11: Vorschläge in die Client-rows mergen (Save schreibt source=ki)

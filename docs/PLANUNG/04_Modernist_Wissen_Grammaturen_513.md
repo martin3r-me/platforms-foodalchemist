@@ -27,7 +27,11 @@
 >
 > **Status 2026-07-18 (2. Slice) — %→Gramm-Rückschreiben GEBAUT:** `rescaleRecipe`/`rescaleToReferenceMass` (Modus A Batch-Skalierung, einheiten-neutral) + `setIngredientBakerPercent` (Modus B Einzel-Zutat, **Einheiten-Guard**: nur g/kg, Stück/Liter read-only weil % massebasiert) + MCP-Write-Tool `foodalchemist.proportion.APPLY` (rescale/set_baker_percent). Schreibt NUR Mengen, nie ein Prozent → Recompute. Owner-Team-Guard (D1). Pest deckt A/B/Guard/kg-Rückrechnung/MCP ab. **Damit ist der Rechner-Kern von Punkt 1 bidirektional komplett — Gramm↔% synchron über die Grammatur.**
 >
-> **Offen (nur noch Präsentations-Schicht):** Bäckerprozent-**Spalte + %/g-Toggle im Rezept-Editor-UI** (Blade/Livewire; Service + beide MCP-Tools stehen bereits — reine UI-Verdrahtung, browser-verifiziert). Danach: Referenztabellen C (Punkt 2 Kerntemp / Punkt 3+7 Hydrokolloid-Dosier — je nach echtem Bedarf).
+> **Status 2026-07-18 (3. Slice) — Editor-UI GEBAUT:** Bäckerprozent-**Spalte im Zutaten-Editor** (neben Garverlust), `partials/zutaten-kern.blade.php`. Live-berechnet in Alpine (`bakerPct`, Masse = `mengeAvg×gFaktor` — spiegelt Server-`bruttoMasseG`), Referenz = schwerste Zutat (= 100 %, `🔒`). **Editierbar** (Modus B im Client): %-Eingabe schreibt Gramm in `zeile.quantity` zurück (`setBakerPct`), gespeichert wird über den bestehenden Save→syncIngredients — nie ein Prozent. **Einheiten-Guard** `istMasse`: nur g/kg editierbar, Stück/Liter read-only (`🔒`). `einheiten`-Map um `dim` erweitert; Colspans nachgezogen. Pest-Markup-Assertion in `IngredientEditorTest`.
+>
+> **Damit ist #513 Punkt 1 KOMPLETT — Rechner (read+write) + MCP + Editor-UI.** ⚠️ Server-Render + Alpine-Formeln sind Pest-/hand-verifiziert; die **Klick-Strecke im Browser** (Live-Eingabe, Referenz-Lock, Layout) steht als menschliche Gegenprobe aus (kein Browser im Build-Env).
+>
+> **Offen (eigene Themen, nach Bedarf):** Referenztabellen C — Punkt 2 Kerntemp (→ R5.3 HACCP) / Punkt 3+7 Hydrokolloid-Dosier+HLB. Tier 3 (PDE/Arrhenius/Henry/Neuro) = bewusst NICHT bauen.
 
 
 **Was:** Bäckerprozent als abgeleitete Sicht (Referenzzutat = 100 %) + „Extraprozent" für hocheffektive Zutaten (Hydrokolloide, Salz, Säure — bezogen aufs Gesamtgewicht) + Brining-Formel + Gelatine-Bloom-Konvertierung.
