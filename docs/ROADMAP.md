@@ -54,6 +54,15 @@ Abgleich der lokalen Cooking-Jarvis-App (Tauri = Referenz-Implementierung) gegen
 - **Keystone #507:** Beide Lücken + die `gps.MATCH`-Fuzziness teilen dieselbe Wurzel — der fehlende semantische Layer. Infra existiert (`KnowledgeEmbeddingService` + Cores `EmbeddingProviderRegistry`, config `semantic_search`), heute nur an die Wissens-Suche gebunden, nicht an GP-/Rezept-Retrieval; Provider auf demo aus. → #507 = fehlende Hälfte von #505 + Qualitätshebel für den ganzen Generator.
 - **Kein Gap:** „Alles anreichern" (`BulkEnrichService`) ist sauber portiert.
 
+## ⭐ Update 2026-07-18 (Session: 07·M1+M2 — LA-First-GP-Mint befreit)
+
+Keystone aus [`docs/PLANUNG/07_LA_First_GP_Mint_ueberall.md`](PLANUNG/07_LA_First_GP_Mint_ueberall.md) gebaut. Der LA-First-Mint (`versucheLaZuGp`, #505 Slice 2) war `private` im Generator eingesperrt → jeder andere Pfad lief in Sackgassen (Ruby-Schokolade-Fall #76).
+
+- **M1 (✅ `df4d875`):** extrahiert nach `LaFirstGpService::mintFromLa` (geteilte Fähigkeit); Generator injiziert + delegiert. Behaviour-erhaltend.
+- **M2 (✅ `b0c1b59`):** in `RecipeService::syncIngredients` verdrahtet — der E3-Re-Grounding-Block (#508) mintet jetzt LA-First bei Bestand-Miss + passender LA (schließt die Revise-Lücke: matchte nur, mintete nicht). Keine LA → bleibt unmatched (Hard-Stop / Sourcing-Wunsch).
+- **Doktrin gewahrt:** kein GP ohne LA · Mint = `tentative` + LA-verknüpft · Freigabe (approved) bleibt menschlich. Voll-Suite 736/737 grün, 0 Regressionen.
+- **Offen:** M3 (MCP `gps.MINT_FROM_LA` + `gps.MATCH` mint-if-missing, Phase 2 — MCP-Lockstep) · M4 (Proposal-Reframe = Sourcing-Wunsch-Liste).
+
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 
 Quellen: `Datenmodell Food.Alchemist.md` (5 Ebenen) + `07.02_Flavor_Pairing/Datenbank Foodalchemist/_Plan_Datenmodell_Chemie-Pairing-DB.md` (Chemie-first Phase 1–4). Stationen von hier bis Voll-Ausbau:
