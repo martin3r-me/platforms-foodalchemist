@@ -117,20 +117,26 @@ Phase 1: 07·M1 (Keystone) → 07·M2 ; 06·H1/H2        [blocker-frei]
 ---
 
 ## Karte des Ordners
-- **01** — Editor-Strecke #511/#509 (✅ gebaut/gepusht `0eac4fe`; offen: Live-Klickstrecke nach Deploy, F3=05-Etappe-2).
-- **02 / 02b** — #507 RAG-Layer (gebaut) + Go-Live-Runbook.
-- **03** — #512 KI-Erstell-Flächen L1–L8 (Update-Banner: #508 done, #507 gebaut).
-- **04** — Modernist/Grammaturen #513 (ProportionService Tier 1 entschieden; Referenztabellen Tier 2; Tier 3 = max. Wissens-Doc).
-- **05** — Datenqualitäts-Kaskade (Etappe 1 ✅ gebaut; offen: P5 Prozessanker-Parser, demo-Heilung, Etappe 2 KI — entblockt durch Martin-Key).
-- **06** — Convenience-Highlights (opt-in KI-Baustein).
-- **07** — LA-First-GP-Mint überall (Keystone-Fundament).
-- **08** — Planungs-/Kreativ-Ebene (Doppel-Diamant + Wissens-Ebene).
-- **09** — Pairing-Offense-Trio (R6.8 Aroma-treue Substitution · R6.9 Dish-Reverse-Engineering · R6.10 Überschuss-zu-Gericht).
-- **10** — Angebots-Funnel / Brief-Parser (R6.2).
-- **11** — Hypothesen-/Widerspruchs-Modus R&D (R6.11).
-- **12** — Wirtschaftlichkeits-Intelligenz R2-Rest (R2.3 Menu-Engineering · R2.4 Marge-optimale Assemblierung · R2.5 Saison-Auto-Pricing).
-- **13** — Preis-/Katalog-Ingest (Q2, Ex-Necta) — Daten-Nabelschnur der Engine; enthält das R2.3-Format-Spec-Gate.
-- **14** — Lieferanten-Management (R9.1 Stammblatt/Absprachen · R9.2 Lead-Steuerung bedient).
+
+**Spec-Reifegrade** (vor Bau-Start prüfen — ein Dossier ist KEIN Bauplan):
+- 🟢 **bau-reif** = code-kartiert (Datei:Zeile), Etappen+DoD verifiziert → Session kann direkt bauen
+- 🟡 **entscheidungs-reif** = Entscheidungen fixiert, Design skizziert → vor Bau: Detail-Kartierung (kurze Planungs-Session)
+- ⚪ **Dossier** = strukturierter ROADMAP-Extrakt (DoD+Kontext+Vorfragen) → vor Bau: volle Planungs-Session
+
+- **01** 🟢 — Editor-Strecke #511/#509 (✅ gebaut/gepusht `0eac4fe`; offen: Live-Klickstrecke nach Deploy, F3=05-Etappe-2).
+- **02 / 02b** 🟢 — #507 RAG-Layer (gebaut) + Go-Live-Runbook.
+- **03** 🟢 — #512 KI-Erstell-Flächen L1–L8 (Update-Banner: #508 done, #507 gebaut).
+- **04** 🟡 — Modernist/Grammaturen #513 (ProportionService Tier 1 entschieden; Referenztabellen Tier 2; Tier 3 = max. Wissens-Doc).
+- **05** 🟢 — Datenqualitäts-Kaskade (Etappe 1 ✅ gebaut; offen: P5 Prozessanker-Parser, demo-Heilung, Etappe 2 KI — entblockt durch Martin-Key).
+- **06** 🟡 — Convenience-Highlights (opt-in KI-Baustein).
+- **07** 🟡 — LA-First-GP-Mint überall (Keystone-Fundament).
+- **08** 🟡 — Planungs-/Kreativ-Ebene (Doppel-Diamant + Wissens-Ebene).
+- **09** ⚪ — Pairing-Offense-Trio (R6.8 Aroma-treue Substitution · R6.9 Dish-Reverse-Engineering · R6.10 Überschuss-zu-Gericht).
+- **10** ⚪ — Angebots-Funnel / Brief-Parser (R6.2).
+- **11** ⚪ — Hypothesen-/Widerspruchs-Modus R&D (R6.11).
+- **12** ⚪ — Wirtschaftlichkeits-Intelligenz R2-Rest (R2.3 Menu-Engineering · R2.4 Marge-optimale Assemblierung · R2.5 Saison-Auto-Pricing).
+- **13** ⚪ — Preis-/Katalog-Ingest (Q2, Ex-Necta) — Daten-Nabelschnur der Engine; enthält das R2.3-Format-Spec-Gate.
+- **14** ⚪ — Lieferanten-Management (R9.1 Stammblatt/Absprachen · R9.2 Lead-Steuerung bedient).
 - *(Q4/Q5 Wissens-+Graph-Fundament → lebt in `_FoodBrain_Docs/`, kein eigenes Spec-File. GEPARKT/nicht-Kern: R5 Compliance · N Nachbar-Modul · A Academy.)*
 
 **Damit sind die Kern-Funktionen vollständig als Einzeldateien extrahiert (01–14).** Die ROADMAP im Modul-Repo bleibt vorerst unverändert (team-facing); Eindampfen auf eine schlanke Spine = separater, abgesprochener Schritt.
