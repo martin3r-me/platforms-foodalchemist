@@ -13,7 +13,9 @@
 | **#508 Revise-Grounding + Hard-Stop-Vorschau** | ✅ done, gepusht |
 | **Wartet auf Martin (extern)** | OpenAI-Key via Core-Contract + `update.sh`-Deploy auf demo |
 | **07 (LA-First-Mint)** | ✅ **KOMPLETT M1–M4 (2026-07-18)** — Keystone geschlagen; Generator+Revise+MCP minten LA-First |
-| **Spec, ungebaut** | 03 (#512 L1–L8) · 06 (Convenience) · 08 (Planungs-/Kreativ-Ebene) |
+| **05·P5 Prozessanker-Parser** | ✅ **GEBAUT 2026-07-19** (deterministisch; Command+Service+MCP+10 Pest; demo-Bulk-Apply = Deploy) |
+| **06 Convenience-Highlights** | ✅ **KOMPLETT H1–H4 (2026-07-19)** — Migration+Service+Screen+Command+2 MCP+opt-in-Modus+Picker-Filter, 14 Pest |
+| **Spec, ungebaut** | 03 (#512 L1–L8) · 08 (Planungs-/Kreativ-Ebene) |
 
 ---
 
@@ -39,8 +41,8 @@ Alles hier ist **ohne Key/Deploy** baubar (deterministisch bzw. Fake-Provider-te
 
 1. ✅ **07 · M1 — LA-First-Mint befreien** (`versucheLaZuGp` → `LaFirstGpService::mintFromLa`; Generator delegiert). **Keystone-Unblock erledigt 2026-07-18** (18 Tests grün, ungepusht). Nächster Schritt darauf: M2. **Keystone-Unblock:** killt die Sackgassen (Ruby-Fall) und ist Vorbedingung für L7 + 08.
 2. ✅ **07 · M2 — Mint in `syncIngredients`** verdrahtet (E3-Re-Grounding-Block: Bestand-Miss + LA → LA-First-Mint) → **schließt die Revise-Lücke, erledigt 2026-07-18.** Nächster Schritt: M3 (MCP-Tool + `gps.MATCH` mint-if-missing).
-3. **06 · H1 + H2 — Convenience-Datenmodell + Kuratierungs-Score** (deterministisch) → du bekommst gleich eine echte Liste zum Pinnen.
-4. **05 · P5 — Prozessanker-Parser** (deterministisch, 0 LLM: Röst/Grill/Rauch/Karamell/Ferment aus dem Zubereitungstext; kein Zwangs-Anker) — der offene Etappe-1-Rest der DQ-Kaskade.
+3. ✅ **06 · H1–H4 — Convenience-Highlights KOMPLETT (2026-07-19)** (Datenmodell + Kuratierungs-Score/Screen + opt-in-Generierungs-Modus + UI). Echte Haus-Liste zum Pinnen steht.
+4. ✅ **05 · P5 — Prozessanker-Parser GEBAUT (2026-07-19)** (deterministisch, 0 LLM: Röst/Grill/Rauch/Karamell/Ferment aus dem Zubereitungstext; kein Zwangs-Anker). Etappe-1-Rest der DQ-Kaskade geschlossen; demo-Bulk-Apply = Deploy.
 5. **04 · #513 — `ProportionService`** (Bäckerprozent-Sicht + Extraprozent + Brining + Bloom): entschiedenes Dev-Issue, exakte Formeln als Code, Pest-getestet — sofortiger Küchen-Nutzen, null Abhängigkeit.
 
 *Ergebnis:* Rezept-Flows dead-enden nicht mehr; Haus-Convenience-Liste steht. Doktrin bleibt: **kein GP ohne LA.**

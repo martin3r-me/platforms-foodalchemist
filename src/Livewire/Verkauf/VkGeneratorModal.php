@@ -25,6 +25,9 @@ class VkGeneratorModal extends Component
         'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
     ];
 
+    /** 06·H4: opt-in Convenience-Highlight-Modus (Default aus → keine Versteifung). */
+    public bool $useConvenienceList = false;
+
     public ?string $fehler = null;
 
     public ?array $ergebnis = null;
@@ -48,9 +51,9 @@ class VkGeneratorModal extends Component
         }
 
         try {
-            $resultat = $generator->generiere($team, trim($this->description), array_filter(
-                $this->parameter, fn ($v) => $v !== '' && $v !== null,
-            ), null, vkModus: true);
+            $parameter = array_filter($this->parameter, fn ($v) => $v !== '' && $v !== null);
+            $parameter['use_convenience_list'] = $this->useConvenienceList; // 06·H4 opt-in (nach array_filter, sonst würde false gestrippt)
+            $resultat = $generator->generiere($team, trim($this->description), $parameter, null, vkModus: true);
             $this->ergebnis = [
                 'recipe_id' => $resultat['recipe']->id,
                 'name' => $resultat['recipe']->name,

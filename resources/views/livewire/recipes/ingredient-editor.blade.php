@@ -29,7 +29,7 @@
 
             // ── R18: Drei-Spalten-Browser — Filter-States + Listen (serverseitig gefiltert) ──
             vokabular,
-            gpFilter: { wg: '', sub: '', condition: '', bio: false, regional: false, mehr: false },
+            gpFilter: { wg: '', sub: '', condition: '', bio: false, regional: false, nur_convenience: false, mehr: false },
             rezFilter: { hg: '', kat: '', niveau: '', mehr: false },
             browseQ: '',                                             // zentrales Suchfeld → filtert BEIDE Listen
             gpListe: [], gpTotal: 0, rezListe: [], rezTotal: 0,
@@ -38,7 +38,7 @@
 
             async browse() {
                 const r = await this.$wire.browseKatalog(
-                    { wg: this.gpFilter.wg, sub: this.gpFilter.sub, condition: this.gpFilter.condition, bio: this.gpFilter.bio, regional: this.gpFilter.regional },
+                    { wg: this.gpFilter.wg, sub: this.gpFilter.sub, condition: this.gpFilter.condition, bio: this.gpFilter.bio, regional: this.gpFilter.regional, nur_convenience: this.gpFilter.nur_convenience },
                     { hg: this.rezFilter.hg, kat: this.rezFilter.kat, niveau: this.rezFilter.level },
                     this.browseQ
                 );

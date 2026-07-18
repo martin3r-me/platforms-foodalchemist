@@ -82,6 +82,14 @@
                     <label class="block {{ $label }} mb-1">Aroma-Richtung</label>
                     <input type="text" wire:model="parameter.aroma" placeholder="z. B. rauchig-karamellig, mediterran …" class="{{ $input }}" />
                 </div>
+                {{-- 06·H4: opt-in Convenience-Highlight-Modus (Default aus → keine Versteifung) --}}
+                <div class="col-span-2 md:col-span-3">
+                    <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                        <input type="checkbox" wire:model="useConvenienceList" class="mt-0.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-vk-convenience />
+                        <span>⭐ Auf Basis meiner Convenience-Liste bauen</span>
+                    </label>
+                    <p class="text-[11px] text-gray-500 mt-1">Bevorzugt die kuratierten Haus-Convenience-Bausteine (bevorzugt, nicht ausschließlich).</p>
+                </div>
             </div>
         </x-foodalchemist::modal-section>
     @else

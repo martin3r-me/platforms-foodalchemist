@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Services\Matching\TokenEngine;
 
 /**
@@ -41,16 +42,24 @@ class GenerationContextService
     ) {
     }
 
+    /** 06·H3: max. Convenience-Highlights im opt-in-Prompt-Block (Prompt schlank halten). */
+    private const CONV_HIGHLIGHT_MAX = 80;
+
     /**
      * Grounding-Kontext-Keys, die additiv in den Generator-$kontext gemerged werden.
      *
-     * @return array{gp_kandidaten?: list<array>, rezept_kandidaten?: list<array>, pairing?: array}
+     * $useConvenienceList (06·H3): opt-in-Modus. Default false = byte-identisches
+     * Verhalten (kein Highlight-Block → keine Versteifung). true = zusätzlicher,
+     * SEPARATER Block „bevorzugte Convenience-Bausteine" (bevorzugt, nicht hart).
+     *
+     * @return array{gp_kandidaten?: list<array>, rezept_kandidaten?: list<array>, pairing?: array, convenience_highlights?: array}
      */
-    public function forGeneration(Team $team, string $description, bool $vkModus = false): array
+    public function forGeneration(Team $team, string $description, bool $vkModus = false, bool $useConvenienceList = false): array
     {
         $tokens = $this->leitTokens($description);
         if ($tokens === []) {
-            return [];
+            // Auch ohne Leit-Tokens soll der opt-in-Modus die Haus-Liste einspielen.
+            return $useConvenienceList ? array_filter(['convenience_highlights' => $this->convenienceBlock($team)]) : [];
         }
 
         $gp = [];
@@ -103,7 +112,41 @@ class GenerationContextService
             ];
         }
 
+        // 06·H3: opt-in Convenience-Highlights — bewusst SEPARAT vom semantischen
+        // Reuse-Block (gp_kandidaten), nicht vermischen.
+        if ($useConvenienceList) {
+            $conv = $this->convenienceBlock($team);
+            if ($conv !== null) {
+                $out['convenience_highlights'] = $conv;
+            }
+        }
+
         return $out;
+    }
+
+    /**
+     * 06·H3: der opt-in-Prompt-Block der kuratierten Haus-Convenience-Liste.
+     * null, wenn nichts gepinnt ist.
+     */
+    private function convenienceBlock(Team $team): ?array
+    {
+        $treffer = FoodAlchemistGp::query()
+            ->visibleToTeam($team)
+            ->convenienceHighlights()
+            ->limit(self::CONV_HIGHLIGHT_MAX)
+            ->get(['id', 'name'])
+            ->map(fn ($g) => ['id' => (int) $g->id, 'name' => (string) $g->name])
+            ->all();
+
+        if ($treffer === []) {
+            return null;
+        }
+
+        return [
+            'hinweis' => 'BEVORZUGTE CONVENIENCE-BAUSTEINE (Haus-Standard): Nutze wo möglich diese '
+                . 'Produkte (gp_id nutzen); ergänze frei, wo die Liste nichts hergibt (bevorzugt, nicht ausschließlich).',
+            'treffer' => $treffer,
+        ];
     }
 
     /**

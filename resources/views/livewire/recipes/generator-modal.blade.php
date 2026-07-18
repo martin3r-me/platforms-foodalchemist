@@ -50,6 +50,15 @@
                     <p class="text-[11px] text-gray-500 mt-1">{{ $parameter['sektor'] === '' ? 'Kein Sektor-Constraint' : '' }}</p>
                 </div>
 
+                {{-- 06·H4: opt-in Convenience-Highlight-Modus (Default aus → keine Versteifung) --}}
+                <div data-richtung="convenience-highlights">
+                    <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                        <input type="checkbox" wire:model="useConvenienceList" class="mt-0.5" data-generator-convenience />
+                        <span>⭐ Auf Basis meiner Convenience-Liste bauen</span>
+                    </label>
+                    <p class="text-[11px] text-gray-500 mt-1">Bevorzugt die kuratierten Haus-Convenience-Bausteine (bevorzugt, nicht ausschließlich). Aus = freie Kreativität.</p>
+                </div>
+
                 <div class="md:col-span-2" data-richtung="diaet">
                     <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
                     <div class="flex flex-wrap gap-1.5">

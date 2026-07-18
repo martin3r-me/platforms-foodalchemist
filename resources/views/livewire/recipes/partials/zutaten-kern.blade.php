@@ -44,6 +44,10 @@
                     <label class="flex items-center gap-1.5 text-[11px] text-gray-600">
                         <input type="checkbox" x-model="gpFilter.regional" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> Regional
                     </label>
+                    {{-- 06·H4: Picker auf die kuratierte Haus-Convenience-Liste verengen --}}
+                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600" title="Nur kuratierte Convenience-Highlights">
+                        <input type="checkbox" x-model="gpFilter.nur_convenience" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> ⭐ Convenience
+                    </label>
                 </div>
             </div>
             <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1" data-gp-liste>

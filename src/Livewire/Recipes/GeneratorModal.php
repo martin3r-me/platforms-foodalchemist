@@ -27,6 +27,9 @@ class GeneratorModal extends Component
         'diaet_hart' => [], 'aroma' => '',
     ];
 
+    /** 06·H4: opt-in Convenience-Highlight-Modus (Default aus → keine Versteifung). */
+    public bool $useConvenienceList = false;
+
     /** Pill-Gruppen fürs View (NICHT als @php-Block — Blade-Raw-Block-Falle mit @php(...)-Einzeilern). */
     public const RICHTUNGEN = [
         ['field' => 'convenience', 'label' => 'Convenience (Eigenleistung)', 'optionen' => ['' => '(egal)', 'from_scratch' => 'From Scratch', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'], 'hint' => ['' => 'Keine Vorgabe', 'from_scratch' => 'alles selbst — Pool dreht auf Roh/Sub-Rezepte', 'teil_convenience' => 'Halbfabrikate erlaubt', 'voll_convenience' => 'Fertigprodukte bevorzugt']],
@@ -77,6 +80,7 @@ class GeneratorModal extends Component
             // Präferenz geht zusätzlich als Prompt-Kontext mit (egal ≠ bio erzwingen)
             $parameter = $this->parameter;
             $parameter['bio'] = $parameter['bio_praeferenz'] === 'bio';
+            $parameter['use_convenience_list'] = $this->useConvenienceList; // 06·H4 opt-in
             $resultat = $generator->generiere($team, trim($this->description), $parameter);
             $this->ergebnis = [
                 'recipe_id' => $resultat['recipe']->id,

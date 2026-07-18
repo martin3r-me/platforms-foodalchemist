@@ -69,7 +69,18 @@ class FoodAlchemistGp extends Model
         'tag_is_convenience' => 'boolean',
         'tag_is_lactose_free' => 'boolean',
         'tag_is_gluten_free' => 'boolean',
+        // 06·H1 Convenience-Highlights (kuratierte Haus-Standard-Liste)
+        'is_convenience_highlight' => 'boolean',
+        'highlight_rank' => 'integer',
     ];
+
+    /** 06·H1: kuratierte Convenience-Highlights (nach Anzeige-Rang, dann Name). */
+    public function scopeConvenienceHighlights(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('is_convenience_highlight', true)
+            ->orderByRaw('highlight_rank IS NULL, highlight_rank ASC')
+            ->orderBy('name');
+    }
 
     public function commodity_group(): BelongsTo
     {

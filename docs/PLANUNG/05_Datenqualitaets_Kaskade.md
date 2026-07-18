@@ -23,7 +23,7 @@
 - Verifikation MCP 2026-07-14 21:xx: demo-Inbox = 241 Signale, noch **alte Typen** (letzter Scheduler-Lauf 21:06 war VOR dem Fold-in). Neue DQ-Typen erscheinen nach Deploy + nächstem Scheduler-Tick (oder „↻ Prüfen" in der Signale-Ansicht auf demo).
 
 ### ◻️ Offen — Etappe 1 Rest (deterministisch, kein LLM)
-- **P5 Prozessanker-Parser** (deterministischer Modus, `recipe_process_anchors`): 2.524 fehlen — nur wo echter Prozess-Marker (Röst/Grill/Rauch/Karamell/Ferment), kein Zwangs-Anker
+- **✅ P5 Prozessanker-Parser GEBAUT 2026-07-19** (`foodalchemist:process-anchor-ground` Parser-Modus + `ProcessAnchorService` + MCP `process_anchors.GROUND`): deterministisch aus `preparation`, nur bei echten Markern (Röst/Grill/Rauch/Karamell/Ferment → 4 Anker roest/karamell/rauch/ferment; grill=roest+rauch, schmor=roest gespiegelt aus Skript 216), `source='parser'`, idempotent, fremde manual/ki/auto unangetastet, Über-Tagging-Guard. 10 Pest + MySQL-Smoke (Fixture: +19 Anker, kein Über-Tagging, Re-Run 0). **KI-Rest** mehrdeutiger Prep-Texte bleibt Etappe 2 (`--mode=ki`, n/a). **Bulk-Apply auf demo/`foodalchemist_full` = separater Deploy-Schritt (Martin/Server, `php8.4 artisan … --apply`).**
 - **P6 Review-/Park-Listen:** 27 tentative-in-Rezept · 12 fb2027-Stubs · 33 beide-null-Zutaten · itemisierte **398 Park-GP-Sourcing-Liste**
 - **demo-Daten-Heilung:** Commands auf demo fahren ODER Master-Re-Import
 

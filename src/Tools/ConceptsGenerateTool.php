@@ -39,6 +39,7 @@ class ConceptsGenerateTool extends FoodAlchemistTool implements ToolContract, To
                 'geruest_owner_type' => ['type' => 'string', 'enum' => ['foodbook', 'concept'], 'description' => 'Owner eines bestehenden Gerüsts (statt brief)'],
                 'geruest_owner_id' => ['type' => 'integer'],
                 'name' => ['type' => 'string', 'description' => 'Name des neuen Konzepts (optional)'],
+                'use_convenience_list' => ['type' => 'boolean', 'default' => false, 'description' => '06·H3: bevorzugt aus der kuratierten Haus-Convenience-Liste bauen (nur Brief-Pfad; Default aus)'],
             ],
         ];
     }
@@ -62,7 +63,7 @@ class ConceptsGenerateTool extends FoodAlchemistTool implements ToolContract, To
                 }
                 $ergebnis = $svc->generiereAusGeruest($team, $frame, $name, 'mcp');
             } elseif (isset($arguments['brief']) && trim((string) $arguments['brief']) !== '') {
-                $ergebnis = $svc->generiereAusBrief($team, (string) $arguments['brief'], $name, 'mcp');
+                $ergebnis = $svc->generiereAusBrief($team, (string) $arguments['brief'], $name, 'mcp', (bool) ($arguments['use_convenience_list'] ?? false));
             } else {
                 return ToolResult::error('Entweder brief ODER geruest_owner_type+geruest_owner_id angeben.', 'VALIDATION_ERROR');
             }

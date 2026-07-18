@@ -67,18 +67,27 @@ class ConceptGeneratorService
      * Freitext-Brief → KI baut das Planungs-Gerüst (Rahmen), dann läuft der
      * deterministische Assembler. Gerüst + Konzept entstehen beide als Draft.
      */
-    public function generiereAusBrief(Team $team, string $brief, ?string $name = null, string $via = 'ui'): array
+    public function generiereAusBrief(Team $team, string $brief, ?string $name = null, string $via = 'ui', bool $useConvenienceList = false): array
     {
         $brief = trim($brief);
         if ($brief === '') {
             throw new RuntimeException('Leerer Brief — Freitext oder Gerüst nötig.');
         }
 
-        $proposal = app(AiGatewayService::class)->propose('concept.brief_geruest', [
+        $kontext = [
             'brief' => $brief,
             'diaet_vokabular' => \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameRule::DIET_FORMS,
             'allergen_keys' => FoodAlchemistGp::ALLERGEN_FIELDS,
-        ]);
+        ];
+        // 06·H3: opt-in Convenience-Highlights (Default aus → byte-identisch)
+        if ($useConvenienceList) {
+            $conv = $this->convenienceHint($team);
+            if ($conv !== null) {
+                $kontext['convenience_highlights'] = $conv;
+            }
+        }
+
+        $proposal = app(AiGatewayService::class)->propose('concept.brief_geruest', $kontext);
         $werte = $proposal->werte ?? [];
         $slots = is_array($werte['slots'] ?? null) ? $werte['slots'] : [];
         if ($slots === []) {
@@ -112,6 +121,31 @@ class ConceptGeneratorService
         $ergebnis = $this->fuelleBestehendesKonzept($team, $concept, $frame->refresh());
 
         return $ergebnis + ['brief_confidence' => $proposal->confidence ?? null];
+    }
+
+    /**
+     * 06·H3: opt-in Convenience-Highlight-Block für den Brief→Gerüst-KI-Schritt.
+     * null, wenn nichts gepinnt ist. Der Gerüst-Assembler selbst ist deterministisch
+     * (wählt aus Bestand, erfindet nicht) — dort braucht es keinen Block.
+     */
+    private function convenienceHint(Team $team): ?array
+    {
+        $treffer = FoodAlchemistGp::query()
+            ->visibleToTeam($team)
+            ->convenienceHighlights()
+            ->limit(80)
+            ->pluck('name')
+            ->all();
+
+        if ($treffer === []) {
+            return null;
+        }
+
+        return [
+            'hinweis' => 'BEVORZUGTE CONVENIENCE-BAUSTEINE (Haus-Standard): berücksichtige diese Produkte '
+                . 'bei der Konzept-Dramaturgie bevorzugt; ergänze frei, wo die Liste nichts hergibt.',
+            'produkte' => $treffer,
+        ];
     }
 
     /** Assembler-Kern auf ein EXISTIERENDES Konzept anwenden (Brief-Pfad: Gerüst hängt schon dran). */

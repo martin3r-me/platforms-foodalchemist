@@ -70,6 +70,14 @@ Keystone aus [`docs/PLANUNG/07_LA_First_GP_Mint_ueberall.md`](PLANUNG/07_LA_Firs
 **+ #513 %→Gramm-Rückschreiben (2. Slice):** `rescaleRecipe`/`rescaleToReferenceMass` (Modus A Batch, einheiten-neutral) + `setIngredientBakerPercent` (Modus B Einzel-Zutat, Einheiten-Guard: nur g/kg) + MCP-Write-Tool `foodalchemist.proportion.APPLY`. Schreibt nur Mengen (nie %) → Recompute; Owner-Guard. Rechner-Kern damit bidirektional komplett (Gramm↔%).
 **+ #513 Editor-UI (3. Slice):** Bäckerprozent-Spalte im Zutaten-Editor (neben Garverlust), Alpine-live berechnet (Referenz = schwerste Zutat = 100 %), **editierbar** = %→Gramm-Rückschreiben im Client (persistiert über Save→syncIngredients, nie %), Einheiten-Guard (Stück/Liter read-only). Pest-Markup-Test. **Damit Punkt 1 komplett (Rechner+MCP+UI); Browser-Klickstrecke = menschliche Gegenprobe offen. Rest: Referenztabellen C (Kerntemp/Dosier, nach Bedarf).**
 
+## ⭐ Update 2026-07-19 (Session: 05·P5 Prozessanker-Parser + 06 Convenience-Highlights KOMPLETT)
+
+Zwei blocker-freie Phase-1-Stücke aus `docs/PLANUNG/` autonom durchgebaut, getestet, gepusht.
+
+- **05·P5 Prozessanker-Parser** (Etappe-1-Rest der DQ-Kaskade): deterministisch (0 LLM). `ProcessAnchorService` erdet die vier Prozess-/Kocharomen-Anker (roest/karamell/rauch/ferment) aus `preparation` — nur bei echten Markern (Rösten/Anbraten/Schmoren/Grillen/Karamellisieren/Räuchern/Fermentieren), kein Zwangs-Anker, „grill=roest+rauch"/„schmor=roest" gespiegelt aus dem Legacy-Gemini-Prompt (Skript 216). `source='parser'`, idempotent, fremde manual/ki/auto-Anker unangetastet. Command `foodalchemist:process-anchor-ground {--team --recipe --missing-only --limit --apply --verify}` + MCP `process_anchors.GROUND` (Lockstep). 10 Pest. MySQL-Smoke (Fixture 95 Rez.): +19 Anker (25/95, kein Über-Tagging), 13 fremde unberührt, Re-Run 0.
+- **06 Convenience-Highlights** (opt-in KI-Baustein, H1–H4 KOMPLETT): kuratierte Haus-Convenience-Liste am GP (`is_convenience_highlight`+`highlight_rank`, orthogonal zu `tag_is_convenience`). Auto-Score (Nutzung×Lead-LA-Vollständigkeit×Lieferanten-Priorität) → `ConvenienceHighlightService` (pin/exclude/reorder, Soft-Regel: nur Convenience-getaggte pinbar). Kuratierungs-Screen (`/convenience-highlights`, Sidebar Stammdaten) + Command `foodalchemist:convenience-highlights {--suggest --pin --exclude --rank}` + 2 MCP-Tools (`convenience_highlights.GET/PUT`). Opt-in-Generierungs-Modus `use_convenience_list` (Default AUS → byte-identisch, Leit-Invariante) an Rezept-/VK-/Konzept-Generator (separater Prompt-Block „bevorzugte Convenience-Bausteine", bevorzugt-nicht-hart) + GP-Picker-Filter „⭐ Convenience". 14 Pest.
+- **Voll-Suite 779/780 grün** (1 begründet skipped), 0 Regressionen. Doktrin gewahrt: kein GP ohne LA (Highlight = kuratiertes Flag am bestehenden GP), draft/opt-in, MCP-Lockstep für jede neue Fähigkeit.
+
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 
 Quellen: `Datenmodell Food.Alchemist.md` (5 Ebenen) + `07.02_Flavor_Pairing/Datenbank Foodalchemist/_Plan_Datenmodell_Chemie-Pairing-DB.md` (Chemie-first Phase 1–4). Stationen von hier bis Voll-Ausbau:
@@ -187,6 +195,7 @@ Die Tools waren darreichungs-blind — für externe LLM-Clients existierte das n
 - [x] **GP-Allergen-Backfill:** „ohne Konfidenz" **6.947 → 0**; 289 Allergen-Konflikte (LA↔LA) als Signal; Wert-Spalten nachweislich unberührt (Guard-Test)
 - [x] **Bulk-Recompute** gelaufen (3.218 Rezepte, 0 Zyklen); EK propagiert
 - [x] Backups vor jedem Apply (`PRE_DQ_CASCADE` voll + `PRE_P3` gps); 13 neue Pest-Tests grün
+- [x] **P5 Prozessanker-Parser** (`foodalchemist:process-anchor-ground`, Parser-Modus, 2026-07-19): deterministisch (0 LLM) — die vier Prozess-/Kocharomen-Anker (roest/karamell/rauch/ferment) aus `preparation`, hoch-präzise (nur echte Marker, kein Zwangs-Anker, Über-Tagging-Guard). Neuer `ProcessAnchorService` (source=`parser`, idempotent, fremde manual/ki/auto-Anker unangetastet) + MCP `process_anchors.GROUND` (Lockstep) + 10 Pest-Tests. MySQL-Smoke: Fixture 95 Rezepte → +19 Anker (25/95), 13 fremde unberührt, Re-Run 0. KI-Rest mehrdeutiger Prep-Texte bleibt Etappe 2.
 - [ ] `unbestimmt`-Servierformen (329) kuratiert → **Etappe 2** (KI je Gericht)
 - [ ] Rest-Stubs fb2027 (12) + tentative-in-Rezept (27) + itemisierte 405-Park-Sourcing-Liste → Review/Etappe 2
 - [~] Anker-Erdung (84 GP + 91 BR + 151 VK) + volle Anreicherung → **Etappe 2** (lokaler OpenAI-Provider)
@@ -683,6 +692,18 @@ In der Lieferantenartikel-Liste mehrere LAs markieren → **ein Bulk-Run** legt 
 - [ ] Confidence + Begründung je Vorschlag (KI-gestützt, Muster Klassifikator 105/`gps.MATCH`)
 - [ ] MCP: als Tool aufrufbar (`gps.bulk_match.POST` o. ä., staging-only) — KI-Client kann denselben Lauf triggern
 - [ ] Team-Scoping + D1; Test: N markierte LAs → korrekte tentative-GP/Match-Verteilung gegen Hand-Prüfung
+
+### R8.2 Convenience-Highlights (kuratierte Haus-Liste als opt-in KI-Baustein) · Größe M · Hängt an: nichts · ✅ **KOMPLETT 2026-07-19** (Spec [`06`](PLANUNG/06_Convenience_Highlights_GP_Liste.md))
+
+Kuratierte, flache Liste der Convenience-„Lieblinge" auf GP-Ebene — verengt Generatoren **auf Knopfdruck** (opt-in) bewusst auf den Haus-Standard. Gegenläufiger, komplementärer Hebel zum #507-Reuse-Layer (der Vielfalt zeigt).
+
+**DoD:**
+- [x] **H1** Datenmodell: `is_convenience_highlight` (bool, index) + `highlight_rank` am GP (Migration `2026_07_18_000010`, orthogonal zu `tag_is_convenience`)
+- [x] **H2** Kuratierung: `ConvenienceHighlightService` (Auto-Score Nutzung×Lead-LA×Priorität + pin/exclude/reorder, Soft-Regel: nur Convenience-getaggte pinbar) + Kuratierungs-Screen `/convenience-highlights` (Sidebar Stammdaten) + Command `foodalchemist:convenience-highlights` + MCP `convenience_highlights.GET/PUT` (Lockstep)
+- [x] **H3** Generierungs-Modus: `use_convenience_list` in `GenerationContextService` (Rezept/VK) + `ConceptGeneratorService` (Brief-Pfad) — separater Prompt-Block „bevorzugte Convenience-Bausteine" (bevorzugt, nicht ausschließlich); **Default AUS = byte-identisch** (Leit-Invariante, Regressions-getestet)
+- [x] **H4** UI: Checkbox „⭐ Auf Basis meiner Convenience-Liste bauen" an Rezept-/VK-/Konzept-Generator + GP-Picker-Filter „⭐ Convenience" (browseKatalog)
+- [x] 14 Pest (Service/Command/MCP/Screen/Generierung/Picker); Voll-Suite grün, 0 Regressionen
+- Nicht-Ziele v1 (bewusst): keine Caterer-Overrides (global-only), kein „ausschließlich", kein Chips-Panel, kein Swap-am-Ergebnis, keine LA-Ebene
 
 ## R9 — Lieferanten-Management *(kommerzielle Beziehungs-Ebene — heute nicht steuerbar; Dominique-Wunsch 2026-07-05)*
 

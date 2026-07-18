@@ -46,6 +46,12 @@ Route::get('/gps/{foodAlchemistGp}', fn (\Platform\FoodAlchemist\Models\FoodAlch
 
 
 /**
+ * 06·H2 Convenience-Highlights — Kuratierungs-Screen (Auto-Score + Pin/Exclude).
+ */
+Route::get('/convenience-highlights', \Platform\FoodAlchemist\Livewire\Convenience\Index::class)
+    ->name('foodalchemist.convenience.index');
+
+/**
  * Basisrezepte (M4-04, P-1) — Auswahl/Filter in der URL (Kontext-Erhalt).
  */
 Route::get('/rezepte', \Platform\FoodAlchemist\Livewire\Recipes\Browser::class)

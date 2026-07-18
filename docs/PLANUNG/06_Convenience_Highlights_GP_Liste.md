@@ -2,7 +2,7 @@
 
 > **Idee (Dominique 2026-07-17):** Eine kuratierte Liste unserer Convenience-„Lieblinge" auf **GP-Ebene**. Der KI eine Aufgabe geben (Gericht / Basisrezept / Konzept) und einen Output bekommen, der neu/kreativ ist, aber **bevorzugt aus dieser Liste** baut — auf Knopfdruck, nicht immer.
 > **Abgrenzung:** Kein Ersatz für den semantischen Reuse-Layer (#507). Der zeigt der KI ALLE passenden GPs (Vielfalt); DIESE Liste **verengt** bewusst auf den kuratierten Haus-Convenience-Standard. Zwei gegenläufige Hebel — beide koexistieren.
-> **Status:** Spec (Diskussion abgeschlossen). Gebaut wird erst nach Freigabe. Dev-Issue folgt (Board 53).
+> **Status: ✅ KOMPLETT GEBAUT 2026-07-19 (H1–H4).** `ConvenienceHighlightService` + Migration (`is_convenience_highlight`+`highlight_rank`) + Kuratierungs-Screen `/convenience-highlights` + Command `foodalchemist:convenience-highlights` + 2 MCP-Tools (`convenience_highlights.GET/PUT`) + opt-in `use_convenience_list` an Rezept-/VK-/Konzept-Generator + GP-Picker-Filter. 14 Pest, Voll-Suite grün. Default-aus-Leit-Invariante regressions-getestet. ROADMAP R8.2. (Etappen-Häkchen unten in §8.)
 
 ---
 
@@ -79,12 +79,12 @@ Gilt für: `recipe.generate` (Gericht/Basisrezept) **und** `concepts.generate` (
 
 ## 8. Etappen
 
-| # | Etappe | Größe | Abhängig |
-|---|---|---|---|
-| **H1** | Datenmodell: Migration `is_convenience_highlight` + `highlight_rank` | S | — |
-| **H2** | Kuratierung: `--suggest`-Score-Report + **Kuratierungs-Screen (v1, entschieden)** + MCP-Tool (Lockstep) | M–L | H1 |
-| **H3** | Generierungs-Modus: `use_convenience_list` in GenerationContextService + ConceptGeneratorService (eigener Prompt-Block, bevorzugt) | M | H1 |
-| **H4** | UI: Toggle an beiden Generator-Modals + Editor-Picker-Filter | S–M | H3 |
+| # | Etappe | Größe | Abhängig | Status |
+|---|---|---|---|---|
+| **H1** | Datenmodell: Migration `is_convenience_highlight` + `highlight_rank` | S | — | ✅ 2026-07-19 |
+| **H2** | Kuratierung: `--suggest`-Score-Report + **Kuratierungs-Screen (v1)** + MCP-Tools (Lockstep) | M–L | H1 | ✅ 2026-07-19 |
+| **H3** | Generierungs-Modus: `use_convenience_list` in GenerationContextService + ConceptGeneratorService (eigener Prompt-Block, bevorzugt) | M | H1 | ✅ 2026-07-19 |
+| **H4** | UI: Toggle an Rezept-/VK-/Konzept-Generator + Editor-Picker-Filter | S–M | H3 | ✅ 2026-07-19 |
 
 **Globale DoD:** Default-aus-Verhalten byte-identisch (Regression), Team-Scoping, MCP-Lockstep (Generator-Tools kennen den Flag), Pest, Push + Dev-Issue.
 

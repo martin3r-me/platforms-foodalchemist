@@ -107,6 +107,12 @@ return [
                     'route' => 'foodalchemist.geschirr.index',
                     'icon'  => 'heroicon-o-square-2-stack',
                 ],
+                [
+                    // 06·H2: kuratierte Haus-Convenience-Liste (opt-in KI-Baustein)
+                    'label' => 'Convenience-Highlights',
+                    'route' => 'foodalchemist.convenience.index',
+                    'icon'  => 'heroicon-o-star',
+                ],
             ],
         ],
         [

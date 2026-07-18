@@ -42,6 +42,9 @@ class Index extends Component
 
     public string $generatorName = '';
 
+    /** 06·H4: opt-in Convenience-Highlight-Modus für den Brief-Generator (Default aus). */
+    public bool $generatorConvenience = false;
+
     public ?array $generatorErgebnis = null;
 
     public ?string $generatorFehler = null;
@@ -52,7 +55,7 @@ class Index extends Component
         $this->generatorErgebnis = null;
         try {
             $ergebnis = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
-                ->generiereAusBrief($this->team(), $this->generatorBrief, $this->generatorName !== '' ? $this->generatorName : null);
+                ->generiereAusBrief($this->team(), $this->generatorBrief, $this->generatorName !== '' ? $this->generatorName : null, 'ui', $this->generatorConvenience);
         } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException) {
             $this->generatorFehler = 'KI ist für dieses Team deaktiviert (Einstellungen) — Brief-Übersetzung braucht sie. Alternativ: Gerüst manuell anlegen und daraus generieren.';
 
@@ -73,6 +76,7 @@ class Index extends Component
         ];
         $this->generatorBrief = '';
         $this->generatorName = '';
+        $this->generatorConvenience = false;
     }
 
     public function generatorOeffnen(): void
