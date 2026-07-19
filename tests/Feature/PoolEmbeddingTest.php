@@ -157,6 +157,31 @@ it('baut kompakte, entrauschte Embed-Texte (die Qualitäts-Stellschraube)', func
     expect($recipeText)->toBe('Geschmorte Kalbsbäckchen (Schmorgericht) Kalbsbäckchen Rotwein Wurzelgemüse');
 });
 
+it('§5b: Zubereitung + Beschreibung + Geschmacksrichtung fließen in den Rezept-Embed-Text', function () {
+    $text = $this->svc->recipeEmbedText(
+        (object) [
+            'name' => 'Sous-vide Lachs', 'category_label' => 'Fisch', 'is_sales_recipe' => true,
+            'preparation' => 'Bei 45 °C sous-vide garen, dann kurz abflämmen.',
+            'description' => 'Zarter Lachs mit Zitrus-Note.',
+            'taste_direction' => 'umami-frisch',
+        ],
+        ['Lachs', 'Zitrone'],
+    );
+
+    expect($text)->toContain('Sous-vide Lachs (Fisch)')
+        ->and($text)->toContain('Lachs Zitrone')     // Kommas werden vom Normalizer geglättet
+        ->and($text)->toContain('abflämmen')         // Technik/Verfahren freitext-auffindbar
+        ->and($text)->toContain('umami-frisch');
+});
+
+it('§5b: lange Prosa wird gedeckelt — Name bleibt prominent vorn', function () {
+    $long = str_repeat('wort ', 200);
+    $text = $this->svc->recipeEmbedText((object) ['name' => 'Test', 'preparation' => $long], []);
+
+    expect($text)->toStartWith('Test ')
+        ->and(mb_strlen($text))->toBeLessThan(260);   // ~Name + RECIPE_PROSE_MAX(220)
+});
+
 it('normalisiert Query und Ziel in denselben Vektorraum (Symmetrie)', function () {
     // Der Kern des Slice-1-Fixes: dieselbe Funktion glättet beide Enden. Eine rohe
     // Query „Aubergine" und ein Ziel-Text „Aubergine · frisch" dürfen nach der

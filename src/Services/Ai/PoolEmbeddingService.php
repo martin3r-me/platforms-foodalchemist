@@ -79,6 +79,14 @@ class PoolEmbeddingService
     /** Max. Zutaten-Namen im Rezept-Embed-Text (die relevante Oberfläche). */
     private const RECIPE_MAX_INGREDIENTS = 8;
 
+    /**
+     * §5b Embed-Text-Tiefe: max. Zeichen je Prosa-Feld (Zubereitung/Beschreibung) im
+     * Rezept-Vektor. Moderat gedeckelt, damit Name + Zutaten prominent bleiben und der
+     * Vektor nicht von langer Prosa dominiert wird (Zutat→Sub-Präzision). Ermöglicht
+     * „finde Gericht mit Technik/Verfahren X" im Freitext.
+     */
+    private const RECIPE_PROSE_MAX = 220;
+
     // ── Provider/Config (Spiegel von KnowledgeEmbeddingService) ─────────────
 
     public function globalTeamId(): int
@@ -173,7 +181,8 @@ class PoolEmbeddingService
         if ($onlyTeamId !== null) {
             $query->where('r.team_id', $onlyTeamId);
         }
-        $recipes = $query->get(['r.id', 'r.name', 'r.is_sales_recipe', 'r.team_id', 'c.label as category_label']);
+        $recipes = $query->get(['r.id', 'r.name', 'r.is_sales_recipe', 'r.team_id', 'c.label as category_label',
+            'r.preparation', 'r.description', 'r.taste_direction']);
 
         if ($recipes->isEmpty()) {
             return ['available' => true, 'candidates' => 0, 'partitions' => []];
@@ -241,7 +250,11 @@ class PoolEmbeddingService
         }
         $names = $this->topIngredientNames([(int) $recipe->id])[(int) $recipe->id] ?? [];
         $label = DB::table('foodalchemist_recipe_categories')->where('id', $recipe->category_id)->value('label');
-        $row = (object) ['name' => $recipe->name, 'category_label' => $label, 'is_sales_recipe' => $recipe->is_sales_recipe];
+        $row = (object) [
+            'name' => $recipe->name, 'category_label' => $label, 'is_sales_recipe' => $recipe->is_sales_recipe,
+            'preparation' => $recipe->preparation, 'description' => $recipe->description,
+            'taste_direction' => $recipe->taste_direction,
+        ];
         $text = $this->recipeEmbedText($row, $names);
         if ($text === '') {
             return;
@@ -314,7 +327,9 @@ class PoolEmbeddingService
     }
 
     /**
-     * Name + Kategorie-Label + Top-Zutaten-Namen.
+     * Name + Kategorie-Label + Top-Zutaten-Namen + (§5b) gedeckelte Prosa-Tiefe
+     * (Zubereitung/Beschreibung/Geschmacksrichtung) — macht „finde Gericht mit
+     * Technik/Verfahren X" auffindbar, ohne dass die Prosa den Vektor dominiert.
      *
      * @param  list<string>  $ingredientNames
      */
@@ -327,6 +342,16 @@ class PoolEmbeddingService
         }
         if ($ingredientNames !== []) {
             $head .= ': ' . implode(', ', array_slice($ingredientNames, 0, self::RECIPE_MAX_INGREDIENTS));
+        }
+
+        // §5b Embed-Tiefe: Zubereitung + Beschreibung + Geschmacksrichtung (gedeckelt).
+        $prose = array_filter([
+            self::lead((string) ($recipe->preparation ?? ''), self::RECIPE_PROSE_MAX),
+            self::lead((string) ($recipe->description ?? ''), self::RECIPE_PROSE_MAX),
+            trim((string) ($recipe->taste_direction ?? '')),
+        ], fn (string $p): bool => $p !== '');
+        if ($prose !== []) {
+            $head .= ' ' . implode(' ', $prose);
         }
 
         return self::normalizeForEmbedding($head);

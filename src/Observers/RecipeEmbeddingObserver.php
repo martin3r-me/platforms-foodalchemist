@@ -15,7 +15,8 @@ use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
  */
 class RecipeEmbeddingObserver
 {
-    private const RELEVANT = ['name', 'category_id', 'status', 'is_sales_recipe'];
+    private const RELEVANT = ['name', 'category_id', 'status', 'is_sales_recipe',
+        'preparation', 'description', 'taste_direction'];
 
     public function created(FoodAlchemistRecipe $recipe): void
     {
