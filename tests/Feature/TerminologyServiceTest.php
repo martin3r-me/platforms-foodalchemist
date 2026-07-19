@@ -14,24 +14,24 @@ beforeEach(function () {
 // ── S1: Alias-Expansion ──────────────────────────────────────────────────────
 
 it('expandiert Dialekt/Übersetzung auf die Kanon-Tokens', function () {
-    expect($this->svc->aliasTokensFor('Paradeiser'))->toContain('tomate');
-    expect($this->svc->aliasTokensFor('Erdapfel'))->toContain('kartoffel');
-    expect($this->svc->aliasTokensFor('Beef'))->toContain('rindfleisch');
-    expect($this->svc->aliasTokensFor('Salmon'))->toContain('lachs');
-    expect($this->svc->aliasTokensFor('Möhre'))->toContain('karotte');
+    expect($this->svc->aliasPhrasesFor('Paradeiser'))->toContain('tomate');
+    expect($this->svc->aliasPhrasesFor('Erdapfel'))->toContain('kartoffel');
+    expect($this->svc->aliasPhrasesFor('Beef'))->toContain('rindfleisch');
+    expect($this->svc->aliasPhrasesFor('Salmon'))->toContain('lachs');
+    expect($this->svc->aliasPhrasesFor('Möhre'))->toContain('karotte');
     // symmetrisch: der Kanon-Begriff zieht die Synonyme mit
-    expect($this->svc->aliasTokensFor('Sahne'))->toContain('rahm')->toContain('obers');
+    expect($this->svc->aliasPhrasesFor('Sahne'))->toContain('rahm')->toContain('obers');
 });
 
 it('lässt Standardnamen ohne Alias unangetastet', function () {
-    expect($this->svc->aliasTokensFor('Zanderfilet'))->toBe([]);
-    expect($this->svc->aliasTokensFor('Butter'))->toBe([]);
+    expect($this->svc->aliasPhrasesFor('Zanderfilet'))->toBe([]);
+    expect($this->svc->aliasPhrasesFor('Butter'))->toBe([]);
 });
 
 it('triggert NICHT auf Teil-Strings (Token-Grenzen)', function () {
     // „Tamarinde" enthält den Substring „rind" — darf NICHT Beef-Aliase ziehen.
-    expect($this->svc->aliasTokensFor('Tamarinde'))->not->toContain('rindfleisch');
-    expect($this->svc->aliasTokensFor('Tamarinde'))->not->toContain('beef');
+    expect($this->svc->aliasPhrasesFor('Tamarinde'))->not->toContain('rindfleisch');
+    expect($this->svc->aliasPhrasesFor('Tamarinde'))->not->toContain('beef');
 });
 
 // ── S2: Anti-Marker-Suppression (die 8 Golden-Negativfälle) ──────────────────

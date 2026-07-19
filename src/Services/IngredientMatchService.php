@@ -204,27 +204,32 @@ class IngredientMatchService
             return [];
         }
 
-        // S1 (#507 Weg-2): Alias-Tokens additiv in Prefilter + Scoring — Dialekt/
-        // Übersetzung („Paradeiser"→auch „tomate"). Feuert nur bei bekanntem Alias,
-        // Standardnamen bleiben unberührt. Der Aroma/Anti-Marker-Fix ist S2 unten.
-        $aliasTokens = $this->terminology->aliasTokensFor($ingredientName);
-        $poolTokens = $aliasTokens === []
-            ? $queryTokens
-            : array_values(array_unique(array_merge($queryTokens, $aliasTokens)));
+        // S1 (#507 Weg-2): Alias-Phrasen (Dialekt/Übersetzung, „Paradeiser"→„tomate").
+        // Union der Tokens erweitert NUR den Prefilter (fetcht den Alias-Kandidaten);
+        // der SCORE kommt aus max(Original, jede Alias-Variante einzeln) — so bekommt
+        // der Alias-Treffer VOLLEN Score statt im Token-Bag zu verwässern. Feuert nur
+        // bei bekanntem Alias; Standardnamen bleiben unberührt.
+        $aliasVariants = array_values(array_filter(
+            array_map(fn ($p) => $this->engine->tokenize($p), $this->terminology->aliasPhrasesFor($ingredientName)),
+            static fn ($v) => $v !== [],
+        ));
+        $poolTokens = $queryTokens;
+        foreach ($aliasVariants as $v) {
+            $poolTokens = array_merge($poolTokens, $v);
+        }
+        $poolTokens = array_values(array_unique($poolTokens));
 
         // Lexikalischer Pool → keyed map "kind\0id".
         $lex = [];
         foreach ($this->gpPool($team, $poolTokens, $querySlug) as $gp) {
             $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
-            $strict = $this->scoreMitFloor($poolTokens, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
-            $score = max($strict, $this->heuristik->substringOverlap($poolTokens, $combined));
+            $score = $this->bestLexScore($queryTokens, $aliasVariants, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
             if ($score > 0.0) {
                 $lex["gp\0{$gp->id}"] = ['kind' => 'gp', 'id' => (int) $gp->id, 'name' => $gp->name, 'score' => $score, 'reference' => "gp:{$gp->id}"];
             }
         }
         foreach ($this->subPool($team, $poolTokens, $querySlug) as $sub) {
-            $strict = $this->scoreMitFloor($poolTokens, $querySlug, $sub->name, null, $sub->name);
-            $score = max($strict, $this->heuristik->substringOverlap($poolTokens, $sub->name));
+            $score = $this->bestLexScore($queryTokens, $aliasVariants, $querySlug, $sub->name, null, $sub->name);
             if ($score > 0.0) {
                 $lex["sub\0{$sub->id}"] = ['kind' => 'sub', 'id' => (int) $sub->id, 'name' => $sub->name, 'score' => $score, 'reference' => "sub:{$sub->id}"];
             }
@@ -322,6 +327,34 @@ class IngredientMatchService
         usort($out, fn ($a, $b) => $b['score'] <=> $a['score']);
 
         return array_slice($out, 0, $k);
+    }
+
+    /**
+     * S1 (#507 Weg-2): bester Lexik-Score über die Original-Query UND jede Alias-
+     * Variante einzeln. So zählt „Karotte" (Alias von „Möhre") mit VOLLEM Score,
+     * statt im gemeinsamen Token-Bag verwässert aus den Top-K zu fallen. Alias-
+     * Varianten tragen keinen Slug (nur die Original-Query).
+     *
+     * @param  list<string>  $queryTokens
+     * @param  list<list<string>>  $aliasVariants
+     */
+    private function bestLexScore(array $queryTokens, array $aliasVariants, ?string $querySlug, string $candText, ?string $candSlug, string $candName): float
+    {
+        $best = max(
+            $this->scoreMitFloor($queryTokens, $querySlug, $candText, $candSlug, $candName),
+            $this->heuristik->substringOverlap($queryTokens, $candText),
+        );
+        foreach ($aliasVariants as $variant) {
+            $s = max(
+                $this->scoreMitFloor($variant, null, $candText, $candSlug, $candName),
+                $this->heuristik->substringOverlap($variant, $candText),
+            );
+            if ($s > $best) {
+                $best = $s;
+            }
+        }
+
+        return $best;
     }
 
     /**

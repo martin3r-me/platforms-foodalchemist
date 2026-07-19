@@ -101,16 +101,19 @@ class TerminologyService
     ];
 
     /**
-     * Zusätzliche Query-Tokens aus Alias-Gruppen. Gibt NUR die neuen (nicht schon
-     * im Original enthaltenen) Tokens zurück. Multi-Wort-Glieder ("grüne bohnen")
-     * werden in Einzel-Tokens zerlegt.
+     * Alias-PHRASEN (nicht Einzeltokens) der ausgelösten Gruppen — die anderen,
+     * nicht schon in der Query stehenden Glieder. Der Matcher scort jeden Kandidaten
+     * gegen die ORIGINAL-Query UND jede Alias-Phrase einzeln und nimmt das Maximum;
+     * dadurch bekommt der Alias-Treffer VOLLEN Score (statt im gemeinsamen Token-Bag
+     * verwässert zu werden und aus den Top-K zu fallen). Multi-Wort-Glieder ("gelbe
+     * rübe") bleiben als Phrase erhalten.
      *
      * @return list<string>
      */
-    public function aliasTokensFor(string $ingredientName): array
+    public function aliasPhrasesFor(string $ingredientName): array
     {
         $hay = ' ' . $this->norm($ingredientName) . ' ';
-        $extra = [];
+        $phrases = [];
         foreach (self::ALIAS_GROUPS as $group) {
             $hit = false;
             foreach ($group as $member) {
@@ -125,15 +128,14 @@ class TerminologyService
                 continue;
             }
             foreach ($group as $member) {
-                foreach (preg_split('/\s+/', $this->norm($member)) ?: [] as $tok) {
-                    if ($tok !== '' && ! str_contains($hay, ' ' . $tok . ' ')) {
-                        $extra[$tok] = true;
-                    }
+                $m = $this->norm($member);
+                if ($m !== '' && ! str_contains($hay, ' ' . $m . ' ')) {
+                    $phrases[$m] = true;
                 }
             }
         }
 
-        return array_keys($extra);
+        return array_keys($phrases);
     }
 
     /**
