@@ -209,8 +209,14 @@ class IngredientMatchService
         // der SCORE kommt aus max(Original, jede Alias-Variante einzeln) — so bekommt
         // der Alias-Treffer VOLLEN Score statt im Token-Bag zu verwässern. Feuert nur
         // bei bekanntem Alias; Standardnamen bleiben unberührt.
+        // S1 Alias-Phrasen + S3 Decompound-Phrasen (Kürbispüree→„kürbis püree")
+        // laufen durch dasselbe Best-über-Varianten-Scoring.
+        $expandPhrases = array_merge(
+            $this->terminology->aliasPhrasesFor($ingredientName),
+            $this->terminology->decompoundPhrasesFor($ingredientName),
+        );
         $aliasVariants = array_values(array_filter(
-            array_map(fn ($p) => $this->engine->tokenize($p), $this->terminology->aliasPhrasesFor($ingredientName)),
+            array_map(fn ($p) => $this->engine->tokenize($p), $expandPhrases),
             static fn ($v) => $v !== [],
         ));
         $poolTokens = $queryTokens;

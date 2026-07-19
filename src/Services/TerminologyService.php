@@ -139,6 +139,65 @@ class TerminologyService
     }
 
     /**
+     * Compound-Köpfe (§1-Syntax-„Head:"-Wörter + gängige DE-Grundworte). Endet ein
+     * Query-Token auf einen dieser Köpfe, wird es in [Modifier, Kopf] gesplittet.
+     * In norm-Form (lowercase, Umlaute erhalten).
+     *
+     * @var list<string>
+     */
+    private const COMPOUND_HEADS = [
+        'püree', 'jus', 'sugo', 'sauce', 'soße', 'fond', 'coulis', 'mus', 'brühe',
+        'suppe', 'wurzel', 'fleisch', 'öl', 'essig', 'butter', 'creme', 'kompott',
+    ];
+
+    /**
+     * S3 Decompounding: zerlegt ein Compound-Query-Token in [Modifier, Kopf], damit
+     * es die §1-Syntax-GPs trifft („Kürbispüree" → „kürbis püree" ⇒ GP „Püree:
+     * Kürbis"). Fugen-Elemente (-s/-n/-en) werden als zusätzliche Modifier-Varianten
+     * erzeugt (Kalbsjus→„kalb jus"); ein falscher Split matcht schlicht nichts (der
+     * Matcher nimmt das Maximum über alle Varianten). Ergänzt {@see aliasPhrasesFor}.
+     *
+     * @return list<string>
+     */
+    public function decompoundPhrasesFor(string $ingredientName): array
+    {
+        $phrases = [];
+        foreach (preg_split('/\s+/', $this->norm($ingredientName)) ?: [] as $tok) {
+            if ($tok === '') {
+                continue;
+            }
+            foreach (self::COMPOUND_HEADS as $head) {
+                if ($tok === $head || ! str_ends_with($tok, $head)) {
+                    continue;
+                }
+                $modLen = mb_strlen($tok) - mb_strlen($head);
+                if ($modLen < 3) {
+                    continue;
+                }
+                $mod = mb_substr($tok, 0, $modLen);
+                // Modifier + Fugen-bereinigte Varianten (nur wenn Rest ≥3 bleibt).
+                foreach ([$mod, $this->stripSuffix($mod, 's'), $this->stripSuffix($mod, 'n'), $this->stripSuffix($mod, 'en')] as $m) {
+                    if ($m !== '' && mb_strlen($m) >= 3) {
+                        $phrases[$m . ' ' . $head] = true;
+                    }
+                }
+                break;   // erster passender Kopf gewinnt
+            }
+        }
+
+        return array_keys($phrases);
+    }
+
+    private function stripSuffix(string $s, string $suf): string
+    {
+        if (str_ends_with($s, $suf) && mb_strlen($s) - mb_strlen($suf) >= 3) {
+            return mb_substr($s, 0, mb_strlen($s) - mb_strlen($suf));
+        }
+
+        return '';
+    }
+
+    /**
      * S2: darf dieser Kandidat für diese Query gar nicht erst in die Shortlist?
      * true = bekannte Verwechslungs-Falle → unterdrücken (unabhängig von Score).
      */

@@ -34,6 +34,20 @@ it('triggert NICHT auf Teil-Strings (Token-Grenzen)', function () {
     expect($this->svc->aliasPhrasesFor('Tamarinde'))->not->toContain('beef');
 });
 
+// ── S3: Decompounding (Compound-Query → §1-Syntax) ───────────────────────────
+
+it('zerlegt Compounds in [Modifier, Kopf] inkl. Fugen-Varianten', function () {
+    expect($this->svc->decompoundPhrasesFor('Kürbispüree'))->toContain('kürbis püree');
+    expect($this->svc->decompoundPhrasesFor('Kalbsjus'))->toContain('kalb jus');       // Fugen-s
+    expect($this->svc->decompoundPhrasesFor('Rotweinjus'))->toContain('rotwein jus');
+    expect($this->svc->decompoundPhrasesFor('Tomatensugo'))->toContain('tomate sugo'); // Fugen-n
+});
+
+it('splittet Nicht-Compounds nicht', function () {
+    expect($this->svc->decompoundPhrasesFor('Kartoffel'))->toBe([]);
+    expect($this->svc->decompoundPhrasesFor('Aubergine'))->toBe([]);
+});
+
 // ── S2: Anti-Marker-Suppression (die 8 Golden-Negativfälle) ──────────────────
 
 it('unterdrückt bekannte Verwechslungs-Fallen', function () {
