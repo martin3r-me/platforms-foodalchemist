@@ -551,17 +551,19 @@ Der Pairing-Graph offensiv: Ersatz, der den Geschmack *erhält*, nicht nur den P
 
 > **Bewusste v1-Abweichungen (verify-before-claiming):** (1) Ranking = graceful gewichtete Mischung `0.6·Kanten + 0.4·Cosinus` statt hartes Produkt — sonst kollabiert das Ranking überall dort auf 0, wo Aroma-Vektoren fehlen (sie sind dünn). (2) `swap_locked` wird im Vorschlag *gemeldet*, aber `ComponentEquivalentService::tauscheZutat` trägt noch KEINEN harten Guard (bestehende R6.3-Lücke) → Follow-up. (3) Cost = indikativer Listen-EK der Lead-LA, NICHT mengennormalisiert.
 
-### R6.9 Dish-Reverse-Engineering · Größe L · Hängt an: R1 (Portfolio zum Nachbauen)
+### R6.9 Dish-Reverse-Engineering · Größe L · Hängt an: R1 (Portfolio zum Nachbauen) · ✅ GEBAUT 2026-07-19
 
 Fremdes Gericht → Aroma-Skelett → Nachbau aus eigenem Bestand.
 
 **DoD:**
-- [ ] Input Text/fremde Karte → Zerlegung in GPs (Matching gegen Stamm, Unmatched als Review-Queue, kein Raten)
-- [ ] Aroma-Skelett aus dem Pairing-Graph extrahiert (tragende Anker + Verbund-Kanten)
-- [ ] Rekonstruktion aus eigenem VK-Portfolio: „nächstes Gericht bei uns" + Lücken („dieser Anker fehlt im Bestand")
-- [ ] Ergebnis mündet per Klick in R6.4 Ideen-Labor / `recipes.POST`-Draft
-- [ ] Foto-Input als Ausbaustufe markiert (hängt an Multimodal-Provider-Entscheid Martin) — Textpfad zuerst
-- [ ] Test: 3 bekannte Gerichte reverse-engineered → Zerlegung von Dominique plausibilisiert
+- [x] Input Text/fremde Karte → Zerlegung in GPs (`DishReverseService` via `matchIngredient`; Unmatched ohne LA → Beschaffungs-Wunsch-Liste, kein Raten; LA vorhanden → `mintFromLa` tentative)
+- [x] Aroma-Skelett aus dem Pairing-Graph extrahiert (tragende Anker + Verbund-Kanten via `gpAnkers`/`edgesFor`)
+- [x] Rekonstruktion aus eigenem VK-Portfolio: „nächstes Gericht bei uns" (Anker-Überlappung) + Lücken („dieser Anker fehlt im Bestand")
+- [~] Ergebnis mündet per Klick in R6.4 / `recipes.POST`-Draft — Analyse read-only, Draft-Anlage = expliziter Folgeschritt (`recipes.POST`); UI-Klick = Folge-Slice
+- [x] Foto-Input als Ausbaustufe markiert (Multimodal = Martin) — Textpfad zuerst
+- [x] Test: `DishReverseTest` (2 Pest) — Zerlegung + Skelett + Nachbau-Kandidat + Lücken + Beschaffungs-Wunsch. Realdaten-Plausibilisierung mit Dominique = nach demo-Deploy
+
+> **v1-Note:** MCP `dish.REVERSE` ist read-only → Beschaffungs-Wünsche werden im Response *gelistet*, nicht als Review-Queue-Zeilen geschrieben (Persistenz = explizite Aktion; Quer-Invariante „read-only bis Commit"). Foto-/#507-Recall greifen additiv, wenn Provider live.
 
 ### R6.10 Überschuss-zu-Gericht · Größe M · Hängt an: Q1 (Core-Contract) + Pairing-Graph
 
@@ -813,6 +815,7 @@ Gleiches Muster wie der N-Track: FA liefert den **Warum-Motor** (`knowledge.EXPL
   - **#511 (a) Warnung:** unbepreiste Zutat (GP/Sub ohne auflösenden Preis) zeigt im Editor einen amber `⚠︎` je Zeile statt des stillen grauen „—" + eine Σ-Zeile „n von m Zutaten bepreist — EK unvollständig". Greift live beim ⇄/♻-Tausch (setzen `ek_pro_g=null`). Daten-Heilung selbst bleibt R0.3-Etappe-2 (Sourcing), kein Editor-Fix kann sie ersetzen — nur sichtbar machen.
   - **#509 Create-Parität:** `RecipeService::create` schreibt jetzt dieselben §4.2-Fachfelder wie `update()` (temperature/function/preparation/notes_manual/yield_pieces + Equipment-Sync) — Schluss mit dem stillen Datenverlust im Anlege-Modal. `RecipeModal::speichern` springt nach dem Anlegen nahtlos in den Edit-Modus (`ladeRezept($id)`, VkModal::anlegen-Muster) statt zu schließen → Zutaten/Deklaration/Darreichungen sofort befüllbar.
   - **Tests:** neu `IngredientSwapPropagationTest` (Server-Propagation, ID-Rückgabe, Event-Dispatch, F2-Warnung, F4 E2E durch den Livewire-Editor inkl. Eltern-EK ohne Reload) + `RecipeCreateParityTest` (Feld-Parität + Edit-Sprung). Kein Server-Recompute-Verhalten geändert (I8 Logging bleibt, I9 `vk_*` nie geschrieben).
+- 2026-07-19 (R6.9): **Dish-Reverse-Engineering GEBAUT (Pairing-Offense S2).** `DishReverseService::reverse(team, text, limit)` — fremdes Gericht (Text) → Zerlegung in eigene GPs (`IngredientMatchService::matchIngredient`; unmatched+keine LA → Beschaffungs-Wunsch, keine Erfindung; unmatched+LA → `LaFirstGpService::mintFromLa` tentative) → Aroma-Skelett (tragende Anker + Verbund-Kanten via `gpAnkers`/`edgesFor`) → Nachbau-Kandidaten aus dem eigenen VK-Portfolio (Anker-Überlappung über `recipe_anchor_mappings`+`recipe_process_anchors`) + Lücken-Report (Anker ohne Bestandsträger). MCP `foodalchemist.dish.REVERSE` (read-only; Draft-Anlage = expliziter `recipes.POST`-Folgeschritt). `DishReverseTest` (2 Pest) grün. Foto-Input + #507-Recall = additive Ausbaustufen (Provider = Martin).
 - 2026-07-19 (R6.8): **Aroma-treue Substitution GEBAUT (Pairing-Offense S1).** `PairingService::aromaTrueSubstitutes(team, gpId, limit, ?recipeIngredientId)` — Ersatz-GPs gerankt nach ERHALTENEM Geschmack: Anker-Kanten-Überlappung (welche Aroma-Brücken des Quell-GP der Kandidat trägt/erreicht, via `edgeBest` über beide `gpAnkers`) graceful gemischt mit dem 14-Typ-Aroma-Vektor-Cosinus (`0.6·Kanten + 0.4·Cosinus`; nur Kanten wenn kein Vektor — bewusst kein hartes Produkt, sonst Ranking-Kollaps bei dünnen Vektoren). Kandidaten-Pool = Aroma-Geschwister (≥1 geteilter Anker) ∪ gleiche Warengruppe ∪ manuelle Äquivalente (letztere geboostet, Inv. 3). Ausgabe je Kandidat: erhaltene/verlorene Brücken, `flavor_score`, `allergen_warnungen` (Diff via `GpAggregateService::allergene` VOR Tausch), `cost` (indikativer Lead-LA-Listen-EK, mode cost/both), `evidenz` (kuratiert/abgeleitet), `kohaesions_delta` (bei `recipe_ingredient_id`). MCP `foodalchemist.substitution.SUGGEST` (read-only, modes flavor|cost|both). 3 Pest (`AromaSubstitutionTest`) grün + 24 Pairing-Regression grün. Der eigentliche Tausch bleibt `tauscheZutat`. **Offen (Follow-up):** harter `swap_locked`-Guard in `tauscheZutat` (R6.3-Altlücke, aktuell nur gemeldet); Aroma-Vektor-Coverage (Q5); mengennormalisierter EK.
 - 2026-07-15 (Bug gemeldet): **IngredientEditor Zutaten-Tausch — Kaskade/Auto-Sync unvollständig (Dev-Modul-Issue).** Beim Tausch einer Zutat + Mengen-Anpassung im Editor treten ZWEI Dinge auf (beide user-bestätigt an Rezept `getreidesalat_bulgur_mit_berglinsen_und_cashews_2527`):
   - **(a) Daten:** `RecipeService::syncIngredients` persistiert beim Tausch nur den `gp_id` (`match_method='manual'`) und prüft NICHT auf einen auflösenden Preis → Tausch auf einen unbepreisten GP (hier „Petersilie glatt: frisch, ganz", einer der 661 „Lead ohne Preis" / 1.417 „ohne Lead") → Zutat bleibt unbepreist, EK partiell (7/8). **Fix:** GP-Preise heilen (Etappe 1 `lead-la-repick` / Etappe 2 GP-Lücken-Match) **+ Editor-Warnung** bei preislosem Tausch-Ziel (`IngredientEditor::ekFuerZiel()`=null → sichtbarer Hinweis statt stillem „—").

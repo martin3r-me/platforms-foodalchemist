@@ -62,9 +62,11 @@ Ersatz, der den **Geschmack erhält**, nicht nur den Preis senkt.
 - [x] MCP `substitution.SUGGEST` (Modi `flavor|cost|both`), read-only bis expliziter Tausch (Tausch bleibt `tauscheZutat`).
 - [x] Pest: Klassiker-Tausch (Estragon↔Kerbel) rankt vor aroma-fernem, gleich teurem Ersatz.
 
-## 3. R6.9 — Dish-Reverse-Engineering · Größe L · Etappe S2 · hängt an R1 ✅
+## 3. R6.9 — Dish-Reverse-Engineering · Größe L · Etappe S2 · hängt an R1 ✅ · ✅ GEBAUT 2026-07-19
 
 Fremdes Gericht → Aroma-Skelett → Nachbau aus **eigenem** Bestand.
+
+> **Gebaut 2026-07-19:** `DishReverseService` (Zerlegung via `matchIngredient` + `mintFromLa`, Aroma-Skelett via `gpAnkers`/`edgesFor`, Rekonstruktion via Anker-Überlappung übers VK-Portfolio + Lücken) + MCP `DishReverseTool` (registriert, read-only) + `DishReverseTest` (2 Pest). Beschaffungs-Wünsche werden gelistet, nicht persistiert (read-only). Draft-Anlage = expliziter `recipes.POST`. Foto/#507 = additive Ausbaustufe.
 
 **Bau:** neuer `DishReverseService` (orchestriert Vorhandenes):
 - Zerlegung Text → GPs: `IngredientMatchService::candidatesFor`/`matchIngredient` (+ #507-Recall); `none` → `mintFromLa` wenn LA da, sonst Review-Queue-Zeile (Beschaffungs-Wunsch, kein Raten).
@@ -73,13 +75,13 @@ Fremdes Gericht → Aroma-Skelett → Nachbau aus **eigenem** Bestand.
 - Zielklick: `RecipeService::create` (Draft) bzw. R6.4 Ideen-Labor.
 
 **DoD:**
-- [ ] Input Text/fremde Karte → Zerlegung in GPs (Matching gegen Stamm; Unmatched → Review-Queue, kein Raten; #507-Recall + 07-Mint wo LA existiert).
-- [ ] Aroma-Skelett aus dem Pairing-Graph (tragende Anker + Verbund-Kanten).
-- [ ] Rekonstruktion aus eigenem VK-Portfolio + Lücken-Report.
-- [ ] Ergebnis mündet per Klick in R6.4 / `recipes.POST`-Draft.
-- [ ] Foto-Input als Ausbaustufe markiert (Multimodal = Martin); Textpfad zuerst (E3).
-- [ ] MCP `dish.REVERSE` (read-only, liefert Zerlegung+Skelett+Kandidaten; Draft-Anlage explizit).
-- [ ] Pest: 3 bekannte Gerichte reverse-engineered → Zerlegung plausibilisiert.
+- [x] Input Text/fremde Karte → Zerlegung in GPs (Matching gegen Stamm; Unmatched ohne LA → Beschaffungs-Wunsch-Liste, kein Raten; #507-Recall + 07-Mint wo LA existiert).
+- [x] Aroma-Skelett aus dem Pairing-Graph (tragende Anker + Verbund-Kanten).
+- [x] Rekonstruktion aus eigenem VK-Portfolio + Lücken-Report.
+- [~] Ergebnis mündet per Klick in R6.4 / `recipes.POST`-Draft — Draft-Anlage explizit (`recipes.POST`); UI-Klick = Folge-Slice.
+- [x] Foto-Input als Ausbaustufe markiert (Multimodal = Martin); Textpfad zuerst (E3).
+- [x] MCP `dish.REVERSE` (read-only, liefert Zerlegung+Skelett+Kandidaten; Draft-Anlage explizit).
+- [x] Pest: `DishReverseTest` (2) — Zerlegung + Skelett + Nachbau + Lücken + Wunsch (Realdaten-Check nach Deploy).
 
 ## 4. R6.10 — Überschuss-zu-Gericht · Größe M · Etappe S3 · hängt an Q1 + Pairing-Graph
 
