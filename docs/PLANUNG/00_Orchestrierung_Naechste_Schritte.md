@@ -146,7 +146,9 @@ Phase 1: 07·M1 (Keystone) → 07·M2 ; 06·H1/H2        [blocker-frei]
 - **14** ✅ — Lieferanten-Management R9 (KOMPLETT 2026-07-19: Engine+MCP+UI; `SupplierDetail`-Modal + GP-Lead-Override-Begründung; Volumen nur Nutzungs-Proxy, echtes Spend = Q2).
 - *(Q4/Q5 Wissens-+Graph-Fundament → lebt in `_FoodBrain_Docs/`, kein eigenes Spec-File. GEPARKT/nicht-Kern: R5 Compliance · N Nachbar-Modul · A Academy.)*
 
-**Damit sind die Kern-Funktionen vollständig als Einzeldateien extrahiert (01–14).** Die ROADMAP im Modul-Repo bleibt vorerst unverändert (team-facing); Eindampfen auf eine schlanke Spine = separater, abgesprochener Schritt.
+- **15** ⚪ — Semantische Suche über Lieferantenartikel (Supplier-Item-Pool) — RAG-Nachzug (aus Frage „RAG auf Lieferanten/Sortiment?" 2026-07-19): neuer `supplier_item`-Pool + Observer + Retrieval; setzt #507-Go-Live voraus; Master-Backfill = größter Pool.
+
+**Damit sind die Kern-Funktionen vollständig als Einzeldateien extrahiert (01–14, +15 RAG-Nachzug).** Die ROADMAP im Modul-Repo bleibt vorerst unverändert (team-facing); Eindampfen auf eine schlanke Spine = separater, abgesprochener Schritt.
 - Memory: `project_fa_507_semantic_search`, `_la_first_gp_mint`, `_convenience_highlights`, `_planungs_kreativ_ebene`, `feedback_fa_composer_update_procedure` — alle in `MEMORY.md`.
 
 **Planungs-Runde 2026-07-19:** alle sechs ⚪-Dossiers (09–14) via Code-Kartierung auf 🟢 bau-reif (bzw. 🟡 mit benanntem Blocker) gehoben — jede Spec trägt jetzt eine „Code-Kartierung"-Sektion (Datei:Zeile), fixierte Entscheidungen (E1…), Etappen mit Größe + geschärfte DoD + Reuse-vs-Neu-Tabelle. Damit ist der ganze Ordner 01–14 bau-fähig. **Rest-Blocker nur noch 08** (LLM-Provider live für die Konvergenz-Qualität; Bau gegen Fake-Provider trotzdem möglich). **11 ist seit 2026-07-19 blocker-frei** — der vermeintliche „Chem-Import"-Blocker war eine Fehlannahme, die Chem-/Pairing-Tabellen sind an der Dev-DB als voll befüllt verifiziert. **09 (R6.8/6.9/6.10) + 14 (R9 inkl. UI) ✅ komplett 2026-07-19.** Nächste blocker-freie Bau-Kandidaten: **11·S1 (Hypothesen-Modus)**, **12·S2 (R2.4-Solver)**, **13·S1 (Kanal-B-Import)**.
