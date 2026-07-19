@@ -25,10 +25,11 @@ class KnowledgeHypothesizeTool extends FoodAlchemistTool implements ToolContract
     public function getDescription(): string
     {
         return 'Hypothesen-Modus (R&D, read-only): schlägt zu einem Grundprodukt (gp_id) oder '
-            . 'Aroma-Anker (anchor = Slug/Name) ungewöhnliche Pairing-Kandidaten vor, gerankt nach '
-            . 'GETEILTEN Compound-Klassen (Aroma-key_components + Molekül-chem_class), je mit Mechanismus. '
-            . 'Jede Zeile ist als Hypothese (Evidenz-Stufe T3) markiert, kein Fakt; ist_etabliert=true = '
-            . 'im Pairing-Graph bereits bekannt. gp_id vorher per foodalchemist.gps.SEARCH ermitteln.';
+            . 'Aroma-Anker (anchor = Slug/Name) ungewöhnliche Pairing-Kandidaten vor. mode="harmonie" '
+            . '(Default) rankt nach GETEILTEN Compound-Klassen (Aroma-Verwandtschaft); mode="kontrast" '
+            . 'rankt nach Geschmacks-GEGENSATZ (Spannung: Fett↔Säure, Süß↔Bitter …) + liefert die '
+            . 'kuratierten kontrast-Kanten. Jede Zeile ist Hypothese (Evidenz-Stufe T3), kein Fakt; '
+            . 'ist_etabliert=true = im Graph bereits bekannt. gp_id vorher per foodalchemist.gps.SEARCH.';
     }
 
     public function getSchema(): array
@@ -38,6 +39,7 @@ class KnowledgeHypothesizeTool extends FoodAlchemistTool implements ToolContract
             'properties' => [
                 'gp_id' => ['type' => 'integer', 'description' => 'Quell-Grundprodukt (sichtbar im Team)'],
                 'anchor' => ['type' => 'string', 'description' => 'Alternativ: Aroma-Anker als Slug oder Name (z. B. "erdbeere")'],
+                'mode' => ['type' => 'string', 'enum' => ['harmonie', 'kontrast'], 'default' => 'harmonie', 'description' => 'harmonie = geteilte Aromen; kontrast = Geschmacks-Gegensatz'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 12],
             ],
         ];
@@ -68,7 +70,11 @@ class KnowledgeHypothesizeTool extends FoodAlchemistTool implements ToolContract
             return ToolResult::error('gp_id oder anchor angeben.', 'BAD_INPUT');
         }
 
-        return ToolResult::success($svc->hypothesizeFor($source, $limit));
+        $mode = ($arguments['mode'] ?? 'harmonie') === 'kontrast' ? 'kontrast' : 'harmonie';
+
+        return ToolResult::success($mode === 'kontrast'
+            ? $svc->contrastHypothesesFor($source, $limit)
+            : $svc->hypothesizeFor($source, $limit));
     }
 
     public function getMetadata(): array

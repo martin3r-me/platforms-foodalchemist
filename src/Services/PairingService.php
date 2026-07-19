@@ -1397,18 +1397,12 @@ class PairingService
         $limit = max(1, min(50, $limit));
 
         // 1) Quell-Anker auflösen (GP → kern-Anker; oder direkter Anker).
-        if (isset($source['gp'])) {
-            $anchorIds = $this->gpAnkers((int) $source['gp'])->pluck('id')->map(fn ($v) => (int) $v)->all();
-            $srcName = DB::table('foodalchemist_gps')->where('id', (int) $source['gp'])->value('name');
-            $srcMeta = ['typ' => 'gp', 'id' => (int) $source['gp'], 'name' => $srcName];
-        } elseif (isset($source['anchor'])) {
-            $anchorIds = [(int) $source['anchor']];
-            $a = DB::table('foodalchemist_vocab_pairing_anchors')->where('id', (int) $source['anchor'])->first(['slug', 'display_de']);
-            $srcMeta = ['typ' => 'anchor', 'id' => (int) $source['anchor'], 'name' => $a?->display_de ?? $a?->slug];
-        } else {
+        $resolved = $this->resolveSource($source);
+        if ($resolved === null) {
             return ['source' => [], 'methode' => 'none', 'hypothesen' => [], 'hinweis' => 'Keine Quelle (gp/anchor) angegeben.'];
         }
-        $anchorIds = array_values(array_unique(array_filter($anchorIds)));
+        $anchorIds = $resolved['anchorIds'];
+        $srcMeta = $resolved['meta'];
         if ($anchorIds === []) {
             return ['source' => $srcMeta, 'methode' => 'none', 'hypothesen' => [],
                 'hinweis' => 'Quelle hat keine kern-Anker — kein Hypothesen-Ranking möglich.'];
@@ -1509,6 +1503,151 @@ class PairingService
                 . 'Mechanismus = geteilte Aroma-/Molekül-Klassen aus den Daten (ingredient_key_component / molecules.chem_class). '
                 . 'ist_etabliert=true ⇒ die Paarung ist im Graphen bereits bekannt (nicht „ungewöhnlich").',
         ];
+    }
+
+    // ── R6.11 · S4: Kontrast-Hypothesen (read-only, 2026-07-19) ──────────
+    // Der zweite offensive Zug: „paar mir X über SPANNUNG statt Verwandtschaft".
+    // Aroma-Harmonie (hypothesizeFor) findet nur geteilte Moleküle — Kontrast ist das
+    // Gegenteil und für nicht-negative Aroma-Vektoren mathematisch unsichtbar. Darum
+    // zwei geerdete Quellen: (1) die kuratierten `kontrast`-Kanten (T0, bewährt), (2)
+    // generativ über den 7-Achsen-GESCHMACKS-Vektor entlang kulinarischer Gegensatz-
+    // Paare (Fett↔Säure, Süß↔Bitter … = Lehrbuch/Buch-Kontrast-Layer, keine Erfindung).
+
+    /**
+     * Kulinarische Gegensatz-Paare (undirektional) über die 7 Geschmacks-Achsen.
+     * Quelle: Foodpairing-Kontrast-Layer (Buch S.36) + Küchen-Grundlagen (Säure
+     * schneidet Fett, Süße mildert Bitter/Schärfe, süß-salzig/süß-sauer-Spannung).
+     *
+     * @var list<array{0:string,1:string}>
+     */
+    private const GESCHMACK_GEGENSATZ = [
+        ['fettig', 'sauer'], ['fettig', 'scharf'], ['suess', 'bitter'],
+        ['suess', 'scharf'], ['suess', 'salzig'], ['suess', 'sauer'], ['umami', 'sauer'],
+    ];
+
+    /**
+     * Kontrast-Hypothesen zu einer Quelle (GP/Anker): kuratierte kontrast-Kanten (T0)
+     * + generative Kandidaten nach Geschmacks-Gegensatz (T3). Ergebnis ist markierte
+     * Spekulation, nie Fakt.
+     *
+     * @param  array{gp?:int, anchor?:int}  $source
+     * @return array{source:array, methode:string, kuratiert:list<array>, hypothesen:list<array>, hinweis:string}
+     */
+    public function contrastHypothesesFor(array $source, int $limit = 12): array
+    {
+        $limit = max(1, min(50, $limit));
+        $resolved = $this->resolveSource($source);
+        if ($resolved === null) {
+            return ['source' => [], 'methode' => 'none', 'kuratiert' => [], 'hypothesen' => [], 'hinweis' => 'Keine Quelle (gp/anchor) angegeben.'];
+        }
+        $anchorIds = $resolved['anchorIds'];
+        $srcMeta = $resolved['meta'];
+        if ($anchorIds === []) {
+            return ['source' => $srcMeta, 'methode' => 'none', 'kuratiert' => [], 'hypothesen' => [],
+                'hinweis' => 'Quelle hat keine kern-Anker — kein Kontrast-Ranking möglich.'];
+        }
+
+        // (1) Kuratierte kontrast-Kanten — bewährte Gegensätze, bisher offensiv ungenutzt.
+        $kuratiert = [];
+        $kontrastPartner = [];
+        foreach (DB::table('foodalchemist_pairing_anchor_edges AS e')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
+            ->whereIn('e.anchor_a_id', $anchorIds)->where('e.type', 'kontrast')
+            ->whereNotIn('e.anchor_b_id', $anchorIds)->whereNull('a.deleted_at')
+            ->distinct()->get(['a.id', 'a.slug', 'a.display_de']) as $r) {
+            $kontrastPartner[(int) $r->id] = true;
+            $kuratiert[] = ['anchor_id' => (int) $r->id, 'slug' => $r->slug, 'display_de' => $r->display_de,
+                'typ' => 'kontrast', 'evidenz_tier' => 'T0'];
+        }
+
+        // (2) Generativ über Geschmacks-Gegensatz.
+        $srcTaste = $this->aggregatedTaste($anchorIds);
+        $methode = array_sum($srcTaste) > 0 ? 'kontrast_geschmack' : 'nur_kuratiert';
+        $hypothesen = [];
+        if ($methode === 'kontrast_geschmack') {
+            $rows = DB::table('foodalchemist_anchor_taste_vectors AS t')
+                ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 't.anchor_id')
+                ->whereNotIn('t.anchor_id', $anchorIds)->whereNull('a.deleted_at')
+                ->get(array_merge(['t.anchor_id', 'a.slug', 'a.display_de'], self::TASTE_ACHSEN));
+            $scored = [];
+            foreach ($rows as $r) {
+                if (in_array($r->slug, self::NICHT_ZUTAT_ANKER, true)) {
+                    continue;   // Prozess/Neutral sind keine Kontrast-Partner
+                }
+                $cand = [];
+                foreach (self::TASTE_ACHSEN as $ax) {
+                    $cand[$ax] = (float) $r->$ax;
+                }
+                [$score, $achsen] = $this->contrastScore($srcTaste, $cand);
+                if ($score <= 0) {
+                    continue;
+                }
+                $scored[] = ['anchor_id' => (int) $r->anchor_id, 'slug' => $r->slug, 'display_de' => $r->display_de,
+                    'score' => round($score, 3), 'opponierende_achsen' => $achsen,
+                    'mechanismus' => 'Spannung über: ' . implode(', ', array_slice($achsen, 0, 4)),
+                    'ist_etabliert' => isset($kontrastPartner[(int) $r->anchor_id]),
+                    'evidenz_tier' => 'T3'];
+            }
+            usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
+            $hypothesen = array_slice($scored, 0, $limit);
+        }
+
+        $srcMeta['geschmack'] = $srcTaste;
+
+        return [
+            'source' => $srcMeta,
+            'methode' => $methode,
+            'kuratiert' => $kuratiert,
+            'hypothesen' => $hypothesen,
+            'hinweis' => 'Kontrast = Paarung durch SPANNUNG (Gegensatz), nicht Verwandtschaft. '
+                . 'kuratiert = bewährte kontrast-Kanten (T0); hypothesen = generative Geschmacks-Gegensätze (T3, markierte Spekulation). '
+                . ($methode === 'nur_kuratiert' ? 'Quelle ohne Geschmacks-Vektor → nur kuratierte Kontraste.' : ''),
+        ];
+    }
+
+    /**
+     * Kontrast-Score zweier 7-Achsen-Geschmacksvektoren entlang der Gegensatz-Paare:
+     * belohnt „Quelle stark auf x ⊕ Kandidat stark auf gegensätzlicher y" (und umgekehrt).
+     * Harmonie/identisch → 0. @return array{0:float, 1:list<string>} score + beteiligte Achsen.
+     */
+    private function contrastScore(array $src, array $cand): array
+    {
+        $score = 0.0;
+        $achsen = [];
+        foreach (self::GESCHMACK_GEGENSATZ as [$x, $y]) {
+            $vorwaerts = ($src[$x] ?? 0.0) * ($cand[$y] ?? 0.0);
+            $rueckwaerts = ($src[$y] ?? 0.0) * ($cand[$x] ?? 0.0);
+            $beitrag = $vorwaerts + $rueckwaerts;
+            if ($beitrag > 0.05) {   // Rausch-Schwelle: nur nennenswerte Spannung
+                $score += $beitrag;
+                $achsen[] = $vorwaerts >= $rueckwaerts ? "{$x}↔{$y}" : "{$y}↔{$x}";
+            }
+        }
+
+        return [$score, $achsen];
+    }
+
+    /**
+     * Quell-Anker + Meta aus {gp:id}|{anchor:id} auflösen (geteilt von Harmonie- und
+     * Kontrast-Hypothesen). @return array{anchorIds:list<int>, meta:array}|null
+     */
+    private function resolveSource(array $source): ?array
+    {
+        if (isset($source['gp'])) {
+            $ids = $this->gpAnkers((int) $source['gp'])->pluck('id')->map(fn ($v) => (int) $v)->all();
+            $name = DB::table('foodalchemist_gps')->where('id', (int) $source['gp'])->value('name');
+            $meta = ['typ' => 'gp', 'id' => (int) $source['gp'], 'name' => $name];
+        } elseif (isset($source['anchor'])) {
+            $ids = [(int) $source['anchor']];
+            $a = DB::table('foodalchemist_vocab_pairing_anchors')->where('id', (int) $source['anchor'])->first(['slug', 'display_de']);
+            $meta = ['typ' => 'anchor', 'id' => (int) $source['anchor'], 'name' => $a?->display_de ?? $a?->slug];
+        } else {
+            return null;
+        }
+        $ids = array_values(array_unique(array_filter($ids)));
+        $meta['anchor_ids'] = $ids;
+
+        return ['anchorIds' => $ids, 'meta' => $meta];
     }
 
     /** anchor_id → ingredient_id (memoierbar; hier direkt, da selten je Aufruf). */

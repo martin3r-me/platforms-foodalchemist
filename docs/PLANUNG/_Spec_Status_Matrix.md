@@ -15,7 +15,7 @@
 | **08** | Planungs-/Kreativ-Ebene (Doppel-Diamant) | ⚪ ungebaut | Bau gegen Fake möglich; **Konvergenz-Qualität braucht LLM-Provider live** (einziger echter Rest-Blocker im Ordner) |
 | **09** | Pairing-Offense-Trio (R6.8/6.9/6.10) | ✅ **KOMPLETT gebaut** | R6.10 *produktiv* = Q1-Contract (extern/N-Track) |
 | **10** | Angebots-Funnel / Brief-Parser R6.2 | 🟢 bau-reif | Bau gegen Fake möglich; scharf erst **nach #492-Blindtest** (Key live) |
-| **11** | Hypothesen-/Widerspruchs-Modus R6.11 | ✅ **S1–S3 gebaut 2026-07-19** | E5 verifiziert. S1 Hypothesen-Modus · S2 Widerspruchs-Detektor · S3 Lab-Notes-Senke; 3 MCP-Tools, 10 Pest. Einziger Rest = optionales KI-Narrativ (Provider) |
+| **11** | Hypothesen-/Widerspruchs-Modus R6.11 | ✅ **S1–S4 gebaut 2026-07-19** | E5 verifiziert. S1 Hypothesen (Aroma-Harmonie) · S2 Widerspruchs-Detektor · S3 Lab-Notes-Senke · S4 Kontrast-Hypothesen (Geschmacks-Gegensatz + kuratierte kontrast-Kanten); 3 MCP-Tools, 14 Pest. Einziger Rest = optionales KI-Narrativ (Provider) |
 | **12** | Wirtschaftlichkeits-Intelligenz R2-Rest | R2.5 ✅ · R2.4 🟢 · R2.3 🟡 | **R2.4-Solver blocker-frei baubar**; R2.3 gated auf **Q2-Format-Spec** |
 | **13** | Preis-/Katalog-Ingest Q2 | Kanal-B 🟢 · Sales-Ist 🟡 · Kanal-A ⚪ | **Kanal-B-Import blocker-frei baubar** (bewusst hinten angestellt); Sales-Ist gated auf echte Beispieldatei; Kanal A extern |
 | **14** | Lieferanten-Management R9 | ✅ **KOMPLETT** (Engine+MCP+UI, `1382fc2`) | echtes Spend = Q2 (Nutzungs-Proxy ist v1) |
