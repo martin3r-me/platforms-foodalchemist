@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Services\BulkEnrichService;
 use Platform\FoodAlchemist\Services\MatchService;
 use Platform\FoodAlchemist\Services\SignalDetektorService;
 use Platform\FoodAlchemist\Services\SignalService;
+use Platform\FoodAlchemist\Services\TerminologyService;
 
 /**
  * M9-03 / V-10: Review-Queue — EINE «Zu prüfen»-Seite für alles, was eine
@@ -33,6 +34,16 @@ class ReviewQueue extends Component
 
     #[Url(as: 'sig_typ')]
     public string $signalTyp = '';
+
+    // E7-c (#507): Terminologie-Lernschleife — der Kurator lehrt beim Review neue
+    // Aliase/Anti-Marker, die SOFORT ins Matching einfließen (globaler Master, kein Deploy).
+    public string $termAlias = '';
+
+    public string $termTrigger = '';
+
+    public string $termForbid = '';
+
+    public string $termUnless = '';
 
     public function matchUebernehmen(int $proposalId): void
     {
@@ -69,6 +80,31 @@ class ReviewQueue extends Component
     public function signalWiederOeffnen(int $id): void
     {
         $this->aktion(fn ($team) => app(SignalService::class)->wiederOeffnen($team, $id), 'Signal wieder geöffnet.');
+    }
+
+    // ── E7-c: Terminologie lernen (Lernschleife-Senke) ─────────────────────
+
+    /** Alias-Gruppe aus kommagetrennten Phrasen anlegen (≥2). */
+    public function terminologieAlias(): void
+    {
+        $members = array_map('trim', explode(',', $this->termAlias));
+        $this->aktion(function () use ($members) {
+            $row = app(TerminologyService::class)->createAlias($members, null, 'reviewqueue');
+            $this->termAlias = '';
+
+            return $row;
+        }, 'Alias gelernt — wirkt sofort im Matching.');
+    }
+
+    /** Anti-Marker anlegen: bei "trigger" den Kandidaten "forbid" sperren (außer "unless"). */
+    public function terminologieAntiMarker(): void
+    {
+        $this->aktion(function () {
+            $row = app(TerminologyService::class)->createAntiMarker($this->termTrigger, $this->termForbid, $this->termUnless, null, 'reviewqueue');
+            $this->termTrigger = $this->termForbid = $this->termUnless = '';
+
+            return $row;
+        }, 'Anti-Marker gelernt — Verwechslung ist gesperrt.');
     }
 
     /** Detektor manuell anstoßen (sonst via Scheduler/Command). */

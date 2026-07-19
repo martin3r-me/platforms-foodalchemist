@@ -131,6 +131,39 @@
             @endforelse
         </div>
 
+        {{-- 1b. Terminologie lernen (E7-c, #507) — Kurator lehrt Aliase/Anti-Marker,
+             die SOFORT ins Matching einfließen (globaler Master, kein Deploy) --}}
+        <div class="relative overflow-hidden {{ $card }} px-5 py-4" data-rq-terminologie>
+            <h3 class="font-medium tracking-tight text-gray-900 mb-1">🧠 Terminologie lernen</h3>
+            <p class="text-[11px] text-gray-500 mb-2">Passt ein Vorschlag nur wegen eines Synonyms/Dialekts nicht — oder trifft er eine Verwechslung? Hier lehren; wirkt sofort im nächsten Matching (kein Deploy).</p>
+
+            <div class="grid gap-3 md:grid-cols-2">
+                {{-- Alias-Gruppe --}}
+                <div class="border border-black/5 rounded-lg p-3">
+                    <p class="text-[11px] font-medium text-gray-700 mb-1">Alias-Gruppe <span class="text-gray-400">(Synonyme, kommagetrennt, ≥2)</span></p>
+                    <div class="flex items-center gap-2">
+                        <input type="text" wire:model="termAlias" wire:keydown.enter="terminologieAlias"
+                               placeholder="paradeiser, tomate" class="min-w-0 flex-1 border border-black/10 rounded px-2 py-1 text-[11px]" data-rq-term-alias-input>
+                        <button type="button" wire:click="terminologieAlias" wire:loading.attr="disabled" wire:target="terminologieAlias"
+                                class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-rq-term-alias-save>Lernen</button>
+                    </div>
+                </div>
+
+                {{-- Anti-Marker --}}
+                <div class="border border-black/5 rounded-lg p-3">
+                    <p class="text-[11px] font-medium text-gray-700 mb-1">Anti-Marker <span class="text-gray-400">(Verwechslung sperren)</span></p>
+                    <div class="flex items-center gap-1.5">
+                        <input type="text" wire:model="termTrigger" placeholder="brie" class="min-w-0 w-20 border border-black/10 rounded px-2 py-1 text-[11px]" title="Query-Token">
+                        <span class="text-gray-400 text-[11px] shrink-0">↛</span>
+                        <input type="text" wire:model="termForbid" placeholder="bries" class="min-w-0 w-20 border border-black/10 rounded px-2 py-1 text-[11px]" title="zu sperrendes Kandidaten-Token">
+                        <input type="text" wire:model="termUnless" placeholder="außer: bries" class="min-w-0 flex-1 border border-black/10 rounded px-2 py-1 text-[11px]" title="Guard-Token (optional)">
+                        <button type="button" wire:click="terminologieAntiMarker" wire:loading.attr="disabled" wire:target="terminologieAntiMarker"
+                                class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-rq-term-anti-save>Sperren</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {{-- 2. KI-Vorschläge aus Bulk-Läufen (M7-06) --}}
         <div class="relative overflow-hidden {{ $card }} px-5 py-4" data-rq-bulks>
             <h3 class="font-medium tracking-tight text-gray-900 mb-1">

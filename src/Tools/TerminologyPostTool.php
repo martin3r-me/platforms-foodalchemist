@@ -6,8 +6,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
-use Platform\FoodAlchemist\Models\FoodAlchemistTerminologyAlias;
-use Platform\FoodAlchemist\Models\FoodAlchemistTerminologyAntiMarker;
+use Platform\FoodAlchemist\Services\TerminologyService;
 
 /**
  * #507 Weg-2 · E7-b: einen Terminologie-Eintrag anlegen — Alias-Gruppe (Synonyme) ODER
@@ -53,40 +52,31 @@ class TerminologyPostTool extends FoodAlchemistTool implements ToolContract, Too
         }
         $kind = (string) ($arguments['kind'] ?? '');
         $note = trim((string) ($arguments['note'] ?? '')) ?: null;
+        $svc = app(TerminologyService::class);
 
-        if ($kind === 'alias') {
-            $members = array_values(array_filter(array_map(
-                fn ($m) => mb_strtolower(trim((string) $m)),
-                (array) ($arguments['members'] ?? [])
-            ), fn ($m) => $m !== ''));
-            $members = array_values(array_unique($members));
-            if (count($members) < 2) {
-                return ToolResult::error('Eine Alias-Gruppe braucht ≥2 verschiedene Phrasen.', 'INVALID');
+        try {
+            if ($kind === 'alias') {
+                $row = $svc->createAlias((array) ($arguments['members'] ?? []), $note, 'mcp');
+
+                return ToolResult::success(['kind' => 'alias', 'id' => $row->id, 'members' => $row->members]);
             }
-            $row = FoodAlchemistTerminologyAlias::create([
-                'team_id' => null, 'members' => $members, 'note' => $note,
-                'source' => 'mcp', 'created_via' => 'mcp',
-            ]);
 
-            return ToolResult::success(['kind' => 'alias', 'id' => $row->id, 'members' => $members]);
-        }
+            if ($kind === 'anti_marker') {
+                $row = $svc->createAntiMarker(
+                    (string) ($arguments['trigger'] ?? ''),
+                    (string) ($arguments['forbid'] ?? ''),
+                    (string) ($arguments['unless'] ?? ''),
+                    $note,
+                    'mcp',
+                );
 
-        if ($kind === 'anti_marker') {
-            $trigger = mb_strtolower(trim((string) ($arguments['trigger'] ?? '')));
-            $forbid = mb_strtolower(trim((string) ($arguments['forbid'] ?? '')));
-            $unless = mb_strtolower(trim((string) ($arguments['unless'] ?? ''))) ?: null;
-            if ($trigger === '' || $forbid === '') {
-                return ToolResult::error('anti_marker braucht trigger UND forbid.', 'INVALID');
+                return ToolResult::success([
+                    'kind' => 'anti_marker', 'id' => $row->id,
+                    'trigger' => $row->trigger_token, 'forbid' => $row->forbid_token, 'unless' => $row->unless_token,
+                ]);
             }
-            $row = FoodAlchemistTerminologyAntiMarker::create([
-                'team_id' => null, 'trigger_token' => $trigger, 'forbid_token' => $forbid,
-                'unless_token' => $unless, 'note' => $note, 'source' => 'mcp', 'created_via' => 'mcp',
-            ]);
-
-            return ToolResult::success([
-                'kind' => 'anti_marker', 'id' => $row->id,
-                'trigger' => $trigger, 'forbid' => $forbid, 'unless' => $unless,
-            ]);
+        } catch (\RuntimeException $e) {
+            return ToolResult::error($e->getMessage(), 'INVALID');
         }
 
         return ToolResult::error('kind muss "alias" oder "anti_marker" sein.', 'INVALID');

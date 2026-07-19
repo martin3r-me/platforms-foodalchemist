@@ -65,6 +65,52 @@ class TerminologyService
     }
 
     /**
+     * E7-c: eine Alias-Gruppe im globalen Master anlegen (Lernschleife-Senke — genutzt
+     * von MCP terminology.POST UND der ReviewQueue-UI, EINE Regel-Stelle). Wirkt sofort
+     * beim nächsten Matching. Wirft RuntimeException bei <2 Phrasen.
+     *
+     * @param  list<string>  $members
+     */
+    public function createAlias(array $members, ?string $note = null, string $via = 'manual'): FoodAlchemistTerminologyAlias
+    {
+        $clean = array_values(array_unique(array_filter(
+            array_map(fn ($m) => mb_strtolower(trim((string) $m)), $members),
+            fn ($m) => $m !== '',
+        )));
+        if (count($clean) < 2) {
+            throw new \RuntimeException('Eine Alias-Gruppe braucht ≥2 verschiedene Phrasen.');
+        }
+        $row = FoodAlchemistTerminologyAlias::create([
+            'team_id' => null, 'members' => $clean, 'note' => $note ?: null,
+            'source' => $via, 'created_via' => $via,
+        ]);
+        $this->aliasGroupsCache = null;
+
+        return $row;
+    }
+
+    /**
+     * E7-c: einen Anti-Marker im globalen Master anlegen (Lernschleife-Senke). Wirft
+     * RuntimeException, wenn trigger oder forbid leer ist.
+     */
+    public function createAntiMarker(string $trigger, string $forbid, ?string $unless = null, ?string $note = null, string $via = 'manual'): FoodAlchemistTerminologyAntiMarker
+    {
+        $trigger = mb_strtolower(trim($trigger));
+        $forbid = mb_strtolower(trim($forbid));
+        $unless = ($u = mb_strtolower(trim((string) $unless))) !== '' ? $u : null;
+        if ($trigger === '' || $forbid === '') {
+            throw new \RuntimeException('Ein Anti-Marker braucht trigger UND forbid.');
+        }
+        $row = FoodAlchemistTerminologyAntiMarker::create([
+            'team_id' => null, 'trigger_token' => $trigger, 'forbid_token' => $forbid,
+            'unless_token' => $unless, 'note' => $note ?: null, 'source' => $via, 'created_via' => $via,
+        ]);
+        $this->antiMarkerCache = null;
+
+        return $row;
+    }
+
+    /**
      * E7-b: Anti-Marker = Konstanten-Baseline ∪ DB-Zeilen (additiv, global). Graceful.
      *
      * @return list<array{trigger:string, forbid:string, unless?:string}>
