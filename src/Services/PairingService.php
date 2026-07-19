@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
 /**
@@ -944,6 +945,341 @@ class PairingService
         usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
 
         return array_slice($scored, 0, $limit);
+    }
+
+    // ── R6.8: Aroma-treue Substitution (read-only, 2026-07-19) ───────────
+    // Ersatz, der den GESCHMACK erhält — nicht nur den Preis senkt. Zwei vorhandene
+    // Basen kombiniert (kein Neubau der Mathematik): (1) Anker-Kanten-Überlappung —
+    // welche der Aroma-Brücken des Quell-GP trägt/erreicht der Kandidat (edgeBest über
+    // die gpAnkers beider Seiten); (2) Aroma-Vektor-Cosinus (14-Typ) der aggregierten
+    // GP-Aromaprofile. Bewusste Abweichung von der Spec-Notation »× Cosinus«: ein hartes
+    // Produkt würde das Ranking überall dort auf 0 kollabieren, wo Aroma-Vektoren fehlen
+    // (sie sind dünn — nur Anker mit ingredient_aroma_vector). Darum GRACEFUL gewichtete
+    // Mischung: nur Kanten wenn kein Vektor da ist, sonst 0.6·Kanten + 0.4·Cosinus. Manuell
+    // kuratierte Äquivalente (ComponentEquivalentService) werden geboostet (Inv. 3: manual
+    // gewinnt). Der eigentliche Tausch bleibt tauscheZutat (Allergen-/swap_locked-Guards dort).
+
+    private const SUBST_W_EDGE = 0.6;
+
+    private const SUBST_W_AROMA = 0.4;
+
+    /**
+     * Aggregierter 14-Typ-Aromavektor eines GP (Mittel über seine kern-Anker mit Vektor),
+     * aus einer vorgeladenen anchor_id→vec-Map. Null, wenn kein kern-Anker einen Vektor hat.
+     *
+     * @param  list<int>  $anchorIds
+     * @param  array<int, array{vec: list<float>}>  $aromaByAnchor
+     */
+    private function gpAromaVectorFromMap(array $anchorIds, array $aromaByAnchor): ?array
+    {
+        $sum = null;
+        $n = 0;
+        foreach ($anchorIds as $aid) {
+            if (! isset($aromaByAnchor[$aid])) {
+                continue;
+            }
+            $vec = $aromaByAnchor[$aid]['vec'];
+            $sum ??= array_fill(0, count(self::AROMA_TYPES), 0.0);
+            foreach ($vec as $i => $x) {
+                $sum[$i] += $x;
+            }
+            $n++;
+        }
+        if ($sum === null || $n === 0) {
+            return null;
+        }
+
+        return array_map(fn ($x) => $x / $n, $sum);
+    }
+
+    /** Listen-EK (indikativ) der Lead-LA eines GP — aktive Preiszeile (valid_to NULL). Null wenn keine. */
+    private function gpLeadListenEk(?int $leadLaId): ?float
+    {
+        if ($leadLaId === null) {
+            return null;
+        }
+        $p = DB::table('foodalchemist_prices')
+            ->where('supplier_item_id', $leadLaId)->whereNull('valid_to')->whereNull('deleted_at')
+            ->orderByDesc('id')->value('price');
+
+        return $p !== null ? (float) $p : null;
+    }
+
+    /**
+     * R6.8 — Aroma-treue Ersatz-GPs für einen Quell-GP, gerankt nach erhaltenem Geschmack.
+     * Optionaler Rezept-Kontext (recipe_ingredient_id) liefert zusätzlich das Kohäsions-Delta
+     * fürs Gesamtgericht + swap_locked-Status. Read-only.
+     *
+     * @return array{source: ?array, context: array, candidates: list<array>}
+     */
+    public function aromaTrueSubstitutes(Team $team, int $sourceGpId, int $limit = 8, ?int $recipeIngredientId = null): array
+    {
+        $context = ['recipe_ingredient_id' => null, 'recipe_id' => null, 'swap_locked' => false, 'base_cohesion' => null];
+        $recipe = null;
+
+        // Rezept-Kontext: Zutat auf Sichtbarkeit prüfen, gp_id daraus ableiten (überschreibt Param).
+        if ($recipeIngredientId !== null) {
+            $zutat = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::find($recipeIngredientId);
+            if ($zutat !== null
+                && FoodAlchemistRecipe::visibleToTeam($team)->whereKey($zutat->recipe_id)->exists()) {
+                if ($zutat->gp_id !== null) {
+                    $sourceGpId = (int) $zutat->gp_id;
+                }
+                $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find($zutat->recipe_id);
+                $context['recipe_ingredient_id'] = (int) $zutat->id;
+                $context['recipe_id'] = (int) $zutat->recipe_id;
+                $context['swap_locked'] = (bool) $zutat->swap_locked;
+            }
+        }
+
+        $sourceGp = FoodAlchemistGp::visibleToTeam($team)->find($sourceGpId);
+        if ($sourceGp === null) {
+            return ['source' => null, 'context' => $context, 'candidates' => []];
+        }
+
+        $sourceAnker = $this->gpAnkers($sourceGpId);
+        $sourceAnkerIds = $sourceAnker->pluck('id')->map(fn ($i) => (int) $i)->all();
+        $sourceSlugs = [];
+        foreach ($sourceAnker as $a) {
+            $sourceSlugs[(int) $a->id] = $a->display_de ?: $a->slug;
+        }
+
+        // ── Kandidaten-Pool: Aroma-Geschwister (teilen ≥1 Quell-Anker) ∪ gleiche Warengruppe
+        //    ∪ manuelle Äquivalente. Konservativ begrenzt; Rohware/Derivat/Platzhalter raus.
+        $poolIds = [];
+        if ($sourceAnkerIds !== []) {
+            foreach (DB::table('foodalchemist_gp_anchor_mappings')
+                ->whereIn('anchor_id', $sourceAnkerIds)->where('role', 'kern')->whereNull('deleted_at')
+                ->where('gp_id', '!=', $sourceGpId)->distinct()->pluck('gp_id') as $gid) {
+                $poolIds[(int) $gid] = true;
+            }
+        }
+        if ($sourceGp->commodity_group_code !== null) {
+            foreach (FoodAlchemistGp::visibleToTeam($team)
+                ->where('commodity_group_code', $sourceGp->commodity_group_code)
+                ->where('id', '!=', $sourceGpId)->limit(300)->pluck('id') as $gid) {
+                $poolIds[(int) $gid] = true;
+            }
+        }
+        $manuelleIds = [];
+        foreach (app(ComponentEquivalentService::class)->fuer($team, 'gp', $sourceGpId) as $eq) {
+            if ($eq->gegen_kind === 'gp' && $eq->gegen_id !== null) {
+                $poolIds[(int) $eq->gegen_id] = true;
+                $manuelleIds[(int) $eq->gegen_id] = true;
+            }
+        }
+        unset($poolIds[$sourceGpId]);
+
+        // Sichtbar + keine Derivate/Platzhalter; manuelle Äquivalente bleiben immer drin (kuratiert).
+        $poolModels = FoodAlchemistGp::visibleToTeam($team)->whereIn('id', array_keys($poolIds))
+            ->where(fn ($q) => $q
+                ->where(fn ($w) => $w->where('is_derivat', false)->where('is_platzhalter', false))
+                ->orWhereIn('id', array_keys($manuelleIds)))
+            ->get(['id', 'name', 'lead_la_supplier_item_id']);
+        if ($poolModels->isEmpty()) {
+            return ['source' => $this->substSourceOut($sourceGp, $sourceSlugs), 'context' => $context, 'candidates' => []];
+        }
+        $poolIdList = $poolModels->pluck('id')->map(fn ($i) => (int) $i)->all();
+
+        // Kandidaten-Anker in EINER Query gruppieren.
+        $candAnkerByGp = [];
+        foreach (DB::table('foodalchemist_gp_anchor_mappings AS m')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'm.anchor_id')
+            ->whereIn('m.gp_id', $poolIdList)->where('m.role', 'kern')->whereNull('m.deleted_at')
+            ->get(['m.gp_id', 'a.id', 'a.slug', 'a.display_de']) as $row) {
+            $candAnkerByGp[(int) $row->gp_id][] = ['id' => (int) $row->id, 'label' => $row->display_de ?: $row->slug];
+        }
+
+        // Aroma-Vektoren (ein Query) + Kanten über die Anker-Union (ein Query).
+        $aromaByAnchor = $this->allAnchorAromaVectors();
+        $sourceAroma = $this->gpAromaVectorFromMap($sourceAnkerIds, $aromaByAnchor);
+        $unionAnker = $sourceAnkerIds;
+        foreach ($candAnkerByGp as $rows) {
+            foreach ($rows as $r) {
+                $unionAnker[] = $r['id'];
+            }
+        }
+        $kanten = $this->edgeBest(array_values(array_unique($unionAnker)));
+
+        // ── Scoring je Kandidat ──────────────────────────────────────────
+        $scored = [];
+        $nSource = max(1, count($sourceAnkerIds));
+        foreach ($poolModels as $cand) {
+            $cid = (int) $cand->id;
+            $candAnker = $candAnkerByGp[$cid] ?? [];
+            $candIds = array_map(fn ($r) => $r['id'], $candAnker);
+
+            $erhalten = [];
+            $verloren = [];
+            foreach ($sourceAnkerIds as $sa) {
+                $keep = in_array($sa, $candIds, true);
+                if (! $keep) {
+                    foreach ($candIds as $ca) {
+                        if (isset($kanten[$sa][$ca]) && $kanten[$sa][$ca][0] > 0) {
+                            $keep = true;
+                            break;
+                        }
+                    }
+                }
+                $label = $sourceSlugs[$sa] ?? (string) $sa;
+                if ($keep) {
+                    $erhalten[] = $label;
+                } else {
+                    $verloren[] = $label;
+                }
+            }
+            $edgeOverlap = round(count($erhalten) / $nSource, 4);
+
+            $candAroma = $this->gpAromaVectorFromMap($candIds, $aromaByAnchor);
+            $aromaCos = ($sourceAroma !== null && $candAroma !== null)
+                ? round($this->vecCos($sourceAroma, $candAroma), 4) : null;
+
+            $flavorScore = $aromaCos !== null
+                ? round(self::SUBST_W_EDGE * $edgeOverlap + self::SUBST_W_AROMA * $aromaCos, 4)
+                : $edgeOverlap;
+
+            $isManual = isset($manuelleIds[$cid]);
+            // Rein-lexikalische Warengruppen-Nachbarn ohne jede Aroma-Beziehung fliegen raus
+            // (kein Ersatz-Vorschlag »ins Blaue«) — manuelle Äquivalente bleiben immer.
+            if (! $isManual && $flavorScore <= 0.0) {
+                continue;
+            }
+
+            $scored[] = [
+                'gp_id' => $cid,
+                'name' => $cand->name,
+                'lead_la_supplier_item_id' => $cand->lead_la_supplier_item_id !== null ? (int) $cand->lead_la_supplier_item_id : null,
+                'flavor_score' => $flavorScore,
+                'edge_overlap' => $edgeOverlap,
+                'aroma_cos' => $aromaCos,
+                'erhaltene_bruecken' => $erhalten,
+                'verlorene_bruecken' => $verloren,
+                'is_manual_equiv' => $isManual,
+                'candidate_anchor_ids' => $candIds,
+            ];
+        }
+
+        // Sortierung: kuratiert zuerst, dann Aroma-Treue, dann meiste erhaltene Brücken, dann Name.
+        usort($scored, fn ($a, $b) => [
+            $b['is_manual_equiv'], $b['flavor_score'], count($b['erhaltene_bruecken']), $a['name'],
+        ] <=> [
+            $a['is_manual_equiv'], $a['flavor_score'], count($a['erhaltene_bruecken']), $b['name'],
+        ]);
+        $scored = array_slice($scored, 0, max(1, $limit));
+
+        // ── Anreicherung nur der Top-N (teure Schritte: Allergene, Preis, Kohäsion) ──
+        $agg = app(GpAggregateService::class);
+        $sourceAllergene = $agg->allergene($sourceGp);
+        $sourceEk = $this->gpLeadListenEk($sourceGp->lead_la_supplier_item_id !== null ? (int) $sourceGp->lead_la_supplier_item_id : null);
+
+        if ($recipe !== null) {
+            $context['base_cohesion'] = $this->recipeCohesion($recipe)['score'];
+        }
+
+        $candidates = [];
+        foreach ($scored as $c) {
+            // Voll-Model (poolModels trägt nur id/name/lead — Allergen-Spalten fehlen dort).
+            $candGp = FoodAlchemistGp::find($c['gp_id']);
+            if ($candGp === null) {
+                continue;
+            }
+
+            // Allergen-Neuberechnung VOR Tausch: was der Kandidat NEU/STÄRKER einbringt.
+            $candAllergene = $agg->allergene($candGp);
+            $allergenWarn = [];
+            foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
+                $cv = $candAllergene[$feld]['value'] ?? null;
+                $sv = $sourceAllergene[$feld]['value'] ?? null;
+                if ($cv instanceof \Platform\FoodAlchemist\Enums\AllergenValue
+                    && in_array($cv, [\Platform\FoodAlchemist\Enums\AllergenValue::Enthalten, \Platform\FoodAlchemist\Enums\AllergenValue::Spuren], true)
+                    && ($sv === null || $cv->rank() > $sv->rank())) {
+                    $allergenWarn[$feld] = $cv->value;
+                }
+            }
+
+            // Cost-Achse (R6.3): indikativer Listen-EK der jeweiligen Lead-LA (NICHT mengennormalisiert).
+            $candEk = $this->gpLeadListenEk($c['lead_la_supplier_item_id']);
+            $cost = [
+                'source_listen_ek' => $sourceEk,
+                'candidate_listen_ek' => $candEk,
+                'guenstiger' => ($sourceEk !== null && $candEk !== null) ? ($candEk < $sourceEk) : null,
+                'hinweis' => 'indikativ: Listen-EK der Lead-LA, nicht mengennormalisiert',
+            ];
+
+            // Kohäsions-Delta fürs Gesamtgericht (nur mit Rezept-Kontext).
+            $kohaesionsDelta = null;
+            if ($recipe !== null && $context['base_cohesion'] !== null) {
+                $kohaesionsDelta = $this->substCohesionDelta(
+                    $recipe, $sourceGp->name, $sourceAnkerIds, $c['candidate_anchor_ids'], $context['base_cohesion']
+                );
+            }
+
+            $candidates[] = [
+                'gp_id' => $c['gp_id'],
+                'name' => $c['name'],
+                'flavor_score' => $c['flavor_score'],
+                'edge_overlap' => $c['edge_overlap'],
+                'aroma_cos' => $c['aroma_cos'],
+                'erhaltene_bruecken' => $c['erhaltene_bruecken'],
+                'verlorene_bruecken' => $c['verlorene_bruecken'],
+                'kohaesions_delta' => $kohaesionsDelta,
+                'is_manual_equiv' => $c['is_manual_equiv'],
+                'allergen_warnungen' => $allergenWarn,
+                'cost' => $cost,
+                'evidenz' => [
+                    'tier' => $c['is_manual_equiv'] ? 'kuratiert' : 'abgeleitet',
+                    'basis' => $c['is_manual_equiv'] ? 'manuelles Äquivalent' : 'Anker-Kanten' . ($c['aroma_cos'] !== null ? ' + Aroma-Vektor' : ''),
+                    'aroma_vektor' => $c['aroma_cos'] !== null,
+                ],
+            ];
+        }
+
+        return [
+            'source' => $this->substSourceOut($sourceGp, $sourceSlugs),
+            'context' => $context,
+            'candidates' => $candidates,
+        ];
+    }
+
+    /** @param array<int, string> $sourceSlugs */
+    private function substSourceOut(FoodAlchemistGp $gp, array $sourceSlugs): array
+    {
+        return ['gp_id' => (int) $gp->id, 'name' => $gp->name, 'anker' => array_values($sourceSlugs)];
+    }
+
+    /**
+     * Kohäsions-Delta: Teller-Score MIT Kandidat statt Quell-Komponente minus Basis-Score.
+     * Findet die zu ersetzende Komponente über den GP-Namen (Fallback: geteilter kern-Anker),
+     * tauscht deren Anker gegen die des Kandidaten, rechnet cohesionFor neu. Null wenn nicht gefunden.
+     *
+     * @param  list<int>  $sourceAnkerIds
+     * @param  list<int>  $candAnkerIds
+     */
+    private function substCohesionDelta(FoodAlchemistRecipe $recipe, string $sourceName, array $sourceAnkerIds, array $candAnkerIds, int $baseScore): ?int
+    {
+        $komponenten = $this->resolveRecipeAnchors($recipe);
+        $trefferIdx = null;
+        foreach ($komponenten as $i => $k) {
+            if ($k['label'] === $sourceName) {
+                $trefferIdx = $i;
+                break;
+            }
+        }
+        if ($trefferIdx === null) {
+            foreach ($komponenten as $i => $k) {
+                if ($k['kern'] !== null && in_array($k['kern'], $sourceAnkerIds, true)) {
+                    $trefferIdx = $i;
+                    break;
+                }
+            }
+        }
+        if ($trefferIdx === null || $candAnkerIds === []) {
+            return null;
+        }
+        $komponenten[$trefferIdx]['kern'] = $candAnkerIds[0];
+        $komponenten[$trefferIdx]['prozess'] = array_slice($candAnkerIds, 1);
+
+        return $this->cohesionFor($komponenten)['score'] - $baseScore;
     }
 
     // ── intern ───────────────────────────────────────────────────────────

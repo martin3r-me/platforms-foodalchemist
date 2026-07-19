@@ -275,6 +275,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeUpdateTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsSuggestTool::class,
+                    \Platform\FoodAlchemist\Tools\SubstitutionSuggestTool::class,
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)
                     \Platform\FoodAlchemist\Tools\ProcessAnchorsGroundTool::class,
                     // 06·H2: Convenience-Highlights kuratieren (MCP-Lockstep)

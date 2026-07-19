@@ -537,17 +537,19 @@ Die Zeilen-Funktionen des Zutaten-Editors (**⇄ Produkt tauschen, ♻ Äquivale
 - [ ] Warnungen im Concepter inline, mit Vorschlag aus `suggest` (Pairing-Graph)
 - [ ] Sensorik-Daten-Abdeckung als Ampel — Radar schweigt ehrlich bei dünner Datenlage statt zu raten
 
-### R6.8 Aroma-treue Substitution · Größe M · Hängt an: R6.3 (nutzt dessen Tausch-Strecke)
+### R6.8 Aroma-treue Substitution · Größe M · Hängt an: R6.3 (nutzt dessen Tausch-Strecke) · ✅ GEBAUT 2026-07-19
 
 Der Pairing-Graph offensiv: Ersatz, der den Geschmack *erhält*, nicht nur den Preis senkt.
 
 **DoD:**
-- [ ] Ersatz-GP nach Kanten-Überlappung im Anker-Graph gerankt, nicht nur nach Äquivalenz/Preis
-- [ ] Ausgabe zeigt: erhaltene vs. verlorene Aroma-Brücken + Kohäsions-Delta fürs Gesamtgericht
-- [ ] Mit R6.3-Kosten kombiniert: „billiger UND aroma-treu" vs. Trade-off sichtbar
-- [ ] Allergen-Neuberechnung im Vorschlag VOR Tausch (wie R6.3), `swap_locked` respektiert
-- [ ] MCP-Tool (`substitution.SUGGEST`, Modus `flavor`), read-only bis expliziter Tausch
-- [ ] Test: bekannter Klassiker-Tausch (z. B. Estragon↔Kerbel) rankt vor aroma-fernem, gleich teurem Ersatz
+- [x] Ersatz-GP nach Kanten-Überlappung im Anker-Graph gerankt, nicht nur nach Äquivalenz/Preis (`PairingService::aromaTrueSubstitutes`)
+- [x] Ausgabe zeigt: erhaltene vs. verlorene Aroma-Brücken + Kohäsions-Delta fürs Gesamtgericht (bei Rezept-Kontext)
+- [x] Mit R6.3-Kosten kombiniert: „billiger UND aroma-treu" vs. Trade-off sichtbar (`cost`-Block, mode=cost/both; indikativer Lead-LA-Listen-EK)
+- [x] Allergen-Neuberechnung im Vorschlag VOR Tausch (`GpAggregateService::allergene`-Diff → `allergen_warnungen`); `swap_locked` im Kontext gespiegelt
+- [x] MCP-Tool (`substitution.SUGGEST`, Modi `flavor|cost|both`), read-only; eigentlicher Tausch bleibt `tauscheZutat`
+- [x] Test: Klassiker-Tausch Estragon↔Kerbel rankt vor aroma-fernem, gleich teurem Ersatz (`AromaSubstitutionTest`, 3 Pest)
+
+> **Bewusste v1-Abweichungen (verify-before-claiming):** (1) Ranking = graceful gewichtete Mischung `0.6·Kanten + 0.4·Cosinus` statt hartes Produkt — sonst kollabiert das Ranking überall dort auf 0, wo Aroma-Vektoren fehlen (sie sind dünn). (2) `swap_locked` wird im Vorschlag *gemeldet*, aber `ComponentEquivalentService::tauscheZutat` trägt noch KEINEN harten Guard (bestehende R6.3-Lücke) → Follow-up. (3) Cost = indikativer Listen-EK der Lead-LA, NICHT mengennormalisiert.
 
 ### R6.9 Dish-Reverse-Engineering · Größe L · Hängt an: R1 (Portfolio zum Nachbauen)
 
@@ -811,6 +813,7 @@ Gleiches Muster wie der N-Track: FA liefert den **Warum-Motor** (`knowledge.EXPL
   - **#511 (a) Warnung:** unbepreiste Zutat (GP/Sub ohne auflösenden Preis) zeigt im Editor einen amber `⚠︎` je Zeile statt des stillen grauen „—" + eine Σ-Zeile „n von m Zutaten bepreist — EK unvollständig". Greift live beim ⇄/♻-Tausch (setzen `ek_pro_g=null`). Daten-Heilung selbst bleibt R0.3-Etappe-2 (Sourcing), kein Editor-Fix kann sie ersetzen — nur sichtbar machen.
   - **#509 Create-Parität:** `RecipeService::create` schreibt jetzt dieselben §4.2-Fachfelder wie `update()` (temperature/function/preparation/notes_manual/yield_pieces + Equipment-Sync) — Schluss mit dem stillen Datenverlust im Anlege-Modal. `RecipeModal::speichern` springt nach dem Anlegen nahtlos in den Edit-Modus (`ladeRezept($id)`, VkModal::anlegen-Muster) statt zu schließen → Zutaten/Deklaration/Darreichungen sofort befüllbar.
   - **Tests:** neu `IngredientSwapPropagationTest` (Server-Propagation, ID-Rückgabe, Event-Dispatch, F2-Warnung, F4 E2E durch den Livewire-Editor inkl. Eltern-EK ohne Reload) + `RecipeCreateParityTest` (Feld-Parität + Edit-Sprung). Kein Server-Recompute-Verhalten geändert (I8 Logging bleibt, I9 `vk_*` nie geschrieben).
+- 2026-07-19 (R6.8): **Aroma-treue Substitution GEBAUT (Pairing-Offense S1).** `PairingService::aromaTrueSubstitutes(team, gpId, limit, ?recipeIngredientId)` — Ersatz-GPs gerankt nach ERHALTENEM Geschmack: Anker-Kanten-Überlappung (welche Aroma-Brücken des Quell-GP der Kandidat trägt/erreicht, via `edgeBest` über beide `gpAnkers`) graceful gemischt mit dem 14-Typ-Aroma-Vektor-Cosinus (`0.6·Kanten + 0.4·Cosinus`; nur Kanten wenn kein Vektor — bewusst kein hartes Produkt, sonst Ranking-Kollaps bei dünnen Vektoren). Kandidaten-Pool = Aroma-Geschwister (≥1 geteilter Anker) ∪ gleiche Warengruppe ∪ manuelle Äquivalente (letztere geboostet, Inv. 3). Ausgabe je Kandidat: erhaltene/verlorene Brücken, `flavor_score`, `allergen_warnungen` (Diff via `GpAggregateService::allergene` VOR Tausch), `cost` (indikativer Lead-LA-Listen-EK, mode cost/both), `evidenz` (kuratiert/abgeleitet), `kohaesions_delta` (bei `recipe_ingredient_id`). MCP `foodalchemist.substitution.SUGGEST` (read-only, modes flavor|cost|both). 3 Pest (`AromaSubstitutionTest`) grün + 24 Pairing-Regression grün. Der eigentliche Tausch bleibt `tauscheZutat`. **Offen (Follow-up):** harter `swap_locked`-Guard in `tauscheZutat` (R6.3-Altlücke, aktuell nur gemeldet); Aroma-Vektor-Coverage (Q5); mengennormalisierter EK.
 - 2026-07-15 (Bug gemeldet): **IngredientEditor Zutaten-Tausch — Kaskade/Auto-Sync unvollständig (Dev-Modul-Issue).** Beim Tausch einer Zutat + Mengen-Anpassung im Editor treten ZWEI Dinge auf (beide user-bestätigt an Rezept `getreidesalat_bulgur_mit_berglinsen_und_cashews_2527`):
   - **(a) Daten:** `RecipeService::syncIngredients` persistiert beim Tausch nur den `gp_id` (`match_method='manual'`) und prüft NICHT auf einen auflösenden Preis → Tausch auf einen unbepreisten GP (hier „Petersilie glatt: frisch, ganz", einer der 661 „Lead ohne Preis" / 1.417 „ohne Lead") → Zutat bleibt unbepreist, EK partiell (7/8). **Fix:** GP-Preise heilen (Etappe 1 `lead-la-repick` / Etappe 2 GP-Lücken-Match) **+ Editor-Warnung** bei preislosem Tausch-Ziel (`IngredientEditor::ekFuerZiel()`=null → sichtbarer Hinweis statt stillem „—").
   - **(b) Propagation/UI:** nach dem Speichern aktualisieren sich EK / übergeordnete Gerichte nicht sichtbar. `syncIngredients` ruft zwar `recomputeAndPropagate()` (RecipeService:484), d.h. server-seitig läuft der Recompute + Eltern-Propagation — aber der **Live-Refresh im UI** (Detail-Panel/Eltern-Liste nach `recipe-gespeichert`/`recipe-selected`) greift nicht durch. **Fix:** reproduzieren (dieses Rezept + ein Eltern-VK-Gericht vorher/nachher), Refresh-/Event-Kette im IngredientEditor + Browser prüfen.

@@ -15,7 +15,8 @@
 | **07 (LA-First-Mint)** | ✅ **KOMPLETT M1–M4 (2026-07-18)** — Keystone geschlagen; Generator+Revise+MCP minten LA-First |
 | **05·P5 Prozessanker-Parser** | ✅ **GEBAUT 2026-07-19** (deterministisch; Command+Service+MCP+10 Pest; demo-Bulk-Apply = Deploy) |
 | **06 Convenience-Highlights** | ✅ **KOMPLETT H1–H4 (2026-07-19)** — Migration+Service+Screen+Command+2 MCP+opt-in-Modus+Picker-Filter, 14 Pest |
-| **Spec, ungebaut** | 03 (#512 L1–L8) · 08 (Planungs-/Kreativ-Ebene) |
+| **09·S1 R6.8 Aroma-Substitution** | ✅ **GEBAUT 2026-07-19** — `aromaTrueSubstitutes`+`substitution.SUGGEST`, 3 Pest + 24 Pairing-Regression grün (ungepusht → siehe Push-Schritt) |
+| **Spec, ungebaut** | 03 (#512 L1–L8) · 08 (Planungs-/Kreativ-Ebene) · 09·S2/S3 · 10 · 12 · 13 · 14 |
 
 ---
 
@@ -145,6 +146,6 @@ Phase 1: 07·M1 (Keystone) → 07·M2 ; 06·H1/H2        [blocker-frei]
 **Damit sind die Kern-Funktionen vollständig als Einzeldateien extrahiert (01–14).** Die ROADMAP im Modul-Repo bleibt vorerst unverändert (team-facing); Eindampfen auf eine schlanke Spine = separater, abgesprochener Schritt.
 - Memory: `project_fa_507_semantic_search`, `_la_first_gp_mint`, `_convenience_highlights`, `_planungs_kreativ_ebene`, `feedback_fa_composer_update_procedure` — alle in `MEMORY.md`.
 
-**Planungs-Runde 2026-07-19:** alle sechs ⚪-Dossiers (09–14) via Code-Kartierung auf 🟢 bau-reif (bzw. 🟡 mit benanntem Blocker) gehoben — jede Spec trägt jetzt eine „Code-Kartierung"-Sektion (Datei:Zeile), fixierte Entscheidungen (E1…), Etappen mit Größe + geschärfte DoD + Reuse-vs-Neu-Tabelle. Damit ist der ganze Ordner 01–14 bau-fähig (nur 08 + 11 tragen Rest-Blocker: LLM-Provider bzw. Chem-Import). Nächster Bau-Kandidat blocker-frei: **09·S1 (R6.8 Aroma-Substitution)**, **14·S1 (R9.1 Stammblatt)**, **12·S1 (R2.5)** oder **13·S1 (Kanal-B-Import)**.
+**Planungs-Runde 2026-07-19:** alle sechs ⚪-Dossiers (09–14) via Code-Kartierung auf 🟢 bau-reif (bzw. 🟡 mit benanntem Blocker) gehoben — jede Spec trägt jetzt eine „Code-Kartierung"-Sektion (Datei:Zeile), fixierte Entscheidungen (E1…), Etappen mit Größe + geschärfte DoD + Reuse-vs-Neu-Tabelle. Damit ist der ganze Ordner 01–14 bau-fähig (nur 08 + 11 tragen Rest-Blocker: LLM-Provider bzw. Chem-Import). **09·S1 (R6.8 Aroma-Substitution) ✅ gebaut 2026-07-19.** Nächster Bau-Kandidat blocker-frei: **14·S1 (R9.1 Stammblatt)**, **12·S1 (R2.5)**, **13·S1 (Kanal-B-Import)** oder **09·S2 (R6.9 Dish-Reverse, hängt an R1 ✅)**.
 
 *Erstellt 2026-07-18. Einstiegspunkt für die Fortsetzung. Reihenfolge = Abhängigkeit + Blocker-Status, nicht in Stein — bei neuem Signal (z.B. Blindtest, Kundendruck) neu priorisieren.*

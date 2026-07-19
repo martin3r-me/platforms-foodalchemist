@@ -43,9 +43,11 @@
 
 ---
 
-## 2. R6.8 — Aroma-treue Substitution · Größe M · Etappe S1
+## 2. R6.8 — Aroma-treue Substitution · Größe M · Etappe S1 · ✅ GEBAUT 2026-07-19
 
 Ersatz, der den **Geschmack erhält**, nicht nur den Preis senkt.
+
+> **Gebaut 2026-07-19:** `PairingService::aromaTrueSubstitutes()` + private `gpAromaVectorFromMap`/`gpLeadListenEk`/`substCohesionDelta` + MCP `SubstitutionSuggestTool` (registriert) + `AromaSubstitutionTest` (3 Pest, 24 Pairing-Regression grün). **Abweichung zu E2:** graceful `0.6·Kanten + 0.4·Cosinus` statt hartes Produkt (Vektoren zu dünn — hartes Produkt kollabiert das Ranking). **swap_locked** wird gemeldet, aber `tauscheZutat` hat noch keinen harten Guard (R6.3-Altlücke) → Follow-up. Cost = indikativer Lead-LA-Listen-EK (nicht mengennormalisiert).
 
 **Bau (code-verankert):**
 - `PairingService::aromaTrueSubstitutes(Team, int $gpId, int $limit=8): array` (neu, öffentlich) — Kandidaten-GPs rankt: `edgesFor`-Überlappung der `gpAnkers` des Quell-GP vs. Kandidat + `vecCos` der Aroma-Vektoren; Ausgabe je Kandidat `{gp_id, name, erhaltene_bruecken[], verlorene_bruecken[], kohaesions_delta, evidenz}`.
@@ -53,12 +55,12 @@ Ersatz, der den **Geschmack erhält**, nicht nur den Preis senkt.
 - MCP `substitution.SUGGEST` (neu, read-only) — `mode ∈ flavor|cost|both`, `gp_id`/`recipe_ingredient_id`.
 
 **DoD:**
-- [ ] Ersatz-GP nach Kanten-Überlappung + Aroma-Cosinus gerankt (nicht nur Äquivalenz/Preis).
-- [ ] Ausgabe: erhaltene vs. verlorene Aroma-Brücken + Kohäsions-Delta fürs Gesamtgericht (`cohesionFor`-Delta).
-- [ ] Mit R6.3-Kosten kombiniert: „billiger UND aroma-treu" vs. Trade-off sichtbar; `evidenz` je Vorschlag (E1).
-- [ ] Allergen-Neuberechnung im Vorschlag VOR Tausch; `swap_locked` respektiert (bestehende `tauscheZutat`-Guard).
-- [ ] MCP `substitution.SUGGEST` (Modus `flavor`), read-only bis expliziter Tausch (Tausch bleibt `tauscheZutat`).
-- [ ] Pest: Klassiker-Tausch (Estragon↔Kerbel) rankt vor aroma-fernem, gleich teurem Ersatz.
+- [x] Ersatz-GP nach Kanten-Überlappung + Aroma-Cosinus gerankt (nicht nur Äquivalenz/Preis).
+- [x] Ausgabe: erhaltene vs. verlorene Aroma-Brücken + Kohäsions-Delta fürs Gesamtgericht (`cohesionFor`-Delta).
+- [x] Mit R6.3-Kosten kombiniert: „billiger UND aroma-treu" vs. Trade-off sichtbar; `evidenz` je Vorschlag (E1).
+- [~] Allergen-Neuberechnung im Vorschlag VOR Tausch ✅; `swap_locked` **gemeldet** (harter `tauscheZutat`-Guard = Follow-up, R6.3-Altlücke).
+- [x] MCP `substitution.SUGGEST` (Modi `flavor|cost|both`), read-only bis expliziter Tausch (Tausch bleibt `tauscheZutat`).
+- [x] Pest: Klassiker-Tausch (Estragon↔Kerbel) rankt vor aroma-fernem, gleich teurem Ersatz.
 
 ## 3. R6.9 — Dish-Reverse-Engineering · Größe L · Etappe S2 · hängt an R1 ✅
 
