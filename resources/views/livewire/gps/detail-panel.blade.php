@@ -123,6 +123,25 @@
                 </div>
             @endif
 
+            {{-- R9.2 (E5): Lead-Steuerung — Override-Begründung + Vorschlag/Abweichung + Ausweichquellen; Grund-Feld speist leadSetzen(★). --}}
+            @if(($leadSteuerung ?? null) !== null && $gp->n_las_total > 0)
+                <div class="rounded-lg bg-black/[0.03] px-2.5 py-1.5 mb-2 text-[11px] space-y-1" data-lead-steuerung>
+                    @if($leadSteuerung['override_reason'])
+                        <p class="text-gray-700" data-lead-reason>Manueller Lead — Grund: <span class="text-gray-900">{{ $leadSteuerung['override_reason'] }}</span></p>
+                    @elseif($leadSteuerung['lead_gesetzt_la_id'] === null && $leadSteuerung['vorschlag_la_id'] !== null)
+                        <p class="text-gray-500">Kein manueller Lead — automatischer Vorschlag (günstigster/Stamm) greift.</p>
+                    @endif
+                    @if(count($leadSteuerung['ausweichquellen']) > 0)
+                        <p class="text-gray-500" data-ausweichquellen>{{ count($leadSteuerung['ausweichquellen']) }} Ausweichquelle(n): {{ collect($leadSteuerung['ausweichquellen'])->pluck('supplier')->filter()->take(3)->implode(', ') ?: '—' }}</p>
+                    @endif
+                    @if($kannKuratieren)
+                        <input type="text" wire:model="leadReason" maxlength="255"
+                               placeholder="Grund für manuellen Lead (optional) — wird beim ★ protokolliert"
+                               class="{{ $input }} !text-[11px] !py-1" data-lead-reason-input />
+                    @endif
+                </div>
+            @endif
+
             <div class="space-y-1.5">
                 @forelse($kette ?? [] as $rang => $la)
                     @php($istLead = $la->id === $effektiverLeadId)

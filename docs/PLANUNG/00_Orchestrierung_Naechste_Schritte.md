@@ -18,7 +18,7 @@
 | **09·S1 R6.8 Aroma-Substitution** | ✅ **GEBAUT+GEPUSHT 2026-07-19** (`63d538c`) — `aromaTrueSubstitutes`+`substitution.SUGGEST`, 3 Pest |
 | **09 Pairing-Offense-Trio (R6.8/6.9/6.10)** | ✅ **KOMPLETT GEBAUT 2026-07-19** — `substitution.SUGGEST` + `dish.REVERSE` + `surplus.SUGGEST`, 7 Pest. R6.10 produktiv = Q1-Contract offen |
 | **12·S1 R2.5 VK-Snapshot-Governance** | ✅ **GEBAUT 2026-07-19** — Snapshot-Layer+Signal+Settings+MCP `vk_snapshots.GET/RELEASE`, 3 Pest. Offen: Batch-Freigabe-UI + R3.2-Kundensicht (`publishedFor`) |
-| **14 Lieferanten-Management (R9.1+R9.2)** | ✅ **GEBAUT 2026-07-19 (Engine+MCP komplett)** — 5 Migr.+3 Models+Status-Enum+3 Services+2 Signale+**6 MCP-Tools** (`suppliers.GET/PUT/VOLUME`, `supplier_agreements.POST`, `gp_lead.GET/PUT`), 6 Pest. Offen: Livewire-Detail-/Lead-Tabs (UI-Slices) |
+| **14 Lieferanten-Management (R9.1+R9.2)** | ✅ **KOMPLETT 2026-07-19 (Engine+MCP+UI)** — 5 Migr.+3 Models+Status-Enum+3 Services+2 Signale+**6 MCP-Tools** (`suppliers.GET/PUT/VOLUME`, `supplier_agreements.POST`, `gp_lead.GET/PUT`), 6 Pest. **UI-Slice:** getabtes `SupplierDetail`-Modal (Stammblatt/Konditionen/Absprachen/Dokumente/Bündelung) + Lead-Override-mit-Begründung im `Gps/DetailPanel`, 5 Pest |
 | **Spec, ungebaut** | 03 (#512 L1–L8) · 08 (Planungs-/Kreativ-Ebene) · 09·S2/S3 · 10 · 12 · 13 · 14 |
 
 ---
@@ -143,7 +143,7 @@ Phase 1: 07·M1 (Keystone) → 07·M2 ; 06·H1/H2        [blocker-frei]
 - **11** 🟡 — Hypothesen-/Widerspruchs-Modus R6.11 (entscheidungs-reif 2026-07-19: Hypothesen-Ranking baubar, Widerspruch nur pairing-Docs v1; Blocker: Chem-Tabellen-Import + Lab-Notes-Tabelle neu).
 - **12** 🟢/🟡 — Wirtschaftlichkeits-Intelligenz R2-Rest (bau-reif 2026-07-19: R2.5 + R2.4 🟢; R2.3 🟡 gated auf Q2-Format-Spec, v0-Matrix auf Feedback interim).
 - **13** 🟢/🟡 — Preis-/Katalog-Ingest Q2 (bau-reif 2026-07-19: Kanal B Datei-Import 🟢, Sales-Ist 🟡 gated, Kanal A ⚪ extern).
-- **14** 🟢 — Lieferanten-Management R9 (bau-reif 2026-07-19: R9.2-Engine vorhanden, R9.1 Stammblatt/Absprachen/Konditionen neu; Volumen nur Nutzungs-Proxy).
+- **14** ✅ — Lieferanten-Management R9 (KOMPLETT 2026-07-19: Engine+MCP+UI; `SupplierDetail`-Modal + GP-Lead-Override-Begründung; Volumen nur Nutzungs-Proxy, echtes Spend = Q2).
 - *(Q4/Q5 Wissens-+Graph-Fundament → lebt in `_FoodBrain_Docs/`, kein eigenes Spec-File. GEPARKT/nicht-Kern: R5 Compliance · N Nachbar-Modul · A Academy.)*
 
 **Damit sind die Kern-Funktionen vollständig als Einzeldateien extrahiert (01–14).** Die ROADMAP im Modul-Repo bleibt vorerst unverändert (team-facing); Eindampfen auf eine schlanke Spine = separater, abgesprochener Schritt.

@@ -91,9 +91,15 @@ class DetailPanel extends Component
 
     // ── M3-07: LA-Aktionen ──────────────────────────────────────────────
 
+    /** R9.2 (E5): optionaler Grund für den manuellen Lead-Override → protokolliert via gp_la_preferences.reason (LogsActivity). */
+    public string $leadReason = '';
+
     public function leadSetzen(int $laId): void
     {
-        $this->laAktion(fn ($svc, $gp, $team) => $svc->setLeadLa($team, $gp, $laId), nurKurator: true);
+        $reason = trim($this->leadReason) ?: null;
+        // R9.2: Override mit Begründung + Recompute der GP-nutzenden Rezepte (neuer Lead-EK schlägt durch).
+        $this->laAktion(fn ($svc, $gp, $team) => $svc->setLeadLa($team, $gp, $laId, $reason, recompute: true), nurKurator: true);
+        $this->leadReason = '';
     }
 
     public function sperreToggle(int $laId, bool $locked): void
@@ -384,6 +390,8 @@ class DetailPanel extends Component
         // Aggregate sind DB-MAX/Ø-Queries über die LAs (M8-04: Panels 2–16 ms).
         $kette = $gp !== null ? $leads->rangliste($gp, $team) : null;
         $effektiverLeadId = $gp !== null ? $leads->effektiverLead($gp, $team)?->id : null;
+        // R9.2 (E5): Lead-Steuerungs-Sicht (gesetzter vs. effektiver Lead, Vorschlag, Override-Begründung, Ausweichquellen).
+        $leadSteuerung = $gp !== null ? $leads->leadSteuerung($gp, $team) : null;
 
         return view('foodalchemist::livewire.gps.detail-panel', [
             'gp' => $gp,
@@ -395,6 +403,7 @@ class DetailPanel extends Component
             'naehrwerte' => $gp !== null ? $aggregate->naehrwerte($gp, mitKiFallback: true) : null,
             'kette' => $kette,
             'effektiverLeadId' => $effektiverLeadId,
+            'leadSteuerung' => $leadSteuerung,
             'preisBand' => $this->preisBand($kette, $effektiverLeadId),
             'preisTrend' => $kette !== null
                 ? app(\Platform\FoodAlchemist\Services\PriceService::class)->preisTrendBulk($kette->pluck('id')->all())

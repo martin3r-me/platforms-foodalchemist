@@ -2,7 +2,7 @@
 
 > **ROADMAP-Bezug:** R9.1 + R9.2 (eigener Track; Dominique-Wunsch 2026-07-05). **Ziel:** Die Beziehung zu einem Lieferanten aktiv **steuern** — Verträge, Konditionen, Absprachen, Zusagen, wer wofür Lead ist.
 > **Scope-Grenze ✅ ENTSCHIEDEN (2026-07-18):** R9 = **nur** kommerzielle/strategische Ebene („mit wem zu welchen Bedingungen"). NICHT Bestellen/Wareneingang/Rechnungskontrolle (N-Track).
-> **Reifegrad: ✅ GEBAUT (R9.1 + R9.2, Engine+MCP, 2026-07-19)** — 5 Migrationen, 3 Models, `SupplierStatus`-Enum, `SupplierService`-Erw. + `SupplierAgreementService` + `LeadLaService`-Erw. (setLeadLa+reason/recompute, leadSteuerung, volumenProxy) + 2 Signale (`VertragsfristFaellig`) + 6 MCP-Tools, 6 Pest. Offen: Livewire-Detail-/Lead-Tabs (UI-Folge-Slices); echtes Spend = Q2.
+> **Reifegrad: ✅ KOMPLETT (R9.1 + R9.2, Engine+MCP+UI, 2026-07-19)** — 5 Migrationen, 3 Models, `SupplierStatus`-Enum, `SupplierService`-Erw. + `SupplierAgreementService` + `LeadLaService`-Erw. (setLeadLa+reason/recompute, leadSteuerung, volumenProxy) + 2 Signale (`VertragsfristFaellig`) + 6 MCP-Tools, 6 Pest. **UI-Slice 2026-07-19:** getabtes `SupplierDetail`-Modal (Stammblatt/Konditionen/Absprachen/Dokumente/Bündelung) im `Suppliers/Index` + Lead-Override-mit-Begründung im `Gps/DetailPanel`, 5 Pest. Offen: echtes Spend = Q2 (Nutzungs-Proxy ist v1).
 
 ---
 
@@ -41,12 +41,12 @@
 
 ## 3. R9.1 — Lieferanten-Stammblatt + Absprachen-Log · L · Etappe S1 · hängt an nichts · ✅ GEBAUT 2026-07-19 (Engine+MCP)
 
-> **Gebaut 2026-07-19:** 4 Migrationen (E1 Status + E4 Konditionen auf `suppliers`; `supplier_contacts`/`supplier_agreements`/`supplier_documents`) + 3 Models + `SupplierStatus`-Enum + `SupplierService`-Erweiterung (setStatus/updateConditions/addContact/`stammblatt` inkl. WG-Abdeckung aus `foodalchemist_preferred_suppliers`) + `SupplierAgreementService` (create/forSupplier/dueForFollowUp/addDocument/documentsFor/`documentsDueForNotice`) + `SignalTyp::VertragsfristFaellig` + Detektor (E7) in `laufen()` + MCP `suppliers.GET`/`suppliers.PUT`/`supplier_agreements.POST` (D1-Gate). `SupplierRelationTest` (3 Pest) + 51er-Regression grün. **Offen (Folge-Slice):** Livewire-Detail-Tabs im `Suppliers/Index` (Vorlage `Gps/DetailPanel`).
+> **Gebaut 2026-07-19:** 4 Migrationen (E1 Status + E4 Konditionen auf `suppliers`; `supplier_contacts`/`supplier_agreements`/`supplier_documents`) + 3 Models + `SupplierStatus`-Enum + `SupplierService`-Erweiterung (setStatus/updateConditions/addContact/`stammblatt` inkl. WG-Abdeckung aus `foodalchemist_preferred_suppliers`) + `SupplierAgreementService` (create/forSupplier/dueForFollowUp/addDocument/documentsFor/`documentsDueForNotice`) + `SignalTyp::VertragsfristFaellig` + Detektor (E7) in `laufen()` + MCP `suppliers.GET`/`suppliers.PUT`/`supplier_agreements.POST` (D1-Gate). `SupplierRelationTest` (3 Pest) + 51er-Regression grün. **UI-Slice ✅ 2026-07-19:** getabtes `SupplierDetail`-Modal (`Livewire/Suppliers/SupplierDetail` + Blade) — Tabs Stammblatt (Status-Setzung · Kontakte-Anlage · WG-Abdeckung · Volumen-Proxy) · Konditionen · Absprachen · Dokumente (Fristen) · Bündelung (`volumenProxyRanking`); „Beziehung"-Button im `Suppliers/Index`, lesen für die Kette, Schreiben D1-gated im Service. `SupplierDetailUiTest` (5 Pest).
 
 **Bau (Spec):** Migrationen (E1/E2/E3/E4) + `SupplierAgreementService` + `SupplierService`-Erweiterung; Supplier-Detail-Tabs (Stammblatt/Absprachen/Konditionen/Lead-Steuerung) im `Suppliers/Index`-Detailbereich (Vorlage `Gps/DetailPanel`); Fristen-Detektor (E7); MCP `suppliers.GET/PUT` + `supplier_agreements.POST` (Write-Gate `isOwnedBy`).
 
 **DoD:**
-- [~] Lieferanten-Detailseite: Kontakte, Rollen, Status, WG-Abdeckung — Aggregat (`stammblatt`) + MCP da; Livewire-Tabs = Folge-Slice.
+- [x] Lieferanten-Detailseite: Kontakte, Rollen, Status, WG-Abdeckung — Aggregat (`stammblatt`) + MCP + getabtes `SupplierDetail`-Modal.
 - [x] Absprachen-/Zusagen-Log je Lieferant: datierte Einträge, Wiedervorlage/Erinnerung, Autor.
 - [x] Vertrags-/Dokumenten-Ablage mit Laufzeit + Kündigungsfrist → Fristen-Signal (E7).
 - [x] Konditionen strukturiert: Rückvergütung/Bonus %, Zahlungsziel, Mindestbestellwert, Frei-Haus-Grenze (E4, geteilt mit Q2).
@@ -54,12 +54,12 @@
 
 ## 4. R9.2 — Lead-Lieferant-Steuerung als bediente Strecke · M · Etappe S2 · hängt an R9.1 + R1 · ✅ GEBAUT 2026-07-19 (Engine+MCP)
 
-> **Gebaut 2026-07-19:** Migration `gp_la_preferences.reason` + `LeadLaService::setLeadLa(+$reason,+$recompute)` (Override-Historie via LogsActivity; Recompute der GP-nutzenden Rezepte) + `leadSteuerung()` (gesetzter/effektiver Lead + Vorschlag + Ausweichquellen aus Rangliste-Rang>1 + Begründung) + `SupplierService::volumenProxyRanking`/`volumenProxy` (Nutzungs-Proxy, ehrlich markiert) + MCP `gp_lead.GET`/`gp_lead.PUT`/`suppliers.VOLUME`. `LeadSteuerungTest` (3 Pest) + 105er-Regression grün. **Offen (Folge-Slice):** UI-Überschreiben (Livewire-Lead-Tab). **Damit ist Spec 14 engine-/MCP-seitig komplett.**
+> **Gebaut 2026-07-19:** Migration `gp_la_preferences.reason` + `LeadLaService::setLeadLa(+$reason,+$recompute)` (Override-Historie via LogsActivity; Recompute der GP-nutzenden Rezepte) + `leadSteuerung()` (gesetzter/effektiver Lead + Vorschlag + Ausweichquellen aus Rangliste-Rang>1 + Begründung) + `SupplierService::volumenProxyRanking`/`volumenProxy` (Nutzungs-Proxy, ehrlich markiert) + MCP `gp_lead.GET`/`gp_lead.PUT`/`suppliers.VOLUME`. `LeadSteuerungTest` (3 Pest) + 105er-Regression grün. **UI-Slice ✅ 2026-07-19:** `Gps/DetailPanel` — `leadReason`-Feld speist `leadSetzen(★)` → `setLeadLa(reason, recompute:true)`; Override-Begründung + Vorschlag/Abweichung + Ausweichquellen aus `leadSteuerung()` sichtbar; Bündelungs-Ranking im `SupplierDetail`-Tab. **Damit ist Spec 14 komplett (Engine + MCP + UI).**
 
 **Bau (Spec):** Lead-Steuerung-Tab reutzt `rangliste`+`effektiverLead` direkt; `setLeadLa(reason)` (E5) + Historie via LogsActivity; Zweit-/Ausweichquelle hinterlegbar (fällt aus `rangliste`-Rang>1); Volumen×Konditionen-Auswertung auf Nutzungs-Proxy (E6).
 
 **DoD:**
-- [~] Lead-LA je GP sichtbar + überschreibbar — Service+MCP (`gp_lead.GET/PUT`, +reason); UI-Tab = Folge-Slice.
+- [x] Lead-LA je GP sichtbar + überschreibbar — Service+MCP (`gp_lead.GET/PUT`, +reason) + `Gps/DetailPanel`-Lead-Override mit Begründung.
 - [x] Vorschlag = `pickLeadLa`; Mensch übersteuert per `gp_lead.PUT`, Entscheid protokolliert (`gp_la_preferences.reason` → LogsActivity).
 - [x] Zweit-/Ausweichquelle je GP (aus `rangliste`, `leadSteuerung.ausweichquellen`).
 - [x] Auswertung: Volumen (Nutzungs-Proxy) je Lieferant × Konditionen (`volumenProxyRanking` + MCP `suppliers.VOLUME`, Proxy markiert).

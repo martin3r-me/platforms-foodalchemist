@@ -64,6 +64,10 @@
                 @if(!$globaleSuche && $aktiverLieferant)
                     <input type="search" wire:model.live.debounce.300ms="artikelSuche"
                            placeholder="Artikel dieses Lieferanten …" class="{{ $input }} !w-56 !py-1.5" data-lokale-suche />
+                    {{-- R9.1/R9.2: Beziehungs-Stammblatt (Status/Konditionen/Absprachen/Dokumente/Bündelung) — lesen für alle, schreiben D1-gated im Service --}}
+                    <button type="button" wire:click="$dispatch('supplier-detail.oeffnen', { id: {{ $aktiverLieferant->id }} })"
+                            class="{{ $btnGhostXs }} text-violet-600" data-beziehung-btn
+                            title="R9: Beziehungs-Ebene — Status, Konditionen, Absprachen, Verträge/Fristen, Bündelungs-Proxy">Beziehung</button>
                     @if($darfLieferantEdit)
                         <button type="button" wire:click="lieferantBearbeiten" class="{{ $btnGhostXs }}" data-lieferant-edit-btn>Bearbeiten</button>
                         <button type="button" wire:click="lieferantDeaktivieren({{ $aktiverLieferant->is_inactive ? 'false' : 'true' }})"
@@ -224,6 +228,9 @@
         </div>
         {{-- LA-Editor-Modal (M2-06/07/08) — innerhalb x-ui-page (Template-Regel) --}}
         <livewire:foodalchemist.suppliers.item-modal />
+
+        {{-- R9.1/R9.2: Lieferanten-Stammblatt-Modal (Beziehungs-Ebene) --}}
+        <livewire:foodalchemist.suppliers.supplier-detail />
 
         {{-- Feedback 2026-06-11: Neuer Lieferant (gehört dem anlegenden Team — D1) --}}
         <x-foodalchemist::modal name="lieferant-neu" title="Neuer Lieferant" size="max-w-2xl">
