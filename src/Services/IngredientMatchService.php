@@ -344,11 +344,12 @@ class IngredientMatchService
             $this->scoreMitFloor($queryTokens, $querySlug, $candText, $candSlug, $candName),
             $this->heuristik->substringOverlap($queryTokens, $candText),
         );
+        // Alias-Varianten NUR token-strikt (kein substringOverlap): ein kurzes
+        // generisches Alias-Token wie „rind" darf nicht als Substring dutzende
+        // GPs („Rinderbrühe", „Rinde") auf 1.0 fluten und den echten Treffer im
+        // Gleichstand aus den Top-K drängen. Ganz-Token-Match reicht für Aliase.
         foreach ($aliasVariants as $variant) {
-            $s = max(
-                $this->scoreMitFloor($variant, null, $candText, $candSlug, $candName),
-                $this->heuristik->substringOverlap($variant, $candText),
-            );
+            $s = $this->scoreMitFloor($variant, null, $candText, $candSlug, $candName);
             if ($s > $best) {
                 $best = $s;
             }
