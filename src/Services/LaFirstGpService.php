@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Jobs\ClassifyLaJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 
@@ -35,14 +36,18 @@ class LaFirstGpService
      * (gp_proposals war staging-only; Entscheid Dominique 2026-07-13). Ergebnis
      * ist direkt als gp_id nutzbar; die Freigabe (approved) bleibt menschlich.
      *
-     * @param  string       $text  Rohe Zutaten-Bezeichnung (Mengen-Präfix wird geputzt)
-     * @param  string|null  $slug  optionaler Hauptzutat-Slug (reserviert für schärferes LA-Matching, M3)
+     * @param  string       $text    Rohe Zutaten-Bezeichnung (Mengen-Präfix wird geputzt)
+     * @param  string|null  $slug    optionaler Hauptzutat-Slug (reserviert für schärferes LA-Matching)
+     * @param  string|null  $wgHint  optionaler Warengruppen-Code aus dem Erzeugungs-Kontext (Spec 16·E1):
+     *                               verengt die LA-Suche auf die WG-Leads. Fehlt er → Suche über alle Leads.
      * @return FoodAlchemistGp|null  gemintetes/wiederverwendetes GP oder null (keine LA / §6-Verstoß / Fehler)
      */
-    public function mintFromLa(Team $team, string $text, ?string $slug = null): ?FoodAlchemistGp
+    public function mintFromLa(Team $team, string $text, ?string $slug = null, ?string $wgHint = null): ?FoodAlchemistGp
     {
         try {
-            $la = app(SupplierItemService::class)->searchGlobal($team, $text, [], 3)->items()[0] ?? null;
+            // Spec 16·S3: WG-Lead-gescopter, Terminologie-gerankter Kandidat statt naivem
+            // searchGlobal->items()[0]. Ohne WG-Hint + Einzeltreffer verhaltensgleich.
+            $la = app(LaCandidateFinder::class)->best($team, $text, $wgHint);
             if ($la === null) {
                 return null;   // Kein LA → KEIN GP (Doktrin). Aufrufer erfasst Sourcing-Wunsch.
             }
@@ -69,6 +74,12 @@ class LaFirstGpService
                 app(LeadLaService::class)->verknuepfen($team, $gp, (int) $la->id);
             } catch (\RuntimeException $e) {
                 // LA schon woanders gemappt o. ä. — GP bleibt trotzdem nutzbar.
+            }
+
+            // Spec 16·S4: getroffenen LA on-demand nachklassifizieren — ASYNC, nie inline.
+            // Der Job blockiert den Mint nie und ist idempotent (klassifiziert → skip).
+            if ($struktur === null || $struktur->classified_at === null) {
+                ClassifyLaJob::dispatch((int) $la->id, $team->id);
             }
 
             return $gp;

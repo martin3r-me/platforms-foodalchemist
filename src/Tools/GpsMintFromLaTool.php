@@ -45,6 +45,7 @@ class GpsMintFromLaTool extends FoodAlchemistTool implements ToolContract, ToolM
             'properties' => [
                 'zutat' => ['type' => 'string', 'description' => 'Zutat-Freitext, z. B. "Ruby-Schokolade" oder "Yuzu-Saft"'],
                 'main_ingredient_slug' => ['type' => 'string', 'description' => 'Optionaler Slug der Hauptzutat zur Präzisierung'],
+                'commodity_group' => ['type' => 'string', 'description' => 'Optionaler Warengruppen-Code (Spec 16): verengt die LA-Suche auf die WG-Lead-Lieferanten. Fehlt er → Suche über alle Leads.'],
             ],
             'required' => ['zutat'],
         ];
@@ -61,8 +62,14 @@ class GpsMintFromLaTool extends FoodAlchemistTool implements ToolContract, ToolM
             return ToolResult::error('zutat darf nicht leer sein.', 'VALIDATION_ERROR');
         }
         $slug = isset($arguments['main_ingredient_slug']) ? (string) $arguments['main_ingredient_slug'] : null;
+        $wgHint = isset($arguments['commodity_group']) ? trim((string) $arguments['commodity_group']) : null;
+        $wgHint = $wgHint !== '' ? $wgHint : null;
 
-        $gp = app(LaFirstGpService::class)->mintFromLa($team, $zutat, $slug);
+        // Spec 16: gewählten Kandidaten für die Transparenz-Response holen (deterministisch,
+        // dieselbe Wahl wie im Mint) — WG-Lead-gescoped, Terminologie-gerankt.
+        $la = app(\Platform\FoodAlchemist\Services\LaCandidateFinder::class)->best($team, $zutat, $wgHint);
+
+        $gp = app(LaFirstGpService::class)->mintFromLa($team, $zutat, $slug, $wgHint);
 
         if ($gp === null) {
             return ToolResult::success([
@@ -83,8 +90,18 @@ class GpsMintFromLaTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'main_ingredient_slug' => $gp->main_ingredient_slug,
                 'requires_la' => (bool) $gp->requires_la,
             ],
+            // Spec 16: Transparenz — welcher LA wurde gewählt, in welchem Scope.
+            'chosen_la' => $la === null ? null : [
+                'id' => (int) $la->id,
+                'designation' => $la->designation,
+                'supplier_id' => (int) $la->supplier_id,
+                'is_lead' => (bool) ($la->ist_lead ?? false),
+                'score' => isset($la->score) ? round((float) $la->score, 3) : null,
+            ],
+            'scope' => $wgHint !== null ? "wg_leads:{$wgHint}" : 'all_leads',
             'note' => 'LA-First gemintet: status=tentative (menschliche Freigabe folgt), LA-verknüpft → '
-                . 'Allergene/Nährwerte/EK LA-abgeleitet. Sofort als gp_id in Rezept-Zeilen verwendbar.',
+                . 'Allergene/Nährwerte/EK LA-abgeleitet. Sofort als gp_id in Rezept-Zeilen verwendbar. '
+                . 'Der getroffene LA wird asynchron nachklassifiziert (Spec 16·S4).',
         ]);
     }
 

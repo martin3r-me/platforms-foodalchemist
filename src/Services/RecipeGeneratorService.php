@@ -193,7 +193,7 @@ class RecipeGeneratorService
                     $zeile['match_method'] = 'recipe_ref';
                     $statistik['stub_neu'] += $stub['neu'] ? 1 : 0;
                     $statistik['bestand_sub'] += $stub['neu'] ? 0 : 1;
-                } elseif (($autoGp = $this->laFirst->mintFromLa($team, $text, $z['slug'] ?? null)) !== null) {
+                } elseif (($autoGp = $this->laFirst->mintFromLa($team, $text, $z['slug'] ?? null, $z['commodity_group'] ?? $z['warengruppe'] ?? null)) !== null) {   // Spec 16·E1: WG-Hint aus Erzeugungs-Kontext (falls das KI-Schema ihn mitliefert)
                     // 07·M1 (ex-#505 Slice 2): Lücke ohne GP → LaFirstGpService mintet FA-nativ ein
                     // GP aus passender LA (tentative, LA-verknüpft → Allergene/Nährwerte/EK LA-abgeleitet).
                     // Geteilte Fähigkeit — dieselbe Logik hängt künftig auch an syncIngredients/MCP.

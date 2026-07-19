@@ -42,6 +42,7 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
                 'main_ingredient_slug' => ['type' => 'string', 'description' => 'Optionaler Slug der Hauptzutat zur Präzisierung'],
                 'k' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 10, 'default' => 5, 'description' => 'Anzahl Kandidaten'],
                 'mint_if_missing' => ['type' => 'boolean', 'default' => false, 'description' => 'Bei target=none LA-First ein GP aus passender LA minten (tentative). Ohne passende LA bleibt es none.'],
+                'commodity_group' => ['type' => 'string', 'description' => 'Optionaler Warengruppen-Code (Spec 16): verengt die LA-Suche beim Mint auf die WG-Lead-Lieferanten. Fehlt er → alle Leads.'],
             ],
             'required' => ['zutat'],
         ];
@@ -65,8 +66,9 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         // 07·M3: mint-if-missing — Bestand-Miss + passende LA → LA-First-Mint (tentative),
         // damit der Rezept-Flow nicht bei GP-Lücken dead-endet. Ohne LA bleibt target=none.
         $minted = false;
+        $wgHint = isset($arguments['commodity_group']) ? trim((string) $arguments['commodity_group']) : null;
         if (($match['target'] ?? null) === 'none' && ($arguments['mint_if_missing'] ?? false)) {
-            $gp = app(LaFirstGpService::class)->mintFromLa($team, $zutat, $slug);
+            $gp = app(LaFirstGpService::class)->mintFromLa($team, $zutat, $slug, $wgHint !== '' ? $wgHint : null);
             if ($gp !== null) {
                 $minted = true;
                 $match = [

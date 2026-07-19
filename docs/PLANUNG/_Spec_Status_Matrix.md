@@ -20,11 +20,11 @@
 | **13** | Preis-/Katalog-Ingest Q2 | Kanal-B 🟢 · Sales-Ist 🟡 · Kanal-A ⚪ | **Kanal-B-Import blocker-frei baubar** (bewusst hinten angestellt); Sales-Ist gated auf echte Beispieldatei; Kanal A extern |
 | **14** | Lieferanten-Management R9 | ✅ **KOMPLETT** (Engine+MCP+UI, `1382fc2`) | echtes Spend = Q2 (Nutzungs-Proxy ist v1) |
 | **15** | Semantische Suche über Lieferantenartikel (Supplier-Item-Pool) | ⚪ Dossier — **entkoppelt/zurückgestellt via 16** | RAG-Nachzug (Vektor-Pool + Observer + Retrieval); vom WG-Lead-Use-Case (16) NICHT gebraucht → wartet auf echte Freitext-Katalog-Discovery + 50k-Store-/Qdrant-Frage |
-| **16** | WG-Lead-gescopter LA-Kandidaten-Finder + On-demand-Klassifikation | 🟢 **bau-reif** (code-verifiziert 2026-07-20) | **Blocker-frei baubar** (Finder deterministisch, kein Provider). S1-Scope-Resolver existiert bereits (`stammSupplierIdsFor`) → Reuse; on-demand-Klassifikator (S4) = einziges neues Stück, nutzt Provider async. Schärft Spec-07-`mintFromLa`; fachlich: E1/E2/E4 mit Dominique |
+| **16** | WG-Lead-gescopter LA-Kandidaten-Finder + On-demand-Klassifikation | ✅ **GEBAUT+GETESTET 2026-07-20** (S1–S3+S5, 14+29 Pest) | Finder deterministisch live (schärft Spec-07-`mintFromLa`); WG-Scope + Terminologie + Anti-Marker + Fallback. **S4-Klassifikator verdrahtet, LLM-Inhalt provider-gated** (Martin). Offen: S3-Decompounding für Compound-Anti-Marker (Kalbsbries); WG-Hint im KI-Rezept-Schema befüllen |
 
 ## Verdichtet
 
-- **Sofort baubar, null Blocker:** 12·S2 (R2.4-Solver) · 13·S1 (Kanal-B) · 03·L4/L5 · **16·S2/S3 (LA-Finder, deterministisch — S1 ist Reuse)**.
+- **Sofort baubar, null Blocker:** 12·S2 (R2.4-Solver) · 13·S1 (Kanal-B) · 03·L4/L5. **(16 = gebaut 2026-07-20.)**
 - **Baubar gegen Fake-Provider (Qualitäts-Gate später via Key):** 03·L1/L2/L3/L6/L7 · 08 · 10 · 05·Etappe-2.
 - **Einziger echter Rest-Blocker im Ordner:** 08 (Konvergenz-Qualität = LLM live). Alle übrigen „Blocker" sind Deploy-/Key-Gates fürs *Live-Feuern*, nicht fürs Bauen.
 - **Fertig:** 04 · 06 · 07 · 09 · 11 (S1–S3; nur optionales KI-Narrativ offen) · 14 (+ 01 nur Deploy-Verifikation).

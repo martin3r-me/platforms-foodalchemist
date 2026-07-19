@@ -3,7 +3,12 @@
 > **ROADMAP-Bezug:** #507 (Grounding/Weg-2) · Spec [07](07_LA_First_GP_Mint_ueberall.md) (LA-First-Mint) · Spec [15](15_Semantic_Supplier_Item_Pool.md) (LA-Vektor-Pool — hiermit **entkoppelt/verschoben**).
 > **Anlass:** Use Case Dominique 2026-07-20 — *„Wenn es keinen passenden GP gibt, aber das Rezept die Zutat braucht, muss der passende Artikel unter den LA-Leads gefunden werden, die für die Warengruppe definiert sind."*
 > **Kernaussage:** Dieser Use Case braucht **KEINEN Vektor-Store/Qdrant und keinen 264k-Pool.** Er ist eine **WG-Lead-gescopte Namenssuche** (Terminologie + Lexik, Weg-2-Stack schon live) + eine **on-demand-Klassifikation** der tatsächlich getroffenen LAs (asynchron). Der LA-Vektor-Pool (Spec 15) ist damit vom Tisch, bis echte Freitext-Discovery über den ganzen Katalog gewünscht ist.
-> **Reifegrad: 🟢 bau-reif** (Code-kartiert + code-verifiziert 2026-07-20). Größe **S–M** (Finder klein — Scope-Resolver S1 existiert bereits als Reuse; on-demand-Klassifikator mittel = einziges echt neues Stück).
+> **Reifegrad: ✅ GEBAUT+GETESTET 2026-07-20** (S1-Reuse → S2 → S3 → S5 + baseQuery-Filter, 14 neue Pest + 29 Regression grün). S4-Klassifikator verdrahtet (Dispatch/Guards getestet), **LLM-Inhalts-Ableitung provider-gated**. Details → ROADMAP-Changelog 2026-07-20. Größe war **S–M** (Scope-Resolver S1 = Reuse).
+>
+> **Bau-Notizen 2026-07-20 (Abweichungen von der Kartierung):**
+> - Such-Prefilter musste Alias-/Decompound-**Phrasen** mit-suchen (je Phrase ein `searchGlobal`-Query + Union über id) — sonst findet „Paradeiser" die Tomaten-LA nie (searchGlobal AND-tokenisiert; Alias erweitert sonst nur das Scoring, nicht die Suche). Das war der eine echte Bug im ersten Wurf.
+> - Anti-Marker greift auf **Token-Ebene**: „Brie"↛„Bries" ok, aber Compound „Kalbsbries" rutscht durch (`substringOverlap` „brie"⊂„kalbsbries" = 1.0) — das ist die bekannte **S3-Decompounding-Lücke** (im TerminologyService-Code so kommentiert), kein Spec-16-Regress.
+> - Reine deterministische Bausteine (S2/S3/S5) sind voll getestet; S4 braucht einen Live-LLM für die End-to-End-Verifikation (Martin-Gate).
 
 ---
 
