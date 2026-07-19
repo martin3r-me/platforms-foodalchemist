@@ -565,17 +565,19 @@ Fremdes Gericht → Aroma-Skelett → Nachbau aus eigenem Bestand.
 
 > **v1-Note:** MCP `dish.REVERSE` ist read-only → Beschaffungs-Wünsche werden im Response *gelistet*, nicht als Review-Queue-Zeilen geschrieben (Persistenz = explizite Aktion; Quer-Invariante „read-only bis Commit"). Foto-/#507-Recall greifen additiv, wenn Provider live.
 
-### R6.10 Überschuss-zu-Gericht · Größe M · Hängt an: Q1 (Core-Contract) + Pairing-Graph
+### R6.10 Überschuss-zu-Gericht · Größe M · Hängt an: Q1 (Core-Contract) + Pairing-Graph · ✅ GEBAUT 2026-07-19 (Mock)
 
 Erster bidirektionaler Contract-Fall: Lager meldet Überschuss, FA schlägt Verwertung vor.
 
 **DoD:**
-- [ ] Input: Überschuss-Bestand eines GP über den Core-Contract (aus Nachbar-Modul, NICHT FA-eigene Lagerhaltung)
-- [ ] Graph schlägt Gerichte/Konzepte, die den GP geschmacklich *tragen* (Anker-Relevanz, nicht bloß „enthält")
-- [ ] Vorschlag mit Verwertungs-Menge + Kohäsions-Begründung; Draft-Konzept per Klick
-- [ ] Grenze gewahrt: FA rechnet/schlägt vor, Bestandsführung + Bestellung bleiben Nachbar-Modul
-- [ ] FA-seitige Logik baubar + testbar mit Mock-Bestand; produktiv erst mit Q1/Nachbar-Modul (N-Track)
-- [ ] Test: Mock-Überschuss rein → sinnvoller Gericht-Vorschlag raus (erster Contract-Beweis in Rückrichtung)
+- [~] Input: Überschuss-Bestand über **Mock/Contract** `[{gp_id, menge}]` (`SurplusToDishService`) — produktiver Core-Contract-Anschluss = Q1/N-Track offen; FA-eigene Lagerhaltung bewusst NICHT
+- [x] Graph schlägt Gerichte, die den GP geschmacklich *tragen* (Anker-Relevanz über `recipe_anchor_mappings`+`recipe_process_anchors`, nicht bloß „enthält") — Konzepte = Folge-Slice
+- [x] Vorschlag mit Verwertungs-GP/-Menge + Kohäsions-Begründung; Draft-Konzept per Klick (`concepts.POST`, explizit)
+- [x] Grenze gewahrt: FA rechnet/schlägt vor, Bestandsführung + Bestellung bleiben Nachbar-Modul
+- [x] FA-seitige Logik baubar + testbar mit Mock-Bestand; produktiv erst mit Q1/Nachbar-Modul (N-Track)
+- [x] Test: `SurplusToDishTest` (2 Pest) — Mock-Überschuss rein → tragendes Gericht + verwertete Menge raus; nicht verwertbare Überschüsse gelistet
+
+> **Damit ist die Pairing-Offense (Trio R6.8–R6.10) FA-seitig komplett.** Voller Effekt: R6.10 produktiv = Q1-Contract (Martin/N-Track); Aroma-Reichweite/Kohärenz = Q5. Konzept-Kandidaten (neben Gerichten) + Portions-genaue Verwertungsmenge = Folge-Slices.
 
 ### R6.11 Hypothesen- & Widerspruchs-Modus (R&D) · Größe M · Hängt an: Q4 + Pairing-Graph
 
@@ -815,6 +817,7 @@ Gleiches Muster wie der N-Track: FA liefert den **Warum-Motor** (`knowledge.EXPL
   - **#511 (a) Warnung:** unbepreiste Zutat (GP/Sub ohne auflösenden Preis) zeigt im Editor einen amber `⚠︎` je Zeile statt des stillen grauen „—" + eine Σ-Zeile „n von m Zutaten bepreist — EK unvollständig". Greift live beim ⇄/♻-Tausch (setzen `ek_pro_g=null`). Daten-Heilung selbst bleibt R0.3-Etappe-2 (Sourcing), kein Editor-Fix kann sie ersetzen — nur sichtbar machen.
   - **#509 Create-Parität:** `RecipeService::create` schreibt jetzt dieselben §4.2-Fachfelder wie `update()` (temperature/function/preparation/notes_manual/yield_pieces + Equipment-Sync) — Schluss mit dem stillen Datenverlust im Anlege-Modal. `RecipeModal::speichern` springt nach dem Anlegen nahtlos in den Edit-Modus (`ladeRezept($id)`, VkModal::anlegen-Muster) statt zu schließen → Zutaten/Deklaration/Darreichungen sofort befüllbar.
   - **Tests:** neu `IngredientSwapPropagationTest` (Server-Propagation, ID-Rückgabe, Event-Dispatch, F2-Warnung, F4 E2E durch den Livewire-Editor inkl. Eltern-EK ohne Reload) + `RecipeCreateParityTest` (Feld-Parität + Edit-Sprung). Kein Server-Recompute-Verhalten geändert (I8 Logging bleibt, I9 `vk_*` nie geschrieben).
+- 2026-07-19 (R6.10): **Überschuss-zu-Gericht GEBAUT (Pairing-Offense S3 — Trio komplett).** `SurplusToDishService::suggest(team, [{gp_id,menge}], limit)` — Mock/Contract-Bestand → GP-Anker (`gpAnkers`) → Portfolio-Gerichte, die die Anker TRAGEN (Relevanz über beide recipe-anchor-Tabellen, nicht bloß „enthält") + verwertete GPs/Menge + Kohäsions-Begründung + nicht-verwertbar-Liste. MCP `foodalchemist.surplus.SUGGEST` (read-only). `SurplusToDishTest` (2 Pest) grün. Grenze E4: FA schlägt vor, Bestand/Bestellung = Nachbar-Modul; produktiver Contract = Q1/N-Track. Damit ist die Pairing-Offense (R6.8/6.9/6.10) FA-seitig durch.
 - 2026-07-19 (R6.9): **Dish-Reverse-Engineering GEBAUT (Pairing-Offense S2).** `DishReverseService::reverse(team, text, limit)` — fremdes Gericht (Text) → Zerlegung in eigene GPs (`IngredientMatchService::matchIngredient`; unmatched+keine LA → Beschaffungs-Wunsch, keine Erfindung; unmatched+LA → `LaFirstGpService::mintFromLa` tentative) → Aroma-Skelett (tragende Anker + Verbund-Kanten via `gpAnkers`/`edgesFor`) → Nachbau-Kandidaten aus dem eigenen VK-Portfolio (Anker-Überlappung über `recipe_anchor_mappings`+`recipe_process_anchors`) + Lücken-Report (Anker ohne Bestandsträger). MCP `foodalchemist.dish.REVERSE` (read-only; Draft-Anlage = expliziter `recipes.POST`-Folgeschritt). `DishReverseTest` (2 Pest) grün. Foto-Input + #507-Recall = additive Ausbaustufen (Provider = Martin).
 - 2026-07-19 (R6.8): **Aroma-treue Substitution GEBAUT (Pairing-Offense S1).** `PairingService::aromaTrueSubstitutes(team, gpId, limit, ?recipeIngredientId)` — Ersatz-GPs gerankt nach ERHALTENEM Geschmack: Anker-Kanten-Überlappung (welche Aroma-Brücken des Quell-GP der Kandidat trägt/erreicht, via `edgeBest` über beide `gpAnkers`) graceful gemischt mit dem 14-Typ-Aroma-Vektor-Cosinus (`0.6·Kanten + 0.4·Cosinus`; nur Kanten wenn kein Vektor — bewusst kein hartes Produkt, sonst Ranking-Kollaps bei dünnen Vektoren). Kandidaten-Pool = Aroma-Geschwister (≥1 geteilter Anker) ∪ gleiche Warengruppe ∪ manuelle Äquivalente (letztere geboostet, Inv. 3). Ausgabe je Kandidat: erhaltene/verlorene Brücken, `flavor_score`, `allergen_warnungen` (Diff via `GpAggregateService::allergene` VOR Tausch), `cost` (indikativer Lead-LA-Listen-EK, mode cost/both), `evidenz` (kuratiert/abgeleitet), `kohaesions_delta` (bei `recipe_ingredient_id`). MCP `foodalchemist.substitution.SUGGEST` (read-only, modes flavor|cost|both). 3 Pest (`AromaSubstitutionTest`) grün + 24 Pairing-Regression grün. Der eigentliche Tausch bleibt `tauscheZutat`. **Offen (Follow-up):** harter `swap_locked`-Guard in `tauscheZutat` (R6.3-Altlücke, aktuell nur gemeldet); Aroma-Vektor-Coverage (Q5); mengennormalisierter EK.
 - 2026-07-15 (Bug gemeldet): **IngredientEditor Zutaten-Tausch — Kaskade/Auto-Sync unvollständig (Dev-Modul-Issue).** Beim Tausch einer Zutat + Mengen-Anpassung im Editor treten ZWEI Dinge auf (beide user-bestätigt an Rezept `getreidesalat_bulgur_mit_berglinsen_und_cashews_2527`):

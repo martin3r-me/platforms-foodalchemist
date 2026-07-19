@@ -1,7 +1,7 @@
 # Pairing-Offense-Trio — Aroma-treue Substitution · Dish-Reverse-Engineering · Überschuss-zu-Gericht
 
 > **ROADMAP-Bezug:** R6.8 + R6.9 + R6.10 (Track „Alleinstellung"). Ein File, weil alle drei **denselben Hebel offensiv nutzen: den Anker-Pairing-Graph** — nicht beschreibend („was passt"), sondern erzeugend („bau mir was, das trägt").
-> **Reifegrad: 🟢 bau-reif** (Code-Kartierung verifiziert 2026-07-19; Etappen + DoD code-verankert). Vorher ⚪ Dossier.
+> **Reifegrad: ✅ GEBAUT (S1+S2+S3, 2026-07-19)** — Trio FA-seitig komplett: `aromaTrueSubstitutes`/`substitution.SUGGEST` (R6.8), `DishReverseService`/`dish.REVERSE` (R6.9), `SurplusToDishService`/`surplus.SUGGEST` (R6.10). 7 Pest gesamt. Offen extern: R6.10 produktiv = Q1-Contract; voller Effekt = Q5 (Kohärenz/Reichweite) + #507 live.
 
 ---
 
@@ -83,20 +83,22 @@ Fremdes Gericht → Aroma-Skelett → Nachbau aus **eigenem** Bestand.
 - [x] MCP `dish.REVERSE` (read-only, liefert Zerlegung+Skelett+Kandidaten; Draft-Anlage explizit).
 - [x] Pest: `DishReverseTest` (2) — Zerlegung + Skelett + Nachbau + Lücken + Wunsch (Realdaten-Check nach Deploy).
 
-## 4. R6.10 — Überschuss-zu-Gericht · Größe M · Etappe S3 · hängt an Q1 + Pairing-Graph
+## 4. R6.10 — Überschuss-zu-Gericht · Größe M · Etappe S3 · hängt an Q1 + Pairing-Graph · ✅ GEBAUT 2026-07-19 (Mock)
 
 Erster **bidirektionaler** Contract-Fall: Lager meldet Überschuss, FA schlägt Verwertung vor.
+
+> **Gebaut 2026-07-19:** `SurplusToDishService::suggest(team, [{gp_id,menge}], limit)` + MCP `SurplusSuggestTool` (registriert, read-only) + `SurplusToDishTest` (2 Pest). Mock/Contract-Input (E4); produktiver Core-Contract = Q1/N-Track. Gerichte tragend nach Anker-Relevanz; Konzept-Kandidaten + portionsgenaue Menge = Folge-Slices. **Trio 09 damit FA-seitig komplett.**
 
 **Bau:** `SurplusToDishService` — Input `[{gp_id, menge}]` (Mock/Contract) → `gpAnkers` → Anker-Set als „Teller" in `componentSuggestions`/`edgesFor` → Gerichte/Konzepte, die den GP **tragen** (Anker-Relevanz). MCP `surplus.SUGGEST`.
 
 **DoD:**
-- [ ] Input: Überschuss-Bestand als Mock-Liste (produktiv über Core-Contract; NICHT FA-eigene Lagerhaltung).
-- [ ] Graph schlägt Gerichte/Konzepte nach Anker-Relevanz (nicht bloß „enthält").
-- [ ] Vorschlag mit Verwertungs-Menge + Kohäsions-Begründung; Draft-Konzept per Klick (`ConceptService::create`).
-- [ ] Grenze: FA rechnet/schlägt vor, Bestand+Bestellung = Nachbar-Modul (E4).
-- [ ] FA-seitig baubar + testbar mit Mock-Bestand; produktiv erst mit Q1/N-Track.
-- [ ] MCP `surplus.SUGGEST` (read-only).
-- [ ] Pest: Mock-Überschuss rein → sinnvoller Gericht-Vorschlag raus.
+- [x] Input: Überschuss-Bestand als Mock-Liste (produktiv über Core-Contract = Q1/N-Track offen; NICHT FA-eigene Lagerhaltung).
+- [x] Graph schlägt **Gerichte** nach Anker-Relevanz (nicht bloß „enthält") — Konzepte = Folge-Slice.
+- [~] Vorschlag mit Verwertungs-GP/-Menge + Kohäsions-Begründung; Draft-Konzept per Klick explizit (`concepts.POST`) — portionsgenaue Menge = Folge-Slice.
+- [x] Grenze: FA rechnet/schlägt vor, Bestand+Bestellung = Nachbar-Modul (E4).
+- [x] FA-seitig baubar + testbar mit Mock-Bestand; produktiv erst mit Q1/N-Track.
+- [x] MCP `surplus.SUGGEST` (read-only).
+- [x] Pest: `SurplusToDishTest` (2) — Mock-Überschuss rein → tragendes Gericht + Menge raus; nicht-verwertbar gelistet.
 
 ---
 
