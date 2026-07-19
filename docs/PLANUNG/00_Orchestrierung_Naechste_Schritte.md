@@ -17,6 +17,7 @@
 | **06 Convenience-Highlights** | ✅ **KOMPLETT H1–H4 (2026-07-19)** — Migration+Service+Screen+Command+2 MCP+opt-in-Modus+Picker-Filter, 14 Pest |
 | **09·S1 R6.8 Aroma-Substitution** | ✅ **GEBAUT+GEPUSHT 2026-07-19** (`63d538c`) — `aromaTrueSubstitutes`+`substitution.SUGGEST`, 3 Pest |
 | **09 Pairing-Offense-Trio (R6.8/6.9/6.10)** | ✅ **KOMPLETT GEBAUT 2026-07-19** — `substitution.SUGGEST` + `dish.REVERSE` + `surplus.SUGGEST`, 7 Pest. R6.10 produktiv = Q1-Contract offen |
+| **12·S1 R2.5 VK-Snapshot-Governance** | ✅ **GEBAUT 2026-07-19** — Snapshot-Layer+Signal+Settings+MCP `vk_snapshots.GET/RELEASE`, 3 Pest. Offen: Batch-Freigabe-UI + R3.2-Kundensicht (`publishedFor`) |
 | **Spec, ungebaut** | 03 (#512 L1–L8) · 08 (Planungs-/Kreativ-Ebene) · 09·S2/S3 · 10 · 12 · 13 · 14 |
 
 ---

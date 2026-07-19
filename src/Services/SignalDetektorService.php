@@ -31,6 +31,7 @@ class SignalDetektorService
             + $this->preisSprungMargeImpact($team)
             + $this->margeUnterZiel($team)
             + $this->wareneinsatzUeberZiel($team)
+            + $this->vkAnpassungEmpfohlen($team)
             + $this->naehrwertPlausi($team)
             + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
     }
@@ -614,6 +615,48 @@ class SignalDetektorService
                     'ref_id' => $r->id,
                     'description' => 'Food-Cost über dem Ziel — günstigeren Lead-LA prüfen, Rezeptur/Portion anpassen oder Verkaufspreis erhöhen.',
                     'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'sales_net' => (float) $r->sales_net],
+                ]
+            );
+            $n++;
+        }
+
+        return $n;
+    }
+
+    /**
+     * R2.5 — VK-Anpassung empfohlen: der LIVE gerechnete VK einer Darreichung weicht
+     * vom zuletzt FREIGEGEBENEN Snapshot über die Leitplanke (max_vk_delta_pct) ab.
+     * Trennung Live-Marge ↔ veröffentlichter VK: das Signal fordert eine bewusste
+     * Freigabe (Batch) — ohne die bleibt der Kundenpreis (Snapshot) unverändert.
+     * Ein Signal je Darreichung; Richtung (erhöhen/senken) + Delta im Payload.
+     */
+    public function vkAnpassungEmpfohlen(Team $team): int
+    {
+        $mindest = app(TeamSettingsService::class)->mindestMarginPct($team);
+        $n = 0;
+        foreach (app(VkSnapshotService::class)->pending($team) as $p) {
+            $this->signals->erzeuge(
+                $team,
+                SignalTyp::VkAnpassungEmpfohlen,
+                // Preissenkung (Marge fällt) ist dringlicher als eine mögliche Erhöhung.
+                $p['richtung'] === 'erhoehen' ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
+                $p['recipe_name'] . ' — freigegebener VK ' . number_format($p['published_net'], 2, ',', '.')
+                    . ' € vs. live ' . number_format($p['live_net'], 2, ',', '.') . ' € (Δ '
+                    . number_format($p['delta_pct'], 1, ',', '.') . ' %, ' . $p['richtung'] . ')',
+                [
+                    'dedup_key' => 'vk-anpassung-presentation-' . $p['presentation_id'] . '-' . $p['live_net'],
+                    'ref_type' => 'recipe',
+                    'ref_id' => $p['recipe_id'],
+                    'description' => 'Der intern gerechnete VK weicht vom freigegebenen Kundenpreis ab. '
+                        . 'Bewusst freigeben (Batch) oder Live-Kalkulation prüfen — kein stiller Kunden-Preissprung.',
+                    'payload' => [
+                        'presentation_id' => $p['presentation_id'],
+                        'published_net' => $p['published_net'],
+                        'live_net' => $p['live_net'],
+                        'delta_pct' => $p['delta_pct'],
+                        'richtung' => $p['richtung'],
+                        'mindest_marge_pct' => $mindest,
+                    ],
                 ]
             );
             $n++;

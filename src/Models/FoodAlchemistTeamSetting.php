@@ -46,6 +46,11 @@ class FoodAlchemistTeamSetting extends Model
         'labor_overhead_pct' => 'decimal:2',
         // R2.1: Preis-Alarm-Schwelle (relative LA-Preisänderung in %, ab der ein Signal entsteht)
         'price_alarm_threshold_pct' => 'decimal:2',
+        // R2.5: Saison-Auto-Pricing-Leitplanken (Margen-Zielband, max VK-Delta je Freigabe, Mindestmarge)
+        'season_margin_band_min_pct' => 'decimal:2',
+        'season_margin_band_max_pct' => 'decimal:2',
+        'max_vk_delta_pct' => 'decimal:2',
+        'min_margin_pct' => 'decimal:2',
         // M-K6: Bezugsbasen für die Fixkosten-Ableitung (mek/fek/hk, monatlich)
         'calculation_reference_bases' => 'array',
         // Phase 5: pro-Typ-Farben (GP / Basisrezept / Gericht), teamweit

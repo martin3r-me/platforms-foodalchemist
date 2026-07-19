@@ -278,6 +278,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SubstitutionSuggestTool::class,
                     \Platform\FoodAlchemist\Tools\DishReverseTool::class,
                     \Platform\FoodAlchemist\Tools\SurplusSuggestTool::class,
+                    \Platform\FoodAlchemist\Tools\VkSnapshotsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\VkSnapshotsReleaseTool::class,
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)
                     \Platform\FoodAlchemist\Tools\ProcessAnchorsGroundTool::class,
                     // 06·H2: Convenience-Highlights kuratieren (MCP-Lockstep)

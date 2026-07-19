@@ -28,9 +28,11 @@
 
 ---
 
-## 1. R2.5 — Saison-Auto-Pricing (intern-vorschlagend) · M · Etappe S1 · 🟢 unblocked
+## 1. R2.5 — Saison-Auto-Pricing (intern-vorschlagend) · M · Etappe S1 · ✅ GEBAUT 2026-07-19 (Engine+MCP)
 
 Trennung: interne Live-Marge ↔ veröffentlichter, freigegebener VK.
+
+> **Gebaut 2026-07-19:** Tabelle `foodalchemist_vk_price_snapshots` + Model + `VkSnapshotService` (release/publishedFor/pending) + TeamSettings-Bänder (Migration+Accessoren) + `SignalTyp::VkAnpassungEmpfohlen` + Detektor in `laufen()` + MCP `vk_snapshots.GET`/`RELEASE`. `VkSnapshotTest` (3 Pest) + 80er-Regression grün. **Offen (Folge-Slices):** Batch-Freigabe-Button (Livewire) + R3.2-Kundensicht liest `publishedFor`. Aktiver Trigger = Snapshot-Delta-Leitplanke; season_margin_band ist als Setting da (Band-Trigger = optionaler Ausbau).
 
 **Bau (code-verankert):**
 - NEU `foodalchemist_vk_price_snapshots` (`presentation_id`, `sales_net`, `sales_gross`, `released_at`, `released_by`, `team_id`) — Kopiervorlage `foodbook_kapitel.snapshot_json`. Live-`recomputePreise` bleibt unberührt.

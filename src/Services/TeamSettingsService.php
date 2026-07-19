@@ -331,6 +331,33 @@ class TeamSettingsService
         return $v !== null && (float) $v > 0 ? (float) $v : self::PREIS_ALARM_SCHWELLE_DEFAULT;
     }
 
+    /** R2.5: max. relatives VK-Delta (%) ggü. freigegebenem Snapshot, ab dem „VK-Anpassung empfohlen" feuert. Default 5 %. */
+    public function maxVkDeltaPct(Team $team): float
+    {
+        $v = $this->for($team)->max_vk_delta_pct;
+
+        return $v !== null && (float) $v > 0 ? (float) $v : 5.0;
+    }
+
+    /** R2.5: Mindestmarge (%) — Untergrenze, unter der ein VK-Vorschlag kritisch ist. Null = nicht gepflegt. */
+    public function mindestMarginPct(Team $team): ?float
+    {
+        $v = $this->for($team)->min_margin_pct;
+
+        return $v !== null && (float) $v > 0 ? (float) $v : null;
+    }
+
+    /** R2.5: Margen-Zielband [min,max] in % (Saison-Auto-Pricing). Null-Elemente = Bandseite nicht gepflegt. */
+    public function seasonMarginBand(Team $team): array
+    {
+        $s = $this->for($team);
+
+        return [
+            'min' => $s->season_margin_band_min_pct !== null ? (float) $s->season_margin_band_min_pct : null,
+            'max' => $s->season_margin_band_max_pct !== null ? (float) $s->season_margin_band_max_pct : null,
+        ];
+    }
+
     /** #379+: Lohnnebenkosten-Zuschlag % auf den Produktionslohn (AG-/Sozialabgaben). */
     public function lohnnebenkostenPct(Team $team): float
     {

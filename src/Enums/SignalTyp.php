@@ -20,6 +20,8 @@ enum SignalTyp: string
     case AnkerFehlt = 'anker_fehlt';
     case ServierformUnbestimmt = 'servierform_unbestimmt';
     case EkKetteUnvollstaendig = 'ek_kette_unvollstaendig';
+    // R2.5: Live-VK weicht vom freigegebenen Snapshot über die Leitplanke ab.
+    case VkAnpassungEmpfohlen = 'vk_anpassung_empfohlen';
 
     public function label(): string
     {
@@ -34,6 +36,7 @@ enum SignalTyp: string
             self::AnkerFehlt => 'Flavor-Anker fehlt',
             self::ServierformUnbestimmt => 'Servierform unbestimmt',
             self::EkKetteUnvollstaendig => 'EK-Kette unvollständig',
+            self::VkAnpassungEmpfohlen => 'VK-Anpassung empfohlen',
         };
     }
 
@@ -51,6 +54,7 @@ enum SignalTyp: string
             self::AnkerFehlt => 'heroicon-o-link-slash',
             self::ServierformUnbestimmt => 'heroicon-o-question-mark-circle',
             self::EkKetteUnvollstaendig => 'heroicon-o-currency-euro',
+            self::VkAnpassungEmpfohlen => 'heroicon-o-tag',
         };
     }
 }
