@@ -1,7 +1,7 @@
-# Spec-Status-Matrix (01–14)
+# Spec-Status-Matrix (01–16)
 
 > Schnell-Sicht: Status + Blocker je Kern-Spec. Detail je Spec in der jeweiligen Datei; Reihenfolge/Phasen in [00_Orchestrierung_Naechste_Schritte.md](00_Orchestrierung_Naechste_Schritte.md).
-> Stand **2026-07-19**. Legende: 🟢 bau-reif · 🟡 entscheidungs-reif (benannter Blocker) · ⚪ Dossier · ✅ fertig.
+> Stand **2026-07-20**. Legende: 🟢 bau-reif · 🟡 entscheidungs-reif (benannter Blocker) · ⚪ Dossier · ✅ fertig.
 
 | # | Spec | Status | Blocker / Offen |
 |---|---|---|---|
@@ -19,11 +19,12 @@
 | **12** | Wirtschaftlichkeits-Intelligenz R2-Rest | R2.5 ✅ · R2.4 🟢 · R2.3 🟡 | **R2.4-Solver blocker-frei baubar**; R2.3 gated auf **Q2-Format-Spec** |
 | **13** | Preis-/Katalog-Ingest Q2 | Kanal-B 🟢 · Sales-Ist 🟡 · Kanal-A ⚪ | **Kanal-B-Import blocker-frei baubar** (bewusst hinten angestellt); Sales-Ist gated auf echte Beispieldatei; Kanal A extern |
 | **14** | Lieferanten-Management R9 | ✅ **KOMPLETT** (Engine+MCP+UI, `1382fc2`) | echtes Spend = Q2 (Nutzungs-Proxy ist v1) |
-| **15** | Semantische Suche über Lieferantenartikel (Supplier-Item-Pool) | ⚪ Dossier (2026-07-19) | RAG-Nachzug: neuer `supplier_item`-Pool + Observer + Retrieval; setzt #507-Go-Live voraus; Master-Backfill = größter Pool (Kosten/Skala) |
+| **15** | Semantische Suche über Lieferantenartikel (Supplier-Item-Pool) | ⚪ Dossier — **entkoppelt/zurückgestellt via 16** | RAG-Nachzug (Vektor-Pool + Observer + Retrieval); vom WG-Lead-Use-Case (16) NICHT gebraucht → wartet auf echte Freitext-Katalog-Discovery + 50k-Store-/Qdrant-Frage |
+| **16** | WG-Lead-gescopter LA-Kandidaten-Finder + On-demand-Klassifikation | 🟢 **bau-reif** (code-verifiziert 2026-07-20) | **Blocker-frei baubar** (Finder deterministisch, kein Provider). S1-Scope-Resolver existiert bereits (`stammSupplierIdsFor`) → Reuse; on-demand-Klassifikator (S4) = einziges neues Stück, nutzt Provider async. Schärft Spec-07-`mintFromLa`; fachlich: E1/E2/E4 mit Dominique |
 
 ## Verdichtet
 
-- **Sofort baubar, null Blocker:** 12·S2 (R2.4-Solver) · 13·S1 (Kanal-B) · 03·L4/L5.
+- **Sofort baubar, null Blocker:** 12·S2 (R2.4-Solver) · 13·S1 (Kanal-B) · 03·L4/L5 · **16·S2/S3 (LA-Finder, deterministisch — S1 ist Reuse)**.
 - **Baubar gegen Fake-Provider (Qualitäts-Gate später via Key):** 03·L1/L2/L3/L6/L7 · 08 · 10 · 05·Etappe-2.
 - **Einziger echter Rest-Blocker im Ordner:** 08 (Konvergenz-Qualität = LLM live). Alle übrigen „Blocker" sind Deploy-/Key-Gates fürs *Live-Feuern*, nicht fürs Bauen.
 - **Fertig:** 04 · 06 · 07 · 09 · 11 (S1–S3; nur optionales KI-Narrativ offen) · 14 (+ 01 nur Deploy-Verifikation).

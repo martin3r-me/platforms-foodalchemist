@@ -3,7 +3,7 @@
 > **ROADMAP-Bezug:** #507 (Grounding/Weg-2) · Spec [07](07_LA_First_GP_Mint_ueberall.md) (LA-First-Mint) · Spec [15](15_Semantic_Supplier_Item_Pool.md) (LA-Vektor-Pool — hiermit **entkoppelt/verschoben**).
 > **Anlass:** Use Case Dominique 2026-07-20 — *„Wenn es keinen passenden GP gibt, aber das Rezept die Zutat braucht, muss der passende Artikel unter den LA-Leads gefunden werden, die für die Warengruppe definiert sind."*
 > **Kernaussage:** Dieser Use Case braucht **KEINEN Vektor-Store/Qdrant und keinen 264k-Pool.** Er ist eine **WG-Lead-gescopte Namenssuche** (Terminologie + Lexik, Weg-2-Stack schon live) + eine **on-demand-Klassifikation** der tatsächlich getroffenen LAs (asynchron). Der LA-Vektor-Pool (Spec 15) ist damit vom Tisch, bis echte Freitext-Discovery über den ganzen Katalog gewünscht ist.
-> **Reifegrad: 🟢 bau-reif** (Code-kartiert 2026-07-20). Größe **M** (Finder klein; on-demand-Klassifikator mittel).
+> **Reifegrad: 🟢 bau-reif** (Code-kartiert + code-verifiziert 2026-07-20). Größe **S–M** (Finder klein — Scope-Resolver S1 existiert bereits als Reuse; on-demand-Klassifikator mittel = einziges echt neues Stück).
 
 ---
 
@@ -28,7 +28,7 @@
 
 **Such-Einhängepunkt:** `SupplierItemService::searchGlobal(Team, q, array $filters, perPage)` `:43` — nimmt eine **`$filters`-Array** → hier kommt der `supplier_id IN (WG-Leads)`-Scope rein (kein Neubau der Suche).
 
-**WG-Lead-Quelle:** Tabelle `foodalchemist_preferred_suppliers` (`team_id, supplier_id, commodity_group_code`, nullable=global). Modell/Service: `FoodAlchemistStammLieferant` + `StammLieferantService` (von `LeadLaService` schon konsumiert).
+**WG-Lead-Quelle + Scope-Resolver EXISTIERT SCHON (Korrektur 2026-07-20):** Tabelle `foodalchemist_preferred_suppliers` (`team_id, supplier_id, commodity_group_code`, nullable=global; English-Rename der Tabelle, Modell/Service blieben deutsch). Der WG-Scope-Resolver ist **bereits gebaut**: `StammLieferantService::stammSupplierIdsFor(team, ?wgCode)` `:33` liefert exakt die Lead-`supplier_id`s einer WG **inkl. global-NULL-Merge** (`whereNull('commodity_group_code') OR = wgCode`). Von `LeadLaService` schon konsumiert. → **S1 ist damit Reuse, kein Neubau** (spart eine Komponente).
 
 **Vorhandenes Lead-Ranking (reuse als Muster):** `LeadLaService::rangliste(gp, team)` `:47` + `kandidaten()` — rankt LAs für ein GP über Stamm-/Preferred-Overlay + `stammIds`. Die Ranking-Logik (Lead-Priorität × Vollständigkeit) ist hier schon gelöst → für den WG-Fall spiegeln.
 
@@ -60,8 +60,8 @@
 
 | # | Etappe | Größe | Inhalt |
 |---|---|---|---|
-| **S1** | **WG-Lead-Scope-Resolver** | S | `PreferredSupplierService::leadSupplierIdsFor(team, wgCode)` — liest `preferred_suppliers` (WG-Code + Fallback global/NULL). Reine Query. |
-| **S2** | **LaCandidateFinder** | M | `find(team, ingredientName, ?wgCode, k)` → Scope via S1 → `searchGlobal($text, ['supplier_id'=>ids])` → Re-Ranking mit `TerminologyService` (Alias/Anti-Marker) + `TokenEngine::matchScore` → Top-k. **Kein KI, deterministisch, schnell.** |
+| **S1** | **WG-Lead-Scope-Resolver** | ~~S~~ **0 (reuse)** | ✅ **Existiert:** `StammLieferantService::stammSupplierIdsFor(team, ?wgCode)` `:33` — WG-Code + global-NULL-Merge, genau der gewünschte Scope. Kein Neubau; nur aus S2 aufrufen. |
+| **S2** | **LaCandidateFinder** | M | `find(team, ingredientName, ?wgCode, k)` → Scope via `StammLieferantService::stammSupplierIdsFor` (S1-Reuse) → `searchGlobal($text, ['supplier_id'=>ids])` → Re-Ranking mit `TerminologyService` (Alias/Anti-Marker) + `TokenEngine::matchScore` → Top-k. **Kein KI, deterministisch, schnell.** ✅ **Verifiziert 2026-07-20:** `SupplierItemService::baseQuery` `:59` wertet heute NUR `$filters['onlyActive']` aus → **einen `->when($filters['supplier_ids'] ?? null, fn($q,$ids)=>$q->whereIn('supplier_id',$ids))`-Zweig ergänzen** (ein Statement, kein Suchneubau). Damit greift der WG-Scope. |
 | **S3** | **mintFromLa umstellen** | S | `searchGlobal(...)->items()[0]` ersetzen durch `LaCandidateFinder::find(team, $text, $wgHint, 3)->first()`. `$slug`/WG-Hint durchreichen (Param existiert). Fallback-Kaskade (E2). Verhalten byte-identisch, wenn kein WG-Hint + kein besserer Treffer (Regressions-Schutz). |
 | **S4** | **On-demand-Klassifikator** | M | `ClassifyLaJob(supplierItemId)` (BulkEnrich-Muster): LLM klassifiziert den **einen** getroffenen LA → schreibt `supplier_item_structures` (WG/Hauptzutat/Zustand/Form/`classifier`/`classified_at`) + reichert den tentativen GP an → `needs_review` bei Lücke. **Nach dem Mint dispatched, nie inline.** Idempotent (schon klassifiziert → skip). |
 | **S5** | **MCP-Lockstep** | S | `gps.MINT_FROM_LA` / `gps.MATCH` um optionalen `commodity_group`-Hint erweitern; Response nennt gewählten LA + `via` (lexical/terminology) + ob Klassifikation angestoßen wurde. |
@@ -72,7 +72,7 @@
 ## 4. Definition of Done
 
 - [ ] `LaFirstGpService::mintFromLa` wählt den Kandidaten **WG-Lead-gescoped + Terminologie-gerankt** statt `->items()[0]`; ohne WG-Hint + ohne besseren Treffer identisches Verhalten (Regressions-Test).
-- [ ] Scope-Resolver liest `preferred_suppliers` korrekt (WG-Code + Fallback global); leere WG → definierter Fallback (E2).
+- [ ] Scope via `StammLieferantService::stammSupplierIdsFor` (WG-Code + global-NULL-Merge, existiert); leere WG → definierter Fallback (E2).
 - [ ] Namensmatch nutzt `TerminologyService` (Alias/Anti-Marker) — „Paradeiser" findet den Tomaten-LA, „Brie" nicht den Bries-LA.
 - [ ] On-demand-Klassifikation läuft **asynchron** (Queue), blockiert Mint/Grounding nicht; nur der getroffene LA wird klassifiziert; idempotent; `needs_review` bei §8-Lücke → ReviewQueue.
 - [ ] Kein Vektor-Store/Embedding im Pfad (deterministisch); Perf: Finder < 300 ms warm im WG-Scope.
@@ -85,7 +85,7 @@
 
 | Reuse | Neu |
 |---|---|
-| `mintFromLa`-Gerüst (Struktur-Reuse, Dedup-Guard, §6-Naming, `LeadLaService::verknuepfen`); `SupplierItemService::searchGlobal(filters[])`; `preferred_suppliers` + `StammLieferantService`; `LeadLaService::rangliste`-Ranking-Muster; `TerminologyService` + `TokenEngine`; `BulkEnrichJob`-Async-Muster; `AiGatewayService`; `ReviewQueue`; `supplier_item_structures`-Felder | `PreferredSupplierService::leadSupplierIdsFor`; `LaCandidateFinder`; `ClassifyLaJob` + LA-Klassifikator-Service (WaWi-`105`-Spiegel); WG-Hint-Param in mintFromLa + MCP; Fallback-Kaskade |
+| `mintFromLa`-Gerüst (Struktur-Reuse, Dedup-Guard, §6-Naming, `LeadLaService::verknuepfen`); `SupplierItemService::searchGlobal(filters[])`; **`StammLieferantService::stammSupplierIdsFor` (= S1-Scope-Resolver, existiert)**; `preferred_suppliers`-Tabelle; `LeadLaService::rangliste`-Ranking-Muster; `TerminologyService` + `TokenEngine::matchScore`; `BulkEnrichJob`-Async-Muster; `AiGatewayService`; `ReviewQueue`; `supplier_item_structures`-Felder | `LaCandidateFinder` (S2); `supplier_ids`-whereIn-Zweig in `baseQuery` (1 Statement); `ClassifyLaJob` + LA-Klassifikator-Service (WaWi-`105`-Spiegel); WG-Hint-Param in `mintFromLa` + MCP; Fallback-Kaskade (E2) |
 
 ---
 
