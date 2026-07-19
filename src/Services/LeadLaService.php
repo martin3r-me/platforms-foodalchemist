@@ -110,13 +110,83 @@ class LeadLaService
             ?? $kette->first(fn ($la) => ! $la->locked);
     }
 
-    /** Manueller Override des globalen Leads (GT-6): LA muss zum GP gehören (I2), NULL erlaubt. */
-    public function setLeadLa(Team $team, FoodAlchemistGp $gp, ?int $laId): void
+    /**
+     * Manueller Override des globalen Leads (GT-6): LA muss zum GP gehören (I2), NULL erlaubt.
+     *
+     * R9.2 (E5): optionale $reason wird auf der gp_la_preferences-Zeile (team,gp,laId)
+     * vermerkt → Override-Historie fällt über LogsActivity ab. $recompute=true rechnet
+     * die GP-nutzenden Rezepte neu (neuer Lead ⇒ neuer EK); Default false hält die zwei
+     * bestehenden UI-Caller verhaltensgleich (Bulk-Recompute läuft dort separat).
+     */
+    public function setLeadLa(Team $team, FoodAlchemistGp $gp, ?int $laId, ?string $reason = null, bool $recompute = false): void
     {
         if ($laId !== null && ! $this->gehoertZuGp($gp, $laId)) {
             throw new \RuntimeException("LA [{$laId}] ist nicht mit GP [{$gp->name}] verknüpft (GL-03 I2).");
         }
         $gp->update(['lead_la_supplier_item_id' => $laId]);
+
+        if ($reason !== null && $laId !== null) {
+            FoodAlchemistGpLaPreference::withTrashed()->updateOrCreate(
+                ['team_id' => $team->id, 'gp_id' => $gp->id, 'supplier_item_id' => $laId],
+                ['reason' => $reason, 'deleted_at' => null],   // LogsActivity → Historie
+            );
+        }
+
+        if ($recompute) {
+            $this->recomputeGpNutzer($gp);
+        }
+    }
+
+    /** R9.2: GP-nutzende Rezepte neu rechnen (Direktnutzer + transitive Eltern). */
+    private function recomputeGpNutzer(FoodAlchemistGp $gp): void
+    {
+        $recipeIds = DB::table('foodalchemist_recipe_ingredients')
+            ->where('gp_id', $gp->id)->whereNull('deleted_at')->distinct()->pluck('recipe_id');
+        if ($recipeIds->isEmpty()) {
+            return;
+        }
+        $rc = app(RecipeRecomputeService::class);
+        foreach ($recipeIds as $rid) {
+            $rc->recomputeAndPropagate((int) $rid);
+        }
+    }
+
+    /**
+     * R9.2 — bediente Lead-Steuerung für einen GP: aktueller Lead (effektiv + global
+     * gesetzt), Heuristik-Vorschlag (pickLeadLa), Ausweichquellen (Rangliste ab Rang 2,
+     * nicht gesperrt) + Override-Begründung (falls vermerkt).
+     */
+    public function leadSteuerung(FoodAlchemistGp $gp, Team $team): array
+    {
+        $kette = $this->rangliste($gp, $team);
+        $effektiv = $this->effektiverLead($gp, $team);
+        $vorschlag = $kette->first()?->id;
+        $gesetzt = $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null;
+
+        $reason = $gesetzt !== null
+            ? FoodAlchemistGpLaPreference::where('team_id', $team->id)->where('gp_id', $gp->id)
+                ->where('supplier_item_id', $gesetzt)->value('reason')
+            : null;
+
+        $map = fn ($la) => [
+            'la_id' => (int) $la->id,
+            'supplier' => $la->supplier_name,
+            'vergleichspreis' => $la->vergleichspreis_wert,
+            'ist_stamm' => (bool) $la->ist_stamm,
+            'locked' => (bool) $la->locked,
+            'gepinnt' => (bool) $la->gepinnt,
+        ];
+
+        return [
+            'gp_id' => (int) $gp->id,
+            'name' => $gp->name,
+            'lead_gesetzt_la_id' => $gesetzt,
+            'lead_effektiv_la_id' => $effektiv?->id !== null ? (int) $effektiv->id : null,
+            'vorschlag_la_id' => $vorschlag !== null ? (int) $vorschlag : null,
+            'override_reason' => $reason,
+            'lead' => $kette->first() !== null ? $map($kette->first()) : null,
+            'ausweichquellen' => $kette->slice(1)->filter(fn ($la) => ! $la->locked)->map($map)->values()->all(),
+        ];
     }
 
     /** Team-Sperre (V-27): LA fällt aus der effektiven Kette dieses Teams. */

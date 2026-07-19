@@ -283,6 +283,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SuppliersGetTool::class,
                     \Platform\FoodAlchemist\Tools\SuppliersPutTool::class,
                     \Platform\FoodAlchemist\Tools\SupplierAgreementsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\SuppliersVolumeTool::class,
+                    \Platform\FoodAlchemist\Tools\GpLeadGetTool::class,
+                    \Platform\FoodAlchemist\Tools\GpLeadPutTool::class,
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)
                     \Platform\FoodAlchemist\Tools\ProcessAnchorsGroundTool::class,
                     // 06·H2: Convenience-Highlights kuratieren (MCP-Lockstep)

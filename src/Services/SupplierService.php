@@ -204,7 +204,75 @@ class SupplierService
                 'notice_period_days' => $d->notice_period_days, 'notice_deadline' => $d->noticeDeadline()?->toDateString(),
             ])->all(),
             'wg_abdeckung' => $wgAbdeckung,
+            'volumen_proxy' => $this->volumenProxy($team, $id),
         ];
+    }
+
+    /**
+     * R9.2 (E6) — Volumen-Proxy je Lieferant: Nutzungs-Häufigkeit = Zahl der
+     * Rezept-Zutaten, deren GP-Lead-LA zu diesem Lieferanten gehört (team-sichtbare
+     * Rezepte). EHRLICH als Proxy markiert — echtes Spend/Umsatz fehlt im Modul.
+     * Kombiniert mit Konditionen → „wo lohnt Bündelung/Nachverhandlung".
+     *
+     * @return array<int, int> supplier_id => n_usages
+     */
+    private function volumenProxyRaw(Team $team): array
+    {
+        $recipeIds = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->pluck('id');
+        if ($recipeIds->isEmpty()) {
+            return [];
+        }
+
+        return DB::table('foodalchemist_recipe_ingredients AS ri')
+            ->join('foodalchemist_gps AS g', 'g.id', '=', 'ri.gp_id')
+            ->join('foodalchemist_supplier_items AS si', 'si.id', '=', 'g.lead_la_supplier_item_id')
+            ->whereNull('ri.deleted_at')->whereIn('ri.recipe_id', $recipeIds)
+            ->selectRaw('si.supplier_id, COUNT(*) AS n')
+            ->groupBy('si.supplier_id')
+            ->pluck('n', 'supplier_id')
+            ->map(fn ($n) => (int) $n)->all();
+    }
+
+    /** R9.2: Volumen-Proxy für EINEN Lieferanten (fürs Stammblatt). */
+    public function volumenProxy(Team $team, int $supplierId): array
+    {
+        $n = $this->volumenProxyRaw($team)[$supplierId] ?? 0;
+
+        return ['n_usages' => $n, 'ist_proxy' => true, 'basis' => 'Rezept-Zutaten via Lead-LA (kein Spend/Umsatz)'];
+    }
+
+    /**
+     * R9.2 (E6): Bündelungs-Ranking über alle sichtbaren Lieferanten —
+     * Nutzungs-Proxy × Konditionen, absteigend nach Nutzung.
+     *
+     * @return list<array>
+     */
+    public function volumenProxyRanking(Team $team): array
+    {
+        $proxy = $this->volumenProxyRaw($team);
+        if ($proxy === []) {
+            return [];
+        }
+        $suppliers = FoodAlchemistSupplier::visibleToTeam($team)->whereIn('id', array_keys($proxy))->get();
+        $out = [];
+        foreach ($suppliers as $s) {
+            $n = $proxy[$s->id] ?? 0;
+            $rebate = $s->rebate_pct !== null ? (float) $s->rebate_pct : null;
+            $out[] = [
+                'supplier_id' => (int) $s->id,
+                'name' => $s->name,
+                'n_usages' => $n,
+                'rebate_pct' => $rebate,
+                'payment_term_days' => $s->payment_term_days,
+                'bundling_hint' => $n >= 5 && ($rebate === null || $rebate <= 0)
+                    ? 'hohes Volumen, keine Rückvergütung hinterlegt → Nachverhandlung prüfen'
+                    : ($n >= 5 ? 'hohes Volumen → Bündelungs-/Konditionshebel' : 'geringes Volumen'),
+                'ist_proxy' => true,
+            ];
+        }
+        usort($out, fn ($a, $b) => [$b['n_usages'], $a['name']] <=> [$a['n_usages'], $b['name']]);
+
+        return $out;
     }
 
     /** Sichtbar + team-eigen, sonst sprechender Fehler (D1-Schreibrecht). */

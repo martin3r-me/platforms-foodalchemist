@@ -2,7 +2,7 @@
 
 > **ROADMAP-Bezug:** R9.1 + R9.2 (eigener Track; Dominique-Wunsch 2026-07-05). **Ziel:** Die Beziehung zu einem Lieferanten aktiv **steuern** — Verträge, Konditionen, Absprachen, Zusagen, wer wofür Lead ist.
 > **Scope-Grenze ✅ ENTSCHIEDEN (2026-07-18):** R9 = **nur** kommerzielle/strategische Ebene („mit wem zu welchen Bedingungen"). NICHT Bestellen/Wareneingang/Rechnungskontrolle (N-Track).
-> **Reifegrad: 🟢 bau-reif** (Code-Kartierung 2026-07-19). Vorher ⚪ Dossier.
+> **Reifegrad: ✅ GEBAUT (R9.1 + R9.2, Engine+MCP, 2026-07-19)** — 5 Migrationen, 3 Models, `SupplierStatus`-Enum, `SupplierService`-Erw. + `SupplierAgreementService` + `LeadLaService`-Erw. (setLeadLa+reason/recompute, leadSteuerung, volumenProxy) + 2 Signale (`VertragsfristFaellig`) + 6 MCP-Tools, 6 Pest. Offen: Livewire-Detail-/Lead-Tabs (UI-Folge-Slices); echtes Spend = Q2.
 
 ---
 
@@ -52,16 +52,18 @@
 - [x] Konditionen strukturiert: Rückvergütung/Bonus %, Zahlungsziel, Mindestbestellwert, Frei-Haus-Grenze (E4, geteilt mit Q2).
 - [x] Team-scoped, LogsActivity, MCP `suppliers.GET/PUT` + `supplier_agreements.POST` (Lockstep, D1-Gate).
 
-## 4. R9.2 — Lead-Lieferant-Steuerung als bediente Strecke · M · Etappe S2 · hängt an R9.1 + R1
+## 4. R9.2 — Lead-Lieferant-Steuerung als bediente Strecke · M · Etappe S2 · hängt an R9.1 + R1 · ✅ GEBAUT 2026-07-19 (Engine+MCP)
 
-**Bau:** Lead-Steuerung-Tab reutzt `rangliste`+`effektiverLead` direkt; `setLeadLa(reason)` (E5) + Historie via LogsActivity; Zweit-/Ausweichquelle hinterlegbar (fällt aus `rangliste`-Rang>1); Volumen×Konditionen-Auswertung auf Nutzungs-Proxy (E6).
+> **Gebaut 2026-07-19:** Migration `gp_la_preferences.reason` + `LeadLaService::setLeadLa(+$reason,+$recompute)` (Override-Historie via LogsActivity; Recompute der GP-nutzenden Rezepte) + `leadSteuerung()` (gesetzter/effektiver Lead + Vorschlag + Ausweichquellen aus Rangliste-Rang>1 + Begründung) + `SupplierService::volumenProxyRanking`/`volumenProxy` (Nutzungs-Proxy, ehrlich markiert) + MCP `gp_lead.GET`/`gp_lead.PUT`/`suppliers.VOLUME`. `LeadSteuerungTest` (3 Pest) + 105er-Regression grün. **Offen (Folge-Slice):** UI-Überschreiben (Livewire-Lead-Tab). **Damit ist Spec 14 engine-/MCP-seitig komplett.**
+
+**Bau (Spec):** Lead-Steuerung-Tab reutzt `rangliste`+`effektiverLead` direkt; `setLeadLa(reason)` (E5) + Historie via LogsActivity; Zweit-/Ausweichquelle hinterlegbar (fällt aus `rangliste`-Rang>1); Volumen×Konditionen-Auswertung auf Nutzungs-Proxy (E6).
 
 **DoD:**
-- [ ] Lead-LA je GP/WG sichtbar + überschreibbar in der UI — mit Begründungs-Vermerk bei manuellem Override (E5).
-- [ ] Vorschlag = `pickLeadLa` (Vollständigkeit > Aktualität > Preis/Einheit); Mensch bestätigt/übersteuert, Entscheid protokolliert (LogsActivity).
-- [ ] Zweit-/Ausweichquelle je GP hinterlegbar (aus `rangliste`).
-- [ ] Auswertung: Volumen (Nutzungs-Proxy) je Lieferant × Konditionen → „wo lohnt Bündelung/Nachverhandlung" (E6, Proxy markiert).
-- [ ] Test: Override setzt Lead korrekt (+reason), Recompute nutzt neuen Lead-EK; Historie nachvollziehbar.
+- [~] Lead-LA je GP sichtbar + überschreibbar — Service+MCP (`gp_lead.GET/PUT`, +reason); UI-Tab = Folge-Slice.
+- [x] Vorschlag = `pickLeadLa`; Mensch übersteuert per `gp_lead.PUT`, Entscheid protokolliert (`gp_la_preferences.reason` → LogsActivity).
+- [x] Zweit-/Ausweichquelle je GP (aus `rangliste`, `leadSteuerung.ausweichquellen`).
+- [x] Auswertung: Volumen (Nutzungs-Proxy) je Lieferant × Konditionen (`volumenProxyRanking` + MCP `suppliers.VOLUME`, Proxy markiert).
+- [x] Test: `LeadSteuerungTest` (3) — Override +reason, Recompute neuer Lead-EK (1,00→2,00 €), Historie.
 
 ## 5. Reuse-vs-Neu
 
