@@ -355,7 +355,43 @@ class IngredientMatchService
             }
         }
 
+        // Ganz-Token-Bonus: ein echter Wort-Treffer (Query- ODER Alias-Token ==
+        // ein Kandidaten-Token) rankt minimal über einen reinen Teil-Substring-
+        // Treffer (Sahne > Rahmspinat für „Rahm", Roastbeef⊃beef verliert gegen
+        // Rindfleisch). Bricht nur Gleichstände, verändert die Bänder nicht.
+        if ($best > 0.0 && $this->hasWholeTokenMatch($queryTokens, $aliasVariants, $candText)) {
+            $best += self::WHOLE_TOKEN_BONUS;
+        }
+
         return $best;
+    }
+
+    private const WHOLE_TOKEN_BONUS = 0.001;
+
+    /**
+     * Gibt es einen EXAKTEN Wort-Treffer (nicht nur Teil-Substring) zwischen der
+     * Query/den Alias-Varianten und dem Kandidatentext?
+     *
+     * @param  list<string>  $queryTokens
+     * @param  list<list<string>>  $aliasVariants
+     */
+    private function hasWholeTokenMatch(array $queryTokens, array $aliasVariants, string $candText): bool
+    {
+        $candSet = array_flip($this->engine->tokenize($candText));
+        foreach ($queryTokens as $t) {
+            if (isset($candSet[$t])) {
+                return true;
+            }
+        }
+        foreach ($aliasVariants as $variant) {
+            foreach ($variant as $t) {
+                if (isset($candSet[$t])) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

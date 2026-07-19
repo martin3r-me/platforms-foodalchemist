@@ -245,7 +245,25 @@ class EmbedEvalCommand extends Command
         $s = strtr($s, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
         $s = (string) preg_replace('/[^a-z0-9]+/', ' ', $s);
 
-        return array_values(array_filter(explode(' ', trim($s)), static fn ($t) => $t !== ''));
+        return array_values(array_map(
+            [$this, 'stem'],
+            array_filter(explode(' ', trim($s)), static fn ($t) => $t !== ''),
+        ));
+    }
+
+    /**
+     * Konservativer DE-Plural-Fold für den MESS-Vergleich: „Tomaten"=„Tomate".
+     * Suffixe -en/-n/-e — NICHT -s (schützt „Bries" ≠ „Brie"). Min-Stamm-Länge 3.
+     */
+    private function stem(string $t): string
+    {
+        foreach (['en', 'n', 'e'] as $suf) {
+            if (str_ends_with($t, $suf) && mb_strlen($t) - mb_strlen($suf) >= 3) {
+                return mb_substr($t, 0, mb_strlen($t) - mb_strlen($suf));
+            }
+        }
+
+        return $t;
     }
 
     /**
