@@ -1,0 +1,61 @@
+<?php
+
+use Platform\FoodAlchemist\Services\TerminologyService;
+
+/**
+ * #507 Weg-2: die deterministische Terminologie-Schicht (S1 Alias + S2 Anti-Marker).
+ * Reine Logik, keine DB. Deckt die Golden-Set-Fälle ab, die die E5-Eichung als
+ * „von Embeddings nicht trennbar" markiert hat.
+ */
+beforeEach(function () {
+    $this->svc = new TerminologyService();
+});
+
+// ── S1: Alias-Expansion ──────────────────────────────────────────────────────
+
+it('expandiert Dialekt/Übersetzung auf die Kanon-Tokens', function () {
+    expect($this->svc->aliasTokensFor('Paradeiser'))->toContain('tomate');
+    expect($this->svc->aliasTokensFor('Erdapfel'))->toContain('kartoffel');
+    expect($this->svc->aliasTokensFor('Beef'))->toContain('rindfleisch');
+    expect($this->svc->aliasTokensFor('Salmon'))->toContain('lachs');
+    expect($this->svc->aliasTokensFor('Möhre'))->toContain('karotte');
+    // symmetrisch: der Kanon-Begriff zieht die Synonyme mit
+    expect($this->svc->aliasTokensFor('Sahne'))->toContain('rahm')->toContain('obers');
+});
+
+it('lässt Standardnamen ohne Alias unangetastet', function () {
+    expect($this->svc->aliasTokensFor('Zanderfilet'))->toBe([]);
+    expect($this->svc->aliasTokensFor('Butter'))->toBe([]);
+});
+
+it('triggert NICHT auf Teil-Strings (Token-Grenzen)', function () {
+    // „Tamarinde" enthält den Substring „rind" — darf NICHT Beef-Aliase ziehen.
+    expect($this->svc->aliasTokensFor('Tamarinde'))->not->toContain('rindfleisch');
+    expect($this->svc->aliasTokensFor('Tamarinde'))->not->toContain('beef');
+});
+
+// ── S2: Anti-Marker-Suppression (die 8 Golden-Negativfälle) ──────────────────
+
+it('unterdrückt bekannte Verwechslungs-Fallen', function () {
+    expect($this->svc->isAntiMarker('Brie', 'Bries'))->toBeTrue();
+    expect($this->svc->isAntiMarker('Bries', 'Brie'))->toBeTrue();
+    expect($this->svc->isAntiMarker('Kalbsbries', 'Brie, jung'))->toBeTrue();
+    expect($this->svc->isAntiMarker('Triple Sec', 'Cookies Triple Chocolate'))->toBeTrue();
+    expect($this->svc->isAntiMarker('Cookies Triple Chocolate', 'Triple Sec'))->toBeTrue();
+    expect($this->svc->isAntiMarker('Cointreau', 'Orange'))->toBeTrue();
+    expect($this->svc->isAntiMarker('Limoncello', 'Zitrone'))->toBeTrue();
+    expect($this->svc->isAntiMarker('Paprikapulver', 'Paprika: frisch'))->toBeTrue();
+    expect($this->svc->isAntiMarker('Sojasauce', 'Sauce Hollandaise'))->toBeTrue();
+});
+
+it('lässt legitime Treffer durch (kein Über-Blocken)', function () {
+    // Der eigentliche Treffer darf NIE unterdrückt werden.
+    expect($this->svc->isAntiMarker('Bries', 'Bries'))->toBeFalse();
+    expect($this->svc->isAntiMarker('Brie', 'Brie'))->toBeFalse();
+    expect($this->svc->isAntiMarker('Cointreau', 'Cointreau'))->toBeFalse();
+    expect($this->svc->isAntiMarker('Limoncello', 'Limoncello'))->toBeFalse();
+    expect($this->svc->isAntiMarker('Paprikapulver', 'Paprikapulver'))->toBeFalse();
+    expect($this->svc->isAntiMarker('Tomate', 'Tomate'))->toBeFalse();
+    // unbeteiligte Paare bleiben unberührt
+    expect($this->svc->isAntiMarker('Rindfleisch', 'Rinderhackfleisch'))->toBeFalse();
+});

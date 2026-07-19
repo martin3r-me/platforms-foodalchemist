@@ -29,8 +29,11 @@ class IngredientMatchService
         // E2 (#507): nullable + container-resolved. Ohne Provider/Flag inert →
         // candidatesFor bleibt byte-identisch zum Legacy-Verhalten (84 Goldens grün).
         private ?SemanticRetrievalService $semantic = null,
+        // #507 Weg-2: deterministische Alias-/Anti-Marker-Schicht (S1/S2).
+        private ?TerminologyService $terminology = null,
     ) {
         $this->semantic ??= app(SemanticRetrievalService::class);
+        $this->terminology ??= app(TerminologyService::class);
     }
 
     /**
@@ -201,31 +204,40 @@ class IngredientMatchService
             return [];
         }
 
-        // Lexikalischer Pool (unverändert) → keyed map "kind\0id".
+        // S1 (#507 Weg-2): Alias-Tokens additiv in Prefilter + Scoring — Dialekt/
+        // Übersetzung („Paradeiser"→auch „tomate"). Feuert nur bei bekanntem Alias,
+        // Standardnamen bleiben unberührt. Der Aroma/Anti-Marker-Fix ist S2 unten.
+        $aliasTokens = $this->terminology->aliasTokensFor($ingredientName);
+        $poolTokens = $aliasTokens === []
+            ? $queryTokens
+            : array_values(array_unique(array_merge($queryTokens, $aliasTokens)));
+
+        // Lexikalischer Pool → keyed map "kind\0id".
         $lex = [];
-        foreach ($this->gpPool($team, $queryTokens, $querySlug) as $gp) {
+        foreach ($this->gpPool($team, $poolTokens, $querySlug) as $gp) {
             $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
-            $strict = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
-            $score = max($strict, $this->heuristik->substringOverlap($queryTokens, $combined));
+            $strict = $this->scoreMitFloor($poolTokens, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
+            $score = max($strict, $this->heuristik->substringOverlap($poolTokens, $combined));
             if ($score > 0.0) {
                 $lex["gp\0{$gp->id}"] = ['kind' => 'gp', 'id' => (int) $gp->id, 'name' => $gp->name, 'score' => $score, 'reference' => "gp:{$gp->id}"];
             }
         }
-        foreach ($this->subPool($team, $queryTokens, $querySlug) as $sub) {
-            $strict = $this->scoreMitFloor($queryTokens, $querySlug, $sub->name, null, $sub->name);
-            $score = max($strict, $this->heuristik->substringOverlap($queryTokens, $sub->name));
+        foreach ($this->subPool($team, $poolTokens, $querySlug) as $sub) {
+            $strict = $this->scoreMitFloor($poolTokens, $querySlug, $sub->name, null, $sub->name);
+            $score = max($strict, $this->heuristik->substringOverlap($poolTokens, $sub->name));
             if ($score > 0.0) {
                 $lex["sub\0{$sub->id}"] = ['kind' => 'sub', 'id' => (int) $sub->id, 'name' => $sub->name, 'score' => $score, 'reference' => "sub:{$sub->id}"];
             }
         }
 
-        // Legacy-Pfad: Semantik aus ⇒ exakt wie bisher (nur Herkunfts-Marker additiv).
+        // Legacy-Pfad: Semantik aus ⇒ exakt wie bisher (nur Herkunfts-Marker + S2).
         if ($this->semantic === null || ! $this->semantic->enabled()) {
             $out = array_map(static function ($c) {
                 $c['origin'] = 'lexical';
 
                 return $c;
             }, array_values($lex));
+            $out = $this->stripAntiMarkers($ingredientName, $out);
             usort($out, fn ($a, $b) => $b['score'] <=> $a['score']);
 
             return array_slice($out, 0, $k);
@@ -306,10 +318,28 @@ class IngredientMatchService
             ];
         }
 
-        $out = array_values($merged);
+        $out = $this->stripAntiMarkers($ingredientName, array_values($merged));
         usort($out, fn ($a, $b) => $b['score'] <=> $a['score']);
 
         return array_slice($out, 0, $k);
+    }
+
+    /**
+     * S2 (#507 Weg-2): entfernt bekannte Verwechslungs-Fallen aus der Shortlist,
+     * bevor sie an die LLM-Disambig geht — unabhängig vom (lexikalischen ODER
+     * semantischen) Score. Genau das entsperrt das Flag-Scharfstellen: Anti-Marker
+     * werden deterministisch (Vault Anti_Marker.md) gefiltert, nicht per Floor
+     * gehofft (Brie↛Bries, Sojasauce↛Hollandaise, Paprikapulver↛Paprika frisch).
+     *
+     * @param  array<int, array{name:string, ...}>  $candidates
+     * @return array<int, array{name:string, ...}>
+     */
+    private function stripAntiMarkers(string $ingredientName, array $candidates): array
+    {
+        return array_values(array_filter(
+            $candidates,
+            fn ($c) => ! $this->terminology->isAntiMarker($ingredientName, (string) ($c['name'] ?? '')),
+        ));
     }
 
     // ── Pool-Scans ───────────────────────────────────────────────────────
