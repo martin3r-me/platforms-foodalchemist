@@ -22,6 +22,8 @@ enum SignalTyp: string
     case EkKetteUnvollstaendig = 'ek_kette_unvollstaendig';
     // R2.5: Live-VK weicht vom freigegebenen Snapshot über die Leitplanke ab.
     case VkAnpassungEmpfohlen = 'vk_anpassung_empfohlen';
+    // R9.1: Vertrags-Kündigungsfrist eines Lieferanten läuft ab.
+    case VertragsfristFaellig = 'vertragsfrist_faellig';
 
     public function label(): string
     {
@@ -37,6 +39,7 @@ enum SignalTyp: string
             self::ServierformUnbestimmt => 'Servierform unbestimmt',
             self::EkKetteUnvollstaendig => 'EK-Kette unvollständig',
             self::VkAnpassungEmpfohlen => 'VK-Anpassung empfohlen',
+            self::VertragsfristFaellig => 'Vertragsfrist fällig',
         };
     }
 
@@ -55,6 +58,7 @@ enum SignalTyp: string
             self::ServierformUnbestimmt => 'heroicon-o-question-mark-circle',
             self::EkKetteUnvollstaendig => 'heroicon-o-currency-euro',
             self::VkAnpassungEmpfohlen => 'heroicon-o-tag',
+            self::VertragsfristFaellig => 'heroicon-o-calendar-days',
         };
     }
 }

@@ -32,6 +32,7 @@ class SignalDetektorService
             + $this->margeUnterZiel($team)
             + $this->wareneinsatzUeberZiel($team)
             + $this->vkAnpassungEmpfohlen($team)
+            + $this->vertragsfristFaellig($team)
             + $this->naehrwertPlausi($team)
             + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
     }
@@ -656,6 +657,44 @@ class SignalDetektorService
                         'delta_pct' => $p['delta_pct'],
                         'richtung' => $p['richtung'],
                         'mindest_marge_pct' => $mindest,
+                    ],
+                ]
+            );
+            $n++;
+        }
+
+        return $n;
+    }
+
+    /**
+     * R9.1 (E7) — Vertragsfrist fällig: die Kündigungs-Deadline eines Lieferanten-
+     * Dokuments (Laufzeitende − Kündigungsfrist) liegt im Vorlauf-Fenster. Ein Signal
+     * je Dokument; Muster wie veraltetePreise, aber datumsgetrieben.
+     */
+    public function vertragsfristFaellig(Team $team, int $lookaheadDays = 30): int
+    {
+        $n = 0;
+        foreach (app(SupplierAgreementService::class)->documentsDueForNotice($team, $lookaheadDays) as $d) {
+            $deadline = $d->noticeDeadline();
+            $supplierName = optional($d->supplier)->name ?? ('Lieferant #' . $d->supplier_id);
+            $ueberfaellig = $deadline !== null && $deadline->isPast();
+            $this->signals->erzeuge(
+                $team,
+                SignalTyp::VertragsfristFaellig,
+                $ueberfaellig ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
+                $supplierName . ' — Kündigungsfrist ' . ($ueberfaellig ? 'überschritten' : 'läuft ab')
+                    . ' am ' . $deadline?->format('d.m.Y') . ' (Vertrag bis ' . $d->term_end?->format('d.m.Y') . ')',
+                [
+                    'dedup_key' => 'vertragsfrist-doc-' . $d->id,
+                    'ref_type' => 'supplier',
+                    'ref_id' => (int) $d->supplier_id,
+                    'description' => 'Kündigungs-/Verlängerungsentscheidung ansteht — Vertrag prüfen, ggf. rechtzeitig kündigen oder nachverhandeln.',
+                    'payload' => [
+                        'document_id' => (int) $d->id,
+                        'kind' => $d->kind,
+                        'term_end' => $d->term_end?->toDateString(),
+                        'notice_period_days' => $d->notice_period_days,
+                        'notice_deadline' => $deadline?->toDateString(),
                     ],
                 ]
             );

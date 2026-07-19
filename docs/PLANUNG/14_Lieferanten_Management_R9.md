@@ -39,16 +39,18 @@
 | E6 | Volumen/Umsatz-Quelle | **v1 Nutzungs-Proxy** (recipe_ingredients via Lead-LA); echtes Spend/Umsatz = **deferred** (braucht Q2-Einkaufs-/Umsatzdaten). Ehrlich als Proxy markiert. | Kein Spend im Modul; Proxy gibt sofort „wo lohnt Bündelung"-Indiz. |
 | E7 | Fristen-Signal | **NEU `SignalTyp::VertragsfristFaellig` + Detektor** (scannt `supplier_documents.notice`-Frist, Muster `veraltetePreise`). | Vorhandene Signal-Infra, nur Case+Detektor. |
 
-## 3. R9.1 — Lieferanten-Stammblatt + Absprachen-Log · L · Etappe S1 · hängt an nichts
+## 3. R9.1 — Lieferanten-Stammblatt + Absprachen-Log · L · Etappe S1 · hängt an nichts · ✅ GEBAUT 2026-07-19 (Engine+MCP)
 
-**Bau:** Migrationen (E1/E2/E3/E4) + `SupplierAgreementService` + `SupplierService`-Erweiterung; Supplier-Detail-Tabs (Stammblatt/Absprachen/Konditionen/Lead-Steuerung) im `Suppliers/Index`-Detailbereich (Vorlage `Gps/DetailPanel`); Fristen-Detektor (E7); MCP `suppliers.GET/PUT` + `supplier_agreements.POST` (Write-Gate `isOwnedBy`).
+> **Gebaut 2026-07-19:** 4 Migrationen (E1 Status + E4 Konditionen auf `suppliers`; `supplier_contacts`/`supplier_agreements`/`supplier_documents`) + 3 Models + `SupplierStatus`-Enum + `SupplierService`-Erweiterung (setStatus/updateConditions/addContact/`stammblatt` inkl. WG-Abdeckung aus `foodalchemist_preferred_suppliers`) + `SupplierAgreementService` (create/forSupplier/dueForFollowUp/addDocument/documentsFor/`documentsDueForNotice`) + `SignalTyp::VertragsfristFaellig` + Detektor (E7) in `laufen()` + MCP `suppliers.GET`/`suppliers.PUT`/`supplier_agreements.POST` (D1-Gate). `SupplierRelationTest` (3 Pest) + 51er-Regression grün. **Offen (Folge-Slice):** Livewire-Detail-Tabs im `Suppliers/Index` (Vorlage `Gps/DetailPanel`).
+
+**Bau (Spec):** Migrationen (E1/E2/E3/E4) + `SupplierAgreementService` + `SupplierService`-Erweiterung; Supplier-Detail-Tabs (Stammblatt/Absprachen/Konditionen/Lead-Steuerung) im `Suppliers/Index`-Detailbereich (Vorlage `Gps/DetailPanel`); Fristen-Detektor (E7); MCP `suppliers.GET/PUT` + `supplier_agreements.POST` (Write-Gate `isOwnedBy`).
 
 **DoD:**
-- [ ] Lieferanten-Detailseite: Kontakte, Rollen, Status (aktiv/Zweitquelle/gesperrt), WG-Abdeckung (`stammSupplierIdsFor`).
-- [ ] Absprachen-/Zusagen-Log je Lieferant: datierte Einträge, Wiedervorlage/Erinnerung, Autor.
-- [ ] Vertrags-/Dokumenten-Ablage mit Laufzeit + Kündigungsfrist → Fristen-Signal (E7).
-- [ ] Konditionen strukturiert: Rückvergütung/Bonus %, Zahlungsziel, Mindestbestellwert, Frei-Haus-Grenze (E4, geteilt mit Q2) — feeds EK-/Marge-Betrachtung.
-- [ ] Team-scoped, LogsActivity, MCP `suppliers.GET/PUT` + `supplier_agreements.POST` (Lockstep).
+- [~] Lieferanten-Detailseite: Kontakte, Rollen, Status, WG-Abdeckung — Aggregat (`stammblatt`) + MCP da; Livewire-Tabs = Folge-Slice.
+- [x] Absprachen-/Zusagen-Log je Lieferant: datierte Einträge, Wiedervorlage/Erinnerung, Autor.
+- [x] Vertrags-/Dokumenten-Ablage mit Laufzeit + Kündigungsfrist → Fristen-Signal (E7).
+- [x] Konditionen strukturiert: Rückvergütung/Bonus %, Zahlungsziel, Mindestbestellwert, Frei-Haus-Grenze (E4, geteilt mit Q2).
+- [x] Team-scoped, LogsActivity, MCP `suppliers.GET/PUT` + `supplier_agreements.POST` (Lockstep, D1-Gate).
 
 ## 4. R9.2 — Lead-Lieferant-Steuerung als bediente Strecke · M · Etappe S2 · hängt an R9.1 + R1
 
