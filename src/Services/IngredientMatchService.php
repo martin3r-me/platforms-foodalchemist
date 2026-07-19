@@ -92,6 +92,26 @@ class IngredientMatchService
 
         $final = $this->poolLauf($team, $queryTokens, $querySlug, $mode, $pref, $preferRaw, $bio);
 
+        // E7-a (#507 Weg-2): S1-Alias-Phrasen der Terminologie-Schicht auch in die
+        // ENTSCHEIDUNG ziehen (bisher nur in candidatesFor/Shortlist → „Paradeiser" stand
+        // in der Kandidatenliste, gewann aber im Urteil nicht). Jede Alias-Phrase ist eine
+        // eigenständige Query, wir nehmen das Maximum. Rein additiv, feuert NUR unter der
+        // Schwelle → die 84 GL-04-Goldens bleiben byte-identisch. Anti-Marker (S2) bleibt
+        // auf dem ORIGINAL-Namen (Verwechslungs-Schutz der Absicht). S3-Decompound hat die
+        // Entscheidung bereits über den flag-gegateten decompoundTokens-Fallback unten.
+        if ($final['score'] < MatchHeuristics::MIN_MATCH_SCORE) {
+            foreach ($this->terminology->aliasPhrasesFor($ingredientName) as $phrase) {
+                $ptok = $this->engine->tokenize($phrase);
+                if ($ptok === []) {
+                    continue;
+                }
+                $kandidat = $this->poolLauf($team, $ptok, $querySlug, $mode, $pref, $preferRaw, $bio);
+                if ($kandidat['score'] > $final['score']) {
+                    $final = $kandidat;
+                }
+            }
+        }
+
         // M6-07 / V-05 (Audit-Hebel 4): Decompounding-FALLBACK — läuft NUR, wenn
         // der v1-Lauf unter der Schwelle bleibt (additiv; GL-04-Goldens unberührt).
         // »Kürbispüree« → kuerbis+pueree, validiert gegen das Pool-Token-Vokabular.

@@ -17,7 +17,7 @@ use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 class EmbedCommand extends Command
 {
     protected $signature = 'foodalchemist:embed
-        {--pool=all : gps|recipes|knowledge|all}
+        {--pool=all : gps|recipes|knowledge|suppliers|concepts|foodbooks|lab_notes|all}
         {--team= : nur diese reale team_id (Default: alle Partitionen)}';
 
     protected $description = 'Backfill der Embedding-Pools (GPs, Rezepte, Wissen) für die semantische Recall-Schicht (#507)';
@@ -28,8 +28,9 @@ class EmbedCommand extends Command
         $teamOpt = $this->option('team');
         $team = ($teamOpt === null || $teamOpt === '') ? null : (int) $teamOpt;
 
-        if (! in_array($pool, ['gps', 'recipes', 'knowledge', 'all'], true)) {
-            $this->error("Unbekannter --pool='{$pool}'. Erlaubt: gps|recipes|knowledge|all.");
+        $allowed = ['gps', 'recipes', 'knowledge', 'suppliers', 'concepts', 'foodbooks', 'lab_notes', 'all'];
+        if (! in_array($pool, $allowed, true)) {
+            $this->error("Unbekannter --pool='{$pool}'. Erlaubt: " . implode('|', $allowed) . '.');
 
             return self::INVALID;
         }
@@ -54,6 +55,26 @@ class EmbedCommand extends Command
         if ($pool === 'recipes' || $pool === 'all') {
             $stats = $pools->embedRecipes($team);
             $rows[] = ['Rezept (Basis + VK)', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
+        }
+
+        if ($pool === 'suppliers' || $pool === 'all') {
+            $stats = $pools->embedSuppliers($team);
+            $rows[] = ['Lieferant', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
+        }
+
+        if ($pool === 'concepts' || $pool === 'all') {
+            $stats = $pools->embedConcepts($team);
+            $rows[] = ['Konzept', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
+        }
+
+        if ($pool === 'foodbooks' || $pool === 'all') {
+            $stats = $pools->embedFoodbooks($team);
+            $rows[] = ['Foodbook', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
+        }
+
+        if ($pool === 'lab_notes' || $pool === 'all') {
+            $stats = $pools->embedLabNotes($team);
+            $rows[] = ['Lab-Note', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
         }
 
         if ($pool === 'knowledge' || $pool === 'all') {

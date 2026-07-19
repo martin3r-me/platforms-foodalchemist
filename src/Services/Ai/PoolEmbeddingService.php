@@ -6,8 +6,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Platform\Core\Services\EmbeddingProviderRegistry;
 use Platform\Core\Services\EmbeddingService;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistLabNote;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Throwable;
 
 /**
@@ -46,6 +50,25 @@ class PoolEmbeddingService
     public const ENTITY_TYPE_GP = 'foodalchemist_gp';
 
     public const ENTITY_TYPE_RECIPE = 'foodalchemist_recipe';
+
+    /**
+     * Spec 15 §5a „Semantische Abdeckung vervollständigen" — die kleinen
+     * Geschwister-Pools (gleiche Mechanik wie GP/Rezept, kleine Skala): Lieferant,
+     * Konzept, Foodbook, Lab-Note. Jeder ist EIN Vektor je Entität, team-partitioniert,
+     * source_hash-idempotent, Observer-frisch, No-op ohne Provider. Der LA-Pool
+     * (Zehntausende, sprengt die ~50k-Store-Grenze) bleibt BEWUSST draußen bis die
+     * Store-/Qdrant-Frage geklärt ist (Spec 15 §5c).
+     */
+    public const ENTITY_TYPE_SUPPLIER = 'foodalchemist_supplier';
+
+    public const ENTITY_TYPE_CONCEPT = 'foodalchemist_concept';
+
+    public const ENTITY_TYPE_FOODBOOK = 'foodalchemist_foodbook';
+
+    public const ENTITY_TYPE_LAB_NOTE = 'foodalchemist_lab_note';
+
+    /** Max. Zeichen für Freitext-Leads (Beschreibung/Body) — kompakt, kein Vektor-Verwässern. */
+    private const LEAD_MAX = 400;
 
     /** GP-Status, die in den Recall-Pool gehören (rejected/merged bleiben draußen). */
     private const GP_POOL_STATUS = ['approved', 'tentative', 'review'];
@@ -309,7 +332,213 @@ class PoolEmbeddingService
         return self::normalizeForEmbedding($head);
     }
 
+    // ── Kleine Geschwister-Pools (Spec 15 §5a) ───────────────────────────────
+
+    /** Lieferant: Name + Branche + Stadt (behebt „Lieferant nicht gefunden"). */
+    public function embedSuppliers(?int $onlyTeamId = null): array
+    {
+        return $this->embedSimple(self::ENTITY_TYPE_SUPPLIER, 'foodalchemist_suppliers',
+            ['id', 'name', 'branch', 'city', 'team_id'],
+            fn (object $r): string => $this->supplierEmbedText($r),
+            self::notInactiveGate(),
+            $onlyTeamId);
+    }
+
+    /** Konzept: Titel + Facetten (Anlass/Saison/Zielgruppe/Consumer) + Kurzbeschreibung. */
+    public function embedConcepts(?int $onlyTeamId = null): array
+    {
+        return $this->embedSimple(self::ENTITY_TYPE_CONCEPT, 'foodalchemist_concepts',
+            ['id', 'name', 'consumer_name', 'occasion', 'season', 'target_group', 'description', 'team_id'],
+            fn (object $r): string => $this->conceptEmbedText($r),
+            null, // Konzepte haben keine is_inactive-Spalte (status/is_template statt dessen) → nur deleted_at-Gate
+            $onlyTeamId);
+    }
+
+    /** Foodbook: Titel/Label + Kunde + Kurzbeschreibung. */
+    public function embedFoodbooks(?int $onlyTeamId = null): array
+    {
+        return $this->embedSimple(self::ENTITY_TYPE_FOODBOOK, 'foodalchemist_foodbooks',
+            ['id', 'label', 'customer', 'description', 'team_id'],
+            fn (object $r): string => $this->foodbookEmbedText($r),
+            null,
+            $onlyTeamId);
+    }
+
+    /** Lab-Note: Titel + Body-Lead („schon mal hypothetisiert?"). */
+    public function embedLabNotes(?int $onlyTeamId = null): array
+    {
+        return $this->embedSimple(self::ENTITY_TYPE_LAB_NOTE, 'foodalchemist_lab_notes',
+            ['id', 'title', 'body', 'team_id'],
+            fn (object $r): string => $this->labNoteEmbedText($r),
+            null,
+            $onlyTeamId);
+    }
+
+    public function queueSupplier(FoodAlchemistSupplier $s): void
+    {
+        $this->queueSimple(self::ENTITY_TYPE_SUPPLIER, $s,
+            fn (): bool => ! (bool) $s->is_inactive && $s->deleted_at === null,
+            fn (): string => $this->supplierEmbedText($s));
+    }
+
+    public function queueConcept(FoodAlchemistConcept $c): void
+    {
+        $this->queueSimple(self::ENTITY_TYPE_CONCEPT, $c,
+            fn (): bool => $c->deleted_at === null,
+            fn (): string => $this->conceptEmbedText($c));
+    }
+
+    public function queueFoodbook(FoodAlchemistFoodbook $f): void
+    {
+        $this->queueSimple(self::ENTITY_TYPE_FOODBOOK, $f,
+            fn (): bool => $f->deleted_at === null,
+            fn (): string => $this->foodbookEmbedText($f));
+    }
+
+    public function queueLabNote(FoodAlchemistLabNote $n): void
+    {
+        $this->queueSimple(self::ENTITY_TYPE_LAB_NOTE, $n,
+            fn (): bool => $n->deleted_at === null,
+            fn (): string => $this->labNoteEmbedText($n));
+    }
+
+    public function deleteSupplier(int $id, int|string|null $rawTeamId = null): void
+    {
+        $this->safeDelete(self::ENTITY_TYPE_SUPPLIER, $this->partitionTeamId($rawTeamId), $id);
+    }
+
+    public function deleteConcept(int $id, int|string|null $rawTeamId = null): void
+    {
+        $this->safeDelete(self::ENTITY_TYPE_CONCEPT, $this->partitionTeamId($rawTeamId), $id);
+    }
+
+    public function deleteFoodbook(int $id, int|string|null $rawTeamId = null): void
+    {
+        $this->safeDelete(self::ENTITY_TYPE_FOODBOOK, $this->partitionTeamId($rawTeamId), $id);
+    }
+
+    public function deleteLabNote(int $id, int|string|null $rawTeamId = null): void
+    {
+        $this->safeDelete(self::ENTITY_TYPE_LAB_NOTE, $this->partitionTeamId($rawTeamId), $id);
+    }
+
+    public function supplierEmbedText(object $s): string
+    {
+        return $this->joinParts([$s->name ?? '', $s->branch ?? '', $s->city ?? '']);
+    }
+
+    public function conceptEmbedText(object $c): string
+    {
+        return $this->joinParts([
+            $c->name ?? '', $c->consumer_name ?? '', $c->occasion ?? '',
+            $c->season ?? '', $c->target_group ?? '', self::lead((string) ($c->description ?? '')),
+        ]);
+    }
+
+    public function foodbookEmbedText(object $f): string
+    {
+        return $this->joinParts([$f->label ?? '', $f->customer ?? '', self::lead((string) ($f->description ?? ''))]);
+    }
+
+    public function labNoteEmbedText(object $n): string
+    {
+        return $this->joinParts([$n->title ?? '', self::lead((string) ($n->body ?? ''))]);
+    }
+
     // ── Interna ──────────────────────────────────────────────────────────────
+
+    /**
+     * Generischer Single-Table-Backfill für die kleinen Pools (Spec 15 §5a).
+     *
+     * @param  list<string>  $columns  Select-Spalten (inkl. id + team_id)
+     * @param  callable(object):string  $textFn  baut den Embed-Text je Zeile
+     * @param  (callable($q):mixed)|null  $gate  Pool-spezifischer WHERE-Filter (z.B. is_inactive)
+     * @return array{available: bool, candidates: int, partitions: array<int,int>}
+     */
+    private function embedSimple(string $entityType, string $table, array $columns, callable $textFn, ?callable $gate, ?int $onlyTeamId): array
+    {
+        if (! $this->isProviderAvailable()) {
+            return ['available' => false, 'candidates' => 0, 'partitions' => []];
+        }
+
+        $query = DB::table($table)->whereNull('deleted_at');
+        if ($gate !== null) {
+            $gate($query);
+        }
+        if ($onlyTeamId !== null) {
+            $query->where('team_id', $onlyTeamId);
+        }
+
+        $byTeam = [];
+        foreach ($query->get($columns) as $row) {
+            $text = $textFn($row);
+            if ($text === '') {
+                continue;
+            }
+            $byTeam[$this->partitionTeamId($row->team_id)][] = ['id' => (int) $row->id, 'text' => $text];
+        }
+
+        return $this->storeByTeam($entityType, $byTeam);
+    }
+
+    /**
+     * Generischer inkrementeller Re-Embed für die kleinen Pools. No-op ohne Provider;
+     * Austritt aus dem Pool (inaktiv/soft-deleted) → Vektor löschen.
+     *
+     * @param  \Illuminate\Database\Eloquent\Model  $model
+     * @param  callable():bool  $inPool
+     * @param  callable():string  $textFn
+     */
+    private function queueSimple(string $entityType, $model, callable $inPool, callable $textFn): void
+    {
+        if (! $this->isProviderAvailable()) {
+            return;
+        }
+        if (! $inPool()) {
+            $this->safeDelete($entityType, $this->partitionTeamId($model->team_id), (int) $model->id);
+
+            return;
+        }
+        $text = $textFn();
+        if ($text === '') {
+            return;
+        }
+        app(EmbeddingService::class)->queueEmbedAndStore(
+            teamId: $this->partitionTeamId($model->team_id),
+            entityType: $entityType,
+            entityId: (int) $model->id,
+            text: $text,
+            providerName: $this->providerName(),
+        );
+    }
+
+    /**
+     * „Nicht explizit inaktiv" — schließt is_inactive=true aus, lässt false UND NULL
+     * durch. Wichtig: auf dem Master trägt is_inactive teils NULL (nachträglich
+     * ergänzte Spalte ohne greifenden Default); ein striktes `=false` würde die
+     * ganze Kategorie aus dem Index werfen.
+     *
+     * @return callable($q):mixed
+     */
+    private static function notInactiveGate(): callable
+    {
+        return fn ($q) => $q->where(fn ($w) => $w->where('is_inactive', false)->orWhereNull('is_inactive'));
+    }
+
+    /** @param list<mixed> $parts */
+    private function joinParts(array $parts): string
+    {
+        $clean = array_filter(array_map(fn ($p): string => trim((string) $p), $parts), fn (string $p): bool => $p !== '');
+
+        return self::normalizeForEmbedding(implode(' ', $clean));
+    }
+
+    private static function lead(string $s, int $max = self::LEAD_MAX): string
+    {
+        $s = trim($s);
+
+        return mb_strlen($s) > $max ? mb_substr($s, 0, $max) : $s;
+    }
 
     /**
      * @param  array<int, list<array{id:int,text:string,metadata?:array}>>  $byTeam

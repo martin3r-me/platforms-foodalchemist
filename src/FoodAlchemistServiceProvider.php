@@ -109,6 +109,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         \Platform\FoodAlchemist\Models\FoodAlchemistGp::observe(\Platform\FoodAlchemist\Observers\GpEmbeddingObserver::class);
         \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::observe(\Platform\FoodAlchemist\Observers\RecipeEmbeddingObserver::class);
 
+        // Spec 15 §5a/§5b: die kleinen Geschwister-Pools (Lieferant/Konzept/Foodbook/Lab-Note).
+        \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::observe(\Platform\FoodAlchemist\Observers\SupplierEmbeddingObserver::class);
+        \Platform\FoodAlchemist\Models\FoodAlchemistConcept::observe(\Platform\FoodAlchemist\Observers\ConceptEmbeddingObserver::class);
+        \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::observe(\Platform\FoodAlchemist\Observers\FoodbookEmbeddingObserver::class);
+        \Platform\FoodAlchemist\Models\FoodAlchemistLabNote::observe(\Platform\FoodAlchemist\Observers\LabNoteEmbeddingObserver::class);
+
         /**
          * SCHRITT 1: Modul-Registrierung prüfen
          * 
@@ -255,6 +261,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\FoodbooksGetTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelSearchTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelListTool::class,
+                    \Platform\FoodAlchemist\Tools\SuppliersSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbooksSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\LabNotesSearchTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeKlassePostTool::class,
                     \Platform\FoodAlchemist\Tools\UiOpenTool::class,
                     // Phase 0: GP-Ground-Truth (Match + NEW-GP-Staging, LA-First-konform)

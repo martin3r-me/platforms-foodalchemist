@@ -249,6 +249,49 @@ E6 (demo) ── FA-Seite jederzeit nach E1; scharf erst mit Provider-Key (Marti
 5. **Fremdmodul-Grenze:** Multi-Partition und searchMany-Wünsche NICHT selbst in platforms-core patchen — Discussion an Martin, modulseitiger Merge bis dahin.
 6. **Embed-Text-Drift:** Ändert jemand später den Embed-Text-Bau, sind Bestand und Neuanlagen inkonsistent (source_hash rettet nur bei Re-Run). Snapshot-Tests + „nach Textbau-Änderung: Voll-Re-Embed"-Regel in die Doku.
 
+## 9a. Terminologie-Schicht + Lernschleife für neue Namen (Weg 2 — LIVE 2026-07-19)
+
+> **Nachtrag nach Go-Live.** Der obige Plan (E0–E6, 2026-07-16) ging von „Embeddings sind der Recall-Hebel" aus. Die B2-Floor-Eichung hat das **widerlegt**: Embedding-only findet **keinen trennbaren Floor** — bei brauchbarem Recall leaken Anti-Marker (Brie↔Bries), bei 0 Leaks stirbt der Recall (3 %). Wurzel: OpenAI 3-large staucht kurze Lebensmittel-Synonyme; echte Treffer und Verwechslungs-Fallen überlappen im Vektorraum.
+
+**Die tatsächliche Lösung (Weg 2):** Die meisten Fehler sind **gar nicht semantisch**, sondern
+- **Dialekt/Synonym** (Paradeiser=Tomate, Erdapfel=Kartoffel) → **Wörterbuch**, kein Vektor.
+- **Verwechslung** (Brie/Bries, Möhre-Bries) → **Negativliste**, kein Vektor.
+
+Beide liegen **kuratiert im Vault** (`Substitutionen.md` + `Anti_Marker.md`). → **`TerminologyService`** (S1 Alias · S2 Anti-Marker · S3 Decompounding) sitzt **VOR** dem Embedding-Pass. Embeddings bleiben additiv obendrauf.
+
+**Gemessen (`foodalchemist:matcher-eval --team=6 --semantic`):** deterministisch 59 % · **hybrid 66 % Recall@15 · 0/8 Leaks**. Flag scharf auf demo (`FOODALCHEMIST_SEMANTIC_SEARCH=true`, floor 0.55). Smoke live bestanden. #507 = Done (Board 53).
+
+### E7 — Lernschleife für neue Namen · M · **die offene Konsequenz**
+
+**Problem:** Der `TerminologyService` ist der Arbeitspferd — **aber heute kuratierte PHP-Konstanten aus dem Vault.** Ein *wirklich neuer* Handelsname/Dialekt, der da nicht drinsteht, löst deterministisch **nicht** auf; Embeddings fangen ihn nur teilweise und leak-anfällig. Neue Lieferanten-Kataloge bringen genau solche neuen Namen laufend rein (via Katalog-Ingest [Spec 13] → LA-First-Mint [Spec 07]). Ohne Schleife wächst das Wörterbuch nie mit → der Recall-Gewinn erodiert mit jedem neuen Sortiment.
+
+**Trichter heute (Ist):**
+1. **Eingang:** Katalog-Ingest Kanal B (Spec 13) → neuer LA in `foodalchemist_supplier_items`.
+2. **Matching LA→GP:** `candidatesFor` mit `TerminologyService` (S1/S2/S3) **+ hybrid Embeddings**.
+3. **Kein GP?** `LaFirstGpService::mintFromLa` (Spec 07) → tentative GP + ReviewQueue.
+4. **Index frisch:** Observer re-embeddet automatisch.
+
+**Was fehlt (E7):**
+- [ ] **S1-Alias + S3-Decompound auch im `matchIngredient`-Scoring** — aktuell nur in der Shortlist (`candidatesFor`) verdrahtet, nicht in der Entscheidung. Heißt: „Paradeiser" steht in der Kandidatenliste, gewinnt aber im Urteil noch nicht → deterministische Auflösung greift halb. (Bereits als offener #507-Punkt notiert.)
+- [ ] **`TerminologyService` → DB-Tabelle + MCP** (`terminology.*`, Lockstep) statt PHP-Konstanten. **Voraussetzung** der Schleife: ohne runtime-pflegbare Tabelle ist kein Zurückschreiben möglich. Seed = **einmaliger** Import aus `Substitutionen.md`/`Anti_Marker.md`; danach ist die DB Master (s. Governance-Entscheid). Anti-Marker- und Alias-Zeilen team-partitioniert (Master ∪ Team).
+- [ ] **Die eigentliche Schleife:** Unmatched/tentative neuer Name (aus ReviewQueue) → Kurator-Entscheid im Review-UI = eine von drei Aktionen: **(a) Alias** auf bestehenden GP (→ S1-Tabelle), **(b) Anti-Marker** gegen falschen Nachbarn (→ S2-Tabelle), **(c) echt neu** (GP bleibt, kein Alias). Entscheid schreibt sofort in die Terminologie-Tabelle → **beim nächsten Matching sofort wirksam**, kein Deploy.
+
+### Governance-Entscheid (Dominique, 2026-07-19): FA = Master der Terminologie
+
+Der Terminologie-Bestand (Aliase + Anti-Marker) wird nach dem Seed **in FA gepflegt, nicht mehr im Vault.** Die Vault-Dateien `Substitutionen.md`/`Anti_Marker.md` werden vom Wahrheits-Original zum **einmaligen Seed + generierten Spiegel** herabgestuft.
+
+**⚠️ Nebenwirkung, die den Entscheid erst vollständig macht:** CJ selbst liest diese zwei Dateien laufend (CLAUDE.md-Pflichtregelwerk: jede Substitution/Verwechslung). Friert man sie ein, während FA über die ReviewQueue weiterlernt, **veraltet CJs eigenes Wissen** — Drift in die Gegenrichtung. Darum ist der Rückfluss **Pflicht, nicht optional:**
+
+- [ ] **FA-DB → Vault-MD EINBAHN-Export (Pflicht):** periodischer Command spiegelt die kuratierte DB zurück nach `Substitutionen.md`/`Anti_Marker.md` — **generierte Dateien mit „manuelle Edits werden überschrieben"-Warnkopf**, exakt das EINBAHN-SQL→MD-Muster wie LAs/Rezepte/GPs. FA gewinnt bei Konflikt. Hält CJs file-basierten Workflow lebendig, ohne die Master-Rolle aufzuweichen.
+- [ ] *(Prüfen)* Ob CJ die Terminologie mittelfristig direkt via `terminology.*`-MCP statt aus der MD liest — dann wäre der Export nur noch menschlicher Lesekomfort, nicht funktionskritisch. **Später-Entscheid, blockiert E7 nicht.**
+
+> **Entscheid Dominique 2026-07-19: E7-(d) Export-Weg = SPÄTER entscheiden.** ⚠ Server-Command kann den lokalen Mac-Vault nicht schreiben (FA auf demo/Forge). Drei Optionen bleiben offen: (1) CJ liest via `terminology.*`-MCP (Vault-MD friert als Seed ein, CLAUDE.md-Anpassung); (2) lokaler CJ-Export-Command (MCP→MD-Spiegel); (3) hier offen. **E7-(a)/(b)/(c) + kleine Pools + Embed-Tiefe starten OHNE diese Entscheidung** — (d) ist der letzte Teilschritt.
+- [ ] **Pest:** neuer Alias in DB → `matchIngredient` löst auf, ohne Code-Change; Anti-Marker in DB → Verwechslung bleibt gesperrt; Smoke gegen echten neuen Katalog-Namen.
+
+**Abhängigkeit / Reihenfolge (Empfehlung Priorität):** E7 **vor** neuen RAG-Pools (Spec 15). Begründung: Der deterministische Layer ist der Motor — erst ihn lernfähig machen, dann Embed-Text-Tiefe (§5b Spec 15), dann Pools nach Wert. Neue Pools ohne Lernschleife vergrößern nur die Fläche, auf der neue Namen ungelöst durchrutschen. **LA-Pool zuletzt — NICHT weil er auf den Ingest wartet** (FA ist Master, alle LAs liegen schon da; Ingest ist Zuträger, nicht Voraussetzung), **sondern weil er mit Zehntausenden Vektoren die ~50k-Grenze des PHP-Cosine-Stores (§5) sprengt** und damit als Erster die Qdrant-/Partitionierungs-Frage real macht. Details → Spec 15 §5c.
+
+---
+
 ## 9. Bewusste Nicht-Ziele (v1)
 
 - Kein pgvector/Qdrant/Neuer-Store (Skala gibt es nicht her; Drop-in-Pfad existiert dokumentiert).

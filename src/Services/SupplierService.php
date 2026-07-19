@@ -8,6 +8,8 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SupplierStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierContact;
+use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
+use Platform\FoodAlchemist\Services\Ai\SemanticRetrievalService;
 
 /**
  * M2-01 / D-2: Lieferanten-Stamm — Liste mit den P-7-Zählern
@@ -34,15 +36,46 @@ class SupplierService
             ->groupBy('i.supplier_id')
             ->pluck('n', 'supplier_id');
 
+        // Spec 15 §5a: bei aktivem Suchbegriff die lexikalische Namenssuche additiv um
+        // semantische Lieferanten-Treffer ergänzen (Synonyme/Tippfehler/Branche) — behebt
+        // „Lieferant nicht gefunden". Graceful: ohne Provider bleibt es rein lexikalisch.
+        // visibleToTeam + is_inactive-Filter bleiben außen → keine Tenancy-/Aktiv-Leaks.
+        $semIds = $search !== '' ? $this->semanticSupplierIds($team, $search) : [];
+
         return FoodAlchemistSupplier::visibleToTeam($team)
             ->when(! $includeInactive, fn ($q) => $q->where('is_inactive', false))
-            ->when($search !== '', fn ($q) => $q->where('name', 'like', '%' . $search . '%'))
+            ->when($search !== '', fn ($q) => $q->where(function ($w) use ($search, $semIds) {
+                $w->where('name', 'like', '%' . $search . '%');
+                if ($semIds !== []) {
+                    $w->orWhereIn('id', $semIds);
+                }
+            }))
             ->orderBy('name')
             ->get()
             ->each(function ($supplier) use ($itemCounts, $mappedCounts) {
                 $supplier->setAttribute('item_count', (int) ($itemCounts[$supplier->id] ?? 0));
                 $supplier->setAttribute('mapped_count', (int) ($mappedCounts[$supplier->id] ?? 0));
             });
+    }
+
+    /**
+     * Semantische Lieferanten-Kandidaten-IDs (Spec 15 §5a) über die sichtbaren
+     * Partitionen. Leer wenn Semantik aus / kein Provider (graceful). Reine
+     * Recall-Ergänzung — das Tenancy-/Aktiv-Gating macht der Aufrufer außen.
+     *
+     * @return list<int>
+     */
+    private function semanticSupplierIds(Team $team, string $query): array
+    {
+        $sem = app(SemanticRetrievalService::class);
+        if (! $sem->enabled()) {
+            return [];
+        }
+
+        return array_map(
+            static fn (array $hit): int => (int) $hit['entity_id'],
+            $sem->candidates($team, $query, [PoolEmbeddingService::ENTITY_TYPE_SUPPLIER], 15),
+        );
     }
 
     // ── Anlage & Lebenszyklus (Dominique-Feedback 2026-06-11, D-2 §1) ───
