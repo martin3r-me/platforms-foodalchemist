@@ -80,6 +80,16 @@ class PoolEmbeddingService
     private const RECIPE_MAX_INGREDIENTS = 8;
 
     /**
+     * Batch-Budget je Embedding-Request (OpenAI-Limit: 300k Tokens/Request). Wir chunken
+     * VOR dem Core-`embedAndStoreBatch` konservativ nach Zeichen (~3–4 Zeichen/Token →
+     * 500k Zeichen ≈ 125–165k Tokens, sicherer Abstand) + Item-Cap. Ohne das sprengt ein
+     * großer Pool (z. B. alle Rezepte mit §5b-Prosa) das Limit → HTTP 400.
+     */
+    private const BATCH_MAX_CHARS = 500_000;
+
+    private const BATCH_MAX_ITEMS = 1000;
+
+    /**
      * §5b Embed-Text-Tiefe: max. Zeichen je Prosa-Feld (Zubereitung/Beschreibung) im
      * Rezept-Vektor. Moderat gedeckelt, damit Name + Zutaten prominent bleiben und der
      * Vektor nicht von langer Prosa dominiert wird (Zutat→Sub-Präzision). Ermöglicht
@@ -577,17 +587,51 @@ class PoolEmbeddingService
         $candidates = 0;
 
         foreach ($byTeam as $teamId => $entries) {
-            $service->embedAndStoreBatch(
-                teamId: (int) $teamId,
-                entityType: $entityType,
-                entries: $entries,
-                providerName: $providerName,
-            );
+            // Nach Token-/Char-Budget chunken (OpenAI 300k Tokens/Request) — sonst
+            // sprengt ein großer Pool (Rezepte mit §5b-Prosa) das Limit → HTTP 400.
+            foreach ($this->chunkByBudget($entries) as $chunk) {
+                $service->embedAndStoreBatch(
+                    teamId: (int) $teamId,
+                    entityType: $entityType,
+                    entries: $chunk,
+                    providerName: $providerName,
+                );
+            }
             $partitions[(int) $teamId] = count($entries);
             $candidates += count($entries);
         }
 
         return ['available' => true, 'candidates' => $candidates, 'partitions' => $partitions];
+    }
+
+    /**
+     * Zerlegt Batch-Einträge in Sub-Batches unter dem Request-Budget (Zeichen + Item-Cap).
+     * Ein einzelner überlanger Eintrag bleibt allein in seinem Chunk (kein Zerreißen);
+     * die Lead-Caps halten Einträge ohnehin klein.
+     *
+     * @param  list<array{id:int,text:string,metadata?:array}>  $entries
+     * @return list<list<array{id:int,text:string,metadata?:array}>>
+     */
+    private function chunkByBudget(array $entries): array
+    {
+        $chunks = [];
+        $cur = [];
+        $curChars = 0;
+        foreach ($entries as $entry) {
+            $len = mb_strlen((string) ($entry['text'] ?? ''));
+            if ($cur !== [] && ($curChars + $len > self::BATCH_MAX_CHARS || count($cur) >= self::BATCH_MAX_ITEMS)) {
+                $chunks[] = $cur;
+                $cur = [];
+                $curChars = 0;
+            }
+            $cur[] = $entry;
+            $curChars += $len;
+        }
+        if ($cur !== []) {
+            $chunks[] = $cur;
+        }
+
+        return $chunks;
     }
 
     private function safeDelete(string $entityType, int $teamId, int $id): void

@@ -182,6 +182,17 @@ it('§5b: lange Prosa wird gedeckelt — Name bleibt prominent vorn', function (
         ->and(mb_strlen($text))->toBeLessThan(260);   // ~Name + RECIPE_PROSE_MAX(220)
 });
 
+it('chunkt Batches unter das OpenAI-Request-Budget (kein 300k-Token-Sprengen)', function () {
+    // 12 Einträge à 100k Zeichen = 1,2 Mio → bei 500k-Budget: Chunks von 5/5/2.
+    $entries = array_map(fn ($i) => ['id' => $i, 'text' => str_repeat('x', 100_000)], range(1, 12));
+    $chunk = Closure::bind(fn (array $e) => $this->chunkByBudget($e), $this->svc, PoolEmbeddingService::class);
+    $chunks = $chunk($entries);
+
+    expect($chunks)->toHaveCount(3)
+        ->and(array_sum(array_map('count', $chunks)))->toBe(12)          // nichts verloren
+        ->and(collect($chunks)->every(fn ($c) => count($c) <= 1000));   // Item-Cap
+});
+
 it('normalisiert Query und Ziel in denselben Vektorraum (Symmetrie)', function () {
     // Der Kern des Slice-1-Fixes: dieselbe Funktion glättet beide Enden. Eine rohe
     // Query „Aubergine" und ein Ziel-Text „Aubergine · frisch" dürfen nach der
