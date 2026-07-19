@@ -278,6 +278,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SubstitutionSuggestTool::class,
                     \Platform\FoodAlchemist\Tools\DishReverseTool::class,
                     \Platform\FoodAlchemist\Tools\SurplusSuggestTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeHypothesizeTool::class,
+                    \Platform\FoodAlchemist\Tools\LabNotesPostTool::class,
                     \Platform\FoodAlchemist\Tools\VkSnapshotsGetTool::class,
                     \Platform\FoodAlchemist\Tools\VkSnapshotsReleaseTool::class,
                     \Platform\FoodAlchemist\Tools\SuppliersGetTool::class,

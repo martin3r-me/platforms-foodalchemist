@@ -1333,4 +1333,252 @@ class PairingService
             'partner' => $this->ankerNeighbors($anker->slug, $typ, $limit)->all(),
         ];
     }
+
+    // ── R6.11 · S1: Hypothesen-Modus (read-only, 2026-07-19) ─────────────
+    // Offensive Nutzung des Chemie-/Pairing-Fundaments: „paar mir X ungewöhnlich".
+    // Rankt Kandidaten-Anker nach GETEILTEN Aroma-Compound-Klassen (Ahn-Sinn:
+    // ingredient_key_component) + geteilten Molekül-Klassen (molecules.chem_class),
+    // je mit Mechanismus-Text + Evidenz-Stufe. Fällt graceful auf Aroma-Vektor-Cosinus
+    // zurück, wenn die Compound-Daten dünn sind. Ergebnis ist IMMER als Hypothese (T3)
+    // markiert — nie als Fakt (Inv./Nicht-Ziel §6). Keine KI nötig; das optionale
+    // Narrativ ist ein Folge-Add (S1-Rest), der deterministische Kern trägt für sich.
+
+    /**
+     * Geteilte Compound-Klassen zweier Anker: Aroma-key_components (Schnitt) +
+     * Molekül-chem_class (Schnitt). Graceful leer, wenn ein Anker keine Zutat/kein
+     * Profil hat. Basis für hypothesizeFor + den Mechanismus-Text.
+     *
+     * @return array{key_components: list<array{key:?string, family:?string, aroma_type:?string}>, chem_classes: list<string>, n_key_components:int, n_chem_classes:int}
+     */
+    public function sharedCompoundClasses(int $anchorA, int $anchorB): array
+    {
+        $leer = ['key_components' => [], 'chem_classes' => [], 'n_key_components' => 0, 'n_chem_classes' => 0];
+        $ingA = $this->anchorIngredientId($anchorA);
+        $ingB = $this->anchorIngredientId($anchorB);
+        if ($ingA === null || $ingB === null) {
+            return $leer;
+        }
+
+        $compA = $this->ingredientKeyComponentIds($ingA);
+        $compB = $this->ingredientKeyComponentIds($ingB);
+        $sharedComp = array_values(array_intersect($compA, $compB));
+
+        $classA = $this->ingredientChemClasses($ingA);
+        $classB = $this->ingredientChemClasses($ingB);
+        $sharedClass = array_values(array_intersect($classA, $classB));
+
+        $keyComponents = [];
+        if ($sharedComp !== []) {
+            foreach (DB::table('foodalchemist_key_components')->whereIn('id', $sharedComp)
+                ->get(['key', 'family', 'aroma_type']) as $kc) {
+                $keyComponents[] = ['key' => $kc->key, 'family' => $kc->family, 'aroma_type' => $kc->aroma_type];
+            }
+        }
+
+        return [
+            'key_components' => $keyComponents,
+            'chem_classes' => $sharedClass,
+            'n_key_components' => count($sharedComp),
+            'n_chem_classes' => count($sharedClass),
+        ];
+    }
+
+    /**
+     * Hypothesen-Modus: für eine Quelle (GP oder Anker) Kandidaten-Anker nach
+     * geteilten Compound-Klassen ranken. Jede Zeile trägt Mechanismus + Evidenz-Stufe
+     * (T3 = Hypothese) + ob die Paarung im Graphen schon ETABLIERT ist (dann kein
+     * „ungewöhnlicher" Vorschlag, sondern bekannt).
+     *
+     * @param  array{gp?:int, anchor?:int}  $source
+     * @return array{source:array, methode:string, hypothesen:list<array>, hinweis:string}
+     */
+    public function hypothesizeFor(array $source, int $limit = 12): array
+    {
+        $limit = max(1, min(50, $limit));
+
+        // 1) Quell-Anker auflösen (GP → kern-Anker; oder direkter Anker).
+        if (isset($source['gp'])) {
+            $anchorIds = $this->gpAnkers((int) $source['gp'])->pluck('id')->map(fn ($v) => (int) $v)->all();
+            $srcName = DB::table('foodalchemist_gps')->where('id', (int) $source['gp'])->value('name');
+            $srcMeta = ['typ' => 'gp', 'id' => (int) $source['gp'], 'name' => $srcName];
+        } elseif (isset($source['anchor'])) {
+            $anchorIds = [(int) $source['anchor']];
+            $a = DB::table('foodalchemist_vocab_pairing_anchors')->where('id', (int) $source['anchor'])->first(['slug', 'display_de']);
+            $srcMeta = ['typ' => 'anchor', 'id' => (int) $source['anchor'], 'name' => $a?->display_de ?? $a?->slug];
+        } else {
+            return ['source' => [], 'methode' => 'none', 'hypothesen' => [], 'hinweis' => 'Keine Quelle (gp/anchor) angegeben.'];
+        }
+        $anchorIds = array_values(array_unique(array_filter($anchorIds)));
+        if ($anchorIds === []) {
+            return ['source' => $srcMeta, 'methode' => 'none', 'hypothesen' => [],
+                'hinweis' => 'Quelle hat keine kern-Anker — kein Hypothesen-Ranking möglich.'];
+        }
+
+        // 2) Quell-Compound-Profil (Aroma-key_components + Molekül-chem_class) aggregiert.
+        $srcComp = [];
+        $srcClass = [];
+        $srcIngredientIds = [];
+        foreach ($anchorIds as $aid) {
+            $iid = $this->anchorIngredientId($aid);
+            if ($iid === null) {
+                continue;
+            }
+            $srcIngredientIds[] = $iid;
+            $srcComp = array_merge($srcComp, $this->ingredientKeyComponentIds($iid));
+            $srcClass = array_merge($srcClass, $this->ingredientChemClasses($iid));
+        }
+        $srcComp = array_values(array_unique($srcComp));
+        $srcClass = array_values(array_unique($srcClass));
+        $srcMeta['anchor_ids'] = $anchorIds;
+        $srcMeta['n_key_components'] = count($srcComp);
+        $srcMeta['n_chem_classes'] = count($srcClass);
+
+        // 3) Etablierte Kanten der Quelle (für die „ungewöhnlich?"-Markierung).
+        $edges = [];
+        foreach (DB::table('foodalchemist_pairing_anchor_edges')
+            ->whereIn('anchor_a_id', $anchorIds)->get(['anchor_b_id', 'type']) as $e) {
+            $edges[(int) $e->anchor_b_id] = $e->type;   // ein Typ je Kandidat reicht für die Markierung
+        }
+
+        // 4) Compound-Klassen-Ranking (primär); Fallback Aroma-Vektor-Cosinus.
+        if ($srcComp !== []) {
+            $kompMap = $this->keyComponentsByAnchor();          // anchor_id => [component_id,...]
+            $scored = [];
+            foreach ($kompMap as $cid => $comps) {
+                if (in_array($cid, $anchorIds, true)) {
+                    continue;
+                }
+                $shared = array_intersect($srcComp, $comps);
+                if ($shared === []) {
+                    continue;
+                }
+                $scored[$cid] = count($shared);
+            }
+            arsort($scored);
+            $methode = 'compound_class';
+            $kandidaten = array_slice(array_keys($scored), 0, $limit, true);
+        } else {
+            // Fallback: kein Compound-Profil → Aroma-Vektor-Cosinus über die Quell-Anker.
+            $methode = 'aroma_vector_fallback';
+            $kandidaten = $this->aromaCosineCandidates($anchorIds, $limit);
+            $scored = $kandidaten;                              // [anchor_id => cosine]
+            $kandidaten = array_keys($kandidaten);
+        }
+        if ($kandidaten === []) {
+            return ['source' => $srcMeta, 'methode' => $methode, 'hypothesen' => [],
+                'hinweis' => 'Keine Kandidaten mit geteilten Klassen gefunden.'];
+        }
+
+        // 5) Kandidaten anreichern: Namen, Mechanismus, Novität, Evidenz-Stufe.
+        $names = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', $kandidaten)
+            ->get(['id', 'slug', 'display_de'])->keyBy('id');
+        $hypothesen = [];
+        foreach ($kandidaten as $cid) {
+            $meta = $names[$cid] ?? null;
+            if ($meta === null) {
+                continue;
+            }
+            // Mechanismus + geteilte Klassen: gegen den ERSTEN Quell-Anker (repräsentativ,
+            // günstig); der Score bleibt der aggregierte Overlap oben.
+            $shared = $this->sharedCompoundClasses($anchorIds[0], (int) $cid);
+            $etabliert = isset($edges[(int) $cid]);
+            $familien = array_values(array_unique(array_map(fn ($k) => $k['family'] ?? $k['key'] ?? '?', $shared['key_components'])));
+            $klassenText = $familien !== []
+                ? implode(', ', array_slice($familien, 0, 6))
+                : ($methode === 'aroma_vector_fallback' ? 'ähnliches Aroma-Vektor-Profil (kein Compound-Profil)' : 'geteilte Klassen quell-übergreifend');
+            $hypothesen[] = [
+                'anchor_id' => (int) $cid,
+                'slug' => $meta->slug,
+                'display_de' => $meta->display_de,
+                'score' => $methode === 'compound_class' ? (int) ($scored[$cid] ?? 0) : round((float) ($scored[$cid] ?? 0), 4),
+                'geteilte_klassen' => $shared['key_components'],
+                'n_geteilt' => $shared['n_key_components'],
+                'geteilte_chem_klassen' => array_slice($shared['chem_classes'], 0, 8),
+                'mechanismus' => 'Teilt: ' . $klassenText,
+                'ist_etabliert' => $etabliert,
+                'edge_typ' => $edges[(int) $cid] ?? null,
+                'evidenz_tier' => 'T3',   // Hypothese (E1) — nie Fakt
+            ];
+        }
+
+        return [
+            'source' => $srcMeta,
+            'methode' => $methode,
+            'hypothesen' => $hypothesen,
+            'hinweis' => 'Hypothesen — markierte Spekulation (Evidenz-Stufe T3), KEIN Fakt. '
+                . 'Mechanismus = geteilte Aroma-/Molekül-Klassen aus den Daten (ingredient_key_component / molecules.chem_class). '
+                . 'ist_etabliert=true ⇒ die Paarung ist im Graphen bereits bekannt (nicht „ungewöhnlich").',
+        ];
+    }
+
+    /** anchor_id → ingredient_id (memoierbar; hier direkt, da selten je Aufruf). */
+    private function anchorIngredientId(int $anchorId): ?int
+    {
+        $v = DB::table('foodalchemist_anchor_ingredient_map')->where('anchor_id', $anchorId)->value('ingredient_id');
+
+        return $v !== null ? (int) $v : null;
+    }
+
+    /** @return list<int> component_ids der Zutat (Aroma-Compound-Klassen). */
+    private function ingredientKeyComponentIds(int $ingredientId): array
+    {
+        return DB::table('foodalchemist_ingredient_key_component')
+            ->where('ingredient_id', $ingredientId)->pluck('component_id')
+            ->map(fn ($v) => (int) $v)->all();
+    }
+
+    /** @return list<string> distinkte chem_class-Werte der Moleküle der Zutat. */
+    private function ingredientChemClasses(int $ingredientId): array
+    {
+        return DB::table('foodalchemist_ingredient_molecule AS im')
+            ->join('foodalchemist_molecules AS m', 'm.id', '=', 'im.molecule_id')
+            ->where('im.ingredient_id', $ingredientId)
+            ->whereNotNull('m.chem_class')->distinct()->pluck('m.chem_class')
+            ->map(fn ($v) => (string) $v)->all();
+    }
+
+    /**
+     * anchor_id → [component_id,...] für ALLE profil-tragenden Anker in einem Rutsch
+     * (ein Join statt N Queries — Kandidaten-Scoring).
+     *
+     * @return array<int, list<int>>
+     */
+    private function keyComponentsByAnchor(): array
+    {
+        $rows = DB::table('foodalchemist_anchor_ingredient_map AS m')
+            ->join('foodalchemist_ingredient_key_component AS ikc', 'ikc.ingredient_id', '=', 'm.ingredient_id')
+            ->get(['m.anchor_id', 'ikc.component_id']);
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int) $r->anchor_id][] = (int) $r->component_id;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Aroma-Vektor-Cosinus-Fallback: aggregierter Quell-Vektor über die Quell-Anker,
+     * gegen alle anderen Anker mit Vektor. @return array<int,float> anchor_id => cosine.
+     */
+    private function aromaCosineCandidates(array $anchorIds, int $limit): array
+    {
+        $all = $this->allAnchorAromaVectors();
+        $src = $this->gpAromaVectorFromMap($anchorIds, $all);
+        if ($src === null) {
+            return [];
+        }
+        $scored = [];
+        foreach ($all as $cid => $c) {
+            if (in_array($cid, $anchorIds, true)) {
+                continue;
+            }
+            $cos = $this->vecCos($src, $c['vec']);
+            if ($cos > 0) {
+                $scored[$cid] = $cos;
+            }
+        }
+        arsort($scored);
+
+        return array_slice($scored, 0, $limit, true);
+    }
 }

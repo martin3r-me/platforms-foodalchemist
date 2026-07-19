@@ -2,7 +2,7 @@
 
 > **ROADMAP-Bezug:** R6.11 (Track „Alleinstellung"), Größe M, hängt an Q4 (Evidenz/Wissensbasis) + Pairing-Graph.
 > **Idee:** Der Warum-Layer **offensiv** — nicht erklären, was ist, sondern **erforschen, was sein könnte.** R&D-Modus für die Food-Alchemist-DNA: gezielte Experimente statt Zufall; Widersprüche im Wissen als Forschungsfragen sichtbar machen statt still zu übertünchen.
-> **Reifegrad: 🟡 entscheidungs-reif** (Code-Kartierung 2026-07-19; ein harter Daten-Blocker + ein feasibility-Cut, s.u. — deshalb noch nicht 🟢). Vorher ⚪ Dossier.
+> **Reifegrad: ✅ S1–S3 GEBAUT 2026-07-19** (Hypothesen-Modus + Widerspruchs-Detektor + Lab-Notes-Senke: Engine + 3 MCP-Tools + Signal + Migration, 10 Pest, Realdaten-verifiziert). **Einziger Rest = optionales KI-Narrativ** (bewusst offen; deterministischer Kern trägt, Qualitäts-Gate braucht echten Provider). Daten-Vorbedingung E5 an Dev-DB verifiziert; feasibility-Cut E3 (Domain-Prosa-Widerspruch = v2).
 
 ---
 
@@ -14,7 +14,7 @@
 - `foodalchemist_ingredient_molecule` (Zutat↔Molekül, Konzentration), `foodalchemist_ingredient_aroma_vector` (14 Aroma-Achsen, **fertiger geteilte-Klasse-Vektor**), `foodalchemist_molecule_type_map` (`provenance`), `foodalchemist_molecule_descriptors` (`citation`), `foodalchemist_pairing_computed` (`confidence`, `evidence_auto`).
 - Brücke zu Ankern/GPs: `foodalchemist_anchor_ingredient_map` (anchor↔ingredient) → GP via `gp_anchor_mappings`.
 - **Vorhandene Mathematik:** `PairingService::allAnchorAromaVectors()` `:870` + `statePairingNeighbors()` `:913` ranken bereits per Aroma-Vektor-**Cosinus**. → **GAP:** diskretes „geteilte `key_component`/`chem_class`"-Zählen gibt es NICHT (Daten da, Code fehlt) — ein `sharedCompoundClasses(anchorA,anchorB)` ist neu.
-- ⚠️ **HARTER BLOCKER:** die Chem-Tabellen haben **keine FKs** und werden nur per `foodalchemist:import-master` befüllt (Migration-Header). **Vor Baustart verifizieren, dass der Import lief** (sonst ranken die Queries auf Leer).
+- ✅ **DATEN-VORBEDINGUNG ERFÜLLT (verifiziert 2026-07-19, Dev-DB):** die Chem-Tabellen haben zwar keine FKs und werden nur per `foodalchemist:import-master` befüllt — der Lauf ist aber **durch**. Zeilen-Zählung: `molecules` 74.746 · `ingredient_molecule` 97.043 · `pairing_computed` 341.009 · `pairing_anchor_edges` 33.846 · `molecule_descriptors` 34.551 · `ingredient_key_component` 21.255 · `key_components` 34 · `ingredient_aroma_vector` 2.729 · `anchor_ingredient_map` 813 · `gp_anchor_mappings` 199. → Rankings ranken auf echten Daten, kein Scheinbau.
 
 **Widerspruchs-Seite: strukturell dünn (ehrlicher Befund).**
 - Docs in `foodalchemist_knowledge_documents` (`category ∈ cross_cutting|domain|pairing|regelwerk_snippet`, `content_md`). `KnowledgeContextService::extractPairingNames($md)` `:175` parst eine **`## Pairings`-Markdown-Sektion** (Wikilinks/`**bold**` → Partner-**Namen**).
@@ -36,25 +36,25 @@
 | E2 | Hypothesen-Ranking | **Primär `sharedCompoundClasses` (neu, über `ingredient_key_component`/`molecule.chem_class`), Fallback Aroma-Vektor-Cosinus (vorhanden).** Mechanismus-Text = geteilte Klassen benennen. | Nutzt die stärkste vorhandene Datenbasis; graceful, wenn Chem-Tabellen (noch) dünn. |
 | E3 | Widerspruchs-Detektor Scope | **v1 NUR `pairing`-Doc ⇄ Edge Präsenz/Absenz-Set-Diff.** Domain-Prosa-Widersprüche (semantisch) = **v2** (braucht LLM-Extraktions-Pass zu strukturierten Claims). | Ehrlicher feasibility-Cut: nur das ist deterministisch belastbar; alles andere wäre Raten. |
 | E4 | Lab-Journal-Output | **v1: `recipes.POST`-Draft (vorhanden) + R&D-Signal (neu).** „Lab-Journal-Eintrag" = **neue Mini-Tabelle `foodalchemist_lab_notes`** (S3, klein) statt Vault-Write. | Vault-Write headless nicht verfügbar; eine schlanke FA-Notiz-Tabelle macht den Zweig ehrlich erfüllbar. |
-| E5 | Vorbedingung | **Import-Master-Lauf verifizieren** (Chem-Tabellen befüllt) BEVOR S1 startet. | Ohne Daten ranken die Queries leer — kein Scheinbau. |
+| E5 | Vorbedingung | ✅ **ERFÜLLT (2026-07-19):** Import-Master-Lauf ist durch, Chem-Tabellen voll (Zählung s. §0). S1 kann direkt starten. | Ohne Daten ranken die Queries leer — geprüft, Daten da. |
 
 ## 2. Etappen
 
 | # | Etappe | Größe | Inhalt |
 |---|---|---|---|
-| **S1** | Hypothesen-Modus | M | `PairingService::sharedCompoundClasses(a,b)` (neu) + `hypothesizeFor(gp/anchor, limit)` → Kandidaten nach geteilten Volatil-Klassen, je mit Mechanismus + Evidenz-Tier (E1/E2); optional KI-Narrativ via Prompt `knowledge.hypothesize`; MCP `knowledge.HYPOTHESIZE` (read-only). |
-| **S2** | Widerspruchs-Detektor | M | Neuer `WissensWiderspruchDetektor`: `pairing`-Doc-Namen (`extractPairingNames`) vs. `pairing_anchor_edges` Set-Diff → neue `SignalTyp::WiderspruchWissenGraph`, `payload` = {doc_slug, edge, beide Assertions, tier}, `ref_type='knowledge_document'`; in `SignalDetektorService::laufen()` verdrahtet (Research-Queue = Q4-Rückspeisung). |
-| **S3** | Output-Senken | S | 1-Klick → `recipes.POST`-Draft; + neue Tabelle `foodalchemist_lab_notes` (team-scoped, `title/body/evidence_tier/source_ref`) als FA-Lab-Journal-Zweig. |
+| **S1** | Hypothesen-Modus | M | ✅ **GEBAUT 2026-07-19.** `PairingService::sharedCompoundClasses(a,b)` + `hypothesizeFor(gp/anchor, limit)` → Kandidaten nach geteilten Volatil-Klassen (Aroma-key_components primär + Molekül-chem_class), je mit Mechanismus-Text + Evidenz-Tier T3 + Novität-Flag (`ist_etabliert` gegen `pairing_anchor_edges`); graceful Aroma-Vektor-Cosinus-Fallback bei dünnen Compound-Daten; MCP `knowledge.HYPOTHESIZE` (read-only). `HypothesizeModeTest` (5 Pest). Realdaten-Smoke: ajvar → guave/orange/paprikapulver über geteilte Pyrazine/Furane/Terpene. **Optionales KI-Narrativ (Prompt `knowledge.hypothesize`) = S1-Rest, bewusst offen** (deterministischer Kern trägt für sich; Qualitäts-Gate braucht echten Provider). |
+| **S2** | Widerspruchs-Detektor | M | ✅ **GEBAUT 2026-07-19.** `SignalDetektorService::widerspruchWissenGraph()`: `pairing`-Doc-Namen (`extractPairingNames`) vs. `pairing_anchor_edges` Präsenz/Absenz-Set-Diff → `SignalTyp::WiderspruchWissenGraph` (Info), `payload` = {doc_slug, anchor_id, fehlende_kanten, doc_tier T0, graph_status}, `ref_type='knowledge_document'`, dedup je Doc; in `laufen()` verdrahtet. Nur belegt-ohne-Kante feuert (Reverse = Rauschen, bewusst weg); unauflösbare Namen = Lücke, kein Widerspruch. Domain-Prosa = v2 (E3). |
+| **S3** | Output-Senken | S | ✅ **GEBAUT 2026-07-19.** Neue Tabelle `foodalchemist_lab_notes` (team-scoped, `title/body/evidence_tier/source_ref/created_via`) + Model + `LabNoteService` (create/forTeam, Tier-Default T3) + MCP `lab_notes.POST` (write, isOwnedBy). Draft-Rezept-Zweig nutzt bestehendes `recipes.POST`. |
 
 ## 3. DoD
 
-- [ ] Hypothesen-Modus: „paare X ungewöhnlich" → Kandidaten nach geteilten Volatil-Klassen gerankt, mit Mechanismus + Evidenz-Stufe (E1/E2).
-- [ ] Widerspruchs-Detektor: `pairing`-Doc ⇄ Graph-Kante Präsenz/Absenz → R&D-Frage als Signal (nicht still auflösen) + Research-Queue (E3); Domain-Prosa explizit als v2 markiert.
-- [ ] Ergebnis **immer mit Evidenz-Stufe**; T3/T0 klar als Hypothese, nie Fakt.
-- [ ] Vorschlag → 1 Klick → Draft-Rezept (`recipes.POST`) oder Lab-Notiz (`foodalchemist_lab_notes`, E4).
-- [ ] MCP `knowledge.HYPOTHESIZE`, read-only bis Draft.
-- [ ] Test: bekannter strittiger `pairing`-Doc-Fall wird als offene Frage geflaggt, nicht willkürlich entschieden; Hypothesen-Ranking auf Fixture reproduzierbar; graceful bei leeren Chem-Tabellen.
-- [ ] **Vorbedingung dokumentiert:** Chem-Tabellen befüllt (Import-Master, E5).
+- [x] **Hypothesen-Modus (S1 ✅ 2026-07-19):** „paare X ungewöhnlich" → Kandidaten nach geteilten Volatil-Klassen gerankt, mit Mechanismus + Evidenz-Stufe (E1/E2).
+- [x] **Widerspruchs-Detektor (S2 ✅ 2026-07-19):** `pairing`-Doc ⇄ Graph-Kante Präsenz/Absenz → R&D-Frage als Signal (nicht still auflösen) + Research-Queue (E3); Domain-Prosa explizit als v2 markiert.
+- [x] Ergebnis **immer mit Evidenz-Stufe**; T3/T0 klar als Hypothese, nie Fakt (S1: T3 je Hypothese; S2: doc_tier T0; S3: Tier Pflicht-Default T3).
+- [x] **Vorschlag → 1 Klick → Draft-Rezept (`recipes.POST`) oder Lab-Notiz (`foodalchemist_lab_notes`, E4)** — S3 ✅ (`lab_notes.POST` + Service; Draft via bestehendes `recipes.POST`).
+- [x] MCP `knowledge.HYPOTHESIZE`, read-only bis Draft (S1 ✅) + `lab_notes.POST` (S3, write).
+- [x] Test: Hypothesen-Ranking reproduzierbar + graceful bei leeren Chem-Tabellen (`HypothesizeModeTest`, 5 Pest) + strittiger `pairing`-Doc wird als Signal geflaggt, vorhandene Kante nicht (`WissensWiderspruchTest`, 5 Pest).
+- [x] **Vorbedingung dokumentiert + verifiziert (2026-07-19):** Chem-Tabellen befüllt (Import-Master, E5) — Zählung in §0.
 
 ## 4. Reuse-vs-Neu
 

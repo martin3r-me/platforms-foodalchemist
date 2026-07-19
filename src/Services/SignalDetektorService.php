@@ -33,6 +33,7 @@ class SignalDetektorService
             + $this->wareneinsatzUeberZiel($team)
             + $this->vkAnpassungEmpfohlen($team)
             + $this->vertragsfristFaellig($team)
+            + $this->widerspruchWissenGraph($team)
             + $this->naehrwertPlausi($team)
             + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
     }
@@ -671,6 +672,80 @@ class SignalDetektorService
      * Dokuments (Laufzeitende − Kündigungsfrist) liegt im Vorlauf-Fenster. Ein Signal
      * je Dokument; Muster wie veraltetePreise, aber datumsgetrieben.
      */
+    /**
+     * R6.11 · S2 — Widerspruchs-Detektor (Wissen ⇄ Anker-Graph). Für jedes `pairing`-
+     * Wissensdokument: die im `## Pairings` gelisteten Partner (KnowledgeContextService)
+     * gegen die Kanten des Doc-Ankers (`pairing_anchor_edges`) — Präsenz/Absenz-Set-Diff.
+     * „Doc behauptet Paarung X, Graph hat keine Kante" → EIN Signal je Doc (R&D-Frage,
+     * Research-Queue), NICHT still aufgelöst. Ein Doc/Partner ohne auflösbaren Anker ist
+     * eine Namens-Lücke, KEIN Widerspruch (übersprungen). Feasibility-Cut (E3): nur
+     * `pairing`-Docs; Domain-Prosa-Semantik-Widersprüche = v2. Reverse-Richtung (Graph
+     * hat Kante, Doc listet nicht) bewusst NICHT als Signal — bei kuratierten Teil-Listen
+     * wäre das Rauschen; hier zählt die belegte Behauptung ohne Graph-Stütze.
+     */
+    public function widerspruchWissenGraph(Team $team, int $maxDocs = 500): int
+    {
+        $pairing = app(PairingService::class);
+        $ctx = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class);
+        $n = 0;
+
+        $docs = DB::table('foodalchemist_knowledge_documents')
+            ->where('category', 'pairing')->where('active', 1)->whereNull('deleted_at')
+            ->limit($maxDocs)->get(['id', 'slug', 'title', 'content_md']);
+
+        foreach ($docs as $doc) {
+            $ankerId = $pairing->resolveByName((string) $doc->title) ?? $pairing->resolveByName((string) $doc->slug);
+            if ($ankerId === null) {
+                continue;   // Doc-Anker nicht auflösbar → Namens-Lücke, kein Widerspruch
+            }
+            $partnerNames = $ctx->extractPairingNames((string) ($doc->content_md ?? ''));
+            if ($partnerNames === []) {
+                continue;
+            }
+            $kanten = array_flip(DB::table('foodalchemist_pairing_anchor_edges')
+                ->where('anchor_a_id', $ankerId)->pluck('anchor_b_id')->map(fn ($v) => (int) $v)->all());
+
+            $fehlend = [];   // Doc behauptet Paarung, Graph kennt keine Kante
+            foreach ($partnerNames as $pname) {
+                $pid = $pairing->resolveByName($pname);
+                if ($pid === null || $pid === $ankerId) {
+                    continue;   // unauflösbarer/selbst-Partner = Namens-Lücke, kein Widerspruch
+                }
+                if (! isset($kanten[$pid])) {
+                    $fehlend[$pid] = $pname;
+                }
+            }
+            if ($fehlend === []) {
+                continue;   // kein Widerspruch → kein Signal (es gibt schlicht keinen)
+            }
+
+            $liste = implode(', ', array_slice(array_values($fehlend), 0, 6));
+            $this->signals->erzeuge(
+                $team,
+                SignalTyp::WiderspruchWissenGraph,
+                SignalSeverity::Info,
+                ($doc->title ?: $doc->slug) . ' — ' . count($fehlend) . ' im Wissen belegte Paarung(en) ohne Graph-Kante: ' . $liste,
+                [
+                    'dedup_key' => 'widerspruch-doc-' . $doc->id,
+                    'ref_type' => 'knowledge_document',
+                    'ref_id' => (int) $doc->id,
+                    'description' => 'Wissensdokument (kuratiert, T0) behauptet Paarungen, die der Anker-Graph nicht kennt. '
+                        . 'R&D-Frage: Kante ergänzen (belegt) oder Beleg prüfen — nicht still auflösen.',
+                    'payload' => [
+                        'doc_slug' => $doc->slug,
+                        'anchor_id' => $ankerId,
+                        'fehlende_kanten' => array_map(fn ($id, $name) => ['anchor_id' => (int) $id, 'name' => $name], array_keys($fehlend), array_values($fehlend)),
+                        'doc_tier' => 'T0',       // kuratiertes Doc = belegt
+                        'graph_status' => 'kante_fehlt',
+                    ],
+                ]
+            );
+            $n++;
+        }
+
+        return $n;
+    }
+
     public function vertragsfristFaellig(Team $team, int $lookaheadDays = 30): int
     {
         $n = 0;

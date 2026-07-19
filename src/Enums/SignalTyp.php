@@ -24,6 +24,8 @@ enum SignalTyp: string
     case VkAnpassungEmpfohlen = 'vk_anpassung_empfohlen';
     // R9.1: Vertrags-Kündigungsfrist eines Lieferanten läuft ab.
     case VertragsfristFaellig = 'vertragsfrist_faellig';
+    // R6.11 · S2: Pairing-Wissensdokument behauptet eine Paarung, die der Anker-Graph nicht kennt (R&D-Frage).
+    case WiderspruchWissenGraph = 'widerspruch_wissen_graph';
 
     public function label(): string
     {
@@ -40,6 +42,7 @@ enum SignalTyp: string
             self::EkKetteUnvollstaendig => 'EK-Kette unvollständig',
             self::VkAnpassungEmpfohlen => 'VK-Anpassung empfohlen',
             self::VertragsfristFaellig => 'Vertragsfrist fällig',
+            self::WiderspruchWissenGraph => 'Widerspruch Wissen ↔ Graph',
         };
     }
 
@@ -59,6 +62,7 @@ enum SignalTyp: string
             self::EkKetteUnvollstaendig => 'heroicon-o-currency-euro',
             self::VkAnpassungEmpfohlen => 'heroicon-o-tag',
             self::VertragsfristFaellig => 'heroicon-o-calendar-days',
+            self::WiderspruchWissenGraph => 'heroicon-o-light-bulb',
         };
     }
 }

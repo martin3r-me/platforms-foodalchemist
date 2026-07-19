@@ -19,7 +19,7 @@
 | **09 Pairing-Offense-Trio (R6.8/6.9/6.10)** | ✅ **KOMPLETT GEBAUT 2026-07-19** — `substitution.SUGGEST` + `dish.REVERSE` + `surplus.SUGGEST`, 7 Pest. R6.10 produktiv = Q1-Contract offen |
 | **12·S1 R2.5 VK-Snapshot-Governance** | ✅ **GEBAUT 2026-07-19** — Snapshot-Layer+Signal+Settings+MCP `vk_snapshots.GET/RELEASE`, 3 Pest. Offen: Batch-Freigabe-UI + R3.2-Kundensicht (`publishedFor`) |
 | **14 Lieferanten-Management (R9.1+R9.2)** | ✅ **KOMPLETT 2026-07-19 (Engine+MCP+UI)** — 5 Migr.+3 Models+Status-Enum+3 Services+2 Signale+**6 MCP-Tools** (`suppliers.GET/PUT/VOLUME`, `supplier_agreements.POST`, `gp_lead.GET/PUT`), 6 Pest. **UI-Slice:** getabtes `SupplierDetail`-Modal (Stammblatt/Konditionen/Absprachen/Dokumente/Bündelung) + Lead-Override-mit-Begründung im `Gps/DetailPanel`, 5 Pest |
-| **Spec, ungebaut** | 03 (#512 L1–L8) · 08 (Planungs-/Kreativ-Ebene) · 09·S2/S3 · 10 · 12 · 13 · 14 |
+| **Spec, ungebaut** | 03 (#512 L1–L8) · 08 (Planungs-/Kreativ-Ebene) · 10 · 11 (🟢 blocker-frei) · 12·S2/S3 · 13 |
 
 ---
 
@@ -140,7 +140,7 @@ Phase 1: 07·M1 (Keystone) → 07·M2 ; 06·H1/H2        [blocker-frei]
 - **08** 🟡 — Planungs-/Kreativ-Ebene (Doppel-Diamant + Wissens-Ebene).
 - **09** 🟢 — Pairing-Offense-Trio (bau-reif 2026-07-19: R6.8 Aroma-Subst. · R6.9 Dish-Reverse · R6.10 Überschuss; alle graph-code-verankert, R6.10 Mock-Bestand).
 - **10** 🟢 — Angebots-Funnel / Brief-Parser R6.2 (bau-reif 2026-07-19: `briefs.PARSE`-Prompt+Tool+Modal; scharf nach #492-Blindtest).
-- **11** 🟡 — Hypothesen-/Widerspruchs-Modus R6.11 (entscheidungs-reif 2026-07-19: Hypothesen-Ranking baubar, Widerspruch nur pairing-Docs v1; Blocker: Chem-Tabellen-Import + Lab-Notes-Tabelle neu).
+- **11** ✅ **S1–S3 gebaut 2026-07-19** — Hypothesen-/Widerspruchs-Modus R6.11 (Daten-Vorbedingung E5 an Dev-DB verifiziert, `molecules` 74.7k / `pairing_computed` 341k / `edges` 33.8k; **S1 `hypothesizeFor`+`sharedCompoundClasses`+MCP `knowledge.HYPOTHESIZE`, S2 `widerspruchWissenGraph`-Detektor+`SignalTyp::WiderspruchWissenGraph`, S3 `foodalchemist_lab_notes`+`LabNoteService`+MCP `lab_notes.POST`, 10 Pest**; einziger Rest = optionales KI-Narrativ).
 - **12** 🟢/🟡 — Wirtschaftlichkeits-Intelligenz R2-Rest (bau-reif 2026-07-19: R2.5 + R2.4 🟢; R2.3 🟡 gated auf Q2-Format-Spec, v0-Matrix auf Feedback interim).
 - **13** 🟢/🟡 — Preis-/Katalog-Ingest Q2 (bau-reif 2026-07-19: Kanal B Datei-Import 🟢, Sales-Ist 🟡 gated, Kanal A ⚪ extern).
 - **14** ✅ — Lieferanten-Management R9 (KOMPLETT 2026-07-19: Engine+MCP+UI; `SupplierDetail`-Modal + GP-Lead-Override-Begründung; Volumen nur Nutzungs-Proxy, echtes Spend = Q2).
@@ -149,6 +149,6 @@ Phase 1: 07·M1 (Keystone) → 07·M2 ; 06·H1/H2        [blocker-frei]
 **Damit sind die Kern-Funktionen vollständig als Einzeldateien extrahiert (01–14).** Die ROADMAP im Modul-Repo bleibt vorerst unverändert (team-facing); Eindampfen auf eine schlanke Spine = separater, abgesprochener Schritt.
 - Memory: `project_fa_507_semantic_search`, `_la_first_gp_mint`, `_convenience_highlights`, `_planungs_kreativ_ebene`, `feedback_fa_composer_update_procedure` — alle in `MEMORY.md`.
 
-**Planungs-Runde 2026-07-19:** alle sechs ⚪-Dossiers (09–14) via Code-Kartierung auf 🟢 bau-reif (bzw. 🟡 mit benanntem Blocker) gehoben — jede Spec trägt jetzt eine „Code-Kartierung"-Sektion (Datei:Zeile), fixierte Entscheidungen (E1…), Etappen mit Größe + geschärfte DoD + Reuse-vs-Neu-Tabelle. Damit ist der ganze Ordner 01–14 bau-fähig (nur 08 + 11 tragen Rest-Blocker: LLM-Provider bzw. Chem-Import). **09·S1 (R6.8 Aroma-Substitution) ✅ gebaut 2026-07-19.** Nächster Bau-Kandidat blocker-frei: **14·S1 (R9.1 Stammblatt)**, **12·S1 (R2.5)**, **13·S1 (Kanal-B-Import)** oder **09·S2 (R6.9 Dish-Reverse, hängt an R1 ✅)**.
+**Planungs-Runde 2026-07-19:** alle sechs ⚪-Dossiers (09–14) via Code-Kartierung auf 🟢 bau-reif (bzw. 🟡 mit benanntem Blocker) gehoben — jede Spec trägt jetzt eine „Code-Kartierung"-Sektion (Datei:Zeile), fixierte Entscheidungen (E1…), Etappen mit Größe + geschärfte DoD + Reuse-vs-Neu-Tabelle. Damit ist der ganze Ordner 01–14 bau-fähig. **Rest-Blocker nur noch 08** (LLM-Provider live für die Konvergenz-Qualität; Bau gegen Fake-Provider trotzdem möglich). **11 ist seit 2026-07-19 blocker-frei** — der vermeintliche „Chem-Import"-Blocker war eine Fehlannahme, die Chem-/Pairing-Tabellen sind an der Dev-DB als voll befüllt verifiziert. **09 (R6.8/6.9/6.10) + 14 (R9 inkl. UI) ✅ komplett 2026-07-19.** Nächste blocker-freie Bau-Kandidaten: **11·S1 (Hypothesen-Modus)**, **12·S2 (R2.4-Solver)**, **13·S1 (Kanal-B-Import)**.
 
 *Erstellt 2026-07-18. Einstiegspunkt für die Fortsetzung. Reihenfolge = Abhängigkeit + Blocker-Status, nicht in Stein — bei neuem Signal (z.B. Blindtest, Kundendruck) neu priorisieren.*
