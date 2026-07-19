@@ -2,6 +2,10 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Platform\FoodAlchemist\Models\FoodAlchemistTerminologyAlias;
+use Platform\FoodAlchemist\Models\FoodAlchemistTerminologyAntiMarker;
+use Throwable;
+
 /**
  * #507 Weg-2 (deterministische Terminologie-Schicht): der ehrliche Fix, nachdem
  * die E5-Eichung (2026-07-19) zeigte, dass OpenAI-Embeddings kurze Lebensmittel-
@@ -25,6 +29,73 @@ namespace Platform\FoodAlchemist\Services;
  */
 class TerminologyService
 {
+    /** Request-Cache der zusammengeführten (Konstanten ∪ DB) Regeln. */
+    private ?array $aliasGroupsCache = null;
+
+    private ?array $antiMarkerCache = null;
+
+    /**
+     * E7-b: Alias-Gruppen = Konstanten-Baseline ∪ runtime-gepflegte DB-Zeilen
+     * (globaler Master, additiv). Graceful: fehlt die Tabelle / kein DB (Sandbox,
+     * frühe Boot-Phase) → nur die Konstanten. Terminologie ist ein GLOBALER Master
+     * (kein Team-Scoping) — sprachliche Zuordnung, keine Geschäftsdaten.
+     *
+     * @return list<list<string>>
+     */
+    public function aliasGroups(): array
+    {
+        if ($this->aliasGroupsCache !== null) {
+            return $this->aliasGroupsCache;
+        }
+        $groups = self::ALIAS_GROUPS;
+        try {
+            foreach (FoodAlchemistTerminologyAlias::query()->whereNull('deleted_at')->get(['members']) as $row) {
+                $members = is_array($row->members)
+                    ? array_values(array_filter(array_map(fn ($m) => $this->norm((string) $m), $row->members), fn ($m) => $m !== ''))
+                    : [];
+                if (count($members) >= 2) {
+                    $groups[] = $members;
+                }
+            }
+        } catch (Throwable) {
+            // Tabelle nicht migriert / kein DB → Konstanten-Baseline genügt.
+        }
+
+        return $this->aliasGroupsCache = $groups;
+    }
+
+    /**
+     * E7-b: Anti-Marker = Konstanten-Baseline ∪ DB-Zeilen (additiv, global). Graceful.
+     *
+     * @return list<array{trigger:string, forbid:string, unless?:string}>
+     */
+    public function antiMarkerRules(): array
+    {
+        if ($this->antiMarkerCache !== null) {
+            return $this->antiMarkerCache;
+        }
+        $rules = self::ANTI_MARKERS;
+        try {
+            foreach (FoodAlchemistTerminologyAntiMarker::query()->whereNull('deleted_at')->get(['trigger_token', 'forbid_token', 'unless_token']) as $r) {
+                $trigger = $this->norm((string) $r->trigger_token);
+                $forbid = $this->norm((string) $r->forbid_token);
+                if ($trigger === '' || $forbid === '') {
+                    continue;
+                }
+                $rule = ['trigger' => $trigger, 'forbid' => $forbid];
+                $unless = $this->norm((string) ($r->unless_token ?? ''));
+                if ($unless !== '') {
+                    $rule['unless'] = $unless;
+                }
+                $rules[] = $rule;
+            }
+        } catch (Throwable) {
+            // Tabelle nicht migriert / kein DB → Konstanten-Baseline genügt.
+        }
+
+        return $this->antiMarkerCache = $rules;
+    }
+
     /**
      * Alias-Gruppen: Sätze bedeutungsgleicher Begriffe. Taucht EIN Glied in der
      * Query auf, werden die Tokens der ANDEREN Glieder additiv in die Query
@@ -114,7 +185,7 @@ class TerminologyService
     {
         $hay = ' ' . $this->norm($ingredientName) . ' ';
         $phrases = [];
-        foreach (self::ALIAS_GROUPS as $group) {
+        foreach ($this->aliasGroups() as $group) {
             $hit = false;
             foreach ($group as $member) {
                 // Token-Grenzen (Space-umschlossen) — verhindert Falsch-Trigger wie
@@ -205,7 +276,7 @@ class TerminologyService
     {
         $q = ' ' . $this->norm($queryName) . ' ';
         $c = ' ' . $this->norm($candidateName) . ' ';
-        foreach (self::ANTI_MARKERS as $rule) {
+        foreach ($this->antiMarkerRules() as $rule) {
             $trigger = ' ' . $rule['trigger'] . ' ';
             $forbid = ' ' . $rule['forbid'] . ' ';
             // Token-Grenzen für Trigger/Forbid; Guard schützt den legitimen Treffer.

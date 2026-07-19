@@ -264,6 +264,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SuppliersSearchTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbooksSearchTool::class,
                     \Platform\FoodAlchemist\Tools\LabNotesSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\TerminologyListTool::class,
+                    \Platform\FoodAlchemist\Tools\TerminologyPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeKlassePostTool::class,
                     \Platform\FoodAlchemist\Tools\UiOpenTool::class,
                     // Phase 0: GP-Ground-Truth (Match + NEW-GP-Staging, LA-First-konform)
