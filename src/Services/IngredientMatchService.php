@@ -36,6 +36,9 @@ class IngredientMatchService
         $this->terminology ??= app(TerminologyService::class);
     }
 
+    /** Roh-Query der laufenden matchIngredient-Entscheidung (für S2-Suppression). */
+    private string $currentIngredientName = '';
+
     /**
      * @return array{target: string, status: MatchBand, gp_id: ?int, gp_name: ?string,
      *               recipe_id: ?int, recipe_name: ?string, score: float}
@@ -55,6 +58,11 @@ class IngredientMatchService
         if ($queryTokens === [] && $querySlug === null) {
             return $this->noMatch(0.0);
         }
+
+        // S2 (#507 Weg-2): die Pool-Scans dieser Entscheidung dürfen nie auf einer
+        // bekannten Verwechslungs-Falle landen (Brie↛Bries etc.). Synchron gesetzt,
+        // in bestGpMatch/bestSubrecipeMatch gelesen (kein Threading durch poolLauf).
+        $this->currentIngredientName = $ingredientName;
 
         // 4.4n — §4-Default-Sub-Alias hat VORRANG (deterministisch, Existenz-Guard)
         if (($aliasName = $this->heuristik->defaultSubAlias($queryTokens)) !== null) {
@@ -426,6 +434,9 @@ class IngredientMatchService
         $bestZustand = null;
         $bestBio = null;
         foreach ($this->gpPool($team, $queryTokens, $querySlug) as $gp) {
+            if ($this->terminology->isAntiMarker($this->currentIngredientName, $gp->name)) {
+                continue;   // S2: Anti-Marker nie als Entscheidung
+            }
             $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
             $score = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
 
@@ -459,6 +470,9 @@ class IngredientMatchService
 
         $best = null;
         foreach ($this->subPool($team, $queryTokens, $querySlug) as $sub) {
+            if ($this->terminology->isAntiMarker($this->currentIngredientName, $sub->name)) {
+                continue;   // S2: Anti-Marker nie als Entscheidung
+            }
             $score = $this->scoreMitFloor($queryTokens, $querySlug, $sub->name, null, $sub->name);
 
             // 4.4b — Sub-Typ-Hint-Boost (+0.20, capped) wenn der Kandidat den Tag trägt
