@@ -24,9 +24,10 @@ use Throwable;
  * (E2, {@see SemanticRetrievalService}) konsumiert ihn additiv.
  *
  * Was wird embeddet (die Qualitäts-Stellschraube — kompakt, 1 Vektor/Entität):
- *  - GP     : §6-Name + Hauptzutat-Oberfläche + Zustand + Warengruppe. Bewusst
- *             KEINE LA-Namen (Lieferanten-Kauderwelsch verrauscht den Index; die
- *             LA→GP-Brücke läuft über #505-Slice-2, nicht über Embeddings).
+ *  - GP     : §6-Name + Hauptzutat-Oberfläche + Zustand (Warengruppen-CODE bewusst
+ *             raus — Slice 1 Entrauschung #507; ein Zahlencode zieht den Vektor nur
+ *             vom Klartext-Namen weg). Bewusst KEINE LA-Namen (Lieferanten-Kauderwelsch
+ *             verrauscht den Index; die LA→GP-Brücke läuft über #505-Slice-2).
  *  - Rezept : Name + Kategorie-Label + die Top-Zutaten-NAMEN (die Oberfläche, die
  *             zu einer Freitext-Suche matchen soll — nicht die Mengen/Prosa).
  *             metadata.is_sales_recipe trennt Basis (D-5) von Verkauf (D-6).
@@ -248,26 +249,45 @@ class PoolEmbeddingService
     /** §6-Name + Hauptzutat-Oberfläche + Zustand + Warengruppe (kompakt). */
     public function gpEmbedText(object $gp): string
     {
-        $parts = [trim((string) ($gp->name ?? ''))];
+        $name = trim((string) ($gp->name ?? ''));
+        $parts = [$name];
 
         $haupt = trim((string) ($gp->main_ingredient_display ?? ''));
         if ($haupt === '' && ! empty($gp->main_ingredient_slug)) {
             $haupt = str_replace('_', ' ', (string) $gp->main_ingredient_slug);
         }
-        if ($haupt !== '' && mb_stripos((string) ($gp->name ?? ''), $haupt) === false) {
+        if ($haupt !== '' && mb_stripos($name, $haupt) === false) {
             $parts[] = $haupt;
         }
 
+        // Zustand nur, wenn er nicht ohnehin schon im §6-Namen steckt (sonst
+        // dupliziert „…, frisch" + „frisch" den Token und verwässert den Vektor).
         $zustand = trim((string) ($gp->condition ?? ''));
-        if ($zustand !== '') {
+        if ($zustand !== '' && mb_stripos($name, $zustand) === false) {
             $parts[] = $zustand;
         }
-        $wg = trim((string) ($gp->commodity_group_code ?? ''));
-        if ($wg !== '') {
-            $parts[] = $wg;
-        }
 
-        return trim(implode(' · ', array_filter($parts, static fn ($p) => $p !== '')));
+        // Warengruppe (Code, z.B. „13") entfällt bewusst: semantisches Rauschen,
+        // das den Vektor vom Klartext-Namen wegzieht (Slice 1 Entrauschung #507).
+        return self::normalizeForEmbedding(implode(' ', $parts));
+    }
+
+    /**
+     * Symmetrischer Normalizer für BEIDE Enden des Vektorraums — Ziel-Embed-Text
+     * (hier) UND die Suchquery ({@see SemanticRetrievalService::candidates}). Ohne
+     * ihn steht die rohe Query („Aubergine") einer strukturierten Ziel-Oberfläche
+     * („Aubergine · frisch · 13") gegenüber → kein Schwellwert trennt echte Treffer
+     * von Anti-Markern (E5-Eichung 2026-07-19 fand kein brauchbares Floor-Fenster).
+     * Wir kollabieren Struktur-Separatoren zu Leerzeichen → Query und Ziel leben im
+     * selben, natürlichsprachlichen Raum. Casing bleibt (3-large ist natursprachlich
+     * trainiert; Groß/Klein ist bei Zutat↔GP nie der trennende Faktor).
+     */
+    public static function normalizeForEmbedding(string $text): string
+    {
+        $text = preg_replace('/[·,;:\/|]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+
+        return trim($text);
     }
 
     /**
@@ -286,7 +306,7 @@ class PoolEmbeddingService
             $head .= ': ' . implode(', ', array_slice($ingredientNames, 0, self::RECIPE_MAX_INGREDIENTS));
         }
 
-        return trim($head);
+        return self::normalizeForEmbedding($head);
     }
 
     // ── Interna ──────────────────────────────────────────────────────────────

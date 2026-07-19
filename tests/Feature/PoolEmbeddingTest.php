@@ -131,27 +131,40 @@ it('embeddet Basis- + Verkaufsrezepte inkl. is_sales_recipe-Metadatum', function
 });
 
 it('baut kompakte, entrauschte Embed-Texte (die Qualitäts-Stellschraube)', function () {
-    // GP: Hauptzutat, die schon im Namen steht, wird NICHT doppelt angehängt;
-    //     Zustand + Warengruppe kommen dazu.
+    // GP: Hauptzutat + Zustand, die schon im Namen stehen, werden NICHT dupliziert;
+    //     der Warengruppen-CODE entfällt bewusst (Slice 1 Entrauschung #507); Struktur-
+    //     Separatoren werden zu Leerzeichen normalisiert (symmetrisch zur Query).
     $text = $this->svc->gpEmbedText((object) [
         'name' => 'Rindfleisch, frisch', 'main_ingredient_display' => 'Rindfleisch',
         'main_ingredient_slug' => 'rindfleisch', 'condition' => 'frisch', 'commodity_group_code' => 'FLEISCH',
     ]);
-    expect($text)->toBe('Rindfleisch, frisch · frisch · FLEISCH');
+    expect($text)->toBe('Rindfleisch frisch');
 
-    // GP: Hauptzutat NICHT im Namen → wird angehängt (Discovery über den Slug-Inhalt).
+    // GP: Hauptzutat steckt bereits im Namen (Topinambur ⊂ Topinambur-Püree) → nicht
+    //     dupliziert; nur der Zustand (TK) kommt dazu; WG-Code bleibt draußen.
     $text2 = $this->svc->gpEmbedText((object) [
         'name' => 'Topinambur-Püree', 'main_ingredient_display' => 'Topinambur',
         'condition' => 'TK', 'commodity_group_code' => 'GEMUESE',
     ]);
-    expect($text2)->toContain('Topinambur')->and($text2)->toContain('TK');
+    expect($text2)->toBe('Topinambur-Püree TK')
+        ->and($text2)->not->toContain('GEMUESE');
 
-    // Rezept: Name (Kategorie): Top-Zutaten-Namen.
+    // Rezept: Name (Kategorie) + Top-Zutaten, Separatoren normalisiert (kein „: " / „, ").
     $recipeText = $this->svc->recipeEmbedText(
         (object) ['name' => 'Geschmorte Kalbsbäckchen', 'category_label' => 'Schmorgericht', 'is_sales_recipe' => true],
         ['Kalbsbäckchen', 'Rotwein', 'Wurzelgemüse'],
     );
-    expect($recipeText)->toBe('Geschmorte Kalbsbäckchen (Schmorgericht): Kalbsbäckchen, Rotwein, Wurzelgemüse');
+    expect($recipeText)->toBe('Geschmorte Kalbsbäckchen (Schmorgericht) Kalbsbäckchen Rotwein Wurzelgemüse');
+});
+
+it('normalisiert Query und Ziel in denselben Vektorraum (Symmetrie)', function () {
+    // Der Kern des Slice-1-Fixes: dieselbe Funktion glättet beide Enden. Eine rohe
+    // Query „Aubergine" und ein Ziel-Text „Aubergine · frisch" dürfen nach der
+    // Normalisierung keine Struktur-Separatoren mehr tragen.
+    expect(\Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService::normalizeForEmbedding('Aubergine · frisch, ganz'))
+        ->toBe('Aubergine frisch ganz')
+        ->and(\Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService::normalizeForEmbedding('  Beef  '))
+        ->toBe('Beef');
 });
 
 it('ist idempotent — zweiter Lauf ohne Änderung legt nicht neu an', function () {

@@ -84,7 +84,9 @@ class SemanticRetrievalService
                 return [];
             }
             // Query EINMAL embedden (nicht je Partition) → dann Store-Suche je Partition.
-            $vectors = $provider->embed([$queryText], 'query');
+            // Symmetrisch zum Ziel-Embed-Text normalisieren (gleicher Vektorraum,
+            // sonst kein trennbarer Floor — E5-Eichung 2026-07-19).
+            $vectors = $provider->embed([PoolEmbeddingService::normalizeForEmbedding($queryText)], 'query');
             if ($vectors === [] || ! isset($vectors[0])) {
                 return [];
             }

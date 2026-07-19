@@ -20,8 +20,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Kern-Fall „Semantik sieht, was die Lexik nicht sieht": Der LIKE-Vorfilter der
  * Lexik durchsucht NUR name/slug/display — NICHT den Zustand. Ein Query-Token,
  * das nur im Zustand steht, ist lexikalisch unsichtbar, aber im Embed-Text
- * ("Name · Zustand · WG") enthalten → semantisch findbar. Das ist echter Recall-
- * Gewinn, kein Fake-Artefakt.
+ * ("Name Zustand", normalisiert, WG-Code raus) enthalten → semantisch findbar.
+ * Das ist echter Recall-Gewinn, kein Fake-Artefakt.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
