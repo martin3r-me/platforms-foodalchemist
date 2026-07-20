@@ -6,7 +6,16 @@
         <p class="text-xs text-rose-600 mb-3" data-generator-fehler>{{ $fehler }}</p>
     @endif
 
-    @if($ergebnis === null)
+    @if($laeuft)
+        {{-- Async (2026-07-20): Generierung läuft im Queue-Job, UI pollt das Ergebnis (kein Web-Timeout/502) --}}
+        <div wire:poll.2s="pruefeErgebnis" class="flex items-center gap-3 py-6 justify-center text-sm text-gray-600" data-generator-laeuft>
+            <svg class="animate-spin h-5 w-5 text-violet-600" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            <span>Rezept wird generiert — das dauert bis zu ~30 Sekunden. Das Fenster kann offen bleiben.</span>
+        </div>
+    @elseif($ergebnis === null)
         <x-foodalchemist::modal-section title="Beschreibung">
             <textarea wire:model="description" rows="3" class="{{ $input }}" data-generator-description
                       placeholder="z. B. Dunkle Rotwein-Schalotten-Reduktion als Saucenbasis für Schmorgerichte …"></textarea>
@@ -99,7 +108,9 @@
 
     <x-slot:footer>
         <button type="button" wire:click="$dispatch('modal.close', { name: 'generator-modal' })" class="{{ $btnGhost }}">{{ $ergebnis === null ? 'Abbrechen' : 'Schließen' }}</button>
-        @if($ergebnis === null)
+        @if($laeuft)
+            <button type="button" disabled class="{{ $btnPrimary }} opacity-60 cursor-not-allowed" data-generator-laeuft-btn>⏳ Generiere …</button>
+        @elseif($ergebnis === null)
             <button type="button" wire:click="generieren" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-generator-start>✨ Generieren</button>
         @endif
     </x-slot:footer>

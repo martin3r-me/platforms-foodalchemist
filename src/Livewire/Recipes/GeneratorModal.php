@@ -3,9 +3,11 @@
 namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Livewire\Attributes\On;
 use Livewire\Component;
-use Platform\FoodAlchemist\Services\RecipeGeneratorService;
+use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 
 /**
  * M4-14: ✨ Basisrezept-Generator — Beschreibung + Richtungs-Parameter
@@ -60,14 +62,24 @@ class GeneratorModal extends Component
 
     public ?array $ergebnis = null;
 
+    /** Async (2026-07-20): läuft während der Queue-Job rechnet; UI pollt über die Run-ID. */
+    public bool $laeuft = false;
+
+    public ?string $runId = null;
+
     #[On('generator-modal.oeffnen')]
     public function oeffnen(): void
     {
-        $this->reset('fehler', 'ergebnis', 'description');
+        $this->reset('fehler', 'ergebnis', 'description', 'laeuft', 'runId');
         $this->dispatch('modal.open', name: 'generator-modal');
     }
 
-    public function generieren(RecipeGeneratorService $generator): void
+    /**
+     * Async statt inline: der synchrone Call (LLM ~25 s + Nachbearbeitung) riss den
+     * nginx-fastcgi-Timeout → 502. Wir dispatchen in die database-Queue und pollen
+     * das Ergebnis (pruefeErgebnis) aus dem Cache. Kein Web-Timeout mehr.
+     */
+    public function generieren(): void
     {
         $this->fehler = null;
         $this->ergebnis = null;
@@ -78,25 +90,45 @@ class GeneratorModal extends Component
             return;
         }
 
-        try {
-            // Hook-Mapping: der Service kennt bio als bool (4.4r) — die dreifache
-            // Präferenz geht zusätzlich als Prompt-Kontext mit (egal ≠ bio erzwingen)
-            $parameter = $this->parameter;
-            $parameter['bio'] = $parameter['bio_praeferenz'] === 'bio';
-            $parameter['use_favorites_list'] = $this->useFavoritesList; // 06·H4 opt-in
-            $parameter['favorites_convenience_only'] = $this->useFavoritesList && $this->favoritesConvenienceOnly; // H4b
-            $resultat = $generator->generiere($team, trim($this->description), $parameter);
-            $this->ergebnis = [
-                'recipe_id' => $resultat['recipe']->id,
-                'name' => $resultat['recipe']->name,
-                'statistik' => $resultat['statistik'],
-                'offene' => $resultat['offene'],
-            ];
-            $this->dispatch('recipe-gespeichert');
-            $this->dispatch('recipe-selected', id: $resultat['recipe']->id);
-        } catch (\RuntimeException $e) {
-            $this->fehler = $e->getMessage();
+        // Hook-Mapping: der Service kennt bio als bool (4.4r) — die dreifache
+        // Präferenz geht zusätzlich als Prompt-Kontext mit (egal ≠ bio erzwingen)
+        $parameter = $this->parameter;
+        $parameter['bio'] = $parameter['bio_praeferenz'] === 'bio';
+        $parameter['use_favorites_list'] = $this->useFavoritesList; // 06·H4 opt-in
+        $parameter['favorites_convenience_only'] = $this->useFavoritesList && $this->favoritesConvenienceOnly; // H4b
+
+        $this->runId = (string) Str::uuid();
+        Cache::put(GenerateRecipeJob::cacheKey($this->runId), ['status' => 'pending'], now()->addMinutes(15));
+        GenerateRecipeJob::dispatch($this->runId, $team->id, (int) Auth::id(), trim($this->description), $parameter, false);
+        $this->laeuft = true;
+    }
+
+    /** Poll-Ziel (wire:poll während $laeuft): liest den Job-Ausgang aus dem Cache. */
+    public function pruefeErgebnis(): void
+    {
+        if ($this->runId === null) {
+            return;
         }
+        $stand = Cache::get(GenerateRecipeJob::cacheKey($this->runId));
+        if (! is_array($stand) || ($stand['status'] ?? null) === 'pending') {
+            return;   // noch am Rechnen → weiter pollen
+        }
+
+        $this->laeuft = false;
+        if (($stand['status'] ?? null) === 'error') {
+            $this->fehler = $stand['fehler'] ?? 'Generierung fehlgeschlagen.';
+
+            return;
+        }
+
+        $this->ergebnis = [
+            'recipe_id' => $stand['recipe_id'],
+            'name' => $stand['name'],
+            'statistik' => $stand['statistik'],
+            'offene' => $stand['offene'],
+        ];
+        $this->dispatch('recipe-gespeichert');
+        $this->dispatch('recipe-selected', id: $stand['recipe_id']);
     }
 
     public function render()
