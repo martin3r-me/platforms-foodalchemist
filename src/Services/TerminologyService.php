@@ -320,15 +320,48 @@ class TerminologyService
      */
     public function isAntiMarker(string $queryName, string $candidateName): bool
     {
-        $q = ' ' . $this->norm($queryName) . ' ';
-        $c = ' ' . $this->norm($candidateName) . ' ';
+        $q = $this->norm($queryName);
+        $c = $this->norm($candidateName);
         foreach ($this->antiMarkerRules() as $rule) {
-            $trigger = ' ' . $rule['trigger'] . ' ';
-            $forbid = ' ' . $rule['forbid'] . ' ';
-            // Token-Grenzen für Trigger/Forbid; Guard schützt den legitimen Treffer.
-            if (str_contains($q, $trigger)
-                && str_contains($c, $forbid)
-                && (! isset($rule['unless']) || ! str_contains($c, ' ' . $rule['unless'] . ' '))) {
+            // Compound-bewusster Treffer (Spec 16·S3): ganzes Token ODER Präfix/Suffix
+            // eines längeren Tokens (Kompositum-Kopf/Modifier) — „Kalbsbries" ⊃ „bries",
+            // „Briekäse" ⊃ „brie". NIE Interieur → „Tamarinde" ⊅ „rind" bleibt geschützt.
+            if ($this->tokenHit($q, $rule['trigger'])
+                && $this->tokenHit($c, $rule['forbid'])
+                && (! isset($rule['unless']) || ! $this->tokenHit($c, $rule['unless']))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Treffer eines Regel-Tokens im normalisierten String: ganzes Space-Token ODER
+     * Präfix/Suffix eines Kompositum-Tokens, bei dem der RESTMORPHEM ≥ 3 Zeichen ist.
+     *
+     * Die Rest-Länge ist der Trick, der echte Komposita von zufälligen Flexions-
+     * Nachbarn trennt: „kalbsbries" ⊃ „bries" (Rest „kalbs" = 5) und „briekaese" ⊃
+     * „brie" (Rest „kaese" = 5) zünden; „bries" ⊃ „brie" (Rest „s" = 1) NICHT — sonst
+     * würde der legitime Bries-Selbsttreffer geblockt. Interieur-Substrings bleiben
+     * ausgeschlossen (schützt „tamarinde" ⊅ „rind").
+     */
+    private function tokenHit(string $normHay, string $needle): bool
+    {
+        if ($needle === '') {
+            return false;
+        }
+        $nl = mb_strlen($needle);
+        foreach (explode(' ', $normHay) as $tok) {
+            if ($tok === '') {
+                continue;
+            }
+            if ($tok === $needle) {
+                return true;                                   // ganzes Token
+            }
+            // Kompositum-Rand: Rest-Morphem ≥ 3 Zeichen (Fuge/Modifier/Kopf).
+            if (mb_strlen($tok) - $nl >= 3
+                && (str_starts_with($tok, $needle) || str_ends_with($tok, $needle))) {
                 return true;
             }
         }

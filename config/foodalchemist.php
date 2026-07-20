@@ -323,7 +323,15 @@ return [
                 . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, aroma): werte = '
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction, '
                 . 'preparation (Markdown-Schritte), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
-                . 'slug (hauptzutat), note}]}. Diät-harte Vorgaben sind VERBINDLICH.',
+                . 'slug (hauptzutat), commodity_group, note}]}. Diät-harte Vorgaben sind VERBINDLICH. '
+                // Spec 16·E1: WG-Hint verengt die LA-Beschaffung auf die Warengruppen-Lead-Lieferanten.
+                // Optional — nur setzen, wenn die Warengruppe der HAUPTZUTAT eindeutig ist, sonst weglassen
+                // (ein falscher/fehlender Code fällt sicher auf die globale Lead-Suche zurück).
+                . 'commodity_group = 2-stelliger Warengruppen-Code der Hauptzutat aus: '
+                . '01 Gemüse/Blattsalat · 02 Obst · 03 Kräuter · 04 Fleisch/Geflügel/Wild · '
+                . '05 Fisch/Meeresfrüchte · 06 Molkerei/Eier · 07 Getreide/Hülsenfrüchte · 08 Teigwaren · '
+                . '09 Backwaren/Süßwaren · 10 Gewürze/Würzmittel · 11 Essig/Öl · 12 Trockenprodukte · '
+                . '13 Convenience/Komponenten · 14 Vegane Ersatzprodukte · 15 Getränke.',
         ],
         'recipe.description' => [
             'tier' => 'C',

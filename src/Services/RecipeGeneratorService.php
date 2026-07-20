@@ -193,7 +193,7 @@ class RecipeGeneratorService
                     $zeile['match_method'] = 'recipe_ref';
                     $statistik['stub_neu'] += $stub['neu'] ? 1 : 0;
                     $statistik['bestand_sub'] += $stub['neu'] ? 0 : 1;
-                } elseif (($autoGp = $this->laFirst->mintFromLa($team, $text, $z['slug'] ?? null, $z['commodity_group'] ?? $z['warengruppe'] ?? null)) !== null) {   // Spec 16·E1: WG-Hint aus Erzeugungs-Kontext (falls das KI-Schema ihn mitliefert)
+                } elseif (($autoGp = $this->laFirst->mintFromLa($team, $text, $z['slug'] ?? null, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null))) !== null) {   // Spec 16·E1: WG-Hint aus Erzeugungs-Kontext (KI-Schema liefert commodity_group)
                     // 07·M1 (ex-#505 Slice 2): Lücke ohne GP → LaFirstGpService mintet FA-nativ ein
                     // GP aus passender LA (tentative, LA-verknüpft → Allergene/Nährwerte/EK LA-abgeleitet).
                     // Geteilte Fähigkeit — dieselbe Logik hängt künftig auch an syncIngredients/MCP.
@@ -260,6 +260,20 @@ class RecipeGeneratorService
     private function stubName(string $text): string
     {
         return trim((string) preg_replace('/^[\d.,\/\s]+(g|kg|ml|l|el|tl|stk|stück|prise[n]?)?\s+/iu', '', $text)) ?: $text;
+    }
+
+    /**
+     * Spec 16·E1: KI-WG-Hint auf den 2-stelligen Warengruppen-Code normalisieren
+     * (das Modell liefert „01" oder „01 Gemüse" → beides ⇒ „01"). Kein 2-Stellen-
+     * Präfix ⇒ null (Finder sucht dann global über alle Leads; nie ein Fehltreffer).
+     */
+    private function wgHint(mixed $raw): ?string
+    {
+        if (! is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+
+        return preg_match('/^\s*(\d{2})\b/', $raw, $m) === 1 ? $m[1] : null;
     }
 
     private function einheitId(Team $team, string $slug): int

@@ -66,10 +66,16 @@ it('löst Dialekt-Alias auf (Paradeiser → Tomate, Weg-2-Terminologie)', functi
 });
 
 it('unterdrückt die Anti-Marker-Falle: Brie findet nicht den Bries-LA', function () {
-    // Token-Form "Bries" (Kalbsthymus, Innerei) — der Anti-Marker greift auf Token-Ebene.
-    // Compound wie "Kalbsbries" ist die bekannte S3-Decompounding-Lücke (Code-Kommentar).
     $s = ($this->mkSupplier)('Metro');
     ($this->mkLa)($s->id, 'Bries frisch');
+
+    expect($this->finder->best($this->rootTeam, 'Brie'))->toBeNull();
+});
+
+it('fängt jetzt auch die Compound-Falle: Brie findet nicht den Kalbsbries-LA (S3)', function () {
+    // Compound „Kalbsbries" ⊃ Kopf „bries" — der kompositum-bewusste Anti-Marker greift.
+    $s = ($this->mkSupplier)('Metro');
+    ($this->mkLa)($s->id, 'Kalbsbries frisch');
 
     expect($this->finder->best($this->rootTeam, 'Brie'))->toBeNull();
 });
