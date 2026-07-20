@@ -79,6 +79,16 @@ class AiGatewayService
         if (!empty($prompt['system'])) {
             $messages[] = ['role' => 'system', 'content' => $prompt['system']];
         }
+        // Ausgabe-Contract: AiProposal erwartet {werte:{…}, confidence, reasoning}. Reale Modelle
+        // (verifiziert gpt-5.5) liefern die Fachfelder sonst FLACH auf oberster Ebene → werte leer,
+        // confidence 0. Diese Instruktion erzwingt den Umschlag provider-übergreifend (Fake-Provider/
+        // Tests liefern ihn ohnehin). Additiv als letzte system-Instruktion vor der Task.
+        $messages[] = ['role' => 'system', 'content' =>
+            'Antworte AUSSCHLIESSLICH mit EINEM JSON-Objekt in exakt dieser Form: '
+            . '{"werte": { …genau die im Auftrag unter "werte = {…}" geforderten Felder… }, '
+            . '"confidence": <Zahl 0..1>, "reasoning": "<kurze Begründung>"}. '
+            . 'Alle Fachfelder MÜSSEN in "werte" verschachtelt sein, nie auf oberster Ebene. '
+            . 'Kein Markdown, keine Prosa außerhalb des JSON.'];
         // GL-13: Fakten-Wissen gehört in den USER-Prompt (Hüllen = Verhalten, additiv, nie redundant)
         $wissen = isset($options['knowledge']) && is_string($options['knowledge']) && $options['knowledge'] !== ''
             ? $options['knowledge'] . "\n\n"
@@ -139,6 +149,15 @@ class AiGatewayService
             $options['model'] = $tierModell;
         }
 
+        // Output-Budget: Reasoning-Modelle (gpt-5.x u.a.) verbrauchen einen Teil des
+        // Output-Kontingents für interne Reasoning-Tokens. Der Core-Default (OpenAiService:
+        // max_output_tokens ?? 1000) schneidet große Struktur-Antworten (Rezept-/Konzept-JSON)
+        // mitten im JSON ab → Parse-Fehler → 3× Re-Roll → Web-Timeout/502. Darum hier pro
+        // Prompt (Registry: max_tokens) bzw. großzügig defaulten, statt Core den Wert raten zu lassen.
+        if (! isset($options['max_tokens'])) {
+            $options['max_tokens'] = (int) ($prompt['max_tokens'] ?? config('foodalchemist.ai.max_tokens_default', 4096));
+        }
+
         // M7-03 §3.3: Structural-Retry-Gate — valides JSON, aber fachlich
         // unbrauchbar (z. B. leeres Pflicht-Array) → Re-Roll
         $isUsable = $options['structural_retry'] ?? null;
@@ -178,8 +197,15 @@ class AiGatewayService
             throw $fehler;
         }
 
+        // Safety-Net: ignoriert ein Modell den Umschlag doch und liefert die Fachfelder flach,
+        // die Meta-Keys rausziehen und den Rest als werte nehmen — statt eine leere Proposal.
+        $werte = $parsed['werte'] ?? null;
+        if (! is_array($werte)) {
+            $werte = array_diff_key($parsed, array_flip(['confidence', 'reasoning', 'unknown_slugs']));
+        }
+
         return new AiProposal(
-            werte: $parsed['werte'] ?? [],
+            werte: $werte,
             confidence: min(1.0, max(0.0, (float) ($parsed['confidence'] ?? 0.0))), // Clamp (GL-07 I5)
             reasoning: $parsed['reasoning'] ?? null,
             unknownSlugs: $parsed['unknown_slugs'] ?? [],

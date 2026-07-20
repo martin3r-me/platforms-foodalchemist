@@ -216,6 +216,14 @@ return [
         'provider' => env('FOODALCHEMIST_AI_PROVIDER', 'core'),
 
         /*
+         * Output-Budget-Default (max_output_tokens). Der Core-OpenAiService fällt ohne
+         * expliziten Wert auf 1000 zurück — für Reasoning-Modelle (gpt-5.x: ein Teil geht
+         * für Reasoning-Tokens drauf) zu knapp, große Struktur-JSONs werden abgeschnitten.
+         * Pro Prompt via prompts.<key>.max_tokens übersteuerbar (siehe Voll-Generatoren).
+         */
+        'max_tokens_default' => (int) env('FOODALCHEMIST_AI_MAX_TOKENS', 4096),
+
+        /*
          * M7-02 / V-01: Tier→Modell-Mapping (06_KI §2). Modell-Strings sind
          * DEPLOYMENT-Config, nicht Spec — null = Plattform-Default-Modell
          * (LLMProviderContract-Binding entscheidet). Tier je Prompt steht in
@@ -319,6 +327,7 @@ return [
         ],
         'recipe.generator' => [
             'tier' => 'B',
+            'max_tokens' => 8000,   // volles Rezept-JSON inkl. Zutatenliste — Reasoning-Headroom
             'task' => 'Erzeuge ein Basisrezept aus der Beschreibung unter Beachtung der Richtungs-'
                 . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, aroma): werte = '
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction, '
@@ -355,6 +364,7 @@ return [
         ],
         'vk.generator' => [
             'tier' => 'B',
+            'max_tokens' => 8000,   // volles VK-Rezept inkl. Zutaten/Plating — Reasoning-Headroom
             'task' => 'Erzeuge ein VERKAUFSREZEPT (Teller/Speise mit VK-Preis) aus der Beschreibung '
                 . 'unter Beachtung der Richtungs-Parameter (convenience, frische, bio, niveau, sektor, '
                 . 'diaet_hart, aroma, anlass, serviceform, kompositions_stil): werte = '
@@ -457,6 +467,7 @@ return [
         ],
         'recipe.preparation' => [
             'tier' => 'A',                                            // V-02: langes Einzeltext-Feld
+            'max_tokens' => 8000,                                     // lange Markdown-Zubereitung — Reasoning-Headroom
             'task' => 'Schreibe die Schritt-fuer-Schritt-Zubereitung fuers PRODUKTIONS-Rezept '
                 . '(Markdown, nummerierte Schritte, Temperaturen/Zeiten konkret, H2 fuer Phasen): '
                 . 'werte = {preparation}.',
@@ -510,6 +521,7 @@ return [
         ],
         'recipe.ueberarbeiten' => [
             'tier' => 'A',                                            // R6 (Ist: KI-Überarbeiten-Button) — freie Anweisung, Gesamt-Rezept
+            'max_tokens' => 8000,                                     // Gesamt-Rezept zurück (description+preparation+zutaten) — Reasoning-Headroom
             'task' => 'Ueberarbeite das Rezept exakt nach der freien Anweisung (anweisung) — '
                 . 'aendere NUR Angefragtes, behalte ids bestehender Zutaten, neue Zutaten ohne id: '
                 . 'werte = {description, preparation, zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
@@ -544,6 +556,7 @@ return [
         ],
         'concept.brief_geruest' => [
             'tier' => 'A',
+            'max_tokens' => 8000,                                     // volles Slot-/Regel-Gerüst — Reasoning-Headroom
             'system' => 'Du uebersetzt Kunden-Briefs in ein strukturiertes Planungs-Geruest (R4.1). '
                 . 'Du erfindest NICHTS: nur, was der Brief hergibt — fehlende Angaben bleiben weg (Felder null/weglassen). '
                 . 'Diaet-Werte NUR aus diaet_vokabular, Allergen-Keys NUR aus allergen_keys.',
