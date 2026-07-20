@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Enums\GpStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\BulkEnrichService;
+use Platform\FoodAlchemist\Services\ConvenienceHighlightService;
 use Platform\FoodAlchemist\Services\GpNamingService;
 use Platform\FoodAlchemist\Services\GpService;
 use Platform\FoodAlchemist\Services\VocabularyService;
@@ -169,6 +170,33 @@ class GpModal extends Component
         try {
             $gps->setStatus($gp, $fall);
             $this->dispatch('gp-gespeichert'); // Browser-Tabelle (Status-Spalte) aktualisieren
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    // ── 06·H4: Convenience-Highlight direkt am GP pinnen (zweiter Andockpunkt
+    //          neben dem Kuratierungs-Screen — landet in derselben Liste,
+    //          gleiches Feld is_convenience_highlight). D1-Gate + Soft-Regel §4. ──
+
+    public function highlightToggle(): void
+    {
+        $this->fehler = null;
+        $gp = $this->gp();
+        if ($gp === null) {
+            return;
+        }
+        if (! Curate::canCurate(Auth::user(), $gp)) {
+            $this->fehler = 'Convenience-Highlight ist Katalog-Pflege — nur fürs Besitzer-Team (D1).';
+
+            return;
+        }
+        try {
+            $svc = app(ConvenienceHighlightService::class);
+            $gp->is_convenience_highlight
+                ? $svc->exclude($gp)
+                : $svc->pin($gp);                        // wirft, wenn nicht als Convenience getaggt (§4)
+            $this->dispatch('gp-gespeichert');           // Screen/Browser können reagieren
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

@@ -26,6 +26,10 @@ class Browser extends Component
     #[Url(as: 'gp')]
     public ?int $gpId = null;
 
+    /** Deeplink „in den Artikel" (z.B. aus dem Convenience-Screen): öffnet den Editor beim Ankommen. */
+    #[Url(as: 'edit')]
+    public bool $editOeffnen = false;
+
     #[Url(as: 'wg')]
     public string $commodity_group = '';
 
@@ -123,6 +127,11 @@ class Browser extends Component
         if ($this->gpId !== null) {
             // Kontext-Erhalt: Auswahl aus der URL übersteht den Reload — Panel direkt befüllen
             $this->dispatch('gp-selected', id: $this->gpId);
+            // Deeplink „in den Artikel": Editor gleich aufziehen, dann edit=1 aus der URL putzen.
+            if ($this->editOeffnen) {
+                $this->dispatch('gp-modal.oeffnen', id: $this->gpId);
+                $this->editOeffnen = false;
+            }
         }
     }
 

@@ -131,3 +131,48 @@ it('✨ gp.suggest (Neuanlage): Fake-Echo befüllt die Builder-Felder nicht mit 
         // Fake echo't {bezeichnung: …} — kein hauptzutat-Key ⇒ Builder bleibt leer (kein Müll-Mapping)
         ->assertSet('builder.hauptzutat', '');
 });
+
+// ── 06·H4: Convenience-Highlight direkt im GP-Editor pinnen (2. Andockpunkt) ──
+
+it('highlightToggle pinnt einen Convenience-GP und nimmt ihn wieder heraus', function () {
+    $gp = $this->makeGp($this->rootTeam, 'TK-Spätzle');
+    $gp->update(['status' => 'approved', 'tag_is_convenience' => true]);
+
+    Livewire::test(GpModal::class)
+        ->call('oeffnen', $gp->id)
+        ->call('highlightToggle')
+        ->assertSet('fehler', null)
+        ->assertDispatched('gp-gespeichert');
+    expect($gp->refresh()->is_convenience_highlight)->toBeTrue();
+
+    Livewire::test(GpModal::class)
+        ->call('oeffnen', $gp->id)
+        ->call('highlightToggle');
+    expect($gp->refresh()->is_convenience_highlight)->toBeFalse();
+});
+
+it('highlightToggle verweigert das Pinnen, wenn der GP nicht als Convenience getaggt ist (§4)', function () {
+    $gp = $this->makeGp($this->rootTeam, 'Frischer Spinat');
+    $gp->update(['status' => 'approved']); // tag_is_convenience bleibt null/false
+
+    Livewire::test(GpModal::class)
+        ->call('oeffnen', $gp->id)
+        ->call('highlightToggle')
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Convenience'));
+
+    expect($gp->refresh()->is_convenience_highlight)->toBeFalse();
+});
+
+it('highlightToggle blockt geerbte Katalog-GPs (D1: nur Besitzer-Team)', function () {
+    // GP gehört dem Root; aktiver User sitzt im Kind-Team → read-only.
+    $gp = $this->makeGp($this->rootTeam, 'TK-Erbsen');
+    $gp->update(['status' => 'approved', 'tag_is_convenience' => true]);
+    $this->actingAs($this->makeUser($this->childA, 'Kind User'));
+
+    Livewire::test(GpModal::class)
+        ->call('oeffnen', $gp->id)
+        ->call('highlightToggle')
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'D1'));
+
+    expect($gp->refresh()->is_convenience_highlight)->toBeFalse();
+});

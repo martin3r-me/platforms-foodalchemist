@@ -92,6 +92,15 @@ it('Browser: mount mit ?gp= aus der URL befüllt das Panel sofort (Kontext-Erhal
         ->assertDispatched('gp-selected', id: $this->zander->id);
 });
 
+it('Browser: Deeplink ?gp=&edit=1 (z.B. aus dem Convenience-Screen) öffnet den GP-Editor', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
+
+    Livewire::test(Browser::class, ['gpId' => $this->zander->id, 'editOeffnen' => true])
+        ->assertDispatched('gp-selected', id: $this->zander->id)
+        ->assertDispatched('gp-modal.oeffnen', id: $this->zander->id)
+        ->assertSet('editOeffnen', false); // edit=1 wird nach dem Öffnen aus der URL geputzt
+});
+
 it('DetailPanel R9: Sektionen IMMER sichtbar — Allergene/Nährwerte/Verwendungen ohne Klapperei', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
 

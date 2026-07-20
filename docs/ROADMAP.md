@@ -72,6 +72,11 @@ Keystone aus [`docs/PLANUNG/07_LA_First_GP_Mint_ueberall.md`](PLANUNG/07_LA_Firs
 **+ #513 Punkt 2 Kerntemp-Referenz (4. Slice):** `CulinaryReferenceService` (32 Teilstücke) + MCP `reference.GET`. **Weich modelliert (Entscheid Dominique 2026-07-19):** Qualitäts-Zielwert primär (Rind rosa 52, Geflügel 68), Sicherheit = Zeit-Temperatur-Kontext, `is_hard_safety` nur bei durchmischter Masse (Hack/Brät). Quelle+Evidenz je Zeile, HACCP-Vorrang fest drin. Pest. Vorwärtskompatibel (`kind`).
 **+ #513 Punkt 3+7 Hydrokolloid-Dosier + HLB (5. Slice):** `HYDROCOLLOID_DOSAGES` (14 Agenten, Dosier-% vom Ansatz + Cofaktor + thermoreversibel) + `HLB_VALUES` (8 Emulgatoren, o_w/w_o) im selben Service, MCP `reference.GET kind=hydrocolloid|hlb`. Dosierung = Extraprozent (Punkt-1-Verzahnung). Quelle+Evidenz je Zeile, „Herstellerangabe hat Vorrang". Pest. **→ #513 Referenztabellen C abgeschlossen (cP bewusst weggelassen); die ganze Spec 04 (Tier 1 + Referenz-C) ist durch. Tier-3 bleibt bewusst zu.**
 
+## ⭐ Update 2026-07-20 (Session: #512 KI-Erstell-Flächen)
+
+- **VK-„Gericht"-Generator auf Parität zum Basisrezept-Generator** (#512, Dominique-Fund „hier sind sogar noch Freitexte"): `VkGeneratorModal` + Blade auf strukturierte Eingaben umgestellt — Niveau/Convenience/Frische als Pills, Bio dreiwertig (Konventionell/Bio/Egal) statt bool, Sektor als Dropdown, Diät als **Multi-Select-Pills** (hart erzwungen) statt Einzel-String. Freitext blieb nur bei Aroma (legitim frei); VK-eigene Achsen (Anlass/Serviceform/Kompositions-Stil) bleiben Selects. Service unberührt — Werte fließen als Prompt-Kontext, `bio_praeferenz`→`bio` gemappt wie im Basis-Generator. 4 Pest (Render ohne Freitext-Platzhalter, togglePill, Multi-Diät, Bio-Dreiwert) + Convenience-Regression grün.
+- **Ops-Befund (nicht Modul-Code):** LLM-Chat auf demo schlägt fehl — Modell `gpt-5.2-thinking` existiert nicht (`model_not_found`), Key selbst ok. Liegt in der demo-Env (`FOODALCHEMIST_AI_TIER_*`)/Core, nicht im Modul. Fix = echtes Chat-Modell setzen + `config:clear` (Forge/Martin). Embeddings/RAG davon getrennt (bereits fein).
+
 ## ⭐ Update 2026-07-19 (Session: 05·P5 Prozessanker-Parser + 06 Convenience-Highlights KOMPLETT)
 
 Zwei blocker-freie Phase-1-Stücke aus `docs/PLANUNG/` autonom durchgebaut, getestet, gepusht.

@@ -74,6 +74,9 @@ Gilt für: `recipe.generate` (Gericht/Basisrezept) **und** `concepts.generate` (
 
 - **Rezept-Generator-Modal + Konzept-Generator-Modal:** eine Checkbox „⭐ Auf Basis meiner Convenience-Liste bauen" (steuert `use_convenience_list`).
 - **Zutaten-Editor GP-Picker:** ein kleiner Filter-Toggle „nur Convenience-Highlights" — verengt die Picker-Liste auf die kuratierten GPs. (Kein separates Panel.)
+- **H4b (2026-07-20, Dominique) — zweiter Pin-Andockpunkt + Rück-Navigation:**
+  - **GP-Editor (GpModal), Tab „Eigenschaften":** unter den Eigenschafts-Tags ein ⭐-Toggle „in Liste pinnen / aus Liste nehmen". `GpModal::highlightToggle` → derselbe `ConvenienceHighlightService` wie der Screen (gleiches Feld, gleiche Soft-Regel §4 + D1-Gate). Disabled + Hinweis, wenn der GP nicht als Convenience getaggt ist; read-only-★ für geerbte Katalog-GPs.
+  - **Convenience-Screen:** GP-Name ist jetzt ein Link (`?gp=<id>&edit=1`, `wire:navigate`). Browser-Deeplink `editOeffnen` öffnet beim Ankommen den GP-Editor und putzt `edit=1` aus der URL. → „aus der Liste in den Artikel klicken".
 
 ---
 
@@ -85,6 +88,7 @@ Gilt für: `recipe.generate` (Gericht/Basisrezept) **und** `concepts.generate` (
 | **H2** | Kuratierung: `--suggest`-Score-Report + **Kuratierungs-Screen (v1)** + MCP-Tools (Lockstep) | M–L | H1 | ✅ 2026-07-19 |
 | **H3** | Generierungs-Modus: `use_convenience_list` in GenerationContextService + ConceptGeneratorService (eigener Prompt-Block, bevorzugt) | M | H1 | ✅ 2026-07-19 |
 | **H4** | UI: Toggle an Rezept-/VK-/Konzept-Generator + Editor-Picker-Filter | S–M | H3 | ✅ 2026-07-19 |
+| **H4b** | Pin direkt im GP-Editor (`highlightToggle`) + GP-Name im Screen als Editor-Deeplink (`?gp=&edit=1`) | S | H1 | ✅ 2026-07-20 |
 
 **Globale DoD:** Default-aus-Verhalten byte-identisch (Regression), Team-Scoping, MCP-Lockstep (Generator-Tools kennen den Flag), Pest, Push + Dev-Issue.
 

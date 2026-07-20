@@ -13,8 +13,13 @@
             <p class="text-[10px] text-gray-500 mt-1">Aus Foto/PDF: blockiert auf die Vision-Frage bei Martin — bis dahin Text.</p>
         </x-foodalchemist::modal-section>
 
+        {{-- VK-eigene Achsen (Selects) + Richtungs-Pills (Parität zum Basisrezept-Generator) --}}
         <x-foodalchemist::modal-section title="Richtungs-Parameter">
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-3" data-vk-generator-parameter>
+            @php($pillAktiv = 'border-emerald-500 text-emerald-700 font-medium')
+            @php($pillRuhe = 'border-black/10 text-gray-600 hover:border-violet-400')
+
+            {{-- VK-eigene Kontext-Achsen — bleiben Selects (kein Basis-Pendant) --}}
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                     <label class="block {{ $label }} mb-1">Anlass</label>
                     <select wire:model="parameter.occasion" class="{{ $input }}">
@@ -42,53 +47,59 @@
                         <option value="gewagt">gewagt (nur belegte Paarungen)</option>
                     </select>
                 </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Convenience</label>
-                    <select wire:model="parameter.convenience" class="{{ $input }}">
-                        <option value="from_scratch">from scratch</option>
-                        <option value="teil_convenience">Teil-Convenience</option>
-                        <option value="standard">Standard</option>
-                        <option value="voll_convenience">Voll-Convenience</option>
+            </div>
+
+            {{-- Richtungs-Pills — identisches Muster wie GeneratorModal::RICHTUNGEN --}}
+            <div class="grid md:grid-cols-2 gap-x-6 gap-y-4 mt-4" data-vk-generator-parameter>
+                @foreach(\Platform\FoodAlchemist\Livewire\Verkauf\VkGeneratorModal::RICHTUNGEN as $g)
+                    <div data-richtung="{{ $g['field'] }}">
+                        <p class="text-xs font-medium text-gray-900 mb-1">{{ $g['label'] }}</p>
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach($g['optionen'] as $wert => $lbl)
+                                <button type="button" wire:click="togglePill('{{ $g['field'] }}', '{{ $wert }}')"
+                                        class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ $parameter[$g['field']] === $wert ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
+                            @endforeach
+                        </div>
+                        <p class="text-[11px] text-gray-500 mt-1">{{ $g['hint'][$parameter[$g['field']]] ?? '' }}</p>
+                    </div>
+                @endforeach
+
+                <div data-richtung="sektor">
+                    <p class="text-xs font-medium text-gray-900 mb-1">Sektor (Verpflegungskontext)</p>
+                    <select wire:model="parameter.sektor" class="{{ $input }} !py-1.5">
+                        <option value="">(egal/universell)</option>
+                        <option value="betriebsgastronomie">Betriebsgastronomie</option>
+                        <option value="catering">Catering / Event</option>
+                        <option value="restaurant">Restaurant / à la carte</option>
+                        <option value="care">Care / Klinik</option>
+                        <option value="schule_kita">Schule / Kita</option>
                     </select>
+                    <p class="text-[11px] text-gray-500 mt-1">{{ $parameter['sektor'] === '' ? 'Kein Sektor-Constraint' : '' }}</p>
                 </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Frische-Hook</label>
-                    <select wire:model="parameter.frische" class="{{ $input }}">
-                        <option value="frisch">frisch</option><option value="tk">alles aus TK</option><option value="konserve">Konserve/haltbar</option>
-                    </select>
+
+                <div data-richtung="aroma">
+                    <p class="text-xs font-medium text-gray-900 mb-1">Aroma-Richtung</p>
+                    <input type="text" wire:model="parameter.aroma" placeholder="frei — z. B. rauchig-karamellig, mediterran …" class="{{ $input }} !py-1.5" />
+                    <p class="text-[11px] text-gray-500 mt-1">{{ $parameter['aroma'] === '' ? 'Keine Aroma-Vorgabe — KI wählt passend zur Beschreibung' : '' }}</p>
                 </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Diät (hart)</label>
-                    <select wire:model="parameter.diaet_hart" class="{{ $input }}">
-                        <option value="">—</option>
-                        <option value="vegan">vegan</option><option value="vegetarisch">vegetarisch</option>
-                        <option value="glutenfrei">glutenfrei</option><option value="laktosefrei">laktosefrei</option><option value="halal">halal</option>
-                    </select>
+
+                <div class="md:col-span-2" data-richtung="diaet">
+                    <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach(['vegan' => 'Vegan', 'vegetarisch' => 'Vegetarisch', 'glutenfrei' => 'Glutenfrei', 'laktosefrei' => 'Laktosefrei', 'halal' => 'Halal', 'low_carb' => 'Low Carb'] as $wert => $lbl)
+                            <button type="button" wire:click="togglePill('diaet_hart', '{{ $wert }}')"
+                                    class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, $parameter['diaet_hart'], true) ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
+                        @endforeach
+                    </div>
                 </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Niveau</label>
-                    <input type="text" wire:model="parameter.level" placeholder="z. B. fine_dining" class="{{ $input }}" />
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Sektor</label>
-                    <input type="text" wire:model="parameter.sektor" placeholder="z. B. catering" class="{{ $input }}" />
-                </div>
-                <div class="flex items-end pb-2 gap-3">
-                    <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
-                        <input type="checkbox" wire:model="parameter.bio" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" /> Bio
-                    </label>
-                </div>
-                <div class="col-span-2 md:col-span-3">
-                    <label class="block {{ $label }} mb-1">Aroma-Richtung</label>
-                    <input type="text" wire:model="parameter.aroma" placeholder="z. B. rauchig-karamellig, mediterran …" class="{{ $input }}" />
-                </div>
+
                 {{-- 06·H4: opt-in Convenience-Highlight-Modus (Default aus → keine Versteifung) --}}
-                <div class="col-span-2 md:col-span-3">
+                <div class="md:col-span-2" data-richtung="convenience-highlights">
                     <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
-                        <input type="checkbox" wire:model="useConvenienceList" class="mt-0.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-vk-convenience />
+                        <input type="checkbox" wire:model="useConvenienceList" class="mt-0.5" data-vk-convenience />
                         <span>⭐ Auf Basis meiner Convenience-Liste bauen</span>
                     </label>
-                    <p class="text-[11px] text-gray-500 mt-1">Bevorzugt die kuratierten Haus-Convenience-Bausteine (bevorzugt, nicht ausschließlich).</p>
+                    <p class="text-[11px] text-gray-500 mt-1">Bevorzugt die kuratierten Haus-Convenience-Bausteine (bevorzugt, nicht ausschließlich). Aus = freie Kreativität.</p>
                 </div>
             </div>
         </x-foodalchemist::modal-section>

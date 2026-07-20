@@ -48,7 +48,8 @@
                                 <tr class="{{ $tr }}">
                                     <td class="{{ $td }}">
                                         @if($r['is_highlight'])<span class="text-amber-500" title="gepinnt">★</span> @endif
-                                        {{ $r['name'] }}
+                                        <a href="{{ route('foodalchemist.gps.index', ['gp' => $r['gp_id'], 'edit' => 1]) }}" wire:navigate
+                                            class="text-gray-800 hover:text-violet-600 hover:underline" title="Grundprodukt öffnen">{{ $r['name'] }}</a>
                                         <span class="text-[10px] text-gray-400">#{{ $r['gp_id'] }}</span>
                                     </td>
                                     <td class="{{ $td }} text-right">{{ $r['usage'] }}</td>

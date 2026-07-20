@@ -255,6 +255,35 @@
                                 @endforeach
                             </div>
                         </x-foodalchemist::ki-header>
+
+                        {{-- 06·H4: Convenience-Highlight direkt am GP pinnen (2. Andockpunkt zum Screen). --}}
+                        <div class="flex items-center justify-between gap-3 pt-3 border-t border-gray-100">
+                            <div class="min-w-0">
+                                <div class="text-[11px] font-medium text-gray-700">⭐ Convenience-Highlight</div>
+                                <div class="text-[10px] text-gray-500">
+                                    @if($gp->is_convenience_highlight)
+                                        Gepinnt in der Haus-Convenience-Liste{{ $gp->highlight_rank !== null ? ' · Rang '.$gp->highlight_rank : '' }}.
+                                    @elseif(! $gp->tag_is_convenience)
+                                        Erst oben als <em>Convenience</em> taggen &amp; speichern — dann pinbar (§4).
+                                    @else
+                                        Fließt im Generator nur mit aktivem „⭐ Auf Basis der Convenience-Liste bauen"-Modus ein.
+                                    @endif
+                                </div>
+                            </div>
+                            @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp))
+                                <button type="button" wire:click="highlightToggle"
+                                    @class([
+                                        $btnGhostXs,
+                                        'text-amber-600' => $gp->is_convenience_highlight,
+                                    ])
+                                    @disabled(! $gp->is_convenience_highlight && ! $gp->tag_is_convenience)
+                                    data-gp-highlight-toggle>
+                                    {{ $gp->is_convenience_highlight ? '★ aus Liste nehmen' : '☆ in Liste pinnen' }}
+                                </button>
+                            @elseif($gp->is_convenience_highlight)
+                                <span class="text-amber-500 text-sm" title="gepinnt (read-only)">★</span>
+                            @endif
+                        </div>
                     </div>
                 </x-foodalchemist::modal-section>
                 {{-- Natürliche Einheit + Nährwerte (eingebettetes DetailPanel, geteilte Render-Quelle) --}}
