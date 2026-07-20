@@ -42,7 +42,7 @@ class RecipeGeneratorService
     }
 
     /**
-     * @param array $parameter convenience|frische|bio|niveau|sektor|diaet_hart|aroma|use_convenience_list
+     * @param array $parameter convenience|frische|bio|niveau|sektor|diaet_hart|aroma|use_favorites_list
      * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
      */
     public function generiere(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false): array
@@ -86,9 +86,10 @@ class RecipeGeneratorService
             // #505 Slice 1: hybrides Grounding — reale GP-/Rezept-Kandidaten + Anker-Graph-
             // Pairing (rollenabhängig) additiv in den Prompt, damit die KI auf EXISTIERENDE
             // GPs benennt (weniger Drift) statt Namen zu erfinden. Food DNA injiziert propose() selbst.
-            // 06·H3: opt-in Convenience-Highlights (Default aus → byte-identisch)
-            $useConvenienceList = (bool) ($parameter['use_convenience_list'] ?? false);
-            foreach (app(GenerationContextService::class)->forGeneration($team, $description, $vkModus, $useConvenienceList) as $gKey => $gVal) {
+            // 06·H3: opt-in Favoriten (Default aus → byte-identisch); H4b: optional nur Convenience-Favoriten
+            $useFavoritesList = (bool) ($parameter['use_favorites_list'] ?? false);
+            $favoritesConvenienceOnly = (bool) ($parameter['favorites_convenience_only'] ?? false);
+            foreach (app(GenerationContextService::class)->forGeneration($team, $description, $vkModus, $useFavoritesList, $favoritesConvenienceOnly) as $gKey => $gVal) {
                 $kontext[$gKey] = $gVal;
             }
             $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [

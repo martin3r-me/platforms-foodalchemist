@@ -67,7 +67,7 @@ class ConceptGeneratorService
      * Freitext-Brief → KI baut das Planungs-Gerüst (Rahmen), dann läuft der
      * deterministische Assembler. Gerüst + Konzept entstehen beide als Draft.
      */
-    public function generiereAusBrief(Team $team, string $brief, ?string $name = null, string $via = 'ui', bool $useConvenienceList = false): array
+    public function generiereAusBrief(Team $team, string $brief, ?string $name = null, string $via = 'ui', bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false): array
     {
         $brief = trim($brief);
         if ($brief === '') {
@@ -79,11 +79,11 @@ class ConceptGeneratorService
             'diaet_vokabular' => \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameRule::DIET_FORMS,
             'allergen_keys' => FoodAlchemistGp::ALLERGEN_FIELDS,
         ];
-        // 06·H3: opt-in Convenience-Highlights (Default aus → byte-identisch)
-        if ($useConvenienceList) {
-            $conv = $this->convenienceHint($team);
-            if ($conv !== null) {
-                $kontext['convenience_highlights'] = $conv;
+        // 06·H3: opt-in Favoriten (Default aus → byte-identisch); H4b: optional nur Convenience-Favoriten
+        if ($useFavoritesList) {
+            $fav = $this->favoritesHint($team, $favoritesConvenienceOnly);
+            if ($fav !== null) {
+                $kontext['favorites'] = $fav;
             }
         }
 
@@ -124,15 +124,17 @@ class ConceptGeneratorService
     }
 
     /**
-     * 06·H3: opt-in Convenience-Highlight-Block für den Brief→Gerüst-KI-Schritt.
-     * null, wenn nichts gepinnt ist. Der Gerüst-Assembler selbst ist deterministisch
-     * (wählt aus Bestand, erfindet nicht) — dort braucht es keinen Block.
+     * 06·H3: opt-in Favoriten-Block für den Brief→Gerüst-KI-Schritt.
+     * $convenienceOnly (H4b): nur Convenience-getaggte Favoriten.
+     * null, wenn nichts (Passendes) gepinnt ist. Der Gerüst-Assembler selbst ist
+     * deterministisch (wählt aus Bestand, erfindet nicht) — dort braucht es keinen Block.
      */
-    private function convenienceHint(Team $team): ?array
+    private function favoritesHint(Team $team, bool $convenienceOnly = false): ?array
     {
         $treffer = FoodAlchemistGp::query()
             ->visibleToTeam($team)
-            ->convenienceHighlights()
+            ->favorites()
+            ->when($convenienceOnly, fn ($q) => $q->where('tag_is_convenience', true))
             ->limit(80)
             ->pluck('name')
             ->all();
@@ -141,8 +143,10 @@ class ConceptGeneratorService
             return null;
         }
 
+        $was = $convenienceOnly ? 'BEVORZUGTE CONVENIENCE-BAUSTEINE (Haus-Standard)' : 'BEVORZUGTE HAUS-FAVORITEN (Grundprodukte)';
+
         return [
-            'hinweis' => 'BEVORZUGTE CONVENIENCE-BAUSTEINE (Haus-Standard): berücksichtige diese Produkte '
+            'hinweis' => $was . ': berücksichtige diese Produkte '
                 . 'bei der Konzept-Dramaturgie bevorzugt; ergänze frei, wo die Liste nichts hergibt.',
             'produkte' => $treffer,
         ];

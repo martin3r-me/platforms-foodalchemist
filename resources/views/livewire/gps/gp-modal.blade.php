@@ -256,32 +256,29 @@
                             </div>
                         </x-foodalchemist::ki-header>
 
-                        {{-- 06·H4: Convenience-Highlight direkt am GP pinnen (2. Andockpunkt zum Screen). --}}
+                        {{-- 06·H4b: Favorit direkt am GP pinnen (2. Andockpunkt zum Favoriten-Screen). --}}
                         <div class="flex items-center justify-between gap-3 pt-3 border-t border-gray-100">
                             <div class="min-w-0">
-                                <div class="text-[11px] font-medium text-gray-700">⭐ Convenience-Highlight</div>
+                                <div class="text-[11px] font-medium text-gray-700">⭐ Favorit (Lieblings-GP)</div>
                                 <div class="text-[10px] text-gray-500">
-                                    @if($gp->is_convenience_highlight)
-                                        Gepinnt in der Haus-Convenience-Liste{{ $gp->highlight_rank !== null ? ' · Rang '.$gp->highlight_rank : '' }}.
-                                    @elseif(! $gp->tag_is_convenience)
-                                        Erst oben als <em>Convenience</em> taggen &amp; speichern — dann pinbar (§4).
+                                    @if($gp->is_favorite)
+                                        Gepinnt in deinen Favoriten{{ $gp->favorite_rank !== null ? ' · Rang '.$gp->favorite_rank : '' }}.
                                     @else
-                                        Fließt im Generator nur mit aktivem „⭐ Auf Basis der Convenience-Liste bauen"-Modus ein.
+                                        Fließt im Generator nur mit aktivem „⭐ Auf Basis meiner Favoriten bauen"-Modus ein.
                                     @endif
                                 </div>
                             </div>
                             @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp))
-                                <button type="button" wire:click="highlightToggle"
+                                <button type="button" wire:click="favoriteToggle"
                                     @class([
                                         $btnGhostXs,
-                                        'text-amber-600' => $gp->is_convenience_highlight,
+                                        'text-amber-600' => $gp->is_favorite,
                                     ])
-                                    @disabled(! $gp->is_convenience_highlight && ! $gp->tag_is_convenience)
-                                    data-gp-highlight-toggle>
-                                    {{ $gp->is_convenience_highlight ? '★ aus Liste nehmen' : '☆ in Liste pinnen' }}
+                                    data-gp-favoriten-toggle>
+                                    {{ $gp->is_favorite ? '★ aus Favoriten nehmen' : '☆ zu Favoriten' }}
                                 </button>
-                            @elseif($gp->is_convenience_highlight)
-                                <span class="text-amber-500 text-sm" title="gepinnt (read-only)">★</span>
+                            @elseif($gp->is_favorite)
+                                <span class="text-amber-500 text-sm" title="Favorit (read-only)">★</span>
                             @endif
                         </div>
                     </div>

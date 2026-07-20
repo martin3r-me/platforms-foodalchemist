@@ -62,10 +62,13 @@
                     <div class="rounded-xl border border-violet-500/25 bg-violet-500/[0.04] p-2.5 space-y-2" data-generator-panel>
                         <textarea wire:model="generatorBrief" rows="5" class="{{ $input }}" placeholder="Kunden-Brief einfügen … (Anlass, Gäste, Budget p. P., Diät-Anforderungen, No-Gos)"></textarea>
                         <input type="text" wire:model="generatorName" class="{{ $input }}" placeholder="Konzept-Name (optional)" />
-                        {{-- 06·H4: opt-in Convenience-Highlight-Modus (Default aus) --}}
+                        {{-- 06·H4: opt-in Favoriten-Modus (Default aus) --}}
                         <label class="flex items-start gap-2 text-[11px] text-gray-700">
-                            <input type="checkbox" wire:model="generatorConvenience" class="mt-0.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-generator-convenience />
-                            <span>⭐ Auf Basis der Convenience-Liste bauen <span class="text-gray-400">(bevorzugt, nicht ausschließlich)</span></span>
+                            <input type="checkbox" wire:model.live="generatorFavorites" class="mt-0.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-generator-favoriten />
+                            <span>⭐ Auf Basis meiner Favoriten bauen <span class="text-gray-400">(bevorzugt, nicht ausschließlich)</span></span>
+                        </label>
+                        <label x-show="$wire.generatorFavorites" class="flex items-center gap-1.5 text-[11px] text-gray-600 ml-6">
+                            <input type="checkbox" wire:model="generatorFavoritesConvenienceOnly" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-generator-favoriten-conv /> nur Convenience-Favoriten
                         </label>
                         <div class="flex gap-2">
                             <button type="button" wire:click="generatorStart" class="{{ $btnPrimary }} flex-1 justify-center" wire:loading.attr="disabled" data-generator-start>

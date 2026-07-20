@@ -46,10 +46,12 @@ Route::get('/gps/{foodAlchemistGp}', fn (\Platform\FoodAlchemist\Models\FoodAlch
 
 
 /**
- * 06·H2 Convenience-Highlights — Kuratierungs-Screen (Auto-Score + Pin/Exclude).
+ * 06·H2 Favoriten-GPs — Kuratierungs-Screen (Auto-Score + Pin/Exclude).
  */
-Route::get('/convenience-highlights', \Platform\FoodAlchemist\Livewire\Convenience\Index::class)
-    ->name('foodalchemist.convenience.index');
+Route::get('/favoriten', \Platform\FoodAlchemist\Livewire\Favorites\Index::class)
+    ->name('foodalchemist.favorites.index');
+// Alt-Pfad → Redirect (Bookmarks/Deeplinks aus der Convenience-Ära).
+Route::get('/convenience-highlights', fn () => redirect()->route('foodalchemist.favorites.index'));
 
 /**
  * Basisrezepte (M4-04, P-1) — Auswahl/Filter in der URL (Kontext-Erhalt).

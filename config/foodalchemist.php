@@ -108,9 +108,9 @@ return [
                     'icon'  => 'heroicon-o-square-2-stack',
                 ],
                 [
-                    // 06·H2: kuratierte Haus-Convenience-Liste (opt-in KI-Baustein)
-                    'label' => 'Convenience-Highlights',
-                    'route' => 'foodalchemist.convenience.index',
+                    // 06·H2: kuratierte Favoriten-GP-Liste (opt-in KI-Baustein)
+                    'label' => 'Favoriten',
+                    'route' => 'foodalchemist.favorites.index',
                     'icon'  => 'heroicon-o-star',
                 ],
             ],

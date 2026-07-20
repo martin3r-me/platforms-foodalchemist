@@ -5,29 +5,29 @@ namespace Platform\FoodAlchemist\Console;
 use Illuminate\Console\Command;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
-use Platform\FoodAlchemist\Services\ConvenienceHighlightService;
+use Platform\FoodAlchemist\Services\FavoriteGpService;
 
 /**
- * 06·H2 — Kuratierung der Convenience-Highlights (kuratierte Haus-Standard-Liste).
+ * 06·H2 — Kuratierung der Favoriten-GPs (kuratierter Haus-Standard).
  *
- * --suggest  : Auto-Score-Rangliste der Convenience-GPs (Report, kein Schreiben).
- * --pin=ID   : GP als Highlight pinnen (optional --rank=N).
- * --exclude=ID : GP aus den Highlights nehmen.
- * ohne Aktion + ohne --suggest → aktuelle Highlight-Liste anzeigen.
+ * --suggest  : Auto-Score-Rangliste der GPs (Report, kein Schreiben).
+ * --pin=ID   : GP als Favorit pinnen (optional --rank=N).
+ * --exclude=ID : GP aus den Favoriten nehmen.
+ * ohne Aktion + ohne --suggest → aktuelle Favoriten-Liste anzeigen.
  */
-class ConvenienceHighlightsCommand extends Command
+class FavoriteGpsCommand extends Command
 {
-    protected $signature = 'foodalchemist:convenience-highlights
+    protected $signature = 'foodalchemist:favorites
         {--team= : Team-ID (default: alle sichtbar)}
         {--suggest : Auto-Score-Rangliste anzeigen (Report)}
-        {--pin= : GP-ID als Highlight pinnen}
-        {--exclude= : GP-ID aus den Highlights nehmen}
+        {--pin= : GP-ID als Favorit pinnen}
+        {--exclude= : GP-ID aus den Favoriten nehmen}
         {--rank= : Anzeige-Rang beim Pinnen}
         {--limit=50 : max. Zeilen im Report}';
 
-    protected $description = 'H2: Convenience-Highlights kuratieren (Auto-Score-Report + pin/exclude).';
+    protected $description = 'H2: Favoriten-GPs kuratieren (Auto-Score-Report + pin/exclude).';
 
-    public function handle(ConvenienceHighlightService $svc): int
+    public function handle(FavoriteGpService $svc): int
     {
         $team = null;
         if ($this->option('team') !== null) {
@@ -67,7 +67,7 @@ class ConvenienceHighlightsCommand extends Command
                 return self::FAILURE;
             }
             $svc->exclude($gp);
-            $this->info("GP {$gp->id} ({$gp->name}) aus den Highlights genommen.");
+            $this->info("GP {$gp->id} ({$gp->name}) aus den Favoriten genommen.");
 
             return self::SUCCESS;
         }
@@ -77,23 +77,23 @@ class ConvenienceHighlightsCommand extends Command
         if ($this->option('suggest')) {
             $rows = $svc->suggest($team, $limit)->map(fn ($r) => [
                 $r['gp_id'], $r['name'], $r['usage'], $r['has_lead_la'] ? '✓' : '—',
-                $r['has_price'] ? '✓' : '—', $r['priority_pos'] ?? '—', $r['score'], $r['is_highlight'] ? '★' : '',
+                $r['has_price'] ? '✓' : '—', $r['priority_pos'] ?? '—', $r['score'], $r['is_favorite'] ? '★' : '',
             ])->all();
-            $this->info('Convenience-Highlights — Auto-Score-Rangliste (★ = bereits gepinnt):');
+            $this->info('Favoriten-GPs — Auto-Score-Rangliste (★ = bereits gepinnt):');
             $this->table(['GP', 'Name', 'Nutzung', 'Lead-LA', 'Preis', 'Prio-Pos', 'Score', 'Pin'], $rows);
 
             return self::SUCCESS;
         }
 
-        // Default: aktuelle Highlights
+        // Default: aktuelle Favoriten
         $cur = $svc->current($team);
         if ($cur->isEmpty()) {
-            $this->warn('Keine Convenience-Highlights gepinnt. --suggest zeigt die Rangliste.');
+            $this->warn('Keine Favoriten-GPs gepinnt. --suggest zeigt die Rangliste.');
 
             return self::SUCCESS;
         }
-        $this->info("Gepinnte Convenience-Highlights ({$cur->count()}):");
-        $this->table(['GP', 'Name', 'Rang'], $cur->map(fn ($g) => [$g->id, $g->name, $g->highlight_rank ?? '—'])->all());
+        $this->info("Gepinnte Favoriten-GPs ({$cur->count()}):");
+        $this->table(['GP', 'Name', 'Rang'], $cur->map(fn ($g) => [$g->id, $g->name, $g->favorite_rank ?? '—'])->all());
 
         return self::SUCCESS;
     }

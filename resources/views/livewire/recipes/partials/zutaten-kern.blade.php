@@ -44,9 +44,9 @@
                     <label class="flex items-center gap-1.5 text-[11px] text-gray-600">
                         <input type="checkbox" x-model="gpFilter.regional" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> Regional
                     </label>
-                    {{-- 06·H4: Picker auf die kuratierte Haus-Convenience-Liste verengen --}}
-                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600" title="Nur kuratierte Convenience-Highlights">
-                        <input type="checkbox" x-model="gpFilter.nur_convenience" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> ⭐ Convenience
+                    {{-- 06·H4: Picker auf die kuratierten Favoriten-GPs verengen --}}
+                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600" title="Nur kuratierte Favoriten-GPs">
+                        <input type="checkbox" x-model="gpFilter.nur_favoriten" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> ⭐ Favoriten
                     </label>
                 </div>
             </div>

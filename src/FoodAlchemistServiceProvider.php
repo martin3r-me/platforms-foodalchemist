@@ -76,7 +76,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\RecomputeCommand::class,
                 \Platform\FoodAlchemist\Console\GpAllergenBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\ProcessAnchorGroundCommand::class,
-                \Platform\FoodAlchemist\Console\ConvenienceHighlightsCommand::class,
+                \Platform\FoodAlchemist\Console\FavoriteGpsCommand::class,
             ]);
         }
     }
@@ -303,8 +303,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)
                     \Platform\FoodAlchemist\Tools\ProcessAnchorsGroundTool::class,
                     // 06·H2: Convenience-Highlights kuratieren (MCP-Lockstep)
-                    \Platform\FoodAlchemist\Tools\ConvenienceHighlightsGetTool::class,
-                    \Platform\FoodAlchemist\Tools\ConvenienceHighlightsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\FavoritesGetTool::class,
+                    \Platform\FoodAlchemist\Tools\FavoritesPutTool::class,
                     // Phase A: Rezept-Schreibkaskade (Weg-A-Ausnahme, Draft-Quarantäne)
                     \Platform\FoodAlchemist\Tools\RecipesPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesPutTool::class,

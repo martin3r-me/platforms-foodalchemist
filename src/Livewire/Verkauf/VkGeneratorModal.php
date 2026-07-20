@@ -45,8 +45,11 @@ class VkGeneratorModal extends Component
         ['field' => 'bio_praeferenz', 'label' => 'Bio-Präferenz', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Egal'], 'hint' => ['konventionell' => 'Standard — kein Bio erzwungen (Default)', 'bio' => 'Bio bevorzugt (nur auf Ansage)', 'egal' => 'keine Präferenz']],
     ];
 
-    /** 06·H4: opt-in Convenience-Highlight-Modus (Default aus → keine Versteifung). */
-    public bool $useConvenienceList = false;
+    /** 06·H4: opt-in Favoriten-Modus (Default aus → keine Versteifung). */
+    public bool $useFavoritesList = false;
+
+    /** 06·H4b: Favoriten-Block auf Convenience-getaggte verengen (nur bei aktivem Favoriten-Modus). */
+    public bool $favoritesConvenienceOnly = false;
 
     public function togglePill(string $feld, string $wert): void
     {
@@ -92,7 +95,8 @@ class VkGeneratorModal extends Component
             $parameter['bio'] = $parameter['bio_praeferenz'] === 'bio';
             // leere String-Hints strippen (diaet_hart-Array + bool bleiben erhalten)
             $parameter = array_filter($parameter, fn ($v) => $v !== '' && $v !== null);
-            $parameter['use_convenience_list'] = $this->useConvenienceList; // 06·H4 opt-in (nach array_filter, sonst würde false gestrippt)
+            $parameter['use_favorites_list'] = $this->useFavoritesList; // 06·H4 opt-in (nach array_filter, sonst würde false gestrippt)
+            $parameter['favorites_convenience_only'] = $this->useFavoritesList && $this->favoritesConvenienceOnly; // H4b
             $resultat = $generator->generiere($team, trim($this->description), $parameter, null, vkModus: true);
             $this->ergebnis = [
                 'recipe_id' => $resultat['recipe']->id,

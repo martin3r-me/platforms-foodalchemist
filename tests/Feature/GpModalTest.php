@@ -132,38 +132,38 @@ it('✨ gp.suggest (Neuanlage): Fake-Echo befüllt die Builder-Felder nicht mit 
         ->assertSet('builder.hauptzutat', '');
 });
 
-// ── 06·H4: Convenience-Highlight direkt im GP-Editor pinnen (2. Andockpunkt) ──
+// ── 06·H4b: Favorit direkt im GP-Editor pinnen (2. Andockpunkt) ──
 
-it('highlightToggle pinnt einen Convenience-GP und nimmt ihn wieder heraus', function () {
+it('favoriteToggle pinnt einen Convenience-GP und nimmt ihn wieder heraus', function () {
     $gp = $this->makeGp($this->rootTeam, 'TK-Spätzle');
     $gp->update(['status' => 'approved', 'tag_is_convenience' => true]);
 
     Livewire::test(GpModal::class)
         ->call('oeffnen', $gp->id)
-        ->call('highlightToggle')
+        ->call('favoriteToggle')
         ->assertSet('fehler', null)
         ->assertDispatched('gp-gespeichert');
-    expect($gp->refresh()->is_convenience_highlight)->toBeTrue();
+    expect($gp->refresh()->is_favorite)->toBeTrue();
 
     Livewire::test(GpModal::class)
         ->call('oeffnen', $gp->id)
-        ->call('highlightToggle');
-    expect($gp->refresh()->is_convenience_highlight)->toBeFalse();
+        ->call('favoriteToggle');
+    expect($gp->refresh()->is_favorite)->toBeFalse();
 });
 
-it('highlightToggle verweigert das Pinnen, wenn der GP nicht als Convenience getaggt ist (§4)', function () {
+it('favoriteToggle pinnt AUCH nicht-Convenience-GPs (kein §4-Zwang mehr)', function () {
     $gp = $this->makeGp($this->rootTeam, 'Frischer Spinat');
     $gp->update(['status' => 'approved']); // tag_is_convenience bleibt null/false
 
     Livewire::test(GpModal::class)
         ->call('oeffnen', $gp->id)
-        ->call('highlightToggle')
-        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Convenience'));
+        ->call('favoriteToggle')
+        ->assertSet('fehler', null);
 
-    expect($gp->refresh()->is_convenience_highlight)->toBeFalse();
+    expect($gp->refresh()->is_favorite)->toBeTrue();
 });
 
-it('highlightToggle blockt geerbte Katalog-GPs (D1: nur Besitzer-Team)', function () {
+it('favoriteToggle blockt geerbte Katalog-GPs (D1: nur Besitzer-Team)', function () {
     // GP gehört dem Root; aktiver User sitzt im Kind-Team → read-only.
     $gp = $this->makeGp($this->rootTeam, 'TK-Erbsen');
     $gp->update(['status' => 'approved', 'tag_is_convenience' => true]);
@@ -171,8 +171,8 @@ it('highlightToggle blockt geerbte Katalog-GPs (D1: nur Besitzer-Team)', functio
 
     Livewire::test(GpModal::class)
         ->call('oeffnen', $gp->id)
-        ->call('highlightToggle')
+        ->call('favoriteToggle')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'D1'));
 
-    expect($gp->refresh()->is_convenience_highlight)->toBeFalse();
+    expect($gp->refresh()->is_favorite)->toBeFalse();
 });

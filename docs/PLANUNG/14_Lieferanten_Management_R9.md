@@ -14,11 +14,11 @@
 
 **Supplier-Stammdaten (reuse):** `foodalchemist_suppliers` (`name/branch/gln/postal_code/city/address/homepage/email_order/is_inactive`; Finanz-Felder `iban/bic/vat_number` laut Migration-Header „P2 aufgeschoben"). `SupplierService` (`listWithCounts/create/update/setInactive`), `StammLieferantService` (`matrixFor/stammSupplierIdsFor/setStamm/unsetStamm`). Stamm-Matrix = EINE Tabelle `foodalchemist_preferred_suppliers` (`commodity_group_code` NULL=global / gefüllt=per-WG). UI `Suppliers/Index.php` + view (item-katalog-zentrisch, `leadSetzen`-★, `darfLieferantEdit`=`Curate::canCurate`) — **kein Supplier-Detail-Subview** → R9-Tabs neu; Vorlage `Gps/DetailPanel.php` (tabbed).
 
-**Prioritätskette (reuse, aber begrenzt):** `supplier_priorities` existiert NICHT; Priorität = `team_settings.lead_la_prioritaeten` (geordnete supplier_id-JSON, **manuell, KEIN Volumen**). → **R9.2 „Volumen/Umsatz × Konditionen" hat KEINE Datenquelle** (kein Spend/Umsatz im Modul). Nächstes Signal = Nutzungs-Häufigkeit (`recipe_ingredients` via Lead-LA, wie `ConvenienceHighlightService`) als **Proxy**.
+**Prioritätskette (reuse, aber begrenzt):** `supplier_priorities` existiert NICHT; Priorität = `team_settings.lead_la_prioritaeten` (geordnete supplier_id-JSON, **manuell, KEIN Volumen**). → **R9.2 „Volumen/Umsatz × Konditionen" hat KEINE Datenquelle** (kein Spend/Umsatz im Modul). Nächstes Signal = Nutzungs-Häufigkeit (`recipe_ingredients` via Lead-LA, wie `FavoriteGpService`) als **Proxy**.
 
 **Signal-Infra (reuse):** `SignalService::erzeuge` + `SignalTyp`-Enum (+`label()/icon()`) + Detektor-Muster `veraltetePreise(Team, tageSchwelle=180)` `:418` = **Vorlage für Fristen-Signal**. Runner `SignaleDetektorCommand`.
 
-**MCP (reuse-Muster):** `ArtikelSearchTool/ArtikelListTool` read-only; Write-Tool-Vorlage `ConvenienceHighlightsPutTool` (`visibleToTeam`+`isOwnedBy`-Gate). `FoodAlchemistSupplier` hat `isOwnedBy`+`visibleToTeam`. **Kein `suppliers.*`-Tool** → neu.
+**MCP (reuse-Muster):** `ArtikelSearchTool/ArtikelListTool` read-only; Write-Tool-Vorlage `FavoritesPutTool` (`visibleToTeam`+`isOwnedBy`-Gate). `FoodAlchemistSupplier` hat `isOwnedBy`+`visibleToTeam`. **Kein `suppliers.*`-Tool** → neu.
 
 **ALLES NEU (kein Scaffolding):** Absprachen-Log, Konditionen-Store, Dokumenten-Ablage. Latent: `foodalchemist_gp_team_overrides.note` (unbenutzt) bzw. `gp_la_preferences` (hat `LogsActivity`) als Ort für Override-Begründung.
 
@@ -69,7 +69,7 @@
 
 | Reuse | Neu |
 |---|---|
-| `LeadLaService` (rangliste/pick/effektiverLead/apply/set), `SupplierService`/`StammLieferantService`, `foodalchemist_preferred_suppliers`, `SignalService`+Detektor-Muster, `ConvenienceHighlightsPutTool`-Write-Muster, `Gps/DetailPanel`-Tab-Vorlage | Status-Enum + `supplier_contacts`, `supplier_agreements`, `supplier_documents`, Konditions-Spalten (geteilt Q2), `reason` auf `gp_la_preferences`, `SignalTyp::VertragsfristFaellig`+Detektor, `suppliers.GET/PUT`+`supplier_agreements.POST`, Volumen-Proxy-Auswertung |
+| `LeadLaService` (rangliste/pick/effektiverLead/apply/set), `SupplierService`/`StammLieferantService`, `foodalchemist_preferred_suppliers`, `SignalService`+Detektor-Muster, `FavoritesPutTool`-Write-Muster, `Gps/DetailPanel`-Tab-Vorlage | Status-Enum + `supplier_contacts`, `supplier_agreements`, `supplier_documents`, Konditions-Spalten (geteilt Q2), `reason` auf `gp_la_preferences`, `SignalTyp::VertragsfristFaellig`+Detektor, `suppliers.GET/PUT`+`supplier_agreements.POST`, Volumen-Proxy-Auswertung |
 
 ## 6. Verzahnung mit dem Kern
 - **[13](13_Preis_Katalog_Ingest_Q2.md)/Q2:** Konditionen (R9) × frische Preise (Q2) = ehrliche EK-Wahrheit; Preis-Import kann Absprachen-Verstöße sichtbar machen. **Konditions-Migration geteilt (E4).**

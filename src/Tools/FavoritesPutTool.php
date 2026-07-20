@@ -7,24 +7,24 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
-use Platform\FoodAlchemist\Services\ConvenienceHighlightService;
+use Platform\FoodAlchemist\Services\FavoriteGpService;
 
 /**
- * 06·H2 (MCP-Lockstep, write) — Convenience-Highlight pinnen/excludieren.
- * pin nur bei tag_is_convenience=true (Soft-Regel §4). Schreibrecht: GP muss
- * dem aktiven Team gehören (global/Master = read-only für Kind-Teams).
+ * 06·H2 (MCP-Lockstep, write) — Favorit (Lieblings-GP) pinnen/excludieren.
+ * Jeder approved GP ist pinbar (kein Convenience-Zwang mehr, H4b). Schreibrecht:
+ * GP muss dem aktiven Team gehören (global/Master = read-only für Kind-Teams).
  */
-class ConvenienceHighlightsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
+class FavoritesPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
-        return 'foodalchemist.convenience_highlights.PUT';
+        return 'foodalchemist.favorites.PUT';
     }
 
     public function getDescription(): string
     {
         return 'Pinnt (action=pin, optional rank) oder entfernt (action=exclude) ein GP in/aus der '
-            . 'kuratierten Convenience-Highlight-Liste. Pinnen nur bei Convenience-getaggten GPs.';
+            . 'kuratierten Favoriten-Liste (Lieblings-GPs). Jeder approved GP ist pinbar.';
     }
 
     public function getSchema(): array
@@ -55,7 +55,7 @@ class ConvenienceHighlightsPutTool extends FoodAlchemistTool implements ToolCont
             return ToolResult::error('GP gehört nicht dem aktiven Team (global/Master ist read-only).', 'ACCESS_DENIED');
         }
 
-        $svc = app(ConvenienceHighlightService::class);
+        $svc = app(FavoriteGpService::class);
         $action = (string) $arguments['action'];
 
         try {
@@ -71,8 +71,8 @@ class ConvenienceHighlightsPutTool extends FoodAlchemistTool implements ToolCont
         return ToolResult::success([
             'gp_id' => $gp->id,
             'action' => $action,
-            'is_convenience_highlight' => (bool) $gp->refresh()->is_convenience_highlight,
-            'highlight_rank' => $gp->highlight_rank,
+            'is_favorite' => (bool) $gp->refresh()->is_favorite,
+            'favorite_rank' => $gp->favorite_rank,
         ]);
     }
 
@@ -80,7 +80,7 @@ class ConvenienceHighlightsPutTool extends FoodAlchemistTool implements ToolCont
     {
         return [
             'category' => 'curation',
-            'tags' => ['foodalchemist', 'convenience', 'highlights', 'kuratierung', 'pin'],
+            'tags' => ['foodalchemist', 'favoriten', 'lieblings-gp', 'kuratierung', 'pin'],
             'read_only' => false,
             'idempotent' => true,
             'risk_level' => 'write',
@@ -88,8 +88,8 @@ class ConvenienceHighlightsPutTool extends FoodAlchemistTool implements ToolCont
             'requires_team' => true,
             'cost_class' => 'local_db',
             'side_effects' => ['updates'],
-            'related_tools' => ['foodalchemist.convenience_highlights.GET'],
-            'examples' => ['Pinne GP 1234 als Convenience-Highlight', 'Nimm GP 987 aus den Highlights'],
+            'related_tools' => ['foodalchemist.favorites.GET'],
+            'examples' => ['Pinne GP 1234 als Favorit', 'Nimm GP 987 aus den Favoriten'],
         ];
     }
 }

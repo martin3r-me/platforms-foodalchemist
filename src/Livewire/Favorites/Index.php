@@ -1,16 +1,17 @@
 <?php
 
-namespace Platform\FoodAlchemist\Livewire\Convenience;
+namespace Platform\FoodAlchemist\Livewire\Favorites;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
-use Platform\FoodAlchemist\Services\ConvenienceHighlightService;
+use Platform\FoodAlchemist\Services\FavoriteGpService;
 
 /**
- * 06·H2 — Kuratierungs-Screen für Convenience-Highlights (v1).
+ * 06·H2 — Kuratierungs-Screen für Favoriten-GPs (v1).
  * Auto-Score-Rangliste (Nutzung × Lead-LA × Priorität) mit Pin/Exclude je GP
- * + flachem Anzeige-Rang. Schreibrecht nur am eigenen Team (global = read-only).
+ * + flachem Anzeige-Rang. Jeder approved GP ist pinbar (Convenience-Zwang §4
+ * fallengelassen 2026-07-20). Schreibrecht nur am eigenen Team (global = read-only).
  */
 class Index extends Component
 {
@@ -30,7 +31,7 @@ class Index extends Component
             return;
         }
         try {
-            app(ConvenienceHighlightService::class)->pin($gp, $rank);
+            app(FavoriteGpService::class)->pin($gp, $rank);
         } catch (\RuntimeException $e) {
             $this->dispatch('notify', type: 'error', message: $e->getMessage());
         }
@@ -45,34 +46,28 @@ class Index extends Component
 
             return;
         }
-        app(ConvenienceHighlightService::class)->exclude($gp);
+        app(FavoriteGpService::class)->exclude($gp);
     }
 
     public function setRank(int $gpId, ?int $rank): void
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
-        if ($gp !== null && $gp->isOwnedBy($team) && $gp->is_convenience_highlight) {
-            app(ConvenienceHighlightService::class)->reorder([$gpId => (int) $rank]);
+        if ($gp !== null && $gp->isOwnedBy($team) && $gp->is_favorite) {
+            app(FavoriteGpService::class)->reorder([$gpId => (int) $rank]);
         }
     }
 
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-        $items = app(ConvenienceHighlightService::class)->suggest($team, $this->limit);
+        // Suche + „nur gepinnt" server-seitig — sonst fänden wir GPs außerhalb
+        // des Score-Caps nicht (Pool ist jetzt der ganze approved-Bestand).
+        $items = app(FavoriteGpService::class)->suggest($team, $this->limit, $this->q, $this->nurGepinnt);
 
-        $suche = trim(mb_strtolower($this->q));
-        if ($suche !== '') {
-            $items = $items->filter(fn ($r) => str_contains(mb_strtolower($r['name']), $suche))->values();
-        }
-        if ($this->nurGepinnt) {
-            $items = $items->filter(fn ($r) => $r['is_highlight'])->values();
-        }
-
-        return view('foodalchemist::livewire.convenience.index', [
+        return view('foodalchemist::livewire.favorites.index', [
             'items' => $items,
-            'anzahlGepinnt' => $items->where('is_highlight', true)->count(),
+            'anzahlGepinnt' => $items->where('is_favorite', true)->count(),
         ])->layout('platform::layouts.app');
     }
 }

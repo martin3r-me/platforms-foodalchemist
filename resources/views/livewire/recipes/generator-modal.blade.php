@@ -50,13 +50,16 @@
                     <p class="text-[11px] text-gray-500 mt-1">{{ $parameter['sektor'] === '' ? 'Kein Sektor-Constraint' : '' }}</p>
                 </div>
 
-                {{-- 06·H4: opt-in Convenience-Highlight-Modus (Default aus → keine Versteifung) --}}
-                <div data-richtung="convenience-highlights">
+                {{-- 06·H4: opt-in Favoriten-Modus (Default aus → keine Versteifung) --}}
+                <div data-richtung="favoriten">
                     <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
-                        <input type="checkbox" wire:model="useConvenienceList" class="mt-0.5" data-generator-convenience />
-                        <span>⭐ Auf Basis meiner Convenience-Liste bauen</span>
+                        <input type="checkbox" wire:model.live="useFavoritesList" class="mt-0.5" data-generator-favoriten />
+                        <span>⭐ Auf Basis meiner Favoriten bauen</span>
                     </label>
-                    <p class="text-[11px] text-gray-500 mt-1">Bevorzugt die kuratierten Haus-Convenience-Bausteine (bevorzugt, nicht ausschließlich). Aus = freie Kreativität.</p>
+                    <p class="text-[11px] text-gray-500 mt-1">Bevorzugt die kuratierten Lieblings-GPs (bevorzugt, nicht ausschließlich). Aus = freie Kreativität.</p>
+                    <label x-show="$wire.useFavoritesList" class="flex items-center gap-1.5 text-[11px] text-gray-600 mt-1.5 ml-6">
+                        <input type="checkbox" wire:model="favoritesConvenienceOnly" data-generator-favoriten-conv /> nur Convenience-Favoriten
+                    </label>
                 </div>
 
                 <div class="md:col-span-2" data-richtung="diaet">

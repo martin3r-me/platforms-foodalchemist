@@ -42,24 +42,27 @@ class GenerationContextService
     ) {
     }
 
-    /** 06·H3: max. Convenience-Highlights im opt-in-Prompt-Block (Prompt schlank halten). */
-    private const CONV_HIGHLIGHT_MAX = 80;
+    /** 06·H3: max. Favoriten im opt-in-Prompt-Block (Prompt schlank halten). */
+    private const FAVORITES_MAX = 80;
 
     /**
      * Grounding-Kontext-Keys, die additiv in den Generator-$kontext gemerged werden.
      *
-     * $useConvenienceList (06·H3): opt-in-Modus. Default false = byte-identisches
-     * Verhalten (kein Highlight-Block → keine Versteifung). true = zusätzlicher,
-     * SEPARATER Block „bevorzugte Convenience-Bausteine" (bevorzugt, nicht hart).
+     * $useFavoritesList (06·H3): opt-in-Modus. Default false = byte-identisches
+     * Verhalten (kein Favoriten-Block → keine Versteifung). true = zusätzlicher,
+     * SEPARATER Block „bevorzugte Bausteine" (bevorzugt, nicht hart).
+     * $favoritesConvenienceOnly (06·H4b): verengt den Block auf Convenience-
+     * getaggte Favoriten (Favoriten ∩ tag_is_convenience) — der alte Convenience-
+     * Modus, jetzt als Tag-Filter über dem allgemeinen Favoriten-Pool.
      *
-     * @return array{gp_kandidaten?: list<array>, rezept_kandidaten?: list<array>, pairing?: array, convenience_highlights?: array}
+     * @return array{gp_kandidaten?: list<array>, rezept_kandidaten?: list<array>, pairing?: array, favorites?: array}
      */
-    public function forGeneration(Team $team, string $description, bool $vkModus = false, bool $useConvenienceList = false): array
+    public function forGeneration(Team $team, string $description, bool $vkModus = false, bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false): array
     {
         $tokens = $this->leitTokens($description);
         if ($tokens === []) {
             // Auch ohne Leit-Tokens soll der opt-in-Modus die Haus-Liste einspielen.
-            return $useConvenienceList ? array_filter(['convenience_highlights' => $this->convenienceBlock($team)]) : [];
+            return $useFavoritesList ? array_filter(['favorites' => $this->favoritesBlock($team, $favoritesConvenienceOnly)]) : [];
         }
 
         $gp = [];
@@ -112,12 +115,12 @@ class GenerationContextService
             ];
         }
 
-        // 06·H3: opt-in Convenience-Highlights — bewusst SEPARAT vom semantischen
+        // 06·H3: opt-in Favoriten — bewusst SEPARAT vom semantischen
         // Reuse-Block (gp_kandidaten), nicht vermischen.
-        if ($useConvenienceList) {
-            $conv = $this->convenienceBlock($team);
-            if ($conv !== null) {
-                $out['convenience_highlights'] = $conv;
+        if ($useFavoritesList) {
+            $fav = $this->favoritesBlock($team, $favoritesConvenienceOnly);
+            if ($fav !== null) {
+                $out['favorites'] = $fav;
             }
         }
 
@@ -125,15 +128,17 @@ class GenerationContextService
     }
 
     /**
-     * 06·H3: der opt-in-Prompt-Block der kuratierten Haus-Convenience-Liste.
-     * null, wenn nichts gepinnt ist.
+     * 06·H3: der opt-in-Prompt-Block der kuratierten Favoriten-GPs.
+     * $convenienceOnly (H4b): nur Convenience-getaggte Favoriten.
+     * null, wenn nichts (Passendes) gepinnt ist.
      */
-    private function convenienceBlock(Team $team): ?array
+    private function favoritesBlock(Team $team, bool $convenienceOnly = false): ?array
     {
         $treffer = FoodAlchemistGp::query()
             ->visibleToTeam($team)
-            ->convenienceHighlights()
-            ->limit(self::CONV_HIGHLIGHT_MAX)
+            ->favorites()
+            ->when($convenienceOnly, fn ($q) => $q->where('tag_is_convenience', true))
+            ->limit(self::FAVORITES_MAX)
             ->get(['id', 'name'])
             ->map(fn ($g) => ['id' => (int) $g->id, 'name' => (string) $g->name])
             ->all();
@@ -142,8 +147,10 @@ class GenerationContextService
             return null;
         }
 
+        $was = $convenienceOnly ? 'BEVORZUGTE CONVENIENCE-BAUSTEINE (Haus-Standard)' : 'BEVORZUGTE HAUS-FAVORITEN (Grundprodukte)';
+
         return [
-            'hinweis' => 'BEVORZUGTE CONVENIENCE-BAUSTEINE (Haus-Standard): Nutze wo möglich diese '
+            'hinweis' => $was . ': Nutze wo möglich diese '
                 . 'Produkte (gp_id nutzen); ergänze frei, wo die Liste nichts hergibt (bevorzugt, nicht ausschließlich).',
             'treffer' => $treffer,
         ];

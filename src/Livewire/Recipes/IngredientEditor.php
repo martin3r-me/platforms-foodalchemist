@@ -232,7 +232,7 @@ class IngredientEditor extends Component
             ->when((bool) ($gpFilter['bio'] ?? false), fn ($w) => $w->where('tag_is_organic', true))
             ->when((bool) ($gpFilter['regional'] ?? false), fn ($w) => $w->where('tag_is_regional', true))
             // 06·H4: „nur Convenience-Highlights" — verengt den Picker auf die kuratierte Haus-Liste
-            ->when((bool) ($gpFilter['nur_convenience'] ?? false), fn ($w) => $w->where('is_convenience_highlight', true));
+            ->when((bool) ($gpFilter['nur_favoriten'] ?? false), fn ($w) => $w->where('is_favorite', true));
         $gpTotal = (clone $gpQuery)->count();
         $gpModels = $gpQuery->orderBy('name')->limit(200)
             ->get(['id', 'name', 'condition', 'lead_la_supplier_item_id', 'piece_default_g', 'team_id']);

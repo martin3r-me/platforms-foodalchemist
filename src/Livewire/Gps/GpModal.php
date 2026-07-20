@@ -9,7 +9,7 @@ use Platform\FoodAlchemist\Enums\GpStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\BulkEnrichService;
-use Platform\FoodAlchemist\Services\ConvenienceHighlightService;
+use Platform\FoodAlchemist\Services\FavoriteGpService;
 use Platform\FoodAlchemist\Services\GpNamingService;
 use Platform\FoodAlchemist\Services\GpService;
 use Platform\FoodAlchemist\Services\VocabularyService;
@@ -175,11 +175,11 @@ class GpModal extends Component
         }
     }
 
-    // ── 06·H4: Convenience-Highlight direkt am GP pinnen (zweiter Andockpunkt
-    //          neben dem Kuratierungs-Screen — landet in derselben Liste,
-    //          gleiches Feld is_convenience_highlight). D1-Gate + Soft-Regel §4. ──
+    // ── 06·H4b: Favorit direkt am GP pinnen (zweiter Andockpunkt neben dem
+    //           Favoriten-Screen — landet in derselben Liste, Feld is_favorite).
+    //           D1-Gate; jeder approved GP ist favoritisierbar (kein §4-Zwang). ──
 
-    public function highlightToggle(): void
+    public function favoriteToggle(): void
     {
         $this->fehler = null;
         $gp = $this->gp();
@@ -187,19 +187,13 @@ class GpModal extends Component
             return;
         }
         if (! Curate::canCurate(Auth::user(), $gp)) {
-            $this->fehler = 'Convenience-Highlight ist Katalog-Pflege — nur fürs Besitzer-Team (D1).';
+            $this->fehler = 'Favorit ist Katalog-Pflege — nur fürs Besitzer-Team (D1).';
 
             return;
         }
-        try {
-            $svc = app(ConvenienceHighlightService::class);
-            $gp->is_convenience_highlight
-                ? $svc->exclude($gp)
-                : $svc->pin($gp);                        // wirft, wenn nicht als Convenience getaggt (§4)
-            $this->dispatch('gp-gespeichert');           // Screen/Browser können reagieren
-        } catch (\RuntimeException $e) {
-            $this->fehler = $e->getMessage();
-        }
+        $svc = app(FavoriteGpService::class);
+        $gp->is_favorite ? $svc->exclude($gp) : $svc->pin($gp);
+        $this->dispatch('gp-gespeichert');               // Screen/Browser können reagieren
     }
 
     // ── ✨ Alles anreichern (GP-Bulk-Autopilot: Zustand+Tags+Allergene+Nährwerte) ──

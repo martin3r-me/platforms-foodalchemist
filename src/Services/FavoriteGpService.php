@@ -9,15 +9,19 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
- * 06·H2 — Kuratierung der Convenience-Highlights (kuratierte Haus-Standard-Liste,
- * opt-in KI-Baustein). Hybrid: Auto-Score schlägt vor (Rangliste), Mensch pinnt/
- * excludet. Alle Mutationen laufen hier (kein Roh-SQL für Schreibwege).
+ * 06·H2 — Kuratierung der Favoriten-GPs (kuratierter Haus-Standard, opt-in
+ * KI-Baustein). Hybrid: Auto-Score schlägt vor (Rangliste), Mensch pinnt/excludet.
+ * Alle Mutationen laufen hier (kein Roh-SQL für Schreibwege).
  *
- * Auto-Score je Convenience-GP (Spec §5): Verwendungshäufigkeit × Lieferanten-
- * Priorität (Lead-LA-Supplier in der Prioritätskette) × Lead-LA-Vollständigkeit.
+ * 2026-07-20 (Dominique): Pool auf JEDEN approved GP geöffnet (früher nur
+ * Convenience-getaggte, §4). Convenience bleibt ein GP-Tag — der Generator kann
+ * die Favoriten optional darauf verengen (Favoriten ∩ tag_is_convenience).
+ *
+ * Auto-Score je GP (Spec §5): Verwendungshäufigkeit × Lieferanten-Priorität
+ * (Lead-LA-Supplier in der Prioritätskette) × Lead-LA-Vollständigkeit.
  * Gewichte bewusst konservativ; am realen Bestand nachkalibrierbar.
  */
-class ConvenienceHighlightService
+class FavoriteGpService
 {
     /** Gewichte des Auto-Scores (Spec §10: am Bestand kalibrieren). */
     public const W_USAGE = 2.0;      // je Rezept-Verwendung
@@ -31,19 +35,25 @@ class ConvenienceHighlightService
     public function __construct(private readonly TeamSettingsService $settings) {}
 
     /**
-     * Auto-Score-Rangliste der Convenience-GPs (nur `tag_is_convenience=true`),
-     * bereits gepinnte oben markiert. Absteigend nach Score.
+     * Auto-Score-Rangliste aller approved GPs, bereits gepinnte oben markiert.
+     * Absteigend nach Score. `$search` (Name-LIKE) + `$pinnedOnly` filtern
+     * server-seitig — gepinnte Favoriten sind IMMER dabei (sonst wären
+     * niedrig gescorte Favoriten unauffindbar).
      *
-     * @return Collection<int, array{gp_id:int, name:string, usage:int, has_lead_la:bool, has_price:bool, priority_pos:?int, score:float, is_highlight:bool, highlight_rank:?int}>
+     * @return Collection<int, array{gp_id:int, name:string, usage:int, has_lead_la:bool, has_price:bool, priority_pos:?int, score:float, is_favorite:bool, is_convenience:bool, favorite_rank:?int}>
      */
-    public function suggest(?Team $team, int $limit = 300): Collection
+    public function suggest(?Team $team, int $limit = 300, ?string $search = null, bool $pinnedOnly = false): Collection
     {
         $prioritaeten = $team !== null ? $this->settings->leadLaPrioritaeten($team) : [];
         $prioPos = array_flip(array_values(array_map('intval', $prioritaeten))); // supplier_id => index
 
-        $rows = $this->convenienceBaseQuery($team)
+        $suche = $search !== null ? trim($search) : '';
+        $rows = $this->favoritesBaseQuery($team)
+            ->when($suche !== '', fn ($q) => $q->where('g.name', 'like', '%' . $suche . '%'))
+            // gepinnt IMMER mitnehmen (auch bei Suche/Score-Cap) — via OR-Gruppe
+            ->when($pinnedOnly, fn ($q) => $q->where('g.is_favorite', true))
             ->select([
-                'g.id', 'g.name', 'g.lead_la_supplier_item_id', 'g.is_convenience_highlight', 'g.highlight_rank',
+                'g.id', 'g.name', 'g.lead_la_supplier_item_id', 'g.is_favorite', 'g.favorite_rank', 'g.tag_is_convenience',
             ])
             ->selectSub(
                 DB::table('foodalchemist_recipe_ingredients')
@@ -90,44 +100,47 @@ class ConvenienceHighlightService
                 'has_price' => $hasPrice,
                 'priority_pos' => $priorityPos,
                 'score' => round($score, 2),
-                'is_highlight' => (bool) $r->is_convenience_highlight,
-                'highlight_rank' => $r->highlight_rank !== null ? (int) $r->highlight_rank : null,
+                'is_favorite' => (bool) $r->is_favorite,
+                'is_convenience' => (bool) $r->tag_is_convenience,
+                'favorite_rank' => $r->favorite_rank !== null ? (int) $r->favorite_rank : null,
             ];
-        })
-            ->sortByDesc('score')
-            ->take($limit)
-            ->values();
+        });
+
+        // Score-Cap, aber gepinnte Favoriten IMMER behalten (sonst fällt ein
+        // niedrig gescorter Favorit aus der Liste und ist nicht mehr entfernbar).
+        $pinned = $rows->where('is_favorite', true)->sortByDesc('score');
+        $rest = $rows->where('is_favorite', false)->sortByDesc('score')
+            ->take(max(0, $limit - $pinned->count()));
+
+        return $pinned->concat($rest)->sortByDesc('score')->values();
     }
 
-    /** Aktuell gepinnte Highlights (nach Rang), team-sichtbar. */
+    /** Aktuell gepinnte Favoriten (nach Rang), team-sichtbar. */
     public function current(?Team $team): Collection
     {
         return $this->scopeVisible($team, FoodAlchemistGp::query())
-            ->convenienceHighlights()
-            ->get(['id', 'name', 'highlight_rank', 'tag_is_convenience']);
+            ->favorites()
+            ->get(['id', 'name', 'favorite_rank', 'tag_is_convenience']);
     }
 
     /**
-     * GP als Highlight pinnen (idempotent). Soft-Regel (Spec §4): nur bei
-     * tag_is_convenience=true — sonst RuntimeException (im Screen erzwungen).
+     * GP als Favorit pinnen (idempotent). JEDER approved GP ist pinbar
+     * (§4-Convenience-Zwang 2026-07-20 fallengelassen — Dominique).
      */
     public function pin(FoodAlchemistGp $gp, ?int $rank = null): void
     {
-        if ($gp->tag_is_convenience !== true) {
-            throw new \RuntimeException("GP {$gp->id} ist nicht als Convenience getaggt (tag_is_convenience) — nicht pinbar.");
-        }
         $gp->forceFill([
-            'is_convenience_highlight' => true,
-            'highlight_rank' => $rank,
+            'is_favorite' => true,
+            'favorite_rank' => $rank,
         ])->save();
     }
 
-    /** GP aus den Highlights nehmen. */
+    /** GP aus den Favoriten nehmen. */
     public function exclude(FoodAlchemistGp $gp): void
     {
         $gp->forceFill([
-            'is_convenience_highlight' => false,
-            'highlight_rank' => null,
+            'is_favorite' => false,
+            'favorite_rank' => null,
         ])->save();
     }
 
@@ -143,20 +156,20 @@ class ConvenienceHighlightService
             foreach ($gpIdToRank as $gpId => $rank) {
                 $n += DB::table('foodalchemist_gps')
                     ->where('id', (int) $gpId)
-                    ->where('is_convenience_highlight', true)
-                    ->update(['highlight_rank' => (int) $rank, 'updated_at' => now()]);
+                    ->where('is_favorite', true)
+                    ->update(['favorite_rank' => (int) $rank, 'updated_at' => now()]);
             }
         });
 
         return $n;
     }
 
-    /** Basis-Query: Convenience-GPs (approved, team-sichtbar), Alias g. */
-    private function convenienceBaseQuery(?Team $team)
+    /** Basis-Query: approved, echte (kein Platzhalter) GPs, team-sichtbar, Alias g. */
+    private function favoritesBaseQuery(?Team $team)
     {
         $q = DB::table('foodalchemist_gps AS g')
-            ->where('g.tag_is_convenience', true)
             ->where('g.status', 'approved')
+            ->where('g.is_platzhalter', false)
             ->whereNull('g.deleted_at');
 
         if ($team !== null) {
