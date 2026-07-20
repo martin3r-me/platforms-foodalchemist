@@ -7,8 +7,11 @@
 >
 > **Bau-Notizen 2026-07-20 (Abweichungen von der Kartierung):**
 > - Such-Prefilter musste Alias-/Decompound-**Phrasen** mit-suchen (je Phrase ein `searchGlobal`-Query + Union über id) — sonst findet „Paradeiser" die Tomaten-LA nie (searchGlobal AND-tokenisiert; Alias erweitert sonst nur das Scoring, nicht die Suche). Das war der eine echte Bug im ersten Wurf.
-> - Anti-Marker greift auf **Token-Ebene**: „Brie"↛„Bries" ok, aber Compound „Kalbsbries" rutscht durch (`substringOverlap` „brie"⊂„kalbsbries" = 1.0) — das ist die bekannte **S3-Decompounding-Lücke** (im TerminologyService-Code so kommentiert), kein Spec-16-Regress.
-> - Reine deterministische Bausteine (S2/S3/S5) sind voll getestet; S4 braucht einen Live-LLM für die End-to-End-Verifikation (Martin-Gate).
+> - Reine deterministische Bausteine (S2/S3/S5) sind voll getestet; S4 braucht einen Live-LLM für die End-to-End-Verifikation (Key liegt auf demo, Sandbox=fake).
+>
+> **Nachzügler erledigt (2026-07-20, Commit `8bdc493`):**
+> - **S3-Compound-Anti-Marker GESCHLOSSEN:** `isAntiMarker` matcht jetzt am Kompositum-Rand (Präfix/Suffix, Rest-Morphem ≥ 3 Z.) → „Brie" fängt „Kalbsbries" (Rest „kalbs"), ohne „Bries"/„Bries" (Rest „s") zu blocken oder die „tamarinde"↛„rind"-Interieur-Falle zu öffnen. Voll-Golden-Suite grün.
+> - **WG-Hint scharfgestellt (E1):** `recipe.generator` liefert optional `commodity_group` (15er-§3-Liste inline), Generator normalisiert via `wgHint()` auf 2-stellig → `mintFromLa`-Scope; sichere globale Rückfall-Ebene. Verifiziert deterministisch (Override-Pfad); LLM-Emission = demo-Smoke.
 
 ---
 

@@ -20,7 +20,7 @@
 | **13** | Preis-/Katalog-Ingest Q2 | Kanal-B 🟢 · Sales-Ist 🟡 · Kanal-A ⚪ | **Kanal-B-Import blocker-frei baubar** (bewusst hinten angestellt); Sales-Ist gated auf echte Beispieldatei; Kanal A extern |
 | **14** | Lieferanten-Management R9 | ✅ **KOMPLETT** (Engine+MCP+UI, `1382fc2`) | echtes Spend = Q2 (Nutzungs-Proxy ist v1) |
 | **15** | Semantische Suche über Lieferantenartikel (Supplier-Item-Pool) | ⚪ Dossier — **entkoppelt/zurückgestellt via 16** | RAG-Nachzug (Vektor-Pool + Observer + Retrieval); vom WG-Lead-Use-Case (16) NICHT gebraucht → wartet auf echte Freitext-Katalog-Discovery + 50k-Store-/Qdrant-Frage |
-| **16** | WG-Lead-gescopter LA-Kandidaten-Finder + On-demand-Klassifikation | ✅ **GEBAUT+GETESTET 2026-07-20** (S1–S3+S5, 14+29 Pest) | Finder deterministisch live (schärft Spec-07-`mintFromLa`); WG-Scope + Terminologie + Anti-Marker + Fallback. **S4-Klassifikator verdrahtet, LLM-Inhalt provider-gated** (Martin). Offen: S3-Decompounding für Compound-Anti-Marker (Kalbsbries); WG-Hint im KI-Rezept-Schema befüllen |
+| **16** | WG-Lead-gescopter LA-Kandidaten-Finder + On-demand-Klassifikation | ✅ **GEBAUT+GETESTET 2026-07-20** (S1–S5 + Nachzügler, 16+ Pest) | Finder deterministisch live (schärft Spec-07-`mintFromLa`); WG-Scope + Terminologie + **Compound-Anti-Marker (S3 geschlossen)** + Fallback; **WG-Hint im KI-Schema scharf (E1)**. Rest nur noch provider-gated (demo): LLM-`commodity_group`-Emission + S4-ClassifyLaJob-Inhalt |
 
 ## Verdichtet
 
