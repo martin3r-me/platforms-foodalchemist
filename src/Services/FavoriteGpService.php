@@ -75,7 +75,7 @@ class FavoriteGpService
             )
             ->get();
 
-        return $rows->map(function ($r) use ($prioPos) {
+        $mapped = $rows->map(function ($r) use ($prioPos) {
             $usage = (int) $r->usage;
             $hasLead = $r->lead_la_supplier_item_id !== null;
             $hasPrice = ((int) $r->price_rows) > 0;
@@ -106,10 +106,11 @@ class FavoriteGpService
             ];
         });
 
-        // Score-Cap, aber gepinnte Favoriten IMMER behalten (sonst fällt ein
-        // niedrig gescorter Favorit aus der Liste und ist nicht mehr entfernbar).
-        $pinned = $rows->where('is_favorite', true)->sortByDesc('score');
-        $rest = $rows->where('is_favorite', false)->sortByDesc('score')
+        // Score-Cap (der Pool ist der ganze approved-Bestand → Rangliste, nicht alles),
+        // aber gepinnte Favoriten IMMER behalten (sonst fällt ein niedrig gescorter
+        // Favorit aus der Liste und wäre nicht mehr entfernbar).
+        $pinned = $mapped->where('is_favorite', true)->sortByDesc('score');
+        $rest = $mapped->where('is_favorite', false)->sortByDesc('score')
             ->take(max(0, $limit - $pinned->count()));
 
         return $pinned->concat($rest)->sortByDesc('score')->values();

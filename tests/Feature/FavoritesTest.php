@@ -64,10 +64,38 @@ it('current listet gepinnte nach Rang', function () {
     expect($this->svc->current($this->rootTeam)->pluck('name')->all())->toBe(['TK-Rösti', 'TK-Kartoffelgratin']);
 });
 
-it('gepinnte Favoriten bleiben trotz Score-Cap in der Liste', function () {
-    $this->svc->pin($this->nichtConv);                 // Score 0 (keine Nutzung/Lead)
+it('gepinnte Favoriten bleiben trotz Score-Cap in der Liste — und der Cap greift wirklich', function () {
+    $this->svc->pin($this->nichtConv);                 // Score 0 (keine Nutzung/Lead), gepinnt
     $items = $this->svc->suggest($this->rootTeam, 1);  // Cap = 1
-    expect($items->pluck('name'))->toContain('Frische Kartoffel');
+    // gepinnter Low-Score-GP bleibt drin …
+    expect($items->pluck('name'))->toContain('Frische Kartoffel')
+        // … aber der Cap kappt echt: rest = limit − pinned = 0 → nur der gepinnte, sonst nichts.
+        ->and($items)->toHaveCount(1)
+        ->and($items->pluck('name'))->not->toContain('TK-Kartoffelgratin');
+});
+
+it('suggest kappt den ganzen approved-Pool auf $limit (Rangliste, nicht ALLE) — Regressions-Guard 2026-07-20', function () {
+    // 4 weitere approved GPs → Pool = 6; nichts gepinnt.
+    foreach (['A', 'B', 'C', 'D'] as $s) {
+        $this->makeGp($this->rootTeam, "Pool-GP {$s}")->update(['status' => 'approved']);
+    }
+    $items = $this->svc->suggest($this->rootTeam, 3, null, false);
+    expect($items)->toHaveCount(3); // vor dem Fix kamen ALLE (früher toter Cap-Code hinter return)
+});
+
+it('suggest sortiert absteigend nach Score (höchster zuerst)', function () {
+    // Lead-LA auf einen GP → +W_LEAD; bleibt über den score-0-GPs.
+    $supplier = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Chefs']);
+    $item = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id, 'designation' => 'Gratin-Mix',
+    ]);
+    $hi = $this->makeGp($this->rootTeam, 'Lead-GP');
+    $hi->update(['status' => 'approved', 'lead_la_supplier_item_id' => $item->id]);
+
+    $items = $this->svc->suggest($this->rootTeam);
+    $scores = $items->pluck('score')->all();
+    expect($scores)->toBe(collect($scores)->sortDesc()->values()->all()) // monoton fallend
+        ->and($items->first()['name'])->toBe('Lead-GP');                 // Top-Score oben
 });
 
 it('Command --suggest + --pin', function () {
