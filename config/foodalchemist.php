@@ -330,7 +330,7 @@ return [
             'max_tokens' => 8000,   // volles Rezept-JSON inkl. Zutatenliste — Reasoning-Headroom
             'task' => 'Erzeuge ein Basisrezept aus der Beschreibung unter Beachtung der Richtungs-'
                 . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, aroma): werte = '
-                . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction, '
+                . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (Markdown-Schritte), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
                 . 'slug (hauptzutat), commodity_group, note}]}. Diät-harte Vorgaben sind VERBINDLICH. '
                 // Spec 16·E1: WG-Hint verengt die LA-Beschaffung auf die Warengruppen-Lead-Lieferanten.
@@ -369,7 +369,7 @@ return [
                 . 'unter Beachtung der Richtungs-Parameter (convenience, frische, bio, niveau, sektor, '
                 . 'diaet_hart, aroma, anlass, serviceform, kompositions_stil): werte = '
                 . '{name (Pipe-Syntax §4.4 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
-                . 'keine Marketing-Adjektive), description (§8-Stil), taste_direction, '
+                . 'keine Marketing-Adjektive), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '
                 . 'NICHT die Produktion), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note}] '
                 . '(Komponenten bevorzugt als Basisrezepte; wenn bestands_inventar mitgegeben ist, benenne '

@@ -123,7 +123,12 @@ class RecipeGeneratorService
                 'name' => $kiRezept['name'],
                 'is_sales_recipe' => $vkModus,
                 'description' => $kiRezept['description'] ?? null,
-                'taste_direction' => $kiRezept['taste_direction'] ?? null,
+                // Enum-Guard: taste_direction ist die grobe Menüplanungs-Richtung (suess|herzhaft|neutral,
+                // varchar(16)) — nicht das Aroma-Profil. Ein Generator-Freitext ("cremig-süßlich, …") lebt
+                // in description; hier nur den Enum-Wert durchlassen, sonst null (crasht sonst den Insert).
+                'taste_direction' => in_array($kiRezept['taste_direction'] ?? null, ['suess', 'herzhaft', 'neutral'], true)
+                    ? $kiRezept['taste_direction']
+                    : null,
                 'production_depth' => match ($parameter['convenience'] ?? null) {
                     'from_scratch' => 'from_scratch',
                     'teil_convenience' => 'teilfertig',
