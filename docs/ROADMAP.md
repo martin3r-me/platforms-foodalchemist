@@ -102,6 +102,14 @@ UX-Fund (Dominique): Der Foodbook-Kopf (Stammdaten/Phase/CRM/Briefing/Leitidee-C
 - `waehle()` selektiert kein Kapitel mehr automatisch → Foodbook-Klick landet auf dem Kopf; neuer `kopfAnzeigen()` + Sidebar-Eintrag „📋 Foodbook-Kopf · Übersicht" für den Rücksprung. Der Bearbeiten⇄Menü-Toggle entfällt (Menü-Vorschau = ganzes Foodbook, gehört zum Kopf; Bearbeiten = kapitel-scoped).
 - Rein UI/Livewire, kein DB-/Schema-/Service-Eingriff. `php -l` clean, Blade rendert (kein 500), beide Ansichten in der Sandbox visuell verifiziert.
 
+## ⭐ Update 2026-07-21 (Session: Foodbook — Header-Rendering + Block-Drag&Drop + Dokument-Feinschliff)
+
+Drei Demo-Befunde (Dominique) am Foodbook, alle gefixt + in der Sandbox verifiziert. Commit `a7f0ee1`.
+- **„Header kommt nicht raus / nicht fett":** Konzept-Titel (`concept_ref`/`recipe_ref`) rendern jetzt **fett + mit Abstand** als eigene Zwischenüberschrift statt plain zwischen den Gericht-Zeilen — konsistent in **allen drei** Ansichten (`dokumente/foodbook.blade`, `praesentation.blade`, Editor-Menüvorschau `index.blade`). Vorher nur `header_*`-Typen fett, `concept_ref` blieb `ist_header=false`.
+- **Drag & Drop im Block-Editor** (fehlte komplett — nur ▲▼): Ziehgriff ⠿ + neue Livewire-Methode `Foodbooks\Index::blockVerschiebenAuf` (insert-after, spiegelt Concepter `positionNach`); native HTML5-DnD-Verdrahtung 1:1 vom Concepter-Slot-Muster. ▲▼ bleibt als Kanten-Alternative. End-to-end verifiziert (dispatchte drag/drop-Events → DB-Reihenfolge korrekt) + `Livewire::test`.
+- **Kundendokument-Feinschliff (Design):** `WordingResolver::fuerGericht` kappt führende interne Marker `[HG]`/`[KAE]`/… **nur im Namens-Fallback** (`source` bleibt `name` → „Wording fehlt"-Amber im Editor erhalten). Plus Kapitel-/Titel-Abstände, Gericht-Bullet, ruhigere Typo. 1-spaltig/druckstabil (bewusst kein Bild-Redesign — #461 später).
+- Pest grün: FoodbookService (16), FoodbookUi (3), ConcepterWording (Teil der 16). **Offen (Daten, kein Code):** viele VK-Gerichte ohne `sales_wording_standard` → Kundensicht zeigt interne Pipe-Namen (Editor flaggt amber); echtes Wording pflegen bleibt To-do.
+
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 
 Quellen: `Datenmodell Food.Alchemist.md` (5 Ebenen) + `07.02_Flavor_Pairing/Datenbank Foodalchemist/_Plan_Datenmodell_Chemie-Pairing-DB.md` (Chemie-first Phase 1–4). Stationen von hier bis Voll-Ausbau:
