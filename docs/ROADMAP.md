@@ -20,6 +20,16 @@ Beschlossen (Dominique):
 
 Details/Historie: Memory `project_fa_klarschiff_cleanup.md` + `_MEMORY_FoodBrain.md`.
 
+## ⭐ Update 2026-07-21 (Session: Geschmacks-Profil entdoppelt → Spinnennetz)
+
+**Dopplung im Rezept-/VK-/GP-Editor + Concepter beseitigt:** Der Sensorik-Tab zeigte zwei optisch identische 7-Achsen-Balkenblöcke — „Geschmacks-Balance · sensorisch" (gegarte KI-Sensorik, `SensorikService`, DB `recipe_taste_vectors`) und „Geschmacks-Profil · Aroma-Anker" (gemittelte Anker-Vektoren, `PairingService`, DB `anchor_taste_vectors`). Beide auf 0–1, aber verschiedene Quelle/Semantik (Abgrenzung stand als `#503`-Kommentar im Code). Ersetzt durch **ein** Spinnennetz (Coffee-Cupping-Optik, Brand-Violett).
+
+- **Neu:** `resources/views/livewire/concepter/partials/geschmack-radar.blade.php` — server-gerendertes SVG-Radar (7 Achsen, PHP-berechnete Koordinaten, konzentrische Ringe + Speichen + Zentrum-Glow, dominant/Lücke-Punktfarben) + Alpine-Tooltip. Kein JS-Chart/CDN, kein `wire:ignore` nötig. Farben inline-literal (JIT-Klassen-Falle beachtet).
+- **Fläche = gegarte Sensorik**, **Aroma-Anker-Wert je Achse im Tooltip** (Hover) — beide Quellen sichtbar, aber nur ein Polygon. Der separate Aroma-Anker-Block entfällt (2 `@include`-Zeilen aus `pairing.blade.php` raus, recipe- + gp-Branch).
+- `sensorik.blade.php` (greift in Rezept/VK/GP) + Concepter-Inline-Block (`editor.blade.php`, `ankerGeschmack => []`, da im Sensorik-Tab kein `$pairing` im Scope) auf das Radar-Include umgestellt; Lücke/dominant-Chips + Textur-Profil bleiben. Altpartial `partials/geschmack.blade.php` gelöscht (verwaist).
+- **Verifikation:** alle 4 Blades mit echtem Blade-Compiler übersetzt → `php -l` 0 Fehler; Radar-Partial (beide Pfade) + `sensorik`-Partial end-to-end mit realen Services (Rezept 461, `source=ki`) gerendert — 1 Polygon, alle 7 Anker-Achsen im Tooltip; `pairing`-Partial: Aroma-Anker-Card weg, Kohäsion/Kontrast intakt.
+- **Offen (optional):** VK-„Teller-Profil" (`sensorik_komposition.blade.php`) noch Balken — Folge-Kandidat für Konsistenz.
+
 ## ⭐ Update 2026-07-21 (Session: Foodbook-PDF-Redesign — Book-Look + pro-Foodbook-Branding + Härten)
 
 **Das versendbare Foodbook-Dokument (`/foodbooks/{id}/dokument`) neu gestaltet** — Ziel-Bar: **Vertriebs-Arbeitsdokument** (sauber/markengerecht/strukturiert), NICHT der End-Kunden-Showpiece (eigener, späterer Track). Engine bleibt **DomPDF** (kein Server-Zusatz). Referenz: die drei echten Caterer-Foodbooks (Broich/TM/DOEC) — ein Layout-Skelett, pro Marke andere Tokens.

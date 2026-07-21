@@ -129,8 +129,6 @@
                 </div>
             </div>
         @endif
-
-        @include('foodalchemist::livewire.concepter.partials.geschmack', ['geschmack' => $pairing['geschmack'] ?? []])
     @endif
 @elseif(($pairing['type'] ?? null) === 'gp')
     @if(count($pairing['anker']) === 0)
@@ -182,7 +180,5 @@
                 </div>
             </div>
         @endif
-
-        @include('foodalchemist::livewire.concepter.partials.geschmack', ['geschmack' => $pairing['geschmack'] ?? []])
     @endif
 @endif
