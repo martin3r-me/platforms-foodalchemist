@@ -27,15 +27,18 @@
             {{ $pdf ? 'position: fixed; top: -2.4cm; left: -1.5cm; width: 21cm;' : '' }}
             height: 1.4cm; background: {{ $band }}; color: #fff; padding: 0 1.5cm;
         }
-        .band-top .bt-label { float: left; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; line-height: 1; padding-top: 0.52cm; opacity: .92; }
-        .band-top .bt-logo { float: right; }
-        .band-top .bt-logo img { max-height: 0.85cm; max-width: 5cm; margin-top: 0.28cm; }
+        /* WICHTIG: KEIN float in den fixed-Bändern — float in position:fixed + Negativ-Offset
+           lässt DomPDF die Paginierung explodieren (ein Block/Seite + Leerseiten). Im PDF darum
+           Block/absolut; die HTML-Vorschau (nicht fixed) darf floaten (dort unkritisch). */
+        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.52cm;' : 'float: left; line-height: 1.4cm;' }} font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .92; }
+        .band-top .bt-logo { {{ $pdf ? 'position: absolute; right: 1.5cm; top: 0.28cm;' : 'float: right;' }} }
+        .band-top .bt-logo img { max-height: 0.85cm; max-width: 5cm; {{ $pdf ? '' : 'margin-top: 0.28cm;' }} }
         .band-bottom {
             {{ $pdf ? 'position: fixed; bottom: -1.7cm; left: -1.5cm; width: 21cm;' : '' }}
             height: 1.0cm; border-top: 2px solid {{ $brand }};
             color: #9ca3af; font-size: 9px; padding: 0 1.5cm;
         }
-        .band-bottom .bb-foot { float: left; line-height: 1.0cm; }
+        .band-bottom .bb-foot { {{ $pdf ? 'display: block;' : 'float: left;' }} line-height: 1.0cm; }
 
         /* ── Cover ── */
         .cover { {{ $pdf ? 'page-break-after: always;' : 'border-bottom: 2px dashed #e5e7eb; margin-bottom: 28px;' }} padding-top: {{ $pdf ? '1.4cm' : '0' }}; }
@@ -67,8 +70,12 @@
         .kapitel .kpreis .ek { color: #9333ea; }
         .kapitel .kpreis .wpz { color: #059669; }
 
-        /* Konzept-Block: Preis links, Inhalt rechts (Referenz-Layout) */
-        table.cblock { width: 100%; border-collapse: collapse; margin: 12px 0; page-break-inside: avoid; }
+        /* Konzept-Block: Preis links, Inhalt rechts (Referenz-Layout).
+           BEWUSST KEINE page-break:avoid-Regeln irgendwo — DomPDFs avoid-Handling (after/inside)
+           ist unzuverlässig und erzeugte „ein Block pro Seite + Leerseiten" (Massen-Leerseiten,
+           per Isolationstest bestätigt). Natürlicher Fluss paginiert sauber; nur das zuverlässige
+           page-break-after:always trennt Cover/Inhaltsverzeichnis. Ein Umbruch im Block ist ok. */
+        table.cblock { width: 100%; border-collapse: collapse; margin: 12px 0; }
         table.cblock td { vertical-align: top; padding: 0; }
         td.cprice { width: 3.6cm; padding-right: 10px; }
         td.cprice .val { font-weight: bold; color: #111827; font-size: 13px; }
@@ -83,12 +90,12 @@
         .leer { color: #cbd5e1; }
 
         /* ── Preise gesamt ── */
-        .price { margin-top: 22px; border-top: 2px solid {{ $brand }}; padding-top: 10px; page-break-inside: avoid; }
+        .price { margin-top: 22px; border-top: 2px solid {{ $brand }}; padding-top: 10px; }
         .price table { width: 100%; border-collapse: collapse; }
         .price td { padding: 4px 0; }
         .price .total { font-size: 18px; font-weight: bold; color: #111827; }
         .right { text-align: right; }
-        .subtable { margin-top: 20px; page-break-inside: avoid; }
+        .subtable { margin-top: 20px; }
         .subtable table { width: 100%; border-collapse: collapse; }
         .subtable td { padding: 3px 0; }
 
