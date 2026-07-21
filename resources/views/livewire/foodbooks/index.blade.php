@@ -194,6 +194,22 @@
                         <div class="{{ $cardAccent }}"></div>
                         @include('foodalchemist::livewire.planning.partials.frame-board')
                     </div>
+
+                    {{-- Phase 3a: Gerüst = Struktur — Slots als Kapitel materialisieren (Slot = Kapitel, Dominiques Kopplung). Idempotent. --}}
+                    <div class="space-y-1.5">
+                        <button type="button" wire:click="strukturAnwenden" class="{{ $btnGhost }} w-full justify-center" wire:loading.attr="disabled" data-struktur-anwenden>
+                            <span wire:loading.remove wire:target="strukturAnwenden">⟐ Struktur anwenden — Slots als Kapitel anlegen</span>
+                            <span wire:loading wire:target="strukturAnwenden">Lege Kapitel an …</span>
+                        </button>
+                        @if($strukturErgebnis !== null)
+                            @if($strukturErgebnis['kein_geruest'])
+                                <div class="rounded-lg bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5 text-[11px] text-amber-700">Noch kein Planungs-Gerüst mit Slots — oben erst Slots anlegen.</div>
+                            @else
+                                <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-2 text-[11px] text-gray-700" data-struktur-ergebnis>{{ $strukturErgebnis['angelegt'] }} Kapitel angelegt · {{ $strukturErgebnis['uebersprungen'] }} bereits vorhanden. Sie erscheinen links im Baum; Coverage matcht jetzt robust per Kapitel.</div>
+                            @endif
+                        @endif
+                    </div>
+
                     {{-- R4.2: Soll/Ist-Coverage live beim Befüllen — Lücken-Klick öffnet den VK-Browser gefiltert --}}
                     @if(($coverage ?? null) !== null && $coverage['hat_geruest'])
                         @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillRoute' => route('foodalchemist.verkauf.index')])

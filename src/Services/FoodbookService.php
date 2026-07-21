@@ -162,6 +162,45 @@ class FoodbookService
         ]);
     }
 
+    /**
+     * Phase 3a: „Struktur anwenden" — die Planungs-Gerüst-Slots als Kapitel des Foodbooks
+     * materialisieren (Slot = Kapitel, Dominiques Kopplung). Je Slot ohne (gültige) chapter_id
+     * ein Kapitel anlegen (Titel = Slot-Label) + slot.chapter_id setzen. **Idempotent**: bereits
+     * verknüpfte Slots werden übersprungen; ein Slot, dessen Kapitel gelöscht wurde, wird neu
+     * angelegt. Danach matcht CoverageService robust per chapter_id (nicht mehr Label-fragil).
+     *
+     * @return array{kein_geruest: bool, angelegt: int, uebersprungen: int, protokoll: list<array{slot:string, status:string, chapter_id:?int}>}
+     */
+    public function strukturAusGeruest(Team $team, int $foodbookId): array
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
+        $this->guard($fb, $team);
+        $frames = app(PlanningFrameService::class);
+        $frame = $frames->find('foodbook', $foodbookId);
+        if ($frame === null || (int) $frame->slots()->count() === 0) {
+            return ['kein_geruest' => true, 'angelegt' => 0, 'uebersprungen' => 0, 'protokoll' => []];
+        }
+        $vorhandene = array_map('intval', $fb->chapters()->pluck('id')->all());
+        $angelegt = 0;
+        $uebersprungen = 0;
+        $protokoll = [];
+        foreach ($frame->slots()->orderBy('position')->get() as $slot) {
+            if ($slot->chapter_id !== null && in_array((int) $slot->chapter_id, $vorhandene, true)) {
+                $uebersprungen++;
+                $protokoll[] = ['slot' => $slot->label, 'status' => 'vorhanden', 'chapter_id' => (int) $slot->chapter_id];
+
+                continue;
+            }
+            $kapitel = $this->addKapitel($team, $foodbookId, ['title' => $slot->label]);
+            $frames->updateSlot($team, $slot->id, ['chapter_id' => $kapitel->id]);
+            $vorhandene[] = (int) $kapitel->id;
+            $angelegt++;
+            $protokoll[] = ['slot' => $slot->label, 'status' => 'angelegt', 'chapter_id' => (int) $kapitel->id];
+        }
+
+        return ['kein_geruest' => false, 'angelegt' => $angelegt, 'uebersprungen' => $uebersprungen, 'protokoll' => $protokoll];
+    }
+
     private const KAPITEL_FELDER = ['title', 'consumer_title', 'claim', 'description', 'price_per_person', 'price_mode'];
 
     public function updateKapitel(Team $team, int $id, array $in): FoodAlchemistFoodbookKapitel

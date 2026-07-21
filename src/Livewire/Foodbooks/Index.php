@@ -139,6 +139,18 @@ class Index extends Component
         ];
     }
 
+    // ── Phase 3a: „Struktur anwenden" — Gerüst-Slots als Kapitel materialisieren (Slot = Kapitel) ──
+    public ?array $strukturErgebnis = null;
+
+    public function strukturAnwenden(FoodbookService $svc): void
+    {
+        $this->strukturErgebnis = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        $this->strukturErgebnis = $svc->strukturAusGeruest($this->team(), $this->selectedId);
+    }
+
     #[Url(as: 'q')]
     public string $search = '';
 
