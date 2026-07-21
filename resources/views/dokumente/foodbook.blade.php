@@ -19,13 +19,20 @@
         .nav .navtitle { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #6d28d9; font-weight: bold; margin-bottom: 6px; }
         .nav a { color: #4c1d95; text-decoration: none; display: block; padding: 1px 0; }
         .nav a .np { float: right; color: #6b7280; }
-        .kapitel { margin-bottom: 12px; }
-        .kapitel h2 { font-size: 14px; color: #6d28d9; margin: 12px 0 4px; border-bottom: 1px solid #ececec; padding-bottom: 3px; }
+        .kapitel { margin-bottom: 18px; }
+        .kapitel h2 { font-size: 15px; color: #6d28d9; margin: 24px 0 6px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; letter-spacing: .01em; }
+        .kapitel:first-of-type h2 { margin-top: 8px; }
         .kapitel .kpreis { float: right; color: #6b7280; font-size: 11px; font-weight: normal; }
         .kapitel .kpreis .ek { color: #9333ea; }
         .kapitel .kpreis .wpz { color: #059669; }
         .pos { padding: 1px 0; }
         .pos.header { font-weight: bold; color: #374151; margin-top: 6px; }
+        /* concept_ref/recipe_ref: Konzept-Titel als eigene Zwischenüberschrift — fett + Luft zum vorigen Block (sonst geht der „Header" unter, Dominique 2026-07-21) */
+        .pos.concept { font-weight: bold; font-size: 13px; color: #111827; margin-top: 14px; margin-bottom: 1px; }
+        .kapitel .pos.concept:first-of-type { margin-top: 4px; }
+        .pos.sub { color: #6b7280; font-size: 11px; font-style: italic; margin-bottom: 3px; }
+        .pos.dish { color: #4b5563; padding-left: 2px; }
+        .pos.dish .b { color: #c4b5fd; }
         .price { margin-top: 20px; border-top: 2px solid #6d28d9; padding-top: 10px; }
         .price table { width: 100%; border-collapse: collapse; }
         .price td { padding: 4px 0; }
@@ -92,16 +99,17 @@
                 {{ $istIntern ? ($k['title_intern'] ?: $k['title']) : $k['title'] }}
             </h2>
             @forelse($k['bloecke'] as $b)
-                <div class="pos {{ $b['ist_header'] ? 'header' : '' }}">{{ $b['label'] }}</div>
+                @php($istKonzept = in_array($b['type'], ['concept_ref', 'recipe_ref'], true))
+                <div class="pos {{ $b['ist_header'] ? 'header' : ($istKonzept ? 'concept' : '') }}">{{ $b['label'] }}</div>
                 @if($b['untertitel'] ?? null)
-                    <div class="pos" style="color:#6b7280; font-size:11px">{{ $b['untertitel'] }}</div>
+                    <div class="pos sub">{{ $b['untertitel'] }}</div>
                 @endif
                 {{-- Wording-Kette: Gerichte eines Concepts als Kundenzeilen --}}
                 @foreach($b['gerichte'] ?? [] as $g)
                     @if($g['type'] === 'paket' || $g['type'] === 'header')
                         <div class="pos" style="margin-left:12px; font-weight:bold; color:#374151">{{ $g['text'] }}</div>
                     @else
-                        <div class="pos" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}</div>
+                        <div class="pos dish" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px"><span class="b">·</span> {{ $g['text'] }}</div>
                     @endif
                 @endforeach
             @empty

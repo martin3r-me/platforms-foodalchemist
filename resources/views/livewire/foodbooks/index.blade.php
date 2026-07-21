@@ -234,8 +234,9 @@
                             @if($k['vk_pro_person'] > 0)<span class="ml-auto text-[11px] text-gray-500 tabular-nums">{{ number_format((float) $k['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
                         </div>
                         @forelse($k['bloecke'] as $b)
+                            @php($istKonzept = in_array($b['type'], ['concept_ref', 'recipe_ref'], true))
                             <div class="py-0.5">
-                                <p class="text-sm {{ $b['ist_header'] ? 'font-semibold text-gray-700 mt-2' : 'text-gray-900' }}">{{ $b['label'] }}</p>
+                                <p class="text-sm {{ $b['ist_header'] ? 'font-semibold text-gray-700 mt-2' : ($istKonzept ? 'font-semibold text-gray-900 mt-2' : 'text-gray-900') }}">{{ $b['label'] }}</p>
                                 @if($b['untertitel'] ?? null)<p class="text-[11px] text-gray-500 italic">{{ $b['untertitel'] }}</p>@endif
                                 @foreach($b['gerichte'] ?? [] as $g)
                                     @if($g['type'] === 'paket' || $g['type'] === 'header')
@@ -302,15 +303,24 @@
                     </div>
 
 
-                    <div class="space-y-1">
+                    {{-- x-data hält den Drag-Zustand; Ziehgriff ⠿ = umsortieren, ▲▼ bleibt als Kanten-Alternative (Muster wie Concepter-Slots, 2026-07-21) --}}
+                    <div class="space-y-1" x-data="{ dragBlockId: null }">
                         @forelse($kapitel->blocks as $block)
                             <div wire:key="block-{{ $block->id }}"
+                                 @dragover.prevent @drop.prevent="if (dragBlockId && dragBlockId !== {{ $block->id }}) { $wire.blockVerschiebenAuf(dragBlockId, {{ $block->id }}); } dragBlockId = null"
+                                 :class="dragBlockId === {{ $block->id }} ? 'opacity-40' : (dragBlockId ? 'ring-1 ring-violet-300/60' : '')"
                                  class="rounded-lg border {{ $block->variant_group_id ? 'border-amber-400/60' : 'border-black/5' }} px-2 py-1 {{ $block->visible ? '' : 'opacity-60' }}"
                                  style="margin-left: {{ $block->level * 20 }}px">
                                 <div class="flex items-center gap-2 text-xs">
-                                    <span class="flex flex-col -my-0.5 shrink-0">
-                                        <button type="button" wire:click="blockHoch({{ $block->id }})" class="text-gray-500 hover:text-violet-500 leading-none">▲</button>
-                                        <button type="button" wire:click="blockRunter({{ $block->id }})" class="text-gray-500 hover:text-violet-500 leading-none">▼</button>
+                                    <span class="flex items-center shrink-0">
+                                        {{-- R4: setData ist Pflicht, sonst startet Safari den Drag nicht --}}
+                                        <span class="cursor-grab active:cursor-grabbing text-gray-400 hover:text-violet-500 select-none mr-0.5" draggable="true"
+                                              @dragstart="dragBlockId = {{ $block->id }}; $event.dataTransfer.setData('text/plain', String({{ $block->id }})); $event.dataTransfer.effectAllowed = 'move'"
+                                              @dragend="dragBlockId = null" title="ziehen zum Sortieren" data-block-drag>⠿</span>
+                                        <span class="flex flex-col -my-0.5">
+                                            <button type="button" wire:click="blockHoch({{ $block->id }})" class="text-gray-500 hover:text-violet-500 leading-none">▲</button>
+                                            <button type="button" wire:click="blockRunter({{ $block->id }})" class="text-gray-500 hover:text-violet-500 leading-none">▼</button>
+                                        </span>
                                     </span>
                                     @if($block->type === 'concept_ref')
                                         <input type="checkbox" wire:click="markiere({{ $block->id }})" @checked(in_array($block->id, $markiert)) title="Für Wahl-Gruppe markieren" class="shrink-0" />

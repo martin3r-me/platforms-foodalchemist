@@ -402,6 +402,27 @@ class Index extends Component
         $svc->reorderBlocks($this->team(), $this->selectedKapitelId, $ids);
     }
 
+    /**
+     * Drag & Drop: Block `$id` HINTER Block `$afterId` einsortieren (Insert-after,
+     * spiegelt Concepter::positionNach — gleiche UX über beide Editoren; ▲▼ bleibt
+     * als zuverlässige Kanten-Alternative). Der Ziehgriff sitzt in der Block-Zeile.
+     */
+    public function blockVerschiebenAuf(int $id, int $afterId, FoodbookService $svc): void
+    {
+        if ($this->selectedKapitelId === null || $id === $afterId) {
+            return;
+        }
+        $ids = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::where('chapter_id', $this->selectedKapitelId)
+            ->orderBy('position')->pluck('id')->map(fn ($x) => (int) $x)->all();
+        $ids = array_values(array_filter($ids, fn ($x) => $x !== $id));
+        $pos = array_search($afterId, $ids, true);
+        if ($pos === false) {
+            return; // Ziel gehört nicht zum Kapitel — kein blinder Append
+        }
+        array_splice($ids, $pos + 1, 0, [$id]);
+        $svc->reorderBlocks($this->team(), $this->selectedKapitelId, $ids);
+    }
+
     // ── Wahl-Gruppe (A|B|C zwischen Concepts) ───────────────────────────────
 
     public function markiere(int $id): void

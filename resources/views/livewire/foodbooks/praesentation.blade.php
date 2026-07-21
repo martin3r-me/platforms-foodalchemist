@@ -49,13 +49,15 @@
                 </div>
 
                 @forelse($k['bloecke'] as $b)
+                    @php($istKonzept = in_array($b['type'], ['concept_ref', 'recipe_ref'], true))
                     @if($b['ist_header'])
                         <p class="font-semibold text-gray-800 mt-3 mb-1">{{ $b['label'] }}</p>
                     @else
-                        <p class="font-medium text-gray-800 mt-2">{{ $b['label'] }}</p>
+                        {{-- Konzept-Titel als deutliche Zwischenüberschrift: fett + Luft nach oben, sonst verschwimmt er mit den Gericht-Zeilen (2026-07-21) --}}
+                        <p class="font-semibold text-gray-900 {{ $istKonzept ? 'mt-4' : 'mt-2' }}">{{ $b['label'] }}</p>
                     @endif
                     @if($b['untertitel'] ?? null)
-                        <p class="text-xs text-gray-500 mb-1">{{ $b['untertitel'] }}</p>
+                        <p class="text-xs italic text-gray-500 mb-1">{{ $b['untertitel'] }}</p>
                     @endif
                     @foreach($b['gerichte'] ?? [] as $g)
                         @if($g['type'] === 'paket' || $g['type'] === 'header')

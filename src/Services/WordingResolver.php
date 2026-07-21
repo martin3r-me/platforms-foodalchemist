@@ -33,9 +33,18 @@ class WordingResolver
         }
         $std = trim((string) $gericht->sales_wording_standard);
 
+        // Fallback = interner Pipe-Name. Führenden Gang-/Klassen-Code kappen ([HG]/[KAE]/…),
+        // damit er nie in der Kundensicht landet (Dominique 2026-07-21). source bleibt 'name'
+        // → die „Wording fehlt"-Amber-Markierung im Editor bleibt erhalten (Handlungssignal).
         return $std !== ''
             ? ['text' => $std, 'source' => 'standard']
-            : ['text' => (string) $gericht->name, 'source' => 'name'];
+            : ['text' => $this->ohneInternenMarker((string) $gericht->name), 'source' => 'name'];
+    }
+
+    /** Führenden Gang-/Klassen-Marker `[XX] ` am Zeilenanfang entfernen (nur dort, nie mitten im Text). */
+    private function ohneInternenMarker(string $name): string
+    {
+        return trim(preg_replace('/^\s*\[[A-Z0-9]{1,6}\]\s*/u', '', $name) ?? $name);
     }
 
     /** @return array{text: string, source: string} */
