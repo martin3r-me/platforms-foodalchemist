@@ -40,6 +40,10 @@
                 {{-- Kapitel-Baum des gewählten Foodbooks --}}
                 @if($fb)
                     <div class="pt-2 border-t border-black/5 space-y-0.5">
+                        {{-- UX 2026-07-21: Rücksprung auf den übergeordneten Foodbook-Kopf (Stammdaten/Briefing/Canvas/Gerüst) --}}
+                        <button type="button" wire:click="kopfAnzeigen"
+                                class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $selectedKapitelId === null ? $aktiv : $hover }}"
+                                data-fb-kopf>📋 Foodbook-Kopf · Übersicht</button>
                         <div class="flex items-center gap-1">
                             <input type="text" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu" placeholder="Neues Kapitel …" class="{{ $input }} py-0.5" />
                             <button type="button" wire:click="kapitelNeu" class="{{ $btnGhostXs }}" title="Top-Kapitel">+</button>
@@ -86,6 +90,8 @@
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         @if($fb)
+            @if($selectedKapitelId === null)
+            {{-- ═══════════════ FOODBOOK-KOPF (übergeordnete Ebene) ═══════════════ --}}
             {{-- Foodbook-Stammdaten --}}
             <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbhdr-{{ $fb->id }}">
                 <div class="{{ $cardAccent }}"></div>
@@ -204,18 +210,15 @@
                 </div>
             @endif
 
-            {{-- UX-Umbau 2026-07-03: Toggle Bearbeiten ⇄ Menü — Kunden-Vorschau mit aufgelöster Wording-Kette (dieselbe Quelle wie das Druck-Dokument) --}}
-            <div x-data="{ fbMenue: false }">
-            <div class="flex items-center justify-between flex-wrap gap-2">
-                <h3 class="font-medium tracking-tight text-gray-900" x-text="fbMenue ? 'Menü-Vorschau (Kundensicht)' : 'Inhalt bearbeiten'">Inhalt bearbeiten</h3>
-                <div class="inline-flex rounded-lg bg-black/[0.05] p-0.5" role="group" aria-label="Ansicht" data-fb-ansicht-toggle>
-                    <button type="button" @click="fbMenue = false" :class="!fbMenue ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-600 hover:text-gray-700'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-fb-bearbeiten>⚙ Bearbeiten</button>
-                    <button type="button" @click="fbMenue = true" :class="fbMenue ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-600 hover:text-gray-700'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-fb-menue>🍽 Menü</button>
-                </div>
-            </div>
+            {{-- UX 2026-07-21: Menü-Vorschau (Kundensicht, ganzes Foodbook) — einklappbar, gehört zur Foodbook-Kopf-Ebene.
+                 Früher Teil eines Bearbeiten⇄Menü-Toggles; das Bearbeiten (Kapitel+Blöcke) lebt jetzt in der Kapitel-Ansicht. --}}
+            <div x-data="{ fbMenue: false }" class="space-y-2">
+            <button type="button" @click="fbMenue = !fbMenue" class="{{ $btnGhost }} w-full justify-center" data-fb-menue-toggle>
+                <span x-text="fbMenue ? '▲ Menü-Vorschau ausblenden' : '🍽 Menü-Vorschau (Kundensicht) — ganzes Foodbook'"></span>
+            </button>
 
             {{-- ═══ MENÜ-VORSCHAU (Kundensicht, read-only) ═══ --}}
-            <div x-show="fbMenue" x-cloak class="relative overflow-hidden {{ $card }} p-6 space-y-5 mt-3" data-fb-menue-vorschau>
+            <div x-show="fbMenue" x-cloak class="relative overflow-hidden {{ $card }} p-6 space-y-5" data-fb-menue-vorschau>
                 <div class="{{ $cardAccent }}"></div>
                 <div class="flex items-baseline justify-between border-b border-black/5 pb-3">
                     <div>
@@ -253,8 +256,10 @@
                 <p class="text-[11px] text-gray-500 pt-2 border-t border-black/5">Gericht-Namen aus der Wording-Kette: Foodbook-Override → Konzept-Wording → VK-Standard → interner Name. Amber = kein Wording gepflegt.</p>
             </div>
 
-            {{-- ═══ BEARBEITEN (Kapitel + Blöcke) ═══ --}}
-            <div x-show="!fbMenue" x-cloak>
+            </div>{{-- /x-data fbMenue (Menü-Vorschau, Foodbook-Kopf) --}}
+
+            @else
+            {{-- ═══════════════ KAPITEL (den „einzelnen Strukturen" — nur die Speisen) ═══════════════ --}}
             @if($kapitel)
                 {{-- Kapitel-Kopf --}}
                 <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="kaphdr-{{ $kapitel->id }}">
@@ -424,8 +429,7 @@
             @else
                 <div class="{{ $card }} p-8 text-center text-sm text-gray-500">Links ein Kapitel wählen oder anlegen.</div>
             @endif
-            </div>{{-- /BEARBEITEN (x-show !fbMenue) --}}
-            </div>{{-- /x-data fbMenue --}}
+            @endif{{-- /Foodbook-Kopf vs. Kapitel-Ansicht --}}
         @else
             <div class="{{ $card }} p-10 text-center text-sm text-gray-500">
                 Links ein Foodbook wählen oder „+ Neues Foodbook". Das Foodbook bündelt fertige <strong>Concepts</strong> zu einem <strong>person-unabhängigen Portfolio</strong> (Kapitel, €/Person) — Pax &amp; Gesamtpreis liegen im <strong>Angebot</strong>, Einzel-Gerichte im Concepter.

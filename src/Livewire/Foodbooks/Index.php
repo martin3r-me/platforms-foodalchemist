@@ -120,8 +120,17 @@ class Index extends Component
             'label' => $fb->label, 'customer' => $fb->customer ?? '', 'jahr' => $fb->jahr,
             'personen' => $fb->personen, 'status' => $fb->status, 'description' => $fb->description ?? '',
         ];
-        $this->selectedKapitelId = $fb->chapters->first()->id ?? null;
-        $this->ladeKapitelForm($svc);
+        // UX 2026-07-21: Foodbook-Wahl landet auf dem Foodbook-KOPF (übergeordnete Ebene),
+        // NICHT mehr automatisch im ersten Kapitel — Kopf und Speisen sind getrennte Ansichten.
+        $this->selectedKapitelId = null;
+        $this->editBlockId = null;
+        $this->markiert = [];
+    }
+
+    /** UX 2026-07-21: zurück auf den Foodbook-Kopf (Master-Detail: kein Kapitel gewählt). */
+    public function kopfAnzeigen(): void
+    {
+        $this->selectedKapitelId = null;
         $this->editBlockId = null;
         $this->markiert = [];
     }

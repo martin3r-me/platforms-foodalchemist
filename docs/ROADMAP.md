@@ -95,6 +95,13 @@ Zwei blocker-freie Phase-1-Stücke aus `docs/PLANUNG/` autonom durchgebaut, gete
 - **06 Convenience-Highlights** (opt-in KI-Baustein, H1–H4 KOMPLETT): kuratierte Haus-Convenience-Liste am GP (`is_favorite`+`favorite_rank`, orthogonal zu `tag_is_convenience`). Auto-Score (Nutzung×Lead-LA-Vollständigkeit×Lieferanten-Priorität) → `FavoriteGpService` (pin/exclude/reorder, Soft-Regel: nur Convenience-getaggte pinbar). Kuratierungs-Screen (`/convenience-highlights`, Sidebar Stammdaten) + Command `foodalchemist:convenience-highlights {--suggest --pin --exclude --rank}` + 2 MCP-Tools (`favorites.GET/PUT`). Opt-in-Generierungs-Modus `use_favorites_list` (Default AUS → byte-identisch, Leit-Invariante) an Rezept-/VK-/Konzept-Generator (separater Prompt-Block „bevorzugte Convenience-Bausteine", bevorzugt-nicht-hart) + GP-Picker-Filter „⭐ Convenience". 14 Pest.
 - **Voll-Suite 779/780 grün** (1 begründet skipped), 0 Regressionen. Doktrin gewahrt: kein GP ohne LA (Highlight = kuratiertes Flag am bestehenden GP), draft/opt-in, MCP-Lockstep für jede neue Fähigkeit.
 
+## ⭐ Update 2026-07-21 (Session: Foodbook-Editor Master-Detail — Kopf ⇄ Kapitel getrennt)
+
+UX-Fund (Dominique): Der Foodbook-Kopf (Stammdaten/Phase/CRM/Briefing/Leitidee-Canvas/Planungs-Gerüst) klebte über *jeder* Kapitel-Ansicht — er gehört aber übergeordnet zum Foodbook, in den einzelnen Strukturen sollen nur die Speisen stehen.
+- **Master-Detail-Split im Foodbook-Editor** (`Foodbooks\Index` + `index.blade.php`): Ansicht verzweigt jetzt an `selectedKapitelId`. **Kopf-Ansicht** (kein Kapitel gewählt) = Stammdaten · Phase-Stepper · CRM · Briefing · Buttons · Leitidee-Canvas · Planungs-Gerüst · Coverage/Generator · Menü-Vorschau (jetzt einklappbar). **Kapitel-Ansicht** = nur Kapitel-Kopf (Titel/Konsumententitel/Preis-Modus) + die Speisen/Concept-Blöcke.
+- `waehle()` selektiert kein Kapitel mehr automatisch → Foodbook-Klick landet auf dem Kopf; neuer `kopfAnzeigen()` + Sidebar-Eintrag „📋 Foodbook-Kopf · Übersicht" für den Rücksprung. Der Bearbeiten⇄Menü-Toggle entfällt (Menü-Vorschau = ganzes Foodbook, gehört zum Kopf; Bearbeiten = kapitel-scoped).
+- Rein UI/Livewire, kein DB-/Schema-/Service-Eingriff. `php -l` clean, Blade rendert (kein 500), beide Ansichten in der Sandbox visuell verifiziert.
+
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 
 Quellen: `Datenmodell Food.Alchemist.md` (5 Ebenen) + `07.02_Flavor_Pairing/Datenbank Foodalchemist/_Plan_Datenmodell_Chemie-Pairing-DB.md` (Chemie-first Phase 1–4). Stationen von hier bis Voll-Ausbau:
