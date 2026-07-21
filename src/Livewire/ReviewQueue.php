@@ -7,8 +7,12 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
 use Platform\FoodAlchemist\Services\BulkEnrichService;
+use Platform\FoodAlchemist\Services\DataQualityService;
 use Platform\FoodAlchemist\Services\MatchService;
 use Platform\FoodAlchemist\Services\SignalDetektorService;
 use Platform\FoodAlchemist\Services\SignalService;
@@ -29,6 +33,18 @@ class ReviewQueue extends Component
 
     public ?string $fehler = null;
 
+    /** Cockpit-Tabs — Ansicht liegt in der URL (V-17/Kontext-Erhalt). */
+    public const TABS = ['ueberblick', 'signale', 'ki', 'matches', 'pflege'];
+
+    #[Url(as: 'tab')]
+    public string $tab = 'signale';
+
+    /** KI-Steuer-Rahmen: welches Signal hat sein „so würde die KI das angehen"-Panel offen (nur UI). */
+    public ?int $kiPanelId = null;
+
+    /** „Reinschauen": welches Signal hat seine Liste betroffener Objekte offen (read-only). */
+    public ?int $detailPanelId = null;
+
     #[Url(as: 'sig_status')]
     public string $signalStatus = 'offen';
 
@@ -44,6 +60,42 @@ class ReviewQueue extends Component
     public string $termForbid = '';
 
     public string $termUnless = '';
+
+    public function mount(): void
+    {
+        if (! in_array($this->tab, self::TABS, true)) {
+            $this->tab = 'signale';
+        }
+    }
+
+    /** Cockpit-Tab wechseln (Muster Concepter\Browser) — Panel-State + Pagination zurücksetzen. */
+    public function setTab(string $t): void
+    {
+        if (! in_array($t, self::TABS, true) || $t === $this->tab) {
+            return;
+        }
+        $this->tab = $t;
+        $this->kiPanelId = null;
+        $this->detailPanelId = null;
+        $this->resetPage();
+    }
+
+    /**
+     * KI-Steuer-Rahmen auf-/zuklappen (nur Darstellung). Führt NICHTS aus — die
+     * eigentlichen Fixer/Assistenzen sind bewusst nachgelagert.
+     */
+    public function toggleKiPanel(int $id): void
+    {
+        $this->kiPanelId = $this->kiPanelId === $id ? null : $id;
+        $this->detailPanelId = null;
+    }
+
+    /** „Reinschauen": Liste der betroffenen Objekte auf-/zuklappen (read-only). */
+    public function toggleDetail(int $id): void
+    {
+        $this->detailPanelId = $this->detailPanelId === $id ? null : $id;
+        $this->kiPanelId = null;
+    }
 
     public function matchUebernehmen(int $proposalId): void
     {
@@ -148,6 +200,65 @@ class ReviewQueue extends Component
         }
     }
 
+    /**
+     * Löst die betroffenen Objekte hinter einem Signal auf („reinschauen"). Read-only.
+     * DataQuality-Signale → Live-Query je Metrik-Key; Detektor-Signale → payload.beispiele
+     * bzw. ref_type/ref_id. Nur fürs offene Detail-Panel aufgerufen.
+     *
+     * @return array{items:list<array<string,mixed>>,total:int,gezeigt:int}|null
+     */
+    private function betroffeneFuer(Team $team, int $signalId): ?array
+    {
+        $sig = FoodAlchemistSignal::visibleToTeam($team)->find($signalId);
+        if ($sig === null) {
+            return null;
+        }
+        $pl = is_array($sig->payload) ? $sig->payload : [];
+
+        // DataQuality-Signale: Metrik-Key → exakt dieselbe Query wie der Zähler, als Liste.
+        if ($sig->source === 'data-quality' && ! empty($pl['metrik'])) {
+            $items = app(DataQualityService::class)->betroffene($team, (string) $pl['metrik']);
+
+            return ['items' => $items, 'total' => (int) ($pl['anzahl'] ?? count($items)), 'gezeigt' => count($items)];
+        }
+
+        // Detektor-Signale mit Beispielen im Payload (Struktur variiert je Detektor — best effort).
+        if (! empty($pl['beispiele']) && is_array($pl['beispiele'])) {
+            $items = [];
+            foreach (array_slice($pl['beispiele'], 0, 50) as $b) {
+                if (is_array($b)) {
+                    $id = (int) ($b['recipe_id'] ?? $b['id'] ?? 0);
+                    $items[] = [
+                        'kind' => isset($b['recipe_id']) ? 'recipe' : ($b['kind'] ?? 'text'),
+                        'id' => $id,
+                        'name' => (string) ($b['name'] ?? $b['label'] ?? ('#' . $id)),
+                        'is_sales_recipe' => (bool) ($b['is_sales_recipe'] ?? true),
+                    ];
+                } else {
+                    $items[] = ['kind' => 'text', 'id' => 0, 'name' => (string) $b, 'is_sales_recipe' => false];
+                }
+            }
+
+            return ['items' => $items, 'total' => (int) ($pl['anzahl'] ?? count($pl['beispiele'])), 'gezeigt' => count($items)];
+        }
+
+        // Einzelobjekt-Signal (ref_type/ref_id).
+        if ($sig->ref_type === 'recipe' && $sig->ref_id) {
+            $r = FoodAlchemistRecipe::visibleToTeam($team)->find($sig->ref_id);
+            if ($r !== null) {
+                return ['items' => [['kind' => 'recipe', 'id' => (int) $r->id, 'name' => (string) $r->name, 'is_sales_recipe' => (bool) $r->is_sales_recipe]], 'total' => 1, 'gezeigt' => 1];
+            }
+        }
+        if ($sig->ref_type === 'gp' && $sig->ref_id) {
+            $g = FoodAlchemistGp::visibleToTeam($team)->find($sig->ref_id);
+            if ($g !== null) {
+                return ['items' => [['kind' => 'gp', 'id' => (int) $g->id, 'name' => (string) $g->name, 'is_sales_recipe' => false]], 'total' => 1, 'gezeigt' => 1];
+            }
+        }
+
+        return ['items' => [], 'total' => (int) ($pl['anzahl'] ?? 0), 'gezeigt' => 0];
+    }
+
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
@@ -168,7 +279,21 @@ class ReviewQueue extends Component
 
         $signalSvc = app(SignalService::class);
 
+        // Überblick-Kacheln: offene Signale nach Schweregrad (read-only, Präsentation).
+        $severitySplit = FoodAlchemistSignal::visibleToTeam($team)->offen()
+            ->selectRaw('severity, COUNT(*) as c')->groupBy('severity')->pluck('c', 'severity')->all();
+        // „Kritischste Signale" — Severity-Rang zuerst (SQLite+MySQL-sicher, kein FIELD()).
+        $kritischste = FoodAlchemistSignal::visibleToTeam($team)->offen()
+            ->orderByRaw("CASE severity WHEN 'kritisch' THEN 0 WHEN 'warnung' THEN 1 ELSE 2 END")
+            ->orderByDesc('created_at')->limit(6)->get();
+
+        // „Reinschauen": betroffene Objekte NUR für das gerade geöffnete Signal auflösen.
+        $detailData = $this->detailPanelId !== null ? $this->betroffeneFuer($team, $this->detailPanelId) : null;
+
         return view('foodalchemist::livewire.review-queue', [
+            'severitySplit' => $severitySplit,
+            'kritischste' => $kritischste,
+            'detailData' => $detailData,
             'matchZahl' => (clone $matchOffen)->count(),
             'matches' => (clone $matchOffen)->orderByDesc('p.score')->limit(50)
                 ->get(['p.id', 'p.score', 'p.methode', 'i.designation AS la_name', 'g.name AS gp_name']),
