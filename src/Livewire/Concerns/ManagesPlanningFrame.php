@@ -82,6 +82,7 @@ trait ManagesPlanningFrame
         $this->frameSlots = array_map(fn ($s) => [
             'id' => $s['id'],
             'label' => (string) $s['label'],
+            'chapter_id' => $s['chapter_id'] ?? null,   // Phase 3: Slot↔Kapitel-Bindung (für per-Slot-Vorschläge)
             'slot_type' => (string) ($s['slot_type'] ?? ''),
             'target_count' => $s['target_count'] !== null ? (string) $s['target_count'] : '',
             'price_anchor' => $s['price_anchor'] !== null ? (string) $s['price_anchor'] : '',

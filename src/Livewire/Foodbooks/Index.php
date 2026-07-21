@@ -105,38 +105,50 @@ class Index extends Component
         return ['foodbook', $this->selectedId];
     }
 
-    // ── R6.1: Konzept aus dem Foodbook-Gerüst generieren ────────────────
-    public ?array $generatorErgebnis = null;
+    // ── Phase 3 (Weg B): per-Slot-Vorschläge → abstimmen → übernehmen ──
+    // Ersetzt den alten Monolith „Konzept aus Gerüst" (ein Gerüst → ein Konzept war die
+    // falsche Abstraktion, Dominique 2026-07-21). Jetzt schlägt die Engine je Slot vor,
+    // der Mensch stimmt ab, Übernehmen landet im Slot-Kapitel-Konzept.
+    /** slotId → Liste vorgeschlagener Gerichte {id,name,diet_form,sales_net}. */
+    public array $slotVorschlaege = [];
 
-    public ?string $generatorFehler = null;
-
-    public function konzeptAusGeruest(): void
+    public function vorschlaegeFuerSlot(int $slotId): void
     {
-        $this->generatorFehler = null;
-        $this->generatorErgebnis = null;
         if ($this->selectedId === null || $this->frameId === null) {
             return;
         }
         $frame = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame::find($this->frameId);
-        if ($frame === null) {
+        $slot = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot::find($slotId);
+        if ($frame === null || $slot === null) {
             return;
         }
-        try {
-            $fb = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::find($this->selectedId);
-            $ergebnis = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
-                ->generiereAusGeruest($this->team(), $frame, 'Konzept-Entwurf: ' . ($fb?->label ?? 'Foodbook'));
-        } catch (\RuntimeException $e) {
-            $this->generatorFehler = $e->getMessage();
+        $this->slotVorschlaege[$slotId] = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
+            ->slotVorschlaege($this->team(), $frame, $slot, 6);
+    }
 
+    /** Weg B: Gericht in den Slot übernehmen (Slot-Kapitel-Konzept) + aus der Vorschlagsliste nehmen. */
+    public function uebernehmeGericht(int $slotId, int $recipeId, FoodbookService $svc): void
+    {
+        if ($this->selectedId === null) {
             return;
         }
-        $this->generatorErgebnis = [
-            'concept_id' => $ergebnis['concept']->id,
-            'concept_name' => $ergebnis['concept']->name,
-            'protokoll' => $ergebnis['protokoll'],
-            'kohaesion_score' => $ergebnis['kohaesion']['score'] ?? null,
-            'coverage_gesamt' => $ergebnis['coverage']['ampel_gesamt'] ?? null,
-        ];
+        $svc->uebernehmeVorschlag($this->team(), $this->selectedId, $slotId, $recipeId);
+        $this->entferneVorschlag($slotId, $recipeId);
+    }
+
+    public function verwerfeGericht(int $slotId, int $recipeId): void
+    {
+        $this->entferneVorschlag($slotId, $recipeId);
+    }
+
+    private function entferneVorschlag(int $slotId, int $recipeId): void
+    {
+        if (isset($this->slotVorschlaege[$slotId])) {
+            $this->slotVorschlaege[$slotId] = array_values(array_filter(
+                $this->slotVorschlaege[$slotId],
+                fn ($v) => (int) $v['id'] !== $recipeId,
+            ));
+        }
     }
 
     // ── Phase 3a: „Struktur anwenden" — Gerüst-Slots als Kapitel materialisieren (Slot = Kapitel) ──
@@ -149,6 +161,9 @@ class Index extends Component
             return;
         }
         $this->strukturErgebnis = $svc->strukturAusGeruest($this->team(), $this->selectedId);
+        // Gerüst neu laden, damit $frameSlots die frisch gesetzten chapter_id trägt
+        // (sonst bleiben die per-Slot-Vorschläge-Buttons fälschlich disabled).
+        $this->frameLaden();
     }
 
     #[Url(as: 'q')]

@@ -214,25 +214,34 @@
                     @if(($coverage ?? null) !== null && $coverage['hat_geruest'])
                         @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillRoute' => route('foodalchemist.verkauf.index')])
 
-                        {{-- R6.1: Gerüst-Pfad des Konzept-Generators — fällt in Phase 3 zugunsten per-Slot-Vorschlägen --}}
-                        <div class="space-y-1.5">
-                            <button type="button" wire:click="konzeptAusGeruest" class="{{ $btnGhost }} w-full justify-center" wire:loading.attr="disabled" data-konzept-aus-geruest>
-                                <span wire:loading.remove wire:target="konzeptAusGeruest">✨ Konzept aus diesem Gerüst generieren</span>
-                                <span wire:loading wire:target="konzeptAusGeruest">Wähle Gerichte …</span>
-                            </button>
-                            @if($generatorFehler)
-                                <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700">{{ $generatorFehler }}</div>
-                            @endif
-                            @if($generatorErgebnis)
-                                <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-2 space-y-1 text-[11px]" data-generator-ergebnis>
-                                    <div class="font-medium text-gray-800">„{{ $generatorErgebnis['concept_name'] }}“ (Draft) · Kohäsion {{ $generatorErgebnis['kohaesion_score'] ?? '—' }} · Coverage {{ $generatorErgebnis['coverage_gesamt'] ?? '—' }}</div>
-                                    @foreach($generatorErgebnis['protokoll'] as $p)
-                                        <div class="{{ $p['status'] === 'leer' ? 'text-amber-600' : 'text-gray-600' }}">{{ $p['slot'] }}: {{ $p['status'] === 'leer' ? 'LEER — ' . $p['begruendung'] : collect($p['gerichte'])->pluck('name')->implode(', ') }}</div>
-                                    @endforeach
-                                    <a href="{{ route('foodalchemist.concepts.index') }}?c={{ $generatorErgebnis['concept_id'] }}" class="{{ $btnGhostXs }} text-violet-600">→ im Concepter öffnen</a>
-                                </div>
-                            @endif
-                        </div>
+                        {{-- Phase 3 (Weg B): per-Slot-Vorschläge → abstimmen → übernehmen. Ersetzt den Monolith
+                             „Konzept aus Gerüst". Voraussetzung: „Struktur anwenden" (Slot hat ein Kapitel). --}}
+                        @if(!empty($frameSlots))
+                            <div class="space-y-2" data-slot-vorschlaege>
+                                <p class="{{ $label }}">Vorschläge je Slot — aus Bestand + Wissen, du stimmst ab</p>
+                                @foreach($frameSlots as $fs)
+                                    <div class="rounded-lg border border-black/5 px-3 py-2" wire:key="slotvor-{{ $fs['id'] }}">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-xs font-medium text-gray-800 truncate">{{ $fs['label'] }}
+                                                @if($fs['chapter_id'])<span class="text-[10px] text-emerald-600">· Kapitel ✓</span>@else<span class="text-[10px] text-amber-600">· erst „Struktur anwenden"</span>@endif
+                                            </span>
+                                            <button type="button" wire:click="vorschlaegeFuerSlot({{ $fs['id'] }})" class="{{ $btnGhostXs }} text-violet-600 shrink-0" wire:loading.attr="disabled" wire:target="vorschlaegeFuerSlot" @disabled(!$fs['chapter_id'])>✨ Vorschläge</button>
+                                        </div>
+                                        @if(!empty($slotVorschlaege[$fs['id']] ?? []))
+                                            <div class="mt-1.5 space-y-1">
+                                                @foreach($slotVorschlaege[$fs['id']] as $v)
+                                                    <div class="flex items-center gap-2 rounded bg-black/[0.02] px-2 py-1" wire:key="v-{{ $fs['id'] }}-{{ $v['id'] }}">
+                                                        <span class="flex-1 min-w-0 truncate text-xs text-gray-700">{{ $v['name'] }}<span class="text-[10px] text-gray-400"> · {{ $v['diet_form'] ?? '—' }}@if($v['sales_net'] !== null) · {{ number_format((float) $v['sales_net'], 2, ',', '.') }} €@endif</span></span>
+                                                        <button type="button" wire:click="uebernehmeGericht({{ $fs['id'] }}, {{ $v['id'] }})" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" title="übernehmen">✓</button>
+                                                        <button type="button" wire:click="verwerfeGericht({{ $fs['id'] }}, {{ $v['id'] }})" class="{{ $btnGhostXs }} text-gray-400 shrink-0" title="verwerfen">✕</button>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                     @endif
                 </div>{{-- /Planung --}}
 

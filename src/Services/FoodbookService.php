@@ -201,6 +201,44 @@ class FoodbookService
         return ['kein_geruest' => false, 'angelegt' => $angelegt, 'uebersprungen' => $uebersprungen, 'protokoll' => $protokoll];
     }
 
+    /**
+     * Phase 3 (Weg B): ein vorgeschlagenes Gericht in den Slot ÜBERNEHMEN. Doktrin-treu —
+     * das Slot-Kapitel trägt EIN Konzept (concept_ref); übernommene Gerichte werden dessen
+     * Konzept-Slots. Erstes Übernehmen legt das Draft-Konzept + den concept_ref-Block an,
+     * weitere hängen an. Duplikate werden übersprungen. Setzt „Struktur anwenden" voraus.
+     *
+     * @return array{concept_id:int, chapter_id:int, schon_drin:bool}
+     */
+    public function uebernehmeVorschlag(Team $team, int $foodbookId, int $slotId, int $recipeId): array
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
+        $this->guard($fb, $team);
+        $slot = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot::findOrFail($slotId);
+        if ($slot->chapter_id === null) {
+            throw new \RuntimeException('Slot ist noch nicht als Kapitel angelegt — erst „Struktur anwenden".');
+        }
+        $kapitel = $this->ownedKapitel($team, (int) $slot->chapter_id);
+
+        $block = $kapitel->blocks()->where('type', 'concept_ref')->whereNotNull('concept_id')->orderBy('position')->first();
+        if ($block === null) {
+            $concept = $this->concepts->create($team, ['name' => trim((string) ($slot->label ?: $kapitel->title)) ?: 'Konzept', 'status' => 'draft']);
+            $concept->update(['created_via' => 'foodbook_slot']);
+            $this->addBlock($team, (int) $slot->chapter_id, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
+            $conceptId = (int) $concept->id;
+        } else {
+            $conceptId = (int) $block->concept_id;
+        }
+
+        $schonDrin = \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::where('concept_id', $conceptId)
+            ->where('sales_recipe_id', $recipeId)->exists();
+        if (! $schonDrin) {
+            $cslot = $this->concepts->addSlot($team, $conceptId, ['role' => $slot->label]);
+            $this->concepts->fillSlot($team, $cslot->id, ['sales_recipe_id' => $recipeId, 'type' => 'gericht']);
+        }
+
+        return ['concept_id' => $conceptId, 'chapter_id' => (int) $slot->chapter_id, 'schon_drin' => $schonDrin];
+    }
+
     private const KAPITEL_FELDER = ['title', 'consumer_title', 'claim', 'description', 'price_per_person', 'price_mode'];
 
     public function updateKapitel(Team $team, int $id, array $in): FoodAlchemistFoodbookKapitel

@@ -7,6 +7,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame;
+use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use RuntimeException;
@@ -226,6 +227,36 @@ class ConceptGeneratorService
             'kohaesion' => $this->pairing->menuCohesion($dishes),
             'coverage' => $this->coverage->coverage($team, 'concept', $concept->id),
         ];
+    }
+
+    /**
+     * Phase 3 (Weg B): gerankte Vorschläge für EINEN Slot — read-only, legt KEIN Konzept an.
+     * Wiederverwendung derselben Assembler-Logik wie generiereAusGeruest (harte Filter aus den
+     * Gerüst-Regeln, kohäsives Ranking über den Pairing-Graphen), nur ohne Persistenz: liefert
+     * die Top-N Gerichte, aus denen der Mensch abstimmt → übernehmen ist FoodbookService-Sache.
+     *
+     * @return list<array{id:int, name:string, diet_form:?string, sales_net:?float}>
+     */
+    public function slotVorschlaege(Team $team, FoodAlchemistPlanningFrame $frame, FoodAlchemistPlanningFrameSlot $slot, int $limit = 6): array
+    {
+        $frame->loadMissing(['slots.rules', 'rules']);
+        $kandidaten = $this->filterFuerSlot($this->kandidatenPool($team, $frame), $frame, $slot);
+
+        $out = [];
+        $gewaehlteAnker = [];
+        $gewaehltIds = [];
+        while (count($out) < max(1, $limit)) {
+            $rest = $kandidaten->reject(fn ($k) => in_array($k['id'], $gewaehltIds, true));
+            $treffer = $this->besterKandidat($rest, $gewaehlteAnker, $slot);
+            if ($treffer === null) {
+                break;
+            }
+            $out[] = ['id' => (int) $treffer['id'], 'name' => (string) $treffer['name'], 'diet_form' => $treffer['diet_form'], 'sales_net' => $treffer['sales_net']];
+            $gewaehltIds[] = $treffer['id'];
+            $gewaehlteAnker = array_unique(array_merge($gewaehlteAnker, $treffer['anker']));
+        }
+
+        return $out;
     }
 
     // ── Kandidaten ──────────────────────────────────────────────────────
