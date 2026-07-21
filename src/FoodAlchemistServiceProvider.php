@@ -313,11 +313,13 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\FoodbooksPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookKapitelPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksPostTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookBlocksDeleteTool::class,
                     // Phase C: Concepter, Angebote, Kalkulation, Settings, Signale, Food DNA, Speiseplan
                     \Platform\FoodAlchemist\Tools\ConceptsSearchTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsListTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsGetTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptSlotsPostTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteSearchTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteListTool::class,

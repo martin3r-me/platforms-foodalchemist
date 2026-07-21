@@ -20,6 +20,16 @@ Beschlossen (Dominique):
 
 Details/Historie: Memory `project_fa_klarschiff_cleanup.md` + `_MEMORY_FoodBrain.md`.
 
+## ⭐ Update 2026-07-21 (Session: MCP DELETE-Tools — Foodbook-Block + Konzept löschen)
+
+**Lücke geschlossen, die im MCP-Audit #504 offen blieb:** die FA-MCP-Oberfläche hatte modulweit **keinen DELETE-Verb** — Konzepte ließen sich per MCP nur anlegen, nicht aus Foodbooks nehmen und nicht löschen (Cleanup nur im Editor möglich). Ursache war rein die fehlende Tool-Hülle: die Services (`FoodbookService::deleteBlock`, `ConceptService::delete` inkl. Referenz-Schutz GT-FB-4/V-06, alle team- + owner-guarded, SoftDeletes) waren vollständig und sicher.
+
+- **`foodalchemist.foodbook_blocks.DELETE`** (Schritt 1) — entfernt einen Block aus einem Kapitel (Soft-Delete). War es ein `concept_ref`, meldet das Ergebnis, ob das Konzept jetzt in keinem Foodbook mehr steckt (`concept_now_deletable` + Restliste).
+- **`foodalchemist.concepts.DELETE`** (Schritt 2) — löscht ein Konzept (Soft-Delete). Referenz-Schutz: solange in Foodbook(s) referenziert → Fehler `HAS_REFERENCES` **mit Liste der blockierenden Foodbooks** (handlungsleitend statt bloßer Count).
+- **Politik:** kein künstliches Draft-Gate auf Löschen (der Editor gated es auch nicht — sonst bliebe MCP für genau diesen Cleanup blockiert); `risk_level=destructive` + `confirmation_required`; Löschen nur per expliziter ID, kein Bulk-by-Filter. Damit ist der erste DELETE-Verb-Präzedenzfall im Modul gesetzt.
+- **Test:** `FoodbookConceptDeleteToolsTest` (Registry-Smoke + kompletter Zwei-Schritt-Flow inkl. Referenz-Schutz + NOT_FOUND), 3 Pest / 21 Assertions. Regression MCP+Foodbook+Concepter 34/34 grün.
+- **Live erst nach demo-Deploy (Martin)** — der Connector zeigt neue Tools erst dann.
+
 ## ⭐ Update 2026-07-12 (Session: Gesamt-Bug-Audit + Master-Vererbung)
 
 Erledigt + beschlossen (Dominique). Details: Memory `project_fa_bug_audit_2026-07-12.md` + `feedback_mcp_lockstep.md`.
