@@ -91,9 +91,23 @@
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         @if($fb)
             @if($selectedKapitelId === null)
-            {{-- ═══════════════ FOODBOOK-KOPF (übergeordnete Ebene) ═══════════════ --}}
-            {{-- Foodbook-Stammdaten --}}
-            <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbhdr-{{ $fb->id }}">
+            {{-- ═══════════════ FOODBOOK-KOPF — Planungs-Cockpit (Tabs) ═══════════════ --}}
+            {{-- Tab-Zustand hält Alpine über Livewire-Morphs hinweg (stabiler wire:key), Muster wie Concepter-Editor.
+                 Kalkulations-Leiste bleibt die rechte activity-Sidebar. Phase 1: reiner Reuse, Modals raus. --}}
+            <div wire:key="fbcockpit-{{ $fb->id }}" x-data="{ tab: 'briefing' }" class="space-y-4">
+
+                {{-- Tab-Leiste --}}
+                <div class="flex flex-wrap gap-1" role="tablist">
+                    @foreach(['planung' => '🎯 Planung', 'briefing' => '📋 Briefing', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend'] as $tk => $tl)
+                        <button type="button" @click="tab = @js($tk)" :class="tab === @js($tk) ? '{{ $aktiv }}' : '{{ $hover }}'"
+                                class="px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-fb-tab="{{ $tk }}">{{ $tl }}</button>
+                    @endforeach
+                </div>
+
+                {{-- ═══ Tab: BRIEFING (Stammdaten · Kunde · Leitidee) ═══ --}}
+                <div x-show="tab === 'briefing'" x-cloak class="space-y-3" data-fb-panel="briefing">
+                {{-- Foodbook-Stammdaten --}}
+                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbhdr-{{ $fb->id }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div class="md:col-span-2"><label class="{{ $label }}">Bezeichnung</label><input type="text" wire:model="form.label" class="{{ $input }}" /></div>
@@ -161,54 +175,64 @@
                 </div>
             </div>
 
-            {{-- #389/Canvas: Foodbook-Leitidee — auf Klick im Modal (Dominique 2026-06-17) --}}
-            <button type="button" @click="$dispatch('modal.open', { name: 'fb-leitidee' })"
-                    class="{{ $btnGhost }} w-full justify-center" wire:key="fbcanvas-btn-{{ $fb->id }}">
-                Leitidee-Canvas — was muss rein · welche Konzepte · was es erfüllen muss
-            </button>
-            <x-foodalchemist::modal name="fb-leitidee" title="Foodbook-Leitidee (Canvas)" size="max-w-3xl">
-                @include('foodalchemist::livewire.canvas.partials.board')
-                <x-slot:footer>
-                    <button type="button" @click="$dispatch('modal.close', { name: 'fb-leitidee' })" class="{{ $btnGhost }}">Schließen</button>
-                </x-slot:footer>
-            </x-foodalchemist::modal>
+                {{-- Foodbook-Leitidee (Canvas) — inline statt Modal (Dominique 2026-07-21) --}}
+                <div class="relative overflow-hidden {{ $card }} p-5" wire:key="fbcanvas-{{ $fb->id }}">
+                    <div class="{{ $cardAccent }}"></div>
+                    <p class="{{ $label }} mb-2">Leitidee-Canvas — was muss rein · welche Konzepte · was es erfüllen muss</p>
+                    @include('foodalchemist::livewire.canvas.partials.board')
+                </div>
+                </div>{{-- /Briefing --}}
 
-            {{-- R4.1: Planungs-Gerüst — messbarer Soll-Rahmen (Mengen · Preise · Quoten · Dramaturgie) neben der Freitext-Leitidee --}}
-            <button type="button" @click="$dispatch('modal.open', { name: 'fb-geruest' })"
-                    class="{{ $btnGhost }} w-full justify-center" wire:key="fbframe-btn-{{ $fb->id }}" data-fb-geruest-btn>
-                Planungs-Gerüst — Soll-Mengen · Preisrahmen · Diät-Quoten · Dramaturgie
-            </button>
-            <x-foodalchemist::modal name="fb-geruest" title="Planungs-Gerüst (Soll-Rahmen)" size="max-w-4xl">
-                @include('foodalchemist::livewire.planning.partials.frame-board')
-                <x-slot:footer>
-                    <button type="button" @click="$dispatch('modal.close', { name: 'fb-geruest' })" class="{{ $btnGhost }}">Schließen</button>
-                </x-slot:footer>
-            </x-foodalchemist::modal>
+                {{-- ═══ Tab: PLANUNG (Struktur = Slots · Coverage) ═══ --}}
+                <div x-show="tab === 'planung'" x-cloak class="space-y-3" data-fb-panel="planung">
+                    {{-- R4.1: Planungs-Gerüst — Soll-Rahmen (Slots = Kapitel-Struktur, Mengen · Preise · Quoten · Dramaturgie) --}}
+                    <div class="relative overflow-hidden {{ $card }} p-5" wire:key="fbframe-{{ $fb->id }}">
+                        <div class="{{ $cardAccent }}"></div>
+                        @include('foodalchemist::livewire.planning.partials.frame-board')
+                    </div>
+                    {{-- R4.2: Soll/Ist-Coverage live beim Befüllen — Lücken-Klick öffnet den VK-Browser gefiltert --}}
+                    @if(($coverage ?? null) !== null && $coverage['hat_geruest'])
+                        @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillRoute' => route('foodalchemist.verkauf.index')])
 
-            {{-- R4.2: Soll/Ist-Coverage live beim Befüllen — Lücken-Klick öffnet den VK-Browser gefiltert --}}
-            @if(($coverage ?? null) !== null && $coverage['hat_geruest'])
-                @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillRoute' => route('foodalchemist.verkauf.index')])
-
-                {{-- R6.1: Gerüst-Pfad des Konzept-Generators — baut ein Draft-Konzept aus echten VK-Gerichten --}}
-                <div class="space-y-1.5">
-                    <button type="button" wire:click="konzeptAusGeruest" class="{{ $btnGhost }} w-full justify-center" wire:loading.attr="disabled" data-konzept-aus-geruest>
-                        <span wire:loading.remove wire:target="konzeptAusGeruest">✨ Konzept aus diesem Gerüst generieren</span>
-                        <span wire:loading wire:target="konzeptAusGeruest">Wähle Gerichte …</span>
-                    </button>
-                    @if($generatorFehler)
-                        <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700">{{ $generatorFehler }}</div>
-                    @endif
-                    @if($generatorErgebnis)
-                        <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-2 space-y-1 text-[11px]" data-generator-ergebnis>
-                            <div class="font-medium text-gray-800">„{{ $generatorErgebnis['concept_name'] }}“ (Draft) · Kohäsion {{ $generatorErgebnis['kohaesion_score'] ?? '—' }} · Coverage {{ $generatorErgebnis['coverage_gesamt'] ?? '—' }}</div>
-                            @foreach($generatorErgebnis['protokoll'] as $p)
-                                <div class="{{ $p['status'] === 'leer' ? 'text-amber-600' : 'text-gray-600' }}">{{ $p['slot'] }}: {{ $p['status'] === 'leer' ? 'LEER — ' . $p['begruendung'] : collect($p['gerichte'])->pluck('name')->implode(', ') }}</div>
-                            @endforeach
-                            <a href="{{ route('foodalchemist.concepts.index') }}?c={{ $generatorErgebnis['concept_id'] }}" class="{{ $btnGhostXs }} text-violet-600">→ im Concepter öffnen</a>
+                        {{-- R6.1: Gerüst-Pfad des Konzept-Generators — fällt in Phase 3 zugunsten per-Slot-Vorschlägen --}}
+                        <div class="space-y-1.5">
+                            <button type="button" wire:click="konzeptAusGeruest" class="{{ $btnGhost }} w-full justify-center" wire:loading.attr="disabled" data-konzept-aus-geruest>
+                                <span wire:loading.remove wire:target="konzeptAusGeruest">✨ Konzept aus diesem Gerüst generieren</span>
+                                <span wire:loading wire:target="konzeptAusGeruest">Wähle Gerichte …</span>
+                            </button>
+                            @if($generatorFehler)
+                                <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700">{{ $generatorFehler }}</div>
+                            @endif
+                            @if($generatorErgebnis)
+                                <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-2 space-y-1 text-[11px]" data-generator-ergebnis>
+                                    <div class="font-medium text-gray-800">„{{ $generatorErgebnis['concept_name'] }}“ (Draft) · Kohäsion {{ $generatorErgebnis['kohaesion_score'] ?? '—' }} · Coverage {{ $generatorErgebnis['coverage_gesamt'] ?? '—' }}</div>
+                                    @foreach($generatorErgebnis['protokoll'] as $p)
+                                        <div class="{{ $p['status'] === 'leer' ? 'text-amber-600' : 'text-gray-600' }}">{{ $p['slot'] }}: {{ $p['status'] === 'leer' ? 'LEER — ' . $p['begruendung'] : collect($p['gerichte'])->pluck('name')->implode(', ') }}</div>
+                                    @endforeach
+                                    <a href="{{ route('foodalchemist.concepts.index') }}?c={{ $generatorErgebnis['concept_id'] }}" class="{{ $btnGhostXs }} text-violet-600">→ im Concepter öffnen</a>
+                                </div>
+                            @endif
                         </div>
                     @endif
-                </div>
-            @endif
+                </div>{{-- /Planung --}}
+
+                {{-- ═══ Tab: KREATIV (Geschmack · Tonalität · Kunde-DNA) — v1-Grundgerüst (Phase 2/4 füllen) ═══ --}}
+                <div x-show="tab === 'kreativ'" x-cloak class="space-y-3" data-fb-panel="kreativ">
+                    <div class="{{ $card }} p-5 text-sm text-gray-500 leading-relaxed">
+                        <p class="{{ $label }} mb-1">Kreativ — folgt (Phase 2/4)</p>
+                        Geschmackswelten, Tonalität (Schreibstil) und die Kunde-DNA landen hier. Die Tonalität steuert, wie die KI neutrale Gerichte in die Markenstimme übersetzt.
+                    </div>
+                </div>{{-- /Kreativ --}}
+
+                {{-- ═══ Tab: TREND (Wissensschrank) — v1-Platzhalter (Phase 4 füllt) ═══ --}}
+                <div x-show="tab === 'trend'" x-cloak class="space-y-3" data-fb-panel="trend">
+                    <div class="{{ $card }} p-5 text-sm text-gray-500 leading-relaxed">
+                        <p class="{{ $label }} mb-1">Trend — folgt (Phase 4)</p>
+                        Zieht Trends, Flavor-Pairings und Domänen-Wissen aus dem Wissensschrank in die Planung — als Inspiration und als zusätzliche Vorschlags-Quelle.
+                    </div>
+                </div>{{-- /Trend --}}
+
+            </div>{{-- /fbcockpit --}}
 
             {{-- UX 2026-07-21: Menü-Vorschau (Kundensicht, ganzes Foodbook) — einklappbar, gehört zur Foodbook-Kopf-Ebene.
                  Früher Teil eines Bearbeiten⇄Menü-Toggles; das Bearbeiten (Kapitel+Blöcke) lebt jetzt in der Kapitel-Ansicht. --}}
