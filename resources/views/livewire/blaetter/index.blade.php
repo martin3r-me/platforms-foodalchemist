@@ -69,11 +69,24 @@
 
                 @if(!empty($dokUrlParams))
                     <div class="flex items-center gap-2 ml-auto">
+                        @if(in_array('bestellung', $blaetter, true))
+                            <button type="button" wire:click="bedarfUebernehmen" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-bedarf-uebernehmen>
+                                <span wire:loading.remove wire:target="bedarfUebernehmen">＋ Bedarf in Bestellschiene</span>
+                                <span wire:loading wire:target="bedarfUebernehmen">übernehme…</span>
+                            </button>
+                        @endif
                         @if(in_array('produktion', $blaetter, true))<a href="{{ route('foodalchemist.blaetter.dokument', array_merge(['typ' => 'produktion'], $dokUrlParams)) }}" target="_blank" class="{{ $btnGhost }}">🖨 Produktion</a>@endif
                         @if(in_array('bestellung', $blaetter, true))<a href="{{ route('foodalchemist.blaetter.dokument', array_merge(['typ' => 'bestellung'], $dokUrlParams)) }}" target="_blank" class="{{ $btnGhost }}">🖨 Bestellung</a>@endif
                     </div>
                 @endif
             </div>
+
+            @if($uebernahmeHinweis)
+                <div class="mt-2 flex items-center gap-2 text-[11px] text-emerald-700">
+                    <span>✓ {{ $uebernahmeHinweis }}</span>
+                    <a href="{{ route('foodalchemist.orders.index') }}" class="text-violet-600 underline">→ zu den Bestellungen</a>
+                </div>
+            @endif
         </div>
 
         @php($alleWarnungen = array_unique(array_merge($produktion['warnungen'] ?? [], $bestellung['warnungen'] ?? [])))

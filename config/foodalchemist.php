@@ -175,6 +175,12 @@ return [
                     'route' => 'foodalchemist.blaetter.index',
                     'icon'  => 'heroicon-o-clipboard-document-list',
                 ],
+                [
+                    // Spec 17/S2: Bestellschienen je Lieferant (mini-WaWi, N-Track)
+                    'label' => 'Bestellungen',
+                    'route' => 'foodalchemist.orders.index',
+                    'icon'  => 'heroicon-o-shopping-cart',
+                ],
             ],
         ],
         [

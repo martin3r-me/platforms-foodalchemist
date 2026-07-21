@@ -9,8 +9,11 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
+use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
+use Platform\FoodAlchemist\Livewire\Blaetter\Index as BlaetterIndex;
+use Platform\FoodAlchemist\Livewire\Orders\Index as OrdersIndex;
 use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -229,6 +232,48 @@ it('MCP im Lockstep: orders.GET/ADD_NEED/SET_STATUS registriert + End-to-End', f
     // Illegaler Sprung (sent→draft gibt es nicht) → Guard
     $bad = $registry->get('foodalchemist.orders.SET_STATUS')->execute(['order_id' => $chefsId, 'status' => 'cancelled'], $kontext);
     expect($bad->success)->toBeTrue(); // sent→cancelled IST erlaubt
+});
+
+it('UI: „Bedarf übernehmen" im Planungsblatt legt Schienen an (idempotent bei Re-Klick)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $comp = Livewire::test(BlaetterIndex::class)
+        ->set('zielTyp', 'recipe')
+        ->call('waehleGericht', $this->kuchen->id)
+        ->set('menge', 100)
+        ->call('bedarfUebernehmen')
+        ->assertSet('uebernahmeHinweis', fn ($v) => str_contains((string) $v, 'Bestellschiene'));
+
+    expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
+
+    // Erneuter Klick (gleiche Quelle) → keine Verdopplung (E10)
+    $comp->call('bedarfUebernehmen');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2)
+        ->and((float) $chefs->total_net)->toBe(21.0);
+});
+
+it('UI: Bestellungen-Seite listet Schienen, Detail + Absenden + manuelle Menge', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+
+    $comp = Livewire::test(OrdersIndex::class)
+        ->assertSee('Chefs')->assertSee('Hanos')
+        ->call('select', $chefs->id)
+        ->assertSee('ART-MEH')          // Gebinde-Detail sichtbar
+        ->assertSee('Absenden');
+
+    // Manuelle Menge übersteuern: 10 → 15 Sack ×2 € = 30 € (+ Zucker 1 = 31 €)
+    $comp->call('updateLineQty', $mehlLine->id, 15);
+    expect((float) $chefs->refresh()->total_net)->toBe(31.0)
+        ->and((bool) $mehlLine->refresh()->is_manual_qty)->toBeTrue();
+
+    // Absenden → nicht mehr editierbar
+    $comp->call('setStatus', 'sent');
+    expect($chefs->refresh()->status->value)->toBe('sent');
+    $comp->call('select', $chefs->id)->assertSee('eingefroren');
 });
 
 it('removeLine + leere Quelle: Zeile verschwindet, total_net rechnet nach', function () {

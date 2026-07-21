@@ -223,6 +223,10 @@ Route::get('/speiseplan', \Platform\FoodAlchemist\Livewire\Speiseplan\Index::cla
 Route::get('/blaetter', \Platform\FoodAlchemist\Livewire\Blaetter\Index::class)
     ->name('foodalchemist.blaetter.index');
 
+// Spec 17/S2 — Bestellungen (mini-WaWi Bestellschienen, N-Track)
+Route::get('/bestellungen', \Platform\FoodAlchemist\Livewire\Orders\Index::class)
+    ->name('foodalchemist.orders.index');
+
 /**
  * Versendbares/druckbares Planungs-Blatt — Druck-HTML; ?pdf=1 = PDF (DomPDF, guarded).
  * typ=produktion|bestellung, Ziel via concept_id+persons ODER recipe_id+portions.

@@ -7,6 +7,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
 
 /**
@@ -38,6 +39,9 @@ class Index extends Component
 
     public string $suche = '';
 
+    /** Rückmeldung der „Bedarf übernehmen"-Aktion (Spec 17/S2). */
+    public ?string $uebernahmeHinweis = null;
+
     public function updatedZielTyp(): void
     {
         $this->conceptId = null;
@@ -47,6 +51,31 @@ class Index extends Component
     public function waehleGericht(int $id): void
     {
         $this->recipeId = $id;
+    }
+
+    /**
+     * Spec 17/S2: den aktuellen Bedarf in die Lieferanten-Bestellschienen übernehmen.
+     * source_ref = stabil pro Ziel (concept:/recipe:), damit erneutes Übernehmen des
+     * SELBEN Ziels seinen Beitrag ERSETZT statt zu verdoppeln (E10).
+     */
+    public function bedarfUebernehmen(OrderService $orders): void
+    {
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        $ziel = $this->aktuellesZiel(max(1, $this->menge));
+        if ($ziel === null) {
+            $this->uebernahmeHinweis = 'Erst Ziel + Menge wählen.';
+
+            return;
+        }
+        $sourceRef = $this->zielTyp === 'concept' ? "concept:{$this->conceptId}" : "recipe:{$this->recipeId}";
+        $res = $orders->addNeedFromTarget($team, $ziel, $sourceRef);
+
+        $n = count($res['orders']);
+        $msg = $n > 0 ? "{$n} Bestellschiene(n) aktualisiert." : 'Kein bestellbarer Bedarf.';
+        if (($skip = count($res['skipped_ohne_la'])) > 0) {
+            $msg .= " {$skip} Lieferant(en)/GP ohne Lead-LA übersprungen.";
+        }
+        $this->uebernahmeHinweis = $msg;
     }
 
     public function render(PlanungsblattService $svc)
