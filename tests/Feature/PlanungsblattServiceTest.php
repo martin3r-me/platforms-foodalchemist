@@ -138,9 +138,12 @@ it('Einkaufsliste führt mehrere Ziele zusammen', function () {
         ['recipe_id' => $this->kuchen->id, 'portions' => 100],
     ]);
     $lief = collect($blatt['lieferanten'])->keyBy('lieferant');
-    // Zusammengeführt VOR Rundung: 20 Ansätze Kuchen → Mehl 20 kg (40 €); Sauce-Bedarf
-    // 150 g × 20 ÷ 1000 = 3,0 → 3 Ansätze → Zucker 1,5 kg (1,50 €), Butter 1,5 kg (18 €).
-    expect($lief['Chefs']['ek_summe'])->toBe(41.5)->and($lief['Hanos']['ek_summe'])->toBe(18.0);
+    // Zusammengeführt VOR Rundung: 20 Ansätze Kuchen → Mehl 20 kg; Sauce-Bedarf 150 g × 20 ÷ 1000
+    // = 3,0 → 3 Ansätze → Zucker 1,5 kg, Butter 1,5 kg.
+    // S0: EK-Summe = ECHTE Gebinde-Kosten (1-kg-Gebinde, ganze Stück):
+    //   Chefs = Mehl ceil(20)=20 ×2 € + Zucker ceil(1,5)=2 ×1 € = 42,00 €.
+    //   Hanos = Butter ceil(1,5)=2 ×12 € = 24,00 €.
+    expect($lief['Chefs']['ek_summe'])->toBe(42.0)->and($lief['Hanos']['ek_summe'])->toBe(24.0);
 });
 
 it('MCP: die drei Blätter-Tools sind registriert, read-only und liefern konsistente Zahlen', function () {
@@ -179,29 +182,30 @@ it('MCP: die drei Blätter-Tools sind registriert, read-only und liefern konsist
 it('Blätter-UI: Gericht-Auswahl + Blätter-Filter (welche Blätter erzeugt werden)', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    // Default: alle drei Blätter
+    // Default: Produktion + Bestellung (Einkauf-Blatt ist raus — Spec 17 E8)
     $comp = Livewire::test(BlaetterIndex::class)
         ->set('zielTyp', 'recipe')
         ->call('waehleGericht', $this->kuchen->id)
         ->set('menge', 100)
         ->assertSee('Produktionsblatt')
         ->assertSee('Vanillesauce')
+        ->assertSee('100 Portionen')      // P1: VK-Gericht in Portionen statt „× Rezept"
+        ->assertDontSee('× Rezept')
         ->assertSee('Bestellvorschlag')
-        ->assertSee('Einkaufsliste')
+        ->assertDontSee('Einkaufsliste')  // E8: Dublette raus
         ->assertSee('Chefs')
         ->assertSee('Hanos');
 
-    // Filter: nur Produktion → Lieferanten-Blätter verschwinden
+    // Filter: nur Produktion → Bestellvorschlag verschwindet
     $comp->set('blaetter', ['produktion'])
         ->assertSee('Produktionsblatt')
-        ->assertDontSee('Bestellvorschlag')
-        ->assertDontSee('Einkaufsliste');
+        ->assertDontSee('Bestellvorschlag');
 
-    // Filter: nur Bestellung → Produktionsblatt verschwindet
+    // Filter: nur Bestellung → Produktionsblatt verschwindet, Gebinde-Spalte da
     $comp->set('blaetter', ['bestellung'])
         ->assertDontSee('Produktionsblatt')
         ->assertSee('Bestellvorschlag')
-        ->assertDontSee('Einkaufsliste');
+        ->assertSee('Bestellen');         // S0: Gebinde-Spalte
 });
 
 it('Blätter-Dokument-Blade rendert (Produktion + Bestellung)', function () {

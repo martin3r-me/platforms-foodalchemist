@@ -64,7 +64,7 @@
                         <strong>{{ $r['ansaetze'] }} Ansatz/Ansätze</strong>@if($r['basis_yield_kg']) à {{ number_format($r['basis_yield_kg'], 3, ',', '.') }} kg (= {{ number_format($r['produzierte_menge_kg'], 2, ',', '.') }} kg)@endif
                         · <span class="muted">Bedarf im Menü: {{ number_format($r['benoetigt_ansaetze'], 2, ',', '.') }} Ansätze</span>
                     @else
-                        <strong>{{ number_format($r['ansaetze'], 2, ',', '.') }}× Rezept</strong>
+                        <strong>{{ $r['portionen'] }} Portionen</strong>@if($r['produzierte_menge_kg']) (gesamt {{ number_format($r['produzierte_menge_kg'], 1, ',', '.') }} kg)@endif
                     @endif
                     @if($r['arbeitszeit_min']) · Arbeitszeit ~{{ $r['arbeitszeit_min'] }} min @endif
                 </div>
@@ -106,13 +106,15 @@
             <div class="lief">
                 <h2><span class="sum">{{ number_format($g['ek_summe'], 2, ',', '.') }} €@unless($g['ek_vollstaendig']) <span class="tag warn">EK unvollst.</span>@endunless</span>{{ $g['lieferant'] }}</h2>
                 <table>
-                    <thead><tr><th>GP / Artikel</th><th class="right">Menge</th><th class="right">EK netto</th></tr></thead>
+                    <thead><tr><th>Artikel</th><th class="right">Bestellen</th><th class="right">Bedarf</th><th class="right">EK netto</th></tr></thead>
                     <tbody>
                         @foreach($g['positionen'] as $p)
+                            @php($geb = $p['gebinde'])
                             <tr>
-                                <td>{{ $p['gp'] }}@if($p['lead_artikel'])<br><span class="muted">{{ $p['lead_artikel'] }}@if($p['lead_artikel_nr']) · {{ $p['lead_artikel_nr'] }}@endif</span>@endif@if($p['ausweich'])<br><span class="tag info">Ausweich: {{ $p['ausweich']['artikel'] }} ({{ $p['ausweich']['lieferant'] }})</span>@endif</td>
-                                <td class="right">{{ number_format($p['menge_kg'], 3, ',', '.') }} kg</td>
-                                <td class="right">{{ $p['ek_bekannt'] ? number_format($p['ek_eur'], 2, ',', '.') . ' €' : '—' }}</td>
+                                <td>{{ $p['gp'] }}@if($p['lead_artikel'])<br><span class="muted">@if($geb['article_number']){{ $geb['article_number'] }} · @endif{{ $p['lead_artikel'] }}</span>@endif@if($p['ausweich'])<br><span class="tag info">Ausweich: {{ $p['ausweich']['artikel'] }} ({{ $p['ausweich']['lieferant'] }})</span>@endif</td>
+                                <td class="right">@if($geb['berechenbar']){{ $geb['qty_packs'] }}× {{ rtrim(rtrim(number_format($geb['pack_qty'], 3, ',', '.'), '0'), ',') }} {{ $geb['pack_unit_code'] }}@if($geb['packaging_unit']) {{ $geb['packaging_unit'] }}@endif@if($geb['pack_price'] !== null)<br><span class="muted">à {{ number_format($geb['pack_price'], 2, ',', '.') }} €</span>@endif @else<span class="muted">{{ $geb['grund'] }}</span>@endif</td>
+                                <td class="right">@if($geb['berechenbar']){{ number_format($geb['needed_base'], $geb['needed_base_unit'] === 'Stk' ? 0 : 2, ',', '.') }} {{ $geb['needed_base_unit'] }}@else {{ number_format($p['menge_kg'], 3, ',', '.') }} kg @endif</td>
+                                <td class="right">{{ $p['ek_bekannt'] ? number_format($p['bestell_ek_eur'], 2, ',', '.') . ' €' : '—' }}</td>
                             </tr>
                         @endforeach
                     </tbody>

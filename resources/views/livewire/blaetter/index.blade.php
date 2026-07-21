@@ -64,7 +64,6 @@
                     <div class="flex items-center gap-3 text-xs text-gray-700 h-[30px]">
                         <label class="inline-flex items-center gap-1"><input type="checkbox" wire:model.live="blaetter" value="produktion"> Produktion</label>
                         <label class="inline-flex items-center gap-1"><input type="checkbox" wire:model.live="blaetter" value="bestellung"> Bestellung</label>
-                        <label class="inline-flex items-center gap-1"><input type="checkbox" wire:model.live="blaetter" value="einkauf"> Einkauf</label>
                     </div>
                 </div>
 
@@ -72,14 +71,13 @@
                     <div class="flex items-center gap-2 ml-auto">
                         @if(in_array('produktion', $blaetter, true))<a href="{{ route('foodalchemist.blaetter.dokument', array_merge(['typ' => 'produktion'], $dokUrlParams)) }}" target="_blank" class="{{ $btnGhost }}">🖨 Produktion</a>@endif
                         @if(in_array('bestellung', $blaetter, true))<a href="{{ route('foodalchemist.blaetter.dokument', array_merge(['typ' => 'bestellung'], $dokUrlParams)) }}" target="_blank" class="{{ $btnGhost }}">🖨 Bestellung</a>@endif
-                        @if(in_array('einkauf', $blaetter, true))<a href="{{ route('foodalchemist.blaetter.dokument', array_merge(['typ' => 'einkauf'], $dokUrlParams)) }}" target="_blank" class="{{ $btnGhost }}">🖨 Einkauf</a>@endif
                     </div>
                 @endif
             </div>
         </div>
 
-        @php($alleWarnungen = array_unique(array_merge($produktion['warnungen'] ?? [], $bestellung['warnungen'] ?? [], $einkauf['warnungen'] ?? [])))
-        @if($produktion === null && $bestellung === null && $einkauf === null)
+        @php($alleWarnungen = array_unique(array_merge($produktion['warnungen'] ?? [], $bestellung['warnungen'] ?? [])))
+        @if($produktion === null && $bestellung === null)
             <div class="{{ $sectionCard }} text-center text-xs text-gray-500 py-8">Ziel + Menge wählen und mindestens ein Blatt ankreuzen.</div>
         @else
             @if($alleWarnungen)
@@ -110,7 +108,8 @@
                                         @if($r['basis_yield_kg'])· à {{ number_format($r['basis_yield_kg'], 3, ',', '.') }} kg @endif
                                         <br><span class="text-gray-400">Bedarf: {{ number_format($r['benoetigt_ansaetze'], 2, ',', '.') }} Ansätze</span>
                                     @else
-                                        <span class="font-medium text-gray-900">{{ number_format($r['ansaetze'], 2, ',', '.') }}× Rezept</span>
+                                        <span class="font-medium text-gray-900">{{ $r['portionen'] }} Portionen</span>
+                                        @if($r['produzierte_menge_kg'])<br><span class="text-gray-400">gesamt {{ number_format($r['produzierte_menge_kg'], 1, ',', '.') }} kg</span>@endif
                                     @endif
                                 </p>
                             </div>
@@ -134,13 +133,13 @@
                 </div>
                 @endif
 
-                {{-- ── Bestellvorschlag + Einkaufsliste (Lieferanten-Ansicht) ── --}}
-                @foreach(array_filter(['Bestellvorschlag' => $bestellung, 'Einkaufsliste' => $einkauf]) as $titel => $blatt)
-                    <div class="{{ $sectionCard }}" wire:key="sblatt-{{ $titel }}">
-                        <h3 class="font-medium tracking-tight text-gray-900 mb-0.5">{{ $titel }}</h3>
-                        <p class="text-[11px] text-gray-500 mb-3">{{ $titel === 'Einkaufsliste' ? 'GP-Bedarf über die Ziele zusammengeführt (bei einem Ziel = Bestellvorschlag).' : 'GP-Bedarf je Lead-Lieferant + EK (netto).' }}</p>
-                        @foreach($blatt['lieferanten'] as $g)
-                            <div class="mb-4" wire:key="lief-{{ $titel }}-{{ $g['supplier_id'] ?? 'none' }}">
+                {{-- ── Bestellvorschlag (Gebinde je Lead-Lieferant) ── --}}
+                @if($bestellung)
+                    <div class="{{ $sectionCard }}" wire:key="sblatt-bestellung">
+                        <h3 class="font-medium tracking-tight text-gray-900 mb-0.5">Bestellvorschlag</h3>
+                        <p class="text-[11px] text-gray-500 mb-3">GP-Bedarf je Lead-Lieferant in ganzen Gebinden · EK netto.</p>
+                        @foreach($bestellung['lieferanten'] as $g)
+                            <div class="mb-4" wire:key="lief-{{ $g['supplier_id'] ?? 'none' }}">
                                 <div class="flex items-center justify-between gap-2">
                                     <p class="font-medium text-gray-900 text-[13px]">{{ $g['lieferant'] }}</p>
                                     <p class="text-[11px] text-right shrink-0">
@@ -148,30 +147,44 @@
                                         @unless($g['ek_vollstaendig'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">EK unvollst.</span>@endunless
                                     </p>
                                 </div>
+                                <div class="overflow-x-auto">
                                 <table class="{{ $table }} mt-1">
                                     <thead><tr>
-                                        <th class="{{ $th }} text-left">GP</th>
-                                        <th class="{{ $th }} text-right">Menge</th>
+                                        <th class="{{ $th }} text-left">Artikel</th>
+                                        <th class="{{ $th }} text-right">Bestellen</th>
+                                        <th class="{{ $th }} text-right">Bedarf</th>
                                         <th class="{{ $th }} text-right">EK</th>
                                     </tr></thead>
                                     <tbody>
                                         @foreach($g['positionen'] as $p)
+                                            @php($geb = $p['gebinde'])
                                             <tr class="border-t border-black/5">
                                                 <td class="{{ $td }} text-gray-800">
                                                     {{ $p['gp'] }}
-                                                    @if($p['lead_artikel'])<br><span class="text-[10px] text-gray-400">{{ $p['lead_artikel'] }}</span>@endif
+                                                    @if($p['lead_artikel'])<br><span class="text-[10px] text-gray-400">@if($geb['article_number']){{ $geb['article_number'] }} · @endif{{ $p['lead_artikel'] }}</span>@endif
                                                     @if($p['ausweich'])<br><span class="text-[10px] text-sky-600">Ausweich: {{ $p['ausweich']['artikel'] }} ({{ $p['ausweich']['lieferant'] }})</span>@endif
                                                 </td>
-                                                <td class="{{ $td }} text-right whitespace-nowrap text-gray-900">{{ number_format($p['menge_kg'], 3, ',', '.') }} kg</td>
-                                                <td class="{{ $td }} text-right whitespace-nowrap {{ $p['ek_bekannt'] ? 'text-gray-900' : 'text-amber-600' }}">{{ $p['ek_bekannt'] ? number_format($p['ek_eur'], 2, ',', '.') . ' €' : '—' }}</td>
+                                                <td class="{{ $td }} text-right whitespace-nowrap text-gray-900">
+                                                    @if($geb['berechenbar'])
+                                                        <span class="font-medium">{{ $geb['qty_packs'] }}×</span> {{ rtrim(rtrim(number_format($geb['pack_qty'], 3, ',', '.'), '0'), ',') }} {{ $geb['pack_unit_code'] }}@if($geb['packaging_unit']) {{ $geb['packaging_unit'] }}@endif
+                                                        @if($geb['pack_price'] !== null)<br><span class="text-[10px] text-gray-400">à {{ number_format($geb['pack_price'], 2, ',', '.') }} €</span>@endif
+                                                    @else
+                                                        <span class="text-[10px] text-amber-600">{{ $geb['grund'] }}</span>
+                                                    @endif
+                                                </td>
+                                                <td class="{{ $td }} text-right whitespace-nowrap text-gray-500 text-[11px]">
+                                                    @if($geb['berechenbar']){{ number_format($geb['needed_base'], $geb['needed_base_unit'] === 'Stk' ? 0 : 2, ',', '.') }} {{ $geb['needed_base_unit'] }}@else {{ number_format($p['menge_kg'], 3, ',', '.') }} kg @endif
+                                                </td>
+                                                <td class="{{ $td }} text-right whitespace-nowrap {{ $p['ek_bekannt'] ? 'text-gray-900' : 'text-amber-600' }}">{{ $p['ek_bekannt'] ? number_format($p['bestell_ek_eur'], 2, ',', '.') . ' €' : '—' }}</td>
                                             </tr>
                                         @endforeach
                                     </tbody>
                                 </table>
+                                </div>
                             </div>
                         @endforeach
                     </div>
-                @endforeach
+                @endif
             </div>
         @endif
 

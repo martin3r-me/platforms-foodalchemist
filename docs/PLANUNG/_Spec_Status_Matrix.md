@@ -1,4 +1,4 @@
-# Spec-Status-Matrix (01–16)
+# Spec-Status-Matrix (01–17)
 
 > Schnell-Sicht: Status + Blocker je Kern-Spec. Detail je Spec in der jeweiligen Datei; Reihenfolge/Phasen in [00_Orchestrierung_Naechste_Schritte.md](00_Orchestrierung_Naechste_Schritte.md).
 > Stand **2026-07-20**. Legende: 🟢 bau-reif · 🟡 entscheidungs-reif (benannter Blocker) · ⚪ Dossier · ✅ fertig.
@@ -21,10 +21,11 @@
 | **14** | Lieferanten-Management R9 | ✅ **KOMPLETT** (Engine+MCP+UI, `1382fc2`) | echtes Spend = Q2 (Nutzungs-Proxy ist v1) |
 | **15** | Semantische Suche über Lieferantenartikel (Supplier-Item-Pool) | ⚪ Dossier — **entkoppelt/zurückgestellt via 16** | RAG-Nachzug (Vektor-Pool + Observer + Retrieval); vom WG-Lead-Use-Case (16) NICHT gebraucht → wartet auf echte Freitext-Katalog-Discovery + 50k-Store-/Qdrant-Frage |
 | **16** | WG-Lead-gescopter LA-Kandidaten-Finder + On-demand-Klassifikation | ✅ **GEBAUT+GETESTET 2026-07-20** (S1–S5 + Nachzügler, 16+ Pest) | Finder deterministisch live (schärft Spec-07-`mintFromLa`); WG-Scope + Terminologie + **Compound-Anti-Marker (S3 geschlossen)** + Fallback; **WG-Hint im KI-Schema scharf (E1)**. Rest nur noch provider-gated (demo): LLM-`commodity_group`-Emission + S4-ClassifyLaJob-Inhalt |
+| **17** | Bestellwesen — mini-WaWi Bestellassistent (N-Track) | 🟢 **S0 GEBAUT+GETESTET 2026-07-21** (lokal; E1–E11) · S1–S3 offen | Der von [R9 §7](14_Lieferanten_Management_R9.md) ausgeklammerte N-Track, **OHNE Bestand**. S0 = `GebindeRechner` + Gebinde-Bestellzeile + „N Portionen"-Fix + Einkauf-Blatt raus (10+8 Pest, Suite 906/908). S2 (persistente Bestellschiene `orders`/`order_lines`) = Kern. Offen: Push + S1 (`suppliers.delivery_days/order_cutoff`) → S2 → S3. Dev #549 |
 
 ## Verdichtet
 
-- **Sofort baubar, null Blocker:** 12·S2 (R2.4-Solver) · 13·S1 (Kanal-B) · 03·L4/L5. **(16 = gebaut 2026-07-20.)**
+- **Sofort baubar, null Blocker:** 12·S2 (R2.4-Solver) · 13·S1 (Kanal-B) · 03·L4/L5 · **17·S0 (Gebinde-Bestellzeile + Blatt-Fix)**. **(16 = gebaut 2026-07-20.)**
 - **Baubar gegen Fake-Provider (Qualitäts-Gate später via Key):** 03·L1/L2/L3/L6/L7 · 08 · 10 · 05·Etappe-2.
 - **Einziger echter Rest-Blocker im Ordner:** 08 (Konvergenz-Qualität = LLM live). Alle übrigen „Blocker" sind Deploy-/Key-Gates fürs *Live-Feuern*, nicht fürs Bauen.
 - **Fertig:** 04 · 06 · 07 · 09 · 11 (S1–S3; nur optionales KI-Narrativ offen) · 14 (+ 01 nur Deploy-Verifikation).

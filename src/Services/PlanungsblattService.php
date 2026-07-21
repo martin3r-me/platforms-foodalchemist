@@ -43,6 +43,7 @@ class PlanungsblattService
         private RecipeRecomputeService $recompute,
         private LeadLaService $leadLa,
         private DarreichungResolver $darreichungen,
+        private GebindeRechner $gebinde,
     ) {
     }
 
@@ -379,12 +380,18 @@ class PlanungsblattService
             }
 
             $basisYieldKg = $recipe->yield_kg !== null ? (float) $recipe->yield_kg : null;
+            // VK-Gericht: Portionszahl = Batches × Portionen/Batch (yield_pieces bzw. sales_unit_count).
+            // P1 (Spec 17): das Blatt zeigt „N Portionen · gesamt kg" statt des sinnlosen „N× Rezept".
+            $anzahlProBatch = ($recipe->yield_pieces !== null && (float) $recipe->yield_pieces > 0)
+                ? (float) $recipe->yield_pieces
+                : max(1, (int) ($recipe->sales_unit_count ?? 1));
             $produktion[] = [
                 'recipe_id' => $rid,
                 'name' => $recipe->name,
                 'ist_basisrezept' => ! $istVk,
                 'tiefe' => $tiefe[$rid],
                 'ansaetze' => $istVk ? round($batches, 3) : (int) $batches,
+                'portionen' => $istVk ? (int) round($batches * $anzahlProBatch) : null,   // P1: Portionszahl fürs VK-Gericht
                 'benoetigt_ansaetze' => round($roh, 3),      // fraktional — Transparenz „ganze Ansätze vs. Bedarf"
                 'basis_yield_kg' => $basisYieldKg,
                 'produzierte_menge_kg' => $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null,
@@ -437,6 +444,17 @@ class PlanungsblattService
             $lead = $kette->first(fn ($la) => $la->gepinnt && ! $la->locked) ?? $kette->first(fn ($la) => ! $la->locked);
             $ausweich = $kette->first(fn ($la) => $lead !== null && $la->id !== $lead->id && ! $la->locked);
 
+            // S0 (Spec 17): GP-Bedarf → ganze Bestell-Gebinde des Lead-LA. Aufrundung auf dem
+            // bereits je GP aggregierten Bedarf (menge_g), Stück via GP-Stückgewicht (E3).
+            $pieceG = $gpModel?->piece_default_g !== null ? (float) $gpModel->piece_default_g : null;
+            $geb = $this->gebinde->berechne($lead, (float) $b['menge_g'], $pieceG);
+            // Effektive Bestell-Kosten = echte Gebinde-Summe, wenn berechenbar + Preis bekannt;
+            // sonst ehrlicher Rückfall auf die Gramm-Theorie (Preisfalle/Stk ohne Gewicht).
+            $bestellEk = ($geb['berechenbar'] && $geb['line_total'] !== null) ? $geb['line_total'] : $b['ek_eur'];
+            $ekBekannt = $bestellEk !== null;
+            // Nicht-berechenbar (Preisfalle/Stk ohne Gewicht) wird pro Zeile über gebinde.grund
+            // im Blatt gezeigt — keine globale Warnung nötig.
+
             $key = $lead?->supplier_id ?? 0;
             $lieferant = $lead?->supplier_name ?? 'ohne Lieferant/Lead-LA';
             $gruppen[$key] ??= ['lieferant' => $lieferant, 'supplier_id' => $lead?->supplier_id, 'positionen' => [], 'ek_summe' => 0.0, 'ek_vollstaendig' => true];
@@ -446,16 +464,18 @@ class PlanungsblattService
                 'gp' => $b['name'],
                 'menge_kg' => $b['menge_kg'],
                 'menge_g' => $b['menge_g'],
-                'ek_eur' => $b['ek_eur'],
-                'ek_bekannt' => $b['ek_bekannt'],
+                'ek_eur' => $b['ek_eur'],                 // Gramm-Theorie (Referenz/Rückfall)
+                'bestell_ek_eur' => $bestellEk !== null ? round((float) $bestellEk, 2) : null,
+                'ek_bekannt' => $ekBekannt,
+                'gebinde' => $geb,                        // S0: ganze Gebinde + Artikel-Nr + Preis/Gebinde
                 'lead_artikel' => $lead?->designation,
                 'lead_artikel_nr' => $lead?->article_number,
                 'ausweich' => $ausweich !== null
                     ? ['artikel' => $ausweich->designation, 'lieferant' => $ausweich->supplier_name]
                     : null,
             ];
-            if ($b['ek_bekannt']) {
-                $gruppen[$key]['ek_summe'] += (float) $b['ek_eur'];
+            if ($ekBekannt) {
+                $gruppen[$key]['ek_summe'] += (float) $bestellEk;
             } else {
                 $gruppen[$key]['ek_vollstaendig'] = false;
             }

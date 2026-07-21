@@ -22,8 +22,10 @@ class BestellvorschlagGetTool extends FoodAlchemistTool implements ToolContract,
 
     public function getDescription(): string
     {
-        return 'Bestellvorschlag (read-only): GP-Bedarf gruppiert nach Lead-LA-Lieferant mit EK-Summe. GENAU '
-            . 'EINES angeben: concept_id (+ persons) ODER recipe_id (+ portions oder persons). Kein Bestellvorgang.';
+        return 'Bestellvorschlag (read-only): GP-Bedarf gruppiert nach Lead-LA-Lieferant, je Position in GANZEN '
+            . 'Gebinden (gebinde: qty_packs, pack_qty, packaging_unit, article_number, pack_price, line_total, '
+            . 'needed_base, ueberkauf_base) + EK-Summe je Lieferant. GENAU EINES angeben: concept_id (+ persons) '
+            . 'ODER recipe_id (+ portions oder persons). Kein Bestellvorgang.';
     }
 
     public function getSchema(): array

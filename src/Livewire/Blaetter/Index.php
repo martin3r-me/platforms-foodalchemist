@@ -28,9 +28,13 @@ class Index extends Component
     #[Url(as: 'n')]
     public int $menge = 100;
 
-    /** Welche Blätter erzeugt/angezeigt werden (Filter — Dominique 2026-07-14). */
+    /**
+     * Welche Blätter erzeugt/angezeigt werden (Filter — Dominique 2026-07-14).
+     * „einkauf" ist raus (Spec 17 E8: war Dublette zur Bestellung; die Event-
+     * Aggregation über mehrere Ziele kommt mit der Bestellschiene in S2).
+     */
     #[Url(as: 'b')]
-    public array $blaetter = ['produktion', 'bestellung', 'einkauf'];
+    public array $blaetter = ['produktion', 'bestellung'];
 
     public string $suche = '';
 
@@ -64,16 +68,12 @@ class Index extends Component
         // Nur die ausgewählten Blätter rechnen (Filter).
         $produktion = null;
         $bestellung = null;
-        $einkauf = null;
         if ($ziel !== null) {
             if (in_array('produktion', $this->blaetter, true)) {
                 $produktion = $svc->produktionsblatt($team, $ziel);
             }
             if (in_array('bestellung', $this->blaetter, true)) {
                 $bestellung = $svc->bestellvorschlag($team, $ziel);
-            }
-            if (in_array('einkauf', $this->blaetter, true)) {
-                $einkauf = $svc->einkaufsliste($team, [$ziel]);
             }
         }
 
@@ -83,7 +83,6 @@ class Index extends Component
             'gewaehltesGericht' => $this->recipeId ? FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId) : null,
             'produktion' => $produktion,
             'bestellung' => $bestellung,
-            'einkauf' => $einkauf,
             'dokUrlParams' => $this->urlParams($menge),
             'mengeLabel' => $this->zielTyp === 'concept' ? 'Personen' : 'Portionen',
         ])->layout('platform::layouts.app');

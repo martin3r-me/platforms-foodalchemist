@@ -20,6 +20,15 @@ Beschlossen (Dominique):
 
 Details/Historie: Memory `project_fa_klarschiff_cleanup.md` + `_MEMORY_FoodBrain.md`.
 
+## ⭐ Update 2026-07-21 (Session: Bestellwesen mini-WaWi — Spec 17 + S0)
+
+**Neuer N-Track angestoßen: mini-WaWi Bestellassistent mit Bestellschienen pro Lieferant** (der von R9 §7 bewusst ausgeklammerte N-Track; Dominique-Wunsch). Auslöser war die Kritik an den R7.1-Planungs-Blättern (100×-Rezept-Label, kg-statt-Gebinde, Bestellung==Einkauf). **OHNE Bestand** (Bestellassistent, kein Lager/Wareneingang) — ein FA-Bereich, kein zweites Composer-Modul. Spec-first: `docs/PLANUNG/17_Bestellwesen_MiniWaWi.md` (E1–E11), Dev **#549**.
+
+- **S0 GEBAUT+GETESTET (dieser Commit):** `GebindeRechner` (pure/read-only: aggregierter GP-Bedarf → ganze Gebinde, Artikel-Nr/Gebinde-Preis/Zeilensumme, Überkauf-Rest; Stk via Stückgewicht sonst ehrlicher kg-Fallback; `qty=NULL`-Preisfalle transparent). `PlanungsblattService` verdrahtet — `gruppiereNachLieferant` liefert `gebinde` je Position + **echte** EK-Summe (ganze Gebinde statt Gramm-Theorie), `explodiere` gibt VK-`portionen` aus.
+- **Blatt-Fix:** Bestell-Blatt (Live + PDF) auf Gebinde-Spalten (Artikel · Bestellen · Bedarf · EK); Produktion „100× Rezept" → **„N Portionen · gesamt kg"**; „Einkauf"-Dublette aus der UI raus (Livewire-Default `['produktion','bestellung']`, `einkaufsliste()`-Service bleibt für S2-Event-Aggregation). `BestellvorschlagGetTool` im Lockstep.
+- **Verifikation:** `GebindeRechnerTest` 10/10 + `PlanungsblattServiceTest` 8/8 (Einkaufs-EK auf echte Gebinde-Summe nachgezogen); volle FA-Suite **906/908** (1 skip, 1 vorbestehender `VoiceHuellenTest`-Fehler ohne S0-Bezug), 0 Regressionen. Blade-Lehre: `@endif`/`@else` nie an ein Wort kleben (`kg@endif` → literal).
+- **Offen:** Live-Klickstrecke demo (Martin-Deploy); S1 (`suppliers.delivery_days`/`order_cutoff`) → S2 (persistente Bestellschiene `orders`/`order_lines` = Kern, E1/E2/E9/E10/E11) → S3 (PDF/CSV/mailto + `orders.*` MCP).
+
 ## ⭐ Update 2026-07-21 (Session: Signale → Tab-Cockpit)
 
 **Die „Signale"-Seite (`/zu-pruefen`, `ReviewQueue`) zum Tab-Cockpit umgebaut** — reine Darstellung/Read-only, Detektor/Signal-Emission/Services-Logik + MCP unverändert. Commit `39c5470`.
