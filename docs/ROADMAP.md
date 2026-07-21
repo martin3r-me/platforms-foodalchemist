@@ -201,7 +201,15 @@ Großes Redesign der Foodbook-Hauptseite zum **Planungs-Cockpit** (mit Dominique
 
 **Phase 3 (Vollausbau) GEBAUT + GEPUSHT (`7208627`), A/B = B:** per-Slot-Vorschläge → abstimmen → übernehmen. `ConceptGeneratorService::slotVorschlaege` (gerankt, read-only, Reuse der Assembler-Helfer), `FoodbookService::uebernehmeVorschlag` (Weg B: Slot-Kapitel = ein Konzept, übernommene Gerichte = dessen Slots, Duplikat-Schutz), UI im Planung-Tab (✨ Vorschläge je Slot, ✓/✕), Monolith „Konzept aus Gerüst" ENTFERNT, `frameSlots.chapter_id` additiv im Trait. **End-to-end in Sandbox verifiziert** (Struktur→6 gerankte Vorschläge→Übernehmen→concept_ref-Block+Konzept-Slot, DB-geprüft). Pest 139 grün.
 
-**Offen:** Phase 2-Rest = **Team-DNA → Einstellungen verschieben** (food-dna-Board in Settings + Route/Sidebar auflösen; `routes`/`config`). Phase 4 (Tonalität-Pass beim Übernehmen + Trend-Tab). Phase 5 (Kickoff-Flow „neues Foodbook für Kunde X"). MCP-Lockstep für per-Slot (optionales Tool; Schreib-Pfad ist über foodbook_blocks.POST/concepts.* schon abgedeckt). demo-Deploy = Martin.
+**Phase 4 GEBAUT + GEPUSHT (`9234833`):** Tonalität wirkt + Trend-Tab. `CanvasService::promptKontext()` gibt für `ref_schreibstil` jetzt den vollen `sprach_duktus` in den Prompt (nicht nur den Namen) → die Kaskade Team→Kunde→Foodbook trägt die Handschrift bis in die KI-Generierung (§10.8). Trend-Tab zieht segment-/DNA-relevante Einträge aus dem Wissensschrank (`trendDocs` in `render()`) als Inspiration + zusätzliche Vorschlags-Quelle. Pest `FoodbookDnaCascade` inkl. Tonalitäts-Test grün.
+
+**Phase 2-Rest GEBAUT + GEPUSHT (`5952a25`):** Team-DNA (Ebene 1) lebt jetzt als **Einstellungen-Sektion** statt als eigene Seite. Neues `Settings/FoodDna`-Livewire + Blade, in `Settings/Index` SEKTIONEN aufgenommen; die alte Food-DNA-Sidebar-/Routing-Entry aus `config/foodalchemist.php` aufgelöst. Die DNA-Kette ist damit dreistufig geerdet: **Team (Einstellungen) → Kunde (CRM) → Foodbook (Cockpit)**.
+
+**Phase 5 GEBAUT + GEPUSHT (`2901a30`):** Segment als Planungsachse. `TeamSettingsService::segment(Team)` leitet aus `kitchen_type` das Segment ab und reichert es um **Niveau + Convenience** an (dasselbe Vokabular wie die KI-Rezept-Regler im Basisrezept-Generator: haute_cuisine/gehoben/klassisch × from_scratch/teil/voll). Segment-Badge im Briefing-Tab („Event-Catering · Niveau Gehoben · Teil-Convenience"). Die per-Slot-Vorschläge ranken jetzt niveau-bewusst: `kandidatenPool` lädt `levelSuitabilities`, `besterKandidat` bekommt `?$zielNiveau` (Sortierschlüssel `niveau_match` nach Slot-Semantik), `slotVorschlaege`+`vorschlaegeFuerSlot` leiten es aus dem Segment ab. Additiv (Default null = neutral). Pest 137 grün.
+
+**➡️ Cockpit-Umbau (Phasen 1–6) KOMPLETT.** Offen nur noch:
+- **Kickoff-Wizard „Neues Foodbook für Kunde X"** (Auto-Frame aus Brief): die Bausteine stehen (Segment-Ableitung, cascadeKontext, per-Slot-Vorschläge) — der letzte Schritt „Brief → Gerüst-Vorschlag" ist **LLM-gated** (braucht gebundenen Provider, wie #499). Heuristik-Frame + „Struktur anwenden" funktionieren bereits ohne LLM.
+- **demo-Deploy = Martin** (composer/import-master).
 
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 
