@@ -11,7 +11,7 @@
     @if($cov === 0 && count($pairing['anker']) === 0)
         <p class="text-xs text-gray-500 py-4">Noch keine Pairing-Daten (keine Anker auf den Zutaten).</p>
     @else
-        <div class="relative overflow-hidden {{ $card }} mb-3">
+        <div class="relative overflow-hidden {{ $card }}">
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 py-4 space-y-3">
                 <div class="flex items-center justify-between">
@@ -33,8 +33,9 @@
             </div>
         </div>
 
+        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 mt-3 items-start">
         @if(count($pairing['anker']))
-            <div class="relative overflow-hidden {{ $card }} mb-3">
+            <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
                     <h3 class="font-medium tracking-tight text-gray-900">Kern-Anker</h3>
@@ -61,7 +62,7 @@
         @endif
 
         @if(count($pairing['signature'] ?? []))
-            <div class="relative overflow-hidden {{ $card }} mt-3">
+            <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
                     <h3 class="font-medium tracking-tight text-gray-900">Macht den Teller eigen</h3>
@@ -77,7 +78,7 @@
 
         {{-- Basisrezept (Komponente): Graph-Sicht statt Teller-Logik. --}}
         @if(count($pairing['nachbarn'] ?? []))
-            <div class="relative overflow-hidden {{ $card }} mt-3">
+            <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
                     <h3 class="font-medium tracking-tight text-gray-900">Passt erprobt zu</h3>
@@ -90,7 +91,7 @@
         @endif
 
         @if(count($pairing['verwandte'] ?? []))
-            <div class="relative overflow-hidden {{ $card }} mt-3">
+            <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
                     <h3 class="font-medium tracking-tight text-gray-900">Verwandte Basisrezepte</h3>
@@ -105,7 +106,7 @@
         @endif
 
         @if(count($pairing['aroma'] ?? []))
-            <div class="relative overflow-hidden {{ $card }} mt-3">
+            <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
                     <h3 class="font-medium tracking-tight text-gray-900">Molekular verwandt (Aroma-Layer)</h3>
@@ -118,7 +119,7 @@
         @endif
 
         @if(count($pairing['kontrast'] ?? []))
-            <div class="relative overflow-hidden {{ $card }} mt-3">
+            <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
                     <h3 class="font-medium tracking-tight text-gray-900">Kontrast (Aroma-Gegenpol)</h3>
@@ -129,12 +130,13 @@
                 </div>
             </div>
         @endif
+        </div>
     @endif
 @elseif(($pairing['type'] ?? null) === 'gp')
     @if(count($pairing['anker']) === 0)
         <p class="text-xs text-gray-500 py-4">Noch keine Pairing-Daten (kein Aroma-Anker auf diesem GP).</p>
     @else
-        <div class="relative overflow-hidden {{ $card }} mb-3">
+        <div class="relative overflow-hidden {{ $card }}">
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 py-4 space-y-2">
                 <h3 class="font-medium tracking-tight text-gray-900">Aroma-Anker</h3>
@@ -144,6 +146,7 @@
             </div>
         </div>
 
+        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 mt-3 items-start">
         @if(count($pairing['nachbarn']))
             <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
@@ -157,7 +160,7 @@
         @endif
 
         @if(count($pairing['aroma'] ?? []))
-            <div class="relative overflow-hidden {{ $card }} mt-3">
+            <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
                     <h3 class="font-medium tracking-tight text-gray-900">Molekular verwandt (Aroma-Layer)</h3>
@@ -170,7 +173,7 @@
         @endif
 
         @if(count($pairing['kontrast'] ?? []))
-            <div class="relative overflow-hidden {{ $card }} mt-3">
+            <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
                     <h3 class="font-medium tracking-tight text-gray-900">Kontrast (Aroma-Gegenpol)</h3>
@@ -180,5 +183,6 @@
                 </div>
             </div>
         @endif
+        </div>
     @endif
 @endif
