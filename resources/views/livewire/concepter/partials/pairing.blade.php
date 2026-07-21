@@ -33,37 +33,8 @@
             </div>
         </div>
 
-        {{-- Kern-Anker / „Passt dazu" / „Macht den Teller eigen" sind ins Geschmacks-Profil (sensorik-Partial, rechts vom Radar) hochgezogen — s. partials/pairing-empfehlungen. --}}
-        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 mt-3 items-start">
-        @if(count($pairing['verwandte'] ?? []))
-            <div class="relative overflow-hidden {{ $card }}">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900">Verwandte Basisrezepte</h3>
-                    <p class="text-[11px] text-gray-500">Andere Basisrezepte, die Pairing-Anker mit diesem teilen — mehr geteilte Anker = näher verwandt.</p>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($pairing['verwandte'] as $r)
-                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="{{ $r['shared'] }} geteilte Anker{{ count($r['shared_slugs'] ?? []) ? ': ' . implode(', ', $r['shared_slugs']) : '' }}">{{ $r['name'] }} <span class="opacity-60">{{ $r['shared'] }}</span></span>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-        @endif
-
-        @if(count($pairing['aroma'] ?? []))
-            <div class="relative overflow-hidden {{ $card }}">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900">Molekular verwandt (Aroma-Layer)</h3>
-                    <p class="text-[11px] text-gray-500">Aromen mit gemeinsamem Aromamolekül (Foodpairing) — harmonieren über die Molekülebene, knapp unter der kulinarischen Klassik.</p>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($pairing['aroma'] as $n)<span class="{{ $pill }} {{ $variantPill['primary'] }}">≈ {{ $n }}</span>@endforeach
-                    </div>
-                </div>
-            </div>
-        @endif
-
-        </div>
+        {{-- Kern-Anker / „Passt dazu" / „Macht den Teller eigen" / Kontrast / Molekular verwandt / Verwandte Basisrezepte
+             sind komplett ins Geschmacks-Profil (sensorik-Partial, rechts vom Radar) hochgezogen — s. partials/pairing-empfehlungen. --}}
     @endif
 @elseif(($pairing['type'] ?? null) === 'gp')
     @if(count($pairing['anker']) === 0)
