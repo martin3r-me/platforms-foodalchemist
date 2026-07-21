@@ -45,7 +45,8 @@ return new class extends Migration
                 $table->string('created_via', 32)->default('manual');
                 $table->timestamps();
                 $table->softDeletes();
-                $table->index(['trigger_token', 'forbid_token']);
+                // Expliziter kurzer Name: der Auto-Name (71 Z.) sprengt MySQLs 64-Zeichen-Limit → fresh migrate crasht.
+                $table->index(['trigger_token', 'forbid_token'], 'fa_term_anti_trigger_forbid_idx');
             });
         }
     }
