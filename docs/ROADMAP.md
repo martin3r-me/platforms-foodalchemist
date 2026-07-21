@@ -197,7 +197,11 @@ Großes Redesign der Foodbook-Hauptseite zum **Planungs-Cockpit** (mit Dominique
 
 **Phase 2 Kern GEBAUT + GEPUSHT (`9a0543f`):** 3-Ebenen-DNA Team → **Kunde** → Foodbook. Neues `kunde_dna`-Canvas-Template (Marke/Ziel-Gäste/Kommunikation-Ton/Schreibstil/No-Gos/Preis-Erwartung), `cascadeKontext` um Kunde-Ebene erweitert (`$crmCompanyId`, owner_type=crm_company), `AiGatewayService` reicht `food_dna_crm_company_id` durch, `kiKundentext` gibt die crm_company_id mit. Kunde-DNA-Board = neues Nested-Livewire `KundeDnaPanel` im Kreativ-Tab (an CRM-Kunde gebunden). Kein DB-Schema (owner_type freier varchar). Verifiziert: Board rendert+speichert, cascade zieht die Kunde-Ebene nachweislich in den KI-Kontext. Pest `FoodbookDnaCascade` 2/2.
 
-**Offen:** Phase 2-Rest = **Team-DNA → Einstellungen verschieben** (Umzug des food-dna-Boards in einen Settings-Abschnitt + food-dna-Route/Sidebar auflösen; berührt `routes`/`config` — Martin/Parallel-WIP-Zone, wartet auf freie Bahn). Phase 3 (Struktur anwenden + per-Slot-Vorschläge, A/B-Entscheid), Phase 4 (Tonalität-Pass + Trend-Tab), Phase 5 (Kickoff-Flow). demo-Deploy = Martin.
+**Phase 3a GEBAUT + GEPUSHT (`ed0bc33`):** „Struktur anwenden" — Button materialisiert die Gerüst-Slots als Kapitel (`FoodbookService::strukturAusGeruest`, idempotent, setzt `slot.chapter_id`) → Coverage matcht robust per Kapitel. Pest `FoodbookStruktur` 2/2.
+
+**Phase 3 (Vollausbau) GEBAUT + GEPUSHT (`7208627`), A/B = B:** per-Slot-Vorschläge → abstimmen → übernehmen. `ConceptGeneratorService::slotVorschlaege` (gerankt, read-only, Reuse der Assembler-Helfer), `FoodbookService::uebernehmeVorschlag` (Weg B: Slot-Kapitel = ein Konzept, übernommene Gerichte = dessen Slots, Duplikat-Schutz), UI im Planung-Tab (✨ Vorschläge je Slot, ✓/✕), Monolith „Konzept aus Gerüst" ENTFERNT, `frameSlots.chapter_id` additiv im Trait. **End-to-end in Sandbox verifiziert** (Struktur→6 gerankte Vorschläge→Übernehmen→concept_ref-Block+Konzept-Slot, DB-geprüft). Pest 139 grün.
+
+**Offen:** Phase 2-Rest = **Team-DNA → Einstellungen verschieben** (food-dna-Board in Settings + Route/Sidebar auflösen; `routes`/`config`). Phase 4 (Tonalität-Pass beim Übernehmen + Trend-Tab). Phase 5 (Kickoff-Flow „neues Foodbook für Kunde X"). MCP-Lockstep für per-Slot (optionales Tool; Schreib-Pfad ist über foodbook_blocks.POST/concepts.* schon abgedeckt). demo-Deploy = Martin.
 
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 
