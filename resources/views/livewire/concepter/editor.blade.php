@@ -1095,39 +1095,41 @@
 
                         <div class="relative overflow-hidden {{ $card }} mb-3">
                             <div class="{{ $cardAccent }}"></div>
-                            <div class="px-5 py-4 space-y-2">
+                            <div class="px-5 py-4">
                                 <h3 class="font-medium tracking-tight text-gray-900">Geschmacks-Profil <span class="text-[11px] font-normal text-gray-400">· sensorisch</span></h3>
                                 {{-- #503: Fläche = aggregierte Sensorik über die Concept-Gerichte (MAX je Achse). --}}
-                                <p class="text-[11px] text-gray-500">Netz = sensorische Grundgeschmack-Achsen (0–1), MAX je Achse über die Concept-Gerichte.</p>
-                                @include('foodalchemist::livewire.concepter.partials.geschmack-radar', [
-                                    'sensGeschmack' => $sensorik['geschmack'] ?? [],
-                                    'ankerGeschmack' => [],
-                                    'dominant' => $sensorik['dominant'] ?? [],
-                                    'luecken' => $sensorik['luecken'] ?? [],
-                                ])
-                                @if(count($sensorik['dominant']) || count($sensorik['luecken']))
-                                    <div class="flex flex-wrap gap-1 pt-1">
-                                        @foreach($sensorik['dominant'] as $d)<span class="{{ $pill }} {{ $variantPill['success'] }}">dominant: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
-                                        @foreach($sensorik['luecken'] as $d)<span class="{{ $pill }} {{ $variantPill['warning'] }}">Lücke: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
+                                <div class="flex flex-col md:flex-row items-center md:items-start gap-6 mt-3">
+                                    <div class="shrink-0 w-full max-w-[360px]">
+                                        @include('foodalchemist::livewire.concepter.partials.geschmack-radar', [
+                                            'sensGeschmack' => $sensorik['geschmack'] ?? [],
+                                            'ankerGeschmack' => [],
+                                            'dominant' => $sensorik['dominant'] ?? [],
+                                            'luecken' => $sensorik['luecken'] ?? [],
+                                        ])
                                     </div>
-                                @endif
-                            </div>
-                        </div>
-
-                        <div class="relative overflow-hidden {{ $card }} mb-3">
-                            <div class="{{ $cardAccent }}"></div>
-                            <div class="px-5 py-4 space-y-2">
-                                <h3 class="font-medium tracking-tight text-gray-900">Textur-Profil</h3>
-                                @if(count($sensorik['textur']))
-                                    <div class="flex flex-wrap gap-1">
-                                        @foreach($sensorik['textur'] as $t)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $t['label'] }}</span>@endforeach
+                                    <div class="flex-1 min-w-0 w-full space-y-3">
+                                        <p class="text-[11px] text-gray-500">Netz = sensorische Grundgeschmack-Achsen (0–1), MAX je Achse über die Concept-Gerichte.</p>
+                                        @if(count($sensorik['dominant']) || count($sensorik['luecken']))
+                                            <div class="flex flex-wrap gap-1">
+                                                @foreach($sensorik['dominant'] as $d)<span class="{{ $pill }} {{ $variantPill['success'] }}">dominant: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
+                                                @foreach($sensorik['luecken'] as $d)<span class="{{ $pill }} {{ $variantPill['warning'] }}">Lücke: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
+                                            </div>
+                                        @endif
+                                        <div class="pt-3 border-t border-black/[0.06]">
+                                            <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Textur-Profil</h4>
+                                            @if(count($sensorik['textur']))
+                                                <div class="flex flex-wrap gap-1">
+                                                    @foreach($sensorik['textur'] as $t)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $t['label'] }}</span>@endforeach
+                                                </div>
+                                            @else
+                                                <p class="text-[11px] text-gray-500">Keine Textur-Daten.</p>
+                                            @endif
+                                            @if($sensorik['monotonie'])
+                                                <p class="text-[11px] text-amber-600 mt-1.5">⚠ {{ $sensorik['monotonie'] }}</p>
+                                            @endif
+                                        </div>
                                     </div>
-                                @else
-                                    <p class="text-[11px] text-gray-500">Keine Textur-Daten.</p>
-                                @endif
-                                @if($sensorik['monotonie'])
-                                    <p class="text-[11px] text-amber-600">⚠ {{ $sensorik['monotonie'] }}</p>
-                                @endif
+                                </div>
                             </div>
                         </div>
 

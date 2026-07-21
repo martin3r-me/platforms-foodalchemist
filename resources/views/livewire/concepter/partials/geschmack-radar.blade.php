@@ -25,7 +25,7 @@
 @endphp
 
 <div x-data="{ act: null }" class="relative">
-    <svg viewBox="0 0 300 300" class="w-full max-w-[320px] mx-auto" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 300 300" class="w-full max-w-[420px] mx-auto" xmlns="http://www.w3.org/2000/svg">
         <defs>
             <radialGradient id="tasteRadarGlow" cx="50%" cy="50%" r="50%">
                 <stop offset="0%" stop-color="rgb(139 92 246)" stop-opacity="0.5" />
