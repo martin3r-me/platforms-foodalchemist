@@ -28,6 +28,11 @@ class SupplierDetail extends Component
     /** R9.1 (E4) Konditionen — vorbelegt beim Öffnen, gespeichert per updateConditions. */
     public array $konditionen = ['rebate_pct' => '', 'payment_term_days' => '', 'min_order_value' => '', 'free_shipping_threshold' => ''];
 
+    /** Spec 17/S1 Bestell-Logistik: Liefertage (ISO-Wochentage) + Bestellschluss/Vorlaufzeit. */
+    public array $liefertage = [];
+
+    public array $bestellung = ['order_cutoff_time' => '', 'order_lead_days' => ''];
+
     public array $neuKontakt = ['name' => '', 'role' => '', 'phone' => '', 'email' => ''];
 
     public array $neueAbsprache = ['type' => 'absprache', 'note' => '', 'valid_from' => '', 'valid_to' => '', 'follow_up_at' => ''];
@@ -52,6 +57,12 @@ class SupplierDetail extends Component
             'min_order_value' => $sb['konditionen']['min_order_value'] ?? '',
             'free_shipping_threshold' => $sb['konditionen']['free_shipping_threshold'] ?? '',
         ];
+        $tage = $sb['bestellung']['delivery_days'] ?? null;
+        $this->liefertage = $tage ? array_map('intval', array_filter(explode(',', (string) $tage), 'strlen')) : [];
+        $this->bestellung = [
+            'order_cutoff_time' => $sb['bestellung']['order_cutoff_time'] ?? '',
+            'order_lead_days' => $sb['bestellung']['order_lead_days'] ?? '',
+        ];
         $this->dispatch('modal.open', name: 'supplier-detail');
     }
 
@@ -74,6 +85,20 @@ class SupplierDetail extends Component
     {
         $this->fuehreAus(fn ($svc, $team) => $svc->updateConditions($team, $this->supplierId, $this->konditionen),
             'Konditionen gespeichert.');
+    }
+
+    /** Spec 17/S1: Bestell-Logistik speichern — Liefertage (ISO-CSV) + Bestellschluss/Vorlaufzeit. */
+    public function bestellungSpeichern(): void
+    {
+        $tage = array_values(array_unique(array_map('intval', $this->liefertage)));
+        sort($tage);
+        $input = [
+            'delivery_days' => $tage === [] ? '' : implode(',', $tage),
+            'order_cutoff_time' => $this->bestellung['order_cutoff_time'] ?? '',
+            'order_lead_days' => $this->bestellung['order_lead_days'] ?? '',
+        ];
+        $this->fuehreAus(fn ($svc, $team) => $svc->updateConditions($team, $this->supplierId, $input),
+            'Bestell-Logistik gespeichert.');
     }
 
     public function kontaktAnlegen(): void
@@ -157,7 +182,7 @@ class SupplierDetail extends Component
 
     private function resetState(): void
     {
-        $this->reset('status', 'konditionen', 'neuKontakt', 'neueAbsprache', 'neuesDokument', 'fehler', 'hinweis');
+        $this->reset('status', 'konditionen', 'liefertage', 'bestellung', 'neuKontakt', 'neueAbsprache', 'neuesDokument', 'fehler', 'hinweis');
     }
 
     private function team()

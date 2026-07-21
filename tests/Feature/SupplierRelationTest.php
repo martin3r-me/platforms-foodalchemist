@@ -42,6 +42,28 @@ it('aggregiert Stammblatt: Status, Konditionen, Kontakt, Absprache, Dokument, WG
         ->and($sb['dokumente'][0]['notice_deadline'])->toBe(now()->addDays(200)->subDays(90)->toDateString());
 });
 
+it('Spec 17/S1: Bestell-Logistik (Liefertage/Bestellschluss/Vorlaufzeit) wird persistiert + aggregiert', function () {
+    $this->svc->updateConditions($this->rootTeam, $this->lief->id, [
+        'delivery_days' => '1,3,5',
+        'order_cutoff_time' => '10:00',
+        'order_lead_days' => 2,
+    ]);
+
+    $sb = $this->svc->stammblatt($this->rootTeam, $this->lief->id);
+
+    expect($sb['bestellung']['delivery_days'])->toBe('1,3,5')
+        ->and($sb['bestellung']['order_cutoff_time'])->toBe('10:00')
+        ->and($sb['bestellung']['order_lead_days'])->toBe(2)
+        // Konditionen bleiben unberührt, wenn nur Logistik gesetzt wird
+        ->and($sb['konditionen']['min_order_value'])->toBeNull();
+
+    // Leerer Wert nullt (nicht '' persistieren)
+    $this->svc->updateConditions($this->rootTeam, $this->lief->id, ['order_cutoff_time' => '']);
+    $sb2 = $this->svc->stammblatt($this->rootTeam, $this->lief->id);
+    expect($sb2['bestellung']['order_cutoff_time'])->toBeNull()
+        ->and($sb2['bestellung']['delivery_days'])->toBe('1,3,5');
+});
+
 it('Vertragsfrist-Signal feuert für ablaufende Kündigungsfrist, nicht für ferne', function () {
     // Deadline in der Vergangenheit (term_end +20, Frist 30 → deadline -10), Vertrag läuft noch → im Fenster.
     $this->agr->addDocument($this->rootTeam, $this->lief->id, ['kind' => 'vertrag', 'term_end' => now()->addDays(20)->toDateString(), 'notice_period_days' => 30]);

@@ -122,6 +122,31 @@
                         <button type="button" wire:click="konditionenSpeichern" class="{{ $btnPrimary }}" data-kond-save>Konditionen speichern</button>
                     @endif
                     <p class="text-[11px] text-gray-500">Rückvergütung ≠ Listen-EK — fließt langfristig in die echte Marge (R2).</p>
+
+                    {{-- Spec 17/S1 — Bestell-Logistik (N-Track): Liefertage + Bestellschluss/Vorlaufzeit --}}
+                    <div class="pt-3 mt-1 border-t border-black/5">
+                        <p class="{{ $label }} mb-2">Bestell-Logistik</p>
+                        <div class="mb-2">
+                            <label class="block {{ $label }} mb-1">Liefertage</label>
+                            <div class="flex flex-wrap gap-2">
+                                @foreach(['1' => 'Mo', '2' => 'Di', '3' => 'Mi', '4' => 'Do', '5' => 'Fr', '6' => 'Sa', '7' => 'So'] as $iso => $tag)
+                                    <label class="inline-flex items-center gap-1 text-xs text-gray-700">
+                                        <input type="checkbox" wire:model="liefertage" value="{{ $iso }}" @disabled(! $darfEdit) /> {{ $tag }}
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="block {{ $label }} mb-1">Bestellschluss (HH:MM)</label>
+                                <input type="time" wire:model="bestellung.order_cutoff_time" @disabled(! $darfEdit) class="{{ $input }}" /></div>
+                            <div><label class="block {{ $label }} mb-1">Vorlaufzeit (Tage)</label>
+                                <input type="number" min="0" wire:model="bestellung.order_lead_days" @disabled(! $darfEdit) class="{{ $input }}" /></div>
+                        </div>
+                        @if($darfEdit)
+                            <button type="button" wire:click="bestellungSpeichern" class="{{ $btnPrimary }} mt-3" data-bestell-save>Bestell-Logistik speichern</button>
+                        @endif
+                        <p class="text-[11px] text-gray-500 mt-1">Speist die Bestellschienen-Ampel (Spec 17/S2): Liefertag + Bestellschluss je Lieferant.</p>
+                    </div>
                 </div>
 
                 {{-- ── Tab: Absprachen ── --}}

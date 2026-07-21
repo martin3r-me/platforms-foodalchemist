@@ -24,8 +24,9 @@ class SuppliersPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
     {
         return 'Pflegt die kommerzielle Beziehungs-Ebene eines Lieferanten: status '
             . '(aktiv|zweitquelle|gesperrt), Konditionen (rebate_pct, payment_term_days, '
-            . 'min_order_value, free_shipping_threshold) und optional einen neuen Ansprechpartner '
-            . '(contact: {name, role?, phone?, email?}). Nur eigene Lieferanten des aktuellen Teams.';
+            . 'min_order_value, free_shipping_threshold), Bestell-Logistik (delivery_days = CSV '
+            . 'ISO-Wochentag "1,3,5"; order_cutoff_time "HH:MM"; order_lead_days) und optional einen '
+            . 'neuen Ansprechpartner (contact: {name, role?, phone?, email?}). Nur eigene Lieferanten des aktuellen Teams.';
     }
 
     public function getSchema(): array
@@ -39,6 +40,9 @@ class SuppliersPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'payment_term_days' => ['type' => 'integer'],
                 'min_order_value' => ['type' => 'number'],
                 'free_shipping_threshold' => ['type' => 'number'],
+                'delivery_days' => ['type' => 'string', 'description' => 'Liefertage als CSV ISO-Wochentag (1=Mo … 7=So), z. B. "1,3,5"'],
+                'order_cutoff_time' => ['type' => 'string', 'description' => 'Bestellschluss-Uhrzeit HH:MM'],
+                'order_lead_days' => ['type' => 'integer', 'description' => 'Vorlaufzeit in Tagen bis Lieferung'],
                 'contact' => [
                     'type' => 'object',
                     'properties' => [
@@ -69,7 +73,10 @@ class SuppliersPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 $svc->setStatus($team, $id, (string) $arguments['status']);
                 $geaendert[] = 'status';
             }
-            $konditionen = array_intersect_key($arguments, array_flip(['rebate_pct', 'payment_term_days', 'min_order_value', 'free_shipping_threshold']));
+            $konditionen = array_intersect_key($arguments, array_flip([
+                'rebate_pct', 'payment_term_days', 'min_order_value', 'free_shipping_threshold',
+                'delivery_days', 'order_cutoff_time', 'order_lead_days',
+            ]));
             if ($konditionen !== []) {
                 $svc->updateConditions($team, $id, $konditionen);
                 $geaendert[] = 'konditionen';

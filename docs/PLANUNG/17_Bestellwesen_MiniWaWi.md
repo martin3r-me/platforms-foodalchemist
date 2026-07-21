@@ -44,9 +44,9 @@ Bedarf→Lieferant-Gruppierung (`bestellvorschlag`/`einkaufsliste`) · Lead-LA-K
 | E10 | Re-Import-Idempotenz | **`addNeed` upserted pro (Schiene, Artikel, `source_ref`):** dieselbe Quelle erneut übernehmen ERSETZT ihren Beitrag (Mengen-Update); nur VERSCHIEDENE Quellen akkumulieren. | Pläne ändern sich (100→120 P.) und Doppelklicks passieren — der Bedarf darf sich dadurch nie verdoppeln. |
 | E11 | Draft-Preise leben, Beleg friert | Im `draft` werden `pack_price`/`line_total` bei Anzeige/`recomputeTotal` aus dem **aktiven Preis** aufgefrischt; erst `send` friert den Snapshot ein (E2 unverändert). | Eine 10 Tage offene Schiene darf keine stalen Preise zeigen — sonst rechnet die MOQ-Ampel falsch. |
 
-## 3. Stufe 0 — Gebinde-Bestellzeile + Blatt-Bereinigung · M · hängt an nichts · ✅ GEBAUT+GETESTET 2026-07-21
+## 3. Stufe 0 — Gebinde-Bestellzeile + Blatt-Bereinigung · M · hängt an nichts · ✅ GEBAUT+GETESTET+GEPUSHT 2026-07-21 (`0d78bd2`)
 
-> **Gebaut 2026-07-21:** `GebindeRechner` (pure/read-only, `berechne(leadLa, needG, pieceG)` → qty_packs/pack_qty/pack_unit_code/packaging_unit/article_number/pack_price/line_total/needed_base/ueberkauf_base/grund) + `PlanungsblattService`-Verdrahtung (Konstruktor-Inject, `gruppiereNachLieferant` liefert `gebinde` je Position + echte `ek_summe`, `explodiere` gibt VK-`portionen` aus) + Blade Live (`blaetter/index.blade.php`) + PDF (`dokumente/blatt.blade.php`) auf Gebinde-Spalten (Artikel · Bestellen · Bedarf · EK) + P1-Relabel + Einkauf-Block/Checkbox raus (Livewire-Default `['produktion','bestellung']`) + `BestellvorschlagGetTool`-Beschreibung (Lockstep, Output trägt gebinde durch). **Tests: `GebindeRechnerTest` 10/10 + `PlanungsblattServiceTest` 8/8 angepasst (echte Gebinde-EK); volle FA-Suite 906/908 (1 skip, 1 vorbestehender VoiceHuellenTest-Fehler ohne S0-Bezug), 0 Regressionen.** Blade-Falle gefunden+gefixt: `kg@endif` (Direktive an Wort geklebt → literal). Offen: Live-Klickstrecke auf demo (Deploy Martin).
+> **Gebaut 2026-07-21 (`0d78bd2`, main):** `GebindeRechner` (pure/read-only, `berechne(leadLa, needG, pieceG)` → qty_packs/pack_qty/pack_unit_code/packaging_unit/article_number/pack_price/line_total/needed_base/ueberkauf_base/grund) + `PlanungsblattService`-Verdrahtung (Konstruktor-Inject, `gruppiereNachLieferant` liefert `gebinde` je Position + echte `ek_summe`, `explodiere` gibt VK-`portionen` aus) + Blade Live (`blaetter/index.blade.php`) + PDF (`dokumente/blatt.blade.php`) auf Gebinde-Spalten (Artikel · Bestellen · Bedarf · EK) + P1-Relabel + Einkauf-Block/Checkbox raus (Livewire-Default `['produktion','bestellung']`) + `BestellvorschlagGetTool`-Beschreibung (Lockstep, Output trägt gebinde durch). **Tests: `GebindeRechnerTest` 10/10 + `PlanungsblattServiceTest` 8/8 angepasst (echte Gebinde-EK); volle FA-Suite 906/908 (1 skip, 1 vorbestehender VoiceHuellenTest-Fehler ohne S0-Bezug), 0 Regressionen.** Blade-Falle gefunden+gefixt: `kg@endif` (Direktive an Wort geklebt → literal). Offen: Live-Klickstrecke auf demo (Deploy Martin).
 
 **DoD:**
 - [x] `GebindeRechner` mit Pest-Test: Gebinde-Aufrundung, Überkauf-Rest, `qty=NULL`-Fallback, Stück **mit + ohne Stückgewicht** vs. kg/l; API nimmt den **aggregierten** GP-Bedarf (E3).
@@ -56,13 +56,13 @@ Bedarf→Lieferant-Gruppierung (`bestellvorschlag`/`einkaufsliste`) · Lead-LA-K
 - [x] „Einkauf"-Blatt aus UI entfernt; `einkaufsliste()` bleibt im Service.
 - [x] `BestellvorschlagGetTool` gibt Gebinde-Felder aus (Lockstep), MySQL-verifiziert (Suite grün).
 
-## 4. Stufe 1 — Beschaffungs-Stammdaten vervollständigen · S · hängt an nichts · ⚪ ungebaut
+## 4. Stufe 1 — Beschaffungs-Stammdaten vervollständigen · S · hängt an nichts · ✅ GEBAUT+GETESTET 2026-07-21
 
-**Bau (Spec):** Migration `suppliers.delivery_days` (JSON/CSV Wochentage) + `order_cutoff` (Uhrzeit/Vorlaufzeit-Tage) — MOQ/Frei-Haus/Bestellweg existieren schon (R9). Im `SupplierDetail`-Modal (R9-UI) im Konditionen-Tab ergänzen. Optional: `SignalTyp::BestellschlussHeute`-Detektor (Muster `veraltetePreise`).
+> **Gebaut 2026-07-21:** Migration `2026_07_21_000002` → `suppliers.delivery_days` (CSV ISO-Wochentag 1=Mo..7=So), `order_cutoff_time` (HH:MM), `order_lead_days` (Vorlaufzeit-Tage). MOQ/Frei-Haus/`email_order` lagen schon (R9). `SupplierService::updateConditions` um die 3 Keys erweitert (leer→NULL), `stammblatt` liefert neuen `bestellung`-Block. `SupplierDetail`-Modal (Konditionen-Tab): Liefertage als 7 Wochentag-Checkboxen + Bestellschluss/Vorlaufzeit + „Bestell-Logistik speichern". `suppliers.PUT` im Lockstep (Schema + Description + intersect-Keys). Test `SupplierRelationTest` „S1: Bestell-Logistik" (persistiert + aggregiert + leer-nullt); gezielte Suite 25/25.
 
 **DoD:**
-- [ ] `delivery_days` + `order_cutoff` auf `suppliers`, editierbar im R9-Konditionen-Tab, `suppliers.PUT` erweitert (Lockstep).
-- [ ] Bestellschiene kann Liefertag/Bestellschluss anzeigen (Grundlage für S2-Ampel).
+- [x] `delivery_days` + `order_cutoff_time` + `order_lead_days` auf `suppliers`, editierbar im R9-Konditionen-Tab, `suppliers.PUT` erweitert (Lockstep).
+- [x] `stammblatt.bestellung` liefert Liefertag/Bestellschluss/Vorlaufzeit → Grundlage für S2-Ampel.
 
 ## 5. Stufe 2 — Persistente Bestellschiene (Kern) · L · hängt an S0 + S1 · ⚪ ungebaut
 

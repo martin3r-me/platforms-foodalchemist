@@ -147,12 +147,17 @@ class SupplierService
         return $supplier;
     }
 
-    /** R9.1 (E4): Konditionen pflegen (nur gesetzte Keys), nur Besitzer-Team. */
+    /**
+     * R9.1 (E4) + Spec 17/S1: Konditionen + Bestell-Logistik pflegen (nur gesetzte Keys),
+     * nur Besitzer-Team. delivery_days/order_cutoff_time/order_lead_days = N-Track-Logistik.
+     */
     public function updateConditions(Team $team, int $id, array $input): FoodAlchemistSupplier
     {
         $supplier = $this->ownedOrFail($team, $id);
         $daten = [];
-        foreach (['rebate_pct', 'payment_term_days', 'min_order_value', 'free_shipping_threshold'] as $k) {
+        $keys = ['rebate_pct', 'payment_term_days', 'min_order_value', 'free_shipping_threshold',
+            'delivery_days', 'order_cutoff_time', 'order_lead_days'];
+        foreach ($keys as $k) {
             if (array_key_exists($k, $input)) {
                 $daten[$k] = $input[$k] === '' ? null : $input[$k];
             }
@@ -222,6 +227,12 @@ class SupplierService
                 'payment_term_days' => $supplier->payment_term_days,
                 'min_order_value' => $supplier->min_order_value !== null ? (float) $supplier->min_order_value : null,
                 'free_shipping_threshold' => $supplier->free_shipping_threshold !== null ? (float) $supplier->free_shipping_threshold : null,
+            ],
+            // Spec 17/S1: Bestell-Logistik (Liefertage/Bestellschluss/Vorlaufzeit) — N-Track.
+            'bestellung' => [
+                'delivery_days' => $supplier->delivery_days,
+                'order_cutoff_time' => $supplier->order_cutoff_time,
+                'order_lead_days' => $supplier->order_lead_days,
             ],
             'kontakte' => $supplier->contacts->map(fn ($c) => [
                 'id' => (int) $c->id, 'name' => $c->name, 'role' => $c->role, 'phone' => $c->phone, 'email' => $c->email,
