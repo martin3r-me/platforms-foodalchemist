@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Foodbooks;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPhase;
@@ -18,7 +19,85 @@ use Platform\FoodAlchemist\Services\FoodbookService;
  */
 class Index extends Component
 {
-    use WithPagination, ManagesCanvas, ManagesPlanningFrame, ManagesPhase;
+    use WithPagination, WithFileUploads, ManagesCanvas, ManagesPlanningFrame, ManagesPhase;
+
+    // ── Phase 6: Branding / CI (pro Foodbook) — verdrahtet die FoodbookService-Branding-API ──
+    public array $brandingForm = ['brand_color' => '#6d28d9', 'band_color' => '', 'footer_text' => ''];
+
+    public $logoUpload = null;
+
+    public $coverUpload = null;
+
+    public ?int $brandingLoadedId = null;
+
+    public ?string $brandingFehler = null;
+
+    public bool $brandingGespeichert = false;
+
+    public function brandingSpeichern(FoodbookService $svc): void
+    {
+        $this->brandingFehler = null;
+        $this->brandingGespeichert = false;
+        if ($this->selectedId === null) {
+            return;
+        }
+        try {
+            $fb = $svc->setBranding($this->team(), $this->selectedId, [
+                'brand_color' => $this->brandingForm['brand_color'] ?? '#6d28d9',
+                'band_color' => $this->brandingForm['band_color'] ?? '',
+                'footer_text' => $this->brandingForm['footer_text'] ?? '',
+            ]);
+            $this->brandingForm = [
+                'brand_color' => $fb->brand_color ?? '#6d28d9',
+                'band_color' => $fb->band_color ?? '',
+                'footer_text' => $fb->footer_text ?? '',
+            ];
+            $this->brandingGespeichert = true;
+        } catch (\RuntimeException $e) {
+            // Hex-Murks oder geerbtes Foodbook (Owner-Guard D1) → sauber als UI-Fehler.
+            $this->brandingFehler = $e->getMessage();
+        }
+    }
+
+    public function updatedLogoUpload(): void
+    {
+        $this->brandingBildHochladen('logoUpload', 'storeLogo');
+    }
+
+    public function updatedCoverUpload(): void
+    {
+        $this->brandingBildHochladen('coverUpload', 'storeCover');
+    }
+
+    /** Auto-Upload bei Dateiwahl: validieren → Service (räumt Altdatei) → Feld leeren. */
+    private function brandingBildHochladen(string $prop, string $serviceMethod): void
+    {
+        $this->brandingFehler = null;
+        if ($this->selectedId === null || $this->{$prop} === null) {
+            return;
+        }
+        $this->validate([$prop => 'image|max:8192'], [], [$prop => $prop === 'logoUpload' ? 'Logo' : 'Cover-Bild']);
+        try {
+            app(FoodbookService::class)->{$serviceMethod}($this->team(), $this->selectedId, $this->{$prop});
+        } catch (\RuntimeException $e) {
+            $this->brandingFehler = $e->getMessage();
+        }
+        $this->reset($prop);
+    }
+
+    public function brandingLogoEntfernen(FoodbookService $svc): void
+    {
+        if ($this->selectedId !== null) {
+            $svc->clearLogo($this->team(), $this->selectedId);
+        }
+    }
+
+    public function brandingCoverEntfernen(FoodbookService $svc): void
+    {
+        if ($this->selectedId !== null) {
+            $svc->clearCover($this->team(), $this->selectedId);
+        }
+    }
 
     /** R4.3: Owner für den Phasen-Stepper (Trait ManagesPhase). */
     protected function phaseOwner(): array
@@ -462,6 +541,16 @@ class Index extends Component
         // R4.1: Planungs-Gerüst (Soll-Rahmen) — gleiche Wechsel-Logik wie der Canvas.
         if ($fb !== null && $this->frameOwnerId !== $fb->id) {
             $this->frameInit('foodbook', $fb->id);
+        }
+
+        // Phase 6: Branding-Felder nur bei Selektions-WECHSEL aus dem Foodbook laden (kein Edit-Verlust je Roundtrip).
+        if ($fb !== null && $this->brandingLoadedId !== $fb->id) {
+            $this->brandingForm = [
+                'brand_color' => $fb->brand_color ?? '#6d28d9',
+                'band_color' => $fb->band_color ?? '',
+                'footer_text' => $fb->footer_text ?? '',
+            ];
+            $this->brandingLoadedId = $fb->id;
         }
 
         $menue = $fb !== null ? $svc->dokumentDaten($team, $fb) : null;

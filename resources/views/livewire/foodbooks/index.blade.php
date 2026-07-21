@@ -98,7 +98,7 @@
 
                 {{-- Tab-Leiste --}}
                 <div class="flex flex-wrap gap-1" role="tablist">
-                    @foreach(['briefing' => '📋 Briefing', 'planung' => '🎯 Planung', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend'] as $tk => $tl)
+                    @foreach(['briefing' => '📋 Briefing', 'planung' => '🎯 Planung', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend', 'branding' => '🏷 Branding/CI'] as $tk => $tl)
                         <button type="button" @click="tab = @js($tk)" :class="tab === @js($tk) ? '{{ $aktiv }}' : '{{ $hover }}'"
                                 class="px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-fb-tab="{{ $tk }}">{{ $tl }}</button>
                     @endforeach
@@ -235,6 +235,96 @@
                         Zieht Trends, Flavor-Pairings und Domänen-Wissen aus dem Wissensschrank in die Planung — als Inspiration und als zusätzliche Vorschlags-Quelle.
                     </div>
                 </div>{{-- /Trend --}}
+
+                {{-- ═══ Tab: BRANDING / CI (pro Foodbook) — Phase 6, verdrahtet FoodbookService-Branding-API ═══ --}}
+                <div x-show="tab === 'branding'" x-cloak class="space-y-3" data-fb-panel="branding"
+                     x-data="{ brand: @entangle('brandingForm.brand_color'), band: @entangle('brandingForm.band_color'), footer: @entangle('brandingForm.footer_text') }">
+                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-4">
+                        <div class="{{ $cardAccent }}"></div>
+
+                        @if($brandingFehler)
+                            <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700" data-branding-fehler>{{ $brandingFehler }}</div>
+                        @endif
+                        @if($brandingGespeichert)
+                            <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1.5 text-[11px] text-emerald-700">✓ Gespeichert — fließt ins Dokument-PDF.</div>
+                        @endif
+
+                        {{-- Live-Vorschau: Kopf-Band (Bandfarbe + Logo) · Fuß-Linie (Marken-Farbe) --}}
+                        <div>
+                            <p class="{{ $label }} mb-1">Vorschau</p>
+                            <div class="rounded-lg overflow-hidden border border-black/10">
+                                <div class="flex items-center justify-between gap-2 px-3 h-9 text-white text-[11px] uppercase tracking-wide" :style="`background:${band || brand}`">
+                                    <span class="truncate">{{ $fb->label }}</span>
+                                    @if($fb->logo_path)<img src="{{ \Storage::disk('public')->url($fb->logo_path) }}" alt="Logo" class="max-h-5 max-w-[90px] object-contain shrink-0" />@endif
+                                </div>
+                                <div class="px-3 py-3 text-[11px] text-gray-600" :style="`border-top:3px solid ${brand}`">
+                                    <span x-text="footer || 'Erstellt mit Food Alchemist'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {{-- Marken-Farbe --}}
+                            <div>
+                                <label class="{{ $label }}">Marken-Farbe</label>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <input type="color" x-model="brand" class="h-9 w-12 rounded border border-black/10 bg-transparent cursor-pointer p-0.5" data-brand-color />
+                                    <input type="text" x-model="brand" class="{{ $input }} w-32 font-mono" placeholder="#6d28d9" />
+                                </div>
+                                <p class="text-[10px] text-gray-500 mt-1">Rahmen, Linien, Badges im PDF.</p>
+                            </div>
+                            {{-- Bandfarbe (optional) --}}
+                            <div>
+                                <label class="{{ $label }}">Bandfarbe (optional)</label>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <input type="color" x-model="band" class="h-9 w-12 rounded border border-black/10 bg-transparent cursor-pointer p-0.5" />
+                                    <input type="text" x-model="band" class="{{ $input }} w-32 font-mono" placeholder="aus Marke" />
+                                    <button type="button" @click="band = ''" class="{{ $btnGhostXs }}" title="leeren → leitet aus der Marken-Farbe ab">✕</button>
+                                </div>
+                                <p class="text-[10px] text-gray-500 mt-1">Kopf-/Fuß-Band. Leer = wie Marken-Farbe.</p>
+                            </div>
+                        </div>
+
+                        {{-- Footer-Text --}}
+                        <div>
+                            <label class="{{ $label }}">Footer-Text</label>
+                            <input type="text" x-model="footer" class="{{ $input }}" placeholder="Erstellt mit Food Alchemist" />
+                        </div>
+
+                        {{-- Logo + Cover --}}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-black/5">
+                            <div>
+                                <label class="{{ $label }}">Logo</label>
+                                @if($fb->logo_path)
+                                    <div class="flex items-center gap-2 mt-1 mb-1">
+                                        <img src="{{ \Storage::disk('public')->url($fb->logo_path) }}" alt="Logo" class="h-10 max-w-[120px] object-contain rounded border border-black/5 bg-white p-1" />
+                                        <button type="button" wire:click="brandingLogoEntfernen" class="{{ $btnGhostXs }} text-red-600" data-logo-entfernen>entfernen</button>
+                                    </div>
+                                @endif
+                                <input type="file" wire:model="logoUpload" accept="image/*" class="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-violet-500/10 file:text-violet-700 file:text-[11px] cursor-pointer" data-logo-upload />
+                                <div wire:loading wire:target="logoUpload" class="text-[10px] text-gray-500 mt-0.5">lädt …</div>
+                                @error('logoUpload')<span class="text-[10px] text-rose-600">{{ $message }}</span>@enderror
+                            </div>
+                            <div>
+                                <label class="{{ $label }}">Cover-Bild</label>
+                                @if($fb->cover_image_path)
+                                    <div class="flex items-center gap-2 mt-1 mb-1">
+                                        <img src="{{ \Storage::disk('public')->url($fb->cover_image_path) }}" alt="Cover" class="h-10 max-w-[120px] object-cover rounded border border-black/5" />
+                                        <button type="button" wire:click="brandingCoverEntfernen" class="{{ $btnGhostXs }} text-red-600" data-cover-entfernen>entfernen</button>
+                                    </div>
+                                @endif
+                                <input type="file" wire:model="coverUpload" accept="image/*" class="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-violet-500/10 file:text-violet-700 file:text-[11px] cursor-pointer" data-cover-upload />
+                                <div wire:loading wire:target="coverUpload" class="text-[10px] text-gray-500 mt-0.5">lädt …</div>
+                                @error('coverUpload')<span class="text-[10px] text-rose-600">{{ $message }}</span>@enderror
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 pt-2">
+                            <button type="button" wire:click="brandingSpeichern" class="{{ $btnPrimary }}" data-branding-speichern>Speichern</button>
+                            <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}?pdf=1" target="_blank" class="{{ $btnGhost }}" title="Branding im PDF gegenprüfen">→ Im Dokument (PDF) ansehen</a>
+                        </div>
+                    </div>
+                </div>{{-- /Branding --}}
 
             </div>{{-- /fbcockpit --}}
 
