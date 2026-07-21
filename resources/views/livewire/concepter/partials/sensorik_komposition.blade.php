@@ -69,3 +69,16 @@
         </div>
     </div>
 @endif
+
+{{-- Pairing-Empfehlungen (Kern-Anker / Passt dazu / Kontrast). Im Gericht-View gibt es kein Radar-Partial
+     (dort sitzen sie rechts vom Radar) — daher hier als eigene Karte, damit sie nicht verschwinden. --}}
+@php($prE = ($pairing['type'] ?? null) === 'recipe' ? ($pairing ?? []) : [])
+@if(count($prE['anker'] ?? []) || count($prE['vorschlaege'] ?? []) || count($prE['signature'] ?? []) || count($prE['nachbarn'] ?? []) || count($prE['kontrast'] ?? []))
+    <div class="relative overflow-hidden {{ $card }} mb-3">
+        <div class="{{ $cardAccent }}"></div>
+        <div class="px-5 py-4 space-y-2">
+            <h3 class="font-medium tracking-tight text-gray-900">Passt dazu <span class="text-[11px] font-normal text-gray-400">· Pairing</span></h3>
+            @include('foodalchemist::livewire.concepter.partials.pairing-empfehlungen', ['pairing' => $pairing ?? null])
+        </div>
+    </div>
+@endif

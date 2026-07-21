@@ -33,63 +33,8 @@
             </div>
         </div>
 
+        {{-- Kern-Anker / „Passt dazu" / „Macht den Teller eigen" sind ins Geschmacks-Profil (sensorik-Partial, rechts vom Radar) hochgezogen — s. partials/pairing-empfehlungen. --}}
         <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 mt-3 items-start">
-        @if(count($pairing['anker']))
-            <div class="relative overflow-hidden {{ $card }}">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900">Kern-Anker</h3>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($pairing['anker'] as $a)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $a['display_de'] ?: $a['slug'] }}</span>@endforeach
-                    </div>
-                </div>
-            </div>
-        @endif
-
-        @if(count($pairing['vorschlaege']))
-            <div class="relative overflow-hidden {{ $card }}">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900">Komplettiert den Teller</h3>
-                    <p class="text-[11px] text-gray-500">Aromen, die zu mehreren Komponenten erprobt passen — Vorschlag, keine Pflicht.</p>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($pairing['vorschlaege'] as $v)
-                            <span class="{{ $pill }} {{ $v['allrounder'] ? $variantPill['secondary'] : $variantPill['info'] }}" title="passt zu {{ $v['cover'] }}/{{ $v['dish_n'] }} Komponenten{{ $v['allrounder'] ? ' · Allrounder (passt zu fast allem)' : '' }}">{{ $v['slug'] }} <span class="opacity-60">{{ $v['cover'] }}/{{ $v['dish_n'] }}</span></span>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-        @endif
-
-        @if(count($pairing['signature'] ?? []))
-            <div class="relative overflow-hidden {{ $card }}">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900">Macht den Teller eigen</h3>
-                    <p class="text-[11px] text-gray-500">Aromen, die spezifisch zu DIESEM Teller passen — Allrounder (passt-zu-allem) sind rausgerechnet. Schärft das Profil statt es zu glätten.</p>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($pairing['signature'] as $v)
-                            <span class="{{ $pill }} {{ $variantPill['info'] }}" title="passt zu {{ $v['cover'] }}/{{ $v['dish_n'] }} Komponenten, aber kein Allrounder">{{ $v['slug'] }} <span class="opacity-60">{{ $v['cover'] }}/{{ $v['dish_n'] }}</span></span>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-        @endif
-
-        {{-- Basisrezept (Komponente): Graph-Sicht statt Teller-Logik. --}}
-        @if(count($pairing['nachbarn'] ?? []))
-            <div class="relative overflow-hidden {{ $card }}">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900">Passt erprobt zu</h3>
-                    <p class="text-[11px] text-gray-500">Aroma-Nachbarn dieser Komponente im Pairing-Graphen — womit sie erprobt harmoniert.</p>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($pairing['nachbarn'] as $n)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $n }}</span>@endforeach
-                    </div>
-                </div>
-            </div>
-        @endif
-
         @if(count($pairing['verwandte'] ?? []))
             <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
@@ -118,18 +63,6 @@
             </div>
         @endif
 
-        @if(count($pairing['kontrast'] ?? []))
-            <div class="relative overflow-hidden {{ $card }}">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900">Kontrast (Aroma-Gegenpol)</h3>
-                    <p class="text-[11px] text-gray-500">Kuratierte Kontrast-Kanten aus dem Aroma-Netz (↔) — der Gegenpol, der den Teller spannend macht.</p>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($pairing['kontrast'] as $n)<span class="{{ $pill }}" style="background-color: rgba(6,182,212,0.14); color: #0891b2;">↔ {{ $n }}</span>@endforeach
-                    </div>
-                </div>
-            </div>
-        @endif
         </div>
     @endif
 @elseif(($pairing['type'] ?? null) === 'gp')

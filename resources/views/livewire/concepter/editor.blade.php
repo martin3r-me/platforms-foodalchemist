@@ -1098,14 +1098,16 @@
                             <div class="px-5 py-4">
                                 <h3 class="font-medium tracking-tight text-gray-900">Geschmacks-Profil <span class="text-[11px] font-normal text-gray-400">· sensorisch</span></h3>
                                 {{-- #503: Fläche = aggregierte Sensorik über die Concept-Gerichte (MAX je Achse). --}}
-                                <div class="flex flex-col md:flex-row items-center md:items-start gap-6 mt-3">
-                                    <div class="shrink-0 w-full max-w-[360px]">
-                                        @include('foodalchemist::livewire.concepter.partials.geschmack-radar', [
-                                            'sensGeschmack' => $sensorik['geschmack'] ?? [],
-                                            'ankerGeschmack' => [],
-                                            'dominant' => $sensorik['dominant'] ?? [],
-                                            'luecken' => $sensorik['luecken'] ?? [],
-                                        ])
+                                <div class="flex flex-col lg:flex-row gap-6 mt-3">
+                                    <div class="shrink-0 mx-auto lg:mx-0 w-full max-w-[400px]">
+                                        <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3">
+                                            @include('foodalchemist::livewire.concepter.partials.geschmack-radar', [
+                                                'sensGeschmack' => $sensorik['geschmack'] ?? [],
+                                                'ankerGeschmack' => [],
+                                                'dominant' => $sensorik['dominant'] ?? [],
+                                                'luecken' => $sensorik['luecken'] ?? [],
+                                            ])
+                                        </div>
                                     </div>
                                     <div class="flex-1 min-w-0 w-full space-y-3">
                                         <p class="text-[11px] text-gray-500">Netz = sensorische Grundgeschmack-Achsen (0–1), MAX je Achse über die Concept-Gerichte.</p>
