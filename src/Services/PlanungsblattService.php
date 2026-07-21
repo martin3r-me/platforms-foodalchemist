@@ -462,6 +462,7 @@ class PlanungsblattService
             $gruppen[$key]['positionen'][] = [
                 'gp_id' => $b['gp_id'],
                 'gp' => $b['name'],
+                'lead_la_id' => $lead?->id !== null ? (int) $lead->id : null,  // S2: Andock für Bestellschiene
                 'menge_kg' => $b['menge_kg'],
                 'menge_g' => $b['menge_g'],
                 'ek_eur' => $b['ek_eur'],                 // Gramm-Theorie (Referenz/Rückfall)

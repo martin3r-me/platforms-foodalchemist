@@ -331,6 +331,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ProduktionsblattGetTool::class,
                     \Platform\FoodAlchemist\Tools\BestellvorschlagGetTool::class,
                     \Platform\FoodAlchemist\Tools\EinkaufslisteGetTool::class,
+                    // Spec 17/S2: Bestellschienen (mini-WaWi, N-Track) — MCP im Lockstep
+                    \Platform\FoodAlchemist\Tools\OrdersGetTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersAddNeedTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersSetStatusTool::class,
                     // R2.6: Praxis-Feedback (Küche/Kunde/Event) je Gericht/Rezept
                     \Platform\FoodAlchemist\Tools\FeedbackSearchTool::class,
                     \Platform\FoodAlchemist\Tools\FeedbackPostTool::class,

@@ -56,15 +56,19 @@ Bedarf→Lieferant-Gruppierung (`bestellvorschlag`/`einkaufsliste`) · Lead-LA-K
 - [x] „Einkauf"-Blatt aus UI entfernt; `einkaufsliste()` bleibt im Service.
 - [x] `BestellvorschlagGetTool` gibt Gebinde-Felder aus (Lockstep), MySQL-verifiziert (Suite grün).
 
-## 4. Stufe 1 — Beschaffungs-Stammdaten vervollständigen · S · hängt an nichts · ✅ GEBAUT+GETESTET 2026-07-21
+## 4. Stufe 1 — Beschaffungs-Stammdaten vervollständigen · S · hängt an nichts · ✅ GEBAUT+GETESTET+GEPUSHT 2026-07-21 (`3daf87d`)
 
-> **Gebaut 2026-07-21:** Migration `2026_07_21_000002` → `suppliers.delivery_days` (CSV ISO-Wochentag 1=Mo..7=So), `order_cutoff_time` (HH:MM), `order_lead_days` (Vorlaufzeit-Tage). MOQ/Frei-Haus/`email_order` lagen schon (R9). `SupplierService::updateConditions` um die 3 Keys erweitert (leer→NULL), `stammblatt` liefert neuen `bestellung`-Block. `SupplierDetail`-Modal (Konditionen-Tab): Liefertage als 7 Wochentag-Checkboxen + Bestellschluss/Vorlaufzeit + „Bestell-Logistik speichern". `suppliers.PUT` im Lockstep (Schema + Description + intersect-Keys). Test `SupplierRelationTest` „S1: Bestell-Logistik" (persistiert + aggregiert + leer-nullt); gezielte Suite 25/25.
+> **Gebaut 2026-07-21 (`3daf87d`, main):** Migration `2026_07_21_000002` → `suppliers.delivery_days` (CSV ISO-Wochentag 1=Mo..7=So), `order_cutoff_time` (HH:MM), `order_lead_days` (Vorlaufzeit-Tage). MOQ/Frei-Haus/`email_order` lagen schon (R9). `SupplierService::updateConditions` um die 3 Keys erweitert (leer→NULL), `stammblatt` liefert neuen `bestellung`-Block. `SupplierDetail`-Modal (Konditionen-Tab): Liefertage als 7 Wochentag-Checkboxen + Bestellschluss/Vorlaufzeit + „Bestell-Logistik speichern". `suppliers.PUT` im Lockstep (Schema + Description + intersect-Keys). Test `SupplierRelationTest` „S1: Bestell-Logistik" (persistiert + aggregiert + leer-nullt); gezielte Suite 25/25.
 
 **DoD:**
 - [x] `delivery_days` + `order_cutoff_time` + `order_lead_days` auf `suppliers`, editierbar im R9-Konditionen-Tab, `suppliers.PUT` erweitert (Lockstep).
 - [x] `stammblatt.bestellung` liefert Liefertag/Bestellschluss/Vorlaufzeit → Grundlage für S2-Ampel.
 
-## 5. Stufe 2 — Persistente Bestellschiene (Kern) · L · hängt an S0 + S1 · ⚪ ungebaut
+## 5. Stufe 2 — Persistente Bestellschiene (Kern) · L · hängt an S0 + S1 · 🟢 ENGINE+MCP GEBAUT 2026-07-21 · UI-Slice offen
+
+> **Gebaut 2026-07-21 (Engine + MCP):** Migration `2026_07_21_000003` (`foodalchemist_orders` + `foodalchemist_order_lines`, Snapshot + `source_contributions` JSON) · `OrderStatus`-Enum (draft→sent→confirmed→delivered→cancelled, `darfWechselnZu`-Guard, delivered=Endstation) · Models `FoodAlchemistOrder`/`FoodAlchemistOrderLine` · `OrderService` (`draftForSupplier` mit Lock-Guard E1, `addNeedFromTarget` E9/E10, `recomputeLine`/`recomputeOrder` E3-Aggregat + E11-Live-Preis, `updateLine`/`removeLine`, `setStatus` guarded + E2-Freeze, `moqAmpel`) · `PlanungsblattService` liefert `lead_la_id` je Position. **MCP im Lockstep:** `orders.GET` (Liste/Detail+MOQ), `orders.ADD_NEED` (E9/E10), `orders.SET_STATUS` (guarded). **Test `OrderServiceTest` 10/10** (Draft-Guard, addNeed pro Lieferant, E10 ersetzen+akkumulieren, E3 Aggregat-Rundung 2×0,4→1 Sack, Status-Guard, E11/E2-Freeze, MOQ-Ampel, removeLine, MCP-E2E). Rechen-Wahrheit = derselbe `GebindeRechner` wie S0.
+>
+> **Offen (UI-Slice):** „Bestellungen"-Seite (Livewire `Orders/Index` + Blade: Schienen-Liste, Detail mit Gebinde-Zeilen + MOQ-Ampel + Status-Buttons + manuelle qty) · Sidebar-Eintrag + Route · „Bedarf in Bestellschiene übernehmen"-Button im Planungsblatt (auf jeder Ebene, E9).
 
 **Bau (Spec):**
 - Migrationen `foodalchemist_orders` (team_id, supplier_id, `status` enum draft|sent|confirmed|cancelled|delivered, reference/name, desired_delivery_date, note, total_net cache, sent_at/confirmed_at, created_by, uuid, timestamps, softDeletes, LogsActivity) + `foodalchemist_order_lines` (order_id, supplier_item_id, gp_id nullable, **Snapshot-Spalten** article_number/designation/packaging_unit/pack_qty/unit_code/pack_price, qty_packs, line_total, needed_base_qty, source_ref, position).
