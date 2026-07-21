@@ -98,7 +98,7 @@
 
                 {{-- Tab-Leiste --}}
                 <div class="flex flex-wrap gap-1" role="tablist">
-                    @foreach(['planung' => '🎯 Planung', 'briefing' => '📋 Briefing', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend'] as $tk => $tl)
+                    @foreach(['briefing' => '📋 Briefing', 'planung' => '🎯 Planung', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend'] as $tk => $tl)
                         <button type="button" @click="tab = @js($tk)" :class="tab === @js($tk) ? '{{ $aktiv }}' : '{{ $hover }}'"
                                 class="px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-fb-tab="{{ $tk }}">{{ $tl }}</button>
                     @endforeach
@@ -162,7 +162,11 @@
                         <label class="{{ $label }}">Briefing / Einleitung (Kundentext)</label>
                         <button type="button" disabled title="KI-Befüllung folgt — speist sich aus Kunde, Briefing und den enthaltenen Concepts (M11-08, LLM offen)" class="{{ $btnGhostXs }} opacity-50 cursor-not-allowed">✨ KI-Text (folgt)</button>
                     </div>
-                    <textarea wire:model="form.description" rows="3" class="{{ $input }}" placeholder="Briefing / Einleitungstext fürs Angebot — später KI-befüllbar aus Kunde + Concepts"></textarea>
+                    <textarea wire:model="form.description" rows="3"
+                              x-data
+                              x-effect="$wire.form; $el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
+                              @input="$el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
+                              class="{{ $input }} resize-none overflow-hidden min-h-[4.5rem]" placeholder="Briefing / Einleitungstext fürs Angebot — später KI-befüllbar aus Kunde + Concepts"></textarea>
                 </div>
                 <div class="flex gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>

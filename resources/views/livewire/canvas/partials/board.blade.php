@@ -60,7 +60,13 @@
                     @else
                         <div>
                             <label class="block {{ $label }} mb-1">{{ $f['label'] }}</label>
-                            <textarea wire:model="canvasForm.{{ $f['key'] }}" rows="2" class="{{ $input }}"></textarea>
+                            {{-- Auto-Grow: Feld wächst mit dem Inhalt statt intern zu scrollen (Dominique 2026-07-21).
+                                 x-effect auf $wire.canvasForm sizet auch nach Laden/Speichern/Foodbook-Wechsel korrekt. --}}
+                            <textarea wire:model="canvasForm.{{ $f['key'] }}" rows="2"
+                                      x-data
+                                      x-effect="$wire.canvasForm; $el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
+                                      @input="$el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
+                                      class="{{ $input }} resize-none overflow-hidden min-h-[3.5rem]"></textarea>
                         </div>
                     @endif
                 @endforeach
