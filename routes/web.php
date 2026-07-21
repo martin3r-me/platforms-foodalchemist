@@ -132,8 +132,17 @@ Route::get('/foodbooks/{id}/dokument', function (int $id, \Platform\FoodAlchemis
     $intern = request()->boolean('intern');
     $data = $svc->dokumentDaten($team, $fb, $intern);
 
-    if (request()->boolean('pdf') && class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+    if (request()->boolean('pdf')) {
+        // Härten: kein stiller HTML-Fallback mehr — wenn PDF verlangt, aber die Engine fehlt,
+        // lieber lauter Fehler + Log als lautlos die HTML-Seite ausliefern (sah aus wie „PDF kaputt").
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Foodbook-PDF angefordert, aber DomPDF (barryvdh/laravel-dompdf) ist nicht installiert.', ['foodbook_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert (composer require barryvdh/laravel-dompdf).');
+        }
+
+        // isPhpEnabled: nur fürs eigene Blade (Seitenzahl-Stempel via page_text am Body-Ende).
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.foodbook', $data + ['istPdf' => true])
+            ->setOption('isPhpEnabled', true)
             ->download('Foodbook-' . $id . ($intern ? '-intern' : '') . '.pdf');
     }
 
@@ -171,7 +180,12 @@ Route::get('/angebote/{id}/dokument', function (int $id, \Platform\FoodAlchemist
     $angebot = $svc->detail($team, $id) ?? abort(404);
     $data = $svc->dokumentDaten($team, $angebot);
 
-    if (request()->boolean('pdf') && class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Angebots-PDF angefordert, aber DomPDF ist nicht installiert.', ['angebot_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.angebot', $data + ['istPdf' => true])
             ->download('Angebot-' . $id . '.pdf');
     }
@@ -245,7 +259,12 @@ Route::get('/blaetter/dokument', function (\Platform\FoodAlchemist\Services\Plan
         'untertitel' => trim(($name ?? 'Ziel') . ' · ' . $mengeTxt),
     ];
 
-    if (request()->boolean('pdf') && class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Planungsblatt-PDF angefordert, aber DomPDF ist nicht installiert.', ['typ' => $typ]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.blatt', $data + ['istPdf' => true])
             ->download($data['titel'] . '.pdf');
     }

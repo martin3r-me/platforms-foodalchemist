@@ -227,7 +227,7 @@ it('R3.1 intern-Dokument-Blade zeigt Marge + Navleiste; Kundensicht-Blade nicht'
 
     $internHtml = view('foodalchemist::dokumente.foodbook',
         $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), true) + ['istPdf' => false])->render();
-    expect($internHtml)->toContain('INTERN')->toContain('Wareneinsatz')->toContain('Navigation')
+    expect($internHtml)->toContain('INTERN')->toContain('Wareneinsatz')->toContain('Inhaltsverzeichnis')
         ->toContain('id="k' . $kap->id . '"');
 
     $kundeHtml = view('foodalchemist::dokumente.foodbook',

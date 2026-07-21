@@ -20,6 +20,17 @@ Beschlossen (Dominique):
 
 Details/Historie: Memory `project_fa_klarschiff_cleanup.md` + `_MEMORY_FoodBrain.md`.
 
+## ⭐ Update 2026-07-21 (Session: Foodbook-PDF-Redesign — Book-Look + pro-Foodbook-Branding + Härten)
+
+**Das versendbare Foodbook-Dokument (`/foodbooks/{id}/dokument`) neu gestaltet** — Ziel-Bar: **Vertriebs-Arbeitsdokument** (sauber/markengerecht/strukturiert), NICHT der End-Kunden-Showpiece (eigener, späterer Track). Engine bleibt **DomPDF** (kein Server-Zusatz). Referenz: die drei echten Caterer-Foodbooks (Broich/TM/DOEC) — ein Layout-Skelett, pro Marke andere Tokens.
+
+- **Härten (Phase 1):** DomPDF in `composer.json` deklariert (`^3.1`, war nirgends deklariert → plug-and-play); stiller HTML-Fallback bei fehlendem DomPDF → expliziter Fehler + `Log::warning` (foodbook + angebot + blatt); falscher „PDF-Bookmarks"-Kommentar korrigiert.
+- **Pro-Foodbook-Branding (Phasen 2–3):** neue Spalten an `foodalchemist_foodbooks` (`brand_color` Default `#6d28d9`, `band_color`, `logo_path`, `cover_image_path`, `footer_text`; additiv, Bestand unverändert). UI-agnostische `FoodbookService`-API `setBranding`/`storeLogo`/`storeCover`/`clearLogo`/`clearCover` (Hex-Validierung, Owner-Guard D1, public-Disk). `dokumentDaten` liefert `branding`-Key; Logo/Cover als **base64-Data-URI** (DomPDF lädt keine http-URLs, `enable_remote` aus).
+- **Blade-Redesign (Phase 4):** Farben tokenisiert (kein `var()` — DomPDF-Echo); gebrandete Cover-Seite; Inhaltsverzeichnis (klickbar); wiederkehrende Kopf-/Fußbänder full-bleed via `position:fixed` + Negativ-Offset; Seitenzahl „X / Y" auf jeder Seite (`page_text` am Body-Ende + `isPhpEnabled`); Konzept-Blöcke im Referenz-Layout (Preis links „x € pro Person", Inhalt rechts, Marken-farbige `|`-Pipes); `page-break-inside: avoid` (Umbruch-Politur). Kunden-/interne Sicht + MwSt + Wareneinsatz-Tabelle erhalten.
+- **Verifikation:** real gerendert (Foodbook #1 + synthetischer Konzept-Block, rot/grün, Kunden-+interne Sicht) → Cover/IV/Bänder/Logo/Pipes/Preis-Spalten/Seitenzahl bestätigt. Pest `FoodbookBrandingTest` (4/17). Regression Foodbook+MCP+DELETE-Tools **30/30 grün** (1 Test-Wording „Navigation"→„Inhaltsverzeichnis" nachgezogen).
+- **NACHGELAGERT (Phase 6):** Branding/CI-Tab im Foodbook-Cockpit — wird gezogen, wenn die parallele Cockpit-Umbau-Session fertig ist; dockt nur an die obige Service-API an (Cockpit-Dateien hier bewusst nicht angefasst).
+- ⚠️ **Deploy-Blocker (Fremdbefund):** Migration `2026_07_19_000009` (terminology) erzeugt einen Index-Namen mit 71 Zeichen → **frischer MySQL-`migrate` bricht ab** (64-Zeichen-Limit); blockiert auch das Deploy dieser Branding-Migration. Auf SQLite (Testsuite) unkritisch. Muss vor demo-Deploy gefixt werden (expliziter kurzer Index-Name).
+
 ## ⭐ Update 2026-07-21 (Session: MCP DELETE-Tools — Foodbook-Block + Konzept löschen)
 
 **Lücke geschlossen, die im MCP-Audit #504 offen blieb:** die FA-MCP-Oberfläche hatte modulweit **keinen DELETE-Verb** — Konzepte ließen sich per MCP nur anlegen, nicht aus Foodbooks nehmen und nicht löschen (Cleanup nur im Editor möglich). Ursache war rein die fehlende Tool-Hülle: die Services (`FoodbookService::deleteBlock`, `ConceptService::delete` inkl. Referenz-Schutz GT-FB-4/V-06, alle team- + owner-guarded, SoftDeletes) waren vollständig und sicher.

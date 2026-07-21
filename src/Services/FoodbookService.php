@@ -2,9 +2,11 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
@@ -527,8 +529,11 @@ class FoodbookService
                     $gerichte = ($b->type === 'concept_ref' && $b->concept !== null)
                         ? $wording->gerichtZeilen($b->concept, $b)
                         : [];
+                    // Block-Preis für die Preis-links-Spalte (Referenz-Layout „x € pro Person").
+                    $bp = $this->blockPreis($b, $pax);
                     $bloecke[] = ['type' => $b->type, 'label' => $label, 'untertitel' => $untertitel,
-                        'gerichte' => $gerichte, 'ist_header' => str_starts_with((string) $b->type, 'header')];
+                        'gerichte' => $gerichte, 'ist_header' => str_starts_with((string) $b->type, 'header'),
+                        'preis_pp' => (float) $bp['vk_pp'], 'pauschal' => (float) $bp['pauschal']];
                 }
                 $agg = $this->kapitelAggregat($team, $k, $pax);
                 $row = [
@@ -561,6 +566,8 @@ class FoodbookService
             // Kundendokument-Vollständigkeit: gesetzlicher MwSt-Satz + Stand-Datum.
             'mwst' => app(TeamSettingsService::class)->mwst($team),
             'stand' => $fb->updated_at,
+            // PDF-Redesign: pro-Foodbook-Marke (Farbe/Band/Logo/Cover/Footer), DomPDF-taugliche base64-Bilder.
+            'branding' => $this->brandingDaten($fb),
         ];
     }
 
@@ -633,6 +640,137 @@ class FoodbookService
             'concepts' => $conceptNamen->unique()->values()->all(),
             'kapitel' => $fb->chapters->pluck('title')->values()->all(),
         ];
+    }
+
+    // ── Branding (pro Foodbook) ─────────────────────────────────────────────────
+    //
+    // UI-agnostische API: der Branding/CI-Tab im Cockpit (separate Session) UND MCP/Console
+    // rufen dieselben Methoden. Owner-Guard wie überall (D1). Bilder liegen auf der
+    // public-Disk; fürs PDF werden sie in dokumentDaten als base64 kodiert (DomPDF-tauglich).
+
+    private const BRANDING_STORAGE_DISK = 'public';
+
+    /** Setzt Farb-/Text-Marke. $in: brand_color, band_color, footer_text (jeweils optional). */
+    public function setBranding(Team $team, int $foodbookId, array $in): FoodAlchemistFoodbook
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
+        $this->guard($fb, $team);
+
+        $daten = [];
+        if (array_key_exists('brand_color', $in)) {
+            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'brand_color') ?? '#6d28d9';
+        }
+        if (array_key_exists('band_color', $in)) {
+            // Leer → null (Blade leitet dann aus brand_color ab).
+            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'band_color', erlaubeLeer: true);
+        }
+        if (array_key_exists('footer_text', $in)) {
+            $t = trim((string) $in['footer_text']);
+            $daten['footer_text'] = $t !== '' ? $t : null;
+        }
+        if ($daten !== []) {
+            $fb->update($daten);
+        }
+
+        return $fb->refresh();
+    }
+
+    public function storeLogo(Team $team, int $foodbookId, UploadedFile $file): string
+    {
+        return $this->speichereBrandingBild($team, $foodbookId, $file, 'logo_path');
+    }
+
+    public function storeCover(Team $team, int $foodbookId, UploadedFile $file): string
+    {
+        return $this->speichereBrandingBild($team, $foodbookId, $file, 'cover_image_path');
+    }
+
+    public function clearLogo(Team $team, int $foodbookId): FoodAlchemistFoodbook
+    {
+        return $this->loescheBrandingBild($team, $foodbookId, 'logo_path');
+    }
+
+    public function clearCover(Team $team, int $foodbookId): FoodAlchemistFoodbook
+    {
+        return $this->loescheBrandingBild($team, $foodbookId, 'cover_image_path');
+    }
+
+    private function speichereBrandingBild(Team $team, int $foodbookId, UploadedFile $file, string $spalte): string
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
+        $this->guard($fb, $team);
+
+        $alt = (string) $fb->{$spalte};
+        if ($alt !== '' && Storage::disk(self::BRANDING_STORAGE_DISK)->exists($alt)) {
+            Storage::disk(self::BRANDING_STORAGE_DISK)->delete($alt);
+        }
+        $pfad = $file->store("foodalchemist/branding/{$foodbookId}", self::BRANDING_STORAGE_DISK);
+        $fb->update([$spalte => $pfad]);
+
+        return $pfad;
+    }
+
+    private function loescheBrandingBild(Team $team, int $foodbookId, string $spalte): FoodAlchemistFoodbook
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
+        $this->guard($fb, $team);
+
+        $alt = (string) $fb->{$spalte};
+        if ($alt !== '' && Storage::disk(self::BRANDING_STORAGE_DISK)->exists($alt)) {
+            Storage::disk(self::BRANDING_STORAGE_DISK)->delete($alt);
+        }
+        $fb->update([$spalte => null]);
+
+        return $fb->refresh();
+    }
+
+    /**
+     * Marken-Tokens fürs Dokument-Blade. Logo/Cover als base64-Data-URI (DomPDF lädt keine
+     * http-URLs, enable_remote ist aus) — funktioniert im HTML- wie im PDF-Pfad. band leer →
+     * aus brand_color, footer null → Blade nutzt Default-Zeile.
+     *
+     * @return array{color:string, band:string, logo:?string, cover:?string, footer:?string}
+     */
+    private function brandingDaten(FoodAlchemistFoodbook $fb): array
+    {
+        $color = ($fb->brand_color ?? '') !== '' ? $fb->brand_color : '#6d28d9';
+
+        return [
+            'color' => $color,
+            'band' => ($fb->band_color ?? '') !== '' ? $fb->band_color : $color,
+            'logo' => $this->alsDataUri($fb->logo_path),
+            'cover' => $this->alsDataUri($fb->cover_image_path),
+            'footer' => ($fb->footer_text ?? '') !== '' ? $fb->footer_text : null,
+        ];
+    }
+
+    private function alsDataUri(?string $pfad): ?string
+    {
+        $pfad = (string) $pfad;
+        if ($pfad === '' || ! Storage::disk(self::BRANDING_STORAGE_DISK)->exists($pfad)) {
+            return null;
+        }
+        $mime = Storage::disk(self::BRANDING_STORAGE_DISK)->mimeType($pfad) ?: 'image/png';
+        $bytes = Storage::disk(self::BRANDING_STORAGE_DISK)->get($pfad);
+
+        return 'data:' . $mime . ';base64,' . base64_encode($bytes);
+    }
+
+    /** Hex-Validierung wie Settings\Kueche::sanitizeFarben. erlaubeLeer=true → '' ⇒ null. */
+    private function normHexOderThrow($wert, string $feld, bool $erlaubeLeer = false): ?string
+    {
+        $v = trim((string) $wert);
+        if ($v === '') {
+            if ($erlaubeLeer) {
+                return null;
+            }
+            throw new \RuntimeException("Farbe {$feld} darf nicht leer sein.");
+        }
+        if (! preg_match('/^#[0-9a-fA-F]{6}$/', $v)) {
+            throw new \RuntimeException("Ungültige Farbe für {$feld}: \"{$v}\" (erwartet #RRGGBB).");
+        }
+
+        return strtolower($v);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
