@@ -237,7 +237,7 @@ class ConceptGeneratorService
      *
      * @return list<array{id:int, name:string, diet_form:?string, sales_net:?float}>
      */
-    public function slotVorschlaege(Team $team, FoodAlchemistPlanningFrame $frame, FoodAlchemistPlanningFrameSlot $slot, int $limit = 6): array
+    public function slotVorschlaege(Team $team, FoodAlchemistPlanningFrame $frame, FoodAlchemistPlanningFrameSlot $slot, int $limit = 6, ?string $zielNiveau = null): array
     {
         $frame->loadMissing(['slots.rules', 'rules']);
         $kandidaten = $this->filterFuerSlot($this->kandidatenPool($team, $frame), $frame, $slot);
@@ -247,7 +247,7 @@ class ConceptGeneratorService
         $gewaehltIds = [];
         while (count($out) < max(1, $limit)) {
             $rest = $kandidaten->reject(fn ($k) => in_array($k['id'], $gewaehltIds, true));
-            $treffer = $this->besterKandidat($rest, $gewaehlteAnker, $slot);
+            $treffer = $this->besterKandidat($rest, $gewaehlteAnker, $slot, $zielNiveau);
             if ($treffer === null) {
                 break;
             }
@@ -275,7 +275,8 @@ class ConceptGeneratorService
             ->whereNull('variant_source_recipe_id')
             ->where('status', '!=', 'draft')
             // Modell A: HG hängt direkt am Recipe (dish_main_group_id); dishClass.mainGroup = Alt-Pfad-Fallback
-            ->with(['dishClass:id,diet_form,dish_main_group_id', 'dishClass.mainGroup:id,code,label', 'speisenHauptgruppe:id,code,label']);
+            // levelSuitabilities = Niveau-Eignungen (haute_cuisine|gehoben|klassisch) fürs Segment-Ranking (Phase 5)
+            ->with(['dishClass:id,diet_form,dish_main_group_id', 'dishClass.mainGroup:id,code,label', 'speisenHauptgruppe:id,code,label', 'levelSuitabilities']);
         if ($brauchtBegriffe) {
             $query->with(['ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name']);
         }
@@ -304,6 +305,7 @@ class ConceptGeneratorService
                 'begriffe' => $brauchtBegriffe
                     ? mb_strtolower($r->name . ' ' . $r->ingredients->map(fn ($z) => ($z->gp?->name ?? '') . ' ' . ($z->referencedRecipe?->name ?? ''))->implode(' '))
                     : mb_strtolower($r->name),
+                'niveaus' => $r->levelSuitabilities->pluck('level_slug')->filter()->values()->all(),
                 'anker' => $this->pairing->anchorsForRecipe($r),
             ];
         })->keyBy('id');
@@ -371,7 +373,7 @@ class ConceptGeneratorService
      * Menüfolge (Pairing-Graph) → Anker-Anzahl (graph-erreichbare Gerichte zuerst) →
      * Nähe zum Preis-Anker → Name (stabil).
      */
-    private function besterKandidat(Collection $kandidaten, array $gewaehlteAnker, $frameSlot): ?array
+    private function besterKandidat(Collection $kandidaten, array $gewaehlteAnker, $frameSlot, ?string $zielNiveau = null): ?array
     {
         if ($kandidaten->isEmpty()) {
             return null;
@@ -383,8 +385,10 @@ class ConceptGeneratorService
         // sonst würde ein freies Label („Station Süß") nichts filtern, aber auch nichts kaputt machen.
         $hatSemantik = $kandidaten->contains(fn ($k) => self::slotSemantik((string) $frameSlot->label, $k['hg_label']) === 1);
 
-        return $kandidaten->map(function ($k) use ($kanten, $gewaehlteAnker, $frameSlot, $hatSemantik) {
+        return $kandidaten->map(function ($k) use ($kanten, $gewaehlteAnker, $frameSlot, $hatSemantik, $zielNiveau) {
             $k['semantik'] = $hatSemantik ? self::slotSemantik((string) $frameSlot->label, $k['hg_label']) : 0;
+            // Phase 5: Segment-Niveau bevorzugen (neutral, wenn kein Ziel-Niveau übergeben wird).
+            $k['niveau_match'] = ($zielNiveau !== null && in_array($zielNiveau, $k['niveaus'] ?? [], true)) ? 1 : 0;
             $gewinn = 0.0;
             $paare = 0;
             foreach ($k['anker'] as $a) {
@@ -405,7 +409,7 @@ class ConceptGeneratorService
                 : 0.0;
 
             return $k;
-        })->sortBy([['semantik', 'desc'], ['score', 'desc'], ['ankerdichte', 'desc'], ['preisnaehe', 'desc'], ['name', 'asc']])->first();
+        })->sortBy([['semantik', 'desc'], ['niveau_match', 'desc'], ['score', 'desc'], ['ankerdichte', 'desc'], ['preisnaehe', 'desc'], ['name', 'asc']])->first();
     }
 
     /**

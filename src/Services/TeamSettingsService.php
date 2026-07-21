@@ -32,6 +32,26 @@ class TeamSettingsService
     ];
 
     /**
+     * Segment (Bespielung) je Küchen-Typ — die Achse, an der bei der Planung alles hängt
+     * (Portionen, Preis, Komplexität, Ton). Abgeleitet aus kitchen_type; null wenn ungesetzt.
+     * niveau/convenience = Default-Erwartung des Segments (Vokabular der KI-Rezept-Regler,
+     * GeneratorModal: niveau ∈ haute_cuisine|gehoben|klassisch, convenience ∈
+     * from_scratch|teil_convenience|voll_convenience) — als Planungs-/Generierungs-Leitplanke.
+     */
+    public const SEGMENTE = [
+        'restaurant' => ['key' => 'fine_dining', 'label' => 'Fine Dining / à la carte', 'niveau' => 'gehoben', 'convenience' => 'from_scratch'],
+        'boutique_patisserie' => ['key' => 'fine_dining', 'label' => 'Fine Dining / Pâtisserie', 'niveau' => 'haute_cuisine', 'convenience' => 'from_scratch'],
+        'catering' => ['key' => 'event_catering', 'label' => 'Event-Catering', 'niveau' => 'gehoben', 'convenience' => 'teil_convenience'],
+        'hotel' => ['key' => 'event_catering', 'label' => 'Event-Catering / Bankett', 'niveau' => 'gehoben', 'convenience' => 'teil_convenience'],
+        'grosskueche' => ['key' => 'volumen', 'label' => 'Volumen / Gemeinschaftsverpflegung', 'niveau' => 'klassisch', 'convenience' => 'teil_convenience'],
+    ];
+
+    /** Menschliche Labels fürs Segment-Badge (Vokabular = KI-Rezept-Generator). */
+    public const NIVEAU_LABEL = ['haute_cuisine' => 'Haute Cuisine', 'gehoben' => 'Gehoben', 'klassisch' => 'Klassisch'];
+
+    public const CONVENIENCE_LABEL = ['from_scratch' => 'From Scratch', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'];
+
+    /**
      * #390 (2026-06-17): Per-Setting-Vererbungs-Policy über die Team-Hierarchie (Org→Team).
      * Hier gelistete DB-Spalten werden vererbt: leeres Feld am Team erbt vom nächsten Vorfahr
      * (Org), erstes Nicht-NULL gewinnt, Code-Default als Boden. NICHT gelistete Spalten sind
@@ -132,6 +152,14 @@ class TeamSettingsService
         $typ = $this->for($team)->kitchen_type;
 
         return isset(self::KUECHEN_TYPEN[$typ]) ? $typ : null;
+    }
+
+    /** Segment (Bespielung) aus dem Küchen-Typ ableiten. @return array{key:string, label:string}|null */
+    public function segment(Team $team): ?array
+    {
+        $typ = $this->kuechenTyp($team);
+
+        return $typ !== null ? (self::SEGMENTE[$typ] ?? null) : null;
     }
 
     public function for(Team $team): FoodAlchemistTeamSetting

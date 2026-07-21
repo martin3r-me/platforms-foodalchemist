@@ -122,8 +122,10 @@ class Index extends Component
         if ($frame === null || $slot === null) {
             return;
         }
+        // Phase 5: Segment-Niveau bevorzugen (Rezepte mit passender Niveau-Eignung ranken höher).
+        $zielNiveau = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->segment($this->team())['niveau'] ?? null;
         $this->slotVorschlaege[$slotId] = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
-            ->slotVorschlaege($this->team(), $frame, $slot, 6);
+            ->slotVorschlaege($this->team(), $frame, $slot, 6, $zielNiveau);
     }
 
     /** Weg B: Gericht in den Slot übernehmen (Slot-Kapitel-Konzept) + aus der Vorschlagsliste nehmen. */
@@ -620,6 +622,8 @@ class Index extends Component
             'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
             // Phase 4: Trend-Tab — Wissensschrank-Pull (Kategorie „trend") als Inspiration
             'trendDocs' => $fb !== null ? app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->listDocuments('trend', 0, 8, true)['documents'] : [],
+            // Phase 5: Segment (aus Küchen-Typ abgeleitet) — die Achse, an der die Planung hängt
+            'segment' => app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->segment($team),
         ])->layout('platform::layouts.app');
     }
 
