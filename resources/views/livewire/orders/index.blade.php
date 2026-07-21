@@ -68,6 +68,18 @@
                         </div>
                     </div>
 
+                    {{-- S3: Export/Versand --}}
+                    <div class="flex flex-wrap items-center gap-2 mb-3">
+                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhost }}">🖨 Dokument</a>
+                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'pdf' => 1]) }}" class="{{ $btnGhost }}">PDF</a>
+                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'csv' => 1]) }}" class="{{ $btnGhost }}">CSV</a>
+                        @if($mailto)
+                            <a href="{{ $mailto }}" class="{{ $btnGhost }}">✉ E-Mail an Lieferant</a>
+                        @else
+                            <span class="text-[11px] text-gray-400">✉ keine Bestell-Mail hinterlegt (Lieferant → email_order)</span>
+                        @endif
+                    </div>
+
                     {{-- MOQ-Ampel --}}
                     @php($moq = $detail['moq'])
                     <div class="flex flex-wrap gap-2 mb-3 text-[11px]">

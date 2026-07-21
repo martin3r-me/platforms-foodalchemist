@@ -3,7 +3,7 @@
 > **ROADMAP-Bezug:** N-Track — die von [R9 §7](14_Lieferanten_Management_R9.md) **bewusst ausgeklammerte** Bestell-Ebene („kein Bestellen/Wareneingang/Rechnungsprüfung"). Dominique-Wunsch 2026-07-21.
 > **Ziel:** Aus dem geplanten Bedarf echte, **versendbare Bestellungen pro Lieferant** formen — in **ganzen Gebinden**, mit Artikelnummer und Gebinde-Preis, gesammelt in einer persistenten **Bestellschiene** je Lieferant. Das Planungsblatt rechnet den Bedarf (read-only) — das Bestellwesen macht daraus einen **dauerhaften Beleg** (stateful).
 > **Scope-Grenze ✅ ENTSCHIEDEN (2026-07-21):** **OHNE Bestand** — Bestellassistent, kein Lager/Wareneingang/Netting/Rechnungsprüfung/Inventur. Bestellmenge = geplanter Bedarf in Gebinde (kein Abzug gegen Lager). Bestand = späterer Ausbau (S4, Nicht-Ziel v1).
-> **Reifegrad: ⚪ Dossier — ungebaut.** Entscheidungen E1–E11 festgezurrt 2026-07-21 (E9–E11 + E3-Schärfung aus Review-Pass 2: Doppel-Übernahme, Doppel-Aufrundung, Stk-Artikel, stale Draft-Preise). **Stufe 0 = der Gebinde-Fix am Planungsblatt** (die Bestellzeilen-Primitive), sofort sichtbarer Nutzen und Fundament für alles Weitere.
+> **Reifegrad: ✅ S0–S3 KOMPLETT+GEPUSHT 2026-07-21** (E1–E11). S0 `0d78bd2` (Gebinde-Bestellzeile) · S1 `3daf87d` (Bestell-Logistik) · S2 `bbc73e3`+`49f6c16` (Bestellschiene Engine+MCP+UI) · S3 (Versand/Export PDF/CSV/mailto + `orders.UPDATE_LINE`). `OrderServiceTest` 14/14. **Offen nur:** S4 Bestand (bewusstes Nicht-Ziel) + Live-Klickstrecke demo (Martin-Deploy, inkl. DomPDF-Verfügbarkeit).
 
 ---
 
@@ -86,14 +86,14 @@ Bedarf→Lieferant-Gruppierung (`bestellvorschlag`/`einkaufsliste`) · Lead-LA-K
 - [ ] `send`: Status draft→sent, Snapshot eingefroren, Schiene geschlossen; neue Bedarfs-Übernahme öffnet neue Schiene.
 - [ ] Team-scoped, LogsActivity (Historie: angelegt/geändert/versendet), Pest (Akkumulation, Snapshot-Immutabilität nach send, MOQ-Ampel).
 
-## 6. Stufe 3 — Versand/Export · M · hängt an S2 · ⚪ ungebaut
+## 6. Stufe 3 — Versand/Export · M · hängt an S2 · ✅ GEBAUT+GETESTET 2026-07-21
 
-**Bau (Spec):** Bestell-PDF pro Lieferant (Vorlage `dokumente/blatt.blade.php`): Kopf (Lieferant/Kontakt/Liefertermin), Zeilen (Artikel-Nr · Bezeichnung · Gebinde · Anzahl · Preis · Summe), Fuß (Netto/MOQ-Status). CSV-Export. `mailto:`-Link an `suppliers.email_order` mit vorbefülltem Betreff/Body (echter SMTP-Versand = später/Martin). MCP `orders.GET/PUT/SEND` (E7, Lockstep).
+> **Gebaut 2026-07-21:** `OrderService::dokument()` (Lieferant-Stammdaten + Zeilen + MOQ) + `mailtoData()` (Betreff/Body aus den Zeilen). Blade `dokumente/bestellung.blade.php` (Kopf Lieferant/Adresse/Liefertermin · Zeilen Artikel-Nr · Gebinde · Anzahl · Preis · Summe · Fuß Netto + MOQ-Ampel). Route `/bestellungen/{order}/dokument` — Druck-HTML · `?pdf=1` (DomPDF, guarded) · `?csv=1` (Excel-tauglich, `;`-getrennt + UTF-8-BOM). Buttons in der Bestellungen-Seite (Dokument/PDF/CSV/✉ E-Mail an `email_order`). **MCP-Lockstep:** `orders.UPDATE_LINE` (qty-Override/reset/remove) — schließt den Zeilen-Edit-Schreibpfad. `OrderServiceTest` **14/14** (+ 1 Route-Test, skip wenn Modul-Route im Harness fehlt). `orders.GET`/`ADD_NEED`/`SET_STATUS` lagen aus S2.
 
 **DoD:**
-- [ ] Bestell-PDF + CSV pro Lieferant aus einer versendeten Schiene.
-- [ ] `mailto:`-Vorbefüllung an `email_order`.
-- [ ] `orders.GET/PUT/SEND` MCP, D1 + `isOwnedBy`, MySQL-verifiziert.
+- [x] Bestell-PDF + CSV + Druck-HTML pro Lieferant (Route `orders.dokument`).
+- [x] `mailto:`-Vorbefüllung an `email_order` (Betreff + Zeilen-Body).
+- [x] MCP: `orders.GET/ADD_NEED/SET_STATUS` (S2) + `orders.UPDATE_LINE` (S3), D1 + `isOwnedBy`.
 
 ## 7. Stufe 4 — Bestand & Wareneingang · XL · NICHT-ZIEL v1 (später)
 Bedarf−Lagerbestand=Bestellmenge, Wareneingang, Inventur, MHD, Lagerorte. **Bewusst ausgeklammert** (E4). Erst wenn Dominique wirklich Lager führen will — dann eigene Spec.

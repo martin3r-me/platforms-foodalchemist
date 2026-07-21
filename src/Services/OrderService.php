@@ -309,6 +309,69 @@ class OrderService
         ];
     }
 
+    /** S3: Volldaten für Bestell-Dokument (PDF/Druck/CSV) — Lieferant-Stammdaten + Zeilen. */
+    public function dokument(Team $team, int $orderId): array
+    {
+        $order = FoodAlchemistOrder::visibleToTeam($team)->with(['supplier', 'lines'])->findOrFail($orderId);
+        $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
+        $sup = $order->supplier;
+
+        return [
+            'id' => (int) $order->id,
+            'status' => $status->value,
+            'status_label' => $status->label(),
+            'reference' => $order->reference,
+            'desired_delivery_date' => $order->desired_delivery_date?->toDateString(),
+            'created_at' => $order->created_at?->format('d.m.Y'),
+            'sent_at' => $order->sent_at?->format('d.m.Y H:i'),
+            'total_net' => (float) $order->total_net,
+            'moq' => $this->moqAmpel($order),
+            'lieferant' => [
+                'name' => $sup?->name,
+                'email_order' => $sup?->email_order,
+                'address' => $sup?->address,
+                'postal_code' => $sup?->postal_code,
+                'city' => $sup?->city,
+            ],
+            'zeilen' => $order->lines->map(fn ($l) => [
+                'article_number' => $l->article_number,
+                'designation' => $l->designation,
+                'packaging_unit' => $l->packaging_unit,
+                'pack_qty' => $l->pack_qty !== null ? (float) $l->pack_qty : null,
+                'unit_code' => $l->unit_code,
+                'qty_packs' => (float) $l->qty_packs,
+                'pack_price' => $l->pack_price !== null ? (float) $l->pack_price : null,
+                'line_total' => (float) $l->line_total,
+                'needed_base_g' => (float) $l->needed_base_g,
+                'bestellbar' => $l->pack_price !== null && (float) $l->qty_packs > 0,
+            ])->all(),
+        ];
+    }
+
+    /** S3: vorbefüllte E-Mail an den Lieferanten (Bestellweg suppliers.email_order). */
+    public function mailtoData(Team $team, int $orderId): array
+    {
+        $d = $this->dokument($team, $orderId);
+        $name = $d['lieferant']['name'] ?? 'Lieferant';
+        $betreff = 'Bestellung ' . $name . ' — ' . ($d['reference'] ?: ('#' . $d['id']));
+
+        $z = ['Guten Tag,', '', 'bitte folgende Bestellung:', ''];
+        foreach ($d['zeilen'] as $l) {
+            $menge = rtrim(rtrim(number_format($l['qty_packs'], 2, ',', '.'), '0'), ',');
+            $geb = trim(($l['packaging_unit'] ?? '') . ' ' . ($l['designation'] ?? ''));
+            $z[] = "- {$menge}× {$geb}" . ($l['article_number'] ? " (Art. {$l['article_number']})" : '');
+        }
+        $z[] = '';
+        if ($d['desired_delivery_date']) {
+            $z[] = 'Wunsch-Liefertermin: ' . $d['desired_delivery_date'];
+        }
+        $z[] = 'Netto gesamt: ' . number_format($d['total_net'], 2, ',', '.') . ' €';
+        $z[] = '';
+        $z[] = 'Vielen Dank.';
+
+        return ['to' => $d['lieferant']['email_order'] ?? '', 'subject' => $betreff, 'body' => implode("\n", $z)];
+    }
+
     /** MOQ-/Frei-Haus-Ampel: total_net gegen Lieferanten-Konditionen (R9). */
     public function moqAmpel(FoodAlchemistOrder $order): array
     {

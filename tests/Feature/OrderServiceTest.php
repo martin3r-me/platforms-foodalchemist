@@ -276,6 +276,62 @@ it('UI: Bestellungen-Seite listet Schienen, Detail + Absenden + manuelle Menge',
     $comp->call('select', $chefs->id)->assertSee('eingefroren');
 });
 
+it('S3: dokument() + mailtoData() + Bestell-Dokument-Blade rendert', function () {
+    FoodAlchemistSupplier::where('name', 'Chefs')->update(['email_order' => 'einkauf@chefs.test', 'city' => 'Köln']);
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+
+    $dok = $this->svc->dokument($this->rootTeam, $chefs->id);
+    expect($dok['zeilen'])->toHaveCount(2)
+        ->and($dok['total_net'])->toBe(21.0)
+        ->and($dok['lieferant']['email_order'])->toBe('einkauf@chefs.test');
+
+    $html = view('foodalchemist::dokumente.bestellung', ['dok' => $dok, 'istPdf' => true])->render();
+    expect($html)->toContain('Chefs')->toContain('ART-MEH')->toContain('Wareneinsatz netto')->toContain('21,00');
+
+    $m = $this->svc->mailtoData($this->rootTeam, $chefs->id);
+    expect($m['to'])->toBe('einkauf@chefs.test')
+        ->and($m['subject'])->toContain('Chefs')
+        ->and($m['body'])->toContain('Mehl')->toContain('Netto gesamt: 21,00 €');
+});
+
+it('S3: orders.UPDATE_LINE MCP — manuelle Menge + Zeile entfernen', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(ToolRegistry::class);
+    $kontext = new ToolContext($user, $this->rootTeam);
+
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+    $zuckerLine = $chefs->lines()->where('gp_id', $this->zucker->id)->first();
+
+    $tool = $registry->get('foodalchemist.orders.UPDATE_LINE');
+    expect($tool)->not->toBeNull()->and($tool->getMetadata()['read_only'])->toBeFalse();
+
+    $r = $tool->execute(['line_id' => $mehlLine->id, 'qty_packs' => 15], $kontext);
+    expect($r->success)->toBeTrue()->and($r->data['is_manual_qty'])->toBeTrue()
+        ->and((float) $chefs->refresh()->total_net)->toBe(31.0);   // 15×2 + 1
+
+    $rm = $tool->execute(['line_id' => $zuckerLine->id, 'remove' => true], $kontext);
+    expect($rm->success)->toBeTrue()->and($rm->data['removed'])->toBeTrue()
+        ->and($chefs->refresh()->lines()->count())->toBe(1);
+});
+
+it('S3: Dokument-Route liefert HTML + CSV-Download', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+
+    $this->get(route('foodalchemist.orders.dokument', ['order' => $chefs->id]))
+        ->assertOk()->assertSee('Wareneinsatz netto');
+
+    $csv = $this->get(route('foodalchemist.orders.dokument', ['order' => $chefs->id, 'csv' => 1]));
+    $csv->assertOk();
+    expect($csv->headers->get('content-type'))->toContain('text/csv')
+        ->and($csv->streamedContent())->toContain('Artikel-Nr')->toContain('ART-MEH');
+})->skip(fn () => ! \Illuminate\Support\Facades\Route::has('foodalchemist.orders.dokument'), 'Modul-Route im Test-Harness nicht registriert');
+
 it('removeLine + leere Quelle: Zeile verschwindet, total_net rechnet nach', function () {
     $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
     $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();

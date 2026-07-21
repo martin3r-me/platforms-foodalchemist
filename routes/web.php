@@ -227,6 +227,57 @@ Route::get('/blaetter', \Platform\FoodAlchemist\Livewire\Blaetter\Index::class)
 Route::get('/bestellungen', \Platform\FoodAlchemist\Livewire\Orders\Index::class)
     ->name('foodalchemist.orders.index');
 
+// Spec 17/S3 — Bestell-Dokument: Druck-HTML | ?pdf=1 (DomPDF) | ?csv=1 (Download).
+Route::get('/bestellungen/{order}/dokument', function (int $order, \Platform\FoodAlchemist\Services\OrderService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    try {
+        $dok = $svc->dokument($team, $order);
+    } catch (\Throwable $e) {
+        abort(404);
+    }
+
+    // CSV-Export (Excel-tauglich: Semikolon-getrennt, BOM für Umlaute).
+    if (request()->boolean('csv')) {
+        $dateiname = 'Bestellung-' . $dok['id'] . '-' . preg_replace('/[^A-Za-z0-9]+/', '_', (string) ($dok['lieferant']['name'] ?? '')) . '.csv';
+
+        return response()->streamDownload(function () use ($dok) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM
+            fputcsv($out, ['Artikel-Nr', 'Bezeichnung', 'Gebinde', 'Anzahl', 'Gebinde-Inhalt', 'Einheit', 'Preis/Gebinde EUR', 'Summe EUR', 'Bedarf kg'], ';');
+            foreach ($dok['zeilen'] as $z) {
+                fputcsv($out, [
+                    $z['article_number'] ?? '',
+                    $z['designation'] ?? '',
+                    $z['packaging_unit'] ?? '',
+                    number_format($z['qty_packs'], 2, ',', ''),
+                    $z['pack_qty'] !== null ? number_format($z['pack_qty'], 3, ',', '') : '',
+                    $z['unit_code'] ?? '',
+                    $z['pack_price'] !== null ? number_format($z['pack_price'], 2, ',', '') : '',
+                    number_format($z['line_total'], 2, ',', ''),
+                    number_format($z['needed_base_g'] / 1000, 3, ',', ''),
+                ], ';');
+            }
+            fputcsv($out, [], ';');
+            fputcsv($out, ['', '', '', '', '', '', 'Netto gesamt', number_format($dok['total_net'], 2, ',', ''), ''], ';');
+            fclose($out);
+        }, $dateiname, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    $data = ['dok' => $dok, 'istPdf' => false];
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Bestell-PDF angefordert, aber DomPDF ist nicht installiert.', ['order' => $order]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.bestellung', $data + ['istPdf' => true])
+            ->download('Bestellung-' . $dok['id'] . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.bestellung', $data);
+})->name('foodalchemist.orders.dokument');
+
 /**
  * Versendbares/druckbares Planungs-Blatt — Druck-HTML; ?pdf=1 = PDF (DomPDF, guarded).
  * typ=produktion|bestellung, Ziel via concept_id+persons ODER recipe_id+portions.

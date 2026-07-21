@@ -85,6 +85,7 @@ class Index extends Component
 
         $detail = null;
         $erlaubteStatus = [];
+        $mailto = null;
         if ($this->selectedId !== null) {
             try {
                 $detail = $orders->detail($team, $this->selectedId);
@@ -93,6 +94,11 @@ class Index extends Component
                     if ($aktuell->darfWechselnZu($z)) {
                         $erlaubteStatus[] = $z;
                     }
+                }
+                // S3: vorbefüllte E-Mail an den Lieferanten (Bestellweg email_order).
+                $m = $orders->mailtoData($team, $this->selectedId);
+                if (($m['to'] ?? '') !== '') {
+                    $mailto = 'mailto:' . $m['to'] . '?subject=' . rawurlencode($m['subject']) . '&body=' . rawurlencode($m['body']);
                 }
             } catch (\Throwable $e) {
                 $this->selectedId = null;
@@ -103,6 +109,7 @@ class Index extends Component
             'liste' => $liste,
             'detail' => $detail,
             'erlaubteStatus' => $erlaubteStatus,
+            'mailto' => $mailto,
         ])->layout('platform::layouts.app');
     }
 }

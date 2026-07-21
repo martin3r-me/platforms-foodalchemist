@@ -335,6 +335,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\OrdersGetTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersAddNeedTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersSetStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersUpdateLineTool::class,
                     // R2.6: Praxis-Feedback (Küche/Kunde/Event) je Gericht/Rezept
                     \Platform\FoodAlchemist\Tools\FeedbackSearchTool::class,
                     \Platform\FoodAlchemist\Tools\FeedbackPostTool::class,
