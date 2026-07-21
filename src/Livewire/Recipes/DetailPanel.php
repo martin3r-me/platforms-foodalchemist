@@ -243,22 +243,19 @@ class DetailPanel extends Component
             'zeilenEk' => $rezept !== null ? app(RecipeRecomputeService::class)->zeilenKosten($rezept) : [],
             // M4-10: ↑-Navigation („Verwendet in")
             'eltern' => $rezept !== null ? $recipes->getParents($team, $rezept->id) : collect(),
-            // M5-04/05: lazy — nur offene Sektionen rechnen (P-1-Performance-Gebot)
+            // v3-Redesign: Standalone-Sidebar nicht mehr ausklappbar → Netz/Kohäsion/Pairings
+            // direkt laden, aber NUR standalone (im Editor-Embed/nur-Sektion bleiben sie ungenutzt → gespart).
             'kernAnker' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipeAnkers($rezept->id) : collect(),
-            'kohaesion' => $rezept !== null && ($this->offen['anker'] ?? false)
+            'kohaesion' => $rezept !== null && ! $this->embedded && $this->section === null
                 ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipeCohesion($rezept) : null,
-            'pairings' => $rezept !== null && ($this->offen['pairing'] ?? false)
+            'pairings' => $rezept !== null && ! $this->embedded && $this->section === null
                 ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipePairings($rezept->id) : null,
-            'verwandte' => $rezept !== null && ($this->offen['pairing'] ?? false)
-                ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipesSharingPairings($team, $rezept->id) : collect(),
-            'nachbarn' => $rezept !== null && ($this->offen['nachbarn'] ?? false)
-                ? app(\Platform\FoodAlchemist\Services\PairingService::class)->componentSuggestions($rezept) : null,
             'ankerKandidaten' => $this->ankerSuche !== ''
                 ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
                     ->whereNull('deleted_at'), 'team_id', $team)->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),
-            'pairingKandidaten' => $this->pairingSuche !== '' && ($this->offen['pairing'] ?? false)
+            'pairingKandidaten' => $this->pairingSuche !== ''
                 ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->pairingSuche) . '%'])
                     ->whereNull('deleted_at'), 'team_id', $team)->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])

@@ -482,11 +482,16 @@ class PairingService
             return collect();
         }
 
+        // Typ-Priorität an das reale edges-Vokabular angepasst (2026-07-21): klassisch =
+        // kuratierte Klassiker (stärkstes Signal) zuerst, dann modern/aroma, kontrast zuletzt.
+        // Vorher CASE erprobt/aroma/kontrast → erprobt existiert nicht mehr, klassisch+modern
+        // fielen in den ELSE-Eimer → Vorschläge waren die alphabetisch ersten aroma-Reste.
+        // (erprobt/verbund/trinitas als Fallback belassen, falls Alt-Daten.)
         return DB::table('foodalchemist_pairing_anchor_edges AS e')
             ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
             ->where('e.anchor_a_id', $ankerId)
             ->when($typ !== null, fn ($q) => $q->where('e.type', $typ))
-            ->orderByRaw("CASE e.type WHEN 'erprobt' THEN 1 WHEN 'aroma' THEN 2 WHEN 'kontrast' THEN 3 ELSE 4 END")
+            ->orderByRaw("CASE e.type WHEN 'klassisch' THEN 1 WHEN 'erprobt' THEN 1 WHEN 'verbund' THEN 2 WHEN 'modern' THEN 2 WHEN 'aroma' THEN 3 WHEN 'trinitas' THEN 3 WHEN 'kontrast' THEN 4 ELSE 5 END")
             ->orderBy('a.slug')->limit($limit)
             ->get(['a.id', 'a.slug', 'a.display_de', 'e.type', 'e.evidence']);
     }
@@ -760,19 +765,48 @@ class PairingService
             return $v;
         })->values()->all();
 
-        // Vorschlags-Modus: je Anker top-n Nachbarn außerhalb des Rings (Typ-Priorität wie Ist)
+        // Vorschlags-Modus: je Ring-Anker die top-n Nachbarn AUSSERHALB des Rings,
+        // gerankt nach Gericht-Kohärenz statt alphabetisch. dish_cover = wie viele ANDERE
+        // Ring-Anker der Kandidat ebenfalls bedient. Ohne das surfacen die alphabetisch
+        // ersten Kanten (aal/ahornsirup/… bei apfel) — global gültig, aber gericht-fremd.
+        // Typ-agnostisch (erprobt|aroma|kontrast); bester Kohärenz-Proxy ohne Kanten-Score.
         $vorschlaege = [];
-        if ($vorschlaegeProAnker > 0) {
-            $gesehen = array_flip($ringIds);
+        if ($vorschlaegeProAnker > 0 && $ringIds !== []) {
+            // Q1: alle Kanten Ring-Anker → Außen (Kandidaten je Anker inkl. Typ).
+            // Eigener Variablenname — $kanten ist oben schon die Brücken-Liste fürs Return!
+            $vKanten = DB::table('foodalchemist_pairing_anchor_edges AS e')
+                ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
+                ->whereIn('e.anchor_a_id', $ringIds)
+                ->whereNotIn('e.anchor_b_id', $ringIds)
+                ->get(['e.anchor_a_id', 'e.anchor_b_id', 'a.slug', 'a.display_de', 'e.type']);
+
+            // Q2: dish_cover je Kandidat (dessen Kanten zurück in den Ring) — eine Query.
+            $candIds = $vKanten->pluck('anchor_b_id')->unique()->values()->all();
+            $cover = $candIds === [] ? collect() : DB::table('foodalchemist_pairing_anchor_edges')
+                ->whereIn('anchor_a_id', $candIds)->whereIn('anchor_b_id', $ringIds)
+                ->select('anchor_a_id', DB::raw('COUNT(DISTINCT anchor_b_id) AS c'))
+                ->groupBy('anchor_a_id')->pluck('c', 'anchor_a_id');
+
+            // Kandidaten je Anker dedupen (beste Kante = niedrigste Typ-Prio gewinnt).
+            $typPrio = ['klassisch' => 1, 'erprobt' => 1, 'verbund' => 2, 'modern' => 2, 'aroma' => 3, 'trinitas' => 3, 'kontrast' => 4];
+            $proAnker = [];
+            foreach ($vKanten as $k) {
+                $aId = (int) $k->anchor_a_id;
+                $cId = (int) $k->anchor_b_id;
+                $prio = $typPrio[$k->type] ?? 9;
+                if (! isset($proAnker[$aId][$cId]) || $prio < $proAnker[$aId][$cId]['prio']) {
+                    $proAnker[$aId][$cId] = ['id' => $cId, 'slug' => $k->slug, 'display_de' => $k->display_de,
+                        'type' => $k->type, 'prio' => $prio, 'cover' => (int) ($cover[$cId] ?? 0)];
+                }
+            }
+
+            // je Anker nach [dish_cover ↓, Typ-Prio ↑, slug ↑] ranken, top-n.
             foreach ($anker as $a) {
-                $neu = $this->ankerNeighbors($a['slug'], null, 60)
-                    ->filter(fn ($n) => ! isset($gesehen[(int) $n->id]))
-                    ->take($vorschlaegeProAnker);
-                foreach ($neu as $n) {
-                    $vorschlaege[] = [
-                        'anchor_id' => $a['id'], 'id' => (int) $n->id,
-                        'slug' => $n->slug, 'display_de' => $n->display_de, 'type' => $n->type,
-                    ];
+                $kandidaten = array_values($proAnker[$a['id']] ?? []);
+                usort($kandidaten, fn ($x, $y) => [$y['cover'], $x['prio'], $x['slug']] <=> [$x['cover'], $y['prio'], $y['slug']]);
+                foreach (array_slice($kandidaten, 0, $vorschlaegeProAnker) as $n) {
+                    $vorschlaege[] = ['anchor_id' => $a['id'], 'id' => $n['id'],
+                        'slug' => $n['slug'], 'display_de' => $n['display_de'], 'type' => $n['type']];
                 }
             }
         }

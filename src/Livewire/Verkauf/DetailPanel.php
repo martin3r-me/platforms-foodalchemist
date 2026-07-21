@@ -131,7 +131,7 @@ class DetailPanel extends Component
 
     public function toggleSektion(string $sektion): void
     {
-        if (in_array($sektion, ['anker', 'pairing', 'kohaerenz', 'heber', 'nachbarn'], true)) {
+        if (in_array($sektion, ['anker', 'pairing', 'kohaerenz', 'heber', 'nachbarn', 'eignung', 'deklaration', 'komponenten'], true)) {
             $this->offen[$sektion] = ! ($this->offen[$sektion] ?? false);
         }
     }
@@ -289,19 +289,17 @@ class DetailPanel extends Component
             'cockpit' => $rezept !== null ? $verkauf->cockpit($rezept) : null,
             // D-6 §5.x: Kern-Anker · Kohäsions-Score · Pairing-Section (lazy)
             'kernAnker' => $rezept !== null ? $pairing->recipeAnkers($rezept->id) : collect(),
-            'kohaesion' => $rezept !== null && ($this->offen['anker'] ?? false) ? $pairing->recipeCohesion($rezept) : null,
-            'pairings' => $rezept !== null && ($this->offen['pairing'] ?? false) ? $pairing->recipePairings($rezept->id) : null,
+            // v3-Redesign: Sektionen nicht mehr ausklappbar → direkt laden (nicht lazy).
+            // Pairings-Sektion entfernt (2026-07-21, Dominique: überschneidet sich mit Aroma-Netz).
+            'kohaesion' => $rezept !== null ? $pairing->recipeCohesion($rezept) : null,
             'ankerKandidaten' => $this->ankerSuche !== ''
                 ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
                     ->whereNull('deleted_at'), 'team_id', $team)->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
                 : collect(),
             // D-6 §5.x: Judge-Achse (gecacht) + deterministische Aroma-Nachbarn (lazy)
-            'kohaerenzStatus' => $rezept !== null && (($this->offen['kohaerenz'] ?? false) || ($this->offen['heber'] ?? false))
+            'kohaerenzStatus' => $rezept !== null
                 ? app(\Platform\FoodAlchemist\Services\CoherenceService::class)->status($team, $rezept->id)
-                : null,
-            'nachbarn' => $rezept !== null && ($this->offen['nachbarn'] ?? false)
-                ? $pairing->componentSuggestions($rezept)
                 : null,
             // M9-01k: Eignungen + Vokabular für die Pflege-Selects
             'niveauEignungen' => $rezept !== null ? $rezept->levelSuitabilities()->get() : collect(),
