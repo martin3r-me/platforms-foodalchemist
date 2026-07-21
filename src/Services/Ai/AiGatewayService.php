@@ -129,16 +129,18 @@ class AiGatewayService
         $cidFoodDna = $options['food_dna_concept_id'] ?? null;     // #389 → zentraler Canvas
         $fbFoodDna = $options['food_dna_foodbook_id'] ?? null;
         $agFoodDna = $options['food_dna_angebot_id'] ?? null;
-        unset($options['knowledge'], $options['knowledge_used'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id']);
+        $kdFoodDna = $options['food_dna_crm_company_id'] ?? null;  // Ebene 2: Endkunde (Kunde-DNA)
+        unset($options['knowledge'], $options['knowledge_used'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
 
         // #389/Canvas: stehenden Marken-/Brief-Kontext NUR in kreative Prompts mergen
-        // (Klassifikatoren ausgenommen). Kaskade Team-DNA → Angebot → Foodbook → Concept (CanvasService).
+        // (Klassifikatoren ausgenommen). Kaskade Team-DNA → Kunde-DNA → Angebot → Foodbook → Concept (CanvasService).
         if ($team !== null && in_array($promptKey, self::FOOD_DNA_KEYS, true)) {
             $context = app(\Platform\FoodAlchemist\Services\CanvasService::class)->cascadeKontext(
                 $team,
                 $cidFoodDna !== null ? (int) $cidFoodDna : null,
                 $fbFoodDna !== null ? (int) $fbFoodDna : null,
                 $agFoodDna !== null ? (int) $agFoodDna : null,
+                $kdFoodDna !== null ? (int) $kdFoodDna : null,
             ) + $context;
         }
 

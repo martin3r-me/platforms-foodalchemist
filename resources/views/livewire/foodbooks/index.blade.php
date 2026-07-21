@@ -220,11 +220,13 @@
                     @endif
                 </div>{{-- /Planung --}}
 
-                {{-- ═══ Tab: KREATIV (Geschmack · Tonalität · Kunde-DNA) — v1-Grundgerüst (Phase 2/4 füllen) ═══ --}}
+                {{-- ═══ Tab: KREATIV (Kunde-DNA · später Geschmack/Tonalität) ═══ --}}
                 <div x-show="tab === 'kreativ'" x-cloak class="space-y-3" data-fb-panel="kreativ">
+                    {{-- Ebene 2 der DNA-Kette: Kunde-DNA am CRM-Kunden (Nested-Livewire, Re-Mount via key bei Kunden-Wechsel) --}}
+                    <livewire:foodalchemist.foodbooks.kunde-dna-panel :company-id="$fb->crm_company_id" :key="'kdna-'.($fb->crm_company_id ?? 'none')" />
                     <div class="{{ $card }} p-5 text-sm text-gray-500 leading-relaxed">
-                        <p class="{{ $label }} mb-1">Kreativ — folgt (Phase 2/4)</p>
-                        Geschmackswelten, Tonalität (Schreibstil) und die Kunde-DNA landen hier. Die Tonalität steuert, wie die KI neutrale Gerichte in die Markenstimme übersetzt.
+                        <p class="{{ $label }} mb-1">Geschmack & Tonalität — folgt (Phase 4)</p>
+                        Geschmackswelten am Foodbook + der Tonalitäts-Pass (steuert, wie die KI neutrale Gerichte in die Markenstimme übersetzt) kommen hier dazu.
                     </div>
                 </div>{{-- /Kreativ --}}
 

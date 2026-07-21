@@ -34,6 +34,21 @@ class CanvasService
                 ['key' => 'default_schreibstil_id', 'label' => 'Default-Schreibstil', 'group_name' => 'Referenzen', 'type' => 'ref_schreibstil'],
             ],
         ],
+        // Ebene 2 der DNA-Kette (Team → KUNDE → Foodbook): stabile Wer-/Kommunikations-Identität
+        // des Endkunden, hängt am CRM-Kunden (owner_type=crm_company). Fließt in jedes Foodbook
+        // dieses Kunden, ohne neu getippt zu werden.
+        'kunde_dna' => [
+            'title' => 'Kunde-DNA (CRM)',
+            'kontext_label' => 'Kunde/Marke des Endkunden (stabiler Wer-/Kommunikations-Rahmen dieses Kunden)',
+            'felder' => [
+                ['key' => 'marke_positionierung', 'label' => 'Marke / Positionierung', 'group_name' => 'Wer', 'type' => 'longtext'],
+                ['key' => 'ziel_gaeste_anlaesse', 'label' => 'Ziel-Gäste & Anlässe', 'group_name' => 'Wer', 'type' => 'longtext'],
+                ['key' => 'kommunikation_ton', 'label' => 'Kommunikation / Ton', 'group_name' => 'Stimme', 'type' => 'longtext'],
+                ['key' => 'default_schreibstil_id', 'label' => 'Default-Schreibstil', 'group_name' => 'Stimme', 'type' => 'ref_schreibstil'],
+                ['key' => 'erwartungen_nogos', 'label' => 'Erwartungen / No-Gos', 'group_name' => 'Rahmen', 'type' => 'longtext'],
+                ['key' => 'preis_erwartung', 'label' => 'Preis-Erwartung', 'group_name' => 'Rahmen', 'type' => 'text'],
+            ],
+        ],
         'foodbook' => [
             'title' => 'Foodbook-Leitidee',
             'kontext_label' => 'Foodbook-Leitidee (was das Foodbook erfüllen muss)',
@@ -194,14 +209,16 @@ class CanvasService
     }
 
     /**
-     * KI-Kaskade: Team-DNA → Foodbook → Concept (→ Angebot) übereinander für die
-     * Generierung. Liefert ['marken_kontext' => block] oder [] (nichts injizieren).
+     * KI-Kaskade: Team-DNA → Kunde-DNA → Angebot → Foodbook → Concept übereinander für die
+     * Generierung (jede Ebene spezialisiert die darüber). Liefert ['marken_kontext' => block]
+     * oder [] (nichts injizieren). $crmCompanyId = Endkunde (Ebene 2, aus foodbook.crm_company_id).
      */
-    public function cascadeKontext(Team $team, ?int $conceptId = null, ?int $foodbookId = null, ?int $angebotId = null): array
+    public function cascadeKontext(Team $team, ?int $conceptId = null, ?int $foodbookId = null, ?int $angebotId = null, ?int $crmCompanyId = null): array
     {
         $bloecke = [];
         $reihen = [
             ['food_dna', 'team', $team->id],
+            ['kunde_dna', 'crm_company', $crmCompanyId],
             ['angebot', 'angebot', $angebotId],
             ['foodbook', 'foodbook', $foodbookId],
             ['concept', 'concept', $conceptId],

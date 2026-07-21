@@ -415,6 +415,8 @@ class Index extends Component
         try {
             $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.marketing', $kontext, [
                 'food_dna_foodbook_id' => $this->selectedId,
+                // Ebene 2 der DNA-Kette: Endkunde des Foodbooks (Kunde-DNA fließt in den Marketing-Text)
+                'food_dna_crm_company_id' => \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::whereKey($this->selectedId)->value('crm_company_id'),
                 'target_table' => 'foodalchemist_foodbook_blocks', 'target_id' => $block->id,
             ]);
             $text = $v->werte['marketing_text'] ?? null;
