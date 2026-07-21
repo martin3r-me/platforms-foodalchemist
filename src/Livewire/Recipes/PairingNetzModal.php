@@ -8,15 +8,15 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Services\PairingService;
 
 /**
- * M5-07 / D-7: Aroma-Netz-Modal — Quell-Rezept zentral (orange), Ring aus
+ * M5-07 / D-7: Pairing-Netz-Modal — Quell-Rezept zentral (orange), Ring aus
  * Pairing-Ankern (rosa, Kern-Anker ★), äußerer Ring verwandte Rezepte
  * (grün = Basis, blau = VK) mit Kanten zu gemeinsamen Ankern. Brücken-Typen
  * aroma/erprobt/kontrast; Hover über Anker = dessen Brücken,
- * Klick auf Rezept = öffnen; Toggle »Alle Aroma-Brücken« + Vorschlags-Modus
+ * Klick auf Rezept = öffnen; Toggle »Alle Pairing-Brücken« + Vorschlags-Modus
  * je Anker. Layout serverseitig (deterministisch), Interaktion Alpine-only —
  * nur der Vorschlags-Select macht einen Roundtrip.
  */
-class AromaNetzModal extends Component
+class PairingNetzModal extends Component
 {
     private const W = 1000;
 
@@ -33,28 +33,28 @@ class AromaNetzModal extends Component
     /** Pairing-Vorschläge pro Anker: 0 = aus (Referenz-Default) */
     public int $vorschlaege = 0;
 
-    #[On('aroma-netz.oeffnen')]
+    #[On('pairing-netz.oeffnen')]
     public function oeffnen(int $recipeId): void
     {
         $this->recipeId = $recipeId;
         $this->vorschlaege = 0;
-        $this->dispatch('modal.open', name: 'aroma-netz');
+        $this->dispatch('modal.open', name: 'pairing-netz');
     }
 
     public function zeigeRezept(int $id): void
     {
         $this->dispatch('recipe-selected', id: $id);
-        $this->dispatch('modal.close', name: 'aroma-netz');
+        $this->dispatch('modal.close', name: 'pairing-netz');
     }
 
     public function render(PairingService $pairings)
     {
         $team = Auth::user()?->currentTeamRelation;
         $netz = $team !== null && $this->recipeId !== null
-            ? $pairings->aromaNetz($team, $this->recipeId, $this->vorschlaege)
+            ? $pairings->pairingNetz($team, $this->recipeId, $this->vorschlaege)
             : ['zentrum' => null, 'anker' => [], 'kanten' => [], 'verwandte' => [], 'vorschlaege' => []];
 
-        return view('foodalchemist::livewire.recipes.aroma-netz-modal', $this->layout($netz));
+        return view('foodalchemist::livewire.recipes.pairing-netz-modal', $this->layout($netz));
     }
 
     /** Radial-Layout: Anker gleichmäßig, Verwandte am zirkulären Mittel ihrer Andock-Anker. */

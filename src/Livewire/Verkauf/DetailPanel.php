@@ -290,7 +290,7 @@ class DetailPanel extends Component
             // D-6 §5.x: Kern-Anker · Kohäsions-Score · Pairing-Section (lazy)
             'kernAnker' => $rezept !== null ? $pairing->recipeAnkers($rezept->id) : collect(),
             // v3-Redesign: Sektionen nicht mehr ausklappbar → direkt laden (nicht lazy).
-            // Pairings-Sektion entfernt (2026-07-21, Dominique: überschneidet sich mit Aroma-Netz).
+            // Pairings-Sektion entfernt (2026-07-21, Dominique: überschneidet sich mit Pairing-Netz).
             'kohaesion' => $rezept !== null ? $pairing->recipeCohesion($rezept) : null,
             'ankerKandidaten' => $this->ankerSuche !== ''
                 ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')

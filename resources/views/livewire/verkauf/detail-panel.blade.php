@@ -1,6 +1,6 @@
 {{-- M6-03: VK-DetailPanel — Verkaufs-/Marge-Linse. Redesign v3 2026-07-21 (Dominique):
      NICHT ausklappbar (alles direkt sichtbar), größere Typo, neu angeordnet;
-     Glance = Cockpit (Preis/Marge) + Sicherheit; Aroma-Netz als Inline-Graph;
+     Glance = Cockpit (Preis/Marge) + Sicherheit; Pairing-Netz als Inline-Graph;
      analytische KI-Blöcke kompakt am Fuß. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
@@ -133,14 +133,14 @@
             <p class="text-[13px] text-gray-600 leading-relaxed" data-vk-beschreibung>{{ $rezept->description }}</p>
         @endif
 
-        {{-- Aroma-Netz — Inline-Graph (Detail) + Anker-Pflege --}}
-        <x-foodalchemist::section title="Aroma-Netz" icon="heroicon-o-share"
+        {{-- Pairing-Netz — Inline-Graph (Detail) + Anker-Pflege --}}
+        <x-foodalchemist::section title="Pairing-Netz" icon="heroicon-o-share"
             :meta="$kohaesion !== null ? 'Kohäsion ' . $kohaesion['score'] . ' · Coverage ' . $kohaesion['coverage_pct'] . ' %' : null" data-vk-kern-anker>
             <x-slot:actions>
-                <button type="button" wire:click="$dispatch('aroma-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
-                        class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-vk-aroma-netz>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
+                <button type="button" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
+                        class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-vk-pairing-netz>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
             </x-slot:actions>
-            <x-foodalchemist::aroma-netz :recipe-id="$rezept->id" />
+            <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" />
             <div class="flex flex-wrap gap-1 mt-2">
                 @foreach($kernAnker as $anker)
                     <span wire:key="vka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->source }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
@@ -171,7 +171,7 @@
             </div>
         </x-foodalchemist::section>
 
-        {{-- KI-Analyse — kompakt gesammelt, direkt unter Komponenten (Details via Prüfen / im Aroma-Netz) --}}
+        {{-- KI-Analyse — kompakt gesammelt, direkt unter Komponenten (Details via Prüfen / im Pairing-Netz) --}}
         <x-foodalchemist::section title="KI-Analyse" icon="heroicon-o-sparkles" data-vk-ki-analyse>
             @php($urteil = $kohaerenzStatus['cache'] ?? null)
             @php($heberJson = $urteil?->heber_json)
@@ -199,7 +199,7 @@
                     <button type="button" wire:click="schlageHeberVor" class="{{ $btnGhostXs }} ml-auto" data-vk-heber-vorschlagen>{{ ($heberJson['vorschlaege'] ?? []) !== [] ? 'Erneut' : '✨ Vorschlagen' }}</button>
                 </div>
                 @if(($heberJson['einschaetzung'] ?? null) !== null)<p class="text-xs text-gray-500 leading-relaxed">{{ $heberJson['einschaetzung'] }}</p>@endif
-                <p class="text-gray-500 border-t border-black/5 pt-2" data-vk-nachbarn>Aroma-Nachbarn <span class="text-gray-400">— aromaverwandte Zutaten sind im Aroma-Netz oben sichtbar.</span></p>
+                <p class="text-gray-500 border-t border-black/5 pt-2" data-vk-nachbarn>Aroma-Nachbarn <span class="text-gray-400">— aromaverwandte Zutaten sind im Pairing-Netz oben sichtbar.</span></p>
             </div>
         </x-foodalchemist::section>
 

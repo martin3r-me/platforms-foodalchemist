@@ -110,8 +110,8 @@
     {{-- D-5: Aus Vorlage instanziieren (Variante + Slot-Binding) --}}
     <livewire:foodalchemist.recipes.template-instantiate-modal />
 
-    {{-- M5-07: Aroma-Netz-Graph (innerhalb x-ui-page, P-2) --}}
-    <livewire:foodalchemist.recipes.aroma-netz-modal />
+    {{-- M5-07: Pairing-Netz-Graph (innerhalb x-ui-page, P-2) --}}
+    <livewire:foodalchemist.recipes.pairing-netz-modal />
 
     {{-- M7-10: Voice-Interface --}}
     <livewire:foodalchemist.recipes.voice-modal />

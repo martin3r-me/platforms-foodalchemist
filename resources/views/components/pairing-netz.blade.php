@@ -1,14 +1,14 @@
 {{--
-    FA Aroma-Netz — kompakter Inline-Graph fürs Detail-Panel: Quell-Gericht zentral,
-    Kern-/Pairing-Anker im Ring, Aroma-Brücken dazwischen (Hover = Brücken des Ankers).
-    Server-gerechnetes SVG (kein JS-Graph), Daten aus PairingService::aromaNetz.
+    FA Pairing-Netz — kompakter Inline-Graph fürs Detail-Panel: Quell-Gericht zentral,
+    Kern-/Pairing-Anker im Ring, Pairing-Brücken dazwischen (Hover = Brücken des Ankers).
+    Server-gerechnetes SVG (kein JS-Graph), Daten aus PairingService::pairingNetz.
     Der volle Graph (verwandte Rezepte + Vorschläge) bleibt im „Netz öffnen"-Overlay.
 --}}
 @props(['recipeId'])
 @php
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation;
     $netz = ($team !== null && $recipeId !== null)
-        ? app(\Platform\FoodAlchemist\Services\PairingService::class)->aromaNetz($team, $recipeId, 0)
+        ? app(\Platform\FoodAlchemist\Services\PairingService::class)->pairingNetz($team, $recipeId, 0)
         : ['zentrum' => null, 'anker' => [], 'kanten' => []];
     $cx = 180; $cy = 115; $R = 86;
     $anker = array_values($netz['anker']);

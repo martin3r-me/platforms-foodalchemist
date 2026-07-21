@@ -97,7 +97,7 @@
     <livewire:foodalchemist.verkauf.vk-modal />
     <livewire:foodalchemist.verkauf.vk-generator-modal />
     <livewire:foodalchemist.recipes.ingredient-editor />
-    <livewire:foodalchemist.recipes.aroma-netz-modal />
+    <livewire:foodalchemist.recipes.pairing-netz-modal />
     {{-- R7-Fix: Sprung-Ziele des Zutaten-Editors als Modals (GP + Basisrezept) --}}
     <livewire:foodalchemist.gps.gp-modal />
     <livewire:foodalchemist.recipes.recipe-modal />

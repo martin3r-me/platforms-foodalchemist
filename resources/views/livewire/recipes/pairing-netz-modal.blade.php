@@ -1,14 +1,14 @@
-{{-- M5-07 / D-7: Aroma-Netz — Quell-Rezept zentral, Anker-Ring, Verwandte außen; Brücken-Typen GL-10 --}}
-<x-foodalchemist::modal name="aroma-netz" title="Aroma-Netz: {{ $zentrum['name'] ?? '' }}" size="max-w-5xl">
+{{-- M5-07 / D-7: Pairing-Netz — Quell-Rezept zentral, Anker-Ring, Verwandte außen; Brücken-Typen GL-10 --}}
+<x-foodalchemist::modal name="pairing-netz" title="Pairing-Netz: {{ $zentrum['name'] ?? '' }}" size="max-w-5xl">
     @if($zentrum === null)
         <p class="text-xs text-gray-500">Kein Rezept gewählt.</p>
     @else
-        <div x-data="{ alle: false, hov: null }" wire:key="aroma-netz-{{ $zentrum['id'] }}-{{ $vorschlaege }}">
+        <div x-data="{ alle: false, hov: null }" wire:key="pairing-netz-{{ $zentrum['id'] }}-{{ $vorschlaege }}">
             {{-- Kopf: Brücken-Toggle · Vorschlags-Modus · Bedien-Hint --}}
             <div class="flex flex-wrap items-center gap-x-5 gap-y-2 mb-2 text-[11px] text-gray-600" data-netz-kopf>
                 <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
                     <input type="checkbox" x-model="alle" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-netz-bruecken-toggle />
-                    Alle Aroma-Brücken ({{ count($kanten) }})
+                    Alle Pairing-Brücken ({{ count($kanten) }})
                 </label>
                 <span class="text-gray-300">·</span>
                 <label class="inline-flex items-center gap-1.5">
@@ -40,7 +40,7 @@
                     @endforeach
                 @endforeach
 
-                {{-- 3. Aroma-Brücken Anker↔Anker (GL-10-Typen) — sichtbar bei Toggle oder Anker-Hover --}}
+                {{-- 3. Pairing-Brücken Anker↔Anker (GL-10-Typen) — sichtbar bei Toggle oder Anker-Hover --}}
                 @foreach($kanten as $k)
                     @if($pos->has($k['a']) && $pos->has($k['b']))
                         <line x1="{{ $pos[$k['a']]['x'] }}" y1="{{ $pos[$k['a']]['y'] }}"
@@ -113,8 +113,7 @@
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-pink-300 border border-pink-600"></span> Pairing-Anker (★ Kern)</span>
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-300 border border-amber-600"></span> Vorschlag über Anker</span>
                 <span class="text-gray-300">|</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#d6409f" stroke-width="2"/></svg> klassisch</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="1 3"/></svg> modern</span>
+                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#d6409f" stroke-width="2"/></svg> erprobt</span>
                 <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#d6409f" stroke-width="1.5" stroke-dasharray="2 3"/></svg> aroma</span>
                 <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="2 3"/></svg> kontrast</span>
             </div>

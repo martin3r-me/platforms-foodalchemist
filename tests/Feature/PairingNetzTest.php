@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
-use Platform\FoodAlchemist\Livewire\Recipes\AromaNetzModal;
+use Platform\FoodAlchemist\Livewire\Recipes\PairingNetzModal;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -12,7 +12,7 @@ use Symfony\Component\Uid\UuidV7;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * M5-07: Aroma-Netz — Datenbasis (Ring, Brücken-Dedupe, Verwandte mit
+ * M5-07: Pairing-Netz — Datenbasis (Ring, Brücken-Dedupe, Verwandte mit
  * Andock-Ankern, Vorschläge außerhalb des Rings) + Modal-Smoke.
  * DoD-Realdaten-Check (BBQ 27 Anker/115 Brücken) lief live, siehe Roadmap.
  */
@@ -55,8 +55,8 @@ beforeEach(function () {
     }
 });
 
-it('aromaNetz: Kern zuerst (★), Brücken einmal je Paar mit Typ, Verwandte docken an, VK-Flag', function () {
-    $netz = $this->svc->aromaNetz($this->rootTeam, $this->rezept->id);
+it('pairingNetz: Kern zuerst (★), Brücken einmal je Paar mit Typ, Verwandte docken an, VK-Flag', function () {
+    $netz = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id);
 
     expect($netz['zentrum']['name'])->toBe('Sauce: Netz')
         ->and(array_column($netz['anker'], 'slug'))->toBe(['ketchup', 'chili', 'essig'])  // Kern vor Pairing-Ankern
@@ -76,8 +76,8 @@ it('aromaNetz: Kern zuerst (★), Brücken einmal je Paar mit Typ, Verwandte doc
     expect($netz['vorschlaege'])->toBe([]);                           // Modus aus (0)
 });
 
-it('aromaNetz: Vorschlags-Modus liefert nur Anker AUSSERHALB des Rings', function () {
-    $netz = $this->svc->aromaNetz($this->rootTeam, $this->rezept->id, 2);
+it('pairingNetz: Vorschlags-Modus liefert nur Anker AUSSERHALB des Rings', function () {
+    $netz = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id, 2);
 
     $slugs = array_column($netz['vorschlaege'], 'slug');
     expect($slugs)->toContain('vanille')                              // ketchup→vanille (klassisch)
@@ -88,8 +88,8 @@ it('aromaNetz: Vorschlags-Modus liefert nur Anker AUSSERHALB des Rings', functio
 it('Modal: öffnen rendert Zentrum/Anker/Brücken, Klick auf Rezept navigiert und schließt', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    $c = Livewire::test(AromaNetzModal::class);
-    $c->dispatch('aroma-netz.oeffnen', recipeId: $this->rezept->id);
+    $c = Livewire::test(PairingNetzModal::class);
+    $c->dispatch('pairing-netz.oeffnen', recipeId: $this->rezept->id);
 
     $c->assertDispatched('modal.open')
         ->assertSeeHtml('data-netz-zentrum')

@@ -600,7 +600,7 @@ class PairingService
 
     /**
      * Aroma-Nachbarn eines Kanten-Typs über mehrere Anker, dedupliziert, ohne die eigenen.
-     * Quelle = dieselben Anker-Kanten wie der Aroma-Netz-Graph (klassisch | kontrast). Ranking
+     * Quelle = dieselben Anker-Kanten wie der Pairing-Netz-Graph (klassisch | kontrast). Ranking
      * nach »cover« (mit wie vielen Teller-Ankern bringt der Kandidat den Typ) — relevanteste zuerst;
      * Prozess-/Neutral-Anker rausgefiltert (keine Zutat).
      */
@@ -714,10 +714,10 @@ class PairingService
         ];
     }
 
-    // ── M5-07: Aroma-Netz-Graph (D-7, 13_REFERENZ Nachlieferung 2) ───────
+    // ── M5-07: Pairing-Netz-Graph (D-7, 13_REFERENZ Nachlieferung 2) ───────
 
     /**
-     * Datenbasis fürs Aroma-Netz-Modal: Ring = Kern-Anker (★, zuerst) +
+     * Datenbasis fürs Pairing-Netz-Modal: Ring = Kern-Anker (★, zuerst) +
      * Pairing-Anker des Rezepts (Cap 28 für Lesbarkeit), Brücken = beste Kante
      * je ungeordnetem Anker-Paar im Ring (GL-10-Typen), Verwandte = Rezepte
      * mit gemeinsamen Pairing-Ankern inkl. Andock-Anker-Ids, Vorschläge =
@@ -725,7 +725,7 @@ class PairingService
      *
      * @return array{zentrum: ?array, anker: list<array>, kanten: list<array>, verwandte: list<array>, vorschlaege: list<array>}
      */
-    public function aromaNetz(Team $team, int $recipeId, int $vorschlaegeProAnker = 0): array
+    public function pairingNetz(Team $team, int $recipeId, int $vorschlaegeProAnker = 0): array
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find($recipeId);
         if ($recipe === null) {

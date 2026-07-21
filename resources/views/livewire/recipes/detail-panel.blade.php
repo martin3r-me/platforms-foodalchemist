@@ -1,5 +1,5 @@
 {{-- M4-05: Rezept-DetailPanel. Redesign v3 2026-07-21 (Dominique): Standalone-Sidebar
-     nicht ausklappbar, größere Typo, Kosten-Linse (EK/kg-Cockpit → Zutaten → Aroma-Netz →
+     nicht ausklappbar, größere Typo, Kosten-Linse (EK/kg-Cockpit → Zutaten → Pairing-Netz →
      Pairings → Allergene → Eignung/Ersatz/Equipment). Editor-Embeds (nurEignung/nurErsatz/
      embedded-Details-Tab) behalten ihre bisherigen Karteien. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
@@ -175,13 +175,13 @@
             </x-foodalchemist::section>
         @endif
 
-        {{-- Aroma-Netz — Inline-Graph + Anker-Pflege --}}
-        <x-foodalchemist::section title="Aroma-Netz" icon="heroicon-o-share"
+        {{-- Pairing-Netz — Inline-Graph + Anker-Pflege --}}
+        <x-foodalchemist::section title="Pairing-Netz" icon="heroicon-o-share"
             :meta="$kohaesion !== null ? 'Kohäsion ' . $kohaesion['score'] . ' · Coverage ' . $kohaesion['coverage_pct'] . ' %' : null" data-kern-anker>
             <x-slot:actions>
-                <button type="button" wire:click="$dispatch('aroma-netz.oeffnen', { recipeId: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-aroma-netz-btn>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
+                <button type="button" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-pairing-netz-btn>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
             </x-slot:actions>
-            <x-foodalchemist::aroma-netz :recipe-id="$rezept->id" />
+            <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" />
             <div class="flex flex-wrap gap-1 mt-2">
                 @foreach($kernAnker as $anker)
                     <span wire:key="ka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->source }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
