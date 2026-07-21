@@ -20,6 +20,17 @@ Beschlossen (Dominique):
 
 Details/Historie: Memory `project_fa_klarschiff_cleanup.md` + `_MEMORY_FoodBrain.md`.
 
+## ⭐ Update 2026-07-21 (Session: Signale → Tab-Cockpit)
+
+**Die „Signale"-Seite (`/zu-pruefen`, `ReviewQueue`) zum Tab-Cockpit umgebaut** — reine Darstellung/Read-only, Detektor/Signal-Emission/Services-Logik + MCP unverändert. Commit `39c5470`.
+
+- **5 Tabs** (Überblick · Signale · KI-Vorschläge · Matches & Terminologie · Pflege), Start auf Signale; Überblick mit klickbaren KPI-Kacheln + kritischsten Signalen.
+- **Signal-Zeilen house-style neu** (`partials/_signal-row.blade.php`): Severity-Akzentbalken, Typ-Icons (aus `SignalTyp::icon()`), klare Hierarchie, aufgeräumte Filter (Segment-Status + auf offene Typen getrimmte Pills).
+- **„KI erledigen lassen"** je tauglichem Signaltyp (`Support\SignalCockpit`-Affordance-Map: Auto-Fix vs. KI-Assistenz) — Ausführung bewusst **nachgelagert** (Steuer-Rahmen, „kommt bald"). Nicht-fixbare Typen (Nährwert/Widerspruch/Vertragsfrist/veraltete Preise) bewusst ohne Knopf.
+- **„Reinschauen"** je Signal: betroffene Objekte **on-demand read-only** aufgelöst (neu `DataQualityService::betroffene()` — gleiche Prädikate wie der Zähler, kein Drift), klickbar ins Rezept-Modal bzw. GP-Browser; >50 gekürzt + „N weitere".
+- **Verifikation:** Sandbox visuell (alle Tabs, KPI-Klick, KI-Panel, Reinschauen für Rezepte + GPs mit 50/182-Kürzung), `php -l` 0 Fehler, keine Konsolen-Fehler.
+- **Offen/nachgelagert:** echte KI-Fixer/Assistenzen pro Typ verdrahten (dann MCP-Lockstep + Dev-Issue); Foodbook-Cockpit-Session läuft parallel (andere Dateien).
+
 ## ⭐ Update 2026-07-21 (Session: Geschmacks-Profil entdoppelt → Spinnennetz)
 
 **Dopplung im Rezept-/VK-/GP-Editor + Concepter beseitigt:** Der Sensorik-Tab zeigte zwei optisch identische 7-Achsen-Balkenblöcke — „Geschmacks-Balance · sensorisch" (gegarte KI-Sensorik, `SensorikService`, DB `recipe_taste_vectors`) und „Geschmacks-Profil · Aroma-Anker" (gemittelte Anker-Vektoren, `PairingService`, DB `anchor_taste_vectors`). Beide auf 0–1, aber verschiedene Quelle/Semantik (Abgrenzung stand als `#503`-Kommentar im Code). Ersetzt durch **ein** Spinnennetz (Coffee-Cupping-Optik, Brand-Violett).
