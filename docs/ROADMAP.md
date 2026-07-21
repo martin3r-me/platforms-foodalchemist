@@ -142,7 +142,11 @@ Großes Redesign der Foodbook-Hauptseite zum **Planungs-Cockpit** (mit Dominique
 
 **Phase 1 GEBAUT + GEPUSHT (`6ea6b42`):** `resources/views/livewire/foodbooks/index.blade.php` — Kopf-Ansicht als 4-Tab-Layout, Leitidee-Canvas + Planungs-Gerüst **inline** (Modals `fb-leitidee`/`fb-geruest` entfernt), Coverage + R6.1-Generator im Planung-Tab, Kreativ/Trend als Platzhalter. Tab-Zustand via Alpine, überlebt Livewire-Morphs (verifiziert). Reiner Reuse, kein Modell-/Service-Eingriff. Sandbox-Smoke grün, keine Konsolenfehler. Plan-Datei: `~/.claude/plans/mach-einen-plan-breezy-star.md`.
 
-**Offen:** Phase 2 (3-Ebenen-DNA, Kunde-DNA-Canvas + cascadeKontext), Phase 3 (Struktur anwenden + per-Slot-Vorschläge, A/B-Entscheid), Phase 4 (Tonalität-Pass + Trend-Tab), Phase 5 (Kickoff-Flow). demo-Deploy = Martin.
+**Phase 1 Politur GEPUSHT (`354d010`):** Tab-Reihenfolge Briefing→Planung; Canvas- + Briefing-Textareas wachsen mit dem Inhalt (CRM-autoGrow-Muster, `x-effect` auf $wire-Property, `min-h`-Boden) statt intern zu scrollen.
+
+**Phase 6 — Branding/CI-Tab GEBAUT + GEPUSHT (`ec9b652`):** 5. Cockpit-Tab, verdrahtet ausschließlich die von Dominique parallel gebaute FoodbookService-Branding-API (Backend `87b0217`: `setBranding`/`storeLogo`/`storeCover`/`clear*` + `foodalchemist_foodbooks`-Spalten brand_color/band_color/logo_path/cover_image_path/footer_text). Marken-Farbe (Picker+Hex), Bandfarbe optional, Logo/Cover-Upload (`WithFileUploads`, Auto-Upload via updated-Hook), Footer, Live-Vorschau (Alpine-@entangle). RuntimeException (Hex/Owner-D1) als UI-Fehler. Gegenprobe: Dokument-PDF zeigt Marke. Pest `FoodbookBrandingTab` 4/4 (+ Dominiques Service-Test 4/4). Nur `Index.php`+`index.blade.php` angefasst.
+
+**Offen:** Phase 2 (3-Ebenen-DNA, Kunde-DNA-Canvas + cascadeKontext; **inkl. Team-DNA → Einstellungen verschieben** — Umzug, kein Neubau), Phase 3 (Struktur anwenden + per-Slot-Vorschläge, A/B-Entscheid), Phase 4 (Tonalität-Pass + Trend-Tab), Phase 5 (Kickoff-Flow). demo-Deploy = Martin.
 
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 
