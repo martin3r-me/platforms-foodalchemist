@@ -45,6 +45,9 @@ class ReviewQueue extends Component
     /** „Reinschauen": welches Signal hat seine Liste betroffener Objekte offen (read-only). */
     public ?int $detailPanelId = null;
 
+    /** KI-Assistenz-Entwurf (transient): ['signal_id','draft','confidence'] fürs offene Panel. */
+    public ?array $kiDraft = null;
+
     #[Url(as: 'sig_status')]
     public string $signalStatus = 'offen';
 
@@ -77,17 +80,57 @@ class ReviewQueue extends Component
         $this->tab = $t;
         $this->kiPanelId = null;
         $this->detailPanelId = null;
+        $this->kiDraft = null;
         $this->resetPage();
     }
 
-    /**
-     * KI-Steuer-Rahmen auf-/zuklappen (nur Darstellung). Führt NICHTS aus — die
-     * eigentlichen Fixer/Assistenzen sind bewusst nachgelagert.
-     */
+    /** KI-Steuer-Rahmen auf-/zuklappen (Panel mit Plan + „Ausführen"). */
     public function toggleKiPanel(int $id): void
     {
         $this->kiPanelId = $this->kiPanelId === $id ? null : $id;
         $this->detailPanelId = null;
+        $this->kiDraft = null;   // frisches Panel, kein alter Entwurf
+    }
+
+    /**
+     * „KI erledigen lassen" ausführen: deterministisch → Hintergrund-Job über den vollen
+     * betroffenen Satz (Signal schließt/aktualisiert danach); assist → ein propose()-Call
+     * → Entwurf transient im Panel. Plan-Wahl metrik-fein via SignalCockpit.
+     */
+    public function kiFixAusfuehren(int $signalId): void
+    {
+        $this->meldung = null;
+        $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        $sig = FoodAlchemistSignal::visibleToTeam($team)->find($signalId);
+        if ($sig === null) {
+            $this->fehler = 'Signal nicht gefunden.';
+
+            return;
+        }
+        $plan = \Platform\FoodAlchemist\Support\SignalCockpit::planFor($sig);
+        if ($plan === null) {
+            $this->fehler = 'Für dieses Signal gibt es keinen KI-Schritt.';
+
+            return;
+        }
+
+        try {
+            if ($plan['kind'] === 'deterministic') {
+                \Platform\FoodAlchemist\Jobs\SignalFixJob::dispatch((int) $sig->id, (int) $team->id);
+                $this->kiDraft = null;
+                $this->meldung = 'KI-Fix gestartet — die betroffenen Objekte werden behoben; erledigte Signale verschwinden aus „offen".';
+            } else {
+                $res = app(\Platform\FoodAlchemist\Services\SignalFixService::class)->assist($team, $sig);
+                $this->kiDraft = ['signal_id' => (int) $sig->id, 'draft' => (string) $res['draft'], 'confidence' => (float) $res['confidence']];
+                $this->meldung = 'KI-Entwurf erzeugt.';
+            }
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     /** „Reinschauen": Liste der betroffenen Objekte auf-/zuklappen (read-only). */

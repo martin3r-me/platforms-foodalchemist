@@ -624,5 +624,33 @@ return [
                 . 'contains_pork, contains_beef, organic, regional, grundnahrungsmittel, convenience, '
                 . 'lactose_free, gluten_free) als true/false; unbewertbare Tags weglassen: werte = {is_vegan: bool, …}.',
         ],
+        // Signale-Cockpit „KI erledigen lassen" (Assistenz) — erzeugen einen Entwurf/Vorschlag,
+        // KEINE Mutation. Antwort-Feld heisst 'entwurf'/'empfehlung'/'vorschlag' (SignalFixService::extractDraft).
+        'signal.supplier_inquiry' => [
+            'tier' => 'B',
+            'task' => 'Formuliere einen sachlichen, freundlichen Lieferanten-Rueckfrage-Entwurf (deutsche '
+                . 'Geschaeftsmail inkl. Betreff) zu einem auffaelligen Preissprung: nenne den Artikel, den '
+                . 'alten→neuen Preis und die Marge-Wirkung, frage nach dem Grund und ob bessere Konditionen '
+                . 'oder Alternativen moeglich sind. Kontext steht im payload (gp_name, preis_alt, preis_neu, '
+                . 'guenstigere_alternative, beispiele). werte = {entwurf}.',
+        ],
+        'signal.margin_levers' => [
+            'tier' => 'B',
+            'task' => 'Schlage 2-3 konkrete, machbare Hebel vor, um die Marge des Gerichts auf die Zielmarge '
+                . 'zu heben (VK-Erhoehung, guenstigere Warenkorb-Alternative, Portionierung) — keine Fantasie. '
+                . 'Kontext im payload (db_pct/wareneinsatz_pct, ziel_pct, sales_net). werte = {empfehlung}.',
+        ],
+        'signal.vk_release_advice' => [
+            'tier' => 'B',
+            'task' => 'Gib eine kurze Freigabe-Empfehlung fuer die vom freigegebenen Snapshot abweichende '
+                . 'Live-VK: soll die neue VK freigegeben werden? Nenne Chance und Risiko (Kunden-Preissprung). '
+                . 'Kontext im payload. werte = {empfehlung}.',
+        ],
+        'signal.serving_form_suggest' => [
+            'tier' => 'B',
+            'task' => 'Schlage je genanntem Gericht die plausibelste Standard-Servierform vor (nach Bauart des '
+                . 'Gerichts, nicht nach Einsatzort). Kontext: beispiele = Gerichtnamen. '
+                . 'werte = {vorschlag} (Liste „Gericht → Form" mit kurzer Begruendung).',
+        ],
     ],
 ];

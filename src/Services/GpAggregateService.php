@@ -23,6 +23,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistItemNutritional;
  */
 class GpAggregateService
 {
+    /** kategorial → decimal(4,3) (allergens_confidence). Single source für Command + SignalFix. */
+    public const ALLERGEN_KONF_MAP = ['high' => 1.0, 'medium' => 0.66, 'low' => 0.33, 'none' => 0.0];
+
     /**
      * Effektive Allergen-Auflösung je GP:
      * [feld => ['value' => AllergenValue, 'source' => override|mutter|la|keine]].
@@ -97,6 +100,51 @@ class GpAggregateService
         }
 
         return ['confidence' => $differenz ? 'medium' : 'high', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => $profile->count()];
+    }
+
+    /**
+     * P3-Backfill je GP: persistiert `allergens_confidence`/`allergens_source`/
+     * `allergens_aggregated_at` aus der on-read-Aggregation. NUR Metadaten — die 14
+     * `allergen_*`-WERT-Spalten (Override-Schicht) werden NIE geschrieben (sonst Derivat-
+     * LIVE-Vererbung + „LA fixen → GP heilt"-Kaskade kaputt). Provenienz-Schutz:
+     * `allergens_source IN (manual|ki)` bleibt unangetastet. Derivate erben LIVE von der
+     * Mutter (source='derivat'). Single source für Command + SignalFixService.
+     *
+     * @return array{confidence:string,needs_review:bool,konflikt_felder:array<int,string>,source:string,written:bool,skipped:bool}
+     */
+    public function backfillAllergenKonfidenz(FoodAlchemistGp $gp, bool $apply = true): array
+    {
+        $skip = in_array($gp->allergens_source, ['manual', 'ki'], true);
+
+        if ($gp->is_derivat && $gp->derivat_von_gp_id !== null) {
+            $mutter = FoodAlchemistGp::find($gp->derivat_von_gp_id);
+            $konf = $mutter !== null
+                ? $this->allergenKonfidenz($mutter)
+                : ['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => []];
+            $source = 'derivat';
+        } else {
+            $konf = $this->allergenKonfidenz($gp);
+            $source = 'la_union';
+        }
+
+        $written = false;
+        if ($apply && ! $skip) {
+            $gp->update([
+                'allergens_confidence' => self::ALLERGEN_KONF_MAP[$konf['confidence']] ?? 0.0,
+                'allergens_source' => $source,
+                'allergens_aggregated_at' => now(),
+            ]);
+            $written = true;
+        }
+
+        return [
+            'confidence' => $konf['confidence'],
+            'needs_review' => (bool) ($konf['needs_review'] ?? false),
+            'konflikt_felder' => $konf['konflikt_felder'] ?? [],
+            'source' => $source,
+            'written' => $written,
+            'skipped' => $skip,
+        ];
     }
 
     /**

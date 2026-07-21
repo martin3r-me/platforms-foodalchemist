@@ -35,9 +35,6 @@ class GpAllergenBackfillCommand extends Command
 
     protected $description = 'P3: persistiert GP-Allergen-Konfidenz/-Quelle (nur Metadaten, nie die Wert-Spalten).';
 
-    /** kategorial → decimal(4,3) (allergens_confidence). */
-    private const KONF_MAP = ['high' => 1.0, 'medium' => 0.66, 'low' => 0.33, 'none' => 0.0];
-
     public function handle(GpAggregateService $agg, SignalService $signals): int
     {
         $apply = (bool) $this->option('apply');
@@ -72,32 +69,17 @@ class GpAllergenBackfillCommand extends Command
                 ->orderBy('id')
                 ->chunkById($chunk, function ($gps) use (&$stats, &$derivate, &$konflikt, &$beispiele, $agg, $apply) {
                     foreach ($gps as $gp) {
-                        if ($gp->is_derivat && $gp->derivat_von_gp_id !== null) {
-                            $mutter = FoodAlchemistGp::find($gp->derivat_von_gp_id);
-                            $konf = $mutter !== null
-                                ? $agg->allergenKonfidenz($mutter)
-                                : ['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => []];
-                            $source = 'derivat';   // varchar(16); LIVE-Erbe von der Mutter
+                        // Single source: Write-/Derivat-/Provenienz-Logik lebt im Service (auch SignalFixService nutzt sie).
+                        $r = $agg->backfillAllergenKonfidenz($gp, $apply);
+                        if ($r['source'] === 'derivat') {
                             $derivate++;
-                        } else {
-                            $konf = $agg->allergenKonfidenz($gp);
-                            $source = 'la_union';
                         }
-
-                        $stats[$konf['confidence']] = ($stats[$konf['confidence']] ?? 0) + 1;
-                        if ($konf['needs_review']) {
+                        $stats[$r['confidence']] = ($stats[$r['confidence']] ?? 0) + 1;
+                        if ($r['needs_review']) {
                             $konflikt++;
                             if (count($beispiele) < 10) {
                                 $beispiele[$gp->id] = $gp->name;
                             }
-                        }
-
-                        if ($apply) {
-                            $gp->update([
-                                'allergens_confidence' => self::KONF_MAP[$konf['confidence']] ?? 0.0,
-                                'allergens_source' => $source,
-                                'allergens_aggregated_at' => now(),
-                            ]);
                         }
                     }
                 }, 'id');

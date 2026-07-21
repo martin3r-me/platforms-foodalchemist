@@ -1,8 +1,8 @@
 {{-- Veredelte Signal-Zeile (Cockpit) — genutzt im Überblick + Signale-Tab (DRY).
-     Erwartet: $sig (FoodAlchemistSignal), $kiPanelId (int|null). Reine Darstellung. --}}
+     Erwartet: $sig, $kiPanelId, $detailPanelId, $detailData, $kiDraft (aus ReviewQueue). --}}
 @php
     extract(\Platform\FoodAlchemist\Support\Ui::maps());
-    $ki = \Platform\FoodAlchemist\Support\SignalCockpit::kiAffordance($sig->type->value);
+    $ki = \Platform\FoodAlchemist\Support\SignalCockpit::planFor($sig);
     $sevMap = [
         'kritisch' => ['bar' => 'bg-rose-500',  'tint' => 'bg-rose-500/10 text-rose-600',  'text' => 'text-rose-600'],
         'warnung'  => ['bar' => 'bg-amber-400', 'tint' => 'bg-amber-500/10 text-amber-600', 'text' => 'text-amber-600'],
@@ -90,19 +90,34 @@
     </div>
 
     @if($ki && $sig->status->istOffen() && $kiPanelId === $sig->id)
+        @php $istFix = $ki['kind'] === 'deterministic'; @endphp
         <div class="mx-4 mb-3 -mt-1 rounded-xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.05] to-indigo-500/[0.03] px-4 py-3" wire:key="kpanel-{{ $sig->id }}">
             <div class="flex items-center gap-2 mb-1.5">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $ki['flavor'] === 'fix' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-sky-500/10 text-sky-600' }}">
-                    @svg($ki['flavor'] === 'fix' ? 'heroicon-o-bolt' : 'heroicon-o-sparkles', 'w-3 h-3') {{ $ki['flavorLabel'] }}
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $istFix ? 'bg-emerald-500/10 text-emerald-600' : 'bg-sky-500/10 text-sky-600' }}">
+                    @svg($istFix ? 'heroicon-o-bolt' : 'heroicon-o-sparkles', 'w-3 h-3') {{ $ki['flavorLabel'] }}
                 </span>
                 <span class="text-[11px] font-medium text-gray-700">So würde die KI das angehen</span>
             </div>
             <p class="text-[11px] leading-relaxed text-gray-600">{{ $ki['plan'] }}</p>
+
+            @if(($kiDraft['signal_id'] ?? null) === $sig->id && !empty($kiDraft['draft']))
+                <div class="mt-2.5 rounded-lg border border-sky-500/20 bg-white/70 px-3 py-2" wire:key="kidraft-{{ $sig->id }}">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[10px] font-medium uppercase tracking-wider text-sky-600">KI-Entwurf</span>
+                        <span class="text-[10px] text-gray-400 tabular-nums">Konfidenz {{ round(((float) ($kiDraft['confidence'] ?? 0)) * 100) }} %</span>
+                    </div>
+                    <textarea readonly rows="6" onclick="this.select()"
+                              class="w-full text-[11px] leading-relaxed text-gray-700 bg-transparent border-0 resize-y focus:ring-0 p-0">{{ $kiDraft['draft'] }}</textarea>
+                    <p class="text-[10px] text-gray-400 mt-1">Klicken zum Markieren · Entwurf, nicht automatisch versendet.</p>
+                </div>
+            @endif
+
             <div class="mt-2.5 flex items-center gap-2">
-                <button type="button" disabled
-                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 opacity-40 cursor-not-allowed"
-                        title="Kommt bald — die Fix-Logik ist bewusst nachgelagert">
-                    @svg('heroicon-o-play', 'w-3.5 h-3.5') Ausführen <span class="opacity-80">(kommt bald)</span>
+                <button type="button" wire:click="kiFixAusfuehren({{ $sig->id }})" wire:target="kiFixAusfuehren" wire:loading.attr="disabled"
+                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 shadow-sm shadow-violet-500/25 hover:shadow-md hover:shadow-violet-500/30 disabled:opacity-50 transition-all">
+                    @svg($istFix ? 'heroicon-o-play' : 'heroicon-o-sparkles', 'w-3.5 h-3.5')
+                    <span wire:loading.remove wire:target="kiFixAusfuehren">{{ $istFix ? 'Automatisch beheben' : 'Entwurf erzeugen' }}</span>
+                    <span wire:loading wire:target="kiFixAusfuehren">Läuft …</span>
                 </button>
                 <button type="button" wire:click="toggleKiPanel({{ $sig->id }})" class="px-2.5 py-1 rounded-lg text-[11px] text-gray-500 hover:bg-black/5 transition-colors">Schließen</button>
             </div>

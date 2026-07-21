@@ -264,34 +264,74 @@ class DataQualityService
      */
     public function betroffene(Team $team, string $metrik, int $limit = 50): array
     {
-        return match ($metrik) {
-            'gp_ohne_lead' => $this->gpItems(
-                FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->where('requires_la', true)
-                    ->where(fn ($w) => $w->whereNull('lead_la_supplier_item_id')->orWhere('n_las_total', 0)), $limit),
-            'gp_lead_ohne_preis' => $this->gpItems(
-                FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->where('requires_la', true)
-                    ->whereNotNull('lead_la_supplier_item_id')->whereNotExists($this->aktivPreisFuerLead()), $limit),
-            'gp_allergen_konfidenz' => $this->gpItems(
-                FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->whereNull('allergens_confidence'), $limit),
-            'gp_anker_fehlt' => $this->gpItems(
-                FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->whereExists($this->gpGenutzt())->whereNotExists($this->gpHatAnker()), $limit),
-            'gp_tentative_genutzt' => $this->gpItems(
-                FoodAlchemistGp::visibleToTeam($team)->where('status', 'tentative')->whereExists($this->gpGenutzt()), $limit),
-            'br_ek_null' => $this->recipeItems($this->rezepte($team, false)->whereNull('ek_total_eur'), $limit),
-            'br_ek_teil' => $this->recipeItems($this->rezepte($team, false)->whereNotNull('ek_total_eur')
-                ->whereColumn('ek_n_ingredients_priced', '<', 'ek_n_ingredients_total'), $limit),
-            'br_anker_fehlt' => $this->recipeItems($this->rezepte($team, false)->whereNotExists($this->rezeptHatAnker()), $limit),
-            'vk_ek_null' => $this->recipeItems($this->rezepte($team, true)->whereNull('ek_total_eur'), $limit),
-            'vk_ek_teil' => $this->recipeItems($this->rezepte($team, true)->whereNotNull('ek_total_eur')
-                ->whereColumn('ek_n_ingredients_priced', '<', 'ek_n_ingredients_total'), $limit),
-            'vk_anker_fehlt' => $this->recipeItems($this->rezepte($team, true)->whereNotExists($this->rezeptHatAnker()), $limit),
-            'vk_servierform_unbestimmt' => $this->servierformItems($team, $limit),
-            'ri_gemini_unverifiziert' => $this->recipeItems(
-                FoodAlchemistRecipe::visibleToTeam($team)->whereExists(fn ($q) => $q->select(DB::raw(1))
+        [$q, $kind] = $this->queryFor($team, $metrik);
+        if ($q === null) {
+            return [];
+        }
+
+        return $kind === 'gp' ? $this->gpItems($q, $limit) : $this->recipeItems($q, $limit);
+    }
+
+    /**
+     * Re-Count einer einzelnen Metrik (nach einem Fix). Dieselbe Query wie betroffene()
+     * (queryFor), nur COUNT — für die Lifecycle-Entscheidung „Signal schließen" (count 0).
+     */
+    public function countFor(Team $team, string $metrik): int
+    {
+        [$q] = $this->queryFor($team, $metrik);
+
+        return $q?->count() ?? 0;
+    }
+
+    /**
+     * EINE Query-Definition je Metrik (kein Drift): betroffene() (SELECT) + countFor() (COUNT)
+     * teilen sich diese. Rückgabe [?Builder, kind:'gp'|'recipe']; null = keine Objekte.
+     *
+     * @return array{0: \Illuminate\Database\Eloquent\Builder|null, 1: string}
+     */
+    private function queryFor(Team $team, string $metrik): array
+    {
+        switch ($metrik) {
+            case 'gp_ohne_lead':
+                return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->where('requires_la', true)
+                    ->where(fn ($w) => $w->whereNull('lead_la_supplier_item_id')->orWhere('n_las_total', 0)), 'gp'];
+            case 'gp_lead_ohne_preis':
+                return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->where('requires_la', true)
+                    ->whereNotNull('lead_la_supplier_item_id')->whereNotExists($this->aktivPreisFuerLead()), 'gp'];
+            case 'gp_allergen_konfidenz':
+                return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->whereNull('allergens_confidence'), 'gp'];
+            case 'gp_anker_fehlt':
+                return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->whereExists($this->gpGenutzt())->whereNotExists($this->gpHatAnker()), 'gp'];
+            case 'gp_tentative_genutzt':
+                return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'tentative')->whereExists($this->gpGenutzt()), 'gp'];
+            case 'br_ek_null':
+                return [$this->rezepte($team, false)->whereNull('ek_total_eur'), 'recipe'];
+            case 'br_ek_teil':
+                return [$this->rezepte($team, false)->whereNotNull('ek_total_eur')->whereColumn('ek_n_ingredients_priced', '<', 'ek_n_ingredients_total'), 'recipe'];
+            case 'br_anker_fehlt':
+                return [$this->rezepte($team, false)->whereNotExists($this->rezeptHatAnker()), 'recipe'];
+            case 'vk_ek_null':
+                return [$this->rezepte($team, true)->whereNull('ek_total_eur'), 'recipe'];
+            case 'vk_ek_teil':
+                return [$this->rezepte($team, true)->whereNotNull('ek_total_eur')->whereColumn('ek_n_ingredients_priced', '<', 'ek_n_ingredients_total'), 'recipe'];
+            case 'vk_anker_fehlt':
+                return [$this->rezepte($team, true)->whereNotExists($this->rezeptHatAnker()), 'recipe'];
+            case 'vk_servierform_unbestimmt':
+                $unbId = FoodAlchemistServierform::where('code', 'unbestimmt')->value('id');
+                if ($unbId === null) {
+                    return [null, 'recipe'];
+                }
+
+                return [$this->rezepte($team, true)->whereExists(fn ($x) => $x->select(DB::raw(1))
+                    ->from('foodalchemist_recipe_presentations as p')->whereColumn('p.recipe_id', 'foodalchemist_recipes.id')
+                    ->where('p.serving_form_id', $unbId)->where('p.is_standard', true)->whereNull('p.deleted_at')), 'recipe'];
+            case 'ri_gemini_unverifiziert':
+                return [FoodAlchemistRecipe::visibleToTeam($team)->whereExists(fn ($q) => $q->select(DB::raw(1))
                     ->from('foodalchemist_recipe_ingredients as ri')->whereColumn('ri.recipe_id', 'foodalchemist_recipes.id')
-                    ->where('ri.match_method', 'gemini_proposed')), $limit),
-            default => [],
-        };
+                    ->where('ri.match_method', 'gemini_proposed')), 'recipe'];
+            default:
+                return [null, 'gp'];
+        }
     }
 
     /** @return list<array{kind:string,id:int,name:string,is_sales_recipe:bool}> */
@@ -306,20 +346,6 @@ class DataQualityService
     {
         return $q->orderBy('name')->limit($limit)->get(['id', 'name', 'is_sales_recipe'])
             ->map(fn ($r) => ['kind' => 'recipe', 'id' => (int) $r->id, 'name' => (string) $r->name, 'is_sales_recipe' => (bool) $r->is_sales_recipe])->all();
-    }
-
-    /** @return list<array{kind:string,id:int,name:string,is_sales_recipe:bool}> */
-    private function servierformItems(Team $team, int $limit): array
-    {
-        $unbId = FoodAlchemistServierform::where('code', 'unbestimmt')->value('id');
-        if ($unbId === null) {
-            return [];
-        }
-        $q = $this->rezepte($team, true)->whereExists(fn ($x) => $x->select(DB::raw(1))
-            ->from('foodalchemist_recipe_presentations as p')->whereColumn('p.recipe_id', 'foodalchemist_recipes.id')
-            ->where('p.serving_form_id', $unbId)->where('p.is_standard', true)->whereNull('p.deleted_at'));
-
-        return $this->recipeItems($q, $limit);
     }
 
     // ---- Metrik-Konstruktoren --------------------------------------------

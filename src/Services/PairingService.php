@@ -517,6 +517,24 @@ class PairingService
             ->where('recipe_id', $recipeId)->where('anchor_id', $ankerId)->update(['deleted_at' => now()]);
     }
 
+    /** GP-Kern-Anker setzen (Gegenstück zu setRecipeAnker; Tabelle gp_anchor_mappings, CAP_GP). */
+    public function setGpAnker(Team $team, int $gpId, int $ankerId): void
+    {
+        $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+        $vorhanden = DB::table('foodalchemist_gp_anchor_mappings')
+            ->where('gp_id', $gp->id)->where('anchor_id', $ankerId)->whereNull('deleted_at')->first();
+        if ($vorhanden === null
+            && DB::table('foodalchemist_gp_anchor_mappings')->where('gp_id', $gp->id)->whereNull('deleted_at')->count() >= self::CAP_GP) {
+            throw new \RuntimeException('Limit erreicht: max ' . self::CAP_GP . ' Kern-Anker pro GP.');
+        }
+        DB::table('foodalchemist_gp_anchor_mappings')->updateOrInsert(
+            ['gp_id' => $gp->id, 'anchor_id' => $ankerId],
+            ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id, 'role' => 'kern',
+                'source' => 'manual', 'ai_confidence' => null, 'ai_reasoning' => null,   // manual gewinnt (Inv. 3), wie setRecipeAnker
+                'deleted_at' => null, 'updated_at' => now(), 'created_at' => now()],
+        );
+    }
+
     /** Anker eines Rezepts inkl. Slug/Quelle (Panel-Chips). */
     public function recipeAnkers(int $recipeId): Collection
     {

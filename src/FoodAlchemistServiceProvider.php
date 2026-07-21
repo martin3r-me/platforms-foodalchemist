@@ -344,6 +344,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SignaleSearchTool::class,
                     \Platform\FoodAlchemist\Tools\SignaleListTool::class,
                     \Platform\FoodAlchemist\Tools\SignalePutTool::class,
+                    // „KI erledigen lassen" (Auto-Fix + Assistenz) — Lockstep zum Cockpit-Knopf
+                    \Platform\FoodAlchemist\Tools\SignaleFixTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasGetTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasPutTool::class,
                     // R4.1–R4.3 Planungs-Gerüst + Coverage + Phase — MCP im Lockstep
