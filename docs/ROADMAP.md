@@ -120,6 +120,18 @@ Drei Demo-Befunde (Dominique) am Foodbook, alle gefixt + in der Sandbox verifizi
 - **Kundendokument-Feinschliff (Design):** `WordingResolver::fuerGericht` kappt führende interne Marker `[HG]`/`[KAE]`/… **nur im Namens-Fallback** (`source` bleibt `name` → „Wording fehlt"-Amber im Editor erhalten). Plus Kapitel-/Titel-Abstände, Gericht-Bullet, ruhigere Typo. 1-spaltig/druckstabil (bewusst kein Bild-Redesign — #461 später).
 - Pest grün: FoodbookService (16), FoodbookUi (3), ConcepterWording (Teil der 16). **Offen (Daten, kein Code):** viele VK-Gerichte ohne `sales_wording_standard` → Kundensicht zeigt interne Pipe-Namen (Editor flaggt amber); echtes Wording pflegen bleibt To-do.
 
+## ⭐ Update 2026-07-21 (Session: Foodbook-Planungs-Cockpit — Plan + Phase 1)
+
+Großes Redesign der Foodbook-Hauptseite zum **Planungs-Cockpit** (mit Dominique durchgeplant). Ansatz: **Vorhandenes aufwerten, nicht neu bauen** (Canvas/Gerüst/Coverage/Generator existieren, lagen nur in Modals + waren als Monolith verdrahtet). Freigegebener Plan: 5 Phasen.
+
+**Gelockte Entscheidungen:** 4 Tabs (Planung · Briefing · Kreativ · Trend) + ständige Kalkulations-Leiste; Tabs = auto-vorbefüllte Input-Flächen, füttern die LLM, User stimmt ab. Gerüst = Struktur (Slots = Kapitel, „Struktur anwenden"; Monolith-„Konzept aus Gerüst" fällt weg). Speisen-Flow: Vorschlag (Bestand+Wissen, in-voice) → abstimmen → übernehmen. **3 DNA-Ebenen** Team → Kunde (CRM, neu) → Foodbook; Tonalität (`WritingStyle.sprach_duktus`) folgt der Kette, angewandt beim Übernehmen. Auto-Kontext-Kaskade (CRM+Settings+DNA+Bestand → Segment). Skizze-PDF später.
+
+**Reuse-Fundstücke (Exploration):** `CanvasService::cascadeKontext()` = Einhängepunkt der DNA-Kette; `owner_type` freier varchar → Kunde-DNA ohne Migration. `PlanningFrameSlot.chapter_id` existiert → Slot↔Kapitel-Kopplung im Schema angelegt; `CoverageService` matched chapter_id-first. Per-Slot-Selektion wiederverwendbar aus `ConceptGeneratorService::{kandidatenPool,filterFuerSlot,besterKandidat,slotSemantik}` + `PairingService`. Offene Weiche vor Phase 3: Slot nimmt Konzepte+Gerichte (A) vs. Slot = Konzept (B, empfohlen).
+
+**Phase 1 GEBAUT + GEPUSHT (`6ea6b42`):** `resources/views/livewire/foodbooks/index.blade.php` — Kopf-Ansicht als 4-Tab-Layout, Leitidee-Canvas + Planungs-Gerüst **inline** (Modals `fb-leitidee`/`fb-geruest` entfernt), Coverage + R6.1-Generator im Planung-Tab, Kreativ/Trend als Platzhalter. Tab-Zustand via Alpine, überlebt Livewire-Morphs (verifiziert). Reiner Reuse, kein Modell-/Service-Eingriff. Sandbox-Smoke grün, keine Konsolenfehler. Plan-Datei: `~/.claude/plans/mach-einen-plan-breezy-star.md`.
+
+**Offen:** Phase 2 (3-Ebenen-DNA, Kunde-DNA-Canvas + cascadeKontext), Phase 3 (Struktur anwenden + per-Slot-Vorschläge, A/B-Entscheid), Phase 4 (Tonalität-Pass + Trend-Tab), Phase 5 (Kickoff-Flow). demo-Deploy = Martin.
+
 ## 🚉 Datenmodell-Fahrplan (Chemie/Pairing Phase 1–4 ⊕ 5 Produkt-Ebenen)
 
 Quellen: `Datenmodell Food.Alchemist.md` (5 Ebenen) + `07.02_Flavor_Pairing/Datenbank Foodalchemist/_Plan_Datenmodell_Chemie-Pairing-DB.md` (Chemie-first Phase 1–4). Stationen von hier bis Voll-Ausbau:
