@@ -81,12 +81,9 @@ return [
                     'route' => 'foodalchemist.review',
                     'icon'  => 'heroicon-o-bell-alert',
                 ],
-                [
-                    // #389: Food DNA — „Markenkern Küche", stehende KI-Referenz für alle Generatoren
-                    'label' => 'Food DNA',
-                    'route' => 'foodalchemist.food-dna.index',
-                    'icon'  => 'heroicon-o-finger-print',
-                ],
+                // #389: Food DNA („Markenkern Küche", Ebene 1 der DNA-Kette) — 2026-07-21 in die
+                // Einstellungen verschoben (Team-Identität = Team-Config), kein Top-Level-Nav mehr.
+                // Route bleibt bestehen (Deep-Links), erreichbar via Einstellungen → „Food DNA (Identität)".
             ],
         ],
         [
