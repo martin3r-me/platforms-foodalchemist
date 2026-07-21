@@ -36,3 +36,22 @@ it('cascadeKontext zieht die Kunde-Ebene, wenn eine crm_company_id übergeben wi
     $ohne = $this->svc->cascadeKontext($this->rootTeam, null, null, null, null);
     expect($ohne['marken_kontext'] ?? '')->not->toContain('Locker, du-Ansprache');
 });
+
+it('Phase 4: cascadeKontext injiziert den Sprach-Duktus des Default-Schreibstils (Tonalität wirkt)', function () {
+    $stil = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id,
+        'slug' => 'locker-du',
+        'name' => 'Locker (Du)',
+        'sprach_duktus' => 'Du-Ansprache, sinnliche Verben, keine Superlative.',
+        'is_inactive' => false,
+        'sort_order' => 0,
+    ]);
+    $companyId = 5150;
+    $canvas = $this->svc->canvasFor($this->rootTeam, 'kunde_dna', 'crm_company', $companyId);
+    $this->svc->setSkalar($canvas, 'default_schreibstil_id', (string) $stil->id);
+
+    $ctx = $this->svc->cascadeKontext($this->rootTeam, null, null, null, $companyId);
+    // Nicht nur der Stil-NAME, sondern der Sprach-Duktus (Prompt-Material) muss drin sein.
+    expect($ctx['marken_kontext'] ?? '')->toContain('Sprach-Duktus')
+        ->and($ctx['marken_kontext'])->toContain('sinnliche Verben');
+});

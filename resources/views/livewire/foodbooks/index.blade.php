@@ -255,11 +255,24 @@
                     </div>
                 </div>{{-- /Kreativ --}}
 
-                {{-- ═══ Tab: TREND (Wissensschrank) — v1-Platzhalter (Phase 4 füllt) ═══ --}}
+                {{-- ═══ Tab: TREND (Wissensschrank-Pull) — Phase 4 ═══ --}}
                 <div x-show="tab === 'trend'" x-cloak class="space-y-3" data-fb-panel="trend">
-                    <div class="{{ $card }} p-5 text-sm text-gray-500 leading-relaxed">
-                        <p class="{{ $label }} mb-1">Trend — folgt (Phase 4)</p>
-                        Zieht Trends, Flavor-Pairings und Domänen-Wissen aus dem Wissensschrank in die Planung — als Inspiration und als zusätzliche Vorschlags-Quelle.
+                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-2.5">
+                        <div class="{{ $cardAccent }}"></div>
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="{{ $label }}">Trends aus dem Wissensschrank — Inspiration für die Planung</p>
+                            <a href="{{ route('foodalchemist.knowledge.index') }}" target="_blank" class="{{ $btnGhostXs }} text-violet-600 shrink-0">→ Wissen</a>
+                        </div>
+                        @forelse($trendDocs ?? [] as $d)
+                            <div class="rounded-lg border border-black/5 px-3 py-2" wire:key="trend-{{ $d['slug'] }}">
+                                <p class="text-xs font-medium text-gray-800">{{ $d['title'] }}</p>
+                                @if(($d['frontmatter']['thema'] ?? null) || ($d['frontmatter']['relevanz'] ?? null))
+                                    <p class="text-[11px] text-gray-500">{{ $d['frontmatter']['thema'] ?? '' }}@if($d['frontmatter']['relevanz'] ?? null) · Relevanz {{ $d['frontmatter']['relevanz'] }}@endif</p>
+                                @endif
+                            </div>
+                        @empty
+                            <p class="text-xs text-gray-500">Noch keine Trend-Dokumente im Wissensschrank. Das Trend-Scouting speist sie wöchentlich ein — dann erscheinen sie hier als Anker für Konzept & Vorschläge.</p>
+                        @endforelse
                     </div>
                 </div>{{-- /Trend --}}
 

@@ -618,6 +618,8 @@ class Index extends Component
             'crmVerfuegbar' => $svc->crmVerfuegbar(),
             'firmen' => $svc->sucheFirmen($this->firmaSuche),
             'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
+            // Phase 4: Trend-Tab — Wissensschrank-Pull (Kategorie „trend") als Inspiration
+            'trendDocs' => $fb !== null ? app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->listDocuments('trend', 0, 8, true)['documents'] : [],
         ])->layout('platform::layouts.app');
     }
 

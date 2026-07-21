@@ -192,7 +192,10 @@ class CanvasService
             } elseif ($typ === 'ref_schreibstil') {
                 $id = $werte[$f['key']] ?? null;
                 if ($id !== null && ($stil = FoodAlchemistWritingStyle::find((int) $id)) !== null) {
-                    $zeilen[] = $f['label'] . ': ' . $stil->name;
+                    // Phase 4: Tonalität muss WIRKEN — nicht nur der Stil-Name, sondern der
+                    // Sprach-Duktus (Prompt-Material) fließt in den KI-Kontext (GL-06).
+                    $duktus = trim((string) $stil->sprach_duktus);
+                    $zeilen[] = $f['label'] . ': ' . $stil->name . ($duktus !== '' ? ' — Sprach-Duktus: ' . $duktus : '');
                 }
             } else {
                 $v = $werte[$f['key']] ?? null;
