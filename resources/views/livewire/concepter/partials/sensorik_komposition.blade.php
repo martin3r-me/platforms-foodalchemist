@@ -1,5 +1,6 @@
-{{-- Gericht-Sensorik als KOMPOSITION (B): Rollen-Check + Teller-Balance (MAX über Komponenten) + Komponenten-Aufschlüsselung.
-     Erwartet $komposition (SensorikService::gerichtKomposition) + $sensorik (für Textur). --}}
+{{-- Gericht-Sensorik als KOMPOSITION (B): Rollen-Check + Teller-Profil-Radar (MAX über Komponenten) + Komponenten-Aufschlüsselung.
+     Gleiches Radar+Layout wie Basisrezept (sensorik.blade.php). Erwartet $komposition (SensorikService::gerichtKomposition)
+     + $sensorik (für Textur) + $pairing (für Anker-Tooltip + Pairing-Empfehlungen). --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 @php($dimLabel = ['suess' => 'Süß', 'salzig' => 'Salzig', 'sauer' => 'Sauer', 'bitter' => 'Bitter', 'umami' => 'Umami', 'fettig' => 'Fettig', 'scharf' => 'Scharf'])
 
@@ -14,29 +15,42 @@
 
 <div class="relative overflow-hidden {{ $card }} mb-3">
     <div class="{{ $cardAccent }}"></div>
-    <div class="px-5 py-4 space-y-2">
-        <div class="flex items-center justify-between">
-            <h3 class="font-medium tracking-tight text-gray-900">Teller-Profil</h3>
-            <span class="text-[11px] text-gray-500">MAX über die Komponenten — „ist der Geschmack auf dem Teller da?"</span>
-        </div>
-        @foreach($dimLabel as $d => $l)
-            @php($v = (float) ($komposition['teller'][$d] ?? 0))
-            @php($istDom = in_array($d, $komposition['dominant'], true))
-            @php($istLueck = in_array($d, $komposition['luecken'], true))
-            <div class="flex items-center gap-2">
-                <span class="text-[11px] w-14 shrink-0 {{ $istLueck ? 'text-gray-500' : 'text-gray-700' }}">{{ $l }}</span>
-                <div class="flex-1 h-2 rounded-full bg-black/[0.06] overflow-hidden">
-                    <div class="h-full rounded-full {{ $istDom ? 'bg-violet-500' : ($istLueck ? 'bg-gray-300' : 'bg-violet-400/60') }}" style="width: {{ (int) round($v * 100) }}%"></div>
+    <div class="px-5 py-4">
+        <h3 class="font-medium tracking-tight text-gray-900">Geschmacks-Profil <span class="text-[11px] font-normal text-gray-400">· Teller</span></h3>
+        {{-- Fläche = MAX-Aggregation über die Komponenten. Aroma-Anker-Wert je Achse im Tooltip. Gleiches Layout wie Basisrezept (sensorik.blade.php). --}}
+        <div class="flex flex-col lg:flex-row gap-6 mt-3">
+            <div class="shrink-0 mx-auto lg:mx-0 w-full max-w-[400px]">
+                <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3">
+                    @include('foodalchemist::livewire.concepter.partials.geschmack-radar', [
+                        'sensGeschmack' => $komposition['teller'] ?? [],
+                        'ankerGeschmack' => $pairing['geschmack'] ?? [],
+                        'dominant' => $komposition['dominant'] ?? [],
+                        'luecken' => $komposition['luecken'] ?? [],
+                    ])
                 </div>
-                <span class="text-[11px] w-8 text-right tabular-nums text-gray-600">{{ number_format($v, 2, ',', '.') }}</span>
             </div>
-        @endforeach
-        @if(count($komposition['dominant']) || count($komposition['luecken']))
-            <div class="flex flex-wrap gap-1 pt-1">
-                @foreach($komposition['dominant'] as $d)<span class="{{ $pill }} {{ $variantPill['success'] }}">dominant: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
-                @foreach($komposition['luecken'] as $d)<span class="{{ $pill }} {{ $variantPill['warning'] }}">Lücke: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
+            <div class="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 content-start">
+                <div class="space-y-3">
+                    <p class="text-[11px] text-gray-500">Netz = Teller-Profil, MAX über die Komponenten (0–1) — „ist der Geschmack auf dem Teller da?". Aroma-Anker-Wert je Achse im Tooltip (Hover).</p>
+                    @if(count($komposition['dominant']) || count($komposition['luecken']))
+                        <div class="flex flex-wrap gap-1">
+                            @foreach($komposition['dominant'] as $d)<span class="{{ $pill }} {{ $variantPill['success'] }}">dominant: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
+                            @foreach($komposition['luecken'] as $d)<span class="{{ $pill }} {{ $variantPill['warning'] }}">Lücke: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
+                        </div>
+                    @endif
+                    @if(! ($sensorik['leer'] ?? true) && count($sensorik['textur'] ?? []))
+                        <div class="pt-3 border-t border-black/[0.06]">
+                            <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Textur-Profil</h4>
+                            <div class="flex flex-wrap gap-1">
+                                @foreach($sensorik['textur'] as $t)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $t['label'] }}</span>@endforeach
+                            </div>
+                            @if($sensorik['monotonie'] ?? null)<p class="text-[11px] text-amber-600 mt-1.5">⚠ {{ $sensorik['monotonie'] }}</p>@endif
+                        </div>
+                    @endif
+                </div>
+                @include('foodalchemist::livewire.concepter.partials.pairing-empfehlungen', ['pairing' => $pairing ?? null])
             </div>
-        @endif
+        </div>
     </div>
 </div>
 
@@ -56,29 +70,3 @@
         @endforeach
     </div>
 </div>
-
-@if(! ($sensorik['leer'] ?? true) && count($sensorik['textur'] ?? []))
-    <div class="relative overflow-hidden {{ $card }} mb-3">
-        <div class="{{ $cardAccent }}"></div>
-        <div class="px-5 py-4 space-y-2">
-            <h3 class="font-medium tracking-tight text-gray-900">Textur-Profil</h3>
-            <div class="flex flex-wrap gap-1">
-                @foreach($sensorik['textur'] as $t)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $t['label'] }}</span>@endforeach
-            </div>
-            @if($sensorik['monotonie'] ?? null)<p class="text-[11px] text-amber-600">⚠ {{ $sensorik['monotonie'] }}</p>@endif
-        </div>
-    </div>
-@endif
-
-{{-- Pairing-Empfehlungen (Kern-Anker / Passt dazu / Kontrast). Im Gericht-View gibt es kein Radar-Partial
-     (dort sitzen sie rechts vom Radar) — daher hier als eigene Karte, damit sie nicht verschwinden. --}}
-@php($prE = ($pairing['type'] ?? null) === 'recipe' ? ($pairing ?? []) : [])
-@if(count($prE['anker'] ?? []) || count($prE['vorschlaege'] ?? []) || count($prE['signature'] ?? []) || count($prE['nachbarn'] ?? []) || count($prE['kontrast'] ?? []))
-    <div class="relative overflow-hidden {{ $card }} mb-3">
-        <div class="{{ $cardAccent }}"></div>
-        <div class="px-5 py-4 space-y-2">
-            <h3 class="font-medium tracking-tight text-gray-900">Passt dazu <span class="text-[11px] font-normal text-gray-400">· Pairing</span></h3>
-            @include('foodalchemist::livewire.concepter.partials.pairing-empfehlungen', ['pairing' => $pairing ?? null])
-        </div>
-    </div>
-@endif
