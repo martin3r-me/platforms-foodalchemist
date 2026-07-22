@@ -284,6 +284,16 @@ class Browser extends Component
                 ->where('mode', '!=', 'none')->orderBy('feature')->get()
             : collect();
 
+        // #469 Chip-Wahrheit: der Kategorie-Routing-Chip allein ist irreführend, weil die
+        // Laufzeit für cross_cutting NUR die fest verdrahtete 7er-Kernliste lädt
+        // (KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING), nicht jedes cross_cutting-Doc.
+        // false = trotz Kategorie-Route NICHT automatisch geladen (nur via Bindung wirksam).
+        // true = wird/kann geladen; null = keine Auswahl.
+        $autoGeladen = $selected === null ? null
+            : ($selected->category === 'cross_cutting'
+                ? in_array($selected->slug, \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING, true)
+                : true);
+
         // v2-Ziele: pflegbare Einsatzorte/Layer
         $layers = DB::table('foodalchemist_knowledge_layers')->whereNull('deleted_at')
             ->where('active', true)->orderBy('sort_order')->orderBy('label')->get();
@@ -307,6 +317,7 @@ class Browser extends Component
             'aliases' => $aliases,
             'bindings' => $bindings,
             'routings' => $routings,
+            'autoGeladen' => $autoGeladen,
             'layers' => $layers,
             'layerLabels' => $layerLabels,
             'traceResults' => $traceResults,

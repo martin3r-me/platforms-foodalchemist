@@ -169,6 +169,55 @@ class KnowledgeService
         ]);
     }
 
+    /**
+     * Bindet ein BESTEHENDES, sichtbares Doc an einen Einsatzort — auch globalen
+     * Seed / Vault-Kanon. Anders als update() (Inhalts-Edit, für Vault-Docs
+     * gesperrt) ist Binden ein rein kuratorischer Akt: der Doc-Inhalt wird nicht
+     * angefasst, darum KEIN source_path-/owns-Guard auf dem DOC. Sichtbarkeit =
+     * globaler Seed (team_id NULL) ODER eigene Ancestry; sonst NOT_FOUND (kein
+     * Existenz-Leak über die Teamgrenze). Die Bindung selbst trägt team_id des
+     * Callers (siehe bindLayer) → tenancy-scoped. Idempotent.
+     */
+    public function bindExisting(Team $team, string $slug, string $targetKey, string $mode = 'discovery'): object
+    {
+        $doc = $this->findSichtbar($team, $slug);
+        $this->bindLayer($team, (int) $doc->id, $targetKey, $mode, 'mcp');
+
+        return $this->find($slug);
+    }
+
+    /**
+     * Löst eine Layer-Bindung — aber NUR eine team-eigene (owns): globale/Fremd-
+     * Bindungen bleiben unberührt. Soft-Delete, damit Reads (whereNull deleted_at)
+     * sie ignorieren und ein späteres Re-Bind sauber neu anlegt. Gibt zurück, ob
+     * etwas gelöst wurde (idempotent).
+     */
+    public function unbindExisting(Team $team, string $slug, string $targetKey): bool
+    {
+        $doc = $this->findSichtbar($team, $slug);
+        $n = DB::table('foodalchemist_knowledge_bindings')->whereNull('deleted_at')
+            ->where('knowledge_document_id', $doc->id)
+            ->where('binding_type', 'layer')->where('target_key', trim($targetKey))
+            ->where('team_id', $team->id)
+            ->update(['active' => false, 'deleted_at' => now(), 'updated_at' => now()]);
+
+        return $n > 0;
+    }
+
+    /** Doc per Slug, sichtbarkeits-gescoped (globaler Seed + eigene Ancestry); sonst NOT_FOUND. */
+    private function findSichtbar(Team $team, string $slug): object
+    {
+        $doc = TeamScope::applyVisible(
+            DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at')->where('slug', $slug),
+            'team_id', $team
+        )->first();
+        if ($doc === null) {
+            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
+        }
+
+        return $doc;
+    }
+
     /** Wirft, wenn die Kategorie nicht im (aktiven) Vokabular steht. */
     private function assertKategorie(Team $team, string $slug): void
     {

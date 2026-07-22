@@ -303,6 +303,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCreateTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeUpdateTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeBindTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeUnbindTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsSuggestTool::class,
                     \Platform\FoodAlchemist\Tools\SubstitutionSuggestTool::class,

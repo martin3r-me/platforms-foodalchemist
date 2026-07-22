@@ -8,6 +8,17 @@
 
 ---
 
+## ⭐ Update 2026-07-22 (Session: Wissens-Modul #469 — Chip-Wahrheit + knowledge.BIND/UNBIND)
+
+**Anlass (Dominique):** in der Wissen-Seite zeigte „Grobe Ebene — automatisch" für JEDES Doc einer Kategorie einen grünen Routing-Chip, auch wenn die Laufzeit es faktisch nie lädt — Verdacht auf Doppelung/überflüssige Einstellung geprüft und widerlegt.
+
+- **Root-Cause verifiziert:** `KnowledgeContextService::crossCuttingDocs()` lädt für Kategorie `cross_cutting` NUR die fest verdrahtete 7er-Kernliste (`ALWAYS_LOAD_CROSS_CUTTING`), nicht jedes Doc der Kategorie. Der Browser-Chip wurde aber rein aus `foodalchemist_knowledge_routings` (Kategorie-Ebene) abgeleitet → 26 von 33 Vault-`cross_cutting`-Docs zeigten „automatisch geladen", wirkten aber nirgends (kein Auto-Pfad, keine Bindung). Ebenso `contextFor()` wird aktuell nur von `RecipeGeneratorService` aufgerufen — Regelwerke/Trends/Niveau + alle ~52 Feinprompts (`recipe.*`/`vk.*`/`gp.*`/`concept.*`) hängen ausschließlich am expliziten Bindungs-Layer (`AiGatewayService::propose`).
+- **Chip-Fix (`Browser.php`+`browser.blade.php`):** neuer `$autoGeladen`-Wert — für cross_cutting außerhalb der 7er-Liste jetzt eine Amber-Warnung statt grünem Chip („wirkt erst nach Bindung"); für domain/pairing zusätzlicher Discovery-Hinweis (Treffer nicht garantiert).
+- **Neue MCP-Tools `knowledge.BIND`/`knowledge.UNBIND`** (`KnowledgeService::bindExisting/unbindExisting`) — lösen die bisherige Lücke, dass kuratiertes Vault-/Seed-Wissen (Regelwerke, cross_cutting-Referenzen) über MCP an Einsatzorte verdrahtet werden kann. Bewusste Abgrenzung zu `knowledge.PUT`: Binden ≠ Inhalt editieren, daher KEIN `source_path`-Guard auf dem Doc (Sichtbarkeits-Scope via `TeamScope::applyVisible` statt `owns`) — aber die Bindung selbst trägt `team_id` des Callers (tenancy-scoped), `UNBIND` löst nur team-eigene Bindungen. Idempotent. **41 FA-Tools.**
+- **Test:** `KnowledgeBindToolTest` (6 its) — Kern-Beweis „PUT wirft LOCKED, BIND funktioniert am selben Doc", Idempotenz, unbekannter Einsatzort, NOT_FOUND, Tenancy-Isolation bei UNBIND. Nicht lokal ausgeführt (kein MySQL in dieser Umgebung) — Muster 1:1 vom grünen `KnowledgeWriteToolsTest` gespiegelt, PHP-Lint sauber.
+- **Nebenfund (pre-existing, nicht in dieser Session eingeführt):** die Bindungs-Injektion in `AiGatewayService::propose` liest ohne `team_id`-Filter — eine Bindung wirkt teamübergreifend. Für globalen Seed vermutlich gewollt (Master-Vererbung), aber nicht verifiziert — als offener Punkt vermerkt.
+- **Offen:** Ausführung der neuen Tests + Deploy auf demo (danach erst wirkt der Chip-Fix dort und sind `knowledge.BIND/UNBIND` über MCP erreichbar); anschließend die Kuratier-Matrix (13 klare Doc→Einsatzort-Treffer + 3 Regelwerke) tatsächlich binden.
+
 ## ⭐ Update 2026-07-22 (Session: Pairing-Netz-Redesign — Empfehler + D3-Rendering)
 
 **Anlass (Dominique):** das Pairing-Netz war unlesbar (statisches PHP-Kreis-Layout, alle Kanten ohne Filter, überlappende Labels) und beantwortete die falsche Frage („Anker-Netzwerk des Rezepts" statt „was passt ZUM Gericht"). Zweistufiger Umbau, an echten Daten (Sandbox-MySQL) browser-verifiziert:

@@ -133,14 +133,26 @@
                             <p class="{{ $dt }}">Verdrahtung <span class="text-[10px] text-gray-500">— wo dieses Wissen wirkt</span></p>
 
                             <div>
-                                <p class="text-[11px] font-medium text-gray-600 mb-1">Grobe Ebene — KI-Features via Kategorie «{{ $selected->category }}» (automatisch)</p>
-                                @forelse($routings as $r)
-                                    <span class="inline-flex items-center gap-1 text-[11px] {{ $pill }} mr-1.5" wire:key="rt-{{ $r->id }}">
-                                        {{ $r->feature }} <span class="text-gray-500">· {{ $r->mode }}</span>
+                                <p class="text-[11px] font-medium text-gray-600 mb-1">Grobe Ebene — automatisch via Kategorie «{{ $selected->category }}»</p>
+                                @if($selected->category === 'cross_cutting' && $autoGeladen === false)
+                                    {{-- #469 Chip-Wahrheit: cross_cutting lädt zur Laufzeit NUR die 7 Kern-Files --}}
+                                    <span class="text-[11px] text-amber-600" data-wissen-auto-warnung>
+                                        ⚠ Die Laufzeit lädt automatisch nur die 7 Kern-cross_cutting-Files
+                                        (Substitutionen, Saisonkalender, Synonyme, Sauce-Mutterstrukturen, Mengen-Defaults, Techniken, Brühen&nbsp;/&nbsp;Fonds).
+                                        Dieses Doc gehört <strong>nicht</strong> dazu → es wirkt erst, wenn du es unten an einen Einsatzort bindest.
                                     </span>
-                                @empty
-                                    <span class="text-[11px] text-gray-500">Keine Feature-Routings für diese Kategorie.</span>
-                                @endforelse
+                                @else
+                                    @forelse($routings as $r)
+                                        <span class="inline-flex items-center gap-1 text-[11px] {{ $pill }} mr-1.5" wire:key="rt-{{ $r->id }}">
+                                            {{ $r->feature }} <span class="text-gray-500">· {{ $r->mode }}</span>
+                                        </span>
+                                    @empty
+                                        <span class="text-[11px] text-gray-500">Keine Feature-Routings für diese Kategorie.</span>
+                                    @endforelse
+                                    @if(in_array($selected->category, ['domain', 'pairing'], true) && $routings->isNotEmpty())
+                                        <span class="block text-[10px] text-gray-400 mt-1">Nur geladen, wenn die Rezept-Beschreibung thematisch matcht (Discovery), nicht garantiert.</span>
+                                    @endif
+                                @endif
                             </div>
 
                             <div>
