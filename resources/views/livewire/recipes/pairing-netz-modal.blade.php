@@ -2,6 +2,14 @@
      nach Typ«. Zentrum = Gericht, Innenring = Kern-Anker, aussen Kandidaten in Typ-Sektoren
      (erprobt/aroma/kontrast, per Chip filterbar), unten komplementäre Basisrezepte. Positionen
      fertig aus PairingService::pairingNetz — D3 (resources/js/pairing-netz) zeichnet nur. --}}
+
+{{-- D3-Bundle modul-eigen laden (Livewire @assets, einmal je Seite) — KEIN Eingriff
+     ins Core-Layout nötig. Dieses Modal ist auf recipes+verkauf Browser eingehängt,
+     deckt damit auch die Detail-Panel-Vorschau derselben Seite ab. --}}
+@assets
+<script src="/_platform/fa-assets/foodalchemist-pairing-netz.iife.js?v={{ config('platform.fa_pairing_netz_hash', '0') }}" defer></script>
+@endassets
+
 @php
     $zentrumNode = collect($netz['nodes'])->firstWhere('kind', 'zentrum');
     $counts = $netz['meta']['counts'] ?? ['erprobt' => 0, 'aroma' => 0, 'kontrast' => 0, 'basis' => 0];
