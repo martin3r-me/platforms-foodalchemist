@@ -23,26 +23,26 @@ beforeEach(function () {
     $this->frames = app(PlanningFrameService::class);
     $this->svc = app(ConceptGeneratorService::class);
 
-    $g = FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
+    $this->g = FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
     $hg = FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'HG', 'label' => 'Hauptgericht']);
-    $klasse = FoodAlchemistDishClass::create(['team_id' => $this->rootTeam->id, 'dish_main_group_id' => $hg->id, 'code' => 'HG_N', 'label' => 'Neutral', 'diet_form' => 'neutral']);
+    $this->klasse = FoodAlchemistDishClass::create(['team_id' => $this->rootTeam->id, 'dish_main_group_id' => $hg->id, 'code' => 'HG_N', 'label' => 'Neutral', 'diet_form' => 'neutral']);
 
-    $convGp = $this->makeGp($this->rootTeam, 'Fertig-Sauce');
-    $convGp->update(['tag_is_convenience' => true]);
-    $scratchGp = $this->makeGp($this->rootTeam, 'Frische Tomate');
-    $scratchGp->update(['tag_is_convenience' => false]);
+    $this->convGp = $this->makeGp($this->rootTeam, 'Fertig-Sauce');
+    $this->convGp->update(['tag_is_convenience' => true]);
+    $this->scratchGp = $this->makeGp($this->rootTeam, 'Frische Tomate');
+    $this->scratchGp->update(['tag_is_convenience' => false]);
 
-    $mk = function (string $key, string $name, $gp) use ($g, $klasse) {
+    $mk = function (string $key, string $name, $gp) {
         $r = FoodAlchemistRecipe::create([
             'team_id' => $this->rootTeam->id, 'recipe_key' => $key, 'name' => $name, 'status' => 'approved',
-            'is_sales_recipe' => true, 'sales_net' => 10.00, 'dish_class_id' => $klasse->id,
+            'is_sales_recipe' => true, 'sales_net' => 10.00, 'dish_class_id' => $this->klasse->id,
         ]);
-        $r->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'gp_id' => $gp->id, 'raw_text' => $name, 'quantity' => 100, 'unit_vocab_id' => $g->id]);
+        $r->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'gp_id' => $gp->id, 'raw_text' => $name, 'quantity' => 100, 'unit_vocab_id' => $this->g->id]);
 
         return $r;
     };
-    $this->convDish = $mk('conv', 'HG: Convenience-Teller', $convGp);
-    $this->scratchDish = $mk('scratch', 'HG: Scratch-Teller', $scratchGp);
+    $this->convDish = $mk('conv', 'HG: Convenience-Teller', $this->convGp);
+    $this->scratchDish = $mk('scratch', 'HG: Scratch-Teller', $this->scratchGp);
 
     $this->fb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'label' => 'Convenience-FB']);
     $this->frame = $this->frames->frameFor($this->rootTeam, 'foodbook', $this->fb->id);
@@ -57,6 +57,33 @@ it('voll_convenience rankt das Convenience-Gericht zuerst', function () {
 it('from_scratch rankt das Scratch-Gericht zuerst', function () {
     $out = $this->svc->slotVorschlaege($this->rootTeam, $this->frame, $this->slot, 2, null, 'from_scratch');
     expect($out[0]['id'])->toBe($this->scratchDish->id);
+});
+
+it('Convenience wirkt bis ins Basisrezept: Gericht mit Convenience-Sub-Rezept schlägt reines Scratch-Gericht', function () {
+    // Basisrezept (kein VK) aus dem Convenience-GP + ein Scratch-GP direkt am Gericht.
+    $basisrezept = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'br-conv', 'name' => 'BR: Fertig-Fond', 'status' => 'approved',
+        'is_sales_recipe' => false, 'dish_class_id' => $this->klasse->id,
+    ]);
+    $basisrezept->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'gp_id' => $this->convGp->id, 'raw_text' => 'Fertig-Sauce', 'quantity' => 100, 'unit_vocab_id' => $this->g->id]);
+
+    $tief = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'tief', 'name' => 'HG: Tiefen-Teller', 'status' => 'approved',
+        'is_sales_recipe' => true, 'sales_net' => 10.00, 'dish_class_id' => $this->klasse->id,
+    ]);
+    // direkte Zutat = Scratch-GP (nicht convenience), plus Referenz auf das Convenience-Basisrezept
+    $tief->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'gp_id' => $this->scratchGp->id, 'raw_text' => 'Frische Tomate', 'quantity' => 100, 'unit_vocab_id' => $this->g->id]);
+    $tief->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 1, 'referenced_recipe_id' => $basisrezept->id, 'raw_text' => 'Fertig-Fond', 'quantity' => 50, 'unit_vocab_id' => $this->g->id]);
+
+    // Baum des Tiefen-Tellers: scratchGp + convGp = 0.5 Convenience → unter voll_convenience
+    // muss er ÜBER dem reinen Scratch-Teller (0.0) ranken. Ohne Rekursion wäre er 0.0 (nur direkte GPs).
+    $ids = collect($this->svc->slotVorschlaege($this->rootTeam, $this->frame, $this->slot, 5, null, 'voll_convenience'))->pluck('id')->all();
+    $posTief = array_search($tief->id, $ids, true);
+    $posScratch = array_search($this->scratchDish->id, $ids, true);
+
+    expect($posTief)->not->toBeFalse()
+        ->and($posScratch)->not->toBeFalse()
+        ->and($posTief)->toBeLessThan($posScratch);
 });
 
 it('teil_convenience / kein Ziel = neutral (kein Convenience-Bias, beide vorhanden)', function () {

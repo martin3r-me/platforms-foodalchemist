@@ -339,8 +339,17 @@ class ConceptGeneratorService
             ->with(['dishClass:id,diet_form,dish_main_group_id', 'dishClass.mainGroup:id,code,label', 'speisenHauptgruppe:id,code,label', 'levelSuitabilities']);
         if ($brauchtBegriffe || $mitConvenience) {
             // Convenience-Ranking (Leitplanke) braucht das GP-Tag tag_is_convenience je Zutat.
-            $query->with(['ingredients.gp:id,name' . ($mitConvenience ? ',tag_is_convenience' : '')]);
-            if ($brauchtBegriffe) {
+            $gpSel = 'id,name' . ($mitConvenience ? ',tag_is_convenience' : '');
+            $query->with(["ingredients.gp:{$gpSel}"]);
+            if ($mitConvenience) {
+                // Bis ins Basisrezept: GPs der referenzierten Sub-Rezepte (2 Ebenen tief = 3 Rezept-
+                // Ebenen mit dem Gericht) für die rekursive Convenience-Quote. referencedRecipe
+                // unrestricted → name bleibt für die Begriffe-Suche verfügbar.
+                $query->with([
+                    "ingredients.referencedRecipe.ingredients.gp:{$gpSel}",
+                    "ingredients.referencedRecipe.ingredients.referencedRecipe.ingredients.gp:{$gpSel}",
+                ]);
+            } elseif ($brauchtBegriffe) {
                 $query->with(['ingredients.referencedRecipe:id,name']);
             }
         }
@@ -378,22 +387,45 @@ class ConceptGeneratorService
     }
 
     /**
-     * Convenience-Anteil eines Gerichts: Quote der Zutaten-GPs mit tag_is_convenience (0..1).
-     * null, wenn die GP-Tags nicht geladen wurden ($mitConvenience=false) oder das Gericht keine
-     * GP-Zutat hat — beides = neutral fürs Ranking (kein Bias). Referenzierte Sub-Rezepte zählen
-     * bewusst nicht mit: der Convenience-Charakter hängt an den eingekauften Bausteinen (GPs).
+     * Convenience-Anteil eines Gerichts: Quote der GPs mit tag_is_convenience (0..1) über die
+     * GANZE Komposition — direkte GP-Zutaten UND die GPs in den referenzierten Basisrezepten
+     * (rekursiv bis Tiefe 3, Regelwerk-Basisrezepte §4). So wirkt die Convenience-Leitplanke bis
+     * ins Basisrezept: ein Gericht, das über ein Convenience-Basisrezept convenience ist, wird
+     * erkannt. null = GP-Tags nicht geladen ($mitConvenience=false) oder keine GP im Baum → neutral.
      */
     private function convenienceRatio(FoodAlchemistRecipe $r, bool $mitConvenience): ?float
     {
         if (! $mitConvenience || ! $r->relationLoaded('ingredients')) {
             return null;
         }
-        $gps = $r->ingredients->map(fn ($z) => $z->gp)->filter();
+        $gps = $this->alleGpsImBaum($r);
         if ($gps->isEmpty()) {
             return null;
         }
 
         return round($gps->filter(fn ($g) => (bool) $g->tag_is_convenience)->count() / $gps->count(), 3);
+    }
+
+    /**
+     * Alle GPs der Kompositions-Tiefe sammeln: direkte GP-Zutaten + GPs referenzierter
+     * Basisrezepte (rekursiv). Nur GELADENE Relationen (kein Lazy-Load → kein N+1); Tiefe
+     * durch das Eager-Loading in kandidatenPool begrenzt (max. 3 Rezept-Ebenen).
+     *
+     * @return \Illuminate\Support\Collection<int, \Platform\FoodAlchemist\Models\FoodAlchemistGp>
+     */
+    private function alleGpsImBaum(FoodAlchemistRecipe $r, int $tiefe = 0): Collection
+    {
+        if ($tiefe > 3 || ! $r->relationLoaded('ingredients')) {
+            return collect();
+        }
+        $gps = $r->ingredients->map(fn ($z) => $z->gp)->filter();
+        foreach ($r->ingredients as $z) {
+            if ($z->relationLoaded('referencedRecipe') && $z->referencedRecipe !== null) {
+                $gps = $gps->merge($this->alleGpsImBaum($z->referencedRecipe, $tiefe + 1));
+            }
+        }
+
+        return $gps;
     }
 
     /** Harte Filter eines Slots: No-Gos (frame + slot, hart), Allergen-No-Gos, Preisrahmen. */
