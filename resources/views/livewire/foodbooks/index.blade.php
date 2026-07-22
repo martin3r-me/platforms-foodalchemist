@@ -96,12 +96,22 @@
                  Kalkulations-Leiste bleibt die rechte activity-Sidebar. Phase 1: reiner Reuse, Modals raus. --}}
             <div wire:key="fbcockpit-{{ $fb->id }}" x-data="{ tab: 'briefing' }" class="space-y-4">
 
-                {{-- Tab-Leiste --}}
-                <div class="flex flex-wrap gap-1" role="tablist">
-                    @foreach(['briefing' => '📋 Briefing', 'planung' => '🎯 Planung', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend', 'branding' => '🏷 Branding/CI', 'vorschau' => '🍽 Vorschau'] as $tk => $tl)
-                        <button type="button" @click="tab = @js($tk)" :class="tab === @js($tk) ? '{{ $aktiv }}' : '{{ $hover }}'"
-                                class="px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-fb-tab="{{ $tk }}">{{ $tl }}</button>
-                    @endforeach
+                {{-- Tab-Leiste + Foodbook-Aktionen — Speichern/Dokument/Präsentation/Löschen gelten fürs GANZE
+                     Foodbook, daher auf Tab-Ebene (aus allen Tabs erreichbar), nicht im Briefing-Tab vergraben. --}}
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex flex-wrap gap-1" role="tablist">
+                        @foreach(['briefing' => '📋 Briefing', 'planung' => '🎯 Planung', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend', 'branding' => '🏷 Branding/CI', 'vorschau' => '🍽 Vorschau'] as $tk => $tl)
+                            <button type="button" @click="tab = @js($tk)" :class="tab === @js($tk) ? '{{ $aktiv }}' : '{{ $hover }}'"
+                                    class="px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-fb-tab="{{ $tk }}">{{ $tl }}</button>
+                        @endforeach
+                    </div>
+                    <div class="flex flex-wrap gap-2" data-fb-aktionen>
+                        <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
+                        {{-- Ein Einstieg genügt: interne Sicht (EK/VK/W%) ⇄ Kundensicht wird IM Dokument umgeschaltet (2026-07-14). --}}
+                        <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Dokument (Druck/PDF) — im Dokument zwischen Kunden- und interner Sicht (Marge) umschaltbar">Dokument</a>
+                        <a href="{{ route('foodalchemist.foodbooks.praesentation', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Externe Kunden-Präsentation (Web-Seite, Preise pro Person, ohne Interna)">Präsentation</a>
+                        <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
+                    </div>
                 </div>
 
                 {{-- ═══ Tab: BRIEFING (Stammdaten · Kunde · Leitidee) ═══ --}}
@@ -212,15 +222,6 @@
                               x-effect="$wire.form; $el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
                               @input="$el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
                               class="{{ $input }} resize-none overflow-hidden min-h-[4.5rem]" placeholder="Briefing / Einleitungstext fürs Angebot — später KI-befüllbar aus Kunde + Concepts"></textarea>
-                </div>
-                <div class="flex gap-2">
-                    <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
-                    {{-- #501 (2026-07-13): standalone interne Ansicht entfernt — die Kunden-Vorschau
-                         lebt im Editor als „🍽 Menü"-Toggle (rechts), das versendbare Dokument im „Dokument"-Link. --}}
-                    {{-- Ein Einstieg genügt: interne Sicht (EK/VK/W%) ⇄ Kundensicht wird IM Dokument umgeschaltet (2026-07-14). --}}
-                    <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Dokument (Druck/PDF) — im Dokument zwischen Kunden- und interner Sicht (Marge) umschaltbar">Dokument</a>
-                    <a href="{{ route('foodalchemist.foodbooks.praesentation', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Externe Kunden-Präsentation (Web-Seite, Preise pro Person, ohne Interna)">Präsentation</a>
-                    <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
                 </div>
             </div>
 
