@@ -35,13 +35,17 @@
             </div>
         </div>
 
-        @if($detail['editierbar'] && count($erlaubteStatus) > 0)
+        {{-- Status-Buttons: NICHT an editierbar koppeln (das ist nur „geplant") — sonst
+             verschwinden „Fertig melden"/„Stornieren" sobald die Produktion läuft. Sichtbar,
+             solange der Auftrag dem Team gehört und ein Wechsel erlaubt ist (Guard im Service). --}}
+        @if($detail['is_owned'] && count($erlaubteStatus) > 0)
+            @php($statusAktion = ['in_progress' => 'Produktion starten', 'done' => 'Fertig melden', 'cancelled' => 'Stornieren'])
             <div class="flex flex-wrap gap-1.5">
                 @foreach($erlaubteStatus as $z)
                     <button type="button" wire:click="setStatus('{{ $z->value }}')"
-                        class="{{ $z->value === 'in_progress' ? $btnPrimary : $btnGhost }}"
+                        class="{{ in_array($z->value, ['in_progress', 'done'], true) ? $btnPrimary : $btnGhost }}"
                         @if($z->value === 'cancelled') onclick="return confirm('Produktion stornieren?')" @endif
-                        data-produktion-status="{{ $z->value }}">{{ $z->value === 'in_progress' ? 'Produktion starten' : $z->label() }}</button>
+                        data-produktion-status="{{ $z->value }}">{{ $statusAktion[$z->value] ?? $z->label() }}</button>
                 @endforeach
             </div>
         @endif
@@ -103,11 +107,13 @@
         @endif
 
         <div class="flex flex-wrap gap-2 pt-2 border-t border-black/5">
-            @if($detail['editierbar'])
+            {{-- Handover ist auch während der Produktion sinnvoll (man bestellt oft erst nach dem Start);
+                 nur bei fertig/storniert ausblenden. --}}
+            @if($detail['is_owned'] && in_array($detail['status'], ['planned', 'in_progress'], true))
                 <button type="button" wire:click="anBestellungUebergeben" class="{{ $btnGhost }}" data-produktion-uebergeben>→ An Bestellung übergeben</button>
             @endif
             @if(\Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument'))
-                <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhost }}">🖨 Produktionsschein</a>
+                <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhost }}" title="Gebündelte interne Doku: Produktionsschein + Einkauf (Lieferant/Gebinde/EK)">🖨 Doku (Produktion + Einkauf)</a>
             @endif
         </div>
     @endif

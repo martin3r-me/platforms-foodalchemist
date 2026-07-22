@@ -231,8 +231,10 @@ Route::get('/blaetter', fn () => redirect()->route('foodalchemist.produktion.ind
 // Spec 18/S3 — Produktionsschein: Druck-HTML | ?pdf=1 (DomPDF) | ?csv=1 (Download).
 Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Platform\FoodAlchemist\Services\ProductionOrderService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    // Default: gebündelte interne Doku (Produktion + Einkauf). ?einkauf=0 → nur Produktionsschein.
+    $mitEinkauf = ! request()->has('einkauf') || request()->boolean('einkauf');
     try {
-        $dok = $svc->dokument($team, $order);
+        $dok = $svc->dokument($team, $order, $mitEinkauf);
     } catch (\Throwable $e) {
         abort(404);
     }

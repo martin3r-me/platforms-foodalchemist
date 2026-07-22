@@ -59,15 +59,26 @@ class ProductionOrderService
      * Vom Editor-Modal genutzt: legt in einer Transaktion den Auftrag an und setzt
      * targets[] in einem Rutsch (kein Zwischenstand während der Eingabe im Editor).
      *
+     * WICHTIG (P1 „ein Auftrag je Tag"): Existiert für das Datum schon ein geplanter
+     * Auftrag, wird NICHT überschrieben, sondern MERGE — bestehende Ziele bleiben, neue
+     * kommen dazu (dedup per source_ref). Sonst gingen die Ziele eines am selben Tag früher
+     * angelegten Auftrags verloren. Anlass/Notiz nur setzen, wenn noch leer (kein stiller Verlust).
+     *
      * @param  list<array{source_ref:string, concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}>  $targets
      */
     public function saveNew(Team $team, string $productionDate, array $targets, ?string $reference = null, ?string $note = null, ?int $userId = null): FoodAlchemistProductionOrder
     {
         return DB::transaction(function () use ($team, $productionDate, $targets, $reference, $note, $userId) {
             $order = $this->draftForDate($team, $productionDate, $userId);
-            $order->targets = $this->mitLabels($team, $targets);
-            $order->reference = $reference;
-            $order->note = $note;
+
+            // Merge: bestehende Ziele des Tages behalten, neue per source_ref ergänzen/ersetzen.
+            $merged = collect($order->targets ?? [])->keyBy('source_ref');
+            foreach ($this->mitLabels($team, $targets) as $t) {
+                $merged[$t['source_ref']] = $t;
+            }
+            $order->targets = $merged->values()->all();
+            $order->reference = $order->reference ?: $reference;
+            $order->note = $order->note ?: $note;
             $order->save();
             $this->recomputeOrder($team, $order);
 
@@ -132,7 +143,10 @@ class ProductionOrderService
             ->values()->all();
 
         $existingNotes = $order->lines()->pluck('note', 'recipe_id')->all();
-        $order->lines()->delete();
+        // forceDelete statt soft-delete: Zeilen sind ephemere Snapshots, die bei jeder
+        // Ziel-Änderung neu erzeugt werden — soft-delete würde sonst unbegrenzt Tombstones
+        // ansammeln. Notizen sind oben schon gesichert und werden per recipe_id neu gesetzt.
+        $order->lines()->forceDelete();
 
         if ($ziele === []) {
             $order->warnungen = [];
@@ -267,12 +281,14 @@ class ProductionOrderService
      */
     public function verknuepfteOrders(Team $team, int $productionOrderId): Collection
     {
+        // Der trailing-Doppelpunkt disambiguiert #1 gegen #10 (produktion:1: matcht nicht
+        // produktion:10:). Filterung auf DB-Ebene (JSON als Text) + Team-Scope über die
+        // Order-Relation — kein Full-Table-Scan, kein Lesen fremder Teams.
         $prefix = 'produktion:' . $productionOrderId . ':';
         $orderIds = FoodAlchemistOrderLine::query()
-            ->whereNotNull('source_contributions')
-            ->get(['order_id', 'source_contributions'])
-            ->filter(fn ($l) => collect(array_keys($l->source_contributions ?? []))->contains(fn ($k) => str_starts_with($k, $prefix)))
-            ->pluck('order_id')->unique()->values();
+            ->whereHas('order', fn ($q) => $q->visibleToTeam($team))
+            ->where('source_contributions', 'like', '%' . $prefix . '%')
+            ->distinct()->pluck('order_id');
 
         if ($orderIds->isEmpty()) {
             return collect();
@@ -281,11 +297,33 @@ class ProductionOrderService
         return FoodAlchemistOrder::visibleToTeam($team)->with('supplier:id,name')->whereIn('id', $orderIds)->get();
     }
 
-    /** S3: Volldaten für Produktionsschein-Dokument (PDF/Druck/CSV) — Auftrags-Kopf + Rezeptzeilen. */
-    public function dokument(Team $team, int $orderId): array
+    /**
+     * S3: Volldaten für Produktionsschein-Dokument (PDF/Druck/CSV).
+     *
+     * $mitEinkauf (Default true) hängt die Einkaufs-Sektion an — GP-Bedarf nach Lieferant
+     * gruppiert, in ganzen Gebinden mit EK (frisch aus den Zielen via PlanungsblattService,
+     * wie der alte Planungsblatt-Bundle). INTERNE Ops-Doku: enthält Lieferanten + EK-Preise,
+     * NICHT zum Aushändigen an den Kunden gedacht.
+     */
+    public function dokument(Team $team, int $orderId, bool $mitEinkauf = true): array
     {
         $order = FoodAlchemistProductionOrder::visibleToTeam($team)->with('lines.recipe:id,name')->findOrFail($orderId);
         $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
+
+        $einkauf = null;
+        if ($mitEinkauf) {
+            $ziele = collect($order->targets ?? [])
+                ->map(fn ($t) => Arr::except($t, ['source_ref', 'label']))
+                ->values()->all();
+            if ($ziele !== []) {
+                $liste = $this->planung->einkaufsliste($team, $ziele);
+                $einkauf = [
+                    'lieferanten' => $liste['lieferanten'],
+                    'ek_gesamt' => collect($liste['lieferanten'])->sum('ek_summe'),
+                    'warnungen' => $liste['warnungen'],
+                ];
+            }
+        }
 
         return [
             'id' => (int) $order->id,
@@ -306,6 +344,7 @@ class ProductionOrderService
                 'darreichung' => $l->darreichung,
                 'zutaten' => $l->zutaten,
             ])->all(),
+            'einkauf' => $einkauf,
         ];
     }
 
@@ -330,10 +369,15 @@ class ProductionOrderService
             return $name !== null ? $name . ($wert !== null ? " ({$wert} P.)" : '') : null;
         }
         if (! empty($ziel['recipe_id'])) {
-            $name = FoodAlchemistRecipe::visibleToTeam($team)->find((int) $ziel['recipe_id'])?->name;
+            $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find((int) $ziel['recipe_id']);
+            if ($recipe === null) {
+                return null;
+            }
             $wert = $ziel['portions'] ?? $ziel['persons'] ?? null;
+            // Basisrezept solo wird in ganzen Ansätzen gemessen, nicht in Portionen.
+            $einheit = (bool) $recipe->is_sales_recipe ? 'Port.' : 'Ansätze';
 
-            return $name !== null ? $name . ($wert !== null ? " ({$wert} Port.)" : '') : null;
+            return $recipe->name . ($wert !== null ? " ({$wert} {$einheit})" : '');
         }
 
         return null;

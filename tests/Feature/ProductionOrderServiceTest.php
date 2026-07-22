@@ -286,6 +286,46 @@ it('S3: dokument() + Produktionsschein-Blade rendert', function () {
     expect($html)->toContain('Produktionsschein')->toContain('DES: Kuchen')->toContain('Vanillesauce')->toContain('Sommer-Buffet');
 });
 
+it('S3-Bundle: dokument() enthält die Einkaufs-Sektion (Lieferant + EK); ?einkauf=0 lässt sie weg', function () {
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ], 'Sommer-Buffet');
+
+    // Default: gebündelt — Einkauf nach Lieferant + Gesamt-EK dabei.
+    $dok = $this->svc->dokument($this->rootTeam, $order->id);
+    expect($dok['einkauf'])->not->toBeNull()
+        ->and(collect($dok['einkauf']['lieferanten'])->pluck('lieferant')->sort()->values()->all())->toBe(['Chefs', 'Hanos'])
+        ->and($dok['einkauf']['ek_gesamt'])->toBe(33.0); // Chefs 21 (Mehl 20 + Zucker 1) + Hanos 12 (Butter)
+
+    $html = view('foodalchemist::dokumente.produktionsauftrag', ['dok' => $dok, 'istPdf' => true])->render();
+    expect($html)->toContain('Einkauf / Bestellvorschlag')->toContain('Chefs')->toContain('Wareneinsatz gesamt');
+
+    // Opt-out: nur Produktionsschein, keine EK/Lieferant-Daten.
+    $dokOhne = $this->svc->dokument($this->rootTeam, $order->id, false);
+    expect($dokOhne['einkauf'])->toBeNull();
+    $htmlOhne = view('foodalchemist::dokumente.produktionsauftrag', ['dok' => $dokOhne, 'istPdf' => true])->render();
+    expect($htmlOhne)->not->toContain('Einkauf / Bestellvorschlag');
+});
+
+it('Merge statt Überschreiben: saveNew für ein Datum mit bestehendem geplanten Auftrag ergänzt die Ziele', function () {
+    // Morgens: Auftrag mit einem Ziel + Anlass angelegt.
+    $order1 = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ], 'Morgen-Buffet');
+
+    // Später „+ Neuer Produktionsauftrag" für denselben Tag, anderes Ziel, ohne Wissen um den ersten.
+    $order2 = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+        ['recipe_id' => $this->tarte->id, 'portions' => 50, 'source_ref' => 'recipe:tarte@50'],
+    ], 'Ignoriert');
+
+    // Derselbe Auftrag, BEIDE Ziele erhalten, Anlass NICHT überschrieben (kein Datenverlust).
+    expect($order2->id)->toBe($order1->id)
+        ->and(collect($order2->targets)->pluck('source_ref')->sort()->values()->all())->toBe(['recipe:kuchen@100', 'recipe:tarte@50'])
+        ->and($order2->reference)->toBe('Morgen-Buffet')
+        ->and($order2->lines()->where('recipe_id', $this->kuchen->id)->exists())->toBeTrue()
+        ->and($order2->lines()->where('recipe_id', $this->tarte->id)->exists())->toBeTrue();
+});
+
 it('S3: Produktionsschein-Dokument-Route liefert HTML + CSV-Download', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', [

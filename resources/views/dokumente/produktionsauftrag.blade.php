@@ -20,6 +20,14 @@
         table.zutaten th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; padding: 3px 6px; border-bottom: 1px solid #ececec; }
         table.zutaten td { padding: 2px 6px; border-bottom: 1px solid #f3f4f6; }
         .right { text-align: right; white-space: nowrap; }
+        .einkauf-head { margin-top: 28px; border-top: 2px solid #6d28d9; padding-top: 12px; }
+        .lieferant { margin: 14px 0; }
+        .lieferant h2 { font-size: 13px; margin: 0 0 4px; color: #111827; display: flex; justify-content: space-between; align-items: baseline; }
+        .lieferant h2 .right-sum { font-weight: bold; }
+        table.einkauf-tbl { width: 100%; border-collapse: collapse; margin-top: 4px; }
+        table.einkauf-tbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; padding: 3px 6px; border-bottom: 1px solid #ececec; }
+        table.einkauf-tbl td { padding: 3px 6px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+        .grand { margin-top: 14px; border-top: 2px solid #6d28d9; padding-top: 8px; font-size: 15px; font-weight: bold; text-align: right; }
         .foot { margin-top: 28px; color: #9ca3af; font-size: 10px; border-top: 1px solid #ececec; padding-top: 10px; }
         .actions { margin-bottom: 18px; }
         .btn { display: inline-block; padding: 6px 12px; background: #6d28d9; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 6px; }
@@ -82,7 +90,40 @@
         <p class="muted">Keine Rezepte.</p>
     @endforelse
 
-    <div class="foot">Food Alchemist · Produktionsschein · {{ $dok['id'] }}</div>
+    {{-- Einkauf/Bestellvorschlag — interne Ops-Sektion (Lieferant, Gebinde, EK). Wie der
+         alte Planungsblatt-Bundle, jetzt im gebündelten Produktionsschein. --}}
+    @if(($dok['einkauf'] ?? null) !== null)
+        <div class="einkauf-head">
+            <h1 style="font-size:16px;margin:0 0 4px">Einkauf / Bestellvorschlag</h1>
+            <div class="muted">GP-Bedarf nach Lieferant, in ganzen Gebinden · interne Ops-Angabe (EK netto)</div>
+        </div>
+
+        @foreach($dok['einkauf']['lieferanten'] as $g)
+            <div class="lieferant">
+                <h2>{{ $g['lieferant'] }}
+                    <span class="right-sum">{{ number_format($g['ek_summe'], 2, ',', '.') }} €@unless($g['ek_vollstaendig']) <span class="muted">(EK unvollst.)</span>@endunless</span>
+                </h2>
+                <table class="einkauf-tbl">
+                    <thead><tr><th>Artikel</th><th class="right">Bestellen</th><th class="right">Bedarf</th><th class="right">EK</th></tr></thead>
+                    <tbody>
+                        @foreach($g['positionen'] as $p)
+                            @php($geb = $p['gebinde'])
+                            <tr>
+                                <td>{{ $p['gp'] }}@if($p['lead_artikel'])<br><span class="muted">@if($geb['article_number']){{ $geb['article_number'] }} · @endif{{ $p['lead_artikel'] }}</span>@endif</td>
+                                <td class="right">@if($geb['berechenbar']){{ $geb['qty_packs'] }}× {{ rtrim(rtrim(number_format($geb['pack_qty'], 3, ',', '.'), '0'), ',') }} {{ $geb['pack_unit_code'] }}@if($geb['packaging_unit']) {{ $geb['packaging_unit'] }}@endif @else<span class="muted">{{ $geb['grund'] }}</span>@endif</td>
+                                <td class="right muted">{{ rtrim(rtrim(number_format($p['menge_kg'], 3, ',', '.'), '0'), ',') }} kg</td>
+                                <td class="right">{{ $p['ek_bekannt'] ? number_format($p['bestell_ek_eur'], 2, ',', '.') . ' €' : '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endforeach
+
+        <div class="grand">Wareneinsatz gesamt: {{ number_format($dok['einkauf']['ek_gesamt'], 2, ',', '.') }} € <span class="muted" style="font-weight:normal;font-size:11px">(netto)</span></div>
+    @endif
+
+    <div class="foot">Food Alchemist · {{ ($dok['einkauf'] ?? null) !== null ? 'Produktionsschein + Einkauf (intern)' : 'Produktionsschein' }} · {{ $dok['id'] }}</div>
 </div>
 </body>
 </html>
