@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
+use Platform\FoodAlchemist\Models\FoodAlchemistOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -253,6 +255,30 @@ class ProductionOrderService
                 'note' => $l->note,
             ])->all(),
         ];
+    }
+
+    /**
+     * Findet die Bestellschienen, die aus diesem Produktionsauftrag heraus per
+     * „An Bestellung übergeben" entstanden sind — es gibt keine FK, die Verknüpfung
+     * läuft über den `source_ref`-Präfix `produktion:{orderId}:` in den
+     * `source_contributions`-Keys der Bestellzeilen (siehe DetailPanel::anBestellungUebergeben()).
+     *
+     * @return Collection<int, FoodAlchemistOrder>
+     */
+    public function verknuepfteOrders(Team $team, int $productionOrderId): Collection
+    {
+        $prefix = 'produktion:' . $productionOrderId . ':';
+        $orderIds = FoodAlchemistOrderLine::query()
+            ->whereNotNull('source_contributions')
+            ->get(['order_id', 'source_contributions'])
+            ->filter(fn ($l) => collect(array_keys($l->source_contributions ?? []))->contains(fn ($k) => str_starts_with($k, $prefix)))
+            ->pluck('order_id')->unique()->values();
+
+        if ($orderIds->isEmpty()) {
+            return collect();
+        }
+
+        return FoodAlchemistOrder::visibleToTeam($team)->with('supplier:id,name')->whereIn('id', $orderIds)->get();
     }
 
     /** S3: Volldaten für Produktionsschein-Dokument (PDF/Druck/CSV) — Auftrags-Kopf + Rezeptzeilen. */

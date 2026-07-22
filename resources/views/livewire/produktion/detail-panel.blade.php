@@ -76,6 +76,24 @@
             </div>
         </x-foodalchemist::section>
 
+        @if($verknuepfteOrders->isNotEmpty())
+            <x-foodalchemist::section title="Bestellung" icon="heroicon-o-shopping-cart" :meta="$verknuepfteOrders->count()">
+                <div class="space-y-1">
+                    @foreach($verknuepfteOrders as $o)
+                        <a href="{{ route('foodalchemist.orders.index', ['o' => $o->id]) }}"
+                           class="flex items-center justify-between gap-2 text-[13px] px-2 py-1.5 rounded-lg bg-black/[0.02] hover:bg-black/[0.04]"
+                           data-produktion-bestellung-link="{{ $o->id }}">
+                            <span class="text-gray-900">{{ $o->supplier?->name ?? '—' }}</span>
+                            <span class="flex items-center gap-2">
+                                <span class="text-gray-500 tabular-nums">{{ number_format((float) $o->total_net, 2, ',', '.') }} €</span>
+                                <span class="{{ $pill }} font-medium {{ $variantPill[$o->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o->status->label() }}</span>
+                            </span>
+                        </a>
+                    @endforeach
+                </div>
+            </x-foodalchemist::section>
+        @endif
+
         @if(count($detail['warnungen']) > 0)
             <x-foodalchemist::section title="Warnungen" icon="heroicon-o-exclamation-triangle">
                 @foreach($detail['warnungen'] as $w)

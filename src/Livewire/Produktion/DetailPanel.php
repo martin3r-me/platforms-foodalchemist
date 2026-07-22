@@ -86,6 +86,7 @@ class DetailPanel extends Component
 
         $detail = null;
         $erlaubteStatus = [];
+        $verknuepfteOrders = collect();
         if ($this->orderId !== null) {
             try {
                 $detail = $svc->detail($team, $this->orderId);
@@ -95,6 +96,7 @@ class DetailPanel extends Component
                         $erlaubteStatus[] = $z;
                     }
                 }
+                $verknuepfteOrders = $svc->verknuepfteOrders($team, $this->orderId);
             } catch (\Throwable) {
                 $this->orderId = null;
             }
@@ -102,6 +104,7 @@ class DetailPanel extends Component
 
         return view('foodalchemist::livewire.produktion.detail-panel', [
             'detail' => $detail,
+            'verknuepfteOrders' => $verknuepfteOrders,
             'erlaubteStatus' => $erlaubteStatus,
         ]);
     }

@@ -251,6 +251,15 @@ it('UI: „An Bestellung übergeben" im Produktionsauftrag legt Schienen an (ide
     $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
     expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2)
         ->and((float) $chefs->total_net)->toBe(21.0);
+
+    // Rückverknüpfung: der Produktionsauftrag findet die aus ihm erzeugten Bestellschienen
+    // (über den source_ref-Präfix produktion:{id}: — es gibt keine FK).
+    $verknuepft = $prod->verknuepfteOrders($this->rootTeam, $order->id);
+    expect($verknuepft->pluck('supplier.name')->sort()->values()->all())->toBe(['Chefs', 'Hanos']);
+
+    // Im DetailPanel sichtbar (der gemeldete Bug: Bestellung tauchte nicht auf).
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Produktion\DetailPanel::class, ['orderId' => $order->id])
+        ->assertSee('Chefs')->assertSee('Hanos');
 });
 
 it('UI: Bestellungen-Seite listet Schienen, Detail + Absenden + manuelle Menge', function () {
