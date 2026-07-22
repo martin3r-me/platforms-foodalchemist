@@ -61,7 +61,7 @@ class FoodbookService
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id'];
+    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
@@ -83,6 +83,33 @@ class FoodbookService
         $fb->update(array_intersect_key($in, array_flip(self::FELDER)));
 
         return $fb->refresh();
+    }
+
+    /**
+     * Kreative Leitplanken auflösen: die effektive Guideline für Generierung + Vorschläge.
+     * Kaskade (spezifisch gewinnt): Kapitel/Konzept-Niveau (concept.level) → Foodbook-Default
+     * → Segment (aus Küchen-Typ). Niveau kanonisiert (haute → haute_cuisine). Convenience:
+     * Foodbook-Default → Segment. Kundentyp = Foodbook-Feld (kein Fallback). So kann ein
+     * Foodbook basic/hochwertig/premium tragen (Niveau je Kapitel), mit Foodbook-Default als Boden.
+     *
+     * @return array{kundentyp: ?string, niveau: ?string, convenience: ?string, niveau_quelle: ?string}
+     */
+    public function leitplanken(Team $team, FoodAlchemistFoodbook $fb, ?FoodAlchemistConcept $concept = null): array
+    {
+        $segment = app(TeamSettingsService::class)->segment($team);
+        $kapitelNiveau = TeamSettingsService::normNiveau($concept?->level);
+
+        $niveau = $kapitelNiveau ?? $fb->default_niveau ?? ($segment['niveau'] ?? null);
+        $niveauQuelle = $kapitelNiveau !== null ? 'kapitel'
+            : ($fb->default_niveau !== null ? 'foodbook'
+            : (($segment['niveau'] ?? null) !== null ? 'segment' : null));
+
+        return [
+            'kundentyp' => $fb->kundentyp,
+            'niveau' => $niveau,
+            'convenience' => $fb->default_convenience ?? ($segment['convenience'] ?? null),
+            'niveau_quelle' => $niveauQuelle,
+        ];
     }
 
     // ── #369: CRM-Kunde-Link (MVP, nur verlinken) — class_exists-geschützt (Modul läuft ohne crm) ──

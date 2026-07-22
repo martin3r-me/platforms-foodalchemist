@@ -122,8 +122,12 @@ class Index extends Component
         if ($frame === null || $slot === null) {
             return;
         }
-        // Phase 5: Segment-Niveau bevorzugen (Rezepte mit passender Niveau-Eignung ranken höher).
-        $zielNiveau = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->segment($this->team())['niveau'] ?? null;
+        // Kreative Leitplanken: das aufgelöste Niveau (Foodbook-Default → Segment) rankt die
+        // Vorschläge (Rezepte mit passender Niveau-Eignung höher). Die Kapitel-Stufe (concept.level)
+        // greift erst, wenn das Kapitel-Konzept existiert — beim ersten Vorschlag gilt der Default.
+        $svc = app(FoodbookService::class);
+        $fb = $svc->detail($this->team(), $this->selectedId);
+        $zielNiveau = $fb !== null ? $svc->leitplanken($this->team(), $fb)['niveau'] : null;
         $this->slotVorschlaege[$slotId] = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
             ->slotVorschlaege($this->team(), $frame, $slot, 6, $zielNiveau);
     }
@@ -199,8 +203,10 @@ class Index extends Component
             return;
         }
 
-        // Auto-Kontext: Segment (Bespielung) + Marken-Kontext aus der DNA-Kaskade.
+        // Auto-Kontext: Segment (Bespielung) + kreative Leitplanken (Kundentyp/Niveau/Convenience)
+        // + Marken-Kontext aus der DNA-Kaskade — alles als Vorgabe an die KI-Gerüst-Erstellung.
         $seg = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->segment($team);
+        $lp = app(FoodbookService::class)->leitplanken($team, $fb);
         $kaskade = app(\Platform\FoodAlchemist\Services\CanvasService::class)
             ->cascadeKontext($team, null, $fb->id, null, $fb->crm_company_id);
 
@@ -212,6 +218,7 @@ class Index extends Component
                 $brief,
                 [
                     'segment' => $seg,
+                    'leitplanken' => $lp,
                     'marken_kontext' => $kaskade['marken_kontext'] ?? null,
                 ],
             );
@@ -353,6 +360,21 @@ class Index extends Component
         }
         $svc->update($this->team(), $this->selectedId, [
             'writing_style_id' => ($styleId === '' || $styleId === null) ? null : (int) $styleId,
+        ]);
+    }
+
+    /**
+     * Kreativ-Tab: eine kreative Leitplanke setzen (kundentyp | default_niveau | default_convenience).
+     * Leer = zurück auf Erben (Segment-Default). Guideline fürs ganze Foodbook — Kapitel + Vorschläge
+     * + KI-Erstellung erben sie, Kapitel können ihr Niveau via concept.level überschreiben.
+     */
+    public function leitplankeSetzen(string $feld, $wert, FoodbookService $svc): void
+    {
+        if ($this->selectedId === null || ! in_array($feld, ['kundentyp', 'default_niveau', 'default_convenience'], true)) {
+            return;
+        }
+        $svc->update($this->team(), $this->selectedId, [
+            $feld => ($wert === '' || $wert === null) ? null : (string) $wert,
         ]);
     }
 
@@ -733,6 +755,11 @@ class Index extends Component
             // Kreativ-Tab: Schreibstile fürs Foodbook-Tonalitäts-Override (aktive, team-sichtbar)
             'schreibstile' => \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('name')->get(['id', 'name']),
+            // Kreativ-Tab: kreative Leitplanken (Kundentyp + Niveau + Convenience) + aufgelöster Ist-Stand
+            'kundentypen' => \Platform\FoodAlchemist\Services\TeamSettingsService::KUNDENTYPEN,
+            'niveauLabels' => \Platform\FoodAlchemist\Services\TeamSettingsService::NIVEAU_LABEL,
+            'convenienceLabels' => \Platform\FoodAlchemist\Services\TeamSettingsService::CONVENIENCE_LABEL,
+            'leitplanken' => $fb !== null ? $svc->leitplanken($team, $fb) : null,
         ])->layout('platform::layouts.app');
     }
 

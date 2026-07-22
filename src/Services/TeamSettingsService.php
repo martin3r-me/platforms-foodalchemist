@@ -52,6 +52,39 @@ class TeamSettingsService
     public const CONVENIENCE_LABEL = ['from_scratch' => 'From Scratch', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'];
 
     /**
+     * Niveau-Aliasse: der Concepter-Editor speichert `haute` (concept.level), Segment +
+     * Rezept-Niveau-Eignung nutzen `haute_cuisine`. Kanonisiert auf haute_cuisine, damit die
+     * Leitplanken-Kaskade (Kapitel → Foodbook → Segment) ein Vokabular spricht.
+     */
+    public const NIVEAU_ALIAS = ['haute' => 'haute_cuisine'];
+
+    /**
+     * Enterprise-Kundentyp am Foodbook (kreative Leitplanke: für wen wird geschrieben).
+     * Fließt als Kontext in die KI-Erstellung. Bewusst als editierbare Liste — bei neuen
+     * Kunden-Segmenten hier ergänzen (kein Schema-Change nötig, kundentyp ist freier varchar).
+     */
+    public const KUNDENTYPEN = [
+        'bhg_gruppe' => 'BHG-Gruppe (intern / gruppenweit)',
+        'enterprise_kette' => 'Enterprise / Kette',
+        'einzelkunde' => 'Einzelkunde / individuell',
+        'hotellerie' => 'Hotellerie & Bankett',
+        'betriebsgastro' => 'Betriebsgastronomie',
+        'care_klinik' => 'Care / Klinik / Senioren',
+        'bildung' => 'Bildung / Mensa',
+        'event_privat' => 'Event / Privat',
+    ];
+
+    /** Concept-/Foodbook-Niveau auf das kanonische Vokabular normalisieren (haute → haute_cuisine). */
+    public static function normNiveau(?string $niveau): ?string
+    {
+        if ($niveau === null || trim($niveau) === '') {
+            return null;
+        }
+
+        return self::NIVEAU_ALIAS[$niveau] ?? $niveau;
+    }
+
+    /**
      * #390 (2026-06-17): Per-Setting-Vererbungs-Policy über die Team-Hierarchie (Org→Team).
      * Hier gelistete DB-Spalten werden vererbt: leeres Feld am Team erbt vom nächsten Vorfahr
      * (Org), erstes Nicht-NULL gewinnt, Code-Default als Boden. NICHT gelistete Spalten sind

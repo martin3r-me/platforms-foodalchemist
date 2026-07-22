@@ -295,6 +295,51 @@
                 <div x-show="tab === 'kreativ'" x-cloak class="space-y-3" data-fb-panel="kreativ">
                     {{-- Ebene 2 der DNA-Kette: Kunde-DNA am CRM-Kunden (Nested-Livewire, Re-Mount via key bei Kunden-Wechsel) --}}
                     <livewire:foodalchemist.foodbooks.kunde-dna-panel :company-id="$fb->crm_company_id" :key="'kdna-'.($fb->crm_company_id ?? 'none')" />
+
+                    {{-- Kreative Leitplanken: Guideline fürs ganze Foodbook — Kundentyp + Default-Niveau
+                         + Default-Convenience. Vorbelegt aus dem Segment, pro Foodbook überschreibbar;
+                         Kapitel + Vorschläge + KI-Erstellung erben sie. Niveau je Stufe (basic/hochwertig/
+                         premium) setzt man pro Kapitel (concept.level) — das hier ist der Boden. --}}
+                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" data-fb-leitplanken>
+                        <div class="{{ $cardAccent }}"></div>
+                        <div class="flex items-baseline justify-between">
+                            <p class="{{ $label }}">Kreative Leitplanken</p>
+                            @if($leitplanken)
+                                <span class="text-[11px] text-gray-500">wirkt: Niveau <span class="font-medium">{{ $niveauLabels[$leitplanken['niveau']] ?? $leitplanken['niveau'] ?? '—' }}</span> · {{ $convenienceLabels[$leitplanken['convenience']] ?? $leitplanken['convenience'] ?? '—' }}</span>
+                            @endif
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label class="{{ $label }}">Kundentyp</label>
+                                <select wire:change="leitplankeSetzen('kundentyp', $event.target.value)" class="{{ $input }}" data-lp-kundentyp>
+                                    <option value="">— nicht gesetzt</option>
+                                    @foreach($kundentypen as $k => $l)
+                                        <option value="{{ $k }}" {{ ($fb->kundentyp ?? null) === $k ? 'selected' : '' }}>{{ $l }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="{{ $label }}">Niveau (Default)</label>
+                                <select wire:change="leitplankeSetzen('default_niveau', $event.target.value)" class="{{ $input }}" data-lp-niveau>
+                                    <option value="">— Segment-Default{{ ($segment['niveau'] ?? null) ? ' ('.($niveauLabels[$segment['niveau']] ?? $segment['niveau']).')' : '' }}</option>
+                                    @foreach($niveauLabels as $k => $l)
+                                        <option value="{{ $k }}" {{ ($fb->default_niveau ?? null) === $k ? 'selected' : '' }}>{{ $l }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="{{ $label }}">Convenience (Default)</label>
+                                <select wire:change="leitplankeSetzen('default_convenience', $event.target.value)" class="{{ $input }}" data-lp-convenience>
+                                    <option value="">— Segment-Default{{ ($segment['convenience'] ?? null) ? ' ('.($convenienceLabels[$segment['convenience']] ?? $segment['convenience']).')' : '' }}</option>
+                                    @foreach($convenienceLabels as $k => $l)
+                                        <option value="{{ $k }}" {{ ($fb->default_convenience ?? null) === $k ? 'selected' : '' }}>{{ $l }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-gray-500">Vorgabe für Rezeptur- + Gericht-Erstellung (Vorschläge werden aufs Niveau gerankt, KI-Erstellung bekommt sie als Rahmen). Leer = erbt aus dem Küchen-Segment. <span class="font-medium">Basic / hochwertig / premium im selben Foodbook?</span> → das Niveau pro Kapitel im Konzept setzen; das hier ist der Default-Boden.</p>
+                    </div>
+
                     {{-- Foodbook-Tonalität (Schreibstil-Override) — führt über die Default-Schreibstile
                          aus Team- + Kunde-DNA (CanvasService::cascadeKontext), Phase 4. --}}
                     <div class="relative overflow-hidden {{ $card }} p-5 space-y-2" data-fb-tonalitaet>
