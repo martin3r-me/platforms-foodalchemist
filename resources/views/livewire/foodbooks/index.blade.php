@@ -98,7 +98,7 @@
 
                 {{-- Tab-Leiste --}}
                 <div class="flex flex-wrap gap-1" role="tablist">
-                    @foreach(['briefing' => '📋 Briefing', 'planung' => '🎯 Planung', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend', 'branding' => '🏷 Branding/CI'] as $tk => $tl)
+                    @foreach(['briefing' => '📋 Briefing', 'planung' => '🎯 Planung', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend', 'branding' => '🏷 Branding/CI', 'vorschau' => '🍽 Vorschau'] as $tk => $tl)
                         <button type="button" @click="tab = @js($tk)" :class="tab === @js($tk) ? '{{ $aktiv }}' : '{{ $hover }}'"
                                 class="px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-fb-tab="{{ $tk }}">{{ $tl }}</button>
                     @endforeach
@@ -411,17 +411,11 @@
                     </div>
                 </div>{{-- /Branding --}}
 
-            </div>{{-- /fbcockpit --}}
-
-            {{-- UX 2026-07-21: Menü-Vorschau (Kundensicht, ganzes Foodbook) — einklappbar, gehört zur Foodbook-Kopf-Ebene.
-                 Früher Teil eines Bearbeiten⇄Menü-Toggles; das Bearbeiten (Kapitel+Blöcke) lebt jetzt in der Kapitel-Ansicht. --}}
-            <div x-data="{ fbMenue: false }" class="space-y-2">
-            <button type="button" @click="fbMenue = !fbMenue" class="{{ $btnGhost }} w-full justify-center" data-fb-menue-toggle>
-                <span x-text="fbMenue ? '▲ Menü-Vorschau ausblenden' : '🍽 Menü-Vorschau (Kundensicht) — ganzes Foodbook'"></span>
-            </button>
-
+                {{-- Menü-Vorschau (Kundensicht, ganzes Foodbook) = eigener Output-Tab (read-only, Foodbook-Kopf-Ebene).
+                     Früher ein einklappbarer Balken unter allen Tabs — jetzt eine eigene Fläche (ein Tab = eine Fläche). --}}
+                <div x-show="tab === 'vorschau'" x-cloak class="space-y-3" data-fb-panel="vorschau">
             {{-- ═══ MENÜ-VORSCHAU (Kundensicht, read-only) ═══ --}}
-            <div x-show="fbMenue" x-cloak class="relative overflow-hidden {{ $card }} p-6 space-y-5" data-fb-menue-vorschau>
+            <div class="relative overflow-hidden {{ $card }} p-6 space-y-5" data-fb-menue-vorschau>
                 <div class="{{ $cardAccent }}"></div>
                 <div class="flex items-baseline justify-between border-b border-black/5 pb-3">
                     <div>
@@ -458,9 +452,10 @@
                     <p class="text-xs text-gray-500 py-6 text-center">Noch keine Kapitel — links anlegen und Concepts einfügen.</p>
                 @endforelse
                 <p class="text-[11px] text-gray-500 pt-2 border-t border-black/5">Gericht-Namen aus der Wording-Kette: Foodbook-Override → Konzept-Wording → VK-Standard → interner Name. Amber = kein Wording gepflegt.</p>
-            </div>
+            </div>{{-- /Menü-Vorschau-Karte --}}
+                </div>{{-- /Vorschau-Tab --}}
 
-            </div>{{-- /x-data fbMenue (Menü-Vorschau, Foodbook-Kopf) --}}
+            </div>{{-- /fbcockpit --}}
 
             @else
             {{-- ═══════════════ KAPITEL (den „einzelnen Strukturen" — nur die Speisen) ═══════════════ --}}
