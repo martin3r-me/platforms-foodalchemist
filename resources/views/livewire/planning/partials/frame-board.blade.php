@@ -35,7 +35,11 @@
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Notiz zum Rahmen</label>
-                <textarea wire:model="frameHead.note" rows="2" class="{{ $input }}" placeholder="z. B. Anker-Logik, Budget-Kontext"></textarea>
+                <textarea wire:model="frameHead.note"
+                          x-data
+                          x-effect="$wire.frameHead; $el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
+                          @input="$el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
+                          class="{{ $input }} resize-none overflow-hidden min-h-[4.5rem]" placeholder="z. B. Anker-Logik, Preisschienen (Basic/Hochwertig/Premium), Wareneinsatz-Ziel, Budget-Kontext — wächst mit"></textarea>
             </div>
             <button type="button" wire:click="frameKopfSpeichern" class="{{ $btnPrimary }}" data-frame-kopf-speichern>Rahmen speichern</button>
         </div>
