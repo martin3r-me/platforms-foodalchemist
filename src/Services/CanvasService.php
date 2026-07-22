@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistCanvas;
 use Platform\FoodAlchemist\Models\FoodAlchemistCanvasEntry;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
 
 /**
@@ -233,6 +234,19 @@ class CanvasService
             $canvas = $this->find($type, $ownerType, $ownerId);
             if ($canvas !== null && ($block = $this->promptKontext($canvas)) !== null) {
                 $bloecke[] = $block;
+            }
+        }
+
+        // Foodbook-Override der Tonalität (Plan: Team-Default → Kunde-Default → FOODBOOK-Override).
+        // Die foodbook.writing_style_id-Spalte (Kreativ-Tab) führt über die Default-Schreibstile der
+        // DNA-Kette — als LETZTER Block angehängt, damit die gewählte Stimme dieses Foodbooks gewinnt.
+        if ($foodbookId !== null) {
+            $fb = FoodAlchemistFoodbook::find($foodbookId);
+            if ($fb !== null && $fb->writing_style_id !== null
+                && ($stil = FoodAlchemistWritingStyle::find((int) $fb->writing_style_id)) !== null) {
+                $duktus = trim((string) $stil->sprach_duktus);
+                $bloecke[] = 'Tonalität dieses Foodbooks (führt — überschreibt die Default-Schreibstile):'
+                    . "\n- Schreibstil: " . $stil->name . ($duktus !== '' ? ' — Sprach-Duktus: ' . $duktus : '');
             }
         }
 

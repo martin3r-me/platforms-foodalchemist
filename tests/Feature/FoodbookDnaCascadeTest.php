@@ -1,6 +1,8 @@
 <?php
 
+use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
 use Platform\FoodAlchemist\Services\CanvasService;
+use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -54,4 +56,36 @@ it('Phase 4: cascadeKontext injiziert den Sprach-Duktus des Default-Schreibstils
     // Nicht nur der Stil-NAME, sondern der Sprach-Duktus (Prompt-Material) muss drin sein.
     expect($ctx['marken_kontext'] ?? '')->toContain('Sprach-Duktus')
         ->and($ctx['marken_kontext'])->toContain('sinnliche Verben');
+});
+
+it('Foodbook-Override: foodbook.writing_style_id führt über den Kunde-Default-Schreibstil', function () {
+    $kundenStil = FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'kunde-stil', 'name' => 'Kunde-Stil',
+        'sprach_duktus' => 'KUNDE-DUKTUS-MARKER', 'is_inactive' => false, 'sort_order' => 0,
+    ]);
+    $foodbookStil = FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'foodbook-stil', 'name' => 'Foodbook-Stil',
+        'sprach_duktus' => 'FOODBOOK-DUKTUS-MARKER', 'is_inactive' => false, 'sort_order' => 1,
+    ]);
+
+    $companyId = 6161;
+    $kundeCanvas = $this->svc->canvasFor($this->rootTeam, 'kunde_dna', 'crm_company', $companyId);
+    $this->svc->setSkalar($kundeCanvas, 'default_schreibstil_id', (string) $kundenStil->id);
+
+    $fbSvc = app(FoodbookService::class);
+    $fb = $fbSvc->create($this->rootTeam, ['label' => 'Adler-Gala']);
+    $fbSvc->update($this->rootTeam, $fb->id, ['writing_style_id' => $foodbookStil->id]);
+
+    $mk = $this->svc->cascadeKontext($this->rootTeam, null, $fb->id, null, $companyId)['marken_kontext'] ?? '';
+    // Beide Ebenen drin, Foodbook-Override als LETZTER Block (führt).
+    expect($mk)->toContain('KUNDE-DUKTUS-MARKER')
+        ->and($mk)->toContain('FOODBOOK-DUKTUS-MARKER')
+        ->and($mk)->toContain('führt — überschreibt')
+        ->and(strpos($mk, 'FOODBOOK-DUKTUS-MARKER'))->toBeGreaterThan(strpos($mk, 'KUNDE-DUKTUS-MARKER'));
+
+    // Override zurücknehmen → kein Foodbook-Tonalitäts-Block mehr.
+    $fbSvc->update($this->rootTeam, $fb->id, ['writing_style_id' => null]);
+    $mk2 = $this->svc->cascadeKontext($this->rootTeam, null, $fb->id, null, $companyId)['marken_kontext'] ?? '';
+    expect($mk2)->not->toContain('FOODBOOK-DUKTUS-MARKER')
+        ->and($mk2)->toContain('KUNDE-DUKTUS-MARKER');
 });

@@ -61,7 +61,7 @@ class FoodbookService
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id'];
+    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {

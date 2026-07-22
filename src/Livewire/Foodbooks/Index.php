@@ -336,6 +336,20 @@ class Index extends Component
         }
     }
 
+    /**
+     * Kreativ-Tab: Foodbook-Tonalität (Schreibstil-Override) setzen. Leer = Default-Kaskade
+     * (Team-DNA → Kunde-DNA). Der gewählte Stil führt über die Defaults (CanvasService::cascadeKontext).
+     */
+    public function tonalitaetSetzen($styleId, FoodbookService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $svc->update($this->team(), $this->selectedId, [
+            'writing_style_id' => ($styleId === '' || $styleId === null) ? null : (int) $styleId,
+        ]);
+    }
+
     // ── #369: CRM-Kunde-Link (MVP, nur verlinken) ──────────────────────────────
 
     public function verknuepfeFirma(int $companyId, FoodbookService $svc): void
@@ -710,6 +724,9 @@ class Index extends Component
             'trendDocs' => $fb !== null ? app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->listDocuments('trend', 0, 8, true)['documents'] : [],
             // Phase 5: Segment (aus Küchen-Typ abgeleitet) — die Achse, an der die Planung hängt
             'segment' => app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->segment($team),
+            // Kreativ-Tab: Schreibstile fürs Foodbook-Tonalitäts-Override (aktive, team-sichtbar)
+            'schreibstile' => \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('name')->get(['id', 'name']),
         ])->layout('platform::layouts.app');
     }
 

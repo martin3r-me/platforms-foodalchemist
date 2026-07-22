@@ -295,9 +295,22 @@
                 <div x-show="tab === 'kreativ'" x-cloak class="space-y-3" data-fb-panel="kreativ">
                     {{-- Ebene 2 der DNA-Kette: Kunde-DNA am CRM-Kunden (Nested-Livewire, Re-Mount via key bei Kunden-Wechsel) --}}
                     <livewire:foodalchemist.foodbooks.kunde-dna-panel :company-id="$fb->crm_company_id" :key="'kdna-'.($fb->crm_company_id ?? 'none')" />
-                    <div class="{{ $card }} p-5 text-sm text-gray-500 leading-relaxed">
-                        <p class="{{ $label }} mb-1">Geschmack & Tonalität — folgt (Phase 4)</p>
-                        Geschmackswelten am Foodbook + der Tonalitäts-Pass (steuert, wie die KI neutrale Gerichte in die Markenstimme übersetzt) kommen hier dazu.
+                    {{-- Foodbook-Tonalität (Schreibstil-Override) — führt über die Default-Schreibstile
+                         aus Team- + Kunde-DNA (CanvasService::cascadeKontext), Phase 4. --}}
+                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-2" data-fb-tonalitaet>
+                        <div class="{{ $cardAccent }}"></div>
+                        <label class="{{ $label }}">Tonalität dieses Foodbooks</label>
+                        <select wire:change="tonalitaetSetzen($event.target.value)" class="{{ $input }}" data-fb-tonalitaet-select>
+                            <option value="">— Default aus der DNA-Kette (Team → Kunde)</option>
+                            @foreach($schreibstile as $s)
+                                <option value="{{ $s->id }}" {{ ($fb->writing_style_id ?? null) == $s->id ? 'selected' : '' }}>{{ $s->name }}</option>
+                            @endforeach
+                        </select>
+                        <p class="text-[11px] text-gray-500">Steuert, wie die KI die neutralen Gerichte in die Markenstimme übersetzt. Der gewählte Stil <span class="font-medium">überschreibt</span> die Default-Schreibstile aus Team- und Kunde-DNA; leer = Default-Kaskade. Stile pflegst du in den Einstellungen → Schreibstile.</p>
+                        @if($schreibstile->isEmpty())
+                            <p class="text-[11px] text-amber-600">Noch keine Schreibstile angelegt — Einstellungen → Schreibstile.</p>
+                        @endif
+                        <p class="text-[11px] text-gray-400 pt-1 border-t border-black/5">Geschmackswelten werden je <span class="font-medium">Konzept</span> gepflegt (Konzept-Brief), nicht am Foodbook — das Foodbook komponiert die Konzepte.</p>
                     </div>
                 </div>{{-- /Kreativ --}}
 
