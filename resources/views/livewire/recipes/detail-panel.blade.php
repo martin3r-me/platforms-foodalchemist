@@ -1,5 +1,5 @@
 {{-- M4-05: Rezept-DetailPanel. Redesign v3 2026-07-21 (Dominique): Standalone-Sidebar
-     nicht ausklappbar, größere Typo, Kosten-Linse (EK/kg-Cockpit → Zutaten → Pairing-Netz →
+     nicht ausklappbar, größere Typo, Kosten-Linse (EK/kg-Cockpit → Pairing-Netz → Zutaten →
      Pairings → Allergene → Eignung/Ersatz/Equipment). Editor-Embeds (nurEignung/nurErsatz/
      embedded-Details-Tab) behalten ihre bisherigen Karteien. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
@@ -136,6 +136,33 @@
             <p class="text-[13px] text-gray-600 leading-relaxed" data-description>{{ $rezept->description }}</p>
         @endif
 
+        {{-- Pairing-Netz — Inline-Graph + Anker-Pflege (ÜBER den Zutaten, analog Gericht-Panel) --}}
+        <x-foodalchemist::section title="Pairing-Netz" icon="heroicon-o-share"
+            :meta="$kohaesion !== null ? 'Kohäsion ' . $kohaesion['score'] . ' · Coverage ' . $kohaesion['coverage_pct'] . ' %' : null" data-kern-anker>
+            <x-slot:actions>
+                <button type="button" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-pairing-netz-btn>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
+            </x-slot:actions>
+            <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" />
+            <div class="flex flex-wrap gap-1 mt-2">
+                @foreach($kernAnker as $anker)
+                    <span wire:key="ka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->source }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
+                        ★ {{ $anker->display_de }}
+                        <button type="button" wire:click="ankerLoesen({{ $anker->id }})" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
+                    </span>
+                @endforeach
+            </div>
+            @if($fehlerAnker !== null)<p class="text-[11px] text-rose-500 mt-1" data-anker-fehler>{{ $fehlerAnker }}</p>@endif
+            <div class="relative mt-1.5">
+                <input type="search" wire:model.live.debounce.300ms="ankerSuche" placeholder="Anker verknüpfen …" class="{{ $input }} !py-1" data-anker-suche />
+                @foreach($ankerKandidaten as $kandidat)
+                    <button type="button" wire:key="ak-{{ $kandidat->id }}" wire:click="ankerVerknuepfen({{ $kandidat->id }})" class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 hover:bg-violet-500/10">{{ $kandidat->display_de }} <span class="text-gray-500">{{ $kandidat->slug }}</span></button>
+                @endforeach
+            </div>
+            @if($kohaesion !== null && $kohaesion['weakest_pair'] !== null)
+                <p class="text-[11px] text-gray-500 mt-1.5">Schwächstes Glied: {{ $kohaesion['weakest_pair']['a'] }} ↔ {{ $kohaesion['weakest_pair']['b'] }} ({{ $kohaesion['weakest_pair']['score'] }})</p>
+            @endif
+        </x-foodalchemist::section>
+
         {{-- Zutaten — Haupt-Block (Kosten-Essenz): Menge · GP-/Sub-Link · Zeilen-EK --}}
         <x-foodalchemist::section title="Zutaten" icon="heroicon-o-list-bullet" :meta="$rezept->ingredients->count()" data-zutaten>
             <div class="space-y-0.5">
@@ -174,33 +201,6 @@
                 </div>
             </x-foodalchemist::section>
         @endif
-
-        {{-- Pairing-Netz — Inline-Graph + Anker-Pflege --}}
-        <x-foodalchemist::section title="Pairing-Netz" icon="heroicon-o-share"
-            :meta="$kohaesion !== null ? 'Kohäsion ' . $kohaesion['score'] . ' · Coverage ' . $kohaesion['coverage_pct'] . ' %' : null" data-kern-anker>
-            <x-slot:actions>
-                <button type="button" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-pairing-netz-btn>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
-            </x-slot:actions>
-            <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" />
-            <div class="flex flex-wrap gap-1 mt-2">
-                @foreach($kernAnker as $anker)
-                    <span wire:key="ka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->source }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
-                        ★ {{ $anker->display_de }}
-                        <button type="button" wire:click="ankerLoesen({{ $anker->id }})" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
-                    </span>
-                @endforeach
-            </div>
-            @if($fehlerAnker !== null)<p class="text-[11px] text-rose-500 mt-1" data-anker-fehler>{{ $fehlerAnker }}</p>@endif
-            <div class="relative mt-1.5">
-                <input type="search" wire:model.live.debounce.300ms="ankerSuche" placeholder="Anker verknüpfen …" class="{{ $input }} !py-1" data-anker-suche />
-                @foreach($ankerKandidaten as $kandidat)
-                    <button type="button" wire:key="ak-{{ $kandidat->id }}" wire:click="ankerVerknuepfen({{ $kandidat->id }})" class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 hover:bg-violet-500/10">{{ $kandidat->display_de }} <span class="text-gray-500">{{ $kandidat->slug }}</span></button>
-                @endforeach
-            </div>
-            @if($kohaesion !== null && $kohaesion['weakest_pair'] !== null)
-                <p class="text-[11px] text-gray-500 mt-1.5">Schwächstes Glied: {{ $kohaesion['weakest_pair']['a'] }} ↔ {{ $kohaesion['weakest_pair']['b'] }} ({{ $kohaesion['weakest_pair']['score'] }})</p>
-            @endif
-        </x-foodalchemist::section>
 
         {{-- Pairings — prominent (Basisrezept-Ebene): Chips + Typ + Verknüpfen --}}
         <x-foodalchemist::section title="Pairings" icon="heroicon-o-arrows-right-left" :meta="$pairings?->count()" data-pairing-sektion>
