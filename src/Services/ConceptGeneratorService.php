@@ -294,17 +294,20 @@ class ConceptGeneratorService
      *
      * @return list<array{id:int, name:string, diet_form:?string, sales_net:?float}>
      */
-    public function slotVorschlaege(Team $team, FoodAlchemistPlanningFrame $frame, FoodAlchemistPlanningFrameSlot $slot, int $limit = 6, ?string $zielNiveau = null): array
+    public function slotVorschlaege(Team $team, FoodAlchemistPlanningFrame $frame, FoodAlchemistPlanningFrameSlot $slot, int $limit = 6, ?string $zielNiveau = null, ?string $zielConvenience = null): array
     {
         $frame->loadMissing(['slots.rules', 'rules']);
-        $kandidaten = $this->filterFuerSlot($this->kandidatenPool($team, $frame), $frame, $slot);
+        // Convenience-Daten (GP-Tags) nur laden, wenn die Leitplanke wirklich diskriminiert
+        // (from_scratch/voll_convenience) — teil_convenience/null bleibt neutral + günstig.
+        $mitConvenience = in_array($zielConvenience, ['from_scratch', 'voll_convenience'], true);
+        $kandidaten = $this->filterFuerSlot($this->kandidatenPool($team, $frame, $mitConvenience), $frame, $slot);
 
         $out = [];
         $gewaehlteAnker = [];
         $gewaehltIds = [];
         while (count($out) < max(1, $limit)) {
             $rest = $kandidaten->reject(fn ($k) => in_array($k['id'], $gewaehltIds, true));
-            $treffer = $this->besterKandidat($rest, $gewaehlteAnker, $slot, $zielNiveau);
+            $treffer = $this->besterKandidat($rest, $gewaehlteAnker, $slot, $zielNiveau, $zielConvenience);
             if ($treffer === null) {
                 break;
             }
@@ -324,7 +327,7 @@ class ConceptGeneratorService
      * (nur wenn No-Go-Zutat-Regeln existieren), Anker-IDs (persistiertes Mapping +
      * dynamische Auflösung über die Zutaten).
      */
-    private function kandidatenPool(Team $team, FoodAlchemistPlanningFrame $frame): Collection
+    private function kandidatenPool(Team $team, FoodAlchemistPlanningFrame $frame, bool $mitConvenience = false): Collection
     {
         $brauchtBegriffe = $frame->rules->where('rule_type', 'nogo_ingredient')->isNotEmpty();
 
@@ -334,11 +337,15 @@ class ConceptGeneratorService
             // Modell A: HG hängt direkt am Recipe (dish_main_group_id); dishClass.mainGroup = Alt-Pfad-Fallback
             // levelSuitabilities = Niveau-Eignungen (haute_cuisine|gehoben|klassisch) fürs Segment-Ranking (Phase 5)
             ->with(['dishClass:id,diet_form,dish_main_group_id', 'dishClass.mainGroup:id,code,label', 'speisenHauptgruppe:id,code,label', 'levelSuitabilities']);
-        if ($brauchtBegriffe) {
-            $query->with(['ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name']);
+        if ($brauchtBegriffe || $mitConvenience) {
+            // Convenience-Ranking (Leitplanke) braucht das GP-Tag tag_is_convenience je Zutat.
+            $query->with(['ingredients.gp:id,name' . ($mitConvenience ? ',tag_is_convenience' : '')]);
+            if ($brauchtBegriffe) {
+                $query->with(['ingredients.referencedRecipe:id,name']);
+            }
         }
 
-        return $query->get()->map(function (FoodAlchemistRecipe $r) use ($brauchtBegriffe) {
+        return $query->get()->map(function (FoodAlchemistRecipe $r) use ($brauchtBegriffe, $mitConvenience) {
             $allergene = [];
             foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $key) {
                 $allergene[$key] = $r->{'allergen_' . $key} ?? null;
@@ -363,9 +370,30 @@ class ConceptGeneratorService
                     ? mb_strtolower($r->name . ' ' . $r->ingredients->map(fn ($z) => ($z->gp?->name ?? '') . ' ' . ($z->referencedRecipe?->name ?? ''))->implode(' '))
                     : mb_strtolower($r->name),
                 'niveaus' => $r->levelSuitabilities->pluck('level_slug')->filter()->values()->all(),
+                // Convenience-Anteil = Quote convenience-getaggter GPs unter den Zutaten (null = nicht geladen / keine GP-Zutat)
+                'convenience_ratio' => $this->convenienceRatio($r, $mitConvenience),
                 'anker' => $this->pairing->anchorsForRecipe($r),
             ];
         })->keyBy('id');
+    }
+
+    /**
+     * Convenience-Anteil eines Gerichts: Quote der Zutaten-GPs mit tag_is_convenience (0..1).
+     * null, wenn die GP-Tags nicht geladen wurden ($mitConvenience=false) oder das Gericht keine
+     * GP-Zutat hat — beides = neutral fürs Ranking (kein Bias). Referenzierte Sub-Rezepte zählen
+     * bewusst nicht mit: der Convenience-Charakter hängt an den eingekauften Bausteinen (GPs).
+     */
+    private function convenienceRatio(FoodAlchemistRecipe $r, bool $mitConvenience): ?float
+    {
+        if (! $mitConvenience || ! $r->relationLoaded('ingredients')) {
+            return null;
+        }
+        $gps = $r->ingredients->map(fn ($z) => $z->gp)->filter();
+        if ($gps->isEmpty()) {
+            return null;
+        }
+
+        return round($gps->filter(fn ($g) => (bool) $g->tag_is_convenience)->count() / $gps->count(), 3);
     }
 
     /** Harte Filter eines Slots: No-Gos (frame + slot, hart), Allergen-No-Gos, Preisrahmen. */
@@ -430,7 +458,7 @@ class ConceptGeneratorService
      * Menüfolge (Pairing-Graph) → Anker-Anzahl (graph-erreichbare Gerichte zuerst) →
      * Nähe zum Preis-Anker → Name (stabil).
      */
-    private function besterKandidat(Collection $kandidaten, array $gewaehlteAnker, $frameSlot, ?string $zielNiveau = null): ?array
+    private function besterKandidat(Collection $kandidaten, array $gewaehlteAnker, $frameSlot, ?string $zielNiveau = null, ?string $zielConvenience = null): ?array
     {
         if ($kandidaten->isEmpty()) {
             return null;
@@ -442,10 +470,19 @@ class ConceptGeneratorService
         // sonst würde ein freies Label („Station Süß") nichts filtern, aber auch nichts kaputt machen.
         $hatSemantik = $kandidaten->contains(fn ($k) => self::slotSemantik((string) $frameSlot->label, $k['hg_label']) === 1);
 
-        return $kandidaten->map(function ($k) use ($kanten, $gewaehlteAnker, $frameSlot, $hatSemantik, $zielNiveau) {
+        return $kandidaten->map(function ($k) use ($kanten, $gewaehlteAnker, $frameSlot, $hatSemantik, $zielNiveau, $zielConvenience) {
             $k['semantik'] = $hatSemantik ? self::slotSemantik((string) $frameSlot->label, $k['hg_label']) : 0;
             // Phase 5: Segment-Niveau bevorzugen (neutral, wenn kein Ziel-Niveau übergeben wird).
             $k['niveau_match'] = ($zielNiveau !== null && in_array($zielNiveau, $k['niveaus'] ?? [], true)) ? 1 : 0;
+            // Convenience-Leitplanke: Anteil convenience-getaggter GPs unter den Zutaten (0..1).
+            // from_scratch → scratch bevorzugen (1-ratio), voll_convenience → Convenience bevorzugen (ratio),
+            // teil_convenience/null → neutral (0, Mix erlaubt). ratio null (nicht geladen) = neutral.
+            $ratio = $k['convenience_ratio'] ?? null;
+            $k['convenience_match'] = match ($zielConvenience) {
+                'from_scratch' => $ratio === null ? 0.0 : 1.0 - $ratio,
+                'voll_convenience' => $ratio ?? 0.0,
+                default => 0.0,
+            };
             $gewinn = 0.0;
             $paare = 0;
             foreach ($k['anker'] as $a) {
@@ -466,7 +503,7 @@ class ConceptGeneratorService
                 : 0.0;
 
             return $k;
-        })->sortBy([['semantik', 'desc'], ['niveau_match', 'desc'], ['score', 'desc'], ['ankerdichte', 'desc'], ['preisnaehe', 'desc'], ['name', 'asc']])->first();
+        })->sortBy([['semantik', 'desc'], ['niveau_match', 'desc'], ['convenience_match', 'desc'], ['score', 'desc'], ['ankerdichte', 'desc'], ['preisnaehe', 'desc'], ['name', 'asc']])->first();
     }
 
     /**

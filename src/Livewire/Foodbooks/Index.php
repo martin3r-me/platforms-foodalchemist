@@ -127,9 +127,9 @@ class Index extends Component
         // greift erst, wenn das Kapitel-Konzept existiert — beim ersten Vorschlag gilt der Default.
         $svc = app(FoodbookService::class);
         $fb = $svc->detail($this->team(), $this->selectedId);
-        $zielNiveau = $fb !== null ? $svc->leitplanken($this->team(), $fb)['niveau'] : null;
+        $lp = $fb !== null ? $svc->leitplanken($this->team(), $fb) : ['niveau' => null, 'convenience' => null];
         $this->slotVorschlaege[$slotId] = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
-            ->slotVorschlaege($this->team(), $frame, $slot, 6, $zielNiveau);
+            ->slotVorschlaege($this->team(), $frame, $slot, 6, $lp['niveau'], $lp['convenience']);
     }
 
     /** Weg B: Gericht in den Slot übernehmen (Slot-Kapitel-Konzept) + aus der Vorschlagsliste nehmen. */
