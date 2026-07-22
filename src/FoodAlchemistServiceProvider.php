@@ -336,6 +336,11 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\OrdersAddNeedTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersSetStatusTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdateLineTool::class,
+                    // Spec 18: Produktionsaufträge (Datum, Status, → Bestellung übergeben) — MCP im Lockstep
+                    \Platform\FoodAlchemist\Tools\ProductionOrdersGetTool::class,
+                    \Platform\FoodAlchemist\Tools\ProductionOrdersAddTargetTool::class,
+                    \Platform\FoodAlchemist\Tools\ProductionOrdersSetStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\ProductionOrdersUpdateLineTool::class,
                     // R2.6: Praxis-Feedback (Küche/Kunde/Event) je Gericht/Rezept
                     \Platform\FoodAlchemist\Tools\FeedbackSearchTool::class,
                     \Platform\FoodAlchemist\Tools\FeedbackPostTool::class,

@@ -228,3 +228,46 @@ it('Route: /blaetter redirected auf /produktion (keine toten Deep-Links)', funct
     $this->get(route('foodalchemist.blaetter.index'))
         ->assertRedirect(route('foodalchemist.produktion.index'));
 })->skip(fn () => ! \Illuminate\Support\Facades\Route::has('foodalchemist.blaetter.index'), 'Modul-Routen im Test-Harness nicht registriert');
+
+it('MCP im Lockstep: production_orders.GET/ADD_TARGET/SET_STATUS/UPDATE_LINE registriert + End-to-End', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(\Platform\Core\Tools\ToolRegistry::class);
+    $kontext = new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam);
+
+    foreach (['production_orders.GET' => true, 'production_orders.ADD_TARGET' => false, 'production_orders.SET_STATUS' => false, 'production_orders.UPDATE_LINE' => false] as $t => $readonly) {
+        $tool = $registry->get("foodalchemist.{$t}");
+        expect($tool)->not->toBeNull()
+            ->and($tool->getMetadata()['read_only'])->toBe($readonly);
+    }
+
+    // ADD_TARGET (write): legt den Auftrag an + fügt das Ziel hinzu
+    $add = $registry->get('foodalchemist.production_orders.ADD_TARGET')
+        ->execute(['production_date' => '2026-08-01', 'recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'], $kontext);
+    expect($add->success)->toBeTrue()->and($add->data['production_date'])->toBe('2026-08-01');
+    $orderId = $add->data['order_id'];
+
+    // GET Liste: 1 geplanter Auftrag
+    $list = $registry->get('foodalchemist.production_orders.GET')->execute([], $kontext);
+    expect($list->success)->toBeTrue()->and($list->data['count'])->toBe(1);
+
+    // GET Detail: Kuchen-Zeile vorhanden
+    $detail = $registry->get('foodalchemist.production_orders.GET')->execute(['order_id' => $orderId], $kontext);
+    expect($detail->data['status'])->toBe('planned')
+        ->and(collect($detail->data['zeilen'])->firstWhere('name', 'DES: Kuchen'))->not->toBeNull();
+    $lineId = collect($detail->data['zeilen'])->firstWhere('name', 'DES: Kuchen')['id'];
+
+    // UPDATE_LINE (write): Notiz setzen
+    $upd = $registry->get('foodalchemist.production_orders.UPDATE_LINE')->execute(['line_id' => $lineId, 'note' => 'Ofen 2'], $kontext);
+    expect($upd->success)->toBeTrue()->and($upd->data['note'])->toBe('Ofen 2');
+
+    // SET_STATUS (write): Produktion starten; danach nicht mehr editierbar
+    $started = $registry->get('foodalchemist.production_orders.SET_STATUS')->execute(['order_id' => $orderId, 'status' => 'in_progress'], $kontext);
+    expect($started->success)->toBeTrue()->and($started->data['status'])->toBe('in_progress');
+    $detail2 = $registry->get('foodalchemist.production_orders.GET')->execute(['order_id' => $orderId], $kontext);
+    expect($detail2->data['editierbar'])->toBeFalse();
+
+    // Illegaler Sprung (in_progress→planned gibt es nicht) → Guard
+    $bad = $registry->get('foodalchemist.production_orders.SET_STATUS')->execute(['order_id' => $orderId, 'status' => 'done'], $kontext);
+    expect($bad->success)->toBeTrue(); // in_progress→done IST erlaubt
+});
