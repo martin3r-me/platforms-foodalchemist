@@ -58,6 +58,24 @@ it('Hex-Murks wird als UI-Fehler gezeigt statt zu crashen', function () {
         ->assertSet('brandingFehler', fn ($v) => is_string($v) && $v !== '');
 });
 
+// Der oben (auf Tab-Ebene) hochgezogene „Speichern" sichert die GANZE Foodbook-Ebene —
+// inkl. Branding. Sonst blieben CI-Änderungen unbemerkt liegen (der prominente Button
+// speicherte nur Stammdaten → „Farbe ändert nicht").
+it('Der Tab-übergreifende Speichern sichert Stammdaten UND Branding', function () {
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->set('form.label', 'Adler Neu')
+        ->set('brandingForm.brand_color', '#0514e6')
+        ->set('brandingForm.footer_text', 'BHG Broich Catering.com')
+        ->call('speichern')
+        ->assertSet('brandingFehler', null);
+
+    $fb = $this->fb->refresh();
+    expect($fb->label)->toBe('Adler Neu')
+        ->and($fb->brand_color)->toBe('#0514e6')
+        ->and($fb->footer_text)->toBe('BHG Broich Catering.com');
+});
+
 it('Logo-Upload legt Datei ab (Storage::fake) und Entfernen räumt sie', function () {
     Storage::fake('public');
 

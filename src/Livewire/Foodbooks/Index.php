@@ -331,9 +331,15 @@ class Index extends Component
 
     public function speichern(FoodbookService $svc): void
     {
-        if ($this->selectedId !== null) {
-            $svc->update($this->team(), $this->selectedId, $this->form);
+        if ($this->selectedId === null) {
+            return;
         }
+        $svc->update($this->team(), $this->selectedId, $this->form);
+        // Der Tab-übergreifende „Speichern" sichert die GANZE Foodbook-Ebene — inkl. Branding
+        // (Marken-Farbe/Bandfarbe/Footer). Sonst greift er nicht auf dem Branding-Tab und der
+        // prominente Button ließe die CI-Änderungen unbemerkt liegen (Falle des hochgezogenen
+        // Speicherns). Idempotent, wenn Branding nicht angefasst wurde; Hex-Fehler → brandingFehler.
+        $this->brandingSpeichern($svc);
     }
 
     /**
