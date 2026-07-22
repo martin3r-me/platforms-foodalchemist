@@ -146,6 +146,20 @@ it('Einkaufsliste führt mehrere Ziele zusammen', function () {
     expect($lief['Chefs']['ek_summe'])->toBe(42.0)->and($lief['Hanos']['ek_summe'])->toBe(24.0);
 });
 
+it('Spec 18: produktionsblattFuerZiele() aggregiert mehrere Ziele VOR der Ansätze-Rundung', function () {
+    $blatt = $this->svc->produktionsblattFuerZiele($this->rootTeam, [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 20],
+        ['recipe_id' => $this->kuchen->id, 'portions' => 20],
+    ]);
+    $rez = collect($blatt['rezepte'])->keyBy('name');
+
+    // 2×20 Portionen = 40 ÷ 10 = 4 Ansätze Kuchen (linear, VOR Rundung zusammengeführt).
+    expect($rez['DES: Kuchen']['ansaetze'])->toBe(4.0);
+    // Sauce-Bedarf 150g×4=600g ÷ 1000g = 0,6 → GEMEINSAM gerundet auf 1 Ansatz (nicht 1+1=2).
+    expect($rez['Vanillesauce']['benoetigt_ansaetze'])->toBe(0.6)
+        ->and($rez['Vanillesauce']['ansaetze'])->toBe(1);
+});
+
 it('MCP: die drei Blätter-Tools sind registriert, read-only und liefern konsistente Zahlen', function () {
     $user = $this->makeUser($this->rootTeam);
     $this->actingAs($user);

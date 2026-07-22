@@ -109,6 +109,28 @@ class PlanungsblattService
         ];
     }
 
+    /**
+     * Spec 18 — wie produktionsblatt(), aber für MEHRERE Ziele EINES Produktionstags:
+     * rundet Sub-Rezept-Ansätze über ALLE Ziele hinweg GEMEINSAM (Diamond-/Rundungs-sicher,
+     * gleiches Prinzip wie einkaufsliste() für GP-Bedarf). Reuse-only: kein neuer Rechenpfad,
+     * nur topsAus()/explodiere() mit N statt 1 Ziel aufgerufen.
+     *
+     * @param  list<array{concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}>  $ziele
+     */
+    public function produktionsblattFuerZiele(Team $team, array $ziele): array
+    {
+        $this->recipeCache = [];
+        $tops = $this->topsAus($team, $ziele);
+        $ex = $this->explodiere($team, $tops['tops']);
+
+        return [
+            'ziele' => $tops['ziel_labels'],
+            'rezepte' => $ex['production'],
+            'gp_bedarf' => array_values($ex['gp']),
+            'warnungen' => array_merge($tops['warnungen'], $ex['warnings']),
+        ];
+    }
+
     // ── Ziele → Top-Ebene (Skalierung auf Batches) ────────────────────────
 
     /**
