@@ -1,121 +1,56 @@
-{{-- M5-07 / D-7: Pairing-Netz — Quell-Rezept zentral, Anker-Ring, Verwandte außen; Brücken-Typen GL-10 --}}
-<x-foodalchemist::modal name="pairing-netz" title="Pairing-Netz: {{ $zentrum['name'] ?? '' }}" size="max-w-5xl">
-    @if($zentrum === null)
+{{-- M5-07 / D-7: Pairing-Netz — Empfehler (2026-07-22 Redesign): »was passt zum Gericht,
+     nach Typ«. Zentrum = Gericht, Innenring = Kern-Anker, aussen Kandidaten in Typ-Sektoren
+     (erprobt/aroma/kontrast, per Chip filterbar), unten komplementäre Basisrezepte. Positionen
+     fertig aus PairingService::pairingNetz — D3 (resources/js/pairing-netz) zeichnet nur. --}}
+@php
+    $zentrumNode = collect($netz['nodes'])->firstWhere('kind', 'zentrum');
+    $counts = $netz['meta']['counts'] ?? ['erprobt' => 0, 'aroma' => 0, 'kontrast' => 0, 'basis' => 0];
+    $typDefault = $netz['meta']['typ_default'] ?? ['erprobt' => true, 'aroma' => false, 'kontrast' => false];
+@endphp
+<x-foodalchemist::modal name="pairing-netz" title="Pairing-Netz: {{ $zentrumNode['label'] ?? '' }}" size="max-w-7xl">
+    @if($zentrumNode === null)
         <p class="text-xs text-gray-500">Kein Rezept gewählt.</p>
     @else
-        <div x-data="{ alle: false, hov: null }" wire:key="pairing-netz-{{ $zentrum['id'] }}-{{ $vorschlaege }}">
-            {{-- Kopf: Brücken-Toggle · Vorschlags-Modus · Bedien-Hint --}}
-            <div class="flex flex-wrap items-center gap-x-5 gap-y-2 mb-2 text-[11px] text-gray-600" data-netz-kopf>
-                <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
-                    <input type="checkbox" x-model="alle" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-netz-bruecken-toggle />
-                    Alle Pairing-Brücken ({{ count($kanten) }})
-                </label>
-                <span class="text-gray-300">·</span>
-                <label class="inline-flex items-center gap-1.5">
-                    Pairing-Vorschläge pro Anker:
-                    <select wire:model.live="vorschlaege" class="rounded-md border-gray-300 text-[11px] py-0.5" data-netz-vorschlaege>
-                        <option value="0">aus (0)</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                    </select>
-                </label>
-                <span class="text-gray-500">Hover über Anker = dessen Brücken · Klick auf Rezept = öffnen</span>
+        <div
+            wire:ignore
+            wire:key="pairing-netz-{{ $recipeId }}"
+            x-data="pairingNetzGraph({
+                nodes: @js($netz['nodes']),
+                edges: @js($netz['edges']),
+                mode: 'modal',
+                canvasW: {{ (float) ($netz['meta']['canvas_w'] ?? 1000) }},
+                canvasH: {{ (float) ($netz['meta']['canvas_h'] ?? 760) }},
+                typDefault: @js($typDefault),
+                onNodeClick: (id) => $wire.zeigeRezept(id),
+            })"
+        >
+            {{-- Kopf: Typ-Filter-Chips (erprobt an, aroma/kontrast zuschaltbar) --}}
+            <div class="flex flex-wrap items-center gap-2 mb-2 text-[11px]" data-netz-kopf>
+                <span class="text-gray-500 mr-1">Was passt dazu:</span>
+                @foreach(['erprobt' => '#d6409f', 'aroma' => '#f59e0b', 'kontrast' => '#06b6d4'] as $typ => $farbe)
+                    <button type="button" @click="toggleTyp('{{ $typ }}')"
+                            :class="typAktiv['{{ $typ }}'] ? 'ring-2 ring-offset-1' : 'opacity-45'"
+                            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition"
+                            style="border-color: {{ $farbe }}; --tw-ring-color: {{ $farbe }};"
+                            data-netz-chip="{{ $typ }}">
+                        <span class="w-2 h-2 rounded-full" style="background: {{ $farbe }}"></span>
+                        {{ ucfirst($typ) }} ({{ $counts[$typ] ?? 0 }})
+                    </button>
+                @endforeach
+                <span class="text-gray-400 ml-2">Basisrezepte: {{ $counts['basis'] ?? 0 }} · Klick auf Rezept = öffnen · Scroll/Ziehen = Zoom/Pan</span>
             </div>
 
-            <svg viewBox="0 0 1000 760" class="w-full rounded-xl bg-black/[0.02]" data-netz-svg>
-                {{-- 1. Zentrum→Anker (Grundgerüst, dezent) --}}
-                @foreach($anker as $a)
-                    <line x1="{{ $cx }}" y1="{{ $cy }}" x2="{{ $a['x'] }}" y2="{{ $a['y'] }}"
-                          class="stroke-gray-400" stroke-width="0.7" opacity="0.10" />
-                @endforeach
+            <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet" class="w-full rounded-xl bg-black/[0.02]" style="height:76vh" data-fa-netz-mount></svg>
 
-                {{-- 2. Verwandte→gemeinsame Anker (grün = Basis, blau = VK) --}}
-                @foreach($verwandte as $v)
-                    @foreach($v['shared_anker_ids'] as $aid)
-                        @if($pos->has($aid))
-                            <line x1="{{ $v['x'] }}" y1="{{ $v['y'] }}" x2="{{ $pos[$aid]['x'] }}" y2="{{ $pos[$aid]['y'] }}"
-                                  stroke="{{ $v['vk'] ? '#3b82f6' : '#22c55e' }}" stroke-width="0.8" opacity="0.14" />
-                        @endif
-                    @endforeach
-                @endforeach
-
-                {{-- 3. Pairing-Brücken Anker↔Anker (GL-10-Typen) — sichtbar bei Toggle oder Anker-Hover --}}
-                @foreach($kanten as $k)
-                    @if($pos->has($k['a']) && $pos->has($k['b']))
-                        <line x1="{{ $pos[$k['a']]['x'] }}" y1="{{ $pos[$k['a']]['y'] }}"
-                              x2="{{ $pos[$k['b']]['x'] }}" y2="{{ $pos[$k['b']]['y'] }}"
-                              data-bruecke="{{ $k['type'] }}"
-                              :opacity="(alle || hov === {{ $k['a'] }} || hov === {{ $k['b'] }}) ? 0.85 : 0"
-                              @switch($k['type'])
-                                  @case('klassisch')
-                                  @case('erprobt') stroke="#d6409f" stroke-width="1.8" @break
-                                  @case('aroma') stroke="#d6409f" stroke-width="1.4" stroke-dasharray="2 4" @break
-                                  @case('modern') stroke="#7c3aed" stroke-width="1.4" stroke-dasharray="1 3" @break
-                                  @case('kontrast') stroke="#06b6d4" stroke-width="1.4" stroke-dasharray="2 4" @break
-                                  @default stroke="#9ca3af" stroke-width="1" stroke-dasharray="5 4"
-                              @endswitch
-                              style="transition: opacity .15s" />
-                    @endif
-                @endforeach
-
-                {{-- 4. Vorschläge (amber, gestrichelt an ihren Anker) --}}
-                @foreach($vorschlaege_liste as $s)
-                    @if($pos->has($s['anchor_id']))
-                        <line x1="{{ $pos[$s['anchor_id']]['x'] }}" y1="{{ $pos[$s['anchor_id']]['y'] }}" x2="{{ $s['x'] }}" y2="{{ $s['y'] }}"
-                              stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.6" />
-                        <circle cx="{{ $s['x'] }}" cy="{{ $s['y'] }}" r="6" fill="#fcd34d" stroke="#f59e0b" data-netz-vorschlag="{{ $s['slug'] }}">
-                            <title>{{ $s['display_de'] }} ({{ $s['type'] }}) — Vorschlag über {{ $pos[$s['anchor_id']]['slug'] }}</title>
-                        </circle>
-                        <text x="{{ $s['x'] }}" y="{{ $s['y'] + 16 }}" text-anchor="middle" font-size="9"
-                              style="paint-order: stroke; stroke: rgba(255,255,255,.8); stroke-width: 2px;" class="fill-amber-600">{{ $s['slug'] }}</text>
-                    @endif
-                @endforeach
-
-                {{-- 5. Anker-Ring (rosa; Kern-Anker ★ mit Akzent-Ring) --}}
-                @foreach($anker as $a)
-                    <g @mouseenter="hov = {{ $a['id'] }}" @mouseleave="hov = null" class="cursor-default" data-netz-anker="{{ $a['slug'] }}">
-                        <circle cx="{{ $a['x'] }}" cy="{{ $a['y'] }}" r="{{ $a['kern'] ? 11 : 9 }}"
-                                fill="#f9a8d4" stroke="{{ $a['kern'] ? '#be185d' : '#ec4899' }}" stroke-width="{{ $a['kern'] ? 2.5 : 1 }}"
-                                :opacity="(hov === null || hov === {{ $a['id'] }}) ? 1 : 0.45" style="transition: opacity .15s">
-                            <title>{{ $a['display_de'] }}{{ $a['kern'] ? ' (Kern-Anker)' : '' }}</title>
-                        </circle>
-                        <text x="{{ $a['x'] }}" y="{{ $a['y'] + ($a['kern'] ? 25 : 22) }}" text-anchor="middle" font-size="10"
-                              class="fill-gray-700 {{ $a['kern'] ? 'font-semibold' : '' }}" style="paint-order: stroke; stroke: rgba(255,255,255,.8); stroke-width: 2.5px;">{{ $a['kern'] ? '★ ' : '' }}{{ $a['slug'] }}</text>
-                    </g>
-                @endforeach
-
-                {{-- 6. Verwandte Rezepte (klickbar) --}}
-                @foreach($verwandte as $v)
-                    <g wire:click="zeigeRezept({{ $v['recipe_id'] }})" class="cursor-pointer" data-netz-rezept="{{ $v['recipe_id'] }}">
-                        <circle cx="{{ $v['x'] }}" cy="{{ $v['y'] }}" r="9"
-                                fill="{{ $v['vk'] ? '#93c5fd' : '#86efac' }}" stroke="{{ $v['vk'] ? '#2563eb' : '#16a34a' }}" stroke-width="1.5">
-                            <title>{{ $v['name'] }} — {{ $v['shared'] }} gemeinsame Anker (von {{ $v['eigene_gesamt'] }})</title>
-                        </circle>
-                        <text x="{{ $v['x'] }}" y="{{ $v['y'] + 21 }}" text-anchor="middle" font-size="9.5"
-                              style="paint-order: stroke; stroke: rgba(255,255,255,.8); stroke-width: 2.5px;" class="fill-gray-600">{{ mb_strimwidth($v['name'], 0, 18, '…') }}</text>
-                    </g>
-                @endforeach
-
-                {{-- 7. Quell-Rezept zentral (orange, groß) --}}
-                <circle cx="{{ $cx }}" cy="{{ $cy }}" r="32" fill="#fdba74" stroke="#ea580c" stroke-width="2.5" data-netz-zentrum>
-                    <title>{{ $zentrum['name'] }}</title>
-                </circle>
-                <text x="{{ $cx }}" y="{{ $cy + 50 }}" text-anchor="middle" font-size="12" font-weight="600"
-                      class="fill-gray-900" style="paint-order: stroke; stroke: rgba(255,255,255,.85); stroke-width: 3px;">{{ mb_strimwidth($zentrum['name'], 0, 34, '…') }}</text>
-            </svg>
-
-            {{-- Legende (Referenz: Knoten-Typen | Brücken-Typen) --}}
+            {{-- Legende --}}
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] text-gray-600" data-netz-legende>
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-orange-300 border border-orange-600"></span> Quell-Rezept</span>
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-300 border border-blue-600"></span> Gericht</span>
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-green-300 border border-green-600"></span> Basisrezept</span>
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-pink-300 border border-pink-600"></span> Pairing-Anker (★ Kern)</span>
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-300 border border-amber-600"></span> Vorschlag über Anker</span>
+                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-orange-300 border border-orange-600"></span> Gericht</span>
+                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-violet-200 border border-violet-600"></span> Kern-Anker (★)</span>
+                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-green-300 border border-green-600"></span> Basisrezept (komplementär)</span>
                 <span class="text-gray-300">|</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#d6409f" stroke-width="2"/></svg> erprobt</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#d6409f" stroke-width="1.5" stroke-dasharray="2 3"/></svg> aroma</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="2 3"/></svg> kontrast</span>
+                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#d6409f" stroke-width="2.2"/></svg> erprobt</span>
+                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 3"/></svg> aroma</span>
+                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#06b6d4" stroke-width="2" stroke-dasharray="1 3"/></svg> kontrast</span>
             </div>
         </div>
     @endif

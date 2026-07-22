@@ -714,110 +714,300 @@ class PairingService
         ];
     }
 
-    // ── M5-07: Pairing-Netz-Graph (D-7, 13_REFERENZ Nachlieferung 2) ───────
+    // ── M5-07: Pairing-Netz-Graph (D-7) ───────────────────────────────────
+    // 2026-07-22 Empfehler-Redesign: statt »Anker-Netzwerk des Rezepts« zeigt das
+    // Netz jetzt »was passt ZUM Gericht« — Kandidaten nach Typ (erprobt/aroma/
+    // kontrast) in Sektoren + komplementäre Basisrezepte. Dish-zentrisch,
+    // clientseitig nach Typ filterbar. Positionen serverseitig fix (keine Simulation).
+
+    private const CANVAS_W = 1200.0;
+
+    private const CANVAS_H = 980.0;
+
+    // Dish-zentrisches Empfehler-Layout (2026-07-22 Redesign): Gericht in der
+    // Mitte, eigene Kern-Anker auf einem kleinen Innenring, Pairing-Kandidaten
+    // in TYP-SEKTOREN aussen (erprobt oben, aroma oben-rechts, kontrast oben-links),
+    // komplementäre Basisrezepte unten. Beantwortet »was passt DAZU, nach Typ«.
+    // Konzentrische Kreise (Foodpairing-Look): Gericht in der Mitte, Kern-Anker
+    // auf einem kleinen Innenring, die ERPROBTEN Kandidaten als voller Kreis
+    // darum (wie in der Vorschau), und aroma + kontrast + Basisrezepte gemeinsam
+    // als äusserer Kreis drumherum (nach Typ in zusammenhängende Bögen sortiert).
+    private const R_ANKER = 150.0;      // Innenring Kern-Anker
+
+    private const R_ERPROBT = 320.0;    // mittlerer Vollkreis: erprobte Kandidaten (rosa)
+
+    private const R_OUTER = 470.0;      // Aussenkreis: aroma (gelb) + kontrast (blau) + Basisrezepte (grün)
+
+    private const KANDIDATEN_PRO_TYP = 14;   // Cap je Typ
+
+    private const BASIS_MAX = 10;
+
+    private const INNER_ANKER_MAX = 12;
+
+    // Legacy-Kantentypen auf die drei kanonischen normalisieren (§ Taxonomie 2026-07-12).
+    private const TYP_NORMALISIERT = [
+        'klassisch' => 'erprobt', 'modern' => 'erprobt', 'erprobt' => 'erprobt',
+        'verbund' => 'aroma', 'trinitas' => 'aroma', 'aroma' => 'aroma',
+        'kontrast' => 'kontrast',
+    ];
 
     /**
-     * Datenbasis fürs Pairing-Netz-Modal: Ring = Kern-Anker (★, zuerst) +
-     * Pairing-Anker des Rezepts (Cap 28 für Lesbarkeit), Brücken = beste Kante
-     * je ungeordnetem Anker-Paar im Ring (GL-10-Typen), Verwandte = Rezepte
-     * mit gemeinsamen Pairing-Ankern inkl. Andock-Anker-Ids, Vorschläge =
-     * je Ring-Anker die stärksten Nachbarn AUSSERHALB des Rings.
+     * Pairing-Empfehler fürs Netz (2026-07-22 Redesign): beantwortet »was passt
+     * zum Gericht, getrennt nach erprobt / aroma / kontrast«.
      *
-     * @return array{zentrum: ?array, anker: list<array>, kanten: list<array>, verwandte: list<array>, vorschlaege: list<array>}
+     * Zentrum = Gericht, Innenring = eigene Kern-Anker (Geschmacks-Identität),
+     * aussen die PAIRING-KANDIDATEN in Typ-Sektoren (erprobt oben, aroma oben-
+     * rechts, kontrast oben-links) — jeder Kandidat ist ein Aroma-Partner der
+     * Kern-Anker, gerankt nach dish_cover (wie viele Kern-Anker er bedient) +
+     * Gewicht. Unten die KOMPLEMENTÄREN Basisrezepte (Rezepte, die auf einem
+     * passenden Partner aufbauen). Typ-Filterung passiert clientseitig (Chips) —
+     * jeder Kandidat/jede Kante trägt ihren `typ`. Positionen serverseitig fix
+     * (reine Formel, keine Simulation).
+     *
+     * @param  int  $vorschlaegeProAnker  Legacy-Parameter, ignoriert (Kandidaten
+     *                                     sind jetzt immer Teil des Netzes).
+     * @return array{nodes: list<array>, edges: list<array>, meta: array}
      */
     public function pairingNetz(Team $team, int $recipeId, int $vorschlaegeProAnker = 0): array
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find($recipeId);
         if ($recipe === null) {
-            return ['zentrum' => null, 'anker' => [], 'kanten' => [], 'verwandte' => [], 'vorschlaege' => []];
+            return ['nodes' => [], 'edges' => [], 'meta' => ['recipe_id' => $recipeId]];
         }
 
-        $kern = $this->recipeAnkers($recipeId);
-        $pairing = DB::table('foodalchemist_recipe_pairings AS rp')
-            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
-            ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
-            ->whereNotIn('a.id', $kern->pluck('id'))
-            ->orderByRaw("CASE rp.type WHEN 'erprobt' THEN 1 WHEN 'verbund' THEN 2 WHEN 'trinitas' THEN 3 ELSE 4 END")
-            ->orderBy('a.slug')
-            ->get(['a.id', 'a.slug', 'a.display_de']);
+        $cx = self::CANVAS_W / 2;
+        $cy = self::CANVAS_H / 2;
 
-        $anker = $kern->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de, 'kern' => true])
-            ->concat($pairing->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de, 'kern' => false]))
-            ->unique('id')->take(28)->values();
-        $ringIds = $anker->pluck('id')->all();
+        // Innenring = Kern-Anker (Identität). Fallback: gespeicherte Pairing-Anker,
+        // falls das Rezept (noch) keine Kern-Anker gemappt hat.
+        $inner = $this->recipeAnkers($recipeId)
+            ->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de]);
+        if ($inner->isEmpty()) {
+            $inner = DB::table('foodalchemist_recipe_pairings AS rp')
+                ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
+                ->where('rp.recipe_id', $recipeId)->whereNull('rp.deleted_at')
+                ->distinct()->get(['a.id', 'a.slug', 'a.display_de'])
+                ->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de]);
+        }
+        $inner = $inner->unique('id')->take(self::INNER_ANKER_MAX)->values();
+        $innerIds = $inner->pluck('id')->all();
 
-        // Brücken: beste Kante je ungeordnetem Paar (a < b dedupe)
-        $kanten = [];
-        foreach ($this->edgeBest($ringIds) as $a => $nachbarn) {
-            foreach ($nachbarn as $b => [$w, $typ]) {
-                if ($a < $b) {
-                    $kanten[] = ['a' => (int) $a, 'b' => (int) $b, 'type' => $typ];
-                }
+        $edges = [];
+        $ankerNodes = [];
+        $nInner = max(1, $inner->count());
+        foreach ($inner as $i => $a) {
+            $w = 2 * M_PI * $i / $nInner - M_PI / 2;
+            $x = round($cx + self::R_ANKER * cos($w), 1);
+            $y = round($cy + self::R_ANKER * sin($w), 1);
+            $ankerNodes[] = [
+                'id' => 'a:'.$a['id'], 'kind' => 'anker', 'label' => $a['display_de'], 'slug' => $a['slug'],
+                'kern' => true, 'x' => $x, 'y' => $y,
+            ];
+            $edges[] = ['source' => 'z', 'target' => 'a:'.$a['id'], 'kind' => 'zentrum_anker', 'visible' => true];
+        }
+
+        // ── Kandidaten: Aroma-Partner der Kern-Anker (ausserhalb), typisiert ──
+        [$kandidaten, $candMeta] = $this->kandidatenFuerAnker($innerIds);
+        $jeTyp = fn ($typ) => array_slice(
+            (function () use ($kandidaten, $typ) {
+                $l = array_values(array_filter($kandidaten, fn ($c) => $c['typ'] === $typ));
+                usort($l, fn ($x, $y) => [$y['cover'], $y['weight'], $x['slug']] <=> [$x['cover'], $x['weight'], $y['slug']]);
+
+                return $l;
+            })(),
+            0, self::KANDIDATEN_PRO_TYP
+        );
+        $erprobt = $jeTyp('erprobt');
+        $aroma = $jeTyp('aroma');
+        $kontrast = $jeTyp('kontrast');
+
+        $basis = $this->komplementaerBasisrezepte($team, $recipeId, $candMeta);
+
+        $kandidatNodes = [];
+        $basisNodes = [];
+
+        // Mittlerer Vollkreis: erprobte Kandidaten gleichmässig rundum (wie Vorschau).
+        $mE = max(1, count($erprobt));
+        foreach ($erprobt as $idx => $c) {
+            [$x, $y] = $this->positionAufKreis($idx, $mE, self::R_ERPROBT, $cx, $cy);
+            $kandidatNodes[] = [
+                'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => 'erprobt', 'label' => $c['display_de'],
+                'slug' => $c['slug'], 'cover' => $c['cover'], 'x' => $x, 'y' => $y,
+            ];
+            foreach ($c['partner'] as $p) {
+                $edges[] = ['source' => 'k:'.$c['id'], 'target' => 'a:'.$p['anker_id'], 'kind' => 'kandidat',
+                    'typ' => $p['typ'], 'weight' => $p['weight'], 'computed' => $p['computed'], 'visible' => true];
             }
         }
 
-        $verwandte = $this->recipesSharingPairings($team, $recipeId)->map(function (array $v) use ($ringIds) {
-            $v['shared_anker_ids'] = DB::table('foodalchemist_recipe_pairings')
-                ->where('recipe_id', $v['recipe_id'])->whereNull('deleted_at')
-                ->whereIn('anchor_id', $ringIds)->distinct()->pluck('anchor_id')->map(fn ($i) => (int) $i)->all();
-            $v['vk'] = (bool) FoodAlchemistRecipe::withoutGlobalScopes()->whereKey($v['recipe_id'])->value('is_sales_recipe');
-
-            return $v;
-        })->values()->all();
-
-        // Vorschlags-Modus: je Ring-Anker die top-n Nachbarn AUSSERHALB des Rings,
-        // gerankt nach Gericht-Kohärenz statt alphabetisch. dish_cover = wie viele ANDERE
-        // Ring-Anker der Kandidat ebenfalls bedient. Ohne das surfacen die alphabetisch
-        // ersten Kanten (aal/ahornsirup/… bei apfel) — global gültig, aber gericht-fremd.
-        // Typ-agnostisch (erprobt|aroma|kontrast); bester Kohärenz-Proxy ohne Kanten-Score.
-        $vorschlaege = [];
-        if ($vorschlaegeProAnker > 0 && $ringIds !== []) {
-            // Q1: alle Kanten Ring-Anker → Außen (Kandidaten je Anker inkl. Typ).
-            // Eigener Variablenname — $kanten ist oben schon die Brücken-Liste fürs Return!
-            $vKanten = DB::table('foodalchemist_pairing_anchor_edges AS e')
-                ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
-                ->whereIn('e.anchor_a_id', $ringIds)
-                ->whereNotIn('e.anchor_b_id', $ringIds)
-                ->get(['e.anchor_a_id', 'e.anchor_b_id', 'a.slug', 'a.display_de', 'e.type']);
-
-            // Q2: dish_cover je Kandidat (dessen Kanten zurück in den Ring) — eine Query.
-            $candIds = $vKanten->pluck('anchor_b_id')->unique()->values()->all();
-            $cover = $candIds === [] ? collect() : DB::table('foodalchemist_pairing_anchor_edges')
-                ->whereIn('anchor_a_id', $candIds)->whereIn('anchor_b_id', $ringIds)
-                ->select('anchor_a_id', DB::raw('COUNT(DISTINCT anchor_b_id) AS c'))
-                ->groupBy('anchor_a_id')->pluck('c', 'anchor_a_id');
-
-            // Kandidaten je Anker dedupen (beste Kante = niedrigste Typ-Prio gewinnt).
-            $typPrio = ['klassisch' => 1, 'erprobt' => 1, 'verbund' => 2, 'modern' => 2, 'aroma' => 3, 'trinitas' => 3, 'kontrast' => 4];
-            $proAnker = [];
-            foreach ($vKanten as $k) {
-                $aId = (int) $k->anchor_a_id;
-                $cId = (int) $k->anchor_b_id;
-                $prio = $typPrio[$k->type] ?? 9;
-                if (! isset($proAnker[$aId][$cId]) || $prio < $proAnker[$aId][$cId]['prio']) {
-                    $proAnker[$aId][$cId] = ['id' => $cId, 'slug' => $k->slug, 'display_de' => $k->display_de,
-                        'type' => $k->type, 'prio' => $prio, 'cover' => (int) ($cover[$cId] ?? 0)];
-                }
-            }
-
-            // je Anker nach [dish_cover ↓, Typ-Prio ↑, slug ↑] ranken, top-n.
-            foreach ($anker as $a) {
-                $kandidaten = array_values($proAnker[$a['id']] ?? []);
-                usort($kandidaten, fn ($x, $y) => [$y['cover'], $x['prio'], $x['slug']] <=> [$x['cover'], $y['prio'], $y['slug']]);
-                foreach (array_slice($kandidaten, 0, $vorschlaegeProAnker) as $n) {
-                    $vorschlaege[] = ['anchor_id' => $a['id'], 'id' => $n['id'],
-                        'slug' => $n['slug'], 'display_de' => $n['display_de'], 'type' => $n['type']];
+        // Äusserer Vollkreis: aroma + kontrast + Basisrezepte, in zusammenhängenden
+        // Typ-Bögen (gelb, blau, grün) rund um den erprobt-Kreis.
+        $outerTotal = max(1, count($aroma) + count($kontrast) + count($basis));
+        $oi = 0;
+        foreach ([['aroma', $aroma], ['kontrast', $kontrast]] as [$typ, $liste]) {
+            foreach ($liste as $c) {
+                [$x, $y] = $this->positionAufKreis($oi++, $outerTotal, self::R_OUTER, $cx, $cy);
+                $kandidatNodes[] = [
+                    'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => $typ, 'label' => $c['display_de'],
+                    'slug' => $c['slug'], 'cover' => $c['cover'], 'x' => $x, 'y' => $y,
+                ];
+                foreach ($c['partner'] as $p) {
+                    $edges[] = ['source' => 'k:'.$c['id'], 'target' => 'a:'.$p['anker_id'], 'kind' => 'kandidat',
+                        'typ' => $p['typ'], 'weight' => $p['weight'], 'computed' => $p['computed'], 'visible' => true];
                 }
             }
         }
+        foreach ($basis as $b) {
+            [$x, $y] = $this->positionAufKreis($oi++, $outerTotal, self::R_OUTER, $cx, $cy);
+            $basisNodes[] = [
+                'id' => 'b:'.$b['recipe_id'], 'kind' => 'basisrezept', 'typ' => $b['typ'], 'label' => $b['name'],
+                'recipe_id' => $b['recipe_id'], 'via' => $b['via_slug'], 'x' => $x, 'y' => $y,
+            ];
+            $edges[] = ['source' => 'b:'.$b['recipe_id'], 'target' => 'a:'.$b['anker_id'], 'kind' => 'basis',
+                'typ' => $b['typ'], 'visible' => true];
+        }
+
+        $nodes = array_merge(
+            [['id' => 'z', 'kind' => 'zentrum', 'label' => $recipe->name, 'x' => $cx, 'y' => $cy]],
+            $ankerNodes, $kandidatNodes, $basisNodes
+        );
 
         return [
-            'zentrum' => ['id' => $recipe->id, 'name' => $recipe->name],
-            'anker' => $anker->all(),
-            'kanten' => $kanten,
-            'verwandte' => $verwandte,
-            'vorschlaege' => $vorschlaege,
+            'nodes' => $nodes,
+            'edges' => $edges,
+            'meta' => [
+                'recipe_id' => $recipeId,
+                'canvas_w' => self::CANVAS_W,
+                'canvas_h' => self::CANVAS_H,
+                // Typ-Filter-Defaults: erprobt an, aroma/kontrast zuschaltbar.
+                'typ_default' => ['erprobt' => true, 'aroma' => false, 'kontrast' => false],
+                'counts' => [
+                    'erprobt' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'erprobt')),
+                    'aroma' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'aroma')),
+                    'kontrast' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'kontrast')),
+                    'basis' => count($basisNodes),
+                ],
+            ],
         ];
+    }
+
+    /**
+     * Pairing-Kandidaten für die Kern-Anker: alle Aroma-Partner AUSSERHALB des
+     * Ankersets, aggregiert je Kandidat (dish_cover = Anzahl bedienter Kern-Anker,
+     * primärer Typ = stärkste Kante). Legacy-Typen werden kanonisiert.
+     *
+     * @return array{0: list<array>, 1: array<int,array>}  [kandidaten, candMeta je candId]
+     */
+    private function kandidatenFuerAnker(array $innerIds): array
+    {
+        if ($innerIds === []) {
+            return [[], []];
+        }
+
+        $rows = DB::table('foodalchemist_pairing_anchor_edges AS e')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
+            ->whereIn('e.anchor_a_id', $innerIds)
+            ->whereNotIn('e.anchor_b_id', $innerIds)
+            ->get(['e.anchor_a_id', 'e.anchor_b_id', 'e.type', 'e.weight', 'e.source_slug', 'a.slug', 'a.display_de']);
+
+        $agg = [];
+        foreach ($rows as $r) {
+            $typ = self::TYP_NORMALISIERT[$r->type] ?? null;
+            if ($typ === null) {
+                continue;
+            }
+            $cid = (int) $r->anchor_b_id;
+            $w = $r->weight !== null ? (float) $r->weight : (self::GEWICHTE[$typ] ?? 0.5);
+            if (! isset($agg[$cid])) {
+                $agg[$cid] = ['id' => $cid, 'slug' => $r->slug, 'display_de' => $r->display_de,
+                    'partner' => [], 'ankerSet' => [], 'best' => ['typ' => $typ, 'weight' => -1.0]];
+            }
+            $agg[$cid]['partner'][] = ['anker_id' => (int) $r->anchor_a_id, 'typ' => $typ, 'weight' => $w,
+                'computed' => $r->source_slug === 'computed'];
+            $agg[$cid]['ankerSet'][(int) $r->anchor_a_id] = true;
+            if ($w > $agg[$cid]['best']['weight']) {
+                $agg[$cid]['best'] = ['typ' => $typ, 'weight' => $w];
+            }
+        }
+
+        $kandidaten = [];
+        $candMeta = [];
+        foreach ($agg as $cid => $c) {
+            $cover = count($c['ankerSet']);
+            $primaerAnker = $c['partner'][0]['anker_id'];
+            foreach ($c['partner'] as $p) {
+                if ($p['typ'] === $c['best']['typ']) {
+                    $primaerAnker = $p['anker_id'];
+                    break;
+                }
+            }
+            $kandidaten[] = [
+                'id' => $cid, 'slug' => $c['slug'], 'display_de' => $c['display_de'],
+                'typ' => $c['best']['typ'], 'weight' => $c['best']['weight'], 'cover' => $cover, 'partner' => $c['partner'],
+            ];
+            $candMeta[$cid] = ['typ' => $c['best']['typ'], 'anker_id' => $primaerAnker, 'slug' => $c['slug']];
+        }
+
+        return [$kandidaten, $candMeta];
+    }
+
+    /**
+     * Komplementäre Basisrezepte: Basisrezepte (is_sales_recipe=0), deren Kern-
+     * Anker ein Pairing-Partner der Gericht-Anker ist — also Rezepte, die auf
+     * einer passenden Zutat AUFBAUEN (ergänzend, nicht bloss »ähnlich«). Typ +
+     * Andock-Anker aus der stärksten Partner-Beziehung.
+     *
+     * @param  array<int,array>  $candMeta  candId → [typ, anker_id, slug]
+     * @return list<array>
+     */
+    private function komplementaerBasisrezepte(Team $team, int $recipeId, array $candMeta): array
+    {
+        if ($candMeta === []) {
+            return [];
+        }
+        $candIds = array_keys($candMeta);
+
+        $rows = DB::table('foodalchemist_recipe_anchor_mappings AS m')
+            ->join('foodalchemist_recipes AS r', 'r.id', '=', 'm.recipe_id')
+            ->whereIn('m.anchor_id', $candIds)
+            ->where('m.recipe_id', '!=', $recipeId)
+            ->where('r.is_sales_recipe', 0)
+            ->whereNull('m.deleted_at')
+            ->get(['m.recipe_id', 'm.anchor_id', 'r.name']);
+
+        // Nur team-sichtbare Rezepte (Tenancy).
+        $sichtbar = FoodAlchemistRecipe::visibleToTeam($team)
+            ->whereIn('id', $rows->pluck('recipe_id')->unique()->all())->pluck('id')->flip();
+
+        $perRecipe = [];
+        foreach ($rows as $r) {
+            $rid = (int) $r->recipe_id;
+            if (! $sichtbar->has($rid)) {
+                continue;
+            }
+            $meta = $candMeta[(int) $r->anchor_id] ?? null;
+            if ($meta === null) {
+                continue;
+            }
+            if (! isset($perRecipe[$rid])) {
+                $perRecipe[$rid] = ['recipe_id' => $rid, 'name' => $r->name, 'treffer' => 0,
+                    'typ' => $meta['typ'], 'anker_id' => $meta['anker_id'], 'via_slug' => $meta['slug']];
+            }
+            $perRecipe[$rid]['treffer']++;
+        }
+
+        $out = array_values($perRecipe);
+        usort($out, fn ($x, $y) => [$y['treffer'], $x['name']] <=> [$x['treffer'], $y['name']]);
+
+        return array_slice($out, 0, self::BASIS_MAX);
+    }
+
+    /** Gleichmässige Position auf einem Vollkreis: Slot idx von n, Start oben (270°/-90°). */
+    private function positionAufKreis(int $idx, int $n, float $radius, float $cx, float $cy): array
+    {
+        $rad = 2 * M_PI * $idx / max(1, $n) - M_PI / 2;
+
+        return [round($cx + $radius * cos($rad), 1), round($cy + $radius * sin($rad), 1)];
     }
 
     // ── Geschmacks-Vektoren & Zubereitungs-Deltas (read-only, 2026-07-11) ─

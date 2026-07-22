@@ -1,0 +1,16 @@
+{
+  "name": "platform-foodalchemist",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "d3-shape": "^3.2",
+    "d3-selection": "^3.0",
+    "d3-zoom": "^3.0",
+    "d3-scale": "^4.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25"
+  }
+}

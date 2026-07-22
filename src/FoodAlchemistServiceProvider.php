@@ -181,6 +181,24 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         }
 
         /**
+         * SCHRITT 2b: Öffentliche Routes (kein Auth) — Pairing-Netz-Frontend-Bundle
+         *
+         * Analog platform-core's _platform/assets/{file}: statische JS-Bundles
+         * ohne Team-/Auth-Kontext, daher NICHT über ModuleRouter::group (das
+         * hängt 'auth' + Tenancy-Middleware an), sondern direkt registriert.
+         */
+        \Illuminate\Support\Facades\Route::domain(parse_url(config('app.url'), PHP_URL_HOST))
+            ->middleware(['web'])
+            ->group(__DIR__.'/../routes/public.php');
+
+        // Pairing-Netz-Bundle-Hash fürs Cache-Busting (analog CoreServiceProvider Tiptap/Workshop/Echo).
+        $faManifestPath = __DIR__.'/../resources/dist/manifest.json';
+        if (file_exists($faManifestPath)) {
+            $faManifest = json_decode(file_get_contents($faManifestPath), true) ?? [];
+            config(['platform.fa_pairing_netz_hash' => $faManifest['foodalchemist-pairing-netz.iife.js'] ?? '0']);
+        }
+
+        /**
          * SCHRITT 3: Migrationen laden
          * 
          * Lädt alle Migrationen aus database/migrations/

@@ -8,6 +8,18 @@
 
 ---
 
+## ⭐ Update 2026-07-22 (Session: Pairing-Netz-Redesign — Empfehler + D3-Rendering)
+
+**Anlass (Dominique):** das Pairing-Netz war unlesbar (statisches PHP-Kreis-Layout, alle Kanten ohne Filter, überlappende Labels) und beantwortete die falsche Frage („Anker-Netzwerk des Rezepts" statt „was passt ZUM Gericht"). Zweistufiger Umbau, an echten Daten (Sandbox-MySQL) browser-verifiziert:
+
+- **Rendering: statisches SVG → D3 im Client.** Neues esbuild-IIFE-Bundle `resources/dist/foodalchemist-pairing-netz.iife.js` (`resources/js/pairing-netz/{index,graph}.js`, Muster von platforms-core: d3-shape/-selection/-zoom/-scale, Alpine-Factory, `wire:ignore`). Ausliefer-Route `_platform/fa-assets/{file}` (`routes/public.php`) + Hash-Config im `FoodAlchemistServiceProvider`. **Keine Force-Simulation** (Force-Directed war Dominique zu chaotisch) — Positionen serverseitig deterministisch, D3 zeichnet nur + zoom/pan.
+- **Modell: dish-zentrischer Empfehler.** `PairingService::pairingNetz()` liefert neuen `nodes/edges/meta`-Vertrag. **Konzentrische Kreise:** Gericht (Mitte) → Kern-Anker violett (R150) → **erprobte Kandidaten als voller Kreis** (R320, wie Vorschau) → Außenkreis (R470) mit **aroma (gelb) + kontrast (blau) + komplementäre Basisrezepte (grün)**. Kandidaten sind Aroma-Partner der Kern-Anker, typisiert erprobt/aroma/kontrast, gerankt nach dish_cover. Legacy-Typen (klassisch/modern→erprobt, verbund/trinitas→aroma) normalisiert.
+- **Komplementäre Basisrezepte:** neu über `recipe_anchor_mappings` (89 Rezepte Abdeckung statt 9 bei `recipe_pairings`) — Basisrezepte, deren Kern-Anker ein Pairing-Partner des Gerichts ist (bauen auf passender Zutat auf, is_sales_recipe=0, team-scoped).
+- **Typ-Filter-Chips** (erprobt an, aroma/kontrast zuschaltbar), radiale Außen-Labels, größere Schrift, Modal auf `max-w-7xl`/76vh vergrößert. Farbpalette getrennt: orange=Gericht, violett=Anker, rosa=erprobt, gelb=aroma, cyan=kontrast, grün=Basisrezept.
+- **Verifikation:** `PairingNetzTest` 4/4 (77 Assertions, inkl. Typisierung/dish_cover/komplementär-Basis/VK-Ausschluss/Canvas-Bounds), ganze Pairing-Suite 28/28. Live in der App browser-geprüft (Chip-Toggle, Radien anker150/erprobt320/außen470, Farben).
+- **⚠️ Cross-Modul offen (Martin/Deploy):** das Bundle wird über eine `<script>`-Zeile in `platforms-core/resources/views/layouts/app.blade.php` geladen — Core ist tabu (Goldene Regel 2), daher NICHT in diesem Modul gepusht. Ohne diese Zeile lädt das Bundle auf demo/Host nicht. → als Abstimmung an Martin.
+- **Ersetzt** das „Vorschlags-Ranking + Rename"-Denkmodell vom 2026-07-21 (unten).
+
 ## ⭐ Update 2026-07-22 (Session: Produktionsaufträge — Spec 18, S0–S3 KOMPLETT)
 
 **Neuer N-Track, Geschwister von Spec 17: Produktionsaufträge mit Datum, Status und vollwertigem Modul-Interface** (Dominique-Wunsch). Zweite bewusste Ausnahme vom 2026-07-04-Non-Goal „Produktion… nicht bauen" — diesmal für die Küchen-Ausführungsebene statt den Einkauf, exakt nach dem Präzedenz-Muster von Spec 17 (FA-Bereich, kein zweites Composer-Modul). Spec-first: `docs/PLANUNG/18_Produktionsauftraege.md` (P1–P6).
