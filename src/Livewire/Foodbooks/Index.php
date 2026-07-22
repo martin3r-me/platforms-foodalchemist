@@ -168,6 +168,92 @@ class Index extends Component
         $this->frameLaden();
     }
 
+    // ── Phase 5: Kickoff-Wizard „Neues Foodbook für Kunde X" (Brief → KI-Gerüst-Vorschlag) ──
+    // Minimale Rückfrage (Anlass/Gäste/Saison/Service-Form/Budget) + Auto-Kontext (Segment +
+    // DNA-Kaskade Team→Kunde→Foodbook) → LLM schlägt das Gerüst vor. Doktrin: Vorschlag, nicht
+    // Zwang — das Gerüst landet im Planung-Tab, der User prüft und ruft dann „Struktur anwenden".
+    // Der LLM-Call läuft über den Core-Contract (AiGatewayService); ohne gebundenen Provider
+    // wirft er typisiert und wird hier als UI-Fehler abgefangen (kein 500).
+    public array $kickoff = ['anlass' => '', 'personen' => null, 'saison' => '', 'service_form' => '', 'budget' => null];
+
+    public ?array $kickoffErgebnis = null;
+
+    public ?string $kickoffFehler = null;
+
+    public function frameAusBriefVorschlagen(): void
+    {
+        $this->kickoffFehler = null;
+        $this->kickoffErgebnis = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        $team = $this->team();
+        $fb = app(FoodbookService::class)->detail($team, $this->selectedId);
+        if ($fb === null) {
+            return;
+        }
+
+        $brief = $this->kickoffBriefText($fb);
+        if (trim($brief) === '') {
+            $this->kickoffFehler = 'Bitte mindestens Anlass oder Gäste-Zahl angeben.';
+            return;
+        }
+
+        // Auto-Kontext: Segment (Bespielung) + Marken-Kontext aus der DNA-Kaskade.
+        $seg = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->segment($team);
+        $kaskade = app(\Platform\FoodAlchemist\Services\CanvasService::class)
+            ->cascadeKontext($team, null, $fb->id, null, $fb->crm_company_id);
+
+        try {
+            $res = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)->geruestAusBriefFuerOwner(
+                $team,
+                'foodbook',
+                $fb->id,
+                $brief,
+                [
+                    'segment' => $seg,
+                    'marken_kontext' => $kaskade['marken_kontext'] ?? null,
+                ],
+            );
+            // Frame-Objekt NICHT in den Livewire-State (nicht serialisierbar) — nur die Kennzahlen.
+            $this->kickoffErgebnis = ['slots' => $res['slots'], 'confidence' => $res['confidence'], 'name' => $res['name']];
+            $this->frameLaden();   // frisches Gerüst → Planung-Tab zeigt die vorgeschlagenen Slots
+        } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException $e) {
+            $this->kickoffFehler = 'KI ist für dieses Team deaktiviert (Einstellungen → Food DNA / KI).';
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException $e) {
+            $this->kickoffFehler = 'Kein KI-Provider gebunden — der Kickoff-Vorschlag braucht ein aktives Modell (demo). Gerüst manuell im Planung-Tab anlegen.';
+        } catch (\RuntimeException $e) {
+            $this->kickoffFehler = $e->getMessage();
+        }
+    }
+
+    /** Baut den minimalen Freitext-Brief aus den Kickoff-Feldern + Foodbook-Kontext. */
+    private function kickoffBriefText($fb): string
+    {
+        $teile = [];
+        if (trim((string) $this->kickoff['anlass']) !== '') {
+            $teile[] = 'Anlass: ' . trim((string) $this->kickoff['anlass']);
+        }
+        $pers = $this->kickoff['personen'] ?: $fb->personen;
+        if ($pers) {
+            $teile[] = 'Gäste: ' . (int) $pers . ' Personen';
+        }
+        if (trim((string) $this->kickoff['saison']) !== '') {
+            $teile[] = 'Saison: ' . trim((string) $this->kickoff['saison']);
+        }
+        if (trim((string) $this->kickoff['service_form']) !== '') {
+            $teile[] = 'Service-Form: ' . trim((string) $this->kickoff['service_form']);
+        }
+        if ($this->kickoff['budget'] !== null && $this->kickoff['budget'] !== '') {
+            $teile[] = 'Budget: ' . (float) $this->kickoff['budget'] . ' € pro Person';
+        }
+        if (trim((string) ($fb->description ?? '')) !== '') {
+            $teile[] = 'Kontext: ' . trim((string) $fb->description);
+        }
+
+        return implode("\n", $teile);
+    }
+
     #[Url(as: 'q')]
     public string $search = '';
 

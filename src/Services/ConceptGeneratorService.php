@@ -125,6 +125,63 @@ class ConceptGeneratorService
     }
 
     /**
+     * Kickoff-Wizard: Freitext-Brief → KI baut NUR das Planungs-Gerüst (Slots+Rules)
+     * für einen beliebigen Owner (foodbook|concept) — KEINE Konzept-Anlage, KEIN
+     * Assembler. Der Foodbook-Pfad stoppt hier bewusst: der User prüft das Gerüst,
+     * ruft dann „Struktur anwenden" (Slots→Kapitel) und lässt je Slot Vorschläge
+     * generieren. Owner-agnostisch — der Frame ist owner-neutral (owner_type-Tupel).
+     *
+     * $extraKontext reicht Segment + Marken-Kontext (DNA-Kaskade) an den Prompt durch,
+     * damit das Gerüst zur Bespielung passt (Fine Dining vs. Volumen).
+     *
+     * Reine KI-Frame-Erzeugung — wirft KiNichtVerfuegbar/KiDeaktiviert (typisiert),
+     * die Aufrufer (Livewire/Tool) fangen als UI-Fehler ab (kein 500).
+     *
+     * @param array<string,mixed> $extraKontext segment · marken_kontext · anlaesse …
+     * @return array{frame: FoodAlchemistPlanningFrame, confidence: float|null, slots: int, name: ?string}
+     */
+    public function geruestAusBriefFuerOwner(Team $team, string $ownerType, int $ownerId, string $brief, array $extraKontext = [], string $via = 'ui'): array
+    {
+        $brief = trim($brief);
+        if ($brief === '') {
+            throw new RuntimeException('Leerer Brief — mindestens Anlass/Gäste nötig.');
+        }
+
+        $kontext = array_merge([
+            'brief' => $brief,
+            'diaet_vokabular' => \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameRule::DIET_FORMS,
+            'allergen_keys' => FoodAlchemistGp::ALLERGEN_FIELDS,
+        ], array_filter($extraKontext, fn ($v) => $v !== null && $v !== '' && $v !== []));
+
+        $proposal = app(AiGatewayService::class)->propose('concept.brief_geruest', $kontext);
+        $werte = $proposal->werte ?? [];
+        $slots = is_array($werte['slots'] ?? null) ? $werte['slots'] : [];
+        if ($slots === []) {
+            throw new RuntimeException('KI lieferte kein verwertbares Gerüst (keine Slots) — Brief präzisieren oder Gerüst manuell anlegen.');
+        }
+
+        $frame = $this->frames->frameFor($team, $ownerType, $ownerId, 'ai_brief_' . $via);
+        $this->frames->setHead($team, $frame, [
+            'target_price_pp' => is_numeric($werte['target_price_pp'] ?? null) ? (float) $werte['target_price_pp'] : null,
+            'price_min_pp' => is_numeric($werte['price_min_pp'] ?? null) ? (float) $werte['price_min_pp'] : null,
+            'price_max_pp' => is_numeric($werte['price_max_pp'] ?? null) ? (float) $werte['price_max_pp'] : null,
+            'note' => 'Aus Brief generiert (KI-Vorschlag, Konfidenz ' . number_format((float) ($proposal->confidence ?? 0), 2) . ') — Rahmen prüfen, dann „Struktur anwenden".',
+        ]);
+        [$sichereSlots, $sichereRules] = $this->sanitizeGeruestWerte($slots, is_array($werte['rules'] ?? null) ? $werte['rules'] : []);
+        if ($sichereSlots === []) {
+            throw new RuntimeException('KI-Gerüst enthielt keine gültigen Slots — Brief präzisieren.');
+        }
+        $this->frames->replaceStructure($team, $frame, $sichereSlots, $sichereRules);
+
+        return [
+            'frame' => $frame->refresh(),
+            'confidence' => $proposal->confidence ?? null,
+            'slots' => count($sichereSlots),
+            'name' => is_string($werte['name'] ?? null) && trim($werte['name']) !== '' ? trim($werte['name']) : null,
+        ];
+    }
+
+    /**
      * 06·H3: opt-in Favoriten-Block für den Brief→Gerüst-KI-Schritt.
      * $convenienceOnly (H4b): nur Convenience-getaggte Favoriten.
      * null, wenn nichts (Passendes) gepinnt ist. Der Gerüst-Assembler selbst ist

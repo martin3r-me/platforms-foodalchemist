@@ -132,6 +132,38 @@
                     @endif
                 </div>
 
+                {{-- Phase 5: Kickoff-Wizard — minimale Rückfrage → KI schlägt das Planungs-Gerüst vor.
+                     Doktrin: Vorschlag, nicht Zwang. LLM läuft über den Core-Contract; kein Provider → UI-Fehler. --}}
+                <div class="space-y-2 pt-2 border-t border-black/5" data-kickoff x-data="{ auf: false }">
+                    <div class="flex items-center justify-between">
+                        <span class="{{ $label }} !mb-0">✨ Kickoff — Gerüst-Vorschlag aus Brief</span>
+                        <button type="button" @click="auf = !auf" class="{{ $btnGhostXs }}" x-text="auf ? 'Zuklappen' : 'Öffnen'"></button>
+                    </div>
+                    <div x-show="auf" x-cloak class="space-y-2">
+                        <p class="text-[11px] text-gray-500">Kurz-Brief + Segment/DNA → die KI schlägt Kapitel-Slots vor. Danach im Planung-Tab prüfen und „Struktur anwenden".</p>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            <div><label class="{{ $label }}">Anlass</label><input type="text" wire:model="kickoff.anlass" class="{{ $input }}" placeholder="z. B. Sommer-Gala" /></div>
+                            <div><label class="{{ $label }}">Gäste</label><input type="number" min="1" wire:model="kickoff.personen" class="{{ $input }}" placeholder="{{ $fb->personen ?? '—' }}" /></div>
+                            <div><label class="{{ $label }}">Saison</label><input type="text" wire:model="kickoff.saison" class="{{ $input }}" placeholder="z. B. Spätsommer" /></div>
+                            <div><label class="{{ $label }}">Service-Form</label><input type="text" wire:model="kickoff.service_form" class="{{ $input }}" placeholder="z. B. Buffet / Menü" /></div>
+                            <div><label class="{{ $label }}">Budget € p. P.</label><input type="number" step="0.01" min="0" wire:model="kickoff.budget" class="{{ $input }}" /></div>
+                        </div>
+                        <button type="button" wire:click="frameAusBriefVorschlagen" class="{{ $btnPrimary }} w-full justify-center" wire:loading.attr="disabled" wire:target="frameAusBriefVorschlagen" data-kickoff-go>
+                            <span wire:loading.remove wire:target="frameAusBriefVorschlagen">✨ Gerüst vorschlagen</span>
+                            <span wire:loading wire:target="frameAusBriefVorschlagen">KI baut das Gerüst …</span>
+                        </button>
+                        @if($kickoffFehler)
+                            <p class="text-[11px] text-red-600" data-kickoff-fehler>{{ $kickoffFehler }}</p>
+                        @endif
+                        @if($kickoffErgebnis)
+                            <p class="text-[11px] text-emerald-600" data-kickoff-ok>
+                                Gerüst-Vorschlag steht: {{ $kickoffErgebnis['slots'] }} Slots @if($kickoffErgebnis['confidence'] !== null)· Konfidenz {{ number_format((float) $kickoffErgebnis['confidence'], 2) }} @endif.
+                                Im <button type="button" @click="tab = 'planung'" class="underline font-medium">Planung-Tab</button> prüfen, dann „Struktur anwenden".
+                            </p>
+                        @endif
+                    </div>
+                </div>
+
                 {{-- #369: CRM-Kunde-Link (MVP, nur verlinken) — ergänzt das Freitext-Feld „Kunde" --}}
                 <div class="space-y-2 pt-1 border-t border-black/5">
                     <span class="{{ $label }}">Kunde (CRM)</span>
