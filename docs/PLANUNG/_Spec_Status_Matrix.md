@@ -1,7 +1,7 @@
-# Spec-Status-Matrix (01–17)
+# Spec-Status-Matrix (01–18)
 
 > Schnell-Sicht: Status + Blocker je Kern-Spec. Detail je Spec in der jeweiligen Datei; Reihenfolge/Phasen in [00_Orchestrierung_Naechste_Schritte.md](00_Orchestrierung_Naechste_Schritte.md).
-> Stand **2026-07-20**. Legende: 🟢 bau-reif · 🟡 entscheidungs-reif (benannter Blocker) · ⚪ Dossier · ✅ fertig.
+> Stand **2026-07-22**. Legende: 🟢 bau-reif · 🟡 entscheidungs-reif (benannter Blocker) · ⚪ Dossier · ✅ fertig.
 
 | # | Spec | Status | Blocker / Offen |
 |---|---|---|---|
@@ -22,13 +22,14 @@
 | **15** | Semantische Suche über Lieferantenartikel (Supplier-Item-Pool) | ⚪ Dossier — **entkoppelt/zurückgestellt via 16** | RAG-Nachzug (Vektor-Pool + Observer + Retrieval); vom WG-Lead-Use-Case (16) NICHT gebraucht → wartet auf echte Freitext-Katalog-Discovery + 50k-Store-/Qdrant-Frage |
 | **16** | WG-Lead-gescopter LA-Kandidaten-Finder + On-demand-Klassifikation | ✅ **GEBAUT+GETESTET 2026-07-20** (S1–S5 + Nachzügler, 16+ Pest) | Finder deterministisch live (schärft Spec-07-`mintFromLa`); WG-Scope + Terminologie + **Compound-Anti-Marker (S3 geschlossen)** + Fallback; **WG-Hint im KI-Schema scharf (E1)**. Rest nur noch provider-gated (demo): LLM-`commodity_group`-Emission + S4-ClassifyLaJob-Inhalt |
 | **17** | Bestellwesen — mini-WaWi Bestellassistent (N-Track) | ✅ **S0–S3 KOMPLETT & ★ LIVE auf demo** 2026-07-21 (S0 `0d78bd2` · S1 `3daf87d` · S2 `bbc73e3`+`49f6c16` · S3 `ef9a5fc`; FA `dc31c6d`, Migrationen gefahren; E1–E11) · nur S4=Bestand (Nicht-Ziel) offen | Der von [R9 §7](14_Lieferanten_Management_R9.md) ausgeklammerte N-Track, **OHNE Bestand**. Gebinde-Bestellzeile + Bestellschiene je Lieferant (`orders`/`order_lines`, Snapshot+source_contributions, MOQ-Ampel, Status-Guard) + „Bedarf übernehmen" + Bestellungen-Seite + PDF/CSV/mailto-Export; **4 MCP-Tools** (GET/ADD_NEED/SET_STATUS/UPDATE_LINE); `OrderServiceTest` 14/14. Offen: demo-Deploy (Martin). Dev #549 |
+| **18** | Produktionsaufträge (Ableger von Spec 17) | ✅ **S0–S3 KOMPLETT** 2026-07-22 (`eac1cd5`·`99e2393`·`228a398`·`c2c25c7`) | Zweite bewusste Ausnahme vom 2026-07-04-Non-Goal (Präzedenz Spec 17), diesmal als vollwertiges Modul-Interface (Browser/DetailPanel/Editor wie Concepter/Gerichte/Basisrezepte statt Tab). `production_orders`/`production_order_lines` je (team, production_date), aggregiert mehrere Ziele/Tag (Nicht-Additivitäts-Rundung), `PlanungsblattService::produktionsblattFuerZiele()` als einzige Erweiterung des Rechenkerns. Absorbiert die alten Planungs-Blätter (`/blaetter` → Redirect). „An Bestellung übergeben" = Einbahn-Handover an Spec 17. **4 MCP-Tools** (GET/ADD_TARGET/SET_STATUS/UPDATE_LINE); `ProductionOrderServiceTest` 14/14 (2 harness-bedingt geskippt). Offen: demo-Deploy |
 
 ## Verdichtet
 
-- **Sofort baubar, null Blocker:** 12·S2 (R2.4-Solver) · 13·S1 (Kanal-B) · 03·L4/L5. **(16 = gebaut 2026-07-20; 17·S0–S3 = KOMPLETT 2026-07-21.)**
+- **Sofort baubar, null Blocker:** 12·S2 (R2.4-Solver) · 13·S1 (Kanal-B) · 03·L4/L5. **(16 = gebaut 2026-07-20; 17·S0–S3 = KOMPLETT 2026-07-21; 18·S0–S3 = KOMPLETT 2026-07-22.)**
 - **Baubar gegen Fake-Provider (Qualitäts-Gate später via Key):** 03·L1/L2/L3/L6/L7 · 08 · 10 · 05·Etappe-2.
 - **Einziger echter Rest-Blocker im Ordner:** 08 (Konvergenz-Qualität = LLM live). Alle übrigen „Blocker" sind Deploy-/Key-Gates fürs *Live-Feuern*, nicht fürs Bauen.
-- **Fertig:** 04 · 06 · 07 · 09 · 11 (S1–S3; nur optionales KI-Narrativ offen) · 14 · **17 (S0–S3, nur demo-Deploy offen)** (+ 01 nur Deploy-Verifikation).
+- **Fertig:** 04 · 06 · 07 · 09 · 11 (S1–S3; nur optionales KI-Narrativ offen) · 14 · **17 (S0–S3, nur demo-Deploy offen)** · **18 (S0–S3, nur demo-Deploy offen)** (+ 01 nur Deploy-Verifikation).
 
 ### Korrektur-Log
 - **2026-07-19:** „Chem-Import fehlt" (Spec 11) war eine **Fehlannahme aus veraltetem Memory** — an der Dev-DB verifiziert, dass `foodalchemist:import-master` durch ist und die 26 Chemie-/Pairing-Tabellen voll befüllt sind. Spec 11 damit von 🟡 auf 🟢.

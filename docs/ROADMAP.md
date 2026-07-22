@@ -8,6 +8,18 @@
 
 ---
 
+## ⭐ Update 2026-07-22 (Session: Produktionsaufträge — Spec 18, S0–S3 KOMPLETT)
+
+**Neuer N-Track, Geschwister von Spec 17: Produktionsaufträge mit Datum, Status und vollwertigem Modul-Interface** (Dominique-Wunsch). Zweite bewusste Ausnahme vom 2026-07-04-Non-Goal „Produktion… nicht bauen" — diesmal für die Küchen-Ausführungsebene statt den Einkauf, exakt nach dem Präzedenz-Muster von Spec 17 (FA-Bereich, kein zweites Composer-Modul). Spec-first: `docs/PLANUNG/18_Produktionsauftraege.md` (P1–P6).
+
+- **S0 GEBAUT+GETESTET (`eac1cd5`):** Migration `foodalchemist_production_orders`+`_lines` (Auftrag je team+production_date, aggregiert mehrere Ziele/Tag) · `ProductionOrderStatus`-Enum (planned→in_progress→done/cancelled, guarded) · `ProductionOrderService` (Lock-Guard, `saveNew`/`replaceTargets`/`addTarget`/`removeTarget`, **volle Neu-Explosion bei jeder Ziel-Änderung statt additivem Patchen** — Kern-Korrektheit, da Sub-Rezept-Ansätze aufrunden und `ceil(a)+ceil(b) ≠ ceil(a+b)`). `PlanungsblattService` bekommt dafür nur `produktionsblattFuerZiele()` (Mehr-Ziele-Variante, ~15 Zeilen) — `explodiere()`/`topsAus()` unverändert, kein neuer Rechenpfad. `ProductionOrderServiceTest` 8/8 inkl. Flaggschiff-Test (zwei VK-Gerichte teilen sich eine Sub-Rezept-Zutat, einzeln ceil=1+1=2, gemeinsam ceil=1).
+- **S1 GEBAUT+VERIFIZIERT (`99e2393`):** Livewire `Produktion\Browser`+`DetailPanel`+`Editor` — **vollwertiges Modul-Interface wie Concepter/Gerichte/Basisrezepte** (kein Tab-Anhängsel). Editor-Karteien Stammdaten/Ziele/Vorschau (Vorschau ruft `produktionsblattFuerZiele()` lokal, kein DB-Schreiben während der Eingabe). DetailPanel: Cockpit-KPIs (Ansätze/Portionen/Arbeitszeit gesamt), Status-Aktionen (Snapshot friert bei „in Arbeit" ein), **„An Bestellung übergeben"** (Einbahn-Handover an `OrderService::addNeedFromTarget`, kein Auto-Sync). Absorbiert die R7.1-Planungs-Blätter: `/blaetter` → Redirect auf `/produktion`, `Blaetter\Index` gelöscht, 2 betroffene UI-Tests auf die neue Oberfläche migriert. **Browser-verifiziert gegen echte Rezept-/GP-Daten** (Sandbox-MySQL, nicht nur Test-Fixture): Ziel hinzufügen → Live-Vorschau korrekt → Speichern → Cockpit → Bestellung übergeben → Bestellschiene entsteht → Status-Freeze. Nebenbefund gefixt: doppelt escapetes „&amp;" in einem Section-Titel.
+- **S2 GEBAUT (`228a398`):** 4 MCP-Tools im Lockstep (`production_orders.GET/ADD_TARGET/SET_STATUS/UPDATE_LINE`), Schema/Guards nach Orders-Tools-Muster; `UPDATE_LINE` bewusst dünner (nur Notiz, keine Mengen-Übersteuerung — Ansätze sind abgeleitet).
+- **S3 GEBAUT (`c2c25c7`):** `ProductionOrderService::dokument()` + `dokumente/produktionsauftrag.blade.php` (küchen-taugliche Arbeitskarte je Rezept: Ansätze/Zutaten/Zubereitung/Darreichung) + Route mit HTML/PDF(DomPDF)/CSV, exakt nach Bestellungen-Dokument-Muster.
+- **Verifikation:** `ProductionOrderServiceTest` 14/14 (2 harness-bedingt geskippt, gleiche Präzedenz wie Spec-17-Route-Tests); volle FA-Suite 940/945 (2 vorbestehende unabhängige Fails PromptRegistry/VoiceHuellen, 0 Regressionen durch diese Session).
+- **Nebenfund (Umgebung, nicht Code):** Bestellwesen-Migrationen (Spec 17, `2026_07_21_00000{2,3}`) waren in der lokalen Sandbox-MySQL-DB noch nicht gelaufen — beim Browser-Test nachgeholt (kein Produktivsystem betroffen).
+- **Offen:** demo-Deploy (Martin), UI-Politur der Darreichungs-Keys im Produktionsschein (rohe snake_case-Labels statt Klartext — kosmetisch, kein Blocker).
+
 ## ⭐ Strategie-Update 2026-07-11 (überschreibt Sequenz-Annahmen von 2026-07-03)
 
 **Einstiegspunkt für die nächste Session: [`_NEXT_SESSION_TODO.md`](_NEXT_SESSION_TODO.md)** (konkrete To-do).
@@ -804,6 +816,8 @@ FA rechnet, das Event-Modul führt aus. Geschirr: Bedarf hier, Beschaffung dort.
 ## R7 — Operative Planungs-Blätter (FA-seitig) *(die „linke Spalte": Berechnetes gehört FA; Vorstufe zum Nachbar-Modul)*
 
 Reine Kaskaden-Ausgaben — Konzept + Gäste → Mengen/Listen/Blätter. Kein Modul, kein Contract; zugleich die Vorstufe, die N0 de-riskt (der Contract kapselt später genau diese Tools).
+
+> **UI 2026-07-22 abgelöst durch [Spec 18](PLANUNG/18_Produktionsauftraege.md):** `/blaetter` ist jetzt Redirect auf `/produktion`, `Blaetter\Index` gelöscht. `PlanungsblattService` (dieser Abschnitt) bleibt unverändert der Rechenkern — Spec 18 macht die Produktionsblatt-Seite der Blätter zu einem persistierten, statusbehafteten Auftrag (Datum, Status, → Bestellung). Die 3 `.GET`-MCP-Tools unten bleiben bestehen (agentseitig weiter nützlich).
 
 ### R7.1 Blätter als read-only FA-Tools · Größe M · Hängt an: R1 (+ Darreichungs-Resolver) · 🟢 **GEBAUT 2026-07-13/14 (gepusht; nur echtes Step-Grouping offen — datenmodell-blockiert)**
 
