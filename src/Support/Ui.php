@@ -68,27 +68,6 @@ final class Ui
                 'primary' => 'bg-violet-500/10 text-violet-600',
             ],
 
-            // ── Signal-Kacheln (Detail-Panels): kräftige Tönung je Zustand — Fläche statt
-            //    Haarlinie (/15 + -700-Text). Genutzt von <x-foodalchemist::kpi-tile tone="…">.
-            'kpiTone' => [
-                'neutral' => ['bg' => 'bg-black/[0.03]', 'label' => 'text-gray-500', 'value' => 'text-gray-900'],
-                'accent' => ['bg' => 'bg-violet-500/15', 'label' => 'text-violet-600', 'value' => 'text-violet-700'],
-                'success' => ['bg' => 'bg-emerald-500/15', 'label' => 'text-emerald-700', 'value' => 'text-emerald-700'],
-                'warning' => ['bg' => 'bg-amber-500/15', 'label' => 'text-amber-700', 'value' => 'text-amber-700'],
-                'danger' => ['bg' => 'bg-rose-500/15', 'label' => 'text-rose-700', 'value' => 'text-rose-700'],
-                'info' => ['bg' => 'bg-sky-500/15', 'label' => 'text-sky-700', 'value' => 'text-sky-700'],
-            ],
-
-            // ── Hinweis-Streifen (farbige Fläche für Warnungen/Infos statt grauem Fließtext).
-            //    Genutzt von <x-foodalchemist::alert tone="…">.
-            'alertTone' => [
-                'warning' => 'bg-amber-500/10 text-amber-700',
-                'danger' => 'bg-rose-500/10 text-rose-700',
-                'info' => 'bg-sky-500/10 text-sky-700',
-                'accent' => 'bg-violet-500/10 text-violet-700',
-                'success' => 'bg-emerald-500/10 text-emerald-700',
-            ],
-
             // ── Buttons
             'btnPrimary' => 'inline-flex items-center whitespace-nowrap gap-2 px-3.5 py-2 text-[13px] font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-lg shadow-sm shadow-violet-500/25 hover:shadow-md hover:shadow-violet-500/30 transition-all duration-150',
             'btnGhost' => 'inline-flex items-center whitespace-nowrap gap-2 px-3.5 py-2 text-[13px] font-medium text-gray-600 bg-white/60 backdrop-blur-sm border border-black/5 rounded-lg hover:bg-white/80 transition-all duration-150',

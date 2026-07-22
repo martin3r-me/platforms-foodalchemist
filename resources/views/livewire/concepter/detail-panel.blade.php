@@ -56,7 +56,7 @@
             'neutral' => ['bg-black/5', 'text-gray-500', 'bg-gray-400'],
             'success' => ['bg-emerald-500/15', 'text-emerald-700', 'bg-emerald-500'],
             'warning' => ['bg-amber-500/15', 'text-amber-700', 'bg-amber-500'],
-            'danger' => ['bg-rose-500/15', 'text-rose-700', 'bg-rose-500'],
+            'danger' => ['bg-rose-500/10', 'text-rose-700', 'bg-rose-500'],
         ][$scoreTone])
         @php($gerichteSuffix = $concept ? ' · ' . ($aggregat['n_slots'] ?? 0) . ' Slots' : (($paket && $paket->food_cost_percent !== null) ? ' · ' . number_format((float) $paket->food_cost_percent, 1, ',', '.') . ' % W' : ''))
         <div class="relative overflow-hidden {{ $card }} px-3.5 py-2.5" data-concepter-cockpit>

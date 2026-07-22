@@ -87,7 +87,7 @@
             'neutral' => ['bg-black/5', 'text-gray-500', 'bg-gray-400', 'kein Preis'],
             'success' => ['bg-emerald-500/15', 'text-emerald-700', 'bg-emerald-500', 'gesund'],
             'warning' => ['bg-amber-500/15', 'text-amber-700', 'bg-amber-500', 'knapp'],
-            'danger' => ['bg-rose-500/15', 'text-rose-700', 'bg-rose-500', 'kritisch'],
+            'danger' => ['bg-rose-500/10', 'text-rose-700', 'bg-rose-500', 'kritisch'],
         ][$weTone])
         @php($weValueText = ['neutral' => 'text-gray-500', 'success' => 'text-emerald-700', 'warning' => 'text-amber-700', 'danger' => 'text-rose-700'][$weTone])
         <div class="relative overflow-hidden {{ $card }} px-3.5 py-2.5" data-vk-kpis>

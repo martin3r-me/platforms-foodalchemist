@@ -27,8 +27,8 @@
         @isset($actions)<div class="shrink-0">{{ $actions }}</div>@endisset
     </div>
     @if($open)
-        <div class="pb-3 pl-[26px]">{{ $slot }}</div>
+        <div class="pb-3 pl-6">{{ $slot }}</div>
     @elseif(isset($preview))
-        <div class="pb-3 pl-[26px]">{{ $preview }}</div>
+        <div class="pb-3 pl-6">{{ $preview }}</div>
     @endif
 </div>

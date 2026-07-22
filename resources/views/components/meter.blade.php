@@ -10,6 +10,6 @@
 <div {{ $attributes->merge(['class' => 'relative h-1.5 rounded-full bg-black/[0.06] overflow-hidden']) }}>
     <div class="absolute inset-y-0 left-0 rounded-full {{ $fill }}" style="width: {{ round($pct, 1) }}%"></div>
     @foreach($ticks as $t)
-        <div class="absolute inset-y-0 w-px bg-black/25" style="left: {{ round(min(100.0, ((float) $t / max((float) $max, 0.0001)) * 100), 1) }}%"></div>
+        <div class="absolute inset-y-0 w-px bg-black/10" style="left: {{ round(min(100.0, ((float) $t / max((float) $max, 0.0001)) * 100), 1) }}%"></div>
     @endforeach
 </div>
