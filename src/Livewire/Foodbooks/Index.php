@@ -157,6 +157,56 @@ class Index extends Component
         }
     }
 
+    /** slotId → kurze Rückmeldung nach „Konzept füllen" (Leitstelle-Kaskade). */
+    public array $slotFuellStatus = [];
+
+    /**
+     * Leitstelle-Kaskade (schritt-für-schritt, pro Slot): erzeugt/füllt das Slot-Konzept mit
+     * passenden Gerichten. Das Foodbook ist die Leitstelle — das Konzept erbt die Leitplanken
+     * (uebernehmeVorschlag stempelt concept.level), die Gericht-Auswahl folgt Niveau + Convenience.
+     * $quelle = 'bestand' (deterministisch, gerankt) | 'neu' (KI-Neu-Erstellung, braucht Provider, #512).
+     */
+    public function slotFuellen(int $slotId, string $quelle, FoodbookService $svc): void
+    {
+        $this->slotFuellStatus[$slotId] = null;
+        if ($this->selectedId === null || $this->frameId === null) {
+            return;
+        }
+        $frame = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame::find($this->frameId);
+        $slot = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot::find($slotId);
+        if ($frame === null || $slot === null) {
+            return;
+        }
+        if ($slot->chapter_id === null) {
+            $this->slotFuellStatus[$slotId] = 'Erst „Struktur anwenden" — der Slot braucht ein Kapitel.';
+            return;
+        }
+        if ($quelle === 'neu') {
+            // KI-Neu-Erstellung eines Gerichts zum Niveau/Convenience/Kundentyp — braucht einen
+            // gebundenen LLM-Provider (auf demo, #512). Solange deterministisch aus Bestand füllen.
+            $this->slotFuellStatus[$slotId] = 'KI-Neu-Erstellung braucht einen gebundenen Provider (demo, #512) — solange „aus Bestand" nutzen.';
+            return;
+        }
+
+        // Bestand: Top-target_count gerankt (Niveau + Convenience aus den Leitplanken) → ins Slot-Konzept.
+        $lp = $svc->leitplanken($this->team(), $svc->detail($this->team(), $this->selectedId));
+        $anzahl = max(1, (int) ($slot->target_count ?: 3));
+        $vorschlaege = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
+            ->slotVorschlaege($this->team(), $frame, $slot, $anzahl, $lp['niveau'], $lp['convenience']);
+        $n = 0;
+        foreach ($vorschlaege as $v) {
+            $res = $svc->uebernehmeVorschlag($this->team(), $this->selectedId, $slotId, (int) $v['id']);
+            if (! ($res['schon_drin'] ?? false)) {
+                $n++;
+            }
+        }
+        unset($this->slotVorschlaege[$slotId]);
+        $this->frameLaden();
+        $this->slotFuellStatus[$slotId] = $n > 0
+            ? "Konzept gefüllt: {$n} Gericht(e) aus dem Bestand (Niveau/Convenience-gerankt)."
+            : 'Kein passendes Gericht im Bestand — Leitplanken/Filter prüfen oder „neu erstellen".';
+    }
+
     // ── Phase 3a: „Struktur anwenden" — Gerüst-Slots als Kapitel materialisieren (Slot = Kapitel) ──
     public ?array $strukturErgebnis = null;
 

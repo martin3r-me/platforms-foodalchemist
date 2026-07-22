@@ -271,8 +271,18 @@
                                             <span class="text-xs font-medium text-gray-800 truncate">{{ $fs['label'] }}
                                                 @if($fs['chapter_id'])<span class="text-[10px] text-emerald-600">· Kapitel ✓</span>@else<span class="text-[10px] text-amber-600">· erst „Struktur anwenden"</span>@endif
                                             </span>
-                                            <button type="button" wire:click="vorschlaegeFuerSlot({{ $fs['id'] }})" class="{{ $btnGhostXs }} text-violet-600 shrink-0" wire:loading.attr="disabled" wire:target="vorschlaegeFuerSlot" @disabled(!$fs['chapter_id'])>✨ Vorschläge</button>
+                                            {{-- Leitstelle-Kaskade: entweder einzeln vorschlagen+abstimmen (✨) ODER das Konzept
+                                                 direkt füllen (Bestand = deterministisch gerankt · neu = KI, braucht Provider). --}}
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <button type="button" wire:click="vorschlaegeFuerSlot({{ $fs['id'] }})" class="{{ $btnGhostXs }} text-violet-600" wire:loading.attr="disabled" wire:target="vorschlaegeFuerSlot" @disabled(!$fs['chapter_id'])>✨ Vorschläge</button>
+                                                <span class="text-[10px] text-gray-400">·&nbsp;Konzept füllen:</span>
+                                                <button type="button" wire:click="slotFuellen({{ $fs['id'] }}, 'bestand')" class="{{ $btnGhostXs }} text-emerald-600" wire:loading.attr="disabled" wire:target="slotFuellen" @disabled(!$fs['chapter_id']) title="Konzept anlegen + mit passenden Bestands-Gerichten füllen (Niveau/Convenience-gerankt)">Bestand</button>
+                                                <button type="button" wire:click="slotFuellen({{ $fs['id'] }}, 'neu')" class="{{ $btnGhostXs }} text-gray-500" @disabled(!$fs['chapter_id']) title="Gerichte per KI neu erstellen (Niveau/Convenience/Kundentyp) — braucht gebundenen Provider">neu (KI)</button>
+                                            </div>
                                         </div>
+                                        @if($slotFuellStatus[$fs['id']] ?? null)
+                                            <p class="mt-1 text-[10px] text-gray-500" data-slot-fuell-status wire:key="fuellst-{{ $fs['id'] }}">{{ $slotFuellStatus[$fs['id']] }}</p>
+                                        @endif
                                         @if(!empty($slotVorschlaege[$fs['id']] ?? []))
                                             <div class="mt-1.5 space-y-1">
                                                 @foreach($slotVorschlaege[$fs['id']] as $v)

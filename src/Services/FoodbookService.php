@@ -248,7 +248,14 @@ class FoodbookService
 
         $block = $kapitel->blocks()->where('type', 'concept_ref')->whereNotNull('concept_id')->orderBy('position')->first();
         if ($block === null) {
-            $concept = $this->concepts->create($team, ['name' => trim((string) ($slot->label ?: $kapitel->title)) ?: 'Konzept', 'status' => 'draft']);
+            // Leitstelle: das neue Kapitel-Konzept erbt das Foodbook-Niveau (concept.level, im Concepter-
+            // Vokabular). Kapitel kann es dort überschreiben (basic/hochwertig/premium). null = erbt weiter.
+            $niveau = \Platform\FoodAlchemist\Services\TeamSettingsService::denormNiveauFuerConcept($this->leitplanken($team, $fb)['niveau']);
+            $concept = $this->concepts->create($team, array_filter([
+                'name' => trim((string) ($slot->label ?: $kapitel->title)) ?: 'Konzept',
+                'status' => 'draft',
+                'level' => $niveau,
+            ], fn ($v) => $v !== null));
             $concept->update(['created_via' => 'foodbook_slot']);
             $this->addBlock($team, (int) $slot->chapter_id, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
             $conceptId = (int) $concept->id;

@@ -84,6 +84,16 @@ class TeamSettingsService
         return self::NIVEAU_ALIAS[$niveau] ?? $niveau;
     }
 
+    /** Umkehrung: kanonisches Niveau → Concepter-Vokabular (haute_cuisine → haute) fürs Schreiben nach concept.level. */
+    public static function denormNiveauFuerConcept(?string $canonical): ?string
+    {
+        if ($canonical === null || trim($canonical) === '') {
+            return null;
+        }
+
+        return array_flip(self::NIVEAU_ALIAS)[$canonical] ?? $canonical;
+    }
+
     /**
      * #390 (2026-06-17): Per-Setting-Vererbungs-Policy über die Team-Hierarchie (Org→Team).
      * Hier gelistete DB-Spalten werden vererbt: leeres Feld am Team erbt vom nächsten Vorfahr
