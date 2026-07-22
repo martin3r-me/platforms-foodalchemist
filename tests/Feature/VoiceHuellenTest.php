@@ -77,7 +77,9 @@ it('layers_used (GL-06 Inv. 7) landet im Audit; ohne Layer bleibt es null', func
     ($this->bindLayer)(null);                                         // kein Layer → empty
     app(AiGatewayService::class)->propose('recipe.description', ['b' => 1]);
     expect(DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('layers_used'))->toBeNull()
-        ->and($this->spy->messages[0]['role'])->toBe('user');         // keine system-Message vorangestellt
+        // Seit dem JSON-Ausgabe-Vertrag (a0a7f9c0, 2026-07-20) steht IMMER eine system-Message
+        // voran — hier wird nur geprüft, dass das NICHT die Voice-Hülle ist (kein Layer → keine Hülle).
+        ->and($this->spy->messages[0]['content'])->not->toContain('HÜLLE');
 });
 
 it('Hülle ist abschaltbar und graceful (Config aus → kein Resolver-Aufruf)', function () {

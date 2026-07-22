@@ -35,6 +35,9 @@ const REGISTRY_SOLL = [
     'concept.brief_geruest' => 'A',                                   // R6.1: Kunden-Brief → Planungs-Gerüst (Rahmen; Gericht-Wahl bleibt deterministisch)
     // Sonstiges
     'price.plausi' => 'B', 'chat.message' => 'A',
+    // Signale-Cockpit: KI-Fixer + Assistenzen hinter „KI erledigen lassen" (2026-07-21)
+    'signal.supplier_inquiry' => 'B', 'signal.margin_levers' => 'B',
+    'signal.vk_release_advice' => 'B', 'signal.serving_form_suggest' => 'B',
 ];
 
 it('Registry vollständig: alle Soll-Keys vorhanden, mit task + gültigem Tier', function () {
