@@ -217,10 +217,15 @@ Route::get('/speiseplan', \Platform\FoodAlchemist\Livewire\Speiseplan\Index::cla
     ->name('foodalchemist.speiseplan.index');
 
 /**
- * R7.1: Operative Planungs-Blätter — Ziel + Skalierung → Produktionsblatt +
- * Bestellvorschlag + Einkaufsliste (read-only, rein rechnend).
+ * Spec 18: Produktion — absorbiert die bisherigen Planungs-Blätter (Vorschau im
+ * Editor, unverändert per PlanungsblattService) + persistierte Produktionsaufträge
+ * (Datum, Status, → Bestellung übergeben). /blaetter bleibt als Redirect (keine
+ * toten Deep-Links, Precedent /kalkulator oben).
  */
-Route::get('/blaetter', \Platform\FoodAlchemist\Livewire\Blaetter\Index::class)
+Route::get('/produktion', \Platform\FoodAlchemist\Livewire\Produktion\Browser::class)
+    ->name('foodalchemist.produktion.index');
+
+Route::get('/blaetter', fn () => redirect()->route('foodalchemist.produktion.index'))
     ->name('foodalchemist.blaetter.index');
 
 // Spec 17/S2 — Bestellungen (mini-WaWi Bestellschienen, N-Track)

@@ -1,0 +1,112 @@
+{{-- Spec 18 — Produktion: Editor-Modal (Stammdaten / Ziele / Vorschau) --}}
+@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+
+<x-foodalchemist::modal name="produktion-editor" :title="$orderId === null ? 'Neuer Produktionsauftrag' : 'Produktionsauftrag bearbeiten'">
+    <x-slot:footer>
+        @if($fehler)<span class="text-[12px] text-rose-600 mr-auto">{{ $fehler }}</span>@endif
+        <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-produktion-speichern>Speichern</button>
+    </x-slot:footer>
+
+    <x-foodalchemist::modal-section title="Stammdaten">
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="{{ $label }}">Produktionsdatum</label>
+                <input type="date" wire:model="productionDate" class="{{ $input }}" data-produktion-datum />
+            </div>
+            <div>
+                <label class="{{ $label }}">Anlass</label>
+                <input type="text" wire:model="reference" placeholder="z. B. Sommer-Buffet" class="{{ $input }}" data-produktion-anlass />
+            </div>
+        </div>
+        <div class="mt-3">
+            <label class="{{ $label }}">Notiz</label>
+            <textarea wire:model="note" rows="2" class="{{ $input }}"></textarea>
+        </div>
+    </x-foodalchemist::modal-section>
+
+    <x-foodalchemist::modal-section title="Ziele">
+        <div class="flex items-center gap-2 mb-2">
+            <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs">
+                <button type="button" wire:click="$set('zielTyp', 'concept')" class="px-3 py-1 rounded-md {{ $zielTyp === 'concept' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Konzept</button>
+                <button type="button" wire:click="$set('zielTyp', 'recipe')" class="px-3 py-1 rounded-md {{ $zielTyp === 'recipe' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Gericht</button>
+            </div>
+        </div>
+
+        <div class="flex items-end gap-2 mb-3">
+            @if($zielTyp === 'concept')
+                <div class="flex-1">
+                    <label class="{{ $label }}">Konzept</label>
+                    <select wire:model="auswahlConceptId" class="{{ $input }}" data-produktion-konzept>
+                        <option value="">— wählen —</option>
+                        @foreach($konzepte as $k)
+                            <option value="{{ $k->id }}">{{ $k->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="w-28">
+                    <label class="{{ $label }}">Personen</label>
+                    <input type="number" min="1" wire:model="auswahlMenge" class="{{ $input }}" />
+                </div>
+            @else
+                <div class="flex-1">
+                    <label class="{{ $label }}">Gericht</label>
+                    <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Gericht suchen …" class="{{ $input }}" data-produktion-gericht-suche />
+                    @if($treffer->isNotEmpty())
+                        <div class="mt-1 rounded-lg border border-black/5 bg-white/80 max-h-40 overflow-y-auto">
+                            @foreach($treffer as $t)
+                                <button type="button" wire:key="tref-{{ $t->id }}" wire:click="$set('auswahlRecipeId', {{ $t->id }})"
+                                    class="block w-full text-left px-2 py-1 text-[12px] {{ $auswahlRecipeId === $t->id ? 'bg-violet-500/10 text-violet-700' : 'text-gray-700 hover:bg-black/[0.03]' }}">{{ $t->name }}</button>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+                <div class="w-28">
+                    <label class="{{ $label }}">Portionen</label>
+                    <input type="number" min="1" wire:model="auswahlMenge" class="{{ $input }}" />
+                </div>
+            @endif
+            <button type="button" wire:click="zielHinzufuegen" class="{{ $btnGhost }}" data-produktion-ziel-hinzufuegen>+ Hinzufügen</button>
+        </div>
+
+        <div class="space-y-1">
+            @forelse($targets as $t)
+                <div class="flex items-center justify-between gap-2 text-[12px] px-2 py-1 rounded-lg bg-black/[0.02]" wire:key="ziel-{{ $t['source_ref'] }}">
+                    <span class="text-gray-800">{{ $t['label'] ?? '—' }}</span>
+                    <button type="button" wire:click="zielEntfernen('{{ $t['source_ref'] }}')" class="text-rose-500" data-produktion-ziel-entfernen>✕</button>
+                </div>
+            @empty
+                <p class="text-[12px] text-gray-500">Noch keine Ziele — Konzept oder Gericht + Menge wählen und hinzufügen.</p>
+            @endforelse
+        </div>
+    </x-foodalchemist::modal-section>
+
+    <x-foodalchemist::modal-section title="Vorschau">
+        @if($vorschau === null)
+            <p class="text-[12px] text-gray-500">Ziele hinzufügen, um die Ansätze-Vorschau zu sehen.</p>
+        @else
+            <table class="{{ $table }}">
+                <thead><tr>
+                    <th class="{{ $th }} text-left">Rezept</th>
+                    <th class="{{ $th }} text-right">Ansätze</th>
+                    <th class="{{ $th }} text-right">Portionen/kg</th>
+                    <th class="{{ $th }} text-right">Arbeitszeit</th>
+                </tr></thead>
+                <tbody>
+                    @foreach($vorschau['rezepte'] as $r)
+                        <tr class="border-t border-black/5">
+                            <td class="{{ $td }}">{{ $r['name'] }} @if($r['ist_basisrezept'])<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Basisrezept</span>@endif</td>
+                            <td class="{{ $td }} text-right tabular-nums">{{ rtrim(rtrim(number_format($r['ansaetze'], 2, ',', '.'), '0'), ',') }}</td>
+                            <td class="{{ $td }} text-right tabular-nums">
+                                @if($r['portionen'] !== null){{ $r['portionen'] }} Port.@elseif($r['produzierte_menge_kg'] !== null){{ number_format($r['produzierte_menge_kg'], 2, ',', '.') }} kg@else—@endif
+                            </td>
+                            <td class="{{ $td }} text-right tabular-nums">{{ $r['arbeitszeit_min'] !== null ? $r['arbeitszeit_min'] . ' min' : '—' }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+            @foreach($vorschau['warnungen'] as $w)
+                <x-foodalchemist::alert tone="warning" class="mt-2">{{ $w }}</x-foodalchemist::alert>
+            @endforeach
+        @endif
+    </x-foodalchemist::modal-section>
+</x-foodalchemist::modal>

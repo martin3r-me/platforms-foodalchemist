@@ -1,6 +1,10 @@
 <?php
 
+use Livewire\Livewire;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
+use Platform\FoodAlchemist\Livewire\Produktion\Browser as ProduktionBrowser;
+use Platform\FoodAlchemist\Livewire\Produktion\DetailPanel as ProduktionDetailPanel;
+use Platform\FoodAlchemist\Livewire\Produktion\Editor as ProduktionEditor;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -181,3 +185,46 @@ it('Team-Scoping-Guard: fremdes Team kann weder Ziel ändern noch Status setzen'
         ->and(fn () => $this->svc->setStatus($fremdesTeam, $order->id, ProductionOrderStatus::InProgress))
         ->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 });
+
+it('UI: Editor legt einen Produktionsauftrag komplett an (Stammdaten + Ziel + Speichern)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    Livewire::test(ProduktionEditor::class)
+        ->call('oeffnenNeu')
+        ->set('productionDate', '2026-08-01')
+        ->set('reference', 'Sommer-Buffet')
+        ->set('zielTyp', 'recipe')
+        ->set('auswahlRecipeId', $this->kuchen->id)
+        ->set('auswahlMenge', 100)
+        ->call('zielHinzufuegen')
+        ->call('speichern')
+        ->assertDispatched('produktion-gespeichert');
+
+    $order = FoodAlchemistProductionOrder::where('reference', 'Sommer-Buffet')->firstOrFail();
+    expect($order->production_date->toDateString())->toBe('2026-08-01')
+        ->and($order->lines()->where('recipe_id', $this->kuchen->id)->exists())->toBeTrue();
+});
+
+it('UI: Browser listet Aufträge, Klick wählt sie im DetailPanel (Cockpit-KPIs)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ], 'Sommer-Buffet');
+
+    Livewire::test(ProduktionBrowser::class)
+        ->assertSee('Sommer-Buffet')
+        ->call('waehle', $order->id)
+        ->assertDispatched('production-order-selected');
+
+    Livewire::test(ProduktionDetailPanel::class, ['orderId' => $order->id])
+        ->assertSee('Sommer-Buffet')
+        ->assertSee('DES: Kuchen')
+        ->assertSee('Produktion starten');
+});
+
+it('Route: /blaetter redirected auf /produktion (keine toten Deep-Links)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $this->get(route('foodalchemist.blaetter.index'))
+        ->assertRedirect(route('foodalchemist.produktion.index'));
+})->skip(fn () => ! \Illuminate\Support\Facades\Route::has('foodalchemist.blaetter.index'), 'Modul-Routen im Test-Harness nicht registriert');

@@ -9,7 +9,6 @@ use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
-use Platform\FoodAlchemist\Livewire\Blaetter\Index as BlaetterIndex;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
@@ -193,33 +192,18 @@ it('MCP: die drei Blätter-Tools sind registriert, read-only und liefern konsist
     expect($fehler->success)->toBeFalse()->and($fehler->errorCode)->toBe('VALIDATION_ERROR');
 });
 
-it('Blätter-UI: Gericht-Auswahl + Blätter-Filter (welche Blätter erzeugt werden)', function () {
+it('Produktion-Editor: Ziel hinzufügen zeigt die Ansätze-Vorschau live (Spec 18, absorbiert die alten Planungs-Blätter)', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    // Default: Produktion + Bestellung (Einkauf-Blatt ist raus — Spec 17 E8)
-    $comp = Livewire::test(BlaetterIndex::class)
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Produktion\Editor::class)
+        ->call('oeffnenNeu')
         ->set('zielTyp', 'recipe')
-        ->call('waehleGericht', $this->kuchen->id)
-        ->set('menge', 100)
-        ->assertSee('Produktionsblatt')
+        ->set('auswahlRecipeId', $this->kuchen->id)
+        ->set('auswahlMenge', 100)
+        ->call('zielHinzufuegen')
+        ->assertSee('DES: Kuchen')
         ->assertSee('Vanillesauce')
-        ->assertSee('100 Portionen')      // P1: VK-Gericht in Portionen statt „× Rezept"
-        ->assertDontSee('× Rezept')
-        ->assertSee('Bestellvorschlag')
-        ->assertDontSee('Einkaufsliste')  // E8: Dublette raus
-        ->assertSee('Chefs')
-        ->assertSee('Hanos');
-
-    // Filter: nur Produktion → Bestellvorschlag verschwindet
-    $comp->set('blaetter', ['produktion'])
-        ->assertSee('Produktionsblatt')
-        ->assertDontSee('Bestellvorschlag');
-
-    // Filter: nur Bestellung → Produktionsblatt verschwindet, Gebinde-Spalte da
-    $comp->set('blaetter', ['bestellung'])
-        ->assertDontSee('Produktionsblatt')
-        ->assertSee('Bestellvorschlag')
-        ->assertSee('Bestellen');         // S0: Gebinde-Spalte
+        ->assertSee('Basisrezept');
 });
 
 it('Blätter-Dokument-Blade rendert (Produktion + Bestellung)', function () {

@@ -12,7 +12,6 @@ use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
-use Platform\FoodAlchemist\Livewire\Blaetter\Index as BlaetterIndex;
 use Platform\FoodAlchemist\Livewire\Orders\Index as OrdersIndex;
 use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
@@ -234,20 +233,21 @@ it('MCP im Lockstep: orders.GET/ADD_NEED/SET_STATUS registriert + End-to-End', f
     expect($bad->success)->toBeTrue(); // sent→cancelled IST erlaubt
 });
 
-it('UI: „Bedarf übernehmen" im Planungsblatt legt Schienen an (idempotent bei Re-Klick)', function () {
+it('UI: „An Bestellung übergeben" im Produktionsauftrag legt Schienen an (idempotent bei Re-Klick, Spec 18)', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
+    $prod = app(\Platform\FoodAlchemist\Services\ProductionOrderService::class);
+    $order = $prod->saveNew($this->rootTeam, '2026-08-01', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
 
-    $comp = Livewire::test(BlaetterIndex::class)
-        ->set('zielTyp', 'recipe')
-        ->call('waehleGericht', $this->kuchen->id)
-        ->set('menge', 100)
-        ->call('bedarfUebernehmen')
-        ->assertSet('uebernahmeHinweis', fn ($v) => str_contains((string) $v, 'Bestellschiene'));
+    $comp = Livewire::test(\Platform\FoodAlchemist\Livewire\Produktion\DetailPanel::class, ['orderId' => $order->id])
+        ->call('anBestellungUebergeben')
+        ->assertSet('hinweis', fn ($v) => str_contains((string) $v, 'Bestellschiene'));
 
     expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
 
     // Erneuter Klick (gleiche Quelle) → keine Verdopplung (E10)
-    $comp->call('bedarfUebernehmen');
+    $comp->call('anBestellungUebergeben');
     $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
     expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2)
         ->and((float) $chefs->total_net)->toBe(21.0);

@@ -68,7 +68,7 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['production_order_id', 'position']);
+            $table->index(['production_order_id', 'position'], 'fa_prod_order_lines_order_pos_idx');
         });
     }
 

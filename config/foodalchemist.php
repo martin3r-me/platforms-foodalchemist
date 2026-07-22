@@ -168,8 +168,10 @@ return [
                     'icon'  => 'heroicon-o-calendar-days',
                 ],
                 [
-                    'label' => 'Planungs-Blätter',
-                    'route' => 'foodalchemist.blaetter.index',
+                    // Spec 18: absorbiert die bisherigen Planungs-Blätter (Vorschau im Editor)
+                    // + neue persistierte Produktionsaufträge (Datum, Status, → Bestellung).
+                    'label' => 'Produktion',
+                    'route' => 'foodalchemist.produktion.index',
                     'icon'  => 'heroicon-o-clipboard-document-list',
                 ],
                 [
