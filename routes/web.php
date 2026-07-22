@@ -228,6 +228,50 @@ Route::get('/produktion', \Platform\FoodAlchemist\Livewire\Produktion\Browser::c
 Route::get('/blaetter', fn () => redirect()->route('foodalchemist.produktion.index'))
     ->name('foodalchemist.blaetter.index');
 
+// Spec 18/S3 — Produktionsschein: Druck-HTML | ?pdf=1 (DomPDF) | ?csv=1 (Download).
+Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Platform\FoodAlchemist\Services\ProductionOrderService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    try {
+        $dok = $svc->dokument($team, $order);
+    } catch (\Throwable $e) {
+        abort(404);
+    }
+
+    if (request()->boolean('csv')) {
+        $dateiname = 'Produktionsschein-' . $dok['id'] . '.csv';
+
+        return response()->streamDownload(function () use ($dok) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM
+            fputcsv($out, ['Rezept', 'Ansätze', 'Portionen', 'Menge (kg)', 'Arbeitszeit (min)'], ';');
+            foreach ($dok['zeilen'] as $z) {
+                fputcsv($out, [
+                    $z['name'] ?? '',
+                    number_format($z['ansaetze'], 2, ',', ''),
+                    $z['portionen'] !== null ? (string) $z['portionen'] : '',
+                    $z['produzierte_menge_kg'] !== null ? number_format($z['produzierte_menge_kg'], 3, ',', '') : '',
+                    $z['arbeitszeit_min'] !== null ? (string) $z['arbeitszeit_min'] : '',
+                ], ';');
+            }
+            fclose($out);
+        }, $dateiname, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    $data = ['dok' => $dok, 'istPdf' => false];
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Produktionsschein-PDF angefordert, aber DomPDF ist nicht installiert.', ['order' => $order]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.produktionsauftrag', $data + ['istPdf' => true])
+            ->download('Produktionsschein-' . $dok['id'] . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.produktionsauftrag', $data);
+})->name('foodalchemist.produktion.auftraege.dokument');
+
 // Spec 17/S2 — Bestellungen (mini-WaWi Bestellschienen, N-Track)
 Route::get('/bestellungen', \Platform\FoodAlchemist\Livewire\Orders\Index::class)
     ->name('foodalchemist.orders.index');

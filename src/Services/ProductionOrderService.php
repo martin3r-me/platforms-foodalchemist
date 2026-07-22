@@ -255,6 +255,34 @@ class ProductionOrderService
         ];
     }
 
+    /** S3: Volldaten für Produktionsschein-Dokument (PDF/Druck/CSV) — Auftrags-Kopf + Rezeptzeilen. */
+    public function dokument(Team $team, int $orderId): array
+    {
+        $order = FoodAlchemistProductionOrder::visibleToTeam($team)->with('lines.recipe:id,name')->findOrFail($orderId);
+        $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
+
+        return [
+            'id' => (int) $order->id,
+            'production_date' => $order->production_date?->toDateString(),
+            'status' => $status->value,
+            'status_label' => $status->label(),
+            'reference' => $order->reference,
+            'note' => $order->note,
+            'ziele' => collect($order->targets ?? [])->pluck('label')->filter()->values()->all(),
+            'zeilen' => $order->lines->map(fn ($l) => [
+                'name' => $l->recipe?->name,
+                'ist_basisrezept' => (bool) $l->is_basisrezept,
+                'ansaetze' => (float) $l->ansaetze,
+                'portionen' => $l->portionen !== null ? (int) $l->portionen : null,
+                'produzierte_menge_kg' => $l->produzierte_menge_kg !== null ? (float) $l->produzierte_menge_kg : null,
+                'arbeitszeit_min' => $l->arbeitszeit_min !== null ? (int) $l->arbeitszeit_min : null,
+                'zubereitung' => $l->zubereitung,
+                'darreichung' => $l->darreichung,
+                'zutaten' => $l->zutaten,
+            ])->all(),
+        ];
+    }
+
     // ── Ziel-Label (Anzeige in targets[] ohne Recompute nötig) ─────────────
 
     /** @param  list<array>  $targets */

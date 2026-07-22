@@ -271,3 +271,32 @@ it('MCP im Lockstep: production_orders.GET/ADD_TARGET/SET_STATUS/UPDATE_LINE reg
     $bad = $registry->get('foodalchemist.production_orders.SET_STATUS')->execute(['order_id' => $orderId, 'status' => 'done'], $kontext);
     expect($bad->success)->toBeTrue(); // in_progress→done IST erlaubt
 });
+
+it('S3: dokument() + Produktionsschein-Blade rendert', function () {
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ], 'Sommer-Buffet');
+
+    $dok = $this->svc->dokument($this->rootTeam, $order->id);
+    expect($dok['zeilen'])->toHaveCount(2) // Kuchen + Vanillesauce
+        ->and($dok['production_date'])->toBe('2026-08-01')
+        ->and($dok['reference'])->toBe('Sommer-Buffet');
+
+    $html = view('foodalchemist::dokumente.produktionsauftrag', ['dok' => $dok, 'istPdf' => true])->render();
+    expect($html)->toContain('Produktionsschein')->toContain('DES: Kuchen')->toContain('Vanillesauce')->toContain('Sommer-Buffet');
+});
+
+it('S3: Produktionsschein-Dokument-Route liefert HTML + CSV-Download', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
+
+    $this->get(route('foodalchemist.produktion.auftraege.dokument', ['order' => $order->id]))
+        ->assertOk()->assertSee('Produktionsschein');
+
+    $csv = $this->get(route('foodalchemist.produktion.auftraege.dokument', ['order' => $order->id, 'csv' => 1]));
+    $csv->assertOk();
+    expect($csv->headers->get('content-type'))->toContain('text/csv')
+        ->and($csv->streamedContent())->toContain('Rezept')->toContain('DES: Kuchen');
+})->skip(fn () => ! \Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument'), 'Modul-Routen im Test-Harness nicht registriert');
