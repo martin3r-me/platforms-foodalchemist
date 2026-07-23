@@ -549,6 +549,7 @@
                                 <button type="button" wire:click="wahlGruppeBilden" class="{{ $btnGhostXs }} text-amber-600">Wahl-Gruppe ({{ count($markiert) }})</button>
                             @endif
                             <button type="button" @click="$dispatch('modal.open', { name: 'fb-concept' })" class="{{ $btnPrimary }}">+ Concept einfügen</button>
+                            <button type="button" @click="$dispatch('modal.open', { name: 'fb-gericht' })" class="{{ $btnGhost }}">+ Gericht einfügen</button>
                             <button type="button" wire:click="blockBasis('text')" class="{{ $btnGhostXs }}">+ Text</button>
                             <button type="button" wire:click="blockBasis('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>
                             <div class="relative">
@@ -601,6 +602,11 @@
                                                 <span class="text-gray-500 tabular-nums">{{ $block->concept?->price_per_person_cache !== null ? '· ' . number_format((float) $block->concept->price_per_person_cache, 2, ',', '.') . ' €/P' : '' }}</span>
                                                 @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600">· „{{ $block->wording }}“</span>@endif
                                                 @break
+                                            @case('recipe_ref')
+                                                <span class="{{ $pill }} {{ $variantPill['warning'] }} mr-1">Gericht</span>{{ $block->dish?->name ?? '—' }}
+                                                <span class="text-gray-500 tabular-nums">{{ $block->dish?->sales_net !== null ? '· ' . number_format((float) $block->dish->sales_net, 2, ',', '.') . ' €' . ($block->price_basis === 'pauschal' ? ' pauschal' : '/Pos') : '' }}</span>
+                                                @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600">· „{{ $block->wording }}“</span>@endif
+                                                @break
                                             @case('header_neutral') @case('header_frei')
                                                 <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
                                                 @break
@@ -638,6 +644,11 @@
                                             {{-- Wording-Kette, oberste Stufe: Foodbook-Override → Konzept-Wording → VK-Wording-Standard → Name --}}
                                             <input type="text" wire:model="blockForm.wording" class="{{ $input }}" placeholder="Anzeigename (Kunde) — leer = Wording-Kette (Konzept → Standard → Name)" data-fb-block-wording />
                                         @endif
+                                        @if($block->type === 'recipe_ref')
+                                            {{-- E1.3: Einzel-Gericht — Wording-Override (Foodbook → VK-Wording-Standard → Name) + Preis-Achse (E1.2) --}}
+                                            <input type="text" wire:model="blockForm.wording" class="{{ $input }}" placeholder="Anzeigename (Kunde) — leer = Wording-Kette (Standard → Name)" data-fb-block-wording />
+                                            <select wire:model="blockForm.price_basis" class="{{ $input }} w-40" title="Preis-Achse für dieses Gericht"><option value="person">pro Position (×Pax)</option><option value="pauschal">Pauschal</option></select>
+                                        @endif
                                         @if($block->type === 'text')
                                             <textarea wire:model="blockForm.customer_text" rows="3" class="{{ $input }}" placeholder="Marketing-Text (kundensichtbar)"></textarea>
                                         @else
@@ -657,7 +668,7 @@
                                 @endif
                             </div>
                         @empty
-                            <p class="text-xs text-gray-500 py-4 text-center">Noch kein Inhalt. Oben „+ Concept einfügen" oder Header/Text/Preis-Block hinzufügen.</p>
+                            <p class="text-xs text-gray-500 py-4 text-center">Noch kein Inhalt. Oben „+ Concept einfügen", „+ Gericht einfügen" oder Header/Text/Preis-Block hinzufügen.</p>
                         @endforelse
                     </div>
 
@@ -700,6 +711,33 @@
                         <x-slot:footer>
                             <span class="text-[10px] text-gray-500 mr-auto">Eingefügte Concepts erscheinen links im Inhalt. Bleibt offen für mehrere.</span>
                             <button type="button" @click="$dispatch('modal.close', { name: 'fb-concept' })" class="{{ $btnGhost }}">Schließen</button>
+                        </x-slot:footer>
+                    </x-foodalchemist::modal>
+
+                    {{-- E1.3: FB-Einzel-Gericht-Picker (recipe_ref). Spiegelt fb-concept, aber ohne Kategorie-Tree:
+                         `gerichtKandidaten` filtert per Freitext auf echte VK-Gerichte (verkauf(), keine Slot-Varianten). --}}
+                    <x-foodalchemist::modal name="fb-gericht" title="Gericht einfügen" size="max-w-2xl">
+                        <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht (VK-Rezept) suchen …" class="{{ $input }} w-full mb-3" />
+                        <div class="min-h-[16rem]">
+                            <div class="overflow-y-auto space-y-0.5 max-h-[26rem]">
+                                @if($gerichtKandidaten->isNotEmpty())
+                                    @foreach($gerichtKandidaten as $gk)
+                                        <button type="button" wire:key="dgk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})"
+                                                class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                            <span class="truncate text-gray-900">+ {{ $gk->name }}</span>
+                                            <span class="text-gray-500 tabular-nums shrink-0">{{ $gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                        </button>
+                                    @endforeach
+                                @elseif($gerichtSuche !== '')
+                                    <p class="text-[11px] text-gray-500 px-2 py-2">Keine VK-Gerichte für „{{ $gerichtSuche }}“.</p>
+                                @else
+                                    <p class="text-[11px] text-gray-500 px-2 py-2">Oben nach einem Gericht suchen.</p>
+                                @endif
+                            </div>
+                        </div>
+                        <x-slot:footer>
+                            <span class="text-[10px] text-gray-500 mr-auto">Einzel-Gerichte erscheinen als [Gericht]-Block (€/Position). Bleibt offen für mehrere.</span>
+                            <button type="button" @click="$dispatch('modal.close', { name: 'fb-gericht' })" class="{{ $btnGhost }}">Schließen</button>
                         </x-slot:footer>
                     </x-foodalchemist::modal>
                 </div>

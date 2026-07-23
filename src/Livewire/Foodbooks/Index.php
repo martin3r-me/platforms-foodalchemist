@@ -334,6 +334,9 @@ class Index extends Component
 
     public ?int $conceptKategorie = null;
 
+    /** E1.3: Freitext-Suche für den recipe_ref-Einzel-Gericht-Picker. */
+    public string $gerichtSuche = '';
+
     /** #369: CRM-Kunde-Picker. */
     public string $firmaSuche = '';
 
@@ -555,6 +558,20 @@ class Index extends Component
         }
         $svc->addBlock($this->team(), $this->selectedKapitelId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
         $this->conceptSuche = '';
+    }
+
+    /**
+     * E1.3: Einzel-Gericht (VK-Rezept) als `recipe_ref`-Block direkt ans Kapitel
+     * (€/Position). Spiegelt `conceptHinzu`; die Schreibpfad-Validierung
+     * (verkauf()-Scope, keine Slot-Variante) übernimmt `addBlock`/`pruefeRecipeRef`.
+     */
+    public function gerichtHinzu(int $recipeId, FoodbookService $svc): void
+    {
+        if ($this->selectedKapitelId === null) {
+            return;
+        }
+        $svc->addBlock($this->team(), $this->selectedKapitelId, ['type' => 'recipe_ref', 'sales_recipe_id' => $recipeId]);
+        $this->gerichtSuche = '';
     }
 
     public function presetHinzu(string $type, ?string $slug, ?string $label, ?string $preisBasis, bool $sichtbar, FoodbookService $svc): void
@@ -794,6 +811,9 @@ class Index extends Component
             'conceptKategorien' => app(\Platform\FoodAlchemist\Services\ConceptService::class)->categoriesFlat($team),
             'conceptKandidaten' => ($this->conceptSuche !== '' || $this->conceptKategorie !== null) && $this->selectedKapitelId !== null
                 ? $svc->conceptKandidaten($team, $this->conceptSuche, $this->conceptKategorie, 50) : collect(),
+            // E1.3: Einzel-Gericht-Picker (recipe_ref) — nur laden, wenn gesucht + Kapitel gewählt
+            'gerichtKandidaten' => $this->gerichtSuche !== '' && $this->selectedKapitelId !== null
+                ? $svc->gerichtKandidaten($team, $this->gerichtSuche, 50) : collect(),
             // #369: CRM-Kunde-Picker
             'crmVerfuegbar' => $svc->crmVerfuegbar(),
             'firmen' => $svc->sucheFirmen($this->firmaSuche),
