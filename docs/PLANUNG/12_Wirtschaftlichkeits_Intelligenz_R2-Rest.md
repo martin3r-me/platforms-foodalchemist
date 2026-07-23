@@ -98,4 +98,4 @@ Q2-Format-Spec ──► S3 R2.3 (HARTES Gate; v0 auf Feedback-Popularität vorh
 - Kein Import ins Blaue — R2.3 erst mit dokumentierter Format-Spec (v0-Matrix auf Feedback ausgenommen).
 - Kein Vertriebs-/Angebots-Funnel in FA (Grenze zum Event-Modul; s. [10](10_Angebots_Funnel_Brief_Parser_R6-2.md)).
 
-*Verzahnt: R1 (Masse), R4.1 (Constraints), R2.1/R3.1 (gebaut), [13](13_Preis_Katalog_Ingest_Q2.md)/Q2 (Gate für R2.3), [08](08_Planungs_und_Kreativ_Ebene.md) (Solver am „Go"). Dossier 2026-07-18, bau-reif (R2.4/R2.5) 2026-07-19.*
+*Verzahnt: R1 (Masse), R4.1 (Constraints), R2.1/R3.1 (gebaut), [13](13_Preis_Katalog_Ingest_Q2.md)/Q2 (Gate für R2.3), [08](08_Planungs_und_Kreativ_Ebene.md) (Solver am „Go") → **präzisiert durch [19](19_Foodbook_Leitstelle_A-Z.md): der R2.4-Solver sitzt am Kapitel-Go bzw. in der Preise-Phase (E8) — pro Kapitel eine marge-optimale Kombination unter den Kapitel-Bändern (M3-Spalten `price_anchor/min/max`, `target_food_cost_pct`) statt Foodbook-weit. R2.4 bleibt Follow-up (Nicht-Ziel von Spec 19).** Dossier 2026-07-18, bau-reif (R2.4/R2.5) 2026-07-19.*

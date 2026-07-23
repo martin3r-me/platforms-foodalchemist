@@ -72,10 +72,15 @@ Alles hier ist **ohne Key/Deploy** baubar (deterministisch bzw. Fake-Provider-te
 
 ---
 
-## Phase 4 — Kreative Front: Planungs-/Kreativ-Ebene (08)  · das große Stück
+## Phase 4 — Kreative Front: Planungs-/Kreativ-Ebene (08 → abgelöst durch 19)  · das große Stück
 
-11. **08 · P6 — Concepting-Wissen** befüllen (Kategorie `concept`, Destillation) + `concept`/`konzept`-Dublette konsolidieren + Routings `concept.plan`/`foodbook.plan`. *Kann früher/parallel laufen — unabhängig.*
-12. **08 · P1–P5 — Doppel-Diamant:** Concept- + Foodbook-Planungs-Ebene (divergent, KI darf erfinden) → „Go"-Gate → Konvergenz (ConceptGenerator R6.1 + 07-Mint für erfundene Gerichte).
+> **Split 2026-07-23 (Spec [19](19_Foodbook_Leitstelle_A-Z.md) löst die Foodbook-Hälfte von 08 ab):** Phase 4 zerfällt in **zwei Bau-Blöcke mit unterschiedlichem Gate.**
+> - **4a — deterministisch, blocker-frei (Spec 19 E1–E5):** recipe_ref-Schreibpfad, Kapitel-Baum + Coverage-Tiefe, Zielgruppen-Vokabular + Foodbook-Defaults, Kapitel-Ziele + WE-Ampel, Leitstelle-Rail/Checkliste. **Läuft VOR L7/L8** — braucht keinen LLM-Provider und baut das Gerüst, in das die Erdung später greift.
+> - **4b — provider-gated (Spec 19 E6.4/E7.4 + 08-Doppel-Diamant):** KI-Divergenz (`foodbook.kapitel_ideen`), Freitext-Erdung am Kapitel-Go, Anpassungs-Schleife. Setzt L7/L8 (Phase 3) + LLM live voraus; ohne Provider „wartet auf KI" (Go scheitert nicht).
+
+11. **08 · P6 / 19 · E6.4 — Concepting-Wissen** befüllen (Kategorie `concept`, Destillation) + `concept`/`konzept`-Dublette konsolidieren + Routings `concept.plan`/`foodbook.plan`. *Kann früher/parallel laufen — unabhängig.*
+12. **19 · E1–E5 (4a) — deterministische Leitstelle:** Kapitel-Baum n-tief, Ziel-Vererbung, Zielgruppen-Vokabular, WE-Ampel, Checkliste/Rail. **Vor L7/L8 baubar.**
+12b. **08 · Doppel-Diamant + 19 · E6/E7 (4b):** divergente Kreativ-Skizzen → Kapitel-Go → Konvergenz/Erdung (ConceptGenerator R6.1 + 07-Mint + L7/L8 für erfundene Gerichte).
 13. **07 · M4 — Proposal-Reframe** (Staging = Beschaffungs-Wunsch, nicht GP-Staging) — passt hier oder in Phase 2.
 
 *Ergebnis:* vorne frei denken (Themen/Gerichte/Pairings), hinten garantiert real. „Grounding-Engine" → „kreativer Co-Pilot".

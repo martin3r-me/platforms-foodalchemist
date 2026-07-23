@@ -1,5 +1,7 @@
 # Planungs- & Kreativ-Ebene — Doppel-Diamant vor der Grounding-Kaskade
 
+> ⚠️ **Teil-Supersede 2026-07-23 durch [19_Foodbook_Leitstelle_A-Z.md](19_Foodbook_Leitstelle_A-Z.md):** Die **Foodbook-Hälfte** dieser Spec (Foodbook-Rahmen top-down, Slot-Planung, Kapitel-Struktur, „Go" auf Foodbook-Ebene) ist von Spec 19 abgelöst. Neu gilt dort: **Go PRO KAPITEL** (nicht Foodbook-weit), Kapitel-Baum n-tief statt flacher Slots, Ziele am Kapitel statt am Slot, Duality Paket-Konzept ↔ Einzel-`recipe_ref`. **Weiterhin gültig aus dieser Spec:** das **Doppel-Diamant-Prinzip** (divergieren → „Go" → konvergieren), die **standalone Concept-Ebene** (Konzept ohne Foodbook-Rahmen) und **P6** (Concepting-Wissen + Routings `concept.plan`/`foodbook.plan` — in Spec 19 als E6.4 verortet). Die KI-Erdung nach dem Go bleibt L7/L8 ([03](03_KI_Erstell_Flaechen_512.md)).
+
 > **Anlass (Dominique 2026-07-18):** Auf Konzept- und Foodbook-Ebene fehlt eine **Planungs-/Kreativ-Ebene**, auf der man plant/gestaltet, **bevor die KI die Kaskaden anlegt** (Rezepte/GPs/Preise). Und: der **kreative Teil fehlt** — der Concepter ist heute rein konvergent.
 > **Diagnose (roter Faden):** FA ist **konvergenz-stark, divergenz-schwach**. „Keine Erfindungen" ist goldrichtig an der **Erdungs-Kante**, hat aber den **kreativen Vorlauf miterstickt** (nur Umsortieren des Bestands). Derselbe Instinkt wie bei Convenience („nicht versteifen") und „planen bevor die KI committet". Diese Ebene ist die systematische Antwort.
 

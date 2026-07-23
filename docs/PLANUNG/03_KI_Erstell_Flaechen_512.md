@@ -78,7 +78,9 @@ Bereits in **#369** getrackt — kein neues Issue. Der Block „LLM-Key" ist inz
 
 Der große Hebel, aber KEIN Neubau — Komposition existierender Teile: Brief → (R4.1) Planungs-Gerüst → Kapitel-Struktur-Vorschlag → je Kapitel `generiereAusGeruest`/`generiereAusBrief` (R6.1) → Foodbook-Draft mit Coverage-Ampel (R4.2) dran.
 
-**✅ ENTSCHIEDEN (Dominique 2026-07-18): v1 schlank** — Brief → Kapitel-Baum + je Kapitel ein generiertes Konzept, Status draft, Coverage sofort sichtbar; Kapitel-Texte via L2 nachziehen (kein Voll-Flow in v1). Erst nach R6.1-Blindtest (#492) starten — der validiert die Konzept-Qualität, auf der dieser Flow aufbaut.
+> ⚠️ **L3-v1 revidiert 2026-07-23 durch Spec [19](19_Foodbook_Leitstelle_A-Z.md):** Der „Foodbook aus Brief"-Flow wird nicht mehr als eigenständiger L3-Sonderweg gebaut, sondern **fällt mit dem Foodbook-Cockpit-Kickoff-Wizard (Brief → KI-Gerüst) + Kapitel-Go zusammen**. Der Kickoff erzeugt das Kapitel-Gerüst; die Kapitel-Anlage (E7) erdet je Kapitel Konzepte/Einzelgerichte. L3 bleibt als **Bau-Referenz** (Brief-Sanitizing, „keine Erfindungen in der Auswahl") bestehen, aber der UI-Einstieg lebt im Cockpit, nicht in einem separaten „✨ Foodbook aus Brief"-Button. Neu ist die **Duality**: ein Kapitel trägt 0–n Paket-Konzepte **und** 0–n Einzel-`recipe_ref`-Blöcke (nicht mehr „je Kapitel genau ein Konzept").
+
+**✅ ENTSCHIEDEN (Dominique 2026-07-18): v1 schlank** — Brief → Kapitel-Baum + je Kapitel ein generiertes Konzept, Status draft, Coverage sofort sichtbar; Kapitel-Texte via L2 nachziehen (kein Voll-Flow in v1). Erst nach R6.1-Blindtest (#492) starten — der validiert die Konzept-Qualität, auf der dieser Flow aufbaut. *(→ siehe Revision oben: Einstieg über Cockpit-Kickoff.)*
 
 **DoD (v1):**
 - [ ] Foodbook-Browser: `✨ Foodbook aus Brief` → Brief-Modal (wie Concepts-Browser)
@@ -123,6 +125,8 @@ Die CJ-Referenz ist vollständig kartiert — Portierung nach bekanntem Muster (
 - [ ] Lineage: Übernahmen als `ki`-Quelle (GL-07), Call-Audit analog `ai_call_log`-Muster (FA: bestehendes Gateway-Logging)
 - [ ] MCP-Lockstep: `recipes.REVIEW` (read-only, liefert Findings-JSON — Apply bleibt UI/explizit) oder bewusst UI-only begründet
 - [ ] Pest: Findings-Parse, fehlt-Matching, Apply-Roundtrip inkl. Recompute; graceful ohne Provider
+
+> **Zweiter Konsument (2026-07-23): Kapitel-Anlage (Spec [19](19_Foodbook_Leitstelle_A-Z.md), E7.4).** Der Kapitel-Go materialisiert Freitext-Ideen (`dish_ideas`) über die **gleiche One-Shot-Generier-Queue** wie L7 (+ Wirtschaftlichkeits-Glied L8). L7/L8 sind damit nicht nur der „Erstell mir ein Rezept"-Button, sondern auch die Erdungs-Maschine hinter dem Kapitel-Go. Verdrahtung provider-gated (ohne Provider: `generation_status='queued'` + „wartet auf KI", Go scheitert nicht).
 
 ### L7 — One-Shot-Vollerstellung („volles Rezept in einem Durchlauf") · Größe M–L · **präzisiert Dominique 2026-07-16**
 

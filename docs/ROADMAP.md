@@ -8,6 +8,10 @@
 
 ---
 
+## Update 2026-07-23 (Spec 19 Foodbook-Leitstelle — E0.2 Doku-Abgleich)
+
+Autonome Routine gestartet für Spec [19 Foodbook-Leitstelle A–Z](PLANUNG/19_Foodbook_Leitstelle_A-Z.md) (Nachfolger der Foodbook-Hälfte von Spec 08). **Teilschritt E0.2 (Doku-Abgleich, reine Doku, kein Code):** `_Spec_Status_Matrix` +Zeile 19 (Titel 01→19); Spec-08-Teil-Supersede-Banner (Foodbook-Hälfte abgelöst, Go PRO KAPITEL; standalone Concept + Doppel-Diamant + P6 bleiben gültig); Spec 03 L7/L8 = Zweitkonsument „Kapitel-Anlage (19)" + L3-v1-Revision (Einstieg via Cockpit-Kickoff, Duality Paket↔Einzel); Spec 00 Phase-4-Split (4a determ. E1–E5 vor L7/L8 / 4b provider-gated); Spec 12 Solver am Kapitel-Go/Preise-Phase statt Foodbook-weit. Nächster Teilschritt: E1.1 (recipe_ref-Schreibpfad).
+
 ## ⭐ Update 2026-07-22 (Session: Wissens-Modul #469 — Chip-Wahrheit + knowledge.BIND/UNBIND)
 
 **Anlass (Dominique):** in der Wissen-Seite zeigte „Grobe Ebene — automatisch" für JEDES Doc einer Kategorie einen grünen Routing-Chip, auch wenn die Laufzeit es faktisch nie lädt — Verdacht auf Doppelung/überflüssige Einstellung geprüft und widerlegt.
