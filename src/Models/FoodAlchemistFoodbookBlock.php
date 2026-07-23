@@ -24,6 +24,17 @@ class FoodAlchemistFoodbookBlock extends Model
 
     protected $guarded = ['id'];
 
+    /**
+     * Kanonische Preis-Basen (Vokabular-Pflicht Spec 19, Entscheidung 6 — keine freien
+     * Strings). blockPreis()/App-UI lesen exakt diese Werte:
+     *  - person   = Per-Person (€/Gast, ×Pax)
+     *  - pauschal = flacher Anteil (€/Position, NICHT ×Pax)
+     *  - staffel  = Pax-gestaffelt (nur header_frei_preis)
+     * MCP-Ergonomie-Labels (pro_person/pro_stueck) werden VOR dem Schreiben hierauf
+     * gemappt (FoodbookBlocksPostTool::PRICE_BASIS_MAP) — die „pro_stueck-Falle".
+     */
+    public const PRICE_BASES = ['person', 'pauschal', 'staffel'];
+
     protected $casts = [
         'uuid' => 'string',
         'position' => 'integer',

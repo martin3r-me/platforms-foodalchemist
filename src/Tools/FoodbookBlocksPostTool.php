@@ -9,17 +9,32 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\VocabularyService;
 
 /**
  * Phase B: Block in einem Kapitel anlegen — das inhaltliche Atom des Foodbooks.
- * Foodbooks komponieren KONZEPTE (Dominique 2026-06-13), keine Einzel-Gerichte:
- * Konzept-/Paket-Block via concept_id (type=concept_ref), dazu Text/Header/Spacer.
+ * Ein Kapitel trägt Konzepte (Paket, €/Gast) UND direkte Einzel-Gerichte (€/Position):
+ * Paket-Block via concept_id (type=concept_ref) · Einzel-Gericht via sales_recipe_id
+ * (type=recipe_ref, Spec 19 Entscheidung 5) · dazu Text/Header/Spacer.
  * Nur solange das Foodbook draft ist. Optional mit Preis-Staffel.
  */
 class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
+    /**
+     * MCP-Ergonomie-Labels → kanonische Code-Werte (FoodAlchemistFoodbookBlock::PRICE_BASES).
+     * Behebt die „pro_stueck-Falle": das Tool schrieb bislang pro_person/pro_stueck ROH in
+     * die Spalte, blockPreis() kennt aber nur person|pauschal|staffel → pro_stueck fiel
+     * still auf Per-Person (×Pax) zurück. Kanonische Werte werden idempotent durchgereicht.
+     */
+    private const PRICE_BASIS_MAP = [
+        'pro_person' => 'person',
+        'pro_stueck' => 'pauschal',   // €/Position, flach (kein ×Pax)
+        'pauschal' => 'pauschal',
+        'person' => 'person',
+        'staffel' => 'staffel',
+    ];
     public function getName(): string
     {
         return 'foodalchemist.foodbook_blocks.POST';
@@ -28,9 +43,11 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
     public function getDescription(): string
     {
         return 'Legt einen Block in einem Kapitel eines draft-Foodbooks an (Position ans Ende). '
-            . 'Foodbooks komponieren KONZEPTE, keine Einzel-Gerichte: der Gericht-/Preis-Block ist '
-            . 'concept_ref (concept_id = Konzept/Paket, via foodalchemist.concepts.SEARCH). '
+            . 'Ein Kapitel trägt Paket-Blöcke UND direkte Einzel-Gerichte: '
+            . 'concept_ref (concept_id = Konzept/Paket, €/Gast, via foodalchemist.concepts.SEARCH) '
+            . 'oder recipe_ref (sales_recipe_id = echtes VK-Gericht, €/Position, via foodalchemist.verkaufsrezepte.SEARCH). '
             . 'Weitere Typen: text (freier Text/Notiz) | header_neutral | header_frei | header_frei_preis | spacer. '
+            . 'price_basis: pro_person (€/Gast, ×Pax) | pro_stueck (€/Position, flach) | pauschal (flach). '
             . 'Optional staffel: [{min_persons, price}] für Pax-abhängige Preise.';
     }
 
@@ -40,10 +57,11 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
             'type' => 'object',
             'properties' => [
                 'chapter_id' => ['type' => 'integer'],
-                'type' => ['type' => 'string', 'enum' => ['text', 'concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer'], 'default' => 'text'],
+                'type' => ['type' => 'string', 'enum' => ['text', 'concept_ref', 'recipe_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer'], 'default' => 'text'],
                 'label' => ['type' => 'string', 'description' => 'Interner Titel des Blocks'],
                 'customer_text' => ['type' => 'string', 'description' => 'Kundenseitiger Angebotstext'],
                 'concept_id' => ['type' => 'integer', 'description' => 'Konzept/Paket bei type=concept_ref'],
+                'sales_recipe_id' => ['type' => 'integer', 'description' => 'Echtes VK-Gericht bei type=recipe_ref (verkauf()-Scope, keine Slot-Variante)'],
                 'quantity' => ['type' => 'number'],
                 'unit' => ['type' => 'string', 'description' => 'Einheiten-Slug, z. B. stk, portion'],
                 'price_value' => ['type' => 'number'],
@@ -86,11 +104,27 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
             && ! FoodAlchemistConcept::visibleToTeam($team)->whereKey((int) $arguments['concept_id'])->exists()) {
             return ToolResult::error('concept_id nicht sichtbar/vorhanden — via foodalchemist.concepts.SEARCH ermitteln.', 'NOT_FOUND');
         }
+        // recipe_ref: sichtbares, echtes VK-Gericht (keine Slot-Variante) — spiegelt
+        // pruefeRecipeRef() im Service, aber mit MCP-typisiertem NOT_FOUND vor dem Write.
+        if (isset($arguments['sales_recipe_id'])
+            && ! FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
+                ->whereNull('variant_source_recipe_id')
+                ->whereKey((int) $arguments['sales_recipe_id'])->exists()) {
+            return ToolResult::error('sales_recipe_id nicht sichtbar/kein VK-Gericht — via foodalchemist.verkaufsrezepte.SEARCH ermitteln.', 'NOT_FOUND');
+        }
 
         $daten = array_intersect_key($arguments, array_flip([
             'type', 'label', 'customer_text', 'interne_bemerkung',
-            'concept_id', 'quantity', 'price_value', 'price_basis', 'visible',
+            'concept_id', 'sales_recipe_id', 'quantity', 'price_value', 'price_basis', 'visible',
         ]));
+        // price_basis-Angleich: MCP-Ergonomie-Label → kanonischer Code-Wert (pro_stueck-Falle).
+        if (($daten['price_basis'] ?? '') !== '') {
+            $kanon = self::PRICE_BASIS_MAP[$daten['price_basis']] ?? null;
+            if ($kanon === null) {
+                return ToolResult::error('Unbekannte price_basis "' . $daten['price_basis'] . '" — erlaubt: pro_person, pro_stueck, pauschal.', 'VALIDATION_ERROR');
+            }
+            $daten['price_basis'] = $kanon;
+        }
         if (($arguments['unit'] ?? '') !== '') {
             $unit = app(VocabularyService::class)->findEinheit($team, (string) $arguments['unit']);
             if ($unit === null) {

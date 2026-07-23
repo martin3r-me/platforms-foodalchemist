@@ -83,6 +83,57 @@ it('M11-11: foodbook.GET liefert Kopf + Kapitel/Blöcke + aggregierten Angebotsp
     expect($miss->success)->toBeFalse()->and($miss->errorCode)->toBe('NOT_FOUND');
 });
 
+it('E1.4: foodbook_blocks.POST recipe_ref-Roundtrip — sales_recipe_id + price_basis-Angleich (pro_stueck→pauschal)', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $vk = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'vk_ref', 'name' => 'HG: Wolfsbarsch',
+        'status' => 'draft', 'is_sales_recipe' => true, 'sales_net' => 12.50,
+    ]);
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Einzel-Test', 'personen' => 100]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'À la carte']);
+
+    $tool = $this->registry->get('foodalchemist.foodbook_blocks.POST');
+
+    // pro_stueck (€/Position, flach) muss kanonisch als 'pauschal' landen — die „pro_stueck-Falle".
+    $res = $tool->execute([
+        'chapter_id' => $kap->id, 'type' => 'recipe_ref',
+        'sales_recipe_id' => $vk->id, 'price_basis' => 'pro_stueck',
+    ], $this->kontext);
+    expect($res->success)->toBeTrue()
+        ->and($res->data['block']['type'])->toBe('recipe_ref')
+        ->and($res->data['block']['sales_recipe_id'])->toBe($vk->id);
+    $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::find($res->data['block']['id']);
+    expect($block->price_basis)->toBe('pauschal');                       // NICHT roh 'pro_stueck'
+
+    // pro_person → person (Per-Person, ×Pax)
+    $res2 = $tool->execute([
+        'chapter_id' => $kap->id, 'type' => 'recipe_ref',
+        'sales_recipe_id' => $vk->id, 'price_basis' => 'pro_person',
+    ], $this->kontext);
+    $block2 = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::find($res2->data['block']['id']);
+    expect($block2->price_basis)->toBe('person');
+
+    // recipe_ref ohne sales_recipe_id → Service-Guard als VALIDATION_ERROR
+    $ohne = $tool->execute(['chapter_id' => $kap->id, 'type' => 'recipe_ref'], $this->kontext);
+    expect($ohne->success)->toBeFalse()->and($ohne->errorCode)->toBe('VALIDATION_ERROR');
+});
+
+it('E1.4: foodbook_blocks.POST Tenancy — fremd-Team-Gericht als sales_recipe_id blockt (NOT_FOUND)', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    // Gericht gehört Kind A — für Root (Ancestry aufwärts) NICHT sichtbar.
+    $fremd = FoodAlchemistRecipe::create([
+        'team_id' => $this->childA->id, 'recipe_key' => 'vk_fremd', 'name' => 'HG: Fremd',
+        'status' => 'draft', 'is_sales_recipe' => true,
+    ]);
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Tenancy-Test', 'personen' => 50]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Kap']);
+
+    $res = $this->registry->get('foodalchemist.foodbook_blocks.POST')->execute([
+        'chapter_id' => $kap->id, 'type' => 'recipe_ref', 'sales_recipe_id' => $fremd->id,
+    ], $this->kontext);
+    expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('NOT_FOUND');
+});
+
 it('Schreib-Tool: ohne accept nur Vorschlag; accept=true schreibt via GL-07; manual blockt als Tool-Error', function () {
     $hg = FoodAlchemistDishMainGroup::create(['code' => 'HG', 'label' => 'Hauptgang']);
     $klasse = FoodAlchemistDishClass::create(['dish_main_group_id' => $hg->id, 'code' => 'HG_F', 'label' => 'Fleisch', 'diet_form' => 'fleisch']);
