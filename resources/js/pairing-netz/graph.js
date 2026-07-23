@@ -216,7 +216,7 @@ export function pairingNetzGraph(config) {
         .attr('text-anchor', (d) => this._labelAnchor(d))
         .attr('x', (d) => this._labelX(d))
         .attr('y', (d) => this._labelY(d))
-        .attr('dominant-baseline', (d) => (this._istRadial(d) ? 'middle' : 'auto'))
+        .attr('dominant-baseline', (d) => (this._istRadial(d) || d.kind === 'zentrum' ? 'middle' : 'auto'))
         .attr('font-size', (d) => this._fontSize(d))
         .style('paint-order', 'stroke')
         .style('stroke', 'rgba(255,255,255,.9)')
@@ -320,6 +320,7 @@ export function pairingNetzGraph(config) {
 
     _labelDy(d) {
       const r = this._radius(d);
+      if (d.kind === 'zentrum') return 0; // Titel MITTIG auf dem Quell-Kreis (freie Mitte, kollidiert mit keinem Anker)
 
       return d.y > this.canvasH / 2 ? r + 12 : -(r + 6);
     },
