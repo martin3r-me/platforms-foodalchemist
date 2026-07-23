@@ -75,3 +75,29 @@ it('slotFuellen(neu) ist gated (Provider-Hinweis, kein Gericht übernommen)', fu
     // Kein Konzept-Slot mit dem Gericht angelegt.
     expect(FoodAlchemistConceptSlot::where('sales_recipe_id', $this->dish->id)->count())->toBe(0);
 });
+
+// ── E1.5 kapitelweite Dedup (Konzept-Slots ∪ recipe_ref-Blöcke) ──────────────
+
+it('zweimaliges Übernehmen desselben Gerichts meldet schon_drin + legt nur einen Konzept-Slot an', function () {
+    $a = $this->fbSvc->uebernehmeVorschlag($this->rootTeam, $this->fb->id, $this->slot->id, $this->dish->id);
+    $b = $this->fbSvc->uebernehmeVorschlag($this->rootTeam, $this->fb->id, $this->slot->id, $this->dish->id);
+
+    expect($a['schon_drin'])->toBeFalse()
+        ->and($b['schon_drin'])->toBeTrue()
+        ->and($b['concept_id'])->toBe($a['concept_id']);   // führendes Kapitel-Konzept zurückgegeben
+    expect(FoodAlchemistConceptSlot::where('concept_id', $a['concept_id'])->where('sales_recipe_id', $this->dish->id)->count())->toBe(1);
+});
+
+it('Gericht bereits als recipe_ref-Block im Kapitel → Übernehmen dedupt kapitelweit (kein Konzept, kein Slot)', function () {
+    // Einzel-Weg: Gericht liegt schon als recipe_ref direkt am Kapitel.
+    $chapterId = (int) $this->slot->refresh()->chapter_id;
+    $this->fbSvc->addBlock($this->rootTeam, $chapterId, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->dish->id]);
+
+    $res = $this->fbSvc->uebernehmeVorschlag($this->rootTeam, $this->fb->id, $this->slot->id, $this->dish->id);
+
+    expect($res['schon_drin'])->toBeTrue();
+    // Union-Dedup greift VOR jeder Anlage: weder Konzept-Block noch Konzept-Slot entstehen.
+    $kapitel = $this->fb->refresh()->chapters->firstWhere('id', $chapterId);
+    expect($kapitel->blocks->where('type', 'concept_ref')->count())->toBe(0);
+    expect(FoodAlchemistConceptSlot::where('sales_recipe_id', $this->dish->id)->count())->toBe(0);
+});

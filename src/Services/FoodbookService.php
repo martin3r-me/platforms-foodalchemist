@@ -246,6 +246,16 @@ class FoodbookService
         }
         $kapitel = $this->ownedKapitel($team, (int) $slot->chapter_id);
 
+        // Spec 19 E1.5: kapitelweite Dedup VOR jeder Anlage. Das Gericht gilt als „schon drin",
+        // wenn es Slot IRGENDEINES Konzepts (concept_ref) ODER ein direkter recipe_ref-Block im
+        // Kapitel ist (Union beider Wege — der alte Check sah nur EIN Konzept). Treffer ⇒ nichts
+        // anlegen (auch kein leeres Konzept); concept_id = führendes Kapitel-Konzept oder 0.
+        if ($this->gerichtImKapitel($kapitel, $recipeId)) {
+            $vorhanden = $kapitel->blocks()->where('type', 'concept_ref')->whereNotNull('concept_id')->orderBy('position')->first();
+
+            return ['concept_id' => (int) ($vorhanden->concept_id ?? 0), 'chapter_id' => (int) $slot->chapter_id, 'schon_drin' => true];
+        }
+
         $block = $kapitel->blocks()->where('type', 'concept_ref')->whereNotNull('concept_id')->orderBy('position')->first();
         if ($block === null) {
             // Leitstelle: das neue Kapitel-Konzept erbt das Foodbook-Niveau (concept.level, im Concepter-
@@ -263,14 +273,30 @@ class FoodbookService
             $conceptId = (int) $block->concept_id;
         }
 
-        $schonDrin = \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::where('concept_id', $conceptId)
-            ->where('sales_recipe_id', $recipeId)->exists();
-        if (! $schonDrin) {
-            $cslot = $this->concepts->addSlot($team, $conceptId, ['role' => $slot->label]);
-            $this->concepts->fillSlot($team, $cslot->id, ['sales_recipe_id' => $recipeId, 'type' => 'gericht']);
+        $cslot = $this->concepts->addSlot($team, $conceptId, ['role' => $slot->label]);
+        $this->concepts->fillSlot($team, $cslot->id, ['sales_recipe_id' => $recipeId, 'type' => 'gericht']);
+
+        return ['concept_id' => $conceptId, 'chapter_id' => (int) $slot->chapter_id, 'schon_drin' => false];
+    }
+
+    /**
+     * Kapitelweite Dedup-Prüfung (Spec 19 E1.5): steckt das VK-Gericht schon im Kapitel —
+     * als Slot IRGENDEINES per concept_ref hängenden Konzepts ODER als direkter recipe_ref-Block?
+     * Union über beide Anlage-Wege (Paket-Konzept + Einzel-Gericht). Nur Kapitel-lokal; die
+     * quer-Kapitel-Meldung ist WEICH und bleibt `uebernehmeGericht` (E7.2) vorbehalten.
+     */
+    private function gerichtImKapitel(FoodAlchemistFoodbookKapitel $kapitel, int $recipeId): bool
+    {
+        if ($kapitel->blocks()->where('type', 'recipe_ref')->where('sales_recipe_id', $recipeId)->exists()) {
+            return true;
+        }
+        $conceptIds = $kapitel->blocks()->where('type', 'concept_ref')->whereNotNull('concept_id')->pluck('concept_id');
+        if ($conceptIds->isEmpty()) {
+            return false;
         }
 
-        return ['concept_id' => $conceptId, 'chapter_id' => (int) $slot->chapter_id, 'schon_drin' => $schonDrin];
+        return \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::whereIn('concept_id', $conceptIds)
+            ->where('sales_recipe_id', $recipeId)->exists();
     }
 
     private const KAPITEL_FELDER = ['title', 'consumer_title', 'claim', 'description', 'price_per_person', 'price_mode'];
