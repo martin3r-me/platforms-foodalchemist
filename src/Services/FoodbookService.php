@@ -334,12 +334,18 @@ class FoodbookService
     // ── Blöcke ────────────────────────────────────────────────────────────────
 
     /**
-     * Block-Typen. **Foodbook komponiert Concepts, KEINE Einzel-Gerichte** (Dominique
-     * 2026-06-13) — die Gericht-Ebene ist Sache des Concepters (GP→Rezept→Gericht→Concept→
-     * Foodbook). Daher kein `recipe_ref` im Angebot; die Spalte/Relation bleibt nur als
-     * Schema-Altlast (Jarsvis hatte keine Concept-Ebene). Wahl-Gruppen A|B|C = zwischen Concepts.
+     * Block-Typen. Ursprüngliche Doktrin (Dominique 2026-06-13): „Foodbook komponiert
+     * Concepts, KEINE Einzel-Gerichte" — die Gericht-Ebene war Sache des Concepters
+     * (GP→Rezept→Gericht→Concept→Foodbook). **Teilrevidiert Spec 19 (Dominique 2026-07-23,
+     * Entscheidung 5):** Ein Kapitel trägt jetzt 0–n Concepts (Paket, €/Gast) UND 0–n
+     * direkte Einzel-Gerichte als `recipe_ref`-Block (€/Position). Damit ist „Weg B
+     * exklusiv" nicht mehr gültig. `recipe_ref` referenziert per `sales_recipe_id` ein
+     * echtes VK-Gericht (`verkauf()`-Scope, KEINE konzept-lokale Slot-Variante) — Validierung
+     * siehe `pruefeRecipeRef()`. Lesepfade (blockPreis/kapitelAggregat/dokBlockLabel) kannten
+     * recipe_ref bereits; hier wird nur der Schreibpfad freigeschaltet. Wahl-Gruppen A|B|C
+     * bleiben (zwischen Concepts wie zwischen Gerichten).
      */
-    public const BLOCK_TYPES = ['concept_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text', 'image'];
+    public const BLOCK_TYPES = ['concept_ref', 'recipe_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text', 'image'];
 
     private const BLOCK_FELDER = ['type', 'level', 'visible', 'label', 'wording', 'customer_text', 'interne_bemerkung',
         'variant_group_id', 'concept_id', 'sales_recipe_id', 'quantity', 'unit_vocab_id', 'price_value', 'price_basis', 'height', 'header_source', 'payload_json'];
@@ -349,6 +355,9 @@ class FoodbookService
         $k = $this->ownedKapitel($team, $kapitelId);
         $daten = array_intersect_key($in, array_flip(self::BLOCK_FELDER));
         $daten['type'] = in_array($in['type'] ?? '', self::BLOCK_TYPES, true) ? $in['type'] : 'text';
+        if ($daten['type'] === 'recipe_ref') {
+            $this->pruefeRecipeRef($team, $daten['sales_recipe_id'] ?? null);
+        }
         $daten['team_id'] = $k->team_id;
         $daten['position'] = (int) $k->blocks()->max('position') + 1;
 
@@ -358,9 +367,35 @@ class FoodbookService
     public function updateBlock(Team $team, int $blockId, array $in): FoodAlchemistFoodbookBlock
     {
         $block = $this->ownedBlock($team, $blockId);
-        $block->update(array_intersect_key($in, array_flip(self::BLOCK_FELDER)));
+        $daten = array_intersect_key($in, array_flip(self::BLOCK_FELDER));
+        // recipe_ref-Guard: greift, wenn der Block (neu oder bereits) recipe_ref ist und ein
+        // sales_recipe_id gesetzt/geändert wird — validiert das effektive Gericht.
+        $effTyp = array_key_exists('type', $daten) ? $daten['type'] : $block->type;
+        if ($effTyp === 'recipe_ref' && array_key_exists('sales_recipe_id', $daten)) {
+            $this->pruefeRecipeRef($team, $daten['sales_recipe_id']);
+        }
+        $block->update($daten);
 
         return $block->refresh();
+    }
+
+    /**
+     * Schreibpfad-Validierung für `recipe_ref`-Blöcke (Spec 19 E1.1). Spiegelt den
+     * Picker-Scope `gerichtKandidaten`: das referenzierte Gericht muss dem Team sichtbar
+     * sein, ein echtes VK-Gericht (`verkauf()`) und darf KEINE konzept-lokale Slot-Variante
+     * (`variant_source_recipe_id`) sein.
+     */
+    private function pruefeRecipeRef(Team $team, ?int $salesRecipeId): void
+    {
+        if ($salesRecipeId === null) {
+            throw new \RuntimeException('recipe_ref-Block braucht ein sales_recipe_id (VK-Gericht).');
+        }
+        $ok = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
+            ->whereNull('variant_source_recipe_id')
+            ->whereKey($salesRecipeId)->exists();
+        if (! $ok) {
+            throw new \RuntimeException("sales_recipe_id {$salesRecipeId} ist kein gültiges, sichtbares VK-Gericht (keine Slot-Variante).");
+        }
     }
 
     /**

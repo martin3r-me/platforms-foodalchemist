@@ -51,8 +51,38 @@ it('M11-02: Kapitel-Aggregat (concept_ref + Paket-Preisblock) + Pax-Gesamtpreis 
         ->and($gesamt['personen'])->toBe(100)
         ->and($gesamt['gesamt_vk'])->toBe(700.00);                    // 7,00 × 100 Pax
 
-    // recipe_ref ist KEIN angebotener Block-Typ mehr (wird zu 'text' degradiert)
-    expect(\Platform\FoodAlchemist\Services\FoodbookService::BLOCK_TYPES)->not->toContain('recipe_ref');
+    // Spec 19 E1.1: recipe_ref ist wieder ein angebotener Block-Typ (Einzel-Gericht direkt am Kapitel)
+    expect(\Platform\FoodAlchemist\Services\FoodbookService::BLOCK_TYPES)->toContain('recipe_ref');
+});
+
+it('Spec 19 E1.1: recipe_ref-Schreibpfad validiert das VK-Gericht (verkauf-Scope, keine Slot-Variante)', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB']);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Einzel']);
+
+    // gültiges VK-Gericht → Block wird als recipe_ref persistiert
+    $block = $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->gericht->id]);
+    expect($block->type)->toBe('recipe_ref')
+        ->and($block->sales_recipe_id)->toBe($this->gericht->id);
+
+    // ohne sales_recipe_id → wirft
+    expect(fn () => $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref']))
+        ->toThrow(\RuntimeException::class);
+
+    // Basis-Rezept (kein VK-Gericht) → wirft
+    $basis = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'b1', 'name' => 'Basis: Fond', 'status' => 'approved',
+        'is_sales_recipe' => false,
+    ]);
+    expect(fn () => $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $basis->id]))
+        ->toThrow(\RuntimeException::class);
+
+    // konzept-lokale Slot-Variante → wirft
+    $variante = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'v1', 'name' => 'Gruß: Amuse (Variante)', 'status' => 'approved',
+        'is_sales_recipe' => true, 'sales_net' => 2.50, 'variant_source_recipe_id' => $this->gericht->id,
+    ]);
+    expect(fn () => $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $variante->id]))
+        ->toThrow(\RuntimeException::class);
 });
 
 it('M11-02: Kapitel-Baum + Move mit Zyklus-Schutz', function () {

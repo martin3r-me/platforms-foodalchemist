@@ -119,7 +119,7 @@ Kein platform-core/crm; KI-Neu-Erstellung = L7/L8 (nur Verdrahtung/Queue); R2.4-
 - [x] E0.2 Doku-Abgleich: `_Spec_Status_Matrix` +Zeile 19 · Spec-08-Banner · Spec 03 (L7/L8-Konsument, L3-v1) · Spec 00 (Phase-4-Split) · Spec 12 (Solver-Referenz) — ✅ 2026-07-23
 
 ### E1 — recipe_ref-Schreibpfad (S)
-- [ ] E1.1 `BLOCK_TYPES` + recipe_ref, Validierung (sales_recipe_id = echtes VK-Gericht, verkauf()-Scope, keine Slot-Variante — Muster `gerichtKandidaten`), Doktrin-Kommentar :337–341 + `docs/foodbook.md` + ROADMAP-Nachtrag
+- [x] E1.1 `BLOCK_TYPES` + recipe_ref, Validierung (sales_recipe_id = echtes VK-Gericht, verkauf()-Scope, keine Slot-Variante — Muster `gerichtKandidaten`), Doktrin-Kommentar :337–341 + `docs/foodbook.md` + ROADMAP-Nachtrag — ✅ 2026-07-23
 - [ ] E1.2 `blockPreis`: price_basis (person|pauschal) für recipe_ref respektieren; Pest Mischkapitel (Konzept €/Gast + Einzel pauschal → Leiste korrekt)
 - [ ] E1.3 UI-Picker im Block-Editor („+ Gericht einfügen" neben „+ Concept einfügen", nutzt `gerichtKandidaten`)
 - [ ] E1.4 MCP `foodbook_blocks.POST`: recipe_ref-Enum + sales_recipe_id + price_basis-Enum-Angleich (`pro_stueck`-Falle); Pest MCP-Roundtrip + Tenancy-Negativ
@@ -179,3 +179,4 @@ Kein platform-core/crm; KI-Neu-Erstellung = L7/L8 (nur Verdrahtung/Queue); R2.4-
 |---|---|---|---|---|
 | 2026-07-23 | E0.1 | ✅ Spec angelegt | — | Session „Foodbook-Leitstelle A–Z"-Plan |
 | 2026-07-23 | E0.2 | ✅ Doku-Abgleich | s. Git-Log „E0.2" | 5 Touchpoints: Matrix +Z19 · Spec-08-Supersede-Banner · Spec 03 L7/L8-Zweitkonsument + L3-v1-Revision · Spec 00 Phase-4-Split (4a determ. vor L7/L8 / 4b provider-gated) · Spec 12 Solver am Kapitel-Go. Reine Doku, kein Code. |
+| 2026-07-23 | E1.1 | ✅ recipe_ref-Schreibpfad frei | (s. Commit) | `recipe_ref` in `BLOCK_TYPES`; `pruefeRecipeRef()` (verkauf()-Scope, visibleToTeam, keine Slot-Variante) in addBlock+updateBlock; Doktrin-Kommentar :337ff. auf Entscheidung 5 umgeschrieben; docs/foodbook.md + ROADMAP nachgezogen. Stale-Test invertiert (BLOCK_TYPES→toContain) + neuer Guard-Test. Pest Foodbook 60/60, Coverage\|Concept 122/122 grün. MCP-Enum-Angleich ist E1.4 (separat). |

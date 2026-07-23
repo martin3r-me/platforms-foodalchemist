@@ -13,7 +13,9 @@ Ein Foodbook bündelt:
 - **Personenzahl (Pax)** — für wie viele Gäste kalkuliert wird.
 - **Angebots-Preise** — die Preise, die der Kunde sieht.
 
-Wichtig: Ein Foodbook arbeitet mit **Concepts**, nicht mit einzelnen Gerichten. Die Komposition einzelner Teller passiert eine Ebene tiefer im Concepter — das Foodbook stellt die fertigen Bausteine zum Portfolio zusammen.
+Ein Foodbook arbeitet primär mit **Concepts** (gebündelte Pakete, €/Gast). Die Komposition einzelner Teller passiert eine Ebene tiefer im Concepter — das Foodbook stellt die fertigen Bausteine zum Portfolio zusammen.
+
+Seit Spec 19 (2026-07-23) kann ein Kapitel **zusätzlich einzelne Gerichte direkt** tragen: neben 0–n Concepts (Paket, €/Gast) auch 0–n `recipe_ref`-Blöcke, die ein VK-Gericht direkt referenzieren (€/Position). Damit ist die frühere Regel „Foodbook komponiert nur Concepts" (Weg B exklusiv) teilrevidiert. Ein `recipe_ref`-Block akzeptiert nur echte VK-Gerichte (keine konzept-lokalen Slot-Varianten).
 
 ---
 
