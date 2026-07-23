@@ -4,6 +4,7 @@
 > **Ziel:** Aus einer geplanten Produktion (Datum + Ziele) einen **verbindlichen Produktionsauftrag** machen — mit Produktionsdatum, Status-Lebenszyklus und zwei Ausgängen: einem küchen-tauglichen **Produktionsschein** (Zubereitung/Ansätze/Zutaten) und einer **Einbahn-Übergabe** an die Bestellschiene (Spec 17). Die bisherigen Planungs-Blätter (R7.1, read-only) rechneten dasselbe nur — Spec 18 macht daraus einen dauerhaften Beleg (stateful), analog zu dem, was Spec 17 für den Einkauf getan hat.
 > **UI-Entscheidung:** kein Tab-Anhängsel an eine bestehende Komponente, sondern ein **vollwertiges Modul-Interface** wie Concepter/Gerichte/Basisrezepte — Browser-Liste + Cockpit-DetailPanel + Editor-Modal (Stammdaten/Ziele/Vorschau-Karteien).
 > **Reifegrad: ✅ S0–S3 KOMPLETT 2026-07-22.** S0 `eac1cd5` (Datenmodell + Service) · S1 `99e2393` (Browser/DetailPanel/Editor + Nav, absorbiert `/blaetter`) · S2 `228a398` (4 MCP-Tools) · S3 `c2c25c7` (Produktionsschein-Export). `ProductionOrderServiceTest` 14/14 (2 harness-bedingt geskippt, siehe Spec 17-Präzedenz). Browser-verifiziert gegen echte Rezept-/GP-Daten (Sandbox-MySQL) — Editor→Speichern→Cockpit→Bestellung übergeben→Status „in Arbeit"-Freeze, alles end-to-end geprüft. **Offen nur:** demo-Deploy.
+> **v2-Ausbau (2026-07-23):** benannte Produktionen (mehrere/Tag — kippt P1), Ziel-Typen Basisrezept+kg + Foodbook-Kapitel, Editor/Panel-Umbau → [Spec 20](20_Produktion_Einkauf_v2.md).
 
 ---
 

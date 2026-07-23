@@ -4,6 +4,7 @@
 > **Ziel:** Aus dem geplanten Bedarf echte, **versendbare Bestellungen pro Lieferant** formen — in **ganzen Gebinden**, mit Artikelnummer und Gebinde-Preis, gesammelt in einer persistenten **Bestellschiene** je Lieferant. Das Planungsblatt rechnet den Bedarf (read-only) — das Bestellwesen macht daraus einen **dauerhaften Beleg** (stateful).
 > **Scope-Grenze ✅ ENTSCHIEDEN (2026-07-21):** **OHNE Bestand** — Bestellassistent, kein Lager/Wareneingang/Netting/Rechnungsprüfung/Inventur. Bestellmenge = geplanter Bedarf in Gebinde (kein Abzug gegen Lager). Bestand = späterer Ausbau (S4, Nicht-Ziel v1).
 > **Reifegrad: ✅ S0–S3 KOMPLETT & ★ LIVE AUF DEMO 2026-07-21** (E1–E11). S0 `0d78bd2` (Gebinde-Bestellzeile) · S1 `3daf87d` (Bestell-Logistik) · S2 `bbc73e3`+`49f6c16` (Bestellschiene Engine+MCP+UI) · S3 `ef9a5fc` (Versand/Export PDF/CSV/mailto + `orders.UPDATE_LINE`). `OrderServiceTest` 14/14. **Deploy:** `update.sh` gefahren (FA `dc31c6d`), Migrationen `000002`+`000003` auf demo-MySQL durch, Schema verifiziert (`orders`/`order_lines`/`suppliers.delivery_days` da). **Offen nur:** manuelle UI-Klickstrecke (Dominique) + S4 Bestand (bewusstes Nicht-Ziel).
+> **v2-Ausbau (2026-07-23):** 3-Panel-Umbau, manuelle LA-Zeilen (`orders.CREATE/ADD_LINE`), Strategie-Switch je Schiene + „Neu quellen" (löst E5-Versprechen ein), editierbare Kopf-Felder → [Spec 20](20_Produktion_Einkauf_v2.md).
 
 ---
 

@@ -8,6 +8,10 @@
 
 ---
 
+## Update 2026-07-23 (Spec 20 Produktion + Einkauf v2 — freigegeben, Routine eingerichtet)
+
+**Neuer v2-Ausbau der N-Track-Geschwister Spec 17+18** (Dominique-Wunsch): Produktion mit **Namen + mehreren Aufträgen pro Tag** (kippt 18·P1), Ziel-Typen **Basisrezept+kg** und **Foodbook-Kapitel** (Kapitel+Personen, Varianten-Wahl), Editor v2 + Panel-Umbau, Stale-Marker für die Einkaufs-Verdrahtung; Einkauf: **3-Panel-Umbau**, **manuelle LA-Zeilen** (`orders.CREATE/ADD_LINE` — Direktbestellung ohne Produktion), **Preisstrategie-Switch je Schiene + „Neu quellen"** (löst 17·E5 ein), editierbare Kopf-Felder. Entscheide V1–V4 festgezurrt, Ist-Stand code-kartiert (6 parallele Leser). Spec-first: [`docs/PLANUNG/20_Produktion_Einkauf_v2.md`](PLANUNG/20_Produktion_Einkauf_v2.md) (Stufen P0–P4 + E1–E3 mit DoD + Stand-Log). **Umsetzung via 2h-Routine `produktion-einkauf-v2-umsetzung`** (ab 2026-07-24, täglich 13–23 Uhr, eine Stufe pro Run).
+
 ## Update 2026-07-23 (Spec 19 Foodbook-Leitstelle — E0.2 Doku-Abgleich)
 
 Autonome Routine gestartet für Spec [19 Foodbook-Leitstelle A–Z](PLANUNG/19_Foodbook_Leitstelle_A-Z.md) (Nachfolger der Foodbook-Hälfte von Spec 08). **Teilschritt E0.2 (Doku-Abgleich, reine Doku, kein Code):** `_Spec_Status_Matrix` +Zeile 19 (Titel 01→19); Spec-08-Teil-Supersede-Banner (Foodbook-Hälfte abgelöst, Go PRO KAPITEL; standalone Concept + Doppel-Diamant + P6 bleiben gültig); Spec 03 L7/L8 = Zweitkonsument „Kapitel-Anlage (19)" + L3-v1-Revision (Einstieg via Cockpit-Kickoff, Duality Paket↔Einzel); Spec 00 Phase-4-Split (4a determ. E1–E5 vor L7/L8 / 4b provider-gated); Spec 12 Solver am Kapitel-Go/Preise-Phase statt Foodbook-weit. Nächster Teilschritt: E1.1 (recipe_ref-Schreibpfad).
