@@ -519,7 +519,9 @@ class FoodbookService
     /**
      * Preis-Beitrag eines Blocks (Jarvis-Parität): liefert Per-Person-Anteil (vk/ek)
      * UND einen Pauschal-Anteil (flach, nicht ×Pax).
-     *  - recipe_ref  → vk/ek = sales_net/ek_total × Menge (Per-Person)
+     *  - recipe_ref  → sales_net/ek_total × Menge; `price_basis` steuert die Achse:
+     *                  person (Default) = Per-Person · pauschal = flacher Anteil (€/Position,
+     *                  kein ×Pax; EK bleibt hier ungezählt, WE-Ampel meldet „partiell", E4.4)
      *  - concept_ref → Concept-€/Person (person-unabhängig)
      *  - header_frei_preis: person→Per-Person · staffel→Per-Person (nach Pax aufgelöst) · pauschal→flach
      *
@@ -534,9 +536,17 @@ class FoodbookService
         }
         if ($block->type === 'recipe_ref' && $block->dish) {
             $faktor = $block->quantity !== null ? (float) $block->quantity : 1.0;
+            $vk = round((float) ($block->dish->sales_net ?? 0) * $faktor, 2);
+            $ek = round((float) ($block->dish->ek_total_eur ?? 0) * $faktor, 2);
 
-            return ['vk_pp' => round((float) ($block->dish->sales_net ?? 0) * $faktor, 2),
-                'ek_pp' => round((float) ($block->dish->ek_total_eur ?? 0) * $faktor, 2), 'pauschal' => 0.0];
+            // Spec 19 E1.2: Einzel-Gericht pauschal (€/Position, flach) vs. per-Person (€/Gast).
+            // Pauschal → VK in den flachen Anteil (kein ×Pax); EK bleibt ungezählt (WE-Ampel
+            // meldet „partiell", E4.4), konsistent zu header_frei_preis/pauschal.
+            if ($block->price_basis === 'pauschal') {
+                return ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => $vk];
+            }
+
+            return ['vk_pp' => $vk, 'ek_pp' => $ek, 'pauschal' => 0.0];
         }
         if ($block->type === 'header_frei_preis') {
             return match ($block->price_basis) {

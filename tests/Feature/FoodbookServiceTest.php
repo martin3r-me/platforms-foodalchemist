@@ -85,6 +85,40 @@ it('Spec 19 E1.1: recipe_ref-Schreibpfad validiert das VK-Gericht (verkauf-Scope
         ->toThrow(\RuntimeException::class);
 });
 
+it('Spec 19 E1.2: Mischkapitel — Konzept €/Gast + Einzel-Gericht pauschal (€/Position) → Leiste korrekt', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Mischkapitel', 'personen' => 100]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü + Extra']);
+
+    // Konzept-Paket: 4,50 €/Gast (EK 1,35)
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+    // Einzel-Gericht pauschal: 2,50 €/Position (Menge 3) → 7,50 flach, NICHT ×Pax; EK ungezählt
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->gericht->id, 'price_basis' => 'pauschal', 'quantity' => 3]);
+
+    $agg = $this->foodbooks->kapitelAggregat($this->rootTeam, $kap->refresh(), 100);
+    expect($agg['vk_pro_person'])->toBe(4.50)                         // nur Konzept-€/Gast
+        ->and($agg['ek_per_person'])->toBe(1.35)                      // nur Konzept-EK (pauschal ohne EK)
+        ->and($agg['pauschal'])->toBe(7.50);                          // 2,50 × 3 flach
+
+    $gesamt = $this->foodbooks->gesamt($this->rootTeam, $fb->refresh());
+    expect($gesamt['gesamt_vk'])->toBe(457.50);                       // 4,50 × 100 + 7,50 pauschal
+});
+
+it('Spec 19 E1.2: Einzel-Gericht per-Person (Default) bleibt ×Pax', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Einzel per Person', 'personen' => 100]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Einzel']);
+
+    // ohne price_basis → Default person: 2,50 €/Gast (EK 0,75)
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->gericht->id]);
+
+    $agg = $this->foodbooks->kapitelAggregat($this->rootTeam, $kap->refresh(), 100);
+    expect($agg['vk_pro_person'])->toBe(2.50)
+        ->and($agg['ek_per_person'])->toBe(0.75)
+        ->and($agg['pauschal'])->toBe(0.00);
+
+    $gesamt = $this->foodbooks->gesamt($this->rootTeam, $fb->refresh());
+    expect($gesamt['gesamt_vk'])->toBe(250.00);                       // 2,50 × 100
+});
+
 it('M11-02: Kapitel-Baum + Move mit Zyklus-Schutz', function () {
     $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB']);
     $top = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Top']);
