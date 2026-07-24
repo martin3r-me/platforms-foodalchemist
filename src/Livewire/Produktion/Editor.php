@@ -24,6 +24,8 @@ class Editor extends Component
 
     public string $productionDate = '';
 
+    public ?string $name = null;
+
     public ?string $reference = null;
 
     public ?string $note = null;
@@ -48,7 +50,7 @@ class Editor extends Component
     #[On('produktion-editor.oeffnen')]
     public function oeffnenNeu(): void
     {
-        $this->reset(['orderId', 'reference', 'note', 'targets', 'auswahlConceptId', 'auswahlRecipeId', 'suche', 'vorschau', 'fehler']);
+        $this->reset(['orderId', 'name', 'reference', 'note', 'targets', 'auswahlConceptId', 'auswahlRecipeId', 'suche', 'vorschau', 'fehler']);
         $this->productionDate = now()->toDateString();
         $this->auswahlMenge = 100;
         $this->dispatch('modal.open', name: 'produktion-editor');
@@ -61,6 +63,7 @@ class Editor extends Component
         $detail = $svc->detail($team, $id);
         $this->orderId = $id;
         $this->productionDate = (string) $detail['production_date'];
+        $this->name = $detail['name'];
         $this->reference = $detail['reference'];
         $this->note = $detail['note'];
         $this->targets = $detail['targets'];
@@ -133,18 +136,23 @@ class Editor extends Component
     public function speichern(ProductionOrderService $svc): void
     {
         $this->fehler = null;
-        if ($this->productionDate === '' || $this->targets === []) {
-            $this->fehler = 'Datum + mindestens ein Ziel angeben.';
+        if ($this->productionDate === '' || trim((string) $this->name) === '' || $this->targets === []) {
+            $this->fehler = 'Name, Datum und mindestens ein Ziel angeben.';
 
             return;
         }
         try {
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
             if ($this->orderId === null) {
-                $order = $svc->saveNew($team, $this->productionDate, $this->targets, $this->reference, $this->note, Auth::id());
+                $order = $svc->saveNew($team, $this->productionDate, trim((string) $this->name), $this->targets, $this->reference, $this->note, Auth::id());
             } else {
                 $order = $svc->replaceTargets($team, $this->orderId, $this->targets);
-                $order->update(['reference' => $this->reference, 'note' => $this->note]);
+                $order = $svc->updateHeader($team, $this->orderId, [
+                    'name' => trim((string) $this->name),
+                    'reference' => $this->reference,
+                    'note' => $this->note,
+                    'production_date' => $this->productionDate,
+                ]);
             }
             $this->dispatch('modal.close', name: 'produktion-editor');
             $this->dispatch('produktion-gespeichert', id: (int) $order->id);

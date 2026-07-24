@@ -34,7 +34,7 @@
 
 | Stufe | Größe | Hängt an |
 |---|---|---|
-| P0 Namen + Mehrfach-Aufträge | S | — |
+| P0 Namen + Mehrfach-Aufträge | S | — ✅ |
 | P1 Ziel-Typen (kg/Basis/Kapitel) | L | P0 |
 | P2 Editor v2 | M | P1 |
 | P3 Browser/DetailPanel | M | P0 |
@@ -43,12 +43,12 @@
 | E2 Direktbestellung | M | E1 |
 | E3 Strategie-Switch + Neu-quellen | L | E1 |
 
-### P0 · Benannte Produktionen (Datenmodell + Service) · S
-- [ ] Migration: `production_orders.name` (string nullable, Backfill aus `reference` bzw. Datums-Label; englische Identifier, Sequenz-Nr.).
-- [ ] `saveNew()` legt immer einen neuen Auftrag an (kein Tages-Merge); `draftForDate()` nur noch als findOrCreate für den MCP-Kompat-Pfad; Auftrags-Adressierung auf `order_id`.
-- [ ] Editor-Stammdaten: Name (Pflicht), Datum, Anlass, Notiz; Browser: Name als Hauptspalte, Sortierung/Gruppierung nach Datum.
-- [ ] MCP-Lockstep: `ADD_TARGET` nimmt `order_id` ODER (`production_date` [+ `name`], legt an wenn fehlt); NEU `production_orders.UPDATE` (Kopf) + `production_orders.REMOVE_TARGET`.
-- [ ] Pest: zwei benannte Aufträge am selben Tag koexistieren; Rundung je Auftrag separat dokumentiert.
+### P0 · Benannte Produktionen (Datenmodell + Service) · S ✅
+- [x] Migration `2026_07_24_000003`: `production_orders.name` (string nullable, Backfill aus `reference` bzw. `Produktion dd.mm.yyyy`-Label; englische Identifier, Sequenz-Nr.). Auf MySQL 8.4 gefahren + Backfill verifiziert (Backup `database/backups/PRE_SPEC20_P0_production_orders.sql`).
+- [x] `saveNew()` legt IMMER einen neuen Auftrag an (kein Tages-Merge mehr); `draftForDate()` nur noch findOrCreate für den MCP-Kompat-Pfad (optional per `name` abgegrenzt); Auftrags-Adressierung auf `order_id`. Neuer Helper `resolveOrCreate()` + `updateHeader()` + `auftragsName()`-Fallback.
+- [x] Editor-Stammdaten: Name (Pflicht, Validierung) + Datum + Anlass + Notiz; Browser: Name als Hauptspalte + Sortierung nach Datum→Name; DetailPanel-Titel = Name, Datum/Anlass als Subtitel; Produktionsschein-Doku trägt Name.
+- [x] MCP-Lockstep: `ADD_TARGET` nimmt `order_id` ODER (`production_date` [+ `name`], legt an wenn fehlt); NEU `production_orders.UPDATE` (Kopf) + `production_orders.REMOVE_TARGET`; `GET`-Liste + `ADD_TARGET`-Return führen `name`. Alle 3 in ServiceProvider registriert.
+- [x] Pest: zwei benannte Aufträge am selben Tag koexistieren (2 planned/Tag); Rundung je Auftrag separat dokumentiert; Name-Pflicht-Guard; Datums-Label-Fallback; MCP End-to-End für UPDATE/REMOVE_TARGET/order_id-Pfad. Ziel-Suite `ProductionOrderServiceTest` 17 passed / 2 skipped (Routen).
 
 ### P1 · Ziel-Typen: Basisrezept + kg, Foodbook-Kapitel · L
 - [ ] Dritter `zielTyp 'basisrezept'` im Editor, Suche ohne `->verkauf()`-Scope.

@@ -192,6 +192,7 @@ it('UI: Editor legt einen Produktionsauftrag komplett an (Stammdaten + Ziel + Sp
     Livewire::test(ProduktionEditor::class)
         ->call('oeffnenNeu')
         ->set('productionDate', '2026-08-01')
+        ->set('name', 'Sommerfest Vormittag')
         ->set('reference', 'Sommer-Buffet')
         ->set('zielTyp', 'recipe')
         ->set('auswahlRecipeId', $this->kuchen->id)
@@ -200,16 +201,34 @@ it('UI: Editor legt einen Produktionsauftrag komplett an (Stammdaten + Ziel + Sp
         ->call('speichern')
         ->assertDispatched('produktion-gespeichert');
 
-    $order = FoodAlchemistProductionOrder::where('reference', 'Sommer-Buffet')->firstOrFail();
+    $order = FoodAlchemistProductionOrder::where('name', 'Sommerfest Vormittag')->firstOrFail();
     expect($order->production_date->toDateString())->toBe('2026-08-01')
+        ->and($order->reference)->toBe('Sommer-Buffet')
         ->and($order->lines()->where('recipe_id', $this->kuchen->id)->exists())->toBeTrue();
+});
+
+it('UI: Editor verweigert Speichern ohne Name (Pflichtfeld)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    Livewire::test(ProduktionEditor::class)
+        ->call('oeffnenNeu')
+        ->set('productionDate', '2026-08-01')
+        ->set('zielTyp', 'recipe')
+        ->set('auswahlRecipeId', $this->kuchen->id)
+        ->set('auswahlMenge', 100)
+        ->call('zielHinzufuegen')
+        ->call('speichern')
+        ->assertNotDispatched('produktion-gespeichert')
+        ->assertSet('fehler', 'Name, Datum und mindestens ein Ziel angeben.');
+
+    expect(FoodAlchemistProductionOrder::count())->toBe(0);
 });
 
 it('UI: Browser listet Aufträge, Klick wählt sie im DetailPanel (Cockpit-KPIs)', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
-    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommer-Buffet', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
-    ], 'Sommer-Buffet');
+    ]);
 
     Livewire::test(ProduktionBrowser::class)
         ->assertSee('Sommer-Buffet')
@@ -235,21 +254,40 @@ it('MCP im Lockstep: production_orders.GET/ADD_TARGET/SET_STATUS/UPDATE_LINE reg
     $registry = app(\Platform\Core\Tools\ToolRegistry::class);
     $kontext = new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam);
 
-    foreach (['production_orders.GET' => true, 'production_orders.ADD_TARGET' => false, 'production_orders.SET_STATUS' => false, 'production_orders.UPDATE_LINE' => false] as $t => $readonly) {
+    foreach (['production_orders.GET' => true, 'production_orders.ADD_TARGET' => false, 'production_orders.REMOVE_TARGET' => false, 'production_orders.UPDATE' => false, 'production_orders.SET_STATUS' => false, 'production_orders.UPDATE_LINE' => false] as $t => $readonly) {
         $tool = $registry->get("foodalchemist.{$t}");
         expect($tool)->not->toBeNull()
             ->and($tool->getMetadata()['read_only'])->toBe($readonly);
     }
 
-    // ADD_TARGET (write): legt den Auftrag an + fügt das Ziel hinzu
+    // ADD_TARGET (write): legt den Auftrag an (production_date + name) + fügt das Ziel hinzu
     $add = $registry->get('foodalchemist.production_orders.ADD_TARGET')
-        ->execute(['production_date' => '2026-08-01', 'recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'], $kontext);
-    expect($add->success)->toBeTrue()->and($add->data['production_date'])->toBe('2026-08-01');
+        ->execute(['production_date' => '2026-08-01', 'name' => 'Sommerfest', 'recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'], $kontext);
+    expect($add->success)->toBeTrue()->and($add->data['production_date'])->toBe('2026-08-01')->and($add->data['name'])->toBe('Sommerfest');
     $orderId = $add->data['order_id'];
 
-    // GET Liste: 1 geplanter Auftrag
+    // ADD_TARGET erfordert order_id ODER production_date
+    $bad = $registry->get('foodalchemist.production_orders.ADD_TARGET')
+        ->execute(['recipe_id' => $this->tarte->id, 'portions' => 10, 'source_ref' => 'x'], $kontext);
+    expect($bad->success)->toBeFalse();
+
+    // ADD_TARGET per order_id (bestehender Auftrag) + REMOVE_TARGET wieder raus
+    $add2 = $registry->get('foodalchemist.production_orders.ADD_TARGET')
+        ->execute(['order_id' => $orderId, 'recipe_id' => $this->tarte->id, 'portions' => 50, 'source_ref' => 'recipe:tarte@50'], $kontext);
+    expect($add2->success)->toBeTrue()->and(collect($add2->data['targets'])->pluck('source_ref')->all())->toContain('recipe:tarte@50');
+    $rem = $registry->get('foodalchemist.production_orders.REMOVE_TARGET')
+        ->execute(['order_id' => $orderId, 'source_ref' => 'recipe:tarte@50'], $kontext);
+    expect($rem->success)->toBeTrue()->and(collect($rem->data['targets'])->pluck('source_ref')->all())->not->toContain('recipe:tarte@50');
+
+    // UPDATE (write): Kopf-Felder ändern
+    $upd = $registry->get('foodalchemist.production_orders.UPDATE')
+        ->execute(['order_id' => $orderId, 'name' => 'Sommerfest 2026', 'reference' => 'Buffet', 'note' => 'Halle A'], $kontext);
+    expect($upd->success)->toBeTrue()->and($upd->data['name'])->toBe('Sommerfest 2026')->and($upd->data['reference'])->toBe('Buffet');
+
+    // GET Liste: 1 geplanter Auftrag (mit name)
     $list = $registry->get('foodalchemist.production_orders.GET')->execute([], $kontext);
-    expect($list->success)->toBeTrue()->and($list->data['count'])->toBe(1);
+    expect($list->success)->toBeTrue()->and($list->data['count'])->toBe(1)
+        ->and($list->data['production_orders'][0]['name'])->toBe('Sommerfest 2026');
 
     // GET Detail: Kuchen-Zeile vorhanden
     $detail = $registry->get('foodalchemist.production_orders.GET')->execute(['order_id' => $orderId], $kontext);
@@ -273,23 +311,23 @@ it('MCP im Lockstep: production_orders.GET/ADD_TARGET/SET_STATUS/UPDATE_LINE reg
 });
 
 it('S3: dokument() + Produktionsschein-Blade rendert', function () {
-    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommer-Buffet', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
-    ], 'Sommer-Buffet');
+    ]);
 
     $dok = $this->svc->dokument($this->rootTeam, $order->id);
     expect($dok['zeilen'])->toHaveCount(2) // Kuchen + Vanillesauce
         ->and($dok['production_date'])->toBe('2026-08-01')
-        ->and($dok['reference'])->toBe('Sommer-Buffet');
+        ->and($dok['name'])->toBe('Sommer-Buffet');
 
     $html = view('foodalchemist::dokumente.produktionsauftrag', ['dok' => $dok, 'istPdf' => true])->render();
     expect($html)->toContain('Produktionsschein')->toContain('DES: Kuchen')->toContain('Vanillesauce')->toContain('Sommer-Buffet');
 });
 
 it('S3-Bundle: dokument() enthält die Einkaufs-Sektion (Lieferant + EK); ?einkauf=0 lässt sie weg', function () {
-    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommer-Buffet', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
-    ], 'Sommer-Buffet');
+    ]);
 
     // Default: gebündelt — Einkauf nach Lieferant + Gesamt-EK dabei.
     $dok = $this->svc->dokument($this->rootTeam, $order->id);
@@ -307,28 +345,52 @@ it('S3-Bundle: dokument() enthält die Einkaufs-Sektion (Lieferant + EK); ?einka
     expect($htmlOhne)->not->toContain('Einkauf / Bestellvorschlag');
 });
 
-it('Merge statt Überschreiben: saveNew für ein Datum mit bestehendem geplanten Auftrag ergänzt die Ziele', function () {
-    // Morgens: Auftrag mit einem Ziel + Anlass angelegt.
-    $order1 = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+it('V1: saveNew legt IMMER einen neuen Auftrag an — zwei benannte Aufträge am selben Tag koexistieren', function () {
+    // Morgens: „Sommerfest Vormittag" mit einem Ziel.
+    $order1 = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommerfest Vormittag', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
-    ], 'Morgen-Buffet');
+    ]);
 
-    // Später „+ Neuer Produktionsauftrag" für denselben Tag, anderes Ziel, ohne Wissen um den ersten.
-    $order2 = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+    // Später ein ZWEITER, eigenständiger Auftrag für denselben Tag (V1: kein Tages-Merge mehr).
+    $order2 = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommerfest Abend', [
         ['recipe_id' => $this->tarte->id, 'portions' => 50, 'source_ref' => 'recipe:tarte@50'],
-    ], 'Ignoriert');
+    ]);
 
-    // Derselbe Auftrag, BEIDE Ziele erhalten, Anlass NICHT überschrieben (kein Datenverlust).
-    expect($order2->id)->toBe($order1->id)
-        ->and(collect($order2->targets)->pluck('source_ref')->sort()->values()->all())->toBe(['recipe:kuchen@100', 'recipe:tarte@50'])
-        ->and($order2->reference)->toBe('Morgen-Buffet')
-        ->and($order2->lines()->where('recipe_id', $this->kuchen->id)->exists())->toBeTrue()
-        ->and($order2->lines()->where('recipe_id', $this->tarte->id)->exists())->toBeTrue();
+    // Zwei getrennte Aufträge, jeder mit exakt seinem Ziel — nichts vermischt sich.
+    expect($order2->id)->not->toBe($order1->id)
+        ->and($order1->name)->toBe('Sommerfest Vormittag')
+        ->and($order2->name)->toBe('Sommerfest Abend')
+        ->and(collect($order1->targets)->pluck('source_ref')->all())->toBe(['recipe:kuchen@100'])
+        ->and(collect($order2->targets)->pluck('source_ref')->all())->toBe(['recipe:tarte@50'])
+        ->and(FoodAlchemistProductionOrder::whereDate('production_date', '2026-08-01')->where('status', 'planned')->count())->toBe(2);
+
+    // Rundung ist bewusst PRO AUFTRAG separat (V1-Trade-off): jeder Auftrag rundet seine
+    // gemeinsame Sauce-Zutat für sich — order1 hat eine Sauce-Zeile, order2 hat eine eigene.
+    expect((float) $order1->lines()->where('recipe_id', $this->sauce->id)->first()->ansaetze)->toBeGreaterThan(0.0)
+        ->and((float) $order2->lines()->where('recipe_id', $this->sauce->id)->first()->ansaetze)->toBeGreaterThan(0.0);
+});
+
+it('V1: leerer Name ⇒ sprechendes Datums-Label (Fallback)', function () {
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', '', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
+    expect($order->name)->toBe('Produktion 01.08.2026');
+});
+
+it('V1: draftForDate bleibt MCP-Kompat-Pfad (findOrCreate, ohne name = erster geplanter des Tages)', function () {
+    $a = $this->svc->draftForDate($this->rootTeam, '2026-08-01');
+    $b = $this->svc->draftForDate($this->rootTeam, '2026-08-01'); // ohne name ⇒ findet a wieder
+    $c = $this->svc->draftForDate($this->rootTeam, '2026-08-01', null, 'Extra-Charge'); // name grenzt neu ab
+
+    expect($a->id)->toBe($b->id)
+        ->and($c->id)->not->toBe($a->id)
+        ->and($c->name)->toBe('Extra-Charge')
+        ->and($a->name)->toBe('Produktion 01.08.2026');
 });
 
 it('S3: Produktionsschein-Dokument-Route liefert HTML + CSV-Download', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
-    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', [
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommer-Buffet', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
     ]);
 

@@ -8,6 +8,10 @@
 
 ---
 
+## Update 2026-07-24 (Spec 20 · P0 KOMPLETT — benannte Produktionen)
+
+**Erste Stufe von Spec 20 umgesetzt (Routine-Run 1):** Produktionsaufträge haben jetzt einen **Namen** (`production_orders.name`, Migration `2026_07_24_000003`, auf MySQL 8.4 gefahren + backfilled), Name+Datum = Identität — **mehrere Aufträge pro Tag koexistieren** (V1, kippt 18·P1). `saveNew()` legt immer NEU an (kein Tages-Merge), `draftForDate()` bleibt reiner MCP-Kompat-findOrCreate. Editor: Name als Pflichtfeld; Browser: Name Hauptspalte; DetailPanel/Produktionsschein tragen den Namen. MCP-Lockstep: `ADD_TARGET` nimmt `order_id` ODER `production_date`[+`name`], NEU `production_orders.UPDATE` (Kopf) + `production_orders.REMOVE_TARGET`. `ProductionOrderServiceTest` 17 passed / 2 skipped. Stand-Log + DoD in [`docs/PLANUNG/20_Produktion_Einkauf_v2.md`](PLANUNG/20_Produktion_Einkauf_v2.md). Nächste Stufe: P1 (Ziel-Typen kg/Basisrezept/Kapitel) bzw. E1 (3-Panel-Einkauf, parallel erlaubt).
+
 ## Update 2026-07-23 (Spec 20 Produktion + Einkauf v2 — freigegeben, Routine eingerichtet)
 
 **Neuer v2-Ausbau der N-Track-Geschwister Spec 17+18** (Dominique-Wunsch): Produktion mit **Namen + mehreren Aufträgen pro Tag** (kippt 18·P1), Ziel-Typen **Basisrezept+kg** und **Foodbook-Kapitel** (Kapitel+Personen, Varianten-Wahl), Editor v2 + Panel-Umbau, Stale-Marker für die Einkaufs-Verdrahtung; Einkauf: **3-Panel-Umbau**, **manuelle LA-Zeilen** (`orders.CREATE/ADD_LINE` — Direktbestellung ohne Produktion), **Preisstrategie-Switch je Schiene + „Neu quellen"** (löst 17·E5 ein), editierbare Kopf-Felder. Entscheide V1–V4 festgezurrt, Ist-Stand code-kartiert (6 parallele Leser). Spec-first: [`docs/PLANUNG/20_Produktion_Einkauf_v2.md`](PLANUNG/20_Produktion_Einkauf_v2.md) (Stufen P0–P4 + E1–E3 mit DoD + Stand-Log). **Umsetzung via 2h-Routine `produktion-einkauf-v2-umsetzung`** (ab 2026-07-24, täglich 13–23 Uhr, eine Stufe pro Run).

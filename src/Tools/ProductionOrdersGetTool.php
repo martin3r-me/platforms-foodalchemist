@@ -58,6 +58,7 @@ class ProductionOrdersGetTool extends FoodAlchemistTool implements ToolContract,
         $status = $arguments['status'] ?? null;
         $liste = $svc->listForTeam($team, $status)->map(fn ($o) => [
             'id' => (int) $o->id,
+            'name' => $o->name,
             'production_date' => $o->production_date?->toDateString(),
             'status' => $o->status instanceof ProductionOrderStatus ? $o->status->value : (string) $o->status,
             'reference' => $o->reference,

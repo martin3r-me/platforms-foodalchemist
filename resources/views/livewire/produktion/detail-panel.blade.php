@@ -10,7 +10,7 @@
     @else
         <div>
             <div class="flex items-start justify-between gap-2">
-                <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ \Illuminate\Support\Carbon::parse($detail['production_date'])->format('d.m.Y') }}</h3>
+                <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $detail['name'] ?: \Illuminate\Support\Carbon::parse($detail['production_date'])->format('d.m.Y') }}</h3>
                 <div class="flex items-center gap-1.5 shrink-0">
                     @if($detail['editierbar'])
                         <button type="button" wire:click="$dispatch('produktion-editor.bearbeiten', { id: {{ $detail['id'] }} })" class="{{ $btnGhostXs }}" data-produktion-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
@@ -18,7 +18,9 @@
                     <span class="{{ $pill }} font-medium {{ $variantPill[\Platform\FoodAlchemist\Enums\ProductionOrderStatus::from($detail['status'])->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $detail['status_label'] }}</span>
                 </div>
             </div>
-            @if($detail['reference'])<p class="text-[11px] text-gray-500 mt-1.5">{{ $detail['reference'] }}</p>@endif
+            <p class="text-[11px] text-gray-500 mt-1.5">
+                {{ \Illuminate\Support\Carbon::parse($detail['production_date'])->format('d.m.Y') }}@if($detail['reference']) · {{ $detail['reference'] }}@endif
+            </p>
         </div>
 
         @if($hinweis)<div class="{{ $sectionCard }} !bg-emerald-500/[0.06] !border-emerald-500/20 text-[12px] text-emerald-700">✓ {{ $hinweis }}</div>@endif

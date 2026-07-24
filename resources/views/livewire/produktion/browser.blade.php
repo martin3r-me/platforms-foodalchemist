@@ -16,7 +16,7 @@
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Filter" width="w-72">
             <div class="p-3 space-y-2">
-                <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Anlass suchen …" class="{{ $input }}" data-produktion-suche />
+                <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Name/Anlass suchen …" class="{{ $input }}" data-produktion-suche />
                 <select wire:model.live="statusFilter" class="{{ $input }}">
                     <option value="">Alle Status</option>
                     @foreach($statusFaelle as $fall)
@@ -59,8 +59,8 @@
             <div class="overflow-x-auto">
                 <table class="{{ $table }}">
                     <thead><tr class="text-left">
+                        <th class="{{ $th }} w-full">Name</th>
                         <th class="{{ $th }}">Produktionsdatum</th>
-                        <th class="{{ $th }} w-full">Anlass</th>
                         <th class="{{ $th }}">Status</th>
                     </tr></thead>
                     <tbody>
@@ -69,8 +69,11 @@
                                 x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
                                 class="{{ $tr }} cursor-pointer {{ $orderId === $a->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                                 data-produktion-zeile="{{ $a->id }}">
+                                <td class="{{ $td }} font-medium text-gray-900">
+                                    {{ $a->name ?: $a->reference ?: '—' }}
+                                    @if($a->reference && $a->name && $a->reference !== $a->name)<span class="block text-[11px] font-normal text-gray-500">{{ $a->reference }}</span>@endif
+                                </td>
                                 <td class="{{ $td }} whitespace-nowrap tabular-nums">{{ $a->production_date->format('d.m.Y') }}</td>
-                                <td class="{{ $td }} font-medium text-gray-900">{{ $a->reference ?: '—' }}</td>
                                 <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $variantPill[$a->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $a->status->label() }}</span></td>
                             </tr>
                         @empty

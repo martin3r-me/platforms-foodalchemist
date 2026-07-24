@@ -24,10 +24,11 @@ class ProductionOrdersAddTargetTool extends FoodAlchemistTool implements ToolCon
 
     public function getDescription(): string
     {
-        return 'Fügt ein Ziel (concept_id+persons ODER recipe_id+portions) zum Produktionsauftrag des '
-            . 'angegebenen production_date hinzu (legt ihn bei Bedarf an) und rechnet die Ansätze für ALLE '
-            . 'Ziele dieses Tages gemeinsam neu (nicht additiv gerundet). source_ref = Quell-Kennung; '
-            . 'gleiche Quelle erneut ⇒ ersetzt ihren Beitrag (idempotent).';
+        return 'Fügt ein Ziel (concept_id+persons ODER recipe_id+portions) zu einem Produktionsauftrag hinzu. '
+            . 'Adressierung: entweder order_id (bestehender, geplanter Auftrag) ODER production_date '
+            . '(+ optional name; legt bei Bedarf an — mehrere Aufträge pro Tag sind erlaubt, name grenzt ab). '
+            . 'Rechnet die Ansätze für ALLE Ziele dieses Auftrags gemeinsam neu (nicht additiv gerundet). '
+            . 'source_ref = Quell-Kennung; gleiche Quelle erneut ⇒ ersetzt ihren Beitrag (idempotent).';
     }
 
     public function getSchema(): array
@@ -35,14 +36,16 @@ class ProductionOrdersAddTargetTool extends FoodAlchemistTool implements ToolCon
         return [
             'type' => 'object',
             'properties' => [
-                'production_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
+                'order_id' => ['type' => 'integer', 'description' => 'Bestehender geplanter Auftrag; Alternative zu production_date'],
+                'production_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD (legt bei Bedarf an, wenn kein order_id)'],
+                'name' => ['type' => 'string', 'description' => 'Optionaler Auftrags-Name beim Anlegen/Abgrenzen über production_date'],
                 'concept_id' => ['type' => 'integer'],
                 'recipe_id' => ['type' => 'integer'],
                 'persons' => ['type' => 'number'],
                 'portions' => ['type' => 'number'],
                 'source_ref' => ['type' => 'string', 'description' => 'Quell-Kennung; Re-Import ersetzt diesen Schlüssel'],
             ],
-            'required' => ['production_date', 'source_ref'],
+            'required' => ['source_ref'],
         ];
     }
 
@@ -57,6 +60,9 @@ class ProductionOrdersAddTargetTool extends FoodAlchemistTool implements ToolCon
         if ($hatConcept === $hatRecipe) {
             return ToolResult::error('Genau eines von concept_id/recipe_id angeben.', 'VALIDATION_ERROR');
         }
+        if (empty($arguments['order_id']) && empty($arguments['production_date'])) {
+            return ToolResult::error('order_id ODER production_date erforderlich.', 'VALIDATION_ERROR');
+        }
 
         $ziel = [];
         if ($hatConcept) {
@@ -69,7 +75,13 @@ class ProductionOrdersAddTargetTool extends FoodAlchemistTool implements ToolCon
 
         try {
             $svc = app(ProductionOrderService::class);
-            $order = $svc->draftForDate($team, (string) $arguments['production_date'], $context->user->id);
+            $order = $svc->resolveOrCreate(
+                $team,
+                ! empty($arguments['order_id']) ? (int) $arguments['order_id'] : null,
+                ! empty($arguments['production_date']) ? (string) $arguments['production_date'] : null,
+                $arguments['name'] ?? null,
+                $context->user->id,
+            );
             $order = $svc->addTarget($team, (int) $order->id, $ziel, (string) $arguments['source_ref']);
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'ERROR');
@@ -77,6 +89,7 @@ class ProductionOrdersAddTargetTool extends FoodAlchemistTool implements ToolCon
 
         return ToolResult::success([
             'order_id' => (int) $order->id,
+            'name' => $order->name,
             'production_date' => $order->production_date?->toDateString(),
             'targets' => $order->targets,
         ]);

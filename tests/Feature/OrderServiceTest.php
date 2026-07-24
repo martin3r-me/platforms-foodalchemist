@@ -236,7 +236,7 @@ it('MCP im Lockstep: orders.GET/ADD_NEED/SET_STATUS registriert + End-to-End', f
 it('UI: „An Bestellung übergeben" im Produktionsauftrag legt Schienen an (idempotent bei Re-Klick, Spec 18)', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $prod = app(\Platform\FoodAlchemist\Services\ProductionOrderService::class);
-    $order = $prod->saveNew($this->rootTeam, '2026-08-01', [
+    $order = $prod->saveNew($this->rootTeam, '2026-08-01', 'Sommerfest', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
     ]);
 

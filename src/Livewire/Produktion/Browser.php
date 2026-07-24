@@ -71,7 +71,7 @@ class Browser extends Component
             ->when($this->von, fn ($c) => $c->filter(fn ($o) => $o->production_date->toDateString() >= $this->von))
             ->when($this->bis, fn ($c) => $c->filter(fn ($o) => $o->production_date->toDateString() <= $this->bis))
             ->when(trim($this->suche) !== '', fn ($c) => $c->filter(
-                fn ($o) => str_contains(mb_strtolower((string) $o->reference), mb_strtolower(trim($this->suche)))
+                fn ($o) => str_contains(mb_strtolower((string) $o->name . ' ' . (string) $o->reference), mb_strtolower(trim($this->suche)))
             ))
             ->values();
 

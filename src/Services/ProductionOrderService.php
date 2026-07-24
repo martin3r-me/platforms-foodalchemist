@@ -35,19 +35,28 @@ class ProductionOrderService
 
     // ── Auftrag holen/anlegen ──────────────────────────────────────────────
 
-    /** Ein-offener-Auftrag-Guard je (team, production_date): Transaktion + Lock gegen Doppelklick. */
-    public function draftForDate(Team $team, string $productionDate, ?int $userId = null): FoodAlchemistProductionOrder
+    /**
+     * MCP-Kompat-Pfad (findOrCreate je (team, production_date[, name])): der frühere
+     * Ein-Auftrag-je-Tag-Guard. Ab Spec 20 P0 (V1) dürfen mehrere Aufträge pro Tag
+     * koexistieren — das UI legt IMMER neu an (saveNew). Diese Methode bleibt nur für
+     * MCP-Tools/Agenten, die einen Auftrag über das Datum (optional zusätzlich per Name)
+     * adressieren, ohne die order_id zu kennen. Ohne `name` matcht sie den ersten
+     * geplanten Auftrag des Tages; mit `name` genau den gleichnamigen.
+     */
+    public function draftForDate(Team $team, string $productionDate, ?int $userId = null, ?string $name = null): FoodAlchemistProductionOrder
     {
-        return DB::transaction(function () use ($team, $productionDate, $userId) {
+        return DB::transaction(function () use ($team, $productionDate, $userId, $name) {
             $draft = FoodAlchemistProductionOrder::where('team_id', $team->id)
                 ->whereDate('production_date', $productionDate) // date-Cast persistiert inkl. Zeitanteil (Y-m-d H:i:s) — whereDate() vergleicht robust nur das Datum
                 ->where('status', ProductionOrderStatus::Planned->value)
+                ->when($name !== null && trim($name) !== '', fn ($q) => $q->where('name', trim($name)))
                 ->lockForUpdate()
                 ->first();
 
             return $draft ?? FoodAlchemistProductionOrder::create([
                 'team_id' => $team->id,
                 'production_date' => $productionDate,
+                'name' => $this->auftragsName($name, $productionDate),
                 'status' => ProductionOrderStatus::Planned->value,
                 'targets' => [],
                 'created_by' => $userId,
@@ -56,34 +65,40 @@ class ProductionOrderService
     }
 
     /**
-     * Vom Editor-Modal genutzt: legt in einer Transaktion den Auftrag an und setzt
-     * targets[] in einem Rutsch (kein Zwischenstand während der Eingabe im Editor).
+     * Vom Editor-Modal genutzt: legt in einer Transaktion IMMER einen NEUEN Auftrag an und
+     * setzt targets[] in einem Rutsch (kein Zwischenstand während der Eingabe im Editor).
      *
-     * WICHTIG (P1 „ein Auftrag je Tag"): Existiert für das Datum schon ein geplanter
-     * Auftrag, wird NICHT überschrieben, sondern MERGE — bestehende Ziele bleiben, neue
-     * kommen dazu (dedup per source_ref). Sonst gingen die Ziele eines am selben Tag früher
-     * angelegten Auftrags verloren. Anlass/Notiz nur setzen, wenn noch leer (kein stiller Verlust).
+     * V1 (Spec 20 P0): Kein Tages-Merge mehr — Name+Datum = Identität, mehrere Aufträge pro
+     * Tag sind gewollt. Wer einen bestehenden Auftrag ergänzen will, bearbeitet ihn per
+     * order_id (replaceTargets/addTarget).
      *
      * @param  list<array{source_ref:string, concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}>  $targets
      */
-    public function saveNew(Team $team, string $productionDate, array $targets, ?string $reference = null, ?string $note = null, ?int $userId = null): FoodAlchemistProductionOrder
+    public function saveNew(Team $team, string $productionDate, string $name, array $targets, ?string $reference = null, ?string $note = null, ?int $userId = null): FoodAlchemistProductionOrder
     {
-        return DB::transaction(function () use ($team, $productionDate, $targets, $reference, $note, $userId) {
-            $order = $this->draftForDate($team, $productionDate, $userId);
-
-            // Merge: bestehende Ziele des Tages behalten, neue per source_ref ergänzen/ersetzen.
-            $merged = collect($order->targets ?? [])->keyBy('source_ref');
-            foreach ($this->mitLabels($team, $targets) as $t) {
-                $merged[$t['source_ref']] = $t;
-            }
-            $order->targets = $merged->values()->all();
-            $order->reference = $order->reference ?: $reference;
-            $order->note = $order->note ?: $note;
-            $order->save();
+        return DB::transaction(function () use ($team, $productionDate, $name, $targets, $reference, $note, $userId) {
+            $order = FoodAlchemistProductionOrder::create([
+                'team_id' => $team->id,
+                'production_date' => $productionDate,
+                'name' => $this->auftragsName($name, $productionDate),
+                'status' => ProductionOrderStatus::Planned->value,
+                'reference' => $reference,
+                'note' => $note,
+                'targets' => $this->mitLabels($team, $targets),
+                'created_by' => $userId,
+            ]);
             $this->recomputeOrder($team, $order);
 
             return $order->refresh();
         });
+    }
+
+    /** Name-Fallback: leerer/kein Name ⇒ sprechendes Datums-Label. */
+    private function auftragsName(?string $name, string $productionDate): string
+    {
+        $name = trim((string) $name);
+
+        return $name !== '' ? $name : 'Produktion ' . \Illuminate\Support\Carbon::parse($productionDate)->format('d.m.Y');
     }
 
     /** Vom Editor beim Bearbeiten eines bestehenden, noch offenen Auftrags genutzt. */
@@ -181,7 +196,44 @@ class ProductionOrderService
         $order->save();
     }
 
+    /**
+     * MCP: adressiert einen Auftrag entweder direkt per order_id oder findet/legt ihn
+     * per production_date (optional + name) an (Kompat-Pfad, V1). Genau eine Adressierung.
+     */
+    public function resolveOrCreate(Team $team, ?int $orderId, ?string $productionDate, ?string $name, ?int $userId): FoodAlchemistProductionOrder
+    {
+        if ($orderId !== null) {
+            return $this->ownedOpenOrder($team, $orderId);
+        }
+        if ($productionDate === null || $productionDate === '') {
+            throw new \InvalidArgumentException('order_id ODER production_date erforderlich.');
+        }
+
+        return $this->draftForDate($team, $productionDate, $userId, $name);
+    }
+
     // ── Manuelle Pflege (nur im planned, nur Besitzer) ─────────────────────
+
+    /** Kopf-Felder (Name/Anlass/Notiz/Datum) — nur im planned, nur Besitzer. */
+    public function updateHeader(Team $team, int $orderId, array $input): FoodAlchemistProductionOrder
+    {
+        $order = $this->ownedOpenOrder($team, $orderId);
+        if (array_key_exists('name', $input) && trim((string) $input['name']) !== '') {
+            $order->name = trim((string) $input['name']);
+        }
+        if (array_key_exists('reference', $input)) {
+            $order->reference = ($input['reference'] ?? '') !== '' ? $input['reference'] : null;
+        }
+        if (array_key_exists('note', $input)) {
+            $order->note = ($input['note'] ?? '') !== '' ? $input['note'] : null;
+        }
+        if (array_key_exists('production_date', $input) && ! empty($input['production_date'])) {
+            $order->production_date = $input['production_date'];
+        }
+        $order->save();
+
+        return $order->refresh();
+    }
 
     public function updateLine(Team $team, int $lineId, array $input): FoodAlchemistProductionOrderLine
     {
@@ -230,6 +282,7 @@ class ProductionOrderService
             ->when($status !== null, fn ($q) => $q->where('status', $status))
             ->orderByRaw("CASE status WHEN 'planned' THEN 0 ELSE 1 END")
             ->orderBy('production_date')
+            ->orderBy('name')
             ->get();
     }
 
@@ -241,6 +294,7 @@ class ProductionOrderService
 
         return [
             'id' => (int) $order->id,
+            'name' => $order->name,
             'production_date' => $order->production_date?->toDateString(),
             'status' => $status->value,
             'status_label' => $status->label(),
@@ -327,6 +381,7 @@ class ProductionOrderService
 
         return [
             'id' => (int) $order->id,
+            'name' => $order->name,
             'production_date' => $order->production_date?->toDateString(),
             'status' => $status->value,
             'status_label' => $status->label(),

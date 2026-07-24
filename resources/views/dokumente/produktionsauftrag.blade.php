@@ -46,7 +46,7 @@
     @endunless
 
     <div class="head">
-        <h1>Produktionsschein</h1>
+        <h1>Produktionsschein{{ !empty($dok['name']) ? ': ' . $dok['name'] : '' }}</h1>
         <div class="sub">
             {{ \Illuminate\Support\Carbon::parse($dok['production_date'])->format('d.m.Y') }} · {{ $dok['status_label'] }}
             @if($dok['reference']) · {{ $dok['reference'] }}@endif

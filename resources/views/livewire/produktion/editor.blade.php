@@ -10,13 +10,17 @@
     <x-foodalchemist::modal-section title="Stammdaten">
         <div class="grid grid-cols-2 gap-3">
             <div>
+                <label class="{{ $label }}">Name <span class="text-rose-500">*</span></label>
+                <input type="text" wire:model="name" placeholder="z. B. Sommerfest Vormittag" class="{{ $input }}" data-produktion-name />
+            </div>
+            <div>
                 <label class="{{ $label }}">Produktionsdatum</label>
                 <input type="date" wire:model="productionDate" class="{{ $input }}" data-produktion-datum />
             </div>
-            <div>
-                <label class="{{ $label }}">Anlass</label>
-                <input type="text" wire:model="reference" placeholder="z. B. Sommer-Buffet" class="{{ $input }}" data-produktion-anlass />
-            </div>
+        </div>
+        <div class="mt-3">
+            <label class="{{ $label }}">Anlass</label>
+            <input type="text" wire:model="reference" placeholder="z. B. Sommer-Buffet" class="{{ $input }}" data-produktion-anlass />
         </div>
         <div class="mt-3">
             <label class="{{ $label }}">Notiz</label>
