@@ -24,12 +24,24 @@ class FoodAlchemistFoodbookKapitel extends Model
 
     protected $guarded = ['id'];
 
+    /** Preis-/Anlage-Modus des Kapitels (Spec 19, M3) — weiche Prüfung, Vokabular-Pflicht. */
+    public const PRICING_MODES = ['paket', 'einzel', 'gemischt'];
+
     protected $casts = [
         'uuid' => 'string',
         'position' => 'integer',
         'price_per_person' => 'decimal:2',
         'snapshot_at' => 'datetime',
         'snapshot_json' => 'array',
+        // SOLL-Ziele (Spec 19, M3)
+        'target_count' => 'integer',
+        'price_anchor' => 'decimal:2',
+        'price_min' => 'decimal:2',
+        'price_max' => 'decimal:2',
+        'target_food_cost_pct' => 'decimal:2',
+        // Anlage-Stand (Kapitel-Go, E7.3)
+        'released_at' => 'datetime',
+        'release_result' => 'array',
     ];
 
     public function foodbook(): BelongsTo
@@ -46,6 +58,18 @@ class FoodAlchemistFoodbookKapitel extends Model
     public function outlet(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistOutlet::class, 'outlet_id');
+    }
+
+    /** Kapitel-Servierform-Override (Spec 19, M3) — Scharnier DarreichungResolver::fuerBlock (E7.1). */
+    public function servingForm(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
+    }
+
+    /** Kapitel-Einsatzmoment-Override (Spec 19, M3) — sonst Foodbook-Default in der Kaskade. */
+    public function serviceMoment(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistEinsatzmoment::class, 'service_moment_id');
     }
 
     public function children(): HasMany

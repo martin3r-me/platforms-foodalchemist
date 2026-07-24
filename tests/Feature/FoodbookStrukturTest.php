@@ -82,6 +82,50 @@ it('materialisiert Slots als Kapitel + setzt chapter_id (idempotent)', function 
         ->and($fb->chapters()->count())->toBe(2);
 });
 
+/**
+ * Spec 19 E4.1: „Struktur anwenden" stempelt die Slot-Ziele einmalig aufs neue Kapitel
+ * (die Ziele wandern vom flachen Slot ans Kapitel). Nur gesetzte Slot-Felder wandern mit;
+ * das Protokoll listet die übernommenen Felder. KAPITEL_FELDER erlaubt späteres Editieren.
+ */
+it('stempelt Slot-Ziele aufs Kapitel (ziele_uebernommen im Protokoll)', function () {
+    $fb = $this->svc->create($this->rootTeam, ['label' => 'Ziel-Stempel']);
+    $frame = $this->frames->frameFor($this->rootTeam, 'foodbook', $fb->id);
+    $this->frames->addSlot($this->rootTeam, $frame, [
+        'label' => 'Vorspeisen', 'slot_type' => 'gang',
+        'target_count' => 4, 'price_anchor' => 6.50, 'price_min' => 5.00, 'price_max' => 9.00,
+    ]);
+    // Slot ohne Ziele → kein Stempel.
+    $this->frames->addSlot($this->rootTeam, $frame, ['label' => 'Käse', 'slot_type' => 'station']);
+
+    $r = $this->svc->strukturAusGeruest($this->rootTeam, $fb->id);
+    expect($r['angelegt'])->toBe(2);
+
+    $vorspeisen = $fb->chapters()->where('title', 'Vorspeisen')->first();
+    expect((int) $vorspeisen->target_count)->toBe(4)
+        ->and((float) $vorspeisen->price_anchor)->toBe(6.50)
+        ->and((float) $vorspeisen->price_min)->toBe(5.00)
+        ->and((float) $vorspeisen->price_max)->toBe(9.00);
+
+    $kaese = $fb->chapters()->where('title', 'Käse')->first();
+    expect($kaese->target_count)->toBeNull()
+        ->and($kaese->price_anchor)->toBeNull();
+
+    // Protokoll spiegelt die übernommenen Felder je Slot.
+    $prot = collect($r['protokoll'])->keyBy('slot');
+    expect($prot['Vorspeisen']['ziele_uebernommen'])->toBe(['target_count', 'price_anchor', 'price_min', 'price_max'])
+        ->and($prot['Käse']['ziele_uebernommen'])->toBe([]);
+
+    // KAPITEL_FELDER: SOLL-Ziele + niveau/pricing_mode sind editierbar.
+    $this->svc->updateKapitel($this->rootTeam, $kaese->id, [
+        'target_count' => 2, 'niveau' => 'premium', 'pricing_mode' => 'einzel', 'target_food_cost_pct' => 28.5,
+    ]);
+    $kaese->refresh();
+    expect((int) $kaese->target_count)->toBe(2)
+        ->and($kaese->niveau)->toBe('premium')
+        ->and($kaese->pricing_mode)->toBe('einzel')
+        ->and((float) $kaese->target_food_cost_pct)->toBe(28.5);
+});
+
 it('ohne Gerüst mit Slots: kein_geruest = true, keine Kapitel', function () {
     $fb = $this->svc->create($this->rootTeam, ['label' => 'Leer']);
     $r = $this->svc->strukturAusGeruest($this->rootTeam, $fb->id);

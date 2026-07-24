@@ -309,7 +309,7 @@ class FoodbookService
      * verknüpfte Slots werden übersprungen; ein Slot, dessen Kapitel gelöscht wurde, wird neu
      * angelegt. Danach matcht CoverageService robust per chapter_id (nicht mehr Label-fragil).
      *
-     * @return array{kein_geruest: bool, angelegt: int, uebersprungen: int, protokoll: list<array{slot:string, status:string, chapter_id:?int}>}
+     * @return array{kein_geruest: bool, angelegt: int, uebersprungen: int, protokoll: list<array{slot:string, status:string, chapter_id:?int, ziele_uebernommen?:list<string>}>}
      */
     public function strukturAusGeruest(Team $team, int $foodbookId): array
     {
@@ -332,10 +332,23 @@ class FoodbookService
                 continue;
             }
             $kapitel = $this->addKapitel($team, $foodbookId, ['title' => $slot->label]);
+            // Spec 19 E4.1: Slot-Ziele einmalig aufs neue Kapitel stempeln (die Ziele
+            // wandern vom flachen Slot ans Kapitel). Nur gesetzte Slot-Felder übernehmen.
+            $ziele = array_filter([
+                'target_count' => $slot->target_count,
+                'price_anchor' => $slot->price_anchor,
+                'price_min' => $slot->price_min,
+                'price_max' => $slot->price_max,
+            ], fn ($v) => $v !== null);
+            $uebernommen = [];
+            if ($ziele !== []) {
+                $kapitel->update($ziele);
+                $uebernommen = array_keys($ziele);
+            }
             $frames->updateSlot($team, $slot->id, ['chapter_id' => $kapitel->id]);
             $vorhandene[] = (int) $kapitel->id;
             $angelegt++;
-            $protokoll[] = ['slot' => $slot->label, 'status' => 'angelegt', 'chapter_id' => (int) $kapitel->id];
+            $protokoll[] = ['slot' => $slot->label, 'status' => 'angelegt', 'chapter_id' => (int) $kapitel->id, 'ziele_uebernommen' => $uebernommen];
         }
 
         return ['kein_geruest' => false, 'angelegt' => $angelegt, 'uebersprungen' => $uebersprungen, 'protokoll' => $protokoll];
@@ -412,7 +425,12 @@ class FoodbookService
             ->where('sales_recipe_id', $recipeId)->exists();
     }
 
-    private const KAPITEL_FELDER = ['title', 'consumer_title', 'claim', 'description', 'price_per_person', 'price_mode'];
+    private const KAPITEL_FELDER = [
+        'title', 'consumer_title', 'claim', 'description', 'price_per_person', 'price_mode',
+        // SOLL-Ziele (Spec 19, M3) — release_* NICHT hier (setzt kapitelFreigeben, E7.3)
+        'target_count', 'price_anchor', 'price_min', 'price_max', 'niveau',
+        'service_moment_id', 'serving_form_id', 'pricing_mode', 'target_food_cost_pct',
+    ];
 
     public function updateKapitel(Team $team, int $id, array $in): FoodAlchemistFoodbookKapitel
     {
