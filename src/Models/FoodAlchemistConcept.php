@@ -195,4 +195,16 @@ class FoodAlchemistConcept extends Model
     {
         return $this->sectorSuitabilities();
     }
+
+    /** Kreativ-Skizzen an diesem Konzept (Spec 19, M4 — XOR-Owner). */
+    public function dishIdeas(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistDishIdea::class, 'concept_id');
+    }
+
+    /** Paket-Skizzengruppen an diesem Konzept (Spec 19, M4). */
+    public function dishIdeaGroups(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistDishIdeaGroup::class, 'concept_id');
+    }
 }

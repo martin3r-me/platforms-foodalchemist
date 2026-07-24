@@ -92,4 +92,16 @@ class FoodAlchemistFoodbookKapitel extends Model
             'target_group_id'
         );
     }
+
+    /** Kreativ-Skizzen dieses Kapitels (Spec 19, M4). */
+    public function dishIdeas(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistDishIdea::class, 'chapter_id');
+    }
+
+    /** Paket-Skizzengruppen dieses Kapitels (Spec 19, M4). */
+    public function dishIdeaGroups(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistDishIdeaGroup::class, 'chapter_id');
+    }
 }
