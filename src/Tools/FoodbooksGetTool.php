@@ -52,6 +52,16 @@ class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'status' => $fb->status instanceof \BackedEnum ? $fb->status->value : $fb->status,
             'phase' => $fb->phase, // R4.3 Statusmaschine
 
+            // Spec 19 E3.5: Bedarf-Defaults (kaskadieren als Boden in die Kapitel-leitplanken)
+            'defaults' => [
+                'event_type_id' => $fb->default_event_type_id !== null ? (int) $fb->default_event_type_id : null,
+                'serving_form_id' => $fb->default_serving_form_id !== null ? (int) $fb->default_serving_form_id : null,
+                'target_food_cost_pct' => $fb->target_food_cost_pct,
+                'food_cost_tolerance_pp' => $fb->food_cost_tolerance_pp,
+                'zielgruppen' => $fb->targetGroups->map(fn ($z) => ['id' => $z->id, 'name' => $z->name])->values()->all(),
+                'service_moment_ids' => $fb->serviceMoments->map(fn ($m) => (int) $m->id)->values()->all(),
+            ],
+
             'price' => $svc->gesamt($team, $fb),
             'kapitel' => $fb->chapters->map(fn ($k) => [
                 'id' => $k->id,

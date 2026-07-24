@@ -13,6 +13,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup;
 
 /**
  * M11-02 / Doc 15 §9.3 + D-8: Foodbook-Service — Mappe + Kapitel-BAUM + Blöcke.
@@ -102,6 +103,45 @@ class FoodbookService
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($fbId);
         $this->guard($fb, $team);
         $fb->targetGroups()->toggle([$targetGroupId]);
+    }
+
+    // ── Spec 19 E3.5: Zielgruppen-Vokabular (MCP-Lesefläche + Anlage) ──
+
+    /**
+     * Team-sichtbares Zielgruppen-Vokabular (eigenes Team + Master-Kette), sortiert.
+     * Für `zielgruppen.GET` und die Bedarf-Sektion. Read-only.
+     */
+    public function zielgruppenListe(Team $team, bool $inklInaktiv = true): Collection
+    {
+        return FoodAlchemistTargetGroup::visibleToTeam($team)
+            ->when(! $inklInaktiv, fn ($q) => $q->where('is_inactive', false))
+            ->orderBy('sort_order')->orderBy('name')->get();
+    }
+
+    /**
+     * Neue Zielgruppe anlegen (immer team-eigen). Dedup gegen das eigene Team
+     * (unique(team_id,name) — ein Kind-Team darf einen Master-Namen bewusst
+     * überschreiben). Wirft RuntimeException bei leerem/doppeltem Namen.
+     */
+    public function zielgruppeAnlegen(Team $team, array $in): FoodAlchemistTargetGroup
+    {
+        $name = trim((string) ($in['name'] ?? ''));
+        if ($name === '') {
+            throw new \RuntimeException('Name der Zielgruppe ist Pflicht.');
+        }
+        $doppelt = FoodAlchemistTargetGroup::where('team_id', $team->id)
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->exists();
+        if ($doppelt) {
+            throw new \RuntimeException("Zielgruppe «{$name}» existiert bereits.");
+        }
+
+        return FoodAlchemistTargetGroup::create([
+            'team_id' => $team->id,
+            'name' => $name,
+            'description' => trim((string) ($in['description'] ?? '')) ?: null,
+            'sort_order' => (int) ($in['sort_order'] ?? 100),
+            'is_inactive' => false,
+        ]);
     }
 
     /**

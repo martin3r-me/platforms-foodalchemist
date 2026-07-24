@@ -163,3 +163,74 @@ it('Schreib-Tool: ohne accept nur Vorschlag; accept=true schreibt via GL-07; man
     expect($geblockt->success)->toBeFalse()
         ->and($geblockt->errorCode)->toBe('OVERRIDE_FIRST');
 });
+
+// ── Spec 19 E3.5: Zielgruppen-Vokabular (GET/POST) + Foodbook-Defaults ──
+
+it('E3.5: zielgruppen.POST/GET-Roundtrip — anlegen, listen, Dedup + Leername als VALIDATION_ERROR', function () {
+    $post = $this->registry->get('foodalchemist.zielgruppen.POST');
+    $get = $this->registry->get('foodalchemist.zielgruppen.GET');
+
+    $res = $post->execute(['name' => 'VIP-Gala', 'description' => 'Gehobenes Publikum', 'sort_order' => 5], $this->kontext);
+    expect($res->success)->toBeTrue()
+        ->and($res->data['zielgruppe']['name'])->toBe('VIP-Gala')
+        ->and($res->data['zielgruppe']['sort_order'])->toBe(5);
+    $id = $res->data['zielgruppe']['id'];
+
+    $liste = $get->execute([], $this->kontext);
+    expect($liste->success)->toBeTrue()
+        ->and(collect($liste->data['zielgruppen'])->firstWhere('id', $id))->not->toBeNull()
+        ->and(collect($liste->data['zielgruppen'])->firstWhere('id', $id)['is_owned'])->toBeTrue();
+
+    // Dedup (case-insensitiv) im eigenen Team
+    $dup = $post->execute(['name' => 'vip-gala'], $this->kontext);
+    expect($dup->success)->toBeFalse()->and($dup->errorCode)->toBe('VALIDATION_ERROR');
+
+    // Leerer Name
+    $leer = $post->execute(['name' => '   '], $this->kontext);
+    expect($leer->success)->toBeFalse()->and($leer->errorCode)->toBe('VALIDATION_ERROR');
+});
+
+it('E3.5: foodbooks.POST setzt Bedarf-Defaults + Zielgruppen/Einsatzmomente; foodbook.GET spiegelt sie', function () {
+    $et = \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::create(['team_id' => $this->rootTeam->id, 'name' => 'Gala']);
+    $sf = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::create(['team_id' => $this->rootTeam->id, 'label' => 'Buffet', 'code' => 'buffet']);
+    $em = \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::create(['team_id' => $this->rootTeam->id, 'name' => 'Apéro']);
+    $zg = \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::create(['team_id' => $this->rootTeam->id, 'name' => 'Bankett-Gast']);
+
+    $post = $this->registry->get('foodalchemist.foodbooks.POST');
+    $res = $post->execute([
+        'label' => 'Bedarf-Defaults-Test', 'personen' => 80,
+        'default_event_type_id' => $et->id, 'default_serving_form_id' => $sf->id,
+        'target_food_cost_pct' => 30, 'food_cost_tolerance_pp' => 5,
+        'zielgruppen' => [$zg->id], 'einsatzmomente' => [$em->id],
+    ], $this->kontext);
+    expect($res->success)->toBeTrue()
+        ->and($res->data['foodbook']['default_event_type_id'])->toBe($et->id)
+        ->and($res->data['foodbook']['default_serving_form_id'])->toBe($sf->id)
+        ->and($res->data['foodbook']['zielgruppen_ids'])->toBe([$zg->id])
+        ->and($res->data['foodbook']['service_moment_ids'])->toBe([$em->id]);
+
+    $get = $this->registry->get('foodalchemist.foodbook.GET')->execute(['id' => $res->data['foodbook']['id']], $this->kontext);
+    expect($get->success)->toBeTrue()
+        ->and($get->data['defaults']['event_type_id'])->toBe($et->id)
+        ->and($get->data['defaults']['serving_form_id'])->toBe($sf->id)
+        ->and((float) $get->data['defaults']['target_food_cost_pct'])->toBe(30.0)
+        ->and($get->data['defaults']['service_moment_ids'])->toBe([$em->id])
+        ->and(collect($get->data['defaults']['zielgruppen'])->pluck('id')->all())->toBe([$zg->id]);
+});
+
+it('E3.5: Tenancy — foodbooks.POST mit fremd-Team-Zielgruppe blockt (NOT_FOUND), nichts wird angelegt', function () {
+    // Zielgruppe gehört Kind A — für Root (Ancestry aufwärts) NICHT sichtbar.
+    $fremd = \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::create(['team_id' => $this->childA->id, 'name' => 'Fremd-Gruppe']);
+    $vorher = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::count();
+
+    $res = $this->registry->get('foodalchemist.foodbooks.POST')->execute([
+        'label' => 'Tenancy-Foodbook', 'zielgruppen' => [$fremd->id],
+    ], $this->kontext);
+    expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('NOT_FOUND');
+    // Guard läuft VOR create() → kein verwaistes Foodbook.
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::count())->toBe($vorher);
+
+    // Fremd-Team-Zielgruppe erscheint auch nicht in der GET-Liste des Root-Teams.
+    $liste = $this->registry->get('foodalchemist.zielgruppen.GET')->execute([], $this->kontext);
+    expect(collect($liste->data['zielgruppen'])->firstWhere('id', $fremd->id))->toBeNull();
+});

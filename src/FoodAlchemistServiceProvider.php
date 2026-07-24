@@ -334,6 +334,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\FoodbookKapitelPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksDeleteTool::class,
+                    // Spec 19 E3.5: Zielgruppen-Vokabular (Leitstelle-Leseflaeche + Anlage)
+                    \Platform\FoodAlchemist\Tools\ZielgruppenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\ZielgruppenPostTool::class,
                     // Phase C: Concepter, Angebote, Kalkulation, Settings, Signale, Food DNA, Speiseplan
                     \Platform\FoodAlchemist\Tools\ConceptsSearchTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsListTool::class,
