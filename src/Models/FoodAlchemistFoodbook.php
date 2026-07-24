@@ -28,6 +28,8 @@ class FoodAlchemistFoodbook extends Model
         'uuid' => 'string',
         'jahr' => 'integer',
         'personen' => 'integer',
+        'target_food_cost_pct' => 'decimal:2',
+        'food_cost_tolerance_pp' => 'decimal:2',
     ];
 
     /**
@@ -78,6 +80,29 @@ class FoodAlchemistFoodbook extends Model
             'foodalchemist_foodbook_target_groups',
             'foodbook_id',
             'target_group_id'
+        );
+    }
+
+    /** Default-Eventtyp (Spec 19, M2) — frame-weiter Fallback, Kapitel erben. */
+    public function defaultEventType(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistEventtyp::class, 'default_event_type_id');
+    }
+
+    /** Default-Servierform (Spec 19, M2) — Scharnier zur Darreichungs-Auflösung (DarreichungResolver::fuerBlock). */
+    public function defaultServingForm(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistServierform::class, 'default_serving_form_id');
+    }
+
+    /** Einsatzmomente / Tagesablauf des Foodbooks (Spec 19, M2) — 1–n. */
+    public function serviceMoments(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            FoodAlchemistEinsatzmoment::class,
+            'foodalchemist_foodbook_service_moments',
+            'foodbook_id',
+            'service_moment_id'
         );
     }
 }

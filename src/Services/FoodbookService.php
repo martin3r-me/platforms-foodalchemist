@@ -61,7 +61,7 @@ class FoodbookService
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience'];
+    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
