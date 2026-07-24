@@ -333,6 +333,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Phase B: Foodbook-Kaskade (nativ FA, Draft-only)
                     \Platform\FoodAlchemist\Tools\FoodbooksPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookKapitelPostTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookKapitelPutTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksDeleteTool::class,
                     // Spec 19 E3.5: Zielgruppen-Vokabular (Leitstelle-Leseflaeche + Anlage)

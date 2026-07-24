@@ -37,14 +37,14 @@ class CoverageService
     private const AMPEL_RANG = ['info' => 0, 'erfuellt' => 1, 'teilerfuellt' => 2, 'verletzt' => 3];
 
     /**
-     * @return array{hat_geruest:bool, befunde:list<array>, zusammenfassung:array, ampel_gesamt:?string}
+     * @return array{hat_geruest:bool, befunde:list<array>, zusammenfassung:array, ampel_gesamt:?string, wareneinsatz:list<array>}
      */
     public function coverage(Team $team, string $ownerType, int $ownerId): array
     {
         $owner = $this->frames->resolveOwner($team, $ownerType, $ownerId);
         $frame = $this->frames->find($ownerType, $ownerId);
         if ($frame === null) {
-            return ['hat_geruest' => false, 'befunde' => [], 'zusammenfassung' => [], 'ampel_gesamt' => null];
+            return ['hat_geruest' => false, 'befunde' => [], 'zusammenfassung' => [], 'ampel_gesamt' => null, 'wareneinsatz' => []];
         }
         $frame->loadMissing(['slots.rules', 'rules']);
 
@@ -77,11 +77,24 @@ class CoverageService
             }
         }
 
+        // Spec 19 E4.6: Wareneinsatz-Sektion je Kapitel (foodbook-only) — IST-Food-Cost vs.
+        // Ziel-Kaskade (FoodbookService::wareneinsatzAmpel, E4.4). Die Kapitel-Befunde selbst
+        // stecken schon in `befunde` (pruefeKapitel, E4.3); die WE-Ampel ist die separate
+        // Kalkulations-Sicht (gruen|gelb|rot|unbekannt + partiell-Vorbehalt bei Pauschal-Anteilen).
+        $wareneinsatz = [];
+        if ($ownerType === 'foodbook') {
+            foreach ($owner->chapters as $kap) {
+                $we = $this->foodbooks->wareneinsatzAmpel($team, $owner, $kap);
+                $wareneinsatz[] = ['chapter_id' => (int) $kap->id, 'titel' => (string) $kap->title] + $we;
+            }
+        }
+
         return [
             'hat_geruest' => true,
             'befunde' => $befunde,
             'zusammenfassung' => $zaehler,
             'ampel_gesamt' => $gesamt ?? 'erfuellt',
+            'wareneinsatz' => $wareneinsatz,
         ];
     }
 

@@ -234,3 +234,79 @@ it('E3.5: Tenancy — foodbooks.POST mit fremd-Team-Zielgruppe blockt (NOT_FOUND
     $liste = $this->registry->get('foodalchemist.zielgruppen.GET')->execute([], $this->kontext);
     expect(collect($liste->data['zielgruppen'])->firstWhere('id', $fremd->id))->toBeNull();
 });
+
+// ── Spec 19 E4.6: foodbook_kapitel.PUT (Ziele+Zielgruppen+pricing_mode) + coverage.GET-WE ──
+
+it('E4.6: foodbook_kapitel.PUT setzt SOLL-Ziele + pricing_mode + Zielgruppen; kapitelZiele spiegelt sie', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $sf = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::create(['team_id' => $this->rootTeam->id, 'label' => 'Buffet', 'code' => 'buffet']);
+    $zg = \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::create(['team_id' => $this->rootTeam->id, 'name' => 'Bankett-Gast']);
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Ziele-PUT', 'personen' => 100]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Hauptgänge']);
+
+    $put = $this->registry->get('foodalchemist.foodbook_kapitel.PUT');
+    $res = $put->execute([
+        'kapitel_id' => $kap->id,
+        'target_count' => 6, 'price_anchor' => 24.00, 'price_min' => 20.00, 'price_max' => 30.00,
+        'serving_form_id' => $sf->id, 'pricing_mode' => 'paket', 'target_food_cost_pct' => 28.5,
+        'zielgruppen' => [$zg->id],
+    ], $this->kontext);
+
+    expect($res->success)->toBeTrue()
+        ->and($res->data['kapitel']['target_count'])->toBe(6)
+        ->and($res->data['kapitel']['pricing_mode'])->toBe('paket')
+        ->and($res->data['kapitel']['serving_form_id'])->toBe($sf->id)
+        ->and($res->data['kapitel']['zielgruppen_ids'])->toBe([$zg->id]);
+
+    // Ziel-Kaskade sieht die frisch gesetzten SOLL-Werte (Quelle = Kapitel).
+    $ziele = $foodbooks->kapitelZiele($this->rootTeam, $kap->fresh());
+    expect($ziele['target_count'])->toBe(6)
+        ->and((float) $ziele['price_anchor'])->toBe(24.0)
+        ->and($ziele['quellen']['target_count'])->toBe('kapitel');
+
+    // Zielgruppen-PUT ist sync: erneutes PUT mit [] leert die Liste.
+    $leer = $put->execute(['kapitel_id' => $kap->id, 'zielgruppen' => []], $this->kontext);
+    expect($leer->data['kapitel']['zielgruppen_ids'])->toBe([]);
+
+    // pricing_mode-Enum wird VOR dem Write geprüft.
+    $bad = $put->execute(['kapitel_id' => $kap->id, 'pricing_mode' => 'quatsch'], $this->kontext);
+    expect($bad->success)->toBeFalse()->and($bad->errorCode)->toBe('VALIDATION_ERROR');
+});
+
+it('E4.6: foodbook_kapitel.PUT Tenancy — fremd-Team-Zielgruppe blockt (NOT_FOUND), Kapitel unverändert', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $fremd = \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::create(['team_id' => $this->childA->id, 'name' => 'Fremd-Gruppe']);
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Tenancy-Ziele', 'personen' => 50]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Kap']);
+
+    $res = $this->registry->get('foodalchemist.foodbook_kapitel.PUT')->execute([
+        'kapitel_id' => $kap->id, 'target_count' => 4, 'zielgruppen' => [$fremd->id],
+    ], $this->kontext);
+    expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('NOT_FOUND');
+    // Guard läuft VOR jedem Write → weder Zielgruppe verknüpft noch target_count gesetzt.
+    expect($kap->fresh()->target_count)->toBeNull()
+        ->and($kap->targetGroups()->count())->toBe(0);
+});
+
+it('E4.6: coverage.GET liefert bei Foodbook eine wareneinsatz[]-Sektion je Kapitel', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $frames = app(\Platform\FoodAlchemist\Services\PlanningFrameService::class);
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'WE-Coverage', 'personen' => 100]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Hauptgänge']);
+    // Gerüst nötig, damit coverage hat_geruest=true liefert (sonst Kurzschluss im Tool).
+    $frame = $frames->frameFor($this->rootTeam, 'foodbook', $fb->id);
+    $frames->addSlot($this->rootTeam, $frame, ['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]);
+
+    $res = $this->registry->get('foodalchemist.coverage.GET')->execute([
+        'owner_type' => 'foodbook', 'owner_id' => $fb->id,
+    ], $this->kontext);
+
+    expect($res->success)->toBeTrue()
+        ->and($res->data['hat_geruest'])->toBeTrue()
+        ->and($res->data)->toHaveKey('wareneinsatz');
+    $we = collect($res->data['wareneinsatz'])->firstWhere('chapter_id', $kap->id);
+    // Ohne bepreiste Blöcke: IST unbekannt → status 'unbekannt', nicht partiell.
+    expect($we)->not->toBeNull()
+        ->and($we['status'])->toBe('unbekannt')
+        ->and($we['partiell'])->toBeFalse();
+});

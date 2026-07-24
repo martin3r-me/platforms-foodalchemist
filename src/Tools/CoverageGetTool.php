@@ -24,6 +24,9 @@ class CoverageGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
         return 'Misst das Ist eines Foodbooks/Konzepts gegen sein Planungs-Gerüst (foodalchemist.planning.GET/PUT): '
             . 'Menge je Slot, Diät-Quoten, Preisrahmen p. P. + je Slot, Saison-Abdeckung, Dramaturgie (Pflicht-Slots), '
             . 'No-Gos (Zutat/Allergen). Ampel je Befund: erfuellt|teilerfuellt|verletzt|info. '
+            . 'Bei Foodbooks zusätzlich: Kapitel-Ziel-Befunde (Menge/Preis am Kapitel-Rollup, chapter_id gesetzt) '
+            . 'und eine wareneinsatz[]-Sektion je Kapitel (IST-Food-Cost vs. Ziel-Kaskade; status gruen|gelb|rot|unbekannt, '
+            . 'partiell=true bei ungezähltem Pauschal-EK). '
             . 'NACH jeder KI-Befüllung aufrufen — verletzt-Befunde beheben oder dem Menschen benennen, nie ignorieren.';
     }
 

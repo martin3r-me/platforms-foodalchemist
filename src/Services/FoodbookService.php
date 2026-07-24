@@ -105,6 +105,21 @@ class FoodbookService
         $fb->targetGroups()->toggle([$targetGroupId]);
     }
 
+    /**
+     * Spec 19 E4.6: Zielgruppen eines Kapitels setzen (PUT-Semantik — `sync` auf die
+     * genaue Liste; leeres Array = alle entfernen). Kapitel-Zielgruppen überschreiben
+     * den Foodbook-Default in der Kaskade (leitplanken()/zielgruppenKaskade). Die IDs
+     * müssen team-sichtbares Vokabular sein (Vokabular-Pflicht, Entscheidung 6) — der
+     * MCP-Guard prüft das VOR dem Aufruf; hier nur Ownership übers Kapitel.
+     *
+     * @param  list<int>  $ids
+     */
+    public function setKapitelZielgruppen(Team $team, int $kapitelId, array $ids): void
+    {
+        $k = $this->ownedKapitel($team, $kapitelId);
+        $k->targetGroups()->sync(array_values(array_unique(array_map('intval', $ids))));
+    }
+
     // ── Spec 19 E3.5: Zielgruppen-Vokabular (MCP-Lesefläche + Anlage) ──
 
     /**
