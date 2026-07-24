@@ -190,6 +190,50 @@ abstract class FoodAlchemistTool
         return $out;
     }
 
+    /**
+     * Spec 19 E6.5: Kreativ-Skizze (dish_idea) kompakt für MCP. MCP-Feldnamen spiegeln die
+     * Spec-Parameter (ziel_form/paket_gruppe), nicht die Roh-Spalten (target_form/group_id).
+     */
+    protected function skizzeArr(\Platform\FoodAlchemist\Models\FoodAlchemistDishIdea $i): array
+    {
+        return [
+            'id' => $i->id,
+            'chapter_id' => $i->chapter_id !== null ? (int) $i->chapter_id : null,
+            'concept_id' => $i->concept_id !== null ? (int) $i->concept_id : null,
+            'title' => $i->title,
+            'description' => $i->description,
+            'ziel_form' => $i->target_form,
+            'paket_gruppe' => $i->group_id !== null ? (int) $i->group_id : null,
+            'sales_recipe_id' => $i->sales_recipe_id !== null ? (int) $i->sales_recipe_id : null,
+            'status' => $i->status,
+            'created_via' => $i->created_via,
+            'position' => (int) $i->position,
+        ];
+    }
+
+    /**
+     * Spec 19 E6.5: Paket-Gruppe (dish_idea_group) kompakt für MCP. $ideen optional
+     * für die gruppierte GET-Sicht (Gruppe → ihre Skizzen).
+     *
+     * @param  list<array>|null  $ideen
+     */
+    protected function paketArr(\Platform\FoodAlchemist\Models\FoodAlchemistDishIdeaGroup $g, ?array $ideen = null): array
+    {
+        $out = [
+            'id' => $g->id,
+            'chapter_id' => $g->chapter_id !== null ? (int) $g->chapter_id : null,
+            'concept_id' => $g->concept_id !== null ? (int) $g->concept_id : null,
+            'name' => $g->name,
+            'paket_zielpreis_pp' => $g->target_price_pp !== null ? (float) $g->target_price_pp : null,
+            'position' => (int) $g->position,
+        ];
+        if ($ideen !== null) {
+            $out['ideen'] = $ideen;
+        }
+
+        return $out;
+    }
+
     /** Phase A: Draft-Quarantäne-Guard — approved/review/archived sind für den MCP-Pfad locked. */
     protected function kiEditGesperrt(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe): ?string
     {

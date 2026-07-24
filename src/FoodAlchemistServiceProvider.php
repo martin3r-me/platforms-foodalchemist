@@ -341,6 +341,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ZielgruppenPostTool::class,
                     // Spec 19 E5.4: Leitstelle-Leseflaeche (Checkliste + Kapitel-Matrix + Kapitel-Stand)
                     \Platform\FoodAlchemist\Tools\LeitstelleGetTool::class,
+                    // Spec 19 E6.5: Kreativ-Skizzen (Entwuerfe) — GET gruppiert, POST/PUT Skizze+Paket
+                    \Platform\FoodAlchemist\Tools\KapitelIdeenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\KapitelIdeenPostTool::class,
+                    \Platform\FoodAlchemist\Tools\KapitelIdeenPutTool::class,
                     // Phase C: Concepter, Angebote, Kalkulation, Settings, Signale, Food DNA, Speiseplan
                     \Platform\FoodAlchemist\Tools\ConceptsSearchTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsListTool::class,

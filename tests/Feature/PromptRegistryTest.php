@@ -33,6 +33,7 @@ const REGISTRY_SOLL = [
     // Concepter
     'concept.wording' => 'A',                                         // Concept-übergreifendes Wording (Schreibstil → Position-Namen + Intro)
     'concept.brief_geruest' => 'A',                                   // R6.1: Kunden-Brief → Planungs-Gerüst (Rahmen; Gericht-Wahl bleibt deterministisch)
+    'foodbook.kapitel_ideen' => 'B',                                  // Spec 19 E6.4: produkt-blinde Kreativ-Divergenz je Kapitel (nur Skizzen)
     // Sonstiges
     'price.plausi' => 'B', 'chat.message' => 'A',
     // Signale-Cockpit: KI-Fixer + Assistenzen hinter „KI erledigen lassen" (2026-07-21)

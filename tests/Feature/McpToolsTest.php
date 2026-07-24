@@ -379,3 +379,113 @@ it('E5.4: leitstelle.GET Tenancy — Foodbook eines fremden Teams + fremdes Kapi
     $res2 = $tool->execute(['foodbook_id' => $meinFb->id, 'chapter_id' => $fremdKap->id], $this->kontext);
     expect($res2->success)->toBeFalse()->and($res2->errorCode)->toBe('NOT_FOUND');
 });
+
+// ── Spec 19 E6.5: kapitel_ideen.GET/POST/PUT (Kreativ-Skizzen, Entwürfe) ──
+
+it('E6.5: kapitel_ideen.POST/GET — freie Idee + Paket-Gruppe + Paket-Zuordnung, GET gruppiert', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Skizzen-Foodbook', 'personen' => 80]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Vorspeisen']);
+    $post = $this->registry->get('foodalchemist.kapitel_ideen.POST');
+    $get = $this->registry->get('foodalchemist.kapitel_ideen.GET');
+
+    // Freie Einzel-Skizze.
+    $frei = $post->execute(['chapter_id' => $kap->id, 'title' => 'Rote-Bete-Tatar'], $this->kontext);
+    expect($frei->success)->toBeTrue()
+        ->and($frei->data['idee']['ziel_form'])->toBe('einzel')
+        ->and($frei->data['idee']['created_via'])->toBe('mcp')
+        ->and($frei->data['idee']['status'])->toBe('entwurf');
+
+    // Paket-Gruppe (name + €/Gast-Ziel).
+    $gruppe = $post->execute([
+        'objekt' => 'gruppe', 'chapter_id' => $kap->id, 'name' => 'Trio kalt', 'paket_zielpreis_pp' => 12.50,
+    ], $this->kontext);
+    expect($gruppe->success)->toBeTrue()
+        ->and($gruppe->data['gruppe']['paket_zielpreis_pp'])->toBe(12.5);
+    $gid = $gruppe->data['gruppe']['id'];
+
+    // Skizze ins Paket (ziel_form=paket + paket_gruppe).
+    $imPaket = $post->execute([
+        'chapter_id' => $kap->id, 'title' => 'Lachs-Praline', 'ziel_form' => 'paket', 'paket_gruppe' => $gid,
+    ], $this->kontext);
+    expect($imPaket->success)->toBeTrue()
+        ->and($imPaket->data['idee']['ziel_form'])->toBe('paket')
+        ->and($imPaket->data['idee']['paket_gruppe'])->toBe($gid);
+
+    // Paket ohne group_id = VALIDATION_ERROR (M4-Regel).
+    $bad = $post->execute(['chapter_id' => $kap->id, 'title' => 'X', 'ziel_form' => 'paket'], $this->kontext);
+    expect($bad->success)->toBeFalse()->and($bad->errorCode)->toBe('VALIDATION_ERROR');
+
+    // GET gruppiert: 1 Gruppe (mit 1 Skizze) + 1 freie Einzel-Skizze.
+    $liste = $get->execute(['chapter_id' => $kap->id], $this->kontext);
+    expect($liste->success)->toBeTrue()
+        ->and($liste->data['gruppen'])->toHaveCount(1)
+        ->and($liste->data['gruppen'][0]['id'])->toBe($gid)
+        ->and($liste->data['gruppen'][0]['ideen'])->toHaveCount(1)
+        ->and($liste->data['gruppen'][0]['ideen'][0]['title'])->toBe('Lachs-Praline')
+        ->and($liste->data['einzel'])->toHaveCount(1)
+        ->and($liste->data['einzel'][0]['title'])->toBe('Rote-Bete-Tatar')
+        ->and($liste->data['total'])->toBe(2);
+
+    // XOR-Guard: weder Owner → VALIDATION_ERROR.
+    $ohneOwner = $get->execute([], $this->kontext);
+    expect($ohneOwner->success)->toBeFalse()->and($ohneOwner->errorCode)->toBe('VALIDATION_ERROR');
+});
+
+it('E6.5: kapitel_ideen.PUT — verwerfen/reaktivieren, Paket umbenennen, Paket auflösen', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'PUT-Foodbook', 'personen' => 60]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Hauptgänge']);
+    $post = $this->registry->get('foodalchemist.kapitel_ideen.POST');
+    $put = $this->registry->get('foodalchemist.kapitel_ideen.PUT');
+    $get = $this->registry->get('foodalchemist.kapitel_ideen.GET');
+
+    $gid = $post->execute(['objekt' => 'gruppe', 'chapter_id' => $kap->id, 'name' => 'Alt'], $this->kontext)->data['gruppe']['id'];
+    $ideeId = $post->execute([
+        'chapter_id' => $kap->id, 'title' => 'Zander', 'ziel_form' => 'paket', 'paket_gruppe' => $gid,
+    ], $this->kontext)->data['idee']['id'];
+
+    // Umbenennen + Zielpreis.
+    $ren = $put->execute(['objekt' => 'gruppe', 'id' => $gid, 'name' => 'Fisch-Menü', 'paket_zielpreis_pp' => 22.0], $this->kontext);
+    expect($ren->success)->toBeTrue()
+        ->and($ren->data['gruppe']['name'])->toBe('Fisch-Menü')
+        ->and($ren->data['gruppe']['paket_zielpreis_pp'])->toBe(22.0);
+
+    // Verwerfen → Default-GET blendet aus, include_verworfen zeigt.
+    $verw = $put->execute(['id' => $ideeId, 'status' => 'verworfen'], $this->kontext);
+    expect($verw->success)->toBeTrue()->and($verw->data['idee']['status'])->toBe('verworfen');
+    $ohne = $get->execute(['chapter_id' => $kap->id], $this->kontext);
+    expect($ohne->data['gruppen'][0]['ideen'])->toHaveCount(0);
+    $mit = $get->execute(['chapter_id' => $kap->id, 'include_verworfen' => true], $this->kontext);
+    expect($mit->data['gruppen'][0]['ideen'])->toHaveCount(1);
+
+    // Reaktivieren + freigegeben ist gesperrt.
+    expect($put->execute(['id' => $ideeId, 'status' => 'entwurf'], $this->kontext)->data['idee']['status'])->toBe('entwurf');
+    $frei = $put->execute(['id' => $ideeId, 'status' => 'freigegeben'], $this->kontext);
+    expect($frei->success)->toBeFalse()->and($frei->errorCode)->toBe('VALIDATION_ERROR');
+
+    // Paket auflösen → Mitglied wird Einzel, Gruppe weg.
+    $auf = $put->execute(['objekt' => 'gruppe', 'id' => $gid, 'aufloesen' => true], $this->kontext);
+    expect($auf->success)->toBeTrue()->and($auf->data['aufgeloest'])->toBeTrue();
+    $nach = $get->execute(['chapter_id' => $kap->id], $this->kontext);
+    expect($nach->data['gruppen'])->toHaveCount(0)
+        ->and($nach->data['einzel'])->toHaveCount(1)
+        ->and($nach->data['einzel'][0]['ziel_form'])->toBe('einzel');
+});
+
+it('E6.5: kapitel_ideen Tenancy — fremdes Kapitel blockt GET + POST (NOT_FOUND)', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    // childA ist NICHT Vorfahr von root → dessen Kapitel für root unsichtbar.
+    $fremdFb = $foodbooks->create($this->childA, ['label' => 'Fremd-Skizzen', 'personen' => 20]);
+    $fremdKap = $foodbooks->addKapitel($this->childA, $fremdFb->id, ['title' => 'Fremd-Kap']);
+
+    $get = $this->registry->get('foodalchemist.kapitel_ideen.GET')->execute(['chapter_id' => $fremdKap->id], $this->kontext);
+    expect($get->success)->toBeFalse()->and($get->errorCode)->toBe('NOT_FOUND');
+
+    $post = $this->registry->get('foodalchemist.kapitel_ideen.POST')->execute([
+        'chapter_id' => $fremdKap->id, 'title' => 'Schmuggel',
+    ], $this->kontext);
+    expect($post->success)->toBeFalse()->and($post->errorCode)->toBe('NOT_FOUND');
+    // Nichts angelegt.
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistDishIdea::where('chapter_id', $fremdKap->id)->count())->toBe(0);
+});
