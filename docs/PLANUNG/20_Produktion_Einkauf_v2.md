@@ -35,7 +35,7 @@
 | Stufe | Größe | Hängt an |
 |---|---|---|
 | P0 Namen + Mehrfach-Aufträge | S | — ✅ |
-| P1 Ziel-Typen (kg/Basis/Kapitel) | L | P0 |
+| P1 Ziel-Typen (kg/Basis/Kapitel) | L | P0 ✅ (Service+MCP; P2 Editor-Picker offen) |
 | P2 Editor v2 | M | P1 |
 | P3 Browser/DetailPanel | M | P0 |
 | P4 Verdrahtung härten | S | P0 |
@@ -50,17 +50,17 @@
 - [x] MCP-Lockstep: `ADD_TARGET` nimmt `order_id` ODER (`production_date` [+ `name`], legt an wenn fehlt); NEU `production_orders.UPDATE` (Kopf) + `production_orders.REMOVE_TARGET`; `GET`-Liste + `ADD_TARGET`-Return führen `name`. Alle 3 in ServiceProvider registriert.
 - [x] Pest: zwei benannte Aufträge am selben Tag koexistieren (2 planned/Tag); Rundung je Auftrag separat dokumentiert; Name-Pflicht-Guard; Datums-Label-Fallback; MCP End-to-End für UPDATE/REMOVE_TARGET/order_id-Pfad. Ziel-Suite `ProductionOrderServiceTest` 17 passed / 2 skipped (Routen).
 
-### P1 · Ziel-Typen: Basisrezept + kg, Foodbook-Kapitel · L (P1a ✅ / P1b Kapitel offen)
+### P1 · Ziel-Typen: Basisrezept + kg, Foodbook-Kapitel · L (P1a ✅ / P1b ✅ Service+MCP; Editor-Picker = P2)
 - [x] **P1a** Dritter `zielTyp 'basisrezept'` im Editor, Suche ohne `->verkauf()`-Scope (`->basis()`).
 - [x] **P1a** targets-Feld `amount_kg`; `rezeptTopBatches()`: Roh-Batches = `kg ÷ yield_kg` (explodiere rundet auf ganze Ansätze auf), Warnung + 1 Ansatz bei `yield_kg NULL`; Editor-Einheiten-Umschalter Ansätze ⇄ kg. (`amount_kg` lebt in der `targets`-JSON — keine Migration.)
-- [ ] **P1b** Kapitel-Ziel `{chapter_id, persons}`: `topsAus()`-Zweig Kapitel → sichtbare `concept_ref`/`recipe_ref`-Blocks (Rest skippen); `concept_ref` → `konzeptTops()`, `recipe_ref` → VK-Ziel (Default 1 Portion/Person, Block-`quantity`+`unit_vocab_id` wenn gesetzt); Varianten-Dialog, gewählte Variante als aufgelöste Einzel-Ziele.
-- [x] `labelFor()` um kg-Labels erweitert (P1a) — Kapitel-Labels offen (P1b).
-- [x] MCP-Lockstep `amount_kg` in ALLEN 5 zielnehmenden Tools (`production_orders.ADD_TARGET`, `orders.ADD_NEED`, `produktionsblatt.GET`, `bestellvorschlag.GET`, `einkaufsliste.GET`); Doppel-Bedeutung von `portions` (VK=Portionen, Basis=Ansätze) in allen Descriptions dokumentiert (P1a). — Kapitel-Parameter offen (P1b).
-- [x] Pest: kg→Ansätze inkl. NULL-yield + Editor-kg-Umschalter + Basis-Scope-Suche + MCP-`amount_kg` (5 neue Tests, P1a). — Kapitel-Explosion + Varianten-Wahl offen (P1b).
+- [x] **P1b** Kapitel-Ziel `{chapter_id, persons}`: `topsAus()`-Zweig Kapitel → sichtbare `concept_ref`/`recipe_ref`-Blocks des Kapitel-Scopes (Kapitel + Nachfahren; header/text/spacer/image geskippt); `concept_ref` → `konzeptTops()`, `recipe_ref` → VK-Position via `positionTop()` (Default 1 Portion/Person, sonst Block-`quantity`+`unit_vocab_id`). Varianten-Gruppen (`variant_group_id`) auf EINEN Block reduziert: `variant_choices` `{group_id: block_id}`, Default = erster Block in Dokument-Reihenfolge. Neuer Resolver `PlanungsblattService::kapitelZiele()` expandiert das Kapitel in **eingefrorene Einzel-Ziele** (V2 „kein Live-Bezug") — `ADD_TARGET` nutzt ihn (chapter_id → N Teil-Ziele, `source_ref` `:c<index>`). **Editor-Varianten-Dialog/Kapitel-Picker = P2** (nur die UI, Service/MCP hier fertig).
+- [x] `labelFor()` um kg-Labels erweitert (P1a) + Kapitel-Label-Fallback (P1b).
+- [x] MCP-Lockstep `amount_kg` in ALLEN 5 zielnehmenden Tools (`production_orders.ADD_TARGET`, `orders.ADD_NEED`, `produktionsblatt.GET`, `bestellvorschlag.GET`, `einkaufsliste.GET`); Doppel-Bedeutung von `portions` (VK=Portionen, Basis=Ansätze) in allen Descriptions dokumentiert (P1a). **P1b:** `chapter_id`/`persons`/`variant_choices` in denselben 5 Tools + Validierung „genau EINES von concept/recipe/chapter" (Read-Tools live; `ADD_TARGET` expandiert eingefroren).
+- [x] Pest: kg→Ansätze inkl. NULL-yield + Editor-kg-Umschalter + Basis-Scope-Suche + MCP-`amount_kg` (5 neue Tests, P1a). **P1b:** recipe_ref-Default + Block-Skip, concept_ref über `konzeptTops`, Varianten-Wahl (Default vs. explizit), `kapitelZiele`-Resolver, MCP `produktionsblatt.GET` chapter_id + Validierung, `ADD_TARGET`-Expansion (6 neue Tests).
 
 ### P2 · Editor v2 („schlau eingeben") · M
 - [ ] 3 Karteien (bestehende `modal-section`-Bausteine): Stammdaten → Ziele (4-Typen-Picker, typabhängiges Mengenfeld mit Einheiten-Suffix, Ziel-Liste mit Edit/Remove) → Live-Vorschau (bestehend).
-- [ ] Kapitel-Picker: Foodbook-Select → Kapitel-Baum → Personenzahl (Pax-Vorbelegung) → ggf. Varianten-Dialog.
+- [ ] Kapitel-Picker: Foodbook-Select → Kapitel-Baum → Personenzahl (Pax-Vorbelegung) → ggf. Varianten-Dialog. **Service-Seite bereit (P1b):** `PlanungsblattService::kapitelZiele($team, $chapterId, $persons, $variantChoices)` liefert die eingefrorenen Einzel-Ziele — der Picker baut nur noch UI + ruft ihn, dann `saveNew`/`replaceTargets`.
 
 ### P3 · Browser + DetailPanel logisch neu · M
 - [ ] Browser-Tabelle: Name · Datum · Ziele (Kurz-Labels) · KPI (Ansätze/Portionen) · Status · Einkaufs-Indikator (keine/offen/versendet).
@@ -114,5 +114,6 @@
 | _(noch kein Run)_ | — | Dossier angelegt (Session 2026-07-23) | P0 starten |
 | 2026-07-24 · Run 1 | **P0 ✅** | `70d7c74` — Name-Feld+Migration (MySQL 8.4 gefahren+backfilled, Backup PRE_SPEC20_P0), saveNew immer-neu, draftForDate MCP-Kompat, Editor/Browser/DetailPanel/Doku auf Name, MCP UPDATE+REMOVE_TARGET+ADD_TARGET-Adressierung. `ProductionOrderServiceTest` 17 passed/2 skip; Modul-Suite 993 passed, 1 Fremd-Fail (`KnowledgeBindToolTest`, fällt auch isoliert, kein Bezug zu P0), 4 skip. | P1 (Ziel-Typen kg/Basisrezept/Kapitel) — oder E1 (3-Panel-Einkauf, parallel erlaubt) |
 | 2026-07-24 · Run 2 | **P1a ✅** (Basisrezept + kg; Kapitel = P1b offen) | `7ce94d9` — 3. Zieltyp `basisrezept` im Editor (`->basis()`-Suche) + Ansätze⇄kg-Umschalter; `rezeptTopBatches()` kg-Zweig (Roh = kg÷yield, explodiere ceil auf ganze Ansätze; NULL-yield ⇒ Warnung + 1 Ansatz); `amount_kg` lebt in der `targets`-JSON (keine Migration); `labelFor()`/`labelFuer()` kg-Label; MCP-Lockstep `amount_kg` + `portions`-Doppeldeutung in allen 5 zielnehmenden Tools. `ProductionOrderServiceTest` 22 passed/2 skip (5 neue P1-Tests); volle Modul-Suite **1088 passed, 4 skip, 0 fail**. Office-Dev #559-DoD-Tick bewusst NICHT gesetzt (Regel „kein Team-9/office-MCP-Zugriff aus der Routine" — Board-Pflege manuell). | P1b (Kapitel-Ziel `{chapter_id, persons}` + Varianten-Dialog) — oder E1 (3-Panel-Einkauf, parallel) |
+| 2026-07-24 · Run 3 | **P1b ✅** (Service + MCP; Editor-Kapitel-Picker/Varianten-Dialog = P2) | `4a51617` — `topsAus()` chapter_id-Zweig + `kapitelTops()`/`kapitelBloecke()` (Kapitel-Scope inkl. Nachfahren, Block-Skip, Varianten-Reduktion mit `variant_choices`, Default = erster Block); recipe_ref über `positionTop()` (Default 1 Port./Person, sonst Block-`quantity`+`unit`); concept_ref über `konzeptTops()`. Neuer Resolver `kapitelZiele()` → eingefrorene Einzel-Ziele (V2 kein Live-Bezug); `ADD_TARGET` expandiert chapter_id → N Teil-Ziele (`source_ref :c<idx>`). `labelFor()` Kapitel-Fallback. MCP-Lockstep `chapter_id`/`persons`/`variant_choices` in allen 5 zielnehmenden Tools + „genau EINES"-Validierung. 6 neue Pest-Tests; volle Modul-Suite **1096 passed, 4 skip, 0 fail**. Office-Dev #559-DoD-Tick manuell (kein office-MCP aus Routine). | P2 (Editor v2 inkl. Kapitel-Picker/Varianten-Dialog — nutzt `kapitelZiele()`) — oder E1 (3-Panel-Einkauf, parallel) |
 
 *Verzahnt: [17](17_Bestellwesen_MiniWaWi.md) · [18](18_Produktionsauftraege.md) · [14](14_Lieferanten_Management_R9.md) (LeadLaStrategie). Dossier 2026-07-23; Entscheide V1–V4 mit Dominique festgezurrt.*
