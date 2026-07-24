@@ -1002,6 +1002,36 @@ class ConceptService
         return $this->flacherBaum($alle);
     }
 
+    /**
+     * Klasse-NAMEN im Teilbaum einer Klasse (self + alle Nachfahren) — für
+     * `whereIn('class', …)`-Filter. `concepts.class` referenziert per Name-String,
+     * darum liefern wir Namen statt IDs (Analogon zu descendantIds für Kategorien).
+     *
+     * @return list<string>
+     */
+    public function klassenDescendantNames(Team $team, int $klasseId): array
+    {
+        $rows = collect($this->klassenFlat($team));
+        $byId = $rows->keyBy('id');
+        $byParent = [];
+        foreach ($rows as $r) {
+            $byParent[$r['parent_id'] ?? 0][] = (int) $r['id'];
+        }
+        $namen = [];
+        $stack = [$klasseId];
+        while ($stack) {
+            $id = array_pop($stack);
+            if (isset($byId[$id])) {
+                $namen[] = $byId[$id]['name'];
+            }
+            foreach ($byParent[$id] ?? [] as $kid) {
+                $stack[] = $kid;
+            }
+        }
+
+        return $namen;
+    }
+
     public function createKlasse(Team $team, string $name, ?int $parentId = null): FoodAlchemistVocabKlasse
     {
         $name = trim($name);

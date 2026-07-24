@@ -461,6 +461,12 @@ class Index extends Component
     /** UX 2026-07-24: Klassen-/Hauptgruppen-Filter im Gericht-Picker (Modell A: dish_main_group_id) — Browsen ohne Namen. */
     public ?int $gerichtHauptgruppe = null;
 
+    /** UX 2026-07-24: Untergruppe (dish_class, z. B. „Vorspeise Vegan") unter der aktiven HG. */
+    public ?int $gerichtDishClass = null;
+
+    /** UX 2026-07-24: Klassen-Filter des Concept-Pickers = echte Concepter-Klasse (vocab_classes-Baum). */
+    public ?int $conceptKlasseId = null;
+
     /** #369: CRM-Kunde-Picker. */
     public string $firmaSuche = '';
 
@@ -796,6 +802,25 @@ class Index extends Component
         $this->gerichtSuche = '';
     }
 
+    /** Gericht-Picker: Hauptgruppe (de)selektieren; HG-Wechsel setzt die Untergruppe zurück. */
+    public function waehleGerichtHg(?int $hgId): void
+    {
+        $this->gerichtHauptgruppe = ($this->gerichtHauptgruppe === $hgId) ? null : $hgId;
+        $this->gerichtDishClass = null;
+    }
+
+    /** Gericht-Picker: Untergruppe (dish_class) unter der aktiven HG (de)selektieren. */
+    public function waehleGerichtKlasse(int $dishClassId): void
+    {
+        $this->gerichtDishClass = ($this->gerichtDishClass === $dishClassId) ? null : $dishClassId;
+    }
+
+    /** Concept-Picker: echte Concepter-Klasse (vocab_classes) (de)selektieren. */
+    public function waehleConceptKlasse(int $klasseId): void
+    {
+        $this->conceptKlasseId = ($this->conceptKlasseId === $klasseId) ? null : $klasseId;
+    }
+
     public function presetHinzu(string $type, ?string $slug, ?string $label, ?string $preisBasis, bool $sichtbar, FoodbookService $svc): void
     {
         if ($this->selectedKapitelId === null) {
@@ -1035,18 +1060,27 @@ class Index extends Component
             'kapitel' => $kapitel,
             // E5.3: Portfolio/Kapitel-Aggregat + WE ziehen jetzt in die Leitstelle-Rail (Nested-Livewire) um.
             'headerPresets' => FoodbookService::headerPresets(),
-            'conceptKategorien' => app(\Platform\FoodAlchemist\Services\ConceptService::class)->categoriesFlat($team),
+            // UX 2026-07-24 (Dominique): Concept-Picker filtert auf die ECHTEN Concepter-Klassen
+            // (vocab_classes-Baum, inkl. Untergruppen), nicht mehr auf die Concept-Kategorie.
+            'conceptKlassen' => $this->selectedKapitelId !== null
+                ? app(\Platform\FoodAlchemist\Services\ConceptService::class)->klassenFlat($team) : [],
             // UX-Fix 2026-07-24 (Dominique „Eingabe katastrophe"): Picker zeigt beim Öffnen sofort eine
-            // browsebare Liste — Suche/Kategorie FILTERN nur noch, sind nicht mehr Voraussetzung. Service
+            // browsebare Liste — Suche/Klasse FILTERN nur noch, sind nicht mehr Voraussetzung. Service
             // liefert bei leerer Suche längst alle (orderBy name, cap 50). Nur an Kapitel-Auswahl gebunden.
             'conceptKandidaten' => $this->selectedKapitelId !== null
-                ? $svc->conceptKandidaten($team, $this->conceptSuche, $this->conceptKategorie, 50) : collect(),
-            // E1.3: Einzel-Gericht-Picker (recipe_ref) — sofort Liste, Suche + Klasse (HG) filtern nur
+                ? $svc->conceptKandidaten($team, $this->conceptSuche, null, 50, $this->conceptKlasseId) : collect(),
+            // E1.3: Einzel-Gericht-Picker (recipe_ref) — sofort Liste, Suche + Klasse (HG) + Untergruppe filtern nur
             'gerichtKandidaten' => $this->selectedKapitelId !== null
-                ? $svc->gerichtKandidaten($team, $this->gerichtSuche, 50, $this->gerichtHauptgruppe) : collect(),
-            // UX 2026-07-24: Klassen-Spalte im Gericht-Picker (Modell A: 16 VK-Hauptgruppen, aktive)
+                ? $svc->gerichtKandidaten($team, $this->gerichtSuche, 50, $this->gerichtHauptgruppe, $this->gerichtDishClass) : collect(),
+            // UX 2026-07-24: Klassen-Spalte im Gericht-Picker (Modell A: aktive VK-Hauptgruppen)
             'gerichtHauptgruppen' => $this->selectedKapitelId !== null
                 ? app(\Platform\FoodAlchemist\Services\SalesRecipeService::class)->dishMainGroups($team)
+                : collect(),
+            // Untergruppen (dish_classes) der aktiven HG — Drill-down im Gericht-Picker
+            'gerichtUntergruppen' => ($this->selectedKapitelId !== null && $this->gerichtHauptgruppe !== null)
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::visibleToTeam($team)
+                    ->where('dish_main_group_id', $this->gerichtHauptgruppe)
+                    ->orderBy('id')->get(['id', 'label', 'diet_form'])
                 : collect(),
             // Spec 19 E6.3: Kreativ-Skizzenfläche — Skizzen des gewählten Kapitels (Pakete + freie Einzel)
             'ideenListe' => $this->selectedKapitelId !== null

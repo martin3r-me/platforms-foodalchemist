@@ -874,18 +874,22 @@
                     <x-foodalchemist::modal name="fb-concept" title="Concept einfügen" size="max-w-3xl">
                         <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-3" />
                         <div class="flex gap-3 min-h-[20rem]">
-                            {{-- Kategorie-Tree (collapsible, wie Concepter-Browser) --}}
+                            {{-- Klassen-Baum = echte Concepter-Klasse (vocab_classes, inkl. Untergruppen) --}}
                             <div class="w-44 shrink-0 overflow-y-auto border-r border-black/5 pr-2 space-y-0.5 max-h-[26rem]">
-                                <button type="button" wire:click="$set('conceptKategorie', null)"
-                                        class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $conceptKategorie === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">Alle Kategorien</button>
-                                <x-foodalchemist::tree :initial-collapsed="collect($conceptKategorien)->where('has_children', true)->pluck('id')->all()">
-                                    @foreach($conceptKategorien as $kat)
-                                        <x-foodalchemist::tree-node :node-id="$kat['id']" :depth="$kat['depth']" :ancestors="$kat['ancestors'] ?? []"
-                                            :has-children="$kat['has_children'] ?? false" :active="$conceptKategorie === $kat['id']">
-                                            <button type="button" wire:click="$set('conceptKategorie', {{ $kat['id'] }})" class="flex-1 min-w-0 truncate text-left text-xs px-1 py-0.5">{{ $kat['name'] }}</button>
-                                        </x-foodalchemist::tree-node>
-                                    @endforeach
-                                </x-foodalchemist::tree>
+                                <button type="button" wire:click="$set('conceptKlasseId', null)"
+                                        class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $conceptKlasseId === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">Alle Klassen</button>
+                                @if(! empty($conceptKlassen))
+                                    <x-foodalchemist::tree :initial-collapsed="collect($conceptKlassen)->where('has_children', true)->pluck('id')->all()">
+                                        @foreach($conceptKlassen as $kl)
+                                            <x-foodalchemist::tree-node :node-id="$kl['id']" :depth="$kl['depth']" :ancestors="$kl['ancestors'] ?? []"
+                                                :has-children="$kl['has_children'] ?? false" :active="$conceptKlasseId === $kl['id']">
+                                                <button type="button" wire:click="waehleConceptKlasse({{ $kl['id'] }})" class="flex-1 min-w-0 truncate text-left text-xs px-1 py-0.5">{{ $kl['name'] }}</button>
+                                            </x-foodalchemist::tree-node>
+                                        @endforeach
+                                    </x-foodalchemist::tree>
+                                @else
+                                    <p class="text-[10px] text-gray-400 px-2 py-2">Keine Klassen gepflegt.</p>
+                                @endif
                             </div>
                             {{-- Concept-Liste --}}
                             <div class="flex-1 min-w-0 overflow-y-auto space-y-0.5 max-h-[26rem]">
@@ -897,7 +901,7 @@
                                             <span class="text-gray-500 tabular-nums shrink-0">{{ $ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
                                         </button>
                                     @endforeach
-                                @elseif($conceptSuche !== '' || $conceptKategorie !== null)
+                                @elseif($conceptSuche !== '' || $conceptKlasseId !== null)
                                     <p class="text-[11px] text-gray-500 px-2 py-2">Keine Concepts für diese Auswahl.</p>
                                 @else
                                     <p class="text-[11px] text-gray-500 px-2 py-2">Noch keine Concepts angelegt.</p>
@@ -915,13 +919,21 @@
                     <x-foodalchemist::modal name="fb-gericht" title="Gericht einfügen" size="max-w-3xl">
                         <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht (VK-Rezept) suchen …" class="{{ $input }} w-full mb-3" />
                         <div class="flex gap-3 min-h-[20rem]">
-                            {{-- UX 2026-07-24: Klassen-Filter (VK-Hauptgruppen) — Browsen, wenn der Name unbekannt ist. Flach (Modell A). --}}
-                            <div class="w-44 shrink-0 overflow-y-auto border-r border-black/5 pr-2 space-y-0.5 max-h-[26rem]">
-                                <button type="button" wire:click="$set('gerichtHauptgruppe', null)"
+                            {{-- UX 2026-07-24: Klassen-Filter mit Untergruppen — Hauptgruppe (Modell A) + Drill-down
+                                 auf die dish_classes der aktiven HG (z. B. „… Vegan"). Browsen, wenn der Name unbekannt ist. --}}
+                            <div class="w-52 shrink-0 overflow-y-auto border-r border-black/5 pr-2 space-y-0.5 max-h-[26rem]">
+                                <button type="button" wire:click="waehleGerichtHg(null)"
                                         class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $gerichtHauptgruppe === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">Alle Klassen</button>
                                 @foreach($gerichtHauptgruppen as $hg)
-                                    <button type="button" wire:key="fbg-hg-{{ $hg->id }}" wire:click="$set('gerichtHauptgruppe', {{ $hg->id }})"
-                                            class="w-full text-left text-xs px-2 py-1 rounded-lg truncate {{ $gerichtHauptgruppe === $hg->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">{{ $hg->label }}</button>
+                                    <button type="button" wire:key="fbg-hg-{{ $hg->id }}" wire:click="waehleGerichtHg({{ $hg->id }})"
+                                            class="w-full text-left text-xs px-2 py-1 rounded-lg truncate {{ $gerichtHauptgruppe === $hg->id && $gerichtDishClass === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">{{ $hg->label }}</button>
+                                    {{-- Untergruppen der aktiven HG, eingerückt --}}
+                                    @if($gerichtHauptgruppe === $hg->id && $gerichtUntergruppen->isNotEmpty())
+                                        @foreach($gerichtUntergruppen as $ug)
+                                            <button type="button" wire:key="fbg-ug-{{ $ug->id }}" wire:click="waehleGerichtKlasse({{ $ug->id }})"
+                                                    class="w-full text-left text-[11px] pl-5 pr-2 py-0.5 rounded-lg truncate {{ $gerichtDishClass === $ug->id ? 'bg-violet-500/10 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]' }}">— {{ $ug->label }}</button>
+                                        @endforeach
+                                    @endif
                                 @endforeach
                             </div>
                             {{-- Gericht-Liste --}}

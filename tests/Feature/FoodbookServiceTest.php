@@ -269,25 +269,56 @@ it('GT-FB-7: Concept-Picker filtert nach Concept-Kategorie (FB-1)', function () 
         ->toContain('Grill-Buffet')->toContain('Fingerfood-Konzept');
 });
 
-it('GT-FB-8: Gericht-Picker filtert nach Klasse (VK-Hauptgruppe, Modell A)', function () {
+it('GT-FB-8: Gericht-Picker filtert nach Klasse (HG) + Untergruppe (dish_class, Modell A)', function () {
     $hg = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::create([
         'team_id' => $this->rootTeam->id, 'code' => 'VOR', 'label' => 'Vorspeisen',
     ]);
-    // Setup-Gericht bleibt ohne HG; ein zweites Gericht in die HG „Vorspeisen".
-    $inHg = FoodAlchemistRecipe::create([
+    $ugVegan = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::create([
+        'team_id' => $this->rootTeam->id, 'dish_main_group_id' => $hg->id, 'code' => 'VOR_V', 'label' => 'Vorspeise Vegan', 'diet_form' => 'vegan',
+    ]);
+    $ugFleisch = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::create([
+        'team_id' => $this->rootTeam->id, 'dish_main_group_id' => $hg->id, 'code' => 'VOR_F', 'label' => 'Vorspeise Fleisch', 'diet_form' => 'fleisch',
+    ]);
+    // Setup-Gericht bleibt ohne HG; zwei Gerichte in die HG „Vorspeisen", verschiedene Untergruppen.
+    FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g2', 'name' => 'Vitello Tonnato', 'status' => 'approved',
-        'is_sales_recipe' => true, 'sales_net' => 8.90, 'ek_total_eur' => 2.10, 'dish_main_group_id' => $hg->id,
+        'is_sales_recipe' => true, 'sales_net' => 8.90, 'ek_total_eur' => 2.10, 'dish_main_group_id' => $hg->id, 'dish_class_id' => $ugFleisch->id,
+    ]);
+    FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'g3', 'name' => 'Kürbis-Carpaccio', 'status' => 'approved',
+        'is_sales_recipe' => true, 'sales_net' => 6.50, 'ek_total_eur' => 1.40, 'dish_main_group_id' => $hg->id, 'dish_class_id' => $ugVegan->id,
     ]);
 
-    // Klasse gewählt → nur das HG-Gericht
-    $gefiltert = $this->foodbooks->gerichtKandidaten($this->rootTeam, '', 50, $hg->id);
-    expect($gefiltert->pluck('name')->all())
-        ->toContain('Vitello Tonnato')->not->toContain('Gruß: Amuse');
+    // HG gewählt → beide HG-Gerichte, nicht das Setup-Gericht
+    $inHg = $this->foodbooks->gerichtKandidaten($this->rootTeam, '', 50, $hg->id);
+    expect($inHg->pluck('name')->all())
+        ->toContain('Vitello Tonnato')->toContain('Kürbis-Carpaccio')->not->toContain('Gruß: Amuse');
 
-    // Ohne Klasse → beide (sofort browsebar, leere Suche = alle)
+    // Untergruppe „Vegan" → nur Kürbis-Carpaccio
+    $vegan = $this->foodbooks->gerichtKandidaten($this->rootTeam, '', 50, $hg->id, $ugVegan->id);
+    expect($vegan->pluck('name')->all())
+        ->toContain('Kürbis-Carpaccio')->not->toContain('Vitello Tonnato');
+
+    // Ohne Klasse → alle (sofort browsebar)
     $alle = $this->foodbooks->gerichtKandidaten($this->rootTeam, '', 50, null);
-    expect($alle->pluck('name')->all())
-        ->toContain('Vitello Tonnato')->toContain('Gruß: Amuse');
+    expect($alle->pluck('name')->all())->toContain('Kürbis-Carpaccio')->toContain('Gruß: Amuse');
+});
+
+it('GT-FB-9: Concept-Picker filtert nach echter Concepter-Klasse (vocab_classes, inkl. Untergruppe)', function () {
+    // Klassen-Baum: „Warme Küche" → „Suppen" (createKlasse setzt slug/uuid korrekt)
+    $parent = $this->concepts->createKlasse($this->rootTeam, 'Warme Küche');
+    $kind = $this->concepts->createKlasse($this->rootTeam, 'Suppen', $parent->id);
+    // Setup-Concept „Grill-Buffet" ohne Klasse; ein Concept in der Unterklasse „Suppen".
+    $suppe = $this->concepts->create($this->rootTeam, ['name' => 'Suppen-Trio', 'class' => 'Suppen']);
+
+    // Elternklasse gewählt → Teilbaum (self + Nachfahren) → Suppen-Trio dabei
+    $imBaum = $this->foodbooks->conceptKandidaten($this->rootTeam, '', null, 50, $parent->id);
+    expect($imBaum->pluck('name')->all())
+        ->toContain('Suppen-Trio')->not->toContain('Grill-Buffet');
+
+    // Ohne Klasse → alle
+    $alle = $this->foodbooks->conceptKandidaten($this->rootTeam, '', null, 50, null);
+    expect($alle->pluck('name')->all())->toContain('Suppen-Trio')->toContain('Grill-Buffet');
 });
 
 it('M11-09: Block-Notiz (interne_bemerkung) persistiert via updateBlock — auch auf concept_ref', function () {

@@ -1658,23 +1658,29 @@ class FoodbookService
      * Concepts (echte, keine Vorlagen) für den concept_ref-Picker — optional gefiltert nach
      * Concept-Kategorie (descendant-inklusiv, FB-1/GT-FB-7).
      */
-    public function conceptKandidaten(Team $team, string $suche, ?int $categoryId = null, int $limit = 20): Collection
+    public function conceptKandidaten(Team $team, string $suche, ?int $categoryId = null, int $limit = 20, ?int $klasseId = null): Collection
     {
+        // UX 2026-07-24 (Dominique): der Picker filtert auf die ECHTEN Concepter-Klassen (vocab_classes-Baum,
+        // concepts.class per Name), inkl. Untergruppen (Teilbaum-Namen). categoryId bleibt als optionale
+        // Zweitachse/Back-Compat erhalten (Tests, Alt-Aufrufer).
         return FoodAlchemistConcept::visibleToTeam($team)->echte()
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when($categoryId !== null, fn ($q) => $q->whereIn('category_id', $this->concepts->descendantIds($team, $categoryId)))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'category_id']);
+            ->when($klasseId !== null, fn ($q) => $q->whereIn('class', $this->concepts->klassenDescendantNames($team, $klasseId)))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'category_id', 'class']);
     }
 
     /** Einzelne Gerichte (VK-Rezepte) für den recipe_ref-Picker. */
-    public function gerichtKandidaten(Team $team, string $suche, int $limit = 20, ?int $hauptgruppe = null): Collection
+    public function gerichtKandidaten(Team $team, string $suche, int $limit = 20, ?int $hauptgruppe = null, ?int $dishClassId = null): Collection
     {
-        // Modell A: HG = Kategorie (recipes.dish_main_group_id). Der Klassen-Filter des Pickers
-        // (Browsen, wenn der Name unbekannt ist) filtert direkt auf die Hauptgruppe.
+        // Modell A: HG = Kategorie (recipes.dish_main_group_id), Untergruppe = Diät-Klasse
+        // (recipes.dish_class_id, z. B. „Vorspeise Vegan"). Beide Achsen filtern den Picker
+        // (Browsen, wenn der Name unbekannt ist); dishClassId ist die feinere.
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->whereNull('variant_source_recipe_id') // R4.4: Slot-Varianten sind konzept-lokal, nicht pickbar
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
+            ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
     }
 
