@@ -88,6 +88,8 @@ trait SeedsTeamHierarchy
         \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistComponentEquivalent::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder::flushTeamAncestryCache();
+        \Platform\FoodAlchemist\Models\FoodAlchemistDishIdea::flushTeamAncestryCache();
+        \Platform\FoodAlchemist\Models\FoodAlchemistDishIdeaGroup::flushTeamAncestryCache();
 
         // Modul-Routen für Full-Page-Komponenten: der ServiceProvider registriert sie nur
         // hinter PlatformCore/ModuleRouter (modules-Tabelle beim Boot noch leer) — ohne sie
