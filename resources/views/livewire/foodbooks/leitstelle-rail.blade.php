@@ -319,6 +319,17 @@
                     <div class="text-[11px] text-gray-400 mt-0.5">Pax + Gesamtpreis liegen im Angebot.</div>
                 @endif
             </div>
+            {{-- Portfolio-WE-Ampel (E8.2): Gesamt-Wareneinsatz des Foodbooks gegen Ziel + Toleranz. --}}
+            <div class="flex items-center justify-between rounded-lg bg-black/[0.02] px-3 py-1.5" data-rail-we-portfolio>
+                <span class="{{ $label }}">Wareneinsatz gesamt</span>
+                <span class="inline-flex items-center gap-1.5 text-xs font-medium {{ $weStil[$weGesamt['status']] ?? '' }}"
+                      title="IST {{ $weGesamt['ist_pct'] !== null ? number_format($weGesamt['ist_pct'], 1, ',', '.') . '%' : 'unbekannt' }} · Ziel {{ number_format($weGesamt['ziel_pct'], 1, ',', '.') }}% (±{{ number_format($weGesamt['toleranz_pp'], 1, ',', '.') }} pp, {{ $weGesamt['quelle'] }}){{ $weGesamt['partiell'] ? ' · partiell (Pauschal-EK ungezählt)' : '' }}">
+                    <span class="w-2 h-2 rounded-full {{ $wePunkt[$weGesamt['status']] ?? 'bg-gray-300' }}"></span>
+                    <span class="tabular-nums">{{ $weGesamt['ist_pct'] !== null ? number_format($weGesamt['ist_pct'], 1, ',', '.') . '%' : '—' }}</span>
+                    <span class="text-[10px] text-gray-400">/ {{ number_format($weGesamt['ziel_pct'], 0, ',', '.') }}%</span>
+                    @if($weGesamt['partiell'])<span title="partiell — Pauschal ohne EK">⚠</span>@endif
+                </span>
+            </div>
             <div class="space-y-0.5" data-rail-we-matrix>
                 <span class="{{ $label }}">Wareneinsatz je Kapitel</span>
                 @forelse($matrix as $m)

@@ -3,11 +3,14 @@
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
+use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\LeitstelleService;
 use Platform\FoodAlchemist\Services\PlanningFrameService;
+use Platform\FoodAlchemist\Services\VkSnapshotService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -190,6 +193,42 @@ it('preiseBaum liefert je Kapitel Aggregat, WE-Ampel und Positionen mit VK-Refer
         ->and($pos['vk'])->toBe(12.0)
         ->and($pos['ref_typ'])->toBe('recipe')
         ->and($pos['ref_id'])->toBe($this->dish->id);              // VK-Editor-Deep-Link-Referenz
+});
+
+// E8.2: R2.5-Snapshot-Badge — Einzelgericht, dessen freigegebener VK-Snapshot über die
+// Leitplanke vom Live-VK abweicht, trägt in preiseBaum ein r2_5-Objekt.
+it('preiseBaum hängt R2.5-Snapshot-Badge an ein Einzelgericht mit abweichendem Snapshot', function () {
+    $sf = FoodAlchemistServierform::firstOrCreate(['code' => 'unbestimmt', 'team_id' => $this->rootTeam->id], ['label' => 'Unbestimmt']);
+    $darr = FoodAlchemistRecipeDarreichung::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $this->dish->id, 'serving_form_id' => $sf->id,
+        'is_standard' => true, 'sales_net' => 12.00, 'sales_gross' => 14.28,
+    ]);
+    $snap = app(VkSnapshotService::class);
+    $snap->release($this->rootTeam, [$darr->id]);   // 12 € freigegeben
+    $darr->update(['sales_net' => 15.00]);           // Live springt auf 15 € → +25 % > Leitplanke 5 %
+
+    // Gericht ohne Snapshot → r2_5 bleibt null.
+    $ohne = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'r2', 'name' => 'HG: Ohne Snapshot', 'status' => 'approved',
+        'is_sales_recipe' => true, 'sales_net' => 8.00,
+    ]);
+
+    $k = $this->fbSvc->addKapitel($this->rootTeam, $this->fb->id, ['title' => 'Menü']);
+    $this->fbSvc->addBlock($this->rootTeam, $k->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->dish->id]);
+    $this->fbSvc->addBlock($this->rootTeam, $k->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $ohne->id]);
+
+    $positionen = collect($this->svc->preiseBaum($this->rootTeam, $this->fb->refresh()))
+        ->firstWhere('titel', 'Menü')['positionen'];
+
+    $mit = collect($positionen)->firstWhere('ref_id', $this->dish->id);
+    $ohneP = collect($positionen)->firstWhere('ref_id', $ohne->id);
+
+    expect($mit['r2_5'])->not->toBeNull()
+        ->and($mit['r2_5']['delta_pct'])->toBe(25.0)
+        ->and($mit['r2_5']['richtung'])->toBe('erhoehen')
+        ->and($mit['r2_5']['published_net'])->toBe(12.0)
+        ->and($mit['r2_5']['live_net'])->toBe(15.0)
+        ->and($ohneP['r2_5'])->toBeNull();
 });
 
 it('preiseBaum trennt Paket-Position (concept_ref, €/Gast, ref_typ concept)', function () {

@@ -603,7 +603,8 @@
                 {{-- ═══ Tab: PREISE (Spec 19 E8.1) — Kalkulations-Sicht: Kapitel-Baum mit EK/VK/WE-% ═══
                      Duality-Positionen (Paket €/Gast · Einzelgericht €/Pos), WE-Ampel je Kapitel,
                      VK-Editor-Deep-Links (Konzept → Concepter, Gericht → Verkaufsrezepte).
-                     R2.5-Snapshot-Badges + Rail-Kalkulation-Ampel folgen in E8.2. --}}
+                     R2.5-Snapshot-Badges (E8.2) an Einzelgericht-Positionen, deren freigegebener
+                     VK-Snapshot über die Leitplanke vom Live-VK abweicht. --}}
                 <div x-show="tab === 'preise'" x-cloak class="space-y-3" data-fb-panel="preise" data-fb-anker="preise">
                     <div class="relative overflow-hidden {{ $card }} p-5 space-y-4" data-fb-preise-baum>
                         <div class="{{ $cardAccent }}"></div>
@@ -656,6 +657,12 @@
                                                 <span class="text-amber-600">kein VK</span>
                                             @endif
                                             @if($p['we_pct'] !== null)<span class="text-gray-400" title="Wareneinsatz dieser Position">{{ number_format((float) $p['we_pct'], 1, ',', '.') }} %</span>@endif
+                                            @if(($p['r2_5'] ?? null) !== null)
+                                                <span class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-amber-500/15 text-amber-700"
+                                                      title="Freigegebener VK-Snapshot {{ number_format((float) $p['r2_5']['published_net'], 2, ',', '.') }} € weicht {{ number_format((float) $p['r2_5']['delta_pct'], 1, ',', '.') }} % vom Live-VK {{ number_format((float) $p['r2_5']['live_net'], 2, ',', '.') }} € ab — bewusst neu freigeben (R2.5).">
+                                                    {{ $p['r2_5']['richtung'] === 'erhoehen' ? '▲' : '▼' }} Snapshot Δ{{ number_format((float) $p['r2_5']['delta_pct'], 1, ',', '.') }} %
+                                                </span>
+                                            @endif
                                             @if($vkLink)<a href="{{ $vkLink }}" target="_blank" class="text-violet-600 hover:underline" title="Im VK-Editor öffnen">VK →</a>@endif
                                         </div>
                                     </div>

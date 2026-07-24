@@ -1453,24 +1453,67 @@ class FoodbookService
 
         $tol = $fb->food_cost_tolerance_pp !== null ? (float) $fb->food_cost_tolerance_pp : 5.0;
 
-        if ($ist === null) {
-            $status = 'unbekannt';
-        } elseif ($ist <= $ziel) {
-            $status = 'gruen';
-        } elseif ($ist <= $ziel + $tol) {
-            $status = 'gelb';
-        } else {
-            $status = 'rot';
-        }
-
         return [
-            'status' => $status,
+            'status' => $this->weAmpelStatus($ist, $ziel, $tol),
             'ist_pct' => $ist,
             'ziel_pct' => round($ziel, 2),
             'toleranz_pp' => round($tol, 2),
             'quelle' => $quelle ?? 'settings',
             'partiell' => $agg['pauschal'] > 0,
         ];
+    }
+
+    /**
+     * Spec 19 E8.2 — Portfolio-Wareneinsatz-Ampel des GANZEN Foodbooks (Rail-Kalkulation-
+     * Panel, Kopf-Modus). Gleiche Ampel-Logik wie {@see wareneinsatzAmpel}, aber IST aus dem
+     * Foodbook-Gesamt ({@see gesamt}: Σ Top-Kapitel Per-Person, EK ÷ VK) statt je Kapitel.
+     * **SOLL** = Foodbook-Ziel (`target_food_cost_pct`) → Team-Setting-Default (30 %);
+     * Toleranz = `food_cost_tolerance_pp` (Code-Default 5,0 pp). **Partiell** = Pauschal-Anteil
+     * im Gesamt (EK ungezählt → IST unterschätzt), analog zur Kapitel-Ampel.
+     *
+     * @return array{status: string, ist_pct: ?float, ziel_pct: float, toleranz_pp: float, quelle: string, partiell: bool}
+     */
+    public function foodbookWareneinsatzAmpel(Team $team, FoodAlchemistFoodbook $fb): array
+    {
+        $gesamt = $this->gesamt($team, $fb);
+        $vk = $gesamt['vk_pro_person'];
+        $ek = $gesamt['ek_per_person'];
+        $ist = $vk > 0 ? round($ek / $vk * 100, 1) : null;
+
+        if ($fb->target_food_cost_pct !== null) {
+            $ziel = (float) $fb->target_food_cost_pct;
+            $quelle = 'foodbook';
+        } else {
+            $ziel = app(TeamSettingsService::class)->zielWareneinsatzPct($team);
+            $quelle = 'settings';
+        }
+        $tol = $fb->food_cost_tolerance_pp !== null ? (float) $fb->food_cost_tolerance_pp : 5.0;
+
+        return [
+            'status' => $this->weAmpelStatus($ist, $ziel, $tol),
+            'ist_pct' => $ist,
+            'ziel_pct' => round($ziel, 2),
+            'toleranz_pp' => round($tol, 2),
+            'quelle' => $quelle,
+            'partiell' => $gesamt['pauschal'] > 0,
+        ];
+    }
+
+    /**
+     * Gemeinsame Ampel-Klassifikation (E4.4/E8.2): `gruen` IST ≤ Ziel · `gelb` IST ≤ Ziel+Toleranz
+     * · `rot` darüber · `unbekannt` ohne IST. Wird von Kapitel- ({@see wareneinsatzAmpel}) und
+     * Portfolio-Ampel ({@see foodbookWareneinsatzAmpel}) geteilt (identische Grenzen).
+     */
+    private function weAmpelStatus(?float $ist, float $ziel, float $tol): string
+    {
+        if ($ist === null) {
+            return 'unbekannt';
+        }
+        if ($ist <= $ziel) {
+            return 'gruen';
+        }
+
+        return $ist <= $ziel + $tol ? 'gelb' : 'rot';
     }
 
     /**

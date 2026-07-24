@@ -200,6 +200,8 @@ class LeitstelleRail extends Component
             'matrix' => $matrix,
             'baum' => $leit->speisenBaum($team, $fb),
             'gesamt' => $svc->gesamt($team, $fb),
+            // Portfolio-WE-Ampel des ganzen Foodbooks (E8.2) — Kopf der Kalkulation-Panel.
+            'weGesamt' => $svc->foodbookWareneinsatzAmpel($team, $fb),
             'kapitelAnzahl' => count($matrix),
             'positionenGesamt' => $positionenGesamt,
             // Komplexitäts-Hinweis (UX 2): >8 Kapitel oder >12 Positionen insgesamt.
