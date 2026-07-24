@@ -89,9 +89,9 @@
     </x-slot>
 
     <x-slot name="activity">
-        <x-ui-page-sidebar title="Detail" width="w-96" :maxWidth="760" storeKey="activityOpen" side="right">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_recipes" side="right">
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" />
-        </x-ui-page-sidebar>
+        </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     {{-- M4-06: Stammdaten-Modal (P-2: innerhalb x-ui-page) --}}
@@ -189,7 +189,7 @@
                 <tbody>
                     @forelse($rezepte as $r)
                         <tr wire:key="r-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
-                            x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
+                            x-data x-on:click="$store.ui?.mSet('activity_recipes', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                             data-rezept-zeile="{{ $r->id }}">
                             <td class="{{ $td }} !pr-0" wire:click.stop>

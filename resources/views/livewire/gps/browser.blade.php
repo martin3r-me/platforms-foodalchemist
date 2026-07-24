@@ -68,9 +68,9 @@
     {{-- Zone rechts: DetailPanel (M3-03) --}}
     <x-slot name="activity">
         {{-- storeKey 'activityOpen' = der einzige rechte Store-Scope der UI-Sidebar (eigene Keys kollidieren mit links) --}}
-        <x-ui-page-sidebar title="Detail" width="w-96" :maxWidth="760" storeKey="activityOpen" side="right">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_gps" side="right">
             <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" />
-        </x-ui-page-sidebar>
+        </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     {{-- M3-09: GP-Modal (P-2: Modals immer innerhalb von x-ui-page) --}}
@@ -117,7 +117,7 @@
                 <tbody>
                     @forelse($gps as $gp)
                         <tr wire:key="gp-{{ $gp->id }}" wire:click="waehleGp({{ $gp->id }})"
-                            x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
+                            x-data x-on:click="$store.ui?.mSet('activity_gps', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $gpId === $gp->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                             data-gp-zeile="{{ $gp->id }}">
                             {{-- R6: Namens-Klick öffnet direkt den GP-Editor (Zeilen-Klick bleibt Panel) --}}

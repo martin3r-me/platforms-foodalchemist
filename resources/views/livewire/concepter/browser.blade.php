@@ -120,9 +120,9 @@
     </x-slot>
 
     <x-slot name="activity">
-        <x-ui-page-sidebar title="Detail" width="w-96" :maxWidth="640" storeKey="activityOpen" side="right">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_concepter" side="right">
             <livewire:foodalchemist.concepter.detail-panel />
-        </x-ui-page-sidebar>
+        </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
@@ -150,7 +150,7 @@
                 <tbody>
                     @forelse($items as $it)
                         <tr wire:key="row-{{ $tab }}-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
-                            x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
+                            x-data x-on:click="$store.ui?.mSet('activity_concepter', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $selectedId === $it->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}">
                             <td wire:click.stop="bearbeite({{ $it->id }})" class="{{ $td }} font-medium text-gray-900 hover:text-violet-600 cursor-pointer" title="Editor öffnen">
                                 @if($it->level)<span class="inline-block w-1.5 h-1.5 rounded-full {{ $niveauDot[$it->level] ?? 'bg-gray-300' }} mr-1 align-middle" title="Niveau: {{ $it->level }}"></span>@endif

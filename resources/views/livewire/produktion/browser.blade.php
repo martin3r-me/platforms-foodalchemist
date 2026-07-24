@@ -38,9 +38,9 @@
     </x-slot>
 
     <x-slot name="activity">
-        <x-ui-page-sidebar title="Detail" width="w-96" :maxWidth="760" storeKey="activityOpen" side="right">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_produktion" side="right">
             <livewire:foodalchemist.produktion.detail-panel :order-id="$orderId" />
-        </x-ui-page-sidebar>
+        </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     <livewire:foodalchemist.produktion.editor />
@@ -66,7 +66,7 @@
                     <tbody>
                         @forelse($auftraege as $a)
                             <tr wire:key="po-{{ $a->id }}" wire:click="waehle({{ $a->id }})"
-                                x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
+                                x-data x-on:click="$store.ui?.mSet('activity_produktion', 'open', true)"
                                 class="{{ $tr }} cursor-pointer {{ $orderId === $a->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                                 data-produktion-zeile="{{ $a->id }}">
                                 <td class="{{ $td }} font-medium text-gray-900">

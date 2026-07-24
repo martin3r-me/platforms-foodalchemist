@@ -118,7 +118,7 @@
     </x-slot>
 
     <x-slot name="activity">
-        <x-ui-page-sidebar title="Live-Preis" width="w-80" :maxWidth="520" storeKey="activityOpen" side="right">
+        <x-foodalchemist::detail-sidebar title="Live-Preis" width="w-80" :maxWidth="520" scope="activity_concepts" side="right">
             @if($selected && $cockpit)
                 <div class="p-4 space-y-3">
                     <div class="text-center py-2">
@@ -160,7 +160,7 @@
             @else
                 <div class="p-6 text-center text-sm text-gray-500">Concept auswählen.</div>
             @endif
-        </x-ui-page-sidebar>
+        </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">

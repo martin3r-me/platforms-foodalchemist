@@ -34,7 +34,7 @@
     </x-slot>
 
     <x-slot name="activity">
-        <x-ui-page-sidebar title="Paket" width="w-96" :maxWidth="640" storeKey="activityOpen" side="right">
+        <x-foodalchemist::detail-sidebar title="Paket" width="w-96" :maxWidth="640" scope="activity_pakete" side="right">
             @if($selected)
                 <div class="p-4 space-y-4" wire:key="edit-{{ $selected->id }}">
                     <div class="space-y-2">
@@ -135,7 +135,7 @@
             @else
                 <div class="p-6 text-center text-sm text-gray-500">Paket auswählen oder neu anlegen.</div>
             @endif
-        </x-ui-page-sidebar>
+        </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">

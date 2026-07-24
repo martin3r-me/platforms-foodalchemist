@@ -88,9 +88,9 @@
     </x-slot>
 
     <x-slot name="activity">
-        <x-ui-page-sidebar title="Detail" width="w-96" :maxWidth="760" storeKey="activityOpen" side="right">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_verkauf" side="right">
             <livewire:foodalchemist.verkauf.detail-panel :recipe-id="$recipeId" />
-        </x-ui-page-sidebar>
+        </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     {{-- M6-04: VK-Editor + geteilter Zutaten-Editor (P-2: innerhalb x-ui-page) --}}
@@ -132,7 +132,7 @@
                 <tbody>
                     @forelse($rezepte as $r)
                         <tr wire:key="vk-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
-                            x-data x-on:click="$store.ui?.mSet('activity', 'open', true)"
+                            x-data x-on:click="$store.ui?.mSet('activity_verkauf', 'open', true)"
                             class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                             data-vk-zeile="{{ $r->id }}">
                             {{-- R6: Namens-Klick öffnet direkt den VK-Editor --}}

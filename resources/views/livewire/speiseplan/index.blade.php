@@ -38,7 +38,7 @@
     </x-slot>
 
     <x-slot name="activity">
-        <x-ui-page-sidebar title="Kennzahlen" width="w-80" :maxWidth="480" storeKey="activityOpen" side="right">
+        <x-foodalchemist::detail-sidebar title="Kennzahlen" width="w-80" :maxWidth="480" scope="activity_speiseplan" side="right">
             @if($sp && $kosten)
                 <div class="p-4 space-y-3">
                     <div class="text-center py-2">
@@ -70,7 +70,7 @@
             @else
                 <div class="p-6 text-center text-sm text-gray-500">Plan auswählen.</div>
             @endif
-        </x-ui-page-sidebar>
+        </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">

@@ -70,7 +70,7 @@
         {{-- E5.3: Leitstelle-Rail als Nested-Livewire (kontextsensitiv Kopf ⇄ Kapitel).
              Re-Mount bei Selektions-Wechsel über den wire:key (foodbook.id + kapitel|'kopf');
              Ziel-Edits melden sich via `leitstelle-kapitel-geaendert` an diesen Eltern zurück. --}}
-        <x-ui-page-sidebar title="Leitstelle" width="w-80" :maxWidth="520" storeKey="activityOpen" side="right">
+        <x-foodalchemist::detail-sidebar title="Leitstelle" width="w-80" :maxWidth="520" scope="activity_foodbooks" side="right">
             @if($fb)
                 <livewire:foodalchemist.foodbooks.leitstelle-rail
                     :foodbook-id="$fb->id"
@@ -79,7 +79,7 @@
             @else
                 <div class="p-6 text-center text-sm text-gray-500">Foodbook auswählen.</div>
             @endif
-        </x-ui-page-sidebar>
+        </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
