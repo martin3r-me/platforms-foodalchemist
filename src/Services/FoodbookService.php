@@ -225,6 +225,93 @@ class FoodbookService
         return $fbZg !== [] ? [$fbZg, 'foodbook'] : [[], null];
     }
 
+    /**
+     * Spec 19 E4.2: aufgelöste SOLL-Sicht eines Kapitels — die Mengen-/Preis-/WE-Ziele mit
+     * Vererbung **Kapitel → Eltern → Slot → Foodbook**. Pro Feld gewinnt der erste nicht-leere
+     * Wert entlang der Kette; `quellen[<feld>]` nennt die Herkunfts-Ebene
+     * ('kapitel'|'eltern'|'slot'|'foodbook'|null). Ergänzt `leitplanken()` (das die
+     * Zielgruppen/Dimensionen liefert) um die kapitel-scoped SOLL-Ziele. DER SOLL-Punkt für
+     * `pruefeKapitel` (E4.3), `wareneinsatzAmpel` (E4.4) und die Kapitel-Planung-Rail (E5.3).
+     *
+     * Feld-Ebenen: target_count/price_anchor/price_min/price_max kennen Slot-Fallback (der flache
+     * Slot trug die Ziele vor der E4.1-Stempelung); niveau/serving_form_id/target_food_cost_pct
+     * kennen Foodbook-Default; service_moment_id/pricing_mode nur die Kapitel-Kette (Foodbook führt
+     * Einsatzmomente als 1–n-Pivot, kein Einzel-Default).
+     *
+     * @return array{
+     *     target_count: ?int, price_anchor: ?float, price_min: ?float, price_max: ?float,
+     *     niveau: ?string, serving_form_id: ?int, service_moment_id: ?int, pricing_mode: ?string,
+     *     target_food_cost_pct: ?float, quellen: array<string, ?string>
+     * }
+     */
+    public function kapitelZiele(Team $team, FoodAlchemistFoodbookKapitel $kapitel): array
+    {
+        $kapitel = $this->ownedKapitel($team, (int) $kapitel->id);
+        $fb = $kapitel->foodbook;
+
+        // Kapitel-Kette: self + Eltern hoch (Zyklus-Guard aus Vorsicht — moveKapitel hält den Baum acyclisch).
+        $kette = [];
+        $node = $kapitel;
+        $besucht = [];
+        while ($node !== null && ! isset($besucht[(int) $node->id])) {
+            $besucht[(int) $node->id] = true;
+            $kette[] = $node;
+            $node = $node->parent;
+        }
+
+        // Ist-Bezug: der flache Planungs-Slot dieses Kapitels (Slot-Ziele als Fallback, falls das
+        // Kapitel-Feld leer ist — z.B. nach manuellem Reset oder bei Kapiteln ohne Stempelung).
+        $slot = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot::where('chapter_id', $kapitel->id)->first();
+
+        $quellen = [];
+        $gesetzt = static fn ($w): bool => $w !== null && $w !== '';
+        $resolve = function (string $feld, $slotWert, $fbWert) use ($kette, $slot, $gesetzt, &$quellen) {
+            foreach ($kette as $i => $k) {
+                if ($gesetzt($k->{$feld})) {
+                    $quellen[$feld] = $i === 0 ? 'kapitel' : 'eltern';
+
+                    return $k->{$feld};
+                }
+            }
+            if ($slot !== null && $gesetzt($slotWert)) {
+                $quellen[$feld] = 'slot';
+
+                return $slotWert;
+            }
+            if ($gesetzt($fbWert)) {
+                $quellen[$feld] = 'foodbook';
+
+                return $fbWert;
+            }
+            $quellen[$feld] = null;
+
+            return null;
+        };
+
+        $targetCount = $resolve('target_count', $slot?->target_count, null);
+        $priceAnchor = $resolve('price_anchor', $slot?->price_anchor, null);
+        $priceMin = $resolve('price_min', $slot?->price_min, null);
+        $priceMax = $resolve('price_max', $slot?->price_max, null);
+        $niveau = $resolve('niveau', null, $fb?->default_niveau);
+        $servingFormId = $resolve('serving_form_id', null, $fb?->default_serving_form_id);
+        $serviceMomentId = $resolve('service_moment_id', null, null);
+        $pricingMode = $resolve('pricing_mode', null, null);
+        $targetFoodCostPct = $resolve('target_food_cost_pct', null, $fb?->target_food_cost_pct);
+
+        return [
+            'target_count' => $targetCount !== null ? (int) $targetCount : null,
+            'price_anchor' => $priceAnchor !== null ? (float) $priceAnchor : null,
+            'price_min' => $priceMin !== null ? (float) $priceMin : null,
+            'price_max' => $priceMax !== null ? (float) $priceMax : null,
+            'niveau' => $niveau !== null ? (string) $niveau : null,
+            'serving_form_id' => $servingFormId !== null ? (int) $servingFormId : null,
+            'service_moment_id' => $serviceMomentId !== null ? (int) $serviceMomentId : null,
+            'pricing_mode' => $pricingMode !== null ? (string) $pricingMode : null,
+            'target_food_cost_pct' => $targetFoodCostPct !== null ? (float) $targetFoodCostPct : null,
+            'quellen' => $quellen,
+        ];
+    }
+
     // ── #369: CRM-Kunde-Link (MVP, nur verlinken) — class_exists-geschützt (Modul läuft ohne crm) ──
 
     public function verknuepfeKunde(Team $team, int $id, ?int $companyId, ?int $contactId): FoodAlchemistFoodbook
