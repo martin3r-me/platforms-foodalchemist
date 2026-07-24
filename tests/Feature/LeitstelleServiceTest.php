@@ -166,3 +166,44 @@ it('kapitelMatrix liefert je Kapitel Ziele-/Inhalts-/Preis-Status + WE-Ampel', f
         ->and($l['bepreist'])->toBeFalse()
         ->and($l['wareneinsatz']['status'])->toBe('unbekannt');   // kein VK → unbekannt
 });
+
+// E8.1: preiseBaum speist den Preise-Tab (Kapitel-Baum mit EK/VK/WE-% + Duality-Positionen + VK-Refs).
+it('preiseBaum liefert je Kapitel Aggregat, WE-Ampel und Positionen mit VK-Referenz', function () {
+    // Einzelgericht (recipe_ref, €/Pos) + WE-Ziel am Kapitel für die Ampel.
+    $k = $this->fbSvc->addKapitel($this->rootTeam, $this->fb->id, ['title' => 'Menü', 'target_food_cost_pct' => 30]);
+    $this->fbSvc->addBlock($this->rootTeam, $k->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->dish->id]);
+
+    $baum = collect($this->svc->preiseBaum($this->rootTeam, $this->fb->refresh()))->keyBy('titel');
+
+    $m = $baum['Menü'];
+    expect($m['kapitel_id'])->toBe($k->id)
+        ->and($m['depth'])->toBe(1)
+        ->and($m['aggregat'])->toHaveKey('vk_pro_person')
+        ->and($m['aggregat']['vk_pro_person'])->toBe(12.0)          // sales_net 12 → Per-Person-VK
+        ->and($m['wareneinsatz'])->toHaveKey('status')
+        ->and($m['positionen'])->toHaveCount(1);
+
+    $pos = $m['positionen'][0];
+    expect($pos['art'])->toBe('einzel')
+        ->and($pos['label'])->toBe('HG: Tomaten-Teller')
+        ->and($pos['preis_einheit'])->toBe('position')
+        ->and($pos['vk'])->toBe(12.0)
+        ->and($pos['ref_typ'])->toBe('recipe')
+        ->and($pos['ref_id'])->toBe($this->dish->id);              // VK-Editor-Deep-Link-Referenz
+});
+
+it('preiseBaum trennt Paket-Position (concept_ref, €/Gast, ref_typ concept)', function () {
+    $frame = $this->frames->frameFor($this->rootTeam, 'foodbook', $this->fb->id);
+    $this->frames->addSlot($this->rootTeam, $frame, ['label' => 'Paket-Kapitel', 'slot_type' => 'gang', 'target_count' => 1]);
+    $this->fbSvc->strukturAusGeruest($this->rootTeam, $this->fb->id);
+    $slot = $frame->refresh()->slots->firstWhere('label', 'Paket-Kapitel');
+    $this->fbSvc->uebernehmeVorschlag($this->rootTeam, $this->fb->id, $slot->id, $this->dish->id);
+
+    $baum = collect($this->svc->preiseBaum($this->rootTeam, $this->fb->refresh()))->keyBy('titel');
+    $paket = collect($baum['Paket-Kapitel']['positionen'])->firstWhere('art', 'paket');
+
+    expect($paket)->not->toBeNull()
+        ->and($paket['preis_einheit'])->toBe('gast')
+        ->and($paket['ref_typ'])->toBe('concept')
+        ->and($paket['ref_id'])->not->toBeNull();
+});

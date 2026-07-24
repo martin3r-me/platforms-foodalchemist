@@ -270,6 +270,74 @@ class LeitstelleService
         return $rows;
     }
 
+    /**
+     * Spec 19 E8.1 — Preise-Baum: die Kalkulations-Sicht des Preise-Tabs. Pro Kapitel
+     * (Baum, depth) das rekursive Aggregat (EK/VK/WE-%) + die WE-Ampel (E4.4) + die
+     * Duality-Positionen (Paket €/Gast vs. Einzelgericht €/Pos) mit Preis, EK, Positions-
+     * WE-% und VK-Editor-Referenz (`ref_typ`+`ref_id` → Blade baut den Deep-Link:
+     * concept → Concepter, recipe → Verkaufsrezepte). READ-ONLY, interne Sicht
+     * (kein Kundensicht-Filter); Ideen/Skizzen sind hier NICHT gelistet (unbepreist).
+     *
+     * @return list<array{
+     *   kapitel_id:int, titel:string, parent_id:?int, depth:int, released:bool,
+     *   pricing_mode:?string, aggregat:array, wareneinsatz:array,
+     *   positionen:list<array{art:string, label:string, vk:float, ek:float,
+     *     preis_einheit:string, we_pct:?float, ref_typ:string, ref_id:?int}>
+     * }>
+     */
+    public function preiseBaum(Team $team, FoodAlchemistFoodbook $fb): array
+    {
+        $fb = $this->ladeFoodbook($team, $fb);
+        $baum = [];
+        foreach ($fb->chapters as $k) {
+            $positionen = [];
+            foreach ($this->inhaltsBloecke($k) as $block) {
+                $preis = $this->foodbooks->blockPreis($block);
+                if ($block->type === 'concept_ref') {
+                    $vk = $preis['vk_pp'];
+                    $ek = $preis['ek_pp'];
+                    $positionen[] = [
+                        'art' => 'paket',
+                        'label' => $block->concept?->name ?? ($block->label ?? 'Paket'),
+                        'vk' => $vk,
+                        'ek' => $ek,
+                        'preis_einheit' => 'gast',
+                        'we_pct' => ($vk > 0 && $ek > 0) ? round($ek / $vk * 100, 1) : null,
+                        'ref_typ' => 'concept',
+                        'ref_id' => $block->concept !== null ? (int) $block->concept->id : null,
+                    ];
+                } else { // recipe_ref
+                    $vk = $preis['vk_pp'] > 0 ? $preis['vk_pp'] : $preis['pauschal'];
+                    $ek = $preis['ek_pp'];
+                    $positionen[] = [
+                        'art' => 'einzel',
+                        'label' => $block->dish?->name ?? ($block->label ?? 'Gericht'),
+                        'vk' => $vk,
+                        'ek' => $ek,
+                        'preis_einheit' => 'position',
+                        'we_pct' => ($vk > 0 && $ek > 0) ? round($ek / $vk * 100, 1) : null,
+                        'ref_typ' => 'recipe',
+                        'ref_id' => $block->sales_recipe_id !== null ? (int) $block->sales_recipe_id : null,
+                    ];
+                }
+            }
+
+            $baum[] = [
+                'kapitel_id' => (int) $k->id,
+                'titel' => (string) $k->title,
+                'parent_id' => $k->parent_id !== null ? (int) $k->parent_id : null,
+                'depth' => $this->kapitelTiefe($k, $fb->chapters),
+                'released' => $k->released_at !== null,
+                'pricing_mode' => $k->pricing_mode !== null ? (string) $k->pricing_mode : null,
+                'aggregat' => $this->foodbooks->kapitelAggregat($team, $k),
+                'wareneinsatz' => $this->foodbooks->wareneinsatzAmpel($team, $fb, $k),
+                'positionen' => $positionen,
+            ];
+        }
+
+        return $baum;
+    }
+
     // ── intern ──────────────────────────────────────────────────────────────
 
     private function ladeFoodbook(Team $team, FoodAlchemistFoodbook $fb, bool $mitSlots = false): FoodAlchemistFoodbook

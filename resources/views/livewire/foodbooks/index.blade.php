@@ -101,7 +101,7 @@
                      Foodbook, daher auf Tab-Ebene (aus allen Tabs erreichbar), nicht im Briefing-Tab vergraben. --}}
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div class="flex flex-wrap gap-1" role="tablist">
-                        @foreach(['briefing' => '📋 Briefing', 'planung' => '🎯 Planung', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend', 'branding' => '🏷 Branding/CI', 'vorschau' => '🍽 Vorschau'] as $tk => $tl)
+                        @foreach(['briefing' => '📋 Briefing', 'planung' => '🎯 Planung', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend', 'branding' => '🏷 Branding/CI', 'preise' => '💶 Preise', 'vorschau' => '🍽 Vorschau'] as $tk => $tl)
                             <button type="button" @click="tab = @js($tk)" :class="tab === @js($tk) ? '{{ $aktiv }}' : '{{ $hover }}'"
                                     class="px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-fb-tab="{{ $tk }}">{{ $tl }}</button>
                         @endforeach
@@ -599,6 +599,75 @@
                         </div>
                     </div>
                 </div>{{-- /Branding --}}
+
+                {{-- ═══ Tab: PREISE (Spec 19 E8.1) — Kalkulations-Sicht: Kapitel-Baum mit EK/VK/WE-% ═══
+                     Duality-Positionen (Paket €/Gast · Einzelgericht €/Pos), WE-Ampel je Kapitel,
+                     VK-Editor-Deep-Links (Konzept → Concepter, Gericht → Verkaufsrezepte).
+                     R2.5-Snapshot-Badges + Rail-Kalkulation-Ampel folgen in E8.2. --}}
+                <div x-show="tab === 'preise'" x-cloak class="space-y-3" data-fb-panel="preise" data-fb-anker="preise">
+                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-4" data-fb-preise-baum>
+                        <div class="{{ $cardAccent }}"></div>
+                        <div class="flex items-baseline justify-between border-b border-black/5 pb-2">
+                            <div>
+                                <p class="{{ $label }}">Preise — Kapitel-Kalkulation</p>
+                                <p class="text-[11px] text-gray-500">EK · VK · Wareneinsatz je Kapitel; Paket = €/Gast, Einzelgericht = €/Position. Ampel: WE-% gegen Ziel + Toleranz.</p>
+                            </div>
+                            @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)
+                                <span class="text-sm font-semibold text-emerald-600 tabular-nums shrink-0">Ø {{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>
+                            @endif
+                        </div>
+
+                        @php($ampelDot = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-400', 'rot' => 'bg-rose-500', 'unbekannt' => 'bg-gray-300'])
+                        @php($ampelText = ['gruen' => 'text-emerald-700', 'gelb' => 'text-amber-700', 'rot' => 'text-rose-700', 'unbekannt' => 'text-gray-400'])
+
+                        @forelse($preiseBaum as $kap)
+                            @php($we = $kap['wareneinsatz'])
+                            @php($agg = $kap['aggregat'])
+                            <section style="margin-left: {{ ($kap['depth'] - 1) * 16 }}px" data-fb-preise-kapitel="{{ $kap['kapitel_id'] }}">
+                                {{-- Kapitel-Kopfzeile: Titel + pricing_mode + Aggregat (EK/VK/WE% + Ampel) --}}
+                                <div class="flex items-center gap-2 border-b border-black/5 pb-1 mb-1">
+                                    <h3 class="text-sm font-semibold text-violet-700">{{ $kap['titel'] }}</h3>
+                                    @if($kap['pricing_mode'])<span class="text-[10px] uppercase tracking-wide text-gray-400">{{ $kap['pricing_mode'] }}</span>@endif
+                                    @if($kap['released'])<span class="text-[10px] text-emerald-600" title="Kapitel angelegt">● angelegt</span>@endif
+                                    <div class="ml-auto flex items-center gap-3 text-[11px] tabular-nums">
+                                        @if($agg['ek_per_person'] > 0)<span class="text-gray-500" title="Wareneinsatz €/Gast">EK {{ number_format((float) $agg['ek_per_person'], 2, ',', '.') }} €</span>@endif
+                                        @if($agg['vk_pro_person'] > 0)<span class="font-semibold text-gray-800" title="VK €/Gast">{{ number_format((float) $agg['vk_pro_person'], 2, ',', '.') }} €/G</span>@endif
+                                        @if($agg['pauschal'] > 0)<span class="font-semibold text-gray-800" title="Pauschal-Anteil">{{ number_format((float) $agg['pauschal'], 2, ',', '.') }} € pausch.</span>@endif
+                                        <span class="inline-flex items-center gap-1 {{ $ampelText[$we['status']] ?? 'text-gray-400' }}"
+                                              title="WE {{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : 'unbekannt' }} · Ziel {{ number_format((float) $we['ziel_pct'], 1, ',', '.') }} % (±{{ number_format((float) $we['toleranz_pp'], 1, ',', '.') }} pp, {{ $we['quelle'] }}){{ $we['partiell'] ? ' · partiell (Pauschal-EK ungezählt)' : '' }}">
+                                            <span class="inline-block h-2 w-2 rounded-full {{ $ampelDot[$we['status']] ?? 'bg-gray-300' }}"></span>
+                                            {{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : '—' }}@if($we['partiell'])<span class="text-[9px]" title="Pauschal-Anteil ohne EK → WE-% unterschätzt">*</span>@endif
+                                        </span>
+                                    </div>
+                                </div>
+                                {{-- Positionen: Paket / Einzelgericht mit VK-Editor-Deep-Link --}}
+                                @forelse($kap['positionen'] as $p)
+                                    @php($vkLink = $p['ref_id'] === null ? null : ($p['ref_typ'] === 'concept'
+                                        ? route('foodalchemist.concepter.index', ['tab' => 'concepts', 'sel' => $p['ref_id']])
+                                        : route('foodalchemist.verkauf.index', ['rezept' => $p['ref_id']])))
+                                    <div class="flex items-center gap-2 py-0.5 pl-3 text-xs" data-fb-preise-position="{{ $p['art'] }}">
+                                        <span class="shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide {{ $p['art'] === 'paket' ? 'bg-violet-500/10 text-violet-700' : 'bg-sky-500/10 text-sky-700' }}">{{ $p['art'] === 'paket' ? 'Paket' : 'Einzel' }}</span>
+                                        <span class="truncate text-gray-800">{{ $p['label'] }}</span>
+                                        <div class="ml-auto flex items-center gap-3 tabular-nums shrink-0">
+                                            @if($p['ek'] > 0)<span class="text-gray-400">EK {{ number_format((float) $p['ek'], 2, ',', '.') }} €</span>@endif
+                                            @if($p['vk'] > 0)
+                                                <span class="font-semibold text-gray-700">{{ number_format((float) $p['vk'], 2, ',', '.') }} {{ $p['preis_einheit'] === 'gast' ? '€/G' : '€/Pos' }}</span>
+                                            @else
+                                                <span class="text-amber-600">kein VK</span>
+                                            @endif
+                                            @if($p['we_pct'] !== null)<span class="text-gray-400" title="Wareneinsatz dieser Position">{{ number_format((float) $p['we_pct'], 1, ',', '.') }} %</span>@endif
+                                            @if($vkLink)<a href="{{ $vkLink }}" target="_blank" class="text-violet-600 hover:underline" title="Im VK-Editor öffnen">VK →</a>@endif
+                                        </div>
+                                    </div>
+                                @empty
+                                    <p class="text-[11px] text-gray-400 pl-3 py-0.5">Noch keine bepreisten Positionen — im Kreativ-Tab skizzieren und über „Kapitel anlegen" materialisieren.</p>
+                                @endforelse
+                            </section>
+                        @empty
+                            <p class="text-xs text-gray-500 py-6 text-center">Noch keine Kapitel — erst im Planung-Tab strukturieren.</p>
+                        @endforelse
+                    </div>
+                </div>{{-- /Preise-Tab --}}
 
                 {{-- Menü-Vorschau (Kundensicht, ganzes Foodbook) = eigener Output-Tab (read-only, Foodbook-Kopf-Ebene).
                      Früher ein einklappbarer Balken unter allen Tabs — jetzt eine eigene Fläche (ein Tab = eine Fläche). --}}

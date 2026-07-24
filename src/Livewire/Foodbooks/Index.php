@@ -1020,6 +1020,9 @@ class Index extends Component
             // Spec 19 E5.2: abgeleitete 7-Schritt-Leitstellen-Checkliste (offen/teil/erledigt + Sprungziel)
             'checkliste' => $fb !== null
                 ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->checkliste($team, $fb) : [],
+            // Spec 19 E8.1: Preise-Tab — Kapitel-Baum mit EK/VK/WE-% + WE-Ampel + Duality-Positionen (VK-Deep-Links)
+            'preiseBaum' => $fb !== null
+                ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->preiseBaum($team, $fb) : [],
             'foodbooks' => $svc->paginateBrowser(['search' => $this->search, 'phase' => $this->phaseFilter], $team),
             'fb' => $fb,
             // D (UX-Umbau): Kunden-Vorschau (Menü-Ansicht) mit aufgelöster Wording-Kette — dieselbe Quelle wie das Druck-Dokument
