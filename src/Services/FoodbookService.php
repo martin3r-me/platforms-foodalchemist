@@ -860,6 +860,59 @@ class FoodbookService
     }
 
     /**
+     * Spec 19 E4.4: Wareneinsatz-Ampel eines Kapitels. **IST** = tatsächliche Food-Cost-%
+     * aus `kapitelAggregat()` (EK ÷ VK der Per-Person-Anteile, rekursiv über Nachfahren).
+     * **SOLL** = Ziel-Wareneinsatz mit Kaskade Kapitel → Eltern → Foodbook (via `kapitelZiele`)
+     * → Team-Setting (`zielWareneinsatzPct`, 30 %-Default). Toleranz = `food_cost_tolerance_pp`
+     * des Foodbooks (Code-Default 5,0 pp).
+     *
+     * Ampel: `gruen` IST ≤ Ziel · `gelb` IST ≤ Ziel+Toleranz · `rot` darüber · `unbekannt`
+     * ohne IST (kein Per-Person-VK). **Partiell-Hinweis:** Pauschal-Anteile (header_frei_preis/
+     * pauschal, recipe_ref/pauschal) tragen VK, aber ihr EK bleibt ungezählt (`blockPreis`, E1.2)
+     * → die IST-Quote unterschätzt den echten Food-Cost. `partiell=true` markiert das, damit die
+     * Kalkulations-Rail (E5.3) und `coverage.GET` (E4.6) den Vorbehalt sichtbar machen.
+     *
+     * @return array{status: string, ist_pct: ?float, ziel_pct: float, toleranz_pp: float,
+     *               quelle: string, partiell: bool}
+     */
+    public function wareneinsatzAmpel(Team $team, FoodAlchemistFoodbook $fb, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null): array
+    {
+        // kapitelZiele zuerst — erzwingt Team-Scope + Ownership (ownedKapitel) vor jeder Rechnung.
+        $ziele = $this->kapitelZiele($team, $kapitel);
+        $ziel = $ziele['target_food_cost_pct'];
+        $quelle = $ziele['quellen']['target_food_cost_pct'] ?? null;
+        if ($ziel === null) {
+            $ziel = app(TeamSettingsService::class)->zielWareneinsatzPct($team);
+            $quelle = 'settings';
+        }
+        $ziel = (float) $ziel;
+
+        $agg = $this->kapitelAggregat($team, $kapitel, $pax);
+        $ist = $agg['food_cost_percent']; // ?float
+
+        $tol = $fb->food_cost_tolerance_pp !== null ? (float) $fb->food_cost_tolerance_pp : 5.0;
+
+        if ($ist === null) {
+            $status = 'unbekannt';
+        } elseif ($ist <= $ziel) {
+            $status = 'gruen';
+        } elseif ($ist <= $ziel + $tol) {
+            $status = 'gelb';
+        } else {
+            $status = 'rot';
+        }
+
+        return [
+            'status' => $status,
+            'ist_pct' => $ist,
+            'ziel_pct' => round($ziel, 2),
+            'toleranz_pp' => round($tol, 2),
+            'quelle' => $quelle ?? 'settings',
+            'partiell' => $agg['pauschal'] > 0,
+        ];
+    }
+
+    /**
      * Foodbook-Gesamt: (Σ Top-Kapitel Per-Person × Pax) + Pauschal-Anteile. Erst HIER
      * wird die Gästezahl bindend (F-12, D-CON-5).
      *
