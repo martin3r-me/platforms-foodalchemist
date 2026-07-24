@@ -148,10 +148,26 @@ class KnowledgeService
         }
         $mode = in_array($mode, self::BINDING_MODES, true) ? $mode : 'discovery';
 
-        $exists = DB::table('foodalchemist_knowledge_bindings')->whereNull('deleted_at')
+        // Bindungen sind team-scoped (team_id des Callers, siehe bindExisting-Docblock +
+        // team-scoped Unique-Index fa_know_bind_team_uq). Idempotenz UND Soft-Delete-Revive
+        // in einem Schritt — team-scoped abgefragt, soft-gelöschte Zeilen eingeschlossen:
+        //   • aktive eigene Bindung  → No-op (nicht doppeln)
+        //   • soft-gelöschte eigene  → wiederbeleben (das im UNBIND versprochene „sauberes
+        //     Re-Bind"; ein Insert würde am Unique-Index mit der Leiche kollidieren)
+        //   • keine eigene           → neu anlegen
+        // Fremd-/globale Bindungen am selben Doc/Ziel bleiben unberührt (eigener team_id-Scope).
+        $eigene = DB::table('foodalchemist_knowledge_bindings')
             ->where('knowledge_document_id', $docId)
-            ->where('binding_type', 'layer')->where('target_key', $targetKey)->exists();
-        if ($exists) {
+            ->where('binding_type', 'layer')->where('target_key', $targetKey)
+            ->where('team_id', $team->id)->first();
+        if ($eigene !== null && $eigene->deleted_at === null) {
+            return;
+        }
+        if ($eigene !== null) {
+            DB::table('foodalchemist_knowledge_bindings')->where('id', $eigene->id)->update([
+                'deleted_at' => null, 'active' => true, 'mode' => $mode, 'updated_at' => now(),
+            ]);
+
             return;
         }
         DB::table('foodalchemist_knowledge_bindings')->insert([
