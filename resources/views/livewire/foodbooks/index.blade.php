@@ -96,7 +96,11 @@
             {{-- ═══════════════ FOODBOOK-KOPF — Planungs-Cockpit (Tabs) ═══════════════ --}}
             {{-- Tab-Zustand hält Alpine über Livewire-Morphs hinweg (stabiler wire:key), Muster wie Concepter-Editor.
                  Kalkulations-Leiste bleibt die rechte activity-Sidebar. Phase 1: reiner Reuse, Modals raus. --}}
-            <div wire:key="fbcockpit-{{ $fb->id }}" x-data="{ tab: 'briefing' }" class="space-y-4">
+            {{-- E5.2: Sprung-Event-Bus — die Checkliste dispatcht `fb-goto` {tab, anker}; der Cockpit-Root
+                 wechselt (falls der Tab existiert) und scrollt nach dem DOM-Flush zum Anker. Graceful:
+                 unbekannter Tab → bleibt stehen (kein Blank), unbekannter Anker → kein Scroll. --}}
+            <div wire:key="fbcockpit-{{ $fb->id }}" x-data="{ tab: 'briefing' }" class="space-y-4"
+                 @fb-goto.window="let d=$event.detail; if(d.tab && $root.querySelector(`[data-fb-tab='${d.tab}']`)) tab=d.tab; $nextTick(()=>{ if(d.anker){ let el=$root.querySelector(`[data-fb-anker='${d.anker}']`); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } });">
 
                 {{-- Tab-Leiste + Foodbook-Aktionen — Speichern/Dokument/Präsentation/Löschen gelten fürs GANZE
                      Foodbook, daher auf Tab-Ebene (aus allen Tabs erreichbar), nicht im Briefing-Tab vergraben. --}}
@@ -116,6 +120,14 @@
                     </div>
                 </div>
 
+                {{-- E5.2: Leitstellen-Leiste auf Tab-Ebene (aus allen Tabs sichtbar) — der abgeleitete
+                     7-Schritt-Fortschritt (Bedarf→Preise, klickbar) + der Phasen-Stepper (Versand-Status).
+                     Der Stepper wanderte hierher aus der Briefing-Karte (vorher ~:131). --}}
+                <div class="flex flex-col gap-2 pb-1 border-b border-black/5" data-fb-leitstelle>
+                    @include('foodalchemist::livewire.foodbooks.partials.leitstelle-checkliste', ['checkliste' => $checkliste])
+                    @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $fb->phase ?? 'kontext'])
+                </div>
+
                 {{-- ═══ Tab: BRIEFING (Stammdaten · Kunde · Leitidee) ═══ --}}
                 <div x-show="tab === 'briefing'" x-cloak class="space-y-3" data-fb-panel="briefing">
                 {{-- Foodbook-Stammdaten --}}
@@ -129,8 +141,7 @@
                     </div>
                 </div>
 
-                {{-- R4.3: Phasen-Statusmaschine (ergänzt den Sichtbarkeits-Status, ersetzt ihn nicht) --}}
-                @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $fb->phase ?? 'kontext'])
+                {{-- R4.3-Phasen-Stepper wanderte auf Tab-Ebene (E5.2, oben in der Leitstellen-Leiste). --}}
 
                 {{-- Phase 5: Segment (aus Küchen-Typ) = Achse für Portionen/Preis/Komplexität/Ton.
                      Niveau + Convenience = Default-Erwartung des Segments (Vokabular der KI-Rezept-Regler). --}}
@@ -230,7 +241,7 @@
                 {{-- ═══ Bedarf — Foodbook-Default-Dimensionen (Spec 19 E3.3) ═══
                      Defaults kaskadieren als Boden nach unten (Kapitel/Konzepte erben, überschreiben spezifisch).
                      Vokabular-Pflege in den Einstellungen → Concepter-Dimensionen. --}}
-                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbbedarf-{{ $fb->id }}" data-fb-bedarf>
+                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbbedarf-{{ $fb->id }}" data-fb-bedarf data-fb-anker="bedarf">
                     <div class="{{ $cardAccent }}"></div>
                     <p class="{{ $label }} !mb-0">Bedarf — Vorgaben fürs ganze Foodbook</p>
                     <p class="text-[11px] text-gray-500 -mt-1">Eventtyp · Servierform · Wareneinsatz-Ziel + Einsatzmomente + Zielgruppen. Leer = Team-/Segment-Default. Kapitel erben und können überschreiben.</p>
@@ -296,7 +307,7 @@
                 {{-- ═══ Tab: PLANUNG (Struktur = Slots · Coverage) ═══ --}}
                 <div x-show="tab === 'planung'" x-cloak class="space-y-3" data-fb-panel="planung">
                     {{-- R4.1: Planungs-Gerüst — Soll-Rahmen (Slots = Kapitel-Struktur, Mengen · Preise · Quoten · Dramaturgie) --}}
-                    <div class="relative overflow-hidden {{ $card }} p-5" wire:key="fbframe-{{ $fb->id }}">
+                    <div class="relative overflow-hidden {{ $card }} p-5" wire:key="fbframe-{{ $fb->id }}" data-fb-anker="kapitel">
                         <div class="{{ $cardAccent }}"></div>
                         @include('foodalchemist::livewire.planning.partials.frame-board')
                     </div>
@@ -362,7 +373,7 @@
                 </div>{{-- /Planung --}}
 
                 {{-- ═══ Tab: KREATIV (Kunde-DNA · später Geschmack/Tonalität) ═══ --}}
-                <div x-show="tab === 'kreativ'" x-cloak class="space-y-3" data-fb-panel="kreativ">
+                <div x-show="tab === 'kreativ'" x-cloak class="space-y-3" data-fb-panel="kreativ" data-fb-anker="ideen">
                     {{-- Ebene 2 der DNA-Kette: Kunde-DNA am CRM-Kunden (Nested-Livewire, Re-Mount via key bei Kunden-Wechsel) --}}
                     <livewire:foodalchemist.foodbooks.kunde-dna-panel :company-id="$fb->crm_company_id" :key="'kdna-'.($fb->crm_company_id ?? 'none')" />
 

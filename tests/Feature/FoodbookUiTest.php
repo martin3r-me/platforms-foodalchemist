@@ -92,3 +92,23 @@ it('Foodbook-Editor: Header-Preis-Block (person) erscheint mit €/Person im Coc
 
     expect((float) $block->refresh()->price_value)->toBe(38.0);
 });
+
+// Spec 19 E5.2: Leitstellen-Checkliste auf Tab-Leisten-Ebene (7 Chips) + Phasen-Stepper daneben.
+// Der Stepper wanderte aus der Briefing-Karte hierher; die Checkliste hängt am LeitstelleService.
+it('Foodbook-Editor: Leitstellen-Checkliste rendert 7 klickbare Schritte auf Tab-Ebene', function () {
+    Livewire::test(FoodbooksIndex::class)->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+
+    $html = Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $fb->id)
+        ->assertSee('data-leitstelle-checkliste', false)              // Leiste da
+        ->assertSee('data-fb-leitstelle', false)                     // Container auf Tab-Ebene
+        ->assertSee('fb-goto', false)                                // Sprung-Event-Bus verdrahtet
+        ->assertSee('data-checkliste-schritt="bedarf"', false)       // erster Schritt
+        ->assertSee('data-checkliste-schritt="preise"', false)       // letzter Schritt
+        ->assertSee('Bedarf')->assertSee('Preise')
+        ->html();
+
+    // Genau 7 Schritte, alle mit Status-Attribut
+    expect(substr_count($html, 'data-checkliste-schritt="'))->toBe(7);
+});
