@@ -526,6 +526,10 @@ class FoodbookService
      * Konzept-Slots. Erstes Übernehmen legt das Draft-Konzept + den concept_ref-Block an,
      * weitere hängen an. Duplikate werden übersprungen. Setzt „Struktur anwenden" voraus.
      *
+     * Spec 19 E7.2: dünner, BIT-IDENTISCHER Wrapper um `uebernehmeGericht` — löst nur
+     * Slot→Kapitel auf und delegiert mit $conceptId=null (= heutiges „führendes Kapitel-Konzept"-
+     * Verhalten). fb-Guard-Reihenfolge bleibt (fb → guard → slot) für unveränderte Exceptions.
+     *
      * @return array{concept_id:int, chapter_id:int, schon_drin:bool}
      */
     public function uebernehmeVorschlag(Team $team, int $foodbookId, int $slotId, int $recipeId): array
@@ -536,7 +540,33 @@ class FoodbookService
         if ($slot->chapter_id === null) {
             throw new \RuntimeException('Slot ist noch nicht als Kapitel angelegt — erst „Struktur anwenden".');
         }
-        $kapitel = $this->ownedKapitel($team, (int) $slot->chapter_id);
+
+        return $this->uebernehmeGericht($team, $foodbookId, (int) $slot->chapter_id, $recipeId, $slot->label, 'foodbook_slot');
+    }
+
+    /**
+     * Spec 19 E7.2 — KERN der Gericht-Übernahme (aus `uebernehmeVorschlag` extrahiert). Nimmt ein
+     * VK-Gericht in ein Kapitel-Konzept auf:
+     *  - $conceptId = null  → heutiges Verhalten: führendes Kapitel-Konzept (concept_ref) finden ODER
+     *    neu anlegen (Draft, Niveau via leitplanken, created_via = $createdVia) + concept_ref-Block.
+     *  - $conceptId gesetzt → Gericht gezielt in DIESES Konzept (E7.3 Paket-Weg). Ownership guardet
+     *    `ConceptService::addSlot` selbst (visibleToTeam + guardOwner).
+     * Dedup ist kapitelweit (Konzept-Slots ∪ recipe_ref-Blöcke) — quer-Kapitel bleibt WEICH (kapitelFreigeben).
+     *
+     * @return array{concept_id:int, chapter_id:int, schon_drin:bool}
+     */
+    public function uebernehmeGericht(
+        Team $team,
+        int $foodbookId,
+        int $chapterId,
+        int $recipeId,
+        ?string $rolle = null,
+        string $createdVia = 'foodbook_slot',
+        ?int $conceptId = null
+    ): array {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
+        $this->guard($fb, $team);
+        $kapitel = $this->ownedKapitel($team, $chapterId);
 
         // Spec 19 E1.5: kapitelweite Dedup VOR jeder Anlage. Das Gericht gilt als „schon drin",
         // wenn es Slot IRGENDEINES Konzepts (concept_ref) ODER ein direkter recipe_ref-Block im
@@ -545,30 +575,35 @@ class FoodbookService
         if ($this->gerichtImKapitel($kapitel, $recipeId)) {
             $vorhanden = $kapitel->blocks()->where('type', 'concept_ref')->whereNotNull('concept_id')->orderBy('position')->first();
 
-            return ['concept_id' => (int) ($vorhanden->concept_id ?? 0), 'chapter_id' => (int) $slot->chapter_id, 'schon_drin' => true];
+            return ['concept_id' => (int) ($vorhanden->concept_id ?? 0), 'chapter_id' => $chapterId, 'schon_drin' => true];
         }
 
-        $block = $kapitel->blocks()->where('type', 'concept_ref')->whereNotNull('concept_id')->orderBy('position')->first();
-        if ($block === null) {
-            // Leitstelle: das neue Kapitel-Konzept erbt das Foodbook-Niveau (concept.level, im Concepter-
-            // Vokabular). Kapitel kann es dort überschreiben (basic/hochwertig/premium). null = erbt weiter.
-            $niveau = \Platform\FoodAlchemist\Services\TeamSettingsService::denormNiveauFuerConcept($this->leitplanken($team, $fb)['niveau']);
-            $concept = $this->concepts->create($team, array_filter([
-                'name' => trim((string) ($slot->label ?: $kapitel->title)) ?: 'Konzept',
-                'status' => 'draft',
-                'level' => $niveau,
-            ], fn ($v) => $v !== null));
-            $concept->update(['created_via' => 'foodbook_slot']);
-            $this->addBlock($team, (int) $slot->chapter_id, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
-            $conceptId = (int) $concept->id;
+        if ($conceptId !== null) {
+            // Gezieltes Ziel-Konzept (E7.3): kein concept_ref-Block anlegen — den setzt der Aufrufer.
+            $zielConceptId = $conceptId;
         } else {
-            $conceptId = (int) $block->concept_id;
+            $block = $kapitel->blocks()->where('type', 'concept_ref')->whereNotNull('concept_id')->orderBy('position')->first();
+            if ($block === null) {
+                // Leitstelle: das neue Kapitel-Konzept erbt das Foodbook-Niveau (concept.level, im Concepter-
+                // Vokabular). Kapitel kann es dort überschreiben (basic/hochwertig/premium). null = erbt weiter.
+                $niveau = \Platform\FoodAlchemist\Services\TeamSettingsService::denormNiveauFuerConcept($this->leitplanken($team, $fb)['niveau']);
+                $concept = $this->concepts->create($team, array_filter([
+                    'name' => trim((string) ($rolle ?: $kapitel->title)) ?: 'Konzept',
+                    'status' => 'draft',
+                    'level' => $niveau,
+                ], fn ($v) => $v !== null));
+                $concept->update(['created_via' => $createdVia]);
+                $this->addBlock($team, $chapterId, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
+                $zielConceptId = (int) $concept->id;
+            } else {
+                $zielConceptId = (int) $block->concept_id;
+            }
         }
 
-        $cslot = $this->concepts->addSlot($team, $conceptId, ['role' => $slot->label]);
+        $cslot = $this->concepts->addSlot($team, $zielConceptId, ['role' => $rolle]);
         $this->concepts->fillSlot($team, $cslot->id, ['sales_recipe_id' => $recipeId, 'type' => 'gericht']);
 
-        return ['concept_id' => $conceptId, 'chapter_id' => (int) $slot->chapter_id, 'schon_drin' => false];
+        return ['concept_id' => $zielConceptId, 'chapter_id' => $chapterId, 'schon_drin' => false];
     }
 
     /**

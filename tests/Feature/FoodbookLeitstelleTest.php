@@ -102,6 +102,39 @@ it('Gericht bereits als recipe_ref-Block im Kapitel → Übernehmen dedupt kapit
     expect(FoodAlchemistConceptSlot::where('sales_recipe_id', $this->dish->id)->count())->toBe(0);
 });
 
+// ── E7.2 uebernehmeGericht-Kern: gezieltes Ziel-Konzept via $conceptId ──────
+
+it('uebernehmeGericht mit $conceptId hängt das Gericht gezielt in DIESES Konzept (kein neues Konzept)', function () {
+    $chapterId = (int) $this->slot->refresh()->chapter_id;
+    // Ziel-Konzept + concept_ref-Block vorbereiten (wie es kapitelFreigeben in E7.3 tun wird).
+    $ziel = app(\Platform\FoodAlchemist\Services\ConceptService::class)
+        ->create($this->rootTeam, ['name' => 'Paket X', 'status' => 'draft']);
+    $this->fbSvc->addBlock($this->rootTeam, $chapterId, ['type' => 'concept_ref', 'concept_id' => $ziel->id]);
+
+    $res = $this->fbSvc->uebernehmeGericht(
+        $this->rootTeam, $this->fb->id, $chapterId, $this->dish->id, 'Vorspeise', 'kapitel_freigabe', $ziel->id
+    );
+
+    expect($res['schon_drin'])->toBeFalse()
+        ->and($res['concept_id'])->toBe($ziel->id)
+        ->and($res['chapter_id'])->toBe($chapterId);
+    // Gericht landet als Slot im Ziel-Konzept; KEIN zweites Konzept angelegt.
+    expect(FoodAlchemistConceptSlot::where('concept_id', $ziel->id)->where('sales_recipe_id', $this->dish->id)->count())->toBe(1)
+        ->and(FoodAlchemistConcept::where('team_id', $this->rootTeam->id)->count())->toBe(1);
+});
+
+it('uebernehmeGericht ohne $conceptId verhält sich wie der Wrapper (führendes Kapitel-Konzept, foodbook_slot)', function () {
+    $chapterId = (int) $this->slot->refresh()->chapter_id;
+
+    $res = $this->fbSvc->uebernehmeGericht($this->rootTeam, $this->fb->id, $chapterId, $this->dish->id, 'Hauptgang');
+
+    $concept = FoodAlchemistConcept::find($res['concept_id']);
+    expect($res['schon_drin'])->toBeFalse()
+        ->and($concept)->not->toBeNull()
+        ->and($concept->created_via)->toBe('foodbook_slot')
+        ->and($concept->level)->toBe('haute');
+});
+
 // ── E3.3 Bedarf-Sektion: Foodbook-Default-Dimensionen (Zielgruppen/Einsatzmomente/Defaults) ──
 
 it('toggleFbZielgruppe schaltet den Default-Zielgruppen-Pivot an und wieder aus', function () {
