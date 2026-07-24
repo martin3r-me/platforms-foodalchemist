@@ -489,3 +489,96 @@ it('E6.5: kapitel_ideen Tenancy — fremdes Kapitel blockt GET + POST (NOT_FOUND
     // Nichts angelegt.
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistDishIdea::where('chapter_id', $fremdKap->id)->count())->toBe(0);
 });
+
+// ── Spec 19 E7.6: kapitel_freigabe.GET (Anlage-Stand: Stempel + Vorschau + Undo, READ-ONLY) ──
+
+it('E7.6: kapitel_freigabe.GET — Stempel-Kontext + Trockenlauf-Vorschau, VOR der Anlage nicht released', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $ideen = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+
+    $hg = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'HG', 'label' => 'Hauptgericht']);
+    $klasse = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::create(['team_id' => $this->rootTeam->id, 'dish_main_group_id' => $hg->id, 'code' => 'HG_N', 'label' => 'Neutral', 'diet_form' => 'neutral']);
+    $mk = fn (string $key, string $name) => \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => $key, 'name' => $name, 'status' => 'approved',
+        'is_sales_recipe' => true, 'sales_net' => 12.00, 'dish_class_id' => $klasse->id,
+    ]);
+    $dishA = $mk('rA', 'HG: Tomaten-Teller');
+    $dishB = $mk('rB', 'VS: Bete-Carpaccio');
+
+    $sf = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::create(['team_id' => $this->rootTeam->id, 'label' => 'Buffet', 'code' => 'buffet']);
+    $et = \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::create(['team_id' => $this->rootTeam->id, 'name' => 'Gala']);
+    $em = \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::create(['team_id' => $this->rootTeam->id, 'name' => 'Apéro']);
+    $zg = \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::create(['team_id' => $this->rootTeam->id, 'name' => 'Bankett-Gast', 'sort_order' => 10]);
+
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Freigabe-FB']);
+    $foodbooks->update($this->rootTeam, $fb->id, [
+        'default_niveau' => 'haute_cuisine',
+        'default_serving_form_id' => $sf->id,
+        'default_event_type_id' => $et->id,
+    ]);
+    $fb->serviceMoments()->sync([$em->id]);
+    $fb->targetGroups()->sync([$zg->id]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Buffet-Kapitel']);
+
+    // Skizzen: Paket (1 Bestand-Mitglied) + Einzel-Bestand + Freitext-Einzel.
+    $gruppe = $ideen->addGruppe($this->rootTeam, ['chapter_id' => $kap->id, 'name' => 'Grill-Buffet', 'target_price_pp' => 24.50]);
+    $ideen->uebernehmeBestand($this->rootTeam, ['chapter_id' => $kap->id, 'group_id' => $gruppe->id, 'sales_recipe_id' => $dishA->id]);
+    $ideen->uebernehmeBestand($this->rootTeam, ['chapter_id' => $kap->id, 'sales_recipe_id' => $dishB->id]);
+    $ideen->add($this->rootTeam, ['chapter_id' => $kap->id, 'title' => 'Rauch-Kartoffel-Idee']);
+
+    $res = $this->registry->get('foodalchemist.kapitel_freigabe.GET')->execute(['chapter_id' => $kap->id], $this->kontext);
+
+    expect($res->success)->toBeTrue()
+        ->and($res->data['kapitel']['id'])->toBe($kap->id)
+        ->and($res->data['kapitel']['foodbook_id'])->toBe($fb->id)
+        // Stempel-Kontext = bit-identisch zur kapitelFreigeben-Auflösung.
+        ->and($res->data['stempel']['niveau'])->toBe('haute')
+        ->and($res->data['stempel']['serving_form_id'])->toBe($sf->id)
+        ->and($res->data['stempel']['event_type_id'])->toBe($et->id)
+        ->and($res->data['stempel']['service_moment_ids'])->toBe([$em->id])
+        ->and(collect($res->data['stempel']['zielgruppen'])->pluck('id')->all())->toBe([$zg->id])
+        // Trockenlauf-Vorschau.
+        ->and($res->data['vorschau']['pakete'])->toHaveCount(1)
+        ->and($res->data['vorschau']['pakete'][0]['gruppe_id'])->toBe($gruppe->id)
+        ->and($res->data['vorschau']['pakete'][0]['name'])->toBe('Grill-Buffet')
+        ->and($res->data['vorschau']['pakete'][0]['target_price_pp'])->toBe(24.5)
+        ->and($res->data['vorschau']['pakete'][0]['bestand'])->toBe(1)
+        ->and($res->data['vorschau']['pakete'][0]['freitext'])->toBe(0)
+        ->and($res->data['vorschau']['einzel_bestand'])->toBe(1)
+        ->and($res->data['vorschau']['freitext_einzel'])->toBe(1)
+        ->and($res->data['vorschau']['summe_skizzen'])->toBe(3)
+        // Anlage-Stand: noch nichts angelegt.
+        ->and($res->data['anlage_stand']['released'])->toBeFalse()
+        ->and($res->data['anlage_stand']['undo_moeglich'])->toBeFalse();
+});
+
+it('E7.6: kapitel_freigabe.GET — nach kapitelFreigeben released + undo_moeglich + release_result', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $ideen = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Freigabe-FB-2']);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Kapitel']);
+    // Eine Freitext-Skizze → Go queued sie (kein Provider nötig für die Anlage selbst).
+    $ideen->add($this->rootTeam, ['chapter_id' => $kap->id, 'title' => 'Freitext-Idee']);
+    $foodbooks->kapitelFreigeben($this->rootTeam, $kap->id, 'los');
+
+    $res = $this->registry->get('foodalchemist.kapitel_freigabe.GET')->execute(['chapter_id' => $kap->id], $this->kontext);
+
+    expect($res->success)->toBeTrue()
+        ->and($res->data['anlage_stand']['released'])->toBeTrue()
+        ->and($res->data['anlage_stand']['released_at'])->not->toBeNull()
+        ->and($res->data['anlage_stand']['release_note'])->toBe('los')
+        ->and($res->data['anlage_stand']['release_result'])->toBeArray()
+        ->and($res->data['anlage_stand']['release_result']['queued'])->toBe(1)
+        // Kein Snapshot/Versand → Undo-Fenster offen.
+        ->and($res->data['anlage_stand']['undo_moeglich'])->toBeTrue();
+});
+
+it('E7.6: kapitel_freigabe.GET Tenancy — fremdes Kapitel blockt (NOT_FOUND)', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $fremdFb = $foodbooks->create($this->childA, ['label' => 'Fremd-Freigabe', 'personen' => 20]);
+    $fremdKap = $foodbooks->addKapitel($this->childA, $fremdFb->id, ['title' => 'Fremd-Kap']);
+
+    $res = $this->registry->get('foodalchemist.kapitel_freigabe.GET')->execute(['chapter_id' => $fremdKap->id], $this->kontext);
+    expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('NOT_FOUND');
+});
