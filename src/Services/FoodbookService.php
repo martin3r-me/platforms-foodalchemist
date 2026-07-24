@@ -760,10 +760,11 @@ class FoodbookService
                     $vorhanden = $kapitel->blocks()->where('type', 'recipe_ref')->where('sales_recipe_id', $idee->sales_recipe_id)->first();
                     if ($vorhanden !== null) {
                         // Weiche kapitelweite Dedup: Gericht liegt schon als Block — nur verknüpfen.
+                        // `created=false` ⇒ Undo (E7.5) räumt diesen VORBESTEHENDEN Block NICHT weg.
                         $idee->update([
                             'status' => 'freigegeben',
                             'materialized_at' => now(),
-                            'materialized_ref' => ['block_id' => (int) $vorhanden->id],
+                            'materialized_ref' => ['block_id' => (int) $vorhanden->id, 'created' => false],
                         ]);
                         $uebersprungen++;
                         $protokoll[] = ['typ' => 'einzel', 'idee_id' => (int) $idee->id, 'status' => 'block_vorhanden', 'block_id' => (int) $vorhanden->id];
@@ -774,10 +775,11 @@ class FoodbookService
                         'type' => 'recipe_ref',
                         'sales_recipe_id' => (int) $idee->sales_recipe_id,
                     ]);
+                    // `created=true` ⇒ Undo (E7.5) löscht diesen frisch angelegten Block wieder.
                     $idee->update([
                         'status' => 'freigegeben',
                         'materialized_at' => now(),
-                        'materialized_ref' => ['block_id' => (int) $block->id],
+                        'materialized_ref' => ['block_id' => (int) $block->id, 'created' => true],
                     ]);
                     $bloeckeEinzel++;
                     $materialisiert++;
@@ -812,6 +814,126 @@ class FoodbookService
             'bloecke_einzel' => $bloeckeEinzel,
             'materialisiert' => $materialisiert,
             'queued' => $queued,
+            'uebersprungen' => $uebersprungen,
+            'protokoll' => $protokoll,
+        ];
+    }
+
+    /**
+     * Spec 19 E7.5 — „Anlage zurückziehen". Macht {@see kapitelFreigeben} rückgängig, solange
+     * das Kapitel noch bearbeitbar ist: **draft + created_via='kapitel_freigabe' + kein
+     * Snapshot/Versand**. Räumt NUR weg, was die Anlage selbst erzeugt hat:
+     *  - **Anlage-Konzepte** (created_via='kapitel_freigabe' & status='draft') samt ihrer
+     *    Slots + concept_ref-Blöcke; die Paket-Gruppe verliert ihr `materialized_concept_id`.
+     *  - **frische recipe_ref-Blöcke** der Einzel-/Freitext-Ideen (`materialized_ref.created===true`);
+     *    per Dedup nur VERKNÜPFTE Bestands-Blöcke (`created===false`) bleiben stehen.
+     *  - **Ideen** kehren auf `status='entwurf'` zurück (materialized_* geleert, `queued`/`erstellt`
+     *    → generation_status null). KI-generierte Rezepte (`generated_recipe_id`) bleiben als
+     *    Draft erhalten — kein stiller Datenverlust (Spec 19 §3).
+     * Konzepte, die der User seit der Anlage bearbeitet/aktiviert hat (status ≠ draft) oder
+     * die nicht aus der Anlage stammen, bleiben unangetastet und werden weich gemeldet.
+     * Transaktional + idempotent (zweiter Lauf findet `released_at=null` → no-op). Setzt
+     * released_* zurück; der LogsActivity-Trait des Kapitels loggt den Write.
+     *
+     * @return array{kapitel_id:int, status:string, konzepte_geloescht:int, bloecke_geloescht:int, ideen_zurueckgesetzt:int, uebersprungen:int, protokoll:list<array<string,mixed>>}
+     */
+    public function anlageZuruckziehen(Team $team, int $kapitelId): array
+    {
+        $kapitel = $this->ownedKapitel($team, $kapitelId);
+
+        if ($kapitel->released_at === null) {
+            return ['kapitel_id' => $kapitelId, 'status' => 'nichts_anzulegen', 'konzepte_geloescht' => 0, 'bloecke_geloescht' => 0, 'ideen_zurueckgesetzt' => 0, 'uebersprungen' => 0, 'protokoll' => []];
+        }
+        // Harte Grenze (Spec 19 UX 4): ab Snapshot/Versand ist die Anlage eingefroren.
+        if ($kapitel->snapshot_at !== null || $kapitel->status === 'sent') {
+            throw new \RuntimeException('Kapitel bereits versendet/eingefroren — Anlage kann nicht zurückgezogen werden.');
+        }
+
+        $konzepteGeloescht = 0;
+        $bloeckeGeloescht = 0;
+        $ideenReset = 0;
+        $uebersprungen = 0;
+        $protokoll = [];
+
+        DB::transaction(function () use (
+            $team, $kapitel, $kapitelId,
+            &$konzepteGeloescht, &$bloeckeGeloescht, &$ideenReset, &$uebersprungen, &$protokoll
+        ) {
+            // ── 1) Materialisierte Ideen zurücksetzen (+ frische Einzel-/Freitext-Blöcke löschen) ──
+            $ideen = FoodAlchemistDishIdea::where('team_id', $team->id)
+                ->where('chapter_id', $kapitelId)
+                ->where('status', 'freigegeben')
+                ->get();
+            foreach ($ideen as $idee) {
+                $ref = $idee->materialized_ref ?? [];
+                if (isset($ref['block_id']) && ($ref['created'] ?? true)) {
+                    $block = FoodAlchemistFoodbookBlock::where('id', (int) $ref['block_id'])
+                        ->where('chapter_id', $kapitelId)->where('type', 'recipe_ref')->first();
+                    if ($block !== null) {
+                        $block->delete();
+                        $bloeckeGeloescht++;
+                    }
+                }
+                // Paket-Slots verschwinden mit dem Konzept (Schritt 3) — hier nur die Idee lösen.
+                $idee->update([
+                    'status' => 'entwurf',
+                    'materialized_at' => null,
+                    'materialized_ref' => null,
+                    'generation_status' => in_array($idee->generation_status, ['queued', 'erstellt'], true) ? null : $idee->generation_status,
+                ]);
+                $ideenReset++;
+                $protokoll[] = ['typ' => 'idee', 'idee_id' => (int) $idee->id, 'status' => 'zurueckgesetzt'];
+            }
+
+            // Freitext-Ideen, die nur in der Queue landeten (nie freigegeben) → entwarten.
+            $queued = FoodAlchemistDishIdea::where('team_id', $team->id)
+                ->where('chapter_id', $kapitelId)
+                ->where('status', 'entwurf')
+                ->where('generation_status', 'queued')
+                ->get();
+            foreach ($queued as $idee) {
+                $idee->update(['generation_status' => null]);
+                $ideenReset++;
+                $protokoll[] = ['typ' => 'idee', 'idee_id' => (int) $idee->id, 'status' => 'queue_geleert'];
+            }
+
+            // ── 2) Anlage-Konzepte der Paket-Gruppen löschen ──
+            $gruppen = FoodAlchemistDishIdeaGroup::where('team_id', $team->id)
+                ->where('chapter_id', $kapitelId)
+                ->whereNotNull('materialized_concept_id')
+                ->get();
+            foreach ($gruppen as $gruppe) {
+                $concept = FoodAlchemistConcept::find($gruppe->materialized_concept_id);
+                if ($concept !== null && $concept->created_via === 'kapitel_freigabe' && $concept->status === 'draft') {
+                    FoodAlchemistFoodbookBlock::where('chapter_id', $kapitelId)
+                        ->where('type', 'concept_ref')->where('concept_id', $concept->id)->delete();
+                    FoodAlchemistConceptSlot::where('concept_id', $concept->id)->delete();
+                    $concept->delete();
+                    $konzepteGeloescht++;
+                    $protokoll[] = ['typ' => 'paket', 'gruppe_id' => (int) $gruppe->id, 'concept_id' => (int) $concept->id, 'status' => 'konzept_geloescht'];
+                    $gruppe->update(['materialized_concept_id' => null]);
+                } else {
+                    // Bearbeitet/aktiviert oder fremd → stehenlassen, nur weich melden.
+                    $uebersprungen++;
+                    $protokoll[] = ['typ' => 'paket', 'gruppe_id' => (int) $gruppe->id, 'concept_id' => (int) ($concept->id ?? 0), 'status' => 'konzept_behalten'];
+                }
+            }
+
+            // ── 3) Anlage-Stand am Kapitel löschen ──
+            $kapitel->update([
+                'released_at' => null,
+                'released_by' => null,
+                'release_note' => null,
+                'release_result' => null,
+            ]);
+        });
+
+        return [
+            'kapitel_id' => $kapitelId,
+            'status' => 'zurueckgezogen',
+            'konzepte_geloescht' => $konzepteGeloescht,
+            'bloecke_geloescht' => $bloeckeGeloescht,
+            'ideen_zurueckgesetzt' => $ideenReset,
             'uebersprungen' => $uebersprungen,
             'protokoll' => $protokoll,
         ];

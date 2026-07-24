@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup;
 use Platform\FoodAlchemist\Services\CoverageService;
 use Platform\FoodAlchemist\Services\FoodbookService;
+use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\LeitstelleService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 
@@ -32,8 +33,11 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  * kapitel.id|'kopf'). Ziel-Edits dispatchen `leitstelle-kapitel-geaendert` an den Eltern
  * (Index), damit Kapitel-Kopf/Coverage im Hauptbereich mitziehen.
  *
- * Das Kapitel-Go „Anlegen" ({@see FoodbookService}::kapitelFreigeben) ist E7 — hier nur als
- * deaktivierter Shortcut mit Tooltip sichtbar (kein Schreibpfad vor E7).
+ * Kapitel-Go „Anlegen" (E7.5): der Ideen-Stand-Shortcut öffnet das Anlage-Modal
+ * ({@see kapitelAnlegen} → {@see FoodbookService}::kapitelFreigeben). Solange das Kapitel
+ * bearbeitbar bleibt (draft + kein Snapshot/Versand) bietet der angelegt-Zustand ein
+ * „Anlage zurückziehen" ({@see anlageZuruckziehen} → {@see FoodbookService}::anlageZuruckziehen).
+ * Kapitel-Go ist bewusst human-only (kein MCP-Trigger, Spec 19 §MCP-Lockstep).
  */
 class LeitstelleRail extends Component
 {
@@ -46,6 +50,12 @@ class LeitstelleRail extends Component
 
     /** Gestempelte Zielgruppen-IDs des Kapitels (lokaler Spiegel fürs Chip-Toggle). */
     public array $zielgruppenIds = [];
+
+    /** Optionale Anlage-Notiz (release_note) — Freitext im Anlage-Modal. */
+    public string $anlageNote = '';
+
+    /** Transientes Ergebnis der letzten Anlage/Undo (für die Inline-Rückmeldung). */
+    public ?array $anlageErgebnis = null;
 
     public function mount(int $foodbookId, ?int $kapitelId = null): void
     {
@@ -105,7 +115,38 @@ class LeitstelleRail extends Component
         $this->dispatch('leitstelle-kapitel-geaendert');
     }
 
-    public function render(LeitstelleService $leit, FoodbookService $svc)
+    /**
+     * Kapitel-Go „Anlegen" (E7.5) — materialisiert die Skizzen dieses Kapitels in Konzepte /
+     * recipe_ref-Blöcke / KI-Queue ({@see FoodbookService}::kapitelFreigeben). Idempotent;
+     * schließt das Modal und meldet den Eltern-Cockpit die Änderung (Kapitel-Kopf/Coverage).
+     */
+    public function kapitelAnlegen(FoodbookService $svc): void
+    {
+        if ($this->kapitelId === null) {
+            return;
+        }
+        $this->anlageErgebnis = $svc->kapitelFreigeben($this->team(), $this->kapitelId, $this->anlageNote ?: null, Auth::id());
+        $this->anlageNote = '';
+        $this->dispatch('modal.close', name: 'kapitel-anlegen');
+        $this->dispatch('leitstelle-kapitel-geaendert');
+    }
+
+    /**
+     * „Anlage zurückziehen" (E7.5) — nur solange draft + kein Snapshot/Versand. Räumt die von
+     * der Anlage erzeugten Objekte wieder weg ({@see FoodbookService}::anlageZuruckziehen);
+     * eine harte Grenze im Service wirft, sobald das Kapitel eingefroren ist.
+     */
+    public function anlageZuruckziehen(FoodbookService $svc): void
+    {
+        if ($this->kapitelId === null) {
+            return;
+        }
+        $this->anlageErgebnis = $svc->anlageZuruckziehen($this->team(), $this->kapitelId);
+        $this->dispatch('modal.close', name: 'kapitel-zurueckziehen');
+        $this->dispatch('leitstelle-kapitel-geaendert');
+    }
+
+    public function render(LeitstelleService $leit, FoodbookService $svc, IdeenService $ideenSvc)
     {
         $team = $this->team();
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->find($this->foodbookId);
@@ -119,9 +160,15 @@ class LeitstelleRail extends Component
             $stand = $k !== null ? $leit->kapitelStand($team, $k) : null;
             // Kapitel-Coverage: Befunde dieses Kapitels aus der Foodbook-Coverage (Scope = Kapitel+Nachfahren, E2.2/E4.3).
             $befunde = [];
+            $ideenListe = ['gruppen' => [], 'einzel' => collect()];
+            $undoMoeglich = false;
             if ($k !== null) {
                 $cov = app(CoverageService::class)->coverage($team, 'foodbook', $fb->id);
                 $befunde = collect($cov['befunde'] ?? [])->where('chapter_id', $this->kapitelId)->values()->all();
+                // Anlage-Modal-Vorschau: alle Entwurf-Skizzen (Pakete + Einzel), NICHT verworfene.
+                $ideenListe = $ideenSvc->liste($team, $this->kapitelId, null, false);
+                // Undo nur solange bearbeitbar (Spec 19 UX 4): draft + kein Snapshot/Versand.
+                $undoMoeglich = $k->released_at !== null && $k->snapshot_at === null && $k->status !== 'sent';
             }
 
             return view('foodalchemist::livewire.foodbooks.leitstelle-rail', [
@@ -129,6 +176,8 @@ class LeitstelleRail extends Component
                 'modus' => $k !== null ? 'kapitel' : 'leer',
                 'stand' => $stand,
                 'befunde' => $befunde,
+                'ideenListe' => $ideenListe,
+                'undoMoeglich' => $undoMoeglich,
                 'servierformen' => FoodAlchemistServierform::where('is_inactive', false)
                     ->orderBy('sort_order')->orderBy('label')->get(['id', 'label']),
                 'einsatzmomente' => FoodAlchemistEinsatzmoment::visibleToTeam($team)

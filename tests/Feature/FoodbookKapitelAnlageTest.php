@@ -152,3 +152,90 @@ it('setzt released_* + release_result am Kapitel', function () {
         ->and($k->release_result['bloecke_einzel'])->toBe(1)
         ->and($k->release_result['materialisiert'])->toBe(1);
 });
+
+/**
+ * Spec 19 E7.5 — „Anlage zurückziehen": Undo räumt Anlage-Objekte weg, Skizzen kehren in den
+ * Entwurf zurück, Kapitel ist wieder anlegbar. Guards: Snapshot/Versand friert ein.
+ */
+it('Undo räumt Konzept + Blöcke + Slots weg und setzt Ideen + released_* zurück', function () {
+    $gruppe = $this->ideen->addGruppe($this->rootTeam, ['chapter_id' => $this->kapitel->id, 'name' => 'Grill-Buffet', 'target_price_pp' => 24.50]);
+    $paketIdee = $this->ideen->uebernehmeBestand($this->rootTeam, ['chapter_id' => $this->kapitel->id, 'group_id' => $gruppe->id, 'sales_recipe_id' => $this->dishA->id]);
+    $einzelIdee = $this->ideen->uebernehmeBestand($this->rootTeam, ['chapter_id' => $this->kapitel->id, 'sales_recipe_id' => $this->dishB->id]);
+
+    $res = $this->fbSvc->kapitelFreigeben($this->rootTeam, $this->kapitel->id, 'go');
+    $conceptId = $res['konzepte'][0];
+    expect(FoodAlchemistConcept::find($conceptId))->not->toBeNull()
+        ->and($this->kapitel->blocks()->count())->toBe(2);   // concept_ref + recipe_ref
+
+    $undo = $this->fbSvc->anlageZuruckziehen($this->rootTeam, $this->kapitel->id);
+
+    expect($undo['status'])->toBe('zurueckgezogen')
+        ->and($undo['konzepte_geloescht'])->toBe(1)
+        ->and($undo['bloecke_geloescht'])->toBe(1)          // nur der frische recipe_ref-Block
+        ->and($undo['ideen_zurueckgesetzt'])->toBe(2);
+
+    // Konzept + Slots + Blöcke weg (soft-delete → nicht mehr sichtbar).
+    expect(FoodAlchemistConcept::find($conceptId))->toBeNull()
+        ->and(FoodAlchemistConceptSlot::where('concept_id', $conceptId)->count())->toBe(0)
+        ->and($this->kapitel->blocks()->count())->toBe(0);
+
+    // Ideen zurück auf Entwurf, materialized_* geleert.
+    $paketIdee->refresh();
+    $einzelIdee->refresh();
+    expect($paketIdee->status)->toBe('entwurf')->and($paketIdee->materialized_ref)->toBeNull()
+        ->and($einzelIdee->status)->toBe('entwurf')->and($einzelIdee->materialized_ref)->toBeNull();
+
+    // Gruppe entkoppelt + Kapitel wieder anlegbar.
+    expect($gruppe->refresh()->materialized_concept_id)->toBeNull();
+    $k = $this->kapitel->refresh();
+    expect($k->released_at)->toBeNull()->and($k->release_result)->toBeNull();
+
+    // Re-Anlage nach Undo funktioniert wieder (Round-Trip idempotent).
+    $reAnlage = $this->fbSvc->kapitelFreigeben($this->rootTeam, $this->kapitel->id);
+    expect($reAnlage['materialisiert'])->toBe(2)->and($reAnlage['konzepte'])->toHaveCount(1);
+});
+
+it('Undo leert die Freitext-Queue (generation_status → null)', function () {
+    $idee = $this->ideen->add($this->rootTeam, ['chapter_id' => $this->kapitel->id, 'title' => 'Wildkräuter-Terrine']);
+    $this->fbSvc->kapitelFreigeben($this->rootTeam, $this->kapitel->id);
+    expect($idee->refresh()->generation_status)->toBe('queued');
+
+    $undo = $this->fbSvc->anlageZuruckziehen($this->rootTeam, $this->kapitel->id);
+
+    expect($undo['status'])->toBe('zurueckgezogen');
+    expect($idee->refresh()->generation_status)->toBeNull()
+        ->and($idee->status)->toBe('entwurf');
+});
+
+it('Undo löscht per Dedup nur VERKNÜPFTE, nicht vorbestehende recipe_ref-Blöcke', function () {
+    // Gericht liegt bereits als Block (aus früherer Übernahme), Idee dedupt darauf.
+    $block = $this->fbSvc->addBlock($this->rootTeam, $this->kapitel->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->dishB->id]);
+    $idee = $this->ideen->uebernehmeBestand($this->rootTeam, ['chapter_id' => $this->kapitel->id, 'sales_recipe_id' => $this->dishB->id]);
+
+    $res = $this->fbSvc->kapitelFreigeben($this->rootTeam, $this->kapitel->id);
+    expect($res['bloecke_einzel'])->toBe(0);   // nichts Neues, Dedup
+    expect($idee->refresh()->materialized_ref['created'])->toBeFalse();
+
+    $undo = $this->fbSvc->anlageZuruckziehen($this->rootTeam, $this->kapitel->id);
+
+    // Der vorbestehende Block bleibt stehen, Idee ist wieder Entwurf.
+    expect($undo['bloecke_geloescht'])->toBe(0);
+    expect($this->kapitel->blocks()->where('id', $block->id)->exists())->toBeTrue()
+        ->and($idee->refresh()->status)->toBe('entwurf');
+});
+
+it('Undo wirft, sobald das Kapitel versendet/eingefroren ist', function () {
+    $this->ideen->uebernehmeBestand($this->rootTeam, ['chapter_id' => $this->kapitel->id, 'sales_recipe_id' => $this->dishB->id]);
+    $this->fbSvc->kapitelFreigeben($this->rootTeam, $this->kapitel->id);
+
+    $this->kapitel->update(['snapshot_at' => now(), 'status' => 'sent']);
+
+    expect(fn () => $this->fbSvc->anlageZuruckziehen($this->rootTeam, $this->kapitel->id))
+        ->toThrow(RuntimeException::class);
+});
+
+it('Undo auf nicht-angelegtem Kapitel ist ein no-op', function () {
+    $undo = $this->fbSvc->anlageZuruckziehen($this->rootTeam, $this->kapitel->id);
+    expect($undo['status'])->toBe('nichts_anzulegen')
+        ->and($undo['konzepte_geloescht'])->toBe(0);
+});

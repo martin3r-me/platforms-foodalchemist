@@ -123,8 +123,11 @@
             </div>
         @endif
 
-        {{-- Ideen-Stand + Anlegen-Shortcut (Kapitel-Go = E7, hier deaktiviert) --}}
+        {{-- Ideen-Stand + Anlegen-Shortcut (Kapitel-Go „Anlegen", E7.5) --}}
         @if($stand)
+            @php($paketAnzahl = count($ideenListe['gruppen']))
+            @php($einzelAnzahl = count($ideenListe['einzel']))
+            @php($ideenAnzahl = $paketAnzahl + $einzelAnzahl)
             <div class="pt-3 border-t border-black/5 space-y-2" data-rail-ideen>
                 <div class="flex items-center justify-between text-xs">
                     <span class="{{ $label }} !mb-0">Inhalt / Ideen</span>
@@ -132,11 +135,85 @@
                 </div>
                 @if($stand['released'])
                     <p class="text-[11px] text-emerald-600" data-rail-released>✓ Kapitel angelegt.</p>
+                    @if($undoMoeglich)
+                        <button type="button" @click="$dispatch('modal.open', { name: 'kapitel-zurueckziehen' })"
+                                class="{{ $btnGhostXs }} w-full justify-center" data-rail-undo>Anlage zurückziehen</button>
+                    @else
+                        <p class="text-[10px] text-gray-400" data-rail-undo-gesperrt>Versendet/eingefroren — Anlage fixiert.</p>
+                    @endif
+                @elseif($ideenAnzahl > 0)
+                    <button type="button" @click="$dispatch('modal.open', { name: 'kapitel-anlegen' })"
+                            class="{{ $btnGhostXs }} w-full justify-center" data-rail-go>Kapitel anlegen …</button>
                 @else
-                    <button type="button" disabled title="Kapitel anlegen (Konzepte/Blöcke aus Ideen) — folgt E7" class="{{ $btnGhostXs }} w-full justify-center opacity-50 cursor-not-allowed" data-rail-go>Anlegen (folgt E7)</button>
+                    <button type="button" disabled title="Keine Skizzen/Ideen zum Anlegen — erst im Kreativ-Tab Ideen sammeln" class="{{ $btnGhostXs }} w-full justify-center opacity-50 cursor-not-allowed" data-rail-go-leer>Kapitel anlegen …</button>
                 @endif
             </div>
         @endif
+
+        {{-- ── Anlage-Modal „Kapitel anlegen" (E7.5) — Zusammenfassung beider Wege + ☑-Liste ── --}}
+        <x-foodalchemist::modal name="kapitel-anlegen" title="Kapitel anlegen" size="max-w-2xl">
+            @if($stand)
+                <p class="text-xs text-gray-600">
+                    Alle Entwurf-Skizzen dieses Kapitels werden angelegt: <strong>Pakete</strong> → je ein Konzept
+                    (€/Gast), <strong>Einzel-Ideen</strong> → Gericht-Block (€/Position), <strong>Freitext</strong> →
+                    KI-Warteschlange. Bereits Angelegtes wird übersprungen (idempotent).
+                </p>
+                <div class="flex flex-wrap gap-3 text-[11px] text-gray-500 mt-2">
+                    <span>Niveau: <strong class="text-gray-700">{{ $niveauLabels[$stand['ziele']['niveau'] ?? ''] ?? ($stand['ziele']['niveau'] ?? '—') }}</strong></span>
+                    <span>Zielgruppen: <strong class="text-gray-700">{{ count($stand['zielgruppen']) ? collect($stand['zielgruppen'])->pluck('name')->implode(', ') : '—' }}</strong></span>
+                </div>
+
+                <x-foodalchemist::modal-section title="Pakete → Konzepte">
+                    @forelse($ideenListe['gruppen'] as $g)
+                        <div class="flex items-start gap-2 text-xs py-1" wire:key="anl-g-{{ $g['gruppe']->id }}">
+                            <span class="text-emerald-500 shrink-0">☑</span>
+                            <div>
+                                <span class="font-medium text-gray-800">{{ $g['gruppe']->name ?: 'Paket' }}</span>
+                                <span class="text-gray-400">· {{ count($g['ideen']) }} Position(en)@if($g['gruppe']->target_price_pp) · Ziel {{ number_format($g['gruppe']->target_price_pp, 2, ',', '.') }} €/Gast @endif</span>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="text-[11px] text-gray-400">Keine Paket-Gruppen.</p>
+                    @endforelse
+                </x-foodalchemist::modal-section>
+
+                <x-foodalchemist::modal-section title="Einzel-Ideen → Gericht/Queue">
+                    @forelse($ideenListe['einzel'] as $idee)
+                        <div class="flex items-start gap-2 text-xs py-1" wire:key="anl-e-{{ $idee->id }}">
+                            <span class="text-emerald-500 shrink-0">☑</span>
+                            <div>
+                                <span class="font-medium text-gray-800">{{ $idee->title }}</span>
+                                <span class="text-gray-400">· {{ $idee->sales_recipe_id ? 'Bestand → Gericht-Block' : 'Freitext → KI-Queue' }}</span>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="text-[11px] text-gray-400">Keine Einzel-Ideen.</p>
+                    @endforelse
+                </x-foodalchemist::modal-section>
+
+                <div class="mt-2">
+                    <label class="{{ $label }}">Notiz (optional)</label>
+                    <input type="text" wire:model="anlageNote" placeholder="z. B. Freigabe-Kontext …" class="{{ $input }}" data-anlage-note />
+                </div>
+            @endif
+            <x-slot:footer>
+                <button type="button" @click="$dispatch('modal.close', { name: 'kapitel-anlegen' })" class="{{ $btnGhost }}">Abbrechen</button>
+                <button type="button" wire:click="kapitelAnlegen" class="{{ $btnPrimary }}" data-anlage-bestaetigen>Jetzt anlegen</button>
+            </x-slot:footer>
+        </x-foodalchemist::modal>
+
+        {{-- ── Undo-Modal „Anlage zurückziehen" (E7.5) ── --}}
+        <x-foodalchemist::modal name="kapitel-zurueckziehen" title="Anlage zurückziehen" size="max-w-lg">
+            <p class="text-xs text-gray-600">
+                Die von der Anlage erzeugten Konzepte, Gericht-Blöcke und Slots werden entfernt und die Skizzen
+                kehren in den Entwurf-Zustand zurück. Bereits bearbeitete/aktivierte Konzepte bleiben erhalten.
+                KI-generierte Rezepte bleiben als Entwurf bestehen (kein Datenverlust).
+            </p>
+            <x-slot:footer>
+                <button type="button" @click="$dispatch('modal.close', { name: 'kapitel-zurueckziehen' })" class="{{ $btnGhost }}">Abbrechen</button>
+                <button type="button" wire:click="anlageZuruckziehen" class="{{ $btnGhost }} !text-red-600" data-undo-bestaetigen>Zurückziehen</button>
+            </x-slot:footer>
+        </x-foodalchemist::modal>
     </div>
 
 @else
@@ -197,7 +274,8 @@
                         @if($m['released'])
                             <span class="text-emerald-500 text-[10px] shrink-0" title="angelegt">✓</span>
                         @else
-                            <button type="button" disabled title="Kapitel anlegen — folgt E7" class="text-gray-300 text-[10px] shrink-0 cursor-not-allowed" data-rail-matrix-go>Go</button>
+                            {{-- Shortcut: Kapitel selektieren → Rail flippt in den Kapitel-Modus mit „Kapitel anlegen" (E7.5). --}}
+                            <button type="button" wire:click="$parent.kapitelWaehle({{ $m['kapitel_id'] }})" title="Kapitel öffnen zum Anlegen" class="text-violet-500 hover:text-violet-700 text-[10px] shrink-0" data-rail-matrix-go>Go</button>
                         @endif
                     </div>
                 @empty

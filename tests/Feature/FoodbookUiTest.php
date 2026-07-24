@@ -3,10 +3,14 @@
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Foodbooks\Index as FoodbooksIndex;
 use Platform\FoodAlchemist\Livewire\Foodbooks\LeitstelleRail;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\FoodbookService;
+use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PaketService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -171,4 +175,41 @@ it('Leitstelle-Rail Kapitel-Modus: Ziele-Editing speichert M3-Spalten + meldet a
     // Nochmals toggeln entfernt wieder.
     $comp->call('zielgruppeToggle', $zg->id);
     expect($k->targetGroups()->count())->toBe(0);
+});
+
+// ── Spec 19 E7.5: Anlage-Modal (Kapitel-Go) + „Anlage zurückziehen" über die Rail ──
+
+it('Leitstelle-Rail: „Kapitel anlegen" materialisiert und „zurückziehen" macht es rückgängig', function () {
+    $svc = app(FoodbookService::class);
+    $fb = $svc->create($this->rootTeam, ['label' => 'Anlage-Rail']);
+    $k = $svc->addKapitel($this->rootTeam, $fb->id, ['title' => 'Buffet']);
+
+    // Ein echtes VK-Gericht als Einzel-Skizze im Kapitel.
+    $hg = FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'HG', 'label' => 'Hauptgericht']);
+    $klasse = FoodAlchemistDishClass::create(['team_id' => $this->rootTeam->id, 'dish_main_group_id' => $hg->id, 'code' => 'HG_N', 'label' => 'Neutral', 'diet_form' => 'neutral']);
+    $dish = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'rX', 'name' => 'HG: Sellerie-Steak', 'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 14.0, 'dish_class_id' => $klasse->id]);
+    app(IdeenService::class)->uebernehmeBestand($this->rootTeam, ['chapter_id' => $k->id, 'sales_recipe_id' => $dish->id]);
+
+    // Modal-Trigger + ☑-Liste sichtbar, solange nicht angelegt.
+    $comp = Livewire::test(LeitstelleRail::class, ['foodbookId' => $fb->id, 'kapitelId' => $k->id])
+        ->assertOk()
+        ->assertSee('data-rail-go', false)
+        ->assertSee('data-anlage-bestaetigen', false)
+        ->assertSee('HG: Sellerie-Steak');
+
+    // „Jetzt anlegen" → recipe_ref-Block entsteht, Event ans Cockpit.
+    $comp->set('anlageNote', 'go')
+        ->call('kapitelAnlegen')
+        ->assertDispatched('leitstelle-kapitel-geaendert');
+    expect($k->refresh()->released_at)->not->toBeNull()
+        ->and($k->blocks()->where('type', 'recipe_ref')->count())->toBe(1);
+
+    // Nach Anlage: Undo-Button sichtbar (draft, kein Snapshot) → zurückziehen.
+    $comp = Livewire::test(LeitstelleRail::class, ['foodbookId' => $fb->id, 'kapitelId' => $k->id])
+        ->assertSee('data-rail-undo', false)
+        ->assertSee('data-rail-released', false);
+    $comp->call('anlageZuruckziehen')
+        ->assertDispatched('leitstelle-kapitel-geaendert');
+    expect($k->refresh()->released_at)->toBeNull()
+        ->and($k->blocks()->count())->toBe(0);
 });
