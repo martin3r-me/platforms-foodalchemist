@@ -34,9 +34,52 @@
                 <button type="button" wire:click="$set('zielTyp', 'concept')" class="px-3 py-1 rounded-md {{ $zielTyp === 'concept' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Konzept</button>
                 <button type="button" wire:click="$set('zielTyp', 'recipe')" class="px-3 py-1 rounded-md {{ $zielTyp === 'recipe' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Gericht</button>
                 <button type="button" wire:click="$set('zielTyp', 'basisrezept')" class="px-3 py-1 rounded-md {{ $zielTyp === 'basisrezept' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}" data-produktion-ziel-basisrezept>Basisrezept</button>
+                <button type="button" wire:click="$set('zielTyp', 'kapitel')" class="px-3 py-1 rounded-md {{ $zielTyp === 'kapitel' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}" data-produktion-ziel-kapitel>Kapitel</button>
             </div>
         </div>
 
+        @if($zielTyp === 'kapitel')
+            {{-- P2: Foodbook-Kapitel als Ziel → beim Hinzufügen in eingefrorene Einzel-Ziele expandiert (V2). --}}
+            <div class="space-y-2 mb-3" data-produktion-kapitel>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="{{ $label }}">Foodbook</label>
+                        <select wire:model.live="auswahlFoodbookId" class="{{ $input }}" data-produktion-foodbook>
+                            <option value="">— wählen —</option>
+                            @foreach($foodbooks as $fb)
+                                <option value="{{ $fb->id }}">{{ $fb->label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="{{ $label }}">Kapitel</label>
+                        <select wire:model.live="auswahlChapterId" @disabled(! $auswahlFoodbookId) class="{{ $input }}" data-produktion-kapitel-select>
+                            <option value="">— wählen —</option>
+                            @foreach($kapitelBaum as $k)
+                                <option value="{{ $k['id'] }}">{!! str_repeat('&nbsp;&nbsp;', $k['depth']) !!}{{ $k['title'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="w-28">
+                    <label class="{{ $label }}">Personen</label>
+                    <input type="number" min="1" wire:model="auswahlPersonen" class="{{ $input }}" data-produktion-kapitel-personen />
+                </div>
+                @if(! empty($variantGroups))
+                    <div class="rounded-lg border border-black/5 bg-black/[0.02] p-2 space-y-2" data-produktion-varianten>
+                        <p class="{{ $label }}">Varianten-Wahl (Wahl-Gruppen im Kapitel)</p>
+                        @foreach($variantGroups as $g)
+                            <select wire:model="variantChoices.{{ $g['group_id'] }}" class="{{ $input }}" wire:key="vg-{{ $g['group_id'] }}" data-produktion-variante="{{ $g['group_id'] }}">
+                                @foreach($g['options'] as $opt)
+                                    <option value="{{ $opt['block_id'] }}">{{ $opt['label'] }}</option>
+                                @endforeach
+                            </select>
+                        @endforeach
+                    </div>
+                @endif
+                <button type="button" wire:click="zielHinzufuegen" class="{{ $btnGhost }}" data-produktion-ziel-hinzufuegen>+ Kapitel-Ziele hinzufügen</button>
+            </div>
+        @else
         <div class="flex items-end gap-2 mb-3">
             @if($zielTyp === 'concept')
                 <div class="flex-1">
@@ -83,15 +126,21 @@
             @endif
             <button type="button" wire:click="zielHinzufuegen" class="{{ $btnGhost }}" data-produktion-ziel-hinzufuegen>+ Hinzufügen</button>
         </div>
+        @endif
 
         <div class="space-y-1">
             @forelse($targets as $t)
                 <div class="flex items-center justify-between gap-2 text-[12px] px-2 py-1 rounded-lg bg-black/[0.02]" wire:key="ziel-{{ $t['source_ref'] }}">
                     <span class="text-gray-800">{{ $t['label'] ?? '—' }}</span>
-                    <button type="button" wire:click="zielEntfernen('{{ $t['source_ref'] }}')" class="text-rose-500" data-produktion-ziel-entfernen>✕</button>
+                    <div class="flex items-center gap-2">
+                        @unless(str_contains($t['source_ref'], ':c'))
+                            <button type="button" wire:click="zielBearbeiten('{{ $t['source_ref'] }}')" class="text-gray-400 hover:text-violet-600" title="Bearbeiten" data-produktion-ziel-bearbeiten>✎</button>
+                        @endunless
+                        <button type="button" wire:click="zielEntfernen('{{ $t['source_ref'] }}')" class="text-rose-500" data-produktion-ziel-entfernen>✕</button>
+                    </div>
                 </div>
             @empty
-                <p class="text-[12px] text-gray-500">Noch keine Ziele — Konzept oder Gericht + Menge wählen und hinzufügen.</p>
+                <p class="text-[12px] text-gray-500">Noch keine Ziele — Konzept, Gericht, Basisrezept oder Foodbook-Kapitel wählen und hinzufügen.</p>
             @endforelse
         </div>
     </x-foodalchemist::modal-section>

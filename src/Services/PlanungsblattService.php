@@ -360,36 +360,7 @@ class PlanungsblattService
      */
     private function kapitelBloecke(FoodAlchemistFoodbookKapitel $chapter, array $variantChoices): array
     {
-        // Scope = Kapitel + Nachfahren (BFS über parent_id innerhalb des Foodbooks).
-        $alle = FoodAlchemistFoodbookKapitel::where('foodbook_id', $chapter->foodbook_id)->get(['id', 'parent_id', 'position']);
-        $posMap = [];
-        $ord = 0;
-        foreach ($alle->sortBy('position') as $c) {
-            $posMap[(int) $c->id] = $ord++;
-        }
-        $scope = [(int) $chapter->id];
-        $queue = [(int) $chapter->id];
-        while ($queue !== []) {
-            $pid = array_shift($queue);
-            foreach ($alle->where('parent_id', $pid) as $c) {
-                $scope[] = (int) $c->id;
-                $queue[] = (int) $c->id;
-            }
-        }
-
-        $blocks = FoodAlchemistFoodbookBlock::with(['unit:id,slug,dimension,default_in_g'])
-            ->whereIn('chapter_id', $scope)
-            ->where('visible', true)
-            ->whereIn('type', ['concept_ref', 'recipe_ref'])
-            ->get()
-            ->all();
-
-        usort($blocks, function ($a, $b) use ($posMap) {
-            $ca = $posMap[(int) $a->chapter_id] ?? 0;
-            $cb = $posMap[(int) $b->chapter_id] ?? 0;
-
-            return [$ca, (int) $a->position, (int) $a->id] <=> [$cb, (int) $b->position, (int) $b->id];
-        });
+        $blocks = $this->kapitelBlockScope($chapter);
 
         // Varianten-Gruppen an der ersten Fundstelle auf einen Block reduzieren.
         $result = [];
@@ -420,6 +391,98 @@ class PlanungsblattService
         }
 
         return $result;
+    }
+
+    /**
+     * Blöcke eines Kapitel-Scopes (Kapitel + alle Nachfahren, Rollup wie Spec 19), sichtbar,
+     * Typ concept_ref/recipe_ref, in Dokument-Reihenfolge (Kapitel-Position → Block-Position →
+     * id). OHNE Varianten-Reduktion — Basis für kapitelBloecke() (reduziert) und
+     * kapitelVarianten() (gruppiert). `unit` eager-geladen für den Portions-/Mengen-Rechner.
+     *
+     * @return list<FoodAlchemistFoodbookBlock>
+     */
+    private function kapitelBlockScope(FoodAlchemistFoodbookKapitel $chapter): array
+    {
+        // Scope = Kapitel + Nachfahren (BFS über parent_id innerhalb des Foodbooks).
+        $alle = FoodAlchemistFoodbookKapitel::where('foodbook_id', $chapter->foodbook_id)->get(['id', 'parent_id', 'position']);
+        $posMap = [];
+        $ord = 0;
+        foreach ($alle->sortBy('position') as $c) {
+            $posMap[(int) $c->id] = $ord++;
+        }
+        $scope = [(int) $chapter->id];
+        $queue = [(int) $chapter->id];
+        while ($queue !== []) {
+            $pid = array_shift($queue);
+            foreach ($alle->where('parent_id', $pid) as $c) {
+                $scope[] = (int) $c->id;
+                $queue[] = (int) $c->id;
+            }
+        }
+
+        $blocks = FoodAlchemistFoodbookBlock::with(['unit:id,slug,dimension,default_in_g', 'dish:id,name', 'concept:id,name'])
+            ->whereIn('chapter_id', $scope)
+            ->where('visible', true)
+            ->whereIn('type', ['concept_ref', 'recipe_ref'])
+            ->get()
+            ->all();
+
+        usort($blocks, function ($a, $b) use ($posMap) {
+            $ca = $posMap[(int) $a->chapter_id] ?? 0;
+            $cb = $posMap[(int) $b->chapter_id] ?? 0;
+
+            return [$ca, (int) $a->position, (int) $a->id] <=> [$cb, (int) $b->position, (int) $b->id];
+        });
+
+        return $blocks;
+    }
+
+    /**
+     * Wahl-Gruppen eines Kapitel-Scopes für den Editor-Varianten-Dialog (Spec 20 P2):
+     * je `variant_group_id` die Block-Optionen (block_id + Anzeigename) in Dokument-
+     * Reihenfolge; Default = erster Block der Gruppe. Blöcke ohne Gruppe erscheinen nicht.
+     *
+     * @return array{chapter_title:string, groups:list<array{group_id:int, default_block_id:int, options:list<array{block_id:int, label:string}>}>}
+     */
+    public function kapitelVarianten(Team $team, int $chapterId): array
+    {
+        $chapter = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->find($chapterId);
+        if ($chapter === null) {
+            return ['chapter_title' => '', 'groups' => []];
+        }
+        $groups = [];
+        foreach ($this->kapitelBlockScope($chapter) as $block) {
+            $gid = $block->variant_group_id;
+            if ($gid === null) {
+                continue;
+            }
+            $groups[$gid] ??= [];
+            $groups[$gid][] = [
+                'block_id' => (int) $block->id,
+                'label' => $this->blockAnzeige($block),
+            ];
+        }
+
+        $out = [];
+        foreach ($groups as $gid => $options) {
+            $out[] = [
+                'group_id' => (int) $gid,
+                'default_block_id' => (int) $options[0]['block_id'],
+                'options' => array_values($options),
+            ];
+        }
+
+        return ['chapter_title' => (string) $chapter->title, 'groups' => $out];
+    }
+
+    /** Anzeigename eines Gericht-/Konzept-Blocks für den Varianten-Dialog. */
+    private function blockAnzeige(FoodAlchemistFoodbookBlock $block): string
+    {
+        if ($block->type === 'recipe_ref') {
+            return $block->dish?->name ?? $block->label ?? ('Gericht #' . $block->id);
+        }
+
+        return $block->concept?->name ?? $block->label ?? ('Konzept #' . $block->id);
     }
 
     /**
