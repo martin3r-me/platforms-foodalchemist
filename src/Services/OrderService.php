@@ -230,6 +230,33 @@ class OrderService
         $this->recomputeOrder($order);
     }
 
+    /**
+     * Spec 20 · E1 — Kopf-Felder einer OFFENEN Schiene pflegen (Anlass, Wunsch-Liefertermin,
+     * Notiz). Nur eigene Belege, nur solange draft; gesendete Belege sind eingefroren (E2).
+     *
+     * @param  array{reference?:?string, desired_delivery_date?:?string, note?:?string}  $input
+     */
+    public function updateHeader(Team $team, int $orderId, array $input): FoodAlchemistOrder
+    {
+        $order = $this->ownedOrder($team, $orderId);
+        $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
+        if (! $status->istOffen()) {
+            throw new \RuntimeException('Nur ein offener Entwurf ist editierbar.');
+        }
+        if (array_key_exists('reference', $input)) {
+            $order->reference = ($input['reference'] ?? '') !== '' ? $input['reference'] : null;
+        }
+        if (array_key_exists('note', $input)) {
+            $order->note = ($input['note'] ?? '') !== '' ? $input['note'] : null;
+        }
+        if (array_key_exists('desired_delivery_date', $input)) {
+            $order->desired_delivery_date = ($input['desired_delivery_date'] ?? '') !== '' ? $input['desired_delivery_date'] : null;
+        }
+        $order->save();
+
+        return $order->refresh();
+    }
+
     // ── Status-Lebenszyklus (guarded) ─────────────────────────────────────
 
     public function setStatus(Team $team, int $orderId, OrderStatus $ziel): FoodAlchemistOrder
@@ -273,8 +300,38 @@ class OrderService
     /** Detail-Aggregat für UI/MCP inkl. MOQ-Ampel. */
     public function detail(Team $team, int $orderId): array
     {
-        $order = FoodAlchemistOrder::visibleToTeam($team)->with(['supplier', 'lines'])->findOrFail($orderId);
+        $order = FoodAlchemistOrder::visibleToTeam($team)
+            ->with(['supplier', 'lines.gp:id,piece_default_g'])
+            ->findOrFail($orderId);
         $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
+
+        $alleRefs = [];
+        $zeilen = $order->lines->map(function ($l) use (&$alleRefs) {
+            [$bedarf, $bedarfEinheit] = $this->zeileBedarf($l);
+            $refs = array_keys($l->source_contributions ?? []);
+            $alleRefs = array_merge($alleRefs, $refs);
+
+            return [
+                'id' => (int) $l->id,
+                'gp_id' => $l->gp_id !== null ? (int) $l->gp_id : null,
+                'supplier_item_id' => $l->supplier_item_id !== null ? (int) $l->supplier_item_id : null,
+                'article_number' => $l->article_number,
+                'designation' => $l->designation,
+                'packaging_unit' => $l->packaging_unit,
+                'pack_qty' => $l->pack_qty !== null ? (float) $l->pack_qty : null,
+                'unit_code' => $l->unit_code,
+                'qty_packs' => (float) $l->qty_packs,
+                'is_manual_qty' => (bool) $l->is_manual_qty,
+                'pack_price' => $l->pack_price !== null ? (float) $l->pack_price : null,
+                'line_total' => (float) $l->line_total,
+                'needed_base_g' => (float) $l->needed_base_g,
+                'needed_display' => $bedarf,          // E1: korrekte Bedarfsmenge in der Grundeinheit des LA
+                'needed_unit' => $bedarfEinheit,      // kg / l / Stk (nie mehr fälschlich „kg" bei Stück)
+                'note' => $l->note,
+                'herkunft' => $this->parseHerkunft($refs),
+                'bestellbar' => $l->pack_price !== null && (float) $l->qty_packs > 0,
+            ];
+        })->all();
 
         return [
             'id' => (int) $order->id,
@@ -289,24 +346,100 @@ class OrderService
             'is_owned' => $order->isOwnedBy($team),
             'editierbar' => $status->istOffen() && $order->isOwnedBy($team),
             'moq' => $this->moqAmpel($order),
-            'zeilen' => $order->lines->map(fn ($l) => [
-                'id' => (int) $l->id,
-                'gp_id' => $l->gp_id !== null ? (int) $l->gp_id : null,
-                'supplier_item_id' => $l->supplier_item_id !== null ? (int) $l->supplier_item_id : null,
-                'article_number' => $l->article_number,
-                'designation' => $l->designation,
-                'packaging_unit' => $l->packaging_unit,
-                'pack_qty' => $l->pack_qty !== null ? (float) $l->pack_qty : null,
-                'unit_code' => $l->unit_code,
-                'qty_packs' => (float) $l->qty_packs,
-                'is_manual_qty' => (bool) $l->is_manual_qty,
-                'pack_price' => $l->pack_price !== null ? (float) $l->pack_price : null,
-                'line_total' => (float) $l->line_total,
-                'needed_base_g' => (float) $l->needed_base_g,
-                'note' => $l->note,
-                'bestellbar' => $l->pack_price !== null && (float) $l->qty_packs > 0,
-            ])->all(),
+            'herkunft' => $this->herkunftAggregat($alleRefs),   // E1: Schienen-weite Quellen-Übersicht (dedupliziert, mit Links)
+            'zeilen' => $zeilen,
         ];
+    }
+
+    /**
+     * E1-Bug-Fix: Bedarf in der korrekten Grundeinheit des Lead-LA. `needed_base_g` liegt
+     * IMMER in Gramm (Basis); Stück-Artikel werden über das Stückgewicht zurückgerechnet
+     * (spiegelt GebindeRechner), statt fälschlich als „kg" ausgewiesen zu werden.
+     *
+     * @return array{0:float, 1:string}  [Menge, Einheit]
+     */
+    private function zeileBedarf(FoodAlchemistOrderLine $line): array
+    {
+        $g = (float) $line->needed_base_g;
+        $unit = $line->unit_code;
+
+        if ($unit === 'Stk') {
+            $pieceG = $line->gp?->piece_default_g !== null ? (float) $line->gp->piece_default_g : null;
+            if ($pieceG !== null && $pieceG > 0.0) {
+                return [round($g / $pieceG, 2), 'Stk'];
+            }
+
+            return [round($g, 0), 'g'];   // ohne Stückgewicht nicht in Stück umrechenbar → Gramm belassen
+        }
+
+        // kg/l (Dichte 1.0) und Fallback für sonstige/leere Einheiten.
+        return [round($g / 1000.0, 3), $unit === 'l' ? 'l' : 'kg'];
+    }
+
+    /**
+     * E1: source_ref-Schlüssel in menschenlesbare Herkunft übersetzen. Kein FK — der Präfix
+     * kodiert die Quelle: `produktion:{id}:…` (Produktionsauftrag), `concept:{id}@…`,
+     * `recipe:{id|key}@…`, `event:…`. Unbekanntes bleibt als Roh-Label erhalten.
+     *
+     * @param  list<string>  $refs
+     * @return list<array{ref:string, type:string, label:string, production_order_id:?int}>
+     */
+    public function parseHerkunft(array $refs): array
+    {
+        $out = [];
+        foreach ($refs as $ref) {
+            $ref = (string) $ref;
+            if ($ref === '') {
+                continue;
+            }
+            $type = 'sonstige';
+            $label = $ref;
+            $prodId = null;
+
+            if (preg_match('/^produktion:(\d+):/', $ref, $m)) {
+                $type = 'produktion';
+                $prodId = (int) $m[1];
+                $label = 'Produktion #' . $prodId;
+            } elseif (preg_match('/^concept:([^@:]+)/', $ref, $m)) {
+                $type = 'concept';
+                $label = 'Konzept ' . $m[1];
+            } elseif (preg_match('/^recipe:([^@:]+)/', $ref, $m)) {
+                $type = 'recipe';
+                $label = 'Gericht ' . $m[1];
+            } elseif (preg_match('/^event:(.+)$/', $ref, $m)) {
+                $type = 'event';
+                $label = $m[1];
+            }
+
+            $out[] = ['ref' => $ref, 'type' => $type, 'label' => $label, 'production_order_id' => $prodId];
+        }
+
+        return $out;
+    }
+
+    /**
+     * E1: dedupliziertes Schienen-Aggregat der Herkunft — je Quelle einmal (Produktion nach
+     * Auftrag, sonst nach Präfix bis zum ersten „@"), für Panel 3 „Herkunft mit Links".
+     *
+     * @param  list<string>  $refs
+     * @return list<array{key:string, type:string, label:string, production_order_id:?int}>
+     */
+    private function herkunftAggregat(array $refs): array
+    {
+        $byKey = [];
+        foreach ($this->parseHerkunft($refs) as $h) {
+            $key = $h['production_order_id'] !== null
+                ? 'produktion:' . $h['production_order_id']
+                : $h['type'] . ':' . $h['label'];
+            $byKey[$key] = [
+                'key' => $key,
+                'type' => $h['type'],
+                'label' => $h['label'],
+                'production_order_id' => $h['production_order_id'],
+            ];
+        }
+
+        return array_values($byKey);
     }
 
     /** S3: Volldaten für Bestell-Dokument (PDF/Druck/CSV) — Lieferant-Stammdaten + Zeilen. */

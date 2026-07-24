@@ -351,3 +351,143 @@ it('removeLine + leere Quelle: Zeile verschwindet, total_net rechnet nach', func
     expect($chefs->refresh()->lines()->count())->toBe(1)      // nur noch Mehl
         ->and((float) $chefs->total_net)->toBe(20.0);
 });
+
+// ── Spec 20 · E1 ──────────────────────────────────────────────────────────
+
+it('E1: updateHeader pflegt Anlass/Liefertermin/Notiz im Draft; leerer String löscht', function () {
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+
+    $this->svc->updateHeader($this->rootTeam, $chefs->id, [
+        'reference' => 'Sommerfest', 'desired_delivery_date' => '2026-08-01', 'note' => 'vor 10 Uhr',
+    ]);
+    $chefs->refresh();
+    expect($chefs->reference)->toBe('Sommerfest')
+        ->and($chefs->desired_delivery_date?->toDateString())->toBe('2026-08-01')
+        ->and($chefs->note)->toBe('vor 10 Uhr');
+
+    // Leerer String löscht (nullt) das Feld.
+    $this->svc->updateHeader($this->rootTeam, $chefs->id, ['reference' => '']);
+    expect($chefs->refresh()->reference)->toBeNull();
+});
+
+it('E1: updateHeader-Guard — versendeter Beleg ist eingefroren', function () {
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+
+    expect(fn () => $this->svc->updateHeader($this->rootTeam, $chefs->id, ['reference' => 'zu spät']))
+        ->toThrow(\RuntimeException::class);
+});
+
+it('E1: Bedarf-Anzeige — kg-Artikel zeigt kg, Stück-Artikel zeigt Stk (nie mehr fälschlich „kg")', function () {
+    // kg-Fall aus dem Bestand.
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $d = $this->svc->detail($this->rootTeam, $chefs->id);
+    $mehl = collect($d['zeilen'])->firstWhere('gp_id', $this->mehl->id);
+    expect($mehl['needed_unit'])->toBe('kg')->and($mehl['needed_display'])->toBe(10.0);   // 10 kg
+
+    // Stück-Fall: GP mit Stückgewicht 250 g, LA in Stk-Gebinden; Bedarf 3000 g = 12 Stk.
+    $sup = FoodAlchemistSupplier::where('name', 'Hanos')->first();
+    $ei = $this->makeGp($this->rootTeam, 'Ei');
+    $ei->update(['piece_default_g' => 250]);
+    $la = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $sup->id,
+        'designation' => 'Eier 6er', 'article_number' => 'ART-EI', 'qty' => 6.0, 'unit_code' => 'Stk', 'packaging_unit' => 'Karton',
+    ]);
+    FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => $ei->id]);
+    FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'price' => 1.50, 'status' => '0']);
+    $ei->update(['lead_la_supplier_item_id' => $la->id]);
+
+    $hanos = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->first();
+    $line = FoodAlchemistOrderLine::create([
+        'team_id' => $this->rootTeam->id, 'order_id' => $hanos->id,
+        'supplier_item_id' => $la->id, 'gp_id' => $ei->id,
+        'source_contributions' => ['manual' => 3000], // 3000 g ÷ 250 g = 12 Stk
+    ]);
+    $this->svc->recomputeLine($line);
+
+    $d2 = $this->svc->detail($this->rootTeam, $hanos->id);
+    $eiZeile = collect($d2['zeilen'])->firstWhere('gp_id', $ei->id);
+    expect($eiZeile['needed_unit'])->toBe('Stk')
+        ->and($eiZeile['needed_display'])->toBe(12.0)
+        ->and($eiZeile['unit_code'])->toBe('Stk');   // Gegenprobe: die Rohspalte ist Stk, Anzeige NICHT kg
+});
+
+it('E1: parseHerkunft + Detail-Herkunft — Produktion mit id/Link, concept/recipe erkannt', function () {
+    $parsed = $this->svc->parseHerkunft([
+        'produktion:7:recipe:kuchen@abc', 'concept:12@100p', 'recipe:kuchen@100', 'event:sommerfest', 'irgendwas',
+    ]);
+    $byType = collect($parsed)->keyBy('type');
+    expect($byType['produktion']['production_order_id'])->toBe(7)
+        ->and($byType['produktion']['label'])->toBe('Produktion #7')
+        ->and($byType['concept']['label'])->toBe('Konzept 12')
+        ->and($byType['recipe']['label'])->toBe('Gericht kuchen')
+        ->and($byType['event']['label'])->toBe('sommerfest')
+        ->and($byType['sonstige']['label'])->toBe('irgendwas');
+
+    // Detail trägt die Herkunft pro Zeile + als dedupliziertes Schienen-Aggregat.
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $d = $this->svc->detail($this->rootTeam, $chefs->id);
+    $mehl = collect($d['zeilen'])->firstWhere('gp_id', $this->mehl->id);
+    expect($mehl['herkunft'][0]['type'])->toBe('recipe')
+        ->and(collect($d['herkunft'])->pluck('type')->all())->toContain('recipe');
+});
+
+it('E1: MCP orders.UPDATE registriert + End-to-End (Kopf im Draft) + Guard nach send', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(ToolRegistry::class);
+    $kontext = new ToolContext($user, $this->rootTeam);
+
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+
+    $tool = $registry->get('foodalchemist.orders.UPDATE');
+    expect($tool)->not->toBeNull()->and($tool->getMetadata()['read_only'])->toBeFalse();
+
+    $r = $tool->execute(['order_id' => $chefs->id, 'reference' => 'Gala', 'desired_delivery_date' => '2026-09-01'], $kontext);
+    expect($r->success)->toBeTrue()
+        ->and($r->data['reference'])->toBe('Gala')
+        ->and($r->data['desired_delivery_date'])->toBe('2026-09-01');
+
+    // Ohne änderbare Felder → NO_CHANGE
+    $noop = $tool->execute(['order_id' => $chefs->id], $kontext);
+    expect($noop->success)->toBeFalse()->and($noop->errorCode)->toBe('NO_CHANGE');
+
+    // Nach send verboten
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+    $blocked = $tool->execute(['order_id' => $chefs->id, 'reference' => 'zu spät'], $kontext);
+    expect($blocked->success)->toBeFalse()->and($blocked->errorCode)->toBe('NOT_ALLOWED');
+});
+
+it('E1: UI — 3-Panel-Cockpit, Lieferant-Filter + Kopf speichern + Zeilen-Notiz', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $hanos = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->first();
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+
+    $comp = Livewire::test(OrdersIndex::class)->assertSee('Chefs')->assertSee('Hanos');
+
+    // Lieferant-Filter: nur die Chefs-Schiene in der Liste (Hanos-Order-Button verschwindet;
+    // die Lieferanten-Optionen im Select bleiben vollständig — daher auf die wire:key prüfen).
+    $comp->set('supplierFilter', $chefs->supplier_id)
+        ->assertSee('ord-' . $chefs->id)
+        ->assertDontSee('ord-' . $hanos->id);
+    $comp->set('supplierFilter', null);
+
+    // Wählen → Kopf-Form geladen; speichern persistiert
+    $comp->call('select', $chefs->id)
+        ->set('formReference', 'Betriebsfeier')
+        ->set('formDeliveryDate', '2026-08-15')
+        ->call('saveHeader')
+        ->assertSet('hinweis', 'Kopf gespeichert.');
+    expect($chefs->refresh()->reference)->toBe('Betriebsfeier');
+
+    // Zeilen-Notiz
+    $comp->call('updateLineNote', $mehlLine->id, 'bio bevorzugt');
+    expect($mehlLine->refresh()->note)->toBe('bio bevorzugt');
+});

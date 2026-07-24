@@ -1,4 +1,4 @@
-{{-- Spec 17/S2 — Bestellungen: Bestellschienen je Lieferant (Liste + Detail) --}}
+{{-- Spec 17/S2 + Spec 20/E1 — Bestellungen: 3-Panel-Cockpit (Browser · Positionen · Detail) --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 @php($statusLabels = ['draft' => 'Entwurf', 'sent' => 'versendet', 'confirmed' => 'bestätigt', 'delivered' => 'geliefert', 'cancelled' => 'storniert'])
 
@@ -16,85 +16,70 @@
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
 
-        {{-- Status-Filter --}}
-        <div class="flex items-center gap-2">
-            <span class="{{ $label }}">Status</span>
-            <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs">
-                <button wire:click="$set('statusFilter','')" class="px-3 py-1 rounded-md {{ $statusFilter === '' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">alle</button>
-                @foreach(['draft','sent','confirmed','delivered','cancelled'] as $s)
-                    <button wire:click="$set('statusFilter','{{ $s }}')" class="px-3 py-1 rounded-md {{ $statusFilter === $s ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">{{ $statusLabels[$s] }}</button>
-                @endforeach
-            </div>
-        </div>
-
         @if($hinweis)<div class="{{ $sectionCard }} !bg-emerald-500/[0.06] !border-emerald-500/20 text-[12px] text-emerald-700">✓ {{ $hinweis }}</div>@endif
         @if($fehler)<div class="{{ $sectionCard }} !bg-rose-500/[0.06] !border-rose-500/20 text-[12px] text-rose-700">{{ $fehler }}</div>@endif
 
-        <div class="grid lg:grid-cols-3 gap-4">
-            {{-- ── Liste ── --}}
-            <div class="{{ $sectionCard }} lg:col-span-1">
-                <h3 class="font-medium tracking-tight text-gray-900 mb-2">Schienen &amp; Bestellungen</h3>
-                @forelse($liste as $o)
-                    <button wire:click="select({{ $o['id'] }})" wire:key="ord-{{ $o['id'] }}"
-                        class="block w-full text-left px-3 py-2 rounded-lg mb-1 border {{ $selectedId === $o['id'] ? 'border-violet-500/40 bg-violet-500/5' : 'border-black/5 hover:bg-black/[0.02]' }}">
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="text-[13px] font-medium text-gray-900">{{ $o['supplier'] }}</span>
-                            <span class="{{ $pill }} {{ $variantPill[$o['status']->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o['status']->label() }}</span>
-                        </div>
-                        <div class="text-[11px] text-gray-500 mt-0.5">{{ number_format($o['total_net'], 2, ',', '.') }} € netto @if($o['reference'])· {{ $o['reference'] }}@endif</div>
-                    </button>
-                @empty
-                    <p class="text-[12px] text-gray-500 py-6 text-center">Keine Bestellungen. Bedarf im Planungs-Blatt übernehmen.</p>
-                @endforelse
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+            {{-- ══ Panel 1 · Schienen-Browser ══ --}}
+            <div class="{{ $sectionCard }} lg:col-span-3 space-y-3">
+                <h3 class="font-medium tracking-tight text-gray-900">Schienen &amp; Bestellungen</h3>
+
+                {{-- Status-Filter --}}
+                <div>
+                    <span class="{{ $label }} block mb-1">Status</span>
+                    <div class="inline-flex flex-wrap rounded-lg bg-black/[0.03] p-0.5 text-xs">
+                        <button wire:click="$set('statusFilter','')" class="px-2.5 py-1 rounded-md {{ $statusFilter === '' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">alle</button>
+                        @foreach(['draft','sent','confirmed','delivered','cancelled'] as $s)
+                            <button wire:click="$set('statusFilter','{{ $s }}')" class="px-2.5 py-1 rounded-md {{ $statusFilter === $s ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">{{ $statusLabels[$s] }}</button>
+                        @endforeach
+                    </div>
+                </div>
+
+                {{-- Lieferant-Filter + Suche --}}
+                <div class="grid grid-cols-1 gap-2">
+                    <div>
+                        <span class="{{ $label }} block mb-1">Lieferant</span>
+                        <select wire:model.live="supplierFilter" class="{{ $input }}">
+                            <option value="">alle Lieferanten</option>
+                            @foreach($lieferanten as $l)
+                                <option value="{{ $l['id'] }}">{{ $l['name'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <span class="{{ $label }} block mb-1">Suche</span>
+                        <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Lieferant / Anlass…" class="{{ $input }}" />
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    @forelse($liste as $o)
+                        <button wire:click="select({{ $o['id'] }})" wire:key="ord-{{ $o['id'] }}"
+                            class="block w-full text-left px-3 py-2 rounded-lg border {{ $selectedId === $o['id'] ? 'border-violet-500/40 bg-violet-500/5' : 'border-black/5 hover:bg-black/[0.02]' }}">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-[13px] font-medium text-gray-900">{{ $o['supplier'] }}</span>
+                                <span class="{{ $pill }} {{ $variantPill[$o['status']->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o['status']->label() }}</span>
+                            </div>
+                            <div class="text-[11px] text-gray-500 mt-0.5">{{ number_format($o['total_net'], 2, ',', '.') }} € netto @if($o['reference'])· {{ $o['reference'] }}@endif</div>
+                        </button>
+                    @empty
+                        <p class="text-[12px] text-gray-500 py-6 text-center">Keine Bestellungen. Bedarf im Planungs-Blatt übernehmen.</p>
+                    @endforelse
+                </div>
             </div>
 
-            {{-- ── Detail ── --}}
-            <div class="{{ $sectionCard }} lg:col-span-2">
+            {{-- ══ Panel 2 · Positionen ══ --}}
+            <div class="{{ $sectionCard }} lg:col-span-6">
                 @if($detail === null)
                     <p class="text-[12px] text-gray-500 py-10 text-center">Eine Bestellschiene links wählen.</p>
                 @else
-                    <div class="flex items-start justify-between gap-3 mb-2">
-                        <div>
-                            <h3 class="font-medium tracking-tight text-gray-900">{{ $detail['supplier'] }}</h3>
-                            <p class="text-[11px] text-gray-500">{{ $detail['status_label'] }} · {{ number_format($detail['total_net'], 2, ',', '.') }} € netto</p>
-                        </div>
-                        <div class="flex flex-wrap gap-1.5 justify-end">
-                            @foreach($erlaubteStatus as $z)
-                                <button wire:click="setStatus('{{ $z->value }}')"
-                                    class="{{ $z->value === 'sent' ? $btnPrimary : $btnGhost }}"
-                                    @if($z->value === 'cancelled') onclick="return confirm('Bestellung stornieren?')" @endif
-                                    data-status-{{ $z->value }}>{{ $z === \Platform\FoodAlchemist\Enums\OrderStatus::Sent ? 'Absenden' : $z->label() }}</button>
-                            @endforeach
-                        </div>
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <h3 class="font-medium tracking-tight text-gray-900">Positionen</h3>
+                        <span class="text-[11px] text-gray-500">{{ count($detail['zeilen']) }} Artikel</span>
                     </div>
 
-                    {{-- S3: Export/Versand --}}
-                    <div class="flex flex-wrap items-center gap-2 mb-3">
-                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhost }}">🖨 Dokument</a>
-                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'pdf' => 1]) }}" class="{{ $btnGhost }}">PDF</a>
-                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'csv' => 1]) }}" class="{{ $btnGhost }}">CSV</a>
-                        @if($mailto)
-                            <a href="{{ $mailto }}" class="{{ $btnGhost }}">✉ E-Mail an Lieferant</a>
-                        @else
-                            <span class="text-[11px] text-gray-400">✉ keine Bestell-Mail hinterlegt (Lieferant → email_order)</span>
-                        @endif
-                    </div>
-
-                    {{-- MOQ-Ampel --}}
-                    @php($moq = $detail['moq'])
-                    <div class="flex flex-wrap gap-2 mb-3 text-[11px]">
-                        @if($moq['unter_mindestbestellwert'])
-                            <span class="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700">Unter Mindestbestellwert — es fehlen {{ number_format($moq['fehlt_bis_min'], 2, ',', '.') }} €</span>
-                        @elseif($moq['min_order_value'] !== null)
-                            <span class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700">Mindestbestellwert erreicht</span>
-                        @endif
-                        @if($moq['frei_haus'])
-                            <span class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700">frei Haus</span>
-                        @elseif($moq['free_shipping_threshold'] !== null)
-                            <span class="px-2 py-0.5 rounded-md bg-black/5 text-gray-600">{{ number_format($moq['fehlt_bis_frei_haus'], 2, ',', '.') }} € bis frei Haus</span>
-                        @endif
-                    </div>
-
+                    <div class="overflow-x-auto">
                     <table class="{{ $table }}">
                         <thead><tr>
                             <th class="{{ $th }} text-left">Artikel</th>
@@ -106,18 +91,34 @@
                         </tr></thead>
                         <tbody>
                             @foreach($detail['zeilen'] as $z)
-                                <tr class="border-t border-black/5" wire:key="line-{{ $z['id'] }}">
+                                <tr class="border-t border-black/5 align-top" wire:key="line-{{ $z['id'] }}">
                                     <td class="{{ $td }} text-gray-800">
                                         {{ $z['designation'] ?: '—' }}
                                         @if($z['article_number'])<br><span class="text-[10px] text-gray-400">Art. {{ $z['article_number'] }}@if($z['packaging_unit']) · {{ $z['packaging_unit'] }}@endif</span>@endif
                                         @unless($z['bestellbar'])<br><span class="text-[10px] text-amber-600">nicht in Gebinde bestellbar (Preis/Gebinde fehlt)</span>@endunless
+                                        {{-- Herkunfts-Badges --}}
+                                        @if(!empty($z['herkunft']))
+                                            <div class="flex flex-wrap gap-1 mt-1">
+                                                @foreach($z['herkunft'] as $h)
+                                                    <span class="{{ $pill }} {{ $variantPill[$h['type'] === 'produktion' ? 'primary' : ($h['type'] === 'concept' ? 'info' : 'secondary')] }}" title="{{ $h['ref'] }}">{{ $h['label'] }}</span>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                        {{-- Zeilen-Notiz --}}
+                                        @if($detail['editierbar'])
+                                            <input type="text" value="{{ $z['note'] }}" placeholder="Notiz…"
+                                                wire:change="updateLineNote({{ $z['id'] }}, $event.target.value)"
+                                                class="mt-1 {{ $input }} !py-1 !text-[11px]" />
+                                        @elseif($z['note'])
+                                            <div class="text-[10px] text-gray-500 mt-1 italic">{{ $z['note'] }}</div>
+                                        @endif
                                     </td>
-                                    <td class="{{ $td }} text-right whitespace-nowrap text-gray-500">{{ number_format($z['needed_base_g'] / 1000, 3, ',', '.') }} {{ $z['unit_code'] === 'Stk' ? 'kg' : ($z['unit_code'] ?: 'kg') }}</td>
+                                    <td class="{{ $td }} text-right whitespace-nowrap text-gray-500">{{ rtrim(rtrim(number_format($z['needed_display'], 3, ',', '.'), '0'), ',') }} {{ $z['needed_unit'] }}</td>
                                     <td class="{{ $td }} text-right whitespace-nowrap">
                                         @if($detail['editierbar'])
                                             <input type="number" min="0" step="1" value="{{ (float) $z['qty_packs'] }}"
                                                 wire:change="updateLineQty({{ $z['id'] }}, $event.target.value)"
-                                                class="w-16 text-right {{ $input }} {{ $z['is_manual_qty'] ? '!border-amber-400' : '' }}" />
+                                                class="w-16 text-right {{ $input }} {{ $z['is_manual_qty'] ? '!border !border-amber-400' : '' }}" />
                                             @if($z['is_manual_qty'])<button wire:click="resetLineQty({{ $z['id'] }})" title="Auto-Menge" class="text-[10px] text-violet-600 ml-1">auto</button>@endif
                                         @else
                                             {{ (float) $z['qty_packs'] }}
@@ -140,11 +141,107 @@
                             </tr>
                         </tfoot>
                     </table>
+                    </div>
                     @unless($detail['editierbar'])
                         <p class="text-[11px] text-gray-400 mt-2">Versendeter Beleg — eingefroren, nicht mehr editierbar.</p>
                     @endunless
                 @endif
             </div>
+
+            {{-- ══ Panel 3 · Detail / Aktionen ══ --}}
+            <div class="{{ $sectionCard }} lg:col-span-3 space-y-4">
+                @if($detail === null)
+                    <p class="text-[12px] text-gray-500 py-10 text-center">Kein Beleg gewählt.</p>
+                @else
+                    <div>
+                        <h3 class="font-medium tracking-tight text-gray-900">{{ $detail['supplier'] }}</h3>
+                        <p class="text-[11px] text-gray-500">{{ $detail['status_label'] }} · {{ number_format($detail['total_net'], 2, ',', '.') }} € netto</p>
+                    </div>
+
+                    {{-- Status-Buttons --}}
+                    @if($erlaubteStatus)
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach($erlaubteStatus as $z)
+                                <button wire:click="setStatus('{{ $z->value }}')"
+                                    class="{{ $z->value === 'sent' ? $btnPrimary : $btnGhost }}"
+                                    @if($z->value === 'cancelled') onclick="return confirm('Bestellung stornieren?')" @endif
+                                    data-status-{{ $z->value }}>{{ $z === \Platform\FoodAlchemist\Enums\OrderStatus::Sent ? 'Absenden' : $z->label() }}</button>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    {{-- MOQ-/Frei-Haus-Ampel --}}
+                    @php($moq = $detail['moq'])
+                    <div class="flex flex-wrap gap-2 text-[11px]">
+                        @if($moq['unter_mindestbestellwert'])
+                            <span class="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700">Unter Mindestbestellwert — es fehlen {{ number_format($moq['fehlt_bis_min'], 2, ',', '.') }} €</span>
+                        @elseif($moq['min_order_value'] !== null)
+                            <span class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700">Mindestbestellwert erreicht</span>
+                        @endif
+                        @if($moq['frei_haus'])
+                            <span class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700">frei Haus</span>
+                        @elseif($moq['free_shipping_threshold'] !== null)
+                            <span class="px-2 py-0.5 rounded-md bg-black/5 text-gray-600">{{ number_format($moq['fehlt_bis_frei_haus'], 2, ',', '.') }} € bis frei Haus</span>
+                        @endif
+                    </div>
+
+                    {{-- Kopf-Felder (nur im offenen Entwurf editierbar) --}}
+                    @if($detail['editierbar'])
+                        <div class="space-y-2 pt-2 border-t border-black/5">
+                            <span class="{{ $label }} block">Liefer-Logistik &amp; Anlass</span>
+                            <div>
+                                <label class="text-[10px] text-gray-500">Anlass / Referenz</label>
+                                <input type="text" wire:model="formReference" class="{{ $input }}" placeholder="z. B. Sommerfest" />
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-500">Wunsch-Liefertermin</label>
+                                <input type="date" wire:model="formDeliveryDate" class="{{ $input }}" />
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-500">Notiz</label>
+                                <textarea wire:model="formNote" rows="2" class="{{ $input }}" placeholder="interne Notiz…"></textarea>
+                            </div>
+                            <button wire:click="saveHeader" class="{{ $btnGhost }}">Kopf speichern</button>
+                        </div>
+                    @else
+                        <div class="space-y-1 pt-2 border-t border-black/5 text-[11px] text-gray-600">
+                            @if($detail['reference'])<div><span class="text-gray-400">Anlass:</span> {{ $detail['reference'] }}</div>@endif
+                            @if($detail['desired_delivery_date'])<div><span class="text-gray-400">Liefertermin:</span> {{ $detail['desired_delivery_date'] }}</div>@endif
+                            @if($detail['note'])<div><span class="text-gray-400">Notiz:</span> {{ $detail['note'] }}</div>@endif
+                        </div>
+                    @endif
+
+                    {{-- Herkunft (Schienen-Aggregat, mit Links) --}}
+                    @if(!empty($detail['herkunft']))
+                        <div class="space-y-1 pt-2 border-t border-black/5">
+                            <span class="{{ $label }} block">Herkunft</span>
+                            <div class="flex flex-wrap gap-1">
+                                @foreach($detail['herkunft'] as $h)
+                                    @if($h['production_order_id'] !== null)
+                                        <a href="{{ route('foodalchemist.produktion.index', ['auftrag' => $h['production_order_id']]) }}"
+                                           class="{{ $pill }} {{ $variantPill['primary'] }} hover:underline" title="{{ $h['key'] }}">{{ $h['label'] }} ↗</a>
+                                    @else
+                                        <span class="{{ $pill }} {{ $variantPill[$h['type'] === 'concept' ? 'info' : 'secondary'] }}" title="{{ $h['key'] }}">{{ $h['label'] }}</span>
+                                    @endif
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    {{-- Export / Versand --}}
+                    <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-black/5">
+                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhostXs }}">🖨 Dokument</a>
+                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'pdf' => 1]) }}" class="{{ $btnGhostXs }}">PDF</a>
+                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'csv' => 1]) }}" class="{{ $btnGhostXs }}">CSV</a>
+                        @if($mailto)
+                            <a href="{{ $mailto }}" class="{{ $btnGhostXs }}">✉ E-Mail</a>
+                        @else
+                            <span class="text-[10px] text-gray-400">✉ keine Bestell-Mail (Lieferant → email_order)</span>
+                        @endif
+                    </div>
+                @endif
+            </div>
+
         </div>
 
     </x-ui-page-container>
