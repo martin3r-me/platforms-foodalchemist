@@ -817,6 +817,140 @@ class FoodbookService
         ];
     }
 
+    /**
+     * Spec 19 E7.4 — Kapitel-Go-Nachlauf: reiht je queued Freitext-Skizze einen
+     * `MaterializeIdeaJob` ein (GenerateRecipeJob-Muster → database-Queue auf demo).
+     * Menschlich getriggert (Anlage-Modal E7.5) — KEIN MCP-Trigger (Spec §Lockstep:
+     * „Kapitel-Go OHNE MCP-Trigger"). Bestands-Refs sind beim Go schon materialisiert;
+     * nur echte Freitext-Skizzen (sales_recipe_id null, generation_status='queued')
+     * kommen in die KI-Queue. Der eigentliche Erdungs-Schritt läuft graceful im Job
+     * (`materialisiereFreitextIdee`) — ohne Provider bleibt die Skizze queued.
+     *
+     * @return array{dispatched:int, ids:list<int>}
+     */
+    public function verarbeiteFreitextQueue(Team $team, int $kapitelId, ?int $userId = null): array
+    {
+        $this->ownedKapitel($team, $kapitelId);
+        $ids = FoodAlchemistDishIdea::where('team_id', $team->id)
+            ->where('chapter_id', $kapitelId)
+            ->where('generation_status', 'queued')
+            ->whereNull('sales_recipe_id')
+            ->whereNull('materialized_at')
+            ->orderBy('position')->orderBy('id')
+            ->pluck('id')->map(static fn ($i) => (int) $i)->all();
+
+        foreach ($ids as $id) {
+            \Platform\FoodAlchemist\Jobs\MaterializeIdeaJob::dispatch($team->id, $userId ?? 0, $id);
+        }
+
+        return ['dispatched' => count($ids), 'ids' => $ids];
+    }
+
+    /**
+     * Spec 19 E7.4 — Freitext-Queue-Prozessor (L7/L8). Erdet EINE queued Freitext-Skizze
+     * in ein echtes VK-Gericht. Der `RecipeGeneratorService` (vkModus) IST die
+     * Anpassungs-Schleife: er groundet die freie Idee gegen den verfügbaren Bestand
+     * (kandidatenPool/#507) bzw. mintet LA-First eine tentative GP (Spec §„Erst kreativ,
+     * dann erden"). Das erzeugte Gericht wird materialisiert — Paket-Mitglied → Konzept-Slot,
+     * Einzel → recipe_ref-Block — und die Skizze auf `erstellt`/`freigegeben` gesetzt.
+     *
+     * **Graceful (DoD):** Ohne LLM-Provider bzw. bei Team-Kill-Switch wirft `propose()`
+     * typisiert (KiNichtVerfuegbar/KiDeaktiviert) → die Skizze bleibt `queued`
+     * („wartet auf KI", retrybar), der Go scheitert NIE. Jeder andere Fehler →
+     * `fehlgeschlagen` (Original bleibt in `dish_ideas` erhalten — kein stiller
+     * Kreativitätsverlust). In BEIDEN Fehlerfällen fliegt KEINE Exception hoch,
+     * der Queue-Batch läuft weiter.
+     *
+     * @return array{status:string, idea_id:int, recipe_id?:int, hinweis?:string, fehler?:string}
+     */
+    public function materialisiereFreitextIdee(Team $team, int $ideaId): array
+    {
+        $idee = FoodAlchemistDishIdea::visibleToTeam($team)->find($ideaId);
+        if ($idee === null || ! $idee->isOwnedBy($team)) {
+            throw new \RuntimeException('Skizze nicht gefunden oder geerbt (D1).');
+        }
+        // Nur echte, noch offene Freitext-Skizzen erden; Bestands-Refs / bereits materialisierte überspringen.
+        if ($idee->sales_recipe_id !== null || $idee->generation_status !== 'queued' || $idee->materialized_at !== null) {
+            return ['status' => 'uebersprungen', 'idea_id' => (int) $idee->id];
+        }
+        $kapitelId = (int) $idee->chapter_id;
+        if ($kapitelId <= 0) {
+            // Konzept-owned Skizze — die Freitext-Queue läuft nur kapitelweit (Kapitel-Go).
+            return ['status' => 'uebersprungen', 'idea_id' => (int) $idee->id];
+        }
+        $kapitel = $this->ownedKapitel($team, $kapitelId);
+        $fb = $kapitel->foodbook;
+        $fbId = (int) $kapitel->foodbook_id;
+
+        // Erdungs-Kontext (Spec §KI-Führung): kapitel-aufgelöstes Niveau steuert den Generator.
+        $ziele = $this->kapitelZiele($team, $kapitel);
+        $leit = $this->leitplanken($team, $fb, null, $kapitel);
+        $beschreibung = trim(implode(' — ', array_filter([
+            (string) $idee->title, (string) $idee->description,
+        ]))) ?: (string) $idee->title;
+        $parameter = array_filter([
+            'niveau' => $ziele['niveau'] ?? $leit['niveau'] ?? null,
+        ], static fn ($v) => $v !== null && $v !== '');
+
+        try {
+            $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, $parameter, null, true);
+            $recipe = $gen['recipe'] ?? null;
+            if ($recipe === null) {
+                throw new \RuntimeException('Generierung lieferte kein Rezept.');
+            }
+
+            $ref = DB::transaction(function () use ($team, $idee, $kapitelId, $fbId, $recipe) {
+                // Paket-Mitglied → Slot im Gruppen-Konzept (via uebernehmeGericht, kapitelweite Dedup);
+                // sonst Einzel → recipe_ref-Block am Kapitel.
+                $gruppe = $idee->group_id !== null
+                    ? FoodAlchemistDishIdeaGroup::where('team_id', $team->id)->find($idee->group_id)
+                    : null;
+                if ($gruppe !== null && $gruppe->materialized_concept_id !== null) {
+                    $this->uebernehmeGericht($team, $fbId, $kapitelId, (int) $recipe->id, $idee->title, 'kapitel_freigabe_ki', (int) $gruppe->materialized_concept_id);
+                    $cslot = FoodAlchemistConceptSlot::where('concept_id', $gruppe->materialized_concept_id)
+                        ->where('sales_recipe_id', $recipe->id)->orderByDesc('id')->first();
+
+                    return ['concept_id' => (int) $gruppe->materialized_concept_id, 'concept_slot_id' => (int) ($cslot->id ?? 0)];
+                }
+                $block = $this->addBlock($team, $kapitelId, ['type' => 'recipe_ref', 'sales_recipe_id' => (int) $recipe->id]);
+
+                return ['block_id' => (int) $block->id];
+            });
+
+            $idee->update([
+                'generation_status' => 'erstellt',
+                'status' => 'freigegeben',
+                'generated_recipe_id' => (int) $recipe->id,
+                'materialized_at' => now(),
+                'materialized_ref' => $ref,
+                'source_meta' => array_merge($idee->source_meta ?? [], [
+                    'erdung' => 'ki_generiert',
+                    'original_titel' => (string) $idee->title,        // kein stiller Kreativitätsverlust
+                    'generated_recipe_id' => (int) $recipe->id,
+                ]),
+            ]);
+
+            return ['status' => 'erstellt', 'idea_id' => (int) $idee->id, 'recipe_id' => (int) $recipe->id];
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException | \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException $e) {
+            // Graceful: kein Provider / Kill-Switch → bleibt queued (retrybar), Go scheitert nicht.
+            $idee->update(['source_meta' => array_merge($idee->source_meta ?? [], [
+                'generation_hinweis' => 'wartet auf KI',
+            ])]);
+
+            return ['status' => 'wartet_ki', 'idea_id' => (int) $idee->id, 'hinweis' => $e->getMessage()];
+        } catch (\Throwable $e) {
+            // Jeder andere Fehler (unbrauchbares KI-Rezept, Grounding) → fehlgeschlagen; Original bleibt.
+            $idee->update([
+                'generation_status' => 'fehlgeschlagen',
+                'source_meta' => array_merge($idee->source_meta ?? [], [
+                    'generation_fehler' => mb_substr($e->getMessage(), 0, 500),
+                ]),
+            ]);
+
+            return ['status' => 'fehlgeschlagen', 'idea_id' => (int) $idee->id, 'fehler' => $e->getMessage()];
+        }
+    }
+
     private const KAPITEL_FELDER = [
         'title', 'consumer_title', 'claim', 'description', 'price_per_person', 'price_mode',
         // SOLL-Ziele (Spec 19, M3) — release_* NICHT hier (setzt kapitelFreigeben, E7.3)
