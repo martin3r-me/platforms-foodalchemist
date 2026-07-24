@@ -22,6 +22,9 @@ class ConcepterDimensionen extends Component
         'eventtypen' => ['tabelle' => 'foodalchemist_event_types', 'label' => 'Eventtypen', 'hint' => 'einfach pro Concept (Konferenz, Gala, Sommerfest …)'],
         'saisons' => ['tabelle' => 'foodalchemist_seasons', 'label' => 'Saisons', 'hint' => 'mehrfach pro Concept'],
         'servierformen' => ['tabelle' => 'foodalchemist_serving_forms', 'label' => 'Servierformen', 'hint' => 'Scharnier Concept ⇄ Gericht-Darreichung — WaWi-Master, Zusätze FA-nativ'],
+        // Spec 19 „Foodbook-Leitstelle" (E3.3): Zielgruppen-Vokabular (FA-nativ). Default am Foodbook,
+        // Auswahl pro Kapitel, Stempel aufs Konzept beim Kapitel-Go (Pivots aus M1).
+        'zielgruppen' => ['tabelle' => 'foodalchemist_target_groups', 'label' => 'Zielgruppen', 'hint' => 'Default am Foodbook + Auswahl pro Kapitel (Tagungsgast, Bankett-Gast, VIP-Gala …)'],
     ];
 
     /** @var array<string, string> Add-Form (Name) je Vokabular */
@@ -134,6 +137,10 @@ class ConcepterDimensionen extends Component
             'saisons' => DB::table('foodalchemist_concept_seasons')->where('season_id', $id)->count(),
             'servierformen' => DB::table('foodalchemist_concepts')->where('serving_form_id', $id)->whereNull('deleted_at')->count()
                 + DB::table('foodalchemist_recipe_presentations')->where('serving_form_id', $id)->whereNull('deleted_at')->count(),
+            // Spec 19 (E3.3): Nutzung über alle 3 M1-Pivots (Foodbook-Default ∪ Kapitel-Auswahl ∪ Konzept-Stempel).
+            'zielgruppen' => DB::table('foodalchemist_foodbook_target_groups')->where('target_group_id', $id)->count()
+                + DB::table('foodalchemist_chapter_target_groups')->where('target_group_id', $id)->count()
+                + DB::table('foodalchemist_concept_target_groups')->where('target_group_id', $id)->count(),
             default => 0,
         };
     }

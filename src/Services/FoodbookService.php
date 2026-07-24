@@ -55,7 +55,8 @@ class FoodbookService
                 'chapters.blocks' => fn ($q) => $q->orderBy('position'),
                 'chapters.blocks.concept:id,name,price_per_person_cache',
                 'chapters.blocks.dish:id,name,sales_net',
-                'crmCompany', 'crmContact'])   // #369: CRM-Kunde-Link
+                'crmCompany', 'crmContact',   // #369: CRM-Kunde-Link
+                'serviceMoments', 'targetGroups', 'defaultEventType', 'defaultServingForm']) // Spec 19 E3.3: Bedarf-Defaults
             ->find($id);
     }
 
@@ -83,6 +84,24 @@ class FoodbookService
         $fb->update(array_intersect_key($in, array_flip(self::FELDER)));
 
         return $fb->refresh();
+    }
+
+    // ── Spec 19 E3.3: Bedarf — Foodbook-Default-Dimensionen (kaskadieren als Boden) ──
+
+    /** Default-Einsatzmoment (Tagesablauf) an/abwählen — 1–n-Pivot foodbook_service_moments. */
+    public function toggleEinsatzmoment(Team $team, int $fbId, int $momentId): void
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($fbId);
+        $this->guard($fb, $team);
+        $fb->serviceMoments()->toggle([$momentId]);
+    }
+
+    /** Default-Zielgruppe an/abwählen — 1–n-Pivot foodbook_target_groups (Entscheidung 4). */
+    public function toggleZielgruppe(Team $team, int $fbId, int $targetGroupId): void
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($fbId);
+        $this->guard($fb, $team);
+        $fb->targetGroups()->toggle([$targetGroupId]);
     }
 
     /**

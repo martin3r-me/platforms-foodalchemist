@@ -101,3 +101,53 @@ it('Gericht bereits als recipe_ref-Block im Kapitel → Übernehmen dedupt kapit
     expect($kapitel->blocks->where('type', 'concept_ref')->count())->toBe(0);
     expect(FoodAlchemistConceptSlot::where('sales_recipe_id', $this->dish->id)->count())->toBe(0);
 });
+
+// ── E3.3 Bedarf-Sektion: Foodbook-Default-Dimensionen (Zielgruppen/Einsatzmomente/Defaults) ──
+
+it('toggleFbZielgruppe schaltet den Default-Zielgruppen-Pivot an und wieder aus', function () {
+    $zg = \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Test-Bankett', 'sort_order' => 10,
+    ]);
+
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('toggleFbZielgruppe', $zg->id);
+    expect($this->fb->refresh()->targetGroups()->where('target_group_id', $zg->id)->exists())->toBeTrue();
+
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('toggleFbZielgruppe', $zg->id);
+    expect($this->fb->refresh()->targetGroups()->where('target_group_id', $zg->id)->exists())->toBeFalse();
+});
+
+it('toggleFbEinsatzmoment schaltet den Tagesablauf-Pivot (1–n) am Foodbook', function () {
+    $em = \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Apéro', 'sort_order' => 10,
+    ]);
+
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('toggleFbEinsatzmoment', $em->id);
+
+    expect($this->fb->refresh()->serviceMoments()->where('service_moment_id', $em->id)->exists())->toBeTrue();
+});
+
+it('bedarfSetzen sichert Default-Eventtyp (FK) und Wareneinsatz-Ziel (%); Leerwert setzt auf null', function () {
+    $et = \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Gala', 'sort_order' => 10,
+    ]);
+
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('bedarfSetzen', 'default_event_type_id', (string) $et->id)
+        ->call('bedarfSetzen', 'target_food_cost_pct', '28.5');
+
+    $fb = $this->fb->refresh();
+    expect((int) $fb->default_event_type_id)->toBe($et->id)
+        ->and((float) $fb->target_food_cost_pct)->toBe(28.5);
+
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('bedarfSetzen', 'default_event_type_id', '');
+    expect($this->fb->refresh()->default_event_type_id)->toBeNull();
+});

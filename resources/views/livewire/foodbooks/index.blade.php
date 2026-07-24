@@ -227,6 +227,64 @@
                 </div>
             </div>
 
+                {{-- ═══ Bedarf — Foodbook-Default-Dimensionen (Spec 19 E3.3) ═══
+                     Defaults kaskadieren als Boden nach unten (Kapitel/Konzepte erben, überschreiben spezifisch).
+                     Vokabular-Pflege in den Einstellungen → Concepter-Dimensionen. --}}
+                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbbedarf-{{ $fb->id }}" data-fb-bedarf>
+                    <div class="{{ $cardAccent }}"></div>
+                    <p class="{{ $label }} !mb-0">Bedarf — Vorgaben fürs ganze Foodbook</p>
+                    <p class="text-[11px] text-gray-500 -mt-1">Eventtyp · Servierform · Wareneinsatz-Ziel + Einsatzmomente + Zielgruppen. Leer = Team-/Segment-Default. Kapitel erben und können überschreiben.</p>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div><label class="{{ $label }}">Eventtyp (Default)</label>
+                            <select wire:change="bedarfSetzen('default_event_type_id', $event.target.value)" class="{{ $input }}">
+                                <option value="">— keiner —</option>
+                                @foreach($eventtypen as $et)<option value="{{ $et->id }}" @selected((int) $fb->default_event_type_id === $et->id)>{{ $et->name }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div><label class="{{ $label }}">Servierform (Default)</label>
+                            <select wire:change="bedarfSetzen('default_serving_form_id', $event.target.value)" class="{{ $input }}">
+                                <option value="">— keine —</option>
+                                @foreach($servierformen as $sf)<option value="{{ $sf->id }}" @selected((int) $fb->default_serving_form_id === $sf->id)>{{ $sf->label }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div><label class="{{ $label }}">Ziel-Wareneinsatz %</label>
+                            <input type="number" step="0.1" min="0" max="100" value="{{ $fb->target_food_cost_pct }}"
+                                   wire:change="bedarfSetzen('target_food_cost_pct', $event.target.value)" class="{{ $input }}" placeholder="Team-Default (30)" />
+                        </div>
+                        <div><label class="{{ $label }}">Toleranz ±pp</label>
+                            <input type="number" step="0.1" min="0" max="50" value="{{ $fb->food_cost_tolerance_pp }}"
+                                   wire:change="bedarfSetzen('food_cost_tolerance_pp', $event.target.value)" class="{{ $input }}" placeholder="5,0" />
+                        </div>
+                    </div>
+
+                    @php($aktiveMomente = $fb->serviceMoments->pluck('id')->all())
+                    <div data-fb-einsatzmomente>
+                        <label class="{{ $label }}">Einsatzmomente (Tagesablauf)</label>
+                        <div class="flex flex-wrap gap-1 mt-0.5">
+                            @forelse($einsatzmomente as $em)
+                                <button type="button" wire:key="fbem-{{ $em->id }}" wire:click="toggleFbEinsatzmoment({{ $em->id }})"
+                                        class="{{ $pill }} {{ in_array($em->id, $aktiveMomente) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
+                            @empty
+                                <span class="text-[11px] text-gray-400">Keine Einsatzmomente gepflegt — in den Einstellungen anlegen.</span>
+                            @endforelse
+                        </div>
+                    </div>
+
+                    @php($aktiveZg = $fb->targetGroups->pluck('id')->all())
+                    <div data-fb-zielgruppen>
+                        <label class="{{ $label }}">Zielgruppen (Default)</label>
+                        <div class="flex flex-wrap gap-1 mt-0.5">
+                            @forelse($zielgruppen as $zg)
+                                <button type="button" wire:key="fbzg-{{ $zg->id }}" wire:click="toggleFbZielgruppe({{ $zg->id }})"
+                                        class="{{ $pill }} {{ in_array($zg->id, $aktiveZg) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $zg->name }}</button>
+                            @empty
+                                <span class="text-[11px] text-gray-400">Keine Zielgruppen gepflegt — in den Einstellungen anlegen.</span>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
+
                 {{-- Foodbook-Leitidee (Canvas) — inline statt Modal (Dominique 2026-07-21) --}}
                 <div class="relative overflow-hidden {{ $card }} p-5" wire:key="fbcanvas-{{ $fb->id }}">
                     <div class="{{ $cardAccent }}"></div>

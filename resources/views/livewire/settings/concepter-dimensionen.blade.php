@@ -4,7 +4,7 @@
 <div class="space-y-6" data-settings-concepter-dimensionen>
     <div>
         <h3 class="font-medium tracking-tight text-gray-900">Concepter-Dimensionen</h3>
-        <p class="text-[11px] text-gray-500 mt-0.5">Facetten der Concepts: Einsatzmoment · Eventtyp · Saison · Servierform. Die Servierform ist das Scharnier zur Darreichungs-Auflösung der Gerichte (Slot → passende Variante). ✕ deaktivieren · 🗑 löschen (nur wenn ungenutzt; WaWi-Servierformen nur deaktivierbar).</p>
+        <p class="text-[11px] text-gray-500 mt-0.5">Facetten der Concepts: Einsatzmoment · Eventtyp · Saison · Servierform · Zielgruppe. Die Servierform ist das Scharnier zur Darreichungs-Auflösung der Gerichte (Slot → passende Variante); Zielgruppen setzt das Foodbook als Default und wählt sie pro Kapitel (Spec 19). ✕ deaktivieren · 🗑 löschen (nur wenn ungenutzt; WaWi-Servierformen nur deaktivierbar).</p>
     </div>
     @if($fehler !== null)<p class="text-xs text-rose-600" data-dimensionen-fehler>{{ $fehler }}</p>@endif
     @if($meldung !== null)<p class="text-xs text-emerald-600" data-dimensionen-meldung>{{ $meldung }}</p>@endif

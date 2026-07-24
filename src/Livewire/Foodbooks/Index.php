@@ -431,6 +431,41 @@ class Index extends Component
         ]);
     }
 
+    // ── Spec 19 E3.3: Bedarf-Sektion (Briefing-Tab) — Foodbook-Default-Dimensionen ──
+
+    /**
+     * Einen skalaren Bedarf-Default setzen (Eventtyp / Servierform per FK-Id, Wareneinsatz-Ziel + Toleranz
+     * als %). Leer = zurück auf Erben (Team-/Segment-Default). Kaskadiert als Foodbook-Boden nach unten.
+     */
+    public function bedarfSetzen(string $feld, $wert, FoodbookService $svc): void
+    {
+        if ($this->selectedId === null
+            || ! in_array($feld, ['default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp'], true)) {
+            return;
+        }
+        $leer = $wert === '' || $wert === null;
+        $wert = $leer ? null : (in_array($feld, ['default_event_type_id', 'default_serving_form_id'], true) ? (int) $wert : (float) $wert);
+        $svc->update($this->team(), $this->selectedId, [$feld => $wert]);
+    }
+
+    /** Einsatzmoment-Pill (Tagesablauf, 1–n) am Foodbook an/abwählen. */
+    public function toggleFbEinsatzmoment(int $id, FoodbookService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $svc->toggleEinsatzmoment($this->team(), $this->selectedId, $id);
+    }
+
+    /** Zielgruppen-Pill (Default, 1–n) am Foodbook an/abwählen. */
+    public function toggleFbZielgruppe(int $id, FoodbookService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $svc->toggleZielgruppe($this->team(), $this->selectedId, $id);
+    }
+
     // ── #369: CRM-Kunde-Link (MVP, nur verlinken) ──────────────────────────────
 
     public function verknuepfeFirma(int $companyId, FoodbookService $svc): void
@@ -882,6 +917,15 @@ class Index extends Component
             'niveauLabels' => \Platform\FoodAlchemist\Services\TeamSettingsService::NIVEAU_LABEL,
             'convenienceLabels' => \Platform\FoodAlchemist\Services\TeamSettingsService::CONVENIENCE_LABEL,
             'leitplanken' => $fb !== null ? $svc->leitplanken($team, $fb) : null,
+            // Spec 19 E3.3: Bedarf-Sektion — Vokabulare für Foodbook-Default-Dimensionen
+            'eventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
+            'servierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
+                ->orderBy('sort_order')->orderBy('label')->get(['id', 'label']),
+            'einsatzmomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
+            'zielgruppen' => \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
         ])->layout('platform::layouts.app');
     }
 
