@@ -33,6 +33,7 @@ class Editor extends Component
     /** @var list<array{source_ref:string, concept_id?:int, recipe_id?:int, persons?:float, portions?:float, label?:string}> */
     public array $targets = [];
 
+    /** concept | recipe (VK-Gericht) | basisrezept (P1). */
     public string $zielTyp = 'concept';
 
     public ?int $auswahlConceptId = null;
@@ -40,6 +41,9 @@ class Editor extends Component
     public ?int $auswahlRecipeId = null;
 
     public float $auswahlMenge = 100;
+
+    /** Nur für zielTyp='basisrezept': Menge in Ansätzen oder Kilogramm (P1). */
+    public string $basisEinheit = 'ansaetze';
 
     public string $suche = '';
 
@@ -50,7 +54,7 @@ class Editor extends Component
     #[On('produktion-editor.oeffnen')]
     public function oeffnenNeu(): void
     {
-        $this->reset(['orderId', 'name', 'reference', 'note', 'targets', 'auswahlConceptId', 'auswahlRecipeId', 'suche', 'vorschau', 'fehler']);
+        $this->reset(['orderId', 'name', 'reference', 'note', 'targets', 'auswahlConceptId', 'auswahlRecipeId', 'suche', 'vorschau', 'fehler', 'basisEinheit']);
         $this->productionDate = now()->toDateString();
         $this->auswahlMenge = 100;
         $this->dispatch('modal.open', name: 'produktion-editor');
@@ -81,9 +85,17 @@ class Editor extends Component
 
     public function zielHinzufuegen(): void
     {
-        $ziel = $this->zielTyp === 'concept'
-            ? ['concept_id' => $this->auswahlConceptId, 'persons' => $this->auswahlMenge]
-            : ['recipe_id' => $this->auswahlRecipeId, 'portions' => $this->auswahlMenge];
+        if ($this->zielTyp === 'concept') {
+            $ziel = ['concept_id' => $this->auswahlConceptId, 'persons' => $this->auswahlMenge];
+        } elseif ($this->zielTyp === 'basisrezept' && $this->basisEinheit === 'kg') {
+            // P1: Basisrezept nach Kilogramm (Service rechnet kg ÷ Basis-Yield → ganze Ansätze).
+            $ziel = ['recipe_id' => $this->auswahlRecipeId, 'amount_kg' => $this->auswahlMenge];
+        } elseif ($this->zielTyp === 'basisrezept') {
+            // Basisrezept nach Ansätzen (portions trägt beim Basisrezept die Ansatz-Zahl).
+            $ziel = ['recipe_id' => $this->auswahlRecipeId, 'portions' => $this->auswahlMenge];
+        } else {
+            $ziel = ['recipe_id' => $this->auswahlRecipeId, 'portions' => $this->auswahlMenge];
+        }
 
         if (empty($ziel['concept_id'] ?? null) && empty($ziel['recipe_id'] ?? null)) {
             return;
@@ -112,8 +124,14 @@ class Editor extends Component
             return ($name ?? '#' . $ziel['concept_id']) . ' (' . $this->zahl($ziel['persons']) . ' P.)';
         }
         $name = $team ? FoodAlchemistRecipe::visibleToTeam($team)->find($ziel['recipe_id'])?->name : null;
+        $anzeige = $name ?? '#' . $ziel['recipe_id'];
+        // P1: kg-Ziel (Basisrezept) bzw. Ansätze (Basisrezept) vs. Portionen (VK-Gericht).
+        if (isset($ziel['amount_kg'])) {
+            return $anzeige . ' (' . $this->zahl((float) $ziel['amount_kg']) . ' kg)';
+        }
+        $einheit = $this->zielTyp === 'basisrezept' ? 'Ansätze' : 'Port.';
 
-        return ($name ?? '#' . $ziel['recipe_id']) . ' (' . $this->zahl($ziel['portions']) . ' Port.)';
+        return $anzeige . ' (' . $this->zahl((float) $ziel['portions']) . ' ' . $einheit . ')';
     }
 
     private function zahl(float $n): string
@@ -166,9 +184,11 @@ class Editor extends Component
         $team = Auth::user()?->currentTeamRelation;
         $konzepte = $team ? FoodAlchemistConcept::visibleToTeam($team)->orderBy('name')->get(['id', 'name']) : collect();
         $treffer = collect();
-        if ($team && $this->zielTyp === 'recipe' && trim($this->suche) !== '') {
-            $treffer = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-                ->where('name', 'like', '%' . trim($this->suche) . '%')
+        if ($team && in_array($this->zielTyp, ['recipe', 'basisrezept'], true) && trim($this->suche) !== '') {
+            // P1: VK-Gericht ⇒ ->verkauf(), Basisrezept ⇒ ->basis() (Suche ohne Verkauf-Scope).
+            $query = FoodAlchemistRecipe::visibleToTeam($team);
+            $query = $this->zielTyp === 'basisrezept' ? $query->basis() : $query->verkauf();
+            $treffer = $query->where('name', 'like', '%' . trim($this->suche) . '%')
                 ->orderBy('name')->limit(20)->get(['id', 'name']);
         }
 

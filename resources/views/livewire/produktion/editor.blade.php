@@ -33,6 +33,7 @@
             <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs">
                 <button type="button" wire:click="$set('zielTyp', 'concept')" class="px-3 py-1 rounded-md {{ $zielTyp === 'concept' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Konzept</button>
                 <button type="button" wire:click="$set('zielTyp', 'recipe')" class="px-3 py-1 rounded-md {{ $zielTyp === 'recipe' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Gericht</button>
+                <button type="button" wire:click="$set('zielTyp', 'basisrezept')" class="px-3 py-1 rounded-md {{ $zielTyp === 'basisrezept' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}" data-produktion-ziel-basisrezept>Basisrezept</button>
             </div>
         </div>
 
@@ -53,8 +54,8 @@
                 </div>
             @else
                 <div class="flex-1">
-                    <label class="{{ $label }}">Gericht</label>
-                    <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Gericht suchen …" class="{{ $input }}" data-produktion-gericht-suche />
+                    <label class="{{ $label }}">{{ $zielTyp === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</label>
+                    <input type="search" wire:model.live.debounce.300ms="suche" placeholder="{{ $zielTyp === 'basisrezept' ? 'Basisrezept suchen …' : 'Gericht suchen …' }}" class="{{ $input }}" data-produktion-gericht-suche />
                     @if($treffer->isNotEmpty())
                         <div class="mt-1 rounded-lg border border-black/5 bg-white/80 max-h-40 overflow-y-auto">
                             @foreach($treffer as $t)
@@ -64,10 +65,21 @@
                         </div>
                     @endif
                 </div>
-                <div class="w-28">
-                    <label class="{{ $label }}">Portionen</label>
-                    <input type="number" min="1" wire:model="auswahlMenge" class="{{ $input }}" />
-                </div>
+                @if($zielTyp === 'basisrezept')
+                    <div class="w-28">
+                        <label class="{{ $label }}">{{ $basisEinheit === 'kg' ? 'Kilogramm' : 'Ansätze' }}</label>
+                        <input type="number" min="0" step="0.1" wire:model="auswahlMenge" class="{{ $input }}" />
+                    </div>
+                    <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs self-end mb-0.5" data-produktion-basis-einheit>
+                        <button type="button" wire:click="$set('basisEinheit', 'ansaetze')" class="px-2 py-1 rounded-md {{ $basisEinheit === 'ansaetze' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Ansätze</button>
+                        <button type="button" wire:click="$set('basisEinheit', 'kg')" class="px-2 py-1 rounded-md {{ $basisEinheit === 'kg' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">kg</button>
+                    </div>
+                @else
+                    <div class="w-28">
+                        <label class="{{ $label }}">Portionen</label>
+                        <input type="number" min="1" wire:model="auswahlMenge" class="{{ $input }}" />
+                    </div>
+                @endif
             @endif
             <button type="button" wire:click="zielHinzufuegen" class="{{ $btnGhost }}" data-produktion-ziel-hinzufuegen>+ Hinzufügen</button>
         </div>

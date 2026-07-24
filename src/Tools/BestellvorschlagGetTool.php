@@ -25,7 +25,8 @@ class BestellvorschlagGetTool extends FoodAlchemistTool implements ToolContract,
         return 'Bestellvorschlag (read-only): GP-Bedarf gruppiert nach Lead-LA-Lieferant, je Position in GANZEN '
             . 'Gebinden (gebinde: qty_packs, pack_qty, packaging_unit, article_number, pack_price, line_total, '
             . 'needed_base, ueberkauf_base) + EK-Summe je Lieferant. GENAU EINES angeben: concept_id (+ persons) '
-            . 'ODER recipe_id (+ portions oder persons). Kein Bestellvorgang.';
+            . 'ODER recipe_id (+ portions oder persons; beim Basisrezept ist portions = Ansätze, alternativ amount_kg). '
+            . 'Kein Bestellvorgang.';
     }
 
     public function getSchema(): array
@@ -36,7 +37,8 @@ class BestellvorschlagGetTool extends FoodAlchemistTool implements ToolContract,
                 'concept_id' => ['type' => 'integer', 'description' => 'Konzept-ID (mit persons)'],
                 'recipe_id' => ['type' => 'integer', 'description' => 'Gericht-/Rezept-ID (mit portions oder persons)'],
                 'persons' => ['type' => 'integer', 'minimum' => 1],
-                'portions' => ['type' => 'number', 'minimum' => 1],
+                'portions' => ['type' => 'number', 'minimum' => 1, 'description' => 'VK-Gericht: Portionen. Basisrezept: Anzahl Ansätze.'],
+                'amount_kg' => ['type' => 'number', 'minimum' => 0, 'description' => 'Nur Basisrezept: Ziel-Kilogramm (Alternative zu portions/Ansätze).'],
             ],
         ];
     }
@@ -51,7 +53,7 @@ class BestellvorschlagGetTool extends FoodAlchemistTool implements ToolContract,
         if (count($keys) !== 1) {
             return ToolResult::error('Genau EINES von concept_id oder recipe_id angeben.', 'VALIDATION_ERROR');
         }
-        $ziel = array_intersect_key($arguments, array_flip(['concept_id', 'recipe_id', 'persons', 'portions']));
+        $ziel = array_intersect_key($arguments, array_flip(['concept_id', 'recipe_id', 'persons', 'portions', 'amount_kg']));
 
         try {
             $blatt = app(PlanungsblattService::class)->bestellvorschlag($team, $ziel);

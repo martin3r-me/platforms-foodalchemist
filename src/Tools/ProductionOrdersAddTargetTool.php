@@ -25,6 +25,8 @@ class ProductionOrdersAddTargetTool extends FoodAlchemistTool implements ToolCon
     public function getDescription(): string
     {
         return 'Fügt ein Ziel (concept_id+persons ODER recipe_id+portions) zu einem Produktionsauftrag hinzu. '
+            . 'portions ist doppeldeutig: VK-Gericht = Portionen, Basisrezept = Anzahl Ansätze; beim Basisrezept '
+            . 'alternativ amount_kg (Ziel-Kilogramm → kg ÷ Basis-Yield, auf ganze Ansätze aufgerundet). '
             . 'Adressierung: entweder order_id (bestehender, geplanter Auftrag) ODER production_date '
             . '(+ optional name; legt bei Bedarf an — mehrere Aufträge pro Tag sind erlaubt, name grenzt ab). '
             . 'Rechnet die Ansätze für ALLE Ziele dieses Auftrags gemeinsam neu (nicht additiv gerundet). '
@@ -42,7 +44,8 @@ class ProductionOrdersAddTargetTool extends FoodAlchemistTool implements ToolCon
                 'concept_id' => ['type' => 'integer'],
                 'recipe_id' => ['type' => 'integer'],
                 'persons' => ['type' => 'number'],
-                'portions' => ['type' => 'number'],
+                'portions' => ['type' => 'number', 'description' => 'VK-Gericht: Portionen. Basisrezept: Anzahl Ansätze.'],
+                'amount_kg' => ['type' => 'number', 'description' => 'Nur Basisrezept: Ziel-Kilogramm (Alternative zu portions/Ansätze).'],
                 'source_ref' => ['type' => 'string', 'description' => 'Quell-Kennung; Re-Import ersetzt diesen Schlüssel'],
             ],
             'required' => ['source_ref'],
@@ -70,7 +73,11 @@ class ProductionOrdersAddTargetTool extends FoodAlchemistTool implements ToolCon
             $ziel['persons'] = (float) ($arguments['persons'] ?? 0);
         } else {
             $ziel['recipe_id'] = (int) $arguments['recipe_id'];
-            $ziel['portions'] = (float) ($arguments['portions'] ?? $arguments['persons'] ?? 0);
+            if (isset($arguments['amount_kg']) && (float) $arguments['amount_kg'] > 0) {
+                $ziel['amount_kg'] = (float) $arguments['amount_kg']; // Basisrezept nach kg (P1)
+            } else {
+                $ziel['portions'] = (float) ($arguments['portions'] ?? $arguments['persons'] ?? 0);
+            }
         }
 
         try {

@@ -24,8 +24,10 @@ class ProduktionsblattGetTool extends FoodAlchemistTool implements ToolContract,
     public function getDescription(): string
     {
         return 'Produktionsblatt (read-only): skalierte Rezepturen für eine Produktionsmenge. GENAU EINES '
-            . 'angeben: concept_id (+ persons) ODER recipe_id (+ portions oder persons). Basisrezepte werden '
-            . 'in ganzen Ansätzen ausgegeben (nicht runter-fraktioniert), Top-Gericht linear skaliert.';
+            . 'angeben: concept_id (+ persons) ODER recipe_id (+ portions oder persons). '
+            . 'portions ist doppeldeutig: beim VK-Gericht = Portionen, beim Basisrezept = Anzahl Ansätze. '
+            . 'Alternativ beim Basisrezept amount_kg (Ziel-Kilogramm → Service rechnet kg ÷ Basis-Yield). '
+            . 'Basisrezepte werden in ganzen Ansätzen ausgegeben (nicht runter-fraktioniert), Top-Gericht linear skaliert.';
     }
 
     public function getSchema(): array
@@ -36,7 +38,8 @@ class ProduktionsblattGetTool extends FoodAlchemistTool implements ToolContract,
                 'concept_id' => ['type' => 'integer', 'description' => 'Konzept-ID (mit persons)'],
                 'recipe_id' => ['type' => 'integer', 'description' => 'Gericht-/Rezept-ID (mit portions oder persons)'],
                 'persons' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Personenzahl (Konzept-Skalierung)'],
-                'portions' => ['type' => 'number', 'minimum' => 1, 'description' => 'Portionszahl (Einzel-Rezept-Skalierung)'],
+                'portions' => ['type' => 'number', 'minimum' => 1, 'description' => 'VK-Gericht: Portionszahl. Basisrezept: Anzahl Ansätze.'],
+                'amount_kg' => ['type' => 'number', 'minimum' => 0, 'description' => 'Nur Basisrezept: Ziel-Kilogramm (Alternative zu portions/Ansätze).'],
             ],
         ];
     }
@@ -51,7 +54,7 @@ class ProduktionsblattGetTool extends FoodAlchemistTool implements ToolContract,
         if (count($keys) !== 1) {
             return ToolResult::error('Genau EINES von concept_id oder recipe_id angeben.', 'VALIDATION_ERROR');
         }
-        $ziel = array_intersect_key($arguments, array_flip(['concept_id', 'recipe_id', 'persons', 'portions']));
+        $ziel = array_intersect_key($arguments, array_flip(['concept_id', 'recipe_id', 'persons', 'portions', 'amount_kg']));
 
         try {
             $blatt = app(PlanungsblattService::class)->produktionsblatt($team, $ziel);

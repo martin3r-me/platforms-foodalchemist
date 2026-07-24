@@ -168,7 +168,7 @@ class PlanungsblattService
 
                     continue;
                 }
-                [$batches, $meta] = $this->rezeptTopBatches($recipe, $ziel);
+                [$batches, $meta] = $this->rezeptTopBatches($recipe, $ziel, $warnungen);
                 $skalierung ??= $meta;
                 $zielLabels[] = "{$recipe->name} ({$meta['wert']} {$meta['modus']})";
                 $tops[] = ['recipe' => $recipe, 'batches' => $batches, 'label' => $recipe->name];
@@ -246,8 +246,13 @@ class PlanungsblattService
         return ['recipe' => $this->ladeRezept((int) $gericht->id), 'batches' => ($pae * $personen) / $anzahl, 'label' => $gericht->name];
     }
 
-    /** Einzel-Rezept-Ziel → Top-Batches. VK: Portionen ÷ Portionszahl; Basisrezept: Ziel = # Ansätze. */
-    private function rezeptTopBatches(FoodAlchemistRecipe $recipe, array $ziel): array
+    /**
+     * Einzel-Rezept-Ziel → Top-Batches. VK: Portionen ÷ Portionszahl; Basisrezept:
+     * Ziel = # Ansätze ODER Ziel-Kilogramm (amount_kg, P1). Bei kg werden die Roh-Batches
+     * = kg ÷ Basis-Yield zurückgegeben — explodiere() rundet sie auf ganze Ansätze auf
+     * (Kern-Entscheid BR: man kocht keinen Teil-Ansatz). yield_kg NULL/0 ⇒ Warnung + 1 Ansatz.
+     */
+    private function rezeptTopBatches(FoodAlchemistRecipe $recipe, array $ziel, array &$warnungen): array
     {
         $istVk = (bool) $recipe->is_sales_recipe;
         if ($istVk) {
@@ -259,6 +264,20 @@ class PlanungsblattService
 
             return [$portionen / $anzahl, ['modus' => 'portionen', 'wert' => $portionen]];
         }
+
+        // Basisrezept mit kg-Ziel (P1): Roh-Batches = kg ÷ Basis-Yield (explodiere rundet auf).
+        if (isset($ziel['amount_kg']) && (float) $ziel['amount_kg'] > 0) {
+            $kg = (float) $ziel['amount_kg'];
+            $yieldKg = $recipe->yield_kg !== null ? (float) $recipe->yield_kg : 0.0;
+            if ($yieldKg <= 0) {
+                $warnungen[] = "Basisrezept „{$recipe->name}“: kg-Ziel ohne Basis-Yield — 1 Ansatz angenommen (Yield pflegen).";
+
+                return [1.0, ['modus' => 'kg', 'wert' => $kg]];
+            }
+
+            return [$kg / $yieldKg, ['modus' => 'kg', 'wert' => $kg]];
+        }
+
         // Basisrezept solo: Ziel = Anzahl Basis-Ansätze (Default 1).
         $ansaetze = (float) ($ziel['portions'] ?? $ziel['persons'] ?? 1);
         $ansaetze = $ansaetze > 0 ? $ansaetze : 1.0;

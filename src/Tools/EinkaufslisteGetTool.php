@@ -24,7 +24,8 @@ class EinkaufslisteGetTool extends FoodAlchemistTool implements ToolContract, To
     public function getDescription(): string
     {
         return 'Einkaufsliste (read-only): GP-Bedarf über mehrere Ziele zusammengeführt, nach Lieferant '
-            . 'gruppiert. ziele = Liste aus {concept_id, persons} und/oder {recipe_id, portions}.';
+            . 'gruppiert. ziele = Liste aus {concept_id, persons} und/oder {recipe_id, portions}. '
+            . 'portions doppeldeutig: VK-Gericht = Portionen, Basisrezept = Ansätze (alternativ amount_kg beim Basisrezept).';
     }
 
     public function getSchema(): array
@@ -42,7 +43,8 @@ class EinkaufslisteGetTool extends FoodAlchemistTool implements ToolContract, To
                             'concept_id' => ['type' => 'integer'],
                             'recipe_id' => ['type' => 'integer'],
                             'persons' => ['type' => 'integer', 'minimum' => 1],
-                            'portions' => ['type' => 'number', 'minimum' => 1],
+                            'portions' => ['type' => 'number', 'minimum' => 1, 'description' => 'VK-Gericht: Portionen. Basisrezept: Anzahl Ansätze.'],
+                            'amount_kg' => ['type' => 'number', 'minimum' => 0, 'description' => 'Nur Basisrezept: Ziel-Kilogramm (Alternative zu portions/Ansätze).'],
                         ],
                     ],
                 ],
@@ -64,7 +66,7 @@ class EinkaufslisteGetTool extends FoodAlchemistTool implements ToolContract, To
         // Nur bekannte Schlüssel je Ziel durchreichen, Werte typkoercieren.
         $ziele = array_map(fn ($z) => array_intersect_key(
             is_array($z) ? $z : [],
-            array_flip(['concept_id', 'recipe_id', 'persons', 'portions'])
+            array_flip(['concept_id', 'recipe_id', 'persons', 'portions', 'amount_kg'])
         ), $ziele);
 
         try {

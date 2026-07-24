@@ -50,13 +50,13 @@
 - [x] MCP-Lockstep: `ADD_TARGET` nimmt `order_id` ODER (`production_date` [+ `name`], legt an wenn fehlt); NEU `production_orders.UPDATE` (Kopf) + `production_orders.REMOVE_TARGET`; `GET`-Liste + `ADD_TARGET`-Return führen `name`. Alle 3 in ServiceProvider registriert.
 - [x] Pest: zwei benannte Aufträge am selben Tag koexistieren (2 planned/Tag); Rundung je Auftrag separat dokumentiert; Name-Pflicht-Guard; Datums-Label-Fallback; MCP End-to-End für UPDATE/REMOVE_TARGET/order_id-Pfad. Ziel-Suite `ProductionOrderServiceTest` 17 passed / 2 skipped (Routen).
 
-### P1 · Ziel-Typen: Basisrezept + kg, Foodbook-Kapitel · L
-- [ ] Dritter `zielTyp 'basisrezept'` im Editor, Suche ohne `->verkauf()`-Scope.
-- [ ] targets-Feld `amount_kg`; `rezeptTopBatches()`: `batches = ceil(kg ÷ yield_kg)`, Warnung bei `yield_kg NULL`; Editor-Einheiten-Umschalter Ansätze ⇄ kg.
-- [ ] Kapitel-Ziel `{chapter_id, persons}`: `topsAus()`-Zweig Kapitel → sichtbare `concept_ref`/`recipe_ref`-Blocks (Rest skippen); `concept_ref` → `konzeptTops()`, `recipe_ref` → VK-Ziel (Default 1 Portion/Person, Block-`quantity`+`unit_vocab_id` wenn gesetzt); Varianten-Dialog, gewählte Variante als aufgelöste Einzel-Ziele.
-- [ ] `labelFor()` um kg-/Kapitel-Labels erweitern.
-- [ ] MCP-Lockstep in ALLEN 5 zielnehmenden Tools gleichzeitig (`production_orders.ADD_TARGET`, `orders.ADD_NEED`, `produktionsblatt.GET`, `bestellvorschlag.GET`, `einkaufsliste.GET`); Doppel-Bedeutung von `portions` (VK=Portionen, Basis=Ansätze) in allen Descriptions dokumentieren.
-- [ ] Pest: kg→Ansätze inkl. NULL-yield; Kapitel-Explosion inkl. Varianten-Wahl + Block-Typ-Filter; `source_ref`-Idempotenz bleibt.
+### P1 · Ziel-Typen: Basisrezept + kg, Foodbook-Kapitel · L (P1a ✅ / P1b Kapitel offen)
+- [x] **P1a** Dritter `zielTyp 'basisrezept'` im Editor, Suche ohne `->verkauf()`-Scope (`->basis()`).
+- [x] **P1a** targets-Feld `amount_kg`; `rezeptTopBatches()`: Roh-Batches = `kg ÷ yield_kg` (explodiere rundet auf ganze Ansätze auf), Warnung + 1 Ansatz bei `yield_kg NULL`; Editor-Einheiten-Umschalter Ansätze ⇄ kg. (`amount_kg` lebt in der `targets`-JSON — keine Migration.)
+- [ ] **P1b** Kapitel-Ziel `{chapter_id, persons}`: `topsAus()`-Zweig Kapitel → sichtbare `concept_ref`/`recipe_ref`-Blocks (Rest skippen); `concept_ref` → `konzeptTops()`, `recipe_ref` → VK-Ziel (Default 1 Portion/Person, Block-`quantity`+`unit_vocab_id` wenn gesetzt); Varianten-Dialog, gewählte Variante als aufgelöste Einzel-Ziele.
+- [x] `labelFor()` um kg-Labels erweitert (P1a) — Kapitel-Labels offen (P1b).
+- [x] MCP-Lockstep `amount_kg` in ALLEN 5 zielnehmenden Tools (`production_orders.ADD_TARGET`, `orders.ADD_NEED`, `produktionsblatt.GET`, `bestellvorschlag.GET`, `einkaufsliste.GET`); Doppel-Bedeutung von `portions` (VK=Portionen, Basis=Ansätze) in allen Descriptions dokumentiert (P1a). — Kapitel-Parameter offen (P1b).
+- [x] Pest: kg→Ansätze inkl. NULL-yield + Editor-kg-Umschalter + Basis-Scope-Suche + MCP-`amount_kg` (5 neue Tests, P1a). — Kapitel-Explosion + Varianten-Wahl offen (P1b).
 
 ### P2 · Editor v2 („schlau eingeben") · M
 - [ ] 3 Karteien (bestehende `modal-section`-Bausteine): Stammdaten → Ziele (4-Typen-Picker, typabhängiges Mengenfeld mit Einheiten-Suffix, Ziel-Liste mit Edit/Remove) → Live-Vorschau (bestehend).
@@ -113,5 +113,6 @@
 |---|---|---|---|
 | _(noch kein Run)_ | — | Dossier angelegt (Session 2026-07-23) | P0 starten |
 | 2026-07-24 · Run 1 | **P0 ✅** | `70d7c74` — Name-Feld+Migration (MySQL 8.4 gefahren+backfilled, Backup PRE_SPEC20_P0), saveNew immer-neu, draftForDate MCP-Kompat, Editor/Browser/DetailPanel/Doku auf Name, MCP UPDATE+REMOVE_TARGET+ADD_TARGET-Adressierung. `ProductionOrderServiceTest` 17 passed/2 skip; Modul-Suite 993 passed, 1 Fremd-Fail (`KnowledgeBindToolTest`, fällt auch isoliert, kein Bezug zu P0), 4 skip. | P1 (Ziel-Typen kg/Basisrezept/Kapitel) — oder E1 (3-Panel-Einkauf, parallel erlaubt) |
+| 2026-07-24 · Run 2 | **P1a ✅** (Basisrezept + kg; Kapitel = P1b offen) | `<pending>` — 3. Zieltyp `basisrezept` im Editor (`->basis()`-Suche) + Ansätze⇄kg-Umschalter; `rezeptTopBatches()` kg-Zweig (Roh = kg÷yield, explodiere ceil auf ganze Ansätze; NULL-yield ⇒ Warnung + 1 Ansatz); `amount_kg` lebt in der `targets`-JSON (keine Migration); `labelFor()`/`labelFuer()` kg-Label; MCP-Lockstep `amount_kg` + `portions`-Doppeldeutung in allen 5 zielnehmenden Tools. `ProductionOrderServiceTest` 22 passed/2 skip (5 neue P1-Tests); volle Modul-Suite **1088 passed, 4 skip, 0 fail**. | P1b (Kapitel-Ziel `{chapter_id, persons}` + Varianten-Dialog) — oder E1 (3-Panel-Einkauf, parallel) |
 
 *Verzahnt: [17](17_Bestellwesen_MiniWaWi.md) · [18](18_Produktionsauftraege.md) · [14](14_Lieferanten_Management_R9.md) (LeadLaStrategie). Dossier 2026-07-23; Entscheide V1–V4 mit Dominique festgezurrt.*

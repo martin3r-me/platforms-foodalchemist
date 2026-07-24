@@ -428,14 +428,24 @@ class ProductionOrderService
             if ($recipe === null) {
                 return null;
             }
+            // Basisrezept mit kg-Ziel (P1): in Kilogramm ausgewiesen, nicht in Ansätzen.
+            if (! (bool) $recipe->is_sales_recipe && isset($ziel['amount_kg']) && (float) $ziel['amount_kg'] > 0) {
+                return $recipe->name . ' (' . $this->zahl((float) $ziel['amount_kg']) . ' kg)';
+            }
             $wert = $ziel['portions'] ?? $ziel['persons'] ?? null;
             // Basisrezept solo wird in ganzen Ansätzen gemessen, nicht in Portionen.
             $einheit = (bool) $recipe->is_sales_recipe ? 'Port.' : 'Ansätze';
 
-            return $recipe->name . ($wert !== null ? " ({$wert} {$einheit})" : '');
+            return $recipe->name . ($wert !== null ? " ({$this->zahl((float) $wert)} {$einheit})" : '');
         }
 
         return null;
+    }
+
+    /** Zahl fürs Label ohne überflüssige Nachkommastellen (5.0 ⇒ „5", 5.5 ⇒ „5,5"). */
+    private function zahl(float $n): string
+    {
+        return rtrim(rtrim(number_format($n, 2, ',', '.'), '0'), ',');
     }
 
     // ── Guards ───────────────────────────────────────────────────────────────

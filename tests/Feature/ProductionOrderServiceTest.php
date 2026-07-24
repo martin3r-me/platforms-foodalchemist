@@ -388,6 +388,95 @@ it('V1: draftForDate bleibt MCP-Kompat-Pfad (findOrCreate, ohne name = erster ge
         ->and($a->name)->toBe('Produktion 01.08.2026');
 });
 
+it('P1: Basisrezept-Ziel nach kg → kg ÷ Basis-Yield, auf ganze Ansätze aufgerundet', function () {
+    // Vanillesauce: Basis-Yield 1,0 kg. 2,5 kg-Ziel → 2,5 Roh-Ansätze → aufgerundet 3.
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Mise en place', [
+        ['recipe_id' => $this->sauce->id, 'amount_kg' => 2.5, 'source_ref' => 'recipe:sauce@2.5kg'],
+    ]);
+
+    $line = $order->lines()->where('recipe_id', $this->sauce->id)->first();
+    expect((int) $line->ansaetze)->toBe(3)
+        ->and((float) $line->benoetigt_ansaetze)->toBe(2.5)
+        ->and($order->targets[0]['label'])->toBe('Vanillesauce (2,5 kg)');
+});
+
+it('P1: kg-Ziel bei fehlendem Basis-Yield ⇒ Warnung + 1 Ansatz (kein Crash)', function () {
+    $fond = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'fond', 'name' => 'Gemüsefond',
+        'status' => 'approved', 'is_sales_recipe' => false, 'yield_kg' => null,
+    ]);
+    $fond->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'gp_id' => $this->zucker->id, 'raw_text' => 'Zucker', 'quantity' => 100, 'unit_vocab_id' => $this->g->id]);
+    // Bewusst KEIN recomputePipeline: der würde yield_kg aus den Zutaten auffüllen — hier soll
+    // der NULL-Yield-Fall (kg-Ziel nicht in Ansätze umrechenbar) getestet werden.
+    $fond->update(['yield_kg' => null]);
+
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Fond-Tag', [
+        ['recipe_id' => $fond->id, 'amount_kg' => 5.0, 'source_ref' => 'recipe:fond@5kg'],
+    ]);
+
+    expect((int) $order->lines()->where('recipe_id', $fond->id)->first()->ansaetze)->toBe(1)
+        ->and(collect($order->warnungen)->filter(fn ($w) => str_contains($w, 'kg-Ziel ohne Basis-Yield'))->count())->toBeGreaterThan(0);
+});
+
+it('P1 UI: Editor legt ein Basisrezept-kg-Ziel an (Einheiten-Umschalter kg)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    Livewire::test(ProduktionEditor::class)
+        ->call('oeffnenNeu')
+        ->set('productionDate', '2026-08-01')
+        ->set('name', 'Vorbereitung')
+        ->set('zielTyp', 'basisrezept')
+        ->set('basisEinheit', 'kg')
+        ->set('auswahlRecipeId', $this->sauce->id)
+        ->set('auswahlMenge', 2.5)
+        ->call('zielHinzufuegen')
+        ->call('speichern')
+        ->assertDispatched('produktion-gespeichert');
+
+    $order = FoodAlchemistProductionOrder::where('name', 'Vorbereitung')->firstOrFail();
+    expect((float) $order->targets[0]['amount_kg'])->toBe(2.5)
+        ->and($order->targets[0])->not->toHaveKey('portions')
+        ->and((int) $order->lines()->where('recipe_id', $this->sauce->id)->first()->ansaetze)->toBe(3);
+});
+
+it('P1 UI: Basisrezept-Zieltyp sucht im Basis-Scope, VK-Scope blendet Basisrezepte aus', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    // Basisrezept-Modus (->basis()) findet die Vanillesauce.
+    Livewire::test(ProduktionEditor::class)
+        ->call('oeffnenNeu')
+        ->set('zielTyp', 'basisrezept')
+        ->set('suche', 'Vanille')
+        ->assertSee('Vanillesauce');
+
+    // VK-Gericht-Modus (->verkauf()) blendet sie aus.
+    Livewire::test(ProduktionEditor::class)
+        ->call('oeffnenNeu')
+        ->set('zielTyp', 'recipe')
+        ->set('suche', 'Vanille')
+        ->assertDontSee('Vanillesauce');
+});
+
+it('P1 MCP: produktionsblatt/bestellvorschlag/ADD_TARGET akzeptieren amount_kg', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(\Platform\Core\Tools\ToolRegistry::class);
+    $kontext = new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam);
+
+    // read-only: Produktionsblatt für 2,5 kg Vanillesauce → 3 Ansätze.
+    $blatt = $registry->get('foodalchemist.produktionsblatt.GET')
+        ->execute(['recipe_id' => $this->sauce->id, 'amount_kg' => 2.5], $kontext);
+    expect($blatt->success)->toBeTrue();
+    $sauceRow = collect($blatt->data['rezepte'])->firstWhere('recipe_id', $this->sauce->id);
+    expect((int) $sauceRow['ansaetze'])->toBe(3);
+
+    // write: ADD_TARGET mit amount_kg legt ein kg-Ziel an.
+    $add = $registry->get('foodalchemist.production_orders.ADD_TARGET')
+        ->execute(['production_date' => '2026-08-01', 'name' => 'MCP-kg', 'recipe_id' => $this->sauce->id, 'amount_kg' => 2.5, 'source_ref' => 'recipe:sauce@2.5kg'], $kontext);
+    expect($add->success)->toBeTrue()
+        ->and((float) $add->data['targets'][0]['amount_kg'])->toBe(2.5);
+});
+
 it('S3: Produktionsschein-Dokument-Route liefert HTML + CSV-Download', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommer-Buffet', [
