@@ -549,6 +549,58 @@ class Index extends Component
         $svc->reorderKapitel($this->team(), $this->selectedId, $k->parent_id, $geschwister);
     }
 
+    /**
+     * E2.1: Kapitel eine Ebene TIEFER — neuer Parent = unmittelbar vorheriges Geschwister
+     * (Outline-Editor-Doktrin). Ohne vorheriges Geschwister nicht einrückbar.
+     */
+    public function kapitelEinruecken(int $id, FoodbookService $svc): void
+    {
+        $k = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($id);
+        if ($k === null || $this->selectedId === null) {
+            return;
+        }
+        $geschwister = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('foodbook_id', $this->selectedId)
+            ->where('parent_id', $k->parent_id)->orderBy('position')->pluck('id')->all();
+        $pos = array_search($id, $geschwister, true);
+        if ($pos === false || $pos === 0) {
+            return; // erstes Geschwister hat keinen Vorgänger zum Einrücken
+        }
+        $this->kapitelUnter($id, (int) $geschwister[$pos - 1], $svc);
+    }
+
+    /**
+     * E2.1: Kapitel eine Ebene HÖHER — neuer Parent = Großelternteil (oder Top-Ebene).
+     * Top-Kapitel sind nicht weiter ausrückbar.
+     */
+    public function kapitelAusruecken(int $id, FoodbookService $svc): void
+    {
+        $k = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($id);
+        if ($k === null || $k->parent_id === null || $this->selectedId === null) {
+            return;
+        }
+        $parent = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($k->parent_id);
+        $grossParent = $parent?->parent_id !== null ? (int) $parent->parent_id : null;
+        $this->kapitelUnter($id, $grossParent, $svc);
+    }
+
+    /**
+     * Gemeinsamer Move: Parent wechseln (Service trägt den Zyklus-Schutz) und das Kapitel
+     * ans ENDE der neuen Geschwister-Ordnung setzen, damit `position` konsistent bleibt
+     * (moveKapitel selbst rührt die Position nicht an).
+     */
+    private function kapitelUnter(int $id, ?int $neuerParent, FoodbookService $svc): void
+    {
+        try {
+            $svc->moveKapitel($this->team(), $id, $neuerParent);
+        } catch (\RuntimeException) {
+            return; // Zyklus o. Ä. — UI bietet solche Moves ohnehin nicht an
+        }
+        $geschwister = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('foodbook_id', $this->selectedId)
+            ->where('parent_id', $neuerParent)->where('id', '!=', $id)->orderBy('position')->pluck('id')->all();
+        $geschwister[] = $id;
+        $svc->reorderKapitel($this->team(), $this->selectedId, $neuerParent, $geschwister);
+    }
+
     // ── Blöcke ────────────────────────────────────────────────────────────
 
     public function conceptHinzu(int $conceptId, FoodbookService $svc): void

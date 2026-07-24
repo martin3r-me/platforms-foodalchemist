@@ -136,6 +136,36 @@ it('M11-02: Kapitel-Baum + Move mit Zyklus-Schutz', function () {
     expect(FoodAlchemistFoodbookKapitel::find($sub->id)->parent_id)->toBeNull();
 });
 
+it('Spec 19 E2.1: Ein-/Ausrücken verschiebt Kapitel zwischen Ebenen (Outline-Doktrin)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB']);
+    $a = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'A']);
+    $b = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'B']);
+    $c = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'C']);
+
+    $comp = Livewire::test(\Platform\FoodAlchemist\Livewire\Foodbooks\Index::class)
+        ->call('waehle', $fb->id);
+
+    // erstes Geschwister A ist nicht einrückbar (kein Vorgänger) → bleibt Top-Ebene
+    $comp->call('kapitelEinruecken', $a->id);
+    expect(FoodAlchemistFoodbookKapitel::find($a->id)->parent_id)->toBeNull();
+
+    // B unter den Vorgänger A einrücken
+    $comp->call('kapitelEinruecken', $b->id);
+    expect(FoodAlchemistFoodbookKapitel::find($b->id)->parent_id)->toBe($a->id);
+    expect(collect($this->foodbooks->kapitelTree($this->rootTeam, $fb->id))->firstWhere('title', 'B')['depth'])->toBe(1);
+
+    // Top-Kapitel A ist nicht ausrückbar → bleibt unverändert
+    $comp->call('kapitelAusruecken', $a->id);
+    expect(FoodAlchemistFoodbookKapitel::find($a->id)->parent_id)->toBeNull();
+
+    // B wieder ausrücken → zurück auf Top-Ebene, ans Ende der Geschwister
+    $comp->call('kapitelAusruecken', $b->id);
+    $bRow = FoodAlchemistFoodbookKapitel::find($b->id);
+    expect($bRow->parent_id)->toBeNull();
+    expect($bRow->position)->toBeGreaterThan(FoodAlchemistFoodbookKapitel::find($c->id)->position);
+});
+
 it('M11-02: Owner-Guard — Kind-Team kann geerbtes Foodbook nicht pflegen (D1)', function () {
     $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Root-FB']);
     expect(fn () => $this->foodbooks->update($this->childA, $fb->id, ['label' => 'Hack']))

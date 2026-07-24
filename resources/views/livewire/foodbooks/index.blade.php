@@ -54,6 +54,8 @@
                                         class="flex-1 min-w-0 text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['title'] }}</button>
                                 <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[10px]" title="hoch">▲</button>
                                 <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[10px]" title="runter">▼</button>
+                                <button type="button" wire:click="kapitelAusruecken({{ $kt['id'] }})" @disabled($kt['parent_id'] === null) class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[10px] disabled:opacity-0" title="ausrücken (eine Ebene höher)">⬅</button>
+                                <button type="button" wire:click="kapitelEinruecken({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[10px]" title="einrücken (unter vorheriges Kapitel)">➡</button>
                                 <button type="button" wire:click="kapitelNeu({{ $kt['id'] }})" class="shrink-0 text-violet-400 hover:text-violet-600 text-xs px-1 leading-none" title="Unterkapitel anlegen">＋</button>
                                 <button type="button" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 text-[11px]" title="löschen">✕</button>
                             </div>
