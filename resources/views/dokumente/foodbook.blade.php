@@ -61,11 +61,16 @@
         .toc a .np { float: right; color: #6b7280; }
         .toc a .pipe { color: {{ $brand }}; font-weight: bold; }
 
-        /* ── Kapitel / Inhalt ── */
+        /* ── Kapitel / Inhalt ──
+           E8.3: depth-basierte Überschriften h3 (Ebene 0) / h4 (Ebene 1) / h5 (Ebene ≥2, gekappt) —
+           semantische Tiefen-Hierarchie statt nur Einrückung; gemeinsame Basis-Optik, abnehmende Größe. */
         .kapitel { margin-bottom: 16px; }
-        .kapitel h2 { font-size: 15px; color: #111827; margin: 22px 0 6px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
-        .kapitel h2 .pipe { color: {{ $brand }}; font-weight: bold; }
-        .kapitel:first-of-type h2 { margin-top: 4px; }
+        .kapitel h3, .kapitel h4, .kapitel h5 { color: #111827; margin: 22px 0 6px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; font-weight: bold; }
+        .kapitel h3 { font-size: 15px; }
+        .kapitel h4 { font-size: 13px; }
+        .kapitel h5 { font-size: 12px; }
+        .kapitel h3 .pipe, .kapitel h4 .pipe, .kapitel h5 .pipe { color: {{ $brand }}; font-weight: bold; }
+        .kapitel:first-of-type h3 { margin-top: 4px; }
         .kapitel .kpreis { float: right; color: #6b7280; font-size: 11px; font-weight: normal; }
         .kapitel .kpreis .ek { color: #9333ea; }
         .kapitel .kpreis .wpz { color: #059669; }
@@ -163,8 +168,9 @@
 
     {{-- ── INHALT ── --}}
     @forelse($kapitel as $k)
+        @php($hTag = 'h' . min(5, 3 + (int) ($k['depth'] ?? 0)))
         <div class="kapitel" style="margin-left: {{ $k['depth'] * 14 }}px">
-            <h2 id="{{ $k['anker'] }}">
+            <{{ $hTag }} id="{{ $k['anker'] }}">
                 @if($k['vk_pro_person'] > 0)
                     <span class="kpreis">
                         {{ number_format($k['vk_pro_person'], 2, ',', '.') }} €/P
@@ -175,7 +181,7 @@
                     </span>
                 @endif
                 <span class="pipe">|</span> {{ $istIntern ? ($k['title_intern'] ?: $k['title']) : $k['title'] }}
-            </h2>
+            </{{ $hTag }}>
 
             @forelse($k['bloecke'] as $blk)
                 @php($istHeader = $blk['ist_header'] ?? false)
@@ -193,8 +199,10 @@
                     <table class="cblock">
                         <tr>
                             <td class="cprice">
+                                {{-- E8.3: €/Gast (Konzept-Paket) vs. €/Position (Einzelgericht) konsistent zur Preise-Kalkulation --}}
+                                @php($einheit = $blk['preis_einheit'] ?? null)
                                 @if($preisPP > 0)
-                                    <div class="val">{{ number_format($preisPP, 2, ',', '.') }} €</div><div class="basis">pro Person</div>
+                                    <div class="val">{{ number_format($preisPP, 2, ',', '.') }} €</div><div class="basis">{{ $einheit === 'position' ? 'pro Position' : 'pro Gast' }}</div>
                                 @elseif($pauschal > 0)
                                     <div class="val">{{ number_format($pauschal, 2, ',', '.') }} €</div><div class="basis">pauschal</div>
                                 @endif

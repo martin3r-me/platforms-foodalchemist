@@ -1563,7 +1563,8 @@ class FoodbookService
             // Wording-Kette: Slots (inkl. Paket-Gerichte) fürs Auflösen der Gericht-Zeilen
             'chapters.blocks.concept.slots.dish:id,name,sales_wording_standard',
             'chapters.blocks.concept.slots.package.dishes.dish:id,name,sales_wording_standard',
-            'chapters.blocks.dish:id,name,sales_wording_standard',
+            // E8.3: recipe_ref braucht sales_net/ek_total_eur für die €/Position-Preisspalte (blockPreis) — sonst rendert der Preis leer.
+            'chapters.blocks.dish:id,name,sales_wording_standard,sales_net,ek_total_eur',
             'crmCompany', 'crmContact',
         ]);
         $pax = $fb->personen;
@@ -1588,9 +1589,17 @@ class FoodbookService
                         : [];
                     // Block-Preis für die Preis-links-Spalte (Referenz-Layout „x € pro Person").
                     $bp = $this->blockPreis($b, $pax);
+                    // E8.3: €/Gast vs. €/Position — Preis-Einheit typ-getrieben (spiegelt LeitstelleService::preiseBaum):
+                    // concept_ref = Paket → pro Gast · recipe_ref = Einzelgericht → pro Position · sonst null (Header/Text).
+                    $preisEinheit = match ($b->type) {
+                        'concept_ref' => 'gast',
+                        'recipe_ref' => 'position',
+                        default => null,
+                    };
                     $bloecke[] = ['type' => $b->type, 'label' => $label, 'untertitel' => $untertitel,
                         'gerichte' => $gerichte, 'ist_header' => str_starts_with((string) $b->type, 'header'),
-                        'preis_pp' => (float) $bp['vk_pp'], 'pauschal' => (float) $bp['pauschal']];
+                        'preis_pp' => (float) $bp['vk_pp'], 'pauschal' => (float) $bp['pauschal'],
+                        'preis_einheit' => $preisEinheit];
                 }
                 $agg = $this->kapitelAggregat($team, $k, $pax);
                 $row = [

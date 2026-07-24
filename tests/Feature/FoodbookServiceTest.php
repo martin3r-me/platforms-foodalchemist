@@ -342,3 +342,58 @@ it('R3.2 Präsentation (Block C): rendert Kundensicht + Preis pro Person, KEINE 
         ->assertDontSee('Wareneinsatz')   // EK-Leak-Guard: interne Marge darf NIE erscheinen
         ->assertDontSee('INTERN');
 });
+
+it('E8.3: Dokument-Blade rendert depth-basierte Überschriften h3/h4/h5', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Tiefen-FB', 'personen' => 50]);
+    $l0 = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Ebene 0']);
+    $l1 = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Ebene 1'], $l0->id);
+    $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Ebene 2'], $l1->id);
+    // Datenschicht: depth 0/1/2 (Rollup-fähig auch für tiefe Bäume)
+    $rows = collect($this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), false)['kapitel']);
+    expect($rows->firstWhere('title', 'Ebene 0')['depth'])->toBe(0)
+        ->and($rows->firstWhere('title', 'Ebene 1')['depth'])->toBe(1)
+        ->and($rows->firstWhere('title', 'Ebene 2')['depth'])->toBe(2);
+
+    $html = view('foodalchemist::dokumente.foodbook',
+        $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), false) + ['istPdf' => false])->render();
+    // Ebene 0 = h3, Ebene 1 = h4, Ebene 2 = h5 (gekappt bei h5)
+    expect($html)->toContain('<h3 id="k' . $l0->id . '"')
+        ->toContain('<h4 id="k' . $l1->id . '"')
+        ->toContain('<h5 id="k');
+});
+
+it('E8.3: Dokument unterscheidet €/Gast (Konzept) vs. €/Position (Einzelgericht)', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Duality-FB', 'personen' => 40]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Gemischt']);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->gericht->id]);
+
+    // Datenschicht: preis_einheit typ-getrieben
+    $bloecke = collect($this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), false)['kapitel'][0]['bloecke']);
+    expect($bloecke->firstWhere('type', 'concept_ref')['preis_einheit'])->toBe('gast')
+        ->and($bloecke->firstWhere('type', 'recipe_ref')['preis_einheit'])->toBe('position');
+
+    $html = view('foodalchemist::dokumente.foodbook',
+        $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), false) + ['istPdf' => false])->render();
+    expect($html)->toContain('pro Gast')->toContain('pro Position');
+});
+
+it('E8.3: Entwurf-Ideen erscheinen NIE in der Kundensicht (Dokument)', function () {
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Skizzen-FB', 'personen' => 30]);
+    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Kapitel mit Skizze']);
+    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
+    // Skizzen-Ebene: Entwurf-Idee erdet nichts, ist kein Block → darf im Kundendokument NICHT auftauchen.
+    app(\Platform\FoodAlchemist\Services\IdeenService::class)
+        ->add($this->rootTeam, ['chapter_id' => $kap->id, 'title' => 'GEHEIME-SKIZZE-Wildkräuterschaum']);
+
+    $rows = collect($this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), false)['kapitel']);
+    $labels = $rows->flatMap(fn ($k) => collect($k['bloecke'])->pluck('label'))->all();
+    expect($labels)->not->toContain('GEHEIME-SKIZZE-Wildkräuterschaum');
+
+    $kundeHtml = view('foodalchemist::dokumente.foodbook',
+        $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), false) + ['istPdf' => false])->render();
+    $internHtml = view('foodalchemist::dokumente.foodbook',
+        $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh(), true) + ['istPdf' => false])->render();
+    expect($kundeHtml)->not->toContain('GEHEIME-SKIZZE')
+        ->and($internHtml)->not->toContain('GEHEIME-SKIZZE');
+});

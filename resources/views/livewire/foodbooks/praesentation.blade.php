@@ -32,9 +32,11 @@
 
         {{-- ── Kapitel ───────────────────────────────────────────────────── --}}
         @forelse($kapitel as $k)
+            {{-- E8.3: depth-basierte Überschrift unter dem h1-Hero — Ebene 0 = h2, tiefer h3/h4/h5 (gekappt). --}}
+            @php($hTag = 'h' . min(5, 2 + (int) ($k['depth'] ?? 0)))
             <div class="{{ $sectionCard }}" style="margin-left: {{ $k['depth'] * 20 }}px" wire:key="praes-{{ $k['anker'] }}">
                 <div class="flex items-start justify-between gap-4 mb-3">
-                    <h2 class="text-lg font-medium tracking-tight text-gray-900">{{ $k['title'] }}</h2>
+                    <{{ $hTag }} class="text-lg font-medium tracking-tight text-gray-900">{{ $k['title'] }}</{{ $hTag }}>
                     @if($k['vk_pro_person'] > 0)
                         <div class="text-right shrink-0">
                             <div class="text-lg font-semibold text-violet-600">{{ number_format($k['vk_pro_person'], 2, ',', '.') }} €</div>
