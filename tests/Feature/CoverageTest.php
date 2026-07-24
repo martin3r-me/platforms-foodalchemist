@@ -187,3 +187,69 @@ it('E2.2 Coverage-Tiefe: Eltern-Slot sieht Enkel-Gerichte (Nachfahren-Rollup)', 
         ->and($byLabel['Slot „Eltern-Ziel“']['ist'])->toBe('2 Gerichte')
         ->and($byLabel['Slot „Enkel-Ziel“']['ampel'])->toBe('erfuellt');
 });
+
+it('E4.3 pruefeKapitel: Kapitel-Mengenziel misst den Nachfahren-Rollup (Befund mit chapter_id)', function () {
+    $foodbooks = app(FoodbookService::class);
+    $fb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'label' => 'FB Kapitel-Ziel']);
+    // Eltern (kein direkter Block) → Enkel trägt das Concept (2 Gerichte).
+    $eltern = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Warme Küche']);
+    $kind = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Aus dem Ofen'], $eltern->id);
+    $kind->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'concept_ref', 'concept_id' => $this->concept->id, 'position' => 0, 'visible' => true]);
+    // M3-Mengenziel am Eltern-Kapitel: 3 gefordert, 2 im Rollup → teilerfüllt.
+    $foodbooks->updateKapitel($this->rootTeam, $eltern->id, ['target_count' => 3]);
+
+    // Ein Gerüst muss existieren (sonst hat_geruest=false), aber OHNE Slot fürs Eltern-Kapitel.
+    $frame = $this->frames->frameFor($this->rootTeam, 'foodbook', $fb->id);
+    $this->frames->addSlot($this->rootTeam, $frame, ['label' => 'Neutral', 'target_count' => 1, 'chapter_id' => $kind->id]);
+
+    $cov = $this->svc->coverage($this->rootTeam, 'foodbook', $fb->id);
+    $kap = collect($cov['befunde'])->firstWhere('label', 'Kapitel „Warme Küche“');
+
+    expect($kap)->not->toBeNull()
+        ->and($kap['dimension'])->toBe('menge')
+        ->and($kap['ampel'])->toBe('teilerfuellt')
+        ->and($kap['ist'])->toBe('2 Gerichte')
+        ->and($kap['slot_id'])->toBeNull()
+        ->and($kap['chapter_id'])->toBe($eltern->id)
+        ->and($kap['fill_filter'])->toBe(['chapter_id' => $eltern->id]);
+});
+
+it('E4.3 Vorrangregel: Kapitel-Ziel gewinnt, gestempelter Slot liefert KEINEN Doppel-Menge-Befund', function () {
+    $foodbooks = app(FoodbookService::class);
+    $fb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'label' => 'FB Vorrang']);
+    $kapitel = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Hauptgänge']);
+    $kapitel->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'concept_ref', 'concept_id' => $this->concept->id, 'position' => 0, 'visible' => true]);
+    // Kapitel UND Slot tragen dasselbe Mengenziel (E4.1-Stempelung-Szenario).
+    $foodbooks->updateKapitel($this->rootTeam, $kapitel->id, ['target_count' => 2]);
+    $frame = $this->frames->frameFor($this->rootTeam, 'foodbook', $fb->id);
+    $this->frames->addSlot($this->rootTeam, $frame, ['label' => 'Hauptgänge', 'chapter_id' => $kapitel->id, 'target_count' => 2]);
+
+    $cov = $this->svc->coverage($this->rootTeam, 'foodbook', $fb->id);
+    $mengeBefunde = collect($cov['befunde'])->where('dimension', 'menge');
+
+    // Genau EIN Menge-Befund — vom Kapitel, nicht vom Slot (Vorrangregel).
+    expect($mengeBefunde)->toHaveCount(1)
+        ->and($mengeBefunde->first()['chapter_id'])->toBe($kapitel->id)
+        ->and($mengeBefunde->first()['slot_id'])->toBeNull()
+        ->and($mengeBefunde->first()['ampel'])->toBe('erfuellt')
+        // Der Slot selbst erzeugt keine eigene Menge-Zeile mehr.
+        ->and(collect($cov['befunde'])->where('label', 'Slot „Hauptgänge“')->where('dimension', 'menge'))->toHaveCount(0);
+});
+
+it('E4.3 Kapitel-Preisspanne: Ø-VK über der Spanne → verletzt', function () {
+    $foodbooks = app(FoodbookService::class);
+    $fb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'label' => 'FB Kapitel-Preis']);
+    $kapitel = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Hauptgänge']);
+    $kapitel->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'concept_ref', 'concept_id' => $this->concept->id, 'position' => 0, 'visible' => true]);
+    // Ø sales_net = (12 + 18) / 2 = 15 € → über price_max 13.
+    $foodbooks->updateKapitel($this->rootTeam, $kapitel->id, ['price_max' => 13.00]);
+    $this->frames->frameFor($this->rootTeam, 'foodbook', $fb->id);
+
+    $cov = $this->svc->coverage($this->rootTeam, 'foodbook', $fb->id);
+    $preis = collect($cov['befunde'])->firstWhere(fn ($b) => $b['dimension'] === 'preis' && $b['chapter_id'] === $kapitel->id);
+
+    expect($preis)->not->toBeNull()
+        ->and($preis['ampel'])->toBe('verletzt')
+        ->and($preis['ist'])->toBe('Ø 15,00 €')
+        ->and($preis['hinweis'])->toContain('Über der Kapitel-Preisspanne');
+});
