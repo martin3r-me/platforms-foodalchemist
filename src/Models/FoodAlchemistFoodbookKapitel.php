@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
@@ -49,5 +50,16 @@ class FoodAlchemistFoodbookKapitel extends Model
     public function blocks(): HasMany
     {
         return $this->hasMany(FoodAlchemistFoodbookBlock::class, 'chapter_id')->orderBy('position');
+    }
+
+    /** Zielgruppen des Kapitels (Spec 19, M1) — 1–n, überschreiben Foodbook-Default in der Kaskade. */
+    public function targetGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            FoodAlchemistTargetGroup::class,
+            'foodalchemist_chapter_target_groups',
+            'chapter_id',
+            'target_group_id'
+        );
     }
 }

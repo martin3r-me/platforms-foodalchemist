@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
@@ -67,5 +68,16 @@ class FoodAlchemistFoodbook extends Model
     public function crmContact(): BelongsTo
     {
         return $this->belongsTo(\Platform\Crm\Models\CrmContact::class, 'crm_contact_id');
+    }
+
+    /** Default-Zielgruppen (Spec 19, M1) — 1–n, kaskadieren als Foodbook-Boden. */
+    public function targetGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            FoodAlchemistTargetGroup::class,
+            'foodalchemist_foodbook_target_groups',
+            'foodbook_id',
+            'target_group_id'
+        );
     }
 }

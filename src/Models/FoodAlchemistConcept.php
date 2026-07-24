@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
@@ -170,6 +171,17 @@ class FoodAlchemistConcept extends Model
     public function saisons()
     {
         return $this->seasons();
+    }
+
+    /** Zielgruppen-Stempel (Spec 19, Entscheidung 6) — gesetzt beim Kapitel-Go. */
+    public function targetGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            FoodAlchemistTargetGroup::class,
+            'foodalchemist_concept_target_groups',
+            'concept_id',
+            'target_group_id'
+        );
     }
 
     /** Mehrwertige Sektor-Eignung (M10R-1, §10.8 — VK-Parität). */
