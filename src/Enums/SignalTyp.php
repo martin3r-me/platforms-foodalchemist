@@ -26,6 +26,8 @@ enum SignalTyp: string
     case VertragsfristFaellig = 'vertragsfrist_faellig';
     // R6.11 · S2: Pairing-Wissensdokument behauptet eine Paarung, die der Anker-Graph nicht kennt (R&D-Frage).
     case WiderspruchWissenGraph = 'widerspruch_wissen_graph';
+    // Spec 19 E9.3: Kreativ-Phase wünscht ein Aroma, das kein beschaffbarer GP trägt (Sortiments-/Buy-Signal).
+    case SortimentsLuecke = 'sortiments_luecke';
 
     public function label(): string
     {
@@ -43,6 +45,7 @@ enum SignalTyp: string
             self::VkAnpassungEmpfohlen => 'VK-Anpassung empfohlen',
             self::VertragsfristFaellig => 'Vertragsfrist fällig',
             self::WiderspruchWissenGraph => 'Widerspruch Wissen ↔ Graph',
+            self::SortimentsLuecke => 'Sortiments-Lücke',
         };
     }
 
@@ -63,6 +66,7 @@ enum SignalTyp: string
             self::VkAnpassungEmpfohlen => 'heroicon-o-tag',
             self::VertragsfristFaellig => 'heroicon-o-calendar-days',
             self::WiderspruchWissenGraph => 'heroicon-o-light-bulb',
+            self::SortimentsLuecke => 'heroicon-o-shopping-bag',
         };
     }
 }

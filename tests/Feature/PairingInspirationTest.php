@@ -31,6 +31,7 @@ beforeEach(function () {
     $this->zander = $mkAnker('zander');
     $this->roteBete = $mkAnker('rote_bete');
     $this->meerrettich = $mkAnker('meerrettich');
+    $this->dill = $mkAnker('dill');
 
     $mkKante = function (int $a, int $b, string $typ) {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
@@ -42,6 +43,7 @@ beforeEach(function () {
     };
     $mkKante($this->zander, $this->roteBete, 'klassisch');
     $mkKante($this->zander, $this->meerrettich, 'aroma');
+    $mkKante($this->zander, $this->dill, 'klassisch');
 
     $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);
     $this->mkGpMitAnker = function (string $name, int $ankerId, array $overrides = [], bool $mitLeadLa = false) use ($supplier) {
@@ -64,8 +66,10 @@ beforeEach(function () {
 
         return $gp->refresh();
     };
-    // „Rote Bete"-GP trägt den Nachbar-Anker rote_bete und hat einen Lead-LA (führen/leicht).
+    // „Rote Bete"-GP = Favorit (bucket 'fuehren'); „Dill"-GP = Lead-LA + Preis, kein Favorit (bucket 'leicht');
+    // meerrettich hat keinen tragenden GP → Nachbar-Lücke.
     $this->gpRoteBete = ($this->mkGpMitAnker)('Rote Bete', $this->roteBete, ['is_favorite' => true], true);
+    $this->gpDill = ($this->mkGpMitAnker)('Dill', $this->dill, [], true);
 });
 
 it('E9.2: voll_kreativ = abstrakt — Aroma-Nachbarn ohne GP', function () {
@@ -102,4 +106,44 @@ it('E9.2: ungültiger Modus fällt auf hybrid (geerdet) zurück; sucheAnker find
 
     $treffer = $this->svc->sucheAnker('Rote');
     expect($treffer->pluck('slug')->all())->toContain('rote_bete');
+});
+
+it('E9.3: Verfügbarkeits-Buckets führen/leicht/Lücke + Nachbar-Lücke-Flag', function () {
+    $out = $this->svc->inspiration($this->rootTeam, ['zander'], 'hybrid');
+    $nachbarn = collect($out['inspiration'][0]['nachbarn']);
+
+    // führen = Favorit
+    $rb = $nachbarn->firstWhere('slug', 'rote_bete');
+    expect(collect($rb['gps'])->firstWhere('name', 'Rote Bete')['bucket'])->toBe('fuehren')
+        ->and($rb['luecke'])->toBeFalse();
+
+    // leicht = Lead-LA + Preis, kein Favorit
+    $dill = $nachbarn->firstWhere('slug', 'dill');
+    expect(collect($dill['gps'])->firstWhere('name', 'Dill')['bucket'])->toBe('leicht')
+        ->and($dill['luecke'])->toBeFalse();
+
+    // Lücke = kein tragender GP → Nachbar-Lücke-Flag true
+    $mr = $nachbarn->firstWhere('slug', 'meerrettich');
+    expect($mr['gps'])->toBe([])->and($mr['luecke'])->toBeTrue();
+});
+
+it('E9.3: GP mit Anker aber ohne beschaffbaren LA = Lücke-Bucket', function () {
+    // „Wilder Meerrettich" trägt meerrettich, aber KEIN Lead-LA → bucket luecke, Nachbar bleibt Lücke.
+    ($this->mkGpMitAnker)('Wilder Meerrettich', $this->meerrettich, [], false);
+
+    $out = $this->svc->inspiration($this->rootTeam, ['zander'], 'hybrid');
+    $mr = collect($out['inspiration'][0]['nachbarn'])->firstWhere('slug', 'meerrettich');
+    expect(collect($mr['gps'])->firstWhere('name', 'Wilder Meerrettich')['bucket'])->toBe('luecke')
+        ->and($mr['luecke'])->toBeTrue();   // einziger Carrier ist Lücke → Nachbar Lücke
+});
+
+it('E9.3: meldeLuecke legt idempotent EIN Sortiments-Lücke-Signal an', function () {
+    $s1 = $this->svc->meldeLuecke($this->rootTeam, 'meerrettich', ['kapitel_id' => 7]);
+    $s2 = $this->svc->meldeLuecke($this->rootTeam, 'meerrettich');
+
+    expect($s1->type)->toBe(\Platform\FoodAlchemist\Enums\SignalTyp::SortimentsLuecke)
+        ->and($s2->id)->toBe($s1->id)   // dedup: dasselbe offene Signal aktualisiert
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistSignal::where('team_id', $this->rootTeam->id)
+            ->where('type', 'sortiments_luecke')->count())->toBe(1)
+        ->and($s1->title)->toContain('Meerrettich');
 });

@@ -116,6 +116,64 @@ class FavoriteGpService
         return $pinned->concat($rest)->sortByDesc('score')->values();
     }
 
+    /**
+     * Spec 19 E9.3: Verfügbarkeits-Bucket je GP für die Kreativ-Erdung.
+     *   - fuehren = kuratierter Haus-Standard (is_favorite)
+     *   - leicht  = beschaffbar JETZT (Lead-LA gesetzt UND auf Preis auflösend)
+     *   - luecke  = keine beschaffbare Quelle (kein Lead-LA oder kein Preis)
+     * Reine Read-Sicht, spiegelt die suggest()-Subqueries; team-sichtbar, ohne approved-Filter
+     * (Verfügbarkeit ≠ Datenqualität — auch ein tentativer GP mit bepreistem LA ist beschaffbar).
+     *
+     * @param  list<int>  $gpIds
+     * @return array<int, array{bucket: string, has_lead_la: bool, has_price: bool, priority_pos: ?int, is_favorite: bool}>
+     */
+    public function verfuegbarkeit(?Team $team, array $gpIds): array
+    {
+        $gpIds = array_values(array_unique(array_map('intval', $gpIds)));
+        if ($gpIds === []) {
+            return [];
+        }
+        $prioritaeten = $team !== null ? $this->settings->leadLaPrioritaeten($team) : [];
+        $prioPos = array_flip(array_values(array_map('intval', $prioritaeten))); // supplier_id => index
+
+        $q = DB::table('foodalchemist_gps AS g')->whereNull('g.deleted_at')->whereIn('g.id', $gpIds);
+        if ($team !== null) {
+            TeamScope::applyVisible($q, 'g.team_id', $team); // NULL (global) ∪ Ancestry — wie favoritesBaseQuery
+        }
+        $rows = $q
+            ->select(['g.id', 'g.is_favorite', 'g.lead_la_supplier_item_id'])
+            ->selectSub(
+                DB::table('foodalchemist_supplier_items AS li')
+                    ->whereColumn('li.id', 'g.lead_la_supplier_item_id')->whereNull('li.deleted_at')
+                    ->selectRaw('li.supplier_id'),
+                'lead_supplier_id',
+            )
+            ->selectSub(
+                DB::table('foodalchemist_prices AS p')
+                    ->whereColumn('p.supplier_item_id', 'g.lead_la_supplier_item_id')->whereNull('p.deleted_at')
+                    ->selectRaw('COUNT(*)'),
+                'price_rows',
+            )
+            ->get();
+
+        $out = [];
+        foreach ($rows as $r) {
+            $isFav = (bool) $r->is_favorite;
+            $hasLead = $r->lead_la_supplier_item_id !== null;
+            $hasPrice = ((int) $r->price_rows) > 0;
+            $priorityPos = ($r->lead_supplier_id !== null && isset($prioPos[(int) $r->lead_supplier_id]))
+                ? (int) $prioPos[(int) $r->lead_supplier_id] : null;
+
+            $bucket = $isFav ? 'fuehren' : (($hasLead && $hasPrice) ? 'leicht' : 'luecke');
+            $out[(int) $r->id] = [
+                'bucket' => $bucket, 'has_lead_la' => $hasLead, 'has_price' => $hasPrice,
+                'priority_pos' => $priorityPos, 'is_favorite' => $isFav,
+            ];
+        }
+
+        return $out;
+    }
+
     /** Aktuell gepinnte Favoriten (nach Rang), team-sichtbar. */
     public function current(?Team $team): Collection
     {

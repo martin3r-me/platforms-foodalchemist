@@ -184,7 +184,7 @@ Kein platform-core/crm; KI-Neu-Erstellung = L7/L8 (nur Verdrahtung/Queue); R2.4-
 
 - [x] E9.1 M6: `foodbooks.creative_mode_default` + `chapters.creative_mode` (nullable, Model-Const `CREATIVE_MODES`); `FELDER`/`KAPITEL_FELDER`; Resolver `kreativModus(Kapitel)` (Kaskade Kapitel→Foodbook→`hybrid`) + `leitplanken()`-Integration; Pest Kaskade — ✅ 2026-07-25
 - [x] E9.2 `PairingInspirationService::inspiration(Team, $seeds, $modus)` + `PairingService::gpsForAnkerIds` (Anker→GP-Reverse-Lookup, Doc-TODO geschlossen); abstrakt (voll_kreativ) vs. geerdet (hybrid/datenbank); read-only; 3 Pest — ✅ 2026-07-25
-- [ ] E9.3 Verfügbarkeits-Buckets (Anker→GP→LA-Status: führen/leicht/Lücke) + Lücke→Signale-Cockpit-Hook (idempotent); Pest
+- [x] E9.3 `FavoriteGpService::verfuegbarkeit` (Buckets führen/leicht/Lücke) → Buckets + Nachbar-`luecke`-Flag in `inspiration()`; neuer `SignalTyp::SortimentsLuecke` + `meldeLuecke()` (idempotent, bewusster Schreibpfad, kein Auto-Write); 4 Pest — ✅ 2026-07-25
 - [ ] E9.4 UI Kreativ-Tab: 3-Modus-Umschalter (pro Kapitel, Default aus Foodbook) + Pairing-Inspiration-Panel (rendert je Modus) + „erden?"-Pull pro Idee; kein Asset-Rebuild (Blade/Alpine/Livewire, dist NICHT anfassen)
 - [ ] E9.5 MCP-Lockstep: `creative_mode` in `foodbook_kapitel.PUT` + `foodbooks.POST/PUT`; neu `foodalchemist.pairing_inspiration.GET`; Pest + Tenancy — **BLOCKIERT solange `FoodAlchemistServiceProvider.php` Fremd-WIP trägt (Spec-20-Produktion), separat committen**
 - [ ] E9.6 Tests + Doku: Modus-Kaskade, Inspiration je Modus, Lücke→Signal; ROADMAP + Checkliste + `docs/foodbook.md`
