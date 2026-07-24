@@ -25,6 +25,9 @@ class ConcepterDimensionen extends Component
         // Spec 19 „Foodbook-Leitstelle" (E3.3): Zielgruppen-Vokabular (FA-nativ). Default am Foodbook,
         // Auswahl pro Kapitel, Stempel aufs Konzept beim Kapitel-Go (Pivots aus M1).
         'zielgruppen' => ['tabelle' => 'foodalchemist_target_groups', 'label' => 'Zielgruppen', 'hint' => 'Default am Foodbook + Auswahl pro Kapitel (Tagungsgast, Bankett-Gast, VIP-Gala …)'],
+        // Spec 19 „Foodbook-Leitstelle" (E3.6): Outlet-Vokabular (FA-nativ). NUR optionaler Kapitel-Tag
+        // (Ausgabestelle) — KEINE Planungs-Ebene, NICHT in leitplanken(). Keine Seeds — rein team-definiert.
+        'outlets' => ['tabelle' => 'foodalchemist_outlets', 'label' => 'Outlets', 'hint' => 'optionaler Kapitel-Tag = Ausgabestelle (Restaurant, Bankett, Bar …) — keine Planungs-Ebene'],
     ];
 
     /** @var array<string, string> Add-Form (Name) je Vokabular */
@@ -141,6 +144,8 @@ class ConcepterDimensionen extends Component
             'zielgruppen' => DB::table('foodalchemist_foodbook_target_groups')->where('target_group_id', $id)->count()
                 + DB::table('foodalchemist_chapter_target_groups')->where('target_group_id', $id)->count()
                 + DB::table('foodalchemist_concept_target_groups')->where('target_group_id', $id)->count(),
+            // Spec 19 (E3.6): Outlet-Tag am Kapitel (lose Spalte, keine Pivot/FK).
+            'outlets' => DB::table('foodalchemist_foodbook_chapters')->where('outlet_id', $id)->whereNull('deleted_at')->count(),
             default => 0,
         };
     }

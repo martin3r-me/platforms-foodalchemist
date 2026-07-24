@@ -42,6 +42,12 @@ class FoodAlchemistFoodbookKapitel extends Model
         return $this->belongsTo(self::class, 'parent_id');
     }
 
+    /** Optionaler Outlet-Tag (Spec 19, E3.6) — lose BelongsTo, keine harte FK. */
+    public function outlet(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistOutlet::class, 'outlet_id');
+    }
+
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id')->orderBy('position');
