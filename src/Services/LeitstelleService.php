@@ -230,6 +230,46 @@ class LeitstelleService
         return $baum;
     }
 
+    /**
+     * Kapitel-Matrix für die Fortschritt-/Kalkulation-Rail (E5.3): pro Kapitel ein
+     * Planungs-Status (hat_ziele/positionen/hat_inhalt/bepreist/released) + die
+     * Wareneinsatz-Ampel. Read-only; teilt die Ziele-/Inhalts-Heuristik mit `checkliste()`
+     * (dieselben privaten Helfer) und dient E5.4 (`leitstelle.GET`) als Kapitel-Sektion.
+     *
+     * @return list<array{kapitel_id:int, titel:string, parent_id:?int, depth:int,
+     *   hat_ziele:bool, positionen:int, hat_inhalt:bool, bepreist:bool, released:bool,
+     *   wareneinsatz:array}>
+     */
+    public function kapitelMatrix(Team $team, FoodAlchemistFoodbook $fb): array
+    {
+        $fb = $this->ladeFoodbook($team, $fb);
+        $rows = [];
+        foreach ($fb->chapters as $k) {
+            $inhalt = $this->inhaltsBloecke($k);
+            $positionen = $inhalt->count() + $this->ideenAnzahl((int) $k->id);
+            $hatInhalt = $inhalt->count() > 0 || $k->released_at !== null;
+            $bepreist = false;
+            if ($hatInhalt) {
+                $agg = $this->foodbooks->kapitelAggregat($team, $k);
+                $bepreist = $agg['vk_pro_person'] > 0 || $agg['pauschal'] > 0;
+            }
+            $rows[] = [
+                'kapitel_id' => (int) $k->id,
+                'titel' => (string) $k->title,
+                'parent_id' => $k->parent_id !== null ? (int) $k->parent_id : null,
+                'depth' => $this->kapitelTiefe($k, $fb->chapters),
+                'hat_ziele' => $this->kapitelHatZiele($k),
+                'positionen' => $positionen,
+                'hat_inhalt' => $hatInhalt,
+                'bepreist' => $bepreist,
+                'released' => $k->released_at !== null,
+                'wareneinsatz' => $this->foodbooks->wareneinsatzAmpel($team, $fb, $k),
+            ];
+        }
+
+        return $rows;
+    }
+
     // ── intern ──────────────────────────────────────────────────────────────
 
     private function ladeFoodbook(Team $team, FoodAlchemistFoodbook $fb, bool $mitSlots = false): FoodAlchemistFoodbook

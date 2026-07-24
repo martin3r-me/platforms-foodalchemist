@@ -67,23 +67,15 @@
     </x-slot>
 
     <x-slot name="activity">
-        <x-ui-page-sidebar title="Portfolio (pro Person)" width="w-80" :maxWidth="520" storeKey="activityOpen" side="right">
-            @if($fb && $gesamt)
-                <div class="p-4 space-y-3">
-                    <div class="text-center py-2">
-                        <div class="text-2xl font-semibold text-gray-900 tabular-nums">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</div>
-                        <div class="{{ $label }}">pro Person · EK {{ number_format($gesamt['ek_per_person'], 2, ',', '.') }} €</div>
-                        <div class="text-[11px] text-gray-500 mt-1">Portfolio — person-unabhängig. Pax + Gesamtpreis liegen im Angebot.</div>
-                    </div>
-                    @if($kapitel && $kapitelAgg)
-                        <div class="pt-2 border-t border-black/5 text-xs space-y-1">
-                            <div class="{{ $label }}">Kapitel „{{ $kapitel->title }}"</div>
-                            <div class="flex justify-between"><span class="text-gray-600">€/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['vk_pro_person'], 2, ',', '.') }} €</span></div>
-                            <div class="flex justify-between"><span class="text-gray-600">EK/Person</span><span class="tabular-nums">{{ number_format($kapitelAgg['ek_per_person'], 2, ',', '.') }} €</span></div>
-                            @if($kapitelAgg['food_cost_percent'] !== null)<div class="flex justify-between"><span class="text-gray-600">Wareneinsatz</span><span class="tabular-nums">{{ number_format($kapitelAgg['food_cost_percent'], 1, ',', '.') }} %</span></div>@endif
-                        </div>
-                    @endif
-                </div>
+        {{-- E5.3: Leitstelle-Rail als Nested-Livewire (kontextsensitiv Kopf ⇄ Kapitel).
+             Re-Mount bei Selektions-Wechsel über den wire:key (foodbook.id + kapitel|'kopf');
+             Ziel-Edits melden sich via `leitstelle-kapitel-geaendert` an diesen Eltern zurück. --}}
+        <x-ui-page-sidebar title="Leitstelle" width="w-80" :maxWidth="520" storeKey="activityOpen" side="right">
+            @if($fb)
+                <livewire:foodalchemist.foodbooks.leitstelle-rail
+                    :foodbook-id="$fb->id"
+                    :kapitel-id="$selectedKapitelId"
+                    :key="'leitstelle-'.$fb->id.'-'.($selectedKapitelId ?? 'kopf')" />
             @else
                 <div class="p-6 text-center text-sm text-gray-500">Foodbook auswählen.</div>
             @endif
@@ -99,7 +91,10 @@
             {{-- E5.2: Sprung-Event-Bus — die Checkliste dispatcht `fb-goto` {tab, anker}; der Cockpit-Root
                  wechselt (falls der Tab existiert) und scrollt nach dem DOM-Flush zum Anker. Graceful:
                  unbekannter Tab → bleibt stehen (kein Blank), unbekannter Anker → kein Scroll. --}}
+            {{-- E5.3: `x-effect` meldet den aktiven Tab per Window-Event an die Leitstelle-Rail
+                 (Auto-Default je Tab, sofern die Rail nicht manuell gepinnt ist). --}}
             <div wire:key="fbcockpit-{{ $fb->id }}" x-data="{ tab: 'briefing' }" class="space-y-4"
+                 x-effect="$dispatch('fb-cockpit-tab', { tab })"
                  @fb-goto.window="let d=$event.detail; if(d.tab && $root.querySelector(`[data-fb-tab='${d.tab}']`)) tab=d.tab; $nextTick(()=>{ if(d.anker){ let el=$root.querySelector(`[data-fb-anker='${d.anker}']`); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } });">
 
                 {{-- Tab-Leiste + Foodbook-Aktionen — Speichern/Dokument/Präsentation/Löschen gelten fürs GANZE

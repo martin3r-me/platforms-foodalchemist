@@ -2,8 +2,11 @@
 
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Foodbooks\Index as FoodbooksIndex;
+use Platform\FoodAlchemist\Livewire\Foodbooks\LeitstelleRail;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
+use Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup;
 use Platform\FoodAlchemist\Services\ConceptService;
+use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\PaketService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -111,4 +114,61 @@ it('Foodbook-Editor: Leitstellen-Checkliste rendert 7 klickbare Schritte auf Tab
 
     // Genau 7 Schritte, alle mit Status-Attribut
     expect(substr_count($html, 'data-checkliste-schritt="'))->toBe(7);
+});
+
+// ── Spec 19 E5.3: Leitstelle-Rail (Nested-Livewire) — Kopf- vs. Kapitel-Modus ──
+
+it('Leitstelle-Rail Kopf-Modus: 3-Panel-Umschalter + Checkliste + Kapitel-Matrix', function () {
+    $svc = app(FoodbookService::class);
+    $fb = $svc->create($this->rootTeam, ['label' => 'Rail-FB']);
+    $svc->addKapitel($this->rootTeam, $fb->id, ['title' => 'Vorspeisen']);
+
+    $html = Livewire::test(LeitstelleRail::class, ['foodbookId' => $fb->id, 'kapitelId' => null])
+        ->assertOk()
+        ->assertSee('data-rail-kopf', false)
+        ->assertSee('data-rail-panel-btn="fortschritt"', false)
+        ->assertSee('data-rail-panel-btn="speisen"', false)
+        ->assertSee('data-rail-panel-btn="kalkulation"', false)
+        ->assertSee('data-rail-matrix', false)
+        ->assertSee('fb-cockpit-tab', false)                 // Auto-Default-Event-Listener verdrahtet
+        ->assertSee('data-rail-progress', false)             // kompakter Fortschritts-Zähler
+        ->assertSee('Vorspeisen')
+        ->html();
+
+    // Kapitel-Planung darf im Kopf-Modus NICHT auftauchen.
+    expect($html)->not->toContain('data-rail-kapitel');
+});
+
+it('Leitstelle-Rail Kapitel-Modus: Ziele-Editing speichert M3-Spalten + meldet an den Eltern', function () {
+    $svc = app(FoodbookService::class);
+    $fb = $svc->create($this->rootTeam, ['label' => 'Rail-FB']);
+    $k = $svc->addKapitel($this->rootTeam, $fb->id, ['title' => 'Hauptgänge']);
+    $zg = FoodAlchemistTargetGroup::create(['team_id' => $this->rootTeam->id, 'name' => 'Bankett', 'sort_order' => 1]);
+
+    $comp = Livewire::test(LeitstelleRail::class, ['foodbookId' => $fb->id, 'kapitelId' => $k->id])
+        ->assertOk()
+        ->assertSee('data-rail-kapitel', false)
+        ->assertSee('data-rail-ziele', false)
+        ->assertSee('Bankett');
+
+    // M3-Ziele setzen → updateKapitel persistiert; Event ans Eltern-Cockpit.
+    $comp->set('ziel.target_count', 3)
+        ->set('ziel.niveau', 'gehoben')
+        ->set('ziel.price_anchor', 24.50)
+        ->call('zieleSpeichern')
+        ->assertDispatched('leitstelle-kapitel-geaendert');
+
+    $k->refresh();
+    expect((int) $k->target_count)->toBe(3)
+        ->and($k->niveau)->toBe('gehoben')
+        ->and((float) $k->price_anchor)->toBe(24.50);
+
+    // Zielgruppen-Chip toggeln → chapter_target_groups-Sync + Event.
+    $comp->call('zielgruppeToggle', $zg->id)
+        ->assertDispatched('leitstelle-kapitel-geaendert');
+    expect($k->targetGroups()->count())->toBe(1);
+
+    // Nochmals toggeln entfernt wieder.
+    $comp->call('zielgruppeToggle', $zg->id);
+    expect($k->targetGroups()->count())->toBe(0);
 });

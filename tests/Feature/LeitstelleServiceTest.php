@@ -137,3 +137,32 @@ it('speisenBaum trennt Paket (concept_ref, €/Gast) und Einzelgericht (recipe_r
         ->and($paket['preis_einheit'])->toBe('gast')
         ->and($paket['kinder'])->toHaveCount(1);   // ein Gericht im Konzept-Slot
 });
+
+// E5.3: kapitelMatrix speist die Fortschritt-Matrix + Kalkulation-WE-Panel der Rail.
+it('kapitelMatrix liefert je Kapitel Ziele-/Inhalts-/Preis-Status + WE-Ampel', function () {
+    $mit = $this->fbSvc->addKapitel($this->rootTeam, $this->fb->id, ['title' => 'Hauptgänge']);
+    $this->fbSvc->updateKapitel($this->rootTeam, $mit->id, ['target_count' => 2]);
+    $this->fbSvc->addBlock($this->rootTeam, $mit->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->dish->id]);
+    $leer = $this->fbSvc->addKapitel($this->rootTeam, $this->fb->id, ['title' => 'Leer']);
+
+    $matrix = collect($this->svc->kapitelMatrix($this->rootTeam, $this->fb->refresh()))->keyBy('titel');
+
+    expect($matrix)->toHaveCount(2);
+
+    $m = $matrix['Hauptgänge'];
+    expect($m['kapitel_id'])->toBe($mit->id)
+        ->and($m['depth'])->toBe(1)
+        ->and($m['hat_ziele'])->toBeTrue()
+        ->and($m['positionen'])->toBe(1)
+        ->and($m['hat_inhalt'])->toBeTrue()
+        ->and($m['bepreist'])->toBeTrue()             // sales_net 12 → Per-Person-VK > 0
+        ->and($m['released'])->toBeFalse()
+        ->and($m['wareneinsatz'])->toHaveKey('status');
+
+    $l = $matrix['Leer'];
+    expect($l['hat_ziele'])->toBeFalse()
+        ->and($l['positionen'])->toBe(0)
+        ->and($l['hat_inhalt'])->toBeFalse()
+        ->and($l['bepreist'])->toBeFalse()
+        ->and($l['wareneinsatz']['status'])->toBe('unbekannt');   // kein VK → unbekannt
+});

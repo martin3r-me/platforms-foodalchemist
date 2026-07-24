@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Foodbooks;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -528,6 +529,17 @@ class Index extends Component
         $this->markiert = [];
     }
 
+    /**
+     * E5.3: Die Leitstelle-Rail (Nested-Livewire) meldet Kapitel-Ziel-Edits hierher —
+     * no-op-Handler, damit der Eltern-Render (Kapitel-Kopf, Coverage, Checkliste) die
+     * Rail-Änderungen im Hauptbereich spiegelt.
+     */
+    #[On('leitstelle-kapitel-geaendert')]
+    public function leitstelleAktualisiert(): void
+    {
+        // absichtlich leer — der Livewire-Roundtrip löst das Re-Render aus
+    }
+
     private function ladeKapitelForm(FoodbookService $svc): void
     {
         if ($this->selectedKapitelId === null) {
@@ -895,8 +907,7 @@ class Index extends Component
             'feedbackAgg' => $feedbackAgg,
             'kapitelTree' => $fb !== null ? $svc->kapitelTree($team, $fb->id) : [],
             'kapitel' => $kapitel,
-            'kapitelAgg' => $kapitel !== null ? $svc->kapitelAggregat($team, $kapitel, $fb?->personen) : null,
-            'gesamt' => $fb !== null ? $svc->gesamt($team, $fb) : null,
+            // E5.3: Portfolio/Kapitel-Aggregat + WE ziehen jetzt in die Leitstelle-Rail (Nested-Livewire) um.
             'headerPresets' => FoodbookService::headerPresets(),
             'conceptKategorien' => app(\Platform\FoodAlchemist\Services\ConceptService::class)->categoriesFlat($team),
             'conceptKandidaten' => ($this->conceptSuche !== '' || $this->conceptKategorie !== null) && $this->selectedKapitelId !== null
