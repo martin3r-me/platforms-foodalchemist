@@ -185,9 +185,13 @@ class CoverageService
 
         $gerichte = collect();
         $scopes = [];
-        $kapitelMap = [];   // chapter_id → ['titel', 'gerichte', 'vk_pp']
+        $kapitelMap = [];   // chapter_id → ['titel', 'gerichte' (rollup), 'vk_pp']
+        $direktMap = [];    // chapter_id → direkte Gerichte (nur eigene Blöcke)
+        $kinder = [];       // parent_id (0 = Wurzel) → [child_id, …] — für Nachfahren-Rollup
         $saisonIds = [];
+        // 1. Durchlauf: direkte Gerichte je Kapitel + Baum-Kanten sammeln.
         foreach ($fb->chapters as $kapitel) {
+            $kinder[$kapitel->parent_id ?? 0][] = $kapitel->id;
             $zeilen = collect();
             foreach ($kapitel->blocks as $block) {
                 if ($block->dish) {
@@ -208,10 +212,11 @@ class CoverageService
                     }
                 }
             }
+            $direktMap[$kapitel->id] = $zeilen;
             $agg = $this->foodbooks->kapitelAggregat($team, $kapitel, $fb->personen);
             $kapitelMap[$kapitel->id] = [
                 'titel' => (string) $kapitel->title,
-                'gerichte' => $zeilen,
+                'gerichte' => $zeilen,   // wird unten durch Nachfahren-Rollup ersetzt
                 'vk_pp' => $agg['vk_pro_person'] > 0 ? (float) $agg['vk_pro_person'] : null,
             ];
             $gerichte = $gerichte->merge($zeilen);
@@ -219,6 +224,15 @@ class CoverageService
             if ($key !== '') {
                 $scopes[$key] = ($scopes[$key] ?? collect())->merge($zeilen);
             }
+        }
+        // 2. Durchlauf: Kapitel-Scope = Kapitel + alle Nachfahren (Ziel-/Slot-Sicht;
+        // vk_pp bleibt aus kapitelAggregat, das ist bereits rekursiv). unique('id') dedupt.
+        foreach ($kapitelMap as $cid => $data) {
+            $roll = $direktMap[$cid] ?? collect();
+            foreach ($this->nachfahrenIds($cid, $kinder) as $did) {
+                $roll = $roll->merge($direktMap[$did] ?? collect());
+            }
+            $kapitelMap[$cid]['gerichte'] = $roll->unique('id')->values();
         }
 
         $gesamt = $this->foodbooks->gesamt($team, $fb);
@@ -230,6 +244,28 @@ class CoverageService
             'saison_ids' => array_values(array_unique($saisonIds)),
             'kapitel' => $kapitelMap,
         ];
+    }
+
+    /**
+     * Iterative Nachfahren-Sammlung aus der parent→children-Map (spiegelt
+     * FoodbookService::descendantKapitelIds, aber ohne DB — der Baum ist schon geladen).
+     *
+     * @param  array<int,list<int>>  $kinder  parent_id (0 = Wurzel) → child ids
+     * @return list<int>
+     */
+    private function nachfahrenIds(int $kapitelId, array $kinder): array
+    {
+        $ids = [];
+        $stack = $kinder[$kapitelId] ?? [];
+        while ($stack) {
+            $id = array_pop($stack);
+            $ids[] = $id;
+            foreach ($kinder[$id] ?? [] as $kid) {
+                $stack[] = $kid;
+            }
+        }
+
+        return $ids;
     }
 
     // ── Prüfungen ───────────────────────────────────────────────────────
@@ -279,7 +315,13 @@ class CoverageService
         return [$this->befund('preis', null, 'Preis pro Person', $soll, $istText, 'erfuellt')];
     }
 
-    /** @return Collection|null Gerichte im Slot-Scope (Kapitel-ID > Label-Match), null = kein Ist-Bezug */
+    /**
+     * Gerichte im Slot-Scope (Kapitel-ID > Label-Match), null = kein Ist-Bezug.
+     * Kapitel-Verweis liefert Kapitel + ALLE Nachfahren (Rollup aus istFoodbook),
+     * damit ein Eltern-Slot Enkel-Gerichte sieht (Coverage-Tiefe, Spec 19 E2.2).
+     *
+     * @return Collection|null
+     */
     private function slotScope(FoodAlchemistPlanningFrameSlot $slot, array $ist): ?Collection
     {
         if ($slot->chapter_id !== null && isset($ist['kapitel'][$slot->chapter_id])) {

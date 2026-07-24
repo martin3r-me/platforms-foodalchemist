@@ -165,3 +165,25 @@ it('Foodbook-Ist: Kapitel-Match über chapter_id und Label, Menge zählt Concept
         ->and($byLabel['Slot „Fehlt komplett“']['dimension'])->toBe('dramaturgie')
         ->and($byLabel['Slot „Fehlt komplett“']['ist'])->toBe('kein Ist-Bezug');
 });
+
+it('E2.2 Coverage-Tiefe: Eltern-Slot sieht Enkel-Gerichte (Nachfahren-Rollup)', function () {
+    $fb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'label' => 'FB Tiefe']);
+    // Baum: Eltern → Kind → Enkel; Concept (2 Gerichte) hängt NUR am Enkel.
+    $eltern = $fb->chapters()->create(['team_id' => $this->rootTeam->id, 'title' => 'Warme Küche', 'position' => 0]);
+    $kind = $fb->chapters()->create(['team_id' => $this->rootTeam->id, 'parent_id' => $eltern->id, 'title' => 'Hauptgänge', 'position' => 0]);
+    $enkel = $fb->chapters()->create(['team_id' => $this->rootTeam->id, 'parent_id' => $kind->id, 'title' => 'Aus dem Ofen', 'position' => 0]);
+    $enkel->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'concept_ref', 'concept_id' => $this->concept->id, 'position' => 0, 'visible' => true]);
+
+    $frame = $this->frames->frameFor($this->rootTeam, 'foodbook', $fb->id);
+    // Ziel am ELTERN-Kapitel (hat selbst KEINE direkten Blöcke) → Rollup muss die 2 Enkel-Gerichte zählen.
+    $this->frames->addSlot($this->rootTeam, $frame, ['label' => 'Eltern-Ziel', 'chapter_id' => $eltern->id, 'target_count' => 2]);
+    // Ziel am ENKEL selbst bleibt ebenfalls erfüllt (Basisfall).
+    $this->frames->addSlot($this->rootTeam, $frame, ['label' => 'Enkel-Ziel', 'chapter_id' => $enkel->id, 'target_count' => 2]);
+
+    $cov = $this->svc->coverage($this->rootTeam, 'foodbook', $fb->id);
+    $byLabel = collect($cov['befunde'])->keyBy('label');
+
+    expect($byLabel['Slot „Eltern-Ziel“']['ampel'])->toBe('erfuellt')   // 2/2 via Nachfahren-Rollup
+        ->and($byLabel['Slot „Eltern-Ziel“']['ist'])->toBe('2 Gerichte')
+        ->and($byLabel['Slot „Enkel-Ziel“']['ampel'])->toBe('erfuellt');
+});

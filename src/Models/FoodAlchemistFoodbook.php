@@ -29,7 +29,11 @@ class FoodAlchemistFoodbook extends Model
         'personen' => 'integer',
     ];
 
-    /** Top-Kapitel (parent_id NULL), Baum baut der Service/die UI. */
+    /**
+     * ALLE Kapitel (flach, jede Ebene) nach position — NICHT nur Top-Kapitel.
+     * Den n-tiefen Baum bauen Service/UI/Coverage aus `parent_id` (Rollup: Kapitel-Scope
+     * = Kapitel + alle Nachfahren, Spec 19).
+     */
     public function chapters(): HasMany
     {
         return $this->hasMany(FoodAlchemistFoodbookKapitel::class, 'foodbook_id')->orderBy('position');
