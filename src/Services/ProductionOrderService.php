@@ -35,6 +35,33 @@ class ProductionOrderService
     ) {
     }
 
+    // ── source_ref-Verdrahtung (P4: EIN Ort für Bau + Lesen) ────────────────
+
+    /**
+     * Basis-Token der Produktions-Herkunft in `order_lines.source_contributions`.
+     * Es gibt bewusst KEINE FK (eine Bestellzeile kann N Quellen haben) — die
+     * Verknüpfung Produktion↔Bestellung läuft ausschließlich über diesen Präfix.
+     */
+    public const SOURCE_REF_BASE = 'produktion:';
+
+    /** Per-Auftrag-Präfix `produktion:{id}:` (trailing-Doppelpunkt disambiguiert #1 gegen #10). */
+    public static function sourceRefPrefix(int $productionOrderId): string
+    {
+        return self::SOURCE_REF_BASE . $productionOrderId . ':';
+    }
+
+    /** Voller Quell-Key `produktion:{id}:{ref}` für die Bedarfs-Übergabe. */
+    public static function sourceRefFor(int $productionOrderId, string $ref): string
+    {
+        return self::sourceRefPrefix($productionOrderId) . $ref;
+    }
+
+    /** Stabiler Hash der Ziel-Liste (Stale-Marker P4). */
+    public static function targetsHash(?array $targets): string
+    {
+        return sha1(json_encode(array_values($targets ?? []), JSON_UNESCAPED_UNICODE) ?: '');
+    }
+
     // ── Auftrag holen/anlegen ──────────────────────────────────────────────
 
     /**
@@ -294,6 +321,15 @@ class ProductionOrderService
         $order = FoodAlchemistProductionOrder::visibleToTeam($team)->with('lines.recipe:id,name')->findOrFail($orderId);
         $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
 
+        // P4: verknüpfte Bestellschienen (kompakt fürs UI/MCP) + Stale-Marker.
+        $verknuepft = $this->verknuepfteOrders($team, $orderId)->map(fn ($o) => [
+            'id' => (int) $o->id,
+            'supplier' => $o->supplier?->name,
+            'status' => $o->status instanceof OrderStatus ? $o->status->value : (string) $o->status,
+            'total_net' => (float) $o->total_net,
+            'reference' => $o->reference,
+        ])->values()->all();
+
         return [
             'id' => (int) $order->id,
             'name' => $order->name,
@@ -305,6 +341,9 @@ class ProductionOrderService
             'note' => $order->note,
             'is_owned' => $order->isOwnedBy($team),
             'editierbar' => $status->istOffen() && $order->isOwnedBy($team),
+            'verknuepfte_orders' => $verknuepft,
+            'last_handover_at' => $order->last_handover_at?->toIso8601String(),
+            'einkauf_veraltet' => $this->einkaufVeraltet($order),
             'warnungen' => $order->warnungen ?? [],
             'ansaetze_gesamt' => (float) $order->lines->sum('ansaetze'),
             'portionen_gesamt' => (int) $order->lines->sum('portionen'),
@@ -340,7 +379,7 @@ class ProductionOrderService
         // Der trailing-Doppelpunkt disambiguiert #1 gegen #10 (produktion:1: matcht nicht
         // produktion:10:). Filterung auf DB-Ebene (JSON als Text) + Team-Scope über die
         // Order-Relation — kein Full-Table-Scan, kein Lesen fremder Teams.
-        $prefix = 'produktion:' . $productionOrderId . ':';
+        $prefix = self::sourceRefPrefix($productionOrderId);
         $orderIds = FoodAlchemistOrderLine::query()
             ->whereHas('order', fn ($q) => $q->visibleToTeam($team))
             ->where('source_contributions', 'like', '%' . $prefix . '%')
@@ -372,7 +411,7 @@ class ProductionOrderService
 
         $lines = FoodAlchemistOrderLine::query()
             ->whereHas('order', fn ($q) => $q->visibleToTeam($team))
-            ->where('source_contributions', 'like', '%produktion:%')
+            ->where('source_contributions', 'like', '%' . self::SOURCE_REF_BASE . '%')
             ->with('order:id,status')
             ->get(['id', 'order_id', 'source_contributions']);
 
@@ -387,7 +426,7 @@ class ProductionOrderService
             }
             $versendet = in_array($ostat, [OrderStatus::Sent, OrderStatus::Confirmed, OrderStatus::Delivered], true);
             foreach (array_keys((array) $line->source_contributions) as $key) {
-                if (! preg_match('/^produktion:(\d+):/', (string) $key, $m)) {
+                if (! preg_match('/^' . preg_quote(self::SOURCE_REF_BASE, '/') . '(\d+):/', (string) $key, $m)) {
                     continue;
                 }
                 $pid = (int) $m[1];
@@ -416,7 +455,7 @@ class ProductionOrderService
      */
     public function zielUebergaben(Team $team, int $orderId): array
     {
-        $prefix = 'produktion:' . $orderId . ':';
+        $prefix = self::sourceRefPrefix($orderId);
         $lines = FoodAlchemistOrderLine::query()
             ->whereHas('order', fn ($q) => $q->visibleToTeam($team))
             ->where('source_contributions', 'like', '%' . $prefix . '%')
@@ -432,6 +471,52 @@ class ProductionOrderService
         }
 
         return $refs;
+    }
+
+    /**
+     * P4: Ist der Einkauf gegenüber dem aktuellen Ziel-Stand veraltet? True, wenn schon
+     * einmal übergeben wurde (`last_handover_at`) und die Ziele sich seither geändert haben
+     * (Hash-Abweichung). Grundlage für den DetailPanel-Hinweis „erneut übergeben".
+     */
+    public function einkaufVeraltet(FoodAlchemistProductionOrder $order): bool
+    {
+        return $order->last_handover_at !== null
+            && $order->handover_targets_hash !== self::targetsHash($order->targets);
+    }
+
+    /**
+     * P4: Einbahn-Übergabe des Bedarfs ALLER Ziele dieses Auftrags an die Bestellschienen —
+     * der eine Ort, der die Ziel-Herkunft (`source_ref`-Präfix) baut UND den Stale-Marker
+     * (`last_handover_at` + Ziel-Hash) setzt. Von DetailPanel und dem MCP-HANDOVER-Tool
+     * gemeinsam genutzt (Lockstep). Kein Auto-Sync, kein Rückkanal.
+     *
+     * @return array{orders:list<int>, skipped_ohne_la:list<string>, warnungen:list<string>}
+     */
+    public function anBestellungUebergeben(Team $team, int $orderId, OrderService $orders, ?int $userId = null): array
+    {
+        $order = FoodAlchemistProductionOrder::visibleToTeam($team)->findOrFail($orderId);
+
+        $touched = [];
+        $skipped = [];
+        $warnungen = [];
+        foreach (($order->targets ?? []) as $ziel) {
+            $sourceRef = self::sourceRefFor($orderId, (string) ($ziel['source_ref'] ?? ''));
+            $res = $orders->addNeedFromTarget($team, Arr::except($ziel, ['source_ref', 'label']), $sourceRef, $userId);
+            $touched = array_merge($touched, $res['orders']);
+            $skipped = array_merge($skipped, $res['skipped_ohne_la']);
+            $warnungen = array_merge($warnungen, $res['warnungen']);
+        }
+
+        // Stale-Marker aktualisieren: ab jetzt ist der Einkauf auf dem aktuellen Ziel-Stand.
+        $order->last_handover_at = now();
+        $order->handover_targets_hash = self::targetsHash($order->targets);
+        $order->save();
+
+        return [
+            'orders' => array_values(array_unique($touched)),
+            'skipped_ohne_la' => array_values(array_unique($skipped)),
+            'warnungen' => array_values(array_unique($warnungen)),
+        ];
     }
 
     /**

@@ -583,3 +583,104 @@ it('P3 UI: DetailPanel zeigt Ziele-Sektion + Einkauf-Deckungsgrad (0/2 → 1/2)'
         ->assertSeeHtml('data-ziel-uebergeben="1"')
         ->assertSeeHtml('data-ziel-uebergeben="0"');
 });
+
+// ── P4 · Einkaufs-Verdrahtung härten ────────────────────────────────────────
+
+it('P4: source_ref-Helper zentralisiert Präfix + vollen Quell-Key', function () {
+    expect(ProductionOrderService::sourceRefPrefix(7))->toBe('produktion:7:')
+        ->and(ProductionOrderService::sourceRefFor(7, 'recipe:kuchen@100'))->toBe('produktion:7:recipe:kuchen@100');
+    // trailing-Doppelpunkt disambiguiert #1 gegen #10
+    expect(ProductionOrderService::sourceRefPrefix(1))->not->toBe(substr(ProductionOrderService::sourceRefPrefix(10), 0, strlen(ProductionOrderService::sourceRefPrefix(1))));
+});
+
+it('P4: anBestellungUebergeben setzt den Stale-Marker + verdrahtet die Schienen (Service-zentral)', function () {
+    $orders = app(OrderService::class);
+    $po = $this->svc->saveNew($this->rootTeam, '2026-08-05', 'Fest', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
+    expect($po->last_handover_at)->toBeNull();
+
+    $res = $this->svc->anBestellungUebergeben($this->rootTeam, $po->id, $orders);
+    expect($res['orders'])->not->toBeEmpty();
+
+    $po->refresh();
+    expect($po->last_handover_at)->not->toBeNull()
+        ->and($po->handover_targets_hash)->toBe(ProductionOrderService::targetsHash($po->targets));
+    // Verknüpfung steht über den Präfix
+    expect($this->svc->verknuepfteOrders($this->rootTeam, $po->id))->not->toBeEmpty();
+});
+
+it('P4: Stale-Marker — Ziel nach Übergabe geändert ⇒ einkauf_veraltet=true, erneut übergeben löscht es', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $orders = app(OrderService::class);
+    $po = $this->svc->saveNew($this->rootTeam, '2026-08-06', 'Fest', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
+
+    // vor Übergabe: nicht veraltet (nie übergeben)
+    expect($this->svc->detail($this->rootTeam, $po->id)['einkauf_veraltet'])->toBeFalse();
+
+    $this->svc->anBestellungUebergeben($this->rootTeam, $po->id, $orders);
+    expect($this->svc->detail($this->rootTeam, $po->id)['einkauf_veraltet'])->toBeFalse();
+
+    // Ziel ändern → veraltet
+    $this->svc->replaceTargets($this->rootTeam, $po->id, [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+        ['recipe_id' => $this->tarte->id, 'portions' => 50, 'source_ref' => 'recipe:tarte@50'],
+    ]);
+    $detail = $this->svc->detail($this->rootTeam, $po->id);
+    expect($detail['einkauf_veraltet'])->toBeTrue();
+
+    // DetailPanel zeigt den Hinweis
+    Livewire::test(ProduktionDetailPanel::class, ['orderId' => $po->id])
+        ->assertSeeHtml('data-einkauf-veraltet="1"');
+
+    // erneut übergeben → wieder aktuell
+    $this->svc->anBestellungUebergeben($this->rootTeam, $po->id, $orders);
+    expect($this->svc->detail($this->rootTeam, $po->id)['einkauf_veraltet'])->toBeFalse();
+});
+
+it('P4: detail() liefert verknuepfte_orders (kompakt) fürs UI/MCP', function () {
+    $orders = app(OrderService::class);
+    $po = $this->svc->saveNew($this->rootTeam, '2026-08-07', 'Fest', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
+    expect($this->svc->detail($this->rootTeam, $po->id)['verknuepfte_orders'])->toBe([]);
+
+    $this->svc->anBestellungUebergeben($this->rootTeam, $po->id, $orders);
+    $vk = $this->svc->detail($this->rootTeam, $po->id)['verknuepfte_orders'];
+    expect($vk)->not->toBeEmpty()
+        ->and($vk[0])->toHaveKeys(['id', 'supplier', 'status', 'total_net']);
+});
+
+it('P4 MCP: production_orders.HANDOVER registriert (write, idempotent) + GET trägt verknuepfte_orders/einkauf_veraltet', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(\Platform\Core\Tools\ToolRegistry::class);
+    $kontext = new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam);
+
+    $tool = $registry->get('foodalchemist.production_orders.HANDOVER');
+    expect($tool)->not->toBeNull()
+        ->and($tool->getMetadata()['read_only'])->toBeFalse()
+        ->and($tool->getMetadata()['idempotent'])->toBeTrue();
+
+    $add = $registry->get('foodalchemist.production_orders.ADD_TARGET')
+        ->execute(['production_date' => '2026-08-08', 'name' => 'Fest', 'recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'], $kontext);
+    $orderId = $add->data['order_id'];
+
+    // vor Handover: keine verknüpften Schienen, nicht veraltet
+    $d0 = $registry->get('foodalchemist.production_orders.GET')->execute(['order_id' => $orderId], $kontext);
+    expect($d0->data['verknuepfte_orders'])->toBe([])->and($d0->data['einkauf_veraltet'])->toBeFalse();
+
+    // HANDOVER
+    $h = $tool->execute(['order_id' => $orderId], $kontext);
+    expect($h->success)->toBeTrue()->and($h->data['orders_count'])->toBeGreaterThan(0);
+
+    // erneutes HANDOVER dupliziert nicht (idempotent über source_ref)
+    $h2 = $tool->execute(['order_id' => $orderId], $kontext);
+    expect($h2->success)->toBeTrue();
+
+    $d1 = $registry->get('foodalchemist.production_orders.GET')->execute(['order_id' => $orderId], $kontext);
+    expect($d1->data['verknuepfte_orders'])->not->toBeEmpty()
+        ->and($d1->data['last_handover_at'])->not->toBeNull();
+});

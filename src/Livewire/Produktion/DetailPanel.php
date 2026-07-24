@@ -2,7 +2,6 @@
 
 namespace Platform\FoodAlchemist\Livewire\Produktion;
 
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -52,19 +51,15 @@ class DetailPanel extends Component
         $this->fuehreAus(fn ($team) => $svc->updateLine($team, $lineId, ['note' => $note]), 'Notiz gespeichert.');
     }
 
-    /** Einbahn-Übergabe: Bedarf aller Ziele dieses Auftrags an die Bestellschienen. */
+    /** Einbahn-Übergabe: Bedarf aller Ziele dieses Auftrags an die Bestellschienen (P4: Service-zentral inkl. Stale-Marker). */
     public function anBestellungUebergeben(ProductionOrderService $prod, OrderService $orders): void
     {
         $this->fuehreAus(function ($team) use ($prod, $orders) {
-            $order = $prod->detail($team, $this->orderId);
-            $touched = 0;
-            foreach ($order['targets'] as $ziel) {
-                $sourceRef = 'produktion:' . $this->orderId . ':' . ($ziel['source_ref'] ?? '');
-                $res = $orders->addNeedFromTarget($team, Arr::except($ziel, ['source_ref', 'label']), $sourceRef);
-                $touched += count($res['orders']);
-            }
+            $res = $prod->anBestellungUebergeben($team, $this->orderId, $orders, Auth::id());
+            $touched = count($res['orders']);
             $this->hinweis = $touched > 0 ? "{$touched} Bestellschiene(n) aktualisiert." : 'Kein bestellbarer Bedarf.';
         }, null);
+        $this->dispatch('produktion-status-geaendert');
     }
 
     private function fuehreAus(callable $fn, ?string $ok): void

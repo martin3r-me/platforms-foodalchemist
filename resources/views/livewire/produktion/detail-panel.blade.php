@@ -106,6 +106,11 @@
             @php($zieleCount = count($detail['targets']))
             @php($uebergebenCount = collect($detail['targets'])->filter(fn ($t) => ! empty($zielUebergaben[$t['source_ref'] ?? '']))->count())
             <x-foodalchemist::section title="Einkauf" icon="heroicon-o-shopping-cart" :meta="$verknuepfteOrders->count()">
+                @if(! empty($detail['einkauf_veraltet']))
+                    <div class="mb-2" data-einkauf-veraltet="1">
+                        <x-foodalchemist::alert tone="warning">Bestellung veraltet — Ziele wurden seit der letzten Übergabe geändert. Erneut „→ An Bestellung übergeben".</x-foodalchemist::alert>
+                    </div>
+                @endif
                 <div class="flex items-center justify-between gap-2 text-[12px] mb-2" data-einkauf-deckung="{{ $uebergebenCount }}/{{ $zieleCount }}">
                     <span class="text-gray-500">Deckungsgrad</span>
                     <span class="{{ $pill }} font-medium {{ $uebergebenCount === 0 ? $variantPill['secondary'] : ($uebergebenCount >= $zieleCount ? $variantPill['success'] : $variantPill['warning']) }}">
