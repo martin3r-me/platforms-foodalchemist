@@ -619,3 +619,97 @@ it('E2: MCP im Lockstep — orders.CREATE + orders.ADD_LINE registriert + End-to
         ->execute(['supplier_item_id' => 999999, 'qty_packs' => 1], $kontext);
     expect($bad->success)->toBeFalse();
 });
+
+// ── Spec 20 · E2 UI (Direktbestellung im Einkauf-Cockpit) ───────────────────
+
+it('E2 UI: „Neue Bestellung" legt leere Draft-Schiene an + wählt sie', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+    expect(FoodAlchemistOrder::where('supplier_id', $chefs->id)->count())->toBe(0);
+
+    Livewire::test(OrdersIndex::class)
+        ->set('neuerLieferant', $chefs->id)
+        ->call('neueBestellung')
+        ->assertSet('hinweis', 'Bestellung angelegt.')
+        ->assertSet('selectedId', fn ($v) => $v !== null)
+        ->assertSet('neuerLieferant', null);
+
+    expect(FoodAlchemistOrder::where('supplier_id', $chefs->id)->where('status', 'draft')->count())->toBe(1);
+});
+
+it('E2 UI: „Neue Bestellung" ohne Lieferant → Fehlerhinweis, keine Schiene', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    Livewire::test(OrdersIndex::class)
+        ->call('neueBestellung')
+        ->assertSet('fehler', fn ($v) => str_contains((string) $v, 'Lieferant'));
+    expect(FoodAlchemistOrder::count())->toBe(0);
+});
+
+it('E2 UI: „＋ Artikel"-Livesearch findet Artikel + hängt manuelle Zeile an dessen Schiene', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+
+    $comp = Livewire::test(OrdersIndex::class)
+        ->set('direktOffen', true)         // Sektion aufklappen (sonst kein Dropdown)
+        ->set('artikelSuche', 'mehl')
+        ->assertSee('Mehl 1kg');           // Livesearch-Dropdown
+
+    $comp->call('artikelHinzufuegen', $this->laOf['Mehl']->id)
+        ->assertSet('hinweis', 'Artikel hinzugefügt.')
+        ->assertSet('artikelSuche', '')
+        ->assertSet('selectedId', fn ($v) => $v !== null);
+
+    $draft = FoodAlchemistOrder::where('supplier_id', $chefs->id)->where('status', 'draft')->first();
+    $line = $draft->lines()->where('supplier_item_id', $this->laOf['Mehl']->id)->first();
+    expect($line)->not->toBeNull()
+        ->and((bool) $line->is_manual_qty)->toBeTrue()
+        ->and((float) $line->qty_packs)->toBe(1.0);
+});
+
+it('E2 UI: Bedarf-Schnellerfassung VK-Gericht (Portionen) → Schienen befüllt', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $comp = Livewire::test(OrdersIndex::class)
+        ->set('direktOffen', true)         // Sektion aufklappen (sonst kein Dropdown)
+        ->set('bedarfSuche', 'Kuchen')
+        ->assertSee('DES: Kuchen');
+
+    $comp->call('bedarfRezeptWaehlen', $this->kuchen->id)
+        ->assertSet('bedarfRecipeVk', true)
+        ->assertSet('bedarfEinheit', 'portions')
+        ->set('bedarfMenge', '100')
+        ->call('bedarfUebernehmen')
+        ->assertSet('hinweis', fn ($v) => str_contains((string) $v, 'Bedarf übernommen'))
+        ->assertSet('bedarfRecipeId', null)          // reset nach Übernahme
+        ->assertSet('selectedId', fn ($v) => $v !== null);
+
+    // Kuchen 100 Port. → Chefs (Mehl+Zucker) + Hanos (Butter) = 2 Schienen
+    expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    expect($chefs->lines()->where('gp_id', $this->mehl->id)->exists())->toBeTrue();
+});
+
+it('E2 UI: Bedarf-Schnellerfassung Basisrezept in kg → amount_kg-Ziel', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    Livewire::test(OrdersIndex::class)
+        ->call('bedarfRezeptWaehlen', $this->sauce->id)
+        ->assertSet('bedarfRecipeVk', false)         // Basisrezept
+        ->assertSet('bedarfEinheit', 'ansaetze')     // Default Basis
+        ->set('bedarfEinheit', 'kg')
+        ->set('bedarfMenge', '2')                    // 2 kg Vanillesauce
+        ->call('bedarfUebernehmen')
+        ->assertSet('hinweis', fn ($v) => str_contains((string) $v, 'Bedarf übernommen'));
+
+    // Vanillesauce (yield 1 kg) 2 kg = 2 Ansätze → Zucker 1 kg (Chefs) + Butter 1 kg (Hanos)
+    expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
+});
+
+it('E2 UI: Bedarf-Schnellerfassung ohne Menge → Fehler, keine Schiene', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    Livewire::test(OrdersIndex::class)
+        ->call('bedarfRezeptWaehlen', $this->kuchen->id)
+        ->call('bedarfUebernehmen')
+        ->assertSet('fehler', fn ($v) => str_contains((string) $v, 'Menge'));
+    expect(FoodAlchemistOrder::count())->toBe(0);
+});

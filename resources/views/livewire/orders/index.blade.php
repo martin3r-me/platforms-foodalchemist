@@ -25,6 +25,95 @@
             <div class="{{ $sectionCard }} lg:col-span-3 space-y-3">
                 <h3 class="font-medium tracking-tight text-gray-900">Schienen &amp; Bestellungen</h3>
 
+                {{-- E2 · Direktbestellung (manuelle Artikel · neue Schiene · Bedarf-Schnellerfassung) --}}
+                <div class="rounded-lg border border-violet-500/20 bg-violet-500/[0.03]">
+                    <button type="button" wire:click="$toggle('direktOffen')"
+                        class="w-full flex items-center justify-between px-3 py-2 text-[12px] font-medium text-violet-700">
+                        <span>＋ Direktbestellung</span>
+                        <span class="text-violet-400">{{ $direktOffen ? '−' : '+' }}</span>
+                    </button>
+                    @if($direktOffen)
+                        <div class="px-3 pb-3 space-y-3 border-t border-violet-500/10 pt-2">
+
+                            {{-- Neue Bestellung je Lieferant --}}
+                            <div>
+                                <span class="{{ $label }} block mb-1">Neue Bestellung</span>
+                                <div class="flex gap-1">
+                                    <select wire:model="neuerLieferant" class="{{ $input }}">
+                                        <option value="">Lieferant…</option>
+                                        @foreach($alleLieferanten as $l)
+                                            <option value="{{ $l['id'] }}">{{ $l['name'] }}</option>
+                                        @endforeach
+                                    </select>
+                                    <button type="button" wire:click="neueBestellung" class="{{ $btnGhostXs }} shrink-0">anlegen</button>
+                                </div>
+                            </div>
+
+                            {{-- ＋ Artikel: globale LA-Livesearch --}}
+                            <div>
+                                <span class="{{ $label }} block mb-1">Artikel direkt bestellen</span>
+                                <input type="search" wire:model.live.debounce.300ms="artikelSuche" placeholder="Artikel / Art-Nr…" class="{{ $input }}" />
+                                @if($artikelTreffer->isNotEmpty())
+                                    <div class="mt-1 space-y-0.5 max-h-52 overflow-y-auto">
+                                        @foreach($artikelTreffer as $a)
+                                            <button type="button" wire:click="artikelHinzufuegen({{ $a['id'] }})" wire:key="art-{{ $a['id'] }}"
+                                                class="block w-full text-left px-2 py-1 rounded hover:bg-black/[0.04]">
+                                                <span class="text-[12px] text-gray-800">{{ $a['designation'] ?: '—' }}</span>
+                                                <span class="text-[10px] text-gray-400 block">{{ $a['supplier'] }}@if($a['article_number']) · Art. {{ $a['article_number'] }}@endif</span>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @elseif(mb_strlen(trim($artikelSuche)) >= 2)
+                                    <p class="text-[11px] text-gray-400 mt-1">Kein Artikel gefunden.</p>
+                                @endif
+                            </div>
+
+                            {{-- Bedarf-Schnellerfassung (Gericht/Basisrezept → addNeedFromTarget) --}}
+                            <div>
+                                <span class="{{ $label }} block mb-1">Bedarf aus Gericht/Basisrezept</span>
+                                @if($bedarfRecipeId === null)
+                                    <input type="search" wire:model.live.debounce.300ms="bedarfSuche" placeholder="Gericht / Basisrezept…" class="{{ $input }}" />
+                                    @if($bedarfTreffer->isNotEmpty())
+                                        <div class="mt-1 space-y-0.5 max-h-52 overflow-y-auto">
+                                            @foreach($bedarfTreffer as $r)
+                                                <button type="button" wire:click="bedarfRezeptWaehlen({{ $r['id'] }})" wire:key="brz-{{ $r['id'] }}"
+                                                    class="flex items-center gap-1.5 w-full text-left px-2 py-1 rounded hover:bg-black/[0.04]">
+                                                    <span class="text-[12px] text-gray-800 truncate">{{ $r['name'] }}</span>
+                                                    <span class="{{ $pill }} {{ $variantPill[$r['is_sales_recipe'] ? 'info' : 'secondary'] }} shrink-0">{{ $r['is_sales_recipe'] ? 'VK' : 'Basis' }}</span>
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    @elseif(mb_strlen(trim($bedarfSuche)) >= 2)
+                                        <p class="text-[11px] text-gray-400 mt-1">Kein Rezept gefunden.</p>
+                                    @endif
+                                @else
+                                    <div class="space-y-1.5">
+                                        <div class="flex items-center justify-between gap-1">
+                                            <span class="text-[12px] text-gray-800 truncate">{{ $bedarfRecipeName }}
+                                                <span class="{{ $pill }} {{ $variantPill[$bedarfRecipeVk ? 'info' : 'secondary'] }}">{{ $bedarfRecipeVk ? 'VK' : 'Basis' }}</span>
+                                            </span>
+                                            <button type="button" wire:click="bedarfRezeptZuruecksetzen" class="text-[11px] text-gray-400 shrink-0">ändern</button>
+                                        </div>
+                                        <div class="flex gap-1">
+                                            <input type="number" min="0" step="0.1" wire:model="bedarfMenge" placeholder="Menge" class="{{ $input }}" />
+                                            @if($bedarfRecipeVk)
+                                                <span class="inline-flex items-center px-2 text-[11px] text-gray-500 whitespace-nowrap">Portionen</span>
+                                            @else
+                                                <select wire:model="bedarfEinheit" class="{{ $input }} !w-auto">
+                                                    <option value="ansaetze">Ansätze</option>
+                                                    <option value="kg">kg</option>
+                                                </select>
+                                            @endif
+                                        </div>
+                                        <button type="button" wire:click="bedarfUebernehmen" class="{{ $btnGhostXs }} w-full justify-center">Bedarf übernehmen</button>
+                                    </div>
+                                @endif
+                            </div>
+
+                        </div>
+                    @endif
+                </div>
+
                 {{-- Status-Filter --}}
                 <div>
                     <span class="{{ $label }} block mb-1">Status</span>

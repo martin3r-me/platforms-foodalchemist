@@ -6,7 +6,11 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\OrderStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\OrderService;
+use Platform\FoodAlchemist\Support\Suche;
 
 /**
  * Spec 17/S2 + Spec 20/E1 — „Bestellungen" als 3-Panel-Cockpit (Muster: Produktion):
@@ -40,6 +44,31 @@ class Index extends Component
     public ?string $hinweis = null;
 
     public ?string $fehler = null;
+
+    // ── E2 · Direktbestellung (manuelle Artikel · neue Schiene · Bedarf-Schnellerfassung) ──
+    /** Panel-1-Sektion „＋ Direktbestellung" auf-/zuklappen. */
+    public bool $direktOffen = false;
+
+    /** „Neue Bestellung": leere Draft-Schiene je Lieferant (createDraft). */
+    public ?int $neuerLieferant = null;
+
+    /** „＋ Artikel": globale LA-Livesearch (unabhängig von jeder Produktion). */
+    public string $artikelSuche = '';
+
+    /** Bedarf-Schnellerfassung: Gericht/Basisrezept → addNeedFromTarget (P1-Zieltypen). */
+    public string $bedarfSuche = '';
+
+    public ?int $bedarfRecipeId = null;
+
+    public string $bedarfRecipeName = '';
+
+    /** true = VK-Gericht (Portionen), false = Basisrezept (Ansätze/kg). Aus is_sales_recipe. */
+    public bool $bedarfRecipeVk = true;
+
+    /** portions (VK) | ansaetze | kg — Doppel-Bedeutung wie P1 (portions=VK-Port. / Basis-Ansätze). */
+    public string $bedarfEinheit = 'portions';
+
+    public string $bedarfMenge = '';
 
     public function select(int $id): void
     {
@@ -123,6 +152,109 @@ class Index extends Component
         }
     }
 
+    // ── E2 · Direktbestellung ─────────────────────────────────────────────
+
+    /** „Neue Bestellung": leere Draft-Schiene für den gewählten Lieferanten (findOrCreate). */
+    public function neueBestellung(OrderService $orders): void
+    {
+        if ($this->neuerLieferant === null) {
+            $this->fehler = 'Erst einen Lieferanten wählen.';
+
+            return;
+        }
+        $this->fuehreAus(function ($team) use ($orders) {
+            $draft = $orders->createDraft($team, (int) $this->neuerLieferant, [], Auth::id());
+            $this->selectedId = (int) $draft->id;
+            $this->ladeKopf();
+        }, 'Bestellung angelegt.');
+        $this->neuerLieferant = null;
+    }
+
+    /** „＋ Artikel": manuelle Zeile (Menge 1) an die Draft-Schiene des Lieferanten hängen. */
+    public function artikelHinzufuegen(int $supplierItemId, OrderService $orders): void
+    {
+        $this->fuehreAus(function ($team) use ($orders, $supplierItemId) {
+            $line = $orders->addManualLine($team, $supplierItemId, 1.0, null, Auth::id());
+            $this->selectedId = (int) $line->order_id;
+            $this->ladeKopf();
+        }, 'Artikel hinzugefügt.');
+        $this->artikelSuche = '';
+    }
+
+    /** Bedarf-Schnellerfassung: gewähltes Gericht/Basisrezept in den Picker laden. */
+    public function bedarfRezeptWaehlen(int $recipeId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $r = $team ? FoodAlchemistRecipe::visibleToTeam($team)->find($recipeId) : null;
+        if ($r === null) {
+            return;
+        }
+        $this->bedarfRecipeId = (int) $r->id;
+        $this->bedarfRecipeName = (string) $r->name;
+        $this->bedarfRecipeVk = (bool) $r->is_sales_recipe;
+        $this->bedarfEinheit = $this->bedarfRecipeVk ? 'portions' : 'ansaetze';
+        $this->bedarfSuche = '';
+    }
+
+    public function bedarfRezeptZuruecksetzen(): void
+    {
+        $this->bedarfRecipeId = null;
+        $this->bedarfRecipeName = '';
+        $this->bedarfMenge = '';
+        $this->bedarfSuche = '';
+    }
+
+    /**
+     * Bedarf des gewählten Ziels direkt in die Lieferanten-Schienen übernehmen (E2). Nutzt die
+     * P1-Zieltypen: VK-Gericht = Portionen, Basisrezept = Ansätze ODER kg (amount_kg). Quelle
+     * `recipe:{id}@…` spiegelt den Produktions-Editor (parseHerkunft → „Gericht").
+     */
+    public function bedarfUebernehmen(OrderService $orders): void
+    {
+        $this->hinweis = null;
+        $this->fehler = null;
+        if ($this->bedarfRecipeId === null) {
+            $this->fehler = 'Erst ein Gericht/Basisrezept wählen.';
+
+            return;
+        }
+        $menge = (float) str_replace(',', '.', trim($this->bedarfMenge));
+        if ($menge <= 0) {
+            $this->fehler = 'Menge größer 0 angeben.';
+
+            return;
+        }
+        $ziel = ['recipe_id' => $this->bedarfRecipeId];
+        if (! $this->bedarfRecipeVk && $this->bedarfEinheit === 'kg') {
+            $ziel['amount_kg'] = $menge;
+        } else {
+            $ziel['portions'] = $menge;   // VK = Portionen, Basis = Ansätze (P1-Doppelbedeutung)
+        }
+        $sourceRef = 'recipe:' . $this->bedarfRecipeId . '@' . uniqid();
+
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $res = $orders->addNeedFromTarget($team, $ziel, $sourceRef, Auth::id());
+            if (! empty($res['orders'])) {
+                $this->selectedId = (int) $res['orders'][0];
+                $this->ladeKopf();
+            }
+            if (empty($res['orders']) && empty($res['skipped_ohne_la'])) {
+                $this->fehler = 'Kein bestellbarer Bedarf (Rezept ohne Zutaten mit Lead-LA?).';
+
+                return;
+            }
+            $teile = [count($res['orders']) . ' Schiene(n) aktualisiert'];
+            if (! empty($res['skipped_ohne_la'])) {
+                $teile[] = 'ohne Lead-LA übersprungen: ' . implode(', ', $res['skipped_ohne_la']);
+            }
+            $this->hinweis = 'Bedarf übernommen — ' . implode(' · ', $teile) . '.';
+            $this->bedarfRezeptZuruecksetzen();
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function render(OrderService $orders)
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
@@ -173,9 +305,52 @@ class Index extends Component
             }
         }
 
+        // ── E2 · Direktbestellung: Lieferanten-Vollliste + Livesearch-Treffer ──
+        $alleLieferanten = FoodAlchemistSupplier::visibleToTeam($team)
+            ->orderBy('name')->get(['id', 'name'])
+            ->map(fn ($s) => ['id' => (int) $s->id, 'name' => (string) $s->name])->values();
+
+        $artikelTreffer = collect();
+        $aq = trim($this->artikelSuche);
+        if (mb_strlen($aq) >= 2) {
+            $q = FoodAlchemistSupplierItem::visibleToTeam($team)
+                ->where('is_discontinued', false)
+                ->whereNotNull('supplier_id')
+                ->with('supplier:id,name');
+            foreach (Suche::tokens($aq) as $token) {
+                $q->where(fn ($x) => $x
+                    ->whereRaw('LOWER(designation) LIKE ?', ['%' . $token . '%'])
+                    ->orWhere('article_number', 'like', $token . '%'));
+            }
+            $artikelTreffer = $q->orderBy('designation')->limit(12)
+                ->get(['id', 'designation', 'article_number', 'packaging_unit', 'supplier_id'])
+                ->map(fn ($a) => [
+                    'id' => (int) $a->id,
+                    'designation' => $a->designation,
+                    'article_number' => $a->article_number,
+                    'supplier' => $a->supplier?->name ?? '—',
+                ])->values();
+        }
+
+        $bedarfTreffer = collect();
+        $bq = trim($this->bedarfSuche);
+        if ($this->bedarfRecipeId === null && mb_strlen($bq) >= 2) {
+            $bedarfTreffer = FoodAlchemistRecipe::visibleToTeam($team)
+                ->where('name', 'like', '%' . $bq . '%')
+                ->orderBy('name')->limit(12)->get(['id', 'name', 'is_sales_recipe'])
+                ->map(fn ($r) => [
+                    'id' => (int) $r->id,
+                    'name' => (string) $r->name,
+                    'is_sales_recipe' => (bool) $r->is_sales_recipe,
+                ])->values();
+        }
+
         return view('foodalchemist::livewire.orders.index', [
             'liste' => $liste,
             'lieferanten' => $lieferanten,
+            'alleLieferanten' => $alleLieferanten,
+            'artikelTreffer' => $artikelTreffer,
+            'bedarfTreffer' => $bedarfTreffer,
             'detail' => $detail,
             'erlaubteStatus' => $erlaubteStatus,
             'mailto' => $mailto,
