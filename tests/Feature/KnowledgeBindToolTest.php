@@ -23,16 +23,29 @@ beforeEach(function () {
     $this->kontext = new ToolContext($this->user, $this->rootTeam);
 });
 
-/** Legt ein Vault/Seed-Doc an (source_path gesetzt, team_id NULL = globaler Seed). */
-function seedVaultDoc(string $slug = 'regelwerk_grundprodukte'): void
+/**
+ * Legt ein Vault/Seed-Doc an (source_path gesetzt, team_id NULL = globaler Seed) und
+ * gibt {id, slug} zurück. Der Slug ist pro Aufruf EINDEUTIG (UUID-Suffix), ebenso der
+ * content_hash — so bleiben die Assertions pollution-fest, obwohl die Modul-Suite ohne
+ * DB-Isolation läuft (kein RefreshDatabase/DatabaseTransactions, Konvention). Vorher
+ * teilten alle Docs Slug UND content_hash → ein zweiter Insert in nicht-frischer DB und
+ * ein per Slug (statt Doc-ID) gegriffenes Doc kippten den Test reihenfolgen-abhängig
+ * (Flakiness-Analyse 2026-07-24). Konsument filtert IMMER über die zurückgegebene id.
+ *
+ * @return array{id:int, slug:string}
+ */
+function seedVaultDoc(?string $slug = null): array
 {
-    DB::table('foodalchemist_knowledge_documents')->insert([
+    $slug ??= 'regelwerk_grundprodukte_' . substr(str_replace('-', '', (string) UuidV7::generate()), 0, 12);
+    $id = DB::table('foodalchemist_knowledge_documents')->insertGetId([
         'uuid' => (string) UuidV7::generate(), 'slug' => $slug,
         'title' => 'Regelwerk Grundprodukte', 'category' => 'regelwerk',
-        'content_md' => '# Regelwerk', 'version' => 3, 'content_hash' => hash('sha256', 'x'),
+        'content_md' => '# Regelwerk', 'version' => 3, 'content_hash' => hash('sha256', $slug),
         'char_count' => 10, 'active' => 1, 'source_path' => '07_WISSEN/…/Regelwerk_Grundprodukte.md',
         'created_via' => 'import', 'created_at' => now(), 'updated_at' => now(),
     ]);
+
+    return ['id' => (int) $id, 'slug' => $slug];
 }
 
 it('registriert knowledge.BIND und knowledge.UNBIND', function () {
@@ -41,22 +54,21 @@ it('registriert knowledge.BIND und knowledge.UNBIND', function () {
 });
 
 it('bindet ein Vault/Seed-Doc, das knowledge.PUT mit LOCKED abweist', function () {
-    seedVaultDoc();
+    ['id' => $docId, 'slug' => $slug] = seedVaultDoc();
 
     // Gegenprobe: PUT bleibt gesperrt …
     $put = $this->registry->get('foodalchemist.knowledge.PUT')->execute([
-        'slug' => 'regelwerk_grundprodukte', 'content_md' => 'HACK',
+        'slug' => $slug, 'content_md' => 'HACK',
     ], $this->kontext);
     expect($put->success)->toBeFalse()->and($put->errorCode)->toBe('LOCKED');
 
     // … BIND aber funktioniert (Binden ≠ Inhalt editieren).
     $res = $this->registry->get('foodalchemist.knowledge.BIND')->execute([
-        'slug' => 'regelwerk_grundprodukte', 'target_key' => 'recipe', 'mode' => 'always',
+        'slug' => $slug, 'target_key' => 'recipe', 'mode' => 'always',
     ], $this->kontext);
 
     expect($res->success)->toBeTrue()->and($res->data['bound_to'])->toBe('recipe');
 
-    $docId = DB::table('foodalchemist_knowledge_documents')->where('slug', 'regelwerk_grundprodukte')->value('id');
     $bind = DB::table('foodalchemist_knowledge_bindings')->where('knowledge_document_id', $docId)->whereNull('deleted_at')->first();
     expect($bind)->not->toBeNull()
         ->and($bind->target_key)->toBe('recipe')
@@ -67,20 +79,19 @@ it('bindet ein Vault/Seed-Doc, das knowledge.PUT mit LOCKED abweist', function (
 });
 
 it('ist idempotent — zweimal binden erzeugt nur eine aktive Bindung', function () {
-    seedVaultDoc();
-    $args = ['slug' => 'regelwerk_grundprodukte', 'target_key' => 'recipe'];
+    ['id' => $docId, 'slug' => $slug] = seedVaultDoc();
+    $args = ['slug' => $slug, 'target_key' => 'recipe'];
     $this->registry->get('foodalchemist.knowledge.BIND')->execute($args, $this->kontext);
     $this->registry->get('foodalchemist.knowledge.BIND')->execute($args, $this->kontext);
 
-    $docId = DB::table('foodalchemist_knowledge_documents')->where('slug', 'regelwerk_grundprodukte')->value('id');
     expect(DB::table('foodalchemist_knowledge_bindings')->where('knowledge_document_id', $docId)
         ->where('target_key', 'recipe')->whereNull('deleted_at')->count())->toBe(1);
 });
 
 it('weist einen unbekannten Einsatzort ab', function () {
-    seedVaultDoc();
+    ['slug' => $slug] = seedVaultDoc();
     $res = $this->registry->get('foodalchemist.knowledge.BIND')->execute([
-        'slug' => 'regelwerk_grundprodukte', 'target_key' => 'gibtsnicht',
+        'slug' => $slug, 'target_key' => 'gibtsnicht',
     ], $this->kontext);
     expect($res->success)->toBeFalse()
         ->and($res->errorCode)->toBe('VALIDATION_ERROR')
@@ -95,8 +106,7 @@ it('liefert NOT_FOUND für ein unsichtbares/unbekanntes Doc', function () {
 });
 
 it('UNBIND löst nur team-eigene Bindungen und ist idempotent', function () {
-    seedVaultDoc();
-    $docId = DB::table('foodalchemist_knowledge_documents')->where('slug', 'regelwerk_grundprodukte')->value('id');
+    ['id' => $docId, 'slug' => $slug] = seedVaultDoc();
 
     // Fremd-Bindung (anderes Team) am selben Doc/Ziel — darf NICHT gelöst werden.
     DB::table('foodalchemist_knowledge_bindings')->insert([
@@ -108,10 +118,10 @@ it('UNBIND löst nur team-eigene Bindungen und ist idempotent', function () {
 
     // eigene Bindung setzen + lösen
     $this->registry->get('foodalchemist.knowledge.BIND')->execute(
-        ['slug' => 'regelwerk_grundprodukte', 'target_key' => 'recipe'], $this->kontext);
+        ['slug' => $slug, 'target_key' => 'recipe'], $this->kontext);
 
     $un1 = $this->registry->get('foodalchemist.knowledge.UNBIND')->execute(
-        ['slug' => 'regelwerk_grundprodukte', 'target_key' => 'recipe'], $this->kontext);
+        ['slug' => $slug, 'target_key' => 'recipe'], $this->kontext);
     expect($un1->success)->toBeTrue()->and($un1->data['removed'])->toBeTrue();
 
     // eigene weg, Fremd-Bindung bleibt
@@ -122,6 +132,6 @@ it('UNBIND löst nur team-eigene Bindungen und ist idempotent', function () {
 
     // zweites UNBIND = no-op
     $un2 = $this->registry->get('foodalchemist.knowledge.UNBIND')->execute(
-        ['slug' => 'regelwerk_grundprodukte', 'target_key' => 'recipe'], $this->kontext);
+        ['slug' => $slug, 'target_key' => 'recipe'], $this->kontext);
     expect($un2->success)->toBeTrue()->and($un2->data['removed'])->toBeFalse();
 });
