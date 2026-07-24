@@ -442,6 +442,70 @@ class FoodbookService
     }
 
     /**
+     * Spec 19 E4.5: Backfill — stempelt Slot-Ziele auf BESTEHENDE Slot↔Kapitel-Kopplungen,
+     * die vor E4.1 entstanden sind (`strukturAusGeruest` stempelt nur bei NEU-Anlage; Slots,
+     * die schon vor E4.1 ein Kapitel hatten, tragen ihre Ziele nie ans Kapitel weiter). Für
+     * jeden Slot mit gesetztem chapter_id (Kapitel team-eigen) werden die SOLL-Felder
+     * target_count/price_anchor/price_min/price_max übernommen — aber NUR die, die am Kapitel
+     * noch NULL sind (bereits gesetzte Kapitel-Ziele bleiben unangetastet). Damit **idempotent**:
+     * ein zweiter Lauf findet alles gefüllt und schreibt nichts. $apply=false = Dry-Run (nur
+     * Protokoll, kein Write). Team-scoped über `visibleToTeam` + `isOwnedBy` (nur eigene Kapitel).
+     *
+     * @return array{slots_geprueft:int, kapitel_gestempelt:int, felder_gesetzt:int, protokoll: list<array{chapter_id:int, slot:string, felder:list<string>}>}
+     */
+    public function backfillSlotZiele(Team $team, ?int $foodbookId = null, bool $apply = false): array
+    {
+        $felder = ['target_count', 'price_anchor', 'price_min', 'price_max'];
+
+        $kapitelQuery = FoodAlchemistFoodbookKapitel::visibleToTeam($team);
+        if ($foodbookId !== null) {
+            $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
+            $this->guard($fb, $team);
+            $kapitelQuery->where('foodbook_id', $foodbookId);
+        }
+        $kapitel = $kapitelQuery->get()
+            ->filter(fn (FoodAlchemistFoodbookKapitel $k) => $k->isOwnedBy($team))
+            ->keyBy('id');
+
+        $slotsGeprueft = 0;
+        $gestempelt = 0;
+        $felderGesetzt = 0;
+        $protokoll = [];
+
+        if ($kapitel->isEmpty()) {
+            return ['slots_geprueft' => 0, 'kapitel_gestempelt' => 0, 'felder_gesetzt' => 0, 'protokoll' => []];
+        }
+
+        $slots = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot::whereIn('chapter_id', $kapitel->keys()->all())
+            ->orderBy('position')->get();
+
+        foreach ($slots as $slot) {
+            $k = $kapitel->get((int) $slot->chapter_id);
+            if ($k === null) {
+                continue;
+            }
+            $slotsGeprueft++;
+            $ziele = [];
+            foreach ($felder as $feld) {
+                if ($k->{$feld} === null && $slot->{$feld} !== null) {
+                    $ziele[$feld] = $slot->{$feld};
+                }
+            }
+            if ($ziele === []) {
+                continue;
+            }
+            if ($apply) {
+                $k->update($ziele);
+            }
+            $gestempelt++;
+            $felderGesetzt += count($ziele);
+            $protokoll[] = ['chapter_id' => (int) $k->id, 'slot' => (string) $slot->label, 'felder' => array_keys($ziele)];
+        }
+
+        return ['slots_geprueft' => $slotsGeprueft, 'kapitel_gestempelt' => $gestempelt, 'felder_gesetzt' => $felderGesetzt, 'protokoll' => $protokoll];
+    }
+
+    /**
      * Phase 3 (Weg B): ein vorgeschlagenes Gericht in den Slot ÜBERNEHMEN. Doktrin-treu —
      * das Slot-Kapitel trägt EIN Konzept (concept_ref); übernommene Gerichte werden dessen
      * Konzept-Slots. Erstes Übernehmen legt das Draft-Konzept + den concept_ref-Block an,

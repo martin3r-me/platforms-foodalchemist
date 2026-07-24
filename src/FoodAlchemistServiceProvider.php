@@ -77,6 +77,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\GpAllergenBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\ProcessAnchorGroundCommand::class,
                 \Platform\FoodAlchemist\Console\FavoriteGpsCommand::class,
+                \Platform\FoodAlchemist\Console\BackfillKapitelZieleCommand::class,
             ]);
         }
     }
