@@ -593,6 +593,52 @@ class PairingService
             ->get(['a.id', 'a.slug', 'a.display_de', 'm.source', 'm.ai_confidence']);
     }
 
+    /**
+     * Spec 19 E9.2: Anker → GP Reverse-Lookup („welche echten GPs tragen Aroma X als Kern").
+     * Gegenrichtung zu gpAnkers(); zuvor nur privat in aromaTrueSubstitutes eingebettet
+     * (Doc-TODO D-7_pairing.md §GL-10 3.4). Team-scoped, ohne Derivate/Platzhalter (die kauft
+     * man nicht als Aromaträger). Read-only.
+     *
+     * @param  list<int>  $ankerIds  Kern-Anker-IDs
+     * @return \Illuminate\Support\Collection<int, object>  GP-Zeilen {id, name, lead_la_supplier_item_id, is_favorite, status, requires_la, anchor_id}
+     */
+    public function gpsForAnkerIds(Team $team, array $ankerIds): Collection
+    {
+        $ankerIds = array_values(array_unique(array_map('intval', $ankerIds)));
+        if ($ankerIds === []) {
+            return collect();
+        }
+        // Anker → gp_id-Zuordnung (kern), damit der Aufrufer weiß, welcher GP welches Aroma trägt.
+        $mapping = DB::table('foodalchemist_gp_anchor_mappings')
+            ->whereIn('anchor_id', $ankerIds)->where('role', 'kern')->whereNull('deleted_at')
+            ->get(['gp_id', 'anchor_id']);
+        $gpIds = $mapping->pluck('gp_id')->map(fn ($i) => (int) $i)->unique()->all();
+        if ($gpIds === []) {
+            return collect();
+        }
+        $gps = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)
+            ->whereIn('id', $gpIds)
+            ->where('is_derivat', false)->where('is_platzhalter', false)
+            ->get(['id', 'name', 'lead_la_supplier_item_id', 'is_favorite', 'status', 'requires_la'])
+            ->keyBy('id');
+
+        // Eine Zeile pro (GP, Anker) — der Aufrufer gruppiert nach Anker (Inspiration) bzw. GP (Erdung).
+        return $mapping
+            ->filter(fn ($m) => $gps->has((int) $m->gp_id))
+            ->map(function ($m) use ($gps) {
+                $gp = $gps->get((int) $m->gp_id);
+
+                return (object) [
+                    'id' => (int) $gp->id, 'name' => (string) $gp->name,
+                    'lead_la_supplier_item_id' => $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null,
+                    'is_favorite' => (bool) $gp->is_favorite,
+                    'status' => is_object($gp->status) ? $gp->status->value : (string) $gp->status,
+                    'requires_la' => (bool) $gp->requires_la,
+                    'anchor_id' => (int) $m->anchor_id,
+                ];
+            })->values();
+    }
+
     // ── Kompakt-Panels fürs »Sensorik & Pairing«-Tab (read-only) ─────────
 
     /** Prozess-/neutrale Anker sind keine Zutat-Vorschläge (»Fermentiert« kauft man nicht). */
