@@ -255,16 +255,51 @@ class PlanningFrameService
     // ── Deklarativ (MCP-PUT: Brief → Gerüst in einem Call) ─────────────
 
     /**
+     * Warnungen des letzten replaceStructure-Laufs (Rerun-Guard, E2.3):
+     * Kapitel-Links, die per Label-Match NICHT wieder zugeordnet werden konnten.
+     * Transient — pro Lauf zurückgesetzt. Aufrufer (Livewire/Tool) können sie anzeigen.
+     *
+     * @var list<string>
+     */
+    public array $letzteStrukturWarnungen = [];
+
+    /** Normalisierter Label-Schlüssel für den Rerun-Guard-Match (trim + lowercase). */
+    private function labelKey(?string $label): string
+    {
+        return mb_strtolower(trim((string) $label));
+    }
+
+    /**
      * Slots und/oder Frame-Regeln deklarativ ERSETZEN (nur was übergeben wird).
      * Slots dürfen eingebettete 'rules' tragen. Transaktional + idempotent —
      * derselbe Payload erzeugt denselben Zustand.
+     *
+     * **Rerun-Guard (E2.3):** Slots werden zwar gelöscht+neu angelegt, aber ihre
+     * `chapter_id`-Verankerung (gesetzt durch `strukturAusGeruest`) überlebt einen
+     * Kickoff-Rerun per Label-Match: ein neuer Slot mit demselben Label erbt die alte
+     * chapter_id (sofern der Payload keine eigene liefert). So mintet ein zweiter
+     * `strukturAusGeruest`-Lauf KEINE Duplikat-Kapitel. Nicht wieder zuordenbare Links
+     * landen als Warnung in {@see $letzteStrukturWarnungen} (Kapitel bleibt verwaist).
      */
     public function replaceStructure(Team $team, FoodAlchemistPlanningFrame $frame, ?array $slots = null, ?array $rules = null): FoodAlchemistPlanningFrame
     {
         $this->guardWrite($team, $frame);
+        $this->letzteStrukturWarnungen = [];
 
         return \Illuminate\Support\Facades\DB::transaction(function () use ($team, $frame, $slots, $rules) {
             if ($slots !== null) {
+                // Rerun-Guard: Kapitel-Links vor dem Löschen sichern (normalisiertes Label → chapter_id).
+                $altLinks = [];   // labelKey → chapter_id
+                $altLabels = [];  // labelKey → Original-Label (für Warntext)
+                foreach ($frame->slots()->whereNotNull('chapter_id')->get(['label', 'chapter_id']) as $alt) {
+                    $key = $this->labelKey($alt->label);
+                    if ($key !== '') {
+                        $altLinks[$key] = (int) $alt->chapter_id;
+                        $altLabels[$key] = (string) $alt->label;
+                    }
+                }
+                $wiederverwendet = [];
+
                 $frame->rules()->whereNotNull('slot_id')->delete();
                 $frame->slots()->delete();
                 $frame->unsetRelation('slots');
@@ -272,11 +307,36 @@ class PlanningFrameService
                     $slotAttrs['position'] = $slotAttrs['position'] ?? $i;
                     $slotRules = $slotAttrs['rules'] ?? [];
                     unset($slotAttrs['rules']);
+                    // chapter_id per Label-Match erhalten, wenn der Payload keine eigene mitbringt.
+                    if (empty($slotAttrs['chapter_id'])) {
+                        $key = $this->labelKey($slotAttrs['label'] ?? null);
+                        if ($key !== '' && isset($altLinks[$key])) {
+                            $slotAttrs['chapter_id'] = $altLinks[$key];
+                            $wiederverwendet[$key] = true;
+                        }
+                    }
                     $slot = $this->addSlot($team, $frame, $slotAttrs);
                     foreach ($slotRules as $ruleAttrs) {
                         $ruleAttrs['slot_id'] = $slot->id;
                         $this->addRule($team, $frame, $ruleAttrs);
                     }
+                }
+
+                // Nicht wieder zugeordnete Links = Warnung (das Kapitel bleibt bestehen, aber ohne Slot-Anker).
+                foreach ($altLinks as $key => $chapterId) {
+                    if (! isset($wiederverwendet[$key])) {
+                        $this->letzteStrukturWarnungen[] = sprintf(
+                            'Slot „%s" (Kapitel #%d) hat im neuen Gerüst kein Label-Gegenstück — Kapitel-Verknüpfung verwaist.',
+                            $altLabels[$key] ?? $key,
+                            $chapterId,
+                        );
+                    }
+                }
+                if ($this->letzteStrukturWarnungen !== []) {
+                    \Illuminate\Support\Facades\Log::warning('PlanningFrameService::replaceStructure Rerun-Guard', [
+                        'frame_id' => $frame->id,
+                        'verwaiste_kapitel_links' => $this->letzteStrukturWarnungen,
+                    ]);
                 }
             }
             if ($rules !== null) {

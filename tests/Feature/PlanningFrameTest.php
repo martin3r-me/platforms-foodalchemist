@@ -128,6 +128,59 @@ it('replaceStructure (MCP-PUT-Pfad): deklarativ + idempotent, Slot-Regeln eingeb
         ->and($summary['rules'][0]['value_text'])->toBe('Innereien');
 });
 
+it('Rerun-Guard (E2.3): Kickoff-Rerun erhält chapter_id per Label-Match → strukturAusGeruest mintet keine Duplikat-Kapitel', function () {
+    $frame = $this->svc->frameFor($this->childA, 'foodbook', $this->foodbook->id, 'ai_brief');
+    $payload = [
+        ['label' => 'Vorspeisen', 'slot_type' => 'gang', 'target_count' => 3],
+        ['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 4],
+    ];
+    $this->svc->replaceStructure($this->childA, $frame, $payload);
+
+    // Struktur anwenden → Slots bekommen chapter_id, 2 Kapitel entstehen.
+    $fbSvc = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $erst = $fbSvc->strukturAusGeruest($this->childA, $this->foodbook->id);
+    expect($erst['angelegt'])->toBe(2)
+        ->and($this->foodbook->chapters()->count())->toBe(2);
+    $kapitelIds = $this->foodbook->chapters()->pluck('id')->sort()->values()->all();
+
+    // Kickoff-RERUN: gleiches Gerüst erneut ersetzen (Label „Hauptgang" leicht anders geschrieben → case-insensitiv match).
+    $rerun = [
+        ['label' => 'Vorspeisen', 'slot_type' => 'gang', 'target_count' => 3],
+        ['label' => 'HAUPTGANG', 'slot_type' => 'gang', 'target_count' => 5],
+    ];
+    $this->svc->replaceStructure($this->childA, $frame->refresh(), $rerun);
+
+    // Slots tragen die alten chapter_ids wieder.
+    $neuSlots = $frame->refresh()->slots()->orderBy('position')->get();
+    expect($neuSlots->pluck('chapter_id')->filter()->count())->toBe(2)
+        ->and($this->svc->letzteStrukturWarnungen)->toBe([]);
+
+    // 2. strukturAusGeruest überspringt alles → KEINE neuen Kapitel.
+    $zweit = $fbSvc->strukturAusGeruest($this->childA, $this->foodbook->id);
+    expect($zweit['angelegt'])->toBe(0)
+        ->and($zweit['uebersprungen'])->toBe(2)
+        ->and($this->foodbook->chapters()->count())->toBe(2)
+        ->and($this->foodbook->chapters()->pluck('id')->sort()->values()->all())->toBe($kapitelIds);
+});
+
+it('Rerun-Guard (E2.3): entfällt ein Label im neuen Gerüst → Warnung, verwaister Kapitel-Link', function () {
+    $frame = $this->svc->frameFor($this->childA, 'foodbook', $this->foodbook->id, 'ai_brief');
+    $this->svc->replaceStructure($this->childA, $frame, [
+        ['label' => 'Vorspeisen', 'slot_type' => 'gang'],
+        ['label' => 'Käse-Station', 'slot_type' => 'station'],
+    ]);
+    app(\Platform\FoodAlchemist\Services\FoodbookService::class)->strukturAusGeruest($this->childA, $this->foodbook->id);
+
+    // Neues Gerüst OHNE „Käse-Station".
+    $this->svc->replaceStructure($this->childA, $frame->refresh(), [
+        ['label' => 'Vorspeisen', 'slot_type' => 'gang'],
+        ['label' => 'Hauptgang', 'slot_type' => 'gang'],
+    ]);
+
+    expect($this->svc->letzteStrukturWarnungen)->toHaveCount(1)
+        ->and($this->svc->letzteStrukturWarnungen[0])->toContain('Käse-Station');
+});
+
 it('promptKontext: nur gefüllte Dimensionen, leeres Gerüst → NULL', function () {
     $frame = $this->svc->frameFor($this->childA, 'concept', $this->concept->id);
     expect($this->svc->promptKontext($frame))->toBeNull();
