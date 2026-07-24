@@ -11,6 +11,7 @@ use Livewire\WithPagination;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPhase;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPlanningFrame;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\IdeenService;
 
@@ -239,6 +240,37 @@ class Index extends Component
     public bool $ideenPapierkorb = false;
 
     public ?string $ideenFehler = null;
+
+    /** Spec 19 E9.4: Kreativ-Modus-Umschalter + Pairing-Inspiration (Pull-not-Push). */
+    public string $kreativSeed = '';
+
+    public ?string $kreativHinweis = null;
+
+    /** Modus pro Kapitel setzen (voll_kreativ|hybrid|datenbank) — erbt sonst vom Foodbook. */
+    public function kreativModusSetzen(string $modus): void
+    {
+        if ($this->selectedKapitelId === null
+            || ! in_array($modus, FoodAlchemistFoodbookKapitel::CREATIVE_MODES, true)) {
+            return;
+        }
+        app(FoodbookService::class)->updateKapitel($this->team(), $this->selectedKapitelId, ['creative_mode' => $modus]);
+        $this->kreativHinweis = null;
+    }
+
+    /** „erden?"-Pull pro Idee: Idee-Titel als Inspirations-Seed (kein Dauer-Einblenden des Bestands). */
+    public function erdenPull(string $term): void
+    {
+        $this->kreativSeed = trim($term);
+        $this->kreativHinweis = null;
+    }
+
+    /** Bewusstes Melden einer Sortiments-Lücke ins Signale-Cockpit (E9.3). */
+    public function luckeMelden(string $slug): void
+    {
+        app(\Platform\FoodAlchemist\Services\PairingInspirationService::class)
+            ->meldeLuecke($this->team(), $slug, ['kapitel_id' => $this->selectedKapitelId]);
+        $this->kreativHinweis = 'Sortiments-Lücke gemeldet: ' . $slug;
+    }
 
     /** Freie Skizze anlegen (Titel Pflicht) — Owner = gewähltes Kapitel. */
     public function ideeHinzu(): void
@@ -1026,6 +1058,16 @@ class Index extends Component
             $this->brandingLoadedId = $fb->id;
         }
 
+        // Spec 19 E9.4: Kreativ-Modus (Kaskade Kapitel→Foodbook→hybrid) + Pairing-Inspiration.
+        // Inspiration ist GATED auf $kreativSeed (Pull-not-Push) — kein Auto-Einblenden des Bestands.
+        $kreativModus = $kapitel !== null ? $svc->kreativModus($team, $kapitel) : null;
+        $kreativInspiration = null;
+        if ($kreativModus !== null && $this->kreativSeed !== '') {
+            $inspSvc = app(\Platform\FoodAlchemist\Services\PairingInspirationService::class);
+            $seeds = $inspSvc->sucheAnker($this->kreativSeed, 5)->pluck('slug')->all();
+            $kreativInspiration = $inspSvc->inspiration($team, $seeds, $kreativModus['modus']);
+        }
+
         $menue = $fb !== null ? $svc->dokumentDaten($team, $fb) : null;
 
         // R2.6: Ø-Feedback je Gericht fürs interne Foodbook (Bulk über alle Menü-Zeilen).
@@ -1082,6 +1124,9 @@ class Index extends Component
                     ->where('dish_main_group_id', $this->gerichtHauptgruppe)
                     ->orderBy('id')->get(['id', 'label', 'diet_form'])
                 : collect(),
+            // Spec 19 E9.4: Kreativ-Modus (führt/erbt) + Pairing-Inspiration (gated, Pull-not-Push)
+            'kreativModus' => $kreativModus,
+            'kreativInspiration' => $kreativInspiration,
             // Spec 19 E6.3: Kreativ-Skizzenfläche — Skizzen des gewählten Kapitels (Pakete + freie Einzel)
             'ideenListe' => $this->selectedKapitelId !== null
                 ? app(IdeenService::class)->liste($team, $this->selectedKapitelId, null, $this->ideenPapierkorb)

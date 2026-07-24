@@ -357,6 +357,26 @@
                         @if(!$kapitel)
                             <p class="text-xs text-gray-500">Wähle links ein Kapitel — Skizzen sammelst du <span class="font-medium">pro Kapitel</span>. Sie sind frei (erden nichts), bis du das Kapitel anlegst.</p>
                         @else
+                            {{-- E9.4: Kreativ-Modus (pro Kapitel; erbt sonst vom Foodbook). Pairing bleibt Inspiration
+                                 in allen Modi; NUR der Bestand wird je Modus anders (nicht) eingeblendet. --}}
+                            @php($km = $kreativModus['modus'] ?? 'hybrid')
+                            <div class="space-y-1" data-fb-kreativ-modus>
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="text-[11px] text-gray-500 shrink-0 mr-0.5">Modus:</span>
+                                    @foreach(['voll_kreativ' => '🟣 Voll kreativ', 'hybrid' => '🔵 Hybrid', 'datenbank' => '🟢 Datenbank'] as $mk => $ml)
+                                        <button type="button" wire:click="kreativModusSetzen('{{ $mk }}')"
+                                            class="rounded-full px-2.5 py-1 text-[11px] border transition {{ $km === $mk ? 'border-violet-500 bg-violet-500/10 text-violet-700 font-medium' : 'border-gray-200 text-gray-500 hover:bg-black/[0.02]' }}"
+                                            data-fb-modus="{{ $mk }}" @if($km === $mk) aria-pressed="true" @endif>{{ $ml }}</button>
+                                    @endforeach
+                                    @if(($kreativModus['quelle'] ?? null) === 'foodbook')<span class="text-[10px] text-gray-400">(vom Foodbook geerbt)</span>@endif
+                                </div>
+                                <p class="text-[10px] text-gray-400">
+                                    @if($km === 'voll_kreativ')Leere Leinwand — nur Aroma-Inspiration, kein Bestand. Erdung auf Abruf.
+                                    @elseif($km === 'datenbank')Vom Verfügbaren aus — Pairing komplettiert aus dem, was wir führen.
+                                    @else Pairing + Verfügbarkeits-Marker (führen/leicht/Lücke), sichtbar aber nicht führend.@endif
+                                </p>
+                            </div>
+
                             @if($ideenFehler)
                                 <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700" data-ideen-fehler>{{ $ideenFehler }}</div>
                             @endif
@@ -422,6 +442,55 @@
                             @endif
                         @endif
                     </div>
+
+                    {{-- E9.4: Pairing-Inspiration — Pull-not-Push. Kein Auto-Einblenden; erst ein Seed (Aroma/Zutat)
+                         zeigt Aroma-Nachbarn. Abstrakt (voll_kreativ) ODER geerdet (hybrid/datenbank) mit
+                         Verfügbarkeits-Markern führen/leicht/Lücke; Lücke ⇒ ins Signale-Cockpit meldbar. --}}
+                    @if($kapitel)
+                        <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" data-fb-pairing-inspiration>
+                            <div class="{{ $cardAccent }}"></div>
+                            <div class="flex items-baseline justify-between gap-2">
+                                <p class="{{ $label }}">🧭 Pairing-Inspiration</p>
+                                <span class="text-[10px] uppercase tracking-wide text-gray-400">{{ ($kreativModus['geerdet'] ?? false) ? 'geerdet' : 'abstrakt' }}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="text" wire:model.blur="kreativSeed" wire:keydown.enter="$refresh" placeholder="Aroma / Zutat — z. B. Zander …" class="{{ $input }} flex-1" data-fb-seed>
+                                <button type="button" wire:click="$refresh" class="{{ $btnGhost }} shrink-0" data-fb-inspirieren>Inspirieren</button>
+                            </div>
+                            @if($kreativHinweis)
+                                <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1.5 text-[11px] text-emerald-700" data-fb-luecke-hinweis>{{ $kreativHinweis }}</div>
+                            @endif
+                            @if($kreativInspiration !== null)
+                                @forelse($kreativInspiration['inspiration'] as $ins)
+                                    <div class="space-y-1" wire:key="insp-{{ $ins['seed'] }}">
+                                        <p class="text-[11px] text-gray-500">passt zu <span class="font-medium text-gray-700">{{ $ins['seed_label'] }}</span>:</p>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            @foreach($ins['nachbarn'] as $n)
+                                                @php($luecke = $n['luecke'] ?? false)
+                                                <span class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] {{ $luecke ? 'border-amber-400/60 bg-amber-500/10 text-amber-700' : 'border-gray-200 text-gray-600' }}" title="Typ: {{ $n['typ'] ?? '—' }}">
+                                                    {{ $n['label'] }}
+                                                    @foreach(collect($n['gps'] ?? [])->take(3) as $g)
+                                                        @php($bc = ['fuehren' => 'bg-emerald-500', 'leicht' => 'bg-sky-500', 'luecke' => 'bg-amber-500'][$g['bucket']] ?? 'bg-gray-300')
+                                                        <span class="inline-block w-1.5 h-1.5 rounded-full {{ $bc }}" title="{{ $g['name'] }} · {{ $g['bucket'] }}"></span>
+                                                    @endforeach
+                                                    @if($luecke && ($kreativInspiration['geerdet'] ?? false))
+                                                        <button type="button" wire:click="luckeMelden('{{ $n['slug'] }}')" class="text-amber-600 hover:text-amber-800" title="Sortiments-Lücke melden" data-fb-luecke-melden="{{ $n['slug'] }}">⚑</button>
+                                                    @endif
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @empty
+                                    <p class="text-xs text-gray-400">Kein Aroma-Anker zu „{{ $kreativSeed }}" gefunden — anderen Begriff probieren.</p>
+                                @endforelse
+                                @if($kreativInspiration['geerdet'] ?? false)
+                                    <p class="text-[10px] text-gray-400"><span class="text-emerald-600">●</span> führen · <span class="text-sky-600">●</span> leicht · <span class="text-amber-600">●</span> Lücke · ⚑ melden</p>
+                                @endif
+                            @else
+                                <p class="text-xs text-gray-400">Gib ein Aroma/eine Zutat ein — im Modus <span class="font-medium">{{ $km ?? ($kreativModus['modus'] ?? 'hybrid') }}</span> {{ ($kreativModus['geerdet'] ?? false) ? 'mit Verfügbarkeits-Markern' : 'als reine Aroma-Inspiration' }}.</p>
+                            @endif
+                        </div>
+                    @endif
 
                     {{-- Ebene 2 der DNA-Kette: Kunde-DNA am CRM-Kunden (Nested-Livewire, Re-Mount via key bei Kunden-Wechsel) --}}
                     <livewire:foodalchemist.foodbooks.kunde-dna-panel :company-id="$fb->crm_company_id" :key="'kdna-'.($fb->crm_company_id ?? 'none')" />
