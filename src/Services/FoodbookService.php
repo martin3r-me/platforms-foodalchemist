@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishIdeaGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
@@ -624,6 +627,194 @@ class FoodbookService
 
         return \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::whereIn('concept_id', $conceptIds)
             ->where('sales_recipe_id', $recipeId)->exists();
+    }
+
+    /**
+     * Spec 19 E7.3 — Kapitel-Go „Anlegen". Materialisiert die Kreativ-Skizzen (`dish_ideas`/
+     * `dish_idea_groups`) eines Kapitels in echte Sortiments-Objekte. **Transaktional + idempotent**:
+     *  - **Paket-Gruppe → EIN Konzept** (name/target_price_per_person aus der Gruppe; Stempel
+     *    serving_form_id/event_type_id [FK], Einsatzmomente-Pivot, Zielgruppen via
+     *    `concept_target_groups`-Pivot; level via `denormNiveauFuerConcept`; created_via='kapitel_freigabe')
+     *    + concept_ref-Block + je Bestands-Mitglied ein Konzept-Slot (über `uebernehmeGericht` mit
+     *    $conceptId — kapitelweite Dedup inklusive). Freitext-Mitglieder → Queue (E7.4).
+     *  - **Einzel-Idee + Bestand-Ref → recipe_ref-Block** (sales_recipe_id, opt. Servierform greift
+     *    additiv über `DarreichungResolver::fuerBlock`). Bereits vorhandener Block ⇒ weich übersprungen.
+     *  - **Freitext-Idee** (kein sales_recipe_id) → `generation_status='queued'`; die eigentliche
+     *    KI-Erstellung + Graceful-ohne-Provider ist E7.4 (hier nur markiert, Go scheitert NIE daran).
+     *
+     * Idempotenz: nur Skizzen mit `status='entwurf'` werden angefasst; Gruppen reusen ihr
+     * `materialized_concept_id`. Ein zweiter Lauf findet alles freigegeben/queued und legt nichts
+     * doppelt an (partielle Materialisierung ist der DoD-Fall). Setzt released_* + Anlage-Protokoll;
+     * die `LogsActivity`-Trait des Kapitels loggt den released_*-Write.
+     *
+     * @return array{kapitel_id:int, konzepte:list<int>, bloecke_einzel:int, materialisiert:int, queued:int, uebersprungen:int, protokoll:list<array<string,mixed>>}
+     */
+    public function kapitelFreigeben(Team $team, int $kapitelId, ?string $note = null, ?int $userId = null): array
+    {
+        $kapitel = $this->ownedKapitel($team, $kapitelId);
+        $fb = $kapitel->foodbook;
+        $fbId = (int) $kapitel->foodbook_id;
+
+        // Aufgelöster Stempel-Kontext (Spec 19 §KI-Führung): leitplanken() liefert Zielgruppen +
+        // Foodbook-Dimensionen, kapitelZiele() die kapitel-scoped SOLL-Überschreibungen.
+        $leit = $this->leitplanken($team, $fb, null, $kapitel);
+        $ziele = $this->kapitelZiele($team, $kapitel);
+        $servingFormId = $ziele['serving_form_id'];                                  // Kapitel→Eltern→Foodbook
+        $eventTypeId = $leit['event_type_id'];                                       // Foodbook-Default
+        $momentIds = $ziele['service_moment_id'] !== null ? [$ziele['service_moment_id']] : $leit['service_moment_ids'];
+        $zgIds = array_values(array_map(static fn ($z) => (int) $z['id'], $leit['zielgruppen']));
+        $niveau = TeamSettingsService::denormNiveauFuerConcept($ziele['niveau'] ?? $leit['niveau']);
+
+        $konzepte = [];
+        $materialisiert = 0;
+        $queued = 0;
+        $uebersprungen = 0;
+        $bloeckeEinzel = 0;
+        $protokoll = [];
+
+        DB::transaction(function () use (
+            $team, $kapitel, $kapitelId, $fbId, $servingFormId, $eventTypeId, $momentIds, $zgIds, $niveau, $note, $userId,
+            &$konzepte, &$materialisiert, &$queued, &$uebersprungen, &$bloeckeEinzel, &$protokoll
+        ) {
+            // ── Paket-Gruppen → Konzepte ────────────────────────────────────────
+            $gruppen = FoodAlchemistDishIdeaGroup::where('team_id', $team->id)
+                ->where('chapter_id', $kapitelId)
+                ->orderBy('position')->orderBy('id')->get();
+
+            foreach ($gruppen as $gruppe) {
+                $members = FoodAlchemistDishIdea::where('team_id', $team->id)
+                    ->where('group_id', $gruppe->id)
+                    ->where('status', 'entwurf')
+                    ->orderBy('position')->orderBy('id')->get();
+                if ($members->isEmpty() && $gruppe->materialized_concept_id === null) {
+                    $uebersprungen++;
+                    $protokoll[] = ['typ' => 'paket', 'gruppe_id' => (int) $gruppe->id, 'status' => 'leer_uebersprungen'];
+
+                    continue;
+                }
+
+                // Konzept reusen (partieller Re-Run) ODER neu anlegen + stempeln.
+                if ($gruppe->materialized_concept_id !== null) {
+                    $concept = FoodAlchemistConcept::find($gruppe->materialized_concept_id);
+                } else {
+                    $concept = null;
+                }
+                if ($concept === null) {
+                    $concept = $this->concepts->create($team, array_filter([
+                        'name' => trim((string) $gruppe->name) ?: 'Paket',
+                        'status' => 'draft',
+                        'level' => $niveau,
+                    ], static fn ($v) => $v !== null));
+                    $concept->update(array_filter([
+                        'created_via' => 'kapitel_freigabe',
+                        'target_price_per_person' => $gruppe->target_price_pp,
+                        'serving_form_id' => $servingFormId,
+                        'event_type_id' => $eventTypeId,
+                    ], static fn ($v) => $v !== null));
+                    if ($momentIds !== []) {
+                        $concept->serviceMoments()->sync($momentIds);
+                    }
+                    if ($zgIds !== []) {
+                        $concept->targetGroups()->sync($zgIds);        // concept_target_groups (Entscheidung 6)
+                    }
+                    $gruppe->update(['materialized_concept_id' => $concept->id]);
+                }
+                $konzepte[] = (int) $concept->id;
+
+                // concept_ref-Block anlegen, falls noch keiner auf dieses Konzept zeigt (idempotent).
+                if (! $kapitel->blocks()->where('type', 'concept_ref')->where('concept_id', $concept->id)->exists()) {
+                    $this->addBlock($team, $kapitelId, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
+                }
+
+                foreach ($members as $idee) {
+                    if ($idee->sales_recipe_id !== null) {
+                        // Bestands-Mitglied → Konzept-Slot (kapitelweite Dedup via uebernehmeGericht).
+                        $this->uebernehmeGericht($team, $fbId, $kapitelId, (int) $idee->sales_recipe_id, $idee->title, 'kapitel_freigabe', (int) $concept->id);
+                        $cslot = FoodAlchemistConceptSlot::where('concept_id', $concept->id)
+                            ->where('sales_recipe_id', $idee->sales_recipe_id)->orderByDesc('id')->first();
+                        $idee->update([
+                            'status' => 'freigegeben',
+                            'materialized_at' => now(),
+                            'materialized_ref' => ['concept_id' => (int) $concept->id, 'concept_slot_id' => (int) ($cslot->id ?? 0)],
+                        ]);
+                        $materialisiert++;
+                        $protokoll[] = ['typ' => 'paket', 'gruppe_id' => (int) $gruppe->id, 'idee_id' => (int) $idee->id, 'status' => 'slot', 'concept_id' => (int) $concept->id];
+                    } else {
+                        // Freitext-Mitglied → KI-Queue (E7.4 erstellt das Rezept + füllt den Slot).
+                        $idee->update(['generation_status' => 'queued']);
+                        $queued++;
+                        $protokoll[] = ['typ' => 'paket', 'gruppe_id' => (int) $gruppe->id, 'idee_id' => (int) $idee->id, 'status' => 'queued', 'concept_id' => (int) $concept->id];
+                    }
+                }
+            }
+
+            // ── Einzel-Ideen → recipe_ref-Blöcke ────────────────────────────────
+            $einzel = FoodAlchemistDishIdea::where('team_id', $team->id)
+                ->where('chapter_id', $kapitelId)
+                ->whereNull('group_id')
+                ->where('status', 'entwurf')
+                ->orderBy('position')->orderBy('id')->get();
+
+            foreach ($einzel as $idee) {
+                if ($idee->sales_recipe_id !== null) {
+                    $vorhanden = $kapitel->blocks()->where('type', 'recipe_ref')->where('sales_recipe_id', $idee->sales_recipe_id)->first();
+                    if ($vorhanden !== null) {
+                        // Weiche kapitelweite Dedup: Gericht liegt schon als Block — nur verknüpfen.
+                        $idee->update([
+                            'status' => 'freigegeben',
+                            'materialized_at' => now(),
+                            'materialized_ref' => ['block_id' => (int) $vorhanden->id],
+                        ]);
+                        $uebersprungen++;
+                        $protokoll[] = ['typ' => 'einzel', 'idee_id' => (int) $idee->id, 'status' => 'block_vorhanden', 'block_id' => (int) $vorhanden->id];
+
+                        continue;
+                    }
+                    $block = $this->addBlock($team, $kapitelId, [
+                        'type' => 'recipe_ref',
+                        'sales_recipe_id' => (int) $idee->sales_recipe_id,
+                    ]);
+                    $idee->update([
+                        'status' => 'freigegeben',
+                        'materialized_at' => now(),
+                        'materialized_ref' => ['block_id' => (int) $block->id],
+                    ]);
+                    $bloeckeEinzel++;
+                    $materialisiert++;
+                    $protokoll[] = ['typ' => 'einzel', 'idee_id' => (int) $idee->id, 'status' => 'block', 'block_id' => (int) $block->id];
+                } else {
+                    // Freitext-Einzel-Idee → KI-Queue (E7.4).
+                    $idee->update(['generation_status' => 'queued']);
+                    $queued++;
+                    $protokoll[] = ['typ' => 'freitext', 'idee_id' => (int) $idee->id, 'status' => 'queued'];
+                }
+            }
+
+            $ergebnis = [
+                'kapitel_id' => $kapitelId,
+                'konzepte' => array_values(array_unique($konzepte)),
+                'bloecke_einzel' => $bloeckeEinzel,
+                'materialisiert' => $materialisiert,
+                'queued' => $queued,
+                'uebersprungen' => $uebersprungen,
+            ];
+            $kapitel->update([
+                'released_at' => now(),
+                'released_by' => $userId,
+                'release_note' => $note,
+                'release_result' => $ergebnis,
+            ]);
+        });
+
+        return [
+            'kapitel_id' => $kapitelId,
+            'konzepte' => array_values(array_unique($konzepte)),
+            'bloecke_einzel' => $bloeckeEinzel,
+            'materialisiert' => $materialisiert,
+            'queued' => $queued,
+            'uebersprungen' => $uebersprungen,
+            'protokoll' => $protokoll,
+        ];
     }
 
     private const KAPITEL_FELDER = [
