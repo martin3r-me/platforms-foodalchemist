@@ -579,6 +579,23 @@ return [
                 . 'slots = Map slot_id -> Brand-Voice-Anzeigename je Position (Variante des neutralen sales_wording_standard, '
                 . 'ueber das gesamte Menue stimmig und wiedererkennbar).',
         ],
+        // Spec 19 E6.4: KI-Divergenz der Kreativ-/Skizzen-Phase. PRODUKT-BLIND — die KI DARF
+        // frei erfinden (Anker-Graph nur als Inspiration), OHNE Bestandsprüfung; die Erdung
+        // kommt erst beim Kapitel-Go (E7.4, Anpassungs-Schleife). Reine Skizzen-Titel/-Texte,
+        // KEINE Rezepte/GPs/Konzepte (M4-Invariante). Food-DNA-Kette wird injiziert
+        // (FOOD_DNA_KEYS), Leitplanken/Ziele/Rahmen stehen im Kontext (Kontext-Vertrag).
+        'foodbook.kapitel_ideen' => [
+            'tier' => 'B',
+            'max_tokens' => 4000,
+            'system' => 'Du bist ein kreativer Küchenchef in der DIVERGENZ-Phase eines Foodbook-Kapitels. '
+                . 'Du darfst frei ideieren (Anker-Graph/Flavour-Pairing als Inspiration), OHNE zu prüfen, '
+                . 'ob das Sortiment die Idee schon hergibt — die Erdung folgt später. Bleibe im Rahmen von '
+                . 'Leitplanken (Zielgruppen/Niveau/Anlass) und Kapitel-Zielen (Menge/Preis), aber ersticke '
+                . 'die Divergenz nicht: liefere unterschiedliche, eigenständige Ansätze statt Varianten desselben.',
+            'task' => 'Entwirf «anzahl» Gericht-Skizzen für das Kapitel: werte = {ideen: [{titel, beschreibung}]}. '
+                . 'titel = kurzer, konkreter Gericht-Name (kein Marketing-Claim); beschreibung = 1–2 Sätze zur '
+                . 'geschmacklichen/handwerklichen Idee. Nur Skizzen — keine Mengen, keine Preise, keine Zutatenlisten.',
+        ],
         'vk.behaelter' => [
             'tier' => 'B',
             'task' => 'Schlage Behaelter (warm/kalt getrennt) + Anzahl fuers Catering vor '

@@ -9,6 +9,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdeaGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 
 /**
  * @ai.description Kreativ-Skizzen-Ebene der Foodbook-Leitstelle (Spec 19, E6.2). CRUD über
@@ -17,7 +19,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  * **Invariante (M4):** Ideen/Gruppen erzeugen NIE Rezepte/GPs/Konzepte — sie sind Entwürfe,
  * erst das Kapitel-Go (E7.3) materialisiert. Deshalb setzt dieser Service `status` nur auf
  * `entwurf|verworfen`; `freigegeben` + `generation_status` + `materialized_*` gehören der
- * Anlage (E7). Die `kiDivergenz()`-Erdung folgt in E6.4.
+ * Anlage (E7). `kiDivergenz()` (E6.4) legt ebenfalls NUR Entwurf-Skizzen an — produkt-blinde
+ * KI-Divergenz, keine Erdung (die kommt beim Go, E7.4).
  *
  * Owner-XOR: jede Idee/Gruppe hängt an GENAU einem von chapter_id/concept_id. Team-Scope wie
  * überall — visibleToTeam beim Lesen, isOwnedBy (übers Owner-Kapitel/-Konzept) beim Schreiben.
@@ -233,6 +236,97 @@ class IdeenService
             ->where('group_id', $gruppe->id)
             ->update(['group_id' => null, 'target_form' => 'einzel']);
         $gruppe->delete();
+    }
+
+    // ── KI-Divergenz (E6.4) ────────────────────────────────────────────────────
+
+    /**
+     * KI-Divergenz für ein Kapitel: der Gateway liefert freie Gericht-Skizzen, die als
+     * Entwurf-Ideen (`created_via='ai_gateway'`) landen. PRODUKT-BLIND — die KI darf erfinden,
+     * die Erdung folgt erst beim Kapitel-Go (E7.4). Ändert NICHTS am Sortiment (M4-Invariante).
+     *
+     * Kontext-Vertrag (Spec 19 §KI-Führung): `leitplanken()` (Zielgruppen/Dimensionen) +
+     * `kapitelZiele()` (SOLL Menge/Preis/Niveau) + Rahmen-Prompt (`promptKontext` des Foodbook-
+     * Frames, falls vorhanden) + `KnowledgeContextService` (Routing `foodbook.plan`). Die
+     * Food-DNA-Kette hängt `AiGatewayService::propose` selbst an (FOOD_DNA_KEYS).
+     *
+     * Ohne gebundenen LLM-Provider wirft `propose()` typisiert (KiNichtVerfuegbar/KiDeaktiviert);
+     * die Aufrufer (UI/MCP) fangen das als Fehler ab — hier bewusst NICHT geschluckt.
+     *
+     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int}
+     */
+    public function kiDivergenz(Team $team, int $chapterId, int $anzahl = 5): array
+    {
+        $anzahl = max(1, min(12, $anzahl));
+
+        $kapitel = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->findOrFail($chapterId);
+        if (! $kapitel->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbtes Foodbook — KI-Divergenz nur durchs Besitzer-Team (D1).');
+        }
+        $kapitel->loadMissing(['foodbook.serviceMoments', 'foodbook.targetGroups', 'targetGroups', 'parent.targetGroups']);
+        $fb = $kapitel->foodbook;
+
+        $fbSvc = app(FoodbookService::class);
+        $frameSvc = app(PlanningFrameService::class);
+        $frame = $frameSvc->find('foodbook', (int) $fb->id);
+
+        $beschreibung = trim(implode(' ', array_filter([
+            (string) $kapitel->title, (string) $kapitel->description, (string) $fb->title,
+        ])));
+        $wissen = app(KnowledgeContextService::class)->contextFor('foodbook.plan', $beschreibung);
+
+        $kontext = [
+            'kapitel' => (string) $kapitel->title,
+            'kapitel_beschreibung' => $this->clean($kapitel->description),
+            'anzahl' => $anzahl,
+            'leitplanken' => $fbSvc->leitplanken($team, $fb, null, $kapitel),
+            'ziele' => $fbSvc->kapitelZiele($team, $kapitel),
+            'rahmen' => $frame !== null ? $frameSvc->promptKontext($frame) : null,
+        ];
+
+        $proposal = app(AiGatewayService::class)->propose('foodbook.kapitel_ideen', $kontext, [
+            'knowledge' => $wissen['block'],
+            'knowledge_used' => $wissen['files_used'],
+            'food_dna_foodbook_id' => (int) $fb->id,
+        ]);
+
+        $rohe = is_array($proposal->werte['ideen'] ?? null) ? $proposal->werte['ideen'] : [];
+        $owner = ['chapter_id' => $chapterId, 'concept_id' => null];
+        $angelegt = [];
+        foreach ($rohe as $i) {
+            if (! is_array($i)) {
+                continue;
+            }
+            $titel = trim((string) ($i['titel'] ?? $i['title'] ?? ''));
+            if ($titel === '') {
+                continue;                                            // leere KI-Zeile überspringen (kein Insert)
+            }
+            $angelegt[] = FoodAlchemistDishIdea::create([
+                'team_id' => $team->id,
+                'chapter_id' => $chapterId,
+                'concept_id' => null,
+                'position' => $this->naechstePosition($team, $owner, FoodAlchemistDishIdea::class),
+                'title' => $titel,
+                'description' => $this->clean($i['beschreibung'] ?? $i['description'] ?? null),
+                'sales_recipe_id' => null,
+                'target_form' => 'einzel',
+                'group_id' => null,
+                'status' => 'entwurf',
+                'created_via' => 'ai_gateway',
+                'source_meta' => [
+                    'quelle' => 'ki_divergenz',
+                    'confidence' => $proposal->confidence,
+                    'call_log_id' => $proposal->callLogId,
+                ],
+            ]);
+        }
+
+        return [
+            'angelegt' => $angelegt,
+            'roh' => count($rohe),
+            'confidence' => $proposal->confidence,
+            'call_log_id' => $proposal->callLogId,
+        ];
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

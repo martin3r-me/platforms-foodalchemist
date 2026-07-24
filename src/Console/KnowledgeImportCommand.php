@@ -243,6 +243,13 @@ class KnowledgeImportCommand extends Command
             ['ai_generate_recipe', 'pairing', 'discovery', null, null],
             ['ai_plan_dishes', 'cross_cutting', 'always', null, null],
             ['ai_plan_dishes', 'domain', 'discovery', null, null],
+            // Spec 19 E6.4 / Spec 08 P6: Kreativ-Divergenz am Kapitel (foodbook.plan) bzw.
+            // standalone-Konzept (concept.plan). Concepting- + Food-Wissen, keine Pairing-Grounding
+            // (Divergenz ist produkt-blind — der Anker-Graph inspiriert, erdet aber nicht).
+            ['foodbook.plan', 'cross_cutting', 'always', null, null],
+            ['foodbook.plan', 'domain', 'discovery', null, null],
+            ['concept.plan', 'cross_cutting', 'always', null, null],
+            ['concept.plan', 'domain', 'discovery', null, null],
             ['ai_extract_recipe', 'cross_cutting', 'none', null, null],     // bewusst leer
             ['ai_suggest_pairings', 'pairing', 'grounding', 5, 1200],
             ['ai_infer_ankers', 'pairing', 'grounding', 3, 1400],
