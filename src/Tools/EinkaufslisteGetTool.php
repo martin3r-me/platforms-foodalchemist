@@ -24,8 +24,9 @@ class EinkaufslisteGetTool extends FoodAlchemistTool implements ToolContract, To
     public function getDescription(): string
     {
         return 'Einkaufsliste (read-only): GP-Bedarf über mehrere Ziele zusammengeführt, nach Lieferant '
-            . 'gruppiert. ziele = Liste aus {concept_id, persons} und/oder {recipe_id, portions}. '
-            . 'portions doppeldeutig: VK-Gericht = Portionen, Basisrezept = Ansätze (alternativ amount_kg beim Basisrezept).';
+            . 'gruppiert. ziele = Liste aus {concept_id, persons}, {recipe_id, portions} und/oder {chapter_id, persons}. '
+            . 'portions doppeldeutig: VK-Gericht = Portionen, Basisrezept = Ansätze (alternativ amount_kg beim Basisrezept). '
+            . 'chapter_id = Foodbook-Kapitel-Scope (variant_choices {gruppe: block_id} je Ziel für Wahl-Gruppen).';
     }
 
     public function getSchema(): array
@@ -42,9 +43,11 @@ class EinkaufslisteGetTool extends FoodAlchemistTool implements ToolContract, To
                         'properties' => [
                             'concept_id' => ['type' => 'integer'],
                             'recipe_id' => ['type' => 'integer'],
+                            'chapter_id' => ['type' => 'integer', 'description' => 'Foodbook-Kapitel-ID (mit persons)'],
                             'persons' => ['type' => 'integer', 'minimum' => 1],
                             'portions' => ['type' => 'number', 'minimum' => 1, 'description' => 'VK-Gericht: Portionen. Basisrezept: Anzahl Ansätze.'],
                             'amount_kg' => ['type' => 'number', 'minimum' => 0, 'description' => 'Nur Basisrezept: Ziel-Kilogramm (Alternative zu portions/Ansätze).'],
+                            'variant_choices' => ['type' => 'object', 'description' => 'Nur chapter_id: {variant_group_id: block_id} je Wahl-Gruppe.'],
                         ],
                     ],
                 ],
@@ -66,7 +69,7 @@ class EinkaufslisteGetTool extends FoodAlchemistTool implements ToolContract, To
         // Nur bekannte Schlüssel je Ziel durchreichen, Werte typkoercieren.
         $ziele = array_map(fn ($z) => array_intersect_key(
             is_array($z) ? $z : [],
-            array_flip(['concept_id', 'recipe_id', 'persons', 'portions', 'amount_kg'])
+            array_flip(['concept_id', 'recipe_id', 'chapter_id', 'persons', 'portions', 'amount_kg', 'variant_choices'])
         ), $ziele);
 
         try {

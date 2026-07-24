@@ -477,6 +477,30 @@ it('P1 MCP: produktionsblatt/bestellvorschlag/ADD_TARGET akzeptieren amount_kg',
         ->and((float) $add->data['targets'][0]['amount_kg'])->toBe(2.5);
 });
 
+it('P1b MCP: ADD_TARGET mit chapter_id expandiert in eingefrorene Einzel-Ziele (kein Live-Bezug)', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(\Platform\Core\Tools\ToolRegistry::class);
+    $kontext = new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam);
+
+    $fb = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $book = $fb->create($this->rootTeam, ['label' => 'FB', 'personen' => 20]);
+    $kap = $fb->addKapitel($this->rootTeam, $book->id, ['title' => 'Desserts']);
+    $fb->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->kuchen->id]);
+    $fb->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->tarte->id]);
+
+    $add = $registry->get('foodalchemist.production_orders.ADD_TARGET')
+        ->execute(['production_date' => '2026-08-02', 'name' => 'Kapitel-Prod', 'chapter_id' => $kap->id, 'persons' => 20, 'source_ref' => 'chapter:' . $kap->id], $kontext);
+
+    expect($add->success)->toBeTrue()
+        ->and($add->data['aufgeloeste_ziele'])->toBe(2);
+    // Gespeichert sind aufgelöste recipe-Ziele — KEIN chapter_id im Ziel (kein Live-Bezug).
+    $targets = collect($add->data['targets']);
+    expect($targets)->toHaveCount(2)
+        ->and($targets->every(fn ($t) => ! isset($t['chapter_id']) && isset($t['recipe_id'])))->toBeTrue()
+        ->and($targets->pluck('recipe_id')->sort()->values()->all())->toBe(collect([$this->kuchen->id, $this->tarte->id])->sort()->values()->all());
+});
+
 it('S3: Produktionsschein-Dokument-Route liefert HTML + CSV-Download', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommer-Buffet', [

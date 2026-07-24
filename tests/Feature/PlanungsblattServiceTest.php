@@ -10,6 +10,7 @@ use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Services\ConceptService;
+use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -159,6 +160,87 @@ it('Spec 18: produktionsblattFuerZiele() aggregiert mehrere Ziele VOR der Ansät
         ->and($rez['Vanillesauce']['ansaetze'])->toBe(1);
 });
 
+// ── P1b: Foodbook-Kapitel als Ziel ────────────────────────────────────────
+
+it('P1b Kapitel-Ziel: recipe_ref (Default 1 Portion/Person) + concept_ref, header/text werden geskippt', function () {
+    $fb = app(FoodbookService::class);
+    $book = $fb->create($this->rootTeam, ['label' => 'FB Sommerfest', 'personen' => 20]);
+    $kap = $fb->addKapitel($this->rootTeam, $book->id, ['title' => 'Hauptgang']);
+    $fb->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->kuchen->id]);
+    $fb->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei', 'label' => 'Nur Deko']);   // muss übersprungen werden
+    $fb->addBlock($this->rootTeam, $kap->id, ['type' => 'text', 'customer_text' => 'Blabla']);      // dito
+
+    // 20 Personen × 1 Portion ÷ 10 Portionen/Batch = 2 Ansätze Kuchen → Mehl 2 kg.
+    $blatt = $this->svc->produktionsblatt($this->rootTeam, ['chapter_id' => $kap->id, 'persons' => 20]);
+    $rez = collect($blatt['rezepte'])->keyBy('name');
+    expect($rez)->toHaveCount(2)                                       // nur Kuchen + Vanillesauce, keine Deko/Text-Zeile
+        ->and($rez['DES: Kuchen']['ansaetze'])->toBe(2.0);
+    $gp = collect($blatt['gp_bedarf'])->keyBy('name');
+    expect($gp['Mehl']['menge_kg'])->toBe(2.0);
+});
+
+it('P1b Kapitel-Ziel: concept_ref-Block läuft über konzeptTops()', function () {
+    $concept = $this->concepts->create($this->rootTeam, ['name' => 'Menü A']);
+    $slot = $this->concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Dessert']);
+    $slot = $this->concepts->fillSlot($this->rootTeam, $slot->id, ['sales_recipe_id' => $this->kuchen->id]);
+    $slot->update(['quantity' => 1, 'unit_vocab_id' => $this->portion->id]);
+
+    $fb = app(FoodbookService::class);
+    $book = $fb->create($this->rootTeam, ['label' => 'FB', 'personen' => 20]);
+    $kap = $fb->addKapitel($this->rootTeam, $book->id, ['title' => 'Menü']);
+    $fb->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
+
+    $blatt = $this->svc->produktionsblatt($this->rootTeam, ['chapter_id' => $kap->id, 'persons' => 20]);
+    $rez = collect($blatt['rezepte'])->keyBy('name');
+    expect($rez['DES: Kuchen']['ansaetze'])->toBe(2.0);
+});
+
+it('P1b Kapitel-Ziel: Wahl-Gruppe — Default = erster Block, variant_choices wählt gezielt', function () {
+    // Zweites VK-Gericht „Torte" (5 Portionen/Batch), damit die Varianten unterscheidbar sind.
+    $torte = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'torte', 'name' => 'DES: Torte',
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 4.0, 'sales_unit_count' => 5,
+    ]);
+    $torte->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'gp_id' => $this->mehl->id, 'raw_text' => 'Mehl', 'quantity' => 800, 'unit_vocab_id' => $this->g->id]);
+    app(RecipeRecomputeService::class)->recomputePipeline($torte->id);
+
+    $fb = app(FoodbookService::class);
+    $book = $fb->create($this->rootTeam, ['label' => 'FB', 'personen' => 10]);
+    $kap = $fb->addKapitel($this->rootTeam, $book->id, ['title' => 'Dessert-Wahl']);
+    $a = $fb->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->kuchen->id]);
+    $b = $fb->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $torte->id]);
+    $gid = $fb->nextVariantGroupId($this->rootTeam, $kap->id);
+    $fb->setVariantGroup($this->rootTeam, [$a->id, $b->id], $gid);
+
+    // Default: erster Block der Gruppe (Kuchen) → 10 P. ÷ 10 = 1 Ansatz Kuchen, keine Torte.
+    $default = $this->svc->produktionsblatt($this->rootTeam, ['chapter_id' => $kap->id, 'persons' => 10]);
+    $rezD = collect($default['rezepte'])->keyBy('name');
+    expect($rezD->has('DES: Kuchen'))->toBeTrue()
+        ->and($rezD->has('DES: Torte'))->toBeFalse();
+
+    // Gewählte Variante Torte → 10 P. ÷ 5 = 2 Ansätze Torte, kein Kuchen.
+    $gewaehlt = $this->svc->produktionsblatt($this->rootTeam, ['chapter_id' => $kap->id, 'persons' => 10, 'variant_choices' => [$gid => $b->id]]);
+    $rezG = collect($gewaehlt['rezepte'])->keyBy('name');
+    expect($rezG->has('DES: Torte'))->toBeTrue()
+        ->and($rezG['DES: Torte']['ansaetze'])->toBe(2.0)
+        ->and($rezG->has('DES: Kuchen'))->toBeFalse();
+});
+
+it('P1b kapitelZiele(): löst Kapitel in eingefrorene Einzel-Ziele auf (kein Live-Bezug)', function () {
+    $fb = app(FoodbookService::class);
+    $book = $fb->create($this->rootTeam, ['label' => 'FB', 'personen' => 20]);
+    $kap = $fb->addKapitel($this->rootTeam, $book->id, ['title' => 'Hauptgang']);
+    $fb->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->kuchen->id]);
+
+    $res = $this->svc->kapitelZiele($this->rootTeam, $kap->id, 20);
+    expect($res['ziele'])->toHaveCount(1);
+    $z = $res['ziele'][0];
+    // recipe_ref Default 1 Portion/Person → 20 Portionen; keine chapter_id im aufgelösten Ziel.
+    expect($z['recipe_id'])->toBe($this->kuchen->id)
+        ->and($z['portions'])->toBe(20.0)
+        ->and($z)->not->toHaveKey('chapter_id');
+});
+
 it('MCP: die drei Blätter-Tools sind registriert, read-only und liefern konsistente Zahlen', function () {
     $user = $this->makeUser($this->rootTeam);
     $this->actingAs($user);
@@ -189,6 +271,28 @@ it('MCP: die drei Blätter-Tools sind registriert, read-only und liefern konsist
     // Validierung: beide Ziel-Schlüssel gleichzeitig → Fehler.
     $fehler = $registry->get('foodalchemist.produktionsblatt.GET')
         ->execute(['recipe_id' => $this->kuchen->id, 'concept_id' => 1], $kontext);
+    expect($fehler->success)->toBeFalse()->and($fehler->errorCode)->toBe('VALIDATION_ERROR');
+});
+
+it('P1b MCP: produktionsblatt.GET akzeptiert chapter_id + persons (Kapitel-Scope)', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(ToolRegistry::class);
+    $kontext = new ToolContext($user, $this->rootTeam);
+
+    $fb = app(FoodbookService::class);
+    $book = $fb->create($this->rootTeam, ['label' => 'FB', 'personen' => 20]);
+    $kap = $fb->addKapitel($this->rootTeam, $book->id, ['title' => 'Hauptgang']);
+    $fb->addBlock($this->rootTeam, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->kuchen->id]);
+
+    $res = $registry->get('foodalchemist.produktionsblatt.GET')
+        ->execute(['chapter_id' => $kap->id, 'persons' => 20], $kontext);
+    expect($res->success)->toBeTrue()
+        ->and(collect($res->data['rezepte'])->firstWhere('name', 'DES: Kuchen')['ansaetze'])->toBe(2.0);
+
+    // Validierung: chapter_id + recipe_id zugleich → Fehler.
+    $fehler = $registry->get('foodalchemist.produktionsblatt.GET')
+        ->execute(['chapter_id' => $kap->id, 'recipe_id' => $this->kuchen->id], $kontext);
     expect($fehler->success)->toBeFalse()->and($fehler->errorCode)->toBe('VALIDATION_ERROR');
 });
 

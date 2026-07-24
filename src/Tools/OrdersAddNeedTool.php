@@ -24,7 +24,8 @@ class OrdersAddNeedTool extends FoodAlchemistTool implements ToolContract, ToolM
     public function getDescription(): string
     {
         return 'Übernimmt den Bedarf eines Ziels in die Bestellschienen je Lieferant (in ganzen Gebinden). '
-            . 'Ziel = concept_id + persons ODER recipe_id + portions. portions ist doppeldeutig: VK-Gericht = '
+            . 'Ziel = concept_id + persons ODER recipe_id + portions ODER chapter_id + persons (Foodbook-Kapitel-Scope, '
+            . 'variant_choices {gruppe: block_id} für Wahl-Gruppen). portions ist doppeldeutig: VK-Gericht = '
             . 'Portionen, Basisrezept = Anzahl Ansätze; beim Basisrezept alternativ amount_kg (Ziel-Kilogramm). '
             . 'source_ref = Quell-Kennung (z. B. "concept:12@100p"); gleiche Quelle erneut ⇒ ersetzt ihren Beitrag '
             . '(idempotent). Liefert die berührten order_ids + GPs ohne Lead-LA (skipped_ohne_la).';
@@ -37,9 +38,11 @@ class OrdersAddNeedTool extends FoodAlchemistTool implements ToolContract, ToolM
             'properties' => [
                 'concept_id' => ['type' => 'integer'],
                 'recipe_id' => ['type' => 'integer'],
+                'chapter_id' => ['type' => 'integer', 'description' => 'Foodbook-Kapitel-ID (mit persons) — Bedarf des Kapitel-Scopes'],
                 'persons' => ['type' => 'number'],
                 'portions' => ['type' => 'number', 'description' => 'VK-Gericht: Portionen. Basisrezept: Anzahl Ansätze.'],
                 'amount_kg' => ['type' => 'number', 'description' => 'Nur Basisrezept: Ziel-Kilogramm (Alternative zu portions/Ansätze).'],
+                'variant_choices' => ['type' => 'object', 'description' => 'Nur chapter_id: {variant_group_id: block_id} je Wahl-Gruppe (Default: erster Block).'],
                 'source_ref' => ['type' => 'string', 'description' => 'Quell-Kennung; Re-Import ersetzt diesen Schlüssel'],
             ],
             'required' => ['source_ref'],
@@ -54,12 +57,19 @@ class OrdersAddNeedTool extends FoodAlchemistTool implements ToolContract, ToolM
         }
         $hatConcept = ! empty($arguments['concept_id']);
         $hatRecipe = ! empty($arguments['recipe_id']);
-        if ($hatConcept === $hatRecipe) {
-            return ToolResult::error('Genau eines von concept_id/recipe_id angeben.', 'VALIDATION_ERROR');
+        $hatChapter = ! empty($arguments['chapter_id']);
+        if (((int) $hatConcept + (int) $hatRecipe + (int) $hatChapter) !== 1) {
+            return ToolResult::error('Genau eines von concept_id/recipe_id/chapter_id angeben.', 'VALIDATION_ERROR');
         }
 
         $ziel = [];
-        if ($hatConcept) {
+        if ($hatChapter) {
+            $ziel['chapter_id'] = (int) $arguments['chapter_id'];
+            $ziel['persons'] = (float) ($arguments['persons'] ?? 0);
+            if (isset($arguments['variant_choices']) && is_array($arguments['variant_choices'])) {
+                $ziel['variant_choices'] = $arguments['variant_choices'];
+            }
+        } elseif ($hatConcept) {
             $ziel['concept_id'] = (int) $arguments['concept_id'];
             $ziel['persons'] = (float) ($arguments['persons'] ?? 0);
         } else {

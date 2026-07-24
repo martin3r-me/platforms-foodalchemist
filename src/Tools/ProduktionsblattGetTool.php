@@ -24,9 +24,11 @@ class ProduktionsblattGetTool extends FoodAlchemistTool implements ToolContract,
     public function getDescription(): string
     {
         return 'Produktionsblatt (read-only): skalierte Rezepturen für eine Produktionsmenge. GENAU EINES '
-            . 'angeben: concept_id (+ persons) ODER recipe_id (+ portions oder persons). '
+            . 'angeben: concept_id (+ persons) ODER recipe_id (+ portions oder persons) ODER chapter_id (+ persons). '
             . 'portions ist doppeldeutig: beim VK-Gericht = Portionen, beim Basisrezept = Anzahl Ansätze. '
             . 'Alternativ beim Basisrezept amount_kg (Ziel-Kilogramm → Service rechnet kg ÷ Basis-Yield). '
+            . 'chapter_id = Foodbook-Kapitel: alle sichtbaren Gericht-/Konzept-Blocks des Kapitels (inkl. Unterkapitel) '
+            . 'für persons Personen; variant_choices {variant_group_id: block_id} wählt in Wahl-Gruppen (sonst erster Block). '
             . 'Basisrezepte werden in ganzen Ansätzen ausgegeben (nicht runter-fraktioniert), Top-Gericht linear skaliert.';
     }
 
@@ -37,9 +39,11 @@ class ProduktionsblattGetTool extends FoodAlchemistTool implements ToolContract,
             'properties' => [
                 'concept_id' => ['type' => 'integer', 'description' => 'Konzept-ID (mit persons)'],
                 'recipe_id' => ['type' => 'integer', 'description' => 'Gericht-/Rezept-ID (mit portions oder persons)'],
-                'persons' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Personenzahl (Konzept-Skalierung)'],
+                'chapter_id' => ['type' => 'integer', 'description' => 'Foodbook-Kapitel-ID (mit persons) — löst alle sichtbaren Blocks des Kapitel-Scopes auf'],
+                'persons' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Personenzahl (Konzept-/Kapitel-Skalierung)'],
                 'portions' => ['type' => 'number', 'minimum' => 1, 'description' => 'VK-Gericht: Portionszahl. Basisrezept: Anzahl Ansätze.'],
                 'amount_kg' => ['type' => 'number', 'minimum' => 0, 'description' => 'Nur Basisrezept: Ziel-Kilogramm (Alternative zu portions/Ansätze).'],
+                'variant_choices' => ['type' => 'object', 'description' => 'Nur chapter_id: {variant_group_id: block_id} — gewählter Block je Wahl-Gruppe (Default: erster Block).'],
             ],
         ];
     }
@@ -50,11 +54,11 @@ class ProduktionsblattGetTool extends FoodAlchemistTool implements ToolContract,
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $keys = array_values(array_intersect(['concept_id', 'recipe_id'], array_keys(array_filter($arguments))));
+        $keys = array_values(array_intersect(['concept_id', 'recipe_id', 'chapter_id'], array_keys(array_filter($arguments))));
         if (count($keys) !== 1) {
-            return ToolResult::error('Genau EINES von concept_id oder recipe_id angeben.', 'VALIDATION_ERROR');
+            return ToolResult::error('Genau EINES von concept_id, recipe_id oder chapter_id angeben.', 'VALIDATION_ERROR');
         }
-        $ziel = array_intersect_key($arguments, array_flip(['concept_id', 'recipe_id', 'persons', 'portions', 'amount_kg']));
+        $ziel = array_intersect_key($arguments, array_flip(['concept_id', 'recipe_id', 'chapter_id', 'persons', 'portions', 'amount_kg', 'variant_choices']));
 
         try {
             $blatt = app(PlanungsblattService::class)->produktionsblatt($team, $ziel);

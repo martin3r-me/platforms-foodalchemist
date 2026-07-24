@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder;
@@ -417,6 +418,13 @@ class ProductionOrderService
 
     private function labelFor(Team $team, array $ziel): ?string
     {
+        // P1b: Kapitel-Ziel (i. d. R. schon in Einzel-Ziele aufgelöst; Fallback-Label für Direkt-Speicher).
+        if (! empty($ziel['chapter_id'])) {
+            $chapter = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->find((int) $ziel['chapter_id']);
+            $wert = $ziel['persons'] ?? null;
+
+            return $chapter !== null ? $chapter->title . ($wert !== null ? " ({$wert} P.)" : '') : null;
+        }
         if (! empty($ziel['concept_id'])) {
             $name = FoodAlchemistConcept::visibleToTeam($team)->find((int) $ziel['concept_id'])?->name;
             $wert = $ziel['persons'] ?? null;

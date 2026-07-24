@@ -5,6 +5,8 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
@@ -148,7 +150,25 @@ class PlanungsblattService
         $skalierung = null;
 
         foreach ($ziele as $ziel) {
-            if (! empty($ziel['concept_id'])) {
+            if (! empty($ziel['chapter_id'])) {
+                // P1b: Foodbook-Kapitel + Personen → sichtbare concept_ref/recipe_ref-Blocks des
+                // Kapitel-Scopes (Kapitel + Nachfahren), Varianten-Gruppen aufgelöst. Live-Zweig
+                // für die ephemeren Blätter/MCP-Reads; STORED Ziele werden über kapitelZiele() in
+                // Einzel-Ziele aufgelöst (V2 „kein Live-Bezug").
+                $chapter = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->find((int) $ziel['chapter_id']);
+                if ($chapter === null) {
+                    $warnungen[] = "Foodbook-Kapitel #{$ziel['chapter_id']} nicht sichtbar/vorhanden — übersprungen.";
+
+                    continue;
+                }
+                $personen = max(1, (int) ($ziel['persons'] ?? 0));
+                $skalierung ??= ['modus' => 'personen', 'wert' => $personen];
+                $variantChoices = is_array($ziel['variant_choices'] ?? null) ? $ziel['variant_choices'] : [];
+                $zielLabels[] = "{$chapter->title} ({$personen} P.)";
+                foreach ($this->kapitelTops($team, $chapter, $personen, $variantChoices, $warnungen) as $t) {
+                    $tops[] = $t;
+                }
+            } elseif (! empty($ziel['concept_id'])) {
                 $concept = FoodAlchemistConcept::visibleToTeam($team)->find((int) $ziel['concept_id']);
                 if ($concept === null) {
                     $warnungen[] = "Konzept #{$ziel['concept_id']} nicht sichtbar/vorhanden — übersprungen.";
@@ -244,6 +264,186 @@ class PlanungsblattService
         }
 
         return ['recipe' => $this->ladeRezept((int) $gericht->id), 'batches' => ($pae * $personen) / $anzahl, 'label' => $gericht->name];
+    }
+
+    // ── Foodbook-Kapitel als Ziel (P1b) ───────────────────────────────────
+
+    /**
+     * Kapitel-Scope (Kapitel + Nachfahren) → Top-Produktionen für N Personen. Nur
+     * sichtbare concept_ref/recipe_ref-Blocks tragen bei (header/text/spacer/image
+     * werden geskippt). Varianten-Gruppen (variant_group_id) werden auf genau EINEN
+     * Block reduziert (gewählt via $variantChoices[gruppe]=block_id, sonst der erste
+     * nach Dokument-Reihenfolge). concept_ref → konzeptTops(); recipe_ref → VK-Position
+     * (Default 1 Portion/Person, Block-quantity+unit wenn gesetzt).
+     *
+     * @param  array<int|string,int>  $variantChoices  variant_group_id ⇒ gewählte block_id
+     * @return list<array{recipe:FoodAlchemistRecipe,batches:float,label:string}>
+     */
+    private function kapitelTops(Team $team, FoodAlchemistFoodbookKapitel $chapter, int $personen, array $variantChoices, array &$warnungen): array
+    {
+        $tops = [];
+        foreach ($this->kapitelBloecke($chapter, $variantChoices) as $block) {
+            if ($block->type === 'concept_ref') {
+                $concept = $block->concept_id !== null
+                    ? FoodAlchemistConcept::visibleToTeam($team)->find((int) $block->concept_id)
+                    : null;
+                if ($concept === null) {
+                    $warnungen[] = "Kapitel „{$chapter->title}“: Konzept-Block ohne sichtbares Konzept — übersprungen.";
+
+                    continue;
+                }
+                foreach ($this->konzeptTops($concept, $personen, $warnungen) as $t) {
+                    $tops[] = $t;
+                }
+            } elseif ($block->type === 'recipe_ref') {
+                $dish = $block->sales_recipe_id !== null ? $this->ladeGerichtStamm((int) $block->sales_recipe_id, $team) : null;
+                if ($dish === null) {
+                    $warnungen[] = "Kapitel „{$chapter->title}“: Gericht-Block ohne sichtbares Rezept — übersprungen.";
+
+                    continue;
+                }
+                // Default 1 Portion/Person, sonst Block-Menge+Einheit (positionTop rechnet das VK-Skalierungsmuster).
+                $top = $this->positionTop($dish, $block->quantity, $block->unit, null, $personen, $warnungen);
+                if ($top !== null) {
+                    $tops[] = $top;
+                }
+            }
+        }
+
+        return $tops;
+    }
+
+    /**
+     * Kapitel-Ziel → aufgelöste Einzel-Ziele (V2 „kein Live-Bezug"): expandiert ein
+     * Kapitel in konkrete {concept_id, persons} / {recipe_id, portions}-Ziel-Dicts, die
+     * der Editor/ADD_TARGET als eingefrorene Auftrags-Ziele speichern. Varianten-Wahl wie
+     * in kapitelTops(). recipe_ref: portions = Portions-Äquivalent × Personen (Default
+     * 1/Person), rundtripsicher zu rezeptTopBatches().
+     *
+     * @param  array<int|string,int>  $variantChoices
+     * @return array{ziele:list<array{concept_id?:int,recipe_id?:int,persons?:int,portions?:float}>, warnungen:list<string>}
+     */
+    public function kapitelZiele(Team $team, int $chapterId, int $personen, array $variantChoices = []): array
+    {
+        $chapter = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->find($chapterId);
+        if ($chapter === null) {
+            return ['ziele' => [], 'warnungen' => ["Foodbook-Kapitel #{$chapterId} nicht sichtbar/vorhanden."]];
+        }
+        $personen = max(1, $personen);
+        $warnungen = [];
+        $ziele = [];
+        foreach ($this->kapitelBloecke($chapter, $variantChoices) as $block) {
+            if ($block->type === 'concept_ref' && $block->concept_id !== null) {
+                $ziele[] = ['concept_id' => (int) $block->concept_id, 'persons' => $personen];
+            } elseif ($block->type === 'recipe_ref' && $block->sales_recipe_id !== null) {
+                $dish = $this->ladeGerichtStamm((int) $block->sales_recipe_id, $team);
+                if ($dish === null) {
+                    $warnungen[] = "Kapitel „{$chapter->title}“: Gericht-Block ohne sichtbares Rezept — übersprungen.";
+
+                    continue;
+                }
+                $ziele[] = ['recipe_id' => (int) $block->sales_recipe_id, 'portions' => $this->recipeRefPortionen($dish, $block, $personen, $warnungen)];
+            }
+        }
+
+        return ['ziele' => $ziele, 'warnungen' => $warnungen];
+    }
+
+    /**
+     * Sammelt die für die Produktion relevanten Blocks eines Kapitel-Scopes (Kapitel +
+     * alle Nachfahren, Rollup wie Spec 19), sichtbar, Typ concept_ref/recipe_ref, in
+     * Dokument-Reihenfolge (Kapitel-Position → Block-Position → id). Varianten-Gruppen
+     * werden an ihrer ersten Fundstelle auf genau EINEN Block reduziert.
+     *
+     * @param  array<int|string,int>  $variantChoices
+     * @return list<FoodAlchemistFoodbookBlock>
+     */
+    private function kapitelBloecke(FoodAlchemistFoodbookKapitel $chapter, array $variantChoices): array
+    {
+        // Scope = Kapitel + Nachfahren (BFS über parent_id innerhalb des Foodbooks).
+        $alle = FoodAlchemistFoodbookKapitel::where('foodbook_id', $chapter->foodbook_id)->get(['id', 'parent_id', 'position']);
+        $posMap = [];
+        $ord = 0;
+        foreach ($alle->sortBy('position') as $c) {
+            $posMap[(int) $c->id] = $ord++;
+        }
+        $scope = [(int) $chapter->id];
+        $queue = [(int) $chapter->id];
+        while ($queue !== []) {
+            $pid = array_shift($queue);
+            foreach ($alle->where('parent_id', $pid) as $c) {
+                $scope[] = (int) $c->id;
+                $queue[] = (int) $c->id;
+            }
+        }
+
+        $blocks = FoodAlchemistFoodbookBlock::with(['unit:id,slug,dimension,default_in_g'])
+            ->whereIn('chapter_id', $scope)
+            ->where('visible', true)
+            ->whereIn('type', ['concept_ref', 'recipe_ref'])
+            ->get()
+            ->all();
+
+        usort($blocks, function ($a, $b) use ($posMap) {
+            $ca = $posMap[(int) $a->chapter_id] ?? 0;
+            $cb = $posMap[(int) $b->chapter_id] ?? 0;
+
+            return [$ca, (int) $a->position, (int) $a->id] <=> [$cb, (int) $b->position, (int) $b->id];
+        });
+
+        // Varianten-Gruppen an der ersten Fundstelle auf einen Block reduzieren.
+        $result = [];
+        $emitted = [];
+        foreach ($blocks as $block) {
+            $gid = $block->variant_group_id;
+            if ($gid === null) {
+                $result[] = $block;
+
+                continue;
+            }
+            if (isset($emitted[$gid])) {
+                continue;
+            }
+            $emitted[$gid] = true;
+            $gruppe = array_values(array_filter($blocks, fn ($x) => $x->variant_group_id === $gid));
+            $chosenId = $variantChoices[$gid] ?? null;
+            $chosen = null;
+            if ($chosenId !== null) {
+                foreach ($gruppe as $g) {
+                    if ((int) $g->id === (int) $chosenId) {
+                        $chosen = $g;
+                        break;
+                    }
+                }
+            }
+            $result[] = $chosen ?? $gruppe[0];
+        }
+
+        return $result;
+    }
+
+    /**
+     * recipe_ref-Block → Portionszahl für N Personen. Ohne Menge: 1 Portion/Person.
+     * Mit Menge+Einheit: Portions-Äquivalent × Personen (Gramm-Menge ohne Portionsgewicht
+     * ⇒ Warnung + 1/Person). Rundtrip-treu zu rezeptTopBatches() (portions ÷ Portionen/Ansatz).
+     */
+    private function recipeRefPortionen(FoodAlchemistRecipe $dish, FoodAlchemistFoodbookBlock $block, int $personen, array &$warnungen): float
+    {
+        $q = $block->quantity !== null ? (float) $block->quantity : null;
+        $pae = ConcepterAggregateService::portionsAequivalent($q, $block->unit, $dish);
+        if ($pae === null) {
+            $warnungen[] = "Kapitel-Gericht „{$dish->name}“: Gramm-Menge ohne Portionsgewicht — 1 Portion/Person angenommen.";
+            $pae = 1.0;
+        }
+
+        return $pae * $personen;
+    }
+
+    /** Gericht-Stammdaten fürs Skalieren (VK-Felder), team-sichtbar. */
+    private function ladeGerichtStamm(int $id, Team $team): ?FoodAlchemistRecipe
+    {
+        return FoodAlchemistRecipe::visibleToTeam($team)
+            ->find($id, ['id', 'name', 'is_sales_recipe', 'sales_unit_count', 'sales_quantity_per_unit_g', 'yield_kg', 'yield_pieces']);
     }
 
     /**
