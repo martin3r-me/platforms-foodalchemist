@@ -310,3 +310,72 @@ it('E4.6: coverage.GET liefert bei Foodbook eine wareneinsatz[]-Sektion je Kapit
         ->and($we['status'])->toBe('unbekannt')
         ->and($we['partiell'])->toBeFalse();
 });
+
+// ── Spec 19 E5.4: leitstelle.GET (Checkliste + Kapitel-Matrix + Kapitel-Stand) ──
+
+it('E5.4: leitstelle.GET ohne chapter_id liefert Checkliste (7 Schritte) + Kapitel-Matrix', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Leitstelle-Überblick', 'personen' => 100]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Hauptgänge']);
+
+    $res = $this->registry->get('foodalchemist.leitstelle.GET')->execute([
+        'foodbook_id' => $fb->id,
+    ], $this->kontext);
+
+    expect($res->success)->toBeTrue()
+        ->and($res->data['foodbook']['id'])->toBe($fb->id)
+        ->and($res->data['foodbook']['personen'])->toBe(100)
+        ->and($res->data['checkliste'])->toHaveCount(7)
+        ->and(collect($res->data['checkliste'])->pluck('key')->all())
+        ->toBe(['bedarf', 'struktur', 'tiefe', 'kapitel_aufbau', 'kreativ', 'anlegen', 'preise'])
+        // Struktur = erledigt (1 Kapitel vorhanden); Kapitel-Matrix listet es.
+        ->and(collect($res->data['checkliste'])->firstWhere('key', 'struktur')['status'])->toBe('erledigt')
+        ->and($res->data)->toHaveKey('kapitel_matrix')
+        ->and($res->data)->not->toHaveKey('kapitel');
+    $row = collect($res->data['kapitel_matrix'])->firstWhere('kapitel_id', $kap->id);
+    expect($row)->not->toBeNull()
+        ->and($row['hat_inhalt'])->toBeFalse()
+        ->and($row['wareneinsatz']['status'])->toBe('unbekannt');
+});
+
+it('E5.4: leitstelle.GET mit chapter_id liefert Kapitel-Stand (Ziele/Zielgruppen/WE) + Coverage-Befunde', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $frames = app(\Platform\FoodAlchemist\Services\PlanningFrameService::class);
+    $zg = \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::create(['team_id' => $this->rootTeam->id, 'name' => 'Bankett-Gast']);
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Leitstelle-Kapitel', 'personen' => 100]);
+    $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Hauptgänge']);
+    $foodbooks->updateKapitel($this->rootTeam, $kap->id, ['target_count' => 5]);
+    $foodbooks->setKapitelZielgruppen($this->rootTeam, $kap->id, [$zg->id]);
+    // Gerüst → Coverage misst; Kapitel-Mengenziel erzeugt einen chapter_id-Befund (E4.3).
+    $frame = $frames->frameFor($this->rootTeam, 'foodbook', $fb->id);
+    $frames->addSlot($this->rootTeam, $frame, ['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]);
+
+    $res = $this->registry->get('foodalchemist.leitstelle.GET')->execute([
+        'foodbook_id' => $fb->id, 'chapter_id' => $kap->id,
+    ], $this->kontext);
+
+    expect($res->success)->toBeTrue()
+        ->and($res->data['kapitel']['kapitel_id'])->toBe($kap->id)
+        ->and($res->data['kapitel']['ziele']['target_count'])->toBe(5)
+        ->and(collect($res->data['kapitel']['zielgruppen'])->pluck('id')->all())->toBe([$zg->id])
+        ->and($res->data['kapitel'])->toHaveKey('wareneinsatz')
+        ->and($res->data['kapitel'])->toHaveKey('coverage_befunde')
+        // Überblicks-Sektion (Matrix) entfällt im Kapitel-Modus.
+        ->and($res->data)->not->toHaveKey('kapitel_matrix');
+});
+
+it('E5.4: leitstelle.GET Tenancy — Foodbook eines fremden Teams + fremdes Kapitel blocken (NOT_FOUND)', function () {
+    $foodbooks = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    // Fremd-Team-Foodbook: für rootTeam nicht sichtbar (childA ist NICHT Vorfahr von root).
+    $fremdFb = $foodbooks->create($this->childA, ['label' => 'Fremd', 'personen' => 20]);
+    $tool = $this->registry->get('foodalchemist.leitstelle.GET');
+
+    $res = $tool->execute(['foodbook_id' => $fremdFb->id], $this->kontext);
+    expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('NOT_FOUND');
+
+    // Eigenes Foodbook, aber chapter_id gehört zu einem anderen (fremden) Foodbook → NOT_FOUND.
+    $meinFb = $foodbooks->create($this->rootTeam, ['label' => 'Mein', 'personen' => 30]);
+    $fremdKap = $foodbooks->addKapitel($this->childA, $fremdFb->id, ['title' => 'Fremd-Kap']);
+    $res2 = $tool->execute(['foodbook_id' => $meinFb->id, 'chapter_id' => $fremdKap->id], $this->kontext);
+    expect($res2->success)->toBeFalse()->and($res2->errorCode)->toBe('NOT_FOUND');
+});
