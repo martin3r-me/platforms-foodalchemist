@@ -27,6 +27,14 @@ class FoodAlchemistFoodbookKapitel extends Model
     /** Preis-/Anlage-Modus des Kapitels (Spec 19, M3) — weiche Prüfung, Vokabular-Pflicht. */
     public const PRICING_MODES = ['paket', 'einzel', 'gemischt'];
 
+    /**
+     * Kreativ-Modus (Spec 19, E9.1) — kanonisch, Vokabular-Pflicht (kein Freitext).
+     * voll_kreativ = leere Leinwand · hybrid = Pairing + Verfügbarkeits-Marker · datenbank = vom Bestand.
+     * NULL am Kapitel ⇒ erbt Foodbook-Default; nirgends gesetzt ⇒ CREATIVE_MODE_DEFAULT.
+     */
+    public const CREATIVE_MODES = ['voll_kreativ', 'hybrid', 'datenbank'];
+    public const CREATIVE_MODE_DEFAULT = 'hybrid';
+
     protected $casts = [
         'uuid' => 'string',
         'position' => 'integer',

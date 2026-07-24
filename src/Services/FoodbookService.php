@@ -66,7 +66,7 @@ class FoodbookService
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp'];
+    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp', 'creative_mode_default'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
@@ -78,6 +78,7 @@ class FoodbookService
             'personen' => $in['personen'] ?? null,
             'status' => $in['status'] ?? 'draft',
             'description' => $in['description'] ?? null,
+            'creative_mode_default' => $in['creative_mode_default'] ?? null,   // Spec 19 E9.1
         ]);
     }
 
@@ -199,6 +200,9 @@ class FoodbookService
         $servingFormId = $fb->default_serving_form_id !== null ? (int) $fb->default_serving_form_id : null;
         $serviceMomentIds = $fb->serviceMoments->map(fn ($m) => (int) $m->id)->values()->all();
 
+        // Kreativ-Modus (E9.1): Kaskade Kapitel → Foodbook → Code-Default 'hybrid'.
+        [$kreativModus, $kmQuelle] = $this->kreativModusRoh($fb, $kapitel);
+
         return [
             'kundentyp' => $fb->kundentyp,
             'niveau' => $niveau,
@@ -208,14 +212,52 @@ class FoodbookService
             'event_type_id' => $eventTypeId,
             'serving_form_id' => $servingFormId,
             'service_moment_ids' => $serviceMomentIds,
+            'creative_mode' => $kreativModus,
             'quellen' => [
                 'niveau' => $niveauQuelle,
                 'zielgruppen' => $zgQuelle,
                 'event_type_id' => $eventTypeId !== null ? 'foodbook' : null,
                 'serving_form_id' => $servingFormId !== null ? 'foodbook' : null,
                 'service_moment_ids' => $serviceMomentIds !== [] ? 'foodbook' : null,
+                'creative_mode' => $kmQuelle,
             ],
         ];
+    }
+
+    /**
+     * Spec 19 E9.1: Kreativ-Modus-Kaskade (roh, ohne Team-Guard — für leitplanken()).
+     * Kapitel.creative_mode → Foodbook.creative_mode_default → CREATIVE_MODE_DEFAULT ('hybrid').
+     * Unbekannte/ungültige Werte fallen auf den Default zurück (weiche Prüfung, Vokabular-Pflicht).
+     *
+     * @return array{0: string, 1: string} [modus, quelle('kapitel'|'foodbook'|'default')]
+     */
+    private function kreativModusRoh(FoodAlchemistFoodbook $fb, ?FoodAlchemistFoodbookKapitel $kapitel): array
+    {
+        $gueltig = FoodAlchemistFoodbookKapitel::CREATIVE_MODES;
+        $kapModus = $kapitel?->creative_mode;
+        if ($kapModus !== null && in_array($kapModus, $gueltig, true)) {
+            return [$kapModus, 'kapitel'];
+        }
+        $fbModus = $fb->creative_mode_default;
+        if ($fbModus !== null && in_array($fbModus, $gueltig, true)) {
+            return [$fbModus, 'foodbook'];
+        }
+
+        return [FoodAlchemistFoodbookKapitel::CREATIVE_MODE_DEFAULT, 'default'];
+    }
+
+    /**
+     * Spec 19 E9.1: aufgelöster Kreativ-Modus eines Kapitels (team-geguarded, öffentlich).
+     * Der Auflösungs-Punkt für den Kreativ-Tab (E9.4), die Pairing-Inspiration (E9.2) und MCP.
+     *
+     * @return array{modus: string, quelle: string, optionen: list<string>}
+     */
+    public function kreativModus(Team $team, FoodAlchemistFoodbookKapitel $kapitel): array
+    {
+        $kapitel = $this->ownedKapitel($team, (int) $kapitel->id);
+        [$modus, $quelle] = $this->kreativModusRoh($kapitel->foodbook, $kapitel);
+
+        return ['modus' => $modus, 'quelle' => $quelle, 'optionen' => FoodAlchemistFoodbookKapitel::CREATIVE_MODES];
     }
 
     /**
@@ -1078,6 +1120,7 @@ class FoodbookService
         // SOLL-Ziele (Spec 19, M3) — release_* NICHT hier (setzt kapitelFreigeben, E7.3)
         'target_count', 'price_anchor', 'price_min', 'price_max', 'niveau',
         'service_moment_id', 'serving_form_id', 'pricing_mode', 'target_food_cost_pct',
+        'creative_mode',   // Kreativ-Modus-Override (Spec 19, E9.1)
     ];
 
     public function updateKapitel(Team $team, int $id, array $in): FoodAlchemistFoodbookKapitel

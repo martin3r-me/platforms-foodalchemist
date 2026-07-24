@@ -173,6 +173,22 @@ Kein platform-core/crm; KI-Neu-Erstellung = L7/L8 (nur Verdrahtung/Queue); R2.4-
 - [x] E8.3 Vorschau/PDF depth-Überschriften + €/Gast-€/Pos-Konsistenz + Regression — ✅ 2026-07-24 (f89e043)
 - [x] E8.4 Abschluss: breite Pest-Suite, Browser-Klickstrecke komplett, fb=1-Protokoll, ROADMAP-Abschluss-Update + Office-Dev-Issue Done, Memory-Update — ✅ 2026-07-24 (a983bdf; Doku-only; Browser-UX-Abnahme + Office-#561 + demo-Deploy manuell/Martin) — **SPEC 19 KOMPLETT E0–E8.4**
 
+### E9 — Kreativ-Modi + Pairing-Inspiration (L) — Nachtrag 2026-07-25
+
+> **Design-Entscheidung (Dominique, 2026-07-25):** Die Kreativ-Phase bekommt einen **Modus-Schalter mit drei Stufen**, pro Kapitel wählbar mit Foodbook-Default, **Default `hybrid`**. Grundprinzip aus §„Erst kreativ, dann erden" bleibt: **Bestand wird NICHT dauerhaft eingeblendet** (kein Anker-Effekt); der **Pairing-/Anker-Graph** dagegen IST erlaubte Inspiration in allen Modi (er öffnet den Aroma-Raum, verankert nicht am Lager). Zwei Gewissheiten sauber getrennt: **Aroma-Gewissheit** (reines Pairing, produkt-blind) vs. **Beschaffungs-Gewissheit** (Anker→GP mit Verfügbarkeits-Bucket *führen / leicht / Lücke*). Ein Werkzeug (Pairing-Graph), drei Verhalten:
+> - **`voll_kreativ`** — leere Leinwand, kein Bestand; Pairing abstrakt (nur Aroma-Kanten); Erdung nur auf Abruf (Pull) pro Idee.
+> - **`hybrid`** (Default) — Pairing + Anker nach Verfügbarkeit markiert (führen/leicht/Lücke); sichtbar, aber nicht führend.
+> - **`datenbank`** — Start vom Verfügbaren; Pairing komplettiert aus dem, was wir führen.
+>
+> Bestand bleibt **Pull-not-Push**: kein Auto-Einblenden, „erden?"-Abruf pro Idee. **Lücke ist Signal, kein Fehler** — markierte Lücken (Hybrid/DB) haken automatisch ins Signale-Cockpit (Sortiments-/Buy-Liste). Vokabular-Pflicht: Modus = Model-Const `CREATIVE_MODES` (kein Freitext).
+
+- [x] E9.1 M6: `foodbooks.creative_mode_default` + `chapters.creative_mode` (nullable, Model-Const `CREATIVE_MODES`); `FELDER`/`KAPITEL_FELDER`; Resolver `kreativModus(Kapitel)` (Kaskade Kapitel→Foodbook→`hybrid`) + `leitplanken()`-Integration; Pest Kaskade — ✅ 2026-07-25
+- [ ] E9.2 `PairingInspirationService::inspiration(Team, $seeds, $modus, ?$kapitel)` — recycelt FA-Anker-Graph: abstrakt (Aroma-Kanten) vs. geerdet (Anker→GP); read-only; Pest
+- [ ] E9.3 Verfügbarkeits-Buckets (Anker→GP→LA-Status: führen/leicht/Lücke) + Lücke→Signale-Cockpit-Hook (idempotent); Pest
+- [ ] E9.4 UI Kreativ-Tab: 3-Modus-Umschalter (pro Kapitel, Default aus Foodbook) + Pairing-Inspiration-Panel (rendert je Modus) + „erden?"-Pull pro Idee; kein Asset-Rebuild (Blade/Alpine/Livewire, dist NICHT anfassen)
+- [ ] E9.5 MCP-Lockstep: `creative_mode` in `foodbook_kapitel.PUT` + `foodbooks.POST/PUT`; neu `foodalchemist.pairing_inspiration.GET`; Pest + Tenancy — **BLOCKIERT solange `FoodAlchemistServiceProvider.php` Fremd-WIP trägt (Spec-20-Produktion), separat committen**
+- [ ] E9.6 Tests + Doku: Modus-Kaskade, Inspiration je Modus, Lücke→Signal; ROADMAP + Checkliste + `docs/foodbook.md`
+
 > **Lauf-Protokoll** (jeder Routine-Lauf hängt eine Zeile an): `| Datum | Teilschritt | Ergebnis | Commit | Notizen |`
 
 | Datum | Teilschritt | Ergebnis | Commit | Notizen |
