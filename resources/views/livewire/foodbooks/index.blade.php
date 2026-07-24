@@ -900,7 +900,7 @@
                                 @elseif($conceptSuche !== '' || $conceptKategorie !== null)
                                     <p class="text-[11px] text-gray-500 px-2 py-2">Keine Concepts für diese Auswahl.</p>
                                 @else
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">Kategorie wählen oder oben suchen.</p>
+                                    <p class="text-[11px] text-gray-500 px-2 py-2">Noch keine Concepts angelegt.</p>
                                 @endif
                             </div>
                         </div>
@@ -912,10 +912,20 @@
 
                     {{-- E1.3: FB-Einzel-Gericht-Picker (recipe_ref). Spiegelt fb-concept, aber ohne Kategorie-Tree:
                          `gerichtKandidaten` filtert per Freitext auf echte VK-Gerichte (verkauf(), keine Slot-Varianten). --}}
-                    <x-foodalchemist::modal name="fb-gericht" title="Gericht einfügen" size="max-w-2xl">
+                    <x-foodalchemist::modal name="fb-gericht" title="Gericht einfügen" size="max-w-3xl">
                         <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht (VK-Rezept) suchen …" class="{{ $input }} w-full mb-3" />
-                        <div class="min-h-[16rem]">
-                            <div class="overflow-y-auto space-y-0.5 max-h-[26rem]">
+                        <div class="flex gap-3 min-h-[20rem]">
+                            {{-- UX 2026-07-24: Klassen-Filter (VK-Hauptgruppen) — Browsen, wenn der Name unbekannt ist. Flach (Modell A). --}}
+                            <div class="w-44 shrink-0 overflow-y-auto border-r border-black/5 pr-2 space-y-0.5 max-h-[26rem]">
+                                <button type="button" wire:click="$set('gerichtHauptgruppe', null)"
+                                        class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $gerichtHauptgruppe === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">Alle Klassen</button>
+                                @foreach($gerichtHauptgruppen as $hg)
+                                    <button type="button" wire:key="fbg-hg-{{ $hg->id }}" wire:click="$set('gerichtHauptgruppe', {{ $hg->id }})"
+                                            class="w-full text-left text-xs px-2 py-1 rounded-lg truncate {{ $gerichtHauptgruppe === $hg->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">{{ $hg->label }}</button>
+                                @endforeach
+                            </div>
+                            {{-- Gericht-Liste --}}
+                            <div class="flex-1 min-w-0 overflow-y-auto space-y-0.5 max-h-[26rem]">
                                 @if($gerichtKandidaten->isNotEmpty())
                                     @foreach($gerichtKandidaten as $gk)
                                         <button type="button" wire:key="dgk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})"
@@ -924,10 +934,10 @@
                                             <span class="text-gray-500 tabular-nums shrink-0">{{ $gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                                         </button>
                                     @endforeach
-                                @elseif($gerichtSuche !== '')
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">Keine VK-Gerichte für „{{ $gerichtSuche }}“.</p>
+                                @elseif($gerichtSuche !== '' || $gerichtHauptgruppe !== null)
+                                    <p class="text-[11px] text-gray-500 px-2 py-2">Keine VK-Gerichte für diese Auswahl.</p>
                                 @else
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">Oben nach einem Gericht suchen.</p>
+                                    <p class="text-[11px] text-gray-500 px-2 py-2">Noch keine VK-Gerichte vorhanden.</p>
                                 @endif
                             </div>
                         </div>

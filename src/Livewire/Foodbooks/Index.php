@@ -458,6 +458,9 @@ class Index extends Component
     /** E1.3: Freitext-Suche für den recipe_ref-Einzel-Gericht-Picker. */
     public string $gerichtSuche = '';
 
+    /** UX 2026-07-24: Klassen-/Hauptgruppen-Filter im Gericht-Picker (Modell A: dish_main_group_id) — Browsen ohne Namen. */
+    public ?int $gerichtHauptgruppe = null;
+
     /** #369: CRM-Kunde-Picker. */
     public string $firmaSuche = '';
 
@@ -1033,11 +1036,18 @@ class Index extends Component
             // E5.3: Portfolio/Kapitel-Aggregat + WE ziehen jetzt in die Leitstelle-Rail (Nested-Livewire) um.
             'headerPresets' => FoodbookService::headerPresets(),
             'conceptKategorien' => app(\Platform\FoodAlchemist\Services\ConceptService::class)->categoriesFlat($team),
-            'conceptKandidaten' => ($this->conceptSuche !== '' || $this->conceptKategorie !== null) && $this->selectedKapitelId !== null
+            // UX-Fix 2026-07-24 (Dominique „Eingabe katastrophe"): Picker zeigt beim Öffnen sofort eine
+            // browsebare Liste — Suche/Kategorie FILTERN nur noch, sind nicht mehr Voraussetzung. Service
+            // liefert bei leerer Suche längst alle (orderBy name, cap 50). Nur an Kapitel-Auswahl gebunden.
+            'conceptKandidaten' => $this->selectedKapitelId !== null
                 ? $svc->conceptKandidaten($team, $this->conceptSuche, $this->conceptKategorie, 50) : collect(),
-            // E1.3: Einzel-Gericht-Picker (recipe_ref) — nur laden, wenn gesucht + Kapitel gewählt
-            'gerichtKandidaten' => $this->gerichtSuche !== '' && $this->selectedKapitelId !== null
-                ? $svc->gerichtKandidaten($team, $this->gerichtSuche, 50) : collect(),
+            // E1.3: Einzel-Gericht-Picker (recipe_ref) — sofort Liste, Suche + Klasse (HG) filtern nur
+            'gerichtKandidaten' => $this->selectedKapitelId !== null
+                ? $svc->gerichtKandidaten($team, $this->gerichtSuche, 50, $this->gerichtHauptgruppe) : collect(),
+            // UX 2026-07-24: Klassen-Spalte im Gericht-Picker (Modell A: 16 VK-Hauptgruppen, aktive)
+            'gerichtHauptgruppen' => $this->selectedKapitelId !== null
+                ? app(\Platform\FoodAlchemist\Services\SalesRecipeService::class)->dishMainGroups($team)
+                : collect(),
             // Spec 19 E6.3: Kreativ-Skizzenfläche — Skizzen des gewählten Kapitels (Pakete + freie Einzel)
             'ideenListe' => $this->selectedKapitelId !== null
                 ? app(IdeenService::class)->liste($team, $this->selectedKapitelId, null, $this->ideenPapierkorb)

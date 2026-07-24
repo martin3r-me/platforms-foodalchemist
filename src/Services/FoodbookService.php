@@ -1667,11 +1667,14 @@ class FoodbookService
     }
 
     /** Einzelne Gerichte (VK-Rezepte) für den recipe_ref-Picker. */
-    public function gerichtKandidaten(Team $team, string $suche, int $limit = 20): Collection
+    public function gerichtKandidaten(Team $team, string $suche, int $limit = 20, ?int $hauptgruppe = null): Collection
     {
+        // Modell A: HG = Kategorie (recipes.dish_main_group_id). Der Klassen-Filter des Pickers
+        // (Browsen, wenn der Name unbekannt ist) filtert direkt auf die Hauptgruppe.
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->whereNull('variant_source_recipe_id') // R4.4: Slot-Varianten sind konzept-lokal, nicht pickbar
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
+            ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
     }
 

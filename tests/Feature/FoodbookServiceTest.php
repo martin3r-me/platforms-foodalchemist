@@ -269,6 +269,27 @@ it('GT-FB-7: Concept-Picker filtert nach Concept-Kategorie (FB-1)', function () 
         ->toContain('Grill-Buffet')->toContain('Fingerfood-Konzept');
 });
 
+it('GT-FB-8: Gericht-Picker filtert nach Klasse (VK-Hauptgruppe, Modell A)', function () {
+    $hg = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::create([
+        'team_id' => $this->rootTeam->id, 'code' => 'VOR', 'label' => 'Vorspeisen',
+    ]);
+    // Setup-Gericht bleibt ohne HG; ein zweites Gericht in die HG „Vorspeisen".
+    $inHg = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'g2', 'name' => 'Vitello Tonnato', 'status' => 'approved',
+        'is_sales_recipe' => true, 'sales_net' => 8.90, 'ek_total_eur' => 2.10, 'dish_main_group_id' => $hg->id,
+    ]);
+
+    // Klasse gewählt → nur das HG-Gericht
+    $gefiltert = $this->foodbooks->gerichtKandidaten($this->rootTeam, '', 50, $hg->id);
+    expect($gefiltert->pluck('name')->all())
+        ->toContain('Vitello Tonnato')->not->toContain('Gruß: Amuse');
+
+    // Ohne Klasse → beide (sofort browsebar, leere Suche = alle)
+    $alle = $this->foodbooks->gerichtKandidaten($this->rootTeam, '', 50, null);
+    expect($alle->pluck('name')->all())
+        ->toContain('Vitello Tonnato')->toContain('Gruß: Amuse');
+});
+
 it('M11-09: Block-Notiz (interne_bemerkung) persistiert via updateBlock — auch auf concept_ref', function () {
     $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB']);
     $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'K']);
