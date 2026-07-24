@@ -112,5 +112,6 @@
 | Wann | Stufe | Ergebnis | Nächster Schritt |
 |---|---|---|---|
 | _(noch kein Run)_ | — | Dossier angelegt (Session 2026-07-23) | P0 starten |
+| 2026-07-24 · Run 1 | **P0 ✅** | `70d7c74` — Name-Feld+Migration (MySQL 8.4 gefahren+backfilled, Backup PRE_SPEC20_P0), saveNew immer-neu, draftForDate MCP-Kompat, Editor/Browser/DetailPanel/Doku auf Name, MCP UPDATE+REMOVE_TARGET+ADD_TARGET-Adressierung. `ProductionOrderServiceTest` 17 passed/2 skip; Modul-Suite 993 passed, 1 Fremd-Fail (`KnowledgeBindToolTest`, fällt auch isoliert, kein Bezug zu P0), 4 skip. | P1 (Ziel-Typen kg/Basisrezept/Kapitel) — oder E1 (3-Panel-Einkauf, parallel erlaubt) |
 
 *Verzahnt: [17](17_Bestellwesen_MiniWaWi.md) · [18](18_Produktionsauftraege.md) · [14](14_Lieferanten_Management_R9.md) (LeadLaStrategie). Dossier 2026-07-23; Entscheide V1–V4 mit Dominique festgezurrt.*
