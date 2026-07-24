@@ -111,9 +111,18 @@ class FoodbookService
      * Foodbook-Default → Segment. Kundentyp = Foodbook-Feld (kein Fallback). So kann ein
      * Foodbook basic/hochwertig/premium tragen (Niveau je Kapitel), mit Foodbook-Default als Boden.
      *
-     * @return array{kundentyp: ?string, niveau: ?string, convenience: ?string, niveau_quelle: ?string}
+     * Spec 19 E3.4: DER Auflösungs-Punkt für Vorschläge, Kickoff, Canvas, Anlage-Stempel. Wird
+     * ein Kapitel übergeben, kaskadieren die Dimensions-Keys Kapitel(+Eltern) → Foodbook → Segment
+     * (Segment-Boden nur niveau/convenience). `zielgruppen` kaskadiert über die M1-Pivots
+     * (Kapitel-Stempel schlägt Foodbook-Default). Eventtyp/Servierform/Einsatzmomente lösen
+     * vorerst nur auf Foodbook-Ebene auf — die Kapitel-Overrides sind M3-Spalten (E4.1) und werden
+     * dort in dieser Kaskade ergänzt. `quellen` protokolliert je Dimension die gewinnende Ebene.
+     *
+     * @return array{kundentyp: ?string, niveau: ?string, convenience: ?string, niveau_quelle: ?string,
+     *     zielgruppen: list<array{id:int, name:string}>, event_type_id: ?int, serving_form_id: ?int,
+     *     service_moment_ids: list<int>, quellen: array<string, ?string>}
      */
-    public function leitplanken(Team $team, FoodAlchemistFoodbook $fb, ?FoodAlchemistConcept $concept = null): array
+    public function leitplanken(Team $team, FoodAlchemistFoodbook $fb, ?FoodAlchemistConcept $concept = null, ?FoodAlchemistFoodbookKapitel $kapitel = null): array
     {
         $segment = app(TeamSettingsService::class)->segment($team);
         $kapitelNiveau = TeamSettingsService::normNiveau($concept?->level);
@@ -123,12 +132,57 @@ class FoodbookService
             : ($fb->default_niveau !== null ? 'foodbook'
             : (($segment['niveau'] ?? null) !== null ? 'segment' : null));
 
+        // Zielgruppen: erstes Kapitel im Pfad (Kapitel → Eltern → …) mit eigener Stempelung
+        // gewinnt, sonst Foodbook-Default.
+        [$zielgruppen, $zgQuelle] = $this->zielgruppenKaskade($fb, $kapitel);
+
+        // Eventtyp/Servierform/Einsatzmomente: vorerst Foodbook-Default (Kapitel-Override = M3/E4.1).
+        $eventTypeId = $fb->default_event_type_id !== null ? (int) $fb->default_event_type_id : null;
+        $servingFormId = $fb->default_serving_form_id !== null ? (int) $fb->default_serving_form_id : null;
+        $serviceMomentIds = $fb->serviceMoments->map(fn ($m) => (int) $m->id)->values()->all();
+
         return [
             'kundentyp' => $fb->kundentyp,
             'niveau' => $niveau,
             'convenience' => $fb->default_convenience ?? ($segment['convenience'] ?? null),
             'niveau_quelle' => $niveauQuelle,
+            'zielgruppen' => $zielgruppen,
+            'event_type_id' => $eventTypeId,
+            'serving_form_id' => $servingFormId,
+            'service_moment_ids' => $serviceMomentIds,
+            'quellen' => [
+                'niveau' => $niveauQuelle,
+                'zielgruppen' => $zgQuelle,
+                'event_type_id' => $eventTypeId !== null ? 'foodbook' : null,
+                'serving_form_id' => $servingFormId !== null ? 'foodbook' : null,
+                'service_moment_ids' => $serviceMomentIds !== [] ? 'foodbook' : null,
+            ],
         ];
+    }
+
+    /**
+     * Spec 19 E3.4: Zielgruppen-Kaskade. Läuft das Kapitel und seine Eltern hoch; das erste mit
+     * eigener Stempelung gewinnt (Quelle 'kapitel'). Findet sich keine, greift der Foodbook-Default
+     * ('foodbook'). Nirgends gesetzt ⇒ leer + null. Zyklus-Schutz via `$besucht` (Baum ist über
+     * `moveKapitel` acyclisch, Guard aus Vorsicht).
+     *
+     * @return array{0: list<array{id:int, name:string}>, 1: ?string} [zielgruppen, quelle]
+     */
+    private function zielgruppenKaskade(FoodAlchemistFoodbook $fb, ?FoodAlchemistFoodbookKapitel $kapitel): array
+    {
+        $node = $kapitel;
+        $besucht = [];
+        while ($node !== null && ! isset($besucht[(int) $node->id])) {
+            $besucht[(int) $node->id] = true;
+            $zg = $node->targetGroups->map(fn ($t) => ['id' => (int) $t->id, 'name' => (string) $t->name])->values()->all();
+            if ($zg !== []) {
+                return [$zg, 'kapitel'];
+            }
+            $node = $node->parent;
+        }
+        $fbZg = $fb->targetGroups->map(fn ($t) => ['id' => (int) $t->id, 'name' => (string) $t->name])->values()->all();
+
+        return $fbZg !== [] ? [$fbZg, 'foodbook'] : [[], null];
     }
 
     // ── #369: CRM-Kunde-Link (MVP, nur verlinken) — class_exists-geschützt (Modul läuft ohne crm) ──
