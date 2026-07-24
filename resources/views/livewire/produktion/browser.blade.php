@@ -59,25 +59,46 @@
             <div class="overflow-x-auto">
                 <table class="{{ $table }}">
                     <thead><tr class="text-left">
-                        <th class="{{ $th }} w-full">Name</th>
-                        <th class="{{ $th }}">Produktionsdatum</th>
+                        <th class="{{ $th }}">Name</th>
+                        <th class="{{ $th }} w-full">Ziele</th>
+                        <th class="{{ $th }} whitespace-nowrap">Ansätze / Port.</th>
+                        <th class="{{ $th }}">Datum</th>
                         <th class="{{ $th }}">Status</th>
+                        <th class="{{ $th }}">Einkauf</th>
                     </tr></thead>
                     <tbody>
+                        @php($einkaufPill = ['keine' => ['—', $variantPill['secondary'] ?? ''], 'offen' => ['offen', $variantPill['warning'] ?? ''], 'versendet' => ['versendet', $variantPill['success'] ?? '']])
                         @forelse($auftraege as $a)
+                            @php($ziele = collect($a->targets ?? [])->pluck('label')->filter()->values())
                             <tr wire:key="po-{{ $a->id }}" wire:click="waehle({{ $a->id }})"
                                 x-data x-on:click="$store.ui?.mSet('activity_produktion', 'open', true)"
                                 class="{{ $tr }} cursor-pointer {{ $orderId === $a->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                                 data-produktion-zeile="{{ $a->id }}">
-                                <td class="{{ $td }} font-medium text-gray-900">
+                                <td class="{{ $td }} font-medium text-gray-900 whitespace-nowrap">
                                     {{ $a->name ?: $a->reference ?: '—' }}
                                     @if($a->reference && $a->name && $a->reference !== $a->name)<span class="block text-[11px] font-normal text-gray-500">{{ $a->reference }}</span>@endif
                                 </td>
+                                <td class="{{ $td }} text-gray-600">
+                                    @if($ziele->isEmpty())
+                                        <span class="text-gray-400">—</span>
+                                    @else
+                                        <span class="text-[12px]">{{ $ziele->take(2)->implode(' · ') }}</span>@if($ziele->count() > 2)<span class="text-[11px] text-gray-400"> +{{ $ziele->count() - 2 }}</span>@endif
+                                    @endif
+                                </td>
+                                <td class="{{ $td }} whitespace-nowrap tabular-nums text-gray-600">
+                                    {{ rtrim(rtrim(number_format((float) $a->lines->sum('ansaetze'), 2, ',', '.'), '0'), ',') ?: '0' }}
+                                    <span class="text-gray-400">/</span>
+                                    {{ (int) $a->lines->sum('portionen') }}
+                                </td>
                                 <td class="{{ $td }} whitespace-nowrap tabular-nums">{{ $a->production_date->format('d.m.Y') }}</td>
                                 <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $variantPill[$a->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $a->status->label() }}</span></td>
+                                <td class="{{ $td }}">
+                                    @php($ind = $einkaufPill[$indikatoren[$a->id] ?? 'keine'] ?? $einkaufPill['keine'])
+                                    <span class="{{ $pill }} font-medium {{ $ind[1] }}" data-einkauf-indikator="{{ $indikatoren[$a->id] ?? 'keine' }}">{{ $ind[0] }}</span>
+                                </td>
                             </tr>
                         @empty
-                            <tr><td colspan="3" class="px-5 py-10 text-center text-gray-500">Keine Produktionsaufträge. „+ Neuer Produktionsauftrag" oben.</td></tr>
+                            <tr><td colspan="6" class="px-5 py-10 text-center text-gray-500">Keine Produktionsaufträge. „+ Neuer Produktionsauftrag" oben.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

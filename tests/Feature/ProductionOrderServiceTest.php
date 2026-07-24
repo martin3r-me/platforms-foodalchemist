@@ -12,6 +12,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
+use Platform\FoodAlchemist\Enums\OrderStatus;
+use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -515,3 +517,69 @@ it('S3: Produktionsschein-Dokument-Route liefert HTML + CSV-Download', function 
     expect($csv->headers->get('content-type'))->toContain('text/csv')
         ->and($csv->streamedContent())->toContain('Rezept')->toContain('DES: Kuchen');
 })->skip(fn () => ! \Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument'), 'Modul-Routen im Test-Harness nicht registriert');
+
+// ── P3: Browser + DetailPanel logisch neu (Ziele/KPI/Einkaufs-Indikator/Deckungsgrad) ──
+
+it('P3: einkaufsIndikatoren faltet keine→offen→versendet (eine Query, kein N+1)', function () {
+    $orders = app(OrderService::class);
+    $po = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Fest', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
+
+    // keine: kein Handover
+    expect($this->svc->einkaufsIndikatoren($this->rootTeam, [$po->id])[$po->id])->toBe('keine');
+
+    // offen: übergeben, Schienen bleiben draft
+    $res = $orders->addNeedFromTarget($this->rootTeam, ['recipe_id' => $this->kuchen->id, 'portions' => 100], 'produktion:' . $po->id . ':recipe:kuchen@100');
+    expect($this->svc->einkaufsIndikatoren($this->rootTeam, [$po->id])[$po->id])->toBe('offen');
+
+    // versendet: mind. eine verknüpfte Schiene sent (Fold: versendet gewinnt über draft)
+    $orders->setStatus($this->rootTeam, $res['orders'][0], OrderStatus::Sent);
+    expect($this->svc->einkaufsIndikatoren($this->rootTeam, [$po->id])[$po->id])->toBe('versendet');
+});
+
+it('P3: zielUebergaben markiert nur das tatsächlich übergebene Ziel', function () {
+    $orders = app(OrderService::class);
+    $po = $this->svc->saveNew($this->rootTeam, '2026-08-02', 'Doppel', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+        ['recipe_id' => $this->tarte->id, 'portions' => 50, 'source_ref' => 'recipe:tarte@50'],
+    ]);
+
+    expect($this->svc->zielUebergaben($this->rootTeam, $po->id))->toBe([]);
+
+    $orders->addNeedFromTarget($this->rootTeam, ['recipe_id' => $this->kuchen->id, 'portions' => 100], 'produktion:' . $po->id . ':recipe:kuchen@100');
+    $ueb = $this->svc->zielUebergaben($this->rootTeam, $po->id);
+    expect($ueb)->toHaveKey('recipe:kuchen@100')->and($ueb)->not->toHaveKey('recipe:tarte@50');
+});
+
+it('P3 UI: Browser zeigt Ziel-Labels, KPI und Einkaufs-Indikator „keine"', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommer-Buffet', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
+
+    Livewire::test(ProduktionBrowser::class)
+        ->assertSee('Sommer-Buffet')
+        ->assertSee('DES: Kuchen')                          // Ziel-Kurzlabel in der Ziele-Spalte
+        ->assertSeeHtml('data-einkauf-indikator="keine"');  // noch nichts übergeben
+});
+
+it('P3 UI: DetailPanel zeigt Ziele-Sektion + Einkauf-Deckungsgrad (0/2 → 1/2)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $orders = app(OrderService::class);
+    $po = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Fest', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+        ['recipe_id' => $this->tarte->id, 'portions' => 50, 'source_ref' => 'recipe:tarte@50'],
+    ]);
+
+    Livewire::test(ProduktionDetailPanel::class, ['orderId' => $po->id])
+        ->assertSee('Ziele')
+        ->assertSeeHtml('data-einkauf-deckung="0/2"');
+
+    $orders->addNeedFromTarget($this->rootTeam, ['recipe_id' => $this->kuchen->id, 'portions' => 100], 'produktion:' . $po->id . ':recipe:kuchen@100');
+
+    Livewire::test(ProduktionDetailPanel::class, ['orderId' => $po->id])
+        ->assertSeeHtml('data-einkauf-deckung="1/2"')
+        ->assertSeeHtml('data-ziel-uebergeben="1"')
+        ->assertSeeHtml('data-ziel-uebergeben="0"');
+});

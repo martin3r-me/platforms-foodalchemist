@@ -75,8 +75,14 @@ class Browser extends Component
             ))
             ->values();
 
+        // KPI-Spalte (Ansätze/Portionen) ohne N+1: Zeilen aller gelisteten Aufträge in
+        // EINER Query nachladen; Einkaufs-Indikator ebenfalls gebündelt (eine Query).
+        $auftraege->load('lines:id,production_order_id,ansaetze,portionen');
+        $indikatoren = $svc->einkaufsIndikatoren($team, $auftraege->pluck('id')->all());
+
         return view('foodalchemist::livewire.produktion.browser', [
             'auftraege' => $auftraege,
+            'indikatoren' => $indikatoren,
             'statusFaelle' => ProductionOrderStatus::cases(),
         ])->layout('platform::layouts.app');
     }

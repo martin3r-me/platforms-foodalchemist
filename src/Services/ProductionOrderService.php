@@ -6,6 +6,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\OrderStatus;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
@@ -350,6 +351,87 @@ class ProductionOrderService
         }
 
         return FoodAlchemistOrder::visibleToTeam($team)->with('supplier:id,name')->whereIn('id', $orderIds)->get();
+    }
+
+    /**
+     * P3 (Browser): Einkaufs-Indikator je Produktionsauftrag in EINER Query (kein N+1).
+     * Wertet die `produktion:{id}:`-Präfixe in den `source_contributions`-Keys aller
+     * team-sichtbaren Bestellzeilen aus und faltet sie auf den „höchsten" Zustand:
+     *   versendet (≥1 verknüpfte Bestellung sent/confirmed/delivered) > offen (nur draft) > keine.
+     * Stornierte Bestellungen zählen nicht (kein aktiver Einkauf).
+     *
+     * @param  list<int>  $prodIds
+     * @return array<int, 'keine'|'offen'|'versendet'>
+     */
+    public function einkaufsIndikatoren(Team $team, array $prodIds): array
+    {
+        $result = array_fill_keys($prodIds, 'keine');
+        if ($prodIds === []) {
+            return $result;
+        }
+
+        $lines = FoodAlchemistOrderLine::query()
+            ->whereHas('order', fn ($q) => $q->visibleToTeam($team))
+            ->where('source_contributions', 'like', '%produktion:%')
+            ->with('order:id,status')
+            ->get(['id', 'order_id', 'source_contributions']);
+
+        foreach ($lines as $line) {
+            $status = $line->order?->status;
+            if ($status === null) {
+                continue;
+            }
+            $ostat = $status instanceof OrderStatus ? $status : OrderStatus::from((string) $status);
+            if ($ostat === OrderStatus::Cancelled) {
+                continue;
+            }
+            $versendet = in_array($ostat, [OrderStatus::Sent, OrderStatus::Confirmed, OrderStatus::Delivered], true);
+            foreach (array_keys((array) $line->source_contributions) as $key) {
+                if (! preg_match('/^produktion:(\d+):/', (string) $key, $m)) {
+                    continue;
+                }
+                $pid = (int) $m[1];
+                if (! array_key_exists($pid, $result)) {
+                    continue;
+                }
+                if ($versendet) {
+                    $result[$pid] = 'versendet';
+                } elseif ($result[$pid] !== 'versendet') {
+                    $result[$pid] = 'offen';
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * P3 (DetailPanel): welche Ziele dieses Auftrags wurden schon an eine Bestellung
+     * übergeben? Match über den vollen Quell-Key `produktion:{orderId}:{source_ref}` in
+     * den `source_contributions` team-sichtbarer Bestellzeilen. Binär je Ziel — keine
+     * Mengen-Deckung (Teil-Mengen-Abgleich ist bewusst Nicht-Ziel von v2, es gibt kein
+     * Bestand/Netting). Grundlage für „übergeben ✓/–" + den Deckungsgrad k/N.
+     *
+     * @return array<string, true>  source_ref (ohne Präfix) => übergeben
+     */
+    public function zielUebergaben(Team $team, int $orderId): array
+    {
+        $prefix = 'produktion:' . $orderId . ':';
+        $lines = FoodAlchemistOrderLine::query()
+            ->whereHas('order', fn ($q) => $q->visibleToTeam($team))
+            ->where('source_contributions', 'like', '%' . $prefix . '%')
+            ->get(['id', 'source_contributions']);
+
+        $refs = [];
+        foreach ($lines as $line) {
+            foreach (array_keys((array) $line->source_contributions) as $key) {
+                if (str_starts_with((string) $key, $prefix)) {
+                    $refs[substr((string) $key, strlen($prefix))] = true;
+                }
+            }
+        }
+
+        return $refs;
     }
 
     /**

@@ -52,6 +52,25 @@
             </div>
         @endif
 
+        {{-- Ziele: was diese Produktion abdeckt + ob es an den Einkauf übergeben wurde --}}
+        @if(count($detail['targets']) > 0)
+            <x-foodalchemist::section title="Ziele" icon="heroicon-o-flag" :meta="count($detail['targets'])">
+                <div class="space-y-1.5">
+                    @foreach($detail['targets'] as $t)
+                        @php($ueb = ! empty($zielUebergaben[$t['source_ref'] ?? '']))
+                        <div class="flex items-center justify-between gap-2 text-[13px]" wire:key="ziel-{{ $loop->index }}">
+                            <span class="text-gray-900">{{ $t['label'] ?? '—' }}</span>
+                            @if($ueb)
+                                <span class="{{ $pill }} font-medium {{ $variantPill['success'] }} shrink-0" title="an Bestellung übergeben" data-ziel-uebergeben="1">✓ übergeben</span>
+                            @else
+                                <span class="{{ $pill }} font-medium {{ $variantPill['secondary'] }} shrink-0" title="noch nicht an Bestellung übergeben" data-ziel-uebergeben="0">–</span>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </x-foodalchemist::section>
+        @endif
+
         <x-foodalchemist::section title="Rezepte & Ansätze" icon="heroicon-o-list-bullet" :meta="count($detail['zeilen'])">
             <div class="space-y-2">
                 @foreach($detail['zeilen'] as $z)
@@ -82,21 +101,34 @@
             </div>
         </x-foodalchemist::section>
 
-        @if($verknuepfteOrders->isNotEmpty())
-            <x-foodalchemist::section title="Bestellung" icon="heroicon-o-shopping-cart" :meta="$verknuepfteOrders->count()">
-                <div class="space-y-1">
-                    @foreach($verknuepfteOrders as $o)
-                        <a href="{{ route('foodalchemist.orders.index', ['o' => $o->id]) }}"
-                           class="flex items-center justify-between gap-2 text-[13px] px-2 py-1.5 rounded-lg bg-black/[0.02] hover:bg-black/[0.04]"
-                           data-produktion-bestellung-link="{{ $o->id }}">
-                            <span class="text-gray-900">{{ $o->supplier?->name ?? '—' }}</span>
-                            <span class="flex items-center gap-2">
-                                <span class="text-gray-500 tabular-nums">{{ number_format((float) $o->total_net, 2, ',', '.') }} €</span>
-                                <span class="{{ $pill }} font-medium {{ $variantPill[$o->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o->status->label() }}</span>
-                            </span>
-                        </a>
-                    @endforeach
+        {{-- Einkauf: Deckungsgrad (wie viele Ziele übergeben) + verknüpfte Bestellschienen --}}
+        @if(count($detail['targets']) > 0)
+            @php($zieleCount = count($detail['targets']))
+            @php($uebergebenCount = collect($detail['targets'])->filter(fn ($t) => ! empty($zielUebergaben[$t['source_ref'] ?? '']))->count())
+            <x-foodalchemist::section title="Einkauf" icon="heroicon-o-shopping-cart" :meta="$verknuepfteOrders->count()">
+                <div class="flex items-center justify-between gap-2 text-[12px] mb-2" data-einkauf-deckung="{{ $uebergebenCount }}/{{ $zieleCount }}">
+                    <span class="text-gray-500">Deckungsgrad</span>
+                    <span class="{{ $pill }} font-medium {{ $uebergebenCount === 0 ? $variantPill['secondary'] : ($uebergebenCount >= $zieleCount ? $variantPill['success'] : $variantPill['warning']) }}">
+                        {{ $uebergebenCount }}/{{ $zieleCount }} Ziele übergeben
+                    </span>
                 </div>
+                @if($verknuepfteOrders->isNotEmpty())
+                    <div class="space-y-1">
+                        @foreach($verknuepfteOrders as $o)
+                            <a href="{{ route('foodalchemist.orders.index', ['o' => $o->id]) }}"
+                               class="flex items-center justify-between gap-2 text-[13px] px-2 py-1.5 rounded-lg bg-black/[0.02] hover:bg-black/[0.04]"
+                               data-produktion-bestellung-link="{{ $o->id }}">
+                                <span class="text-gray-900">{{ $o->supplier?->name ?? '—' }}</span>
+                                <span class="flex items-center gap-2">
+                                    <span class="text-gray-500 tabular-nums">{{ number_format((float) $o->total_net, 2, ',', '.') }} €</span>
+                                    <span class="{{ $pill }} font-medium {{ $variantPill[$o->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o->status->label() }}</span>
+                                </span>
+                            </a>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="text-[12px] text-gray-500">Noch keine Bestellung — „→ An Bestellung übergeben" unten.</p>
+                @endif
             </x-foodalchemist::section>
         @endif
 
