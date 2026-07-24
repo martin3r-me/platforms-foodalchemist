@@ -57,6 +57,7 @@ class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'event_type_id' => $fb->default_event_type_id !== null ? (int) $fb->default_event_type_id : null,
                 'serving_form_id' => $fb->default_serving_form_id !== null ? (int) $fb->default_serving_form_id : null,
                 'target_food_cost_pct' => $fb->target_food_cost_pct,
+                'creative_mode_default' => $fb->creative_mode_default,
                 'food_cost_tolerance_pp' => $fb->food_cost_tolerance_pp,
                 'zielgruppen' => $fb->targetGroups->map(fn ($z) => ['id' => $z->id, 'name' => $z->name])->values()->all(),
                 'service_moment_ids' => $fb->serviceMoments->map(fn ($m) => (int) $m->id)->values()->all(),

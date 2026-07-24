@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistEventtyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup;
@@ -56,6 +57,7 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'default_serving_form_id' => ['type' => 'integer', 'description' => 'Default-Servierform (Vokabular; Scharnier zur Darreichungs-Auflösung)'],
                 'target_food_cost_pct' => ['type' => 'number', 'description' => 'Ziel-Wareneinsatz in % (WE-Ampel-SOLL)'],
                 'food_cost_tolerance_pp' => ['type' => 'number', 'description' => 'Toleranz in Prozentpunkten (Default 5,0 im Code)'],
+                'creative_mode_default' => ['type' => 'string', 'enum' => FoodAlchemistFoodbookKapitel::CREATIVE_MODES, 'description' => 'Kreativ-Modus-Default aller Kapitel: voll_kreativ | hybrid | datenbank (Kapitel überschreiben)'],
                 'zielgruppen' => [
                     'type' => 'array',
                     'items' => ['type' => 'integer'],
@@ -88,6 +90,10 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
             && ! FoodAlchemistServierform::visibleToTeam($team)->whereKey((int) $arguments['default_serving_form_id'])->exists()) {
             return ToolResult::error('default_serving_form_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
+        if (isset($arguments['creative_mode_default'])
+            && ! in_array((string) $arguments['creative_mode_default'], FoodAlchemistFoodbookKapitel::CREATIVE_MODES, true)) {
+            return ToolResult::error('creative_mode_default muss voll_kreativ|hybrid|datenbank sein.', 'VALIDATION_ERROR');
+        }
         $zielgruppenIds = array_map('intval', (array) ($arguments['zielgruppen'] ?? []));
         if ($zielgruppenIds !== []
             && FoodAlchemistTargetGroup::visibleToTeam($team)->whereKey($zielgruppenIds)->count() !== count(array_unique($zielgruppenIds))) {
@@ -110,7 +116,7 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
             ]);
             // Dimension-Defaults durchs FELDER-Update (create() setzt nur den Kern).
             $defaults = array_intersect_key($arguments, array_flip([
-                'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp',
+                'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp', 'creative_mode_default',
             ]));
             if ($defaults !== []) {
                 $svc->update($team, $fb->id, $defaults);
@@ -137,6 +143,7 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'default_event_type_id' => $fb->default_event_type_id !== null ? (int) $fb->default_event_type_id : null,
                 'default_serving_form_id' => $fb->default_serving_form_id !== null ? (int) $fb->default_serving_form_id : null,
                 'target_food_cost_pct' => $fb->target_food_cost_pct,
+                'creative_mode_default' => $fb->creative_mode_default,
                 'food_cost_tolerance_pp' => $fb->food_cost_tolerance_pp,
                 'zielgruppen_ids' => array_values(array_unique($zielgruppenIds)),
                 'service_moment_ids' => array_values(array_unique($einsatzmomentIds)),
