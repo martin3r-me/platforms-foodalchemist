@@ -491,3 +491,131 @@ it('E1: UI — 3-Panel-Cockpit, Lieferant-Filter + Kopf speichern + Zeilen-Notiz
     $comp->call('updateLineNote', $mehlLine->id, 'bio bevorzugt');
     expect($mehlLine->refresh()->note)->toBe('bio bevorzugt');
 });
+
+// ── Spec 20 · E2 (Direktbestellung) ─────────────────────────────────────────
+
+it('E2: addManualLine legt Schiene an + manuelle Zeile mit Preis-Snapshot (needed_base_g=0)', function () {
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+    expect(FoodAlchemistOrder::where('supplier_id', $chefs->id)->count())->toBe(0);
+
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 3, 'ohne Ziel bestellt');
+
+    $draft = FoodAlchemistOrder::where('supplier_id', $chefs->id)->where('status', 'draft')->first();
+    expect($draft)->not->toBeNull()
+        ->and((int) $line->order_id)->toBe((int) $draft->id)
+        ->and((bool) $line->is_manual_qty)->toBeTrue()
+        ->and((float) $line->qty_packs)->toBe(3.0)
+        ->and((float) $line->needed_base_g)->toBe(0.0)          // kein Ziel-Bedarf
+        ->and((float) $line->pack_price)->toBe(2.0)             // Snapshot aus aktivem Preis
+        ->and((float) $line->line_total)->toBe(6.0)             // 3 × 2 €
+        ->and($line->article_number)->toBe('ART-MEH')
+        ->and($line->note)->toBe('ohne Ziel bestellt')
+        ->and((float) $draft->refresh()->total_net)->toBe(6.0);
+
+    // Erneuter Aufruf für denselben Artikel = Menge neu setzen (idempotent, keine Dublette).
+    $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 5);
+    expect($draft->refresh()->lines()->count())->toBe(1)
+        ->and((float) $draft->lines()->first()->qty_packs)->toBe(5.0)
+        ->and((float) $draft->total_net)->toBe(10.0);
+});
+
+it('E2: manuelle Zeile übersteht Recompute + Bedarfs-Übernahme in dieselbe Schiene', function () {
+    // Erst manuell 3 Sack Mehl, dann Ziel-Bedarf (10 kg = 10 Sack) in dieselbe Chefs-Schiene.
+    $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 3);
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+
+    // Manuelle Menge bleibt bei 3 (übersteuert den 10-Sack-Bedarf); needed_base_g trägt den Bedarf.
+    expect((bool) $mehlLine->is_manual_qty)->toBeTrue()
+        ->and((float) $mehlLine->qty_packs)->toBe(3.0)
+        ->and((float) $mehlLine->needed_base_g)->toBe(10000.0)
+        ->and($mehlLine->source_contributions)->toHaveKey('recipe:kuchen@100')
+        ->and($chefs->lines()->count())->toBe(2);   // Mehl (manuell+Bedarf) + Zucker (nur Bedarf)
+
+    // Chefs: Mehl 3 × 2 € = 6 € + Zucker 1 Sack × 1 € = 1 € ⇒ 7,00 €.
+    expect((float) $chefs->refresh()->total_net)->toBe(7.0);
+
+    // Bedarf-Anzeige: 10 kg trotz manueller 3 Sack.
+    $d = $this->svc->detail($this->rootTeam, $chefs->id);
+    $mehl = collect($d['zeilen'])->firstWhere('gp_id', $this->mehl->id);
+    expect($mehl['needed_display'])->toBe(10.0)->and($mehl['needed_unit'])->toBe('kg');
+});
+
+it('E2: manuelle Zeile — Draft-Preis lebt, versendeter Beleg friert ein', function () {
+    $this->svc->addManualLine($this->rootTeam, $this->laOf['Butter']->id, 2);   // Hanos, 12 €/kg
+    $hanos = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->first();
+    expect((float) $hanos->total_net)->toBe(24.0);                              // 2 × 12 €
+
+    // Preis 12 → 15 €/kg: Draft frischt auf (E11).
+    FoodAlchemistPrice::where('supplier_item_id', $this->laOf['Butter']->id)->update(['price' => 15.00]);
+    $this->svc->recomputeOrder($hanos->refresh());
+    expect((float) $hanos->refresh()->total_net)->toBe(30.0);                   // 2 × 15 €
+
+    // Versenden friert ein; weitere Preisänderung bewegt den Beleg nicht mehr (E2).
+    $this->svc->setStatus($this->rootTeam, $hanos->id, OrderStatus::Sent);
+    FoodAlchemistPrice::where('supplier_item_id', $this->laOf['Butter']->id)->update(['price' => 99.00]);
+    $this->svc->recomputeOrder($hanos->refresh());
+    expect((float) $hanos->refresh()->total_net)->toBe(30.0);                   // unverändert
+});
+
+it('E2: createDraft — findOrCreate je Lieferant + optionale Kopf-Felder', function () {
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+
+    $a = $this->svc->createDraft($this->rootTeam, $chefs->id, ['reference' => 'Sommerfest']);
+    expect($a->status->value ?? (string) $a->status)->toBe('draft')
+        ->and($a->reference)->toBe('Sommerfest');
+
+    // Zweiter Aufruf gibt dieselbe offene Schiene zurück (keine zweite Draft-Schiene).
+    $b = $this->svc->createDraft($this->rootTeam, $chefs->id);
+    expect((int) $b->id)->toBe((int) $a->id)
+        ->and(FoodAlchemistOrder::where('supplier_id', $chefs->id)->where('status', 'draft')->count())->toBe(1);
+
+    // Unbekannter/nicht sichtbarer Lieferant → Fehler.
+    expect(fn () => $this->svc->createDraft($this->rootTeam, 999999))
+        ->toThrow(\RuntimeException::class);
+});
+
+it('E2: MCP im Lockstep — orders.CREATE + orders.ADD_LINE registriert + End-to-End', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(ToolRegistry::class);
+    $kontext = new ToolContext($user, $this->rootTeam);
+
+    foreach (['orders.CREATE', 'orders.ADD_LINE'] as $t) {
+        $tool = $registry->get("foodalchemist.{$t}");
+        expect($tool)->not->toBeNull()
+            ->and($tool->getMetadata()['read_only'])->toBeFalse();
+    }
+
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+
+    // CREATE: leere Schiene für Chefs anlegen
+    $create = $registry->get('foodalchemist.orders.CREATE')
+        ->execute(['supplier_id' => $chefs->id, 'reference' => 'Direktkauf'], $kontext);
+    expect($create->success)->toBeTrue()
+        ->and($create->data['status'])->toBe('draft')
+        ->and($create->data['reference'])->toBe('Direktkauf');
+    $orderId = $create->data['order_id'];
+
+    // ADD_LINE: manuell 4 Sack Mehl an dieselbe Schiene
+    $add = $registry->get('foodalchemist.orders.ADD_LINE')
+        ->execute(['supplier_item_id' => $this->laOf['Mehl']->id, 'qty_packs' => 4, 'note' => 'bio'], $kontext);
+    expect($add->success)->toBeTrue()
+        ->and((int) $add->data['order_id'])->toBe((int) $orderId)   // fällt in die CREATE-Schiene
+        ->and($add->data['is_manual_qty'])->toBeTrue()
+        ->and((float) $add->data['qty_packs'])->toBe(4.0)
+        ->and((float) $add->data['line_total'])->toBe(8.0)          // 4 × 2 €
+        ->and($add->data['note'])->toBe('bio');
+
+    // GET Detail: die manuelle Zeile ist sichtbar + total_net stimmt
+    $detail = $registry->get('foodalchemist.orders.GET')->execute(['order_id' => $orderId], $kontext);
+    expect($detail->data['total_net'])->toBe(8.0)
+        ->and(collect($detail->data['zeilen'])->firstWhere('supplier_item_id', $this->laOf['Mehl']->id)['is_manual_qty'])->toBeTrue();
+
+    // ADD_LINE auf unbekannten Artikel → sauberer Fehler
+    $bad = $registry->get('foodalchemist.orders.ADD_LINE')
+        ->execute(['supplier_item_id' => 999999, 'qty_packs' => 1], $kontext);
+    expect($bad->success)->toBeFalse();
+});

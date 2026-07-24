@@ -231,6 +231,77 @@ class OrderService
     }
 
     /**
+     * Spec 20 · E2 — „Neue Bestellung": eine (leere) Draft-Schiene für einen Lieferanten
+     * anlegen bzw. die bestehende offene zurückgeben (findOrCreate, idempotent je (team,
+     * supplier)). Nur team-sichtbare Lieferanten (D1). Optionale Kopf-Felder werden direkt
+     * gesetzt (reference/desired_delivery_date/note).
+     *
+     * @param  array{reference?:?string, desired_delivery_date?:?string, note?:?string}  $header
+     */
+    public function createDraft(Team $team, int $supplierId, array $header = [], ?int $userId = null): FoodAlchemistOrder
+    {
+        $supplier = FoodAlchemistSupplier::visibleToTeam($team)->find($supplierId);
+        if ($supplier === null) {
+            throw new \RuntimeException('Lieferant nicht gefunden.');
+        }
+        $draft = $this->draftForSupplier($team, (int) $supplier->id, $userId);
+
+        $kopf = array_intersect_key($header, array_flip(['reference', 'desired_delivery_date', 'note']));
+        if ($kopf !== []) {
+            $draft = $this->updateHeader($team, (int) $draft->id, $kopf);
+        }
+
+        return $draft;
+    }
+
+    /**
+     * Spec 20 · E2 — Direktbestellung: eine Zeile MANUELL an die Draft-Schiene des
+     * Lieferanten hängen (unabhängig von jeder Produktion/jedem Ziel). Legt die Schiene
+     * an, wenn nötig; die Zeile trägt `is_manual_qty=true` + leeres `source_contributions`
+     * (der Cleanup-Guard in recomputeOrder verschont sie), Preis-Snapshot über den
+     * recomputeLine-Pfad (needed_base_g bleibt 0 = kein Ziel-Bedarf). Existiert für den
+     * Artikel bereits eine Zeile in der Schiene, wird deren Menge manuell übersteuert
+     * (Setter-Semantik, idempotent) statt eine Dublette anzulegen.
+     */
+    public function addManualLine(Team $team, int $supplierItemId, float $qtyPacks, ?string $note = null, ?int $userId = null): FoodAlchemistOrderLine
+    {
+        // D1: nur team-sichtbare Artikel (eigenes Team + Master-Kette/Seed) sind bestellbar.
+        $la = FoodAlchemistSupplierItem::visibleToTeam($team)->with('structure')->find($supplierItemId);
+        if ($la === null) {
+            throw new \RuntimeException('Lieferantenartikel nicht gefunden.');
+        }
+        if ($la->supplier_id === null) {
+            throw new \RuntimeException('Lieferantenartikel ohne Lieferant — nicht bestellbar.');
+        }
+        $qty = max(0.0, (float) $qtyPacks);
+        $draft = $this->draftForSupplier($team, (int) $la->supplier_id, $userId);
+
+        $line = FoodAlchemistOrderLine::where('order_id', $draft->id)
+            ->where('supplier_item_id', $la->id)
+            ->first();
+        if ($line === null) {
+            $line = new FoodAlchemistOrderLine([
+                'team_id' => $team->id,
+                'order_id' => $draft->id,
+                'supplier_item_id' => $la->id,
+                'gp_id' => $la->structure?->gp_id,
+                'source_contributions' => [],
+                'position' => (int) FoodAlchemistOrderLine::where('order_id', $draft->id)->max('position') + 1,
+            ]);
+        }
+        $line->is_manual_qty = true;
+        $line->qty_packs = $qty;
+        if ($note !== null) {
+            $line->note = $note !== '' ? $note : null;
+        }
+        $line->save();
+
+        $this->recomputeOrder($draft->refresh());
+
+        return $line->refresh();
+    }
+
+    /**
      * Spec 20 · E1 — Kopf-Felder einer OFFENEN Schiene pflegen (Anlass, Wunsch-Liefertermin,
      * Notiz). Nur eigene Belege, nur solange draft; gesendete Belege sind eingefroren (E2).
      *
