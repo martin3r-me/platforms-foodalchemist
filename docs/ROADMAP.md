@@ -8,6 +8,19 @@
 
 ---
 
+## Update 2026-07-25 (Spec 19 Foodbook-Leitstelle — E9 Kreativ-Modi + Pairing-Inspiration)
+
+**Nachtrag-Etappe E9 (Design-Entscheidung Dominique 2026-07-25):** Die Kreativ-Phase bekommt einen **3-Modus-Schalter** (`voll_kreativ | hybrid | datenbank`), pro Kapitel wählbar mit Foodbook-Default, Code-Default **`hybrid`**. Grundprinzip **Pull-not-Push**: der Bestand wird nie dauerhaft eingeblendet (Anker-Effekt vermeiden), der **Pairing-/Anker-Graph** ist dagegen in allen Modi erlaubte Inspiration — er öffnet den Aroma-Raum, verankert nicht am Lager. Zwei Gewissheiten getrennt: **Aroma** (abstrakte Nachbarn) vs. **Beschaffung** (Anker→GP mit Verfügbarkeits-Bucket *führen/leicht/Lücke*). „Lücke ist Signal, kein Fehler" → bewusst meldbar ins Signale-Cockpit.
+
+- **E9.1** (`0090f0e`) — M6 `foodbooks.creative_mode_default` + `chapters.creative_mode` (additiv/idempotent, Model-Const `CREATIVE_MODES`), Resolver `kreativModus()` (Kaskade Kapitel→Foodbook→hybrid) + `leitplanken()`-Integration; 5 Pest.
+- **E9.2** (`d3d9fff`) — `PairingInspirationService::inspiration()` (abstrakt vs. geerdet) + `PairingService::gpsForAnkerIds` (Anker→GP-Reverse-Lookup, schließt Doc-TODO); 3 Pest.
+- **E9.3** (`a55412e`) — `FavoriteGpService::verfuegbarkeit()` (Buckets führen/leicht/Lücke) + Nachbar-`luecke`-Flag; neuer `SignalTyp::SortimentsLuecke` + `meldeLuecke()` (idempotent, bewusster Schreibpfad); 4 Pest.
+- **E9.4** (`6449b1f`) — Kreativ-Tab-UI: Modus-Umschalter + Pairing-Inspiration-Panel (Pull via Seed, Bucket-Dots, ⚑ Lücke melden); kein Asset-Rebuild; 5 Pest (viewData/DB).
+- **E9.5** (`faa1d4d`) — MCP-Lockstep `creative_mode` in `foodbook_kapitel.PUT` + `creative_mode_default` in `foodbooks.POST`/`foodbook.GET`; 4 Pest inkl. Tenancy. *Offen (vertagt): optionales `pairing_inspiration.GET`-Tool — braucht ServiceProvider-Registrierung, Datei trug Fremd-WIP.*
+- **E9.6** — Doku (`docs/foodbook.md` §Kreativ-Modus) + ROADMAP + breite Regression.
+
+Weiterhin **lokal/ungepusht** (Batch-Push durch Dominique). Browser-Klickstrecke des Kreativ-Tabs = manuelle Abnahme (Tab-HTML im Livewire-Test-Harness nicht voll gerendert → Logik über viewData/DB gedeckt).
+
 ## Update 2026-07-24 (Spec 19 Foodbook-Leitstelle — E8.4 Abschluss: ✅ Spec KOMPLETT E0–E8.4)
 
 **Teilschritt E8.4 (Abschluss — die Leitstelle ist ausgeliefert):** Kein Code-Change, reiner Abnahme- + Doku-Schritt. **(a) Breite Pest-Suite** aus `sandbox-food-alchemist`: **1089 Tests, 1085 grün, 4 skipped, 0 Fehler, 5200 Assertions** — inkl. aller Leitstellen-Suiten (FoodbookLeitstelle, KapitelZiele, Skizzen/Ideen, KapitelAnlage, ZielgruppenVokabular, Coverage-Tiefe, Wareneinsatz, Praesentation-depth). Die in E3.6 gemeldete Fremd-Regression (`KnowledgeBindTool UNBIND idempotent`) ist inzwischen grün — **0 offene Regressionen**. **(b) fb=1-Protokoll** („Angebot Hotel Adler", Regressions-Referenz): unverändert — 2 Kapitel, 200 Blöcke, **0 released_at, 0 dish_ideas** → die neuen Leitstellen-Pfade (Kapitel-Go/Skizzen) haben den Bestand nie berührt, wie gefordert (fb=1 nur gelesen). **(c) Browser-Klickstrecke:** die funktionale Kaskade (Kickoff→Struktur→Unterkapitel→Ziele→Einzel-Block+Paket-Fill→Skizzen→Anlage-Go→Panels→Vorschau) ist durch die grüne Livewire-/Feature-Suite vollständig abgedeckt; der visuelle Fake-Provider-Durchlauf im Browser bleibt als manuelle UX-Abnahme für Dominique offen (Sandbox hat keinen echten LLM-Provider — Output-Qualität war nie Bau-Auftrag). **(d) Doku:** ROADMAP-Abschluss (diese Zeile) + Checkliste E8.4 ✅ + Lauf-Protokoll-Zeile. **Spec 19 damit vollständig: E0–E8.4 alle ✅.** Weg B ist nicht mehr exklusiv (Duality Paket/Einzel live). Offene Nicht-Bau-Punkte: manuelle Browser-UX-Abnahme + demo-Deploy (Martin) + KI-Inhaltsqualität (braucht echten Provider, `#499`-Gate).
