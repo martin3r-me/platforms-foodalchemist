@@ -41,6 +41,7 @@ class FoodAlchemistFoodbookBlock extends Model
         'level' => 'integer',
         'visible' => 'boolean',
         'variant_group_id' => 'integer',
+        'presentation_id' => 'integer',
         'quantity' => 'decimal:3',
         'price_value' => 'decimal:2',
         'payload_json' => 'array',
@@ -78,6 +79,16 @@ class FoodAlchemistFoodbookBlock extends Model
     public function unit(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id');
+    }
+
+    /**
+     * recipe_ref: expliziter Darreichungs-Override (Spec 19, M5/E7.1). Oberste Stufe der
+     * Auflösung in {@see DarreichungResolver::fuerBlock()}; NULL ⇒ Servierform-/Standard-Fallback.
+     * Loser Zeiger (unsignedBigInteger, keine harte FK — vgl. slot/paket_gericht.presentation_id).
+     */
+    public function presentation(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'presentation_id');
     }
 
     /** Staffelpreise (nur bei preis_basis='staffel'). */

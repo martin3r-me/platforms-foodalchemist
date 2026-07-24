@@ -5,6 +5,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Services\DarreichungResolver;
 use Platform\FoodAlchemist\Services\DarreichungService;
+use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -66,4 +67,60 @@ it('Money-Path: die Standard-Darreichung ist die Preis-Wahrheit; recipes.sales_n
 
     expect((float) $this->resolver->standardFuer($this->gericht->fresh())->sales_net)->toBe(2.32)
         ->and((float) $this->gericht->fresh()->sales_net)->toBe(2.32); // Legacy-Feld folgt dem Standard
+});
+
+// ── Spec 19 E7.1 · DarreichungResolver::fuerBlock (recipe_ref-Einzel-Gericht) ──
+// Der distinguierende Zwei-Darreichungen-Fall (Servierform-Match / expliziter Override
+// SCHLAGEN den Standard, „2,32 statt 25 €") ist auf In-Memory-SQLite nicht abbildbar
+// (partieller Ein-Standard-Unique-Index verbietet die 2. Darreichung) → MySQL-Smoke.
+// Hier: die SQLite-tragfähigen Zweige (Standard-Fallback, expliziter Zeiger, kein Gericht).
+
+/** Minimaler recipe_ref-Block am Kapitel eines frischen Foodbooks. */
+function macheRecipeRefBlock($team, int $recipeId): \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock
+{
+    $fbSvc = app(FoodbookService::class);
+    $fb = $fbSvc->create($team, ['label' => 'Dar-FB']);
+    $kapitel = $fbSvc->addKapitel($team, $fb->id, ['title' => 'Kap']);
+
+    return $fbSvc->addBlock($team, $kapitel->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $recipeId]);
+}
+
+it('fuerBlock: ohne presentation_id + ohne Servierform → standardFuer (bit-identisch heute)', function () {
+    $standard = $this->svc->ensureStandard($this->rootTeam, $this->gericht->id);
+    $block = macheRecipeRefBlock($this->rootTeam, $this->gericht->id);
+
+    $gefunden = $this->resolver->fuerBlock($block->fresh(), null);
+    expect($gefunden)->not->toBeNull()
+        ->and($gefunden->id)->toBe($standard->id)
+        ->and($gefunden->is_standard)->toBeTrue();
+});
+
+it('fuerBlock: expliziter presentation_id-Override wird zurückgegeben', function () {
+    $standard = $this->svc->ensureStandard($this->rootTeam, $this->gericht->id);
+    $block = macheRecipeRefBlock($this->rootTeam, $this->gericht->id);
+    $block->update(['presentation_id' => $standard->id]); // Zeiger gesetzt → Zweig 1
+
+    $gefunden = $this->resolver->fuerBlock($block->fresh(), null);
+    expect($gefunden)->not->toBeNull()
+        ->and($gefunden->id)->toBe($standard->id);
+});
+
+it('fuerBlock: recipe_ref ohne Gericht → null (kein stiller Preis)', function () {
+    $block = macheRecipeRefBlock($this->rootTeam, $this->gericht->id);
+    $block->update(['sales_recipe_id' => null]); // dish löst zu null auf
+
+    expect($this->resolver->fuerBlock($block->fresh(), null))->toBeNull();
+});
+
+it('fuerBlock: Servierform ohne passende Darreichung → Standard-Fallback', function () {
+    $standard = $this->svc->ensureStandard($this->rootTeam, $this->gericht->id);
+    $form = FoodAlchemistServierform::firstOrCreate(
+        ['code' => 'buffet', 'team_id' => $this->rootTeam->id],
+        ['label' => 'Buffet']
+    );
+    $block = macheRecipeRefBlock($this->rootTeam, $this->gericht->id);
+
+    // Servierform gesetzt, aber das Gericht hat keine passende Darreichung → fällt auf Standard.
+    $gefunden = $this->resolver->fuerBlock($block->fresh(), $form->id);
+    expect($gefunden)->not->toBeNull()->and($gefunden->id)->toBe($standard->id);
 });

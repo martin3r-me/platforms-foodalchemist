@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaketGericht;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
@@ -51,6 +52,40 @@ class DarreichungResolver
         }
 
         return $pg->dish !== null ? $this->standardFuer($pg->dish) : null;
+    }
+
+    /**
+     * Darreichung eines `recipe_ref`-Foodbook-Blocks (Spec 19, M5/E7.1 — Einzel-Gericht-Pfad).
+     * Auflösung analog {@see fuerSlot()}:
+     *   1. block.presentation_id (expliziter Override) →
+     *   2. Gericht-Darreichung zur übergebenen Servierform (Kapitel-/Foodbook-Servierform,
+     *      vom Aufrufer aus der Dimensions-Kaskade gereicht) →
+     *   3. standardFuer().
+     *
+     * `$servingFormId === null` UND keine block-Darreichung ⇒ standardFuer(), dessen sales_net
+     * per Invariante der Anzeige-Spiegel `recipes.sales_net` ist → bit-identisch zu heute
+     * (keine sichtbaren Preisänderungen im Bestand). dish === null ⇒ null.
+     */
+    public function fuerBlock(FoodAlchemistFoodbookBlock $block, ?int $servingFormId = null): ?FoodAlchemistRecipeDarreichung
+    {
+        if ($block->presentation_id !== null && $block->presentation !== null) {
+            return $block->presentation;
+        }
+
+        if ($block->dish === null) {
+            return null;
+        }
+
+        if ($servingFormId !== null) {
+            $passend = $block->dish->presentations()
+                ->where('serving_form_id', $servingFormId)
+                ->first();
+            if ($passend !== null) {
+                return $passend;
+            }
+        }
+
+        return $this->standardFuer($block->dish);
     }
 
     public function standardFuer(FoodAlchemistRecipe $recipe): ?FoodAlchemistRecipeDarreichung
