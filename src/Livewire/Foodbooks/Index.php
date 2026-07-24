@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPhase;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPlanningFrame;
 use Platform\FoodAlchemist\Services\FoodbookService;
+use Platform\FoodAlchemist\Services\IdeenService;
 
 /**
  * M11-03 / Doc 15 §9.3: Foodbook-Editor — stellt fertige **Concepts** zu einem
@@ -218,9 +219,128 @@ class Index extends Component
             return;
         }
         $this->strukturErgebnis = $svc->strukturAusGeruest($this->team(), $this->selectedId);
-        // Gerüst neu laden, damit $frameSlots die frisch gesetzten chapter_id trägt
-        // (sonst bleiben die per-Slot-Vorschläge-Buttons fälschlich disabled).
+        // Gerüst neu laden, damit $frameSlots die frisch gesetzten chapter_id trägt.
         $this->frameLaden();
+    }
+
+    // ── Spec 19 E6.3: Kreativ-Skizzenfläche (IdeenService) ──────────────────────
+    // Divergenz-Ebene: freie oder aus Bestand übernommene Skizzen PRO Kapitel, Paket-Bündelung
+    // per Mehrfachauswahl. Erdet NICHTS (Invariante M4) — erst das Kapitel-Go (E7.3)
+    // materialisiert Skizzen zu Konzepten/Blöcken. Deshalb hier nur entwurf|verworfen.
+    public string $ideeTitel = '';
+
+    public string $skizzeGerichtSuche = '';
+
+    /** Markierte Idee-IDs für „zu Paket bündeln" (nur freie Einzel-Skizzen). */
+    public array $ideeAuswahl = [];
+
+    public string $paketName = '';
+
+    public bool $ideenPapierkorb = false;
+
+    public ?string $ideenFehler = null;
+
+    /** Freie Skizze anlegen (Titel Pflicht) — Owner = gewähltes Kapitel. */
+    public function ideeHinzu(): void
+    {
+        $this->ideenFehler = null;
+        if ($this->selectedKapitelId === null) {
+            return;
+        }
+        try {
+            app(IdeenService::class)->add($this->team(), [
+                'chapter_id' => $this->selectedKapitelId,
+                'title' => $this->ideeTitel,
+            ]);
+            $this->ideeTitel = '';
+        } catch (\RuntimeException $e) {
+            $this->ideenFehler = $e->getMessage();
+        }
+    }
+
+    /** Bestands-Gericht als Skizze übernehmen (loser sales_recipe_id-Zeiger, dedupliziert NICHTS). */
+    public function skizzeAusBestand(int $recipeId): void
+    {
+        $this->ideenFehler = null;
+        if ($this->selectedKapitelId === null) {
+            return;
+        }
+        try {
+            app(IdeenService::class)->uebernehmeBestand($this->team(), [
+                'chapter_id' => $this->selectedKapitelId,
+                'sales_recipe_id' => $recipeId,
+            ]);
+            $this->skizzeGerichtSuche = '';
+        } catch (\RuntimeException $e) {
+            $this->ideenFehler = $e->getMessage();
+        }
+    }
+
+    public function ideeVerwerfen(int $id): void
+    {
+        $this->ideeStatus($id, 'verworfen');
+    }
+
+    public function ideeReaktivieren(int $id): void
+    {
+        $this->ideeStatus($id, 'entwurf');
+    }
+
+    private function ideeStatus(int $id, string $status): void
+    {
+        $this->ideenFehler = null;
+        try {
+            app(IdeenService::class)->setStatus($this->team(), $id, $status);
+        } catch (\RuntimeException $e) {
+            $this->ideenFehler = $e->getMessage();
+        }
+        // Eine verworfene Skizze fällt aus der Bündel-Auswahl.
+        $this->ideeAuswahl = array_values(array_filter($this->ideeAuswahl, fn ($v) => (int) $v !== $id));
+    }
+
+    /** Mehrfachauswahl → neue Paket-Gruppe + Zuordnung (Muster markiere()/wahlGruppeBilden()). */
+    public function paketBilden(): void
+    {
+        $this->ideenFehler = null;
+        if ($this->selectedKapitelId === null || $this->ideeAuswahl === []) {
+            return;
+        }
+        try {
+            $svc = app(IdeenService::class);
+            $gruppe = $svc->addGruppe($this->team(), [
+                'chapter_id' => $this->selectedKapitelId,
+                'name' => trim($this->paketName) !== '' ? trim($this->paketName) : 'Paket',
+            ]);
+            foreach ($this->ideeAuswahl as $iid) {
+                $svc->update($this->team(), (int) $iid, ['group_id' => $gruppe->id]);
+            }
+            $this->ideeAuswahl = [];
+            $this->paketName = '';
+        } catch (\RuntimeException $e) {
+            $this->ideenFehler = $e->getMessage();
+        }
+    }
+
+    /** Einzelne Skizze aus ihrem Paket lösen (→ Einzel; target_form muss mitgezogen werden, sonst greift der Paket-Guard). */
+    public function ausPaketLoesen(int $ideaId): void
+    {
+        $this->ideenFehler = null;
+        try {
+            app(IdeenService::class)->update($this->team(), $ideaId, ['group_id' => 0, 'target_form' => 'einzel']);
+        } catch (\RuntimeException $e) {
+            $this->ideenFehler = $e->getMessage();
+        }
+    }
+
+    /** Ganzes Paket auflösen: Mitglieder lösen + leere Gruppe entfernen. */
+    public function paketAufloesen(int $groupId): void
+    {
+        $this->ideenFehler = null;
+        try {
+            app(IdeenService::class)->loescheGruppe($this->team(), $groupId);
+        } catch (\RuntimeException $e) {
+            $this->ideenFehler = $e->getMessage();
+        }
     }
 
     // ── Phase 5: Kickoff-Wizard „Neues Foodbook für Kunde X" (Brief → KI-Gerüst-Vorschlag) ──
@@ -915,6 +1035,17 @@ class Index extends Component
             // E1.3: Einzel-Gericht-Picker (recipe_ref) — nur laden, wenn gesucht + Kapitel gewählt
             'gerichtKandidaten' => $this->gerichtSuche !== '' && $this->selectedKapitelId !== null
                 ? $svc->gerichtKandidaten($team, $this->gerichtSuche, 50) : collect(),
+            // Spec 19 E6.3: Kreativ-Skizzenfläche — Skizzen des gewählten Kapitels (Pakete + freie Einzel)
+            'ideenListe' => $this->selectedKapitelId !== null
+                ? app(IdeenService::class)->liste($team, $this->selectedKapitelId, null, $this->ideenPapierkorb)
+                : ['gruppen' => [], 'einzel' => collect()],
+            // „aus Bestand"-Quelle der Skizzenfläche (Reuse des VK-Gericht-Pickers)
+            'skizzeKandidaten' => $this->skizzeGerichtSuche !== '' && $this->selectedKapitelId !== null
+                ? $svc->gerichtKandidaten($team, $this->skizzeGerichtSuche, 50) : collect(),
+            // „bereits angelegt"-Zustand (Bestands-Foodbooks): Kapitel trägt schon Inhalt, aber keine Skizzen
+            'kapitelHatInhalt' => $this->selectedKapitelId !== null
+                && \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::where('chapter_id', $this->selectedKapitelId)
+                    ->whereIn('type', ['concept_ref', 'recipe_ref'])->exists(),
             // #369: CRM-Kunde-Picker
             'crmVerfuegbar' => $svc->crmVerfuegbar(),
             'firmen' => $svc->sucheFirmen($this->firmaSuche),

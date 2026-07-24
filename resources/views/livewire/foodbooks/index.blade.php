@@ -326,49 +326,103 @@
                     @if(($coverage ?? null) !== null && $coverage['hat_geruest'])
                         @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillRoute' => route('foodalchemist.verkauf.index')])
 
-                        {{-- Phase 3 (Weg B): per-Slot-Vorschläge → abstimmen → übernehmen. Ersetzt den Monolith
-                             „Konzept aus Gerüst". Voraussetzung: „Struktur anwenden" (Slot hat ein Kapitel). --}}
+                        {{-- Spec 19 E6.3: Die divergente Gericht-Findung ist in den Kreativ-Tab (Skizzen)
+                             gewandert — Skizzen erden NICHTS, erst das Kapitel-Go (E7) legt Konzepte/Blöcke
+                             an. Der frühere per-Slot-Vorschlags-Block ist hierher weitergeleitet. --}}
                         @if(!empty($frameSlots))
-                            <div class="space-y-2" data-slot-vorschlaege>
-                                <p class="{{ $label }}">Vorschläge je Slot — aus Bestand + Wissen, du stimmst ab</p>
-                                @foreach($frameSlots as $fs)
-                                    <div class="rounded-lg border border-black/5 px-3 py-2" wire:key="slotvor-{{ $fs['id'] }}">
-                                        <div class="flex items-center justify-between gap-2">
-                                            <span class="text-xs font-medium text-gray-800 truncate">{{ $fs['label'] }}
-                                                @if($fs['chapter_id'])<span class="text-[10px] text-emerald-600">· Kapitel ✓</span>@else<span class="text-[10px] text-amber-600">· erst „Struktur anwenden"</span>@endif
-                                            </span>
-                                            {{-- Leitstelle-Kaskade: entweder einzeln vorschlagen+abstimmen (✨) ODER das Konzept
-                                                 direkt füllen (Bestand = deterministisch gerankt · neu = KI, braucht Provider). --}}
-                                            <div class="flex items-center gap-1 shrink-0">
-                                                <button type="button" wire:click="vorschlaegeFuerSlot({{ $fs['id'] }})" class="{{ $btnGhostXs }} text-violet-600" wire:loading.attr="disabled" wire:target="vorschlaegeFuerSlot" @disabled(!$fs['chapter_id'])>✨ Vorschläge</button>
-                                                <span class="text-[10px] text-gray-400">·&nbsp;Konzept füllen:</span>
-                                                <button type="button" wire:click="slotFuellen({{ $fs['id'] }}, 'bestand')" class="{{ $btnGhostXs }} text-emerald-600" wire:loading.attr="disabled" wire:target="slotFuellen" @disabled(!$fs['chapter_id']) title="Konzept anlegen + mit passenden Bestands-Gerichten füllen (Niveau/Convenience-gerankt)">Bestand</button>
-                                                <button type="button" wire:click="slotFuellen({{ $fs['id'] }}, 'neu')" class="{{ $btnGhostXs }} text-gray-500" @disabled(!$fs['chapter_id']) title="Gerichte per KI neu erstellen (Niveau/Convenience/Kundentyp) — braucht gebundenen Provider">neu (KI)</button>
-                                            </div>
-                                        </div>
-                                        @if($slotFuellStatus[$fs['id']] ?? null)
-                                            <p class="mt-1 text-[10px] text-gray-500" data-slot-fuell-status wire:key="fuellst-{{ $fs['id'] }}">{{ $slotFuellStatus[$fs['id']] }}</p>
-                                        @endif
-                                        @if(!empty($slotVorschlaege[$fs['id']] ?? []))
-                                            <div class="mt-1.5 space-y-1">
-                                                @foreach($slotVorschlaege[$fs['id']] as $v)
-                                                    <div class="flex items-center gap-2 rounded bg-black/[0.02] px-2 py-1" wire:key="v-{{ $fs['id'] }}-{{ $v['id'] }}">
-                                                        <span class="flex-1 min-w-0 truncate text-xs text-gray-700">{{ $v['name'] }}<span class="text-[10px] text-gray-400"> · {{ $v['diet_form'] ?? '—' }}@if($v['sales_net'] !== null) · {{ number_format((float) $v['sales_net'], 2, ',', '.') }} €@endif</span></span>
-                                                        <button type="button" wire:click="uebernehmeGericht({{ $fs['id'] }}, {{ $v['id'] }})" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" title="übernehmen">✓</button>
-                                                        <button type="button" wire:click="verwerfeGericht({{ $fs['id'] }}, {{ $v['id'] }})" class="{{ $btnGhostXs }} text-gray-400 shrink-0" title="verwerfen">✕</button>
-                                                    </div>
-                                                @endforeach
-                                            </div>
-                                        @endif
-                                    </div>
-                                @endforeach
-                            </div>
+                            <button type="button" @click="tab = 'kreativ'; $dispatch('fb-goto', { tab: 'kreativ', anker: 'ideen' })"
+                                    class="{{ $btnGhost }} w-full justify-center text-violet-600" data-vorschlaege-forward>
+                                🎨 Gerichte je Kapitel im Kreativ-Tab skizzieren →
+                            </button>
                         @endif
                     @endif
                 </div>{{-- /Planung --}}
 
                 {{-- ═══ Tab: KREATIV (Kunde-DNA · später Geschmack/Tonalität) ═══ --}}
                 <div x-show="tab === 'kreativ'" x-cloak class="space-y-3" data-fb-panel="kreativ" data-fb-anker="ideen">
+                    {{-- Spec 19 E6.3: Kreativ-Skizzenfläche — divergente Ideen je Kapitel (frei · aus Bestand · KI frei).
+                         Skizzen sind Entwürfe und erden NICHTS: erst das Kapitel-Go (E7) legt Konzepte/Blöcke an.
+                         Paket-Bündelung per Mehrfachauswahl. Owner = links gewähltes Kapitel. --}}
+                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" data-fb-skizzen>
+                        <div class="{{ $cardAccent }}"></div>
+                        <div class="flex items-baseline justify-between gap-2">
+                            <p class="{{ $label }}">🎨 Skizzen{{ $kapitel ? ' — '.$kapitel->title : '' }}</p>
+                            @if($kapitel)
+                                <label class="flex items-center gap-1 text-[11px] text-gray-500">
+                                    <input type="checkbox" wire:model.live="ideenPapierkorb" class="rounded border-gray-300"> Papierkorb
+                                </label>
+                            @endif
+                        </div>
+
+                        @if(!$kapitel)
+                            <p class="text-xs text-gray-500">Wähle links ein Kapitel — Skizzen sammelst du <span class="font-medium">pro Kapitel</span>. Sie sind frei (erden nichts), bis du das Kapitel anlegst.</p>
+                        @else
+                            @if($ideenFehler)
+                                <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700" data-ideen-fehler>{{ $ideenFehler }}</div>
+                            @endif
+
+                            {{-- 3 Quellen: frei · aus Bestand · KI frei (gated) --}}
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <input type="text" wire:model="ideeTitel" wire:keydown.enter="ideeHinzu" placeholder="Freie Idee — Titel …" class="{{ $input }} flex-1" data-idee-titel>
+                                    <button type="button" wire:click="ideeHinzu" class="{{ $btnGhost }} shrink-0" data-idee-add>+ Idee</button>
+                                </div>
+                                <div>
+                                    <input type="text" wire:model.live.debounce.300ms="skizzeGerichtSuche" placeholder="aus Bestand — VK-Gericht suchen …" class="{{ $input }}" data-skizze-suche>
+                                    @if($skizzeKandidaten->isNotEmpty())
+                                        <div class="mt-1 space-y-1 max-h-56 overflow-y-auto">
+                                            @foreach($skizzeKandidaten as $g)
+                                                <div class="flex items-center gap-2 rounded bg-black/[0.02] px-2 py-1" wire:key="skz-{{ $g->id }}">
+                                                    <span class="flex-1 min-w-0 truncate text-xs text-gray-700">{{ $g->name }}@if(($g->sales_net ?? null) !== null)<span class="text-[10px] text-gray-400"> · {{ number_format((float) $g->sales_net, 2, ',', '.') }} €</span>@endif</span>
+                                                    <button type="button" wire:click="skizzeAusBestand({{ $g->id }})" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" title="als Skizze übernehmen">als Skizze</button>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+                                <button type="button" class="{{ $btnGhost }} w-full justify-center opacity-50 cursor-not-allowed" disabled
+                                        title="KI-Divergenz braucht einen gebundenen Provider (demo, E6.4) — solange frei schreiben oder aus Bestand übernehmen." data-ki-frei-gated>✨ KI-Ideen (braucht Provider)</button>
+                            </div>
+
+                            {{-- Bestands-Foodbooks: Slot-Konzepte da, Ideen-Phase übersprungen (UX 7) --}}
+                            @if($kapitelHatInhalt && empty($ideenListe['gruppen']) && $ideenListe['einzel']->isEmpty())
+                                <div class="rounded-lg bg-sky-500/10 border border-sky-500/25 px-2.5 py-1.5 text-[11px] text-sky-700" data-bereits-angelegt>Kapitel ist bereits angelegt — die Skizzen-Phase wurde übersprungen (Slot-Übernahme). Neue Skizzen ergänzen geht trotzdem.</div>
+                            @endif
+
+                            {{-- Mehrfachauswahl → zu Paket bündeln --}}
+                            @if(count($ideeAuswahl) > 0)
+                                <div class="flex items-center gap-2 rounded-lg bg-violet-500/10 border border-violet-500/25 px-2.5 py-1.5" data-paket-bilden>
+                                    <span class="text-[11px] text-violet-700 shrink-0">{{ count($ideeAuswahl) }} markiert</span>
+                                    <input type="text" wire:model="paketName" placeholder="Paket-Name …" class="{{ $input }} flex-1 !py-1">
+                                    <button type="button" wire:click="paketBilden" class="{{ $btnGhostXs }} text-violet-700 shrink-0">zu Paket bündeln</button>
+                                </div>
+                            @endif
+
+                            {{-- Paket-Gruppen --}}
+                            @foreach($ideenListe['gruppen'] as $grp)
+                                <div class="rounded-lg border border-violet-500/20 bg-violet-500/[0.03] px-3 py-2 space-y-1" wire:key="grp-{{ $grp['gruppe']->id }}" data-paket="{{ $grp['gruppe']->id }}">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="text-xs font-medium text-violet-800 truncate">📦 {{ $grp['gruppe']->name }}@if($grp['gruppe']->target_price_pp !== null)<span class="text-[10px] text-gray-500"> · {{ number_format((float) $grp['gruppe']->target_price_pp, 2, ',', '.') }} €/Gast</span>@endif</span>
+                                        <button type="button" wire:click="paketAufloesen({{ $grp['gruppe']->id }})" class="{{ $btnGhostXs }} text-gray-400 shrink-0" title="Paket auflösen">Paket auflösen</button>
+                                    </div>
+                                    @foreach($grp['ideen'] as $idee)
+                                        @include('foodalchemist::livewire.foodbooks.partials.skizze-zeile', ['idee' => $idee, 'imPaket' => true])
+                                    @endforeach
+                                    @if($grp['ideen']->isEmpty())<p class="text-[10px] text-gray-400">leer</p>@endif
+                                </div>
+                            @endforeach
+
+                            {{-- freie Einzel-Skizzen --}}
+                            @foreach($ideenListe['einzel'] as $idee)
+                                @include('foodalchemist::livewire.foodbooks.partials.skizze-zeile', ['idee' => $idee, 'imPaket' => false])
+                            @endforeach
+
+                            @if(empty($ideenListe['gruppen']) && $ideenListe['einzel']->isEmpty() && !$kapitelHatInhalt)
+                                <p class="text-xs text-gray-400" data-skizzen-leer>Noch keine Skizzen. Schreib eine freie Idee oder übernimm ein Gericht aus dem Bestand.</p>
+                            @endif
+                        @endif
+                    </div>
+
                     {{-- Ebene 2 der DNA-Kette: Kunde-DNA am CRM-Kunden (Nested-Livewire, Re-Mount via key bei Kunden-Wechsel) --}}
                     <livewire:foodalchemist.foodbooks.kunde-dna-panel :company-id="$fb->crm_company_id" :key="'kdna-'.($fb->crm_company_id ?? 'none')" />
 

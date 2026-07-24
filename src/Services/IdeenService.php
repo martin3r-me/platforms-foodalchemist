@@ -221,6 +221,20 @@ class IdeenService
         return $gruppe->refresh();
     }
 
+    /**
+     * Paket-Gruppe auflösen (E6.3-UI „Paket auflösen"): erst alle Mitglieder lösen (→ Einzel),
+     * dann die leere Gruppe soft-löschen. Team-eigen erzwungen (isOwnedBy übers Owner-Kapitel/
+     * -Konzept). Die Skizzen selbst bleiben erhalten — nur ihre Paket-Bindung fällt weg.
+     */
+    public function loescheGruppe(Team $team, int $id): void
+    {
+        $gruppe = $this->ownedGruppe($team, $id);
+        FoodAlchemistDishIdea::where('team_id', $team->id)
+            ->where('group_id', $gruppe->id)
+            ->update(['group_id' => null, 'target_form' => 'einzel']);
+        $gruppe->delete();
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     /**

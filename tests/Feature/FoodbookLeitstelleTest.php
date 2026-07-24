@@ -151,3 +151,97 @@ it('bedarfSetzen sichert Default-Eventtyp (FK) und Wareneinsatz-Ziel (%); Leerwe
         ->call('bedarfSetzen', 'default_event_type_id', '');
     expect($this->fb->refresh()->default_event_type_id)->toBeNull();
 });
+
+// ── E6.3 Kreativ-Skizzenfläche (Livewire: freie Idee · aus Bestand · Paket-Bündelung · verwerfen) ──
+
+it('ideeHinzu legt eine freie Skizze (entwurf) am gewählten Kapitel an', function () {
+    $chapterId = (int) $this->slot->refresh()->chapter_id;
+
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('kapitelWaehle', $chapterId)
+        ->set('ideeTitel', 'Ceviche vom Saibling')
+        ->call('ideeHinzu')
+        ->assertSet('ideeTitel', ''); // Feld nach Anlage geleert
+
+    $idee = \Platform\FoodAlchemist\Models\FoodAlchemistDishIdea::where('chapter_id', $chapterId)->first();
+    expect($idee)->not->toBeNull()
+        ->and($idee->title)->toBe('Ceviche vom Saibling')
+        ->and($idee->status)->toBe('entwurf')
+        ->and($idee->target_form)->toBe('einzel')
+        ->and($idee->sales_recipe_id)->toBeNull();
+});
+
+it('ideeHinzu ohne Titel meldet einen Fehler und legt nichts an', function () {
+    $chapterId = (int) $this->slot->refresh()->chapter_id;
+
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('kapitelWaehle', $chapterId)
+        ->set('ideeTitel', '   ')
+        ->call('ideeHinzu')
+        ->assertSet('ideenFehler', fn ($v) => is_string($v) && str_contains($v, 'Titel'));
+
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistDishIdea::where('chapter_id', $chapterId)->count())->toBe(0);
+});
+
+it('skizzeAusBestand übernimmt ein VK-Gericht als Skizze (loser Zeiger, kein Duplikat)', function () {
+    $chapterId = (int) $this->slot->refresh()->chapter_id;
+
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('kapitelWaehle', $chapterId)
+        ->call('skizzeAusBestand', $this->dish->id);
+
+    $idee = \Platform\FoodAlchemist\Models\FoodAlchemistDishIdea::where('chapter_id', $chapterId)->first();
+    expect($idee)->not->toBeNull()
+        ->and($idee->sales_recipe_id)->toBe($this->dish->id)
+        ->and($idee->title)->toBe('HG: Tomaten-Teller');
+    // Kein Konzept/Slot entstanden (Invariante: Skizzen erden nichts).
+    expect(FoodAlchemistConceptSlot::where('sales_recipe_id', $this->dish->id)->count())->toBe(0);
+});
+
+it('paketBilden bündelt markierte Skizzen; ausPaketLoesen + paketAufloesen kehren sie zurück auf einzel', function () {
+    $chapterId = (int) $this->slot->refresh()->chapter_id;
+    $svc = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+    $a = $svc->add($this->rootTeam, ['chapter_id' => $chapterId, 'title' => 'Gruß A']);
+    $b = $svc->add($this->rootTeam, ['chapter_id' => $chapterId, 'title' => 'Gruß B']);
+
+    $comp = Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('kapitelWaehle', $chapterId)
+        ->set('ideeAuswahl', [$a->id, $b->id])
+        ->set('paketName', 'Amuse-Bouche')
+        ->call('paketBilden')
+        ->assertSet('ideeAuswahl', []);
+
+    $gruppe = \Platform\FoodAlchemist\Models\FoodAlchemistDishIdeaGroup::where('chapter_id', $chapterId)->first();
+    expect($gruppe)->not->toBeNull()->and($gruppe->name)->toBe('Amuse-Bouche');
+    expect($a->refresh()->group_id)->toBe($gruppe->id)
+        ->and($a->target_form)->toBe('paket')
+        ->and($b->refresh()->group_id)->toBe($gruppe->id);
+
+    // Eine Skizze aus dem Paket lösen → einzel.
+    $comp->call('ausPaketLoesen', $a->id);
+    expect($a->refresh()->group_id)->toBeNull()->and($a->target_form)->toBe('einzel');
+
+    // Ganzes Paket auflösen → Gruppe weg, Rest-Mitglied wieder einzel.
+    $comp->call('paketAufloesen', $gruppe->id);
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistDishIdeaGroup::find($gruppe->id))->toBeNull();
+    expect($b->refresh()->group_id)->toBeNull()->and($b->target_form)->toBe('einzel');
+});
+
+it('ideeVerwerfen + ideeReaktivieren schalten den Skizzen-Status (entwurf ↔ verworfen)', function () {
+    $chapterId = (int) $this->slot->refresh()->chapter_id;
+    $idee = app(\Platform\FoodAlchemist\Services\IdeenService::class)
+        ->add($this->rootTeam, ['chapter_id' => $chapterId, 'title' => 'Testidee']);
+
+    $comp = Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('kapitelWaehle', $chapterId)
+        ->call('ideeVerwerfen', $idee->id);
+    expect($idee->refresh()->status)->toBe('verworfen');
+
+    $comp->call('ideeReaktivieren', $idee->id);
+    expect($idee->refresh()->status)->toBe('entwurf');
+});
