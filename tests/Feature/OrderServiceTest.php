@@ -883,4 +883,123 @@ describe('E3 · Preisstrategie-Switch + Neu quellen', function () {
             ->and($hanosOrder->refresh()->lines()->where('gp_id', $this->oel->id)->count())->toBe(0)
             ->and($chefsOrder->lines()->where('gp_id', $this->oel->id)->first()->supplier_item_id)->toBe($this->oelChefs->id);
     });
+
+    // ── E3b · Alternativ-Artikel je Zeile + Neu-quellen-UI ──
+
+    it('lineAlternativen: Rangliste ohne den aktuellen LA, mit Vergleichspreis + Schienen-Wechsel-Flag', function () {
+        $this->settings->update($this->rootTeam, ['lead_la_strategie' => LeadLaStrategie::GuenstigsterPreis]);
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');   // Öl → Chefs (2 €)
+        $chefsOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+        $line = $chefsOrder->lines()->where('gp_id', $this->oel->id)->first();
+        expect((int) $line->supplier_item_id)->toBe($this->oelChefs->id);
+
+        $alt = $this->svc->lineAlternativen($this->rootTeam, $line->id);
+        // Der aktuell gewählte Chefs-LA fällt raus, nur der Hanos-LA bleibt als Ausweichquelle.
+        expect($alt)->toHaveCount(1)
+            ->and($alt[0]['la_id'])->toBe($this->oelHanos->id)
+            ->and($alt[0]['supplier'])->toBe('Hanos')
+            ->and($alt[0]['schiene_wechsel'])->toBeTrue()
+            ->and($alt[0]['vergleichspreis'])->toBe(9.0);
+    });
+
+    it('switchLineArticle: anderer Lieferant → Zeile wandert in dessen Draft-Schiene', function () {
+        $this->settings->update($this->rootTeam, ['lead_la_strategie' => LeadLaStrategie::GuenstigsterPreis]);
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');   // Öl → Chefs
+        $chefsOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+        $line = $chefsOrder->lines()->where('gp_id', $this->oel->id)->first();
+
+        $res = $this->svc->switchLineArticle($this->rootTeam, $line->id, $this->oelHanos->id);
+
+        $hanosOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->where('status', 'draft')->first();
+        $hanosLine = $hanosOrder->lines()->where('gp_id', $this->oel->id)->first();
+        expect($res['schiene_wechsel'])->toBeTrue()
+            ->and($res['target_order_id'])->toBe($hanosOrder->id)
+            ->and((int) $hanosLine->supplier_item_id)->toBe($this->oelHanos->id)
+            ->and((float) $hanosLine->needed_base_g)->toBe(1000.0)
+            ->and((float) $hanosLine->pack_price)->toBe(9.0)
+            // Quell-Schiene: Öl-Zeile ist weg (Beitrag verschoben, nicht dupliziert).
+            ->and($chefsOrder->refresh()->lines()->where('gp_id', $this->oel->id)->count())->toBe(0);
+    });
+
+    it('switchLineArticle: gleicher Lieferant → nur der Artikel der Zeile wechselt (keine Schiene)', function () {
+        $oelChefs2 = FoodAlchemistSupplierItem::create([
+            'team_id' => $this->rootTeam->id, 'supplier_id' => $this->chefs->id,
+            'designation' => 'Oel 1kg Chefs Bio', 'article_number' => 'OEL-CHB',
+            'qty' => 1.0, 'unit_code' => 'kg', 'packaging_unit' => 'Kanister',
+        ]);
+        FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $oelChefs2->id, 'gp_id' => $this->oel->id]);
+        FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $oelChefs2->id, 'price' => 5.00, 'status' => '0']);
+
+        $this->settings->update($this->rootTeam, ['lead_la_strategie' => LeadLaStrategie::GuenstigsterPreis]);
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');   // Öl → Chefs (2-€-LA)
+        $chefsOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+        $line = $chefsOrder->lines()->where('gp_id', $this->oel->id)->first();
+
+        $res = $this->svc->switchLineArticle($this->rootTeam, $line->id, $oelChefs2->id);
+
+        $line->refresh();
+        expect($res['schiene_wechsel'])->toBeFalse()
+            ->and($res['target_order_id'])->toBeNull()
+            ->and((int) $line->supplier_item_id)->toBe($oelChefs2->id)
+            ->and((float) $line->pack_price)->toBe(5.0)
+            ->and($chefsOrder->refresh()->lines()->where('gp_id', $this->oel->id)->count())->toBe(1);   // keine zweite Schiene
+    });
+
+    it('switchLineArticle: LA einer fremden GP wird abgelehnt', function () {
+        $this->settings->update($this->rootTeam, ['lead_la_strategie' => LeadLaStrategie::GuenstigsterPreis]);
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');
+        $line = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first()
+            ->lines()->where('gp_id', $this->oel->id)->first();
+
+        // Ein LA ohne Struktur-Verknüpfung zur Öl-GP ist keine Ausweichquelle.
+        $fremd = FoodAlchemistSupplierItem::create([
+            'team_id' => $this->rootTeam->id, 'supplier_id' => $this->chefs->id,
+            'designation' => 'Salz 1kg', 'article_number' => 'SAL-1', 'qty' => 1.0, 'unit_code' => 'kg', 'packaging_unit' => 'Sack',
+        ]);
+        expect(fn () => $this->svc->switchLineArticle($this->rootTeam, $line->id, $fremd->id))
+            ->toThrow(\RuntimeException::class);
+    });
+
+    it('E3b UI: Preisstrategie-Select + Neu quellen (Vorschau → Anwenden) verschiebt die Schiene', function () {
+        $this->actingAs($this->makeUser($this->rootTeam));
+        $this->settings->update($this->rootTeam, ['lead_la_strategie' => LeadLaStrategie::PrioritaetsKette, 'lead_la_prioritaeten' => [$this->hanos->id]]);
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');   // Öl → Hanos
+        $hanosOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->first();
+
+        $comp = Livewire::test(OrdersIndex::class)
+            ->call('select', $hanosOrder->id)
+            ->set('formStrategy', 'guenstigster_preis')
+            ->call('neuQuellenVorschau')
+            ->assertSet('resourceVorschau', fn ($v) => is_array($v) && count($v['wechsel']) === 1);
+        // Vorschau persistiert nichts.
+        expect($hanosOrder->refresh()->lines()->where('gp_id', $this->oel->id)->count())->toBe(1);
+
+        $comp->call('neuQuellenAnwenden')
+            ->assertSet('hinweis', 'Neu gequellt.')
+            ->assertSet('resourceVorschau', null);
+
+        $chefsOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->where('status', 'draft')->first();
+        expect($chefsOrder->lines()->where('gp_id', $this->oel->id)->count())->toBe(1)
+            ->and($hanosOrder->refresh()->lines()->where('gp_id', $this->oel->id)->count())->toBe(0);
+    });
+
+    it('E3b UI: alternativeWaehlen stellt die Zeile auf den Ausweich-LA um + folgt in die neue Schiene', function () {
+        $this->actingAs($this->makeUser($this->rootTeam));
+        $this->settings->update($this->rootTeam, ['lead_la_strategie' => LeadLaStrategie::GuenstigsterPreis]);
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');   // Öl → Chefs
+        $chefsOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+        $line = $chefsOrder->lines()->where('gp_id', $this->oel->id)->first();
+
+        Livewire::test(OrdersIndex::class)
+            ->call('select', $chefsOrder->id)
+            ->call('alternativenUmschalten', $line->id)
+            ->assertSet('altLineId', $line->id)
+            ->call('alternativeWaehlen', $line->id, $this->oelHanos->id)
+            ->assertSet('hinweis', 'Artikel umgestellt.')
+            ->assertSet('altLineId', null);
+
+        $hanosOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->where('status', 'draft')->first();
+        expect($hanosOrder->lines()->where('gp_id', $this->oel->id)->count())->toBe(1)
+            ->and($chefsOrder->refresh()->lines()->where('gp_id', $this->oel->id)->count())->toBe(0);
+    });
 });

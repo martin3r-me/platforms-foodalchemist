@@ -201,6 +201,33 @@
                                         @elseif($z['note'])
                                             <div class="text-[10px] text-gray-500 mt-1 italic">{{ $z['note'] }}</div>
                                         @endif
+                                        {{-- E3b · Alternativ-Artikel (nur Bedarfs-Zeilen mit GP; leere Direktbestellungen ohne GP haben keine Ausweichquelle) --}}
+                                        @if($detail['editierbar'] && $z['gp_id'] !== null)
+                                            <button type="button" wire:click="alternativenUmschalten({{ $z['id'] }})"
+                                                class="mt-1 text-[10px] text-violet-600 hover:underline">
+                                                {{ $altLineId === $z['id'] ? '▾ Ausweichquelle schließen' : '⇄ Ausweichquelle' }}
+                                            </button>
+                                            @if($altLineId === $z['id'])
+                                                <div class="mt-1 rounded-md border border-violet-500/20 bg-violet-500/[0.03] p-1.5 space-y-0.5">
+                                                    @forelse($alternativen as $alt)
+                                                        <button type="button" wire:key="alt-{{ $z['id'] }}-{{ $alt['la_id'] }}"
+                                                            wire:click="alternativeWaehlen({{ $z['id'] }}, {{ $alt['la_id'] }})"
+                                                            @if($alt['schiene_wechsel']) onclick="return confirm('Anderer Lieferant ({{ $alt['supplier'] }}) — die Position wandert in dessen Bestellschiene. Fortfahren?')" @endif
+                                                            @disabled($alt['gesperrt'])
+                                                            class="block w-full text-left px-1.5 py-1 rounded hover:bg-black/[0.04] {{ $alt['gesperrt'] ? 'opacity-40 cursor-not-allowed' : '' }}">
+                                                            <span class="text-[11px] text-gray-800">{{ $alt['designation'] ?: '—' }}</span>
+                                                            <span class="text-[10px] text-gray-400 block">
+                                                                {{ $alt['supplier'] ?? '—' }}@if($alt['schiene_wechsel']) · andere Schiene @endif
+                                                                @if($alt['ist_stamm']) · Stamm @endif
+                                                                @if($alt['vergleichspreis'] !== null) · {{ number_format($alt['vergleichspreis'], 2, ',', '.') }} {{ $alt['vergleichspreis_einheit'] ?? '' }} @endif
+                                                            </span>
+                                                        </button>
+                                                    @empty
+                                                        <p class="text-[10px] text-gray-400 px-1">Keine Ausweichquelle für dieses Grundprodukt.</p>
+                                                    @endforelse
+                                                </div>
+                                            @endif
+                                        @endif
                                     </td>
                                     <td class="{{ $td }} text-right whitespace-nowrap text-gray-500">{{ rtrim(rtrim(number_format($z['needed_display'], 3, ',', '.'), '0'), ',') }} {{ $z['needed_unit'] }}</td>
                                     <td class="{{ $td }} text-right whitespace-nowrap">
@@ -297,6 +324,46 @@
                             @if($detail['reference'])<div><span class="text-gray-400">Anlass:</span> {{ $detail['reference'] }}</div>@endif
                             @if($detail['desired_delivery_date'])<div><span class="text-gray-400">Liefertermin:</span> {{ $detail['desired_delivery_date'] }}</div>@endif
                             @if($detail['note'])<div><span class="text-gray-400">Notiz:</span> {{ $detail['note'] }}</div>@endif
+                        </div>
+                    @endif
+
+                    {{-- E3b · Preisstrategie + „Neu quellen" (nur offener Entwurf) --}}
+                    @if($detail['editierbar'])
+                        <div class="space-y-2 pt-2 border-t border-black/5">
+                            <span class="{{ $label }} block">Preisstrategie</span>
+                            <select wire:model="formStrategy" class="{{ $input }}">
+                                <option value="">Haupteinstellung (Team)</option>
+                                @foreach($strategieOptionen as $s)
+                                    <option value="{{ $s->value }}">{{ $s->label() }}</option>
+                                @endforeach
+                            </select>
+                            @if($resourceVorschau === null)
+                                <button wire:click="neuQuellenVorschau" class="{{ $btnGhost }}" data-neu-quellen-vorschau>Neu quellen (Vorschau)</button>
+                            @else
+                                <div class="rounded-md border border-violet-500/20 bg-violet-500/[0.03] p-2 space-y-1">
+                                    @if(empty($resourceVorschau['wechsel']))
+                                        <p class="text-[11px] text-gray-500">Kein Wechsel unter dieser Strategie.</p>
+                                    @else
+                                        <p class="text-[11px] font-medium text-gray-700">{{ count($resourceVorschau['wechsel']) }} Position(en) wechseln:</p>
+                                        <ul class="space-y-0.5">
+                                            @foreach($resourceVorschau['wechsel'] as $w)
+                                                <li class="text-[10px] text-gray-600">
+                                                    {{ $w['gp'] }} → <span class="text-gray-800">{{ $w['nach_artikel'] ?: '—' }}</span>
+                                                    <span class="text-gray-400">({{ $w['nach_lieferant'] ?? '—' }}@if($w['schiene_wechsel']) · andere Schiene @endif)</span>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    @endif
+                                    <div class="flex gap-1.5 pt-1">
+                                        <button wire:click="neuQuellenAnwenden" class="{{ $btnPrimary }}" @disabled(empty($resourceVorschau['wechsel'])) data-neu-quellen-anwenden>Anwenden</button>
+                                        <button wire:click="neuQuellenAbbrechen" class="{{ $btnGhost }}">Abbrechen</button>
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+                    @elseif($detail['sourcing_strategy'])
+                        <div class="pt-2 border-t border-black/5 text-[11px] text-gray-600">
+                            <span class="text-gray-400">Preisstrategie:</span> {{ $detail['sourcing_strategy'] }}
                         </div>
                     @endif
 

@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Orders;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Enums\OrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
@@ -70,11 +71,24 @@ class Index extends Component
 
     public string $bedarfMenge = '';
 
+    // ── E3b · Preisstrategie-Switch + „Neu quellen" ──
+    /** Strategie-Override der aktiven Schiene ('' = Team-Haupteinstellung). */
+    public string $formStrategy = '';
+
+    /** Vorschau der Wechsel aus resourceOrder(apply=false); null = kein Dialog offen. */
+    public ?array $resourceVorschau = null;
+
+    // ── E3b · Alternativ-Artikel je Zeile ──
+    /** Zeile, deren Ausweichquellen-Dropdown offen ist (nur eine gleichzeitig). */
+    public ?int $altLineId = null;
+
     public function select(int $id): void
     {
         $this->selectedId = $id;
         $this->hinweis = null;
         $this->fehler = null;
+        $this->resourceVorschau = null;
+        $this->altLineId = null;
         $this->ladeKopf();
     }
 
@@ -84,6 +98,7 @@ class Index extends Component
         $this->formReference = '';
         $this->formDeliveryDate = '';
         $this->formNote = '';
+        $this->formStrategy = '';
         if ($this->selectedId === null) {
             return;
         }
@@ -93,6 +108,7 @@ class Index extends Component
             $this->formReference = (string) ($d['reference'] ?? '');
             $this->formDeliveryDate = (string) ($d['desired_delivery_date'] ?? '');
             $this->formNote = (string) ($d['note'] ?? '');
+            $this->formStrategy = (string) ($d['sourcing_strategy'] ?? '');
         } catch (\Throwable $e) {
             // Detail wird in render() ohnehin defensiv behandelt.
         }
@@ -137,6 +153,73 @@ class Index extends Component
     public function removeLine(int $lineId, OrderService $orders): void
     {
         $this->fuehreAus(fn ($team) => $orders->removeLine($team, $lineId), 'Position entfernt.');
+    }
+
+    // ── E3b · Alternativ-Artikel je Zeile ─────────────────────────────────
+
+    /** Ausweichquellen-Dropdown einer Zeile auf-/zuklappen (nur eine gleichzeitig). */
+    public function alternativenUmschalten(int $lineId): void
+    {
+        $this->altLineId = $this->altLineId === $lineId ? null : $lineId;
+    }
+
+    /** Zeile auf einen Ausweich-LA umstellen (gleicher Lieferant = Artikel-Tausch, sonst Schienen-Wechsel). */
+    public function alternativeWaehlen(int $lineId, int $laId, OrderService $orders): void
+    {
+        $this->fuehreAus(function ($team) use ($orders, $lineId, $laId) {
+            $res = $orders->switchLineArticle($team, $lineId, $laId, Auth::id());
+            $this->altLineId = null;
+            // Bei Schienen-Wechsel folgt die Auswahl der Zeile in ihre neue Schiene.
+            if ($res['schiene_wechsel'] && $res['target_order_id'] !== null) {
+                $this->selectedId = (int) $res['target_order_id'];
+                $this->ladeKopf();
+            }
+        }, 'Artikel umgestellt.');
+    }
+
+    // ── E3b · Preisstrategie-Switch + „Neu quellen" ───────────────────────
+
+    /** Vorschau: welche Zeilen wechseln unter der gewählten Strategie? (nichts wird persistiert) */
+    public function neuQuellenVorschau(OrderService $orders): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $this->hinweis = null;
+        $this->fehler = null;
+        $this->resourceVorschau = null;
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $strategie = $this->strategieAusForm();
+            $this->resourceVorschau = $orders->resourceOrder($team, $this->selectedId, $strategie, false, Auth::id());
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /** Neu quellen anwenden: Zeilen unter der Strategie neu auflösen + verschieben. */
+    public function neuQuellenAnwenden(OrderService $orders): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $this->fuehreAus(function ($team) use ($orders) {
+            $strategie = $this->strategieAusForm();
+            $orders->resourceOrder($team, $this->selectedId, $strategie, true, Auth::id());
+            $this->resourceVorschau = null;
+            $this->ladeKopf();
+        }, 'Neu gequellt.');
+    }
+
+    public function neuQuellenAbbrechen(): void
+    {
+        $this->resourceVorschau = null;
+    }
+
+    /** '' = Team-Haupteinstellung (null), sonst der gewählte LeadLaStrategie-Override. */
+    private function strategieAusForm(): ?LeadLaStrategie
+    {
+        return $this->formStrategy !== '' ? LeadLaStrategie::tryFrom($this->formStrategy) : null;
     }
 
     private function fuehreAus(callable $fn, string $ok): void
@@ -345,6 +428,16 @@ class Index extends Component
                 ])->values();
         }
 
+        // ── E3b · Alternativ-Artikel: nur die aktuell aufgeklappte Zeile lädt ihre Rangliste ──
+        $alternativen = [];
+        if ($this->altLineId !== null && $detail !== null && $detail['editierbar']) {
+            try {
+                $alternativen = $orders->lineAlternativen($team, $this->altLineId);
+            } catch (\Throwable $e) {
+                $this->altLineId = null;
+            }
+        }
+
         return view('foodalchemist::livewire.orders.index', [
             'liste' => $liste,
             'lieferanten' => $lieferanten,
@@ -354,6 +447,8 @@ class Index extends Component
             'detail' => $detail,
             'erlaubteStatus' => $erlaubteStatus,
             'mailto' => $mailto,
+            'alternativen' => $alternativen,
+            'strategieOptionen' => LeadLaStrategie::cases(),
         ])->layout('platform::layouts.app');
     }
 }

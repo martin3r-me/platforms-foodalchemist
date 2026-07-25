@@ -396,18 +396,10 @@ class OrderService
 
         $touched = [(int) $order->id => $order];
         foreach ($moves as [$line, $sameSupplier, $newSupplierId, $newLaId, $gpId]) {
-            if ($sameSupplier) {
-                $line->supplier_item_id = $newLaId;   // Artikel wechselt, Schiene bleibt
-                $line->save();
-
-                continue;
+            $target = $this->applyLaSwitch($team, $line, $sameSupplier, $newSupplierId, $newLaId, $gpId, $userId);
+            if ($target !== null) {
+                $touched[(int) $target->id] = $target;
             }
-            $targetDraft = $this->draftForSupplier($team, $newSupplierId, $userId);
-            foreach ($line->source_contributions ?? [] as $ref => $g) {
-                $this->upsertContribution($team, $targetDraft, ['lead_la_id' => $newLaId, 'gp_id' => $gpId, 'menge_g' => $g], (string) $ref);
-            }
-            $line->delete();                          // Beitrag verschoben, nicht dupliziert
-            $touched[(int) $targetDraft->id] = $targetDraft;
         }
 
         $order->sourcing_strategy = $strategie?->value;   // Override an der Schiene vermerken (NULL = Haupteinstellung)
@@ -420,6 +412,123 @@ class OrderService
             'strategie' => $strategie?->value,
             'wechsel' => $wechsel,
             'orders' => array_values(array_map(fn ($o) => (int) $o->id, $touched)),
+        ];
+    }
+
+    /**
+     * Spec 20 · E3 — eine Zeile auf einen anderen Lead-LA umziehen (gemeinsamer Motor für
+     * resourceOrder + E3b-Einzelwechsel). Gleicher Lieferant ⇒ nur der Artikel der Zeile
+     * wechselt (Schiene bleibt, gibt NULL zurück). Anderer Lieferant ⇒ die Beiträge wandern
+     * idempotent (E10) in dessen Draft-Schiene und die Quell-Zeile fällt weg — bei einer
+     * beitragslosen (manuellen) Zeile wandert stattdessen die manuelle Menge mit. Rückgabe:
+     * die Ziel-Draft-Schiene bei Lieferanten-Wechsel, sonst NULL.
+     */
+    private function applyLaSwitch(Team $team, FoodAlchemistOrderLine $line, bool $sameSupplier, int $newSupplierId, int $newLaId, int $gpId, ?int $userId): ?FoodAlchemistOrder
+    {
+        if ($sameSupplier) {
+            $line->supplier_item_id = $newLaId;   // Artikel wechselt, Schiene bleibt
+            $line->save();
+
+            return null;
+        }
+        $targetDraft = $this->draftForSupplier($team, $newSupplierId, $userId);
+        $contribs = $line->source_contributions ?? [];
+        if (! empty($contribs)) {
+            foreach ($contribs as $ref => $g) {
+                $this->upsertContribution($team, $targetDraft, ['lead_la_id' => $newLaId, 'gp_id' => $gpId, 'menge_g' => $g], (string) $ref);
+            }
+        } else {
+            // Beitragslose (manuelle) Zeile: manuelle Menge in die Ziel-Schiene übernehmen.
+            $this->addManualLine($team, $newLaId, (float) $line->qty_packs, $line->note, $userId);
+        }
+        $line->delete();   // Beitrag/Menge verschoben, nicht dupliziert
+
+        return $targetDraft;
+    }
+
+    /**
+     * Spec 20 · E3b — Ausweichquellen einer Bedarfs-Zeile fürs Panel-2-Dropdown: die
+     * GP-Rangliste (V-27) ohne den aktuell gewählten LA, jeweils mit Vergleichspreis und
+     * Schienen-Wechsel-Hinweis (anderer Lieferant als die aktuelle Schiene). Nur eigene,
+     * offene Belege; leere Liste bei Zeile ohne GP.
+     *
+     * @return list<array{la_id:int, designation:?string, supplier:?string, supplier_id:?int, vergleichspreis:?float, vergleichspreis_einheit:?string, ist_stamm:bool, gesperrt:bool, schiene_wechsel:bool}>
+     */
+    public function lineAlternativen(Team $team, int $lineId): array
+    {
+        $line = $this->ownedDraftLine($team, $lineId);
+        if ($line->gp_id === null) {
+            return [];
+        }
+        $gp = FoodAlchemistGp::find($line->gp_id);
+        if ($gp === null) {
+            return [];
+        }
+        $aktuelleSchieneSupplier = (int) $line->order->supplier_id;
+        $aktuellLa = $line->supplier_item_id !== null ? (int) $line->supplier_item_id : null;
+
+        return $this->leadLa->rangliste($gp, $team)
+            ->reject(fn ($la) => (int) $la->id === $aktuellLa)   // Rang > „aktuell" (der gewählte LA fällt raus)
+            ->map(fn ($la) => [
+                'la_id' => (int) $la->id,
+                'designation' => $la->designation,
+                'supplier' => $la->supplier_name,
+                'supplier_id' => $la->supplier_id !== null ? (int) $la->supplier_id : null,
+                'vergleichspreis' => $la->vergleichspreis_wert !== null ? (float) $la->vergleichspreis_wert : null,
+                'vergleichspreis_einheit' => $la->vergleichspreis['unit'] ?? null,
+                'ist_stamm' => (bool) $la->ist_stamm,
+                'gesperrt' => (bool) $la->locked,
+                'schiene_wechsel' => $la->supplier_id !== null && (int) $la->supplier_id !== $aktuelleSchieneSupplier,
+            ])
+            ->values()->all();
+    }
+
+    /**
+     * Spec 20 · E3b — eine einzelne OFFENE Bedarfs-Zeile manuell auf einen Ausweich-LA ihrer
+     * GP-Rangliste umstellen (Alternativ-Artikel-Dropdown). Gleicher Lieferant ⇒ nur der
+     * Artikel wechselt; anderer Lieferant ⇒ die Zeile wandert in dessen Draft-Schiene (über
+     * denselben applyLaSwitch-Motor wie „Neu quellen"). Der Ziel-LA muss ein Rangliste-
+     * Kandidat der GP sein (I2-analog). Nur eigene, offene Belege.
+     *
+     * @return array{order_id:int, target_order_id:?int, schiene_wechsel:bool}
+     */
+    public function switchLineArticle(Team $team, int $lineId, int $newLaId, ?int $userId = null): array
+    {
+        $line = $this->ownedDraftLine($team, $lineId);
+        if ($line->gp_id === null) {
+            throw new \RuntimeException('Zeile ohne Grundprodukt — kein Alternativ-Artikel wählbar.');
+        }
+        $gp = FoodAlchemistGp::find($line->gp_id);
+        if ($gp === null) {
+            throw new \RuntimeException('Grundprodukt nicht gefunden.');
+        }
+        $kandidat = $this->leadLa->rangliste($gp, $team)->firstWhere('id', $newLaId);
+        if ($kandidat === null) {
+            throw new \RuntimeException('Artikel gehört nicht zu den Ausweichquellen dieses Grundprodukts.');
+        }
+        if ($kandidat->supplier_id === null) {
+            throw new \RuntimeException('Artikel ohne Lieferant — nicht bestellbar.');
+        }
+        $sourceOrderId = (int) $line->order_id;
+        if ((int) $newLaId === ($line->supplier_item_id !== null ? (int) $line->supplier_item_id : null)) {
+            return ['order_id' => $sourceOrderId, 'target_order_id' => null, 'schiene_wechsel' => false];
+        }
+
+        $sameSupplier = (int) $kandidat->supplier_id === (int) $line->order->supplier_id;
+        $target = $this->applyLaSwitch($team, $line, $sameSupplier, (int) $kandidat->supplier_id, (int) $newLaId, (int) $gp->id, $userId);
+
+        $sourceOrder = FoodAlchemistOrder::find($sourceOrderId);
+        if ($sourceOrder !== null) {
+            $this->recomputeOrder($sourceOrder);
+        }
+        if ($target !== null) {
+            $this->recomputeOrder($target->refresh());
+        }
+
+        return [
+            'order_id' => $sourceOrderId,
+            'target_order_id' => $target?->id !== null ? (int) $target->id : null,
+            'schiene_wechsel' => $target !== null,
         ];
     }
 
