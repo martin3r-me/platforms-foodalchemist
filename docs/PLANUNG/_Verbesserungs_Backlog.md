@@ -64,3 +64,11 @@
 - **Warum es zählt:** Eine Allow-Liste, die Keys ohne Aufrufer führt, verliert ihre Aussagekraft — man kann nicht mehr ablesen, was das System wirklich kann.
 - **Level-up-Vorschlag:** Entweder mit 03·L6 einlösen (dann sind sie korrekt) oder bis dahin als „reserviert für L6" kommentieren. Zusätzlich ein Test, der Allow-Liste gegen tatsächliche `propose()`-Aufrufe abgleicht.
 - **Berührt:** Spec 03 (L6)
+
+### V-005 · Jedes Lücken-Prädikat steht zweimal im DataQualityService
+- **Kategorie:** tech-debt   **Größe:** M   **Status:** neu
+- **Gefunden:** 2026-07-25, Lauf zu 21·S0 · `src/Services/DataQualityService.php` — Zähl-Seite `basisrezepte()`/`gerichte()`/`gp()` (ab Z. 103) vs. `queryFor()` (ab Z. 300)
+- **Beobachtung:** Die Zähl-Methoden bauen ihr Prädikat inline (`$this->rezepte($team,false)->whereNull('ek_total_eur')`), `queryFor()` baut für „reinschauen"/`countFor()` **dasselbe Prädikat ein zweites Mal** (`case 'br_ek_null'`). Betrifft aktuell 13 von 14 Metriken. Der Docblock über `queryFor()` behauptet „dieselben Prädikate … eine Regel-Stelle, kein Drift" — faktisch sind es zwei Stellen, die nur zufällig übereinstimmen.
+- **Warum es zählt:** Ändert man eine Regel nur auf der Zähl-Seite, zeigt die Ampel eine Zahl, die Objekt-Liste eine andere — und der Fixer-Lifecycle („Signal schließen, wenn `countFor()==0`") schließt gegen das *alte* Prädikat. Spec 21 verdoppelt den Bestand: Tranche A allein bringt 11 weitere Doppel-Prädikate, C+D nochmal ~10.
+- **Level-up-Vorschlag:** Prädikat je Metrik **einmal** definieren (Map `metrik → Closure(Builder)`); die Zähl-Seite ruft `queryFor(...)->count()` statt eigenem Where. Vor Tranche A sinnvoller als danach — dann werden die 11 neuen Checks gleich einstellig definiert.
+- **Berührt:** Spec 21 (S1/S4), Spec 05

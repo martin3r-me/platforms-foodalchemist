@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Services\SignalService;
 
 /**
@@ -35,7 +36,8 @@ class SignaleListTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'type' => 'object',
             'properties' => [
                 'status' => ['type' => 'string', 'description' => 'Optionaler Status (offen/erledigt/ignoriert). Leer = alle (Default).'],
-                'type' => ['type' => 'string', 'enum' => ['preis_anomalie', 'preis_sprung_marge_impact', 'veraltete_preise', 'marge_unter_ziel', 'wareneinsatz_ueber_ziel', 'datenqualitaet_gp_la', 'naehrwert_plausi']],
+                // Aus dem Enum abgeleitet (seiteneffektfrei) — siehe SignaleSearchTool.
+                'type' => ['type' => 'string', 'enum' => array_column(SignalTyp::cases(), 'value')],
                 'page' => ['type' => 'integer', 'minimum' => 1, 'default' => 1, 'description' => 'Seitennummer (last_page aus der Vorantwort).'],
                 'per_page' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 100, 'description' => 'Seitengröße (max. 200).'],
             ],

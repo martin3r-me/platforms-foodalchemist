@@ -119,4 +119,65 @@ trait SeedsTeamHierarchy
             'name' => $name,
         ]);
     }
+
+    // ---- Rezeptur-Fixtures (Spec 21 S0) ----------------------------------
+    //
+    // Die Qualitäts-Checks brauchen Rezepte mit realistischen Feld-Kombinationen
+    // (Zubereitung, Mengen, Ausbeute, Kategorie). Vorher baute jeder Test seine
+    // Rezepte inline — mit je eigener Default-Wahl, was die Checks schwer
+    // vergleichbar macht. Diese Helfer setzen einen bewusst „sauberen" Default:
+    // ein so erzeugtes Rezept darf KEINEN Tranche-A-Check auslösen, damit Tests
+    // gezielt genau ein Feld verschlechtern und den Negativfall gratis bekommen.
+
+    protected static int $recipeSeq = 0;
+
+    /**
+     * Qualitativ unauffälliges Rezept. $attrs überschreibt gezielt einzelne Felder.
+     */
+    protected function makeRecipe(Team $owner, string $name, array $attrs = []): \Platform\FoodAlchemist\Models\FoodAlchemistRecipe
+    {
+        self::$recipeSeq++;
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create(array_merge([
+            'team_id' => $owner->id,
+            'recipe_key' => 'fixture-' . self::$recipeSeq . '-' . mb_strtolower(str_replace(' ', '-', $name)),
+            'name' => $name,
+            'status' => 'approved',
+            'is_sales_recipe' => false,
+            'preparation' => 'Alle Zutaten abwiegen, zusammenführen und auf Temperatur bringen.',
+            'yield_kg' => 1.0,
+            'n_ingredients_total' => 2,
+            'n_ingredients_unmapped' => 0,
+        ], $attrs));
+    }
+
+    /** Einheit „g" (idempotent je Team) — Zutaten brauchen eine Mengen-Einheit. */
+    protected function unitG(Team $owner): \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit
+    {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::firstOrCreate(
+            ['team_id' => $owner->id, 'slug' => 'g'],
+            ['display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]
+        );
+    }
+
+    /** Rezept-Zutat mit GP-Mapping (gp_id = null ⇒ ungemappt). */
+    protected function makeIngredient(
+        \Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe,
+        string $rawText,
+        ?FoodAlchemistGp $gp = null,
+        string $quantity = '100',
+        int $position = 1
+    ): \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient {
+        $team = Team::findOrFail($recipe->team_id);
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
+            'team_id' => $recipe->team_id,
+            'recipe_id' => $recipe->id,
+            'gp_id' => $gp?->id,
+            'raw_text' => $rawText,
+            'quantity' => $quantity,
+            'unit_vocab_id' => $this->unitG($team)->id,
+            'position' => $position,
+        ]);
+    }
 }

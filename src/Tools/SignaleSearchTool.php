@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Services\SignalService;
 
 /** Phase C: Signale (Daten-/Preis-/Margen-Alerts) durchsuchen. */
@@ -29,7 +30,9 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
             'type' => 'object',
             'properties' => [
                 'status' => ['type' => 'string', 'description' => 'offen (Default) | abgeschlossen | ignoriert | leer = alle'],
-                'type' => ['type' => 'string', 'enum' => ['preis_anomalie', 'preis_sprung_marge_impact', 'veraltete_preise', 'marge_unter_ziel', 'wareneinsatz_ueber_ziel', 'datenqualitaet_gp_la', 'naehrwert_plausi']],
+                // Aus dem Enum abgeleitet (seiteneffektfrei) — eine handgepflegte Liste war bereits
+                // auf 7 von 14 Typen zurückgefallen und hätte mit Spec 21 weiter driftet.
+                'type' => ['type' => 'string', 'enum' => array_column(SignalTyp::cases(), 'value')],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 20],
             ],
         ];

@@ -44,6 +44,7 @@ class DataQualityService
             'gp' => ['label' => 'Grundprodukte', 'metriken' => $this->gp($team)],
             'basisrezept' => ['label' => 'Basisrezepte', 'metriken' => $this->basisrezepte($team)],
             'gericht' => ['label' => 'VK-Gerichte', 'metriken' => $this->gerichte($team)],
+            'rezeptqualitaet' => ['label' => 'Rezept-Qualität', 'metriken' => $this->rezeptqualitaet($team)],
             'quer' => ['label' => 'Querschnitt', 'metriken' => $this->quer($team)],
         ];
     }
@@ -66,7 +67,9 @@ class DataQualityService
                 $this->signals->erzeuge(
                     $team,
                     $m['signal']['typ'],
-                    $wert > self::ROT_SCHWELLE ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
+                    // Fester Schweregrad je Check schlägt die reine Mengen-Heuristik: „ohne Zubereitung"
+                    // ist auch bei 3 Treffern kritisch, „verwaist" auch bei 300 nur Info (Spec 21 §2).
+                    $m['signal']['sev'] ?? ($wert > self::ROT_SCHWELLE ? SignalSeverity::Kritisch : SignalSeverity::Warnung),
                     $wert . ' — ' . $m['label'],
                     [
                         'dedup_key' => $m['signal']['dedup'],
@@ -185,6 +188,30 @@ class DataQualityService
         ];
     }
 
+    /**
+     * Spec 21 Tranche A — Inhalts-Qualität der Rezeptur selbst (deterministisch, 0-Egress).
+     *
+     * Abgrenzung: die Ebenen `basisrezept`/`gericht` messen Geld (EK-Kette), Erdung (Anker)
+     * und Servierform — also ob ein Rezept *auflöst*. Diese Sektion misst, ob es *taugt*:
+     * Zubereitung, Mengen, Ausbeute, Benennung, Kategorie, Allergen-Belastbarkeit.
+     * Sie spannt bewusst über beide Rezept-Arten (Basisrezept + VK-Gericht), weil die
+     * Rezeptur-Regeln (Regelwerk_Basisrezepte) für beide gelten.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function rezeptqualitaet(Team $team): array
+    {
+        $zutatenUngemappt = $this->alleRezepte($team)->where('n_ingredients_unmapped', '>', 0)->count();
+
+        return [
+            $this->gap('rezept_zutaten_ungemappt', 'Rezepte mit ungemappten Zutaten', $zutatenUngemappt,
+                SignalTyp::RezeptZutatenUngemappt, 'dq-rezept-zutaten-ungemappt',
+                'Zutaten ohne GP-Mapping zählen weder in EK noch in Allergene/Nährwerte — jede Aggregation '
+                . 'am Rezept ist damit systematisch unvollständig.',
+                SignalSeverity::Warnung),
+        ];
+    }
+
     /** @return list<array<string,mixed>> */
     private function quer(Team $team): array
     {
@@ -206,6 +233,12 @@ class DataQualityService
     private function rezepte(Team $team, bool $vk): \Illuminate\Database\Eloquent\Builder
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->where('is_sales_recipe', $vk);
+    }
+
+    /** Basis-Query über BEIDE Rezept-Arten — Tranche-A-Regeln gelten für Basisrezept wie VK-Gericht. */
+    private function alleRezepte(Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        return FoodAlchemistRecipe::visibleToTeam($team);
     }
 
     /** EXISTS: GP ist in mindestens einer Rezept-Zutat genutzt. */
@@ -325,6 +358,9 @@ class DataQualityService
                 return [$this->rezepte($team, true)->whereExists(fn ($x) => $x->select(DB::raw(1))
                     ->from('foodalchemist_recipe_presentations as p')->whereColumn('p.recipe_id', 'foodalchemist_recipes.id')
                     ->where('p.serving_form_id', $unbId)->where('p.is_standard', true)->whereNull('p.deleted_at')), 'recipe'];
+            // ---- Spec 21 Tranche A (Rezept-Inhalts-Qualität) ----
+            case 'rezept_zutaten_ungemappt':
+                return [$this->alleRezepte($team)->where('n_ingredients_unmapped', '>', 0), 'recipe'];
             case 'ri_gemini_unverifiziert':
                 return [FoodAlchemistRecipe::visibleToTeam($team)->whereExists(fn ($q) => $q->select(DB::raw(1))
                     ->from('foodalchemist_recipe_ingredients as ri')->whereColumn('ri.recipe_id', 'foodalchemist_recipes.id')
@@ -359,12 +395,15 @@ class DataQualityService
     /**
      * Lücken-Metrik: grün bei 0, gelb bis Schwelle, rot darüber. Optionaler
      * Signal-Deskriptor (Typ + dedup_key + Beschreibung) für die --signals-Emission.
+     *
+     * $sev setzt den Signal-Schweregrad fix, statt ihn aus der Trefferzahl abzuleiten —
+     * die Ampel-Farbe der Metrik bleibt davon unberührt (sie zeigt weiter die Menge).
      */
-    private function gap(string $key, string $label, int $wert, ?SignalTyp $typ = null, ?string $dedup = null, ?string $desc = null): array
+    private function gap(string $key, string $label, int $wert, ?SignalTyp $typ = null, ?string $dedup = null, ?string $desc = null, ?SignalSeverity $sev = null): array
     {
         $severity = $wert === 0 ? 'gruen' : ($wert > self::ROT_SCHWELLE ? 'rot' : 'gelb');
         $signal = ($typ !== null && $dedup !== null)
-            ? ['typ' => $typ, 'dedup' => $dedup, 'desc' => $desc]
+            ? ['typ' => $typ, 'dedup' => $dedup, 'desc' => $desc, 'sev' => $sev]
             : null;
 
         return ['key' => $key, 'label' => $label, 'wert' => $wert, 'severity' => $severity, 'signal' => $signal];

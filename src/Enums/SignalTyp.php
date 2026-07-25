@@ -28,6 +28,19 @@ enum SignalTyp: string
     case WiderspruchWissenGraph = 'widerspruch_wissen_graph';
     // Spec 19 E9.3: Kreativ-Phase wünscht ein Aroma, das kein beschaffbarer GP trägt (Sortiments-/Buy-Signal).
     case SortimentsLuecke = 'sortiments_luecke';
+    // Spec 21 Tranche A: Inhalts-Qualität auf Rezept-Ebene (deterministisch, 0-Egress).
+    // Bis dahin prüfte das System am Rezept nur EK-Kette, Flavor-Anker und Servierform.
+    case RezeptOhneZubereitung = 'rezept_ohne_zubereitung';
+    case RezeptMengenLuecke = 'rezept_mengen_luecke';
+    case RezeptYieldImplausibel = 'rezept_yield_implausibel';
+    case RezeptEinZutat = 'rezept_ein_zutat';
+    case RezeptNamingRegelwerk = 'rezept_naming_regelwerk';
+    case RezeptDublette = 'rezept_dublette';
+    case RezeptKategorieProblem = 'rezept_kategorie_problem';
+    case RezeptAllergenUnbelastbar = 'rezept_allergen_unbelastbar';
+    case RezeptZutatenUngemappt = 'rezept_zutaten_ungemappt';
+    case RezeptSubStubOffen = 'rezept_sub_stub_offen';
+    case RezeptVerwaist = 'rezept_verwaist';
 
     public function label(): string
     {
@@ -46,6 +59,17 @@ enum SignalTyp: string
             self::VertragsfristFaellig => 'Vertragsfrist fällig',
             self::WiderspruchWissenGraph => 'Widerspruch Wissen ↔ Graph',
             self::SortimentsLuecke => 'Sortiments-Lücke',
+            self::RezeptOhneZubereitung => 'Rezept ohne Zubereitung',
+            self::RezeptMengenLuecke => 'Rezept mit Mengen-Lücke',
+            self::RezeptYieldImplausibel => 'Rezept-Ausbeute implausibel',
+            self::RezeptEinZutat => 'Rezept mit nur einer Zutat',
+            self::RezeptNamingRegelwerk => 'Rezept-Name gegen Regelwerk',
+            self::RezeptDublette => 'Rezept-Dublette',
+            self::RezeptKategorieProblem => 'Rezept-Kategorie fehlt/stillgelegt',
+            self::RezeptAllergenUnbelastbar => 'Rezept-Allergene unbelastbar',
+            self::RezeptZutatenUngemappt => 'Rezept mit ungemappten Zutaten',
+            self::RezeptSubStubOffen => 'Sub-Rezept-Stub offen',
+            self::RezeptVerwaist => 'Rezept verwaist',
         };
     }
 
@@ -67,6 +91,27 @@ enum SignalTyp: string
             self::VertragsfristFaellig => 'heroicon-o-calendar-days',
             self::WiderspruchWissenGraph => 'heroicon-o-light-bulb',
             self::SortimentsLuecke => 'heroicon-o-shopping-bag',
+            self::RezeptOhneZubereitung => 'heroicon-o-document-minus',
+            self::RezeptMengenLuecke => 'heroicon-o-scale',
+            self::RezeptYieldImplausibel => 'heroicon-o-arrows-up-down',
+            self::RezeptEinZutat => 'heroicon-o-cube',
+            self::RezeptNamingRegelwerk => 'heroicon-o-pencil-square',
+            self::RezeptDublette => 'heroicon-o-document-duplicate',
+            self::RezeptKategorieProblem => 'heroicon-o-folder-minus',
+            self::RezeptAllergenUnbelastbar => 'heroicon-o-shield-exclamation',
+            self::RezeptZutatenUngemappt => 'heroicon-o-link-slash',
+            self::RezeptSubStubOffen => 'heroicon-o-puzzle-piece',
+            self::RezeptVerwaist => 'heroicon-o-archive-box',
         };
+    }
+
+    /**
+     * Spec 21 Tranche A — Rezept-Inhalts-Qualität (deterministisch, 0-Egress).
+     * Abgrenzung zu den älteren Kaskaden-Typen (EK/Anker/Servierform), die Geld-
+     * bzw. Erdungs-Lücken messen statt der Rezeptur selbst.
+     */
+    public function istRezeptQualitaet(): bool
+    {
+        return str_starts_with($this->value, 'rezept_');
     }
 }
