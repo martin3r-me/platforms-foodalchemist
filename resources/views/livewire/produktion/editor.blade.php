@@ -161,9 +161,7 @@
                         <tr class="border-t border-black/5">
                             <td class="{{ $td }}">{{ $r['name'] }} @if($r['ist_basisrezept'])<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Basisrezept</span>@endif</td>
                             <td class="{{ $td }} text-right tabular-nums">{{ rtrim(rtrim(number_format($r['ansaetze'], 2, ',', '.'), '0'), ',') }}</td>
-                            <td class="{{ $td }} text-right tabular-nums">
-                                @if($r['portionen'] !== null){{ $r['portionen'] }} Port.@elseif($r['produzierte_menge_kg'] !== null){{ number_format($r['produzierte_menge_kg'], 2, ',', '.') }} kg@else—@endif
-                            </td>
+                            <td class="{{ $td }} text-right tabular-nums">{{ $r['portionen'] !== null ? $r['portionen'] . ' Port.' : ($r['produzierte_menge_kg'] !== null ? number_format($r['produzierte_menge_kg'], 2, ',', '.') . ' kg' : '—') }}</td>
                             <td class="{{ $td }} text-right tabular-nums">{{ $r['arbeitszeit_min'] !== null ? $r['arbeitszeit_min'] . ' min' : '—' }}</td>
                         </tr>
                     @endforeach

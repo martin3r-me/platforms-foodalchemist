@@ -38,7 +38,9 @@ class Editor extends Component
     /** concept | recipe (VK-Gericht) | basisrezept (P1) | kapitel (Foodbook-Kapitel, P2). */
     public string $zielTyp = 'concept';
 
-    public ?int $auswahlConceptId = null;
+    // Untyped (nicht ?int): Livewire kann leeren String "" aus Select/Input nicht in ?int hydrieren
+    // (500 TypeError). Alle Verwendungen casten selbst per (int). Siehe auch auswahlChapterId/-Personen.
+    public $auswahlConceptId = null;
 
     public ?int $auswahlRecipeId = null;
 
@@ -48,11 +50,11 @@ class Editor extends Component
     public string $basisEinheit = 'ansaetze';
 
     /** Nur für zielTyp='kapitel' (P2): Foodbook + Kapitel + Personenzahl + Varianten-Wahl. */
-    public ?int $auswahlFoodbookId = null;
+    public $auswahlFoodbookId = null;
 
-    public ?int $auswahlChapterId = null;
+    public $auswahlChapterId = null;
 
-    public ?int $auswahlPersonen = null;
+    public $auswahlPersonen = null;
 
     /** variant_group_id ⇒ gewählte block_id (Kapitel-Ziel). */
     public array $variantChoices = [];
