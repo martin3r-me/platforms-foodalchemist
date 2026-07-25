@@ -39,6 +39,7 @@ const REGISTRY_SOLL = [
     // Signale-Cockpit: KI-Fixer + Assistenzen hinter „KI erledigen lassen" (2026-07-21)
     'signal.supplier_inquiry' => 'B', 'signal.margin_levers' => 'B',
     'signal.vk_release_advice' => 'B', 'signal.serving_form_suggest' => 'B',
+    'signal.recipe_category_suggest' => 'B',                          // Spec 21 Tranche A: Assist zu rezept_kategorie_problem
 ];
 
 it('Registry vollständig: alle Soll-Keys vorhanden, mit task + gültigem Tier', function () {

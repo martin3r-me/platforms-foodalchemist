@@ -148,7 +148,41 @@ trait SeedsTeamHierarchy
             'yield_kg' => 1.0,
             'n_ingredients_total' => 2,
             'n_ingredients_unmapped' => 0,
+            // Beide Taxonomie-Wege gesetzt, damit der Default egal ob Basisrezept oder VK-Gericht
+            // sauber ist: VK-Gerichte hängen an der Hauptgruppe (Modell A), Basisrezepte an der
+            // Produktions-Kategorie. Sonst würde jedes Fixture-Rezept `rezept_kategorie_problem` auslösen.
+            'category_id' => $this->makeRecipeCategory($owner)->id,
+            'dish_main_group_id' => $this->makeMainGroup($owner)->id,
         ], $attrs));
+    }
+
+    /**
+     * VK-Speisen-Hauptgruppe (Modell A, hängt direkt am Gericht) — die Tabelle mit
+     * `is_inactive`; `$code` variieren, um eine stillgelegte Gruppe zu bauen.
+     */
+    protected function makeMainGroup(Team $owner, string $code = 'FIX', bool $inactive = false): \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup
+    {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::firstOrCreate(
+            ['team_id' => $owner->id, 'code' => $code],
+            ['label' => 'Hauptgruppe ' . $code, 'is_inactive' => $inactive]
+        );
+    }
+
+    /**
+     * Produktions-Kategorie des Basisrezepts. Achtung: hängt an `recipe_main_groups`
+     * (Produktions-Taxonomie), NICHT an den VK-Speisen-Hauptgruppen — zwei getrennte Bäume.
+     */
+    protected function makeRecipeCategory(Team $owner, string $code = 'FIX-KAT'): \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory
+    {
+        $hg = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup::firstOrCreate(
+            ['team_id' => $owner->id, 'code' => 'FIX-PHG'],
+            ['label' => 'Produktions-Hauptgruppe']
+        );
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::firstOrCreate(
+            ['team_id' => $owner->id, 'code' => $code],
+            ['label' => 'Kategorie ' . $code, 'main_group_id' => $hg->id]
+        );
     }
 
     /** Einheit „g" (idempotent je Team) — Zutaten brauchen eine Mengen-Einheit. */

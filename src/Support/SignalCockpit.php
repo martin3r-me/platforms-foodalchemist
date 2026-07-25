@@ -41,6 +41,12 @@ final class SignalCockpit
         'preis_anomalie' => 'price.plausi',
         'vk_anpassung_empfohlen' => 'signal.vk_release_advice',
         'servierform_unbestimmt' => 'signal.serving_form_suggest',
+        // Spec 21 Tranche A: nur Kategorie (und später Naming) bekommen KI-Assistenz — beides sind
+        // Zuordnungs-Vorschläge, die ein Modell aus dem Namen ableiten kann. Die übrigen Tranche-A-Typen
+        // bleiben bewusst knopflos: „ohne Zubereitung"/„Mengen-Lücke" braucht Küchen-Wissen am Einzelfall
+        // (kein Sammel-propose über 15 Beispiele), „ungemappte Zutaten" läuft über den bestehenden
+        // Match-Pfad im Rezept, „verwaist"/„ein Zutat" sind reine Entscheidungen.
+        'rezept_kategorie_problem' => 'signal.recipe_category_suggest',
     ];
 
     private const PLAN_DET = [
@@ -66,6 +72,9 @@ final class SignalCockpit
             . '(kein stiller Kunden-Preissprung).',
         'signal.serving_form_suggest' => 'Passende Servierform je Gericht vorschlagen (KI-Klassifikation nach Bauart) — '
             . 'du bestätigst.',
+        'signal.recipe_category_suggest' => 'Passende Kategorie je Rezept vorschlagen (Bauart-Logik „wie gebaut", nicht '
+            . '„wo eingesetzt"); stillgelegte Hauptgruppen bleiben ausgeschlossen. Vorschlag zur Sichtung — die '
+            . 'Zuordnung setzt du.',
     ];
 
     /**

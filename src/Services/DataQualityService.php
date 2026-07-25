@@ -32,6 +32,36 @@ class DataQualityService
     /** Ab dieser Anzahl gilt eine Lücke als kritisch (rot) statt Warnung (gelb). */
     private const ROT_SCHWELLE = 100;
 
+    /** Zubereitungs-Text unter dieser Länge gilt als nicht vorhanden (Spec 21 §2). */
+    private const MIN_ZUBEREITUNG_ZEICHEN = 20;
+
+    /** So lange unberührt + unreferenziert ⇒ Pflege-Kandidat. */
+    private const VERWAIST_TAGE = 180;
+
+    /**
+     * „Produktiv" = das Rezept beansprucht, benutzbar zu sein — nur diese Menge wird
+     * gegen Rezeptur-Vollständigkeit geprüft. `draft`/`stub`/`deprecated` sind bewusst
+     * ausgenommen: ein Auto-Stub (RecipeService setzt `status=stub`) HAT per Definition
+     * keine Zubereitung und keine Zutaten — den fängt `rezept_sub_stub_offen`; ein
+     * `deprecated`-Rezept ist ausgemustert. Spec 21 §2 schreibt „status != draft", was
+     * vor `stub`/`deprecated` formuliert wurde; die engere Menge verhindert Über-Flaggen
+     * (Nicht-Ziel: kein Rauschen).
+     */
+    private const PRODUKTIV_STATUS = ['review', 'approved'];
+
+    /**
+     * Alle Flächen, auf denen ein Rezept „benutzt" ist — eine Referenz genügt ⇒ nicht verwaist.
+     * Sub-Rezept-Nutzung zählt mit: ein Basisrezept in einem anderen Rezept ist in Gebrauch,
+     * auch wenn es in keinem Foodbook steht.
+     */
+    private const NUTZUNGS_REFERENZEN = [
+        ['foodalchemist_recipe_ingredients', 'referenced_recipe_id'],
+        ['foodalchemist_concept_slots', 'sales_recipe_id'],
+        ['foodalchemist_foodbook_blocks', 'sales_recipe_id'],
+        ['foodalchemist_menu_plan_entries', 'sales_recipe_id'],
+        ['foodalchemist_package_dishes', 'sales_recipe_id'],
+    ];
+
     /**
      * Voll-Messung aller Kaskaden-Ebenen.
      *
@@ -201,14 +231,104 @@ class DataQualityService
      */
     private function rezeptqualitaet(Team $team): array
     {
-        $zutatenUngemappt = $this->alleRezepte($team)->where('n_ingredients_unmapped', '>', 0)->count();
+        $out = [];
+        foreach ($this->rezeptQualitaetChecks() as $key => $c) {
+            $out[] = $this->gap($key, $c['label'], ($c['q'])($team)->count(), $c['typ'], $c['dedup'], $c['desc'], $c['sev']);
+        }
 
+        return $out;
+    }
+
+    /**
+     * Tranche-A-Register: Label, Signal-Deskriptor und **das Prädikat** je Check —
+     * EINMAL definiert. Zähl-Seite (`rezeptqualitaet`), Objekt-Liste (`betroffene`) und
+     * Fixer-Lifecycle (`countFor`) ziehen alle aus derselben Closure; ein Regel-Wechsel
+     * kann damit nicht auf halber Strecke driften.
+     *
+     * Reihenfolge = Lese-Reihenfolge im Cockpit: erst was das Rezept unbrauchbar macht
+     * (kritisch), dann Struktur-/Pflege-Befunde.
+     *
+     * @return array<string,array{label:string,typ:SignalTyp,dedup:string,sev:SignalSeverity,desc:string,q:\Closure}>
+     */
+    private function rezeptQualitaetChecks(): array
+    {
         return [
-            $this->gap('rezept_zutaten_ungemappt', 'Rezepte mit ungemappten Zutaten', $zutatenUngemappt,
-                SignalTyp::RezeptZutatenUngemappt, 'dq-rezept-zutaten-ungemappt',
-                'Zutaten ohne GP-Mapping zählen weder in EK noch in Allergene/Nährwerte — jede Aggregation '
-                . 'am Rezept ist damit systematisch unvollständig.',
-                SignalSeverity::Warnung),
+            'rezept_ohne_zubereitung' => [
+                'label' => 'Rezepte ohne Zubereitung',
+                'typ' => SignalTyp::RezeptOhneZubereitung,
+                'dedup' => 'dq-rezept-ohne-zubereitung',
+                'sev' => SignalSeverity::Kritisch,
+                'desc' => 'Ohne Zubereitungstext ist das Rezept nicht produzierbar — Küche kann es nicht ausführen, '
+                    . 'Regeneration/Prozessanker hängen daran. Prüfen: steht der Text noch unübernommen in '
+                    . '`excel_raw_preparation` (Import-Rest)?',
+                // LENGTH: SQLite zählt Zeichen, MySQL Bytes — bei Schwelle 20 fachlich belanglos
+                // (Umlaute machen MySQL nur minimal nachsichtiger), dafür ohne Dialekt-Fallunterscheidung.
+                'q' => fn (Team $t) => $this->produktiveRezepte($t)
+                    ->whereRaw("LENGTH(TRIM(COALESCE(preparation, ''))) < " . self::MIN_ZUBEREITUNG_ZEICHEN),
+            ],
+            'rezept_mengen_luecke' => [
+                'label' => 'Rezepte mit Mengen-Lücke (Zutat ohne Menge)',
+                'typ' => SignalTyp::RezeptMengenLuecke,
+                'dedup' => 'dq-rezept-mengen-luecke',
+                'sev' => SignalSeverity::Kritisch,
+                'desc' => 'Mindestens eine Zutat steht auf Menge 0 (die Spalte ist NOT NULL, 0 ist der Marker für '
+                    . '„nicht bekannt"). Solche Zutaten fallen aus EK, Yield und Nährwerten heraus — die Kalkulation '
+                    . 'des Rezepts ist zu niedrig, ohne dass man es sieht.',
+                'q' => fn (Team $t) => $this->alleRezepte($t)->whereExists(fn ($q) => $q->select(DB::raw(1))
+                    ->from('foodalchemist_recipe_ingredients as ri')
+                    ->whereColumn('ri.recipe_id', 'foodalchemist_recipes.id')
+                    ->whereNull('ri.deleted_at')->where('ri.quantity', 0)),
+            ],
+            'rezept_zutaten_ungemappt' => [
+                'label' => 'Rezepte mit ungemappten Zutaten',
+                'typ' => SignalTyp::RezeptZutatenUngemappt,
+                'dedup' => 'dq-rezept-zutaten-ungemappt',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Zutaten ohne GP-Mapping zählen weder in EK noch in Allergene/Nährwerte — jede Aggregation '
+                    . 'am Rezept ist damit systematisch unvollständig.',
+                'q' => fn (Team $t) => $this->alleRezepte($t)->where('n_ingredients_unmapped', '>', 0),
+            ],
+            'rezept_ein_zutat' => [
+                'label' => 'Rezepte mit höchstens einer Zutat',
+                'typ' => SignalTyp::RezeptEinZutat,
+                'dedup' => 'dq-rezept-ein-zutat',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Ein „Rezept" mit einer oder keiner Zutat ist nach Regelwerk_Basisrezepte §10 meist gar '
+                    . 'keins: entweder ein Grundprodukt, das als Rezept angelegt wurde, oder ein Fehl-Import, dessen '
+                    . 'Zutatenliste nie ankam.',
+                'q' => fn (Team $t) => $this->produktiveRezepte($t)->where('n_ingredients_total', '<=', 1),
+            ],
+            'rezept_kategorie_problem' => [
+                'label' => 'Rezepte ohne/mit stillgelegter Kategorie',
+                'typ' => SignalTyp::RezeptKategorieProblem,
+                'dedup' => 'dq-rezept-kategorie-problem',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Kategorie fehlt, oder das Gericht hängt an einer stillgelegten Speisen-Hauptgruppe '
+                    . '(Taxonomie-Neutralisierung: APE/SNK/ALC/BVK/ALL sind inaktiv). Ohne gültige Kategorie ist das '
+                    . 'Rezept in Browser, Slot-Filtern und Gericht-Pickern unauffindbar.',
+                // Zwei getrennte Taxonomien, deshalb zwei Zweige (verifiziert an den Migrationen):
+                //  · VK-Gericht  → `dish_main_group_id` direkt am Rezept (Modell A), Ziel `dish_main_groups`
+                //    — DIESE Tabelle trägt `is_inactive` (269er-Neutralisierung).
+                //  · Basisrezept → `category_id` → `recipe_categories.main_group_id` → `recipe_main_groups`
+                //    — Produktions-Taxonomie, hat KEIN Stillgelegt-Flag; hier bleibt nur „Kategorie fehlt".
+                'q' => fn (Team $t) => $this->alleRezepte($t)->where(fn ($w) => $w
+                    ->where(fn ($vk) => $vk->where('is_sales_recipe', true)
+                        ->where(fn ($x) => $x->whereNull('dish_main_group_id')
+                            ->orWhereExists($this->inaktiveSpeisenHauptgruppe())))
+                    ->orWhere(fn ($br) => $br->where('is_sales_recipe', false)->whereNull('category_id'))),
+            ],
+            'rezept_verwaist' => [
+                'label' => 'Rezepte verwaist (unreferenziert + unberührt)',
+                'typ' => SignalTyp::RezeptVerwaist,
+                'dedup' => 'dq-rezept-verwaist',
+                'sev' => SignalSeverity::Info,
+                'desc' => 'Seit über ' . self::VERWAIST_TAGE . ' Tagen unberührt und in keinem Gericht, Konzept, '
+                    . 'Foodbook, Speiseplan oder Paket referenziert — Pflege-Kandidat (aktualisieren, ausmustern '
+                    . 'oder bewusst behalten). Bewusst nur Info: Bestand ist kein Fehler.',
+                'q' => fn (Team $t) => $this->unreferenziert(
+                    $this->produktiveRezepte($t)->where('updated_at', '<', now()->subDays(self::VERWAIST_TAGE))
+                ),
+            ],
         ];
     }
 
@@ -239,6 +359,32 @@ class DataQualityService
     private function alleRezepte(Team $team): \Illuminate\Database\Eloquent\Builder
     {
         return FoodAlchemistRecipe::visibleToTeam($team);
+    }
+
+    /** Rezepte, die benutzbar sein wollen (s. PRODUKTIV_STATUS) — Stubs/Entwürfe/Ausgemusterte raus. */
+    private function produktiveRezepte(Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        return $this->alleRezepte($team)->whereIn('status', self::PRODUKTIV_STATUS);
+    }
+
+    /** EXISTS: die Speisen-Hauptgruppe des VK-Gerichts ist stillgelegt (269er-Neutralisierung). */
+    private function inaktiveSpeisenHauptgruppe(): \Closure
+    {
+        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_dish_main_groups as hg')
+            ->whereColumn('hg.id', 'foodalchemist_recipes.dish_main_group_id')
+            ->where('hg.is_inactive', true)->whereNull('hg.deleted_at');
+    }
+
+    /** Schränkt auf Rezepte ein, die auf KEINER Nutzungs-Fläche referenziert werden. */
+    private function unreferenziert(\Illuminate\Database\Eloquent\Builder $q): \Illuminate\Database\Eloquent\Builder
+    {
+        foreach (self::NUTZUNGS_REFERENZEN as [$tabelle, $spalte]) {
+            $q->whereNotExists(fn ($s) => $s->select(DB::raw(1))->from($tabelle)
+                ->whereColumn($tabelle . '.' . $spalte, 'foodalchemist_recipes.id')
+                ->whereNull($tabelle . '.deleted_at'));
+        }
+
+        return $q;
     }
 
     /** EXISTS: GP ist in mindestens einer Rezept-Zutat genutzt. */
@@ -324,6 +470,13 @@ class DataQualityService
      */
     private function queryFor(Team $team, string $metrik): array
     {
+        // Tranche A (Spec 21) definiert ihr Prädikat im Check-Register — hier nur nachschlagen,
+        // nicht nachbauen. Der switch unten ist der Altbestand der Kaskaden-Ebenen (s. V-005).
+        $checks = $this->rezeptQualitaetChecks();
+        if (isset($checks[$metrik])) {
+            return [($checks[$metrik]['q'])($team), 'recipe'];
+        }
+
         switch ($metrik) {
             case 'gp_ohne_lead':
                 return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->where('requires_la', true)
@@ -358,9 +511,6 @@ class DataQualityService
                 return [$this->rezepte($team, true)->whereExists(fn ($x) => $x->select(DB::raw(1))
                     ->from('foodalchemist_recipe_presentations as p')->whereColumn('p.recipe_id', 'foodalchemist_recipes.id')
                     ->where('p.serving_form_id', $unbId)->where('p.is_standard', true)->whereNull('p.deleted_at')), 'recipe'];
-            // ---- Spec 21 Tranche A (Rezept-Inhalts-Qualität) ----
-            case 'rezept_zutaten_ungemappt':
-                return [$this->alleRezepte($team)->where('n_ingredients_unmapped', '>', 0), 'recipe'];
             case 'ri_gemini_unverifiziert':
                 return [FoodAlchemistRecipe::visibleToTeam($team)->whereExists(fn ($q) => $q->select(DB::raw(1))
                     ->from('foodalchemist_recipe_ingredients as ri')->whereColumn('ri.recipe_id', 'foodalchemist_recipes.id')
@@ -397,11 +547,13 @@ class DataQualityService
      * Signal-Deskriptor (Typ + dedup_key + Beschreibung) für die --signals-Emission.
      *
      * $sev setzt den Signal-Schweregrad fix, statt ihn aus der Trefferzahl abzuleiten —
-     * die Ampel-Farbe der Metrik bleibt davon unberührt (sie zeigt weiter die Menge).
+     * die Ampel-Farbe der Metrik zeigt weiter die Menge. Einzige Ausnahme: ein als
+     * `Info` deklarierter Check wird NIE rot/gelb — eine Pflege-Liste („verwaiste
+     * Rezepte") ist kein Alarm, und 300 davon sind kein roter Zustand.
      */
     private function gap(string $key, string $label, int $wert, ?SignalTyp $typ = null, ?string $dedup = null, ?string $desc = null, ?SignalSeverity $sev = null): array
     {
-        $severity = $wert === 0 ? 'gruen' : ($wert > self::ROT_SCHWELLE ? 'rot' : 'gelb');
+        $severity = $wert === 0 ? 'gruen' : ($sev === SignalSeverity::Info ? 'info' : ($wert > self::ROT_SCHWELLE ? 'rot' : 'gelb'));
         $signal = ($typ !== null && $dedup !== null)
             ? ['typ' => $typ, 'dedup' => $dedup, 'desc' => $desc, 'sev' => $sev]
             : null;

@@ -674,5 +674,15 @@ return [
                 . 'Gerichts, nicht nach Einsatzort). Kontext: beispiele = Gerichtnamen. '
                 . 'werte = {vorschlag} (Liste „Gericht → Form" mit kurzer Begruendung).',
         ],
+        // Spec 21 Tranche A: Assist zu `rezept_kategorie_problem` (Kategorie fehlt oder haengt an
+        // stillgelegter Hauptgruppe). Klassifikations-Regel = Bauart, nicht Einsatzort (Taxonomie-
+        // Neutralisierung) — deshalb bewusst KEIN Food-DNA-Key: DNA wuerde die Struktur verzerren.
+        'signal.recipe_category_suggest' => [
+            'tier' => 'B',
+            'task' => 'Schlage je genanntem Rezept die plausibelste Kategorie vor. Klassifiziere nach BAUART '
+                . '(„wie ist es gebaut?"), nie nach Einsatzort („wo wird es serviert?"). Kontext: '
+                . 'beispiele = Rezeptnamen. Nenne keine stillgelegten Hauptgruppen. '
+                . 'werte = {vorschlag} (Liste „Rezept → Kategorie" mit kurzer Begruendung).',
+        ],
     ],
 ];

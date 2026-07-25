@@ -42,6 +42,23 @@ it('gibt kein Plan (null) für reine Urteilssachen', function () {
         ->and(SignalCockpit::planFor(mkSignal('widerspruch_wissen_graph')))->toBeNull();
 });
 
+it('gibt der Rezept-Kategorie einen Assist-Vorschlag und lässt den Rest von Tranche A knopflos', function () {
+    $plan = SignalCockpit::planFor(mkSignal('rezept_kategorie_problem', 'rezept_kategorie_problem'));
+
+    expect($plan['kind'])->toBe('assist')
+        ->and($plan['prompt'])->toBe('signal.recipe_category_suggest')
+        ->and($plan['plan'])->not->toBeEmpty();
+        // (Dass der Prompt-Key auch in der Registry steht, prüft RezeptQualitaetSignaleTest —
+        //  dieser Unit-Test läuft ohne App-Container.)
+
+    // Bewusst ohne Knopf: Küchen-Wissen am Einzelfall bzw. reine Entscheidung — ein Sammel-propose
+    // über 15 Beispiele würde hier Scheinsicherheit erzeugen.
+    foreach (['rezept_ohne_zubereitung', 'rezept_mengen_luecke', 'rezept_ein_zutat', 'rezept_verwaist',
+        'rezept_zutaten_ungemappt'] as $typ) {
+        expect(SignalCockpit::planFor(mkSignal($typ, $typ)))->toBeNull();
+    }
+});
+
 it('leitet den Detektor-gp-ohne-la-Fix aus dem dedup_key ab (kein payload.metrik)', function () {
     $plan = SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', null, 'datenqualitaet-gp-ohne-la'));
     expect($plan)->not->toBeNull()
