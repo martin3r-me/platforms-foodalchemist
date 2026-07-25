@@ -305,8 +305,8 @@ export function pairingNetzGraph(config) {
     },
 
     _labelText(d) {
-      if (d.kind === 'zentrum') return this.mode === 'preview' ? '' : this._trunc(d.label, 32);
-      if (d.kind === 'basisrezept') return this._trunc(d.label, 22);
+      if (d.kind === 'zentrum') return ''; // Titel steht schon im Modal-Header / ist aus Kontext bekannt
+      if (d.kind === 'basisrezept') return this._trunc(d.label, 38);
       if (d.kind === 'anker') return '★ ' + (d.slug || d.label || '');
 
       return d.slug || d.label || ''; // kandidat
@@ -341,14 +341,23 @@ export function pairingNetzGraph(config) {
         const base = this._edgeOpacity(d);
         if (id == null) return base;
 
-        return d.source === id || d.target === id ? Math.min(1, base + 0.35) : base * 0.12;
+        return d.source === id || d.target === id ? Math.min(1, base + 0.45) : base * 0.05;
       });
-      this._nodeSel.select('circle').style('opacity', (n) => {
-        if (id == null || n.id === id) return 1;
+      const isDimmed = (n) => {
+        if (id == null || n.id === id) return false;
         const nb = this.edges.some((e) => (e.source === id && e.target === n.id) || (e.target === id && e.source === n.id));
 
-        return nb ? 1 : 0.35;
-      });
+        return !nb;
+      };
+      this._nodeSel.select('circle').style('opacity', (n) => (isDimmed(n) ? 0.15 : 1));
+      this._nodeSel.select('text').style('opacity', (n) => (isDimmed(n) ? 0.2 : 1));
+      this._nodeSel
+        .select('circle')
+        .attr('stroke-width', (d) => {
+          const dflt = d.kind === 'zentrum' || (d.kind === 'anker' && d.kern) ? 2.5 : 1.4;
+
+          return id != null && d.id === id ? dflt + 1.5 : dflt;
+        });
     },
 
     _enableZoom() {
