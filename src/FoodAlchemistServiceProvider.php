@@ -347,6 +347,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KapitelIdeenPutTool::class,
                     // Spec 19 E7.6: Kapitel-Go „Anlegen" — READ-ONLY (Stempel-Vorschau + Trockenlauf + Anlage-Stand; Go selbst human-only, kein MCP-Trigger)
                     \Platform\FoodAlchemist\Tools\KapitelFreigabeGetTool::class,
+                    // Spec 19 E9: Pairing-Inspiration der Kreativ-Phase — READ-ONLY (Aroma-Nachbarn je Modus, abstrakt/geerdet)
+                    \Platform\FoodAlchemist\Tools\PairingInspirationGetTool::class,
                     // Phase C: Concepter, Angebote, Kalkulation, Settings, Signale, Food DNA, Speiseplan
                     \Platform\FoodAlchemist\Tools\ConceptsSearchTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsListTool::class,

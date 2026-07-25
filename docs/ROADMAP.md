@@ -20,7 +20,7 @@
 - **E9.2** (`d3d9fff`) — `PairingInspirationService::inspiration()` (abstrakt vs. geerdet) + `PairingService::gpsForAnkerIds` (Anker→GP-Reverse-Lookup, schließt Doc-TODO); 3 Pest.
 - **E9.3** (`a55412e`) — `FavoriteGpService::verfuegbarkeit()` (Buckets führen/leicht/Lücke) + Nachbar-`luecke`-Flag; neuer `SignalTyp::SortimentsLuecke` + `meldeLuecke()` (idempotent, bewusster Schreibpfad); 4 Pest.
 - **E9.4** (`6449b1f`) — Kreativ-Tab-UI: Modus-Umschalter + Pairing-Inspiration-Panel (Pull via Seed, Bucket-Dots, ⚑ Lücke melden); kein Asset-Rebuild; 5 Pest (viewData/DB).
-- **E9.5** (`faa1d4d`) — MCP-Lockstep `creative_mode` in `foodbook_kapitel.PUT` + `creative_mode_default` in `foodbooks.POST`/`foodbook.GET`; 4 Pest inkl. Tenancy. *Offen (vertagt): optionales `pairing_inspiration.GET`-Tool — braucht ServiceProvider-Registrierung, Datei trug Fremd-WIP.*
+- **E9.5** (`faa1d4d`) — MCP-Lockstep `creative_mode` in `foodbook_kapitel.PUT` + `creative_mode_default` in `foodbooks.POST`/`foodbook.GET`; 4 Pest inkl. Tenancy. **+ Nachtrag:** neues READ-ONLY `foodalchemist.pairing_inspiration.GET` (search/seeds→Anker, Modus aus chapter_id/Override/Default, abstrakt vs. geerdet) — ServiceProvider-registriert, 5. Pest + Registry-Regression 73/73.
 - **E9.6** — Doku (`docs/foodbook.md` §Kreativ-Modus) + ROADMAP + breite Regression.
 
 Weiterhin **lokal/ungepusht** (Batch-Push durch Dominique). Browser-Klickstrecke des Kreativ-Tabs = manuelle Abnahme (Tab-HTML im Livewire-Test-Harness nicht voll gerendert → Logik über viewData/DB gedeckt).
