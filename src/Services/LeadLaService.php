@@ -42,16 +42,19 @@ class LeadLaService
      * Vollständige Rangliste (V-27-Kette): Rang 1 = Lead-Kandidat, Rest = Ausweich-LAs.
      * Jeder Eintrag trägt vergleichspreis/ist_stamm/locked/gepinnt fürs Panel (M3-07).
      *
+     * Spec 20 · E3: $strategieOverride (z. B. je Bestellschiene) gewinnt vor der Team-Einstellung;
+     * NULL = Team-Haupteinstellung (mit WG-Override). Sortier-Stufen sonst unverändert.
+     *
      * @return Collection<int, FoodAlchemistSupplierItem>
      */
-    public function rangliste(FoodAlchemistGp $gp, Team $team): Collection
+    public function rangliste(FoodAlchemistGp $gp, Team $team, ?LeadLaStrategie $strategieOverride = null): Collection
     {
         $kandidaten = $this->kandidaten($gp);
         if ($kandidaten->isEmpty()) {
             return $kandidaten;
         }
 
-        $strategie = $this->settings->leadLaStrategie($team, $gp->commodity_group_code); // Phase 3: WG-Override vor Global
+        $strategie = $strategieOverride ?? $this->settings->leadLaStrategie($team, $gp->commodity_group_code); // E3-Override vor Phase-3-WG vor Global
         $prioritaeten = array_map('intval', $this->settings->leadLaPrioritaeten($team));
         $stammIds = array_map('intval', $this->stamm->stammSupplierIdsFor($team, $gp->commodity_group_code));
         $overlay = FoodAlchemistGpLaPreference::where('team_id', $team->id)->where('gp_id', $gp->id)
@@ -100,11 +103,12 @@ class LeadLaService
 
     /**
      * Effektiver Lead des Teams (V-27): Pin gewinnt (sofern verknüpft + nicht locked),
-     * sonst erster nicht gesperrter Rang der Kette.
+     * sonst erster nicht gesperrter Rang der Kette. Spec 20 · E3: optionaler
+     * Strategie-Override (je Schiene) — der Pin bleibt aber ein harter Team-Override.
      */
-    public function effektiverLead(FoodAlchemistGp $gp, Team $team): ?FoodAlchemistSupplierItem
+    public function effektiverLead(FoodAlchemistGp $gp, Team $team, ?LeadLaStrategie $strategieOverride = null): ?FoodAlchemistSupplierItem
     {
-        $kette = $this->rangliste($gp, $team);
+        $kette = $this->rangliste($gp, $team, $strategieOverride);
 
         return $kette->first(fn ($la) => $la->gepinnt && ! $la->locked)
             ?? $kette->first(fn ($la) => ! $la->locked);

@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Services\OrderService;
 
 /**
@@ -44,6 +45,7 @@ class OrdersAddNeedTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'amount_kg' => ['type' => 'number', 'description' => 'Nur Basisrezept: Ziel-Kilogramm (Alternative zu portions/Ansätze).'],
                 'variant_choices' => ['type' => 'object', 'description' => 'Nur chapter_id: {variant_group_id: block_id} je Wahl-Gruppe (Default: erster Block).'],
                 'source_ref' => ['type' => 'string', 'description' => 'Quell-Kennung; Re-Import ersetzt diesen Schlüssel'],
+                'strategy' => ['type' => 'string', 'enum' => ['guenstigster_preis', 'stamm_lieferant', 'prioritaets_kette'], 'description' => 'Preisstrategie-Override für die Lead-LA-Wahl (Spec 20 · E3); weglassen = Team-Haupteinstellung. Übernahme landet dann in denselben Schienen wie orders.RESOURCE.'],
             ],
             'required' => ['source_ref'],
         ];
@@ -81,8 +83,10 @@ class OrdersAddNeedTool extends FoodAlchemistTool implements ToolContract, ToolM
             }
         }
 
+        $strategie = isset($arguments['strategy']) ? LeadLaStrategie::tryFrom((string) $arguments['strategy']) : null;
+
         try {
-            $res = app(OrderService::class)->addNeedFromTarget($team, $ziel, (string) $arguments['source_ref']);
+            $res = app(OrderService::class)->addNeedFromTarget($team, $ziel, (string) $arguments['source_ref'], null, $strategie);
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'ERROR');
         }

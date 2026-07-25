@@ -1,5 +1,6 @@
 <?php
 
+use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Enums\OrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrderLine;
@@ -13,8 +14,11 @@ use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Livewire\Orders\Index as OrdersIndex;
+use Platform\FoodAlchemist\Services\LeadLaService;
 use Platform\FoodAlchemist\Services\OrderService;
+use Platform\FoodAlchemist\Services\PlanungsblattService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -712,4 +716,171 @@ it('E2 UI: Bedarf-Schnellerfassung ohne Menge → Fehler, keine Schiene', functi
         ->call('bedarfUebernehmen')
         ->assertSet('fehler', fn ($v) => str_contains((string) $v, 'Menge'));
     expect(FoodAlchemistOrder::count())->toBe(0);
+});
+
+/**
+ * Spec 20 · E3 — Preisstrategie-Switch + „Neu quellen".
+ * Zusatz-Fixture: GP „Oel" mit ZWEI LAs an ZWEI Lieferanten (Chefs 2 €, Hanos 9 €, je
+ * 1-kg-Gebinde) + VK-Gericht „Salat" (1 Portion = 1000 g Öl) — so wechselt eine Strategie
+ * den Lieferanten nachweisbar.
+ */
+describe('E3 · Preisstrategie-Switch + Neu quellen', function () {
+    beforeEach(function () {
+        $chefs = FoodAlchemistSupplier::firstOrCreate(['team_id' => $this->rootTeam->id, 'name' => 'Chefs']);
+        $hanos = FoodAlchemistSupplier::firstOrCreate(['team_id' => $this->rootTeam->id, 'name' => 'Hanos']);
+        $this->oel = $this->makeGp($this->rootTeam, 'Oel');
+
+        $mkLa = function ($supplier, float $preis) {
+            $la = FoodAlchemistSupplierItem::create([
+                'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
+                'designation' => 'Oel 1kg ' . $supplier->name, 'article_number' => 'OEL-' . strtoupper(substr($supplier->name, 0, 3)),
+                'qty' => 1.0, 'unit_code' => 'kg', 'packaging_unit' => 'Kanister',
+            ]);
+            FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => $this->oel->id]);
+            FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'price' => $preis, 'status' => '0']);
+
+            return $la;
+        };
+        $this->chefs = $chefs;
+        $this->hanos = $hanos;
+        $this->oelChefs = $mkLa($chefs, 2.00);
+        $this->oelHanos = $mkLa($hanos, 9.00);
+
+        $this->salat = FoodAlchemistRecipe::create([
+            'team_id' => $this->rootTeam->id, 'recipe_key' => 'salat', 'name' => 'VOR: Salat',
+            'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 4.0, 'sales_unit_count' => 1,
+        ]);
+        $this->salat->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'gp_id' => $this->oel->id, 'raw_text' => 'Öl', 'quantity' => 1000, 'unit_vocab_id' => $this->g->id]);
+        app(RecipeRecomputeService::class)->recomputePipeline($this->salat->id);
+
+        $this->settings = app(TeamSettingsService::class);
+        $this->salatZiel = ['recipe_id' => $this->salat->id, 'portions' => 1];
+    });
+
+    it('Strategie-Override in bestellvorschlag wechselt den Lead-Lieferanten deterministisch', function () {
+        // Prioritäts-Kette Hanos zuerst (nur relevant für die Prioritäts-Strategie).
+        $this->settings->update($this->rootTeam, ['lead_la_prioritaeten' => [$this->hanos->id]]);
+        $planung = app(PlanungsblattService::class);
+
+        $guenstig = $planung->bestellvorschlag($this->rootTeam, $this->salatZiel, LeadLaStrategie::GuenstigsterPreis);
+        $prio = $planung->bestellvorschlag($this->rootTeam, $this->salatZiel, LeadLaStrategie::PrioritaetsKette);
+
+        expect($guenstig['lieferanten'][0]['lieferant'])->toBe('Chefs')      // 2 € < 9 €
+            ->and($prio['lieferanten'][0]['lieferant'])->toBe('Hanos');      // Ketten-Position schlägt Preis
+    });
+
+    it('resourceOrder: Strategie-Switch verschiebt Contributions in die andere Lieferanten-Schiene', function () {
+        // Start: Prioritäts-Kette Hanos ⇒ Übernahme landet bei Hanos.
+        $this->settings->update($this->rootTeam, ['lead_la_strategie' => LeadLaStrategie::PrioritaetsKette, 'lead_la_prioritaeten' => [$this->hanos->id]]);
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');
+
+        $hanosOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->first();
+        expect($hanosOrder->lines()->where('gp_id', $this->oel->id)->first()->supplier_item_id)->toBe($this->oelHanos->id);
+
+        // Neu quellen auf „günstigster Preis" ⇒ Öl wandert nach Chefs.
+        $report = $this->svc->resourceOrder($this->rootTeam, $hanosOrder->id, LeadLaStrategie::GuenstigsterPreis);
+
+        $chefsOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->where('status', 'draft')->first();
+        $chefsLine = $chefsOrder->lines()->where('gp_id', $this->oel->id)->first();
+
+        expect($report['strategie'])->toBe('guenstigster_preis')
+            ->and($report['wechsel'])->toHaveCount(1)
+            ->and($report['wechsel'][0]['schiene_wechsel'])->toBeTrue()
+            ->and($report['wechsel'][0]['nach_lieferant'])->toBe('Chefs')
+            ->and((int) $chefsLine->supplier_item_id)->toBe($this->oelChefs->id)
+            ->and((float) $chefsLine->needed_base_g)->toBe(1000.0)
+            ->and((float) $chefsLine->pack_price)->toBe(2.0)
+            ->and((float) $chefsOrder->total_net)->toBe(2.0)
+            // Quell-Schiene: Öl-Zeile ist weg (Beitrag verschoben, nicht dupliziert).
+            ->and($hanosOrder->refresh()->lines()->where('gp_id', $this->oel->id)->count())->toBe(0)
+            ->and($hanosOrder->sourcing_strategy)->toBe('guenstigster_preis');
+    });
+
+    it('resourceOrder: gleicher Lieferant, anderer Artikel — nur der LA der Zeile wechselt (keine Schiene)', function () {
+        // Zweiter Chefs-LA für Öl (teurer), damit ein Wechsel innerhalb Chefs möglich ist.
+        $oelChefs2 = FoodAlchemistSupplierItem::create([
+            'team_id' => $this->rootTeam->id, 'supplier_id' => $this->chefs->id,
+            'designation' => 'Oel 1kg Chefs Bio', 'article_number' => 'OEL-CHB',
+            'qty' => 1.0, 'unit_code' => 'kg', 'packaging_unit' => 'Kanister',
+        ]);
+        FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $oelChefs2->id, 'gp_id' => $this->oel->id]);
+        FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $oelChefs2->id, 'price' => 5.00, 'status' => '0']);
+
+        // günstigster Preis ⇒ Übernahme bei Chefs auf den 2-€-LA.
+        $this->settings->update($this->rootTeam, ['lead_la_strategie' => LeadLaStrategie::GuenstigsterPreis]);
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');
+        $chefsOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+        expect($chefsOrder->lines()->where('gp_id', $this->oel->id)->first()->supplier_item_id)->toBe($this->oelChefs->id);
+
+        // Günstigsten Chefs-LA sperren ⇒ effektiver Lead = teurerer Chefs-LA (gleicher Lieferant).
+        app(LeadLaService::class)->sperren($this->rootTeam, $this->oel, $this->oelChefs->id, true);
+        $report = $this->svc->resourceOrder($this->rootTeam, $chefsOrder->id, LeadLaStrategie::GuenstigsterPreis);
+
+        $line = $chefsOrder->refresh()->lines()->where('gp_id', $this->oel->id)->first();
+        expect($report['wechsel'])->toHaveCount(1)
+            ->and($report['wechsel'][0]['schiene_wechsel'])->toBeFalse()
+            ->and($report['orders'])->toBe([$chefsOrder->id])   // keine zweite Schiene
+            ->and((int) $line->supplier_item_id)->toBe($oelChefs2->id)
+            ->and((float) $line->pack_price)->toBe(5.0);
+    });
+
+    it('resourceOrder: manuelle Zeilen bleiben beim Neu-quellen unangetastet', function () {
+        // Extra Hanos-Artikel (kein GP) für eine manuelle Zeile.
+        $pfeffer = FoodAlchemistSupplierItem::create([
+            'team_id' => $this->rootTeam->id, 'supplier_id' => $this->hanos->id,
+            'designation' => 'Pfeffer schwarz 100g', 'article_number' => 'PFE-100',
+            'qty' => 0.1, 'unit_code' => 'kg', 'packaging_unit' => 'Dose',
+        ]);
+        FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $pfeffer->id, 'price' => 3.00, 'status' => '0']);
+
+        $this->settings->update($this->rootTeam, ['lead_la_strategie' => LeadLaStrategie::PrioritaetsKette, 'lead_la_prioritaeten' => [$this->hanos->id]]);
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');   // Öl → Hanos
+        $this->svc->addManualLine($this->rootTeam, $pfeffer->id, 2.0, 'Direktkauf');          // manuelle Zeile in Hanos-Schiene
+
+        $hanosOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->first();
+        $this->svc->resourceOrder($this->rootTeam, $hanosOrder->id, LeadLaStrategie::GuenstigsterPreis);   // Öl → Chefs
+
+        $manuell = $hanosOrder->refresh()->lines()->where('supplier_item_id', $pfeffer->id)->first();
+        expect($manuell)->not->toBeNull()
+            ->and((bool) $manuell->is_manual_qty)->toBeTrue()
+            ->and((float) $manuell->qty_packs)->toBe(2.0)
+            ->and($hanosOrder->lines()->where('gp_id', $this->oel->id)->count())->toBe(0);   // Öl-Bedarf ist gewandert
+    });
+
+    it('resourceOrder: gesendeter Beleg ist eingefroren — kein Neu-quellen', function () {
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+        $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+        $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+
+        expect(fn () => $this->svc->resourceOrder($this->rootTeam, $chefs->id, LeadLaStrategie::GuenstigsterPreis))
+            ->toThrow(\RuntimeException::class);
+    });
+
+    it('MCP orders.RESOURCE: preview zeigt Wechsel ohne Persistenz, apply verschiebt', function () {
+        $user = $this->makeUser($this->rootTeam);
+        $this->actingAs($user);
+        $registry = app(ToolRegistry::class);
+        $kontext = new ToolContext($user, $this->rootTeam);
+
+        $this->settings->update($this->rootTeam, ['lead_la_strategie' => LeadLaStrategie::PrioritaetsKette, 'lead_la_prioritaeten' => [$this->hanos->id]]);
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');   // Öl → Hanos
+        $hanosOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->first();
+
+        // Vorschau: Wechsel wird gemeldet, aber nichts verschoben.
+        $preview = $registry->get('foodalchemist.orders.RESOURCE')
+            ->execute(['order_id' => $hanosOrder->id, 'strategy' => 'guenstigster_preis', 'preview' => true], $kontext);
+        expect($preview->success)->toBeTrue()
+            ->and($preview->data['applied'])->toBeFalse()
+            ->and($preview->data['wechsel'])->toHaveCount(1)
+            ->and($hanosOrder->refresh()->lines()->where('gp_id', $this->oel->id)->count())->toBe(1);   // noch da
+
+        // Anwenden: jetzt wandert Öl nach Chefs.
+        $applied = $registry->get('foodalchemist.orders.RESOURCE')
+            ->execute(['order_id' => $hanosOrder->id, 'strategy' => 'guenstigster_preis'], $kontext);
+        $chefsOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->where('status', 'draft')->first();
+
+        expect($applied->data['applied'])->toBeTrue()
+            ->and($hanosOrder->refresh()->lines()->where('gp_id', $this->oel->id)->count())->toBe(0)
+            ->and($chefsOrder->lines()->where('gp_id', $this->oel->id)->first()->supplier_item_id)->toBe($this->oelChefs->id);
+    });
 });

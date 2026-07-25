@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
@@ -76,9 +77,12 @@ class PlanungsblattService
      * Bestellvorschlag für EIN Ziel: GP-Bedarf → Lead-LA je Lieferant, gruppiert
      * nach Lieferant, mit EK-Summe + Ausweichquelle.
      *
+     * Spec 20 · E3: optionaler $strategieOverride (Preisstrategie je Schiene) wird bis in
+     * die Lead-LA-Rangliste durchgereicht; NULL = Team-Haupteinstellung.
+     *
      * @param  array{concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}  $ziel
      */
-    public function bestellvorschlag(Team $team, array $ziel): array
+    public function bestellvorschlag(Team $team, array $ziel, ?LeadLaStrategie $strategieOverride = null): array
     {
         $this->recipeCache = [];
         $tops = $this->topsAus($team, [$ziel]);
@@ -86,7 +90,7 @@ class PlanungsblattService
 
         return [
             'skalierung' => $tops['skalierung'],
-            'lieferanten' => $this->gruppiereNachLieferant($team, $ex['gp']),
+            'lieferanten' => $this->gruppiereNachLieferant($team, $ex['gp'], $strategieOverride),
             'warnungen' => array_merge($tops['warnungen'], $ex['warnings']),
         ];
     }
@@ -95,9 +99,11 @@ class PlanungsblattService
      * Einkaufsliste über MEHRERE Ziele (Event / mehrere Konzepte): GP-Bedarf
      * zusammengeführt, gruppiert nach Lieferant.
      *
+     * Spec 20 · E3: optionaler $strategieOverride (Preisstrategie) wird durchgereicht.
+     *
      * @param  list<array{concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}>  $ziele
      */
-    public function einkaufsliste(Team $team, array $ziele): array
+    public function einkaufsliste(Team $team, array $ziele, ?LeadLaStrategie $strategieOverride = null): array
     {
         $this->recipeCache = [];
         $tops = $this->topsAus($team, $ziele);
@@ -105,7 +111,7 @@ class PlanungsblattService
 
         return [
             'ziele' => $tops['ziel_labels'],
-            'lieferanten' => $this->gruppiereNachLieferant($team, $ex['gp']),
+            'lieferanten' => $this->gruppiereNachLieferant($team, $ex['gp'], $strategieOverride),
             'positionen_gesamt' => count($ex['gp']),
             'warnungen' => array_merge($tops['warnungen'], $ex['warnings']),
         ];
@@ -739,12 +745,12 @@ class PlanungsblattService
      *
      * @param  array<int, array>  $gpBedarf
      */
-    private function gruppiereNachLieferant(Team $team, array $gpBedarf): array
+    private function gruppiereNachLieferant(Team $team, array $gpBedarf, ?LeadLaStrategie $strategieOverride = null): array
     {
         $gruppen = [];
         foreach ($gpBedarf as $b) {
             $gpModel = FoodAlchemistGp::find($b['gp_id']);
-            $kette = $gpModel !== null ? $this->leadLa->rangliste($gpModel, $team) : collect();
+            $kette = $gpModel !== null ? $this->leadLa->rangliste($gpModel, $team, $strategieOverride) : collect();
             $lead = $kette->first(fn ($la) => $la->gepinnt && ! $la->locked) ?? $kette->first(fn ($la) => ! $la->locked);
             $ausweich = $kette->first(fn ($la) => $lead !== null && $la->id !== $lead->id && ! $la->locked);
 

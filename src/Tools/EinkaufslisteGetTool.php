@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
 
 /**
@@ -51,6 +52,7 @@ class EinkaufslisteGetTool extends FoodAlchemistTool implements ToolContract, To
                         ],
                     ],
                 ],
+                'strategy' => ['type' => 'string', 'enum' => ['guenstigster_preis', 'stamm_lieferant', 'prioritaets_kette'], 'description' => 'Preisstrategie-Override für die Lead-LA-Wahl (Spec 20 · E3); weglassen = Team-Haupteinstellung.'],
             ],
             'required' => ['ziele'],
         ];
@@ -71,9 +73,10 @@ class EinkaufslisteGetTool extends FoodAlchemistTool implements ToolContract, To
             is_array($z) ? $z : [],
             array_flip(['concept_id', 'recipe_id', 'chapter_id', 'persons', 'portions', 'amount_kg', 'variant_choices'])
         ), $ziele);
+        $strategie = isset($arguments['strategy']) ? LeadLaStrategie::tryFrom((string) $arguments['strategy']) : null;
 
         try {
-            $blatt = app(PlanungsblattService::class)->einkaufsliste($team, $ziele);
+            $blatt = app(PlanungsblattService::class)->einkaufsliste($team, $ziele, $strategie);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'EXECUTION_ERROR');
         }

@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
 
 /**
@@ -42,6 +43,7 @@ class BestellvorschlagGetTool extends FoodAlchemistTool implements ToolContract,
                 'portions' => ['type' => 'number', 'minimum' => 1, 'description' => 'VK-Gericht: Portionen. Basisrezept: Anzahl Ansätze.'],
                 'amount_kg' => ['type' => 'number', 'minimum' => 0, 'description' => 'Nur Basisrezept: Ziel-Kilogramm (Alternative zu portions/Ansätze).'],
                 'variant_choices' => ['type' => 'object', 'description' => 'Nur chapter_id: {variant_group_id: block_id} — gewählter Block je Wahl-Gruppe (Default: erster Block).'],
+                'strategy' => ['type' => 'string', 'enum' => ['guenstigster_preis', 'stamm_lieferant', 'prioritaets_kette'], 'description' => 'Preisstrategie-Override für die Lead-LA-Wahl (Spec 20 · E3); weglassen = Team-Haupteinstellung.'],
             ],
         ];
     }
@@ -57,9 +59,10 @@ class BestellvorschlagGetTool extends FoodAlchemistTool implements ToolContract,
             return ToolResult::error('Genau EINES von concept_id, recipe_id oder chapter_id angeben.', 'VALIDATION_ERROR');
         }
         $ziel = array_intersect_key($arguments, array_flip(['concept_id', 'recipe_id', 'chapter_id', 'persons', 'portions', 'amount_kg', 'variant_choices']));
+        $strategie = isset($arguments['strategy']) ? LeadLaStrategie::tryFrom((string) $arguments['strategy']) : null;
 
         try {
-            $blatt = app(PlanungsblattService::class)->bestellvorschlag($team, $ziel);
+            $blatt = app(PlanungsblattService::class)->bestellvorschlag($team, $ziel, $strategie);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'EXECUTION_ERROR');
         }

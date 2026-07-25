@@ -373,6 +373,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 20 · E2: Direktbestellung (manueller Artikel + neue Schiene)
                     \Platform\FoodAlchemist\Tools\OrdersCreateTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersAddLineTool::class,
+                    // Spec 20 · E3: „Neu quellen" (Preisstrategie-Switch je Schiene)
+                    \Platform\FoodAlchemist\Tools\OrdersResourceTool::class,
                     // Spec 18: Produktionsaufträge (Datum, Status, → Bestellung übergeben) — MCP im Lockstep
                     \Platform\FoodAlchemist\Tools\ProductionOrdersGetTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersAddTargetTool::class,

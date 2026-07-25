@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Enums\OrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
@@ -32,6 +33,7 @@ class OrderService
         private PlanungsblattService $planung,
         private PriceService $preise,
         private GebindeRechner $gebinde,
+        private LeadLaService $leadLa,
     ) {
     }
 
@@ -63,12 +65,15 @@ class OrderService
      * Übernimmt den Bedarf EINES Ziels (concept_id|recipe_id + Menge) in die passenden
      * Lieferanten-Schienen. `sourceRef` identifiziert die Quelle (Re-Import ersetzt sie, E10).
      *
+     * Spec 20 · E3: optionaler $strategieOverride (Preisstrategie) steuert die Lead-LA-Wahl
+     * des Vorschlags — so wechselt die Übernahme dieselbe Schiene wie eine spätere „Neu quellen".
+     *
      * @param  array{concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}  $ziel
      * @return array{orders:list<int>, skipped_ohne_la:list<string>, warnungen:list<string>}
      */
-    public function addNeedFromTarget(Team $team, array $ziel, string $sourceRef, ?int $userId = null): array
+    public function addNeedFromTarget(Team $team, array $ziel, string $sourceRef, ?int $userId = null, ?LeadLaStrategie $strategieOverride = null): array
     {
-        $vorschlag = $this->planung->bestellvorschlag($team, $ziel);
+        $vorschlag = $this->planung->bestellvorschlag($team, $ziel, $strategieOverride);
         $touched = [];
         $skipped = [];
 
@@ -328,6 +333,96 @@ class OrderService
         return $order->refresh();
     }
 
+    /**
+     * Spec 20 · E3 — „Neu quellen": die OFFENE Schiene mit einer (optionalen) Preisstrategie
+     * neu auflösen. Je Bedarfs-Zeile (mit source_contributions) wird der Lead-LA über
+     * effektiverLead($strategie) neu bestimmt:
+     *   • gleicher Lieferant, anderer LA ⇒ nur der Artikel der Zeile wechselt;
+     *   • anderer Lieferant ⇒ die Beiträge wandern idempotent (E10) in dessen Draft-Schiene,
+     *     die Quell-Zeile fällt weg (Contribution „verschoben", nicht dupliziert).
+     * Manuelle Zeilen (is_manual_qty) und Zeilen ohne Lead bleiben unangetastet; E3-Aggregat-
+     * Rundung läuft über recomputeOrder(). $apply=false ⇒ reine Vorschau (nichts persistiert,
+     * gleicher Report-Shape) für den „Neu quellen"-Dialog. Der gewählte Override wird an der
+     * Schiene vermerkt (orders.sourcing_strategy; NULL = Team-Haupteinstellung).
+     *
+     * @return array{strategie:?string, wechsel:list<array{gp_id:int, gp:string, von_la_id:?int, nach_la_id:int, nach_artikel:?string, nach_lieferant:?string, schiene_wechsel:bool}>, orders:list<int>}
+     */
+    public function resourceOrder(Team $team, int $orderId, ?LeadLaStrategie $strategie = null, bool $apply = true, ?int $userId = null): array
+    {
+        $order = $this->ownedOrder($team, $orderId);
+        $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
+        if (! $status->istOffen()) {
+            throw new \RuntimeException('Nur ein offener Entwurf kann neu gequellt werden.');
+        }
+
+        $wechsel = [];
+        $moves = [];   // [FoodAlchemistOrderLine $line, bool $sameSupplier, int $newSupplierId, int $newLaId, int $gpId]
+        foreach ($order->lines()->get() as $line) {
+            // E3: manuelle Zeilen + reine Direktbestellungen (leere contributions) bleiben unberührt.
+            if ($line->is_manual_qty || empty($line->source_contributions) || $line->gp_id === null) {
+                continue;
+            }
+            $gp = FoodAlchemistGp::find($line->gp_id);
+            if ($gp === null) {
+                continue;
+            }
+            $lead = $this->leadLa->effektiverLead($gp, $team, $strategie);
+            $newLaId = $lead?->id !== null ? (int) $lead->id : null;
+            $newSupplierId = $lead?->supplier_id !== null ? (int) $lead->supplier_id : null;
+            if ($newLaId === null || $newSupplierId === null) {
+                continue;   // kein bestellbarer Lead unter dieser Strategie → Zeile bleibt
+            }
+            $altLaId = $line->supplier_item_id !== null ? (int) $line->supplier_item_id : null;
+            if ($newLaId === $altLaId) {
+                continue;   // Strategie ändert für diesen GP nichts
+            }
+
+            $sameSupplier = $newSupplierId === (int) $order->supplier_id;
+            $wechsel[] = [
+                'gp_id' => (int) $gp->id,
+                'gp' => $gp->name,
+                'von_la_id' => $altLaId,
+                'nach_la_id' => $newLaId,
+                'nach_artikel' => $lead->designation,
+                'nach_lieferant' => $lead->supplier_name,
+                'schiene_wechsel' => ! $sameSupplier,
+            ];
+            $moves[] = [$line, $sameSupplier, $newSupplierId, $newLaId, (int) $gp->id];
+        }
+
+        if (! $apply) {
+            return ['strategie' => $strategie?->value, 'wechsel' => $wechsel, 'orders' => [(int) $order->id]];
+        }
+
+        $touched = [(int) $order->id => $order];
+        foreach ($moves as [$line, $sameSupplier, $newSupplierId, $newLaId, $gpId]) {
+            if ($sameSupplier) {
+                $line->supplier_item_id = $newLaId;   // Artikel wechselt, Schiene bleibt
+                $line->save();
+
+                continue;
+            }
+            $targetDraft = $this->draftForSupplier($team, $newSupplierId, $userId);
+            foreach ($line->source_contributions ?? [] as $ref => $g) {
+                $this->upsertContribution($team, $targetDraft, ['lead_la_id' => $newLaId, 'gp_id' => $gpId, 'menge_g' => $g], (string) $ref);
+            }
+            $line->delete();                          // Beitrag verschoben, nicht dupliziert
+            $touched[(int) $targetDraft->id] = $targetDraft;
+        }
+
+        $order->sourcing_strategy = $strategie?->value;   // Override an der Schiene vermerken (NULL = Haupteinstellung)
+        $order->save();
+        foreach ($touched as $o) {
+            $this->recomputeOrder($o->refresh());
+        }
+
+        return [
+            'strategie' => $strategie?->value,
+            'wechsel' => $wechsel,
+            'orders' => array_values(array_map(fn ($o) => (int) $o->id, $touched)),
+        ];
+    }
+
     // ── Status-Lebenszyklus (guarded) ─────────────────────────────────────
 
     public function setStatus(Team $team, int $orderId, OrderStatus $ziel): FoodAlchemistOrder
@@ -413,6 +508,7 @@ class OrderService
             'reference' => $order->reference,
             'desired_delivery_date' => $order->desired_delivery_date?->toDateString(),
             'note' => $order->note,
+            'sourcing_strategy' => $order->sourcing_strategy,   // E3: Preisstrategie-Override je Schiene (NULL = Haupteinstellung)
             'total_net' => (float) $order->total_net,
             'is_owned' => $order->isOwnedBy($team),
             'editierbar' => $status->istOffen() && $order->isOwnedBy($team),
