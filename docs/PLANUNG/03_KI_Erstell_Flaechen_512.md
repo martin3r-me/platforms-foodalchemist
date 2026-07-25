@@ -1,5 +1,21 @@
 # KI-Erstell-/Verbesser-Flächen — Bestandsaufnahme + Lücken-Plan (Stand 2026-07-16)
 
+> ## 🔍 Audit an HEAD `a55ced3` (2026-07-25) — verbindlicher Ist-Stand
+> Code-verifiziert, überschreibt widersprechende Aussagen im Text unten:
+>
+> | Lücke | Ist | Beleg |
+> |---|---|---|
+> | **L1** | ⚪ offen | `ueberarbeit` nur in `src/Livewire/Recipes/RecipeModal.php`; `BulkEnrich` in ReviewQueue/GpModal/RecipeModal/Recipes\Browser/ClassifyLaJob — **nicht** im `VkModal` |
+> | **L2** | ⚪ offen | Button weiter `disabled`: `resources/views/livewire/foodbooks/index.blade.php:226`; Prompt `foodbook.kapitel_text` **nicht** in `AiGatewayService`. **Spec 19 hat L2 NICHT absorbiert** (entgegen früherer Annahme) |
+> | **L3** | ✅ **via Spec 19** | Kickoff in `Foodbooks/Index`, `PlanningFrameService`, `FoodbookService` + `ConceptGeneratorService::generiereAusBrief`. Kein eigener L3-Bau mehr — nur noch Bau-Referenz |
+> | **L4** | ⚪ offen | nur manueller `fillSlot` (`Concepts/Index.php:256/262`, `ConceptSlotsPostTool:94`); `zielpreisBerechnen`/`zielVorschlag` im Concepter-Editor sind **Preis**-Vorschlag, nicht Slot-Inhalt |
+> | **L5** | ⚪ offen | `src/Tools/` hat `ConceptsGenerateTool`, aber **kein** `RecipesGenerateTool` |
+> | **L6** | ⚪ offen | 0 Treffer für `copilot`/`RecipeReview`. **Aber:** Prompts `recipe.review` + `vk.review` sind in `AiGatewayService:45-46` bereits reserviert (registriert, ohne Konsument) = kleiner Vorsprung |
+> | **L7** | ⚪ offen | kein `voll_anreichern`/`vollAnreichern`/`oneShot` im Modul |
+> | **L8** | ⚪ offen | `MargeService` genutzt in SalesRecipeService/PaketService/MargeImpactService/SignalDetektorService — in **keinem** Generator; `target_food_cost_pct` liegt in `FoodAlchemistTeamSetting:44` bereit |
+>
+> **Blocker-Reset:** „Qualitäts-Gate braucht Key live" ist hinfällig — LLM-Key + Deploy sind self-service. Bau-Reihenfolge jetzt nach Größe in [_Fahrplan_Routine_Umsetzung.md](_Fahrplan_Routine_Umsetzung.md).
+
 > **Auftrag (Notiz Dominique):** „Rezept Erstellung/Verbesserung … Concepter vorhanden? … Foodbook KI-Button Erstellung vorhanden?" — Board geprüft + Code kartiert. Ergebnis: **mehr vorhanden als erinnert**, aber 5 klare Lücken.
 > **Quellen:** Dev-Board 53/54 (Suche Generator/Foodbook/KI), Code-Kartierung platforms-foodalchemist HEAD 2026-07-16 (alle Fundstellen verifiziert), Issues #369/#492/#505/#508.
 

@@ -1,0 +1,72 @@
+# Fahrplan — Autonome Umsetzung Rest-Programm (Routine-Arbeitsdokument)
+
+> Einzige Fortschritts-Wahrheit der Routine `fa-specs-umsetzung` (alle 30 Min, ein Chunk pro Run). Vor jedem Run lesen (inkl. Stand-Log), dann nächstes offenes Stück gemäß Reihenfolge wählen. Checkbox erst abhaken, wenn Tests real grün.
+>
+> **Phase 0 wurde manuell auditiert und abgeschlossen (2026-07-25, HEAD `a55ced3`)** — die Reihenfolge unten ist das *Ergebnis* dieses Audits, nicht die ursprüngliche Annahme. Detail-Status je Spec: [_Spec_Status_Matrix.md](_Spec_Status_Matrix.md).
+
+## ⚙️ Bau-Rahmen (vor jedem Chunk beachten)
+- **Test-Gate braucht erhöhtes Memory-Limit:** `php -d memory_limit=1G vendor/bin/pest` aus der Sandbox. Im 128M-Default crasht die Suite mit *Fatal: memory exhausted* (Blade-Render + Whoops) — das ist **kein** Code-Fehler und darf nicht als solcher interpretiert werden.
+- **Verifizierte Baseline 2026-07-25 (HEAD `a55ced3`): 1169 Tests · 1165 passed · 4 skipped · 0 Fail · 5558 Assertions.** Jede Regression ist ab hier zu messen.
+- **Laufzeit-Budget:** die Volle Suite braucht **~8,6 Min** (516 s). Bei 30-Min-Ticks bleibt nach Abzug von Suite + Commit/Push realistisch **~15–18 Min Bauzeit**. Darum: während der Arbeit gezielt filtern (`--filter=<Test>`), Voll-Suite erst am Chunk-Ende. Chunks entsprechend klein schneiden.
+- Dominique committet parallel (Beleg: `2f54d15`/`a55ced3` während des Audits) → `git pull` vor Arbeit, **nur eigene Dateien** gezielt stagen.
+- Kein externer Menschen-Blocker mehr (LLM-Key + Deploy self-service). Kein Deploy aus der Routine.
+- **Verbesserungs-Beobachtung je Lauf → [_Verbesserungs_Backlog.md](_Verbesserungs_Backlog.md).** Was über den Auftrag hinaus auffällt (Muster, Level-up-Chancen, Regelwerk-Drift, MCP-/Test-Lücken) wird dort notiert — max. 1–3 Einträge, konkret mit Datei/Zeile, Status immer `neu`. **Nie selbst umsetzen** (Scope-Drift-Schutz); über Übernahme entscheidet nur Dominique. Ergebnis nach Gesamtlauf = fertige Verbesserungs-/Anpassliste.
+
+---
+
+## ✅ Phase 0 — Reconcile & Audit (ABGESCHLOSSEN 2026-07-25, manuell)
+- [x] `_Spec_Status_Matrix.md` aktualisiert: Blocker-Reset im Header, Zeilen 03/08/15/19 an HEAD verifiziert, „Verdichtet"-Block mit Größen neu geschrieben.
+- [x] **Overlap-Audit an HEAD** — Ergebnis:
+  - **L3 ✅ via Spec 19** (Kickoff in `Foodbooks/Index`+`PlanningFrameService`+`FoodbookService` + `generiereAusBrief`) → aus dem Bauvorrat gestrichen.
+  - **L2 ist NICHT absorbiert** (Button weiter `disabled` in `foodbooks/index.blade.php:226`, Prompt `foodbook.kapitel_text` fehlt) → bleibt zu bauen. *(Widerlegt die ursprüngliche Annahme.)*
+  - **Spec 08 Divergenz-Hälfte ✅ via 19·E9** (Kreativ-Modi, `dish_ideas`, `PairingInspirationService`) → 08 schrumpft auf **P6**.
+  - **RAG (02) ✅ gebaut** — `src/Services/Ai/SemanticRetrievalService.php`, verdrahtet in `IngredientMatchService:31/35`.
+  - **12·R2.4 = XL** (ersetzt greedy Assembler `ConceptGeneratorService:152`), **13·S1 = L** — nicht die Quick-Wins der alten Liste.
+  - **15**: Blocker = ~50k-Vektor-Grenze `MySqlJsonEmbeddingStore`, nicht „Vektor-DB allgemein"; Backfill+Observer jederzeit baubar.
+- [x] `00_Orchestrierung_Naechste_Schritte.md` als **SUPERSEDED** markiert (Banner mit den 3 überholten Punkten + Verweis hierher) statt zu flicken — die Datei ist ein 07-18-Phasenplan, der lebende Plan ist dieses Dokument.
+- [x] Audit-Ergebnis in die Spec-Dateien selbst geschrieben: Tabelle je Lücke in `03_KI_Erstell_Flaechen_512.md`, Schrumpf-auf-P6 mit Code-Belegen in `08_Planungs_und_Kreativ_Ebene.md`.
+
+## Phase 1 — Spec 21 Signal-Ausbau (NEU, Entscheid Dominique 2026-07-25: **vor** Spec 03)
+> **Warum zuerst:** die Signale *messen* erst, wie gut die Rezept-/Konzept-/Foodbook-Basis wirklich ist. Danach baut man L1–L8 gegen echte Zahlen statt gegen Vermutungen. Detail + Begründung je Signal: [21_Signal_Ausbau_Qualitaetssignale.md](21_Signal_Ausbau_Qualitaetssignale.md). Die *Heilung* (Spec 05 Etappe 2) bleibt bewusst zuletzt.
+- [ ] **21·S0** Fundament · S — `SignalTyp`-Enum erweitern, Rezept-Sektion im `DataQualityService` (Muster der bestehenden `gap()`-Aufrufe), Fixture-Basis
+- [ ] **21·S1** Tranche A · M — 11 deterministische Rezept-Checks (0-Egress), Fixer-/Assist-Mapping in `SignalCockpit`; Pest je Check mit Positiv- **und** Negativfall (kein Über-Flaggen)
+- [ ] **21·S2** Tranche E · M — Zeitreihe (`signal_snapshots`) + Rausch-Guard (`signal_policies`) + Drift-Meta-Signal. **Pflicht, nicht optional** — ohne Guard kämen ~900 offene Signale statt 252 und das Cockpit stumpft ab
+- [ ] **21·S3** Tranche P · M–L — `Signale/DetailPanel` (heute nutzt die Signale-Seite die rechte Fläche gar nicht; 6 andere Seiten haben ein Panel). Kern-Features: **objekt-zentrische Sicht** („was hat dieses Rezept noch?" → einmal richtig fixen statt dreimal) + **Fix-Dry-Run vor dem Klick**
+- [ ] **21·S4** Tranche C+D · M — Konzept- + Foodbook-Signale; `foodbook_kapitel_ohne_text` erst scharf **nach L2**
+- [ ] *(21·S5 Tranche B steht in Phase 3 — sie ist Batch-Konsument von L6, kein Zweitbau)*
+
+## Phase 2 — Quick-Wins Spec 03 (klein, blocker-frei)
+- [ ] **L5** `RecipesGenerateTool` (`foodalchemist.recipes.GENERATE`) · S — Vorlage `ConceptsGenerateTool`; `vk: true` als Parameter statt zweitem Tool; `created_via=mcp`, immer draft; Tenancy-Negativtest (#504-Muster)
+- [ ] **L2** Kapitel-Text-KI · S — Prompt `foodbook.kapitel_text` in `AiGatewayService`-Allow-Liste + Button an `foodbooks/index.blade.php:226` entsperren; Vorschau + Übernehmen; `notizen_manual`-Schutz
+- [ ] **L4** KI-Slot-Vorschlag im Concepter · S–M — Slot-Ranking aus `ConceptGeneratorService` (`kandidatenPool`/`filterFuerSlot`) als per-Slot-Button; **läuft ohne LLM**; Slot ohne zulässigen Treffer sagt es ehrlich
+
+## Phase 3 — Spec 03 Verbund L1+L6 (eine geteilte Strecke)
+- [ ] **L1** VK-Revise · M — `✨ KI-Überarbeiten` (Freitext) + `✨ Alles anreichern` ins `VkModal`; Zutaten über den #508-Pfad (`RecipeService::syncIngredients` + `matchVorschau`), **nicht** duplizieren; Facetten-Erhalt (Servierform/Klasse/Diät)
+- [ ] **L6** Rezept-Copilot · M–L — `RecipeReviewService`; Prompts `recipe.review`/`vk.review` sind in `AiGatewayService:45-46` **bereits reserviert**; Findings (`menge/einheit/entfernen/fehlt/hinweis` + Confidence), „fehlt" sofort matchen (`auto_applicable` nur bei Match), granularer Apply + `recomputeAndPropagate`; Button in RecipeModal **und** VkModal
+- [ ] **21·S5** Tranche B · S–M — direkt nach L6: Batch-Lauf des Copilot über den Bestand, Findings über Confidence-Schwelle werden Signale (`rezept_plausi_ki`, `rezept_gericht_vs_komponente`). Fängt die Pfefferkörner→Pfefferrahm-Fehlerklasse (Skript 215) künftig **laufend** statt einmalig
+
+## Phase 4 — Flaggschiff L7 + L8 (ein Kaskaden-Umbau)
+- [ ] **L7** One-Shot-Vollerstellung · M–L — Toggle „⚡ Voll anreichern" (Default AN); Kette: Generieren → Grounding (+ LA-First-Mint Spec 07) → Accept/Aggregation → Auto-Enrichment über **bestehende** `BulkEnrichService`-Strecke → Kohärenz; Sub-Rezepte v1 = Stub+Flag; alles `draft`, user-editierte Felder nie überschreiben
+- [ ] **L8** Wirtschaftlichkeits-Glied · M — nach Enrichment: Portion (`quantity_per_unit_g`) + Default-AK + Standard-Darreichung → Auto-VK via `MargeService` (heute in **keinem** Generator verdrahtet) → W%-Ampel gegen `target_food_cost_pct`; unbepreiste Zutaten schlagen als „vorläufig" durch; `recipes.GENERATE` (L5) liefert EK/VK/W% mit
+
+## Phase 5 — Spec 08 Rest
+- [ ] **P6** Wissens-Ebene · M — Kategorie `concept` befüllen (Destillation 109/110/111), `concept`/`konzept`-Dublette konsolidieren, Routings `concept.plan`/`foodbook.plan` in `foodalchemist_knowledge_routings` (heute nur `foodbook.kapitel_ideen`)
+
+## Phase 6 — Große eigene Etappen (jede mehrere Runs)
+- [ ] **12·S2 · R2.4 Marge-optimale Assemblierung · XL** — ersetzt den greedy Schritt `ConceptGeneratorService:152`; reutzt `PlanningFrameService`-Constraints (`target_price_pp`, Bänder, `RULE_TYPES`), `kandidatenPool`/`filterFuerSlot`, `CoverageService::coverage` als Feasibility-Gate; Perf-Vorlage `MargeImpactService::impactFuerGps`+`gpSetExposure`. **In Teilschritte zerlegen, nicht in einem Run.**
+- [ ] **13·S1 · Kanal-B Datei-Import · L** — `FileArticleImportService` + Command `foodalchemist:import-articles {--file --supplier --team --dry-run --apply}`; schreibt in **vorhandene** Tabellen (kein neues Schema); `PriceService::createFor` → `recomputeAndPropagate` → `preisSprungMargeImpact`; idempotent/resumefähig
+- [ ] 13·S2 Lieferbedingungen · S · und 13·S3 MCP `ingest.STATUS` · S
+- [ ] **05·Etappe 2** KI-Datenqualität · M — via OpenAI über Core-Provider (Entscheid: serverseitig auf demo, Review in demo-UI); u.a. `--mode=ki` für mehrdeutige Prep-Texte (Prozessanker), unbestimmte Servierformen je Gericht
+
+## Phase 7 — Vektor-DB-Track (Store-Frage)
+- [ ] **15 · Backfill + Observer** — laut Spec §79 **vom Ingest entkoppelt und jederzeit baubar**; kann bei Bedarf vorgezogen werden
+- [ ] **15 · LA-Pool** — erst wenn die ~50k-Grenze beantwortet ist (Qdrant/Partitionierung = die geplante Vektor-DB); dann RAG-Speicher als **Backend-Swap** umhängen, Additiv-Fallback halten
+
+## Deferred / extern (NICHT anfassen)
+12·R2.3 (gated auf Q2-Format-Spec aus echter Bankettprofi-Datei = Dominique-Aufgabe) · 13·S4 Sales-Ist (dito) · 13·E6 Kanal A (extern) · 09·R6.10 produktiv (Q1-Contract) · 11·KI-Narrativ (optional) · #492-Blindtest (braucht 3 echte Kunden-Briefs — Dominique liefert; nicht erfinden).
+
+---
+
+## Stand-Log (neueste oben)
+- **2026-07-25 · Spec 21 angelegt (Session, nach Signal-Audit)** — Ist-Katalog kartiert: 14 `SignalTyp`-Typen aus `DataQualityService` (14 Gaps) + `SignalDetektorService` (10 Detektoren) + `SignalCockpit` (FIX_DET/ASSIST). Befund: Rezept-Ebene prüft nur EK/Anker/Servierform, **Konzept+Foodbook 0 Signale**, Signale-Seite ohne rechtes Panel (6 andere Seiten haben eins). Neue Spec 21 mit Tranchen A/B/C/D/E/P + Etappen S0–S5; als **Phase 1 vor Spec 03** eingehängt (Entscheid Dominique), Folgephasen umnummeriert. Nächster Schritt: **21·S0**.
+- **2026-07-25 · Phase 0 (manuell, supervidiert)** — Voll-Audit aller Specs 01–20 an HEAD `a55ced3`. Ergebnis: L3 + Spec-08-Divergenz via 19 erledigt, L2 dagegen offen (Annahme widerlegt); 6/8 Lücken in Spec 03 offen; R2.4=XL und Kanal-B=L neu eingeordnet; Spec-15-Blocker als 50k-Store-Grenze präzisiert; Suite-Memory-Falle dokumentiert. Matrix + dieser Fahrplan neu geschrieben, Orchestrierung als SUPERSEDED markiert. Baseline gemessen: **1169/1165 passed/4 skip/0 Fail** (8,6 Min Laufzeit → Tick-Budget dokumentiert). Alle 15 Kern-Artefakte der „fertig"-Specs an HEAD gegengeprüft (114 MCP-Tools, 193 Test-Dateien). Nächster Schritt: **Phase 1 · L5** (`RecipesGenerateTool`).

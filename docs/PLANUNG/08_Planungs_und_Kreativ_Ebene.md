@@ -1,5 +1,14 @@
 # Planungs- & Kreativ-Ebene — Doppel-Diamant vor der Grounding-Kaskade
 
+> ## 🔍 Audit an HEAD `a55ced3` (2026-07-25) — Spec schrumpft auf P6
+> Der Teil-Supersede unten (Foodbook-Hälfte via Spec 19) geht **weiter als dort beschrieben**: mit dem Nachtrag **19·E9** ist auch die **Divergenz-Hälfte gebaut**. Code-Belege:
+> - Kreativ-Modi `voll_kreativ` / `hybrid` / `datenbank` in `FoodbookService`, `Livewire/Foodbooks/Index`, `FoodbookKapitelPutTool`, `FoodbooksGetTool`/`FoodbooksPostTool`
+> - **Skizzen-Ebene** = `FoodAlchemistDishIdea` + `FoodAlchemistDishIdeaGroup` + Migration `2026_07_24_000006_create_foodalchemist_dish_ideas_tables.php` + `LeitstelleService`
+> - **Pairing-Inspiration** = `PairingInspirationService` + `PairingInspirationGetTool`
+> - Divergenz-Prompt = `foodbook.kapitel_ideen` (`AiGatewayService:48`, „E6.4: KI-Divergenz erbt die Food-DNA-Kette")
+>
+> **Konsequenz:** P1–P5 sind absorbiert bzw. gegenstandslos (die Skizzen-/Go-Mechanik lebt am Kapitel, nicht an einer eigenen Planungs-Fläche). **Echter Rest = P6** (Concepting-Wissen + Routings `concept.plan`/`foodbook.plan` — heute existiert nur `foodbook.kapitel_ideen`). **Kein LLM-Blocker mehr** — der in der Matrix jahrelang geführte „einzige echte Rest-Blocker" ist erledigt. Bauvorrat: [_Fahrplan_Routine_Umsetzung.md](_Fahrplan_Routine_Umsetzung.md) Phase 4.
+
 > ⚠️ **Teil-Supersede 2026-07-23 durch [19_Foodbook_Leitstelle_A-Z.md](19_Foodbook_Leitstelle_A-Z.md):** Die **Foodbook-Hälfte** dieser Spec (Foodbook-Rahmen top-down, Slot-Planung, Kapitel-Struktur, „Go" auf Foodbook-Ebene) ist von Spec 19 abgelöst. Neu gilt dort: **Go PRO KAPITEL** (nicht Foodbook-weit), Kapitel-Baum n-tief statt flacher Slots, Ziele am Kapitel statt am Slot, Duality Paket-Konzept ↔ Einzel-`recipe_ref`. **Weiterhin gültig aus dieser Spec:** das **Doppel-Diamant-Prinzip** (divergieren → „Go" → konvergieren), die **standalone Concept-Ebene** (Konzept ohne Foodbook-Rahmen) und **P6** (Concepting-Wissen + Routings `concept.plan`/`foodbook.plan` — in Spec 19 als E6.4 verortet). Die KI-Erdung nach dem Go bleibt L7/L8 ([03](03_KI_Erstell_Flaechen_512.md)).
 
 > **Anlass (Dominique 2026-07-18):** Auf Konzept- und Foodbook-Ebene fehlt eine **Planungs-/Kreativ-Ebene**, auf der man plant/gestaltet, **bevor die KI die Kaskaden anlegt** (Rezepte/GPs/Preise). Und: der **kreative Teil fehlt** — der Concepter ist heute rein konvergent.

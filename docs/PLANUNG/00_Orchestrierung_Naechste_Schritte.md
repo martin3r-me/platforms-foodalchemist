@@ -1,5 +1,15 @@
 # 00 — Orchestrierung: was nach und nach zu tun ist (Einstieg nächste Session)
 
+> # ⛔ SUPERSEDED 2026-07-25 — nicht mehr als Reihenfolge benutzen
+> **Aktueller Bauvorrat + Reihenfolge:** [_Fahrplan_Routine_Umsetzung.md](_Fahrplan_Routine_Umsetzung.md) · **Status je Spec:** [_Spec_Status_Matrix.md](_Spec_Status_Matrix.md)
+>
+> Diese Datei beschreibt den Stand **2026-07-18** und ist in drei Punkten überholt:
+> 1. **„Wartet auf Martin (OpenAI-Key + Deploy)" ist hinfällig** — Key funktioniert, Deploy ist self-service. Das ganze Phase-0-Gate unten (#507 live schalten „sobald Martin fertig") ist kein Gate mehr.
+> 2. **Seither fertig geworden:** Spec 16, 17 (★live), 18, **19 (E0–E9.6)**, 20 (P0–P4+E1–E3), 11·S4, 01. Die „Spec, ungebaut"-Zeile unten ist falsch.
+> 3. **Spec 08 ist auf P6 geschrumpft** und **03·L3 ist erledigt** (beides via Spec 19) — die Phasen 4/5 unten zielen auf Arbeit, die es nicht mehr gibt.
+>
+> Historischer Wert: die Abhängigkeits-Logik (#508 → L1/L6, #492 → L3) und das Prinzip „nie auf unverifiziertes Fundament stapeln" gelten weiter.
+
 > **Lies mich zuerst.** Diese Datei ordnet die Specs im Ordner in eine logische Reihenfolge — nach Abhängigkeit + Blocker-Status. Jede Phase liefert **eigenständigen Wert** (Kaskaden-Prinzip: greifen ineinander, laufen aber je für sich).
 > **Prinzip der Reihenfolge:** erst Fundament verifizieren, dann härten, dann Flächen, dann die kreative Front. Nie ein Feature auf ein unverifiziertes Fundament stapeln.
 
