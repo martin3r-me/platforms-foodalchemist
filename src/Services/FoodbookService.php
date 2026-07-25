@@ -1701,16 +1701,22 @@ class FoodbookService
      * Concepts (echte, keine Vorlagen) für den concept_ref-Picker — optional gefiltert nach
      * Concept-Kategorie (descendant-inklusiv, FB-1/GT-FB-7).
      */
-    public function conceptKandidaten(Team $team, string $suche, ?int $categoryId = null, int $limit = 20, ?int $klasseId = null): Collection
+    /**
+     * UX 2026-07-25 (Dominique): der Concept-Picker filtert auf die Concepter-DIMENSIONEN
+     * (Eventtyp/Servierform/Einsatzmoment/Saison) — nicht mehr auf Kategorie/Klasse (Konzept-Taxonomie
+     * ausgemustert). Filter-Logik gespiegelt aus ConceptService::paginateBrowser (4c-Facetten).
+     *
+     * @param array{eventtyp?:?int, servierform?:?int, einsatzmoment?:?int, season?:?int} $facetten
+     */
+    public function conceptKandidaten(Team $team, string $suche, int $limit = 20, array $facetten = []): Collection
     {
-        // UX 2026-07-24 (Dominique): der Picker filtert auf die ECHTEN Concepter-Klassen (vocab_classes-Baum,
-        // concepts.class per Name), inkl. Untergruppen (Teilbaum-Namen). categoryId bleibt als optionale
-        // Zweitachse/Back-Compat erhalten (Tests, Alt-Aufrufer).
         return FoodAlchemistConcept::visibleToTeam($team)->echte()
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
-            ->when($categoryId !== null, fn ($q) => $q->whereIn('category_id', $this->concepts->descendantIds($team, $categoryId)))
-            ->when($klasseId !== null, fn ($q) => $q->whereIn('class', $this->concepts->klassenDescendantNames($team, $klasseId)))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'category_id', 'class']);
+            ->when(! empty($facetten['eventtyp']), fn ($q) => $q->where('event_type_id', (int) $facetten['eventtyp']))
+            ->when(! empty($facetten['servierform']), fn ($q) => $q->where('serving_form_id', (int) $facetten['servierform']))
+            ->when(! empty($facetten['einsatzmoment']), fn ($q) => $q->whereHas('serviceMoments', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $facetten['einsatzmoment'])))
+            ->when(! empty($facetten['season']), fn ($q) => $q->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $facetten['season'])))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'event_type_id', 'serving_form_id']);
     }
 
     /** Einzelne Gerichte (VK-Rezepte) für den recipe_ref-Picker. */

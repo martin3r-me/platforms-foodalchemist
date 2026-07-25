@@ -32,7 +32,27 @@ class DetailPanel extends Component
 
     public string $conceptSuche = '';
 
-    public ?int $conceptKategorie = null;
+    /**
+     * UX 2026-07-25 (Dominique): Katalog-Picker filtert auf die Concepter-DIMENSIONEN.
+     *
+     * @var array{eventtyp:?int, servierform:?int, einsatzmoment:?int, season:?int}
+     */
+    public array $conceptFacetten = ['eventtyp' => null, 'servierform' => null, 'einsatzmoment' => null, 'season' => null];
+
+    /** Katalog-Picker: eine Concepter-Dimension (de)selektieren. */
+    public function toggleConceptFacet(string $feld, int $id): void
+    {
+        if (! array_key_exists($feld, $this->conceptFacetten)) {
+            return;
+        }
+        $this->conceptFacetten[$feld] = ($this->conceptFacetten[$feld] === $id) ? null : $id;
+    }
+
+    /** Katalog-Picker: alle Dimensions-Filter zurücksetzen. */
+    public function resetConceptFacetten(): void
+    {
+        $this->conceptFacetten = ['eventtyp' => null, 'servierform' => null, 'einsatzmoment' => null, 'season' => null];
+    }
 
     #[On('angebot-selected')]
     public function zeige(?int $id): void
@@ -217,10 +237,14 @@ class DetailPanel extends Component
             'firmen' => $svc->sucheFirmen($this->firmaSuche),
             'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
             'crmVerfuegbar' => $svc->crmVerfuegbar(),
-            'katalogTreffer' => ($this->conceptSuche !== '' || $this->conceptKategorie !== null)
-                ? $svc->katalogConcepts($this->team(), $this->conceptSuche, $this->conceptKategorie)
+            // UX 2026-07-25: sofort-Liste (kein Such-/Filter-Zwang) + Filter auf Concepter-Dimensionen
+            'katalogTreffer' => $this->selectedId !== null
+                ? $svc->katalogConcepts($this->team(), $this->conceptSuche, 50, $this->conceptFacetten)
                 : collect(),
-            'conceptKategorien' => app(\Platform\FoodAlchemist\Services\ConceptService::class)->categoriesFlat($this->team()),
+            'facetteEventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($this->team())->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'facetteServierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)->orderBy('sort_order')->get(['id', 'label']),
+            'facetteMomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($this->team())->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'facetteSaisons' => \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($this->team())->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
         ]);
     }
 

@@ -323,12 +323,22 @@ class AngebotService
     }
 
     /** Suche über standardisierte (echte) Katalog-Concepts für den Referenz-Picker. */
-    public function katalogConcepts(Team $team, string $suche, ?int $kategorieId = null, int $limit = 50): Collection
+    /**
+     * UX 2026-07-25 (Dominique): Angebots-Katalog filtert auf die Concepter-DIMENSIONEN
+     * (Eventtyp/Servierform/Einsatzmoment/Saison) — Konzept-Taxonomie ausgemustert. Spiegelt
+     * FoodbookService::conceptKandidaten / ConceptService::paginateBrowser.
+     *
+     * @param array{eventtyp?:?int, servierform?:?int, einsatzmoment?:?int, season?:?int} $facetten
+     */
+    public function katalogConcepts(Team $team, string $suche, int $limit = 50, array $facetten = []): Collection
     {
         return FoodAlchemistConcept::visibleToTeam($team)->standardisiert()->echte()
             ->when(trim($suche) !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
-            ->when($kategorieId !== null, fn ($q) => $q->where('category_id', $kategorieId))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'category_id']);
+            ->when(! empty($facetten['eventtyp']), fn ($q) => $q->where('event_type_id', (int) $facetten['eventtyp']))
+            ->when(! empty($facetten['servierform']), fn ($q) => $q->where('serving_form_id', (int) $facetten['servierform']))
+            ->when(! empty($facetten['einsatzmoment']), fn ($q) => $q->whereHas('serviceMoments', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $facetten['einsatzmoment'])))
+            ->when(! empty($facetten['season']), fn ($q) => $q->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $facetten['season'])))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'event_type_id', 'serving_form_id']);
     }
 
     // ── CRM-Lese-Picker (MVP) — class_exists-geschützt (Modul läuft ohne crm) ──

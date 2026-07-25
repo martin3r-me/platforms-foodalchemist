@@ -485,7 +485,13 @@ class Index extends Component
 
     public string $conceptSuche = '';
 
-    public ?int $conceptKategorie = null;
+    /**
+     * UX 2026-07-25 (Dominique): Concept-Picker filtert auf die Concepter-DIMENSIONEN
+     * (Eventtyp/Servierform/Einsatzmoment/Saison) — Konzept-Taxonomie (Kategorie/Klasse) ausgemustert.
+     *
+     * @var array{eventtyp:?int, servierform:?int, einsatzmoment:?int, season:?int}
+     */
+    public array $conceptFacetten = ['eventtyp' => null, 'servierform' => null, 'einsatzmoment' => null, 'season' => null];
 
     /** E1.3: Freitext-Suche für den recipe_ref-Einzel-Gericht-Picker. */
     public string $gerichtSuche = '';
@@ -495,9 +501,6 @@ class Index extends Component
 
     /** UX 2026-07-24: Untergruppe (dish_class, z. B. „Vorspeise Vegan") unter der aktiven HG. */
     public ?int $gerichtDishClass = null;
-
-    /** UX 2026-07-24: Klassen-Filter des Concept-Pickers = echte Concepter-Klasse (vocab_classes-Baum). */
-    public ?int $conceptKlasseId = null;
 
     /** #369: CRM-Kunde-Picker. */
     public string $firmaSuche = '';
@@ -847,10 +850,19 @@ class Index extends Component
         $this->gerichtDishClass = ($this->gerichtDishClass === $dishClassId) ? null : $dishClassId;
     }
 
-    /** Concept-Picker: echte Concepter-Klasse (vocab_classes) (de)selektieren. */
-    public function waehleConceptKlasse(int $klasseId): void
+    /** Concept-Picker: eine Concepter-Dimension (eventtyp|servierform|einsatzmoment|season) (de)selektieren. */
+    public function toggleConceptFacet(string $feld, int $id): void
     {
-        $this->conceptKlasseId = ($this->conceptKlasseId === $klasseId) ? null : $klasseId;
+        if (! array_key_exists($feld, $this->conceptFacetten)) {
+            return;
+        }
+        $this->conceptFacetten[$feld] = ($this->conceptFacetten[$feld] === $id) ? null : $id;
+    }
+
+    /** Concept-Picker: alle Dimensions-Filter zurücksetzen. */
+    public function resetConceptFacetten(): void
+    {
+        $this->conceptFacetten = ['eventtyp' => null, 'servierform' => null, 'einsatzmoment' => null, 'season' => null];
     }
 
     public function presetHinzu(string $type, ?string $slug, ?string $label, ?string $preisBasis, bool $sichtbar, FoodbookService $svc): void
@@ -1102,15 +1114,22 @@ class Index extends Component
             'kapitel' => $kapitel,
             // E5.3: Portfolio/Kapitel-Aggregat + WE ziehen jetzt in die Leitstelle-Rail (Nested-Livewire) um.
             'headerPresets' => FoodbookService::headerPresets(),
-            // UX 2026-07-24 (Dominique): Concept-Picker filtert auf die ECHTEN Concepter-Klassen
-            // (vocab_classes-Baum, inkl. Untergruppen), nicht mehr auf die Concept-Kategorie.
-            'conceptKlassen' => $this->selectedKapitelId !== null
-                ? app(\Platform\FoodAlchemist\Services\ConceptService::class)->klassenFlat($team) : [],
+            // UX 2026-07-25 (Dominique): Concept-Picker filtert auf die Concepter-DIMENSIONEN
+            // (Eventtyp/Servierform/Einsatzmoment/Saison) — Konzept-Taxonomie (Kategorie/Klasse) ausgemustert.
+            // Vokabulare wie im Concepter-Browser; nur bei gewähltem Kapitel laden.
+            'facetteEventtypen' => $this->selectedKapitelId !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']) : collect(),
+            'facetteServierformen' => $this->selectedKapitelId !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)->orderBy('sort_order')->get(['id', 'label']) : collect(),
+            'facetteMomente' => $this->selectedKapitelId !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']) : collect(),
+            'facetteSaisons' => $this->selectedKapitelId !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']) : collect(),
             // UX-Fix 2026-07-24 (Dominique „Eingabe katastrophe"): Picker zeigt beim Öffnen sofort eine
-            // browsebare Liste — Suche/Klasse FILTERN nur noch, sind nicht mehr Voraussetzung. Service
+            // browsebare Liste — Suche/Dimensionen FILTERN nur noch, sind nicht mehr Voraussetzung. Service
             // liefert bei leerer Suche längst alle (orderBy name, cap 50). Nur an Kapitel-Auswahl gebunden.
             'conceptKandidaten' => $this->selectedKapitelId !== null
-                ? $svc->conceptKandidaten($team, $this->conceptSuche, null, 50, $this->conceptKlasseId) : collect(),
+                ? $svc->conceptKandidaten($team, $this->conceptSuche, 50, $this->conceptFacetten) : collect(),
             // E1.3: Einzel-Gericht-Picker (recipe_ref) — sofort Liste, Suche + Klasse (HG) + Untergruppe filtern nur
             'gerichtKandidaten' => $this->selectedKapitelId !== null
                 ? $svc->gerichtKandidaten($team, $this->gerichtSuche, 50, $this->gerichtHauptgruppe, $this->gerichtDishClass) : collect(),

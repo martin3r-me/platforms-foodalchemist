@@ -161,21 +161,55 @@
             @endforelse
         </div>
 
-        {{-- Katalog-Concept-Picker (Modal, Livewire-sicher) — Suche + Kategorie-Tree + Liste, „alles eingeben" --}}
+        {{-- Katalog-Concept-Picker (Modal, Livewire-sicher) — Suche + Concepter-Dimensionen + sofort-Liste --}}
         <x-foodalchemist::modal name="angebot-katalog" title="Katalog-Concept einbinden" size="max-w-3xl">
             <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-3" />
+            @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
             <div class="flex gap-3 min-h-[20rem]">
-                <div class="w-44 shrink-0 overflow-y-auto border-r border-black/5 pr-2 space-y-0.5 max-h-[26rem]">
-                    <button type="button" wire:click="$set('conceptKategorie', null)"
-                            class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $conceptKategorie === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">Alle Kategorien</button>
-                    <x-foodalchemist::tree :initial-collapsed="collect($conceptKategorien)->where('has_children', true)->pluck('id')->all()">
-                        @foreach($conceptKategorien as $kat)
-                            <x-foodalchemist::tree-node :node-id="$kat['id']" :depth="$kat['depth']" :ancestors="$kat['ancestors'] ?? []"
-                                :has-children="$kat['has_children'] ?? false" :active="$conceptKategorie === $kat['id']">
-                                <button type="button" wire:click="$set('conceptKategorie', {{ $kat['id'] }})" class="flex-1 min-w-0 truncate text-left text-xs px-1 py-0.5">{{ $kat['name'] }}</button>
-                            </x-foodalchemist::tree-node>
-                        @endforeach
-                    </x-foodalchemist::tree>
+                {{-- UX 2026-07-25: Filter auf die Concepter-Dimensionen (Eventtyp/Servierform/Einsatzmoment/Saison) --}}
+                <div class="w-56 shrink-0 overflow-y-auto border-r border-black/5 pr-2 space-y-2 max-h-[26rem]">
+                    <button type="button" wire:click="resetConceptFacetten"
+                            class="w-full text-left text-[11px] px-2 py-1 rounded-lg {{ ! $facettenAktiv ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]' }}">Alle Dimensionen</button>
+                    @if($facetteEventtypen->isNotEmpty())
+                        <div class="space-y-1"><span class="{{ $label }}">Eventtyp</span>
+                            <div class="flex flex-wrap gap-1">
+                                @foreach($facetteEventtypen as $et)
+                                    <button type="button" wire:key="afc-ev-{{ $et->id }}" wire:click="toggleConceptFacet('eventtyp', {{ $et->id }})"
+                                            class="{{ $pill }} {{ $conceptFacetten['eventtyp'] === $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                    @if($facetteServierformen->isNotEmpty())
+                        <div class="space-y-1"><span class="{{ $label }}">Servierform</span>
+                            <div class="flex flex-wrap gap-1">
+                                @foreach($facetteServierformen as $sf)
+                                    <button type="button" wire:key="afc-sf-{{ $sf->id }}" wire:click="toggleConceptFacet('servierform', {{ $sf->id }})"
+                                            class="{{ $pill }} {{ $conceptFacetten['servierform'] === $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                    @if($facetteMomente->isNotEmpty())
+                        <div class="space-y-1"><span class="{{ $label }}">Einsatzmoment</span>
+                            <div class="flex flex-wrap gap-1">
+                                @foreach($facetteMomente as $em)
+                                    <button type="button" wire:key="afc-em-{{ $em->id }}" wire:click="toggleConceptFacet('einsatzmoment', {{ $em->id }})"
+                                            class="{{ $pill }} {{ $conceptFacetten['einsatzmoment'] === $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                    @if($facetteSaisons->isNotEmpty())
+                        <div class="space-y-1"><span class="{{ $label }}">Saison</span>
+                            <div class="flex flex-wrap gap-1">
+                                @foreach($facetteSaisons as $sa)
+                                    <button type="button" wire:key="afc-sa-{{ $sa->id }}" wire:click="toggleConceptFacet('season', {{ $sa->id }})"
+                                            class="{{ $pill }} {{ $conceptFacetten['season'] === $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
                 </div>
                 <div class="flex-1 min-w-0 overflow-y-auto space-y-0.5 max-h-[26rem]">
                     @if($katalogTreffer->isNotEmpty())
@@ -186,10 +220,10 @@
                                 <span class="text-gray-500 tabular-nums shrink-0">{{ $kt->price_per_person_cache !== null ? number_format((float) $kt->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
                             </button>
                         @endforeach
-                    @elseif($conceptSuche !== '' || $conceptKategorie !== null)
+                    @elseif($conceptSuche !== '' || $facettenAktiv)
                         <p class="text-[11px] text-gray-500 px-2 py-2">Keine Concepts für diese Auswahl.</p>
                     @else
-                        <p class="text-[11px] text-gray-500 px-2 py-2">Kategorie wählen oder oben suchen.</p>
+                        <p class="text-[11px] text-gray-500 px-2 py-2">Noch keine Concepts angelegt.</p>
                     @endif
                 </div>
             </div>

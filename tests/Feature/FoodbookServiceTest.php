@@ -255,16 +255,19 @@ it('GT-FB-4: Lösch-Guard — referenziertes Concept löschen wirft typisierte E
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistConcept::find($this->concept->id))->toBeNull();
 });
 
-it('GT-FB-7: Concept-Picker filtert nach Concept-Kategorie (FB-1)', function () {
-    $cat = $this->concepts->createCategory($this->rootTeam, 'Buffets');
-    $this->concept->update(['category_id' => $cat->id]);                              // Grill-Buffet → „Buffets"
-    $this->concepts->create($this->rootTeam, ['name' => 'Fingerfood-Konzept']);       // ohne Kategorie
+it('GT-FB-7: Concept-Picker filtert nach Concepter-Dimension (Eventtyp, FB-1)', function () {
+    $et = \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Gala/Bankett', 'is_inactive' => false, 'sort_order' => 1,
+    ]);
+    $this->concept->forceFill(['event_type_id' => $et->id])->save();                  // Grill-Buffet → „Gala/Bankett"
+    $this->concepts->create($this->rootTeam, ['name' => 'Fingerfood-Konzept']);       // ohne Dimension
 
-    $inKat = $this->foodbooks->conceptKandidaten($this->rootTeam, '', $cat->id);
-    expect($inKat->pluck('name')->all())
+    $inDim = $this->foodbooks->conceptKandidaten($this->rootTeam, '', 50, ['eventtyp' => $et->id]);
+    expect($inDim->pluck('name')->all())
         ->toContain('Grill-Buffet')->not->toContain('Fingerfood-Konzept');
 
-    $alle = $this->foodbooks->conceptKandidaten($this->rootTeam, '', null);
+    // Ohne Dimension → sofort-Liste mit allen
+    $alle = $this->foodbooks->conceptKandidaten($this->rootTeam, '', 50, []);
     expect($alle->pluck('name')->all())
         ->toContain('Grill-Buffet')->toContain('Fingerfood-Konzept');
 });
@@ -304,21 +307,20 @@ it('GT-FB-8: Gericht-Picker filtert nach Klasse (HG) + Untergruppe (dish_class, 
     expect($alle->pluck('name')->all())->toContain('Kürbis-Carpaccio')->toContain('Gruß: Amuse');
 });
 
-it('GT-FB-9: Concept-Picker filtert nach echter Concepter-Klasse (vocab_classes, inkl. Untergruppe)', function () {
-    // Klassen-Baum: „Warme Küche" → „Suppen" (createKlasse setzt slug/uuid korrekt)
-    $parent = $this->concepts->createKlasse($this->rootTeam, 'Warme Küche');
-    $kind = $this->concepts->createKlasse($this->rootTeam, 'Suppen', $parent->id);
-    // Setup-Concept „Grill-Buffet" ohne Klasse; ein Concept in der Unterklasse „Suppen".
-    $suppe = $this->concepts->create($this->rootTeam, ['name' => 'Suppen-Trio', 'class' => 'Suppen']);
+it('GT-FB-9: Concept-Picker filtert nach Concepter-Dimension (Einsatzmoment-Pivot)', function () {
+    $moment = \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Apéro/Empfang', 'is_inactive' => false, 'sort_order' => 1,
+    ]);
+    // Setup-Concept „Grill-Buffet" ohne Moment; ein Concept mit Einsatzmoment-Pivot.
+    $apero = $this->concepts->create($this->rootTeam, ['name' => 'Apéro-Häppchen']);
+    $apero->serviceMoments()->attach($moment->id);
 
-    // Elternklasse gewählt → Teilbaum (self + Nachfahren) → Suppen-Trio dabei
-    $imBaum = $this->foodbooks->conceptKandidaten($this->rootTeam, '', null, 50, $parent->id);
-    expect($imBaum->pluck('name')->all())
-        ->toContain('Suppen-Trio')->not->toContain('Grill-Buffet');
+    $imMoment = $this->foodbooks->conceptKandidaten($this->rootTeam, '', 50, ['einsatzmoment' => $moment->id]);
+    expect($imMoment->pluck('name')->all())
+        ->toContain('Apéro-Häppchen')->not->toContain('Grill-Buffet');
 
-    // Ohne Klasse → alle
-    $alle = $this->foodbooks->conceptKandidaten($this->rootTeam, '', null, 50, null);
-    expect($alle->pluck('name')->all())->toContain('Suppen-Trio')->toContain('Grill-Buffet');
+    $alle = $this->foodbooks->conceptKandidaten($this->rootTeam, '', 50, []);
+    expect($alle->pluck('name')->all())->toContain('Apéro-Häppchen')->toContain('Grill-Buffet');
 });
 
 it('M11-09: Block-Notiz (interne_bemerkung) persistiert via updateBlock — auch auf concept_ref', function () {
