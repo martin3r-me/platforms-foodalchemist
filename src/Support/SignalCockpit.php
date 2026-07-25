@@ -47,6 +47,7 @@ final class SignalCockpit
         // (kein Sammel-propose über 15 Beispiele), „ungemappte Zutaten" läuft über den bestehenden
         // Match-Pfad im Rezept, „verwaist"/„ein Zutat" sind reine Entscheidungen.
         'rezept_kategorie_problem' => 'signal.recipe_category_suggest',
+        'rezept_naming_regelwerk' => 'signal.recipe_naming_suggest',
     ];
 
     private const PLAN_DET = [
@@ -75,6 +76,9 @@ final class SignalCockpit
         'signal.recipe_category_suggest' => 'Passende Kategorie je Rezept vorschlagen (Bauart-Logik „wie gebaut", nicht '
             . '„wo eingesetzt"); stillgelegte Hauptgruppen bleiben ausgeschlossen. Vorschlag zur Sichtung — die '
             . 'Zuordnung setzt du.',
+        'signal.recipe_naming_suggest' => 'Regelkonformen Namen je auffälligem Rezept vorschlagen (VK-Gericht: '
+            . '[HG]-Präfix + Pipe-Skelett aus den Kern-Bausteinen; Basisrezept: „Typ: Bezeichnung"). Nur ein '
+            . 'Vorschlag — umbenannt wird nichts automatisch, weil der Name in Angeboten und Foodbooks hängt.',
     ];
 
     /**

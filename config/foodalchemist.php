@@ -684,5 +684,14 @@ return [
                 . 'beispiele = Rezeptnamen. Nenne keine stillgelegten Hauptgruppen. '
                 . 'werte = {vorschlag} (Liste „Rezept → Kategorie" mit kurzer Begruendung).',
         ],
+        'signal.recipe_naming_suggest' => [
+            'tier' => 'B',
+            'task' => 'Schlage je genanntem Rezept einen regelkonformen Namen vor. Verkaufsgericht: fuehrendes '
+                . 'Hauptgruppen-Kuerzel in eckigen Klammern, danach 3-5 Kern-Bausteine mit " | " getrennt, '
+                . 'Leitkomponente zuerst (kein Marketing-Satz, keine Verbindungswoerter, keine Grammatur, '
+                . 'keine Katalog-Marker). Basisrezept: "Typ: Bezeichnung". Erfinde keine Zutaten, die nicht '
+                . 'im Ausgangsnamen stehen. Kontext: beispiele = Rezeptnamen. '
+                . 'werte = {vorschlag} (Liste „alt → neu" mit kurzer Begruendung).',
+        ],
     ],
 ];

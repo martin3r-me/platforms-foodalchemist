@@ -131,21 +131,40 @@ trait SeedsTeamHierarchy
 
     protected static int $recipeSeq = 0;
 
+    /** Ausbeute des Fixture-Defaults — nur solange sie unverändert ist, führt makeIngredient sie mit. */
+    protected const FIXTURE_YIELD_KG = 1.0;
+
     /**
      * Qualitativ unauffälliges Rezept. $attrs überschreibt gezielt einzelne Felder.
+     *
+     * Zwei bewusste Grenzen des „sauber"-Versprechens (Spec 21 S1b):
+     *  · **VK-Gerichte** müssen selbst regelkonform benannt werden (`[HG] A | B`), sonst
+     *    schlägt `rezept_naming_regelwerk` an — der Name kommt vom Test, nicht vom Fixture.
+     *  · **Ausbeute** bleibt nur kohärent, wenn Zutaten über makeIngredient dazukommen
+     *    (das führt sie mit); rohe Inserts in `recipe_ingredients` muss der Test selbst passend
+     *    zur Ausbeute wählen.
      */
     protected function makeRecipe(Team $owner, string $name, array $attrs = []): \Platform\FoodAlchemist\Models\FoodAlchemistRecipe
     {
         self::$recipeSeq++;
 
-        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create(array_merge([
+        // Allergene stehen nach dem Insert per DB-Default auf `unbekannt`/`unknown` — ein
+        // kundenexponiertes Fixture-Rezept würde damit sofort `rezept_allergen_unbelastbar`
+        // auslösen. Der saubere Default ist „aggregiert und belastbar".
+        $allergene = ['allergens_confidence' => 'high'];
+        foreach (['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk',
+            'tree_nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs'] as $a) {
+            $allergene['allergen_' . $a] = 'nicht_enthalten';
+        }
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create(array_merge($allergene, [
             'team_id' => $owner->id,
             'recipe_key' => 'fixture-' . self::$recipeSeq . '-' . mb_strtolower(str_replace(' ', '-', $name)),
             'name' => $name,
             'status' => 'approved',
             'is_sales_recipe' => false,
             'preparation' => 'Alle Zutaten abwiegen, zusammenführen und auf Temperatur bringen.',
-            'yield_kg' => 1.0,
+            'yield_kg' => self::FIXTURE_YIELD_KG,
             'n_ingredients_total' => 2,
             'n_ingredients_unmapped' => 0,
             // Beide Taxonomie-Wege gesetzt, damit der Default egal ob Basisrezept oder VK-Gericht
@@ -204,7 +223,7 @@ trait SeedsTeamHierarchy
     ): \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient {
         $team = Team::findOrFail($recipe->team_id);
 
-        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
+        $zutat = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
             'team_id' => $recipe->team_id,
             'recipe_id' => $recipe->id,
             'gp_id' => $gp?->id,
@@ -213,5 +232,32 @@ trait SeedsTeamHierarchy
             'unit_vocab_id' => $this->unitG($team)->id,
             'position' => $position,
         ]);
+
+        $this->haltAusbeuteKohaerent($recipe);
+
+        return $zutat;
+    }
+
+    /**
+     * Führt die Ausbeute mit der eingewogenen Masse mit — sonst würde jedes Fixture-Rezept
+     * mit Zutaten `rezept_yield_implausibel` auslösen (1,0 kg Ausbeute aus 200 g Zutaten ist
+     * physikalisch unmöglich). Greift nur, solange die Ausbeute noch der Fixture-Default ist:
+     * setzt ein Test sie bewusst (auch auf null), bleibt sein Wert stehen. Schreibt per
+     * Query-Builder, damit `updated_at` unberührt bleibt (der Verwaist-Check liest es).
+     */
+    private function haltAusbeuteKohaerent(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe): void
+    {
+        if ($recipe->yield_kg === null || abs((float) $recipe->yield_kg - self::FIXTURE_YIELD_KG) > 0.0001) {
+            return;
+        }
+
+        $summeG = (float) \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients')
+            ->where('recipe_id', $recipe->id)->whereNull('deleted_at')->sum('quantity');
+        if ($summeG <= 0.0) {
+            return;
+        }
+
+        \Illuminate\Support\Facades\DB::table('foodalchemist_recipes')
+            ->where('id', $recipe->id)->update(['yield_kg' => round($summeG / 1000, 3)]);
     }
 }

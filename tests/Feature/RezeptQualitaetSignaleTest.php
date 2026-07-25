@@ -214,6 +214,140 @@ it('flaggt verwaiste Rezepte — Nutzung auf einer Fläche genügt zum Freispruc
         ->and(array_column($this->dq->betroffene($this->rootTeam, 'rezept_verwaist'), 'id'))->toBe([$verwaist->id]);
 });
 
+// ── S1b · Tranche A: die Checks mit eigener Mechanik ─────────────────────────
+
+it('flaggt fehlende Ausbeute und Ausbeute über der Einsatzmasse — nicht aber Zähl-Einheiten', function () {
+    $gp = $this->makeGp($this->rootTeam, 'Kalbsfond');
+
+    // ok: Fixture führt die Ausbeute mit der eingewogenen Masse mit
+    $ok = $this->makeRecipe($this->rootTeam, 'Kohärent');
+    $this->makeIngredient($ok, 'Kalbsknochen', $gp, '800');
+
+    // ✗ Ausbeute fehlt trotz Zutaten
+    $this->makeRecipe($this->rootTeam, 'Ohne Ausbeute', ['yield_kg' => null, 'yield_kg_manual' => null]);
+
+    // ✗ 5 kg Ausbeute aus 100 g Einsatz — Verluste können Masse nur senken
+    $zuHoch = $this->makeRecipe($this->rootTeam, 'Ausbeute zu hoch', ['yield_kg' => 5.0]);
+    $this->makeIngredient($zuHoch, 'Knochen', $gp, '100');
+
+    // Die Falle: identisches Zahlenbild, aber die Zutat steht in einer Zähl-Einheit ohne
+    // Gramm-Default → die Einsatzmasse ist unbekannt, das Verhältnis darf NICHT bewertet werden.
+    $stk = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'bund', 'display_de' => 'Bund', 'dimension' => 'count',
+    ]);
+    $zaehl = $this->makeRecipe($this->rootTeam, 'Zähl-Einheit', ['yield_kg' => 5.0]);
+    $this->makeIngredient($zaehl, 'Petersilie', $gp, '2')->update(['unit_vocab_id' => $stk->id]);
+
+    // Ausbeute-lose Entwürfe/Stubs bleiben außen vor (kein Über-Flaggen)
+    $this->makeRecipe($this->rootTeam, 'Stub ohne Ausbeute', ['status' => 'stub', 'yield_kg' => null]);
+
+    $m = rqMetrik($this->dq->messeAlleEbenen($this->rootTeam), 'rezept_yield_implausibel');
+
+    expect($m['wert'])->toBe(2)
+        ->and($m['signal']['sev'])->toBe(SignalSeverity::Warnung)
+        ->and(array_column($this->dq->betroffene($this->rootTeam, 'rezept_yield_implausibel'), 'name'))
+        ->toBe(['Ausbeute zu hoch', 'Ohne Ausbeute']);
+});
+
+it('flaggt Naming-Verstöße — Grammatur nur ohne unterscheidende Funktion', function () {
+    $this->makeRecipe($this->rootTeam, 'Sauber benannt');                              // ok
+    $this->makeRecipe($this->rootTeam, 'Doppelt  Leerzeichen');                        // ✗
+    $this->makeRecipe($this->rootTeam, 'Trenner am Ende |');                           // ✗
+    $this->makeRecipe($this->rootTeam, ' Führendes Leerzeichen');                      // ✗
+
+    // VK-Gerichte: [HG]-Präfix + Pipe-Skelett (Regelwerk_Verkaufsgerichte §1.1)
+    $this->makeRecipe($this->rootTeam, '[HG] Rinderfilet | Portwein-Jus | Selleriepüree', ['is_sales_recipe' => true]);   // ok
+    $this->makeRecipe($this->rootTeam, 'Rinderfilet | Portwein-Jus', ['is_sales_recipe' => true]);                        // ✗ kein Präfix
+    $this->makeRecipe($this->rootTeam, '[DES] Panna Cotta | Mango (BOX)', ['is_sales_recipe' => true]);                   // ✗ Katalog-Marker
+
+    // Grammatur: als Diskriminator zulässig (§1.2a) → das Paar bleibt sauber …
+    $this->makeRecipe($this->rootTeam, 'Törtchen (17g)');
+    $this->makeRecipe($this->rootTeam, 'Törtchen (65g)');
+    // … alleinstehend ist sie ein Steckbrief-Wert und gehört ins Datenfeld
+    $this->makeRecipe($this->rootTeam, 'Brownie (65g)');                               // ✗
+
+    $m = rqMetrik($this->dq->messeAlleEbenen($this->rootTeam), 'rezept_naming_regelwerk');
+
+    expect($m['wert'])->toBe(6)
+        // Reihenfolge bewusst offen: `orderBy('name')` sortiert Klammern/führende Leerzeichen
+        // je Kollation unterschiedlich (SQLite binär, MySQL unicode_ci) — geprüft wird die Menge.
+        ->and(array_column($this->dq->betroffene($this->rootTeam, 'rezept_naming_regelwerk'), 'name'))
+        ->toEqualCanonicalizing([' Führendes Leerzeichen', '[DES] Panna Cotta | Mango (BOX)', 'Brownie (65g)',
+            'Doppelt  Leerzeichen', 'Rinderfilet | Portwein-Jus', 'Trenner am Ende |']);
+});
+
+it('flaggt Namens-Dubletten je Rezept-Art und Kategorie — beide Seiten', function () {
+    $andereKat = $this->makeRecipeCategory($this->rootTeam, 'FIX-KAT2');
+
+    // Dublette: Normalisierung ignoriert Groß-/Kleinschreibung und Trennzeichen
+    $a = $this->makeRecipe($this->rootTeam, 'Tomaten Sauce');
+    $b = $this->makeRecipe($this->rootTeam, 'tomaten-sauce');
+
+    // kein Befund: andere Kategorie ist laut Regelwerk §1 ein zulässiger Diskriminator
+    $this->makeRecipe($this->rootTeam, 'Tomaten Sauce', ['category_id' => $andereKat->id]);
+    // kein Befund: gleicher Name, andere Rezept-Art (Komponente vs. verkauftes Gericht)
+    $this->makeRecipe($this->rootTeam, '[HG] Tomaten Sauce', ['is_sales_recipe' => true]);
+    $this->makeRecipe($this->rootTeam, 'Einzelstück');
+
+    $m = rqMetrik($this->dq->messeAlleEbenen($this->rootTeam), 'rezept_dublette');
+
+    expect($m['wert'])->toBe(2)
+        ->and(array_column($this->dq->betroffene($this->rootTeam, 'rezept_dublette'), 'id'))
+        ->toEqualCanonicalizing([$a->id, $b->id]);
+});
+
+it('flaggt unbelastbare Allergene nur bei kundenexponierten Rezepten', function () {
+    $unbekannt = ['allergens_confidence' => 'unknown'];
+
+    // ✗ steht in einem Foodbook und die Allergen-Auskunft ist unbelastbar
+    $imBuch = $this->makeRecipe($this->rootTeam, 'Im Foodbook', $unbekannt + ['is_sales_recipe' => true]);
+    // ok: exponiert, aber aggregiert
+    $sauber = $this->makeRecipe($this->rootTeam, 'Sauber aggregiert', ['is_sales_recipe' => true]);
+    // ok: unbelastbar, aber erreicht keinen Gast → Pflege, keine Haftung
+    $this->makeRecipe($this->rootTeam, 'Nur im Regal', $unbekannt);
+    // ✗ Sub-Rezept eines exponierten Gerichts erbt die Exposition (eine Ebene)
+    $sauce = $this->makeRecipe($this->rootTeam, 'Sauce im Gericht', $unbekannt);
+    // ✗ einzelnes Allergen auf `unbekannt` genügt (Konfidenz sagt hier nichts)
+    $einzeln = $this->makeRecipe($this->rootTeam, 'Ein Allergen offen',
+        ['is_sales_recipe' => true, 'allergen_sesame' => 'unbekannt']);
+
+    $this->makeIngredient($imBuch, 'Sauce', null)->update(['referenced_recipe_id' => $sauce->id]);
+
+    $foodbook = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'label' => 'Buch']);
+    $kapitel = FoodAlchemistFoodbookKapitel::create([
+        'team_id' => $this->rootTeam->id, 'foodbook_id' => $foodbook->id, 'title' => 'Hauptgänge',
+    ]);
+    foreach ([$imBuch, $sauber, $einzeln] as $i => $gericht) {
+        FoodAlchemistFoodbookBlock::create([
+            'team_id' => $this->rootTeam->id, 'chapter_id' => $kapitel->id, 'position' => $i + 1,
+            'type' => 'gericht', 'sales_recipe_id' => $gericht->id,
+        ]);
+    }
+
+    $m = rqMetrik($this->dq->messeAlleEbenen($this->rootTeam), 'rezept_allergen_unbelastbar');
+
+    expect($m['wert'])->toBe(3)
+        ->and($m['signal']['sev'])->toBe(SignalSeverity::Kritisch)
+        ->and(array_column($this->dq->betroffene($this->rootTeam, 'rezept_allergen_unbelastbar'), 'name'))
+        ->toBe(['Ein Allergen offen', 'Im Foodbook', 'Sauce im Gericht']);
+});
+
+it('flaggt referenzierte Sub-Rezept-Stubs ohne Inhalt', function () {
+    $leer = $this->makeRecipe($this->rootTeam, 'Leerer Stub', ['status' => 'stub', 'n_ingredients_total' => 0]);
+    $gefuellt = $this->makeRecipe($this->rootTeam, 'Stub mit Inhalt', ['status' => 'stub']);   // Default 2 Zutaten
+    // nicht referenziert → niemand wartet darauf
+    $this->makeRecipe($this->rootTeam, 'Freier Stub', ['status' => 'stub', 'n_ingredients_total' => 0]);
+
+    $eltern = $this->makeRecipe($this->rootTeam, 'Eltern');
+    $this->makeIngredient($eltern, 'Leer', null)->update(['referenced_recipe_id' => $leer->id]);
+    $this->makeIngredient($eltern, 'Gefüllt', null, '100', 2)->update(['referenced_recipe_id' => $gefuellt->id]);
+
+    $m = rqMetrik($this->dq->messeAlleEbenen($this->rootTeam), 'rezept_sub_stub_offen');
+
+    expect($m['wert'])->toBe(1)
+        ->and(array_column($this->dq->betroffene($this->rootTeam, 'rezept_sub_stub_offen'), 'id'))->toBe([$leer->id]);
+});
+
 it('führt jeden Tranche-A-Typ als Metrik mit Signal-Deskriptor (Register vollständig)', function () {
     $metriken = collect($this->dq->messeAlleEbenen($this->rootTeam)['rezeptqualitaet']['metriken']);
 

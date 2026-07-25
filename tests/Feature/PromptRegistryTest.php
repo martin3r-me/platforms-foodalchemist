@@ -40,6 +40,7 @@ const REGISTRY_SOLL = [
     'signal.supplier_inquiry' => 'B', 'signal.margin_levers' => 'B',
     'signal.vk_release_advice' => 'B', 'signal.serving_form_suggest' => 'B',
     'signal.recipe_category_suggest' => 'B',                          // Spec 21 Tranche A: Assist zu rezept_kategorie_problem
+    'signal.recipe_naming_suggest' => 'B',                            // Spec 21 Tranche A: Assist zu rezept_naming_regelwerk
 ];
 
 it('Registry vollständig: alle Soll-Keys vorhanden, mit task + gültigem Tier', function () {
