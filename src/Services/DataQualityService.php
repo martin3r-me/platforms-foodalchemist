@@ -32,6 +32,15 @@ class DataQualityService
     /** Ab dieser Anzahl gilt eine Lücke als kritisch (rot) statt Warnung (gelb). */
     private const ROT_SCHWELLE = 100;
 
+    /**
+     * Metrik-Art. Nötig, weil `severity='info'` beide Arten treffen kann (ein als
+     * Info deklarierter Lücken-Check wird nie rot) — die Zeitreihe (Spec 21 · E1)
+     * braucht aber genau die Lücken und nicht die Bestands-Totale („GPs approved").
+     */
+    public const KIND_GAP = 'gap';
+
+    public const KIND_INFO = 'info';
+
     /** Zubereitungs-Text unter dieser Länge gilt als nicht vorhanden (Spec 21 §2). */
     private const MIN_ZUBEREITUNG_ZEICHEN = 20;
 
@@ -862,7 +871,7 @@ class DataQualityService
     /** Informations-Metrik (Total o. ä.) — nie ampel-relevant. */
     private function info(string $key, string $label, int $wert): array
     {
-        return ['key' => $key, 'label' => $label, 'wert' => $wert, 'severity' => 'info', 'signal' => null];
+        return ['key' => $key, 'kind' => self::KIND_INFO, 'label' => $label, 'wert' => $wert, 'severity' => 'info', 'signal' => null];
     }
 
     /**
@@ -881,6 +890,6 @@ class DataQualityService
             ? ['typ' => $typ, 'dedup' => $dedup, 'desc' => $desc, 'sev' => $sev]
             : null;
 
-        return ['key' => $key, 'label' => $label, 'wert' => $wert, 'severity' => $severity, 'signal' => $signal];
+        return ['key' => $key, 'kind' => self::KIND_GAP, 'label' => $label, 'wert' => $wert, 'severity' => $severity, 'signal' => $signal];
     }
 }

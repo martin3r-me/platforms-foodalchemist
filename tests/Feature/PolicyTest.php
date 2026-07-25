@@ -57,6 +57,13 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         'FoodAlchemistCanvasEntry',                                    // Zugriff nur via Canvas-Aggregat (CanvasService)
         'FoodAlchemistPlanningFrameSlot', 'FoodAlchemistPlanningFrameRule', // R4.1: Zugriff nur via Frame-Aggregat (PlanningFrameService-Guard)
     ];
+    /**
+     * Messreihen: haben ein team_id, dürfen aber NICHT vererben. Eine Zeile ist der
+     * Zähler-Stand aus der Sicht des messenden Teams — ein Kind-Team zählt den
+     * Eltern-Katalog schon mit, würde man zusätzlich die Eltern-Zeitreihe einblenden,
+     * lägen zwei Serien derselben Objekte übereinander (Spec 21 · E1).
+     */
+    $messreihen = ['FoodAlchemistSignalSnapshot'];
     $modelDir = dirname((new ReflectionClass(FoodAlchemistRecipe::class))->getFileName());
     $fehlend = [];
     foreach (glob($modelDir . '/*.php') as $datei) {
@@ -65,7 +72,8 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             continue;
         }
         $traits = collect(class_uses_recursive($klasse))->keys()->map(fn ($t) => class_basename($t));
-        $pflichten = in_array(class_basename($klasse), $satelliten, true)
+        $ohneHierarchie = array_merge($satelliten, $messreihen);
+        $pflichten = in_array(class_basename($klasse), $ohneHierarchie, true)
             ? ['LogsActivity', 'HasUuidV7', 'SoftDeletes']
             : ['LogsActivity', 'BelongsToTeamHierarchy', 'HasUuidV7', 'SoftDeletes'];
         if (class_basename($klasse) === 'FoodAlchemistPrice') {

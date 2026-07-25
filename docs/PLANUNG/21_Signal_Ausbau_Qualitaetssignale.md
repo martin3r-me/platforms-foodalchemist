@@ -78,6 +78,8 @@ Alle auf verifizierten Spalten. Ziel-Severity in Klammern.
 - **E2 · Rausch-Guard:** Policy je Typ (`foodalchemist_signal_policies`: `type`, `threshold`, `accepted_until`, `note`, `muted`). Ein Typ über Schwelle wird als **aggregierte Zustands-Zeile** geführt („788 Basisrezepte teil-unbepreist — bekannt, akzeptiert bis TT.MM"), nicht als 788 Einzel-Alarme. Neu hinzukommende Fälle bleiben trotzdem sichtbar (Delta-Alarm statt Absolut-Alarm).
 - **E3 · Verschlechterungs-Signal:** Meta-Signal `qualitaet_drift` wenn ein Typ gegenüber dem Vorlauf um >X % steigt. Das ist der eigentliche „System im Blick"-Mechanismus — es alarmiert bei *Veränderung*, nicht bei Bestand.
 
+> **Stand 2026-07-26 · E1 gebaut** (Etappe S2a, `SignalTrendService` + `foodalchemist_signal_snapshots` + MCP `signal_trend.GET`). Zwei Abweichungen von der Spalten-Skizze oben, beide im Code begründet: die Tabelle führt **`metric_key` + `source` + `signal_type`** statt „`type`/`gap_key`" (derselbe Schlüsselraum trägt zwei Bedeutungen — SignalTyp-Wert vs. Ampel-Metrik-Key — und ein Trend-Reader darf das nicht raten müssen), und `severity_counts` wird nur für die Signal-Seite gefüllt (eine Ampel-Metrik hat genau *eine* Severity). Zwei Eigenschaften sind **Voraussetzung für E3** und dürfen dort nicht wegoptimiert werden: die Reihe ist **dicht** (auch Nullen → „behoben" ≠ „nicht gemessen", `previous=null` bei neuen Checks alarmiert nicht) und **ein Lauf = ein `measured_at`** (Basis des Vorlauf-Vergleichs). Geschrieben wird im Detektor-Lauf (`SignalDetektorService::laufen()`), weil der Scheduler diesen Command fährt. E2+E3 folgen zusammen als S2b — die Policy entscheidet, ob ein Drift überhaupt alarmiert (`muted`/`threshold`), getrennt gebaut würde Drift zweimal geschrieben.
+
 ## 7. Tranche P — Signal-Detail-Panel (rechtes Panel, heute ungenutzt)
 
 **Ist-Stand:** 6 Seiten haben ein `DetailPanel` (`Gps`, `Recipes`, `Verkauf`, `Concepter`, `Angebote`, `Produktion`) — **Signale nicht.** Die Signale-Seite (`src/Livewire/ReviewQueue.php`, 5-Tab-Cockpit) nutzt die rechte Fläche gar nicht; Aktionen sind heute „Reinschauen / KI erledigen lassen / Erledigt / Ignorieren" in der Zeile.
@@ -101,7 +103,8 @@ Panel-Inhalt (Muster + Design von `Recipes/DetailPanel` + Cockpit/section aus De
 |---|---|---|---|
 | **S0** | Fundament | S | `SignalTyp`-Enum erweitern (Label+Icon je neuem Typ), `DataQualityService` um eine Rezept-Sektion erweitern (Muster der bestehenden `gap()`-Aufrufe), Pest-Fixture-Basis |
 | **S1** | Tranche A | M | 11 deterministische Rezept-Checks + Fixer-/Assist-Mapping in `SignalCockpit`; Pest je Check mit Positiv- **und** Negativfall (kein Über-Flaggen) |
-| **S2** | Tranche E | M | Snapshot-Tabelle + Policy-Tabelle + Drift-Meta-Signal; Detektor-Lauf schreibt Zeitreihe; Aggregations-Darstellung statt Einzel-Alarm |
+| **S2a** | Tranche E · E1 | S–M | ✅ 2026-07-26 — Snapshot-Tabelle + `SignalTrendService` (Serie/Delta/Übersicht) + Fold-in in den Detektor-Lauf + MCP `signal_trend.GET` |
+| **S2b** | Tranche E · E2+E3 | M | Policy-Tabelle (`threshold`/`accepted_until`/`muted`) + aggregierte Zustands-Zeile statt Einzel-Alarm + Drift-Meta-Signal `qualitaet_drift` |
 | **S3** | Tranche P | M–L | `Signale/DetailPanel` + `signal-selected`-Event; Punkte 1–8 (2 und 3 sind die Kern-Features, nicht optional) |
 | **S4** | Tranche C+D | M | Konzept- + Foodbook-Signale; `foodbook_kapitel_ohne_text` **erst nach L2** scharfstellen |
 | **S5** | Tranche B | S–M | Batch-Konsument von L6 (`RecipeReviewService`) → Findings über Schwelle werden Signale; **erst nach L6** |

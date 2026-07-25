@@ -5,23 +5,29 @@ namespace Platform\FoodAlchemist\Console;
 use Illuminate\Console\Command;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Services\DataQualityService;
+use Platform\FoodAlchemist\Services\SignalTrendService;
 
 /**
  * Datenqualitäts-Ampel für die Kaskade LA → GP → Basisrezept → VK-Gericht.
  * Rein messend (read-only). Mit --signals werden die Lücken als Signale in die
  * „Signale"-Inbox geschrieben (idempotent, Dedup) — sichtbar in der ReviewQueue
  * und via MCP signale.SEARCH. Für den Scheduler gedacht (analog signale-detektor).
+ *
+ * Mit --snapshot landen die Zähler zusätzlich in der Zeitreihe (Spec 21 · E1) — für die
+ * Messung außer der Reihe. Im Scheduler passiert das ohnehin: `signale-detektor` schreibt
+ * den Snapshot am Ende seines Laufs (dort hängt auch diese Ampel als Detektor mit drin).
  */
 class DataQualityCommand extends Command
 {
     protected $signature = 'foodalchemist:data-quality
         {--team= : nur dieses Team (ID), sonst alle}
         {--json : Maschinen-lesbare Ausgabe (per-Ebene JSON) statt Tabelle}
-        {--signals : Lücken zusätzlich als Signale in die Inbox schreiben (idempotent)}';
+        {--signals : Lücken zusätzlich als Signale in die Inbox schreiben (idempotent)}
+        {--snapshot : Zähler zusätzlich in die Zeitreihe schreiben (Spec 21 E1; für den Trend)}';
 
     protected $description = 'Datenqualitäts-Ampel der Kaskade (LA→GP→Basisrezept→Gericht); optional als Signale.';
 
-    public function handle(DataQualityService $dq): int
+    public function handle(DataQualityService $dq, SignalTrendService $trend): int
     {
         $teams = $this->option('team')
             ? Team::whereKey((int) $this->option('team'))->get()
@@ -54,6 +60,13 @@ class DataQualityCommand extends Command
             if ($this->option('signals')) {
                 $n = $dq->emittiereSignale($team);
                 $this->line("  → {$n} Signal(e) geschrieben/aktualisiert.");
+            }
+
+            // Reihenfolge ist Absicht: erst Signale emittieren, dann snapshotten — sonst
+            // zählt die Signal-Seite der Zeitreihe den Stand VOR diesem Lauf.
+            if ($this->option('snapshot')) {
+                $rows = $trend->schreibeSnapshot($team);
+                $this->line("  → {$rows} Zeitreihen-Zeile(n) geschrieben.");
             }
         }
 

@@ -19,11 +19,28 @@ class SignalDetektorService
     public function __construct(
         private SignalService $signals,
         private DataQualityService $dataQuality,
+        private SignalTrendService $trend,
     ) {
     }
 
-    /** Alle Detektoren; Rückgabe = Anzahl erzeugter/aktualisierter Signale. */
+    /**
+     * Alle Detektoren; Rückgabe = Anzahl erzeugter/aktualisierter Signale.
+     *
+     * Am Ende schreibt der Lauf seinen Zähler-Stand in die Zeitreihe (Spec 21 · E1) —
+     * derselbe Fold-in-Gedanke wie bei der DQ-Ampel: der Scheduler fährt **diesen**
+     * Command, also muss der Trend hier entstehen und nicht in einem Zweit-Job, der
+     * auf demo nie eingehängt wird. Bewusst **nach** allen Emissionen, damit die
+     * Signal-Seite des Snapshots diesen Lauf schon enthält.
+     */
     public function laufen(Team $team): int
+    {
+        $n = $this->detektoren($team);
+        $this->trend->schreibeSnapshot($team);
+
+        return $n;
+    }
+
+    private function detektoren(Team $team): int
     {
         return $this->datenqualitaetGpLa($team)
             + $this->veraltetePreise($team)
