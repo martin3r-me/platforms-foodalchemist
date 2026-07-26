@@ -6,7 +6,7 @@
 > | Lücke | Ist | Beleg |
 > |---|---|---|
 > | **L1** | ⚪ offen | `ueberarbeit` nur in `src/Livewire/Recipes/RecipeModal.php`; `BulkEnrich` in ReviewQueue/GpModal/RecipeModal/Recipes\Browser/ClassifyLaJob — **nicht** im `VkModal` |
-> | **L2** | ⚪ offen | Button weiter `disabled`: `resources/views/livewire/foodbooks/index.blade.php:226`; Prompt `foodbook.kapitel_text` **nicht** in `AiGatewayService`. **Spec 19 hat L2 NICHT absorbiert** (entgegen früherer Annahme) |
+> | **L2** | 🟡 **L2a ✅ 2026-07-26** / L2b offen | L2a: Prompt **`foodbook.kundentext`** in Registry + `FOOD_DNA_KEYS`, `FoodbookService::kiKundentextVorschlag`, Button `:226` scharf mit echter Vorschau-Stufe. Offen (L2b): Kapitel-Ebene — `foodbook_chapters.description` ist im Editor **gar nicht** editierbar, erst danach `foodbook_kapitel_ohne_text` (Spec 21 Tranche D) |
 > | **L3** | ✅ **via Spec 19** | Kickoff in `Foodbooks/Index`, `PlanningFrameService`, `FoodbookService` + `ConceptGeneratorService::generiereAusBrief`. Kein eigener L3-Bau mehr — nur noch Bau-Referenz |
 > | **L4** | ⚪ offen | nur manueller `fillSlot` (`Concepts/Index.php:256/262`, `ConceptSlotsPostTool:94`); `zielpreisBerechnen`/`zielVorschlag` im Concepter-Editor sind **Preis**-Vorschlag, nicht Slot-Inhalt |
 > | **L5** | ⚪ offen | `src/Tools/` hat `ConceptsGenerateTool`, aber **kein** `RecipesGenerateTool` |
@@ -86,9 +86,10 @@ Das Basisrezept-Muster existiert komplett (`RecipeModal::kiUeberarbeiten`/`ueber
 Bereits in **#369** getrackt — kein neues Issue. Der Block „LLM-Key" ist inzwischen weicher: `AiGatewayService` + Prompt-Registry existieren, lokal läuft ein Provider; nur demo hängt an Martin (#499).
 
 **DoD (als #369-Nachtrag):**
-- [ ] Prompt `foodbook.kapitel_text` (Kontext: Kapitel-Titel + enthaltene Concepts/Gerichte + Kunden-Wording-Kette + Brand Voice)
-- [ ] Button enabled, graceful bei fehlendem Provider (KiNichtVerfuegbarException-Muster aus #499)
-- [ ] Vorschau + Übernehmen, `notizen_manual`-Schutz (user-editierte Texte nie überschreiben — Backup-Lehre 2026-06-30)
+- [x] Prompt **`foodbook.kundentext`** (Kontext: Gliederung über die Wording-Kette + Roh-Briefing + Leitplanken; Brand Voice über `FOOD_DNA_KEYS`). **Umbenannt gegenüber der Spec-Zeile:** ein Key für beide Ebenen (`ebene: foodbook|kapitel`) — der Auftrag ist derselbe in anderem Zuschnitt, und zwei Keys hätten die Tonalität an zwei Orten definiert (vgl. V-004: Prompt-Keys, die nur registriert sind, verrotten)
+- [x] Button enabled, graceful bei fehlendem Provider (KiDeaktiviert/KiNichtVerfuegbar → Hinweiszeile, Feld unverändert; Test dafür)
+- [x] Vorschau + Übernehmen — Überschreib-Schutz als **eigene Stufe**: der Vorschlag lebt in `kiTextVorschau` und berührt `form.description` nie; „Ersetzen" (statt „Übernehmen") + Warnzeile, wenn schon Text im Feld steht. *(Ein `notizen_manual`-Gegenstück gibt es an `foodbooks`/`foodbook_chapters` nicht — der Schutz ist deshalb der Ablauf, nicht ein Feld.)*
+- [ ] **L2b:** dasselbe an der Kapitel-Ebene (`foodbook_chapters.description`, im Editor bisher unerreichbar) → schaltet `foodbook_kapitel_ohne_text` frei
 
 ### L3 — „Foodbook aus Brief" (Gesamt-Flow) · Größe L · **Entscheid Dominique: Scope**
 

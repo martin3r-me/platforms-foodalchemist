@@ -46,6 +46,7 @@ class AiGatewayService
         'vk.generator', 'vk.wording', 'vk.marketing', 'vk.plating', 'vk.servier_vehikel', 'vk.behaelter', 'vk.regeneration', 'vk.kohaerenz', 'vk.teller_heber', 'vk.review',
         'concept.wording',
         'foodbook.kapitel_ideen',   // Spec 19 E6.4: KI-Divergenz erbt die Food-DNA-Kette (Kontext-Vertrag)
+        'foodbook.kundentext',      // Spec 03 L2: Kundentext IST die Marken-Stimme — ohne DNA-Kette wäre er beliebig
     ];
 
     public function propose(string $promptKey, array $context = [], array $options = []): AiProposal

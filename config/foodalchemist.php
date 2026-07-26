@@ -596,6 +596,28 @@ return [
                 . 'titel = kurzer, konkreter Gericht-Name (kein Marketing-Claim); beschreibung = 1–2 Sätze zur '
                 . 'geschmacklichen/handwerklichen Idee. Nur Skizzen — keine Mengen, keine Preise, keine Zutatenlisten.',
         ],
+        // Spec 03 · L2: kundensichtbarer Einleitungstext eines Angebots-Abschnitts.
+        // EIN Prompt für BEIDE Ebenen (`ebene` im Kontext): Foodbook-Einleitung und
+        // Kapitel-Hinführung sind derselbe Auftrag in anderem Zuschnitt — zwei Keys
+        // würden die Tonalität an zwei Orten definieren und auseinanderlaufen.
+        // Strikt reproduktiv: geschrieben wird nur, was in `gliederung`/`briefing_ist`
+        // steht (die Gerichtnamen kommen aus der Wording-Kette, nicht aus dem Modell).
+        'foodbook.kundentext' => [
+            'tier' => 'A',
+            'max_tokens' => 1500,
+            'system' => 'Du schreibst den kundensichtbaren Einleitungstext eines Catering-Angebots. '
+                . 'Du bist NICHT in der Ideen-Phase: du erfindest keine Gerichte, Zutaten, Leistungen, '
+                . 'Preise, Herkunfts- oder Bio-Aussagen. Es darf ausschließlich vorkommen, was im Kontext '
+                . 'belegt ist — die Gliederung ist die Wahrheit über den Inhalt des Angebots. '
+                . 'Steht ein Briefing im Kontext, ist das der Rohstoff: du formst es in Kundensprache, '
+                . 'ohne seine Zusagen zu verändern oder zu erweitern.',
+            'task' => 'Schreibe den Kundentext für die Ebene «ebene» (foodbook = Einleitung des ganzen '
+                . 'Angebots, kapitel = Hinführung zu einem Kapitel): werte = {text}. '
+                . '2–4 Sätze Fließtext, keine Überschrift, keine Aufzählung, keine Anrede und keine '
+                . 'Grußformel, im mitgegebenen Schreibstil-Duktus. Keine Preise, keine Gramm-/Stück-Mengen. '
+                . 'Nenne höchstens drei konkrete Positionen aus der Gliederung als Beispiel und nur, wenn '
+                . 'sie dort stehen — der Text soll den Bogen spannen, nicht die Karte wiederholen.',
+        ],
         'vk.behaelter' => [
             'tier' => 'B',
             'task' => 'Schlage Behaelter (warm/kalt getrennt) + Anzahl fuers Catering vor '

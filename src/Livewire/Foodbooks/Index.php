@@ -481,6 +481,19 @@ class Index extends Component
 
     public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'price_mode' => 'auto', 'price_per_person' => null];
 
+    /**
+     * Spec 03 · L2: KI-Kundentext — VORSCHAU-Zustand. Der Vorschlag landet hier und
+     * nirgends sonst; erst `kiTextUebernehmen()` schreibt ihn ins Formular, erst
+     * „Speichern" in die DB. Zwei Stufen mit Absicht: das Briefing-Feld ist oft
+     * handgeschrieben, und ein still ersetzter Kundentext wäre unwiederbringlich.
+     */
+    public ?string $kiTextVorschau = null;
+
+    public ?float $kiTextConfidence = null;
+
+    /** Fehler ODER Erfolgs-Hinweis der KI-Text-Fläche (eine Zeile, ein Zustand). */
+    public ?string $kiTextHinweis = null;
+
     public string $neuesKapitelTitel = '';
 
     public string $conceptSuche = '';
@@ -565,6 +578,56 @@ class Index extends Component
         // prominente Button ließe die CI-Änderungen unbemerkt liegen (Falle des hochgezogenen
         // Speicherns). Idempotent, wenn Branding nicht angefasst wurde; Hex-Fehler → brandingFehler.
         $this->brandingSpeichern($svc);
+        // Der übernommene KI-Text ist jetzt echter Feld-Inhalt — die Vorschau-Fläche hat
+        // nichts mehr zu sagen und würde sonst als „noch offen" stehen bleiben.
+        $this->kiTextHinweis = null;
+    }
+
+    /**
+     * Spec 03 · L2: Kundentext-Vorschlag für die Foodbook-Einleitung holen.
+     * Schreibt NICHT ins Formular — nur in die Vorschau (`kiTextVorschau`).
+     */
+    public function kiEinleitung(FoodbookService $svc): void
+    {
+        $this->kiTextVorschau = null;
+        $this->kiTextConfidence = null;
+        $this->kiTextHinweis = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        try {
+            $r = $svc->kiKundentextVorschlag($this->team(), $this->selectedId);
+            $this->kiTextVorschau = $r['text'];
+            $this->kiTextConfidence = $r['confidence'];
+        } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException $e) {
+            $this->kiTextHinweis = 'KI ist für dieses Team deaktiviert (Einstellungen → Food DNA / KI).';
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException $e) {
+            $this->kiTextHinweis = 'Kein KI-Provider gebunden — der Kundentext braucht ein aktives Modell (demo).';
+        } catch (\RuntimeException $e) {
+            $this->kiTextHinweis = $e->getMessage();
+        }
+    }
+
+    /**
+     * Vorschlag ins Formular übernehmen — bewusst OHNE zu speichern: der Text steht
+     * danach sichtbar im Feld und geht denselben Weg wie jede Handeingabe („Speichern").
+     */
+    public function kiTextUebernehmen(): void
+    {
+        if ($this->kiTextVorschau === null) {
+            return;
+        }
+        $this->form['description'] = $this->kiTextVorschau;
+        $this->kiTextVorschau = null;
+        $this->kiTextConfidence = null;
+        $this->kiTextHinweis = 'Text steht im Feld — noch nicht gespeichert („Speichern" oben).';
+    }
+
+    public function kiTextVerwerfen(): void
+    {
+        $this->kiTextVorschau = null;
+        $this->kiTextConfidence = null;
+        $this->kiTextHinweis = null;
     }
 
     /**

@@ -1766,6 +1766,97 @@ class FoodbookService
         ];
     }
 
+    // ── Spec 03 · L2: KI-Kundentext ─────────────────────────────────────────────
+    //
+    // Löst den M11-08-Platzhalter oben ab: `kiAndockKontext` sammelte die Eingaben,
+    // hier läuft der Call. Bewusst NUR Vorschlag — geschrieben wird nichts, auch nicht
+    // `description`. Übernehmen ist ein eigener, menschlicher Akt in der Fläche
+    // (Backup-Lehre 2026-06-30: ein Generator, der ein handgeschriebenes Kundentext-Feld
+    // still überschreibt, vernichtet Arbeit, die nirgends versioniert ist).
+
+    /**
+     * Kundentext-Vorschlag für die Foodbook-Einleitung. Persistiert NICHTS außer der
+     * Audit-Zeile des Gateways (GL-07 I3). Ohne gebundenen Provider wirft `propose()`
+     * typisiert (KiNichtVerfuegbar/KiDeaktiviert) — hier bewusst NICHT geschluckt,
+     * die Fläche formuliert die Meldung.
+     *
+     * @return array{text: string, confidence: ?float, call_log_id: ?int}
+     */
+    public function kiKundentextVorschlag(Team $team, int $foodbookId): array
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
+        $this->guard($fb, $team);                                    // D1: Schreiben/Erzeugen nur durchs Besitzer-Team
+
+        $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+            'foodbook.kundentext',
+            $this->kundentextKontext($team, $fb),
+            [
+                'food_dna_foodbook_id' => (int) $fb->id,
+                // Ebene 2 der DNA-Kette: der Endkunde des Foodbooks (Muster wie kiKundentext am Block)
+                'food_dna_crm_company_id' => $fb->crm_company_id !== null ? (int) $fb->crm_company_id : null,
+                'target_table' => 'foodalchemist_foodbooks',
+                'target_id' => (int) $fb->id,
+            ],
+        );
+
+        $text = trim((string) ($proposal->werte['text'] ?? ''));
+        if ($text === '') {
+            // Leere Antwort NICHT als Erfolg verkaufen — sonst zeigt die Vorschau ein leeres
+            // Kästchen und „Übernehmen" würde das Feld leeren.
+            throw new \RuntimeException('Die KI hat keinen Text geliefert — bitte erneut versuchen.');
+        }
+
+        return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+    }
+
+    /**
+     * Kontext-Vertrag des Kundentexts: WAS im Angebot steht (Gliederung über die
+     * Wording-Kette — dieselben Kunden-Labels wie im PDF, nicht die internen Namen)
+     * + WIE es gerahmt ist (Leitplanken) + das Roh-Briefing als Umformungs-Vorlage.
+     * Die Marken-/Schreibstil-Kette hängt `AiGatewayService::propose` selbst an.
+     *
+     * @return array<string, mixed>
+     */
+    private function kundentextKontext(Team $team, FoodAlchemistFoodbook $fb): array
+    {
+        $voll = $this->detail($team, (int) $fb->id) ?? $fb;
+
+        $gliederung = [];
+        foreach ($voll->chapters as $k) {
+            $positionen = [];
+            foreach ($k->blocks as $b) {
+                if (! $b->visible) {
+                    continue;                                        // Export-Filter gilt auch für die KI-Sicht
+                }
+                $t = trim((string) $this->dokBlockLabel($b));
+                if ($t !== '') {
+                    $positionen[] = $t;
+                }
+            }
+            $gliederung[] = [
+                'kapitel' => trim((string) ($k->consumer_title ?: $k->title)),
+                // Deckel gegen Prompt-Aufblähung: ein 60-Positionen-Buffet-Kapitel braucht
+                // die KI nicht vollständig, um den Bogen zu spannen.
+                'positionen' => array_slice(array_values(array_unique($positionen)), 0, 12),
+            ];
+            if (count($gliederung) >= 20) {
+                break;
+            }
+        }
+
+        $briefing = trim((string) $voll->description);
+
+        return [
+            'ebene' => 'foodbook',
+            'titel' => $voll->label,
+            'kunde' => $voll->customer,
+            'personen' => $voll->personen,
+            'briefing_ist' => $briefing !== '' ? $briefing : null,
+            'gliederung' => $gliederung,
+            'leitplanken' => $this->leitplanken($team, $voll),
+        ];
+    }
+
     // ── Branding (pro Foodbook) ─────────────────────────────────────────────────
     //
     // UI-agnostische API: der Branding/CI-Tab im Cockpit (separate Session) UND MCP/Console
