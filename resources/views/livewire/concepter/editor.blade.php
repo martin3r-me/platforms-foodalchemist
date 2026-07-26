@@ -626,8 +626,40 @@
                                             <button type="button" wire:click="neuesPaketImSlot({{ $slot->id }})" class="{{ $btnGhostXs }} text-violet-600" title="Inline ein neues Paket schnüren">+ neues Paket</button>
                                             @if($slot->package_id || $slot->sales_recipe_id)
                                                 <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-500 hover:text-red-500">leeren</button>
+                                            @else
+                                                {{-- L4: deterministischer Vorschlag aus dem Bestand (kein LLM) --}}
+                                                <button type="button" wire:click="vorschlagFuerSlot({{ $slot->id }})" class="{{ $btnGhostXs }} text-violet-600"
+                                                        title="Vorschlag aus dem Bestand — gerankt nach Rolle · Aroma-Kanten zur gesetzten Folge · Anker-Dichte · Preis-Nähe. Ohne KI.">
+                                                    ✨ Vorschlag
+                                                </button>
                                             @endif
                                         </div>
+                                        @if(isset($slotVorschlaege[$slot->id]))
+                                            @php($vs = $slotVorschlaege[$slot->id])
+                                            <div class="mt-2 pl-1 space-y-1">
+                                                @foreach($vs['kandidaten'] as $v)
+                                                    <div wire:key="ev-{{ $slot->id }}-{{ $v['id'] }}" class="flex items-start justify-between gap-2 px-2 py-1 rounded-lg bg-violet-500/[0.06] border border-violet-500/10">
+                                                        <div class="min-w-0">
+                                                            <p class="text-xs text-gray-700 truncate">
+                                                                {{ $v['name'] }}
+                                                                @if($v['diet_form'])
+                                                                    <span class="text-[10px] uppercase tracking-wider text-gray-500">{{ $v['diet_form'] }}</span>
+                                                                @endif
+                                                            </p>
+                                                            <p class="text-[10px] text-gray-500 leading-snug">{{ $v['begruendung'] }}</p>
+                                                        </div>
+                                                        <div class="flex items-center gap-1 shrink-0">
+                                                            <span class="text-[11px] text-gray-500 tabular-nums">{{ $v['sales_net'] !== null ? number_format((float) $v['sales_net'], 2, ',', '.') . ' €' : '—' }}</span>
+                                                            <button type="button" wire:click="vorschlagUebernehmen({{ $slot->id }}, {{ $v['id'] }})" class="{{ $btnGhostXs }} text-violet-600">übernehmen</button>
+                                                            <button type="button" wire:click="vorschlagVerwerfen({{ $slot->id }}, {{ $v['id'] }})" class="text-[11px] text-gray-400 hover:text-red-500" title="Vorschlag verwerfen">✕</button>
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                                @if($vs['hinweis'] !== null)
+                                                    <p class="text-[11px] text-gray-500 px-2 py-0.5">{{ $vs['hinweis'] }}</p>
+                                                @endif
+                                            </div>
+                                        @endif
                                         @if($fillSlotId === $slot->id)
                                             <div class="space-y-1 pl-1 mt-2">
                                                 <div class="flex gap-1.5">

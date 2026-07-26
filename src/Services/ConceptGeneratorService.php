@@ -296,27 +296,129 @@ class ConceptGeneratorService
      */
     public function slotVorschlaege(Team $team, FoodAlchemistPlanningFrame $frame, FoodAlchemistPlanningFrameSlot $slot, int $limit = 6, ?string $zielNiveau = null, ?string $zielConvenience = null): array
     {
-        $frame->loadMissing(['slots.rules', 'rules']);
+        // Eine Ranking-Wahrheit: der schlanke Weg-B-Aufruf ist die Projektion des begründeten.
+        $res = $this->slotKandidaten($team, $frame, $slot, [], $limit, $zielNiveau, $zielConvenience);
+
+        return array_map(fn ($k) => [
+            'id' => $k['id'], 'name' => $k['name'], 'diet_form' => $k['diet_form'], 'sales_net' => $k['sales_net'],
+        ], $res['kandidaten']);
+    }
+
+    /**
+     * L4 (Spec 03): dieselbe Slot-Rangliste, aber MIT sichtbaren Ranking-Faktoren und
+     * ehrlichem Hinweis, wenn nichts (mehr) zulässig ist — die Fläche dafür ist der
+     * Concepter-Editor („schlag mir für diese Position was vor"). Read-only, kein LLM.
+     *
+     * `$belegteRecipeIds` = die bereits gesetzten Gerichte des Konzepts: ihre Anker gehen
+     * als Kohäsions-Basis ins Ranking (der Vorschlag passt zur BESTEHENDEN Menüfolge, nicht
+     * nur zu sich selbst) und sie werden nicht erneut vorgeschlagen. Leer = Verhalten wie
+     * der Generator-Pfad, der sein Menü von Null aufbaut.
+     *
+     * @param  list<int>  $belegteRecipeIds
+     * @return array{kandidaten: list<array{id:int, name:string, diet_form:?string, sales_net:?float, faktoren:array<string,int|float>, begruendung:string}>, hinweis:?string}
+     */
+    public function slotKandidaten(Team $team, FoodAlchemistPlanningFrame $frame, FoodAlchemistPlanningFrameSlot $slot, array $belegteRecipeIds = [], int $limit = 3, ?string $zielNiveau = null, ?string $zielConvenience = null): array
+    {
+        if ($frame->exists) {
+            $frame->loadMissing(['slots.rules', 'rules']);
+        }
         // Convenience-Daten (GP-Tags) nur laden, wenn die Leitplanke wirklich diskriminiert
         // (from_scratch/voll_convenience) — teil_convenience/null bleibt neutral + günstig.
         $mitConvenience = in_array($zielConvenience, ['from_scratch', 'voll_convenience'], true);
-        $kandidaten = $this->filterFuerSlot($this->kandidatenPool($team, $frame, $mitConvenience), $frame, $slot);
+        $pool = $this->kandidatenPool($team, $frame, $mitConvenience);
 
+        // Kohäsions-Basis aus dem Pool selbst (keine zweite Anker-Auflösung): Gerichte, die
+        // nicht im Pool sind (draft/Slot-Variante), liefern eben keine Anker — ehrlich, nicht geraten.
+        $belegteRecipeIds = array_values(array_unique(array_map('intval', $belegteRecipeIds)));
+        $basisAnker = [];
+        foreach ($belegteRecipeIds as $rid) {
+            if ($pool->has($rid)) {
+                $basisAnker = array_merge($basisAnker, $pool[$rid]['anker']);
+            }
+        }
+        $basisAnker = array_values(array_unique($basisAnker));
+
+        $kandidaten = $this->filterFuerSlot($pool, $frame, $slot)
+            ->reject(fn ($k) => in_array((int) $k['id'], $belegteRecipeIds, true));
+        if ($kandidaten->isEmpty()) {
+            return ['kandidaten' => [], 'hinweis' => 'Kein Gericht erfüllt die Vorgaben (' . $this->filterBeschreibung($frame, $slot) . ').'];
+        }
+
+        $limit = max(1, $limit);
         $out = [];
-        $gewaehlteAnker = [];
+        $gewaehlteAnker = $basisAnker;
         $gewaehltIds = [];
-        while (count($out) < max(1, $limit)) {
+        while (count($out) < $limit) {
             $rest = $kandidaten->reject(fn ($k) => in_array($k['id'], $gewaehltIds, true));
             $treffer = $this->besterKandidat($rest, $gewaehlteAnker, $slot, $zielNiveau, $zielConvenience);
             if ($treffer === null) {
                 break;
             }
-            $out[] = ['id' => (int) $treffer['id'], 'name' => (string) $treffer['name'], 'diet_form' => $treffer['diet_form'], 'sales_net' => $treffer['sales_net']];
+            $faktoren = [
+                'semantik' => (int) ($treffer['semantik'] ?? 0),
+                'kohaesion' => round((float) ($treffer['score'] ?? 0.0), 3),
+                'ankerdichte' => (int) ($treffer['ankerdichte'] ?? 0),
+                'preisnaehe' => round((float) ($treffer['preisnaehe'] ?? 0.0), 2),
+                'niveau_match' => (int) ($treffer['niveau_match'] ?? 0),
+                'convenience_match' => round((float) ($treffer['convenience_match'] ?? 0.0), 3),
+            ];
+            $out[] = [
+                'id' => (int) $treffer['id'], 'name' => (string) $treffer['name'],
+                'diet_form' => $treffer['diet_form'], 'sales_net' => $treffer['sales_net'],
+                'faktoren' => $faktoren,
+                'begruendung' => $this->rankingBegruendung(
+                    $faktoren, $slot, $basisAnker !== [], $zielNiveau, $zielConvenience,
+                    $treffer['sales_net'] !== null ? (float) $treffer['sales_net'] : null,
+                ),
+            ];
             $gewaehltIds[] = $treffer['id'];
             $gewaehlteAnker = array_unique(array_merge($gewaehlteAnker, $treffer['anker']));
         }
 
-        return $out;
+        return [
+            'kandidaten' => $out,
+            'hinweis' => count($out) < $limit
+                ? 'Nur ' . count($out) . ' zulässige Treffer (' . $this->filterBeschreibung($frame, $slot) . ').'
+                : null,
+        ];
+    }
+
+    /**
+     * Ranking-Faktoren als lesbare Kette — dieselbe Reihenfolge wie die Sortierung in
+     * besterKandidat, damit die Begründung erklärt, warum DIESER Kandidat oben steht.
+     * Faktoren, die im Kontext nichts entscheiden (kein Preis-Anker, kein Ziel-Niveau),
+     * bleiben weg statt als Null-Wert Rauschen zu machen.
+     *
+     * @param  array<string,int|float>  $f
+     */
+    private function rankingBegruendung(array $f, FoodAlchemistPlanningFrameSlot $slot, bool $mitKohaesion, ?string $zielNiveau, ?string $zielConvenience, ?float $salesNet = null): string
+    {
+        $teile = [];
+        if ($f['semantik'] === 1) {
+            $teile[] = 'Hauptgruppe passt zur Rolle';
+        }
+        if ($zielNiveau !== null) {
+            $teile[] = $f['niveau_match'] === 1 ? "Niveau {$zielNiveau} geeignet" : "Niveau {$zielNiveau} nicht gestempelt";
+        }
+        if (in_array($zielConvenience, ['from_scratch', 'voll_convenience'], true)) {
+            $teile[] = ($zielConvenience === 'from_scratch' ? 'Scratch-Anteil ' : 'Convenience-Anteil ')
+                . number_format($f['convenience_match'] * 100, 0, ',', '.') . '%';
+        }
+        if ($mitKohaesion) {
+            $teile[] = $f['kohaesion'] > 0.0
+                ? 'Aroma-Nähe zur gesetzten Folge ' . number_format($f['kohaesion'], 2, ',', '.')
+                : 'keine Aroma-Kante zur gesetzten Folge';
+        }
+        $teile[] = $f['ankerdichte'] . ' Aroma-Anker';
+        if ($slot->price_anchor !== null) {
+            // preisnaehe ist 0.0 in ZWEI Fällen (Preis genau am Anker · gar kein VK-Preis) —
+            // deshalb entscheidet sales_net, nicht das Vorzeichen.
+            $teile[] = $salesNet !== null
+                ? 'Preis-Abstand zum Anker ' . number_format(abs($f['preisnaehe']), 2, ',', '.') . ' €'
+                : 'kein VK-Preis (Anker ' . number_format((float) $slot->price_anchor, 2, ',', '.') . ' €)';
+        }
+
+        return implode(' · ', $teile);
     }
 
     // ── Kandidaten ──────────────────────────────────────────────────────

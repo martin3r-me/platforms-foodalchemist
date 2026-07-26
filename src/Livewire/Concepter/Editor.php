@@ -134,7 +134,7 @@ class Editor extends Component
     public function oeffnen(string $type, ?int $id): void
     {
         $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'einfuegenNachId', 'linkeListe', 'paketKlasse', 'basisSuche', 'kombiSuche', 'basisHg', 'basisKat', 'basisNiveau', 'gerichtSuche', 'pickTyp',
-            'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack', 'pickDiaet', 'zutatenOffenSlotId', 'menueKohaesion',
+            'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack', 'pickDiaet', 'zutatenOffenSlotId', 'menueKohaesion', 'slotVorschlaege',
             'zielModus', 'zielPreis', 'zielVorschlag', 'rueckSprungConceptId', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
         $this->id = $id;
@@ -621,6 +621,133 @@ class Editor extends Component
     {
         app(ConceptService::class)->fillSlot($this->team(), $slotId, []);
         $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    // ── L4 (Spec 03): deterministischer Slot-Vorschlag je Position ────────────
+    // Dieselbe Assembler-Rangliste wie der Konzept-Generator (Rolle-Semantik → Aroma-
+    // Kanten → Anker-Dichte → Preis-Nähe), nur read-only je Position und MIT sichtbaren
+    // Faktoren. Kein LLM, kein Provider-Blocker (R6.1: Gericht-AUSWAHL bleibt deterministisch).
+
+    /** @var array<int, array{kandidaten: list<array<string,mixed>>, hinweis: ?string}> slotId → Rangliste */
+    public array $slotVorschlaege = [];
+
+    public function vorschlagFuerSlot(int $slotId): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        // Erneuter Klick klappt zu (ein Knopf, zwei Richtungen — wie fillToggle).
+        if (isset($this->slotVorschlaege[$slotId])) {
+            unset($this->slotVorschlaege[$slotId]);
+
+            return;
+        }
+        $concept = app(ConceptService::class)->detail($this->team(), $this->id);
+        $slot = $concept?->slots->firstWhere('id', $slotId);
+        if ($concept === null || $slot === null || in_array($slot->type, ['header', 'header_preis', 'text', 'spacer'], true)) {
+            return;
+        }
+
+        $frame = app(\Platform\FoodAlchemist\Services\PlanningFrameService::class)->find('concept', $this->id);
+        if ($frame === null) {
+            // Ohne Gerüst gibt es keine Vorgaben — Rolle, Aroma-Kanten und Anker-Dichte ranken
+            // trotzdem. In-Memory-Gerüst, damit der Lese-Pfad NICHTS anlegt (frameOderAnlegen
+            // wäre ein Schreibzugriff auf Knopfdruck „Vorschlag").
+            $frame = new \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame(['owner_type' => 'concept', 'owner_id' => $this->id]);
+            $frame->setRelation('rules', collect());
+            $frame->setRelation('slots', collect());
+        }
+        // Kohäsion gegen die bereits gesetzten Gerichte des Konzepts (die eigene Position zählt nicht).
+        $belegte = $this->belegteGerichtIds($concept, $slotId);
+        [$niveau, $convenience] = $this->kreativLeitplanken($concept);
+
+        $this->slotVorschlaege[$slotId] = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
+            ->slotKandidaten($this->team(), $frame, $this->frameSlotZurRolle($frame, (string) ($slot->role ?? '')), $belegte, 3, $niveau, $convenience);
+    }
+
+    public function vorschlagUebernehmen(int $slotId, int $recipeId): void
+    {
+        $this->fuelleGericht($slotId, $recipeId);
+        unset($this->slotVorschlaege[$slotId]);
+    }
+
+    public function vorschlagVerwerfen(int $slotId, int $recipeId): void
+    {
+        if (! isset($this->slotVorschlaege[$slotId])) {
+            return;
+        }
+        $this->slotVorschlaege[$slotId]['kandidaten'] = array_values(array_filter(
+            $this->slotVorschlaege[$slotId]['kandidaten'],
+            fn ($k) => (int) $k['id'] !== $recipeId,
+        ));
+    }
+
+    /**
+     * Gerichte, die im Konzept schon stehen — inklusive der Gerichte gebuchter PAKETE
+     * (gleiche Auffaltung wie `kohaesionPruefen` einige Zeilen höher; dass diese Frage im
+     * Modul an mehreren Stellen eigenhändig beantwortet wird, ist als V-018 notiert).
+     * Ohne die Paket-Ebene wäre ein Menü, dessen Gänge in Paketen stecken, für den
+     * Vorschlag halb leer.
+     *
+     * @return list<int>
+     */
+    private function belegteGerichtIds(FoodAlchemistConcept $concept, ?int $ausserSlotId = null): array
+    {
+        $ids = [];
+        foreach ($concept->slots as $s) {
+            if ($ausserSlotId !== null && (int) $s->id === $ausserSlotId) {
+                continue;
+            }
+            if ($s->sales_recipe_id !== null) {
+                $ids[(int) $s->sales_recipe_id] = true;
+            } elseif ($s->package !== null) {
+                foreach ($s->package->dishes as $pg) {
+                    if ($pg->sales_recipe_id !== null) {
+                        $ids[(int) $pg->sales_recipe_id] = true;
+                    }
+                }
+            }
+        }
+
+        return array_keys($ids);
+    }
+
+    /**
+     * Gerüst-Zeile zur Rolle einer Position (normalisierter Label-Vergleich — so verknüpft
+     * der Generator Gerüst-Slot und Konzept-Position: `role = frameSlot->label`). Ohne
+     * Treffer eine nicht persistierte Ersatz-Zeile: dann gibt es keinen Slot-Preisrahmen und
+     * keine Slot-Regeln, die Gerüst-Regeln (slot_id NULL) wirken weiter.
+     */
+    private function frameSlotZurRolle(\Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame $frame, string $rolle): \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot
+    {
+        $norm = fn (string $s) => mb_strtolower(trim($s));
+        $treffer = trim($rolle) !== ''
+            ? $frame->slots->first(fn ($s) => $norm((string) $s->label) === $norm($rolle))
+            : null;
+        if ($treffer !== null) {
+            return $treffer;
+        }
+        $ersatz = new \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot(['label' => trim($rolle)]);
+        $ersatz->setRelation('rules', collect());
+
+        return $ersatz;
+    }
+
+    /**
+     * Kreative Leitplanken fürs Ranking: Konzept-Stempel → Team-Segment. Dieselbe Kaskade
+     * wie FoodbookService::leitplanken, nur eine Ebene kürzer (im Concepter gibt es kein
+     * Foodbook darüber). Null = neutral, das Ranking fällt dann auf Aroma + Rolle zurück.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function kreativLeitplanken(FoodAlchemistConcept $concept): array
+    {
+        $segment = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->segment($this->team());
+
+        return [
+            \Platform\FoodAlchemist\Services\TeamSettingsService::normNiveau($concept->level) ?? ($segment['niveau'] ?? null),
+            $segment['convenience'] ?? null,
+        ];
     }
 
     /** Phase 3: aus den Seiten-Listen (Basisrezepte links / VK-Gerichte rechts) direkt eine neue Position anlegen. */
