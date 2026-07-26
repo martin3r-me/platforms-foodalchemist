@@ -41,6 +41,10 @@ enum SignalTyp: string
     case RezeptZutatenUngemappt = 'rezept_zutaten_ungemappt';
     case RezeptSubStubOffen = 'rezept_sub_stub_offen';
     case RezeptVerwaist = 'rezept_verwaist';
+    // Spec 21 Tranche E · E3: Meta-Signal über die Zeitreihe — ein Zähler ist gegenüber
+    // dem Vorlauf gestiegen. Alarmiert bei *Veränderung*, nicht bei Bestand; das ist der
+    // eigentliche „System im Blick"-Mechanismus.
+    case QualitaetDrift = 'qualitaet_drift';
 
     public function label(): string
     {
@@ -70,6 +74,7 @@ enum SignalTyp: string
             self::RezeptZutatenUngemappt => 'Rezept mit ungemappten Zutaten',
             self::RezeptSubStubOffen => 'Sub-Rezept-Stub offen',
             self::RezeptVerwaist => 'Rezept verwaist',
+            self::QualitaetDrift => 'Qualität verschlechtert sich',
         };
     }
 
@@ -102,6 +107,7 @@ enum SignalTyp: string
             self::RezeptZutatenUngemappt => 'heroicon-o-link-slash',
             self::RezeptSubStubOffen => 'heroicon-o-puzzle-piece',
             self::RezeptVerwaist => 'heroicon-o-archive-box',
+            self::QualitaetDrift => 'heroicon-o-arrow-trending-down',
         };
     }
 

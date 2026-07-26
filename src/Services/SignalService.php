@@ -72,13 +72,22 @@ class SignalService
         $s->update(['status' => SignalStatus::Offen->value, 'erledigt_at' => null, 'ignoriert_at' => null]);
     }
 
+    /**
+     * Inbox-Liste. `exclude_types` (Spec 21 · E2, Rausch-Guard) blendet Typen aus, die
+     * als aggregierte Zustands-Zeile geführt werden — aber **nur** in der ungefilterten
+     * Ansicht: sobald man den Typ explizit wählt, sind die Einzel-Signale wieder da.
+     * Der Guard versteckt also, er löscht nicht.
+     */
     public function paginate(array $filters, Team $team, int $perPage = 50): LengthAwarePaginator
     {
         $status = $filters['status'] ?? SignalStatus::Offen->value;
+        $typ = $filters['type'] ?? '';
+        $exclude = $typ === '' ? ($filters['exclude_types'] ?? []) : [];
 
         return FoodAlchemistSignal::visibleToTeam($team)
             ->when($status !== '', fn ($q) => $q->where('status', $status))
-            ->when(($filters['type'] ?? '') !== '', fn ($q) => $q->where('type', $filters['type']))
+            ->when($typ !== '', fn ($q) => $q->where('type', $typ))
+            ->when($exclude !== [], fn ($q) => $q->whereNotIn('type', $exclude))
             ->orderByDesc('created_at')
             ->paginate($perPage);
     }

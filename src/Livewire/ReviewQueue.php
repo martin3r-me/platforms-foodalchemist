@@ -322,6 +322,15 @@ class ReviewQueue extends Component
 
         $signalSvc = app(SignalService::class);
 
+        // Spec 21 · E2: Zustands-Sicht (Bestand + Delta + Policy) über der Einzelliste.
+        // Ein Aufruf, zwei Verwendungen — die Zeilen selbst und die Typen, die dadurch
+        // aus der Einzelliste fallen (kein zweiter Query-Durchlauf).
+        $zustand = app(\Platform\FoodAlchemist\Services\SignalPolicyService::class)->zustand($team);
+        $aggregierteTypen = array_values(array_map(
+            fn (array $z) => $z['type'],
+            array_filter($zustand, fn (array $z) => $z['aggregiert'])
+        ));
+
         // Überblick-Kacheln: offene Signale nach Schweregrad (read-only, Präsentation).
         $severitySplit = FoodAlchemistSignal::visibleToTeam($team)->offen()
             ->selectRaw('severity, COUNT(*) as c')->groupBy('severity')->pluck('c', 'severity')->all();
@@ -352,7 +361,14 @@ class ReviewQueue extends Component
                 ->limit(50)->get(['id', 'name', 'is_sales_recipe', 'n_ingredients_unmapped']),
             'ungemapptZahl' => (clone $rezept())->where('n_ingredients_unmapped', '>', 0)->count(),
             // Klasse B: Signale (#378)
-            'signale' => $signalSvc->paginate(['status' => $this->signalStatus, 'type' => $this->signalTyp], $team, 30),
+            'signalZustand' => $zustand,
+            'signale' => $signalSvc->paginate([
+                'status' => $this->signalStatus,
+                'type' => $this->signalTyp,
+                // Spec 21 · E2: Typen mit Rausch-Guard fallen in ihre Zustands-Zeile zusammen —
+                // aber nur ungefiltert; ein Klick auf die Zeile (setSignalTyp) klappt sie auf.
+                'exclude_types' => $aggregierteTypen,
+            ], $team, 30),
             'signalOffen' => $signalSvc->offeneCount($team),
             'signalNachTyp' => $signalSvc->offeneNachTyp($team),
             'signalTypWerte' => $signalSvc->typWerte(),

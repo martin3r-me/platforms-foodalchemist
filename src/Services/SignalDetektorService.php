@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistSignalSnapshot;
 
 /**
  * #378 — Detektor für Klasse-B-Signale. Idempotent über dedup_key (SignalService).
@@ -20,24 +21,35 @@ class SignalDetektorService
         private SignalService $signals,
         private DataQualityService $dataQuality,
         private SignalTrendService $trend,
+        private SignalPolicyService $policies,
     ) {
     }
+
+    /** Spec 21 · E3 — ab diesem Zuwachs gegenüber dem Vorlauf gilt ein Zähler als abgedriftet. */
+    private const DRIFT_MIN_PCT = 20.0;
+
+    /** … und erst ab dieser absoluten Zunahme (sonst wäre 1 → 2 ein „+100 %"-Alarm). */
+    private const DRIFT_MIN_ABS = 5;
 
     /**
      * Alle Detektoren; Rückgabe = Anzahl erzeugter/aktualisierter Signale.
      *
-     * Am Ende schreibt der Lauf seinen Zähler-Stand in die Zeitreihe (Spec 21 · E1) —
+     * Reihenfolge ist Absicht: Detektoren → Snapshot → Drift.
+     * Der Snapshot schreibt den Zähler-Stand in die Zeitreihe (Spec 21 · E1) —
      * derselbe Fold-in-Gedanke wie bei der DQ-Ampel: der Scheduler fährt **diesen**
      * Command, also muss der Trend hier entstehen und nicht in einem Zweit-Job, der
      * auf demo nie eingehängt wird. Bewusst **nach** allen Emissionen, damit die
      * Signal-Seite des Snapshots diesen Lauf schon enthält.
+     * Der Drift-Vergleich (E3) läuft danach, weil er genau diesen frischen Punkt gegen
+     * den Vorlauf hält. Konsequenz, bewusst in Kauf genommen: die Drift-Signale dieses
+     * Laufs stehen erst im *nächsten* Snapshot — sie zählen sich sonst selbst mit.
      */
     public function laufen(Team $team): int
     {
         $n = $this->detektoren($team);
         $this->trend->schreibeSnapshot($team);
 
-        return $n;
+        return $n + $this->qualitaetsDrift($team);
     }
 
     private function detektoren(Team $team): int
@@ -53,6 +65,98 @@ class SignalDetektorService
             + $this->widerspruchWissenGraph($team)
             + $this->naehrwertPlausi($team)
             + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
+    }
+
+    /**
+     * Spec 21 · E3 — Meta-Signal `qualitaet_drift`: ein Zähler ist gegenüber dem
+     * Vorlauf gestiegen. Alarmiert bei **Veränderung**, nicht bei Bestand — deshalb
+     * überlebt es den Rausch-Guard (E2): eine bekannte, akzeptierte Lage darf sich
+     * trotzdem nicht heimlich vergrößern. Nur `muted` schaltet auch den Drift ab.
+     *
+     * Vier Sperren gegen Fehlalarm:
+     *  1. `previous === null` (im Vorlauf nicht gemessen, also neuer Check) ist keine
+     *     Verschlechterung — genau dafür ist die Zeitreihe dicht geschrieben (E1).
+     *  2. Ein Zuwachs braucht **beides**: ≥ DRIFT_MIN_PCT und ≥ DRIFT_MIN_ABS, sonst
+     *     wäre 1 → 2 ein „+100 %"-Alarm. Ausnahme ist das **Neuauftreten** (0 → n):
+     *     ein Befund, der behoben war und wiederkommt, ist die stärkste Aussage der
+     *     ganzen Reihe und zählt unabhängig von der Menge.
+     *  3. Dieselbe Lage wird oft zweimal gemessen — als Lücken-Metrik der Ampel *und*
+     *     als offene Signale desselben Typs. Die Ampel-Seite gewinnt, die Signal-Seite
+     *     wird übersprungen (sonst zwei Drift-Signale für einen Sachverhalt).
+     *  4. Kein Drift über den Drift selbst.
+     *
+     * Schweregrad bleibt `Warnung`: die Drift-Aussage ist „es wird schlechter", die
+     * Schwere des Befunds selbst steht am zugrundeliegenden Signal. Dort hängt auch
+     * der Fixer — das Drift-Signal bekommt bewusst **keinen** Knopf (es trägt kein
+     * `metrik` im Payload), damit niemand über die Trend-Zeile blind einen Massen-Fix
+     * auslöst statt den eigentlichen Befund anzusehen.
+     */
+    public function qualitaetsDrift(Team $team): int
+    {
+        $u = $this->trend->uebersicht($team);
+        if ($u['previous_at'] === null) {
+            return 0; // erster Lauf — es gibt nichts zu vergleichen
+        }
+
+        $dqTypen = [];
+        foreach ($u['metriken'] as $m) {
+            if ($m['source'] === FoodAlchemistSignalSnapshot::SOURCE_DQ && $m['signal_type'] !== null) {
+                $dqTypen[$m['signal_type']] = true;
+            }
+        }
+
+        $n = 0;
+        foreach ($u['metriken'] as $m) {
+            $vorher = $m['previous'];
+            $delta = (int) ($m['delta'] ?? 0);
+            if ($vorher === null || $delta <= 0) {
+                continue;
+            }
+            $typ = $m['signal_type'] !== null ? SignalTyp::tryFrom($m['signal_type']) : null;
+            if ($typ === SignalTyp::QualitaetDrift) {
+                continue;
+            }
+            if ($m['source'] === FoodAlchemistSignalSnapshot::SOURCE_SIGNALS && isset($dqTypen[$m['metric_key']])) {
+                continue;
+            }
+            if ($this->policies->driftStumm($team, $typ)) {
+                continue;
+            }
+            $neuauftreten = $vorher === 0;
+            $pct = $m['pct'];
+            if (! $neuauftreten && ($delta < self::DRIFT_MIN_ABS || ($pct ?? 0.0) < self::DRIFT_MIN_PCT)) {
+                continue;
+            }
+
+            $this->signals->erzeuge(
+                $team,
+                SignalTyp::QualitaetDrift,
+                SignalSeverity::Warnung,
+                $m['label'] . ': ' . $vorher . ' → ' . $m['count'] . ' (+' . $delta . ')',
+                [
+                    'dedup_key' => 'drift:' . $m['source'] . ':' . $m['metric_key'],
+                    'description' => $neuauftreten
+                        ? 'War beim letzten Lauf bei 0 und ist wieder aufgetreten — der Befund kommt zurück. Ursache am zugrundeliegenden Signal ansehen.'
+                        : 'Seit dem letzten Lauf um ' . ($pct !== null ? $pct . ' %' : '+' . $delta) . ' gestiegen. Ursache am zugrundeliegenden Signal ansehen.',
+                    // Bewusst OHNE 'metrik': kein Fix-Knopf an der Trend-Zeile (s. Docblock).
+                    'payload' => [
+                        'drift_metric' => $m['metric_key'],
+                        'drift_source' => $m['source'],
+                        'anzahl' => (int) $m['count'],
+                        'vorher' => $vorher,
+                        'delta' => $delta,
+                        'pct' => $pct,
+                        'neuauftreten' => $neuauftreten,
+                        'measured_at' => $u['measured_at'],
+                        'previous_at' => $u['previous_at'],
+                    ],
+                    'source' => 'trend',
+                ]
+            );
+            $n++;
+        }
+
+        return $n;
     }
 
     /**

@@ -398,6 +398,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SignaleFixTool::class,
                     // Spec 21 E1: Trend statt Momentaufnahme („wird es besser oder schlechter?")
                     \Platform\FoodAlchemist\Tools\SignalTrendGetTool::class,
+                    // Spec 21 E2: Rausch-Guard — Zustands-Zeilen lesen + Policy setzen (menschlich getriggert)
+                    \Platform\FoodAlchemist\Tools\SignalPoliciesGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SignalPolicyPutTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasGetTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasPutTool::class,
                     // R4.1–R4.3 Planungs-Gerüst + Coverage + Phase — MCP im Lockstep

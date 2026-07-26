@@ -148,6 +148,40 @@
                     @endforeach
                 </div>
 
+                {{-- Zustands-Zeilen (Spec 21 · E2): bekannte Lagen als EINE Zeile statt n Alarmen.
+                     Nur in der ungefilterten Offen-Ansicht — mit gewähltem Typ sieht man die Einzelfälle. --}}
+                @php
+                    $zustandsZeilen = $signalStatus === 'offen' && $signalTyp === ''
+                        ? array_values(array_filter($signalZustand ?? [], fn ($z) => $z['aggregiert'] || $z['state'] === 'frist_abgelaufen'))
+                        : [];
+                @endphp
+                @if($zustandsZeilen !== [])
+                    <div class="mb-3 space-y-1">
+                        @foreach($zustandsZeilen as $z)
+                            @php
+                                $ton = match($z['state']) {
+                                    'stumm' => 'text-gray-400 bg-black/[0.02]',
+                                    'akzeptiert' => 'text-gray-600 bg-emerald-500/[0.05]',
+                                    'frist_abgelaufen' => 'text-amber-700 bg-amber-500/[0.07]',
+                                    default => 'text-gray-700 bg-black/[0.03]',
+                                };
+                            @endphp
+                            <div wire:key="sigzustand-{{ $z['type'] }}" class="flex items-center gap-2 px-3 py-2 rounded-lg {{ $ton }}">
+                                @svg($z['icon'], 'w-4 h-4 shrink-0 opacity-70')
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-xs font-medium truncate">{{ $z['label'] }}</div>
+                                    <div class="text-[11px] opacity-80 truncate">{{ $z['hinweis'] }}@if($z['note']) — {{ $z['note'] }}@endif</div>
+                                </div>
+                                @if(($z['delta'] ?? 0) > 0)
+                                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-600">+{{ $z['delta'] }}</span>
+                                @endif
+                                <button type="button" wire:click="setSignalTyp('{{ $z['type'] }}')"
+                                        class="shrink-0 text-[11px] px-2 py-1 rounded-md hover:bg-black/[0.05] transition-colors">{{ $z['count'] }} anzeigen</button>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
                 <div class="space-y-0.5">
                     @forelse($signale as $sig)
                         @include('foodalchemist::livewire.partials._signal-row', ['sig' => $sig])
