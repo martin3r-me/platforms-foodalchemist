@@ -51,6 +51,10 @@ enum SignalTyp: string
     // Ohne Gerüst gibt es kein Soll und damit auch keinen Befund.
     case KonzeptPreisbandVerletzt = 'konzept_preisband_verletzt';
     case KonzeptRegelVerletzt = 'konzept_regel_verletzt';
+    // S4b-2 — die Anker-Graph-Hälfte: greift ohne Gerüst und ohne Soll, weil sie das
+    // Konzept gegen sich selbst liest (welche Gänge tragen dieselbe Hauptzutat).
+    // Bewusst `info`: eine Wiederholung kann gewollt sein (Themen-Menü).
+    case KonzeptDramaturgie = 'konzept_dramaturgie';
     // Spec 21 Tranche E · E3: Meta-Signal über die Zeitreihe — ein Zähler ist gegenüber
     // dem Vorlauf gestiegen. Alarmiert bei *Veränderung*, nicht bei Bestand; das ist der
     // eigentliche „System im Blick"-Mechanismus.
@@ -88,6 +92,7 @@ enum SignalTyp: string
             self::KonzeptOhneWording => 'Konzept ohne Kunden-Wording',
             self::KonzeptPreisbandVerletzt => 'Konzept außerhalb des Preisbands',
             self::KonzeptRegelVerletzt => 'Konzept verletzt eine Gerüst-Regel',
+            self::KonzeptDramaturgie => 'Konzept wiederholt eine Hauptzutat',
             self::QualitaetDrift => 'Qualität verschlechtert sich',
         };
     }
@@ -125,6 +130,7 @@ enum SignalTyp: string
             self::KonzeptOhneWording => 'heroicon-o-chat-bubble-bottom-center-text',
             self::KonzeptPreisbandVerletzt => 'heroicon-o-banknotes',
             self::KonzeptRegelVerletzt => 'heroicon-o-no-symbol',
+            self::KonzeptDramaturgie => 'heroicon-o-arrow-path',
             self::QualitaetDrift => 'heroicon-o-arrow-trending-down',
         };
     }

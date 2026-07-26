@@ -57,9 +57,12 @@ function kfMetrik(array $ebenen, string $key): array
 it('kennt beide S4b-Typen und führt sie in der Konzept-Ebene', function () {
     $e = $this->dq->messeAlleEbenen($this->rootTeam);
 
-    expect(array_column($e['konzept']['metriken'], 'key'))->toBe([
-        'konzept_slot_luecke', 'konzept_ohne_wording', 'konzept_preisband_verletzt', 'konzept_regel_verletzt',
-    ])->and(SignalTyp::KonzeptPreisbandVerletzt->istKonzeptQualitaet())->toBeTrue()
+    // Nur die beiden eigenen Keys — die vollständige, geordnete Liste der Ebene hält der
+    // jeweils jüngste Tranche-C-Test (sonst müsste jede neue Etappe zwei Stellen ändern).
+    expect(array_column($e['konzept']['metriken'], 'key'))
+        ->toContain('konzept_preisband_verletzt')
+        ->toContain('konzept_regel_verletzt')
+        ->and(SignalTyp::KonzeptPreisbandVerletzt->istKonzeptQualitaet())->toBeTrue()
         ->and(SignalTyp::KonzeptRegelVerletzt->istKonzeptQualitaet())->toBeTrue();
 });
 

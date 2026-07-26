@@ -335,6 +335,157 @@ class PairingService
     }
 
     /**
+     * Spec 21 · S4b-2 — WIEDERHOLUNG über eine Menüfolge: welche Gerichte tragen
+     * dieselbe Hauptzutat? Gegenstück zu {@see menuCohesion}, bewusst als eigener
+     * Weg und nicht als weiterer Rückgabe-Schlüssel dort:
+     *
+     *  · `cohesionFor` bewertet einen geteilten Anker als **1,0 — das Maximum**
+     *    (Paar-Typ `gleich`). Für den Teller ist das richtig (die Komponenten
+     *    gehören zusammen), für die Menüfolge ist es die Diagnose auf dem Kopf:
+     *    zweimal Lachs hebt dort den Score, obwohl es genau der Mangel ist.
+     *    Denselben Wert einmal als Stärke und einmal als Befund zu lesen, wären
+     *    zwei Wahrheiten in einer Zahl.
+     *  · `menuCohesion` legt je Gericht die **Union aller Zutaten-Anker** an. Ein
+     *    geteilter Anker heißt dort auch „beide enthalten Butter" — für die
+     *    Dramaturgie-Frage zählt nur, worum es in dem Gang geht.
+     *
+     * Die Hauptzutat ist deshalb die **mengenmäßig dominierende Zutat** des Gerichts
+     * (größte Roh-Einsatzmasse, gleiche Formel wie `RecipeRecomputeService`: Mittelwert
+     * eines Mengen-Bereichs × `default_in_g`), und ihr Identitäts-Anker ist der `kern`
+     * ihres GP bzw. — bei einer Sub-Rezept-Zeile — der des Sub-Rezepts; dieselbe Wahl,
+     * die {@see resolveRecipeAnchors} je Zutaten-Zeile trifft (höchste `ai_confidence`,
+     * dann `id`). Bewusst NICHT genommen: `recipe_anchor_mappings.role='kern'` am Gericht
+     * selbst — das liest sich wie ein Identitäts-Feld, ist im Bestand aber ein *Beutel*
+     * aller KI-erkannten Zutaten-Anker (bis zu 24 je Rezept, durchweg ohne Konfidenz).
+     * Daraus einen zu wählen hieße raten, und „beide fangen mit Butter an" wäre dasselbe
+     * Signal wie „beide sind Lachs".
+     *
+     * Zwei weitere Auslegungen:
+     *  · Gruppiert wird über {@see ankerSlugMatches}, nicht über die Anker-ID:
+     *    `lachs` und `lachs_wild` sind für den Gast dieselbe Hauptzutat. Der Match
+     *    ist prefix-basiert und damit nicht transitiv — Repräsentant einer Gruppe
+     *    ist deshalb das zuerst gesehene Gericht (deterministisch über `recipe_id`).
+     *  · Was sich nicht in Masse vergleichen lässt (Stück-/Volumen-Einheit, `qs`,
+     *    optionale Zeile) oder keinen Anker trägt, bleibt **unbewertet** — kein Befund.
+     *    Fehlende Erdung ist keine Aussage über das Menü (T9). `neutral` ist kein
+     *    Identitäts-Anker, so behandelt es auch `resolveRecipeAnchors`.
+     *
+     * @param  list<int>  $dishIds
+     * @return list<array{slug: string, recipe_ids: list<int>}>
+     */
+    public function menuRepetitions(array $dishIds): array
+    {
+        $dishIds = array_values(array_unique(array_map('intval', $dishIds)));
+        if (count($dishIds) < 2) {
+            return [];
+        }
+
+        // Einheiten-Gate wie beim Ausbeute-Check (Spec 21 · S1b): ein Gericht wird nur
+        // bewertet, wenn ALLE beitragenden Zeilen massen-vergleichbar sind. Sonst gewönne
+        // die schwerste *messbare* Zeile — in einer Mayonnaise mit 0,25 l Sojamilch und
+        // 0,5 l Öl wäre das das Salz, und der Befund behauptete eine Hauptzutat, die
+        // keine ist. Lieber unbewertet als falsch.
+        $unvergleichbar = DB::table('foodalchemist_recipe_ingredients AS ri')
+            ->leftJoin('foodalchemist_vocab_units AS u', 'u.id', '=', 'ri.unit_vocab_id')
+            ->whereIn('ri.recipe_id', $dishIds)
+            ->whereNull('ri.deleted_at')
+            ->where('ri.is_optional', false)
+            ->where(fn ($w) => $w->whereNull('u.slug')->orWhere('u.slug', '!=', 'qs'))
+            ->where(fn ($w) => $w->whereNull('u.dimension')->orWhere('u.dimension', '!=', 'mass')
+                ->orWhereNull('u.default_in_g')->orWhere('u.default_in_g', '<=', 0))
+            ->distinct()->pluck('ri.recipe_id')->map(fn ($i) => (int) $i)->all();
+        $dishIds = array_values(array_diff($dishIds, $unvergleichbar));
+        if (count($dishIds) < 2) {
+            return [];
+        }
+
+        // Schwerste Zeile je Gericht (Bereich = Mittelwert, §6.4).
+        $top = [];
+        $rows = DB::table('foodalchemist_recipe_ingredients AS ri')
+            ->join('foodalchemist_vocab_units AS u', 'u.id', '=', 'ri.unit_vocab_id')
+            ->whereIn('ri.recipe_id', $dishIds)
+            ->whereNull('ri.deleted_at')
+            ->where('ri.is_optional', false)
+            ->where('u.slug', '!=', 'qs')
+            ->where('u.dimension', 'mass')
+            ->where('u.default_in_g', '>', 0)
+            ->where('ri.quantity', '>', 0)
+            ->selectRaw('ri.recipe_id, ri.gp_id, ri.referenced_recipe_id, ri.position,'
+                . ' ((ri.quantity + COALESCE(ri.quantity_max, ri.quantity)) / 2) * u.default_in_g AS masse_g')
+            ->orderBy('ri.recipe_id')
+            ->orderByDesc('masse_g')
+            ->orderBy('ri.position')
+            ->get();
+        foreach ($rows as $r) {
+            $top[(int) $r->recipe_id] ??= $r;
+        }
+
+        $kernJeGericht = [];
+        $gpKerne = $this->kernSlugs('foodalchemist_gp_anchor_mappings', 'gp_id',
+            array_map(fn ($z) => (int) $z->gp_id, array_filter($top, fn ($z) => $z->referenced_recipe_id === null && $z->gp_id !== null)));
+        $subKerne = $this->kernSlugs('foodalchemist_recipe_anchor_mappings', 'recipe_id',
+            array_map(fn ($z) => (int) $z->referenced_recipe_id, array_filter($top, fn ($z) => $z->referenced_recipe_id !== null)));
+        foreach ($top as $recipeId => $z) {
+            $slug = $z->referenced_recipe_id !== null
+                ? ($subKerne[(int) $z->referenced_recipe_id] ?? null)
+                : ($z->gp_id !== null ? ($gpKerne[(int) $z->gp_id] ?? null) : null);
+            if ($slug !== null) {
+                $kernJeGericht[$recipeId] = $slug;
+            }
+        }
+        ksort($kernJeGericht);
+
+        $gruppen = [];
+        foreach ($kernJeGericht as $recipeId => $slug) {
+            foreach ($gruppen as &$g) {
+                if ($this->ankerSlugMatches($g['slug'], $slug)) {
+                    $g['recipe_ids'][] = $recipeId;
+
+                    continue 2;
+                }
+            }
+            unset($g);
+            $gruppen[] = ['slug' => $slug, 'recipe_ids' => [$recipeId]];
+        }
+
+        return array_values(array_filter($gruppen, fn ($g) => count($g['recipe_ids']) > 1));
+    }
+
+    /**
+     * Kern-Anker-Slug je Besitzer (GP oder Sub-Rezept) — dieselbe Wahl wie in
+     * {@see resolveRecipeAnchors}: höchste `ai_confidence`, dann `id`. `neutral`
+     * gilt dort wie hier als „kein Kern".
+     *
+     * @param  list<int>  $ids
+     * @return array<int, string>
+     */
+    private function kernSlugs(string $tabelle, string $spalte, array $ids): array
+    {
+        $ids = array_values(array_unique($ids));
+        if ($ids === []) {
+            return [];
+        }
+
+        $out = [];
+        $rows = DB::table($tabelle . ' AS m')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'm.anchor_id')
+            ->whereIn('m.' . $spalte, $ids)
+            ->where('m.role', 'kern')
+            ->where('a.slug', '!=', 'neutral')
+            ->whereNull('m.deleted_at')
+            ->whereNull('a.deleted_at')
+            ->orderBy('m.' . $spalte)
+            ->orderByRaw('COALESCE(m.ai_confidence, 1.0) DESC')
+            ->orderBy('m.id')
+            ->get(['m.' . $spalte . ' AS owner_id', 'a.slug']);
+        foreach ($rows as $r) {
+            $out[(int) $r->owner_id] ??= (string) $r->slug;
+        }
+
+        return $out;
+    }
+
+    /**
      * R6.1 Kohäsions-Beweis über eine MENÜFOLGE: jedes Gericht ist EINE Komponente
      * (Anker = Union seiner Zutaten-Anker), Score/Coverage/schwächstes Paar über die
      * Gericht-Paare. Gleiche Mechanik wie der Teller-Score (cohesionFor), eine Ebene höher.

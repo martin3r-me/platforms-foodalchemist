@@ -44,14 +44,17 @@ function kqMetrik(array $ebenen, string $key): array
 it('führt die Konzept-Ebene getrennt und kennt beide Tranche-C-Typen', function () {
     $e = $this->dq->messeAlleEbenen($this->rootTeam);
 
+    // Eigene Keys hier, die vollständige geordnete Liste im jüngsten Tranche-C-Test.
     expect($e)->toHaveKey('konzept')
         ->and($e['konzept']['label'])->toBe('Konzepte')
         ->and(array_column($e['konzept']['metriken'], 'key'))
-        ->toBe(['konzept_slot_luecke', 'konzept_ohne_wording', 'konzept_preisband_verletzt', 'konzept_regel_verletzt']);
+        ->toContain('konzept_slot_luecke')
+        ->toContain('konzept_ohne_wording');
 
-    // S4a = die zwei frame-freien Checks, S4b = die zwei frame-gestützten (s. KonzeptFrameSignaleTest).
+    // S4a = die zwei frame-freien Checks, S4b-1 = die zwei frame-gestützten
+    // (s. KonzeptFrameSignaleTest), S4b-2 = Dramaturgie (s. KonzeptDramaturgieSignalTest).
     $konzept = array_filter(SignalTyp::cases(), fn (SignalTyp $t) => $t->istKonzeptQualitaet());
-    expect($konzept)->toHaveCount(4)
+    expect($konzept)->toHaveCount(5)
         // Die zwei Tranchen dürfen sich nicht überschneiden — sonst zählt ein Typ doppelt.
         ->and(SignalTyp::KonzeptSlotLuecke->istRezeptQualitaet())->toBeFalse()
         ->and(SignalTyp::RezeptVerwaist->istKonzeptQualitaet())->toBeFalse();

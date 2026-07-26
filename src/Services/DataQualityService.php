@@ -27,13 +27,16 @@ use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 class DataQualityService
 {
     /**
-     * `CoverageService` kommt ab Spec 21 · S4b dazu (frame-gestützte Konzept-Checks).
-     * Kein Container-Zyklus: seine Abhängigkeiten (PlanningFrame/Concept/Foodbook) kennen
-     * diesen Service nicht — anders als beim `SignalObjectService`, der genau deshalb
-     * ausgelagert wurde.
+     * `CoverageService` kommt ab Spec 21 · S4b dazu (frame-gestützte Konzept-Checks),
+     * `PairingService` ab S4b-2 (Anker-Graph). Kein Container-Zyklus: die Abhängigkeiten
+     * beider (PlanningFrame/Concept/Foodbook bzw. keine) kennen diesen Service nicht —
+     * anders als beim `SignalObjectService`, der genau deshalb ausgelagert wurde.
      */
-    public function __construct(private SignalService $signals, private CoverageService $coverage)
-    {
+    public function __construct(
+        private SignalService $signals,
+        private CoverageService $coverage,
+        private PairingService $pairing,
+    ) {
     }
 
     /** Ab dieser Anzahl gilt eine Lücke als kritisch (rot) statt Warnung (gelb). */
@@ -553,6 +556,18 @@ class DataQualityService
                     . 'hier nicht mit; die Allergen-Linie ist Freitext und maschinell nicht messbar.',
                 'q' => fn (Team $t) => $this->konzepteMitFrameBefund($t, 'regel'),
             ],
+            'konzept_dramaturgie' => [
+                'label' => 'Konzepte in Gebrauch mit wiederholter Hauptzutat',
+                'typ' => SignalTyp::KonzeptDramaturgie,
+                'dedup' => 'dq-konzept-dramaturgie',
+                'sev' => SignalSeverity::Info,
+                'desc' => 'Zwei oder mehr Gänge dieses Konzepts tragen dieselbe Hauptzutat — als Hauptzutat gilt '
+                    . 'die mengenmäßig dominierende Zutat des Gerichts, ihr Aroma-Anker identifiziert sie; '
+                    . 'Sorten-Varianten zählen mit (lachs / lachs_wild). Das ist bewusst nur ein Hinweis und keine '
+                    . 'Warnung: ein Themen-Menü darf sich wiederholen. Gerichte ohne massen-vergleichbare Zutaten '
+                    . 'oder ohne Anker bleiben unbewertet — fehlende Erdung ist keine Aussage über das Menü.',
+                'q' => fn (Team $t) => $this->konzepteMitWiederholung($t),
+            ],
         ];
     }
 
@@ -618,6 +633,64 @@ class DataQualityService
         }
 
         return $this->konzepteInGebrauch($team)->whereIn('id', $treffer);
+    }
+
+    /**
+     * Spec 21 · S4b-2 — die Anker-Graph-Hälfte von Tranche C.
+     *
+     * Anders als {@see konzepteMitFrameBefund} braucht dieser Check **kein Planungs-Gerüst**:
+     * er misst das Konzept gegen sich selbst (welche Gänge tragen dieselbe Hauptzutat) und
+     * greift damit auch dort, wo niemand ein Soll gesetzt hat. Die Arbeitsmenge bleibt die
+     * aus S4a (in Gebrauch), enger geschnitten wird nur über die Sache selbst: unter zwei
+     * Gerichten gibt es keine Menüfolge.
+     *
+     * Der Befund kommt aus {@see PairingService::menuRepetitions} — bewusst NICHT aus
+     * `menuCohesion`, obwohl der Fahrplan das zuerst so vorsah: dessen Score liest einen
+     * geteilten Anker als maximale Nähe (1,0), was für den Teller stimmt und für die
+     * Menüfolge die Diagnose umdreht; und seine Anker-Union je Gericht enthält jede
+     * Nebenzutat, „zweimal Butter" wäre dort dasselbe Signal wie „zweimal Lachs".
+     * Begründung im Detail am Service.
+     *
+     * `severity=info`: eine Wiederholung ist kein Fehler, sondern eine Frage an die
+     * Dramaturgie — ein Themen-Menü (Kürbis-Menü) wiederholt bewusst. Als Warnung wäre
+     * das genau das Über-Flaggen, das Spec 21 §9 ausschließt.
+     */
+    private function konzepteMitWiederholung(Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        $treffer = [];
+        foreach ($this->konzepteInGebrauch($team)->pluck('id') as $id) {
+            if ($this->pairing->menuRepetitions($this->konzeptGerichtIds((int) $id)) !== []) {
+                $treffer[] = (int) $id;
+            }
+        }
+
+        return $this->konzepteInGebrauch($team)->whereIn('id', $treffer);
+    }
+
+    /**
+     * Die Gerichte EINES Konzepts über beide Befüllungs-Arten — Gericht-Slot und
+     * Paket-Slot (dieselben zwei Wege wie {@see slotOhneWording}; ein Paket bringt
+     * seine Gerichte in die Menüfolge ein, auch wenn sie an keinem eigenen Slot hängen).
+     *
+     * @return list<int>
+     */
+    private function konzeptGerichtIds(int $conceptId): array
+    {
+        $direkt = DB::table('foodalchemist_concept_slots')
+            ->where('concept_id', $conceptId)
+            ->whereNull('deleted_at')
+            ->whereNotNull('sales_recipe_id')
+            ->pluck('sales_recipe_id')->all();
+
+        $ausPaket = DB::table('foodalchemist_package_dishes as pd')
+            ->join('foodalchemist_concept_slots as cs', 'cs.package_id', '=', 'pd.package_id')
+            ->where('cs.concept_id', $conceptId)
+            ->whereNull('cs.deleted_at')
+            ->whereNull('pd.deleted_at')
+            ->whereNotNull('pd.sales_recipe_id')
+            ->pluck('pd.sales_recipe_id')->all();
+
+        return array_values(array_unique(array_map('intval', array_merge($direkt, $ausPaket))));
     }
 
     /**
