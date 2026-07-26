@@ -43,9 +43,11 @@ class RecipeGeneratorService
 
     /**
      * @param array $parameter convenience|frische|bio|niveau|sektor|diaet_hart|aroma|use_favorites_list
+     * @param ?string $createdVia 03·L5: Herkunfts-Lineage am Rezept (mcp bei MCP-Aufruf).
+     *                            Default null = byte-identisches Verhalten der UI-Pfade.
      * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
      */
-    public function generiere(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false): array
+    public function generiere(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null): array
     {
         $kiRezept = $kiRezeptOverride;
         if ($kiRezept === null) {
@@ -118,10 +120,11 @@ class RecipeGeneratorService
         };
         $bio = ($parameter['bio'] ?? false) ? 'bio' : 'conventional';        // Bio nur auf Ansage (4.4r)
 
-        return DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $vkModus) {
+        return DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $vkModus, $createdVia) {
             $recipe = $this->recipes->create($team, [
                 'name' => $kiRezept['name'],
                 'is_sales_recipe' => $vkModus,
+                'created_via' => $createdVia,
                 'description' => $kiRezept['description'] ?? null,
                 // Enum-Guard: taste_direction ist die grobe Menüplanungs-Richtung (suess|herzhaft|neutral,
                 // varchar(16)) — nicht das Aroma-Profil. Ein Generator-Freitext ("cremig-süßlich, …") lebt
