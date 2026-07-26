@@ -25,6 +25,15 @@
         </x-ui-page-actionbar>
     </x-slot>
 
+    {{-- Spec 21 · S3a: die rechte Fläche war die einzige der sieben Cockpit-Seiten ohne
+         Panel. Öffnen über „Reinschauen" in der Signal-Zeile (Event `signal-selected`). --}}
+    <x-slot name="activity">
+        <x-foodalchemist::detail-sidebar title="Signal-Detail" width="w-96" :maxWidth="640"
+                                        scope="activity_signale" side="right" icon="heroicon-o-bell-alert" :defaultOpen="true">
+            <livewire:foodalchemist.signale.detail-panel />
+        </x-foodalchemist::detail-sidebar>
+    </x-slot>
+
     {{-- Klick-Ziele der Rezept-Listen (Signale/KI/Pflege-Tabs) --}}
     <livewire:foodalchemist.recipes.recipe-modal />
     <livewire:foodalchemist.verkauf.vk-modal />

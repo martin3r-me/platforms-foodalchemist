@@ -97,6 +97,8 @@ Panel-Inhalt (Muster + Design von `Recipes/DetailPanel` + Cockpit/section aus De
 7. **Teil-Bulk** — Checkboxen auf den betroffenen Objekten: „diese 12 fixen" statt alles-oder-nichts.
 8. **Policy-Regler** — Schwelle justieren / „akzeptiert bis" setzen (E2) direkt im Panel.
 
+> **Stand 2026-07-26 · Punkte 1+2 gebaut** (Etappe S3a, `Signale/DetailPanel` + `SignalObjectService` + `DataQualityService::trifftObjekt()`). Die tragende Auslegung: **Punkt 2 wird rückwärts gefragt.** Nicht „alle Trefferlisten laden und schneiden" (das wären bei den vierstelligen Typen Zehntausende Zeilen für die Frage nach einem Rezept), sondern ein `whereKey(...)->exists()` je Metrik gegen genau dieses Objekt — auf demselben `queryFor`-Prädikat, das Ampel, Liste und Fixer-Lifecycle schon teilen. Zweitens: die Objekt-Liste ist eine **Live-Auflösung** und ihr `total` kommt aus `countFor()`, nicht aus `payload.anzahl` — sonst zeigt das Panel den Stand des letzten Detektor-Laufs, obwohl gerade gefixt wurde. Drittens: die alte 50er-Inline-Liste unter der Signal-Zeile ist **abgelöst** (`toggleDetail`/`betroffeneFuer` aus der `ReviewQueue` entfernt), und das Panel bekommt bewusst **keine** eigenen Lifecycle-/KI-Knöpfe — zwei Sätze derselben Knöpfe wären eine zweite Wahrheit; der KI-Plan erscheint nur als Erklärtext. Offen in S3b: Punkte 3+7 hängen an einem **Teilmengen-Pfad** im Fixer (`SignalFixService`/`SignalFixJob` kennen heute nur den vollen betroffenen Satz) — das ist der eigentliche Kern der Rest-Etappe, nicht die UI. **Punkt 6 (Historie/„wie oft wiedergekehrt") ist mit dem heutigen Schema nicht baubar** (kein `last_seen_at`/`seen_count`, V-009) und bleibt bis zu einer Migrations-Entscheidung draußen.
+
 ---
 
 ## 8. Etappen
@@ -107,7 +109,8 @@ Panel-Inhalt (Muster + Design von `Recipes/DetailPanel` + Cockpit/section aus De
 | **S1** | Tranche A | M | 11 deterministische Rezept-Checks + Fixer-/Assist-Mapping in `SignalCockpit`; Pest je Check mit Positiv- **und** Negativfall (kein Über-Flaggen) |
 | **S2a** | Tranche E · E1 | S–M | ✅ 2026-07-26 — Snapshot-Tabelle + `SignalTrendService` (Serie/Delta/Übersicht) + Fold-in in den Detektor-Lauf + MCP `signal_trend.GET` |
 | **S2b** | Tranche E · E2+E3 | M | ✅ 2026-07-26 — Policy-Tabelle (`threshold`/`accepted_until`/`muted`/`note`) + `SignalPolicyService` + aggregierte Zustands-Zeile auf der Signale-Seite statt Einzel-Alarm + Drift-Meta-Signal `qualitaet_drift` im Detektor-Lauf + MCP `signal_policies.GET`/`signal_policy.PUT` |
-| **S3** | Tranche P | M–L | `Signale/DetailPanel` + `signal-selected`-Event; Punkte 1–8 (2 und 3 sind die Kern-Features, nicht optional) |
+| **S3a** | Tranche P · Punkte 1+2 | M | ✅ 2026-07-26 — `Signale/DetailPanel` + `signal-selected` + rechte Fläche (`activity_signale`); `SignalObjectService` (beide Richtungen) + `DataQualityService::trifftObjekt()`; volle Liste (300) sortierbar, Inline-50er-Liste abgelöst |
+| **S3b** | Tranche P · Punkte 3+7+8, 4, 5 | M | Dry-Run + Teil-Bulk (brauchen einen **Teilmengen-Pfad** in `SignalFixService`/`SignalFixJob` — heute alles-oder-nichts), Policy-Regler, Sparkline, Ursachen-Kette. **Punkt 6 (Historie) nicht baubar** ohne Migration → V-009 |
 | **S4** | Tranche C+D | M | Konzept- + Foodbook-Signale; `foodbook_kapitel_ohne_text` **erst nach L2** scharfstellen |
 | **S5** | Tranche B | S–M | Batch-Konsument von L6 (`RecipeReviewService`) → Findings über Schwelle werden Signale; **erst nach L6** |
 

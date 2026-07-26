@@ -1,5 +1,7 @@
 {{-- Veredelte Signal-Zeile (Cockpit) — genutzt im Überblick + Signale-Tab (DRY).
-     Erwartet: $sig, $kiPanelId, $detailPanelId, $detailData, $kiDraft (aus ReviewQueue). --}}
+     Erwartet: $sig, $kiPanelId, $kiDraft (aus ReviewQueue).
+     Spec 21 · S3a: „Reinschauen" öffnet nicht mehr eine 50er-Liste unter der Zeile,
+     sondern das rechte Signal-Panel (volle Liste + objekt-zentrische Sicht). --}}
 @php
     extract(\Platform\FoodAlchemist\Support\Ui::maps());
     $ki = \Platform\FoodAlchemist\Support\SignalCockpit::planFor($sig);
@@ -59,10 +61,13 @@
         </div>
 
         <div class="shrink-0 flex items-center gap-1 pt-0.5">
-            <button type="button" wire:click="toggleDetail({{ $sig->id }})"
-                    class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-gray-500 hover:text-gray-800 hover:bg-black/5 transition-colors {{ ($detailPanelId ?? null) === $sig->id ? 'bg-black/[0.06] text-gray-800' : '' }}"
-                    title="Betroffene Objekte anzeigen">
-                @svg('heroicon-o-chevron-down', 'w-3.5 h-3.5 transition-transform '.(($detailPanelId ?? null) === $sig->id ? 'rotate-180' : ''))
+            {{-- Öffnet das rechte Panel; der Alpine-Teil klappt die Fläche auf, falls sie
+                 zugeschoben ist (sonst „passiert nichts" beim Klick). --}}
+            <button type="button" wire:click="$dispatch('signal-selected', { id: {{ $sig->id }} })"
+                    x-on:click="$store.ui?.mSet('activity_signale', 'open', true)"
+                    class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-gray-500 hover:text-gray-800 hover:bg-black/5 transition-colors"
+                    title="Betroffene Objekte im Detail-Panel anzeigen" data-signal-reinschauen="{{ $sig->id }}">
+                @svg('heroicon-o-arrow-right-circle', 'w-3.5 h-3.5')
                 Reinschauen
             </button>
             @if($sig->status->istOffen())
@@ -124,39 +129,4 @@
         </div>
     @endif
 
-    @if(($detailPanelId ?? null) === $sig->id)
-        @php $dd = $detailData ?? null; @endphp
-        <div class="mx-4 mb-3 -mt-1 rounded-xl border border-black/10 bg-black/[0.015] px-4 py-3" wire:key="detail-{{ $sig->id }}">
-            @if($dd && count($dd['items']))
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-[11px] font-medium text-gray-700">Betroffene Objekte</span>
-                    <span class="text-[10px] text-gray-400 tabular-nums">{{ $dd['gezeigt'] }} von {{ number_format($dd['total'], 0, ',', '.') }}</span>
-                </div>
-                <div class="grid sm:grid-cols-2 gap-x-6 gap-y-0.5">
-                    @foreach($dd['items'] as $it)
-                        @if($it['kind'] === 'recipe')
-                            <button type="button" wire:click="$dispatch('{{ $it['is_sales_recipe'] ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $it['id'] }} })"
-                                    class="flex items-center gap-1.5 text-left text-[11px] text-sky-600 hover:text-sky-700 hover:underline py-0.5 min-w-0">
-                                @svg('heroicon-o-arrow-top-right-on-square', 'w-3 h-3 shrink-0 opacity-60')<span class="truncate">{{ $it['name'] }}</span>
-                            </button>
-                        @elseif($it['kind'] === 'gp')
-                            <a href="{{ route('foodalchemist.gps.index', ['gp' => $it['id']]) }}" wire:navigate
-                               class="flex items-center gap-1.5 text-[11px] text-violet-600 hover:text-violet-700 hover:underline py-0.5 min-w-0">
-                                @svg('heroicon-o-arrow-top-right-on-square', 'w-3 h-3 shrink-0 opacity-60')<span class="truncate">{{ $it['name'] }}</span>
-                            </a>
-                        @else
-                            <span class="text-[11px] text-gray-600 truncate py-0.5">{{ $it['name'] }}</span>
-                        @endif
-                    @endforeach
-                </div>
-                @if($dd['total'] > $dd['gezeigt'])
-                    <p class="text-[10px] text-gray-400 mt-2">… und {{ number_format($dd['total'] - $dd['gezeigt'], 0, ',', '.') }} weitere. Zum Bearbeiten ins jeweilige Modul.</p>
-                @endif
-            @elseif($dd)
-                <p class="text-[11px] text-gray-500">Für diesen Signaltyp gibt es (noch) keine Einzelaufstellung — der Befund ist aggregiert.</p>
-            @else
-                <p class="text-[11px] text-gray-400">Lade …</p>
-            @endif
-        </div>
-    @endif
 </div>

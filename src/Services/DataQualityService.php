@@ -784,6 +784,25 @@ class DataQualityService
     }
 
     /**
+     * Umgekehrte Frage (Spec 21 · P·2, objekt-zentrische Sicht): trifft das Prädikat
+     * dieser Metrik ein KONKRETES Objekt? Dasselbe `queryFor` wie Zählung und Liste —
+     * nur mit `whereKey`, damit „was hat dieses Rezept noch?" nicht die volle
+     * Trefferliste jeder Metrik laden muss (ein EXISTS je Metrik statt n Zeilen).
+     *
+     * $kind muss zur Metrik passen ('gp'|'recipe') — eine GP-Metrik trifft nie ein
+     * Rezept, auch wenn die IDs zufällig gleich sind.
+     */
+    public function trifftObjekt(Team $team, string $metrik, string $kind, int $id): bool
+    {
+        [$q, $metrikKind] = $this->queryFor($team, $metrik);
+        if ($q === null || $metrikKind !== $kind) {
+            return false;
+        }
+
+        return $q->whereKey($id)->exists();
+    }
+
+    /**
      * Re-Count einer einzelnen Metrik (nach einem Fix). Dieselbe Query wie betroffene()
      * (queryFor), nur COUNT — für die Lifecycle-Entscheidung „Signal schließen" (count 0).
      */
