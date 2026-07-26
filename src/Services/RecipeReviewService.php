@@ -159,6 +159,11 @@ class RecipeReviewService
             $einheitSlug = trim((string) ($b['einheit_slug'] ?? '')) ?: null;
 
             $befund = [
+                // S5b: stammt der Befund aus der Ablage, reist seine Zeilen-id mit —
+                // sonst könnte die Fläche eine Übernahme dort nicht vermerken und das
+                // Signal zählte den erledigten Befund bis zum nächsten Batch weiter.
+                // Aus `pruefe()` ist der Schlüssel schlicht nicht gesetzt.
+                'finding_id' => ($b['finding_id'] ?? null) !== null ? (int) $b['finding_id'] : null,
                 'art' => $art,
                 'zutat_id' => null,
                 'zutat_text' => $text,

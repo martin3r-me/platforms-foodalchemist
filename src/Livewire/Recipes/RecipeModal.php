@@ -39,14 +39,21 @@ class RecipeModal extends Component
 
     public bool $istOffen = false;
 
+    /**
+     * $copilot = Sprung aus dem Signal-Cockpit (Spec 21 · S5b): die abgelegten Befunde
+     * werden direkt aufgeklappt. Kein Prüf-Call — s. `copilotAusAblage()`.
+     */
     #[On('recipe-modal.oeffnen')]
-    public function oeffnen(?int $id = null): void
+    public function oeffnen(?int $id = null, bool $copilot = false): void
     {
         // Sub-Navigation: aus einem bereits OFFENEN Rezept ein anderes öffnen → Eltern auf den Stack.
         if ($this->istOffen && $this->recipeId !== null && $id !== null && $this->recipeId !== $id) {
             $this->navStack[] = $this->recipeId;
         }
         $this->ladeRezept($id);
+        if ($copilot && $this->recipeId !== null) {
+            $this->copilotAusAblage();
+        }
     }
 
     /** ✕ am Rezept-Modal: bei Sub-Navigation zurück zum Eltern-Rezept, sonst hart schließen. */

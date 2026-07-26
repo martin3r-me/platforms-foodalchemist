@@ -190,6 +190,37 @@ class RecipeFindingService
     }
 
     /**
+     * S5b — die abgelegten offenen Befunde EINES Rezepts in der Form, die
+     * `RecipeReviewService::bewerte()` und die Copilot-Fläche lesen.
+     *
+     * Bewusst ohne die gespeicherte Anwendbarkeit (`auto_applicable`/`applicability`):
+     * die stammt aus dem Batch-Zeitpunkt und kann längst überholt sein — die Zielzeile
+     * ist vielleicht weg, die „fehlende" Zutat schon drin. Wer diese Liste anzeigt,
+     * schickt sie durch `bewerte()` und bekommt die Entscheidung frisch aus derselben
+     * Stelle wie der Live-Pass. Die id reist als `finding_id` mit, damit die Fläche
+     * eine Übernahme auch an der Ablage vermerken kann.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function offeneBefundeFuer(Team $team, int $recipeId, ?float $schwelle = null): array
+    {
+        return $this->offeneUeberSchwelle($team, $schwelle)
+            ->where('recipe_id', $recipeId)
+            ->orderByDesc('confidence')->orderBy('id')
+            ->get()
+            ->map(fn (FoodAlchemistRecipeFinding $f) => [
+                'finding_id' => (int) $f->id,
+                'art' => (string) $f->kind,
+                'zutat_id' => $f->ingredient_id !== null ? (int) $f->ingredient_id : null,
+                'zutat_text' => (string) ($f->ingredient_text ?? ''),
+                'quantity' => $f->quantity !== null ? (float) $f->quantity : null,
+                'einheit_slug' => $f->unit_slug,
+                'begruendung' => (string) ($f->reason ?? ''),
+                'konfidenz' => (float) $f->confidence,
+            ])->all();
+    }
+
+    /**
      * Dedup-Schlüssel: Art + Zielzeile. Ohne Wert (s. Klassen-Doku), ohne Fuzzy —
      * die Zielzeile ist entweder die id oder der genannte Text.
      */

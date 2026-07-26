@@ -48,6 +48,12 @@ final class SignalCockpit
         // Match-Pfad im Rezept, „verwaist"/„ein Zutat" sind reine Entscheidungen.
         'rezept_kategorie_problem' => 'signal.recipe_category_suggest',
         'rezept_naming_regelwerk' => 'signal.recipe_naming_suggest',
+        // Spec 21 Tranche B (`rezept_plausi_ki`) steht bewusst NICHT hier — weder als
+        // Fixer noch als Assist. Hinter dem Signal liegt bereits ein KI-Urteil je Befund
+        // (`foodalchemist_recipe_findings`); ein Sammel-`propose()` darüber wäre ein
+        // zweites Urteil über dasselbe und würde am Ende gegen die abgelegten Befunde
+        // laufen. Der Weg ist die Objekt-Liste im Panel: sie öffnet das Rezept mit
+        // aufgeklappten Befunden, entschieden wird einzeln (SignalTyp::istKiUrteil).
     ];
 
     private const PLAN_DET = [

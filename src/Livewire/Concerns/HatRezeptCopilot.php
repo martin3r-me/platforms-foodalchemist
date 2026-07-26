@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Concerns;
 
 use Illuminate\Support\Facades\Auth;
+use Platform\FoodAlchemist\Services\RecipeFindingService;
 use Platform\FoodAlchemist\Services\RecipeReviewService;
 
 /**
@@ -54,6 +55,80 @@ trait HatRezeptCopilot
     }
 
     /**
+     * Spec 21 · S5b — die Befunde des letzten Batch-Laufs anzeigen, OHNE zu prüfen.
+     *
+     * Das ist der Landeplatz des Signals `rezept_plausi_ki`: es zählt abgelegte
+     * Befunde, also muss die Fläche genau die zeigen. Ein Live-Pass an dieser Stelle
+     * wäre gleich doppelt falsch — er kostet Egress bei jedem Sprung aus dem Cockpit,
+     * und er könnte etwas anderes liefern als das, worauf das Signal zeigt.
+     *
+     * Frisch ist trotzdem die Anwendbarkeit: die Zeilen laufen durch `bewerte()`,
+     * dieselbe Stelle wie nach jeder Übernahme. Ein Befund vom Vortag, dessen
+     * Zielzeile inzwischen weg ist, kommt damit als nicht-anwendbar an statt mit
+     * grünem Knopf.
+     */
+    public function copilotAusAblage(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $this->fehler = null;
+        $this->copilotStatus = null;
+
+        $abgelegt = app(RecipeFindingService::class)->offeneBefundeFuer($team, $this->recipeId);
+        if ($abgelegt === []) {
+            return;                                                // nichts abgelegt → normale Fläche, kein leerer Kasten
+        }
+
+        try {
+            $befunde = app(RecipeReviewService::class)->bewerte($team, $this->recipeId, $abgelegt);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+
+        $this->copilot = ['gesamturteil' => '', 'confidence' => 0.0, 'befunde' => $befunde];
+        $this->copilotOffen = true;
+        $this->copilotStatus = count($befunde).' offene(r) Befund(e) aus dem letzten Prüflauf — nicht neu geprüft.';
+    }
+
+    /**
+     * „Lass das so" an EINEM Befund aus der Ablage. Gegenstück zur Übernahme und der
+     * eigentliche Ruhigsteller: laut S5a hält `verworfen`, während ein übernommener
+     * Befund wiederkommen darf (dann hat der Fix nicht gegriffen). Ohne diesen Knopf
+     * bliebe ein bewusst akzeptierter Befund bis in alle Ewigkeit im Signal stehen.
+     *
+     * Live-Befunde (ohne `finding_id`) verschwinden nur aus der Ansicht — es gibt
+     * nichts zu entscheiden, was Bestand hätte.
+     */
+    public function copilotBefundVerwerfen(int $index): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $befund = $this->copilot['befunde'][$index] ?? null;
+        if ($team === null || $befund === null) {
+            return;
+        }
+        $this->fehler = null;
+
+        if (($befund['finding_id'] ?? null) !== null) {
+            try {
+                app(RecipeFindingService::class)->entscheide($team, (int) $befund['finding_id'], 'verworfen');
+            } catch (\RuntimeException $e) {
+                $this->fehler = $e->getMessage();
+
+                return;
+            }
+        }
+
+        $rest = $this->copilot['befunde'];
+        unset($rest[$index]);
+        $this->copilot['befunde'] = array_values($rest);
+        $this->copilotStatus = 'Befund verworfen — er kommt nicht wieder.';
+    }
+
+    /**
      * Übernahme genau EINES Befunds. Der Schreib-Weg liegt im Service; hier
      * bleibt nur die Frage, was danach mit den ÜBRIGEN Befunden passiert:
      * sie werden gegen den frischen Bestand neu bewertet (`bewerte`), weil ein
@@ -76,6 +151,14 @@ trait HatRezeptCopilot
             $this->fehler = $e->getMessage();
 
             return;
+        }
+
+        // S5b: kam der Befund aus der Ablage, wird er dort auch abgeschlossen — sonst
+        // zählt `rezept_plausi_ki` einen erledigten Befund bis zum nächsten Batch weiter.
+        // Bewusst `uebernommen` und nicht `verworfen`: greift der Fix nicht, darf der
+        // Befund wiederkommen (S5a, Entscheidung 2).
+        if (($befund['finding_id'] ?? null) !== null) {
+            app(RecipeFindingService::class)->entscheide($team, (int) $befund['finding_id'], 'uebernommen');
         }
 
         $rest = $this->copilot['befunde'];

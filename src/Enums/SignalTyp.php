@@ -41,6 +41,12 @@ enum SignalTyp: string
     case RezeptZutatenUngemappt = 'rezept_zutaten_ungemappt';
     case RezeptSubStubOffen = 'rezept_sub_stub_offen';
     case RezeptVerwaist = 'rezept_verwaist';
+    // Spec 21 Tranche B (S5b): das einzige Rezept-Signal mit KI-Urteil im Rücken. Die
+    // Zähl-Query selbst ist so deterministisch wie Tranche A — sie liest abgelegte
+    // Befunde (`foodalchemist_recipe_findings`, S5a), der Egress lag im Batch. Deshalb
+    // trägt der Typ dasselbe `rezept_`-Präfix: für Cockpit, Panel und Policies ist er
+    // ein Rezept-Qualitätssignal wie die anderen, nur mit anderer Herkunft.
+    case RezeptPlausiKi = 'rezept_plausi_ki';
     // Spec 21 Tranche C: Konzept-Ebene (bis dahin 0 Signale — die Kaskade endete am Gericht).
     // Gemessen wird nur an Konzepten, die IN GEBRAUCH sind (s. DataQualityService::konzepteInGebrauch):
     // ein unfertiger Entwurf ist kein Mangel, ein unfertiges verkauftes Konzept schon.
@@ -105,6 +111,7 @@ enum SignalTyp: string
             self::RezeptZutatenUngemappt => 'Rezept mit ungemappten Zutaten',
             self::RezeptSubStubOffen => 'Sub-Rezept-Stub offen',
             self::RezeptVerwaist => 'Rezept verwaist',
+            self::RezeptPlausiKi => 'Rezept mit offenem KI-Befund',
             self::KonzeptSlotLuecke => 'Konzept mit unbesetztem Pflicht-Slot',
             self::KonzeptOhneWording => 'Konzept ohne Kunden-Wording',
             self::KonzeptPreisbandVerletzt => 'Konzept außerhalb des Preisbands',
@@ -148,6 +155,7 @@ enum SignalTyp: string
             self::RezeptZutatenUngemappt => 'heroicon-o-link-slash',
             self::RezeptSubStubOffen => 'heroicon-o-puzzle-piece',
             self::RezeptVerwaist => 'heroicon-o-archive-box',
+            self::RezeptPlausiKi => 'heroicon-o-chat-bubble-left-right',
             self::KonzeptSlotLuecke => 'heroicon-o-squares-2x2',
             self::KonzeptOhneWording => 'heroicon-o-chat-bubble-bottom-center-text',
             self::KonzeptPreisbandVerletzt => 'heroicon-o-banknotes',
@@ -163,13 +171,29 @@ enum SignalTyp: string
     }
 
     /**
-     * Spec 21 Tranche A — Rezept-Inhalts-Qualität (deterministisch, 0-Egress).
-     * Abgrenzung zu den älteren Kaskaden-Typen (EK/Anker/Servierform), die Geld-
-     * bzw. Erdungs-Lücken messen statt der Rezeptur selbst.
+     * Rezept-Inhalts-Qualität (Spec 21 Tranche A + B). Abgrenzung zu den älteren
+     * Kaskaden-Typen (EK/Anker/Servierform), die Geld- bzw. Erdungs-Lücken messen
+     * statt der Rezeptur selbst.
+     *
+     * Tranche A ist durchgehend deterministisch (0-Egress); seit S5b ist mit
+     * {@see istKiUrteil} genau ein Typ dabei, dessen Befund aus einem KI-Pass
+     * stammt. Für alles, was diese Methode steuert (Ebene, Panel, Policies), ist
+     * das derselbe Sachverhalt — wer die Herkunft braucht, fragt `istKiUrteil()`.
      */
     public function istRezeptQualitaet(): bool
     {
         return str_starts_with($this->value, 'rezept_');
+    }
+
+    /**
+     * Spec 21 Tranche B — der Befund hinter dem Signal ist ein KI-Urteil (abgelegt in
+     * `foodalchemist_recipe_findings`), kein Prädikat über Stammdaten. Relevant überall
+     * dort, wo „das kann ein Fixer erledigen" gilt: hier entscheidet der Mensch je
+     * Befund, deshalb führt der Weg ins Rezept-Modal statt auf einen Knopf.
+     */
+    public function istKiUrteil(): bool
+    {
+        return $this === self::RezeptPlausiKi;
     }
 
     /**

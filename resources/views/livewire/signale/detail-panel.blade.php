@@ -105,10 +105,14 @@
                                            title="Für Teil-Fix auswählen" data-signal-pick="{{ $it['id'] }}">
                                 @endif
                                 @if($it['kind'] === 'recipe')
+                                    {{-- Tranche B (S5b): bei `rezept_plausi_ki` öffnet das Modal direkt mit den
+                                         abgelegten Befunden — das Signal zählt genau die, und der Fix passiert
+                                         je Befund. Kein Prüf-Call beim Sprung (kein Egress, keine zweite
+                                         Befundlage neben der, auf die das Signal zeigt). --}}
                                     <button type="button"
-                                            wire:click="$dispatch('{{ $it['is_sales_recipe'] ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $it['id'] }} })"
+                                            wire:click="$dispatch('{{ $it['is_sales_recipe'] ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $it['id'] }}, copilot: {{ $sig->type->istKiUrteil() ? 'true' : 'false' }} })"
                                             class="min-w-0 flex-1 flex items-center gap-1.5 text-left text-[11px] text-sky-600 hover:text-sky-700 hover:underline"
-                                            title="{{ $it['is_sales_recipe'] ? 'Verkaufsgericht' : 'Basisrezept' }} öffnen">
+                                            title="{{ $it['is_sales_recipe'] ? 'Verkaufsgericht' : 'Basisrezept' }} öffnen{{ $sig->type->istKiUrteil() ? ' — mit den Copilot-Befunden' : '' }}">
                                         @svg('heroicon-o-arrow-top-right-on-square', 'w-3 h-3 shrink-0 opacity-60')
                                         <span class="truncate">{{ $it['name'] }}</span>
                                     </button>

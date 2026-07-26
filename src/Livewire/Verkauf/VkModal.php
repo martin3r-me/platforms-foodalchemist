@@ -63,8 +63,12 @@ class VkModal extends Component
 
     public string $darNeueForm = '';                                 // serving_form_id für Anlage
 
+    /**
+     * $copilot = Sprung aus dem Signal-Cockpit (Spec 21 · S5b): die abgelegten Befunde
+     * werden direkt aufgeklappt. Kein Prüf-Call — s. `copilotAusAblage()`.
+     */
     #[On('vk-modal.oeffnen')]
-    public function oeffnen(?int $id = null): void
+    public function oeffnen(?int $id = null, bool $copilot = false): void
     {
         $this->formZuruecksetzen();
         $this->recipeId = $id;
@@ -106,6 +110,9 @@ class VkModal extends Component
             $this->hauptgruppeId = $r->dishClass?->dish_main_group_id;
         }
         $this->ladeDarreichungen();
+        if ($copilot && $this->recipeId !== null) {
+            $this->copilotAusAblage();
+        }
         $this->dispatch('modal.open', name: 'vk-modal');
     }
 

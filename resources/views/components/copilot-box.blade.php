@@ -93,6 +93,14 @@
                     @else
                         <p class="text-[10px] mt-0.5 text-gray-500">{{ $warum[$b['status']] ?? 'Nicht anwendbar.' }}</p>
                     @endif
+                    {{-- S5b: „Lass das so" gibt es NUR für abgelegte Befunde (finding_id) — nur die haben
+                         Bestand, den man ruhigstellen könnte. Bewusst auch am nicht-anwendbaren Befund:
+                         gerade der reine Hinweis ist der, den man dauerhaft loswerden will. --}}
+                    @if(($b['finding_id'] ?? null) !== null)
+                        <button type="button" wire:click="copilotBefundVerwerfen({{ $i }})"
+                                class="{{ $btnGhostXs }} mt-0.5 text-gray-500" data-{{ $prefix }}copilot-dismiss
+                                title="Befund als bewusst akzeptiert schließen — er wird nicht wieder gemeldet.">Lass das so</button>
+                    @endif
                 </div>
             @endforeach
         </div>

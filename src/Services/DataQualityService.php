@@ -473,6 +473,30 @@ class DataQualityService
                     $this->produktiveRezepte($t)->where('updated_at', '<', now()->subDays(self::VERWAIST_TAGE))
                 ),
             ],
+            // Tranche B (S5b) — die einzige Zeile dieses Registers mit KI-Urteil im Rücken.
+            // Sie prüft trotzdem nichts selbst: der Egress lag im Batch
+            // (`foodalchemist:recipe-findings`), hier wird nur der abgelegte Bestand
+            // gelesen. Die Auswahl-Regel kommt ungeteilt aus `offeneUeberSchwelle()` —
+            // eine eigene Schwelle hier hieße, dass ein Befund in der Rezept-Ansicht
+            // erledigt aussieht und im Cockpit noch zählt.
+            'rezept_plausi_ki' => [
+                'label' => 'Rezepte mit offenem KI-Befund',
+                'typ' => SignalTyp::RezeptPlausiKi,
+                'dedup' => 'dq-rezept-plausi-ki',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Der Rezept-Copilot hat am Rezept mindestens einen unentschiedenen Befund mit Konfidenz ≥ '
+                    . RecipeFindingService::KONFIDENZ_SCHWELLE . ' hinterlassen (falsche Menge, unpassende Zutat, '
+                    . 'fehlende Schlüsselkomponente). Das ist die Fehlerklasse Pfefferkörner→Pfefferrahm-Sauce, die '
+                    . 'bisher nur einmalig per Skript gefunden wurde. Aufgelöst wird sie im Rezept selbst — je '
+                    . 'Befund übernehmen oder verwerfen; ein verworfener Befund kommt nicht wieder.',
+                // `whereIn` mit Sub-Builder statt eigenem EXISTS: die Befund-Zeilen sind
+                // bewusst NICHT team-hierarchisch (Messreihen-Ausnahme aus S5a), ihr Scope
+                // steckt im Service. Nachgebaut wäre er hier eine zweite Wahrheit.
+                'q' => fn (Team $t) => $this->alleRezepte($t)->whereIn(
+                    'foodalchemist_recipes.id',
+                    app(RecipeFindingService::class)->offeneUeberSchwelle($t)->select('recipe_id')
+                ),
+            ],
         ];
     }
 

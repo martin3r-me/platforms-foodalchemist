@@ -250,3 +250,69 @@ it('L6b: das Gericht prüft über denselben Weg (VK-Zweig, Komponenten-Wort in d
     expect((float) $zeile->quantity)->toBe(200.0)
         ->and($zeile->role)->toBe('komponente');                        // Facette der Zeile überlebt (V-027-Umweg)
 });
+
+/**
+ * Spec 21 · S5b — der Landeplatz des Signals `rezept_plausi_ki`.
+ *
+ * Der Sprung aus dem Cockpit öffnet das Rezept mit den ABGELEGTEN Befunden, nicht
+ * mit einem frischen Prüf-Pass. Das ist keine Sparmaßnahme: das Signal zählt genau
+ * die abgelegten Zeilen, ein Live-Pass könnte etwas anderes zeigen — und wäre bei
+ * jedem Sprung ein Provider-Call.
+ */
+it('S5b: der Sprung aus dem Cockpit klappt die abgelegten Befunde auf — ohne Provider-Call', function () {
+    // Kein Stub gebunden: ein versehentlicher Prüf-Pass müsste hier scheitern.
+    $befund = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeFinding::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $this->recipe->id,
+        'fingerprint' => sha1('hinweis|butter'), 'kind' => 'hinweis',
+        'reason' => 'Butter erst nach dem Stampfen einrühren.', 'confidence' => 0.9,
+        'auto_applicable' => false, 'applicability' => 'nur_hinweis', 'status' => 'offen',
+        'seen_count' => 1, 'first_seen_at' => now(), 'last_seen_at' => now(),
+    ]);
+
+    $test = Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $this->recipe->id, true)
+        ->assertSet('fehler', null)
+        ->assertSet('copilotOffen', true)
+        ->assertCount('copilot.befunde', 1)
+        ->assertSet('copilot.befunde.0.finding_id', $befund->id)
+        ->assertSet('copilot.befunde.0.status', 'nur_hinweis');        // frisch bewertet, nicht aus der Ablage gelesen
+
+    expect($test->html())->toContain('data-copilot-dismiss');
+
+    // „Lass das so" schließt die Zeile dauerhaft (S5a: `verworfen` hält).
+    $test->call('copilotBefundVerwerfen', 0)
+        ->assertSet('fehler', null)
+        ->assertCount('copilot.befunde', 0);
+
+    expect($befund->refresh()->status)->toBe('verworfen')
+        ->and($befund->decided_at)->not->toBeNull();
+});
+
+it('S5b: ohne abgelegte Befunde bleibt die Fläche zu (kein leerer Kasten)', function () {
+    Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $this->recipe->id, true)
+        ->assertSet('copilotOffen', false)
+        ->assertSet('copilot', null)
+        ->assertSet('fehler', null);
+});
+
+it('S5b: eine Übernahme aus der Ablage schließt auch die Befund-Zeile', function () {
+    $befund = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeFinding::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $this->recipe->id,
+        'fingerprint' => sha1('menge|butter'), 'kind' => 'menge', 'ingredient_id' => $this->idButter,
+        'ingredient_text' => 'Butter', 'quantity' => 120, 'reason' => 'Zu wenig Fett.', 'confidence' => 0.85,
+        'auto_applicable' => true, 'applicability' => 'anwendbar', 'status' => 'offen',
+        'seen_count' => 1, 'first_seen_at' => now(), 'last_seen_at' => now(),
+    ]);
+
+    Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $this->recipe->id, true)
+        ->assertSet('copilot.befunde.0.auto_applicable', true)
+        ->call('copilotUebernehmen', 0)
+        ->assertSet('fehler', null);
+
+    expect((float) DB::table('foodalchemist_recipe_ingredients')->find($this->idButter)->quantity)->toBe(120.0)
+        // Bewusst `uebernommen` statt `verworfen`: greift der Fix nicht, darf der
+        // Befund im nächsten Batch wiederkommen (S5a, Entscheidung 2).
+        ->and($befund->refresh()->status)->toBe('uebernommen');
+});
