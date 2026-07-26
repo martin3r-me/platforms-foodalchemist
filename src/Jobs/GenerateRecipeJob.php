@@ -48,6 +48,13 @@ class GenerateRecipeJob implements ShouldQueue
         public string $description,
         public array $parameter = [],
         public bool $vkModus = false,
+        /**
+         * Spec 03 L7a: One-Shot — nach der Generierung läuft der Anreicherungs-Pass
+         * in DERSELBEN Queue-Ausführung durch (der Web-Request ist längst zurück).
+         * Default aus, damit die Bestandspfade byte-identisch bleiben; der Toggle
+         * am Generator-Modal schaltet ihn an (L7b).
+         */
+        public bool $vollAnreichern = false,
     ) {
     }
 
@@ -73,13 +80,20 @@ class GenerateRecipeJob implements ShouldQueue
             if ($r === [] || ! isset($r['recipe'])) {
                 throw new \RuntimeException('Generierung lieferte kein Ergebnis.');
             }
-            $this->schreibe([
+            $payload = [
                 'status' => 'done',
                 'recipe_id' => $r['recipe']->id,
                 'name' => $r['recipe']->name,
                 'statistik' => $r['statistik'],
                 'offene' => $r['offene'],
-            ]);
+            ];
+            if ($this->vollAnreichern) {
+                // L7a: der Pass wirft nie — ein Fehlschlag steht als `fehler` im
+                // Ergebnis, das Rezept bleibt trotzdem `done`.
+                $payload['anreicherung'] = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
+                    ->anreichern($team, $r['recipe']);
+            }
+            $this->schreibe($payload);
         } catch (\Throwable $e) {
             $this->schreibe(['status' => 'error', 'fehler' => $e->getMessage()]);
         }

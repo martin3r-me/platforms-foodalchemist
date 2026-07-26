@@ -38,21 +38,76 @@ class BulkEnrichService
     /** GP-Bulk-Autopilot-Schritte (Feld-KIs mit vorhandenem Accept-Pfad). */
     public const SCHRITTE_GP = ['condition', 'tags', 'allergene', 'naehrwerte'];
 
+    /**
+     * Spec 03 L7: WAS schreibt ein Schritt? Bisher stand diese Zuordnung nur
+     * implizit im `match`-Block von `uebernehmen()`. Der One-Shot braucht sie
+     * explizit, um die Schrittfolge auf echte LÜCKEN zu schneiden (ein schon
+     * gefülltes Feld nicht erneut bezahlen). `source` ist null bei Feldern ohne
+     * Lineage-Trio (`taste_direction` = Auto-Apply-Ausnahme, GL-07 §4.3).
+     */
+    public const ZIELFELDER = [
+        'description' => ['feld' => 'description', 'source' => 'description_source'],
+        'category' => ['feld' => 'category_id', 'source' => 'category_source'],
+        'geschmack' => ['feld' => 'taste_direction', 'source' => null],
+        'wording' => ['feld' => 'sales_wording_standard', 'source' => 'sales_wording_source'],
+        'plating' => ['feld' => 'plating_text', 'source' => 'plating_source'],
+        'speisen_klasse' => ['feld' => 'dish_class_id', 'source' => 'dish_class_source'],
+    ];
+
     public function __construct(private AiGatewayService $ki)
     {
+    }
+
+    /**
+     * Spec 03 L7: welche Schritte füllen an diesem Rezept noch eine Lücke?
+     *
+     * Ein Schritt fällt raus, wenn sein Ziel-Feld schon einen Wert trägt — egal
+     * ob von Hand, vom Generator oder aus einem früheren Lauf. Das ist der
+     * Unterschied zwischen „✨ Alles anreichern" (der Mensch will alle Felder neu
+     * vorgeschlagen bekommen und entscheidet je Zeile) und der One-Shot-Kaskade
+     * (die übernimmt selbst und darf darum nur Leerstellen anfassen). Ein
+     * unbekannter Schritt bleibt drin — er soll in `proposeFeld()` laut scheitern,
+     * nicht hier still verschwinden.
+     *
+     * @param  list<string>  $schritte
+     * @return list<string>
+     */
+    public function luecken(FoodAlchemistRecipe $r, array $schritte): array
+    {
+        return array_values(array_filter($schritte, function (string $s) use ($r) {
+            $ziel = self::ZIELFELDER[$s] ?? null;
+            if ($ziel === null) {
+                return true;
+            }
+            $wert = $r->getAttribute($ziel['feld']);
+
+            return $wert === null || $wert === '';
+        }));
+    }
+
+    /**
+     * Lauf-Zeile anlegen (Fortschritts-Anker für Polling + Review-Queue).
+     * Herausgezogen für Spec 03 L7: die One-Shot-Kaskade läuft synchron im ohnehin
+     * asynchronen Generier-Job und darf deshalb keinen zweiten Job dispatchen —
+     * sie braucht die Lauf-Zeile ohne `starte()`. Ein Insert, eine Wahrheit.
+     */
+    public function laufAnlegen(Team $team, int $total, string $type = 'enrich'): int
+    {
+        DB::table('foodalchemist_bulk_runs')->insert([
+            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+            'team_id' => $team->id, 'user_id' => Auth::id(),
+            'type' => $type, 'status' => 'running', 'total' => $total,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return (int) DB::getPdo()->lastInsertId();
     }
 
     /** Startet einen Run (Job ist queued; Sandbox/Tests: sync). */
     public function starte(Team $team, array $recipeIds, array $schritte = self::SCHRITTE, string $type = 'enrich'): int
     {
         $ids = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $recipeIds)->pluck('id')->all();
-        DB::table('foodalchemist_bulk_runs')->insert([
-            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-            'team_id' => $team->id, 'user_id' => Auth::id(),
-            'type' => $type, 'status' => 'running', 'total' => count($ids),
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-        $runId = (int) DB::getPdo()->lastInsertId();
+        $runId = $this->laufAnlegen($team, count($ids), $type);
 
         \Platform\FoodAlchemist\Jobs\BulkEnrichJob::dispatch($runId, $team->id, $ids, $schritte);
 
@@ -277,13 +332,7 @@ class BulkEnrichService
     public function starteGp(Team $team, array $gpIds, array $schritte = self::SCHRITTE_GP): int
     {
         $ids = FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $gpIds)->pluck('id')->all();
-        DB::table('foodalchemist_bulk_runs')->insert([
-            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-            'team_id' => $team->id, 'user_id' => Auth::id(),
-            'type' => 'enrich_gp', 'status' => 'running', 'total' => count($ids),
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-        $runId = (int) DB::getPdo()->lastInsertId();
+        $runId = $this->laufAnlegen($team, count($ids), 'enrich_gp');
 
         \Platform\FoodAlchemist\Jobs\BulkEnrichGpJob::dispatch($runId, $team->id, $ids, $schritte);
 

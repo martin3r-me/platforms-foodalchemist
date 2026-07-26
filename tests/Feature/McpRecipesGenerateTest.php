@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
@@ -205,4 +206,60 @@ it('#504-Muster: ohne Team im Kontext kein Schreibzugriff', function () {
 
     expect($res->success)->toBeFalse()
         ->and($res->errorCode)->toBe('NO_TEAM');
+});
+
+it('L7a: voll_anreichern ist ein Parameter — Default aus lässt den Aufruf unverändert', function () {
+    ($this->mkGpMitPreis)($this->rootTeam, 'Schalotten: frisch, ganz', 'schalotten', 4.00);
+    ($this->stubKi)([
+        'name' => 'Reduktion: Rotwein-Schalotte',
+        'description' => 'Sirupartige Saucenbasis.',
+        'zutaten' => [['text' => 'Schalotten', 'slug' => 'schalotten', 'quantity' => 300, 'unit' => 'g']],
+    ]);
+    $tool = $this->registry->get('foodalchemist.recipes.GENERATE');
+
+    expect($tool->getSchema()['properties'])->toHaveKey('voll_anreichern')
+        ->and($tool->getSchema()['properties']['voll_anreichern']['default'])->toBeFalse();
+
+    $res = $tool->execute(['description' => 'Dunkle Rotwein-Schalotten-Reduktion'], $this->kontext);
+
+    expect($res->success)->toBeTrue()
+        ->and($res->data['anreicherung'])->toBeNull()                   // ohne Flag kein Pass
+        ->and(DB::table('foodalchemist_bulk_runs')->count())->toBe(0);
+});
+
+it('L7a: voll_anreichern=true hängt die Kaskade an — die Lücken sind nach dem EINEN Aufruf gefüllt', function () {
+    ($this->mkGpMitPreis)($this->rootTeam, 'Schalotten: frisch, ganz', 'schalotten', 4.00);
+    $hg = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup::create([
+        'team_id' => $this->rootTeam->id, 'code' => 'FND', 'label' => 'Fonds & Saucen',
+    ]);
+    $kat = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::create([
+        'team_id' => $this->rootTeam->id, 'main_group_id' => $hg->id, 'code' => 'RED', 'label' => 'Reduktionen',
+    ]);
+    // Derselbe Stub bedient beide Stufen: der Generator liest name/zutaten/description,
+    // die Anreicherungs-Schritte lesen category_id/taste_direction aus demselben Objekt.
+    ($this->stubKi)([
+        'name' => 'Reduktion: Rotwein-Schalotte',
+        'description' => 'Sirupartige Saucenbasis.',
+        'zutaten' => [['text' => 'Schalotten', 'slug' => 'schalotten', 'quantity' => 300, 'unit' => 'g']],
+        'category_id' => $kat->id,
+        'taste_direction' => 'herzhaft',
+    ]);
+
+    $res = $this->registry->get('foodalchemist.recipes.GENERATE')
+        ->execute(['description' => 'Dunkle Rotwein-Schalotten-Reduktion', 'voll_anreichern' => true], $this->kontext);
+
+    // Nur `category` bleibt als Lücke: description UND taste_direction setzt der
+    // Generator schon selbst (das Enum passt), und die Kaskade zahlt für ein
+    // gefülltes Feld keinen zweiten Call — genau die L7a-Regel.
+    expect($res->success)->toBeTrue()
+        ->and($res->data['anreicherung']['schritte'])->toBe(['category'])
+        ->and($res->data['anreicherung']['uebersprungen'])->toBe(['description', 'geschmack'])
+        ->and($res->data['anreicherung']['uebernommen'])->toBe(1);
+
+    $r = FoodAlchemistRecipe::find($res->data['recipe']['id']);
+    expect((int) $r->category_id)->toBe((int) $kat->id)
+        ->and($r->category_source)->toBe('ki')
+        ->and($r->taste_direction)->toBe('herzhaft')
+        ->and($r->status->value)->toBe('draft')                          // One-Shot ≠ Freigabe
+        ->and($r->created_via)->toBe('mcp');
 });

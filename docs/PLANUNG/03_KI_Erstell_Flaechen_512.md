@@ -11,7 +11,7 @@
 > | **L4** | ⚪ offen | nur manueller `fillSlot` (`Concepts/Index.php:256/262`, `ConceptSlotsPostTool:94`); `zielpreisBerechnen`/`zielVorschlag` im Concepter-Editor sind **Preis**-Vorschlag, nicht Slot-Inhalt |
 > | **L5** | ⚪ offen | `src/Tools/` hat `ConceptsGenerateTool`, aber **kein** `RecipesGenerateTool` |
 > | **L6** | ✅ **komplett** — L6a Service+MCP (`3c0ed84`), L6b UI in beiden Modals | `RecipeReviewService` + `RecipesReviewTool` + `Livewire/Concerns/HatRezeptCopilot` + `components/copilot-box.blade.php`; Prompts `recipe.review`/`vk.review` haben ihren Konsumenten. Offen: Browser-Klickstrecke (manuell), Befund-Ablage → V-031 (Voraussetzung für 21·S5) |
-> | **L7** | ⚪ offen | kein `voll_anreichern`/`vollAnreichern`/`oneShot` im Modul |
+> | **L7** | 🟡 **L7a gebaut** (Motor + MCP), L7b (Flächen) offen | `RecipeOneShotService::anreichern()` + `BulkEnrichService::ZIELFELDER`/`luecken()`/`laufAnlegen()`; `voll_anreichern` an `recipes.GENERATE`, `vollAnreichern` am `GenerateRecipeJob`. Offen: Toggle in `GeneratorModal`+`VkGeneratorModal` — dort erst **V-035** entscheiden (VK-Modal fährt `generiere()` weiter synchron im Web-Request) |
 > | **L8** | ⚪ offen | `MargeService` genutzt in SalesRecipeService/PaketService/MargeImpactService/SignalDetektorService — in **keinem** Generator; `target_food_cost_pct` liegt in `FoodAlchemistTeamSetting:44` bereit |
 >
 > **Blocker-Reset:** „Qualitäts-Gate braucht Key live" ist hinfällig — LLM-Key + Deploy sind self-service. Bau-Reihenfolge jetzt nach Größe in [_Fahrplan_Routine_Umsetzung.md](_Fahrplan_Routine_Umsetzung.md).

@@ -47,6 +47,8 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
             . 'Neues entsteht nur für echte Lücken (Sub-Rezept-Stub bei Halbfabrikaten, GP-Mint aus passendem Lieferantenartikel). '
             . 'Zutaten ohne Treffer bleiben ungematcht und kommen als "offene" zurück — nie geraten; sie erst mit foodalchemist.gps.MATCH '
             . 'erden bzw. per foodalchemist.gp_proposals.POST anlegen und dann mit foodalchemist.recipe_ingredients.PUT nachziehen. '
+            . 'Mit voll_anreichern=true laeuft danach der One-Shot-Anreicherungs-Pass durch und fuellt die noch leeren Textfelder '
+            . '(Beschreibung, VK-Wording, Plating, Klassifikation) — je fehlendes Feld ein weiterer Provider-Call. '
             . 'Braucht einen LLM-Provider und dauert je nach Modell ~20–40 s. Freigabe (approved) macht nur ein Mensch im Editor.';
     }
 
@@ -72,6 +74,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                 'occasion' => ['type' => 'string', 'enum' => ['fruehstueck', 'lunch', 'konferenz', 'empfang', 'dinner', 'late_night'], 'description' => 'Nur vk=true: Anlass'],
                 'serviceform' => ['type' => 'string', 'enum' => ['tellerservice', 'buffet', 'flying', 'stehempfang', 'boxed'], 'description' => 'Nur vk=true: Serviceform'],
                 'kompositions_stil' => ['type' => 'string', 'enum' => ['klassisch', 'kreativ', 'gewagt'], 'description' => 'Nur vk=true: filtert den Pairing-Wissensblock (gewagt = nur belegte Paarungen)'],
+                'voll_anreichern' => ['type' => 'boolean', 'default' => false, 'description' => '03·L7: One-Shot — nach der Erdung laeuft der Anreicherungs-Pass durch und fuellt die noch LEEREN Textfelder (Basisrezept: Beschreibung/Kategorie/Geschmack; vk=true: Beschreibung/VK-Wording/Plating/Speisen-Klasse). Kostet 1 Provider-Call je fehlendes Feld und verlaengert den Aufruf entsprechend; bereits gefuellte Felder werden nie angetastet'],
                 'use_favorites_list' => ['type' => 'boolean', 'default' => false, 'description' => '06·H3: bevorzugt aus der kuratierten Favoriten-GP-Liste bauen (bevorzugt, nicht ausschließlich)'],
                 'favorites_convenience_only' => ['type' => 'boolean', 'default' => false, 'description' => '06·H4b: Favoriten-Block auf Convenience-getaggte GPs verengen (nur wirksam mit use_favorites_list)'],
             ],
@@ -123,6 +126,17 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
         $statistik = $resultat['statistik'];
         $offen = (int) ($statistik['offen'] ?? 0);
 
+        // 03·L7a: One-Shot-Glied. Bewusst opt-in (Default aus), obwohl der UI-Toggle
+        // AN steht: dort läuft die Kaskade in der Queue, hier synchron im Tool-Call —
+        // 3–4 zusätzliche Provider-Calls würden die Antwortzeit vervielfachen. Der
+        // Client entscheidet, ob er sie zahlt.
+        $anreicherung = (bool) ($arguments['voll_anreichern'] ?? false)
+            ? app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->anreichern($team, $recipe)
+            : null;
+        if ($anreicherung !== null) {
+            $recipe = $recipe->fresh() ?? $recipe;
+        }
+
         return ToolResult::success([
             'recipe' => [
                 'id' => $recipe->id,
@@ -145,6 +159,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                 ], array_slice($o['shortlist'] ?? [], 0, 3)),
             ], $resultat['offene']),
             'kohaerenz' => $statistik['kohaerenz'] ?? null,        // nur VK-Modus
+            'anreicherung' => $anreicherung,                       // nur mit voll_anreichern=true
             'hinweis' => ($offen > 0
                     ? "⚠ {$offen} Zutat(en) ohne Treffer — bewusst NICHT geraten. Pro Zeile: foodalchemist.gps.MATCH prüfen, "
                         . 'sonst GP/Basisrezept anlegen und mit foodalchemist.recipe_ingredients.PUT nachziehen. '
