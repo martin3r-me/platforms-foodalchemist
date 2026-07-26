@@ -329,6 +329,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Phase A: Rezept-Schreibkaskade (Weg-A-Ausnahme, Draft-Quarantäne)
                     \Platform\FoodAlchemist\Tools\RecipesPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGenerateTool::class, // 03·L5 (Lockstep-Schuld aus #505)
+                    \Platform\FoodAlchemist\Tools\RecipesReviewTool::class,   // 03·L6 Copilot-Pruefpass (read-only)
                     \Platform\FoodAlchemist\Tools\RecipesPutTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeIngredientsPutTool::class,
                     // Phase B: Foodbook-Kaskade (nativ FA, Draft-only)

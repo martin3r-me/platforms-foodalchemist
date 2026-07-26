@@ -97,27 +97,49 @@ class RecipeReviseService
             $orig = isset($z['id']) ? $original->get((int) $z['id']) : null;
             $roh = str_replace(',', '.', (string) ($z['quantity'] ?? ''));
             $quantity = is_numeric($roh) ? (float) $roh : null;
-            $zeilen[] = [
-                'id' => $orig?->id,
-                'gp_id' => $orig?->gp_id,                             // Verknüpfung des Originals bleibt
-                'referenced_recipe_id' => $orig?->referenced_recipe_id,
-                'raw_text' => (string) ($z['text'] ?? $orig?->raw_text ?? ''),
-                'display_name' => (string) ($z['text'] ?? $orig?->display_name ?? ''),
-                'quantity' => $quantity ?? (float) ($orig?->quantity ?? 1),
-                'unit_vocab_id' => $einheiten[$z['einheit_slug'] ?? ''] ?? $orig?->unit_vocab_id ?? $einheiten['g'] ?? null,
-                'cooking_loss_pct' => $orig?->cooking_loss_pct,
-                'cooking_loss_source' => $orig?->cooking_loss_source,
-                'trimming_loss_pct' => $orig?->trimming_loss_pct,
-                'quantity_max' => $orig?->quantity_max,
-                'is_optional' => (bool) ($orig?->is_optional ?? false),
-                'is_value_relevant' => (bool) ($orig?->is_value_relevant ?? false),
-                'note' => $orig?->note,
-                // VK-Kontext: die Rolle ist eine Verkaufs-Facette und wird von einem
-                // Zutaten-Revise nie neu gesetzt (nur 🎭 Rollen verteilen schreibt sie).
-                'role' => $orig?->role,
-            ];
+            $zeile = $this->bestandsZeile($orig);
+            $zeile['raw_text'] = (string) ($z['text'] ?? $orig?->raw_text ?? '');
+            $zeile['display_name'] = (string) ($z['text'] ?? $orig?->display_name ?? '');
+            $zeile['quantity'] = $quantity ?? (float) ($orig?->quantity ?? 1);
+            $zeile['unit_vocab_id'] = $einheiten[$z['einheit_slug'] ?? ''] ?? $orig?->unit_vocab_id ?? $einheiten['g'] ?? null;
+            $zeilen[] = $zeile;
         }
 
         return $zeilen;
+    }
+
+    /**
+     * Eine Bestands-Zeile → Sync-Payload, verlustfrei.
+     *
+     * `syncIngredients` hat Voll-Ersatz-Semantik: was nicht im Payload steht,
+     * ist danach weg (Zeile) bzw. genullt (Feld — Wurzel von V-027). Jeder
+     * Teil-Schreiber (Revise, Copilot-Apply) muss die unangetasteten Zeilen
+     * also vollständig mitschicken. Damit diese Abbildung nur EINMAL existiert,
+     * liegt sie hier — `syncZeilen()` und `RecipeReviewService` teilen sie.
+     *
+     * @param  ?\Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient  $orig
+     * @return array<string, mixed>
+     */
+    public function bestandsZeile($orig): array
+    {
+        return [
+            'id' => $orig?->id,
+            'gp_id' => $orig?->gp_id,                                 // Verknüpfung des Originals bleibt
+            'referenced_recipe_id' => $orig?->referenced_recipe_id,
+            'raw_text' => (string) ($orig?->raw_text ?? ''),
+            'display_name' => (string) ($orig?->display_name ?? ''),
+            'quantity' => (float) ($orig?->quantity ?? 1),
+            'unit_vocab_id' => $orig?->unit_vocab_id,
+            'cooking_loss_pct' => $orig?->cooking_loss_pct,
+            'cooking_loss_source' => $orig?->cooking_loss_source,
+            'trimming_loss_pct' => $orig?->trimming_loss_pct,
+            'quantity_max' => $orig?->quantity_max,
+            'is_optional' => (bool) ($orig?->is_optional ?? false),
+            'is_value_relevant' => (bool) ($orig?->is_value_relevant ?? false),
+            'note' => $orig?->note,
+            // VK-Kontext: die Rolle ist eine Verkaufs-Facette und wird von einem
+            // Zutaten-Revise nie neu gesetzt (nur 🎭 Rollen verteilen schreibt sie).
+            'role' => $orig?->role,
+        ];
     }
 }

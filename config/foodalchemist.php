@@ -503,10 +503,18 @@ return [
                 . 'texturen: [{slug, intensitaet}]}.',
         ],
         'recipe.review' => [
-            'tier' => 'A',
-            'task' => 'Pruefe das Produktionsrezept als Sous-Chef auf Plausibilitaet (Mengen, '
-                . 'Technik, Reihenfolge, Luecken) — konkrete Befunde statt Floskeln: '
-                . 'werte = {befunde: [{schwere, text}], gesamturteil}.',
+            'tier' => 'A',                                            // Spec 03 L6 — Copilot-Pruefpass, read-only
+            'max_tokens' => 6000,                                     // Befund-Liste ueber das ganze Rezept + Reasoning-Headroom
+            'task' => 'Pruefe das Produktionsrezept als Sous-Chef auf Plausibilitaet: Mengen-'
+                . 'verhaeltnisse, falsche Einheiten, fehlende Schluesselkomponenten (Saeure, Salz, '
+                . 'Fett, Bindung), Ueberfluessiges. KONKRETE Befunde statt Floskeln — lieber drei '
+                . 'belastbare als zehn vage. Je Befund die art waehlen: menge (zutat_id + neue '
+                . 'quantity) | einheit (zutat_id + einheit_slug) | entfernen (zutat_id) | fehlt '
+                . '(zutat_text + quantity + einheit_slug einer NEUEN Zutat) | hinweis (nur Text, '
+                . 'kein Schreibziel — fuer alles Technik-/Reihenfolge-Bezogene). Nutze die '
+                . 'mitgegebenen zutat-ids unveraendert; erfinde keine ids. Konfidenz 0..1: '
+                . 'werte = {befunde: [{art, zutat_id, zutat_text, quantity, einheit_slug, '
+                . 'begruendung, konfidenz}], gesamturteil}.',
         ],
         'recipe.pairing' => [
             'tier' => 'A',                                            // groesster Ist-Kostenblock — Qualitaet zaehlt
@@ -638,9 +646,19 @@ return [
                 . 'Portion, Vokabular mitgegeben): werte = {servier_vehikel_id}.',
         ],
         'vk.review' => [
-            'tier' => 'A',
-            'task' => 'Pruefe das Verkaufsrezept als Copilot auf Verkaufs-Tauglichkeit '
-                . '(Marge, Portionierung, Service-Logik, Wording): werte = {befunde: [{schwere, text}], gesamturteil}.',
+            'tier' => 'A',                                            // Spec 03 L6 — VK-Zweig desselben Pruefpasses
+            'max_tokens' => 6000,
+            'task' => 'Pruefe das GERICHT (Verkaufsrezept) als Copilot auf Verkaufs-Tauglichkeit: '
+                . 'Portionierung gegen die Speisen-Klasse, Komposition und Teller-Logik, Service-'
+                . 'Tauglichkeit, Wording. Die Verkaufs-Facetten im Kontext (speisen_klasse, '
+                . 'diaetform, portion_g) sind MASSSTAB, nicht Gegenstand — pruefe gegen sie, '
+                . 'schlage sie nicht um. KONKRETE Befunde statt Floskeln. Je Befund die art '
+                . 'waehlen: menge (zutat_id + neue quantity) | einheit (zutat_id + einheit_slug) | '
+                . 'entfernen (zutat_id) | fehlt (zutat_text + quantity + einheit_slug einer NEUEN '
+                . 'Komponente) | hinweis (nur Text, kein Schreibziel — fuer Portions-, Service- und '
+                . 'Wording-Befunde). Nutze die mitgegebenen zutat-ids unveraendert; erfinde keine '
+                . 'ids. Konfidenz 0..1: werte = {befunde: [{art, zutat_id, zutat_text, quantity, '
+                . 'einheit_slug, begruendung, konfidenz}], gesamturteil}.',
         ],
         'vk.ueberarbeiten' => [
             'tier' => 'A',                                            // Spec 03 L1a — VK-Variante von recipe.ueberarbeiten
