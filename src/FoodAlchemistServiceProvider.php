@@ -401,6 +401,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 21 E2: Rausch-Guard — Zustands-Zeilen lesen + Policy setzen (menschlich getriggert)
                     \Platform\FoodAlchemist\Tools\SignalPoliciesGetTool::class,
                     \Platform\FoodAlchemist\Tools\SignalPolicyPutTool::class,
+                    // Spec 21 Punkt 5: Ursachen-Kette („warum ist DIESES Objekt betroffen?")
+                    \Platform\FoodAlchemist\Tools\SignalCausesGetTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasGetTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasPutTool::class,
                     // R4.1–R4.3 Planungs-Gerüst + Coverage + Phase — MCP im Lockstep

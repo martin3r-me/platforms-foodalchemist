@@ -636,13 +636,50 @@ class DataQualityService
 
         $ids = [];
         foreach ($rows as $r) {
-            if ($this->namingVerstoss($r, $basisZaehler)) {
+            if ($this->namingBefunde($r, $basisZaehler) !== []) {
                 $ids[] = $r['id'];
             }
         }
 
         return $ids;
     }
+
+    /**
+     * Spec 21 · S3b-3 (Ursachen-Kette): WELCHE Regel ein einzelnes Rezept verletzt.
+     *
+     * Der Check selbst (`namingVerstossIds`) beantwortet nur „ja/nein" — für den
+     * Deep-Link auf das verletzte § braucht das Panel den konkreten Fall. Die Regel-
+     * Prüfung bleibt hier (eine Stelle, dasselbe `nameScan`); die Zuordnung
+     * Fall → §/Dokument liegt bewusst NICHT hier, sondern im `SignalCauseService`:
+     * dieser Service misst, er formuliert nicht.
+     *
+     * Der Grammatur-Fall braucht den Zwillings-Zähler über den ganzen Bestand
+     * (§1.2a — sie ist nur ohne Diskriminator-Funktion ein Verstoß), darum wird der
+     * volle Scan gefahren und danach auf das eine Rezept gefiltert.
+     *
+     * @return list<string> Fall-Schlüssel aus {@see self::NAMING_FAELLE}, leer = regelkonform
+     */
+    public function namingBefundeFuer(Team $team, int $recipeId): array
+    {
+        $rows = $this->nameScan($team);
+
+        $basisZaehler = [];
+        foreach ($rows as $r) {
+            $basis = $this->grammaturBasis($r);
+            $basisZaehler[$basis] = ($basisZaehler[$basis] ?? 0) + 1;
+        }
+
+        foreach ($rows as $r) {
+            if ($r['id'] === $recipeId) {
+                return $this->namingBefunde($r, $basisZaehler);
+            }
+        }
+
+        return [];
+    }
+
+    /** Alle Fall-Schlüssel, die {@see namingBefundeFuer} liefern kann (Vertrag für den Aufrufer). */
+    public const NAMING_FAELLE = ['leerraum', 'trenner_rand', 'grammatur', 'vk_marker', 'vk_praefix'];
 
     /** @param array{id:int,name:string,vk:bool,achse:string} $r */
     private function grammaturBasis(array $r): string
@@ -653,34 +690,48 @@ class DataQualityService
     }
 
     /**
+     * Alle verletzten Regel-Fälle eines Namens. Bewusst eine LISTE statt eines bool:
+     * der Zähl-Pfad braucht nur „nicht leer", die Ursachen-Kette (S3b-3) den Fall.
+     * Es wird nicht beim ersten Treffer abgebrochen — ein Name kann mehrere Regeln
+     * reißen, und wer ihn korrigiert, soll alle auf einmal sehen.
+     *
      * @param array{id:int,name:string,vk:bool,achse:string} $r
      * @param array<string,int> $basisZaehler
+     * @return list<string>
      */
-    private function namingVerstoss(array $r, array $basisZaehler): bool
+    private function namingBefunde(array $r, array $basisZaehler): array
     {
         $name = $r['name'];
+        $faelle = [];
 
-        if (preg_match('/\s{2,}/u', $name) === 1 || preg_match(self::NAME_TRENNER_RAND, $name) === 1) {
-            return true;
+        if (preg_match('/\s{2,}/u', $name) === 1) {
+            $faelle[] = 'leerraum';
         }
-
+        if (preg_match(self::NAME_TRENNER_RAND, $name) === 1) {
+            $faelle[] = 'trenner_rand';
+        }
         if (preg_match(self::GRAMMATUR_MUSTER, $name) === 1
             && ($basisZaehler[$this->grammaturBasis($r)] ?? 0) < 2) {
-            return true;
+            $faelle[] = 'grammatur';
         }
 
         if (! $r['vk']) {
-            return false;                                   // §1-Präfix/Marker sind VK-Regeln
+            return $faelle;                                 // §1-Präfix/Marker sind VK-Regeln
         }
 
         foreach (self::VK_MARKER as $marker) {
             if (mb_stripos($name, $marker) !== false) {
-                return true;
+                $faelle[] = 'vk_marker';
+                break;
             }
         }
 
         // Pipe-Skelett: führendes Hauptgruppen-Kürzel in eckigen Klammern (§1.1).
-        return preg_match('/^\[[A-Z]{2,5}\]\s/u', $name) !== 1;
+        if (preg_match('/^\[[A-Z]{2,5}\]\s/u', $name) !== 1) {
+            $faelle[] = 'vk_praefix';
+        }
+
+        return $faelle;
     }
 
     /**

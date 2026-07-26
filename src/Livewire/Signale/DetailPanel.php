@@ -8,6 +8,7 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Jobs\SignalFixJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignalSnapshot;
+use Platform\FoodAlchemist\Services\SignalCauseService;
 use Platform\FoodAlchemist\Services\SignalFixService;
 use Platform\FoodAlchemist\Services\SignalObjectService;
 use Platform\FoodAlchemist\Services\SignalPolicyService;
@@ -37,6 +38,12 @@ use Platform\FoodAlchemist\Support\SignalCockpit;
  *  8. Policy-Regler — Schwelle / „akzeptiert bis" / stumm aus E2 direkt am Signal.
  *     **Der Regler gilt für den TYP, nicht für dieses eine Signal** — das muss die
  *     Fläche sagen, sonst liest man ihn als „diesen Befund akzeptieren".
+ *
+ * Ergänzt in S3b-3 (Spec §7):
+ *  5. Ursachen-Kette nach unten — „warum ist dieses Objekt betroffen?": unbepreiste
+ *     Zutat → GP → Lead-LA-Lage bzw. verletztes § mit Sprung ins Wissens-Modul.
+ *     Steht bewusst im aufgeklappten Objekt-Block (nicht am Signal): ein Aggregat-
+ *     Signal deckt n Objekte ab, die Ursache hat nur je Objekt eine Antwort.
  *
  * Lifecycle-Aktionen (Erledigt/Ignorieren) und der Fix über den VOLLEN Satz bleiben in
  * der Signal-Zeile der ReviewQueue — ein zweiter Satz derselben Knöpfe wäre eine zweite
@@ -336,7 +343,7 @@ class DetailPanel extends Component
         ));
     }
 
-    public function render(SignalObjectService $objekte, SignalPolicyService $policies, SignalTrendService $trend)
+    public function render(SignalObjectService $objekte, SignalPolicyService $policies, SignalTrendService $trend, SignalCauseService $ursachen)
     {
         $team = Auth::user()?->currentTeamRelation;
         $sig = $team !== null && $this->signalId !== null
@@ -349,8 +356,16 @@ class DetailPanel extends Component
         }
 
         // Objekt-Sicht nur für das aufgeklappte Objekt auflösen (ein EXISTS je Metrik).
-        $objektSignale = $team !== null && $sig !== null && $this->objektKind !== null && $this->objektId !== null
+        $aufgeklappt = $team !== null && $sig !== null && $this->objektKind !== null && $this->objektId !== null;
+        $objektSignale = $aufgeklappt
             ? $objekte->signaleAmObjekt($team, $this->objektKind, $this->objektId)
+            : [];
+
+        // Punkt 5: die Ursachen-Kette hängt am OBJEKT (ein Aggregat-Signal deckt n Rezepte
+        // ab — „welche GPs sind unbepreist" hat nur je Rezept eine Antwort) und wird darum
+        // nur für das aufgeklappte Objekt gerechnet, direkt neben der Objekt-Sicht.
+        $objektUrsachen = $aufgeklappt
+            ? $ursachen->fuerObjekt($team, $this->objektKind, $this->objektId)
             : [];
 
         // Punkt 4 + 8: Verlauf und Rausch-Guard hängen am Signal-TYP, nicht am Einzelfall.
@@ -363,6 +378,7 @@ class DetailPanel extends Component
             'plan' => $sig !== null ? SignalCockpit::planFor($sig) : null,
             'betroffen' => $betroffen,
             'objektSignale' => $objektSignale,
+            'objektUrsachen' => $objektUrsachen,
             'panelLimit' => SignalObjectService::PANEL_LIMIT,
             'policy' => $team !== null && $sig !== null ? $policies->zustandFuer($team, $sig->type) : null,
             'spark' => $this->sparkline($serie),

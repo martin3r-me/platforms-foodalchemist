@@ -157,6 +157,67 @@
                                             {{ count($objektSignale) }} Befunde am selben Objekt — in einem Durchgang beheben statt {{ count($objektSignale) }}× öffnen.
                                         </p>
                                     @endif
+
+                                    {{-- ── Punkt 5 (S3b-3): Ursachen-Kette nach unten ──────
+                                         Warum ist DIESES Objekt betroffen — unbepreiste Zutat → GP →
+                                         Lead-LA-Lage bzw. verletztes § mit Sprung ins Wissens-Modul.
+                                         Nur Kurzform-@php hier: ein Roh-Block unterhalb einer Kurzform
+                                         reißt die halbe View mit (s. Warnung ganz oben). --}}
+                                    @foreach($objektUrsachen as $uB)
+                                        <div wire:key="urs-{{ $it['kind'] }}-{{ $it['id'] }}-{{ $uB['art'] }}"
+                                             class="mt-2 pt-2 border-t border-black/[0.06]" data-signal-ursache="{{ $uB['art'] }}">
+                                            <p class="text-[10px] font-medium uppercase tracking-wider text-gray-500 mb-1">
+                                                {{ $uB['titel'] }}
+                                                <span class="normal-case tracking-normal text-gray-400">· {{ $uB['kopf'] }}</span>
+                                            </p>
+
+                                            @if($uB['art'] === 'regelwerk')
+                                                <div class="space-y-1">
+                                                    @foreach($uB['glieder'] as $g)
+                                                        <div wire:key="ursreg-{{ $it['id'] }}-{{ $g['fall'] }}" class="rounded-md bg-amber-500/[0.07] px-2 py-1.5">
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="text-[10px] font-medium text-amber-700">{{ $g['paragraph'] }}</span>
+                                                                @if($g['url'])
+                                                                    <a href="{{ $g['url'] }}" wire:navigate
+                                                                       class="text-[10px] text-sky-600 hover:underline" data-signal-paragraph="{{ $g['fall'] }}">nachlesen →</a>
+                                                                @endif
+                                                            </div>
+                                                            <p class="text-[10px] leading-relaxed text-gray-600 mt-0.5">{{ $g['regel'] }}</p>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @else
+                                                <div class="space-y-1">
+                                                    @foreach($uB['glieder'] as $gi => $g)
+                                                        <div wire:key="ursek-{{ $it['id'] }}-{{ $gi }}"
+                                                             class="rounded-md px-2 py-1.5 {{ $g['fixbar'] ? 'bg-emerald-500/[0.06]' : 'bg-black/[0.03]' }}">
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-700">{{ $g['zutat'] }}</span>
+                                                                @if($g['menge'])<span class="shrink-0 text-[10px] text-gray-400">{{ $g['menge'] }}</span>@endif
+                                                            </div>
+                                                            <p class="text-[10px] text-gray-600 mt-0.5">
+                                                                <span class="{{ $g['fixbar'] ? 'text-emerald-700' : 'text-rose-600' }}">{{ $g['ursache'] }}</span>
+                                                                @if($g['gp_name'])
+                                                                    · <a href="{{ route('foodalchemist.gps.index', ['gp' => $g['gp_id']]) }}" wire:navigate
+                                                                         class="text-violet-600 hover:underline">{{ $g['gp_name'] }}</a>
+                                                                @endif
+                                                            </p>
+                                                            <p class="text-[10px] leading-relaxed text-gray-500 mt-0.5">{{ $g['weiter'] }}</p>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                                @if($uB['gekappt'] > 0)
+                                                    <p class="text-[10px] text-gray-400 mt-1">… und {{ $uB['gekappt'] }} weitere unbepreiste Zutat(en).</p>
+                                                @endif
+                                                @if($uB['ungemappt'] > 0)
+                                                    <p class="text-[10px] text-gray-500 mt-1">
+                                                        Zusätzlich {{ $uB['ungemappt'] }} ungemappte Zutat(en) — die zählen gar nicht erst in
+                                                        die EK-Kette und senken den Wert still.
+                                                    </p>
+                                                @endif
+                                            @endif
+                                        </div>
+                                    @endforeach
                                 </div>
                             @endif
                         </div>
