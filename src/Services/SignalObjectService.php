@@ -103,12 +103,12 @@ class SignalObjectService
      * In-Memory-Scan der Detektor-Payloads. Bewusst kein Cache: das Panel wird nach
      * einem Fix erneut gefragt und muss dann den neuen Stand zeigen.
      *
-     * @param  string  $kind  'recipe'|'gp'
+     * @param  string  $kind  'recipe'|'gp'|'concept'
      * @return list<array{id:int,type:string,label:string,icon:string,severity:string,title:string,hat_ki:bool}>
      */
     public function signaleAmObjekt(Team $team, string $kind, int $id): array
     {
-        if (! in_array($kind, ['recipe', 'gp'], true) || $id <= 0) {
+        if (! in_array($kind, ['recipe', 'gp', 'concept'], true) || $id <= 0) {
             return [];
         }
 

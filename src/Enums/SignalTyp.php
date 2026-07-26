@@ -41,6 +41,11 @@ enum SignalTyp: string
     case RezeptZutatenUngemappt = 'rezept_zutaten_ungemappt';
     case RezeptSubStubOffen = 'rezept_sub_stub_offen';
     case RezeptVerwaist = 'rezept_verwaist';
+    // Spec 21 Tranche C: Konzept-Ebene (bis dahin 0 Signale — die Kaskade endete am Gericht).
+    // Gemessen wird nur an Konzepten, die IN GEBRAUCH sind (s. DataQualityService::konzepteInGebrauch):
+    // ein unfertiger Entwurf ist kein Mangel, ein unfertiges verkauftes Konzept schon.
+    case KonzeptSlotLuecke = 'konzept_slot_luecke';
+    case KonzeptOhneWording = 'konzept_ohne_wording';
     // Spec 21 Tranche E · E3: Meta-Signal über die Zeitreihe — ein Zähler ist gegenüber
     // dem Vorlauf gestiegen. Alarmiert bei *Veränderung*, nicht bei Bestand; das ist der
     // eigentliche „System im Blick"-Mechanismus.
@@ -74,6 +79,8 @@ enum SignalTyp: string
             self::RezeptZutatenUngemappt => 'Rezept mit ungemappten Zutaten',
             self::RezeptSubStubOffen => 'Sub-Rezept-Stub offen',
             self::RezeptVerwaist => 'Rezept verwaist',
+            self::KonzeptSlotLuecke => 'Konzept mit unbesetztem Pflicht-Slot',
+            self::KonzeptOhneWording => 'Konzept ohne Kunden-Wording',
             self::QualitaetDrift => 'Qualität verschlechtert sich',
         };
     }
@@ -107,6 +114,8 @@ enum SignalTyp: string
             self::RezeptZutatenUngemappt => 'heroicon-o-link-slash',
             self::RezeptSubStubOffen => 'heroicon-o-puzzle-piece',
             self::RezeptVerwaist => 'heroicon-o-archive-box',
+            self::KonzeptSlotLuecke => 'heroicon-o-squares-2x2',
+            self::KonzeptOhneWording => 'heroicon-o-chat-bubble-bottom-center-text',
             self::QualitaetDrift => 'heroicon-o-arrow-trending-down',
         };
     }
@@ -119,5 +128,16 @@ enum SignalTyp: string
     public function istRezeptQualitaet(): bool
     {
         return str_starts_with($this->value, 'rezept_');
+    }
+
+    /**
+     * Spec 21 Tranche C — Qualität der Komposition (Konzept-Ebene, deterministisch).
+     * Eigene Tranche statt Erweiterung von A: das Prüf-Objekt ist ein anderes
+     * (Konzept statt Rezept), und die Arbeitsmenge ist enger — geprüft wird nur, was
+     * in Gebrauch ist.
+     */
+    public function istKonzeptQualitaet(): bool
+    {
+        return str_starts_with($this->value, 'konzept_');
     }
 }

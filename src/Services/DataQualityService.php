@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
@@ -116,6 +117,7 @@ class DataQualityService
             'basisrezept' => ['label' => 'Basisrezepte', 'metriken' => $this->basisrezepte($team)],
             'gericht' => ['label' => 'VK-Gerichte', 'metriken' => $this->gerichte($team)],
             'rezeptqualitaet' => ['label' => 'Rezept-Qualität', 'metriken' => $this->rezeptqualitaet($team)],
+            'konzept' => ['label' => 'Konzepte', 'metriken' => $this->konzept($team)],
             'quer' => ['label' => 'Querschnitt', 'metriken' => $this->quer($team)],
         ];
     }
@@ -459,6 +461,153 @@ class DataQualityService
                 ),
             ],
         ];
+    }
+
+    /**
+     * Spec 21 Tranche C — Qualität der Komposition (Konzept-Ebene, deterministisch, 0-Egress).
+     *
+     * Bis hierher endete die Kaskade am Gericht: LA → GP → Basisrezept → VK-Gericht. Das
+     * Konzept ist aber die Einheit, die der Kunde kauft — ein vollständiges Gericht in einem
+     * halb gefüllten Menü ist trotzdem ein Mangel, und er fällt heute erst im Angebot auf.
+     *
+     * **Arbeitsmenge = nur was in Gebrauch ist** (s. konzepteInGebrauch). Das ist die
+     * tragende Abgrenzung dieser Tranche: anders als ein Rezept ist ein Konzept über
+     * längere Zeit *bewusst* unfertig (der Entwurf IST der Arbeitsstand). Würde man alle
+     * Entwürfe messen, zählte der Check die normale Arbeit als Fehler — genau das
+     * Rauschen, das Spec 21 §9 ausschließt.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function konzept(Team $team): array
+    {
+        $out = [];
+        foreach ($this->konzeptChecks() as $key => $c) {
+            $out[] = $this->gap($key, $c['label'], ($c['q'])($team)->count(), $c['typ'], $c['dedup'], $c['desc'], $c['sev']);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Tranche-C-Register — gleiche Bauart wie {@see rezeptQualitaetChecks}: Label,
+     * Signal-Deskriptor und Prädikat je Check an EINER Stelle, aus der Zähl-Seite,
+     * Objekt-Liste (`betroffene`) und Lifecycle (`countFor`) gemeinsam ziehen.
+     *
+     * @return array<string,array{label:string,typ:SignalTyp,dedup:string,sev:SignalSeverity,desc:string,q:\Closure}>
+     */
+    private function konzeptChecks(): array
+    {
+        return [
+            'konzept_slot_luecke' => [
+                'label' => 'Konzepte in Gebrauch mit unbesetztem Pflicht-Slot',
+                'typ' => SignalTyp::KonzeptSlotLuecke,
+                'dedup' => 'dq-konzept-slot-luecke',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Das Konzept ist in Gebrauch (aktiv, an einem Angebot oder in einem Foodbook), aber '
+                    . 'mindestens ein als Pflicht markierter Slot ist weder mit einem Gericht noch mit einem Paket '
+                    . 'belegt — oder es hat überhaupt keinen belegten Inhalts-Slot. Solche Lücken schlagen bis in '
+                    . 'Angebot und Kundendokument durch: der Preis pro Person rechnet ohne die fehlende Position, '
+                    . 'die Zeile fehlt im Menü.',
+                'q' => fn (Team $t) => $this->konzepteInGebrauch($t)->where(fn ($w) => $w
+                    ->whereExists($this->offenerPflichtSlot())
+                    ->orWhereNotExists($this->belegterInhaltsSlot())),
+            ],
+            'konzept_ohne_wording' => [
+                'label' => 'Konzepte in Gebrauch mit Gericht ohne Kunden-Wording',
+                'typ' => SignalTyp::KonzeptOhneWording,
+                'dedup' => 'dq-konzept-ohne-wording',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Mindestens eine Gericht-Zeile dieses Konzepts hat keine kundenfähige Bezeichnung: weder '
+                    . 'am Slot (`wording`) noch am Gericht (`sales_wording_standard`). Die Wording-Kette fällt dort '
+                    . 'auf den INTERNEN Pipe-Namen zurück ([HG]-Präfix, Bausteine mit | getrennt) — genau der Text, '
+                    . 'der nie beim Kunden landen darf. Der Foodbook-Override ist bewusst nicht mitgeprüft: er hängt '
+                    . 'am Buch, nicht am Konzept, und würde die Lücke nur an einer von n Stellen kaschieren.',
+                'q' => fn (Team $t) => $this->konzepteInGebrauch($t)->whereExists($this->slotOhneWording()),
+            ],
+        ];
+    }
+
+    /**
+     * Konzepte, die real benutzt werden — nur hier ist Unvollständigkeit ein Mangel.
+     * Vier Wege in den Gebrauch: Status `aktiv`, an einem Angebot (direkt oder über die
+     * Angebots-Zuordnung), oder in einem Foodbook-Block referenziert. Vorlagen
+     * (`is_template`) sind per Definition Gerüste und bleiben draußen, `archiviert` ist
+     * ausgemustert.
+     */
+    private function konzepteInGebrauch(Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        return FoodAlchemistConcept::visibleToTeam($team)
+            ->where('is_template', false)
+            ->where('status', '!=', 'archiviert')
+            ->where(fn ($w) => $w
+                ->where('status', 'aktiv')
+                ->orWhereNotNull('offer_id')
+                ->orWhereExists(fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_offer_concept as oc')
+                    ->whereColumn('oc.concept_id', 'foodalchemist_concepts.id'))
+                ->orWhereExists(fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_foodbook_blocks as fb')
+                    ->whereColumn('fb.concept_id', 'foodalchemist_concepts.id')
+                    ->whereNull('fb.deleted_at')));
+    }
+
+    /**
+     * EXISTS: ein Pflicht-Slot ohne Befüllung. „Genau eines von Paket/Gericht" erzwingt
+     * der ConceptService — hier zählt nur, dass keines von beiden steht. Struktur-Slots
+     * (Header/Text/Leerzeile) sind bewusst ausgenommen: sie tragen nie Inhalt
+     * (ConceptService::STRUKTUR_TYPEN).
+     */
+    private function offenerPflichtSlot(): \Closure
+    {
+        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_concept_slots as cs')
+            ->whereColumn('cs.concept_id', 'foodalchemist_concepts.id')
+            ->whereNull('cs.deleted_at')
+            ->whereNotIn('cs.type', ConceptService::STRUKTUR_TYPEN)
+            ->where('cs.is_pflicht', true)
+            ->whereNull('cs.package_id')
+            ->whereNull('cs.sales_recipe_id');
+    }
+
+    /** EXISTS: mindestens ein Inhalts-Slot ist belegt (Gericht oder Paket). */
+    private function belegterInhaltsSlot(): \Closure
+    {
+        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_concept_slots as cs')
+            ->whereColumn('cs.concept_id', 'foodalchemist_concepts.id')
+            ->whereNull('cs.deleted_at')
+            ->whereNotIn('cs.type', ConceptService::STRUKTUR_TYPEN)
+            ->where(fn ($w) => $w->whereNotNull('cs.package_id')->orWhereNotNull('cs.sales_recipe_id'));
+    }
+
+    /**
+     * EXISTS: eine Gericht-Zeile dieses Konzepts würde den internen Namen drucken.
+     *
+     * Spiegelt {@see WordingResolver} — beide Befüllungs-Arten, weil beide im
+     * Kundendokument als Zeile erscheinen:
+     *   · Gericht-Slot → `slot.wording` → `dish.sales_wording_standard`
+     *   · Paket-Slot   → Paket-Gerichte gehen direkt auf `sales_wording_standard`
+     *     (ein Slot-Override existiert für sie nicht, s. WordingResolver::gerichtZeilen)
+     */
+    private function slotOhneWording(): \Closure
+    {
+        $ohneStandard = fn ($spalte) => fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_recipes as wr')
+            ->whereColumn('wr.id', $spalte)
+            ->whereNull('wr.deleted_at')
+            ->whereRaw("LENGTH(TRIM(COALESCE(wr.sales_wording_standard, ''))) = 0");
+
+        return function ($q) use ($ohneStandard) {
+            return $q->select(DB::raw(1))->from('foodalchemist_concept_slots as cs')
+                ->whereColumn('cs.concept_id', 'foodalchemist_concepts.id')
+                ->whereNull('cs.deleted_at')
+                ->where(fn ($w) => $w
+                    ->where(fn ($gericht) => $gericht
+                        ->whereNotNull('cs.sales_recipe_id')
+                        ->whereRaw("LENGTH(TRIM(COALESCE(cs.wording, ''))) = 0")
+                        ->whereExists($ohneStandard('cs.sales_recipe_id')))
+                    ->orWhere(fn ($paket) => $paket
+                        ->whereNotNull('cs.package_id')
+                        ->whereExists(fn ($p) => $p->select(DB::raw(1))->from('foodalchemist_package_dishes as pd')
+                            ->whereColumn('pd.package_id', 'cs.package_id')
+                            ->whereNull('pd.deleted_at')
+                            ->whereExists($ohneStandard('pd.sales_recipe_id')))));
+        };
     }
 
     /** @return list<array<string,mixed>> */
@@ -831,7 +980,11 @@ class DataQualityService
             return [];
         }
 
-        return $kind === 'gp' ? $this->gpItems($q, $limit) : $this->recipeItems($q, $limit);
+        return match ($kind) {
+            'gp' => $this->gpItems($q, $limit),
+            'concept' => $this->conceptItems($q, $limit),
+            default => $this->recipeItems($q, $limit),
+        };
     }
 
     /**
@@ -840,8 +993,8 @@ class DataQualityService
      * nur mit `whereKey`, damit „was hat dieses Rezept noch?" nicht die volle
      * Trefferliste jeder Metrik laden muss (ein EXISTS je Metrik statt n Zeilen).
      *
-     * $kind muss zur Metrik passen ('gp'|'recipe') — eine GP-Metrik trifft nie ein
-     * Rezept, auch wenn die IDs zufällig gleich sind.
+     * $kind muss zur Metrik passen ('gp'|'recipe'|'concept') — eine GP-Metrik trifft nie
+     * ein Rezept, auch wenn die IDs zufällig gleich sind.
      */
     public function trifftObjekt(Team $team, string $metrik, string $kind, int $id): bool
     {
@@ -866,17 +1019,20 @@ class DataQualityService
 
     /**
      * EINE Query-Definition je Metrik (kein Drift): betroffene() (SELECT) + countFor() (COUNT)
-     * teilen sich diese. Rückgabe [?Builder, kind:'gp'|'recipe']; null = keine Objekte.
+     * teilen sich diese. Rückgabe [?Builder, kind:'gp'|'recipe'|'concept']; null = keine Objekte.
      *
      * @return array{0: \Illuminate\Database\Eloquent\Builder|null, 1: string}
      */
     private function queryFor(Team $team, string $metrik): array
     {
-        // Tranche A (Spec 21) definiert ihr Prädikat im Check-Register — hier nur nachschlagen,
-        // nicht nachbauen. Der switch unten ist der Altbestand der Kaskaden-Ebenen (s. V-005).
-        $checks = $this->rezeptQualitaetChecks();
-        if (isset($checks[$metrik])) {
-            return [($checks[$metrik]['q'])($team), 'recipe'];
+        // Die Register (Tranche A = Rezept, Tranche C = Konzept) definieren ihr Prädikat
+        // selbst — hier nur nachschlagen, nicht nachbauen. Der `kind` gehört ans Register,
+        // nicht an den Aufrufer: er entscheidet, WELCHES Objekt die Liste zeigt. Der switch
+        // unten ist der Altbestand der Kaskaden-Ebenen (s. V-005).
+        foreach ([['recipe', $this->rezeptQualitaetChecks()], ['concept', $this->konzeptChecks()]] as [$kind, $checks]) {
+            if (isset($checks[$metrik])) {
+                return [($checks[$metrik]['q'])($team), $kind];
+            }
         }
 
         switch ($metrik) {
@@ -927,6 +1083,19 @@ class DataQualityService
     {
         return $q->orderBy('name')->limit($limit)->get(['id', 'name'])
             ->map(fn ($g) => ['kind' => 'gp', 'id' => (int) $g->id, 'name' => (string) $g->name, 'is_sales_recipe' => false])->all();
+    }
+
+    /**
+     * Konzept-Objekte (Tranche C). `is_sales_recipe` ist hier immer false — das Feld
+     * unterscheidet im Panel nur Basisrezept von VK-Gericht und hat für ein Konzept
+     * keine Bedeutung; die Fallunterscheidung im Panel läuft über `kind`.
+     *
+     * @return list<array{kind:string,id:int,name:string,is_sales_recipe:bool}>
+     */
+    private function conceptItems(\Illuminate\Database\Eloquent\Builder $q, int $limit): array
+    {
+        return $q->orderBy('name')->limit($limit)->get(['id', 'name'])
+            ->map(fn ($c) => ['kind' => 'concept', 'id' => (int) $c->id, 'name' => (string) $c->name, 'is_sales_recipe' => false])->all();
     }
 
     /** @return list<array{kind:string,id:int,name:string,is_sales_recipe:bool}> */

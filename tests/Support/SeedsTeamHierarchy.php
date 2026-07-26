@@ -260,4 +260,44 @@ trait SeedsTeamHierarchy
         \Illuminate\Support\Facades\DB::table('foodalchemist_recipes')
             ->where('id', $recipe->id)->update(['yield_kg' => round($summeG / 1000, 3)]);
     }
+
+    /**
+     * Konzept, das die Tranche-C-Checks (Spec 21 · S4a) ÜBERHAUPT erreichen: Status
+     * `aktiv` = „in Gebrauch". Bewusst nicht `draft` — die Checks messen nur benutzte
+     * Konzepte, ein Entwurf wäre für jeden Positivfall unsichtbar. Wer den Negativfall
+     * „Entwurf zählt nicht" prüfen will, setzt `status` explizit auf `draft`.
+     *
+     * Unauffällig ist das Konzept damit noch NICHT — es hat keine Slots und löst
+     * deshalb `konzept_slot_luecke` aus (kein belegter Inhalts-Slot). Ein sauberes
+     * Konzept braucht mindestens einen Slot über {@see makeConceptSlot} mit Wording.
+     */
+    protected function makeConcept(Team $owner, string $name, array $attrs = []): \Platform\FoodAlchemist\Models\FoodAlchemistConcept
+    {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistConcept::create(array_merge([
+            'team_id' => $owner->id,
+            'name' => $name,
+            'status' => 'aktiv',
+            'is_template' => false,
+        ], $attrs));
+    }
+
+    /**
+     * Gericht-Slot eines Konzepts. Default = Pflicht-Slot mit Kunden-Wording, also
+     * die saubere Variante: so löst er weder `konzept_slot_luecke` noch
+     * `konzept_ohne_wording` aus. Ein Test verschlechtert genau ein Feld
+     * (`sales_recipe_id` => null, `wording` => null …).
+     */
+    protected function makeConceptSlot(
+        \Platform\FoodAlchemist\Models\FoodAlchemistConcept $concept,
+        array $attrs = []
+    ): \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::create(array_merge([
+            'team_id' => $concept->team_id,
+            'concept_id' => $concept->id,
+            'type' => 'gericht',
+            'is_pflicht' => true,
+            'position' => 1,
+            'wording' => 'Kundenfähige Bezeichnung',
+        ], $attrs));
+    }
 }
