@@ -125,15 +125,23 @@
                                         @svg('heroicon-o-arrow-top-right-on-square', 'w-3 h-3 shrink-0 opacity-60')
                                         <span class="truncate">{{ $it['name'] }}</span>
                                     </a>
+                                @elseif($it['kind'] === 'foodbook')
+                                    {{-- Tranche D: die Leitstelle wählt über ?fb= vor (Foodbooks\Index::$selectedId) --}}
+                                    <a href="{{ route('foodalchemist.foodbooks.index', ['fb' => $it['id']]) }}" wire:navigate
+                                       class="min-w-0 flex-1 flex items-center gap-1.5 text-[11px] text-amber-600 hover:text-amber-700 hover:underline" title="Foodbook in der Leitstelle öffnen">
+                                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3 h-3 shrink-0 opacity-60')
+                                        <span class="truncate">{{ $it['name'] }}</span>
+                                    </a>
                                 @else
                                     <span class="min-w-0 flex-1 truncate text-[11px] text-gray-600">{{ $it['name'] }}</span>
                                 @endif
 
-                                {{-- „was noch?" gilt für jedes auflösbare Objekt (Tranche C: auch Konzepte);
+                                {{-- „was noch?" gilt für jedes auflösbare Objekt (Tranche C: auch Konzepte,
+                                     Tranche D: auch Foodbooks — Liste in SignalObjectService::KINDS);
                                      die Teil-Bulk-Checkbox oben bleibt bewusst bei recipe/gp — nur dafür gibt es
-                                     deterministische Fixer (SignalCockpit::DETERMINISTIC). Kommt ein Konzept-Fixer,
-                                     ändern sich beide Stellen zusammen (auch fixbareItems()). --}}
-                                @if(in_array($it['kind'], ['recipe', 'gp', 'concept'], true))
+                                     deterministische Fixer (SignalCockpit::DETERMINISTIC). Kommt ein Konzept-/
+                                     Foodbook-Fixer, ändern sich beide Stellen zusammen (auch fixbareItems()). --}}
+                                @if(in_array($it['kind'], \Platform\FoodAlchemist\Services\SignalObjectService::KINDS, true))
                                     <button type="button" wire:click="objektWaehlen('{{ $it['kind'] }}', {{ $it['id'] }})"
                                             class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] text-gray-400 hover:text-violet-700 hover:bg-violet-500/[0.08] transition-colors {{ $istGewaehlt ? 'text-violet-700 bg-violet-500/[0.08]' : '' }}"
                                             title="Alle offenen Signale an diesem Objekt"

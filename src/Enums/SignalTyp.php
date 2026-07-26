@@ -55,6 +55,12 @@ enum SignalTyp: string
     // Konzept gegen sich selbst liest (welche Gänge tragen dieselbe Hauptzutat).
     // Bewusst `info`: eine Wiederholung kann gewollt sein (Themen-Menü).
     case KonzeptDramaturgie = 'konzept_dramaturgie';
+    // Spec 21 Tranche D: Foodbook-Ebene — das Kundendokument selbst (bis dahin 0 Signale).
+    // Zwei verschiedene Arbeitsmengen, s. DataQualityService::foodbookChecks:
+    // `foodbook_kapitel_leer` misst nur BENUTZTE Bücher (ein Entwurf ist bewusst unfertig),
+    // `foodbook_skizze_ungeerdet` hängt am Kapitel-Go — der Knopf IST die Grenze.
+    case FoodbookKapitelLeer = 'foodbook_kapitel_leer';
+    case FoodbookSkizzeUngeerdet = 'foodbook_skizze_ungeerdet';
     // Spec 21 Tranche E · E3: Meta-Signal über die Zeitreihe — ein Zähler ist gegenüber
     // dem Vorlauf gestiegen. Alarmiert bei *Veränderung*, nicht bei Bestand; das ist der
     // eigentliche „System im Blick"-Mechanismus.
@@ -93,6 +99,8 @@ enum SignalTyp: string
             self::KonzeptPreisbandVerletzt => 'Konzept außerhalb des Preisbands',
             self::KonzeptRegelVerletzt => 'Konzept verletzt eine Gerüst-Regel',
             self::KonzeptDramaturgie => 'Konzept wiederholt eine Hauptzutat',
+            self::FoodbookKapitelLeer => 'Foodbook-Kapitel ohne Inhalt',
+            self::FoodbookSkizzeUngeerdet => 'Kreativ-Skizze nach dem Go nicht geerdet',
             self::QualitaetDrift => 'Qualität verschlechtert sich',
         };
     }
@@ -131,6 +139,8 @@ enum SignalTyp: string
             self::KonzeptPreisbandVerletzt => 'heroicon-o-banknotes',
             self::KonzeptRegelVerletzt => 'heroicon-o-no-symbol',
             self::KonzeptDramaturgie => 'heroicon-o-arrow-path',
+            self::FoodbookKapitelLeer => 'heroicon-o-book-open',
+            self::FoodbookSkizzeUngeerdet => 'heroicon-o-sparkles',
             self::QualitaetDrift => 'heroicon-o-arrow-trending-down',
         };
     }
@@ -154,5 +164,16 @@ enum SignalTyp: string
     public function istKonzeptQualitaet(): bool
     {
         return str_starts_with($this->value, 'konzept_');
+    }
+
+    /**
+     * Spec 21 Tranche D — Qualität des Kundendokuments (Foodbook-Ebene, deterministisch).
+     * Wieder eine eigene Tranche und nicht Teil von C: das Prüf-Objekt ist das Buch, und
+     * es hat einen eigenen Lebenszyklus (Status + Phase + Kapitel-Go), aus dem sich zwei
+     * verschiedene Arbeitsmengen ergeben — anders als bei Konzepten, wo eine reicht.
+     */
+    public function istFoodbookQualitaet(): bool
+    {
+        return str_starts_with($this->value, 'foodbook_');
     }
 }

@@ -7,6 +7,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
@@ -127,6 +128,7 @@ class DataQualityService
             'gericht' => ['label' => 'VK-Gerichte', 'metriken' => $this->gerichte($team)],
             'rezeptqualitaet' => ['label' => 'Rezept-Qualität', 'metriken' => $this->rezeptqualitaet($team)],
             'konzept' => ['label' => 'Konzepte', 'metriken' => $this->konzept($team)],
+            'foodbook' => ['label' => 'Foodbooks', 'metriken' => $this->foodbook($team)],
             'quer' => ['label' => 'Querschnitt', 'metriken' => $this->quer($team)],
         ];
     }
@@ -776,6 +778,218 @@ class DataQualityService
         };
     }
 
+    /**
+     * Spec 21 Tranche D — Qualität des Kundendokuments (Foodbook-Ebene, deterministisch, 0-Egress).
+     *
+     * Letzte Stufe der Kaskade: LA → GP → Basisrezept → VK-Gericht → Konzept → **Foodbook**.
+     * Das Buch ist das Artefakt, das der Kunde in die Hand bekommt — ein leeres Kapitel darin
+     * fällt heute erst beim Lesen des PDF auf, und dann steht es schon beim Kunden.
+     *
+     * **Zwei Arbeitsmengen, nicht eine** — das ist die tragende Abgrenzung dieser Tranche und
+     * der Unterschied zu Tranche C (dort genügte `konzepteInGebrauch` für alle Checks):
+     *  · `foodbook_kapitel_leer` misst nur BENUTZTE Bücher ({@see foodbooksInGebrauch}) — ein
+     *    Entwurf hat leere Kapitel, weil er ein Entwurf ist.
+     *  · `foodbook_skizze_ungeerdet` hängt am **Kapitel-Go**: dort hat ein Mensch „Anlegen"
+     *    gedrückt, und damit ist der Arbeitsstand erklärt — unabhängig vom Buch-Status.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function foodbook(Team $team): array
+    {
+        $out = [];
+        foreach ($this->foodbookChecks() as $key => $c) {
+            $out[] = $this->gap($key, $c['label'], ($c['q'])($team)->count(), $c['typ'], $c['dedup'], $c['desc'], $c['sev']);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Tranche-D-Register — gleiche Bauart wie {@see rezeptQualitaetChecks} und
+     * {@see konzeptChecks}: Label, Signal-Deskriptor und Prädikat je Check an EINER
+     * Stelle, aus der Zähl-Seite, Objekt-Liste (`betroffene`) und Lifecycle (`countFor`)
+     * gemeinsam ziehen. Objekt ist immer das **Foodbook**, nicht das Kapitel: es ist das,
+     * was man öffnet und was einen Namen trägt — dieselbe Wahl wie in Tranche C, wo das
+     * Konzept und nicht der Slot das Objekt ist.
+     *
+     * @return array<string,array{label:string,typ:SignalTyp,dedup:string,sev:SignalSeverity,desc:string,q:\Closure}>
+     */
+    private function foodbookChecks(): array
+    {
+        return [
+            'foodbook_kapitel_leer' => [
+                'label' => 'Foodbooks in Gebrauch mit leerem Kapitel oder ohne jeden Inhalt',
+                'typ' => SignalTyp::FoodbookKapitelLeer,
+                'dedup' => 'dq-foodbook-kapitel-leer',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Mindestens ein Kapitel dieses Foodbooks trägt keine Inhalts-Zeile: weder einen '
+                    . 'Paket-/Konzept-Block (`concept_ref`) noch ein einzelnes Gericht (`recipe_ref`). Kopfzeilen, '
+                    . 'Text, Abstand und Bild zählen nicht als Inhalt — sie beschreiben ihn. Gemessen werden nur '
+                    . 'Kapitel OHNE Unterkapitel: ein Eltern-Kapitel ist eine Klammer, sein Inhalt steht darunter. '
+                    . 'Ein unsichtbar geschalteter Block zählt ebenfalls nicht: im Kundendokument druckt das '
+                    . 'Kapitel dann leer, und genau das ist der Befund. Zweiter Zweig: ein Buch mit überhaupt '
+                    . 'keinem befüllten Kapitel — es hat kein LEERES Kapitel und käme sonst unauffällig durch.',
+                'q' => fn (Team $t) => $this->foodbooksInGebrauch($t)->where(fn ($w) => $w
+                    ->whereExists($this->kapitelOhneInhalt())
+                    ->orWhereNotExists($this->kapitelMitInhalt())),
+            ],
+            'foodbook_skizze_ungeerdet' => [
+                'label' => 'Foodbooks mit Kreativ-Skizze, die nach dem Go nicht geerdet wurde',
+                'typ' => SignalTyp::FoodbookSkizzeUngeerdet,
+                'dedup' => 'dq-foodbook-skizze-ungeerdet',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Beim Kapitel-Go wurde eine Freitext-Skizze in die KI-Queue gestellt '
+                    . '(`generation_status=queued`), aber es ist nie ein Gericht daraus geworden. Ohne '
+                    . 'LLM-Provider bleibt eine Skizze bewusst queued und retrybar — deshalb greift der Befund '
+                    . 'erst ' . self::SKIZZE_STUCK_STUNDEN . ' Stunden nach dem Go: davor ist sie in Arbeit, '
+                    . 'danach steckt sie. Es geht um verlorene Kreativarbeit, nicht um einen Datenfehler: die Idee '
+                    . 'steht im Buch-Entwurf, im Sortiment steht sie nicht.',
+                'q' => fn (Team $t) => $this->foodbooksNichtArchiviert($t)->whereExists($this->ungeerdeteSkizze()),
+            ],
+        ];
+    }
+
+    /**
+     * Foodbooks, die real benutzt werden — nur hier ist ein leeres Kapitel ein Mangel.
+     * Drei Wege in den Gebrauch, jeder für sich ausreichend:
+     *  · `status` — das Buch ist live bzw. schon beim Kunden (s. FOODBOOK_STATUS_IN_GEBRAUCH).
+     *  · `phase` ab `kalkulation` — im Planungs-Workflow ist die Befüllung erklärt-fertig
+     *    (PhaseService::PHASEN: kontext → struktur → befuellung → **kalkulation** → freigabe).
+     *    Das ist der belastbarere Marker als der Status: die Phase führt die Leitstelle
+     *    selbst, den Status setzt jemand von Hand (im Bestand steht er durchweg auf `draft`).
+     *  · ein Kapitel mit `snapshot_at` — der Versand hat es eingefroren, es war beim Kunden.
+     */
+    private function foodbooksInGebrauch(Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        return $this->foodbooksNichtArchiviert($team)
+            ->where(fn ($w) => $w
+                ->whereIn('status', self::FOODBOOK_STATUS_IN_GEBRAUCH)
+                ->orWhereIn('phase', self::FOODBOOK_PHASEN_IN_GEBRAUCH)
+                ->orWhereExists(fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_foodbook_chapters as sk')
+                    ->whereColumn('sk.foodbook_id', 'foodalchemist_foodbooks.id')
+                    ->whereNull('sk.deleted_at')
+                    ->whereNotNull('sk.snapshot_at')));
+    }
+
+    /**
+     * Basismenge beider Tranche-D-Checks: alles außer `archiviert`. Ein archiviertes Buch
+     * ist ausgemustert — dieselbe Grenze wie bei den Konzepten.
+     */
+    private function foodbooksNichtArchiviert(Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        return FoodAlchemistFoodbook::visibleToTeam($team)->where('status', '!=', 'archiviert');
+    }
+
+    /** Ab dieser Phase gilt die Befüllung als erklärt-fertig (s. PhaseService::PHASEN). */
+    private const FOODBOOK_PHASEN_IN_GEBRAUCH = ['kalkulation', 'freigabe'];
+
+    /**
+     * Status-Werte, die „nicht mehr Arbeitsstand" bedeuten. `versendet` ist eindeutig.
+     *
+     * **`aktiv` UND `active`, weil das Vokabular im Bestand widersprüchlich ist:** die
+     * Migration schreibt `draft|aktiv|versendet|archiviert` (2026_06_13_000045), das
+     * Status-Dropdown der Leitstelle schreibt aber `active`
+     * (`livewire/foodbooks/index.blade.php:135`) — dasselbe Auseinanderlaufen wie bei den
+     * Konzepten (`ConceptService::setStatus` validiert `active`, die Migration kommentiert
+     * `aktiv`). Welche Schreibweise kanonisch ist, entscheidet nicht dieser Check; bis dahin
+     * misst er BEIDE, statt ein live geschaltetes Buch stillschweigend zu verfehlen. Als Bug
+     * gemeldet — sobald der Kanon steht, fällt hier ein Wert weg (und `konzepteInGebrauch`
+     * braucht dieselbe Korrektur).
+     */
+    private const FOODBOOK_STATUS_IN_GEBRAUCH = ['aktiv', 'active', 'versendet'];
+
+    /**
+     * Block-Typen, die Inhalt TRAGEN. Der Rest des Vokabulars (`header`/`text`/`spacer`/
+     * `image`) beschreibt oder gliedert ihn — dieselbe Unterscheidung wie
+     * `ConceptService::STRUKTUR_TYPEN` auf der Konzept-Ebene.
+     */
+    private const INHALTS_BLOCK_TYPEN = ['concept_ref', 'recipe_ref'];
+
+    /**
+     * So lange nach dem Kapitel-Go darf eine Skizze queued bleiben, ohne aufzufallen.
+     * Der Go dispatcht die Jobs sofort (`verarbeiteFreitextQueue`); wer nach zwei Tagen
+     * noch nichts erzeugt hat, wartet nicht, sondern steckt. Kürzer wäre Rauschen (ein
+     * Provider-Ausfall über Nacht), länger würde verlorene Kreativarbeit verschweigen.
+     */
+    private const SKIZZE_STUCK_STUNDEN = 48;
+
+    /**
+     * EXISTS: ein Kapitel dieses Foodbooks ohne eine einzige Inhalts-Zeile.
+     *
+     * Drei Einschränkungen, jede mit eigenem Grund:
+     *  · **Blattkapitel only** — ein Kapitel mit Unterkapiteln ist eine Klammer; sein
+     *    Inhalt hängt an den Kindern (Spec 19: Kapitel-Scope = Kapitel + Nachfahren).
+     *    Ohne diese Grenze wäre jede saubere Baum-Gliederung ein Befund.
+     *  · **`archived`-Kapitel draußen** — dieselbe Logik wie beim Buch-Status.
+     *  · **`visible=true`** am Inhalts-Block: das Kapitel wird danach beurteilt, was im
+     *    Kundendokument LANDET. Ein ausgeschalteter Block ist im Export nicht da.
+     */
+    private function kapitelOhneInhalt(): \Closure
+    {
+        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_foodbook_chapters as k')
+            ->whereColumn('k.foodbook_id', 'foodalchemist_foodbooks.id')
+            ->whereNull('k.deleted_at')
+            ->where('k.status', '!=', 'archived')
+            ->whereNotExists(fn ($kind) => $kind->select(DB::raw(1))->from('foodalchemist_foodbook_chapters as kk')
+                ->whereColumn('kk.parent_id', 'k.id')
+                ->whereNull('kk.deleted_at'))
+            ->whereNotExists(fn ($b) => $b->select(DB::raw(1))->from('foodalchemist_foodbook_blocks as fb')
+                ->whereColumn('fb.chapter_id', 'k.id')
+                ->whereNull('fb.deleted_at')
+                ->where('fb.visible', true)
+                ->whereIn('fb.type', self::INHALTS_BLOCK_TYPEN));
+    }
+
+    /**
+     * EXISTS: irgendein Kapitel dieses Foodbooks trägt Inhalt. Gegenstück zum zweiten
+     * Zweig von `foodbook_kapitel_leer` — dieselbe Lücke, die auf der Konzept-Ebene
+     * `belegterInhaltsSlot` schließt: ohne diesen Zweig wäre ein Buch mit NULL Kapiteln
+     * unauffällig, weil es kein leeres Kapitel hat.
+     */
+    private function kapitelMitInhalt(): \Closure
+    {
+        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_foodbook_chapters as k')
+            ->whereColumn('k.foodbook_id', 'foodalchemist_foodbooks.id')
+            ->whereNull('k.deleted_at')
+            ->where('k.status', '!=', 'archived')
+            ->whereExists(fn ($b) => $b->select(DB::raw(1))->from('foodalchemist_foodbook_blocks as fb')
+                ->whereColumn('fb.chapter_id', 'k.id')
+                ->whereNull('fb.deleted_at')
+                ->where('fb.visible', true)
+                ->whereIn('fb.type', self::INHALTS_BLOCK_TYPEN));
+    }
+
+    /**
+     * EXISTS: eine Freitext-Skizze, die der Kapitel-Go in die KI-Queue gestellt hat und
+     * die dort hängen geblieben ist.
+     *
+     * Der Zustand ist exakt der, den `materialisiereFreitextIdee` als „noch offen" liest
+     * (`sales_recipe_id` null · `generation_status='queued'` · `materialized_at` null) —
+     * gespiegelt statt neu formuliert, damit Signal und Queue nicht auseinanderlaufen.
+     * Dazu `generated_recipe_id` null: ein erzeugtes Rezept ist das Ergebnis, auch wenn
+     * der Rest-Stempel fehlen sollte.
+     *
+     * `fehlgeschlagen` zählt bewusst NICHT: dort ist die KI gelaufen und hat verloren, das
+     * meldet die Leitstelle am Kapitel selbst. Hier geht es um den stillen Fall — niemand
+     * bekommt mit, dass nichts passiert ist.
+     */
+    private function ungeerdeteSkizze(): \Closure
+    {
+        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_foodbook_chapters as k')
+            ->whereColumn('k.foodbook_id', 'foodalchemist_foodbooks.id')
+            ->whereNull('k.deleted_at')
+            ->whereNotNull('k.released_at')
+            ->where('k.released_at', '<', now()->subHours(self::SKIZZE_STUCK_STUNDEN))
+            ->whereExists(fn ($i) => $i->select(DB::raw(1))->from('foodalchemist_dish_ideas as di')
+                ->whereColumn('di.chapter_id', 'k.id')
+                ->whereNull('di.deleted_at')
+                ->where('di.generation_status', 'queued')
+                ->whereNull('di.sales_recipe_id')
+                ->whereNull('di.generated_recipe_id')
+                ->whereNull('di.materialized_at')
+                ->where('di.status', '!=', 'verworfen'));
+    }
+
     /** @return list<array<string,mixed>> */
     private function quer(Team $team): array
     {
@@ -1149,6 +1363,7 @@ class DataQualityService
         return match ($kind) {
             'gp' => $this->gpItems($q, $limit),
             'concept' => $this->conceptItems($q, $limit),
+            'foodbook' => $this->foodbookItems($q, $limit),
             default => $this->recipeItems($q, $limit),
         };
     }
@@ -1159,8 +1374,8 @@ class DataQualityService
      * nur mit `whereKey`, damit „was hat dieses Rezept noch?" nicht die volle
      * Trefferliste jeder Metrik laden muss (ein EXISTS je Metrik statt n Zeilen).
      *
-     * $kind muss zur Metrik passen ('gp'|'recipe'|'concept') — eine GP-Metrik trifft nie
-     * ein Rezept, auch wenn die IDs zufällig gleich sind.
+     * $kind muss zur Metrik passen ('gp'|'recipe'|'concept'|'foodbook') — eine GP-Metrik
+     * trifft nie ein Rezept, auch wenn die IDs zufällig gleich sind.
      */
     public function trifftObjekt(Team $team, string $metrik, string $kind, int $id): bool
     {
@@ -1185,17 +1400,22 @@ class DataQualityService
 
     /**
      * EINE Query-Definition je Metrik (kein Drift): betroffene() (SELECT) + countFor() (COUNT)
-     * teilen sich diese. Rückgabe [?Builder, kind:'gp'|'recipe'|'concept']; null = keine Objekte.
+     * teilen sich diese. Rückgabe [?Builder, kind:'gp'|'recipe'|'concept'|'foodbook'];
+     * null = keine Objekte.
      *
      * @return array{0: \Illuminate\Database\Eloquent\Builder|null, 1: string}
      */
     private function queryFor(Team $team, string $metrik): array
     {
-        // Die Register (Tranche A = Rezept, Tranche C = Konzept) definieren ihr Prädikat
-        // selbst — hier nur nachschlagen, nicht nachbauen. Der `kind` gehört ans Register,
-        // nicht an den Aufrufer: er entscheidet, WELCHES Objekt die Liste zeigt. Der switch
-        // unten ist der Altbestand der Kaskaden-Ebenen (s. V-005).
-        foreach ([['recipe', $this->rezeptQualitaetChecks()], ['concept', $this->konzeptChecks()]] as [$kind, $checks]) {
+        // Die Register (Tranche A = Rezept, C = Konzept, D = Foodbook) definieren ihr
+        // Prädikat selbst — hier nur nachschlagen, nicht nachbauen. Der `kind` gehört ans
+        // Register, nicht an den Aufrufer: er entscheidet, WELCHES Objekt die Liste zeigt.
+        // Der switch unten ist der Altbestand der Kaskaden-Ebenen (s. V-005).
+        foreach ([
+            ['recipe', $this->rezeptQualitaetChecks()],
+            ['concept', $this->konzeptChecks()],
+            ['foodbook', $this->foodbookChecks()],
+        ] as [$kind, $checks]) {
             if (isset($checks[$metrik])) {
                 return [($checks[$metrik]['q'])($team), $kind];
             }
@@ -1262,6 +1482,20 @@ class DataQualityService
     {
         return $q->orderBy('name')->limit($limit)->get(['id', 'name'])
             ->map(fn ($c) => ['kind' => 'concept', 'id' => (int) $c->id, 'name' => (string) $c->name, 'is_sales_recipe' => false])->all();
+    }
+
+    /**
+     * Foodbook-Objekte (Tranche D). Das Buch trägt seinen Namen in `label`, nicht in
+     * `name` — die Panel-Zeile erwartet `name`, also wird hier umbenannt (statt das Panel
+     * um einen zweiten Feldnamen zu erweitern). `is_sales_recipe` ist wie beim Konzept
+     * ohne Bedeutung; die Fallunterscheidung im Panel läuft über `kind`.
+     *
+     * @return list<array{kind:string,id:int,name:string,is_sales_recipe:bool}>
+     */
+    private function foodbookItems(\Illuminate\Database\Eloquent\Builder $q, int $limit): array
+    {
+        return $q->orderBy('label')->limit($limit)->get(['id', 'label'])
+            ->map(fn ($f) => ['kind' => 'foodbook', 'id' => (int) $f->id, 'name' => (string) $f->label, 'is_sales_recipe' => false])->all();
     }
 
     /** @return list<array{kind:string,id:int,name:string,is_sales_recipe:bool}> */

@@ -32,6 +32,14 @@ class SignalObjectService
     /** Kappungsgrenze der Objekt-Liste im Panel — darüber wird ehrlich „… und n weitere" gemeldet. */
     public const PANEL_LIMIT = 300;
 
+    /**
+     * Objekt-Arten, für die die objekt-zentrische Sicht auflösen kann — deckungsgleich mit
+     * den `kind`-Werten der Check-Register im `DataQualityService` (`recipe`/`gp` aus der
+     * Kaskade + Tranche A, `concept` ab Tranche C, `foodbook` ab Tranche D). Eine neue
+     * Tranche mit neuem Objekt-Typ ändert diese Liste mit, sonst bliebe „was noch?" stumm.
+     */
+    public const KINDS = ['recipe', 'gp', 'concept', 'foodbook'];
+
     public function __construct(private DataQualityService $dq)
     {
     }
@@ -103,12 +111,12 @@ class SignalObjectService
      * In-Memory-Scan der Detektor-Payloads. Bewusst kein Cache: das Panel wird nach
      * einem Fix erneut gefragt und muss dann den neuen Stand zeigen.
      *
-     * @param  string  $kind  'recipe'|'gp'|'concept'
+     * @param  string  $kind  'recipe'|'gp'|'concept'|'foodbook'
      * @return list<array{id:int,type:string,label:string,icon:string,severity:string,title:string,hat_ki:bool}>
      */
     public function signaleAmObjekt(Team $team, string $kind, int $id): array
     {
-        if (! in_array($kind, ['recipe', 'gp', 'concept'], true) || $id <= 0) {
+        if (! in_array($kind, self::KINDS, true) || $id <= 0) {
             return [];
         }
 

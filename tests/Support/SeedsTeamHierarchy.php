@@ -300,4 +300,74 @@ trait SeedsTeamHierarchy
             'wording' => 'Kundenfähige Bezeichnung',
         ], $attrs));
     }
+
+    /**
+     * Foodbook, das die Tranche-D-Checks (Spec 21 · S4c) ÜBERHAUPT erreichen: Status
+     * `aktiv` = „in Gebrauch". Bewusst nicht `draft` — `foodbook_kapitel_leer` misst nur
+     * benutzte Bücher, ein Entwurf wäre für jeden Positivfall unsichtbar. Wer den
+     * Negativfall „Entwurf zählt nicht" prüfen will, setzt `status` explizit auf `draft`.
+     *
+     * Unauffällig ist das Buch damit noch NICHT: ohne befülltes Kapitel löst es
+     * `foodbook_kapitel_leer` über den zweiten Zweig aus (kein Kapitel mit Inhalt).
+     */
+    protected function makeFoodbook(Team $owner, string $label, array $attrs = []): \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook
+    {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::create(array_merge([
+            'team_id' => $owner->id,
+            'label' => $label,
+            'status' => 'aktiv',
+        ], $attrs));
+    }
+
+    /** Kapitel eines Foodbooks. Ohne Inhalts-Block ist es leer (Tranche D). */
+    protected function makeChapter(
+        \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook $foodbook,
+        array $attrs = []
+    ): \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::create(array_merge([
+            'team_id' => $foodbook->team_id,
+            'foodbook_id' => $foodbook->id,
+            'title' => 'Kapitel',
+            'position' => 1,
+        ], $attrs));
+    }
+
+    /**
+     * Inhalts-Block eines Kapitels. Default `recipe_ref` + sichtbar = die Variante, die
+     * das Kapitel befüllt; ein Test verschlechtert genau ein Feld (`type => 'header'`,
+     * `visible => false` …).
+     */
+    protected function makeFoodbookBlock(
+        \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel $chapter,
+        array $attrs = []
+    ): \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::create(array_merge([
+            'team_id' => $chapter->team_id,
+            'chapter_id' => $chapter->id,
+            'type' => 'recipe_ref',
+            'position' => 1,
+            'visible' => true,
+        ], $attrs));
+    }
+
+    /**
+     * Kreativ-Skizze am Kapitel. Default = der Zustand, den der Kapitel-Go bei einer
+     * Freitext-Idee hinterlässt (`generation_status='queued'`, nichts materialisiert) —
+     * also der Positivfall von `foodbook_skizze_ungeerdet`, sobald das Kapitel ein
+     * `released_at` jenseits der Karenzzeit trägt.
+     */
+    protected function makeDishIdea(
+        \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel $chapter,
+        array $attrs = []
+    ): \Platform\FoodAlchemist\Models\FoodAlchemistDishIdea {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistDishIdea::create(array_merge([
+            'team_id' => $chapter->team_id,
+            'chapter_id' => $chapter->id,
+            'title' => 'Freie Idee',
+            'status' => 'entwurf',
+            'target_form' => 'einzel',
+            'generation_status' => 'queued',
+            'position' => 1,
+        ], $attrs));
+    }
 }
