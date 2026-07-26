@@ -204,7 +204,8 @@ class VkModal extends Component
     // (modal.closed ist ein Alpine-window-Event, das Livewire nicht erreicht)
     private function formZuruecksetzen(): void
     {
-        $this->reset(['recipeId', 'form', 'hauptgruppeId', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege']);
+        $this->reset(['recipeId', 'form', 'hauptgruppeId', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege',
+            'ueberarbeitenOffen', 'anweisung', 'ueberarbeitung']);   // L1a: Revise-Vorschau darf nicht ins nächste Gericht lecken
     }
 
     public function updatedHauptgruppeId(): void
@@ -428,6 +429,148 @@ class VkModal extends Component
         app(SalesRecipeService::class)->upsertRegeneration($team, $this->recipeId, $zeile, null);
         unset($this->regenVorschlaege[$idx]);
         $this->regenVorschlaege = array_values($this->regenVorschlaege);
+    }
+
+    // ── Spec 03 L1a: ✨ KI-Überarbeiten — freie Anweisung, Vorschau, Übernehmen (GL-07) ──
+    //
+    // Zweite Fläche derselben Strecke wie im RecipeModal: Vorschau über
+    // RecipeReviseService::vorschau, Übernehmen über ::syncZeilen + den
+    // #508-Grounding in RecipeService::syncIngredients. Der VK-Unterschied ist
+    // NICHT die Mechanik, sondern der Schreib-Umfang: die Verkaufs-Facetten
+    // (Klasse/Diät, Darreichungen, Verkaufseinheit, Aufschlagsklasse, Container,
+    // Vehikel) gehen als Kontext HINEIN und werden nie zurückgeschrieben.
+
+    public bool $ueberarbeitenOffen = false;
+
+    public string $anweisung = '';
+
+    /** @var ?array{werte: array, confidence: float, match_vorschau: array} Vorschau — NICHTS persistiert */
+    public ?array $ueberarbeitung = null;
+
+    /** Die drei Text-Felder, die ein VK-Revise anfassen darf (Facetten stehen bewusst NICHT drin). */
+    private const REVISE_TEXTE = [
+        'description' => 'description_source',
+        'plating_text' => 'plating_source',
+        'sales_wording_standard' => 'sales_wording_source',
+    ];
+
+    public function kiUeberarbeiten(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null || trim($this->anweisung) === '') {
+            $this->fehler = 'Anweisung ist Pflicht (z. B. «mach das Gericht vegan und ersetze die Sauce»).';
+
+            return;
+        }
+        $this->fehler = null;
+        $r = app(SalesRecipeService::class)->detail($team, $this->recipeId);
+        if ($r === null) {
+            return;
+        }
+
+        try {
+            $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.ueberarbeiten', [
+                'anweisung' => trim($this->anweisung),
+                'name' => $r->name,
+                'sales_wording_standard' => $r->sales_wording_standard,
+                'description' => $r->description,
+                'plating_text' => $r->plating_text,
+                'zutaten' => $r->ingredients->map(fn ($z) => [
+                    'id' => $z->id,
+                    'text' => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name ?? $z->raw_text,
+                    'quantity' => (float) $z->quantity,
+                    'einheit_slug' => $z->unit?->slug,
+                ])->values()->all(),
+            ] + $this->facetten($r));
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+
+        $hatText = false;
+        foreach (array_keys(self::REVISE_TEXTE) as $feld) {
+            $hatText = $hatText || is_string($vorschlag->werte[$feld] ?? null) && trim($vorschlag->werte[$feld]) !== '';
+        }
+        if (empty($vorschlag->werte['zutaten']) && ! $hatText) {
+            $this->fehler = 'KI lieferte keine verwertbare Überarbeitung — echter Provider nötig (FakeProvider-Grenze).';
+
+            return;
+        }
+        $this->ueberarbeitung = [
+            'werte' => $vorschlag->werte,
+            'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
+            'match_vorschau' => app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)
+                ->vorschau($team, $r, $vorschlag->werte['zutaten'] ?? []),
+        ];
+    }
+
+    /**
+     * Die Verkaufs-Facetten als VORGABE im Prompt — der Grund, warum das VK-Revise
+     * einen eigenen Prompt-Key hat: ohne sie revidiert die KI ein Fingerfood zum
+     * Tellergericht oder ein veganes Gericht zurück in die Butter.
+     *
+     * @return array<string, mixed>
+     */
+    private function facetten(FoodAlchemistRecipe $r): array
+    {
+        return [
+            'speisen_klasse' => $r->dishClass?->label,
+            'diaetform' => $r->dishClass?->diet_form,
+            'darreichungen' => $r->darreichungen->map(fn ($d) => $d->servingForm?->label)->filter()->values()->all(),
+            'verkaufseinheit' => trim(($r->sales_unit_count !== null ? $r->sales_unit_count . ' × ' : '')
+                . ($r->salesUnit?->display_de ?? '')) ?: null,
+            'portion_g' => $r->sales_quantity_per_unit_g,
+            'aufschlagsklasse' => $r->markupClass?->code,
+        ];
+    }
+
+    /** Übernehmen = der EINE Schreib-Moment: Komponenten-Sync + Text-Felder mit Lineage ki. */
+    public function ueberarbeitungUebernehmen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null || $this->ueberarbeitung === null) {
+            return;
+        }
+        $werte = $this->ueberarbeitung['werte'];
+        $konfidenz = $this->ueberarbeitung['confidence'];
+        $r = app(SalesRecipeService::class)->detail($team, $this->recipeId);
+
+        try {
+            if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
+                $zeilen = app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)->syncZeilen($r, $werte['zutaten']);
+                if ($zeilen !== []) {
+                    app(\Platform\FoodAlchemist\Services\RecipeService::class)->syncIngredients($team, $this->recipeId, $zeilen);
+                }
+            }
+            // Texte im Bestands-Muster (RecipeModal): direkter Write MIT Lineage,
+            // Override-First — manuell Gepflegtes bleibt unangetastet (GL-07 §4.2).
+            $frisch = $r->fresh();
+            foreach (self::REVISE_TEXTE as $feld => $lineage) {
+                $wert = $werte[$feld] ?? null;
+                if (! is_string($wert) || trim($wert) === '' || $frisch->{$lineage} === 'manual') {
+                    continue;
+                }
+                $frisch->update([$feld => trim($wert), $lineage => 'ki',
+                    str_replace('_source', '_ai_confidence', $lineage) => $konfidenz]);
+                $this->form[$feld] = trim($wert);
+            }
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+
+        $this->ueberarbeitung = null;
+        $this->anweisung = '';
+        $this->ueberarbeitenOffen = false;
+        $this->zutatenVersion++;                                     // eingebetteten Editor neu mounten (Client-rows!)
+        $this->dispatch('recipe-gespeichert');
+    }
+
+    public function ueberarbeitungVerwerfen(): void
+    {
+        $this->ueberarbeitung = null;                                 // reject lässt Fachdaten unberührt (GL-07)
     }
 
     // ── M9-01a: 🎭 Rollen verteilen (V-21) — Proposal-Box über den Zutaten ──

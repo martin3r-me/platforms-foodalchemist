@@ -642,6 +642,20 @@ return [
             'task' => 'Pruefe das Verkaufsrezept als Copilot auf Verkaufs-Tauglichkeit '
                 . '(Marge, Portionierung, Service-Logik, Wording): werte = {befunde: [{schwere, text}], gesamturteil}.',
         ],
+        'vk.ueberarbeiten' => [
+            'tier' => 'A',                                            // Spec 03 L1a — VK-Variante von recipe.ueberarbeiten
+            'max_tokens' => 8000,                                     // Gesamt-Gericht zurueck (Komponenten + Texte) — Reasoning-Headroom
+            'task' => 'Ueberarbeite das GERICHT (Verkaufsrezept) exakt nach der freien Anweisung '
+                . '(anweisung) — aendere NUR Angefragtes und behalte ids bestehender Komponenten, '
+                . 'neue Komponenten ohne id. Die Verkaufs-Facetten im Kontext (speisen_klasse, '
+                . 'diaetform, darreichungen, verkaufseinheit, aufschlagsklasse) sind VORGABE, nicht '
+                . 'Gegenstand der Ueberarbeitung: sie stehen dort, damit die Ueberarbeitung zu ihnen '
+                . 'passt (z. B. eine Fingerfood-Klasse bleibt handlich, eine vegane Diaetform bleibt '
+                . 'vegan) — gib sie NICHT aus und schlage keine Aenderung an ihnen vor. Widerspricht '
+                . 'die Anweisung einer Facette, sag es in aenderungs_notiz statt die Facette zu '
+                . 'unterlaufen: werte = {description, plating_text, sales_wording_standard, '
+                . 'zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
+        ],
         'vk.kohaerenz' => [
             'tier' => 'A',                                            // Inline-Prompt im Ist (culinary_coherence_judge) — gehoben
             'task' => 'Beurteile die kulinarische Kohaerenz des Tellers (Score 0-100, Label wie '

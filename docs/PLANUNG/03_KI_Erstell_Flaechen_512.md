@@ -5,7 +5,7 @@
 >
 > | Lücke | Ist | Beleg |
 > |---|---|---|
-> | **L1** | ⚪ offen | `ueberarbeit` nur in `src/Livewire/Recipes/RecipeModal.php`; `BulkEnrich` in ReviewQueue/GpModal/RecipeModal/Recipes\Browser/ClassifyLaJob — **nicht** im `VkModal` |
+> | **L1** | 🟡 L1a ✅ (2026-07-26), L1b offen | Revise jetzt in **beiden** Modals über den geteilten `RecipeReviseService`; `BulkEnrich`-Knopf im `VkModal` weiter offen (braucht erst eine VK-Schrittfolge, s. DoD) |
 > | **L2** | ✅ **KOMPLETT 2026-07-26** (L2a + L2b) | L2a: Prompt **`foodbook.kundentext`** in Registry + `FOOD_DNA_KEYS`, `FoodbookService::kiKundentextVorschlag`, Button `:226` scharf mit echter Vorschau-Stufe. L2b: Feld „Hinführung“ im Kapitel-Kopf + `kiKapitelKundentextVorschlag` (`ebene: 'kapitel'`) + Kapitel-Text erstmals in der Dokument-Projektion (`dokumentDaten` → PDF + Präsentation) + `foodbook_kapitel_ohne_text` scharf (Spec 21 Tranche D, `info`) |
 > | **L3** | ✅ **via Spec 19** | Kickoff in `Foodbooks/Index`, `PlanningFrameService`, `FoodbookService` + `ConceptGeneratorService::generiereAusBrief`. Kein eigener L3-Bau mehr — nur noch Bau-Referenz |
 > | **L4** | ⚪ offen | nur manueller `fillSlot` (`Concepts/Index.php:256/262`, `ConceptSlotsPostTool:94`); `zielpreisBerechnen`/`zielVorschlag` im Concepter-Editor sind **Preis**-Vorschlag, nicht Slot-Inhalt |
@@ -75,11 +75,12 @@ Seit der Erstfassung ist gebaut + gepusht (`main` `9c1bae2`+`ebc1aa4`), das änd
 Das Basisrezept-Muster existiert komplett (`RecipeModal::kiUeberarbeiten`/`ueberarbeitungUebernehmen`) — Portierung, keine Neuentwicklung. ABER: **im Verbund mit #508 bauen**, nicht davor — sonst portieren wir den Grounding-Fehler (Revise persistiert `unmatched`) auf eine zweite Fläche.
 
 **DoD:**
-- [ ] `VkModal`: `✨ KI-Überarbeiten` mit Freitext-Anweisung, Prompt-Variante für VK (Gericht-Kontext: Servierform/Klasse/Diät bleiben konsistent, Facetten nicht kaputt-revidieren)
-- [ ] Revidierte Zutaten laufen durch den **#508-Re-Matching-Pfad** (IngredientMatchService + Hard-Stop) — geteilte Strecke, nicht dupliziert
-- [ ] `✨ Alles anreichern` im VkModal (BulkEnrichService kann VK schon — nur Button/Wiring)
-- [ ] Vorschau + explizites Übernehmen, Lineage `ki` (GL-07), nie Auto-Persistenz
-- [ ] Pest: Revise-Roundtrip VK + Facetten-Erhalt; MCP-Lockstep-Check (kein neues Tool nötig, `recipe.ueberarbeiten` ist UI-only — bewusst begründen oder L5 mitlösen)
+- [x] **L1a ✅ 2026-07-26:** `VkModal`: `✨ KI-Überarbeiten` mit Freitext-Anweisung + eigener Prompt `vk.ueberarbeiten` (Tier A, 8000 Tokens, in `FOOD_DNA_KEYS`). **Facetten-Erhalt zweistufig, nicht einstufig:** Klasse/Diätform/Darreichungs-Formen/Verkaufseinheit/Portion/Aufschlagsklasse gehen als *Vorgabe* in den Prompt (mit der Anweisung, sie nicht auszugeben und Widersprüche in `aenderungs_notiz` zu melden) **und** der Schreibpfad kennt sie gar nicht. Nur den Schreib-Umfang zu beschränken hätte „mach es vegan" formal geschützt und inhaltlich unterlaufen
+- [x] **L1a ✅:** Revidierte Zutaten laufen durch den #508-Pfad — und die Strecke ist **extrahiert statt kopiert**: neuer `src/Services/RecipeReviseService.php` (`vorschau()` + `syncZeilen()`), beide Modals fahren ihn, `RecipeModal::matchVorschau` bleibt Durchgriff. Wörtliche „Portierung" hätte 65 Zeilen dupliziert und den #508-Fix auf zwei Orte verteilt
+- [ ] **L1b:** `✨ Alles anreichern` im VkModal. **Korrektur zur Spec-Annahme „BulkEnrichService kann VK schon — nur Button/Wiring":** `BulkEnrichService::SCHRITTE` = `description|category|geschmack` ist die **Basisrezept**-Ebene (`category` = 186er-Rezept-Kategorie, nicht die VK-Speisen-Klasse). Ein Gericht braucht `SCHRITTE_VK` (Wording/Plating/Speisen-Klasse) + Accept-Pfade in `uebernehmen()`, sonst reichert der Knopf die falsche Ebene an
+- [x] **L1a ✅:** Vorschau + explizites Übernehmen, Lineage `ki` je Feld (`description_source`/`plating_source`/`sales_wording_source`), `manual` gewinnt (Override-First), nie Auto-Persistenz
+- [x] **L1a ✅:** `tests/Feature/VkReviseTest.php` (6 Tests): Revise-Roundtrip + Facetten-Erhalt (schickt Facetten-Felder bewusst MIT und beweist, dass keins ankommt) + Override-First + leere Anweisung + Vorschau-ohne-Persistenz + Render. **MCP-Lockstep: kein Tool, bewusst** — ein Revise-Tool wäre entweder Auto-Persistenz (gibt den Vorschau-/Übernehmen-Schnitt und damit GL-07 auf) oder eine Vorschau, die kein Client übernehmen kann (Accept-Zustand lebt in der Livewire-Komponente). Der schreibende Weg existiert granular: `recipe_ingredients.PUT` + `recipes.PUT`
+- **Nebenbefund L1a → V-027:** der Alt-Revise nullte beim Übernehmen `role`/`is_value_relevant`/`quantity_max`/`trimming_loss_pct`/`cooking_loss_source` (`syncIngredients` baut `$attrs` bei UPDATE wie bei INSERT aus dem Payload). Im neuen Service per Original-Fallback geschlossen — die Wurzel trifft als nächstes **L6** (granularer Copilot-Apply braucht per Definition ein Teil-Update)
 
 ### L2 — Foodbook Kapitel-Text-KI scharfstellen · Größe S · hängt an: LLM-Provider (lokal geht sofort)
 

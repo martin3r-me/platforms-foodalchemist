@@ -419,56 +419,17 @@ class RecipeModal extends Component
     }
 
     /**
-     * E3 (#508): pro vorgeschlagener Zutat den künftigen Grounding-Status —
-     * spiegelt die Logik von ueberarbeitungUebernehmen/syncIngredients:
-     *  - matched  : bestehende GP/Sub-Verknüpfung des Originals bleibt
-     *  - grounded : Resolver findet ein GP/Sub-Rezept (wird beim Übernehmen verlinkt)
-     *  - hardstop : nichts über der Schwelle → nach dem Übernehmen „GP/Basisrezept
-     *               anlegen" (Button-Heuristik + Shortlist-Zähler, analog Generator)
+     * E3 (#508): pro vorgeschlagener Zutat der künftige Grounding-Status.
+     * Die Logik liegt seit Spec 03 L1a im geteilten `RecipeReviseService`
+     * (das VkModal fährt dieselbe Strecke); hier bleibt nur der Durchgriff,
+     * damit Blade + Bestands-Tests ihren Aufruf behalten.
      *
      * @param  array<int, mixed>  $zutaten
      * @return array<int, array{status:string, kind:?string, ziel:?string, primaer:?string, shortlist:int}>
      */
     public function matchVorschau($team, $r, array $zutaten): array
     {
-        if ($zutaten === [] || $r === null) {
-            return [];
-        }
-        $original = $r->ingredients->keyBy('id');
-        $matcher = app(\Platform\FoodAlchemist\Services\IngredientMatchService::class);
-        $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
-
-        $out = [];
-        foreach (array_values($zutaten) as $i => $z) {
-            if (! is_array($z)) {
-                continue;
-            }
-            $text = trim((string) ($z['text'] ?? ''));
-            $orig = isset($z['id']) ? $original->get((int) $z['id']) : null;
-
-            if ($orig !== null && ($orig->gp_id !== null || $orig->referenced_recipe_id !== null)) {
-                $out[$i] = ['status' => 'matched', 'kind' => $orig->gp_id !== null ? 'gp' : 'sub',
-                    'ziel' => $orig->gp?->name ?? $orig->referencedRecipe?->name, 'primaer' => null, 'shortlist' => 0];
-                continue;
-            }
-            if ($text === '') {
-                $out[$i] = ['status' => 'hardstop', 'kind' => null, 'ziel' => null, 'primaer' => 'gp_anlegen', 'shortlist' => 0];
-                continue;
-            }
-
-            $t = $matcher->matchIngredient($team, $text);
-            if ($t['target'] === 'gp') {
-                $out[$i] = ['status' => 'grounded', 'kind' => 'gp', 'ziel' => $t['gp_name'], 'primaer' => null, 'shortlist' => 0];
-            } elseif ($t['target'] === 'sub_recipe') {
-                $out[$i] = ['status' => 'grounded', 'kind' => 'sub', 'ziel' => $t['recipe_name'], 'primaer' => null, 'shortlist' => 0];
-            } else {
-                $out[$i] = ['status' => 'hardstop', 'kind' => null, 'ziel' => null,
-                    'primaer' => $heuristik->istSubRezeptKandidat($text) ? 'basisrezept_anlegen' : 'gp_anlegen',
-                    'shortlist' => count($matcher->candidatesFor($team, $text, null, 5))];
-            }
-        }
-
-        return $out;
+        return app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)->vorschau($team, $r, $zutaten);
     }
 
     /** Übernehmen = der EINE Schreib-Moment: Zutaten-Sync + Text-Felder mit Lineage ki. */
@@ -480,32 +441,10 @@ class RecipeModal extends Component
         }
         $werte = $this->ueberarbeitung['werte'];
         $r = app(RecipeService::class)->detailAnySicht($team, $this->recipeId);
-        $einheiten = FoodAlchemistRecipe::query()->getConnection()->table('foodalchemist_vocab_units')
-            ->whereNull('deleted_at')->pluck('id', 'slug');
 
         try {
             if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
-                $original = $r->ingredients->keyBy('id');
-                $zeilen = [];
-                foreach ($werte['zutaten'] as $z) {
-                    if (! is_array($z)) {
-                        continue;
-                    }
-                    $orig = isset($z['id']) ? $original->get((int) $z['id']) : null;
-                    $quantity = is_numeric(str_replace(',', '.', (string) ($z['quantity'] ?? ''))) ? (float) str_replace(',', '.', (string) $z['quantity']) : null;
-                    $zeilen[] = [
-                        'id' => $orig?->id,
-                        'gp_id' => $orig?->gp_id,                     // Verknüpfung des Originals bleibt
-                        'referenced_recipe_id' => $orig?->referenced_recipe_id,
-                        'raw_text' => (string) ($z['text'] ?? $orig?->raw_text ?? ''),
-                        'display_name' => (string) ($z['text'] ?? $orig?->display_name ?? ''),
-                        'quantity' => $quantity ?? (float) ($orig?->quantity ?? 1),
-                        'unit_vocab_id' => $einheiten[$z['einheit_slug'] ?? ''] ?? $orig?->unit_vocab_id ?? $einheiten['g'] ?? null,
-                        'cooking_loss_pct' => $orig?->cooking_loss_pct,
-                        'is_optional' => (bool) ($orig?->is_optional ?? false),
-                        'note' => $orig?->note,
-                    ];
-                }
+                $zeilen = app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)->syncZeilen($r, $werte['zutaten']);
                 if ($zeilen !== []) {
                     app(RecipeService::class)->syncIngredients($team, $this->recipeId, $zeilen);
                 }

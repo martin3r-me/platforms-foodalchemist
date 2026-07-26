@@ -167,7 +167,69 @@
         <x-foodalchemist::modal-section title="Zutaten ({{ $rezept->ingredients->count() }})">
             <x-slot:actions>
                 <button type="button" wire:click="ai_rollen" class="{{ $btnGhostXs }} text-violet-600" title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-editor-rollen>🎭 Rollen verteilen</button>
+                {{-- Spec 03 L1a: ✨ KI-Überarbeiten — freie Anweisung, Vorschau, Übernehmen --}}
+                <button type="button" wire:click="$toggle('ueberarbeitenOffen')" class="{{ $btnGhostXs }} text-violet-600"
+                        title="Freie Anweisung — KI überarbeitet Komponenten, Mengen, Beschreibung, Plating & VK-Wording (Vorschau + Übernehmen). Klasse/Diät/Darreichung/Verkaufseinheit bleiben unangetastet."
+                        data-vk-ki-ueberarbeiten>✨ KI-Überarbeiten</button>
             </x-slot:actions>
+
+            @if($ueberarbeitenOffen)
+                <div class="mb-3 rounded-lg bg-violet-500/5 border border-violet-500/20 px-3 py-2 space-y-2" data-vk-ueberarbeiten-box>
+                    <div class="flex items-center gap-2">
+                        <input type="text" wire:model="anweisung" wire:keydown.enter="kiUeberarbeiten"
+                               placeholder="z. B. «mach das Gericht vegan und ersetze die Sauce»" class="{{ $input }} !py-1.5 flex-1" data-vk-anweisung />
+                        <button type="button" wire:click="kiUeberarbeiten" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-vk-ueberarbeiten-start>
+                            <span wire:loading.remove wire:target="kiUeberarbeiten">✨ Vorschlagen</span>
+                            <span wire:loading wire:target="kiUeberarbeiten">denkt …</span>
+                        </button>
+                    </div>
+                    @if($ueberarbeitung !== null)
+                        <div class="rounded-lg bg-white/60 px-3 py-2 space-y-1.5 max-h-72 overflow-y-auto" data-vk-ueberarbeiten-vorschau>
+                            @if(is_string($ueberarbeitung['werte']['aenderungs_notiz'] ?? null))
+                                <p class="text-[11px] font-medium text-violet-700">{{ $ueberarbeitung['werte']['aenderungs_notiz'] }}</p>
+                            @endif
+                            @if(!empty($ueberarbeitung['werte']['zutaten']))
+                                <p class="{{ $dt }}">Komponenten (neu)</p>
+                                @foreach($ueberarbeitung['werte']['zutaten'] as $z)
+                                    @if(is_array($z))
+                                        @php($mv = $ueberarbeitung['match_vorschau'][$loop->index] ?? null)
+                                        <p class="text-[11px] text-gray-600 flex flex-wrap items-center gap-x-1.5" wire:key="vkuz-{{ $loop->index }}">
+                                            <span>{{ $z['quantity'] ?? '?' }} {{ $z['einheit_slug'] ?? '' }} · {{ $z['text'] ?? '—' }}</span>
+                                            <span class="text-gray-500">{{ isset($z['id']) ? '(bestehend #' . $z['id'] . ')' : '(neu)' }}</span>
+                                            @if($mv)
+                                                @if($mv['status'] === 'matched')
+                                                    <span class="text-emerald-600" title="Bestehende Verknüpfung bleibt">✓ {{ $mv['kind'] === 'gp' ? 'GP' : 'Rezept' }}: {{ $mv['ziel'] ?? '—' }}</span>
+                                                @elseif($mv['status'] === 'grounded')
+                                                    <span class="text-emerald-600" title="Wird beim Übernehmen automatisch verknüpft">→ {{ $mv['kind'] === 'gp' ? 'GP' : 'Rezept' }}: {{ $mv['ziel'] ?? '—' }}</span>
+                                                @else
+                                                    <span class="text-violet-600" title="Kein Bestandstreffer — nach dem Übernehmen anlegen">⚠ {{ $mv['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}{{ ($mv['shortlist'] ?? 0) > 0 ? ' · ' . $mv['shortlist'] . ' Kandidaten' : '' }}</span>
+                                                @endif
+                                            @endif
+                                        </p>
+                                    @endif
+                                @endforeach
+                                @php($vkHardstops = collect($ueberarbeitung['match_vorschau'] ?? [])->where('status', 'hardstop')->count())
+                                @if($vkHardstops > 0)
+                                    <p class="text-[10px] text-violet-700 mt-0.5" data-vk-ueberarbeiten-hardstops>
+                                        {{ $vkHardstops }} Komponente(n) ohne Bestandstreffer → nach dem Übernehmen als GP/Basisrezept anlegen (Hard-Stop). Alle anderen werden automatisch verknüpft.
+                                    </p>
+                                @endif
+                            @endif
+                            @foreach(['sales_wording_standard' => 'VK-Wording (neu)', 'description' => 'Beschreibung (neu)', 'plating_text' => 'Plating (neu)'] as $feld => $titel)
+                                @if(is_string($ueberarbeitung['werte'][$feld] ?? null) && trim($ueberarbeitung['werte'][$feld]) !== '')
+                                    <p class="{{ $dt }}">{{ $titel }}</p>
+                                    <p class="text-[11px] text-gray-600 whitespace-pre-line" wire:key="vkut-{{ $feld }}">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte'][$feld], 400) }}</p>
+                                @endif
+                            @endforeach
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" wire:click="ueberarbeitungUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-vk-ueberarbeiten-uebernehmen>Übernehmen ({{ round($ueberarbeitung['confidence'] * 100) }} %)</button>
+                            <button type="button" wire:click="ueberarbeitungVerwerfen" class="{{ $btnGhostXs }}" data-vk-ueberarbeiten-verwerfen>Verwerfen</button>
+                            <span class="text-[10px] text-gray-500">Übernehmen schreibt Komponenten-Sync + Texte mit Lineage ki — manuell Gepflegtes und die Verkaufs-Facetten bleiben (GL-07).</span>
+                        </div>
+                    @endif
+                </div>
+            @endif
 
             @if($rollenVorschlag !== null)
                 <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs" data-vk-editor-rollen-vorschlag>
