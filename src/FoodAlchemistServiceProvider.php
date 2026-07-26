@@ -78,6 +78,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ProcessAnchorGroundCommand::class,
                 \Platform\FoodAlchemist\Console\FavoriteGpsCommand::class,
                 \Platform\FoodAlchemist\Console\BackfillKapitelZieleCommand::class,
+                \Platform\FoodAlchemist\Console\RecipeFindingsCommand::class,
             ]);
         }
     }
@@ -330,6 +331,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipesPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGenerateTool::class, // 03·L5 (Lockstep-Schuld aus #505)
                     \Platform\FoodAlchemist\Tools\RecipesReviewTool::class,   // 03·L6 Copilot-Pruefpass (read-only)
+                    // 21·S5a: die Ablage der Copilot-Befunde (Batch) — lesen ohne Egress + entscheiden
+                    \Platform\FoodAlchemist\Tools\RecipeFindingsSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeFindingsPutTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesPutTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeIngredientsPutTool::class,
                     // Phase B: Foodbook-Kaskade (nativ FA, Draft-only)

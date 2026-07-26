@@ -58,12 +58,19 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         'FoodAlchemistPlanningFrameSlot', 'FoodAlchemistPlanningFrameRule', // R4.1: Zugriff nur via Frame-Aggregat (PlanningFrameService-Guard)
     ];
     /**
-     * Messreihen: haben ein team_id, dürfen aber NICHT vererben. Eine Zeile ist der
-     * Zähler-Stand aus der Sicht des messenden Teams — ein Kind-Team zählt den
-     * Eltern-Katalog schon mit, würde man zusätzlich die Eltern-Zeitreihe einblenden,
-     * lägen zwei Serien derselben Objekte übereinander (Spec 21 · E1).
+     * Messungen und Urteile: haben ein team_id, dürfen aber NICHT vererben — sie
+     * gehören dem messenden bzw. urteilenden Team, nicht dem Katalog.
+     *  - `FoodAlchemistSignalSnapshot` (Spec 21 · E1): eine Zeile ist der Zähler-Stand
+     *    aus der Sicht des messenden Teams. Ein Kind-Team zählt den Eltern-Katalog schon
+     *    mit; blendete man zusätzlich die Eltern-Zeitreihe ein, lägen zwei Serien
+     *    derselben Objekte übereinander.
+     *  - `FoodAlchemistRecipeFinding` (Spec 21 · S5a): ein KI-Befund am Rezept **plus die
+     *    menschliche Entscheidung darüber** (`offen`/`uebernommen`/`verworfen`). Eltern und
+     *    Kind dürfen zum selben Eltern-Rezept getrennt urteilen; geerbte Sichtbarkeit
+     *    würde ein fremdes „verworfen" in die eigene Inbox mischen und den Befund dort
+     *    stumm stellen.
      */
-    $messreihen = ['FoodAlchemistSignalSnapshot'];
+    $messreihen = ['FoodAlchemistSignalSnapshot', 'FoodAlchemistRecipeFinding'];
     $modelDir = dirname((new ReflectionClass(FoodAlchemistRecipe::class))->getFileName());
     $fehlend = [];
     foreach (glob($modelDir . '/*.php') as $datei) {
