@@ -26,7 +26,13 @@ use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
  */
 class DataQualityService
 {
-    public function __construct(private SignalService $signals)
+    /**
+     * `CoverageService` kommt ab Spec 21 · S4b dazu (frame-gestützte Konzept-Checks).
+     * Kein Container-Zyklus: seine Abhängigkeiten (PlanningFrame/Concept/Foodbook) kennen
+     * diesen Service nicht — anders als beim `SignalObjectService`, der genau deshalb
+     * ausgelagert wurde.
+     */
+    public function __construct(private SignalService $signals, private CoverageService $coverage)
     {
     }
 
@@ -524,7 +530,94 @@ class DataQualityService
                     . 'am Buch, nicht am Konzept, und würde die Lücke nur an einer von n Stellen kaschieren.',
                 'q' => fn (Team $t) => $this->konzepteInGebrauch($t)->whereExists($this->slotOhneWording()),
             ],
+            'konzept_preisband_verletzt' => [
+                'label' => 'Konzepte in Gebrauch außerhalb des Preisbands',
+                'typ' => SignalTyp::KonzeptPreisbandVerletzt,
+                'dedup' => 'dq-konzept-preisband-verletzt',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Der Ist-Preis pro Person liegt außerhalb der im Planungs-Gerüst gesetzten Spanne '
+                    . '(`price_min_pp`/`price_max_pp`) — oder ein Slot-Preisrahmen ist gerissen. Gemeldet wird nur '
+                    . 'die rote Lage: eine Abweichung vom Zielpreis INNERHALB der Spanne ist gelb und bleibt eine '
+                    . 'Kalkulations-Frage, kein Signal. Ohne Gerüst gibt es kein Soll und damit keinen Befund.',
+                'q' => fn (Team $t) => $this->konzepteMitFrameBefund($t, 'preis'),
+            ],
+            'konzept_regel_verletzt' => [
+                'label' => 'Konzepte in Gebrauch mit verletzter Gerüst-Regel',
+                'typ' => SignalTyp::KonzeptRegelVerletzt,
+                'dedup' => 'dq-konzept-regel-verletzt',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Mindestens eine Kunden-Politik aus dem Planungs-Gerüst ist gerissen: Diät-Quote nicht '
+                    . 'erreicht, eine No-Go-Zutat kommt vor, ein No-Go-Allergen ist enthalten, oder eine geforderte '
+                    . 'Saison fehlt. Das sind Zusagen an den Kunden — anders als eine Struktur-Lücke fällt eine '
+                    . 'verletzte Zusage nicht beim Lesen auf. Weiche Regeln (`severity=weich`) sind gelb und zählen '
+                    . 'hier nicht mit; die Allergen-Linie ist Freitext und maschinell nicht messbar.',
+                'q' => fn (Team $t) => $this->konzepteMitFrameBefund($t, 'regel'),
+            ],
         ];
+    }
+
+    /**
+     * Befund-Dimensionen aus {@see CoverageService}, die als Regel-Verletzung zählen.
+     * Bewusst NUR die Regel-Dimensionen (`RULE_TYPES`): `menge`/`dramaturgie` kommen aus
+     * den Gerüst-Slots, nicht aus einer Regel — sie gehören begrifflich zur Slot-Lücke
+     * und würden hier zwei verschiedene Sachverhalte in einem Signal vermischen.
+     */
+    private const FRAME_REGEL_DIMENSIONEN = ['diaet', 'nogo', 'saison'];
+
+    /**
+     * Spec 21 · S4b — die frame-gestützte Hälfte von Tranche C.
+     *
+     * Beide Checks fallen aus EINEM `CoverageService::coverage()`-Aufruf je Konzept
+     * (Preis-Kopf bzw. Regel-Befunde), darum EIN Helfer statt zwei: die Lade- und
+     * Auflöse-Logik existiert genau einmal, und wer sie ändert, ändert beide Checks.
+     *
+     * Anders als die S4a-Checks ist das **kein Builder-Prädikat** — `coverage()` lädt je
+     * Konzept Slots, Regeln, Gerichte und ruft `preisCockpit()`. Muster ist deshalb der
+     * PHP-Pass aus S1b (`namingVerstossIds`): erst die IDs bestimmen, dann `whereIn`,
+     * damit `betroffene()`/`countFor()`/`trifftObjekt()` unverändert weiterfunktionieren.
+     *
+     * Zwei Dinge halten die Kosten klein:
+     *  · Die Arbeitsmenge ist doppelt geschnitten — in Gebrauch (S4a) UND mit Gerüst.
+     *    Ohne Gerüst gibt es kein Soll; ein Konzept ohne gesetzte Preis-/Regel-Erwartung
+     *    kann sie nicht verletzen (`coverage()` gäbe dort `hat_geruest=false` zurück).
+     *  · Bewusst OHNE Memoisierung, aus demselben Grund wie {@see nameScan}: der Service
+     *    wird auch NACH einem Fix erneut gefragt (`countFor` ⇒ Signal schließen), ein
+     *    Cache meldete dort den alten Stand.
+     *
+     * Gemeldet wird ausschließlich `ampel='verletzt'` — also genau das, was das Concepter-
+     * Cockpit rot zeigt. `teilerfuellt` bleibt draußen: „noch keine bepreisten Positionen"
+     * oder „>10 % vom Zielpreis, aber in der Spanne" sind Arbeitsstände, keine Fehler.
+     * Damit sagen Ampel und Signal dasselbe — sonst gäbe es zwei Wahrheiten über dasselbe
+     * Konzept.
+     *
+     * @param  'preis'|'regel'  $art
+     */
+    private function konzepteMitFrameBefund(Team $team, string $art): \Illuminate\Database\Eloquent\Builder
+    {
+        $kandidaten = $this->konzepteInGebrauch($team)
+            ->whereExists(fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_planning_frames as pf')
+                ->where('pf.owner_type', 'concept')
+                ->whereColumn('pf.owner_id', 'foodalchemist_concepts.id')
+                ->whereNull('pf.deleted_at'))
+            ->pluck('id')->all();
+
+        $treffer = [];
+        foreach ($kandidaten as $id) {
+            foreach ($this->coverage->coverage($team, 'concept', (int) $id)['befunde'] as $b) {
+                if ($b['ampel'] !== 'verletzt') {
+                    continue;
+                }
+                $passt = $art === 'preis'
+                    ? $b['dimension'] === 'preis'
+                    : in_array($b['dimension'], self::FRAME_REGEL_DIMENSIONEN, true);
+                if ($passt) {
+                    $treffer[] = (int) $id;
+                    break;
+                }
+            }
+        }
+
+        return $this->konzepteInGebrauch($team)->whereIn('id', $treffer);
     }
 
     /**

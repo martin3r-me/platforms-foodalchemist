@@ -46,6 +46,11 @@ enum SignalTyp: string
     // ein unfertiger Entwurf ist kein Mangel, ein unfertiges verkauftes Konzept schon.
     case KonzeptSlotLuecke = 'konzept_slot_luecke';
     case KonzeptOhneWording = 'konzept_ohne_wording';
+    // S4b — die frame-gestützte Hälfte: gemessen wird gegen das Planungs-Gerüst
+    // (CoverageService), also gegen ein SOLL, das jemand für dieses Konzept gesetzt hat.
+    // Ohne Gerüst gibt es kein Soll und damit auch keinen Befund.
+    case KonzeptPreisbandVerletzt = 'konzept_preisband_verletzt';
+    case KonzeptRegelVerletzt = 'konzept_regel_verletzt';
     // Spec 21 Tranche E · E3: Meta-Signal über die Zeitreihe — ein Zähler ist gegenüber
     // dem Vorlauf gestiegen. Alarmiert bei *Veränderung*, nicht bei Bestand; das ist der
     // eigentliche „System im Blick"-Mechanismus.
@@ -81,6 +86,8 @@ enum SignalTyp: string
             self::RezeptVerwaist => 'Rezept verwaist',
             self::KonzeptSlotLuecke => 'Konzept mit unbesetztem Pflicht-Slot',
             self::KonzeptOhneWording => 'Konzept ohne Kunden-Wording',
+            self::KonzeptPreisbandVerletzt => 'Konzept außerhalb des Preisbands',
+            self::KonzeptRegelVerletzt => 'Konzept verletzt eine Gerüst-Regel',
             self::QualitaetDrift => 'Qualität verschlechtert sich',
         };
     }
@@ -116,6 +123,8 @@ enum SignalTyp: string
             self::RezeptVerwaist => 'heroicon-o-archive-box',
             self::KonzeptSlotLuecke => 'heroicon-o-squares-2x2',
             self::KonzeptOhneWording => 'heroicon-o-chat-bubble-bottom-center-text',
+            self::KonzeptPreisbandVerletzt => 'heroicon-o-banknotes',
+            self::KonzeptRegelVerletzt => 'heroicon-o-no-symbol',
             self::QualitaetDrift => 'heroicon-o-arrow-trending-down',
         };
     }

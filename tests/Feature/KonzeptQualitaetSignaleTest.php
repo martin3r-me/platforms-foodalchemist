@@ -47,10 +47,11 @@ it('führt die Konzept-Ebene getrennt und kennt beide Tranche-C-Typen', function
     expect($e)->toHaveKey('konzept')
         ->and($e['konzept']['label'])->toBe('Konzepte')
         ->and(array_column($e['konzept']['metriken'], 'key'))
-        ->toBe(['konzept_slot_luecke', 'konzept_ohne_wording']);
+        ->toBe(['konzept_slot_luecke', 'konzept_ohne_wording', 'konzept_preisband_verletzt', 'konzept_regel_verletzt']);
 
+    // S4a = die zwei frame-freien Checks, S4b = die zwei frame-gestützten (s. KonzeptFrameSignaleTest).
     $konzept = array_filter(SignalTyp::cases(), fn (SignalTyp $t) => $t->istKonzeptQualitaet());
-    expect($konzept)->toHaveCount(2)
+    expect($konzept)->toHaveCount(4)
         // Die zwei Tranchen dürfen sich nicht überschneiden — sonst zählt ein Typ doppelt.
         ->and(SignalTyp::KonzeptSlotLuecke->istRezeptQualitaet())->toBeFalse()
         ->and(SignalTyp::RezeptVerwaist->istKonzeptQualitaet())->toBeFalse();
