@@ -10,7 +10,7 @@
 > | **L3** | ✅ **via Spec 19** | Kickoff in `Foodbooks/Index`, `PlanningFrameService`, `FoodbookService` + `ConceptGeneratorService::generiereAusBrief`. Kein eigener L3-Bau mehr — nur noch Bau-Referenz |
 > | **L4** | ⚪ offen | nur manueller `fillSlot` (`Concepts/Index.php:256/262`, `ConceptSlotsPostTool:94`); `zielpreisBerechnen`/`zielVorschlag` im Concepter-Editor sind **Preis**-Vorschlag, nicht Slot-Inhalt |
 > | **L5** | ⚪ offen | `src/Tools/` hat `ConceptsGenerateTool`, aber **kein** `RecipesGenerateTool` |
-> | **L6** | ⚪ offen | 0 Treffer für `copilot`/`RecipeReview`. **Aber:** Prompts `recipe.review` + `vk.review` sind in `AiGatewayService:45-46` bereits reserviert (registriert, ohne Konsument) = kleiner Vorsprung |
+> | **L6** | 🟡 L6a ✅ (Service+MCP, `3c0ed84`), L6b offen (UI) | 0 Treffer für `copilot`/`RecipeReview`. **Aber:** Prompts `recipe.review` + `vk.review` sind in `AiGatewayService:45-46` bereits reserviert (registriert, ohne Konsument) = kleiner Vorsprung |
 > | **L7** | ⚪ offen | kein `voll_anreichern`/`vollAnreichern`/`oneShot` im Modul |
 > | **L8** | ⚪ offen | `MargeService` genutzt in SalesRecipeService/PaketService/MargeImpactService/SignalDetektorService — in **keinem** Generator; `target_food_cost_pct` liegt in `FoodAlchemistTeamSetting:44` bereit |
 >
@@ -139,13 +139,13 @@ Die CJ-Referenz ist vollständig kartiert — Portierung nach bekanntem Muster (
 - Übernahme granular je Finding (UPDATE/DELETE/INSERT) + „Alle übernehmen" (nur auto_applicable), **nach jeder Übernahme Recompute+Propagation**
 
 **FA-Umsetzung (DoD):**
-- [ ] `RecipeReviewService` + Prompts `recipe.copilot` / `recipe.copilot_vk` (Prompt-Registry; Kontext via `KnowledgeContextService` sparsam — CJ injiziert hier bewusst KEIN Pairing/Vault, nur Layer + Rezept)
-- [ ] Button `🧑‍🍳 Copilot` in RecipeModal UND VkModal (beide Flächen von Anfang an — nicht die L1-Lücke wiederholen)
-- [ ] Findings-UI: Karten mit art-Farbe + Confidence, 1-Klick-Apply je Finding, „Alle übernehmen" nur auto_applicable; `fehlt`-Zeilen durch `IngredientMatchService` (+ #508-Strecke/`versucheLaZuGp` wo passend)
-- [ ] Jede Übernahme → `recomputeAndPropagate` (+ die #511-Event-Kette, damit das UI es auch zeigt)
+- [x] `RecipeReviewService` ✅ **L6a** — Prompt-Keys sind die **reservierten** `recipe.review` / `vk.review` (nicht `recipe.copilot*`: die Registry führte sie seit Anlage, ein zweites Key-Paar hätte vier Keys für zwei Fähigkeiten bedeutet); ihr Vertrag war `{befunde:[{schwere,text}]}` und wurde durch den Befund-Vertrag ersetzt. Kontext bewusst sparsam: Rezept + Zutaten + Zubereitung (+ VK-Facetten als Massstab), **kein** Pairing/Vault
+- [ ] Button `🧑‍🍳 Copilot` in RecipeModal UND VkModal (beide Flächen von Anfang an — nicht die L1-Lücke wiederholen) → **L6b**
+- [ ] **L6b** Findings-UI: Karten mit art-Farbe + Confidence, 1-Klick-Apply je Finding, „Alle übernehmen" nur auto_applicable; `fehlt`-Zeilen durch `IngredientMatchService` (+ #508-Strecke/`versucheLaZuGp` wo passend)
+- [x] Jede Übernahme → `recomputeAndPropagate` ✅ **L6a** (hängt am `syncIngredients`-Pfad, deshalb geht der volle Bestand mit — V-027). Die #511-Event-Kette ist UI-seitig und kommt mit **L6b**
 - [ ] Lineage: Übernahmen als `ki`-Quelle (GL-07), Call-Audit analog `ai_call_log`-Muster (FA: bestehendes Gateway-Logging)
-- [ ] MCP-Lockstep: `recipes.REVIEW` (read-only, liefert Findings-JSON — Apply bleibt UI/explizit) oder bewusst UI-only begründet
-- [ ] Pest: Findings-Parse, fehlt-Matching, Apply-Roundtrip inkl. Recompute; graceful ohne Provider
+- [x] MCP-Lockstep: `recipes.REVIEW` ✅ **L6a** — read-only (`risk_level: read`, `side_effects: []`), Apply bleibt UI bzw. explizit über `recipe_ingredients.PUT`
+- [x] Pest ✅ **L6a** — `RecipeReviewServiceTest` (7: Normalisierung/Anwendbarkeit, Namens-Rückfall, Mengen-Apply ohne Kollateralschaden, entfernen+fehlt, Schreib-Sperre für nicht-anwendbare Befunde, VK-Zweig, Provider-Ausfall) + `McpRecipesReviewTest` (4, #504-Tenancy)
 
 > **Zweiter Konsument (2026-07-23): Kapitel-Anlage (Spec [19](19_Foodbook_Leitstelle_A-Z.md), E7.4).** Der Kapitel-Go materialisiert Freitext-Ideen (`dish_ideas`) über die **gleiche One-Shot-Generier-Queue** wie L7 (+ Wirtschaftlichkeits-Glied L8). L7/L8 sind damit nicht nur der „Erstell mir ein Rezept"-Button, sondern auch die Erdungs-Maschine hinter dem Kapitel-Go. Verdrahtung provider-gated (ohne Provider: `generation_status='queued'` + „wartet auf KI", Go scheitert nicht).
 
