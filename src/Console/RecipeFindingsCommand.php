@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Console;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Services\RecipeBauartService;
 use Platform\FoodAlchemist\Services\RecipeFindingService;
 use Platform\FoodAlchemist\Services\RecipeReviewService;
 
@@ -31,12 +32,23 @@ class RecipeFindingsCommand extends Command
         {--limit=25 : höchstens so viele Rezepte je Team und Lauf (Egress-Bremse)}
         {--nur-verkauf : nur VK-Gerichte prüfen}
         {--recipe= : genau dieses Rezept prüfen (ignoriert die Fälligkeits-Auswahl)}
+        {--pass=copilot : copilot = Rezeptur-Befunde (L6) | bauart = Gericht-vs-Komponente (S5b-2)}
         {--dry-run : prüfen und ausgeben, aber nichts ablegen}';
 
     protected $description = 'Rezept-Copilot als Batch: prüft fällige Rezepte und legt die Befunde ab (Spec 21 Tranche B).';
 
     public function handle(RecipeFindingService $findings, RecipeReviewService $review): int
     {
+        // S5b-2: zwei Pässe, EIN Command — sie teilen Arbeitsmengen-Logik, Lauf-
+        // Bookkeeping und Egress-Bremse. Was sie NICHT teilen (Erzeuger, Prüf-Stempel,
+        // Befund-Arten), liegt vollständig im RecipeFindingService.
+        $pass = (string) $this->option('pass');
+        if (! in_array($pass, [RecipeFindingService::PASS_COPILOT, RecipeFindingService::PASS_BAUART], true)) {
+            $this->error("Unbekannter Pass [{$pass}] — erlaubt: copilot, bauart.");
+
+            return self::FAILURE;
+        }
+
         $teams = $this->option('team')
             ? Team::whereKey((int) $this->option('team'))->get()
             : Team::query()->get();
@@ -53,15 +65,15 @@ class RecipeFindingsCommand extends Command
         foreach ($teams as $team) {
             $ids = $this->option('recipe')
                 ? [(int) $this->option('recipe')]
-                : $findings->arbeitsmenge($team, (bool) $this->option('nur-verkauf'))->limit($limit)->pluck('id')->all();
+                : $findings->arbeitsmenge($team, (bool) $this->option('nur-verkauf'), $pass)->limit($limit)->pluck('id')->all();
 
             if ($ids === []) {
-                $this->line("── Team {$team->id} ({$team->name}): nichts fällig.");
+                $this->line("── Team {$team->id} ({$team->name}): nichts fällig ({$pass}).");
 
                 continue;
             }
 
-            $this->info("── Team {$team->id} ({$team->name}): " . count($ids) . ' fällige(s) Rezept(e)'
+            $this->info("── Team {$team->id} ({$team->name}): " . count($ids) . " fällige(s) Rezept(e) · Pass {$pass}"
                 . ($trocken ? ' · dry-run' : ''));
 
             $runId = $trocken ? null : $this->starteRun($team->id, count($ids));
@@ -71,12 +83,14 @@ class RecipeFindingsCommand extends Command
             foreach ($ids as $recipeId) {
                 try {
                     if ($trocken) {
-                        $n = count($review->pruefe($team, $recipeId)['befunde']);
+                        $n = count($pass === RecipeFindingService::PASS_BAUART
+                            ? app(RecipeBauartService::class)->pruefe($team, $recipeId)['befunde']
+                            : $review->pruefe($team, $recipeId)['befunde']);
                         $this->line("   #{$recipeId}: {$n} Befund(e) (nicht abgelegt)");
 
                         continue;
                     }
-                    $z = $findings->pruefeUndAblegen($team, $recipeId, $runId);
+                    $z = $findings->pruefeUndAblegen($team, $recipeId, $runId, $pass);
                     foreach ($summe as $k => $_) {
                         $summe[$k] += $z[$k];
                     }

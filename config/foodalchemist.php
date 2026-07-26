@@ -516,6 +516,21 @@ return [
                 . 'werte = {befunde: [{art, zutat_id, zutat_text, quantity, einheit_slug, '
                 . 'begruendung, konfidenz}], gesamturteil}.',
         ],
+        'recipe.bauart' => [
+            'tier' => 'B',                                            // Spec 21 S5b-2 — Klassifikator, kein Kreativ-Pass (darum auch KEINE Food-DNA)
+            'max_tokens' => 1200,                                     // eine Einstufung + Begruendung, sonst nichts
+            'task' => 'Entscheide nach BAUART, ob dieses Rezept ein fertiges GERICHT oder eine '
+                . 'KOMPONENTE ist. Massstab ist ausschliesslich „Wie ist es gebaut?" — NIE „Wo wird '
+                . 'es eingesetzt?". Gericht = eine essfertige Zusammenstellung (Hauptkomponente plus '
+                . 'Saettigungs-/Gemuese-/Sauciertem, oder ein in sich vollstaendiger Teller/Bowl/'
+                . 'Sandwich). Komponente = ein Baustein, der allein nicht als Speise ausgegeben wird '
+                . '(Sauce, Fond, Marinade, Teig, Creme, Wuerzmischung, einzelne Beilage, Garnitur). '
+                . 'Dass eine Komponente verkauft wird oder ein Gericht nur im Buffet steht, aendert '
+                . 'die Bauart NICHT. einstufung_ist im Kontext ist die BESTEHENDE Einordnung — '
+                . 'bestaetige sie, wenn sie stimmt. Bei Zweifel bestaetigen (lieber kein Befund als '
+                . 'ein falscher). Konfidenz 0..1: werte = {einstufung: "gericht"|"komponente", '
+                . 'konfidenz, begruendung}.',
+        ],
         'recipe.pairing' => [
             'tier' => 'A',                                            // groesster Ist-Kostenblock — Qualitaet zaehlt
             'task' => 'Schlage 12-25 BELEGTE Flavor-Pairing-Partner aus dem mitgegebenen '

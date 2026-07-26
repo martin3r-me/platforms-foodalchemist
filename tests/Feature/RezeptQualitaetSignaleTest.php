@@ -47,12 +47,13 @@ it('hat für jeden Signal-Typ Label und Icon (Enum-Vollständigkeit)', function 
             ->and($typ->icon())->toStartWith('heroicon-o-');
     }
 
-    // Tranche A ist vollständig angelegt (S1 füllt nur noch die Checks); seit S5b
-    // kommt mit `rezept_plausi_ki` genau EIN Typ aus Tranche B dazu — dieselbe Ebene,
-    // andere Herkunft (s. SignalTyp::istKiUrteil).
+    // Tranche A ist vollständig angelegt (S1 füllt nur noch die Checks); Tranche B
+    // steuert ZWEI Typen auf derselben Ebene bei, beide mit KI-Herkunft:
+    // `rezept_plausi_ki` (Rezeptur, S5b-1) und `rezept_gericht_vs_komponente`
+    // (Bauart, S5b-2) — s. SignalTyp::istKiUrteil.
     $rezept = array_filter(SignalTyp::cases(), fn (SignalTyp $t) => $t->istRezeptQualitaet());
     $deterministisch = array_filter($rezept, fn (SignalTyp $t) => ! $t->istKiUrteil());
-    expect($rezept)->toHaveCount(12)
+    expect($rezept)->toHaveCount(13)
         ->and($deterministisch)->toHaveCount(11)
         ->and(SignalTyp::EkKetteUnvollstaendig->istRezeptQualitaet())->toBeFalse();
 });

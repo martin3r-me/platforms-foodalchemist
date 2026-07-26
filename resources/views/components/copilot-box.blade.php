@@ -23,10 +23,14 @@
         'entfernen' => 'text-rose-700 bg-rose-500/10 border-rose-500/30',
         'fehlt' => 'text-violet-700 bg-violet-500/10 border-violet-500/30',
         'hinweis' => 'text-gray-600 bg-black/[0.03] border-black/10',
+        // S5b-2: Bauart-Befund — andere Herkunft (eigener Pass), andere Auflösung
+        // (Struktur statt Zeile). Eigene Farbe, damit er in der Liste nicht als
+        // beliebiger Hinweis untergeht.
+        'bauart' => 'text-sky-700 bg-sky-500/10 border-sky-500/30',
     ];
     $artWort = [
         'menge' => 'Menge', 'einheit' => 'Einheit', 'entfernen' => 'Entfernen',
-        'fehlt' => 'Fehlt', 'hinweis' => 'Hinweis',
+        'fehlt' => 'Fehlt', 'hinweis' => 'Hinweis', 'bauart' => 'Bauart',
     ];
     // Das WARUM kommt aus dem Service (`status`) — hier wird es nur übersetzt.
     $warum = [
@@ -35,6 +39,10 @@
         'schon_drin' => 'Steht bereits im Rezept — nichts zu tun.',
         'letzte_zutat' => 'Letzte Zeile: ein Rezept ohne ' . $zeilenWort . 'en wird nicht gespeichert.',
         'nur_hinweis' => 'Hinweis ohne Schreibziel — zur Kenntnis.',
+        // Bewusst kein Knopf: die Umstellung kippt is_sales_recipe samt Taxonomie,
+        // Verkaufs-Facetten und Darreichungen. Das entscheidet ein Mensch im Editor.
+        'strukturentscheidung' => 'Struktur-Entscheidung: Einordnung als Gericht bzw. Komponente von Hand umstellen — '
+            . 'daran hängen Taxonomie, Verkaufs-Facetten und Darreichungen.',
     ];
     $befunde = $copilot['befunde'] ?? [];
     $anwendbar = collect($befunde)->where('auto_applicable', true)->count();

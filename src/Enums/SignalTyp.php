@@ -47,6 +47,11 @@ enum SignalTyp: string
     // trägt der Typ dasselbe `rezept_`-Präfix: für Cockpit, Panel und Policies ist er
     // ein Rezept-Qualitätssignal wie die anderen, nur mit anderer Herkunft.
     case RezeptPlausiKi = 'rezept_plausi_ki';
+    // S5b-2 — dieselbe Ablage, anderer Erzeuger: nicht die Rezeptur steht in Frage,
+    // sondern die Bauart („Gericht oder Komponente?", 269er-Regel „Wie gebaut?"). Ein
+    // eigener Typ und nicht ein Unterfall von `rezept_plausi_ki`, weil die Auflösung
+    // eine andere ist: dort korrigiert man Zeilen, hier stellt man ein Rezept um.
+    case RezeptGerichtVsKomponente = 'rezept_gericht_vs_komponente';
     // Spec 21 Tranche C: Konzept-Ebene (bis dahin 0 Signale — die Kaskade endete am Gericht).
     // Gemessen wird nur an Konzepten, die IN GEBRAUCH sind (s. DataQualityService::konzepteInGebrauch):
     // ein unfertiger Entwurf ist kein Mangel, ein unfertiges verkauftes Konzept schon.
@@ -112,6 +117,7 @@ enum SignalTyp: string
             self::RezeptSubStubOffen => 'Sub-Rezept-Stub offen',
             self::RezeptVerwaist => 'Rezept verwaist',
             self::RezeptPlausiKi => 'Rezept mit offenem KI-Befund',
+            self::RezeptGerichtVsKomponente => 'Gericht oder Komponente? (Bauart-Zweifel)',
             self::KonzeptSlotLuecke => 'Konzept mit unbesetztem Pflicht-Slot',
             self::KonzeptOhneWording => 'Konzept ohne Kunden-Wording',
             self::KonzeptPreisbandVerletzt => 'Konzept außerhalb des Preisbands',
@@ -156,6 +162,7 @@ enum SignalTyp: string
             self::RezeptSubStubOffen => 'heroicon-o-puzzle-piece',
             self::RezeptVerwaist => 'heroicon-o-archive-box',
             self::RezeptPlausiKi => 'heroicon-o-chat-bubble-left-right',
+            self::RezeptGerichtVsKomponente => 'heroicon-o-arrows-right-left',
             self::KonzeptSlotLuecke => 'heroicon-o-squares-2x2',
             self::KonzeptOhneWording => 'heroicon-o-chat-bubble-bottom-center-text',
             self::KonzeptPreisbandVerletzt => 'heroicon-o-banknotes',
@@ -175,10 +182,10 @@ enum SignalTyp: string
      * Kaskaden-Typen (EK/Anker/Servierform), die Geld- bzw. Erdungs-Lücken messen
      * statt der Rezeptur selbst.
      *
-     * Tranche A ist durchgehend deterministisch (0-Egress); seit S5b ist mit
-     * {@see istKiUrteil} genau ein Typ dabei, dessen Befund aus einem KI-Pass
-     * stammt. Für alles, was diese Methode steuert (Ebene, Panel, Policies), ist
-     * das derselbe Sachverhalt — wer die Herkunft braucht, fragt `istKiUrteil()`.
+     * Tranche A ist durchgehend deterministisch (0-Egress); seit S5b sind mit
+     * {@see istKiUrteil} zwei Typen dabei, deren Befund aus einem KI-Pass stammt.
+     * Für alles, was diese Methode steuert (Ebene, Panel, Policies), ist das
+     * derselbe Sachverhalt — wer die Herkunft braucht, fragt `istKiUrteil()`.
      */
     public function istRezeptQualitaet(): bool
     {
@@ -193,7 +200,7 @@ enum SignalTyp: string
      */
     public function istKiUrteil(): bool
     {
-        return $this === self::RezeptPlausiKi;
+        return in_array($this, [self::RezeptPlausiKi, self::RezeptGerichtVsKomponente], true);
     }
 
     /**

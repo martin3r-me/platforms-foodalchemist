@@ -29,8 +29,20 @@ use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
  */
 class RecipeReviewService
 {
-    /** Befund-Arten (CJ-Parität). `hinweis` ist bewusst nie anwendbar — er hat kein Schreibziel. */
-    public const ARTEN = ['menge', 'einheit', 'entfernen', 'fehlt', 'hinweis'];
+    /** Befund-Arten DIESES Passes (CJ-Parität). `hinweis` ist bewusst nie anwendbar — er hat kein Schreibziel. */
+    public const ARTEN_COPILOT = ['menge', 'einheit', 'entfernen', 'fehlt', 'hinweis'];
+
+    /**
+     * Spec 21 · S5b-2 — Befund-Arten über das Rezept ALS GANZES, erzeugt von einem
+     * anderen Pass ({@see RecipeBauartService}). Sie teilen sich die Ablage, aber
+     * nicht den Erzeuger, nicht den Prüf-Stempel und nicht das Signal. Getrennt
+     * geführt, weil sonst jeder Konsument der Ablage (Signal-Register, MCP, Fläche)
+     * zwei verschiedene Sachverhalte in eine Zahl legte.
+     */
+    public const ARTEN_STRUKTUR = ['bauart'];
+
+    /** Alle bekannten Arten — was hier nicht steht, wird zum `hinweis` entschärft. */
+    public const ARTEN = ['menge', 'einheit', 'entfernen', 'fehlt', 'hinweis', 'bauart'];
 
     /**
      * Read-only Prüf-Pass. Persistiert NICHTS ausser dem Gateway-Audit (GL-07 I3).
@@ -247,6 +259,17 @@ class RecipeReviewService
                         $befund['status'] = 'kein_treffer';
                         $befund['primaer'] = $heuristik->istSubRezeptKandidat($text) ? 'basisrezept_anlegen' : 'gp_anlegen';
                     }
+                    break;
+
+                case 'bauart':
+                    // S5b-2: der Befund fragt, ob `is_sales_recipe` stimmt. Daran hängen
+                    // Taxonomie, VK-Felder und Darreichungen — das ist keine Zeile, die
+                    // ein Knopf umlegt. Er bleibt darum grundsätzlich nicht anwendbar und
+                    // wird nur angezeigt/entschieden. Die Zielzeilen-Auflösung oben trifft
+                    // hier gelegentlich zufällig eine Zutat (der `zutat_text` ist der
+                    // Rezeptname) — für diese Art ist sie bedeutungslos, also weg damit.
+                    $befund['zutat_id'] = null;
+                    $befund['status'] = 'strukturentscheidung';
                     break;
 
                 default:                                              // hinweis

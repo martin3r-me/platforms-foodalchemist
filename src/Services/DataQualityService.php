@@ -473,8 +473,8 @@ class DataQualityService
                     $this->produktiveRezepte($t)->where('updated_at', '<', now()->subDays(self::VERWAIST_TAGE))
                 ),
             ],
-            // Tranche B (S5b) — die einzige Zeile dieses Registers mit KI-Urteil im Rücken.
-            // Sie prüft trotzdem nichts selbst: der Egress lag im Batch
+            // Tranche B (S5b) — die zwei Zeilen dieses Registers mit KI-Urteil im Rücken.
+            // Sie prüfen trotzdem nichts selbst: der Egress lag im Batch
             // (`foodalchemist:recipe-findings`), hier wird nur der abgelegte Bestand
             // gelesen. Die Auswahl-Regel kommt ungeteilt aus `offeneUeberSchwelle()` —
             // eine eigene Schwelle hier hieße, dass ein Befund in der Rezept-Ansicht
@@ -492,9 +492,31 @@ class DataQualityService
                 // `whereIn` mit Sub-Builder statt eigenem EXISTS: die Befund-Zeilen sind
                 // bewusst NICHT team-hierarchisch (Messreihen-Ausnahme aus S5a), ihr Scope
                 // steckt im Service. Nachgebaut wäre er hier eine zweite Wahrheit.
+                // Die Arten-Grenze ist ab S5b-2 Pflicht: sonst zählte diese Zeile auch die
+                // Bauart-Befunde mit und dasselbe Rezept stünde in zwei Signalen für einen
+                // Sachverhalt, den nur eines von beiden beschreibt.
                 'q' => fn (Team $t) => $this->alleRezepte($t)->whereIn(
                     'foodalchemist_recipes.id',
-                    app(RecipeFindingService::class)->offeneUeberSchwelle($t)->select('recipe_id')
+                    app(RecipeFindingService::class)
+                        ->offeneUeberSchwelle($t, null, RecipeReviewService::ARTEN_COPILOT)->select('recipe_id')
+                ),
+            ],
+            'rezept_gericht_vs_komponente' => [
+                'label' => 'Rezepte mit Bauart-Zweifel (Gericht oder Komponente?)',
+                'typ' => SignalTyp::RezeptGerichtVsKomponente,
+                'dedup' => 'dq-rezept-gericht-vs-komponente',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Der Bauart-Pass widerspricht der bestehenden Einordnung: was hier als Gericht geführt '
+                    . 'wird, ist nach Bauart eine Komponente — oder umgekehrt. Maßstab ist die 269er-Regel '
+                    . '„Wie ist es gebaut?", nie „Wo wird es eingesetzt?". Die Folgen einer falschen Einordnung '
+                    . 'sind still, aber breit: eine als Gericht geführte Sauce taucht in Gericht-Pickern und '
+                    . 'Slot-Vorschlägen auf, ein als Komponente geführtes Gericht bekommt weder Verkaufs-Facetten '
+                    . 'noch Darreichungen. Aufgelöst wird das im Rezept selbst — die Umstellung ist eine '
+                    . 'Struktur-Entscheidung und bewusst kein Knopf.',
+                'q' => fn (Team $t) => $this->alleRezepte($t)->whereIn(
+                    'foodalchemist_recipes.id',
+                    app(RecipeFindingService::class)
+                        ->offeneUeberSchwelle($t, null, RecipeReviewService::ARTEN_STRUKTUR)->select('recipe_id')
                 ),
             ],
         ];

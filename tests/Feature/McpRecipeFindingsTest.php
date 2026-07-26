@@ -58,7 +58,8 @@ it('S5a: SEARCH liefert offene Befunde inkl. Signal-Kandidaten-Zähler', functio
 
     expect($res->success)->toBeTrue()
         ->and($res->data['total'])->toBe(2)                            // verworfen ist per Default draussen
-        ->and($res->data['signal_kandidaten'])->toBe(1)                // nur der über der Schwelle
+        // S5b-2: zwei Zähler, getrennt nach Pass — der Bauart-Zweifel ist ein eigenes Signal.
+        ->and($res->data['signal_kandidaten'])->toBe(['copilot' => 1, 'bauart' => 0]) // nur der über der Schwelle
         ->and($res->data['befunde'][0]['kind'])->toBe('menge')         // nach Konfidenz sortiert
         ->and($res->data['befunde'][0]['ebene'])->toBe('basisrezept');
 

@@ -26,8 +26,9 @@ class RecipeFindingsSearchTool extends FoodAlchemistTool implements ToolContract
 
     public function getDescription(): string
     {
-        return 'Listet abgelegte KI-Befunde am Rezept (Rezept-Copilot-Batch): Menge/Einheit falsch, Zutat '
-            . 'entfernen, Zutat fehlt, Hinweis — je Befund Konfidenz, Anwendbarkeit und wie oft er schon '
+        return 'Listet abgelegte KI-Befunde am Rezept (Batch-Pässe): Menge/Einheit falsch, Zutat '
+            . 'entfernen, Zutat fehlt, Hinweis (Rezept-Copilot) sowie bauart = Zweifel, ob das Rezept ein '
+            . 'Gericht oder eine Komponente ist — je Befund Konfidenz, Anwendbarkeit und wie oft er schon '
             . 'gemeldet wurde. Default: offene. Entscheiden via foodalchemist.recipe_findings.PUT.';
     }
 
@@ -68,7 +69,15 @@ class RecipeFindingsSearchTool extends FoodAlchemistTool implements ToolContract
 
         return ToolResult::success([
             'total' => $gesamt,
-            'signal_kandidaten' => app(RecipeFindingService::class)->offeneUeberSchwelle($team)->count(),
+            // Zwei Zahlen, weil zwei Signale daran hängen (S5b-1 / S5b-2). Eine Summe
+            // wäre hier irreführend: sie zählte Rezeptur- und Bauart-Zweifel zusammen,
+            // die im Cockpit getrennt stehen und getrennt aufgelöst werden.
+            'signal_kandidaten' => [
+                'copilot' => app(RecipeFindingService::class)
+                    ->offeneUeberSchwelle($team, null, RecipeReviewService::ARTEN_COPILOT)->count(),
+                'bauart' => app(RecipeFindingService::class)
+                    ->offeneUeberSchwelle($team, null, RecipeReviewService::ARTEN_STRUKTUR)->count(),
+            ],
             'schwelle' => RecipeFindingService::KONFIDENZ_SCHWELLE,
             'befunde' => $zeilen->map(fn ($f) => [
                 'id' => $f->id,
