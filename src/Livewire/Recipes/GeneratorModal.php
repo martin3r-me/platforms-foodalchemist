@@ -3,19 +3,22 @@
 namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 use Livewire\Attributes\On;
 use Livewire\Component;
-use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
+use Platform\FoodAlchemist\Livewire\Concerns\HatGeneratorLauf;
 
 /**
  * M4-14: ✨ Basisrezept-Generator — Beschreibung + Richtungs-Parameter
  * (Convenience/Frische/Bio/Niveau/Sektor/Diät-hart), Bestand-Hybrid-Resolver.
  * Aus-Foto/PDF blockiert auf die Martin-Vision-Frage (Hinweis im Modal).
+ *
+ * Lauf-Mechanik (Queue-Dispatch, Poll, One-Shot-Toggle) liegt seit L7b im
+ * geteilten Trait `HatGeneratorLauf` — dieselbe Strecke wie im VK-Generator.
  */
 class GeneratorModal extends Component
 {
+    use HatGeneratorLauf;
+
     public string $description = '';
 
     /**
@@ -62,15 +65,10 @@ class GeneratorModal extends Component
 
     public ?array $ergebnis = null;
 
-    /** Async (2026-07-20): läuft während der Queue-Job rechnet; UI pollt über die Run-ID. */
-    public bool $laeuft = false;
-
-    public ?string $runId = null;
-
     #[On('generator-modal.oeffnen')]
     public function oeffnen(): void
     {
-        $this->reset('fehler', 'ergebnis', 'description', 'laeuft', 'runId');
+        $this->reset('fehler', 'ergebnis', 'description', 'laeuft', 'runId', 'anreicherung');
         $this->dispatch('modal.open', name: 'generator-modal');
     }
 
@@ -83,6 +81,7 @@ class GeneratorModal extends Component
     {
         $this->fehler = null;
         $this->ergebnis = null;
+        $this->anreicherung = null;
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null || trim($this->description) === '') {
             $this->fehler = 'Beschreibung ist Pflicht.';
@@ -97,38 +96,12 @@ class GeneratorModal extends Component
         $parameter['use_favorites_list'] = $this->useFavoritesList; // 06·H4 opt-in
         $parameter['favorites_convenience_only'] = $this->useFavoritesList && $this->favoritesConvenienceOnly; // H4b
 
-        $this->runId = (string) Str::uuid();
-        Cache::put(GenerateRecipeJob::cacheKey($this->runId), ['status' => 'pending'], now()->addMinutes(15));
-        GenerateRecipeJob::dispatch($this->runId, $team->id, (int) Auth::id(), trim($this->description), $parameter, false);
-        $this->laeuft = true;
+        $this->starteLauf($team->id, trim($this->description), $parameter, vkModus: false);
     }
 
-    /** Poll-Ziel (wire:poll während $laeuft): liest den Job-Ausgang aus dem Cache. */
-    public function pruefeErgebnis(): void
+    protected function auswahlEvent(): string
     {
-        if ($this->runId === null) {
-            return;
-        }
-        $stand = Cache::get(GenerateRecipeJob::cacheKey($this->runId));
-        if (! is_array($stand) || ($stand['status'] ?? null) === 'pending') {
-            return;   // noch am Rechnen → weiter pollen
-        }
-
-        $this->laeuft = false;
-        if (($stand['status'] ?? null) === 'error') {
-            $this->fehler = $stand['fehler'] ?? 'Generierung fehlgeschlagen.';
-
-            return;
-        }
-
-        $this->ergebnis = [
-            'recipe_id' => $stand['recipe_id'],
-            'name' => $stand['name'],
-            'statistik' => $stand['statistik'],
-            'offene' => $stand['offene'],
-        ];
-        $this->dispatch('recipe-gespeichert');
-        $this->dispatch('recipe-selected', id: $stand['recipe_id']);
+        return 'recipe-selected';
     }
 
     public function render()

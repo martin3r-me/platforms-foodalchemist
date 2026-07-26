@@ -6,7 +6,16 @@
         <p class="text-xs text-rose-600 mb-3" data-vk-generator-fehler>{{ $fehler }}</p>
     @endif
 
-    @if($ergebnis === null)
+    @if($laeuft)
+        {{-- L7b: Generierung läuft im Queue-Job, UI pollt das Ergebnis (kein Web-Timeout/502) --}}
+        <div wire:poll.2s="pruefeErgebnis" class="flex items-center gap-3 py-6 justify-center text-sm text-gray-600" data-vk-generator-laeuft>
+            <svg class="animate-spin h-5 w-5 text-violet-600" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            <span>Gericht wird generiert{{ $vollAnreichern ? ' und angereichert' : '' }} — das dauert bis zu ~{{ $vollAnreichern ? 60 : 30 }} Sekunden. Das Fenster kann offen bleiben.</span>
+        </div>
+    @elseif($ergebnis === null)
         <x-foodalchemist::modal-section title="Beschreibung">
             <textarea wire:model="description" rows="3" class="{{ $input }}" data-vk-generator-description
                       placeholder="z. B. Herbstlicher Hauptgang mit geschmortem Rind, Wurzelgemüse und Kartoffelkomponente für Bankett …"></textarea>
@@ -104,6 +113,11 @@
                         <input type="checkbox" wire:model="favoritesConvenienceOnly" data-vk-favoriten-conv /> nur Convenience-Favoriten
                     </label>
                 </div>
+
+                {{-- Spec 03 L7b: One-Shot — Generieren und Anreichern in einem Durchlauf (Default AN) --}}
+                <div class="md:col-span-2">
+                    <x-foodalchemist::oneshot-toggle marker="vk-generator" schritte="Beschreibung, Verkaufs-Wording, Plating, Speisen-Klasse" />
+                </div>
             </div>
         </x-foodalchemist::modal-section>
     @else
@@ -128,12 +142,15 @@
                 </div>
             @endif
             <p class="text-[10px] text-gray-500 mt-2">VK-Daten (Klasse/Aufschlagsklasse) aus dem Vorschlag übernommen, soweit valide — Rest im VK-Editor pflegen.</p>
+            <x-foodalchemist::oneshot-ergebnis :anreicherung="$anreicherung" />
         </x-foodalchemist::modal-section>
     @endif
 
     <x-slot:footer>
         <button type="button" wire:click="$dispatch('modal.close', { name: 'vk-generator-modal' })" class="{{ $btnGhost }}">{{ $ergebnis === null ? 'Abbrechen' : 'Schließen' }}</button>
-        @if($ergebnis === null)
+        @if($laeuft)
+            <button type="button" disabled class="{{ $btnPrimary }} opacity-60 cursor-not-allowed" data-vk-generator-laeuft-btn>⏳ Generiere …</button>
+        @elseif($ergebnis === null)
             <button type="button" wire:click="generieren" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-vk-generator-start>✨ Generieren</button>
         @endif
     </x-slot:footer>

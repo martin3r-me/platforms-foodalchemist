@@ -35,7 +35,13 @@ class GenerateRecipeJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /** < Worker-Timeout (600 s), > typischer Lauf (~25 s + Nachbearbeitung). */
+    /**
+     * < Worker-Timeout (600 s), > typischer Lauf (~25 s + Nachbearbeitung).
+     * Mit One-Shot (L7b) kommen 1–4 weitere Provider-Calls dazu → im Konstruktor
+     * angehoben; ein Timeout-Kill mitten in der Kaskade wäre genau das „halbe
+     * Wrack", das die Kaskade laut DoD nie hinterlassen darf (Rezept existiert,
+     * die UI liest „abgebrochen").
+     */
     public int $timeout = 300;
 
     /** KI-Kosten: kein stiller Auto-Retry der ganzen Generierung. */
@@ -56,6 +62,9 @@ class GenerateRecipeJob implements ShouldQueue
          */
         public bool $vollAnreichern = false,
     ) {
+        if ($vollAnreichern) {
+            $this->timeout = 540;   // bleibt unter dem demo-Worker-Timeout (600 s)
+        }
     }
 
     public static function cacheKey(string $runId): string

@@ -5,7 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Verkauf;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
-use Platform\FoodAlchemist\Services\RecipeGeneratorService;
+use Platform\FoodAlchemist\Livewire\Concerns\HatGeneratorLauf;
 
 /**
  * M6-06 / D-6 §4.3 + N3: ✨ VK-Generator v1 — der Pain-Point: Basisrezept→VK
@@ -21,9 +21,17 @@ use Platform\FoodAlchemist\Services\RecipeGeneratorService;
  * diaet_hart MULTI (hart erzwungen) statt Einzel-String, bio dreiwertig statt
  * bool. Freitext blieb nur bei Aroma (legitim frei). Werte fließen als Prompt-
  * Kontext (nur convenience/frische/bio/kompositions_stil sind harte Resolver-Hooks).
+ *
+ * L7b (2026-07-26): Die Generierung läuft nicht mehr synchron in der Livewire-
+ * Action, sondern über `GenerateRecipeJob` (`vkModus: true`) wie das Basisrezept-
+ * Modal — geteilte Mechanik im Trait `HatGeneratorLauf`. Begründung dort; kurz:
+ * der 502-Fix von 2026-07-20 hatte nur die halbe Strecke erfasst, und der
+ * One-Shot-Pass hätte im Web-Request garantiert getimeoutet.
  */
 class VkGeneratorModal extends Component
 {
+    use HatGeneratorLauf;
+
     public string $description = '';
 
     public array $parameter = [
@@ -72,14 +80,15 @@ class VkGeneratorModal extends Component
     #[On('vk-generator-modal.oeffnen')]
     public function oeffnen(): void
     {
-        $this->reset('fehler', 'ergebnis', 'description');
+        $this->reset('fehler', 'ergebnis', 'description', 'laeuft', 'runId', 'anreicherung');
         $this->dispatch('modal.open', name: 'vk-generator-modal');
     }
 
-    public function generieren(RecipeGeneratorService $generator): void
+    public function generieren(): void
     {
         $this->fehler = null;
         $this->ergebnis = null;
+        $this->anreicherung = null;
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null || trim($this->description) === '') {
             $this->fehler = 'Beschreibung ist Pflicht.';
@@ -87,28 +96,22 @@ class VkGeneratorModal extends Component
             return;
         }
 
-        try {
-            // Hook-Mapping wie im Basisrezept-Generator: der Service kennt bio als
-            // bool (4.4r) — die dreiwertige Präferenz geht zusätzlich als Prompt-
-            // Kontext mit (egal ≠ bio erzwingen).
-            $parameter = $this->parameter;
-            $parameter['bio'] = $parameter['bio_praeferenz'] === 'bio';
-            // leere String-Hints strippen (diaet_hart-Array + bool bleiben erhalten)
-            $parameter = array_filter($parameter, fn ($v) => $v !== '' && $v !== null);
-            $parameter['use_favorites_list'] = $this->useFavoritesList; // 06·H4 opt-in (nach array_filter, sonst würde false gestrippt)
-            $parameter['favorites_convenience_only'] = $this->useFavoritesList && $this->favoritesConvenienceOnly; // H4b
-            $resultat = $generator->generiere($team, trim($this->description), $parameter, null, vkModus: true);
-            $this->ergebnis = [
-                'recipe_id' => $resultat['recipe']->id,
-                'name' => $resultat['recipe']->name,
-                'statistik' => $resultat['statistik'],
-                'offene' => $resultat['offene'],
-            ];
-            $this->dispatch('recipe-gespeichert');
-            $this->dispatch('vk-recipe-selected', id: $resultat['recipe']->id);
-        } catch (\RuntimeException $e) {
-            $this->fehler = $e->getMessage();
-        }
+        // Hook-Mapping wie im Basisrezept-Generator: der Service kennt bio als
+        // bool (4.4r) — die dreiwertige Präferenz geht zusätzlich als Prompt-
+        // Kontext mit (egal ≠ bio erzwingen).
+        $parameter = $this->parameter;
+        $parameter['bio'] = $parameter['bio_praeferenz'] === 'bio';
+        // leere String-Hints strippen (diaet_hart-Array + bool bleiben erhalten)
+        $parameter = array_filter($parameter, fn ($v) => $v !== '' && $v !== null);
+        $parameter['use_favorites_list'] = $this->useFavoritesList; // 06·H4 opt-in (nach array_filter, sonst würde false gestrippt)
+        $parameter['favorites_convenience_only'] = $this->useFavoritesList && $this->favoritesConvenienceOnly; // H4b
+
+        $this->starteLauf($team->id, trim($this->description), $parameter, vkModus: true);
+    }
+
+    protected function auswahlEvent(): string
+    {
+        return 'vk-recipe-selected';
     }
 
     public function render()

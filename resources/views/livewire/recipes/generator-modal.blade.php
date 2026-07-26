@@ -13,7 +13,7 @@
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
             </svg>
-            <span>Rezept wird generiert — das dauert bis zu ~30 Sekunden. Das Fenster kann offen bleiben.</span>
+            <span>Rezept wird generiert{{ $vollAnreichern ? ' und angereichert' : '' }} — das dauert bis zu ~{{ $vollAnreichern ? 60 : 30 }} Sekunden. Das Fenster kann offen bleiben.</span>
         </div>
     @elseif($ergebnis === null)
         <x-foodalchemist::modal-section title="Beschreibung">
@@ -71,6 +71,9 @@
                     </label>
                 </div>
 
+                {{-- Spec 03 L7b: One-Shot — Generieren und Anreichern in einem Durchlauf (Default AN) --}}
+                <x-foodalchemist::oneshot-toggle marker="generator" schritte="Beschreibung, Kategorie, Geschmacksrichtung" />
+
                 <div class="md:col-span-2" data-richtung="diaet">
                     <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
                     <div class="flex flex-wrap gap-1.5">
@@ -103,6 +106,7 @@
                     @endforeach
                 </div>
             @endif
+            <x-foodalchemist::oneshot-ergebnis :anreicherung="$anreicherung" />
         </x-foodalchemist::modal-section>
     @endif
 
