@@ -18,6 +18,7 @@ use Platform\FoodAlchemist\Services\RecipeService;
 class RecipeModal extends Component
 {
     use \Livewire\WithFileUploads;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
 
     private const LEER = [
         'name' => '', 'origin_source' => '', 'category_id' => null, 'hauptgruppe_id' => null,
@@ -70,6 +71,7 @@ class RecipeModal extends Component
     private function ladeRezept(?int $id): void
     {
         $this->reset('fehler');
+        $this->copilotZuruecksetzen();                             // L6b: Befunde gehören zu GENAU diesem Rezept
         $this->recipeId = $id;
         $this->form = self::LEER;
 

@@ -61,6 +61,30 @@ class RecipeReviewService
     }
 
     /**
+     * Bestehende Befunde gegen den FRISCHEN Bestand neu bewerten — ohne KI-Call.
+     *
+     * Gebraucht ab L6b: nach jeder Einzel-Übernahme kann ein anderer Befund tot
+     * sein (seine Zielzeile wurde gerade entfernt) oder erledigt (`fehlt`, das
+     * jetzt drinsteht). Die Anwendbarkeits-Entscheidung bleibt damit an EINER
+     * Stelle — das UI schreibt sie nicht selbst fort.
+     *
+     * Zulässige Eingabe ist die Ausgabe von `pruefe()`: `normalisiere()` liest
+     * dieselben Schlüssel, die es schreibt (idempotent).
+     *
+     * @param  array<int, array<string, mixed>>  $befunde
+     * @return array<int, array<string, mixed>>
+     */
+    public function bewerte(Team $team, int $recipeId, array $befunde): array
+    {
+        $r = app(RecipeService::class)->detailAnySicht($team, $recipeId);
+        if ($r === null) {
+            throw new \RuntimeException('Rezept nicht gefunden oder nicht sichtbar.');
+        }
+
+        return $this->normalisiere($team, $r, $befunde);
+    }
+
+    /**
      * Prompt-Kontext: Rezept + Zutaten + Zubereitung, sonst nichts. Die
      * CJ-Referenz injiziert hier bewusst KEIN Pairing-/Vault-Wissen — ein
      * Prüf-Pass soll das Rezept beurteilen, nicht es umdichten.

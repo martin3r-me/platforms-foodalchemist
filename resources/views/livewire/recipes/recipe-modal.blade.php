@@ -150,6 +150,9 @@
             <x-slot:actions>
                 <button type="button" wire:click="$toggle('ueberarbeitenOffen')" class="{{ $btnGhostXs }} text-violet-600"
                         title="Freie Anweisung — KI überarbeitet Zutaten, Mengen, Zubereitung & Beschreibung (Vorschau + Übernehmen)" data-ki-ueberarbeiten>✨ KI-Überarbeiten</button>
+                {{-- Spec 03 L6b: 🧑‍🍳 Copilot — Prüf-Pass statt Neu-Schreiben (Befunde einzeln annehmen) --}}
+                <button type="button" wire:click="$toggle('copilotOffen')" class="{{ $btnGhostXs }} text-violet-600"
+                        title="Prüf-Pass: die KI beurteilt Mengen, Einheiten, überflüssige und fehlende Zutaten — je Befund einzeln übernehmbar. Das Rezept bleibt stehen." data-copilot>🧑‍🍳 Copilot</button>
             </x-slot:actions>
 
             @if($ueberarbeitenOffen)
@@ -210,6 +213,10 @@
                         </div>
                     @endif
                 </div>
+            @endif
+
+            @if($copilotOffen)
+                <x-foodalchemist::copilot-box :copilot="$copilot" :status="$copilotStatus" zeilen-wort="Zutat" />
             @endif
 
             <livewire:foodalchemist.recipes.ingredient-editor :recipe-id="$recipeId" :eingebettet="true" wire:key="zutaten-inline-{{ $recipeId }}-v{{ $zutatenVersion }}" />

@@ -189,6 +189,10 @@
                 <button type="button" wire:click="$toggle('ueberarbeitenOffen')" class="{{ $btnGhostXs }} text-violet-600"
                         title="Freie Anweisung — KI überarbeitet Komponenten, Mengen, Beschreibung, Plating & VK-Wording (Vorschau + Übernehmen). Klasse/Diät/Darreichung/Verkaufseinheit bleiben unangetastet."
                         data-vk-ki-ueberarbeiten>✨ KI-Überarbeiten</button>
+                {{-- Spec 03 L6b: 🧑‍🍳 Copilot — Prüf-Pass statt Neu-Schreiben (Befunde einzeln annehmen) --}}
+                <button type="button" wire:click="$toggle('copilotOffen')" class="{{ $btnGhostXs }} text-violet-600"
+                        title="Prüf-Pass: die KI beurteilt Mengen, Einheiten, überflüssige und fehlende Komponenten am Massstab der Verkaufs-Facetten — je Befund einzeln übernehmbar."
+                        data-vk-copilot>🧑‍🍳 Copilot</button>
             </x-slot:actions>
 
             @if($ueberarbeitenOffen)
@@ -269,6 +273,10 @@
                         <button type="button" wire:click="reject_rollen" class="{{ $btnGhostXs }}">Verwerfen</button>
                     </div>
                 </div>
+            @endif
+
+            @if($copilotOffen)
+                <x-foodalchemist::copilot-box :copilot="$copilot" :status="$copilotStatus" prefix="vk-" zeilen-wort="Komponente" />
             @endif
 
             <livewire:foodalchemist.recipes.ingredient-editor :recipe-id="$recipeId" :eingebettet="true" wire:key="vk-zutaten-{{ $recipeId }}-v{{ $zutatenVersion }}" />

@@ -26,6 +26,8 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class VkModal extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
+
     public ?int $recipeId = null;                                    // null = Anlage-Modus
 
     /** @var array<string, mixed> */
@@ -207,6 +209,7 @@ class VkModal extends Component
         $this->reset(['recipeId', 'form', 'hauptgruppeId', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege',
             'ueberarbeitenOffen', 'anweisung', 'ueberarbeitung',     // L1a: Revise-Vorschau darf nicht ins nächste Gericht lecken
             'bulkRunId']);                                          // L1b: dito für die Anreicherungs-Lauf-Box
+        $this->copilotZuruecksetzen();                              // L6b: Befunde gehören zu GENAU diesem Gericht
     }
 
     public function updatedHauptgruppeId(): void
