@@ -151,3 +151,106 @@ it('L7a: Provider-Ausfall mitten in der Kaskade lässt das Rezept vollständig z
         ->and($frisch->description)->toBe('Vom Generator.')
         ->and($frisch->status->value)->toBe('draft');
 });
+
+// ── L7b-2: das Kohärenz-Glied am Ende der Kaskade ────────────────────────────
+//
+// Spec-Kaskade: „… → Auto-Enrichment → Kohärenz-Check (VK) → fertig". Die
+// Fixtures füllen die vier VK-Ziel-Felder absichtlich vor, damit der
+// Anreicherungs-Pass leer läuft (`schritte === []`) — dann steht in den Tests
+// wirklich nur das Urteil und nicht der halbe Bulk-Pass.
+
+/** VK-Gericht mit vollständigen Text-Feldern (⇒ keine Anreicherungs-Lücke) + n Komponenten. */
+$vkFertig = function (object $t, int $komponenten = 2): \Platform\FoodAlchemist\Models\FoodAlchemistRecipe {
+    $bau = \Closure::bind(function (int $komponenten) {
+        $hg = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::firstOrCreate(['code' => 'TEL'], ['label' => 'Tellergericht']);
+        $klasse = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::firstOrCreate(
+            ['dish_main_group_id' => $hg->id, 'code' => 'TEL-OMN'],
+            ['label' => 'Teller omnivor', 'diet_form' => 'omnivor'],
+        );
+
+        $vk = $this->makeRecipe($this->rootTeam, 'TEL: Rinderrücken | Jus', [
+            'is_sales_recipe' => true, 'status' => 'draft',
+            'description' => 'Steht.', 'sales_wording_standard' => 'Steht.',
+            'plating_text' => 'Steht.', 'dish_class_id' => $klasse->id,
+            'taste_direction' => 'herzhaft',
+        ]);
+        for ($i = 1; $i <= $komponenten; $i++) {
+            $this->makeIngredient($vk, 'Komponente ' . $i, $this->makeGp($this->rootTeam, 'Komponente ' . $i . '-' . $vk->id), '100', $i);
+        }
+
+        return $vk->refresh();
+    }, $t, $t::class);
+
+    return $bau($komponenten);
+};
+
+it('L7b-2: das Kohärenz-Urteil läuft auch dann, wenn es NICHTS anzureichern gibt — es hängt an den Komponenten, nicht am Pass', function () use ($vkFertig) {
+    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')->once()->with('vk.kohaerenz', \Mockery::any())
+            ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(
+                ['score' => 78, 'label' => 'Klassisch geschlossen', 'reasoning' => 'Jus bindet.', 'schwachstelle' => 'Säure fehlt'],
+                0.9, 'Mock', [], 'judge-mock',
+            ));
+    });
+    $vk = $vkFertig($this);
+
+    $erg = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $vk);
+
+    // Kein Anreicherungs-Lauf (alle Ziel-Felder belegt) — und trotzdem ein Urteil.
+    expect($erg['schritte'])->toBe([])
+        ->and($erg['run_id'])->toBeNull()
+        ->and($erg['kohaerenz_urteil'])->toBe([
+            'score' => 78, 'label' => 'Klassisch geschlossen', 'schwachstelle' => 'Säure fehlt', 'fehler' => null,
+        ]);
+
+    // Das Urteil ist gecacht (GL-10-Cache, keine zweite Wahrheit) und frisch.
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeCulinaryCoherence::where('recipe_id', $vk->id)->count())->toBe(1)
+        ->and(app(\Platform\FoodAlchemist\Services\CoherenceService::class)->status($this->rootTeam, $vk->id)['stale'])->toBeFalse();
+});
+
+it('L7b-2: ein Basisrezept bekommt kein Teller-Urteil — und bezahlt dafür auch keinen Call', function () {
+    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')->never();
+    });
+    $basis = $this->makeRecipe($this->rootTeam, 'Reduktion: Rotwein-Schalotte', [
+        'description' => 'Steht.', 'category_id' => $this->kategorie->id, 'taste_direction' => 'herzhaft',
+    ]);
+    $this->makeIngredient($basis, 'Schalotte', $this->makeGp($this->rootTeam, 'Schalotte-basis'), '200', 1);
+    $this->makeIngredient($basis, 'Rotwein', $this->makeGp($this->rootTeam, 'Rotwein-basis'), '500', 2);
+
+    $erg = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $basis->refresh());
+
+    expect($erg['kohaerenz_urteil'])->toBeNull()
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeCulinaryCoherence::count())->toBe(0);
+});
+
+it('L7b-2: ein Gericht mit EINER Komponente hat kein Zusammenspiel — kein Urteil, kein Call', function () use ($vkFertig) {
+    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')->never();
+    });
+    $vk = $vkFertig($this, 1);
+
+    $erg = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $vk);
+
+    expect($erg['kohaerenz_urteil'])->toBeNull()
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeCulinaryCoherence::count())->toBe(0);
+});
+
+it('L7b-2: ein Judge ohne verwertbaren Score wird zur ehrlichen Lücke — nicht zum Generierungs-Fehler', function () use ($vkFertig) {
+    // FakeProvider-Grenze: `judge()` wirft absichtlich und cacht nichts.
+    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')->andReturn(
+            new \Platform\FoodAlchemist\Services\Ai\AiProposal(['label' => 'ohne Score'], 0.4, 'Mock', [], 'judge-mock'),
+        );
+    });
+    $vk = $vkFertig($this);
+
+    $erg = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $vk);
+
+    expect($erg['fehler'])->toBeNull()                                  // die Kaskade selbst ist nicht gescheitert
+        ->and($erg['kohaerenz_urteil']['score'])->toBeNull()
+        ->and($erg['kohaerenz_urteil']['fehler'])->toContain('score')
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeCulinaryCoherence::count())->toBe(0);
+
+    expect($vk->fresh()->status->value)->toBe('draft');                 // Rezept unversehrt
+});

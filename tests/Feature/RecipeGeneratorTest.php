@@ -72,12 +72,19 @@ it('DoD M4-14: 1 Rezept end-to-end — Bestand-GP + Sub-Stub für Halbfabrikat +
         ->and($recipe->description_source)->toBe('ki')
         ->and($recipe->ingredients()->count())->toBe(4);
 
-    // Statistik: 2 Bestand-GPs, 1 Stub neu, 1 offen (Lücken-Zutat fand keine LA → kein Auto-GP, #505 Slice 2)
-    expect($resultat['statistik'])->toBe(['bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 1, 'gp_neu_aus_la' => 0, 'offen' => 1]);
-
     // Stub existiert als Basisrezept (status stub, generator-markiert) — §4-Alias griff NICHT
     // (BRAUNER KALBSFOND existiert nicht), also Stub mit geputztem Namen
     $stub = FoodAlchemistRecipe::where('status', 'stub')->firstOrFail();
+
+    // Statistik: 2 Bestand-GPs, 1 Stub neu, 1 offen (Lücken-Zutat fand keine LA → kein Auto-GP, #505 Slice 2).
+    // L7b-2: `stubs` nennt den neuen Stub beim Namen — „stub_neu: 1" allein sagt nicht,
+    // WAS noch ausrezeptiert werden muss, und genau das ist die offene Arbeit des Laufs.
+    expect($resultat['statistik'])->toBe([
+        'bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 1,
+        'stubs' => [['id' => $stub->id, 'name' => $stub->name]],
+        'gp_neu_aus_la' => 0, 'offen' => 1,
+    ]);
+
     expect($stub->last_modified_by)->toBe('generator_stub')
         ->and(mb_strtolower($stub->name))->toContain('kalbsfond');
 

@@ -106,6 +106,7 @@
                     @endforeach
                 </div>
             @endif
+            <x-foodalchemist::stub-offen :stubs="$ergebnis['statistik']['stubs'] ?? []" />
             <x-foodalchemist::oneshot-ergebnis :anreicherung="$anreicherung" />
         </x-foodalchemist::modal-section>
     @endif

@@ -74,7 +74,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                 'occasion' => ['type' => 'string', 'enum' => ['fruehstueck', 'lunch', 'konferenz', 'empfang', 'dinner', 'late_night'], 'description' => 'Nur vk=true: Anlass'],
                 'serviceform' => ['type' => 'string', 'enum' => ['tellerservice', 'buffet', 'flying', 'stehempfang', 'boxed'], 'description' => 'Nur vk=true: Serviceform'],
                 'kompositions_stil' => ['type' => 'string', 'enum' => ['klassisch', 'kreativ', 'gewagt'], 'description' => 'Nur vk=true: filtert den Pairing-Wissensblock (gewagt = nur belegte Paarungen)'],
-                'voll_anreichern' => ['type' => 'boolean', 'default' => false, 'description' => '03·L7: One-Shot — nach der Erdung laeuft der Anreicherungs-Pass durch und fuellt die noch LEEREN Textfelder (Basisrezept: Beschreibung/Kategorie/Geschmack; vk=true: Beschreibung/VK-Wording/Plating/Speisen-Klasse). Kostet 1 Provider-Call je fehlendes Feld und verlaengert den Aufruf entsprechend; bereits gefuellte Felder werden nie angetastet'],
+                'voll_anreichern' => ['type' => 'boolean', 'default' => false, 'description' => '03·L7: One-Shot — nach der Erdung laeuft der Anreicherungs-Pass durch und fuellt die noch LEEREN Textfelder (Basisrezept: Beschreibung/Kategorie/Geschmack; vk=true: Beschreibung/VK-Wording/Plating/Speisen-Klasse). Kostet 1 Provider-Call je fehlendes Feld und verlaengert den Aufruf entsprechend; bereits gefuellte Felder werden nie angetastet. Mit vk=true und mindestens 2 Komponenten kommt danach EIN weiterer Call fuer das kulinarische Kohaerenz-Urteil (anreicherung.kohaerenz_urteil: score/label/schwachstelle) — das ist die zweite Achse, nicht der deterministische Aroma-Score im Feld kohaerenz'],
                 'use_favorites_list' => ['type' => 'boolean', 'default' => false, 'description' => '06·H3: bevorzugt aus der kuratierten Favoriten-GP-Liste bauen (bevorzugt, nicht ausschließlich)'],
                 'favorites_convenience_only' => ['type' => 'boolean', 'default' => false, 'description' => '06·H4b: Favoriten-Block auf Convenience-getaggte GPs verengen (nur wirksam mit use_favorites_list)'],
             ],
@@ -150,6 +150,9 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                 'n_ingredients_total' => $recipe->n_ingredients_total,
                 'n_ingredients_unmapped' => $recipe->n_ingredients_unmapped,
             ],
+            // `statistik.stubs` (L7b-2) = die in diesem Lauf NEU angelegten
+            // Sub-Rezept-Stubs mit Namen: bewusst leere Halbfabrikat-Platzhalter,
+            // die noch ausrezeptiert werden müssen (v1 generiert nicht rekursiv).
             'statistik' => $statistik,
             'offene' => array_map(fn (array $o) => [
                 'text' => $o['text'],
@@ -158,8 +161,8 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                     'kind' => $k['kind'], 'id' => $k['id'], 'name' => $k['name'], 'score' => $k['score'],
                 ], array_slice($o['shortlist'] ?? [], 0, 3)),
             ], $resultat['offene']),
-            'kohaerenz' => $statistik['kohaerenz'] ?? null,        // nur VK-Modus
-            'anreicherung' => $anreicherung,                       // nur mit voll_anreichern=true
+            'kohaerenz' => $statistik['kohaerenz'] ?? null,        // nur VK-Modus: deterministischer Aroma-Score (GL-10 Achse 1)
+            'anreicherung' => $anreicherung,                       // nur mit voll_anreichern=true; enthält `kohaerenz_urteil` (GL-10 Achse 2, nie mit Achse 1 verrechnet)
             'hinweis' => ($offen > 0
                     ? "⚠ {$offen} Zutat(en) ohne Treffer — bewusst NICHT geraten. Pro Zeile: foodalchemist.gps.MATCH prüfen, "
                         . 'sonst GP/Basisrezept anlegen und mit foodalchemist.recipe_ingredients.PUT nachziehen. '

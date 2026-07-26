@@ -167,7 +167,13 @@ class RecipeGeneratorService
                 ], fn ($v) => $v !== null));
             }
 
-            $statistik = ['bestand_gp' => 0, 'bestand_sub' => 0, 'stub_neu' => 0, 'gp_neu_aus_la' => 0, 'offen' => 0];
+            // `stubs` = die NEU angelegten Sub-Rezept-Stubs mit Namen (L7-DoD:
+            // „Stub + Flag ausrezeptieren offen"). Der dauerhafte Flag ist bewusst
+            // KEINE neue Spalte: `rezept_sub_stub_offen` (21·S1b) erkennt genau
+            // diesen Zustand schon aus dem Bestand (status stub/draft + 0 Zutaten +
+            // referenziert). Was fehlte, ist die Sichtbarkeit im Moment der
+            // Entstehung — `stub_neu` zählt sie, sagt aber nicht, WELCHE offen sind.
+            $statistik = ['bestand_gp' => 0, 'bestand_sub' => 0, 'stub_neu' => 0, 'stubs' => [], 'gp_neu_aus_la' => 0, 'offen' => 0];
             $offene = [];
             $zeilen = [];
             foreach (array_values($kiRezept['zutaten']) as $i => $z) {
@@ -202,6 +208,11 @@ class RecipeGeneratorService
                     $zeile['match_method'] = 'recipe_ref';
                     $statistik['stub_neu'] += $stub['neu'] ? 1 : 0;
                     $statistik['bestand_sub'] += $stub['neu'] ? 0 : 1;
+                    if ($stub['neu']) {
+                        // Nur die NEUEN: ein wiederverwendeter Bestands-Stub ist keine
+                        // Bringschuld dieses Laufs (und steht ggf. schon im Signal).
+                        $statistik['stubs'][] = ['id' => $stub['recipe']->id, 'name' => $stub['recipe']->name];
+                    }
                 } elseif (($autoGp = $this->laFirst->mintFromLa($team, $text, $z['slug'] ?? null, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null))) !== null) {   // Spec 16·E1: WG-Hint aus Erzeugungs-Kontext (KI-Schema liefert commodity_group)
                     // 07·M1 (ex-#505 Slice 2): Lücke ohne GP → LaFirstGpService mintet FA-nativ ein
                     // GP aus passender LA (tentative, LA-verknüpft → Allergene/Nährwerte/EK LA-abgeleitet).

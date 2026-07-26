@@ -135,3 +135,69 @@ it('Job-Fehler kommt weiter als Fehler durch (VK-Pfad verliert die Meldung nicht
         ->assertSet('ergebnis', null)
         ->assertSet('fehler', 'KI-Provider ist deaktiviert.');
 });
+
+// ── L7b-2: die beiden neuen Ergebnis-Flächen ────────────────────────────────
+
+it('L7b-2: das Kohärenz-Urteil erscheint neben dem Aroma-Score, nicht verrechnet mit ihm', function () {
+    $comp = Livewire::test(VkGeneratorModal::class)
+        ->set('description', 'Rinderrücken mit Jus')
+        ->call('generieren');
+
+    Cache::put(GenerateRecipeJob::cacheKey($comp->get('runId')), [
+        'status' => 'done', 'recipe_id' => 51, 'name' => '[TEL] Rinderrücken | Jus',
+        'statistik' => ['bestand_gp' => 3, 'bestand_sub' => 1, 'stub_neu' => 0, 'stubs' => [], 'offen' => 0, 'kohaerenz' => 0.42],
+        'offene' => [],
+        'anreicherung' => [
+            'run_id' => 11, 'schritte' => ['wording'], 'uebersprungen' => [],
+            'uebernommen' => 1, 'offen' => 0, 'fehler' => null,
+            'kohaerenz_urteil' => ['score' => 78, 'label' => 'Klassisch geschlossen', 'schwachstelle' => 'Säure fehlt', 'fehler' => null],
+        ],
+    ], now()->addMinutes(5));
+
+    $comp->call('pruefeErgebnis')
+        ->assertSee('Kohärenz 78 / 100')
+        ->assertSee('Klassisch geschlossen')
+        ->assertSee('Schwachstelle: Säure fehlt');
+});
+
+it('L7b-2: ein fehlendes Kohärenz-Urteil wird gesagt, nicht weggelassen', function () {
+    $comp = Livewire::test(VkGeneratorModal::class)
+        ->set('description', 'Irgendein Teller')
+        ->call('generieren');
+
+    Cache::put(GenerateRecipeJob::cacheKey($comp->get('runId')), [
+        'status' => 'done', 'recipe_id' => 52, 'name' => '[TEL] Teller',
+        'statistik' => ['bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 0, 'stubs' => [], 'offen' => 0],
+        'offene' => [],
+        'anreicherung' => [
+            'run_id' => 12, 'schritte' => ['wording'], 'uebersprungen' => [],
+            'uebernommen' => 1, 'offen' => 0, 'fehler' => null,
+            'kohaerenz_urteil' => ['score' => null, 'label' => null, 'schwachstelle' => null, 'fehler' => 'Judge lieferte kein verwertbares Urteil'],
+        ],
+    ], now()->addMinutes(5));
+
+    $comp->call('pruefeErgebnis')
+        ->assertSee('Kohärenz-Urteil offen')
+        ->assertDontSee('/ 100');
+});
+
+it('L7b-2: neu angelegte Sub-Rezept-Stubs stehen beim Namen im Ergebnis — auch ohne One-Shot-Toggle', function () {
+    $comp = Livewire::test(GeneratorModal::class)
+        ->set('vollAnreichern', false)                       // Toggle aus ⇒ kein Anreicherungs-Block
+        ->set('description', 'Rotwein-Reduktion')
+        ->call('generieren');
+
+    Cache::put(GenerateRecipeJob::cacheKey($comp->get('runId')), [
+        'status' => 'done', 'recipe_id' => 53, 'name' => 'Reduktion: Rotwein-Schalotte',
+        'statistik' => [
+            'bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 1, 'offen' => 0,
+            'stubs' => [['id' => 777, 'name' => 'Kalbsfond braun']],
+        ],
+        'offene' => [],
+    ], now()->addMinutes(5));
+
+    $comp->call('pruefeErgebnis')
+        ->assertSet('anreicherung', null)
+        ->assertSee('ausrezeptieren offen')
+        ->assertSee('Kalbsfond braun');
+});

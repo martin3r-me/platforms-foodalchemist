@@ -141,6 +141,7 @@
                     @endforeach
                 </div>
             @endif
+            <x-foodalchemist::stub-offen :stubs="$ergebnis['statistik']['stubs'] ?? []" />
             <p class="text-[10px] text-gray-500 mt-2">VK-Daten (Klasse/Aufschlagsklasse) aus dem Vorschlag übernommen, soweit valide — Rest im VK-Editor pflegen.</p>
             <x-foodalchemist::oneshot-ergebnis :anreicherung="$anreicherung" />
         </x-foodalchemist::modal-section>
