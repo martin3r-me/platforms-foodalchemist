@@ -205,7 +205,8 @@ class VkModal extends Component
     private function formZuruecksetzen(): void
     {
         $this->reset(['recipeId', 'form', 'hauptgruppeId', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege',
-            'ueberarbeitenOffen', 'anweisung', 'ueberarbeitung']);   // L1a: Revise-Vorschau darf nicht ins nächste Gericht lecken
+            'ueberarbeitenOffen', 'anweisung', 'ueberarbeitung',     // L1a: Revise-Vorschau darf nicht ins nächste Gericht lecken
+            'bulkRunId']);                                          // L1b: dito für die Anreicherungs-Lauf-Box
     }
 
     public function updatedHauptgruppeId(): void
@@ -678,6 +679,43 @@ class VkModal extends Component
         }
     }
 
+    // ── Spec 03 L1b: ✨ Alles anreichern (Bulk-Mechanik M7-06 auf EIN Gericht) ──
+    //
+    // Unterschied zu den ✨-Einzelknöpfen daneben: die schreiben in `$form` (der
+    // Nutzer sieht den Text und speichert), hier entstehen VORSCHLÄGE mit Confidence
+    // in der Review-Liste, und »Alle übernehmen« schreibt Override-First mit Lineage
+    // `ki`. Die Schrittfolge ist die VK-Ebene (SCHRITTE_VK), nicht die Basisrezept-
+    // Folge — sonst würde der Knopf am Gericht die 186er-Rezept-Kategorie anreichern.
+
+    public ?int $bulkRunId = null;
+
+    public function allesAnreichern(): void
+    {
+        $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        try {
+            $this->bulkRunId = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)
+                ->starteVk($team, [$this->recipeId]);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();                          // sync-Queue (demo) ohne Provider → graceful
+        }
+    }
+
+    public function bulkAlleUebernehmen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && $this->bulkRunId !== null) {
+            app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->alleUebernehmen($team, $this->bulkRunId);
+            $id = $this->recipeId;
+            $this->bulkRunId = null;
+            $this->oeffnen($id);                                       // Form mit den übernommenen Werten neu laden
+            $this->dispatch('recipe-gespeichert');
+        }
+    }
+
     /** ✨ Sensorik: KI bewertet das GEGARTE Gericht (Zutaten + Zubereitung) → Recipe-Sensorik-Tabellen. */
     public function sensorikBewerten(): void
     {
@@ -723,8 +761,15 @@ class VkModal extends Component
             }
         }
 
+        // L1b: Lauf-Status der ✨-Anreicherung (Poll-Zeile über dem Editor)
+        $bulkRun = $this->bulkRunId !== null && $team !== null
+            ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->status($team, $this->bulkRunId) : null;
+
         return view('foodalchemist::livewire.verkauf.vk-modal', [
             'rezept' => $rezept,
+            'bulkRun' => $bulkRun,
+            'bulkOffen' => $bulkRun !== null
+                ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->offeneVorschlaege($team, $this->bulkRunId) : 0,
             'cockpit' => $rezept !== null ? ($cockpitTmp ?? $verkauf->cockpit($rezept)) : null,
             'gProStueck' => $gProStueck,
             'anteile' => $anteile,

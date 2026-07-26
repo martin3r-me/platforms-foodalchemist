@@ -22,6 +22,19 @@ class BulkEnrichService
 {
     public const SCHRITTE = ['description', 'category', 'geschmack'];
 
+    /**
+     * Spec 03 L1b: die VK-Schrittfolge — bewusst NICHT `SCHRITTE`. `category` ist
+     * dort die 186er-Rezept-Kategorie (Basisrezept-Ebene); am Gericht heißt die
+     * Klassifikation `speisen_klasse` und läuft über eine eigene Taxonomie. Der
+     * Schritt-Name ist überall das Suffix seines Prompt-Keys (`recipe.description`,
+     * `vk.wording`, `vk.plating`, `vk.speisen_klasse`) — so bleibt ablesbar, welche
+     * Registry-Zeile ein Vorschlag erzeugt hat.
+     */
+    public const SCHRITTE_VK = ['description', 'wording', 'plating', 'speisen_klasse'];
+
+    /** Die Teilmenge, die es nur am Gericht gibt — auf einem Basisrezept ehrlicher Fehler statt Unsinn. */
+    private const NUR_GERICHT = ['wording', 'plating', 'speisen_klasse'];
+
     /** GP-Bulk-Autopilot-Schritte (Feld-KIs mit vorhandenem Accept-Pfad). */
     public const SCHRITTE_GP = ['condition', 'tags', 'allergene', 'naehrwerte'];
 
@@ -30,13 +43,13 @@ class BulkEnrichService
     }
 
     /** Startet einen Run (Job ist queued; Sandbox/Tests: sync). */
-    public function starte(Team $team, array $recipeIds, array $schritte = self::SCHRITTE): int
+    public function starte(Team $team, array $recipeIds, array $schritte = self::SCHRITTE, string $type = 'enrich'): int
     {
         $ids = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $recipeIds)->pluck('id')->all();
         DB::table('foodalchemist_bulk_runs')->insert([
             'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
             'team_id' => $team->id, 'user_id' => Auth::id(),
-            'type' => 'enrich', 'status' => 'running', 'total' => count($ids),
+            'type' => $type, 'status' => 'running', 'total' => count($ids),
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $runId = (int) DB::getPdo()->lastInsertId();
@@ -44,6 +57,19 @@ class BulkEnrichService
         \Platform\FoodAlchemist\Jobs\BulkEnrichJob::dispatch($runId, $team->id, $ids, $schritte);
 
         return $runId;
+    }
+
+    /**
+     * Spec 03 L1b: Anreicherungs-Lauf am GERICHT — gleicher Vorschlags-Speicher und
+     * gleiche Review-Mechanik, nur andere Schrittfolge. Die Arbeitsmenge wird hier
+     * auf Verkaufsrezepte geschnitten: ein mitgegebenes Basisrezept fällt raus,
+     * statt VK-Schritte auf der falschen Ebene zu fahren.
+     */
+    public function starteVk(Team $team, array $recipeIds, array $schritte = self::SCHRITTE_VK): int
+    {
+        $ids = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->whereIn('id', $recipeIds)->pluck('id')->all();
+
+        return $this->starte($team, $ids, $schritte, 'enrich_vk');
     }
 
     /** Job-Kern: ein Rezept × Schritte → Vorschläge (kein Fach-Write). */
@@ -87,6 +113,21 @@ class BulkEnrichService
     /** @return array{wert: mixed, confidence: ?float, reasoning: ?string, call_log_id: ?int} */
     private function proposeFeld(Team $team, FoodAlchemistRecipe $r, string $feld): array
     {
+        if (in_array($feld, self::NUR_GERICHT, true) && ! $r->is_sales_recipe) {
+            throw new \RuntimeException("Bulk-Schritt [{$feld}] gilt nur fuer Verkaufsgerichte.");
+        }
+        if ($feld === 'speisen_klasse') {
+            // Eine Wahrheit: Taxonomie-Aufbau, Aktiv-Filter und Klassen-Validierung
+            // stehen im SpeisenKlassenService (Detail-Panel fährt denselben Weg).
+            $c = app(SpeisenKlassenService::class)->classify($team, $r->id);
+
+            return [
+                'value' => $c['klasse_id'] === null ? null
+                    : ['dish_class_id' => $c['klasse_id'], 'klasse_name' => $c['klasse_name']],
+                'confidence' => $c['confidence'], 'reasoning' => $c['reasoning'], 'call_log_id' => $c['call_log_id'],
+            ];
+        }
+
         [$key, $kontext, $extract] = match ($feld) {
             'description' => ['recipe.description',
                 ['name' => $r->name, 'description' => $r->description, 'zutaten' => $r->ingredients()->whereNull('deleted_at')->pluck('display_name')->all()],
@@ -98,6 +139,11 @@ class BulkEnrichService
             'geschmack' => ['recipe.geschmack',
                 ['name' => $r->name, 'taste_direction' => $r->taste_direction],
                 fn (array $w) => $w['taste_direction'] ?? null],
+            // L1b: VK-Texte — derselbe Kontext-Zuschnitt wie die ✨-Einzelknöpfe im VkModal
+            'wording' => ['vk.wording', $this->gerichtKontext($r),
+                fn (array $w) => $w['sales_wording_standard'] ?? null],
+            'plating' => ['vk.plating', $this->gerichtKontext($r) + ['portion_g' => $r->sales_quantity_per_unit_g],
+                fn (array $w) => $w['preparation'] ?? $w['plating_text'] ?? null],   // Registry-Schema: {preparation}
             default => throw new \RuntimeException("Unbekannter Bulk-Schritt [{$feld}]."),
         };
 
@@ -108,6 +154,19 @@ class BulkEnrichService
             'confidence' => $p->confidence,
             'reasoning' => $p->reasoning,
             'call_log_id' => $p->callLogId,
+        ];
+    }
+
+    /** Gericht-Kontext für die VK-Schritte (Name · Wording · Komponenten · Klasse). */
+    private function gerichtKontext(FoodAlchemistRecipe $r): array
+    {
+        return [
+            'name' => $r->name,
+            'sales_wording_standard' => $r->sales_wording_standard,
+            'komponenten' => $r->ingredients()->whereNull('deleted_at')
+                ->with(['referencedRecipe:id,name', 'gp:id,name'])->get()
+                ->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all(),
+            'speisen_klasse' => $r->dishClass?->label,
         ];
     }
 
@@ -124,9 +183,20 @@ class BulkEnrichService
         }
         $wert = json_decode((string) $prop->value, true);
 
+        if ($prop->field === 'speisen_klasse') {
+            return $this->uebernehmeSpeisenKlasse($team, $r->id, $wert, $prop);
+        }
+        $text = fn () => is_string($wert) && trim($wert) !== '' ? trim($wert) : null;
+
         $update = match ($prop->field) {
             'description' => $r->description_source === 'manual' ? null
                 : ['description' => (string) $wert, 'description_source' => 'ki', 'description_ai_confidence' => $prop->confidence],
+            // L1b: VK-Texte mit eigenem Lineage-Paar; Gericht-Guard, damit ein
+            // fehlgeleiteter Vorschlag nicht am Basisrezept landet.
+            'wording' => $r->sales_wording_source === 'manual' || ! $r->is_sales_recipe || $text() === null ? null
+                : ['sales_wording_standard' => $text(), 'sales_wording_source' => 'ki', 'sales_wording_ai_confidence' => $prop->confidence],
+            'plating' => $r->plating_source === 'manual' || ! $r->is_sales_recipe || $text() === null ? null
+                : ['plating_text' => $text(), 'plating_source' => 'ki', 'plating_ai_confidence' => $prop->confidence],
             'category' => $r->category_source === 'manual' || FoodAlchemistRecipeCategory::find((int) $wert) === null ? null
                 : ['category_id' => (int) $wert, 'category_source' => 'ki', 'category_ai_confidence' => $prop->confidence],
             'geschmack' => in_array($wert, ['suess', 'herzhaft', 'neutral'], true)
@@ -140,6 +210,31 @@ class BulkEnrichService
         $r->update($update);
         $this->ki->stempleAccepted($prop->call_log_id !== null ? (int) $prop->call_log_id : null);
         DB::table('foodalchemist_bulk_proposals')->where('id', $proposalId)->update(['status' => 'uebernommen', 'updated_at' => now()]);
+
+        return true;
+    }
+
+    /**
+     * L1b-Accept der Speisen-Klasse: geht durch `SpeisenKlassenService::acceptKlasse`,
+     * weil dort Override-First, Besitzer-Regel (D1) und Taxonomie-Validierung schon
+     * stehen — und der Accept-Stempel mit. Ein Veto kommt dort als Exception; hier
+     * bleibt der Vorschlag dann offen (Review kann später entscheiden).
+     */
+    private function uebernehmeSpeisenKlasse(Team $team, int $recipeId, mixed $wert, object $prop): bool
+    {
+        $klasseId = is_array($wert) ? ($wert['dish_class_id'] ?? null) : $wert;
+        if (! is_numeric($klasseId)) {
+            return false;
+        }
+        try {
+            app(SpeisenKlassenService::class)->acceptKlasse(
+                $team, $recipeId, (int) $klasseId, (float) $prop->confidence, $prop->reasoning,
+                $prop->call_log_id !== null ? (int) $prop->call_log_id : null,
+            );
+        } catch (\Throwable) {
+            return false;                                            // manual / geerbt / ungültige Klasse
+        }
+        DB::table('foodalchemist_bulk_proposals')->where('id', $prop->id)->update(['status' => 'uebernommen', 'updated_at' => now()]);
 
         return true;
     }
