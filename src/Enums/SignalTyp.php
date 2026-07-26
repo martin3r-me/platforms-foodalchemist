@@ -56,11 +56,18 @@ enum SignalTyp: string
     // Bewusst `info`: eine Wiederholung kann gewollt sein (Themen-Menü).
     case KonzeptDramaturgie = 'konzept_dramaturgie';
     // Spec 21 Tranche D: Foodbook-Ebene — das Kundendokument selbst (bis dahin 0 Signale).
-    // Zwei verschiedene Arbeitsmengen, s. DataQualityService::foodbookChecks:
+    // Drei verschiedene Arbeitsmengen, s. DataQualityService::foodbookChecks:
     // `foodbook_kapitel_leer` misst nur BENUTZTE Bücher (ein Entwurf ist bewusst unfertig),
     // `foodbook_skizze_ungeerdet` hängt am Kapitel-Go — der Knopf IST die Grenze.
     case FoodbookKapitelLeer = 'foodbook_kapitel_leer';
     case FoodbookSkizzeUngeerdet = 'foodbook_skizze_ungeerdet';
+    // S4c-2 — der Rest von Tranche D, beide gegen ein FREMDES Soll gemessen und darum
+    // je mit einer eigenen dritten Arbeitsmenge: `foodbook_ziel_verfehlt` gegen die
+    // Kapitel-Ziele im Planungs-Gerüst (ohne Gerüst kein Befund, wie S4b-1),
+    // `foodbook_stale` gegen den freigegebenen VK-Snapshot (R2.5) — und nur an Büchern,
+    // die schon draußen sind: in der Kalkulation SOLLEN Preise sich bewegen.
+    case FoodbookZielVerfehlt = 'foodbook_ziel_verfehlt';
+    case FoodbookStale = 'foodbook_stale';
     // Spec 21 Tranche E · E3: Meta-Signal über die Zeitreihe — ein Zähler ist gegenüber
     // dem Vorlauf gestiegen. Alarmiert bei *Veränderung*, nicht bei Bestand; das ist der
     // eigentliche „System im Blick"-Mechanismus.
@@ -101,6 +108,8 @@ enum SignalTyp: string
             self::KonzeptDramaturgie => 'Konzept wiederholt eine Hauptzutat',
             self::FoodbookKapitelLeer => 'Foodbook-Kapitel ohne Inhalt',
             self::FoodbookSkizzeUngeerdet => 'Kreativ-Skizze nach dem Go nicht geerdet',
+            self::FoodbookZielVerfehlt => 'Foodbook verfehlt ein Kapitel-Ziel',
+            self::FoodbookStale => 'Foodbook zeigt einen überholten Preis',
             self::QualitaetDrift => 'Qualität verschlechtert sich',
         };
     }
@@ -141,6 +150,8 @@ enum SignalTyp: string
             self::KonzeptDramaturgie => 'heroicon-o-arrow-path',
             self::FoodbookKapitelLeer => 'heroicon-o-book-open',
             self::FoodbookSkizzeUngeerdet => 'heroicon-o-sparkles',
+            self::FoodbookZielVerfehlt => 'heroicon-o-flag',
+            self::FoodbookStale => 'heroicon-o-clock',
             self::QualitaetDrift => 'heroicon-o-arrow-trending-down',
         };
     }
@@ -169,7 +180,7 @@ enum SignalTyp: string
     /**
      * Spec 21 Tranche D — Qualität des Kundendokuments (Foodbook-Ebene, deterministisch).
      * Wieder eine eigene Tranche und nicht Teil von C: das Prüf-Objekt ist das Buch, und
-     * es hat einen eigenen Lebenszyklus (Status + Phase + Kapitel-Go), aus dem sich zwei
+     * es hat einen eigenen Lebenszyklus (Status + Phase + Kapitel-Go), aus dem sich DREI
      * verschiedene Arbeitsmengen ergeben — anders als bei Konzepten, wo eine reicht.
      */
     public function istFoodbookQualitaet(): bool

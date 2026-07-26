@@ -52,12 +52,14 @@ it('führt die Foodbook-Ebene getrennt und kennt beide Tranche-D-Typen', functio
 
     expect($e)->toHaveKey('foodbook')
         ->and($e['foodbook']['label'])->toBe('Foodbooks')
-        // Vollständige, geordnete Liste der Ebene — S4c-2 (Ziel/Stale) hängt hier an.
+        // Nur die beiden eigenen Keys — die vollständige, geordnete Liste der Ebene hält
+        // der jüngste Tranche-D-Test (S4c-2), sonst müsste jede Etappe zwei Stellen ändern.
         ->and(array_column($e['foodbook']['metriken'], 'key'))
-        ->toBe(['foodbook_kapitel_leer', 'foodbook_skizze_ungeerdet']);
+        ->toContain('foodbook_kapitel_leer')
+        ->toContain('foodbook_skizze_ungeerdet');
 
-    $foodbook = array_filter(SignalTyp::cases(), fn (SignalTyp $t) => $t->istFoodbookQualitaet());
-    expect($foodbook)->toHaveCount(2)
+    expect(SignalTyp::FoodbookKapitelLeer->istFoodbookQualitaet())->toBeTrue()
+        ->and(SignalTyp::FoodbookSkizzeUngeerdet->istFoodbookQualitaet())->toBeTrue()
         // Die drei Tranchen dürfen sich nicht überschneiden — sonst zählt ein Typ doppelt.
         ->and(SignalTyp::FoodbookKapitelLeer->istKonzeptQualitaet())->toBeFalse()
         ->and(SignalTyp::FoodbookKapitelLeer->istRezeptQualitaet())->toBeFalse()

@@ -29,14 +29,16 @@ class DataQualityService
 {
     /**
      * `CoverageService` kommt ab Spec 21 · S4b dazu (frame-gestützte Konzept-Checks),
-     * `PairingService` ab S4b-2 (Anker-Graph). Kein Container-Zyklus: die Abhängigkeiten
-     * beider (PlanningFrame/Concept/Foodbook bzw. keine) kennen diesen Service nicht —
-     * anders als beim `SignalObjectService`, der genau deshalb ausgelagert wurde.
+     * `PairingService` ab S4b-2 (Anker-Graph), `VkSnapshotService` ab S4c-2 (freigegebener
+     * VK vs. live). Kein Container-Zyklus: die Abhängigkeiten aller drei (PlanningFrame/
+     * Concept/Foodbook bzw. keine bzw. TeamSettings) kennen diesen Service nicht — anders
+     * als beim `SignalObjectService`, der genau deshalb ausgelagert wurde.
      */
     public function __construct(
         private SignalService $signals,
         private CoverageService $coverage,
         private PairingService $pairing,
+        private VkSnapshotService $vkSnapshots,
     ) {
     }
 
@@ -785,12 +787,14 @@ class DataQualityService
      * Das Buch ist das Artefakt, das der Kunde in die Hand bekommt — ein leeres Kapitel darin
      * fällt heute erst beim Lesen des PDF auf, und dann steht es schon beim Kunden.
      *
-     * **Zwei Arbeitsmengen, nicht eine** — das ist die tragende Abgrenzung dieser Tranche und
+     * **Drei Arbeitsmengen, nicht eine** — das ist die tragende Abgrenzung dieser Tranche und
      * der Unterschied zu Tranche C (dort genügte `konzepteInGebrauch` für alle Checks):
-     *  · `foodbook_kapitel_leer` misst nur BENUTZTE Bücher ({@see foodbooksInGebrauch}) — ein
-     *    Entwurf hat leere Kapitel, weil er ein Entwurf ist.
+     *  · `foodbook_kapitel_leer` + `foodbook_ziel_verfehlt` messen nur BENUTZTE Bücher
+     *    ({@see foodbooksInGebrauch}) — ein Entwurf hat leere Kapitel, weil er ein Entwurf ist.
      *  · `foodbook_skizze_ungeerdet` hängt am **Kapitel-Go**: dort hat ein Mensch „Anlegen"
      *    gedrückt, und damit ist der Arbeitsstand erklärt — unabhängig vom Buch-Status.
+     *  · `foodbook_stale` misst nur FREIGEGEBENE Bücher ({@see foodbooksFreigegeben}) — in der
+     *    Kalkulation sollen Preise sich bewegen, „überholt" gibt es erst draußen.
      *
      * @return list<array<string,mixed>>
      */
@@ -846,7 +850,166 @@ class DataQualityService
                     . 'steht im Buch-Entwurf, im Sortiment steht sie nicht.',
                 'q' => fn (Team $t) => $this->foodbooksNichtArchiviert($t)->whereExists($this->ungeerdeteSkizze()),
             ],
+            'foodbook_ziel_verfehlt' => [
+                'label' => 'Foodbooks in Gebrauch mit verfehltem Kapitel-Ziel',
+                'typ' => SignalTyp::FoodbookZielVerfehlt,
+                'dedup' => 'dq-foodbook-ziel-verfehlt',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Mindestens ein Kapitel dieses Foodbooks reißt sein gesetztes SOLL: das Mengengerüst '
+                    . '(`target_count`) ist mit NULL Gerichten unbesetzt, oder der Ø-VK der Gerichte im Kapitel '
+                    . 'liegt außerhalb der Kapitel-Preisspanne. Das Ziel wird n-tief vererbt (Kapitel → Eltern), '
+                    . 'ein Unterkapitel erbt also die Vorgabe der Klammer darüber; der Ist-Bezug rollt umgekehrt '
+                    . 'über alle Nachfahren hoch. Gemeldet wird nur die ROTE Lage — „3 von 5 Gerichten da" oder '
+                    . '„weicht >15 % vom Preis-Anker ab" ist gelb und bleibt Arbeitsstand. Ohne Planungs-Gerüst '
+                    . 'gibt es keinen Befund: die Kapitel-Ziele werden nur innerhalb der Coverage ausgewertet.',
+                'q' => fn (Team $t) => $this->foodbooksMitKapitelZielBefund($t),
+            ],
+            'foodbook_stale' => [
+                'label' => 'Freigegebene Foodbooks mit überholtem Preis',
+                'typ' => SignalTyp::FoodbookStale,
+                'dedup' => 'dq-foodbook-stale',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Das Buch ist freigegeben bzw. beim Kunden, aber mindestens eines seiner Gerichte hat '
+                    . 'seinen freigegebenen VK-Snapshot (R2.5) verlassen: der live gerechnete Preis weicht über die '
+                    . 'Team-Leitplanke (`max_vk_delta_pct`) hinaus ab. Das Dokument nennt damit einen Preis, den das '
+                    . 'System nicht mehr rechnet. Bücher in der Kalkulation zählen bewusst nicht mit — dort SOLLEN '
+                    . 'Preise sich bewegen. Gerichte ohne je freigegebenen Snapshot ebenfalls nicht: ohne Freigabe '
+                    . 'gibt es keinen Kundenpreis, von dem etwas abweichen könnte.',
+                'q' => fn (Team $t) => $this->foodbooksMitPreisDrift($t),
+            ],
         ];
+    }
+
+    /**
+     * Spec 21 · S4c-2 — die frame-gestützte Hälfte von Tranche D. Baugleich zu
+     * {@see konzepteMitFrameBefund} (PHP-Pass → `whereIn`, keine Memoisierung), aber auf
+     * die **Kapitel-Befunde** geschnitten: `CoverageService::pruefeKapitel` stempelt genau
+     * diesen Befunden eine `chapter_id` auf, alles ohne ist ein Frame-Kopf- oder Slot-Befund
+     * und damit ein anderer Sachverhalt (der wäre das Foodbook-Gegenstück zu
+     * `konzept_preisband_verletzt`, nicht das Kapitel-Ziel).
+     *
+     * **Die Ziel-Vererbung n-tief steckt in `kapitelKettenZiel`** (self + Eltern hoch, erstes
+     * gesetztes gewinnt) und der Ist-Rollup über alle Nachfahren in `istFoodbook` — beides
+     * wird hier bewusst NICHT nachgebaut. Eine eigene Auflösung wäre die zweite Wahrheit,
+     * an der Signal und Planungs-Rail auseinanderlaufen.
+     *
+     * Bekannte Grenze, bewusst so: ohne Planungs-Gerüst am Buch gibt `coverage()` früh
+     * `hat_geruest=false` zurück, ein von Hand gesetztes Kapitel-Ziel wird dann nirgends
+     * ausgewertet — auch nicht in der UI. Der Signal-Layer richtet das nicht einseitig
+     * (→ Verbesserungs-Backlog), sonst meldete er einen Befund, den keine Fläche zeigt.
+     */
+    private function foodbooksMitKapitelZielBefund(Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        $kandidaten = $this->foodbooksInGebrauch($team)
+            ->whereExists(fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_planning_frames as pf')
+                ->where('pf.owner_type', 'foodbook')
+                ->whereColumn('pf.owner_id', 'foodalchemist_foodbooks.id')
+                ->whereNull('pf.deleted_at'))
+            ->pluck('id')->all();
+
+        $treffer = [];
+        foreach ($kandidaten as $id) {
+            foreach ($this->coverage->coverage($team, 'foodbook', (int) $id)['befunde'] as $b) {
+                if ($b['ampel'] === 'verletzt' && ($b['chapter_id'] ?? null) !== null) {
+                    $treffer[] = (int) $id;
+                    break;
+                }
+            }
+        }
+
+        return $this->foodbooksInGebrauch($team)->whereIn('id', $treffer);
+    }
+
+    /**
+     * Spec 21 · S4c-2 — die Snapshot-Hälfte von Tranche D.
+     *
+     * „Stale" heißt hier **der freigegebene Kundenpreis ist überholt**, und diese Aussage
+     * hat im System genau eine Quelle: {@see VkSnapshotService::pending} vergleicht den
+     * eingefrorenen VK gegen den live gerechneten, mit der Team-Leitplanke als Schwelle.
+     * Dieselbe Liste füttert das Signal `vk_anpassung_empfohlen` — dort je Gericht, hier je
+     * Buch. Zwei Objekte, eine Wahrheit: eine eigene Schwelle im Foodbook-Layer hieße, dass
+     * ein Preis am Gericht schon driftet und am Buch noch nicht.
+     *
+     * Das Buch-Signal ist trotzdem kein Duplikat, sondern die andere Frage: nicht „welcher
+     * Preis muss nachgezogen werden", sondern „welches Dokument steht mit einem falschen
+     * Preis beim Kunden" — nur die zweite Frage hat einen Adressaten außerhalb der Küche.
+     *
+     * Ein Team-weiter `pending()`-Aufruf statt einer Rechnung je Buch: die Kandidaten-Menge
+     * ist klein (nur Gerichte MIT Freigabe) und hängt nicht am Buch.
+     */
+    private function foodbooksMitPreisDrift(Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        $driftend = array_flip(array_map(
+            static fn (array $p): int => (int) $p['recipe_id'],
+            $this->vkSnapshots->pending($team)
+        ));
+
+        $treffer = [];
+        if ($driftend !== []) {
+            foreach ($this->foodbooksFreigegeben($team)->pluck('id') as $id) {
+                foreach ($this->foodbookGerichtIds((int) $id) as $recipeId) {
+                    if (isset($driftend[$recipeId])) {
+                        $treffer[] = (int) $id;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $this->foodbooksFreigegeben($team)->whereIn('id', $treffer);
+    }
+
+    /**
+     * Dritte Arbeitsmenge der Tranche (nach `foodbooksInGebrauch` und der Go-Menge):
+     * Bücher, die **draußen** sind. Gegenüber `foodbooksInGebrauch` fällt genau die Phase
+     * `kalkulation` weg — dort ist das Verschieben von Preisen die Arbeit selbst, und ein
+     * Signal darauf wäre exakt das Über-Flaggen, das Spec 21 §9 ausschließt. Der
+     * Versand-Snapshot am Kapitel bleibt drin: was versendet wurde, ist beim Kunden.
+     */
+    private function foodbooksFreigegeben(Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        return $this->foodbooksNichtArchiviert($team)
+            ->where(fn ($w) => $w
+                ->whereIn('status', self::FOODBOOK_STATUS_IN_GEBRAUCH)
+                ->orWhere('phase', 'freigabe')
+                ->orWhereExists(fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_foodbook_chapters as sk')
+                    ->whereColumn('sk.foodbook_id', 'foodalchemist_foodbooks.id')
+                    ->whereNull('sk.deleted_at')
+                    ->whereNotNull('sk.snapshot_at')));
+    }
+
+    /**
+     * Die Gerichte EINES Foodbooks über beide Befüllungs-Arten der Spec-19-Duality:
+     * `recipe_ref`-Block (Einzelgericht) und `concept_ref`-Block (Paket/Konzept, dessen
+     * Gerichte über {@see konzeptGerichtIds} kommen — inklusive Paket-Slots).
+     *
+     * **Nur sichtbare Blöcke**, dieselbe Grenze wie bei {@see kapitelOhneInhalt}: beurteilt
+     * wird, was im Kundendokument LANDET. Ein ausgeschalteter Block trägt keinen Preis nach
+     * draußen und kann deshalb auch keinen überholten zeigen.
+     *
+     * @return list<int>
+     */
+    private function foodbookGerichtIds(int $foodbookId): array
+    {
+        $bloecke = DB::table('foodalchemist_foodbook_blocks as fb')
+            ->join('foodalchemist_foodbook_chapters as k', 'k.id', '=', 'fb.chapter_id')
+            ->where('k.foodbook_id', $foodbookId)
+            ->whereNull('k.deleted_at')
+            ->whereNull('fb.deleted_at')
+            ->where('fb.visible', true)
+            ->get(['fb.sales_recipe_id', 'fb.concept_id']);
+
+        $ids = [];
+        foreach ($bloecke as $b) {
+            if ($b->sales_recipe_id !== null) {
+                $ids[] = (int) $b->sales_recipe_id;
+            }
+            if ($b->concept_id !== null) {
+                $ids = array_merge($ids, $this->konzeptGerichtIds((int) $b->concept_id));
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     /**
