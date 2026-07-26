@@ -1648,6 +1648,10 @@ class FoodbookService
                 $row = [
                     'title' => $k->consumer_title ?: $k->title,
                     'title_intern' => $k->title,           // interner Titel für die Projektleitung-Sicht
+                    // Spec 03 · L2b: die Kapitel-Hinführung. Das Feld existierte im Schema und war
+                    // über MCP schreibbar, wurde aber von keiner Projektion gelesen — ein Kundentext,
+                    // der nie beim Kunden ankam. Gleiche Rolle wie `fb->description` auf Buch-Ebene.
+                    'text' => trim((string) $k->description) ?: null,
                     'anker' => 'k' . $k->id,               // Navleiste-Sprungziel (klickbar in HTML + PDF)
                     'depth' => $depth,
                     'bloecke' => $bloecke,
@@ -1810,6 +1814,39 @@ class FoodbookService
     }
 
     /**
+     * Spec 03 · L2b — dasselbe für die **Kapitel**-Ebene (`foodbook_chapters.description`).
+     * Eigener Einstieg, aber derselbe Prompt-Key: die Ebene steht im Kontext (`ebene`),
+     * nicht im Key. Persistiert ebenfalls nichts — Übernehmen bleibt ein menschlicher Akt.
+     *
+     * @return array{text: string, confidence: ?float, call_log_id: ?int}
+     */
+    public function kiKapitelKundentextVorschlag(Team $team, int $kapitelId): array
+    {
+        $k = $this->ownedKapitel($team, $kapitelId);           // D1: Pflege nur durchs Besitzer-Team
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($k->foodbook_id);
+
+        $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+            'foodbook.kundentext',
+            $this->kapitelKundentextKontext($team, $fb, $k),
+            [
+                'food_dna_foodbook_id' => (int) $fb->id,
+                'food_dna_crm_company_id' => $fb->crm_company_id !== null ? (int) $fb->crm_company_id : null,
+                // Ziel ist das KAPITEL, nicht das Buch — die Audit-Zeile muss zeigen, welches
+                // Feld der Vorschlag füllen soll (sonst sind n Kapitel-Calls nicht unterscheidbar).
+                'target_table' => 'foodalchemist_foodbook_chapters',
+                'target_id' => (int) $k->id,
+            ],
+        );
+
+        $text = trim((string) ($proposal->werte['text'] ?? ''));
+        if ($text === '') {
+            throw new \RuntimeException('Die KI hat keinen Text geliefert — bitte erneut versuchen.');
+        }
+
+        return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+    }
+
+    /**
      * Kontext-Vertrag des Kundentexts: WAS im Angebot steht (Gliederung über die
      * Wording-Kette — dieselben Kunden-Labels wie im PDF, nicht die internen Namen)
      * + WIE es gerahmt ist (Leitplanken) + das Roh-Briefing als Umformungs-Vorlage.
@@ -1823,22 +1860,7 @@ class FoodbookService
 
         $gliederung = [];
         foreach ($voll->chapters as $k) {
-            $positionen = [];
-            foreach ($k->blocks as $b) {
-                if (! $b->visible) {
-                    continue;                                        // Export-Filter gilt auch für die KI-Sicht
-                }
-                $t = trim((string) $this->dokBlockLabel($b));
-                if ($t !== '') {
-                    $positionen[] = $t;
-                }
-            }
-            $gliederung[] = [
-                'kapitel' => trim((string) ($k->consumer_title ?: $k->title)),
-                // Deckel gegen Prompt-Aufblähung: ein 60-Positionen-Buffet-Kapitel braucht
-                // die KI nicht vollständig, um den Bogen zu spannen.
-                'positionen' => array_slice(array_values(array_unique($positionen)), 0, 12),
-            ];
+            $gliederung[] = $this->kundentextKapitelZeile($k);
             if (count($gliederung) >= 20) {
                 break;
             }
@@ -1854,6 +1876,70 @@ class FoodbookService
             'briefing_ist' => $briefing !== '' ? $briefing : null,
             'gliederung' => $gliederung,
             'leitplanken' => $this->leitplanken($team, $voll),
+        ];
+    }
+
+    /**
+     * Kontext-Vertrag der Kapitel-Ebene. Drei Unterschiede zur Buch-Ebene, jeder mit Grund:
+     *  · Die `gliederung` ist auf DIESES Kapitel geschnitten (plus seine Unterkapitel — ein
+     *    Eltern-Kapitel ist eine Klammer, sein Inhalt hängt darunter). Die Nachbar-Kapitel
+     *    gehören nicht dazu: die Hinführung soll das Kapitel eröffnen, nicht das Buch.
+     *  · `briefing_ist` ist der **Kapitel**-Text, falls schon einer steht (Umformen statt
+     *    Neuschreiben, wie auf der Buch-Ebene). Das Buch-Briefing kommt getrennt als
+     *    `rahmen_einleitung` mit — damit die Hinführung nicht die Einleitung wiederholt.
+     *  · `leitplanken` werden MIT Kapitel aufgelöst (Zielgruppen-/Kreativ-Kaskade
+     *    Kapitel → Foodbook), sonst schriebe die KI gegen den Buch-Default.
+     *
+     * @return array<string, mixed>
+     */
+    private function kapitelKundentextKontext(Team $team, FoodAlchemistFoodbook $fb, FoodAlchemistFoodbookKapitel $k): array
+    {
+        $gliederung = [$this->kundentextKapitelZeile($k)];
+        foreach ($k->children()->limit(19)->get() as $kind) {
+            $gliederung[] = $this->kundentextKapitelZeile($kind);
+        }
+
+        $kapitelText = trim((string) $k->description);
+        $rahmen = trim((string) $fb->description);
+
+        return [
+            'ebene' => 'kapitel',
+            'titel' => trim((string) ($k->consumer_title ?: $k->title)),
+            'foodbook_titel' => $fb->label,
+            'kunde' => $fb->customer,
+            'personen' => $fb->personen,
+            'briefing_ist' => $kapitelText !== '' ? $kapitelText : null,
+            'rahmen_einleitung' => $rahmen !== '' ? $rahmen : null,
+            'gliederung' => $gliederung,
+            'leitplanken' => $this->leitplanken($team, $fb, null, $k),
+        ];
+    }
+
+    /**
+     * Eine Kapitel-Zeile der KI-Gliederung: Kunden-Label des Kapitels + seine sichtbaren
+     * Positionen über die Wording-Kette. Von beiden Ebenen geteilt, damit ein Kapitel in
+     * der Buch- und in der Kapitel-Sicht dasselbe zeigt.
+     *
+     * @return array{kapitel: string, positionen: list<string>}
+     */
+    private function kundentextKapitelZeile(FoodAlchemistFoodbookKapitel $k): array
+    {
+        $positionen = [];
+        foreach ($k->blocks as $b) {
+            if (! $b->visible) {
+                continue;                                            // Export-Filter gilt auch für die KI-Sicht
+            }
+            $t = trim((string) $this->dokBlockLabel($b));
+            if ($t !== '') {
+                $positionen[] = $t;
+            }
+        }
+
+        return [
+            'kapitel' => trim((string) ($k->consumer_title ?: $k->title)),
+            // Deckel gegen Prompt-Aufblähung: ein 60-Positionen-Buffet-Kapitel braucht
+            // die KI nicht vollständig, um den Bogen zu spannen.
+            'positionen' => array_slice(array_values(array_unique($positionen)), 0, 12),
         ];
     }
 

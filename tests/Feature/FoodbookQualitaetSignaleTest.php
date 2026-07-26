@@ -193,7 +193,9 @@ it('zählt keine Skizze ohne Go und keine, aus der etwas geworden ist', function
 it('löst Foodbook-Objekte in beide Richtungen auf (trifftObjekt + signaleAmObjekt)', function () {
     $kaputt = $this->makeFoodbook($this->rootTeam, 'Leeres Buch');
     $sauber = $this->makeFoodbook($this->rootTeam, 'Volles Buch');
-    $this->makeFoodbookBlock($this->makeChapter($sauber));
+    // Kundentext am Kapitel, sonst greift `foodbook_kapitel_ohne_text` (Spec 03 L2b) und
+    // „sauber" wäre nicht mehr sauber — hier soll das Buch bei KEINEM Check auftauchen.
+    $this->makeFoodbookBlock($this->makeChapter($sauber, ['description' => 'Ein Abend am Wasser.']));
 
     expect($this->dq->trifftObjekt($this->rootTeam, 'foodbook_kapitel_leer', 'foodbook', $kaputt->id))->toBeTrue()
         ->and($this->dq->trifftObjekt($this->rootTeam, 'foodbook_kapitel_leer', 'foodbook', $sauber->id))->toBeFalse()

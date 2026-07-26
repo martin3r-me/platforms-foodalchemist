@@ -68,6 +68,10 @@ enum SignalTyp: string
     // die schon draußen sind: in der Kalkulation SOLLEN Preise sich bewegen.
     case FoodbookZielVerfehlt = 'foodbook_ziel_verfehlt';
     case FoodbookStale = 'foodbook_stale';
+    // L2b (Spec 03) hat den Fixer nachgeliefert — das Kapitel-Textfeld gab es im Editor
+    // vorher gar nicht, und ein Signal ohne Fixer ist Rauschen (Spec 21 §9). Bewusst
+    // `info`: ein Kapitel ohne Hinführung ist druckbar, nur nicht ausformuliert.
+    case FoodbookKapitelOhneText = 'foodbook_kapitel_ohne_text';
     // Spec 21 Tranche E · E3: Meta-Signal über die Zeitreihe — ein Zähler ist gegenüber
     // dem Vorlauf gestiegen. Alarmiert bei *Veränderung*, nicht bei Bestand; das ist der
     // eigentliche „System im Blick"-Mechanismus.
@@ -110,6 +114,7 @@ enum SignalTyp: string
             self::FoodbookSkizzeUngeerdet => 'Kreativ-Skizze nach dem Go nicht geerdet',
             self::FoodbookZielVerfehlt => 'Foodbook verfehlt ein Kapitel-Ziel',
             self::FoodbookStale => 'Foodbook zeigt einen überholten Preis',
+            self::FoodbookKapitelOhneText => 'Foodbook-Kapitel ohne Hinführung',
             self::QualitaetDrift => 'Qualität verschlechtert sich',
         };
     }
@@ -152,6 +157,7 @@ enum SignalTyp: string
             self::FoodbookSkizzeUngeerdet => 'heroicon-o-sparkles',
             self::FoodbookZielVerfehlt => 'heroicon-o-flag',
             self::FoodbookStale => 'heroicon-o-clock',
+            self::FoodbookKapitelOhneText => 'heroicon-o-chat-bubble-left-ellipsis',
             self::QualitaetDrift => 'heroicon-o-arrow-trending-down',
         };
     }

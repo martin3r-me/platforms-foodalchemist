@@ -45,6 +45,11 @@
                     @endif
                 </div>
 
+                {{-- Spec 03 · L2b: Hinführung des Kapitels — dieselbe Projektion wie im PDF. --}}
+                @if(! empty($k['text']))
+                    <p class="text-sm text-gray-600 whitespace-pre-line mb-3">{{ $k['text'] }}</p>
+                @endif
+
                 {{-- Bild-Platzhalter (echte Gericht-/Hero-Bilder = spätere Iteration, #461) --}}
                 <div class="mb-4 rounded-xl border border-dashed border-violet-300/50 bg-violet-500/[0.03] py-8 text-center text-[11px] text-violet-400">
                     🖼 Bild folgt

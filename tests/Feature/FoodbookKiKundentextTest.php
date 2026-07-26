@@ -200,3 +200,135 @@ it('L2: ohne Provider bleibt die Fläche stehen und sagt es (kein Crash)', funct
         ->assertSet('kiTextVorschau', null)
         ->assertSet('form.description', 'Bestandstext.');
 });
+
+// ── L2b — dieselbe Mechanik auf der Kapitel-Ebene ───────────────────────────
+//
+// Zwei Dinge sind hier NEU gegenüber L2a und darum die Prüfmasse:
+//  1. **Ein Prompt-Key, zwei Ebenen.** Unterschieden wird nur über `ebene` im Kontext;
+//     der Kapitel-Kontext ist auf DIESES Kapitel geschnitten (Nachbar-Kapitel gehören
+//     nicht dazu) und trägt die Buch-Einleitung getrennt als `rahmen_einleitung`.
+//  2. **Ein geteilter Vorschau-Zustand für beide Flächen** (`kiTextZiel`). Der teuerste
+//     Fehler wäre, dass ein Kapitel-Vorschlag im Buch-Feld landet — oder im Feld des
+//     nächsten Kapitels, nachdem jemand weitergeklickt hat.
+
+it('L2b: der Kapitel-Kontext ist auf DIESES Kapitel geschnitten und nennt die Buch-Einleitung getrennt', function () {
+    bindKundentextStub('Text.');
+    $fb = fbMitInhalt($this->rootTeam, 'Rustikal, viel Gemüse, kein Schwein.');
+    $kap = $fb->chapters()->first();
+    // Nachbar-Kapitel mit eigener Position — es darf im Kapitel-Kontext NICHT auftauchen.
+    $nachbar = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Desserts']);
+    $this->foodbooks->updateKapitel($this->rootTeam, $nachbar->id, ['consumer_title' => 'Süßes zum Schluss']);
+
+    $this->foodbooks->kiKapitelKundentextVorschlag($this->rootTeam, $kap->id);
+    $prompt = $GLOBALS['ki_kundentext_user_prompt'] ?? '';
+
+    expect($prompt)->toContain('"ebene": "kapitel"')
+        ->toContain('Unser Menü')                       // Konsumententitel des Kapitels
+        ->toContain('Zanderfilet auf Linsen')           // seine Position aus der Wording-Kette
+        ->toContain('rahmen_einleitung')                // Buch-Briefing als Rahmen, nicht als Vorlage
+        ->toContain('Rustikal, viel Gemüse')
+        ->not->toContain('Süßes zum Schluss');          // das Nachbar-Kapitel eröffnet ein anderer Text
+});
+
+it('L2b: ein bestehender Kapitel-Text ist die Umformungs-Vorlage (briefing_ist)', function () {
+    bindKundentextStub('Text.');
+    $fb = fbMitInhalt($this->rootTeam);
+    $kap = $fb->chapters()->first();
+    $this->foodbooks->updateKapitel($this->rootTeam, $kap->id, ['description' => 'Stichworte: leicht, Fisch, Sommer.']);
+
+    $this->foodbooks->kiKapitelKundentextVorschlag($this->rootTeam, $kap->id);
+
+    expect($GLOBALS['ki_kundentext_user_prompt'] ?? '')->toContain('Stichworte: leicht, Fisch, Sommer.');
+});
+
+it('L2b: Vorschlag schreibt NICHTS an die Kapitel-description', function () {
+    bindKundentextStub('Der Auftakt gehört dem Zander.');
+    $fb = fbMitInhalt($this->rootTeam);
+    $kap = $fb->chapters()->first();
+
+    $r = $this->foodbooks->kiKapitelKundentextVorschlag($this->rootTeam, $kap->id);
+
+    expect($r['text'])->toContain('Zander')
+        ->and($kap->refresh()->description)->toBeNull();
+});
+
+it('L2b: geerbtes Kapitel — Vorschlag nur durchs Besitzer-Team (D1)', function () {
+    bindKundentextStub('Text.');
+    $fb = fbMitInhalt($this->rootTeam);
+
+    expect(fn () => $this->foodbooks->kiKapitelKundentextVorschlag($this->childA, $fb->chapters()->first()->id))
+        ->toThrow(RuntimeException::class, 'Besitzer-Team');
+});
+
+it('L2b: Fläche — Übernehmen füllt das Kapitel-Feld, gespeichert wird erst beim Verlassen', function () {
+    bindKundentextStub('Wir beginnen leicht.');
+    $fb = fbMitInhalt($this->rootTeam);
+    $kap = $fb->chapters()->first();
+
+    $c = Livewire::test(Index::class)
+        ->call('waehle', $fb->id)
+        ->call('kapitelWaehle', $kap->id)
+        ->call('kiKapitelText')
+        ->assertSet('kiTextZiel', 'kapitel')
+        ->assertSet('kiTextVorschau', 'Wir beginnen leicht.')
+        ->assertSet('kapitelForm.description', '')      // Vorschau berührt das Feld nicht
+        ->call('kiTextUebernehmen')
+        ->assertSet('kapitelForm.description', 'Wir beginnen leicht.')
+        // Der Buch-Text bleibt unberührt — das Ziel entscheidet kiTextZiel, nicht der Knopf
+        ->assertSet('form.description', '');
+
+    expect($kap->refresh()->description)->toBeNull();
+
+    $c->call('kapitelSpeichern');
+    expect($kap->refresh()->description)->toBe('Wir beginnen leicht.');
+});
+
+it('L2b: Kapitel-Wechsel verwirft den Vorschlag (er darf nicht im falschen Feld landen)', function () {
+    bindKundentextStub('Vorschlag fürs erste Kapitel.');
+    $fb = fbMitInhalt($this->rootTeam);
+    $erstes = $fb->chapters()->first();
+    $zweites = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Desserts']);
+
+    Livewire::test(Index::class)
+        ->call('waehle', $fb->id)
+        ->call('kapitelWaehle', $erstes->id)
+        ->call('kiKapitelText')
+        ->assertSet('kiTextVorschau', 'Vorschlag fürs erste Kapitel.')
+        ->call('kapitelWaehle', $zweites->id)
+        ->assertSet('kiTextVorschau', null)
+        ->call('kiTextUebernehmen')                     // ohne Vorschlag ein No-op
+        ->assertSet('kapitelForm.description', '');
+
+    expect($zweites->refresh()->description)->toBeNull();
+});
+
+it('L2b: der Kapitel-Text kommt im Kundendokument an (er wurde vorher von niemandem gelesen)', function () {
+    $fb = fbMitInhalt($this->rootTeam);
+    $kap = $fb->chapters()->first();
+    $this->foodbooks->updateKapitel($this->rootTeam, $kap->id, ['description' => "Wir beginnen leicht.\nDann wird es kräftig."]);
+
+    $daten = $this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh());
+
+    // Ohne diese Projektion wäre L2b ein Feld, das nie beim Kunden ankommt — das Signal
+    // `foodbook_kapitel_ohne_text` hätte dann eine Lücke gemeldet, die nichts bewirkt.
+    expect($daten['kapitel'][0]['text'])->toBe("Wir beginnen leicht.\nDann wird es kräftig.");
+
+    // Leer/nur-Leerzeichen kommt als null heraus, damit die Views nichts rendern müssen.
+    $this->foodbooks->updateKapitel($this->rootTeam, $kap->id, ['description' => '   ']);
+    expect($this->foodbooks->dokumentDaten($this->rootTeam, $fb->refresh())['kapitel'][0]['text'])->toBeNull();
+});
+
+it('L2b: zurück auf den Buch-Kopf räumt die Kapitel-Vorschau weg', function () {
+    bindKundentextStub('Kapitel-Vorschlag.');
+    $fb = fbMitInhalt($this->rootTeam);
+
+    Livewire::test(Index::class)
+        ->call('waehle', $fb->id)
+        ->call('kapitelWaehle', $fb->chapters()->first()->id)
+        ->call('kiKapitelText')
+        ->assertSet('kiTextVorschau', 'Kapitel-Vorschlag.')
+        ->call('kopfAnzeigen')
+        ->assertSet('kiTextZiel', 'foodbook')
+        ->assertSet('kiTextVorschau', null)
+        ->assertSet('form.description', '');
+});

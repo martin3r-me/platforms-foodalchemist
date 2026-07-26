@@ -616,7 +616,9 @@ return [
                 . '2–4 Sätze Fließtext, keine Überschrift, keine Aufzählung, keine Anrede und keine '
                 . 'Grußformel, im mitgegebenen Schreibstil-Duktus. Keine Preise, keine Gramm-/Stück-Mengen. '
                 . 'Nenne höchstens drei konkrete Positionen aus der Gliederung als Beispiel und nur, wenn '
-                . 'sie dort stehen — der Text soll den Bogen spannen, nicht die Karte wiederholen.',
+                . 'sie dort stehen — der Text soll den Bogen spannen, nicht die Karte wiederholen. '
+                . 'Steht «rahmen_einleitung» im Kontext, ist das die schon geschriebene Einleitung des '
+                . 'Angebots: greife sie nicht auf, sondern führe von dort ins Kapitel weiter.',
         ],
         'vk.behaelter' => [
             'tier' => 'B',

@@ -479,7 +479,8 @@ class Index extends Component
 
     public array $form = ['label' => '', 'customer' => '', 'jahr' => null, 'personen' => null, 'status' => 'draft', 'description' => ''];
 
-    public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'price_mode' => 'auto', 'price_per_person' => null];
+    /** `description` = Kapitel-Kundentext (Spec 03 · L2b) — im Editor vorher gar nicht erreichbar. */
+    public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'description' => '', 'price_mode' => 'auto', 'price_per_person' => null];
 
     /**
      * Spec 03 · L2: KI-Kundentext — VORSCHAU-Zustand. Der Vorschlag landet hier und
@@ -493,6 +494,14 @@ class Index extends Component
 
     /** Fehler ODER Erfolgs-Hinweis der KI-Text-Fläche (eine Zeile, ein Zustand). */
     public ?string $kiTextHinweis = null;
+
+    /**
+     * Spec 03 · L2b: WELCHES Feld der Vorschlag füllen soll — `foodbook` (Einleitung) oder
+     * `kapitel` (Hinführung). EIN Vorschau-Zustand für beide Ebenen, weil beide Flächen
+     * nie gleichzeitig sichtbar sind (Master-Detail: Buch-Kopf ODER Kapitel). Zwei
+     * Zustands-Sätze wären zwei Wahrheiten über denselben Ablauf.
+     */
+    public string $kiTextZiel = 'foodbook';
 
     public string $neuesKapitelTitel = '';
 
@@ -565,6 +574,9 @@ class Index extends Component
         $this->selectedKapitelId = null;
         $this->editBlockId = null;
         $this->markiert = [];
+        if ($this->kiTextZiel === 'kapitel') {
+            $this->kiTextZuruecksetzen('foodbook');   // die Kapitel-Fläche ist weg, ihr Vorschlag auch
+        }
     }
 
     public function speichern(FoodbookService $svc): void
@@ -589,14 +601,45 @@ class Index extends Component
      */
     public function kiEinleitung(FoodbookService $svc): void
     {
-        $this->kiTextVorschau = null;
-        $this->kiTextConfidence = null;
-        $this->kiTextHinweis = null;
+        $this->kiTextZuruecksetzen('foodbook');
         if ($this->selectedId === null) {
             return;
         }
+        $this->kiTextHolen(fn () => $svc->kiKundentextVorschlag($this->team(), $this->selectedId));
+    }
+
+    /**
+     * Spec 03 · L2b: Hinführung fürs gewählte Kapitel holen. Gleiche zwei Stufen wie auf
+     * der Buch-Ebene — der Vorschlag berührt `kapitelForm.description` nie.
+     */
+    public function kiKapitelText(FoodbookService $svc): void
+    {
+        $this->kiTextZuruecksetzen('kapitel');
+        if ($this->selectedKapitelId === null) {
+            return;
+        }
+        $this->kiTextHolen(fn () => $svc->kiKapitelKundentextVorschlag($this->team(), $this->selectedKapitelId));
+    }
+
+    private function kiTextZuruecksetzen(string $ziel): void
+    {
+        $this->kiTextZiel = $ziel;
+        $this->kiTextVorschau = null;
+        $this->kiTextConfidence = null;
+        $this->kiTextHinweis = null;
+    }
+
+    /**
+     * Der gemeinsame Call-Rahmen beider Ebenen: die typisierten KI-Ausfälle werden zu
+     * genau einer Hinweis-Zeile. Bewusst EINE Stelle — sonst driften die Meldungen
+     * zwischen Buch- und Kapitel-Knopf auseinander.
+     *
+     * @param  \Closure():array{text:string,confidence:?float,call_log_id:?int}  $call
+     */
+    private function kiTextHolen(\Closure $call): void
+    {
         try {
-            $r = $svc->kiKundentextVorschlag($this->team(), $this->selectedId);
+            $r = $call();
             $this->kiTextVorschau = $r['text'];
             $this->kiTextConfidence = $r['confidence'];
         } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException $e) {
@@ -611,16 +654,27 @@ class Index extends Component
     /**
      * Vorschlag ins Formular übernehmen — bewusst OHNE zu speichern: der Text steht
      * danach sichtbar im Feld und geht denselben Weg wie jede Handeingabe („Speichern").
+     * Das Ziel entscheidet `kiTextZiel`, nicht der Aufrufer: der Knopf sitzt in beiden
+     * Ebenen an derselben Vorschau-Fläche.
      */
     public function kiTextUebernehmen(): void
     {
         if ($this->kiTextVorschau === null) {
             return;
         }
-        $this->form['description'] = $this->kiTextVorschau;
+        if ($this->kiTextZiel === 'kapitel') {
+            if ($this->selectedKapitelId === null) {
+                return;                                              // Kapitel gewechselt, während die KI lief
+            }
+            $this->kapitelForm['description'] = $this->kiTextVorschau;
+            $hinweis = 'Text steht im Kapitel-Feld — noch nicht gespeichert (Feld verlassen speichert).';
+        } else {
+            $this->form['description'] = $this->kiTextVorschau;
+            $hinweis = 'Text steht im Feld — noch nicht gespeichert („Speichern" oben).';
+        }
         $this->kiTextVorschau = null;
         $this->kiTextConfidence = null;
-        $this->kiTextHinweis = 'Text steht im Feld — noch nicht gespeichert („Speichern" oben).';
+        $this->kiTextHinweis = $hinweis;
     }
 
     public function kiTextVerwerfen(): void
@@ -769,6 +823,11 @@ class Index extends Component
 
     private function ladeKapitelForm(FoodbookService $svc): void
     {
+        // Kapitel-Wechsel = anderer Gegenstand: ein Vorschlag fürs vorige Kapitel darf hier
+        // nicht stehen bleiben (er würde beim „Übernehmen" im falschen Feld landen).
+        if ($this->kiTextZiel === 'kapitel') {
+            $this->kiTextZuruecksetzen('kapitel');
+        }
         if ($this->selectedKapitelId === null) {
             return;
         }
@@ -776,6 +835,7 @@ class Index extends Component
         if ($k) {
             $this->kapitelForm = [
                 'title' => $k->title, 'consumer_title' => $k->consumer_title ?? '',
+                'description' => $k->description ?? '',
                 'price_mode' => $k->price_mode, 'price_per_person' => $k->price_per_person,
             ];
         }
@@ -785,6 +845,10 @@ class Index extends Component
     {
         if ($this->selectedKapitelId !== null) {
             $svc->updateKapitel($this->team(), $this->selectedKapitelId, $this->kapitelForm);
+            // Der übernommene KI-Text ist jetzt echter Feld-Inhalt (Muster wie `speichern()`).
+            if ($this->kiTextZiel === 'kapitel') {
+                $this->kiTextHinweis = null;
+            }
         }
     }
 

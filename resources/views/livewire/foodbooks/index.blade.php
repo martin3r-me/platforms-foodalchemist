@@ -237,29 +237,10 @@
                               @input="$el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
                               class="{{ $input }} resize-none overflow-hidden min-h-[4.5rem]" placeholder="Briefing / Einleitungstext fürs Angebot — ✨ KI-Text formt daraus den Kundentext"></textarea>
 
-                    @if($kiTextVorschau !== null)
-                        {{-- Vorschau: der Vorschlag ist noch nirgends geschrieben. „Ersetzen" statt „Übernehmen",
-                             wenn im Feld schon Text steht — überschreiben soll man sehen, nicht bemerken. --}}
-                        @php($fbBriefingDa = trim((string) ($form['description'] ?? '')) !== '')
-                        <div class="mt-2 rounded-xl border border-violet-300/60 bg-violet-500/5 p-3 space-y-2" data-fb-ki-vorschau>
-                            {{-- @if NIE direkt an ein Wortzeichen kleben: Blade lässt die Direktive dann
-                                 uncompiliert stehen, das @endif aber nicht → verwaistes endif im Kompilat. --}}
-                            <p class="{{ $label }} !mb-0">KI-Vorschlag — noch nicht übernommen
-                                @if($kiTextConfidence !== null) · Konfidenz {{ number_format($kiTextConfidence * 100, 0) }} %@endif
-                            </p>
-                            <p class="text-xs text-gray-700 whitespace-pre-line">{{ $kiTextVorschau }}</p>
-                            @if($fbBriefingDa)
-                                <p class="text-[11px] text-amber-600">Im Feld steht schon ein Text — „Ersetzen" schreibt ihn über (endgültig erst beim Speichern).</p>
-                            @endif
-                            <div class="flex gap-2">
-                                <button type="button" wire:click="kiTextUebernehmen" class="{{ $btnPrimary }}">{{ $fbBriefingDa ? 'Ersetzen' : 'Übernehmen' }}</button>
-                                <button type="button" wire:click="kiTextVerwerfen" class="{{ $btnGhost }}">Verwerfen</button>
-                            </div>
-                        </div>
-                    @endif
-                    @if($kiTextHinweis !== null)
-                        <p class="text-[11px] text-amber-600 mt-1" data-fb-ki-hinweis>{{ $kiTextHinweis }}</p>
-                    @endif
+                    @include('foodalchemist::livewire.foodbooks.partials.ki-text-vorschau', [
+                        'ziel' => 'foodbook',
+                        'vorhanden' => trim((string) ($form['description'] ?? '')) !== '',
+                    ])
                 </div>
             </div>
 
@@ -832,6 +813,28 @@
                         <div><label class="{{ $label }}">Preis-Modus</label>
                             <select wire:model.live="kapitelForm.price_mode" wire:change="kapitelSpeichern" class="{{ $input }}"><option value="auto">auto (Σ Inhalt)</option><option value="manuell">manuell</option></select>
                         </div>
+                    </div>
+
+                    {{-- Spec 03 · L2b: der Kapitel-Kundentext. Bis hierher existierte das Feld nur in
+                         der DB (`foodbook_chapters.description`) — nicht im Editor UND in keiner
+                         Ausgabe; die Dokument-Projektion ist mit dieser Etappe nachgezogen. --}}
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label class="{{ $label }}">Hinführung (Kundentext des Kapitels)</label>
+                            <button type="button" wire:click="kiKapitelText" wire:loading.attr="disabled" wire:target="kiKapitelText"
+                                    title="foodbook.kundentext (Ebene Kapitel): Hinführung aus Kapitel-Inhalt (Wording-Kette), Buch-Einleitung und Marken-Stimme" data-fb-ki-kapiteltext
+                                    class="{{ $btnGhostXs }} text-violet-600">
+                                <span wire:loading.remove wire:target="kiKapitelText">✨ KI-Text</span>
+                                <span wire:loading wire:target="kiKapitelText">✨ schreibt …</span>
+                            </button>
+                        </div>
+                        <textarea wire:model.blur="kapitelForm.description" wire:change="kapitelSpeichern" rows="2"
+                                  class="{{ $input }} resize-none min-h-[3.5rem]"
+                                  placeholder="Kurzer Kundentext, der ins Kapitel einführt — ✨ KI-Text schlägt einen vor"></textarea>
+                        @include('foodalchemist::livewire.foodbooks.partials.ki-text-vorschau', [
+                            'ziel' => 'kapitel',
+                            'vorhanden' => trim((string) ($kapitelForm['description'] ?? '')) !== '',
+                        ])
                     </div>
                 </div>
 

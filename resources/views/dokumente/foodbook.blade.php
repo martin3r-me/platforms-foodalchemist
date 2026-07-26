@@ -71,6 +71,7 @@
         .kapitel h5 { font-size: 12px; }
         .kapitel h3 .pipe, .kapitel h4 .pipe, .kapitel h5 .pipe { color: {{ $brand }}; font-weight: bold; }
         .kapitel:first-of-type h3 { margin-top: 4px; }
+        .kapitel .kaptext { color: #4b5563; font-size: 11px; margin: 0 0 8px; }
         .kapitel .kpreis { float: right; color: #6b7280; font-size: 11px; font-weight: normal; }
         .kapitel .kpreis .ek { color: #9333ea; }
         .kapitel .kpreis .wpz { color: #059669; }
@@ -182,6 +183,12 @@
                 @endif
                 <span class="pipe">|</span> {{ $istIntern ? ($k['title_intern'] ?: $k['title']) : $k['title'] }}
             </{{ $hTag }}>
+
+            {{-- Spec 03 · L2b: Hinführung des Kapitels (gepflegt im Kapitel-Kopf, ✨ KI-Text).
+                 Gleiche Darstellung wie die Buch-Einleitung oben — Fließtext, nl2br, escaped. --}}
+            @if(! empty($k['text']))
+                <div class="kaptext">{!! nl2br(e($k['text'])) !!}</div>
+            @endif
 
             @forelse($k['bloecke'] as $blk)
                 @php($istHeader = $blk['ist_header'] ?? false)

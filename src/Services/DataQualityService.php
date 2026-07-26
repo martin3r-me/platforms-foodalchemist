@@ -877,6 +877,24 @@ class DataQualityService
                     . 'gibt es keinen Kundenpreis, von dem etwas abweichen könnte.',
                 'q' => fn (Team $t) => $this->foodbooksMitPreisDrift($t),
             ],
+            // Spec 03 · L2b hat den Fixer nachgeliefert (Kapitel-Textfeld + KI-Knopf je Kapitel),
+            // damit ist der §9-Vorbehalt erledigt und der Check darf scharf sein.
+            'foodbook_kapitel_ohne_text' => [
+                'label' => 'Foodbooks in Gebrauch mit Kapitel ohne Hinführung',
+                'typ' => SignalTyp::FoodbookKapitelOhneText,
+                'dedup' => 'dq-foodbook-kapitel-ohne-text',
+                // Bewusst `info`, nicht `warnung`: das Kapitel ist druckbar und inhaltlich
+                // vollständig, es ist nur nicht ausformuliert. Als Warnung stünde eine
+                // Formulierungs-Aufgabe neben einem falschen Kundenpreis.
+                'sev' => SignalSeverity::Info,
+                'desc' => 'Mindestens ein befülltes Kapitel dieses Foodbooks hat keinen Kundentext '
+                    . '(`description`) — im Dokument folgt auf die Kapitel-Überschrift direkt die Liste, '
+                    . 'ohne Hinführung. Gemessen werden nur Kapitel, die auch Inhalt TRAGEN: ein leeres '
+                    . 'Kapitel ist bereits `foodbook_kapitel_leer` und braucht keinen Text, sondern '
+                    . 'Gerichte — zwei Signale auf denselben Sachverhalt wären Rauschen. Auflösen im '
+                    . 'Kapitel-Kopf der Leitstelle: das Feld „Hinführung" mit ✨ KI-Text (Spec 03 L2b).',
+                'q' => fn (Team $t) => $this->foodbooksInGebrauch($t)->whereExists($this->kapitelOhneText()),
+            ],
         ];
     }
 
@@ -1115,6 +1133,39 @@ class DataQualityService
             ->whereColumn('k.foodbook_id', 'foodalchemist_foodbooks.id')
             ->whereNull('k.deleted_at')
             ->where('k.status', '!=', 'archived')
+            ->whereExists(fn ($b) => $b->select(DB::raw(1))->from('foodalchemist_foodbook_blocks as fb')
+                ->whereColumn('fb.chapter_id', 'k.id')
+                ->whereNull('fb.deleted_at')
+                ->where('fb.visible', true)
+                ->whereIn('fb.type', self::INHALTS_BLOCK_TYPEN));
+    }
+
+    /**
+     * EXISTS: ein Kapitel dieses Foodbooks, das Inhalt trägt, aber keinen Kundentext.
+     *
+     * Die tragende Grenze ist **„trägt Inhalt"** und damit die Umkehrung von
+     * {@see kapitelOhneInhalt}: beide Checks teilen dieselbe Inhalts-Definition (sichtbarer
+     * `concept_ref`/`recipe_ref`-Block), aber sie schließen sich aus. Ein leeres Kapitel
+     * braucht keine Hinführung, sondern Gerichte — es dort zusätzlich zu melden hieße,
+     * einen Sachverhalt zweimal zu zählen (Spec 21 §9).
+     *
+     * Anders als beim Inhalts-Check ist **kein Blatt-Filter** nötig: geprüft wird, was
+     * Inhalt trägt, und das kann auch ein Eltern-Kapitel mit eigenen Blöcken sein. Eine
+     * reine Klammer ohne eigene Blöcke fällt über dieselbe Bedingung heraus.
+     *
+     * `visible` wird bewusst NICHT am Text geprüft — das Feld hat kein Sichtbarkeits-Flag:
+     * `dokumentDaten` gibt `description` als `text` je Kapitel heraus, sobald das Kapitel
+     * gedruckt wird (Projektion mit L2b nachgezogen; vorher las sie niemand).
+     */
+    private function kapitelOhneText(): \Closure
+    {
+        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_foodbook_chapters as k')
+            ->whereColumn('k.foodbook_id', 'foodalchemist_foodbooks.id')
+            ->whereNull('k.deleted_at')
+            ->where('k.status', '!=', 'archived')
+            // Haus-Muster der Wording-Checks: NULL, leer und „nur Leerzeichen" sind dasselbe
+            // (das Formular schreibt '' statt NULL, ein versehentliches Space wäre kein Text).
+            ->whereRaw("LENGTH(TRIM(COALESCE(k.description, ''))) = 0")
             ->whereExists(fn ($b) => $b->select(DB::raw(1))->from('foodalchemist_foodbook_blocks as fb')
                 ->whereColumn('fb.chapter_id', 'k.id')
                 ->whereNull('fb.deleted_at')

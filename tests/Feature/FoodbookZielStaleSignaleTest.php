@@ -71,14 +71,14 @@ function fzMetrik(array $ebenen, string $key): array
 it('führt beide S4c-2-Typen in der Foodbook-Ebene und schließt Tranche D ab', function () {
     $e = $this->dq->messeAlleEbenen($this->rootTeam);
 
-    expect(array_column($e['foodbook']['metriken'], 'key'))->toBe([
+    // Reihenfolge des Registers bis hierher; `foodbook_kapitel_ohne_text` kam mit Spec 03
+    // L2b dazu (der Fixer fehlte vorher) und wird von FoodbookKapitelTextSignalTest geführt.
+    expect(array_slice(array_column($e['foodbook']['metriken'], 'key'), 0, 4))->toBe([
         'foodbook_kapitel_leer', 'foodbook_skizze_ungeerdet', 'foodbook_ziel_verfehlt', 'foodbook_stale',
     ]);
 
-    // `foodbook_kapitel_ohne_text` bleibt bis L2 bewusst draußen: ein Signal ohne Fixer
-    // ist Rauschen (Spec 21 §9) — die Tranche ist mit vier Typen vollständig.
     $foodbook = array_filter(SignalTyp::cases(), fn (SignalTyp $t) => $t->istFoodbookQualitaet());
-    expect($foodbook)->toHaveCount(4)
+    expect($foodbook)->toHaveCount(5)
         ->and(SignalTyp::FoodbookZielVerfehlt->istKonzeptQualitaet())->toBeFalse()
         ->and(SignalTyp::FoodbookStale->istRezeptQualitaet())->toBeFalse();
 });
