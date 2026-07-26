@@ -13,6 +13,16 @@
         'info' => ['tint' => 'bg-sky-500/10 text-sky-600', 'variant' => 'info'],
     ];
     $sv = $sig !== null ? ($sevMap[$sig->severity->value] ?? $sevMap['info']) : $sevMap['info'];
+    // S3b-2 · Punkt 8: Ton der Zustands-Zeile. Steht bewusst HIER oben im einen Block —
+    // ein zweiter Roh-Block weiter unten würde ab der ersten Kurzform greifen und die
+    // halbe View unkompiliert lassen (s. Warnung oben). Und: NIE die Roh-Block-Direktiven
+    // in einem Kommentar hier drin nennen — der Schluss-Tag würde den Block früh beenden.
+    $polTon = match ($policy['state'] ?? 'alarm') {
+        'stumm' => 'bg-black/[0.03] text-gray-500',
+        'akzeptiert' => 'bg-emerald-500/[0.07] text-emerald-700',
+        'frist_abgelaufen' => 'bg-amber-500/[0.09] text-amber-700',
+        default => 'bg-black/[0.03] text-gray-600',
+    };
 @endphp
 
 <div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04]" data-signal-panel>
@@ -226,6 +236,104 @@
                     Für diesen Signaltyp gibt es keine Einzelaufstellung — der Befund ist aggregiert
                     @if($betroffen['total'] > 0)({{ number_format($betroffen['total'], 0, ',', '.') }} Objekte laut Payload)@endif.
                 </p>
+            @endif
+        </x-foodalchemist::section>
+
+        {{-- ── Punkt 4: Trend-Sparkline (E1) ──────────────────────────────────
+             Gelesen wird die Signal-Seite der Reihe (Schlüssel = Signal-Typ), darum
+             stehen hier echte Labels und keine rohen Metrik-Keys (V-010). --}}
+        @php($verlaufMeta = $policy !== null ? $policy['count'].' offen' : null)
+        <x-foodalchemist::section title="Verlauf" icon="heroicon-o-presentation-chart-line" :meta="$verlaufMeta">
+            @if($spark !== null)
+                <div class="flex items-center gap-3" data-signal-spark>
+                    <svg viewBox="0 0 {{ $spark['w'] }} {{ $spark['h'] }}" class="w-full h-8 overflow-visible" preserveAspectRatio="none" aria-hidden="true">
+                        <polyline points="{{ $spark['points'] }}" fill="none" stroke="currentColor" stroke-width="1.5"
+                                  vector-effect="non-scaling-stroke"
+                                  class="{{ ($policy['delta'] ?? 0) > 0 ? 'text-rose-500' : (($policy['delta'] ?? 0) < 0 ? 'text-emerald-500' : 'text-gray-400') }}" />
+                    </svg>
+                    <div class="shrink-0 text-right">
+                        <div class="text-[13px] font-semibold text-gray-800 leading-none">{{ $spark['letzter'] }}</div>
+                        @if(($policy['delta'] ?? null) !== null && $policy['delta'] !== 0)
+                            <div class="text-[10px] {{ $policy['delta'] > 0 ? 'text-rose-600' : 'text-emerald-600' }}">
+                                {{ $policy['delta'] > 0 ? '+' : '' }}{{ $policy['delta'] }}
+                            </div>
+                        @endif
+                    </div>
+                </div>
+                <p class="text-[10px] text-gray-400 mt-1.5">
+                    {{ $spark['punkte'] }} Messpunkte · min {{ $spark['min'] }} / max {{ $spark['max'] }} ·
+                    seit {{ \Illuminate\Support\Carbon::parse($spark['von'])->format('d.m.Y H:i') }}
+                </p>
+            @else
+                <p class="text-[11px] text-gray-500">
+                    Noch keine Reihe — der Verlauf entsteht ab dem zweiten Detektor-Lauf.
+                    @if(($policy['count'] ?? 0) > 0)Aktuell {{ $policy['count'] }} offen.@endif
+                </p>
+            @endif
+        </x-foodalchemist::section>
+
+        {{-- ── Punkt 8: Policy-Regler (E2) ────────────────────────────────────
+             WICHTIG in der Fläche selbst benannt: der Regler gilt für den TYP, nicht
+             für dieses eine Signal. --}}
+        <x-foodalchemist::section title="Rausch-Guard" icon="heroicon-o-adjustments-horizontal">
+            <x-slot:actions>
+                <button type="button" wire:click="policyFormUmschalten"
+                        class="px-2 py-0.5 rounded-md text-[10px] text-gray-500 hover:text-violet-700 hover:bg-violet-500/[0.08] transition-colors"
+                        data-signal-policy-toggle>{{ $policyForm ? 'schließen' : 'einstellen' }}</button>
+            </x-slot:actions>
+
+            @if($policy !== null)
+                <div class="rounded-lg px-3 py-2 {{ $polTon }}" data-signal-policy-state>
+                    <div class="text-[11px]">{{ $policy['hinweis'] }}</div>
+                    @if($policy['note'])<div class="text-[10px] opacity-80 mt-0.5 italic">{{ $policy['note'] }}</div>@endif
+                    @if($policy['geerbt'])
+                        <div class="text-[10px] opacity-70 mt-0.5">geerbt vom Eltern-Team — Speichern legt eine eigene Zeile an, die sie überstimmt.</div>
+                    @endif
+                </div>
+            @endif
+
+            @if($policyForm)
+                <div class="mt-2 rounded-xl border border-violet-500/20 bg-white/70 px-3 py-2.5 space-y-2" data-signal-policy-form>
+                    <p class="text-[10px] text-gray-500 leading-relaxed">
+                        Gilt für <span class="font-medium">alle</span> Signale vom Typ „{{ $sig->type->label() }}",
+                        nicht nur für dieses. Schwelle und Frist dämpfen nur die Darstellung des Bestands —
+                        ein Zuwachs meldet sich weiter. Nur „stumm" schaltet auch den Drift-Alarm ab.
+                    </p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="block">
+                            <span class="block text-[10px] text-gray-500 mb-0.5">ab Bestand nur Zustands-Zeile</span>
+                            <input type="number" min="0" wire:model="pThreshold" placeholder="—"
+                                   class="w-full px-2 py-1 rounded-md border border-black/10 text-[11px]" data-signal-policy-threshold>
+                        </label>
+                        <label class="block">
+                            <span class="block text-[10px] text-gray-500 mb-0.5">akzeptiert bis</span>
+                            <input type="date" wire:model="pAcceptedUntil"
+                                   class="w-full px-2 py-1 rounded-md border border-black/10 text-[11px]" data-signal-policy-until>
+                        </label>
+                    </div>
+                    <label class="block">
+                        <span class="block text-[10px] text-gray-500 mb-0.5">Begründung (wird angezeigt)</span>
+                        <input type="text" wire:model="pNote" maxlength="255" placeholder="z. B. Sourcing läuft, Frist mit Einkauf abgestimmt"
+                               class="w-full px-2 py-1 rounded-md border border-black/10 text-[11px]" data-signal-policy-note>
+                    </label>
+                    <label class="flex items-center gap-1.5">
+                        <input type="checkbox" wire:model="pMuted"
+                               class="w-3.5 h-3.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-signal-policy-muted>
+                        <span class="text-[11px] text-gray-600">stumm — interessiert nicht (auch kein Drift-Alarm)</span>
+                    </label>
+                    <div class="flex items-center gap-1.5 pt-0.5">
+                        <button type="button" wire:click="policySpeichern"
+                                class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-white bg-violet-600 hover:bg-violet-700"
+                                data-signal-policy-save>
+                            @svg('heroicon-o-check', 'w-3 h-3') Speichern
+                        </button>
+                        @if($policy !== null && $policy['gesetzt'] && ! $policy['geerbt'])
+                            <button type="button" wire:click="policyEntfernen"
+                                    class="px-2 py-1 rounded-lg text-[10px] text-gray-500 hover:text-rose-700 hover:bg-rose-500/[0.08]"
+                                    data-signal-policy-remove>Regler entfernen</button>
+                        @endif
+                    </div>
+                </div>
             @endif
         </x-foodalchemist::section>
     @endif

@@ -134,6 +134,39 @@ class SignalPolicyService
     }
 
     /**
+     * Zustands-Zeile für **einen** Typ — die Panel-Sicht (Spec 21 §7 Punkt 8, Etappe S3b-2).
+     *
+     * Baut über dasselbe {@see zeile()} wie {@see zustand()}, damit State-Ableitung und
+     * Hinweis-Text nicht zweimal existieren; nur die Zähl-Seite ist schmaler (ein Typ statt
+     * aller). Delta kommt aus {@see SignalTrendService::delta()} statt aus `uebersicht()` —
+     * bei der dichten Reihe (E1) sind „zwei jüngste Zeilen dieser Metrik" und „zwei jüngste
+     * Läufe" dasselbe Paar, und die schmale Variante ist eine Query statt drei.
+     *
+     * Zusätzlich `geerbt`: eine vom Eltern-Team übernommene Entscheidung darf man sehen,
+     * aber nicht aus dem Panel löschen (Katalog-Vererbung — überstimmt wird mit einer
+     * eigenen Zeile, das Original bleibt unangetastet).
+     *
+     * @return array<string,mixed>
+     */
+    public function zustandFuer(Team $team, SignalTyp $typ): array
+    {
+        $policy = $this->fuer($team, $typ);
+        $delta = $this->trend->delta($team, $typ->value, FoodAlchemistSignalSnapshot::SOURCE_SIGNALS);
+
+        $zeile = $this->zeile(
+            $typ,
+            (int) ($this->signals->offeneNachTyp($team)[$typ->value] ?? 0),
+            $policy,
+            $delta === null ? null : ['previous' => $delta['previous'], 'delta' => $delta['delta']]
+        );
+
+        $zeile['gesetzt'] = $policy !== null;
+        $zeile['geerbt'] = $policy !== null && ! $policy->isOwnedBy($team);
+
+        return $zeile;
+    }
+
+    /**
      * Typen, deren Einzel-Signale in der Inbox zu einer Zustands-Zeile zusammenfallen.
      * Die Liste filtert die Einzelliste — mit explizit gewähltem Typ-Filter zeigt die
      * UI sie trotzdem (Aufklappen bleibt jederzeit möglich).

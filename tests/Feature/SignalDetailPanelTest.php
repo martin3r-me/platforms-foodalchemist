@@ -189,6 +189,111 @@ it('verweigert den Teil-Fix ohne Auswahl — „alles fixen" bleibt in der Signa
     expect($r->refresh()->allergens_aggregated_at)->toBeNull();
 });
 
+// ── Etappe S3b-2: Policy-Regler (Punkt 8) + Trend-Sparkline (Punkt 4) ──────
+
+it('setzt den Regler für den TYP — nicht für das eine Signal, aus dem er gestellt wurde', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Policy User'));
+
+    // Zwei Signale desselben Typs; der Regler aus dem einen muss am anderen wirken.
+    $a = $this->signals->erzeuge($this->rootTeam, SignalTyp::MargeUnterZiel, SignalSeverity::Warnung, 'Marge A', ['dedup_key' => 'm-a']);
+    $b = $this->signals->erzeuge($this->rootTeam, SignalTyp::MargeUnterZiel, SignalSeverity::Warnung, 'Marge B', ['dedup_key' => 'm-b']);
+
+    $lw = Livewire::test(DetailPanel::class)
+        ->dispatch('signal-selected', id: $a->id)
+        ->call('policyFormUmschalten')
+        ->assertSet('policyForm', true)
+        ->set('pThreshold', '1')
+        ->set('pAcceptedUntil', now()->addMonth()->toDateString())
+        ->set('pNote', 'Sourcing läuft')
+        ->call('policySpeichern')
+        ->assertSet('policyForm', false);
+
+    expect($lw->get('meldung'))->toContain('gilt für alle Signale dieses Typs');
+
+    // Am zweiten Signal desselben Typs steht dieselbe Bewertung.
+    $andere = Livewire::test(DetailPanel::class)->dispatch('signal-selected', id: $b->id)->viewData('policy');
+    expect($andere['state'])->toBe(\Platform\FoodAlchemist\Services\SignalPolicyService::STATE_AKZEPTIERT)
+        ->and($andere['aggregiert'])->toBeTrue()          // 2 offen > Schwelle 1
+        ->and($andere['note'])->toBe('Sourcing läuft')
+        ->and($andere['gesetzt'])->toBeTrue()
+        ->and($andere['geerbt'])->toBeFalse();
+});
+
+it('lädt beim Aufklappen die wirksamen Werte und entfernt nur den eigenen Regler', function () {
+    // Eltern-Team entscheidet, Kind-Team sieht die Entscheidung (Katalog-Vererbung).
+    app(\Platform\FoodAlchemist\Services\SignalPolicyService::class)
+        ->setzen($this->rootTeam, SignalTyp::VeraltetePreise, ['threshold' => 7, 'note' => 'Eltern-Entscheid']);
+
+    $this->actingAs($this->makeUser($this->childA, 'Kind Policy User'));
+    $sig = $this->signals->erzeuge($this->childA, SignalTyp::VeraltetePreise, SignalSeverity::Warnung, 'Alt', ['dedup_key' => 'vp-1']);
+
+    $lw = Livewire::test(DetailPanel::class)->dispatch('signal-selected', id: $sig->id);
+    expect($lw->viewData('policy')['geerbt'])->toBeTrue();
+
+    // Aufklappen übernimmt die geerbten Werte — sonst würde „Speichern" sie auf leer setzen.
+    $lw->call('policyFormUmschalten')
+        ->assertSet('pThreshold', '7')
+        ->assertSet('pNote', 'Eltern-Entscheid');
+
+    // Ohne eigene Zeile gibt es nichts zu entfernen; die geerbte bleibt unangetastet.
+    $lw->call('policyEntfernen');
+    expect($lw->get('meldung'))->toContain('keinen eigenen Regler')
+        ->and($lw->viewData('policy')['threshold'])->toBe(7);
+
+    // Eigene Zeile überstimmt, danach ist sie entfernbar und die Eltern-Zeile greift wieder.
+    $lw->call('policyFormUmschalten')->set('pThreshold', '99')->call('policySpeichern');
+    expect($lw->viewData('policy')['threshold'])->toBe(99);
+    $lw->call('policyEntfernen');
+    expect($lw->viewData('policy')['threshold'])->toBe(7);
+});
+
+it('weist eine unbrauchbare Schwelle und ein unlesbares Datum ab, ohne zu speichern', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Murks User'));
+    $sig = $this->signals->erzeuge($this->rootTeam, SignalTyp::PreisAnomalie, SignalSeverity::Warnung, 'Anomalie', ['dedup_key' => 'pa-1']);
+
+    $lw = Livewire::test(DetailPanel::class)
+        ->dispatch('signal-selected', id: $sig->id)
+        ->call('policyFormUmschalten')
+        ->set('pThreshold', 'viele')
+        ->call('policySpeichern')
+        ->assertSet('policyForm', true);          // Formular bleibt offen, Eingabe erhalten
+
+    expect($lw->get('fehler'))->toContain('Zahl')
+        ->and($lw->viewData('policy')['gesetzt'])->toBeFalse();
+
+    $lw->set('pThreshold', '')->set('pAcceptedUntil', 'irgendwann')->call('policySpeichern');
+    expect($lw->get('fehler'))->toContain('JJJJ-MM-TT')
+        ->and($lw->viewData('policy')['gesetzt'])->toBeFalse();
+});
+
+it('zeichnet die Sparkline erst ab zwei Messpunkten und normiert die Reihe', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Trend User'));
+    $sig = $this->signals->erzeuge($this->rootTeam, SignalTyp::MargeUnterZiel, SignalSeverity::Warnung, 'Marge', ['dedup_key' => 'mz-1']);
+    $trend = app(\Platform\FoodAlchemist\Services\SignalTrendService::class);
+
+    // Ein Punkt: bewusst KEINE Linie — eine Waagerechte aus einem Punkt behauptet
+    // eine Stabilität, die nie gemessen wurde.
+    $trend->schreibeSnapshot($this->rootTeam, now()->subDays(2));
+    $lw = Livewire::test(DetailPanel::class)->dispatch('signal-selected', id: $sig->id);
+    expect($lw->viewData('spark'))->toBeNull();
+    $lw->assertSee('Noch keine Reihe');
+
+    // Zwei weitere Läufe mit steigendem Bestand (1 → 2 → 3 offene Signale des Typs).
+    $this->signals->erzeuge($this->rootTeam, SignalTyp::MargeUnterZiel, SignalSeverity::Warnung, 'Marge 2', ['dedup_key' => 'mz-2']);
+    $trend->schreibeSnapshot($this->rootTeam, now()->subDay());
+    $this->signals->erzeuge($this->rootTeam, SignalTyp::MargeUnterZiel, SignalSeverity::Warnung, 'Marge 3', ['dedup_key' => 'mz-3']);
+    $trend->schreibeSnapshot($this->rootTeam, now());
+
+    $spark = Livewire::test(DetailPanel::class)->dispatch('signal-selected', id: $sig->id)->viewData('spark');
+
+    expect($spark['punkte'])->toBe(3)
+        ->and($spark['min'])->toBe(1)
+        ->and($spark['max'])->toBe(3)
+        ->and($spark['letzter'])->toBe(3)
+        // ältester links unten (min ⇒ y = Höhe), jüngster rechts oben (max ⇒ y = 0)
+        ->and($spark['points'])->toBe('0,24 50,12 100,0');
+});
+
 it('hakt mit „alle" alle fixbaren Objekte an und verwirft die Vorschau bei Auswahl-Änderung', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Alle User'));
 
