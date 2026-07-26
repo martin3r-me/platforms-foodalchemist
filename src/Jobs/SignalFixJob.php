@@ -12,13 +12,17 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
 use Platform\FoodAlchemist\Services\SignalFixService;
 
 /**
- * „KI erledigen lassen" (deterministisch) — den vollen betroffenen Satz eines Signals
- * beheben. ASYNC: der Cockpit-Klick blockiert nicht an einer möglichen Masse
+ * „KI erledigen lassen" (deterministisch) — den betroffenen Satz eines Signals beheben.
+ * ASYNC: der Cockpit-Klick blockiert nicht an einer möglichen Masse
  * (demo: 182 GPs / 223 Preis-Anomalien). Sync-Queue-Driver (Sandbox) ⇒ läuft inline.
  *
- * Idempotent genug: `SignalFixService::execute` scoped auf `betroffene()` (bei bereits
- * behobenem Signal leer) und schließt es bei count 0. Nur deterministische Pläne;
- * Assist läuft synchron im Component (ein propose()-Call), nicht hier.
+ * Spec 21 · S3b: `$ids` trägt eine Auswahl (Teil-Bulk aus dem Signal-Panel) durch. Der
+ * Job prüft sie NICHT selbst — `SignalFixService::execute` schneidet jede Auswahl gegen
+ * `betroffene()`, damit es genau eine Autorisierungs-Stelle gibt.
+ *
+ * Idempotent genug: `execute` scoped auf `betroffene()` (bei bereits behobenem Signal
+ * leer) und schließt es bei count 0. Nur deterministische Pläne; Assist läuft synchron
+ * im Component (ein propose()-Call), nicht hier.
  */
 class SignalFixJob implements ShouldQueue
 {
@@ -26,9 +30,11 @@ class SignalFixJob implements ShouldQueue
 
     public int $timeout = 600;   // Bulk-Recompute kann dauern (async)
 
+    /** @param list<int>|null $ids Auswahl (Teil-Bulk) oder null = voller betroffener Satz */
     public function __construct(
         public int $signalId,
         public int $teamId,
+        public ?array $ids = null,
     ) {
     }
 
@@ -44,7 +50,7 @@ class SignalFixJob implements ShouldQueue
         }
 
         try {
-            $svc->execute($team, $sig);
+            $svc->execute($team, $sig, $this->ids);
         } catch (\RuntimeException) {
             // Kein automatischer Fix für dieses Signal (z. B. Plan-Änderung) → No-op.
         }

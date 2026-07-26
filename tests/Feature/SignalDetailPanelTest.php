@@ -140,3 +140,72 @@ it('Panel zeigt kein fremdes Signal (Tenancy) und überlebt eine gelöschte Ausw
         ->assertViewHas('sig', null)
         ->assertSee('Signal in der Liste');
 });
+
+// ── Etappe S3b: Dry-Run (Punkt 3) + Teil-Bulk (Punkt 7) im Panel ───────────
+
+/** Basisrezepte ohne EK ⇒ `br_ek_null`, deterministischer Fixer `recompute`. */
+function ekSignal(SignalService $svc, $team, int $anzahl)
+{
+    return $svc->erzeuge($team, SignalTyp::EkKetteUnvollstaendig, SignalSeverity::Warnung, 'Basisrezepte ohne EK', [
+        'dedup_key' => 'dq-br-ek-null',
+        'source' => 'data-quality',
+        'payload' => ['metrik' => 'br_ek_null', 'anzahl' => $anzahl],
+    ]);
+}
+
+it('zeigt den Dry-Run zur Auswahl und fixt danach genau diese Objekte', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Bulk User'));
+
+    $a = $this->makeRecipe($this->rootTeam, 'Jus: Kalb');
+    $b = $this->makeRecipe($this->rootTeam, 'Jus: Wild');
+    $sig = ekSignal($this->signals, $this->rootTeam, 2);
+
+    $lw = Livewire::test(DetailPanel::class)
+        ->dispatch('signal-selected', id: $sig->id)
+        ->set('auswahl', [(string) $a->id])
+        ->call('vorschauZeigen');
+
+    // Vorschau nennt genau das gewählte Objekt — und hat nichts geschrieben.
+    expect(array_column($lw->get('vorschau')['items'], 'id'))->toBe([(int) $a->id]);
+    expect($a->refresh()->allergens_aggregated_at)->toBeNull();
+
+    $lw->call('teilFixAusfuehren')->assertSet('auswahl', []);   // Auswahl nach dem Lauf leer
+
+    expect($a->refresh()->allergens_aggregated_at)->not->toBeNull()
+        ->and($b->refresh()->allergens_aggregated_at)->toBeNull();
+});
+
+it('verweigert den Teil-Fix ohne Auswahl — „alles fixen" bleibt in der Signal-Zeile', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Leer User'));
+
+    $r = $this->makeRecipe($this->rootTeam, 'Jus: Lamm');
+    $sig = ekSignal($this->signals, $this->rootTeam, 1);
+
+    Livewire::test(DetailPanel::class)
+        ->dispatch('signal-selected', id: $sig->id)
+        ->call('teilFixAusfuehren')
+        ->assertSet('meldung', null);
+
+    expect($r->refresh()->allergens_aggregated_at)->toBeNull();
+});
+
+it('hakt mit „alle" alle fixbaren Objekte an und verwirft die Vorschau bei Auswahl-Änderung', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Alle User'));
+
+    $this->makeRecipe($this->rootTeam, 'Jus: Ente');
+    $this->makeRecipe($this->rootTeam, 'Jus: Reh');
+    $sig = ekSignal($this->signals, $this->rootTeam, 2);
+
+    $lw = Livewire::test(DetailPanel::class)
+        ->dispatch('signal-selected', id: $sig->id)
+        ->call('alleWaehlen');
+
+    expect($lw->get('auswahl'))->toHaveCount(2);
+
+    // Eine Vorschau darf eine spätere Auswahl-Änderung nicht überleben (sonst zeigt sie
+    // Werte zu einer anderen Menge als der Knopf darunter fixt).
+    $lw->call('vorschauZeigen');
+    expect($lw->get('vorschau'))->not->toBeNull();
+    $lw->set('auswahl', []);
+    expect($lw->get('vorschau'))->toBeNull();
+});

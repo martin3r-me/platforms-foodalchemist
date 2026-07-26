@@ -18,6 +18,11 @@ use Platform\FoodAlchemist\Support\SignalCockpit;
  *    Reversibel: das Schließen über foodalchemist.signale.PUT (wieder_oeffnen).
  *  - assist        → erzeugt einen Entwurf/Vorschlag via LLM (kein Schreiben, kein Close).
  *  - kein Plan     → ACTION_NOT_AVAILABLE (reine Urteilssache / externe Daten).
+ *
+ * Lockstep zu Spec 21 · S3b: `object_ids` schneidet auf eine Teilmenge (der Service
+ * schneidet jede Auswahl gegen das Metrik-Prädikat — eine ID außerhalb wird nie
+ * angefasst), `dry_run` liefert stattdessen die Fix-Vorschau („n Objekte, diese Felder,
+ * diese Werte") ohne jede Mutation. Beides gilt nur für deterministische Pläne.
  */
 class SignaleFixTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -40,6 +45,12 @@ class SignaleFixTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'type' => 'object',
             'properties' => [
                 'signal_id' => ['type' => 'integer', 'description' => 'ID des Signals (foodalchemist.signale.SEARCH).'],
+                'object_ids' => ['type' => 'array', 'items' => ['type' => 'integer'],
+                    'description' => 'Optional: nur diese Objekte (Rezept-/GP-IDs) beheben statt des vollen betroffenen '
+                        . 'Satzes. IDs, die das Prädikat des Signals nicht treffen, werden ignoriert.'],
+                'dry_run' => ['type' => 'boolean',
+                    'description' => 'Optional: nichts schreiben, sondern die Fix-Vorschau liefern (je Objekt: '
+                        . 'welche Felder, welche Werte, wirkt/wirkt nicht). Nur für deterministische Fixes.'],
             ],
             'required' => ['signal_id'],
         ];
@@ -62,15 +73,33 @@ class SignaleFixTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             return ToolResult::error('Für dieses Signal gibt es keinen automatischen Fix/Assistenz-Schritt (Urteilssache).', 'ACTION_NOT_AVAILABLE');
         }
 
+        $ids = $arguments['object_ids'] ?? null;
+        $ids = is_array($ids) && $ids !== [] ? array_values(array_map('intval', $ids)) : null;
+        $dryRun = (bool) ($arguments['dry_run'] ?? false);
+
         $svc = app(SignalFixService::class);
         try {
             if ($plan['kind'] === 'deterministic') {
-                $res = $svc->execute($team, $sig);   // MCP = synchron; UI nutzt den Job
+                if ($dryRun) {
+                    $v = $svc->vorschau($team, $sig, $ids);
+
+                    return ToolResult::success([
+                        'signal_id' => (int) $sig->id, 'kind' => 'deterministic', 'dry_run' => true,
+                        'fixer' => $v['fixer'], 'scope' => $v['scope'], 'total' => $v['total'],
+                        'inspected' => $v['gezeigt'], 'would_change' => $v['wirkt'], 'unchanged' => $v['wirkt_nicht'],
+                        'items' => $v['items'],
+                    ]);
+                }
+
+                $res = $svc->execute($team, $sig, $ids);   // MCP = synchron; UI nutzt den Job
 
                 return ToolResult::success([
-                    'signal_id' => (int) $sig->id, 'kind' => 'deterministic',
+                    'signal_id' => (int) $sig->id, 'kind' => 'deterministic', 'scope' => $res['scope'],
                     'fixed' => $res['fixed'], 'remaining' => $res['remaining'], 'closed' => $res['closed'],
                 ]);
+            }
+            if ($dryRun) {
+                return ToolResult::error('Eine Fix-Vorschau gibt es nur für automatische Fixes (dieser Plan ist KI-Assistenz).', 'ACTION_NOT_AVAILABLE');
             }
 
             $res = $svc->assist($team, $sig);
@@ -93,7 +122,8 @@ class SignaleFixTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'requires_auth' => true, 'requires_team' => true,
             'side_effects' => ['updates'], 'cost_class' => 'local_db',
             'related_tools' => ['foodalchemist.signale.SEARCH', 'foodalchemist.signale.PUT'],
-            'examples' => ['Behebe Signal 12 automatisch', 'Erzeuge den KI-Entwurf für Signal 7'],
+            'examples' => ['Behebe Signal 12 automatisch', 'Erzeuge den KI-Entwurf für Signal 7',
+                'Zeig mir die Fix-Vorschau für Signal 12 (dry_run)', 'Behebe an Signal 12 nur die Rezepte 44 und 51'],
         ];
     }
 }

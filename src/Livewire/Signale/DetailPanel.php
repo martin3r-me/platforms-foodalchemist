@@ -5,7 +5,9 @@ namespace Platform\FoodAlchemist\Livewire\Signale;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Jobs\SignalFixJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
+use Platform\FoodAlchemist\Services\SignalFixService;
 use Platform\FoodAlchemist\Services\SignalObjectService;
 use Platform\FoodAlchemist\Support\SignalCockpit;
 
@@ -20,9 +22,15 @@ use Platform\FoodAlchemist\Support\SignalCockpit;
  *  2. Objekt-zentrische Sicht — „was hat dieses Rezept noch?": alle offenen Signale
  *     am selben Objekt, damit man es EINMAL richtig fixt statt dreimal einzeln.
  *
- * Read-only: das Panel löst auf und verlinkt, es mutiert nichts. Lifecycle-Aktionen
- * (Erledigt/Ignorieren/KI) bleiben in der Signal-Zeile der ReviewQueue — ein zweiter
- * Satz derselben Knöpfe wäre eine zweite Wahrheit.
+ * Ergänzt in S3b (Spec §7):
+ *  3. Fix-Vorschau (Dry-Run) — „n Objekte, diese Felder, diese Werte" VOR dem Klick,
+ *     statt „KI erledigen lassen" blind zu drücken.
+ *  7. Teil-Bulk — Checkboxen auf den Objekten: „diese 12 fixen" statt alles-oder-nichts.
+ *
+ * Lifecycle-Aktionen (Erledigt/Ignorieren) und der Fix über den VOLLEN Satz bleiben in
+ * der Signal-Zeile der ReviewQueue — ein zweiter Satz derselben Knöpfe wäre eine zweite
+ * Wahrheit. Das Panel bekommt deshalb ausschließlich den Knopf, den die Zeile NICHT hat:
+ * den auf die Auswahl geschnittenen Fix (anderer Scope, nicht dieselbe Aktion zweimal).
  */
 class DetailPanel extends Component
 {
@@ -36,6 +44,16 @@ class DetailPanel extends Component
     /** Sortierung der Objekt-Liste: 'name' | 'name_desc' | 'art'. */
     public string $sort = 'name';
 
+    /** Teil-Bulk (Punkt 7): angehakte Objekt-IDs. Livewire liefert Checkbox-Werte als String. */
+    public array $auswahl = [];
+
+    /** Dry-Run-Ergebnis (Punkt 3) — transient, wird bei jeder Änderung verworfen. */
+    public ?array $vorschau = null;
+
+    public ?string $meldung = null;
+
+    public ?string $fehler = null;
+
     public function mount(?int $signalId = null): void
     {
         $this->signalId = $signalId;
@@ -47,6 +65,7 @@ class DetailPanel extends Component
         $this->signalId = $id;
         $this->objektKind = null;
         $this->objektId = null;
+        $this->auswahlZuruecksetzen();
     }
 
     /**
@@ -84,6 +103,125 @@ class DetailPanel extends Component
     public function signalOeffnen(int $id): void
     {
         $this->signalId = $id;
+        $this->auswahlZuruecksetzen();
+    }
+
+    // ── S3b: Dry-Run (Punkt 3) + Teil-Bulk (Punkt 7) ───────────────────────
+
+    /**
+     * Eine Auswahl-Änderung verwirft die Vorschau: eine Feld-/Wert-Liste, die zu einer
+     * anderen Auswahl gehört als der Knopf darunter, ist genau die Fehlinformation, die
+     * der Dry-Run abschaffen soll.
+     */
+    public function updatedAuswahl(): void
+    {
+        $this->vorschau = null;
+    }
+
+    /** Alle sichtbaren, fixbaren Objekte anhaken (Kind gp/recipe). */
+    public function alleWaehlen(SignalObjectService $objekte): void
+    {
+        $this->auswahl = array_map('strval', array_column($this->fixbareItems($objekte), 'id'));
+        $this->vorschau = null;
+    }
+
+    public function auswahlLeeren(): void
+    {
+        $this->auswahlZuruecksetzen();
+    }
+
+    /** Dry-Run: „n Objekte, diese Felder, diese Werte" — auf die Auswahl oder den ganzen Satz. */
+    public function vorschauZeigen(): void
+    {
+        $this->meldung = null;
+        $this->fehler = null;
+        [$team, $sig] = $this->kontext();
+        if ($sig === null) {
+            return;
+        }
+        try {
+            $this->vorschau = app(SignalFixService::class)->vorschau($team, $sig, $this->idsOderNull());
+        } catch (\RuntimeException $e) {
+            $this->vorschau = null;
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /**
+     * Fix auf die Auswahl anstoßen (Teil-Bulk). Ohne Auswahl passiert bewusst nichts —
+     * „alles fixen" bleibt der Knopf in der Signal-Zeile, sonst hätte dieselbe Aktion
+     * zwei Auslöser mit unterschiedlichem Scope-Default.
+     */
+    public function teilFixAusfuehren(): void
+    {
+        $this->meldung = null;
+        $this->fehler = null;
+        [$team, $sig] = $this->kontext();
+        if ($sig === null) {
+            return;
+        }
+        $ids = $this->idsOderNull();
+        if ($ids === null) {
+            $this->fehler = 'Erst Objekte anhaken — „alles fixen" läuft über den Knopf in der Signal-Zeile.';
+
+            return;
+        }
+        $plan = SignalCockpit::planFor($sig);
+        if ($plan === null || $plan['kind'] !== 'deterministic') {
+            $this->fehler = 'Für dieses Signal gibt es keinen automatischen Fix.';
+
+            return;
+        }
+
+        SignalFixJob::dispatch((int) $sig->id, (int) $team->id, $ids);
+        $this->meldung = count($ids) . ' Objekt(e) werden behoben — die Liste aktualisiert sich, sobald der Lauf durch ist.';
+        $this->auswahlZuruecksetzen();
+        $this->dispatch('signal-geaendert');
+    }
+
+    /** @return array{0:?\Platform\Core\Models\Team,1:?FoodAlchemistSignal} */
+    private function kontext(): array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $sig = $team !== null && $this->signalId !== null
+            ? FoodAlchemistSignal::visibleToTeam($team)->find($this->signalId)
+            : null;
+        if ($sig === null) {
+            $this->fehler = 'Signal nicht gefunden.';
+        }
+
+        return [$team, $sig];
+    }
+
+    /** @return list<int>|null */
+    private function idsOderNull(): ?array
+    {
+        $ids = array_values(array_filter(array_map('intval', $this->auswahl), fn (int $i) => $i > 0));
+
+        return $ids === [] ? null : $ids;
+    }
+
+    private function auswahlZuruecksetzen(): void
+    {
+        $this->auswahl = [];
+        $this->vorschau = null;
+        $this->meldung = null;
+        $this->fehler = null;
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function fixbareItems(SignalObjectService $objekte): array
+    {
+        [$team, $sig] = $this->kontext();
+        if ($sig === null) {
+            return [];
+        }
+        $this->fehler = null;
+
+        return array_values(array_filter(
+            $objekte->betroffene($team, $sig)['items'],
+            fn (array $i) => in_array($i['kind'], ['recipe', 'gp'], true) && (int) $i['id'] > 0
+        ));
     }
 
     public function render(SignalObjectService $objekte)
