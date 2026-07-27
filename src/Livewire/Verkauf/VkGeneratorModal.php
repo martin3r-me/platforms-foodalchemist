@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Livewire\Concerns\HatGeneratorLauf;
+use Platform\FoodAlchemist\Livewire\Concerns\HatHardstopAktionen;
 
 /**
  * M6-06 / D-6 §4.3 + N3: ✨ VK-Generator v1 — der Pain-Point: Basisrezept→VK
@@ -30,7 +31,7 @@ use Platform\FoodAlchemist\Livewire\Concerns\HatGeneratorLauf;
  */
 class VkGeneratorModal extends Component
 {
-    use HatGeneratorLauf;
+    use HatGeneratorLauf, HatHardstopAktionen;
 
     public string $description = '';
 
@@ -80,7 +81,7 @@ class VkGeneratorModal extends Component
     #[On('vk-generator-modal.oeffnen')]
     public function oeffnen(): void
     {
-        $this->reset('fehler', 'ergebnis', 'description', 'laeuft', 'runId', 'anreicherung');
+        $this->reset('fehler', 'ergebnis', 'description', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex');
         $this->dispatch('modal.open', name: 'vk-generator-modal');
     }
 

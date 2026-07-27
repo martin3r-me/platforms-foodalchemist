@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Livewire\Concerns\HatGeneratorLauf;
+use Platform\FoodAlchemist\Livewire\Concerns\HatHardstopAktionen;
 
 /**
  * M4-14: ✨ Basisrezept-Generator — Beschreibung + Richtungs-Parameter
@@ -17,7 +18,7 @@ use Platform\FoodAlchemist\Livewire\Concerns\HatGeneratorLauf;
  */
 class GeneratorModal extends Component
 {
-    use HatGeneratorLauf;
+    use HatGeneratorLauf, HatHardstopAktionen;
 
     public string $description = '';
 
@@ -68,7 +69,7 @@ class GeneratorModal extends Component
     #[On('generator-modal.oeffnen')]
     public function oeffnen(): void
     {
-        $this->reset('fehler', 'ergebnis', 'description', 'laeuft', 'runId', 'anreicherung');
+        $this->reset('fehler', 'ergebnis', 'description', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex');
         $this->dispatch('modal.open', name: 'generator-modal');
     }
 

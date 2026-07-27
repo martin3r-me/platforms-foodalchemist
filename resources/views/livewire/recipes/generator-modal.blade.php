@@ -94,18 +94,8 @@
                 <span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $ergebnis['statistik']['stub_neu'] }} Stubs neu</span>
                 <span class="{{ $pill }} {{ $ergebnis['statistik']['offen'] > 0 ? $variantPill['danger'] : $variantPill['secondary'] }}">{{ $ergebnis['statistik']['offen'] }} offen</span>
             </div>
-            @if(count($ergebnis['offene']) > 0)
-                <div class="mt-3 space-y-1" data-generator-offene>
-                    <p class="{{ $label }}">Hard-Stops (Bestand-Lücken ohne Halbfabrikat-Marker):</p>
-                    @foreach($ergebnis['offene'] as $offen)
-                        <p class="text-[11px] text-gray-600">
-                            🔴 {{ $offen['text'] }} —
-                            <span class="text-violet-600">{{ $offen['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}</span>
-                            @if(count($offen['shortlist']) > 0)<span class="text-gray-500">· {{ count($offen['shortlist']) }} Shortlist-Kandidaten</span>@endif
-                        </p>
-                    @endforeach
-                </div>
-            @endif
+            <x-foodalchemist::hardstop-zeilen :offene="$ergebnis['offene']" prefix=""
+                                             :aufgeklappt="$hardstopOffenIndex" :meldung="$hardstopMeldung" />
             <x-foodalchemist::stub-offen :stubs="$ergebnis['statistik']['stubs'] ?? []" />
             <x-foodalchemist::oneshot-ergebnis :anreicherung="$anreicherung" />
         </x-foodalchemist::modal-section>
