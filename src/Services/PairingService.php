@@ -30,6 +30,19 @@ class PairingService
 
     public const CAP_RECIPE = 5;
 
+    /**
+     * V-045: der `neutral`-Anker wird einmal je Service-Instanz aufgelöst, nicht je
+     * Rezept. `resolveRecipeAnchors` läuft im Kandidaten-Pool je Gericht — der Lookup
+     * war damit eine Query pro Gericht für einen Wert, der sich nie ändert.
+     * **Bewusst untypisiert** und ohne Cast: der Wert wird per `===` gegen
+     * `->value('anchor_id')` verglichen, und beide kommen aus derselben untypisierten
+     * Query-Builder-Quelle. Ein `(int)`-Cast hier würde die Identitäts-Vergleiche
+     * unten je nach Treiber kippen.
+     */
+    private mixed $neutralAnkerId = null;
+
+    private bool $neutralAnkerAufgeloest = false;
+
     // ── Slug-Matching (Tabelle 2/3) ──────────────────────────────────────
 
     /** Pairing-Slug-Normalisierung: ä→a … PLUS Digraphen ae→a/oe→o/ue→u (Tabelle 2). */
@@ -152,6 +165,53 @@ class PairingService
         }
     }
 
+    /** V-045: `neutral` einmal je Instanz auflösen. Eigenes Flag, damit ein NULL-Ergebnis nicht jedes Mal neu gefragt wird. */
+    private function neutralAnkerId(): mixed
+    {
+        if (! $this->neutralAnkerAufgeloest) {
+            $this->neutralAnkerId = DB::table('foodalchemist_vocab_pairing_anchors')
+                ->where('slug', 'neutral')->value('id');
+            $this->neutralAnkerAufgeloest = true;
+        }
+
+        return $this->neutralAnkerId;
+    }
+
+    /**
+     * V-045: bereits eager geladene Zutaten wiederverwenden statt neu zu fragen.
+     *
+     * Der Kandidaten-Pool lädt `ingredients` (+ `gp`/`referencedRecipe`) im Begriffe-/
+     * Convenience-Modus schon eager — die Requery hier war eine Query je Gericht auf
+     * Daten, die der Aufrufer in der Hand hält. Wiederverwendet wird **nur**, wenn auch
+     * die beiden Label-Relationen geladen sind: sonst löste der Zugriff je Zeile ein
+     * Lazy-Load aus und wäre teurer als die eine Sammel-Query.
+     *
+     * Zwei Feinheiten, damit das Ergebnis identisch bleibt: die Relation ist wegen
+     * `SoftDeletes` am Ingredient-Model schon ohne getrashte Zeilen (das `whereNull`
+     * unten ist dort redundant), und `position` wird in PHP sortiert, weil eine geladene
+     * Relation keine `orderBy`-Garantie mitbringt.
+     *
+     * @return iterable<int, \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient>
+     */
+    private function ankerZutaten(FoodAlchemistRecipe $recipe): iterable
+    {
+        if ($recipe->relationLoaded('ingredients')) {
+            $zutaten = $recipe->ingredients;
+            $labelRelationenDa = $zutaten->every(
+                fn ($z) => $z->relationLoaded('gp') && $z->relationLoaded('referencedRecipe')
+            );
+            if ($labelRelationenDa) {
+                return $zutaten->sortBy('position')->values();
+            }
+        }
+
+        return $recipe->ingredients()
+            ->with(['gp:id,name', 'referencedRecipe:id,name'])
+            ->whereNull('deleted_at')
+            ->orderBy('position')
+            ->get();
+    }
+
     /**
      * resolve_recipe_anchors (Tabelle 4): pro Zutaten-Zeile GENAU EIN Kern
      * (+ Prozess-Anker nur bei Sub-Rezepten).
@@ -160,9 +220,9 @@ class PairingService
      */
     public function resolveRecipeAnchors(FoodAlchemistRecipe $recipe): array
     {
-        $neutralId = DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', 'neutral')->value('id');
+        $neutralId = $this->neutralAnkerId();
         $out = [];
-        foreach ($recipe->ingredients()->with(['gp:id,name', 'referencedRecipe:id,name'])->whereNull('deleted_at')->orderBy('position')->get() as $z) {
+        foreach ($this->ankerZutaten($recipe) as $z) {
             $label = $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->raw_text;
             $kern = null;
             $via = 'unresolved';

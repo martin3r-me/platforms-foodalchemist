@@ -138,16 +138,69 @@ it('die DB-Achse kostet EINE Query, nicht eine je Gericht', function () {
         return [$pool, $n];
     };
 
+    // Warmlauf VOR der Messung: `PairingService` löst den `neutral`-Anker seit V-045 einmal
+    // je Instanz auf (memoisiert). Ohne Warmlauf zahlte nur die erste der beiden Messungen
+    // diesen einen Lookup — der Delta läse dadurch 0 statt 1 und würde eine echte
+    // Regression der Wirtschafts-Achse verdecken.
+    $zaehle(false);
+
     [, $ohne] = $zaehle(false);
     [$pool, $mit] = $zaehle(true);
 
-    // Gemessen wird der DELTA der neuen Achse, nicht die Gesamtzahl: der Pool trägt eine
-    // bestehende N+1 in der Anker-Auflösung (PairingService::resolveRecipeAnchors fragt je
-    // Rezept und je Zutat einzeln) — die ist älter als diese Etappe, gehört nicht hierher
-    // korrigiert und ist als V-045 notiert. Die Darreichungs-Relation ist eager: +1 Query.
+    // Gemessen wird der DELTA der neuen Achse: die Darreichungs-Relation ist eager, also +1.
+    // Zusätzlich eine absolute Obergrenze als Regressions-Riegel — V-045 (Halbschritt) hat den
+    // `neutral`-Lookup memoisiert und die Zutaten-Requery bei geladener Relation abgestellt und
+    // damit 38 → 27 für 12 zutatenlose Gerichte gebracht. Der Rest sind die zwei noch offenen
+    // Per-Gericht-Queries (Zutaten-Requery, weil hier OHNE Begriffe/Convenience nichts eager
+    // geladen ist, + `recipe_process_anchors`) — die Batch-Variante ist der zweite Halbschritt.
     expect($pool)->toHaveCount(12)
         ->and($pool->every(fn ($k) => $k['wirtschaft']['vollstaendig'] === true))->toBeTrue()
-        ->and($mit - $ohne)->toBe(1);
+        ->and($mit - $ohne)->toBe(1)
+        ->and($ohne)->toBeLessThanOrEqual(27);
+});
+
+it('V-045: bei eager geladenen Zutaten fragt die Anker-Auflösung sie NICHT neu', function () {
+    // Begriffe-Modus scharfstellen — er ist die Bedingung, unter der `fuerFrame` die Zutaten
+    // samt gp/referencedRecipe eager lädt. Genau dann darf `resolveRecipeAnchors` sie nicht
+    // ein zweites Mal holen.
+    $this->frames->addRule($this->rootTeam, $this->frame, ['rule_type' => 'nogo_ingredient', 'value_text' => 'Leber']);
+    $this->frame->load(['slots.rules', 'rules']);
+
+    $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::create([
+        'team_id' => $this->rootTeam->id, 'gp_key' => 'v045|butter', 'name' => 'Butter', 'status' => 'approved',
+    ]);
+    for ($i = 0; $i < 6; $i++) {
+        $r = ($this->mkGericht)("v045-{$i}", "HG: Anker {$i}", ['sales_net' => 12.00]);
+        // drei Zutaten je Gericht: unter der alten Requery kostete jedes Gericht eine eigene
+        // Zutaten-Query, unabhängig davon, dass der Pool sie gerade eager geladen hatte.
+        for ($z = 1; $z <= 3; $z++) {
+            $this->makeIngredient($r, 'Butter', $gp, '100', $z);
+        }
+    }
+
+    $warm = fn () => $this->pool->fuerFrame($this->rootTeam, $this->frame, false, false);
+    $warm(); // `neutral`-Memoisierung aus der Messung halten
+
+    \Illuminate\Support\Facades\DB::flushQueryLog();
+    \Illuminate\Support\Facades\DB::enableQueryLog();
+    $pool = $warm();
+    $queries = \Illuminate\Support\Facades\DB::getQueryLog();
+    \Illuminate\Support\Facades\DB::disableQueryLog();
+
+    // Der Riegel: keine einzige Query darf die Zutaten-Tabelle nach EINEM `recipe_id` fragen.
+    // Der Eager-Load des Pools nutzt `whereIn` — eine Einzel-`where`-Abfrage ist genau die
+    // Requery, die V-045 beschreibt. Identifier-Quoting vorher wegnormalisieren, damit der
+    // Riegel auf SQLite ("recipe_id") UND MySQL (`recipe_id`) greift und nicht still grün wird.
+    $requeries = collect($queries)
+        ->map(fn ($q) => str_replace(['`', '"'], '', $q['query']))
+        ->filter(
+            fn (string $sql) => str_contains($sql, 'foodalchemist_recipe_ingredients')
+                && str_contains($sql, 'recipe_id = ')
+        );
+
+    expect($pool)->toHaveCount(6)
+        ->and($pool->every(fn ($k) => $k['anker'] !== null))->toBeTrue()
+        ->and($requeries)->toBeEmpty();
 });
 
 it('Team-Grenze hält: fremde VK-Gerichte stehen nicht im Pool', function () {
