@@ -220,15 +220,28 @@ class MenuCandidatePoolService
         return $gps;
     }
 
-    /** Harte Filter eines Slots: No-Gos (frame + slot, hart), Allergen-No-Gos, Preisrahmen. */
-    public function filterFuerSlot(Collection $pool, FoodAlchemistPlanningFrame $frame, $frameSlot): Collection
+    /**
+     * Harte Filter eines Slots: No-Gos (frame + slot, hart), Allergen-No-Gos, Preisrahmen.
+     *
+     * `$lockerung` (12·S2a-3) hebt einzelne dieser Filter **testweise** aus, damit die
+     * Erklärung „wie weit vom Optimum bei Lockerung X" durch **dieselbe** Filter-Logik
+     * läuft statt durch einen Nachbau: `['regel_ids' => int[], 'slot_preis' => bool]`.
+     * Default = leer = Bestandsverhalten; der Generator merkt davon nichts.
+     *
+     * @param  array{regel_ids?: list<int>, slot_preis?: bool}  $lockerung
+     */
+    public function filterFuerSlot(Collection $pool, FoodAlchemistPlanningFrame $frame, $frameSlot, array $lockerung = []): Collection
     {
-        $regeln = $frame->rules->whereNull('slot_id')->merge($frameSlot->rules);
+        $ohne = $lockerung['regel_ids'] ?? [];
+        $ohnePreis = (bool) ($lockerung['slot_preis'] ?? false);
+
+        $regeln = $frame->rules->whereNull('slot_id')->merge($frameSlot->rules)
+            ->reject(fn ($r) => in_array((int) $r->id, $ohne, true));
         $nogoTerms = $regeln->where('rule_type', 'nogo_ingredient')
             ->map(fn ($r) => mb_strtolower(trim((string) $r->value_text)))->filter()->values();
         $nogoAllergene = $regeln->where('rule_type', 'nogo_allergen')->pluck('ref_key')->filter()->values();
 
-        return $pool->filter(function ($k) use ($nogoTerms, $nogoAllergene, $frameSlot) {
+        return $pool->filter(function ($k) use ($nogoTerms, $nogoAllergene, $frameSlot, $ohnePreis) {
             foreach ($nogoTerms as $term) {
                 if (str_contains($k['begriffe'], $term)) {
                     return false; // No-Gos wirken HART im Generator — nie vorschlagen
@@ -239,10 +252,10 @@ class MenuCandidatePoolService
                     return false;
                 }
             }
-            if ($frameSlot->price_min !== null && ($k['sales_net'] === null || $k['sales_net'] < (float) $frameSlot->price_min)) {
+            if (! $ohnePreis && $frameSlot->price_min !== null && ($k['sales_net'] === null || $k['sales_net'] < (float) $frameSlot->price_min)) {
                 return false;
             }
-            if ($frameSlot->price_max !== null && ($k['sales_net'] === null || $k['sales_net'] > (float) $frameSlot->price_max)) {
+            if (! $ohnePreis && $frameSlot->price_max !== null && ($k['sales_net'] === null || $k['sales_net'] > (float) $frameSlot->price_max)) {
                 return false;
             }
 

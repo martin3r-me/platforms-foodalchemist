@@ -48,6 +48,13 @@ use RuntimeException;
  * · `heuristik` — Constraint-aware-Greedy + Local-Swap. Wird gewählt, wenn der Suchraum
  *   a priori zu groß ist ODER der Deckel im B&B gegriffen hat. `exakt=false` sagt das
  *   ausdrücklich — eine Lösung ohne Optimalitäts-Zusicherung wird nie als optimal verkauft.
+ *
+ * ## 12·S2a-3 — die Erklärung
+ * `erklaere()` liefert dasselbe Ergebnis plus die Frage dahinter: **welche** Vorgabe bindet,
+ * und **wie viel DB** liegt hinter ihrer Lockerung. Ohne sie wäre der Motor eine Black Box —
+ * „31 € ist optimal" kann niemand gegenzeichnen, solange nicht sichtbar ist, woran das
+ * Optimum hängt. Gebaut als echte Wiederholungsläufe auf demselben Pool, nicht als
+ * analytischer Schattenpreis (siehe Docblock dort).
  */
 class MenuAssemblyService
 {
@@ -73,6 +80,13 @@ class MenuAssemblyService
 
     /** Runden des Local-Swap im Heuristik-Pfad. */
     public const SWAP_RUNDEN = 3;
+
+    /**
+     * Höchstzahl geprüfter Lockerungen in `erklaere()` — jede ist ein vollständiger
+     * Solver-Lauf. Wird sie erreicht, sagt das Ergebnis das ausdrücklich
+     * (`abgeschnitten`, `lockerbar_gesamt`) statt eine vollständige Liste zu suggerieren.
+     */
+    public const LOCKERUNGEN_MAX = 12;
 
     public function __construct(
         private MenuCandidatePoolService $pool,
@@ -102,10 +116,33 @@ class MenuAssemblyService
         }
 
         $pool = $this->pool->fuerFrame($team, $frame, false, true);
+        $aufgaben = $this->aufgabenFuer($pool, $frame);
+        $l = $this->loese($aufgaben, $this->menuQuoten($frame), $this->band($frame));
+
+        return $this->ergebnis($frame, $aufgaben, $l['wahl'], $pool, $gaeste, $l['verfahren'], $l['exakt'], $l['knoten'], $l['deckel'], $l['raum']);
+    }
+
+    /**
+     * Slot-Aufgaben aus dem Pool: je Slot die zulässigen Kandidaten (harte Filter), die
+     * Platzzahl, die Slot-Quoten und die Filter-Beschreibung für Leer-Begründungen.
+     *
+     * `$lockerung` (12·S2a-3) hebt einzelne Vorgaben testweise aus — die Kandidaten-Menge
+     * kommt trotzdem aus `filterFuerSlot`, es gibt also keine zweite Zulässigkeits-Wahrheit.
+     *
+     * @param  array{regel_ids?: list<int>, slot_preis?: list<int>}  $lockerung
+     */
+    private function aufgabenFuer(Collection $pool, FoodAlchemistPlanningFrame $frame, array $lockerung = []): array
+    {
+        $ohneRegeln = $lockerung['regel_ids'] ?? [];
+        $ohnePreisSlots = $lockerung['slot_preis'] ?? [];
 
         $aufgaben = [];
         foreach ($frame->slots as $frameSlot) {
-            $kandidaten = $this->pool->filterFuerSlot($pool, $frame, $frameSlot)
+            $slotLockerung = [
+                'regel_ids' => $ohneRegeln,
+                'slot_preis' => in_array((int) $frameSlot->id, $ohnePreisSlots, true),
+            ];
+            $kandidaten = $this->pool->filterFuerSlot($pool, $frame, $frameSlot, $slotLockerung)
                 ->map(fn (array $k) => $this->kandidat($k))
                 ->sortBy([['db', 'desc'], ['name', 'asc'], ['id', 'asc']])
                 ->values()->all();
@@ -114,16 +151,48 @@ class MenuAssemblyService
                 'n' => max(1, (int) ($frameSlot->target_count ?? 1)),
                 'kandidaten' => $kandidaten,
                 'best_db' => $kandidaten === [] ? 0.0 : max(0.0, max(array_column($kandidaten, 'db'))),
-                'quoten' => $frameSlot->rules->where('rule_type', 'diet_quota')->values()->all(),
+                'quoten' => $frameSlot->rules->where('rule_type', 'diet_quota')
+                    ->reject(fn ($r) => in_array((int) $r->id, $ohneRegeln, true))->values()->all(),
                 'filter' => $this->pool->filterBeschreibung($frame, $frameSlot),
             ];
         }
 
-        $menuQuoten = $frame->rules->whereNull('slot_id')->where('rule_type', 'diet_quota')->values()->all();
-        $band = [
-            'min' => $frame->price_min_pp !== null ? (float) $frame->price_min_pp : null,
-            'max' => $frame->price_max_pp !== null ? (float) $frame->price_max_pp : null,
+        return $aufgaben;
+    }
+
+    /**
+     * Menü-weite Diät-Quoten (ohne die gelockerten).
+     *
+     * @param  list<int>  $ohneRegeln
+     */
+    private function menuQuoten(FoodAlchemistPlanningFrame $frame, array $ohneRegeln = []): array
+    {
+        return $frame->rules->whereNull('slot_id')->where('rule_type', 'diet_quota')
+            ->reject(fn ($r) => in_array((int) $r->id, $ohneRegeln, true))->values()->all();
+    }
+
+    /**
+     * Preisband p. P. am Kopf; `$lockerung` nullt gezielt ein Ende.
+     *
+     * @param  array{band_min?: bool, band_max?: bool}  $lockerung
+     * @return array{min: ?float, max: ?float}
+     */
+    private function band(FoodAlchemistPlanningFrame $frame, array $lockerung = []): array
+    {
+        return [
+            'min' => ($lockerung['band_min'] ?? false) === true || $frame->price_min_pp === null ? null : (float) $frame->price_min_pp,
+            'max' => ($lockerung['band_max'] ?? false) === true || $frame->price_max_pp === null ? null : (float) $frame->price_max_pp,
         ];
+    }
+
+    /**
+     * Die Pfad-Wahl + Suche selbst — ohne Ergebnis-Aufbereitung, damit die Erklärung
+     * (12·S2a-3) denselben Motor mit gelockerten Vorgaben erneut fahren kann.
+     *
+     * @return array{wahl: array<int, list<array>>, verfahren: string, exakt: bool, knoten: int, deckel: bool, raum: float}
+     */
+    private function loese(array $aufgaben, array $menuQuoten, array $band): array
+    {
         $menuWeit = $menuQuoten !== [] || $band['min'] !== null || $band['max'] !== null;
         $slotQuoten = collect($aufgaben)->contains(fn (array $a) => $a['quoten'] !== []);
 
@@ -160,7 +229,262 @@ class MenuAssemblyService
             }
         }
 
-        return $this->ergebnis($frame, $aufgaben, $wahl, $pool, $gaeste, $verfahren, $exakt, $knoten, $deckel, $raum);
+        return ['wahl' => $wahl, 'verfahren' => $verfahren, 'exakt' => $exakt, 'knoten' => $knoten, 'deckel' => $deckel, 'raum' => $raum];
+    }
+
+    // ── 12·S2a-3: die Erklärung ─────────────────────────────────────────
+
+    /**
+     * Assemblierung **plus** Erklärung: welche Vorgaben binden, und wie viel DB liegt
+     * hinter jeder einzelnen.
+     *
+     * Rückgabe = das Ergebnis von `assembliere()` + Schlüssel `erklaerung`. Ohne diese
+     * Schicht ist der Solver eine Black Box: „31 € ist optimal" ist keine Aussage, die
+     * jemand gegenzeichnen kann, solange niemand sieht, *woran* das Optimum hängt.
+     *
+     * ## Wie die Erklärung entsteht — kein Schatten-Modell, sondern echte Läufe
+     * Je lockerbarer Vorgabe wird der Motor **noch einmal** gefahren, mit genau dieser
+     * einen Vorgabe ausgehoben, auf **demselben** Pool (eine Query-Runde für alles).
+     * Bewusst keine analytischen Schattenpreise: das Verfahren ist teils heuristisch und
+     * lexikografisch, ein Dual-Wert wäre eine Zahl mit falscher Genauigkeit. Ein zweiter
+     * Lauf ist die Wahrheit, die der Motor selbst produziert.
+     *
+     * Gemessen wird beides mit derselben Elle wie die Basis: DB p. P. über `dbSumme` und
+     * Verletzungen über `CoverageService` — es kommt keine dritte Zahl dazu.
+     *
+     * ## Zwei Grenzen, die ausgewiesen werden statt zu verschwinden
+     * · **Untergrenze statt Abstand (V-062):** ist Basis oder Variante heuristisch, ist
+     *   das Delta eine *Untergrenze* für den Gewinn der Lockerung, nicht der bewiesene
+     *   Abstand zum Optimum. Steht als `delta_ist_untergrenze` an jeder Zeile.
+     * · **Zielpreis (V-061):** `target_price_pp` steht **nicht** in der Zielfunktion — der
+     *   Motor maximiert DB im erlaubten Band und landet damit systematisch an der
+     *   Obergrenze. Die Abweichung wird als eigener Block berichtet, nicht stillschweigend
+     *   hingenommen und auch nicht klammheimlich wegoptimiert (das wäre ein anderer
+     *   Auftrag: „triff den Preispunkt" statt „beste Marge im Band").
+     *
+     * @return array<string,mixed> `assembliere()`-Ergebnis + `erklaerung`
+     */
+    public function erklaere(Team $team, FoodAlchemistPlanningFrame $frame, ?int $gaeste = null): array
+    {
+        $frame->loadMissing(['slots.rules', 'rules']);
+        if ($frame->slots->isEmpty()) {
+            throw new RuntimeException('Planungs-Gerüst ohne Slots — erst Dramaturgie/Mengengerüst anlegen (R4.1).');
+        }
+
+        $pool = $this->pool->fuerFrame($team, $frame, false, true);
+
+        $basisAufgaben = $this->aufgabenFuer($pool, $frame);
+        $basisLoesung = $this->loese($basisAufgaben, $this->menuQuoten($frame), $this->band($frame));
+        $basis = $this->ergebnis(
+            $frame, $basisAufgaben, $basisLoesung['wahl'], $pool, $gaeste,
+            $basisLoesung['verfahren'], $basisLoesung['exakt'], $basisLoesung['knoten'], $basisLoesung['deckel'], $basisLoesung['raum']
+        );
+
+        ['kandidaten' => $lockerungen, 'nicht_gelockert' => $nichtGelockert] = $this->lockerungsKandidaten($frame);
+        $gesamt = count($lockerungen);
+        $abgeschnitten = $gesamt > self::LOCKERUNGEN_MAX;
+        if ($abgeschnitten) {
+            // Muster MAX_DELTA_ITEMS/MAX_RECOMPUTE: kappen ja, still kappen nein. Die
+            // Reihenfolge ist deshalb nicht beliebig — Menü-weite Vorgaben zuerst, weil
+            // sie alle Slots binden; die Slot-Vorgaben danach in Gerüst-Reihenfolge.
+            $lockerungen = array_slice($lockerungen, 0, self::LOCKERUNGEN_MAX);
+        }
+
+        $basisKandidaten = $this->kandidatenSumme($basisAufgaben);
+        $zeilen = [];
+        foreach ($lockerungen as $c) {
+            $l = $c['lockerung'];
+            $aufgaben = $this->aufgabenFuer($pool, $frame, $l);
+            $loesung = $this->loese($aufgaben, $this->menuQuoten($frame, $l['regel_ids'] ?? []), $this->band($frame, $l));
+            $variante = $this->ergebnis(
+                $frame, $aufgaben, $loesung['wahl'], $pool, $gaeste,
+                $loesung['verfahren'], $loesung['exakt'], $loesung['knoten'], $loesung['deckel'], $loesung['raum']
+            );
+
+            $deltaDb = round($variante['zielfunktion']['db_pp'] - $basis['zielfunktion']['db_pp'], 2);
+            $deltaVerl = $variante['verletzungen'] - $basis['verletzungen'];
+            $untergrenze = ! $basisLoesung['exakt'] || ! $loesung['exakt'];
+
+            $zeilen[] = [
+                'schluessel' => $c['schluessel'],
+                'typ' => $c['typ'],
+                'ebene' => $c['ebene'],
+                'slot_id' => $c['slot_id'],
+                'slot_label' => $c['slot_label'],
+                'label' => $c['label'],
+                'wirkung' => $c['wirkung'],
+                // Bindend heißt: das Aushebeln dieser einen Vorgabe verbessert das Ergebnis
+                // lexikografisch — mehr DB oder eine Verletzung weniger. Alles andere ist
+                // eine Vorgabe, die das Portfolio ohnehin erfüllt (und die man nicht
+                // diskutieren muss).
+                'bindend' => $deltaDb > 0.005 || $deltaVerl < 0,
+                'delta_db_pp' => $deltaDb,
+                'delta_db_gaeste' => $gaeste !== null && $gaeste > 0 ? round($deltaDb * $gaeste, 2) : null,
+                'delta_verletzungen' => $deltaVerl,
+                'kandidaten_delta' => $this->kandidatenSumme($aufgaben) - $basisKandidaten,
+                'db_pp_gelockert' => $variante['zielfunktion']['db_pp'],
+                'delta_ist_untergrenze' => $untergrenze,
+                'warnung' => $c['warnung'],
+            ];
+        }
+
+        // Sortierung: der größte Hebel zuerst; bei Gleichstand deterministisch über den
+        // Schlüssel, damit zwei Läufe dieselbe Liste in derselben Reihenfolge liefern.
+        usort($zeilen, fn (array $a, array $b) => [$b['delta_db_pp'], $a['schluessel']] <=> [$a['delta_db_pp'], $b['schluessel']]);
+
+        $ziel = $frame->target_price_pp !== null ? round((float) $frame->target_price_pp, 2) : null;
+
+        $basis['erklaerung'] = [
+            'basis' => [
+                'verfahren' => $basis['verfahren'],
+                'exakt' => $basis['exakt'],
+                'db_pp' => $basis['zielfunktion']['db_pp'],
+                'vk_pp' => $basis['zielfunktion']['vk_pp'],
+                'verletzungen' => $basis['verletzungen'],
+                'ampel_gesamt' => $basis['ampel_gesamt'],
+            ],
+            'constraints' => $zeilen,
+            'bindend' => array_values(array_map(
+                fn (array $z) => $z['schluessel'],
+                array_filter($zeilen, fn (array $z) => $z['bindend'])
+            )),
+            'nicht_gelockert' => $nichtGelockert,
+            'zielpreis' => [
+                'ziel_pp' => $ziel,
+                'ist_pp' => $basis['zielfunktion']['vk_pp'],
+                'abweichung_pp' => $ziel !== null ? round($basis['zielfunktion']['vk_pp'] - $ziel, 2) : null,
+                'in_zielfunktion' => false,
+                'hinweis' => $ziel === null
+                    ? 'Kein Zielpreis p. P. am Gerüst gesetzt.'
+                    : 'Der Zielpreis ist KEIN Teil der Zielfunktion: der Motor maximiert DB im erlaubten Band und fährt deshalb an die Obergrenze. „Beste Marge im Band" und „triff den versprochenen Preispunkt" sind zwei Aufträge — die Abweichung wird ausgewiesen, nicht wegoptimiert.',
+            ],
+            'geprueft' => count($zeilen),
+            'lockerbar_gesamt' => $gesamt,
+            'abgeschnitten' => $abgeschnitten,
+            'hinweis' => $basisLoesung['exakt']
+                ? null
+                : 'Die Basis ist heuristisch (' . $basis['verfahren'] . ') — jedes Delta ist eine Untergrenze für den Gewinn der Lockerung, nicht der bewiesene Abstand zum Optimum.',
+        ];
+
+        return $basis;
+    }
+
+    /** Zulässige Kandidaten über alle Slots — die Kennzahl hinter `kandidaten_delta`. */
+    private function kandidatenSumme(array $aufgaben): int
+    {
+        return array_sum(array_map(fn (array $a) => count($a['kandidaten']), $aufgaben));
+    }
+
+    /**
+     * Welche Vorgaben sind überhaupt lockerbar — und welche ausdrücklich nicht?
+     *
+     * Die zweite Liste ist keine Nebensache: eine Erklärung, die eine bestehende Vorgabe
+     * einfach nicht erwähnt, liest sich wie „geprüft und unkritisch". Deshalb wird jede
+     * nicht gelockerte Vorgabe **mit Grund** benannt.
+     *
+     * @return array{kandidaten: list<array<string,mixed>>, nicht_gelockert: list<string>}
+     */
+    private function lockerungsKandidaten(FoodAlchemistPlanningFrame $frame): array
+    {
+        $kandidaten = [];
+        $nicht = [];
+
+        // 1. Menü-weit: das Preisband p. P. — die beiden Enden getrennt, weil sie
+        //    verschiedene Fragen sind („zu teuer" vs. „zu billig fürs Versprechen").
+        if ($frame->price_max_pp !== null) {
+            $kandidaten[] = $this->lockerungsZeile('preisband_max', 'preisband', 'menue', null, null,
+                'Preisband p. P. — Obergrenze ' . $this->eur((float) $frame->price_max_pp),
+                'Obergrenze aufgehoben: teurere Zusammenstellungen werden zulässig',
+                ['band_max' => true]);
+        }
+        if ($frame->price_min_pp !== null) {
+            $kandidaten[] = $this->lockerungsZeile('preisband_min', 'preisband', 'menue', null, null,
+                'Preisband p. P. — Untergrenze ' . $this->eur((float) $frame->price_min_pp),
+                'Untergrenze aufgehoben: günstigere Zusammenstellungen werden zulässig',
+                ['band_min' => true]);
+        }
+
+        // 2. Menü-weite Regeln, dann 3. je Slot — die Reihenfolge trägt die Kappung.
+        foreach ($frame->rules->whereNull('slot_id')->sortBy('id') as $rule) {
+            $z = $this->regelZeile($rule, null);
+            $z !== null ? $kandidaten[] = $z : $nicht[] = $this->nichtLockerbar($rule, null);
+        }
+        foreach ($frame->slots as $slot) {
+            if ($slot->price_min !== null || $slot->price_max !== null) {
+                $kandidaten[] = $this->lockerungsZeile('slot_preis_' . $slot->id, 'slot_preisband', 'slot',
+                    (int) $slot->id, (string) $slot->label,
+                    'Slot „' . $slot->label . '“: Preisrahmen ' . ($slot->price_min !== null ? $this->eur((float) $slot->price_min) : '—')
+                        . '–' . ($slot->price_max !== null ? $this->eur((float) $slot->price_max) : '—'),
+                    'Preisrahmen des Slots aufgehoben: mehr Gerichte werden für diese Position zulässig',
+                    ['slot_preis' => [(int) $slot->id]]);
+            }
+            if (($slot->target_count ?? null) !== null) {
+                $nicht[] = 'Slot „' . $slot->label . '“: ' . (int) $slot->target_count . ' Plätze — die Platzzahl ist das Gerüst, keine Vorgabe zum Lockern (weniger Gänge wäre ein anderes Menü, kein besseres).';
+            }
+            foreach ($slot->rules->sortBy('id') as $rule) {
+                $z = $this->regelZeile($rule, $slot);
+                $z !== null ? $kandidaten[] = $z : $nicht[] = $this->nichtLockerbar($rule, $slot);
+            }
+        }
+
+        return ['kandidaten' => $kandidaten, 'nicht_gelockert' => $nicht];
+    }
+
+    /** Regel → Lockerungs-Zeile, oder null wenn diese Regel-Art nicht lockerbar ist. */
+    private function regelZeile($rule, $slot): ?array
+    {
+        $prefix = $slot !== null ? 'Slot „' . $slot->label . '“: ' : '';
+        $ebene = $slot !== null ? 'slot' : 'menue';
+        $slotId = $slot !== null ? (int) $slot->id : null;
+        $slotLabel = $slot !== null ? (string) $slot->label : null;
+        $schluessel = 'regel_' . $rule->id;
+        $l = ['regel_ids' => [(int) $rule->id]];
+
+        return match ($rule->rule_type) {
+            'diet_quota' => $this->lockerungsZeile($schluessel, 'diet_quota', $ebene, $slotId, $slotLabel,
+                $prefix . 'Diät-Quote ' . $rule->ref_key . ' ' . $rule->operator . ' '
+                    . rtrim(rtrim((string) $rule->value_num, '0'), '.') . ($rule->unit === 'percent' ? ' %' : '×'),
+                'Quote aufgehoben: die Auswahl ist an diese Diätform nicht mehr gebunden', $l),
+
+            'nogo_ingredient' => $this->lockerungsZeile($schluessel, 'nogo_ingredient', $ebene, $slotId, $slotLabel,
+                $prefix . 'No-Go „' . $rule->value_text . '“',
+                'No-Go aufgehoben: bisher ausgeschlossene Gerichte werden zulässig', $l),
+
+            'nogo_allergen' => $this->lockerungsZeile($schluessel, 'nogo_allergen', $ebene, $slotId, $slotLabel,
+                $prefix . 'No-Go-Allergen ' . $rule->ref_key,
+                'Allergen-Ausschluss aufgehoben: Gerichte mit „enthalten"/„spuren" werden zulässig', $l,
+                'Diese Lockerung ist eine Gast- und Kennzeichnungsfrage, keine wirtschaftliche — das Delta beziffert sie, es rechtfertigt sie nicht.'),
+
+            default => null,
+        };
+    }
+
+    /** Grund, warum eine bestehende Vorgabe nicht gelockert wird (nie stillschweigend). */
+    private function nichtLockerbar($rule, $slot): string
+    {
+        $prefix = $slot !== null ? 'Slot „' . $slot->label . '“: ' : '';
+
+        return $prefix . match ($rule->rule_type) {
+            'season_coverage' => 'Saison-Abdeckung — hängt am Konzept/Foodbook, nicht an der Gericht-Auswahl; sie wird deshalb schon in der Messung nicht bewertet.',
+            'allergen_line' => 'Allergen-Linie („' . $rule->value_text . '“) — Freitext, nicht maschinell messbar, also auch nicht lockerbar.',
+            default => 'Regel-Art „' . $rule->rule_type . '“ — dem Motor unbekannt, deshalb weder wirksam noch lockerbar.',
+        };
+    }
+
+    /** @return array<string,mixed> */
+    private function lockerungsZeile(string $schluessel, string $typ, string $ebene, ?int $slotId, ?string $slotLabel, string $label, string $wirkung, array $lockerung, ?string $warnung = null): array
+    {
+        return [
+            'schluessel' => $schluessel, 'typ' => $typ, 'ebene' => $ebene,
+            'slot_id' => $slotId, 'slot_label' => $slotLabel,
+            'label' => $label, 'wirkung' => $wirkung,
+            'lockerung' => $lockerung, 'warnung' => $warnung,
+        ];
+    }
+
+    private function eur(float $wert): string
+    {
+        return number_format($wert, 2, ',', '.') . ' €';
     }
 
     /**
