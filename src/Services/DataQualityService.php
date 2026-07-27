@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 
@@ -33,12 +34,17 @@ class DataQualityService
      * VK vs. live). Kein Container-Zyklus: die Abhängigkeiten aller drei (PlanningFrame/
      * Concept/Foodbook bzw. keine bzw. TeamSettings) kennen diesen Service nicht — anders
      * als beim `SignalObjectService`, der genau deshalb ausgelagert wurde.
+     *
+     * `PriceService` kommt ab Spec 22 · H2b dazu (V-053: die Preis-Aktiv-Bedingung wird
+     * geholt, nicht ein zweites Mal geschrieben). Ebenfalls zyklenfrei — `PriceService`
+     * hat keine Konstruktor-Abhängigkeiten.
      */
     public function __construct(
         private SignalService $signals,
         private CoverageService $coverage,
         private PairingService $pairing,
         private VkSnapshotService $vkSnapshots,
+        private PriceService $preise,
     ) {
     }
 
@@ -229,7 +235,7 @@ class DataQualityService
             // besitzt diesen Befund bereits (kein Doppel-Signal im Scheduler). Bleibt Info-Metrik.
             $this->gap('gp_ohne_lead', 'approved-GPs ohne Lead-LA', $ohneLead),
             $this->gap('gp_lead_ohne_preis', 'approved-GPs: Lead-LA ohne gültigen Preis', $leadOhnePreis, SignalTyp::DatenqualitaetGpLa, 'dq-gp-lead-ohne-preis',
-                'Lead-LA gesetzt, aber ohne aktiven Preis (>0, nicht gesperrt) → GP löst nicht auf einen EK auf.'),
+                'Lead-LA gesetzt, aber ohne aktiven Preis in der Lesart des Money-Paths (GL-11 T1: Status 0/2, nicht gesperrt, Betrag > 0) → GP löst nicht auf einen EK auf.'),
             $this->gap('gp_allergen_konfidenz', 'approved-GPs ohne Allergen-Konfidenz', $allergenKonfidenzFehlt, SignalTyp::DatenqualitaetGpLa, 'dq-gp-allergen-konfidenz',
                 'Allergen-Aggregation (ALL-MAXIMAL + Konfidenz) nie auf GP-Ebene persistiert.'),
             $this->gap('gp_anker_fehlt', 'genutzte approved-GPs ohne Flavor-Anker', $ankerFehlt, SignalTyp::AnkerFehlt, 'dq-gp-anker-fehlt',
@@ -1573,12 +1579,36 @@ class DataQualityService
             ->whereColumn('m.gp_id', 'foodalchemist_gps.id');
     }
 
-    /** EXISTS: Lead-LA des GP hat einen aktiven Preis (>0, nicht gesperrt). */
-    private function aktivPreisFuerLead(): \Closure
+    /**
+     * EXISTS: Lead-LA des GP hat einen aktiven Preis — in der Lesart des Money-Paths.
+     *
+     * Spec 22 · H2b (V-053): das Prädikat wird NICHT mehr hier geschrieben, sondern von
+     * `PriceService::scopeAktiv` geholt — derselben Stelle, aus der Rezept-EK
+     * (`RecipeRecomputeService::laMitPreis` → `activePriceSubquery`), Preis-Alarm und
+     * `ingest.STATUS` ihre Definition beziehen. Vorher fehlte der Ampel der **Status**
+     * (GL-11 T1: nur `0` Standard und `2` Aktion sind aktiv), weshalb sie eine
+     * statusfremde Zeile als Versorgung durchgehen ließ, die der EK nicht findet —
+     * ein Fehler in Richtung „zu wenige Lücken". Jede künftige Statusregel zieht jetzt
+     * automatisch mit; `deleted_at IS NULL` kommt aus dem SoftDeletes-Scope des Models.
+     *
+     * Zwei Entscheidungen, die diese Etappe bewusst trifft (statt sie mitzunehmen):
+     *  1. **`valid_to` wird NICHT gefiltert.** `PriceService::activeFor` sortiert nur
+     *     danach (`valid_to IS NULL DESC, valid_to DESC, id DESC`) und liefert bei einer
+     *     nur noch abgelaufenen Zeile eben diese. Filterte die Ampel hier, meldete sie
+     *     eine Lücke, wo der EK rechnet — eine *dritte* Preis-Wahrheit statt einer
+     *     geteilten. Ob eine abgelaufene Zeile überhaupt ein aktiver EK sein darf, ist
+     *     eine Frage an den Money-Path, nicht an die Ampel (→ V-069).
+     *  2. **`price > 0` bleibt strenger als `scopeAktiv` (`>= 0`).** 0,00 € ist nach
+     *     GL-11 / Spec 13 S1b kein Preis, sondern eine Datenlücke, die als aktiver
+     *     Standard-EK die Kosten jedes nutzenden Rezepts auf null zöge. Die eine
+     *     Abweichung steht hier sichtbar, statt das ganze Prädikat zu duplizieren.
+     */
+    private function aktivPreisFuerLead(): \Illuminate\Database\Eloquent\Builder
     {
-        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_prices as p')
-            ->whereColumn('p.supplier_item_id', 'foodalchemist_gps.lead_la_supplier_item_id')
-            ->where('p.price', '>', 0)->where('p.is_blocked', false)->whereNull('p.deleted_at');
+        return $this->preise->scopeAktiv(FoodAlchemistPrice::query())
+            ->select(DB::raw(1))
+            ->whereColumn('foodalchemist_prices.supplier_item_id', 'foodalchemist_gps.lead_la_supplier_item_id')
+            ->where('foodalchemist_prices.price', '>', 0);
     }
 
     /** EXISTS: Rezept hat ein Anker-Mapping. */
