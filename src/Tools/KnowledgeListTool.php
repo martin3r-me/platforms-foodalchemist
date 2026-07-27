@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
+use Platform\FoodAlchemist\Services\KnowledgeService;
 
 /**
  * #496: Vollständige, seiten-basierte Auflistung der Catering-Wissensbasis —
@@ -26,8 +27,9 @@ class KnowledgeListTool extends FoodAlchemistTool implements ToolContract, ToolM
     public function getDescription(): string
     {
         return 'Listet die Catering-Wissensbasis vollständig und seitenweise auf (ohne Suchbegriff, '
-            . 'ohne 50er-Cap). Optional pro Kategorie (trend/pairing/cross_cutting/domain/niveau/regelwerk/concept) '
-            . 'gefiltert; offset/limit-Paging (next_offset zum Weiterblättern). Liefert slug/title/category '
+            . 'ohne 50er-Cap). Optional pro Kategorie gefiltert (Slug aus dem pflegbaren Kategorien-Vokabular, '
+            . 'u. a. trend/pairing/cross_cutting/domain/niveau/regelwerk/workflow/concept — ein unbekannter Slug '
+            . 'wird abgelehnt und nennt die verfügbaren); offset/limit-Paging (next_offset zum Weiterblättern). Liefert slug/title/category '
             . '+ Frontmatter (thema, sub_thema, relevanz, recherche_datum, tags). Volltext via '
             . 'foodalchemist.knowledge.GET, gezielte Stichwortsuche via foodalchemist.knowledge.SEARCH.';
     }
@@ -38,9 +40,17 @@ class KnowledgeListTool extends FoodAlchemistTool implements ToolContract, ToolM
             'type' => 'object',
             'properties' => [
                 'category' => [
+                    // Bewusst OHNE enum (V-044): die Kategorien sind ein zur Laufzeit pflegbares
+                    // Vokabular (Settings → Wissenskategorien). Ein Enum im Schema wäre eine
+                    // Handkopie, die bei jeder neuen Kategorie nachgezogen werden muss — und
+                    // deren Vergessen niemand bemerkt (der Client sieht nur eine Kategorie, die
+                    // es „nicht gibt", und weicht auf die ungefilterte Suche aus). `getSchema()`
+                    // darf keine DB lesen, also validiert `execute()` gegen die Tabelle.
                     'type' => 'string',
-                    'enum' => ['trend', 'pairing', 'cross_cutting', 'domain', 'niveau', 'regelwerk', 'kueche', 'workflow', 'concept'],
-                    'description' => 'Optionaler Kategorie-Filter. Ohne Angabe: alle Kategorien.',
+                    'description' => 'Optionaler Kategorie-Filter (Slug aus dem Kategorien-Vokabular, z. B. '
+                        . 'trend/pairing/cross_cutting/domain/niveau/regelwerk/workflow/concept — der Bestand ist '
+                        . 'pflegbar und kann weitere enthalten). Unbekannter Slug wird abgelehnt und nennt die '
+                        . 'verfügbaren. Ohne Angabe: alle Kategorien.',
                 ],
                 'offset' => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => 'Start-Offset fürs Paging (next_offset aus der Vorantwort).'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 100, 'description' => 'Seitengröße (max. 200).'],
@@ -57,8 +67,20 @@ class KnowledgeListTool extends FoodAlchemistTool implements ToolContract, ToolM
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
 
+        $kategorie = isset($arguments['category']) && trim((string) $arguments['category']) !== ''
+            ? trim((string) $arguments['category'])
+            : null;
+
+        if ($kategorie !== null) {
+            try {
+                app(KnowledgeService::class)->assertKategorie($team, $kategorie);
+            } catch (\RuntimeException $e) {
+                return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+            }
+        }
+
         $ergebnis = app(KnowledgeContextService::class)->listDocuments(
-            isset($arguments['category']) ? (string) $arguments['category'] : null,
+            $kategorie,
             (int) ($arguments['offset'] ?? 0),
             (int) ($arguments['limit'] ?? 100),
             (bool) ($arguments['with_frontmatter'] ?? true),

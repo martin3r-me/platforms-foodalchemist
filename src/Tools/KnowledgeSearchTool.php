@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
+use Platform\FoodAlchemist\Services\KnowledgeService;
 
 /**
  * Phase K: Wissens-Discovery für externe LLM-Clients — 836 Dokumente aus der
@@ -35,7 +36,13 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
             'type' => 'object',
             'properties' => [
                 'q' => ['type' => 'string', 'description' => 'Suchbegriffe, z. B. "Mengen Buffet" oder "Substitution Sahne"'],
-                'category' => ['type' => 'string', 'enum' => ['cross_cutting', 'domain', 'pairing', 'regelwerk', 'trend', 'niveau', 'kueche', 'workflow', 'concept'], 'description' => 'Optionaler Filter (workflow = MCP-Handlungs-Workflows, concept = Konzept-/Menü-Handwerk für die Planungs-Ebene)'],
+                // Bewusst OHNE enum (V-044): pflegbares Vokabular, siehe KnowledgeListTool.
+                // Validierung in execute() gegen foodalchemist_knowledge_categories.
+                'category' => ['type' => 'string', 'description' => 'Optionaler Filter — Slug aus dem '
+                    . 'Kategorien-Vokabular (u. a. cross_cutting/domain/pairing/regelwerk/trend/niveau/workflow/'
+                    . 'concept; workflow = MCP-Handlungs-Workflows, concept = Konzept-/Menü-Handwerk für die '
+                    . 'Planungs-Ebene). Der Bestand ist pflegbar; ein unbekannter Slug wird abgelehnt und nennt '
+                    . 'die verfügbaren.'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 10],
             ],
             'required' => ['q'],
@@ -49,9 +56,21 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
 
+        $kategorie = isset($arguments['category']) && trim((string) $arguments['category']) !== ''
+            ? trim((string) $arguments['category'])
+            : null;
+
+        if ($kategorie !== null) {
+            try {
+                app(KnowledgeService::class)->assertKategorie($team, $kategorie);
+            } catch (\RuntimeException $e) {
+                return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+            }
+        }
+
         $treffer = app(KnowledgeContextService::class)->searchDocuments(
             (string) $arguments['q'],
-            isset($arguments['category']) ? (string) $arguments['category'] : null,
+            $kategorie,
             (int) ($arguments['limit'] ?? 10),
         );
 

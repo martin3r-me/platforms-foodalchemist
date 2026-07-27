@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Models\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Support\TeamAncestryRegistry;
 
 /**
  * D1 (revidiert 2026-06-11): Eltern→Kinder-Katalog-Vererbung statt NULL-Global.
@@ -52,6 +53,10 @@ trait BelongsToTeamHierarchy
     public static function teamAncestryIds(Team $team): array
     {
         if (!isset(static::$teamAncestryCache[$team->id])) {
+            // V-048: die Klasse trägt sich ein, sobald sie etwas zu leeren hat — damit ist
+            // TeamAncestryRegistry::flushAll() vollständig, ohne dass jemand eine Liste pflegt.
+            TeamAncestryRegistry::register(static::class);
+
             $ids = [];
             $current = $team;
             $guard = 0;
@@ -69,6 +74,9 @@ trait BelongsToTeamHierarchy
     /**
      * Cache leeren — Pflicht in Test-Setups, die Teams neu seeden (M0-06-Harness):
      * im selben Prozess wiederverwendete Team-IDs würden sonst stale Ketten liefern.
+     *
+     * Klassenweise. Für „alle" gibt es {@see TeamAncestryRegistry::flushAll()} (V-048) —
+     * die Modul-`TestCase::setUp` ruft das unbedingt, ein Test muss hier nichts aufzählen.
      */
     public static function flushTeamAncestryCache(): void
     {

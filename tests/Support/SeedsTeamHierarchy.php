@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Tests\Support;
 
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Support\TeamAncestryRegistry;
 
 /**
  * M0-06 Leak-Test-Harness (D1-Risiko, 08_ENTSCHEIDUNGEN):
@@ -74,23 +75,12 @@ trait SeedsTeamHierarchy
         $this->childA = Team::create(['name' => 'Kind A', 'user_id' => 1, 'personal_team' => false, 'parent_team_id' => $this->rootTeam->id]);
         $this->childB = Team::create(['name' => 'Kind B', 'user_id' => 1, 'personal_team' => false, 'parent_team_id' => $this->rootTeam->id]);
 
-        // Stale Ketten aus früheren Tests desselben Prozesses verwerfen.
-        // Weitere Models mit BelongsToTeamHierarchy hier ergänzen, sobald getestet.
-        FoodAlchemistGp::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistPaket::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistConcept::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistVocabKlasse::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistComponentEquivalent::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistDishIdea::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistDishIdeaGroup::flushTeamAncestryCache();
-        \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::flushTeamAncestryCache(); // Spec 13 S1a (Kanal-B-Import prüft D1 am LA)
+        // Stale Ketten aus früheren Tests desselben Prozesses verwerfen (V-048).
+        // Früher stand hier eine Handliste über 14 von 77 Models; sie wuchs nur, wenn jemand
+        // darüber stolperte, und eine fehlende Zeile machte D1-Tests grün aus dem falschen
+        // Grund. Jetzt trägt sich jede Klasse selbst ein, sobald sie eine Kette cacht —
+        // hier (und in TestCase::setUp) wird die registrierte Menge geleert, nicht aufgezählt.
+        TeamAncestryRegistry::flushAll();
 
         // Modul-Routen für Full-Page-Komponenten: der ServiceProvider registriert sie nur
         // hinter PlatformCore/ModuleRouter (modules-Tabelle beim Boot noch leer) — ohne sie

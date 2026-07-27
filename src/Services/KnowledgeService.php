@@ -234,8 +234,17 @@ class KnowledgeService
         return $doc;
     }
 
-    /** Wirft, wenn die Kategorie nicht im (aktiven) Vokabular steht. */
-    private function assertKategorie(Team $team, string $slug): void
+    /**
+     * Wirft, wenn die Kategorie nicht im (aktiven) Vokabular steht.
+     *
+     * Öffentlich seit 22·H1 (V-044): die beiden LESE-Tools (`knowledge.LIST`/`SEARCH`) trugen
+     * die Kategorien als JSON-Schema-Enum im Code — eine Handkopie einer zur Laufzeit
+     * pflegbaren Tabelle. Ein `getSchema()` darf keine DB anfassen (seiteneffektfrei, wird
+     * bei jeder LLM-Anfrage gerufen), also fällt die Prüfung in `execute()` — und zwar über
+     * DIESE Methode, damit Lese- und Schreibweg dieselbe Menge und dieselbe
+     * „Verfügbar: …"-Meldung benutzen statt zwei Wahrheiten zu pflegen.
+     */
+    public function assertKategorie(Team $team, string $slug): void
     {
         $ok = DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
             ->where('active', true)->where('slug', $slug)
