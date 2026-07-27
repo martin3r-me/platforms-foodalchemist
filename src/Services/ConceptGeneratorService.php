@@ -539,29 +539,15 @@ class ConceptGeneratorService
 
     /**
      * Slot-Semantik: passt die Speisen-Hauptgruppe des Gerichts zum Slot-Label?
-     * Deterministischer Token-Präfix-Vergleich („Hauptgang" ↔ „Hauptgericht" via
-     * gemeinsamem Präfix ≥5) — kein Match bei freien Labels (Boost neutral 0).
+     *
+     * 12·S3a: die Logik liegt jetzt im geteilten {@see MenuCandidatePoolService::slotSemantik}
+     * (dort entsteht `hg_label`), damit Generator, Weg-B-Vorschlag und Marge-Solver
+     * nicht drei Auslegungen desselben Vergleichs pflegen. Diese Methode bleibt als
+     * benannter Zugang stehen und delegiert — eine Wahrheit, zwei Türen.
      */
     public static function slotSemantik(string $slotLabel, string $hgLabel): int
     {
-        if ($hgLabel === '') {
-            return 0;
-        }
-        $slotTokens = preg_split('/[^a-zäöüß]+/u', mb_strtolower($slotLabel), -1, PREG_SPLIT_NO_EMPTY);
-        $hgTokens = preg_split('/[^a-zäöüß]+/u', $hgLabel, -1, PREG_SPLIT_NO_EMPTY);
-        foreach ($slotTokens as $s) {
-            foreach ($hgTokens as $h) {
-                $len = min(mb_strlen($s), mb_strlen($h));
-                if ($len >= 5 && mb_substr($s, 0, 5) === mb_substr($h, 0, 5)) {
-                    return 1;
-                }
-                if ($s === $h && $len >= 3) {
-                    return 1;
-                }
-            }
-        }
-
-        return 0;
+        return MenuCandidatePoolService::slotSemantik($slotLabel, $hgLabel);
     }
 
     /**
@@ -577,12 +563,15 @@ class ConceptGeneratorService
         $kanten = $gewaehlteAnker !== []
             ? $this->pairing->edgesFor(array_unique(array_merge($gewaehlteAnker, $kandidaten->flatMap(fn ($k) => $k['anker'])->unique()->values()->all())))
             : [];
-        // Semantik nur anwenden, wenn ÜBERHAUPT ein Kandidat zum Slot-Label passt —
-        // sonst würde ein freies Label („Station Süß") nichts filtern, aber auch nichts kaputt machen.
-        $hatSemantik = $kandidaten->contains(fn ($k) => self::slotSemantik((string) $frameSlot->label, $k['hg_label']) === 1);
+        // Semantik EINMAL je Kandidat über die geteilte Naht (12·S3a) statt zweimal inline.
+        // Das Gate „nur anwenden, wenn überhaupt einer passt" bleibt stehen wie im Bestand;
+        // es ist beweisbar folgenlos (ohne Treffer ist jeder Wert ohnehin 0) und wird
+        // deshalb hier nicht angetastet, sondern gemeldet (→ V-066).
+        $semantik = MenuCandidatePoolService::semantikJeKandidat($kandidaten, $frameSlot);
+        $hatSemantik = in_array(1, $semantik, true);
 
-        return $kandidaten->map(function ($k) use ($kanten, $gewaehlteAnker, $frameSlot, $hatSemantik, $zielNiveau, $zielConvenience) {
-            $k['semantik'] = $hatSemantik ? self::slotSemantik((string) $frameSlot->label, $k['hg_label']) : 0;
+        return $kandidaten->map(function ($k) use ($kanten, $gewaehlteAnker, $frameSlot, $hatSemantik, $semantik, $zielNiveau, $zielConvenience) {
+            $k['semantik'] = $hatSemantik ? ($semantik[(int) $k['id']] ?? 0) : 0;
             // Phase 5: Segment-Niveau bevorzugen (neutral, wenn kein Ziel-Niveau übergeben wird).
             $k['niveau_match'] = ($zielNiveau !== null && in_array($zielNiveau, $k['niveaus'] ?? [], true)) ? 1 : 0;
             // Convenience-Leitplanke: Anteil convenience-getaggter GPs unter den Zutaten (0..1).

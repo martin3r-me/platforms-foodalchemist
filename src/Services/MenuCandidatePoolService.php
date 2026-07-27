@@ -263,6 +263,61 @@ class MenuCandidatePoolService
         });
     }
 
+    /**
+     * Slot-Semantik: passt die Speisen-Hauptgruppe des Gerichts zum Slot-Label?
+     * Deterministischer Token-Präfix-Vergleich („Hauptgang" ↔ „Hauptgericht" via
+     * gemeinsamem Präfix ≥5, sonst Token-Gleichheit ab 3 Zeichen) — kein Match bei
+     * freien Labels („Station Süß"), das Ergebnis ist dann neutral 0.
+     *
+     * 12·S3a: hierher gezogen aus `ConceptGeneratorService::slotSemantik` (das
+     * delegiert seither). Der Pool ist der Ort, weil `hg_label` hier entsteht —
+     * damit lesen Generator, Weg-B-Vorschlag und Marge-Solver (R2.4) EINE
+     * Semantik-Wahrheit statt dreier Auslegungen desselben Vergleichs.
+     * Verhalten unverändert gegenüber dem Bestand (Riegel: `SlotSemantikGoldenTest`).
+     *
+     * ⚠️ Vertrag: `$hgLabel` muss **kleingeschrieben** übergeben werden — die Methode
+     * normalisiert nur die Slot-Seite. Genau so liefert der Pool `hg_label` (Z. 108),
+     * ein rohes Model-Label ergäbe still 0. Asymmetrie bewusst eingefroren statt
+     * hier geheilt (Auswahl-Regel ⇒ nicht in einen Naht-Umbau, → V-065).
+     */
+    public static function slotSemantik(string $slotLabel, string $hgLabel): int
+    {
+        if ($hgLabel === '') {
+            return 0;
+        }
+        $slotTokens = preg_split('/[^a-zäöüß]+/u', mb_strtolower($slotLabel), -1, PREG_SPLIT_NO_EMPTY);
+        $hgTokens = preg_split('/[^a-zäöüß]+/u', $hgLabel, -1, PREG_SPLIT_NO_EMPTY);
+        foreach ($slotTokens as $s) {
+            foreach ($hgTokens as $h) {
+                $len = min(mb_strlen($s), mb_strlen($h));
+                if ($len >= 5 && mb_substr($s, 0, 5) === mb_substr($h, 0, 5)) {
+                    return 1;
+                }
+                if ($s === $h && $len >= 3) {
+                    return 1;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Semantik-Wert je Kandidaten-Zeile am Slot — die Sicht, die ein Konsument
+     * wirklich braucht („welcher Kandidat passt zur Rolle dieses Slots?").
+     *
+     * @param  Collection<int, array<string,mixed>>  $kandidaten Pool-Zeilen (mit `hg_label`)
+     * @return array<int, int> keyBy Rezept-ID → 0|1
+     */
+    public static function semantikJeKandidat(Collection $kandidaten, $frameSlot): array
+    {
+        $label = (string) ($frameSlot->label ?? '');
+
+        return $kandidaten->mapWithKeys(fn ($k) => [
+            (int) $k['id'] => self::slotSemantik($label, (string) ($k['hg_label'] ?? '')),
+        ])->all();
+    }
+
     /** Menschlich lesbare Filter-Zusammenfassung für Leer-Begründungen. */
     public function filterBeschreibung(FoodAlchemistPlanningFrame $frame, $frameSlot): string
     {
