@@ -57,14 +57,14 @@ Aus dem Portfolio **lösen**: Rahmen rein → DB-maximale Kombination raus.
 >
 > ⚠️ **Perf-DoD ist gefährdet und die Ursache liegt außerhalb dieser Etappe:** hart gemessen **39 Queries für 12 Gerichte ohne Zutaten** — `PairingService::resolveRecipeAnchors` läuft je Gericht und holt die Zutaten erneut, obwohl sie eager geladen sind. Hochgerechnet ~2.700 Queries bei 1.000 Gerichten, vor der ersten Zutat. Die neue Achse selbst kostet **+1 Query** (im Test festgenagelt). Nicht mit-behoben → **V-045** (Batch-`anchorsForRecipes`). **Vor S2a-2 zu entscheiden.** Zweiter Fund: `filterFuerSlot` schließt hart über `recipes.sales_net` aus, während der Money-Path über den Darreichungs-Resolver geht → **V-046**.
 >
-> **Restliche Teilschritte:** S2a-2 Solver-Motor (`MenuAssemblyService`, B&B exakt / Greedy+Local-Swap bei Skala) · S2a-3 Erklärung (bindende Constraints, Lockerungs-Delta) · S2b MCP `assemblierung.POST` + explizite Übernahme als `draft`.
+> **Restliche Teilschritte:** ~~S2a-2 Solver-Motor~~ ✅ 2026-07-27 (`MenuAssemblyService`, drei Verfahren: slot-unabhängig / B&B exakt / Greedy+Local-Swap) · ~~S2a-3 Erklärung~~ ✅ 2026-07-27 (`erklaere()`, bindende Vorgaben + Lockerungs-Delta als echte Wiederholungsläufe; V-061/V-062 ausgewiesen statt gefixt — beides Geschäftsentscheidung) · **offen: S2b** MCP `assemblierung.POST` + explizite Übernahme als `draft`.
 
 **Bau:** NEU `MenuAssemblyService` — optimiert DB über `kandidatenPool`/`filterFuerSlot` unter Frame-Bändern + Diät-Quoten; validiert über `CoverageService`; Perf über die `MargeImpactService`-Eviction. **Algorithmus (E-Entscheid):** slot-unabhängige DB-Max wo Slots unabhängig; bei menü-weiten Constraints (Diät-Quote) **bounded exhaustive/Branch-and-Bound für kleine Slot-Zahlen (exakt), Constraint-aware-Greedy + Local-Swap bei Skala** (kein externer Solver-Lib in v1).
 
 **DoD:**
 - [ ] Solver: Zielpreis p.P. + Gästezahl + Coverage-Constraints (Diät-Quoten, Gang-/Stations-Gerüst, Preisspannen) → DB-maximale Kombination **nur aus echten VK-Gerichten** (`kandidatenPool`).
 - [ ] Keine Halluzination; Slot ohne zulässigen Treffer bleibt leer + Begründung.
-- [ ] Lösung erklärt sich: welche Constraints bindend, wie weit vom Optimum bei Lockerung X.
+- [x] Lösung erklärt sich: welche Constraints bindend, wie weit vom Optimum bei Lockerung X. **S2a-3, 2026-07-27:** `MenuAssemblyService::erklaere()` — je lockerbarer Vorgabe ein echter Wiederholungslauf auf demselben Pool (kein Schattenpreis: lexikografische Zielfunktion + heuristischer Pfad ⇒ ein Dual-Wert hätte vorgetäuschte Genauigkeit). Ausgabe je Vorgabe: `bindend` · `delta_db_pp`/`delta_db_gaeste` · `delta_verletzungen` (dieselbe Coverage-Ampel) · `kandidaten_delta` (trennt menü-weit von hartem Slot-Filter) · `delta_ist_untergrenze`; dazu `nicht_gelockert` mit Grund, Kappung `LOCKERUNGEN_MAX=12` mit `abgeschnitten` und der `zielpreis`-Block (V-061 ausgewiesen statt wegoptimiert).
 - [ ] MCP `assemblierung.POST` (read-only-Semantik, Template `SimulationPostTool`).
 - [ ] Übernahme nur explizit (`status=draft`), kein Auto-Commit.
 - [ ] Perf: Portfolio ~1.000 Gerichte < 15 s (Eviction-Muster).
