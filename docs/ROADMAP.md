@@ -8,7 +8,9 @@
 
 ---
 
-## Update 2026-07-27 (Spec 12 · S2b — die Fläche: Vorschau und Übernahme sind zwei Aufrufe · **R2.4 KOMPLETT**)
+## Update 2026-07-27 (Spec 12 · S2b — die Fläche: Vorschau und Übernahme sind zwei Aufrufe · **R2.4 gebaut, aber fachlich blockiert**)
+
+> ⚠️ **Nachtrag 2026-07-28 (Abnahme-Nachmessung, Auftrag Dominique) — R2.4 ist gebaut, aber noch nicht einsatzfähig.** Beim Gegenprüfen ist aufgefallen: der Solver ignoriert die Slot-Semantik, die der greedy Pfad daneben anwendet. `ConceptGeneratorService::slotSemantik()` (`:545`) vergleicht Slot-Label und Speisen-Hauptgruppe und ist in `besterKandidat()` das **erste** Ranking-Kriterium des Generators — `MenuAssemblyService::aufgabenFuer` ruft `besterKandidat()` gar nicht und sortiert allein nach DB. Am echten Gerüst besetzt der Solver damit den Slot „Hauptgang" mit `[FIN]`-Fingerfood und Gebäck (Bienenstich, Mini-Muffins, Landfrauenkuchen). Ein margenoptimales Menü mit Bienenstich als Hauptgang ist niemandem zeigbar — betroffen sind alle drei Flächen (Vorschau, Erklärung, Übernahme). **Bug #651 (Board 54, Prio hoch)**; Bauplan als neue Etappe **12·S3 Slot-Zulässigkeit**, im Fahrplan auf **Punkt 4** vorgezogen (vor 22·H2). Gute Nachricht aus derselben Messung: `recipes.dish_main_group_id` ist zu **100 %** gepflegt (26/26) und liegt über `hg_label` **bereits im Pool** — kein Join, keine Migration, kein Backfill, daher S–M. Offene Entscheidung: hart / lexikografisch / Ranking-Vorrang; Empfehlung lexikografisch, weil ein harter Filter bei Soll 4 gegen 2 passende Gerichte die Hälfte des Hauptgangs leer ließe (→ D-011).
 
 **Achtundvierzigster Bau-Lauf der Routine ([Spec 12](PLANUNG/12_Wirtschaftlichkeits_Intelligenz_R2-Rest.md), Etappe S2b — damit ist R2.4 gebaut) — Commit `2eab40e`.** Der Solver rechnet seit S2a-2 und erklärt sich seit S2a-3; er hatte aber keinen Zugang von außen und keinen Weg ins Konzept. Beides steht jetzt — als **zwei** Werkzeuge: `foodalchemist.assemblierung.POST` (Vorschau, `read_only=true`, optional `erklaerung=true`) und `foodalchemist.assemblierung.APPLY` (Übernahme, `read_only=false`, Ergebnis immer `status=draft` + `created_via=menu_assembly_mcp`).
 
