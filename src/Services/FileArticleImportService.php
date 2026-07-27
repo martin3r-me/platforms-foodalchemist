@@ -18,18 +18,16 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
  *
  * Was diese Stufe schreibt: den Artikel-Stamm (`foodalchemist_supplier_items`),
  * seit S1b den **Preis** (`foodalchemist_prices` über {@see PriceService::createFor},
- * append-only) und seit S1c die drei **Detail-Blöcke** (`item_nutritionals` /
- * `item_allergens` / `item_declarations` über den SupplierItemService) — alles samt
- * **Post-Import-Kette (E4)**: bewegter Artikel → betroffene GPs →
+ * append-only), seit S1c die drei **Detail-Blöcke** (`item_nutritionals` /
+ * `item_allergens` / `item_declarations` über den SupplierItemService) und seit S2 die
+ * **Lieferbedingungen** am Lieferanten (E3, über {@see SupplierService::updateConditions})
+ * — alles samt **Post-Import-Kette (E4)**: bewegter Artikel → betroffene GPs →
  * `recomputeAndPropagate` je nutzendem Rezept → `SignalDetektorService::preisSprungMargeImpact`.
  * Das ist der DoD-Kern der Spec: keine stille Drift — weder ein neuer EK noch ein
  * neues Allergen darf am Artikel stehen, während Rezeptkosten, Aushang und
  * Marge-Signale den alten Stand zeigen.
  *
- * Was sie NOCH NICHT schreibt: Lieferbedingungen (S2). Diese Spalten werden in der
- * Datei **erkannt und namentlich gemeldet** statt still verschluckt.
- *
- * Fünf tragende Regeln:
+ * Sechs tragende Regeln:
  *  1. **Leere Zelle heißt „steht nicht in der Datei", nicht „lösche den Wert".**
  *     Nur Spalten, die die Datei mitbringt UND befüllt hat, werden geschrieben.
  *     Damit ist ein zweiter Lauf derselben Datei per Konstruktion ein No-op
@@ -50,6 +48,10 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
  *     dieselben Eltern-Rezepte hundertfach an; je Zeile zu propagieren hieße, dasselbe
  *     Gericht hundertmal zu rechnen. Gesammelt wird über den ganzen Lauf, gerechnet
  *     über die deduplizierte Menge.
+ *  6. **Lieferbedingungen gelten dem Lieferanten, nicht der Zeile (S2).** Sie stehen in
+ *     einer Artikel-Datei zwangsläufig n-mal da (oder nur in der ersten Zeile). Gelesen
+ *     wird die ganze Datei, geschrieben **einmal** — und widersprechen sich zwei Zeilen
+ *     in derselben Kondition, wird sie abgelehnt statt geraten (Regel 3 auf Datei-Ebene).
  */
 class FileArticleImportService
 {
@@ -134,17 +136,43 @@ class FileArticleImportService
     ];
 
     /**
-     * Spalten, die zur Vorlage gehören, aber erst eine spätere Stufe schreibt.
-     * Sie werden erkannt und im Bericht namentlich genannt (nie still ignoriert).
+     * Spalten, die zur Vorlage gehören, aber erst eine spätere Stufe schreibt. Sie
+     * werden erkannt und im Bericht namentlich genannt (nie still ignoriert).
+     *
+     * **Derzeit leer** — S1b (Preis), S1c (Detail-Blöcke) und S2 (Lieferbedingungen)
+     * haben die letzten Einträge abgeräumt; die Vorlage wird jetzt vollständig
+     * geschrieben. Die Mechanik bleibt bewusst stehen: sie ist der Ort, an dem eine
+     * künftige Spalte ehrlich „erkannt, aber noch nicht geschrieben" sagen kann,
+     * statt unter „nicht Teil der Vorlage" zu verschwinden.
      *
      * @var array<string, string>
      */
-    public const SPAETER = [
-        'mindestbestellwert' => 'S2 (Lieferbedingungen am Lieferanten, E3)',
-        'freihausab' => 'S2 (Lieferbedingungen am Lieferanten, E3)',
-        'zahlungsziel' => 'S2 (Lieferbedingungen am Lieferanten, E3)',
-        'rueckverguetung' => 'S2 (Lieferbedingungen am Lieferanten, E3)',
+    public const SPAETER = [];
+
+    /**
+     * S2 (E3) — die **Lieferbedingungen**. Ihr Ziel ist keine Spalte am Artikel, sondern
+     * `foodalchemist_suppliers`: sie gelten dem Lieferanten, nicht der Zeile (Regel 6).
+     * Der Schreibweg ist {@see SupplierService::updateConditions} — dort hängen die
+     * D1-Prüfung und die Spalten-Whitelist schon dran, ein `$supplier->update()` hier
+     * wäre der zweite Pfad.
+     *
+     * Die vier Spalten sind genau die aus E3/E4 (geteilte Migration mit R9). Die drei
+     * Bestell-Logistik-Felder derselben Tabelle (`delivery_days` / `order_cutoff_time`
+     * / `order_lead_days`, Spec 17) sind **bewusst nicht** dabei: sie beschreiben die
+     * Bestellschiene, nicht die kommerzielle Kondition, stehen in keiner Preisliste und
+     * werden im Lieferanten-Modal gepflegt.
+     *
+     * @var array<string, array{0: string, 1: string, 2: list<string>}>  Ziel-Spalte => [Label, Typ, Aliase]
+     */
+    public const KONDITIONS_FELDER = [
+        'min_order_value' => ['Mindestbestellwert', 'geld', ['mindestbestellwert', 'mindestauftragswert', 'mindestbestellwertnetto', 'mbw', 'minbestellwert']],
+        'free_shipping_threshold' => ['Frei-Haus-Grenze', 'geld', ['freihausab', 'freihaus', 'freihausgrenze', 'frachtfreiab', 'versandkostenfreiab']],
+        'payment_term_days' => ['Zahlungsziel', 'tage', ['zahlungsziel', 'zahlungszieltage', 'zahlungsfrist', 'nettotage']],
+        'rebate_pct' => ['Rückvergütung', 'prozent', ['rueckverguetung', 'rueckverguetungprozent', 'bonus', 'bonusprozent', 'jahresbonus']],
     ];
+
+    /** Obergrenze eines plausiblen Zahlungsziels in Tagen — darüber ist es ein Tippfehler, keine Kondition. */
+    public const MAX_ZAHLUNGSZIEL_TAGE = 365;
 
     /**
      * S1c — die drei Detail-Blöcke. Ihre Spalten heißen `<Präfix> <Wert>`
@@ -238,6 +266,7 @@ class FileArticleImportService
         private PriceService $preise,
         private RecipeRecomputeService $recompute,
         private SupplierItemService $artikel,
+        private SupplierService $lieferanten,
     ) {
     }
 
@@ -251,6 +280,7 @@ class FileArticleImportService
      *   neu: int, aktualisiert: int, unveraendert: int, uebersprungen: int, fehler: int,
      *   preise: array{neu: int, geaendert: int, unveraendert: int, fehler: int},
      *   details: array{naehrwerte: int, allergene: int, zusatzstoffe: int},
+     *   konditionen: array{status: ?string, grund?: string, gesetzt: array<string, mixed>, unveraendert: list<string>, abgelehnt: list<string>},
      *   kette: array{bewegt: int, gps: int, rezepte: int, neu_berechnet: int, signale: int, abgeschnitten: bool},
      *   spalten: array{erkannt: list<string>, spaeter: list<string>, unbekannt: list<string>},
      *   hinweise: list<string>, befunde: list<array<string, mixed>>
@@ -273,6 +303,7 @@ class FileArticleImportService
             'neu' => 0, 'aktualisiert' => 0, 'unveraendert' => 0, 'uebersprungen' => 0, 'fehler' => 0,
             'preise' => ['neu' => 0, 'geaendert' => 0, 'unveraendert' => 0, 'fehler' => 0],
             'details' => ['naehrwerte' => 0, 'allergene' => 0, 'zusatzstoffe' => 0],
+            'konditionen' => ['status' => null, 'gesetzt' => [], 'unveraendert' => [], 'abgelehnt' => []],
             'kette' => ['bewegt' => 0, 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0, 'abgeschnitten' => false],
             'spalten' => $datei['spalten'],
             'hinweise' => $datei['hinweise'],
@@ -294,6 +325,7 @@ class FileArticleImportService
             }
         }
 
+        $bericht['konditionen'] = $this->verarbeiteKonditionen($team, $supplier, $datei['zeilen'], $apply);
         $bericht['kette'] = $this->postImportKette($team, $bewegteItems, $apply);
 
         return $bericht;
@@ -736,6 +768,165 @@ class FileArticleImportService
         return $out;
     }
 
+    /**
+     * S2 (E3) — die Lieferbedingungen der Datei → `foodalchemist_suppliers`.
+     *
+     * Vier Regeln, die hier zusammenkommen:
+     *
+     *  - **Eine Kondition gilt dem Lieferanten, nicht der Zeile (Regel 6).** Gelesen wird
+     *    über die ganze Datei, geschrieben genau einmal am Ende. Dass derselbe
+     *    Mindestbestellwert in 400 Artikelzeilen steht, ist der Normalfall, kein Konflikt.
+     *  - **Widerspruch ist ein Fehler, keine Wahl.** Zwei verschiedene Zahlungsziele in
+     *    einer Datei sind kein Datensatz, sondern ein Rätsel — die betroffene Kondition
+     *    wird abgelehnt und benannt (Regel 3 auf Datei-Ebene). Die übrigen bleiben gültig:
+     *    ein widersprüchlicher Bonus soll nicht den Mindestbestellwert mitreißen.
+     *  - **Kein zweiter Schreibweg.** {@see SupplierService::updateConditions} trägt die
+     *    D1-Prüfung und die Spalten-Whitelist. Ein geerbter Katalog-Lieferant wird darum
+     *    **übersprungen mit Grund** statt verändert — und weil der Bestand fast nur
+     *    geerbte Lieferanten kennt, ist das der häufige Fall und keine Randnotiz.
+     *  - **Nur echte Änderung schreibt** (Regel 1). Steht in der Datei, was schon am
+     *    Lieferanten steht, passiert nichts — der zweite Lauf ist auch hier ein No-op.
+     *
+     * @param  list<array{nr: int, werte: array<string, string>}>  $zeilen
+     * @return array{status: ?string, grund?: string, gesetzt: array<string, mixed>, unveraendert: list<string>, abgelehnt: list<string>}
+     */
+    private function verarbeiteKonditionen(Team $team, FoodAlchemistSupplier $supplier, array $zeilen, bool $apply): array
+    {
+        $ergebnis = ['status' => null, 'gesetzt' => [], 'unveraendert' => [], 'abgelehnt' => []];
+
+        /** @var array<string, array{wert: float|int, zeile: int, roh: string}> $gefunden */
+        $gefunden = [];
+        $konflikt = [];
+        foreach ($zeilen as $zeile) {
+            foreach (self::KONDITIONS_FELDER as $spalte => [$label, $typ, $_aliase]) {
+                $roh = trim((string) ($zeile['werte']["lb:{$spalte}"] ?? ''));
+                // Leere Zelle heißt „steht nicht da" (Regel 1). Eine einmal verworfene
+                // Kondition bleibt verworfen — sonst hinge das Ergebnis an der
+                // Zeilenreihenfolge, und dieselbe Datei ergäbe je nach Sortierung
+                // einen anderen Lieferanten-Stammsatz.
+                if ($roh === '' || isset($konflikt[$spalte])) {
+                    continue;
+                }
+                $wert = $this->konditionsWert($roh, $typ);
+                if ($wert === null) {
+                    // Unlesbar zählt wie ein Widerspruch: die Spalte ist als Ganzes
+                    // nicht vertrauenswürdig. Ein schon gefundener guter Wert fällt
+                    // deshalb mit — auch wenn er weiter oben stand.
+                    $ergebnis['abgelehnt'][] = "{$label} (Zeile {$zeile['nr']}): [{$roh}] " . $this->konditionsBand($typ);
+                    unset($gefunden[$spalte]);
+                    $konflikt[$spalte] = true;
+
+                    continue;
+                }
+                if (! isset($gefunden[$spalte])) {
+                    $gefunden[$spalte] = ['wert' => $wert, 'zeile' => $zeile['nr'], 'roh' => $roh];
+
+                    continue;
+                }
+                if (abs((float) $gefunden[$spalte]['wert'] - (float) $wert) >= 0.0005) {
+                    $ergebnis['abgelehnt'][] = "{$label}: Zeile {$gefunden[$spalte]['zeile']} sagt [{$gefunden[$spalte]['roh']}], "
+                        . "Zeile {$zeile['nr']} sagt [{$roh}] — eine Kondition gilt dem Lieferanten, nicht der Zeile.";
+                    unset($gefunden[$spalte]);
+                    $konflikt[$spalte] = true;
+                }
+            }
+        }
+
+        if ($gefunden === []) {
+            $ergebnis['status'] = $ergebnis['abgelehnt'] === [] ? null : 'fehler';
+
+            return $ergebnis;
+        }
+
+        // Nur echte Änderung schreibt. `rebate_pct` & Co. kommen als decimal-Cast
+        // (String „3.50") zurück — darum numerisch vergleichen, nicht per !==.
+        $daten = [];
+        foreach ($gefunden as $spalte => $treffer) {
+            $alt = $supplier->getAttribute($spalte);
+            if ($alt !== null && abs((float) $alt - (float) $treffer['wert']) < 0.0005) {
+                $ergebnis['unveraendert'][] = self::KONDITIONS_FELDER[$spalte][0];
+
+                continue;
+            }
+            $daten[$spalte] = $treffer['wert'];
+            $ergebnis['gesetzt'][self::KONDITIONS_FELDER[$spalte][0]] = $treffer['wert'];
+        }
+
+        if ($daten === []) {
+            $ergebnis['status'] = $ergebnis['abgelehnt'] === [] ? 'unveraendert' : 'fehler';
+
+            return $ergebnis;
+        }
+
+        // D1 vorab prüfen, damit der Trockenlauf dieselbe Aussage trifft wie der scharfe
+        // Lauf — die Ausnahme aus `updateConditions` käme sonst erst mit `--apply`.
+        if (! $supplier->isOwnedBy($team)) {
+            $ergebnis['status'] = 'uebersprungen';
+            $ergebnis['grund'] = "Lieferant #{$supplier->id} gehört Team {$supplier->team_id} (geerbt) — "
+                . 'Konditionen pflegt nur das Besitzer-Team (D1).';
+
+            return $ergebnis;
+        }
+
+        if ($apply) {
+            try {
+                $this->lieferanten->updateConditions($team, (int) $supplier->id, $daten);
+            } catch (\RuntimeException $e) {
+                $ergebnis['status'] = 'fehler';
+                $ergebnis['grund'] = $e->getMessage();
+                $ergebnis['gesetzt'] = [];
+
+                return $ergebnis;
+            }
+        }
+
+        $ergebnis['status'] = $ergebnis['abgelehnt'] === [] ? 'geschrieben' : 'teilweise';
+
+        return $ergebnis;
+    }
+
+    /**
+     * Konditions-Zelle → Wert, oder `null` wenn unlesbar bzw. außerhalb des Bandes.
+     *
+     * Die Bänder sind Tippfehler-Schutz, keine Fach-Grenzen: ein Bonus von 150 % und ein
+     * Zahlungsziel von 4000 Tagen sind keine Konditionen. **0 ist überall gültig** —
+     * „frei Haus ab 0 €" und „kein Mindestbestellwert" sind echte Aussagen (anders als
+     * beim Preis, wo die 0 ein aktiver Null-EK wäre).
+     */
+    private function konditionsWert(string $roh, string $typ): int|float|null
+    {
+        if ($typ === 'tage') {
+            // Streng geparst statt Wörter wegzustreichen: „30/2 %" (Skonto) würde sonst
+            // als 302 Tage durchgehen. Erlaubt ist Zahl + optionale Tage-Einheit.
+            if (! preg_match('/^(?:netto\s*)?(\d{1,5})\s*(?:t|tg|td|tage?|days?)?\.?$/i', trim($roh), $m)) {
+                return null;
+            }
+            $tage = (int) $m[1];
+
+            return $tage <= self::MAX_ZAHLUNGSZIEL_TAGE ? $tage : null;
+        }
+
+        $z = $this->zahl($roh);
+        if ($z === null || $z < 0) {
+            return null;
+        }
+        if ($typ === 'prozent' && $z > 100) {
+            return null;
+        }
+
+        return $z;
+    }
+
+    /** Klartext des zulässigen Bandes — steht im Bericht hinter einem abgelehnten Wert. */
+    private function konditionsBand(string $typ): string
+    {
+        return match ($typ) {
+            'tage' => 'ist keine Tages-Angabe zwischen 0 und ' . self::MAX_ZAHLUNGSZIEL_TAGE . ' — nicht gesetzt.',
+            'prozent' => 'ist kein Prozentwert zwischen 0 und 100 — nicht gesetzt.',
+            default => 'ist kein Betrag ≥ 0 — nicht gesetzt.',
+        };
+    }
+
     /** Datenblatt-Wort → GL-01-Wert. `null` = unlesbar (⇒ Warnung, Wert bleibt wie er war). */
     private function allergenWert(string $roh): ?string
     {
@@ -1012,6 +1203,14 @@ class FileArticleImportService
         foreach (self::PREIS_FELDER as $kanon => $aliase) {
             if ($norm === $kanon || in_array($norm, $aliase, true)) {
                 return $kanon;
+            }
+        }
+        // S2: eigener Namensraum `lb:` (wie `nw:`/`al:`/`dk:` bei den Detail-Blöcken) —
+        // das Ziel ist der Lieferant, nicht der Artikel, und `mappeWerte` läuft nur über
+        // FELDER. Damit kann eine Konditions-Spalte nie in einer Artikel-Spalte landen.
+        foreach (self::KONDITIONS_FELDER as $spalte => [$_label, $_typ, $aliase]) {
+            if (in_array($norm, $aliase, true)) {
+                return "lb:{$spalte}";
             }
         }
 

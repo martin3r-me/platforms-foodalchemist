@@ -2,7 +2,7 @@
 
 > **Richtung:** nur hinein. Food Alchemist ist Master — es gibt keinen Rückweg zum Lieferanten, keinen VK-Export, keine Rück-Synchronisation (Spec 13 §0).
 > **Frequenz:** manuell, quartalsweise (E5). Datei ablegen, Command laufen lassen.
-> **Stand:** Stufe **S1a + S1b + S1c** — Artikel-Stamm, **Preis** und die drei **Detail-Blöcke** (Nährwerte / Allergene / Zusatzstoffe), inklusive Post-Import-Kette (Abschnitt 7). Nur die Lieferbedingungen (S2) folgen noch; ihre Spalten dürfen **jetzt schon** in der Datei stehen (sie werden erkannt und im Bericht namentlich genannt, aber noch nicht geschrieben).
+> **Stand:** Stufe **S1a + S1b + S1c + S2** — die Vorlage wird **vollständig** geschrieben: Artikel-Stamm, **Preis**, die drei **Detail-Blöcke** (Nährwerte / Allergene / Zusatzstoffe) und die **Lieferbedingungen** am Lieferanten, inklusive Post-Import-Kette (Abschnitt 7). Was der Reader nicht kennt, wird im Bericht namentlich genannt statt still verschluckt.
 
 ## 1. Aufruf
 
@@ -118,13 +118,29 @@ Drei Regeln für alle drei Blöcke:
 
 Zeilen aus dem Datei-Import tragen die Lineage `source = datei` (das Artikel-Modal zeigt sie als Quelle an) — nicht `manual` und nicht leer: leer steht im Bestand für den alten Necta-Bulk-Import.
 
-### Spalten für spätere Stufen
+### Lieferbedingungen (S2) — sie gelten dem Lieferanten, nicht der Zeile
 
-Diese dürfen in der Datei stehen; der Bericht nennt sie und sagt, welche Stufe sie schreibt:
+Vier Spalten, die **nicht** am Artikel landen, sondern an `foodalchemist_suppliers` (E3, geteilte Migration mit R9). Geschrieben wird über denselben Weg wie das Konditionen-Tab im Lieferanten-Modal (`SupplierService::updateConditions`).
 
-| Spalte | Stufe |
-|---|---|
-| Mindestbestellwert, Frei-Haus ab, Zahlungsziel, Rückvergütung | **S2** — Lieferbedingungen am Lieferanten (E3) |
+| Spalte | Ziel | Zulässig | Beispiel |
+|---|---|---|---|
+| `Mindestbestellwert` | `min_order_value` | Betrag ≥ 0 (netto) | `250,00` |
+| `Frei Haus ab` | `free_shipping_threshold` | Betrag ≥ 0 (netto) | `500` |
+| `Zahlungsziel` | `payment_term_days` | 0–365 Tage, Einheit optional | `30`, `30 Tage`, `netto 30` |
+| `Rückvergütung` | `rebate_pct` | 0–100 % | `3,5 %` |
+
+Aliase u. a.: `Mindestauftragswert`/`MBW` · `Frachtfrei ab`/`Versandkostenfrei ab` · `Zahlungsfrist`/`Nettotage` · `Bonus`/`Jahresbonus`.
+
+**Vier Regeln:**
+
+1. **Eine Kondition steht in jeder Zeile — geschrieben wird sie einmal.** Dass derselbe Mindestbestellwert 400-mal in der Datei steht, ist der Normalfall. Es reicht auch, ihn nur in die erste Zeile zu schreiben.
+2. **Widerspruch wird abgelehnt, nicht geraten.** Sagt Zeile 2 „30 Tage" und Zeile 5 „60 Tage", wird das *Zahlungsziel* nicht gesetzt und der Bericht nennt beide Zeilen. Die übrigen Konditionen bleiben davon unberührt.
+3. **Bänder statt blindem Übernehmen.** Ein Bonus von `150` und ein Zahlungsziel von `30/2 %` (Skonto-Schreibweise) sind Tippfehler bzw. eine andere Angabe — beide werden abgelehnt und benannt. **`0` ist überall gültig** („frei Haus ab 0 €" ist eine echte Aussage).
+4. **D1 gilt auch hier.** Konditionen eines geerbten Katalog-Lieferanten pflegt nur das Besitzer-Team; der Import überspringt sie mit Grund. Die Artikelzeilen derselben Datei laufen davon unabhängig weiter.
+
+Die drei Bestell-Logistik-Felder derselben Tabelle (Liefertage, Bestellschluss, Vorlaufzeit — Spec 17) sind **bewusst nicht** Teil der Vorlage: sie beschreiben die Bestellschiene, nicht die kommerzielle Kondition, stehen in keiner Preisliste und werden im Lieferanten-Modal gepflegt.
+
+### Spalten ohne Ziel
 
 **Preis-Notiz** wird erkannt und als „ohne Ziel-Feld" gemeldet: Preis-Zeilen tragen keine Notiz. Alles andere wird ignoriert und im Bericht als „nicht Teil der Vorlage" aufgeführt.
 

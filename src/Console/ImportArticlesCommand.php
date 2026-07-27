@@ -8,7 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\FileArticleImportService;
 
 /**
- * Spec 13 · S1a/S1b/S1c — Kanal B: Artikel-Datei eines Lieferanten einlesen.
+ * Spec 13 · S1a/S1b/S1c/S2 — Kanal B: Artikel-Datei eines Lieferanten einlesen.
  *
  * Bewusst **dry-run als Default**: ein Import berührt den Katalog, aus dem jede
  * Kalkulation ihren EK zieht. Geschrieben wird nur mit `--apply`; die Ausgabe ist
@@ -31,7 +31,7 @@ class ImportArticlesCommand extends Command
         {--apply : wirklich schreiben}
         {--zeilen=25 : höchstens so viele Zeilen-Befunde ausgeben}';
 
-    protected $description = 'Kanal B (Spec 13): Lieferanten-Artikel + EK + Nährwerte/Allergene/Zusatzstoffe aus einer CSV-Datei upserten, inkl. Recompute-/Signal-Kette (Lieferbedingungen folgen in S2).';
+    protected $description = 'Kanal B (Spec 13): Lieferanten-Artikel + EK + Nährwerte/Allergene/Zusatzstoffe + Lieferbedingungen aus einer CSV-Datei upserten, inkl. Recompute-/Signal-Kette.';
 
     public function handle(FileArticleImportService $import): int
     {
@@ -141,6 +141,33 @@ class ImportArticlesCommand extends Command
                 . " · Allergene {$d['allergene']} · Zusatzstoffe {$d['zusatzstoffe']}");
         }
 
+        // S2: die Lieferbedingungen gelten dem Lieferanten, nicht der Zeile — deshalb
+        // stehen sie als eigener Block am Ende und nicht bei den Zeilen-Befunden.
+        $lb = $bericht['konditionen'];
+        if ($lb['status'] !== null) {
+            $teile = [];
+            foreach ($lb['gesetzt'] as $label => $wert) {
+                $teile[] = "{$label} = " . (is_int($wert) ? $wert : number_format((float) $wert, 2, ',', '.'));
+            }
+            if ($lb['unveraendert'] !== []) {
+                $teile[] = 'unverändert: ' . implode(', ', $lb['unveraendert']);
+            }
+            $kopf = match ($lb['status']) {
+                'geschrieben', 'teilweise' => $apply ? '🏷 Lieferbedingungen gesetzt' : '🏷 Lieferbedingungen (Vorschau)',
+                'unveraendert' => '🏷 Lieferbedingungen unverändert',
+                'uebersprungen' => '🏷 Lieferbedingungen übersprungen',
+                default => '🏷 Lieferbedingungen NICHT gesetzt',
+            };
+            $zeile = "   {$kopf}" . ($teile !== [] ? ': ' . implode(' · ', $teile) : '');
+            in_array($lb['status'], ['fehler', 'uebersprungen'], true) ? $this->warn($zeile) : $this->info($zeile);
+            if (isset($lb['grund'])) {
+                $this->warn("      ! {$lb['grund']}");
+            }
+            foreach ($lb['abgelehnt'] as $a) {
+                $this->warn("      ⚠ {$a}");
+            }
+        }
+
         // E4: die Kette ist der DoD-Kern — sie wird IMMER berichtet, auch wenn sie
         // nichts getroffen hat. „0 Rezepte" ist eine Aussage, eine fehlende Zeile nicht.
         $k = $bericht['kette'];
@@ -165,6 +192,11 @@ class ImportArticlesCommand extends Command
             $this->line('   Vor dem scharfen Lauf: DB-Backup ziehen, dann denselben Aufruf mit --apply.');
         }
 
-        return ($bericht['fehler'] + $pr['fehler']) > 0 ? self::FAILURE : self::SUCCESS;
+        // Eine abgelehnte Kondition zählt als Fehlschlag (der Wert ist nicht angekommen),
+        // ein D1-Übersprung dagegen nicht — der ist eine korrekte Zuständigkeits-Grenze,
+        // genau wie beim geerbten Artikel.
+        $lbFehler = in_array($lb['status'], ['fehler', 'teilweise'], true);
+
+        return ($bericht['fehler'] + $pr['fehler']) > 0 || $lbFehler ? self::FAILURE : self::SUCCESS;
     }
 }

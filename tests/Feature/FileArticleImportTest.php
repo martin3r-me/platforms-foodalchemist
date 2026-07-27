@@ -165,16 +165,16 @@ it('Trockenlauf berichtet vollständig, schreibt aber nichts', function () {
         ->and(FoodAlchemistSupplierItem::count())->toBe(0);
 });
 
-it('nennt Spalten späterer Stufen und solche ohne Ziel-Feld, statt sie still zu verschlucken', function () {
+it('nennt Spalten ohne Ziel-Feld und unbekannte Spalten, statt sie still zu verschlucken', function () {
     $pfad = csv([
-        'Artikel-Nr;Bezeichnung;Mindestbestellwert;Zahlungsziel;Preis-Notiz;Lieferzeit Kommentar',
-        '70012;Zanderfilet;250;30 Tage;Streichpreis;montags',
+        'Artikel-Nr;Bezeichnung;Preis-Notiz;Lieferzeit Kommentar',
+        '70012;Zanderfilet;Streichpreis;montags',
     ]);
 
     $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
 
-    expect($bericht['spalten']['spaeter'])->toHaveCount(2)
-        ->and(implode(' ', $bericht['spalten']['spaeter']))->toContain('S2')
+    // Seit S2 ist die Vorlage vollständig — es gibt keine „spätere Stufe" mehr.
+    expect($bericht['spalten']['spaeter'])->toBe([])
         ->and($bericht['spalten']['unbekannt'])->toBe(['Lieferzeit Kommentar'])
         ->and(implode(' ', $bericht['hinweise']))->toContain('Ohne Ziel-Feld');
 
@@ -507,4 +507,148 @@ it('Command: Trockenlauf ist Default, --apply schreibt und hinterlässt einen in
         ->and($lauf->status)->toBe('done')
         ->and((int) $lauf->done)->toBe(1)
         ->and((int) $lauf->failed)->toBe(0);
+});
+
+// ---- S2: Lieferbedingungen (E3) ----------------------------------------------
+//
+// Die Konditionen gelten dem LIEFERANTEN, nicht der Zeile — in einer Artikel-Datei
+// stehen sie deshalb zwangsläufig n-mal da. Gelesen wird die ganze Datei, geschrieben
+// genau einmal; ein Widerspruch zwischen zwei Zeilen wird abgelehnt statt geraten.
+
+it('schreibt die Lieferbedingungen einmal an den Lieferanten, obwohl sie in jeder Zeile stehen', function () {
+    $pfad = csv([
+        'Artikel-Nr;Bezeichnung;Mindestbestellwert;Frei Haus ab;Zahlungsziel;Rückvergütung',
+        '70012;Zanderfilet;250,00;500;30 Tage;3,5 %',
+        '70013;Petersilienöl;250,00;500;30 Tage;3,5 %',
+    ]);
+
+    $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
+
+    expect($bericht['konditionen']['status'])->toBe('geschrieben')
+        ->and($bericht['konditionen']['abgelehnt'])->toBe([])
+        ->and($bericht['konditionen']['gesetzt'])->toHaveCount(4)
+        ->and($bericht['neu'])->toBe(2);
+
+    $s = $this->supplier->fresh();
+    expect((float) $s->min_order_value)->toBe(250.0)
+        ->and((float) $s->free_shipping_threshold)->toBe(500.0)
+        ->and($s->payment_term_days)->toBe(30)
+        ->and((float) $s->rebate_pct)->toBe(3.5);
+});
+
+it('ist auch bei den Konditionen idempotent: der zweite Lauf ändert nichts', function () {
+    $pfad = csv([
+        'Artikel-Nr;Bezeichnung;Zahlungsziel',
+        '70012;Zanderfilet;30',
+    ]);
+
+    $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
+    $zweiter = $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
+
+    expect($zweiter['konditionen']['status'])->toBe('unveraendert')
+        ->and($zweiter['konditionen']['gesetzt'])->toBe([])
+        ->and($zweiter['konditionen']['unveraendert'])->toBe(['Zahlungsziel']);
+});
+
+it('lehnt eine widersprüchliche Kondition ab, ohne die übrigen mitzureißen', function () {
+    $pfad = csv([
+        'Artikel-Nr;Bezeichnung;Zahlungsziel;Mindestbestellwert',
+        '70012;Zanderfilet;30;250',
+        '70013;Petersilienöl;60;250',
+    ]);
+
+    $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
+
+    expect($bericht['konditionen']['status'])->toBe('teilweise')
+        ->and($bericht['konditionen']['abgelehnt'])->toHaveCount(1)
+        ->and($bericht['konditionen']['abgelehnt'][0])->toContain('Zahlungsziel')
+        ->and(array_keys($bericht['konditionen']['gesetzt']))->toBe(['Mindestbestellwert']);
+
+    $s = $this->supplier->fresh();
+    expect($s->payment_term_days)->toBeNull()          // der Widerspruch bleibt ungeschrieben
+        ->and((float) $s->min_order_value)->toBe(250.0); // die eindeutige Kondition steht
+});
+
+it('lehnt unplausible Konditions-Werte ab (Bonus > 100 %, Skonto-Text im Zahlungsziel)', function () {
+    $pfad = csv([
+        'Artikel-Nr;Bezeichnung;Rückvergütung;Zahlungsziel',
+        '70012;Zanderfilet;150;30/2 %',
+    ]);
+
+    $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
+
+    expect($bericht['konditionen']['status'])->toBe('fehler')
+        ->and($bericht['konditionen']['abgelehnt'])->toHaveCount(2)
+        ->and($bericht['konditionen']['gesetzt'])->toBe([]);
+
+    $s = $this->supplier->fresh();
+    expect($s->rebate_pct)->toBeNull()->and($s->payment_term_days)->toBeNull();
+});
+
+it('D1: Konditionen eines geerbten Lieferanten werden übersprungen, nicht überschrieben', function () {
+    $this->supplier->update(['payment_term_days' => 14]);
+    $pfad = csv([
+        'Artikel-Nr;Bezeichnung;Zahlungsziel',
+        '70012;Zanderfilet;30',
+    ]);
+
+    // childA sieht den Root-Lieferanten, besitzt ihn aber nicht.
+    $bericht = $this->import->importiere($this->childA, $this->supplier->id, $pfad, apply: true);
+
+    expect($bericht['konditionen']['status'])->toBe('uebersprungen')
+        ->and($bericht['konditionen']['grund'])->toContain('D1')
+        ->and($this->supplier->fresh()->payment_term_days)->toBe(14);
+});
+
+it('Trockenlauf zeigt die Konditionen an, schreibt sie aber nicht', function () {
+    $pfad = csv([
+        'Artikel-Nr;Bezeichnung;Mindestbestellwert',
+        '70012;Zanderfilet;250',
+    ]);
+
+    $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad);
+
+    expect($bericht['konditionen']['status'])->toBe('geschrieben')   // „so käme es an"
+        ->and($bericht['konditionen']['gesetzt'])->toBe(['Mindestbestellwert' => 250.0])
+        ->and($this->supplier->fresh()->min_order_value)->toBeNull();
+});
+
+it('Command: rendert den Konditions-Block und meldet einen Widerspruch als Fehlschlag', function () {
+    $ok = csv([
+        'Artikel-Nr;Bezeichnung;Zahlungsziel;Rückvergütung',
+        '70012;Zanderfilet;30 Tage;3,5 %',
+    ]);
+
+    $this->artisan('foodalchemist:import-articles', [
+        '--file' => $ok, '--supplier' => $this->supplier->id, '--team' => $this->rootTeam->id, '--apply' => true,
+    ])->expectsOutputToContain('Lieferbedingungen gesetzt')->assertSuccessful();
+
+    expect($this->supplier->fresh()->payment_term_days)->toBe(30);
+
+    // Widerspruch: der Wert kommt nicht an ⇒ Exit-Code FAILURE (wie beim Preis-Fehler).
+    $streit = csv([
+        'Artikel-Nr;Bezeichnung;Mindestbestellwert',
+        '70012;Zanderfilet;250',
+        '70013;Petersilienöl;400',
+    ]);
+
+    $this->artisan('foodalchemist:import-articles', [
+        '--file' => $streit, '--supplier' => $this->supplier->id, '--team' => $this->rootTeam->id, '--apply' => true,
+    ])->assertFailed();
+
+    expect($this->supplier->fresh()->min_order_value)->toBeNull();
+});
+
+it('verwirft eine Kondition auch dann, wenn erst eine spätere Zeile unlesbar ist (reihenfolge-unabhängig)', function () {
+    $pfad = csv([
+        'Artikel-Nr;Bezeichnung;Zahlungsziel',
+        '70012;Zanderfilet;30',
+        '70013;Petersilienöl;siehe Rahmenvertrag',
+    ]);
+
+    $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
+
+    expect($bericht['konditionen']['status'])->toBe('fehler')
+        ->and($bericht['konditionen']['abgelehnt'][0])->toContain('Zeile 3')
+        ->and($this->supplier->fresh()->payment_term_days)->toBeNull();
 });
