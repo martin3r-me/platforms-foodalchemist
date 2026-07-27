@@ -52,30 +52,8 @@ class CoverageService
             ? $this->istFoodbook($team, $owner)
             : $this->istConcept($owner);
 
-        $befunde = [];
-        $befunde = array_merge($befunde, $this->pruefePreisKopf($frame, $ist));
-        foreach ($frame->slots as $slot) {
-            $befunde = array_merge($befunde, $this->pruefeSlot($slot, $ist));
-        }
-        // Kapitel-Ziele (M3 SOLL, foodbook-only): Menge/Preis am Kapitel-Rollup. Greift ein
-        // Kapitel-Ziel, hat pruefeSlot dieselbe Dimension übersprungen (Vorrangregel).
-        foreach ($ist['kapitel'] as $cid => $data) {
-            if (($data['hat_menge_ziel'] ?? false) || ($data['hat_preis_ziel'] ?? false)) {
-                $befunde = array_merge($befunde, $this->pruefeKapitel((int) $cid, (string) $data['titel'], $data['gerichte'], $data['ziele']));
-            }
-        }
-        foreach ($frame->rules->whereNull('slot_id') as $rule) {
-            $befunde = array_merge($befunde, $this->pruefeRegel($rule, $ist['gerichte'], null, $ist));
-        }
-
-        $zaehler = ['erfuellt' => 0, 'teilerfuellt' => 0, 'verletzt' => 0, 'info' => 0];
-        $gesamt = null;
-        foreach ($befunde as $b) {
-            $zaehler[$b['ampel']]++;
-            if ($b['ampel'] !== 'info' && ($gesamt === null || self::AMPEL_RANG[$b['ampel']] > self::AMPEL_RANG[$gesamt])) {
-                $gesamt = $b['ampel'];
-            }
-        }
+        $befunde = $this->befundeFuer($frame, $ist);
+        ['zusammenfassung' => $zaehler, 'ampel_gesamt' => $gesamt] = $this->ampelZusammenfassung($befunde);
 
         // Spec 19 E4.6: Wareneinsatz-Sektion je Kapitel (foodbook-only) — IST-Food-Cost vs.
         // Ziel-Kaskade (FoodbookService::wareneinsatzAmpel, E4.4). Die Kapitel-Befunde selbst
@@ -96,6 +74,63 @@ class CoverageService
             'ampel_gesamt' => $gesamt ?? 'erfuellt',
             'wareneinsatz' => $wareneinsatz,
         ];
+    }
+
+    /**
+     * Die Messung selbst — Gerüst-SOLL gegen ein **beliebiges** Ist, das in der Shape
+     * von `istConcept`/`istFoodbook` vorliegt (`gerichte`, `scopes`, `preis_pp`,
+     * `saison_ids`, `kapitel`).
+     *
+     * Herausgezogen für 12·S2a-2 (R2.4): der Marge-Solver bewertet eine **hypothetische**
+     * Zusammenstellung, die nirgends persistiert ist — `coverage()` kann er nicht rufen,
+     * weil das einen gespeicherten Owner voraussetzt. Ohne diese Naht hätte der Solver
+     * seine eigene Ampel-Rechnung mitgebracht, also eine zweite Messlatte neben der,
+     * die Mensch und KI sehen (genau das Anti-Muster aus 22·H5/V-018). `coverage()`
+     * ruft hier durch — es gibt EINE Messung, zwei Ist-Quellen.
+     *
+     * @param  array{gerichte:Collection, scopes:array<string,Collection>, preis_pp:?float, saison_ids:list<int>, kapitel:array}  $ist
+     * @return list<array>
+     */
+    public function befundeFuer(FoodAlchemistPlanningFrame $frame, array $ist): array
+    {
+        $befunde = [];
+        $befunde = array_merge($befunde, $this->pruefePreisKopf($frame, $ist));
+        foreach ($frame->slots as $slot) {
+            $befunde = array_merge($befunde, $this->pruefeSlot($slot, $ist));
+        }
+        // Kapitel-Ziele (M3 SOLL, foodbook-only): Menge/Preis am Kapitel-Rollup. Greift ein
+        // Kapitel-Ziel, hat pruefeSlot dieselbe Dimension übersprungen (Vorrangregel).
+        foreach ($ist['kapitel'] as $cid => $data) {
+            if (($data['hat_menge_ziel'] ?? false) || ($data['hat_preis_ziel'] ?? false)) {
+                $befunde = array_merge($befunde, $this->pruefeKapitel((int) $cid, (string) $data['titel'], $data['gerichte'], $data['ziele']));
+            }
+        }
+        foreach ($frame->rules->whereNull('slot_id') as $rule) {
+            $befunde = array_merge($befunde, $this->pruefeRegel($rule, $ist['gerichte'], null, $ist));
+        }
+
+        return $befunde;
+    }
+
+    /**
+     * Ampel-Rollup über eine Befund-Liste: Zähler je Stufe + schlechteste nicht-`info`-Ampel.
+     * `erfuellt`, wenn nichts Messbares dagegen spricht.
+     *
+     * @param  list<array>  $befunde
+     * @return array{zusammenfassung:array<string,int>, ampel_gesamt:string}
+     */
+    public function ampelZusammenfassung(array $befunde): array
+    {
+        $zaehler = ['erfuellt' => 0, 'teilerfuellt' => 0, 'verletzt' => 0, 'info' => 0];
+        $gesamt = null;
+        foreach ($befunde as $b) {
+            $zaehler[$b['ampel']]++;
+            if ($b['ampel'] !== 'info' && ($gesamt === null || self::AMPEL_RANG[$b['ampel']] > self::AMPEL_RANG[$gesamt])) {
+                $gesamt = $b['ampel'];
+            }
+        }
+
+        return ['zusammenfassung' => $zaehler, 'ampel_gesamt' => $gesamt ?? 'erfuellt'];
     }
 
     /** Rote Ampeln (verletzt) — Gate-Frage für R4.3 Kalkulation→Freigabe. */
