@@ -8,6 +8,18 @@
 
 ---
 
+## Update 2026-07-27 (Spec 13 · S3a — `ingest.STATUS`: der Katalog-Import bekommt eine Auskunft)
+
+**Neununddreißigster Bau-Lauf der Routine ([Spec 13](PLANUNG/13_Preis_Katalog_Ingest_Q2.md), Etappe S3a).** Bisher konnte man einen Quartals-Import *fahren*, aber nicht *nachsehen*. Das neue read-only-Tool `foodalchemist.ingest.STATUS` beantwortet die drei Fragen danach: **ist er gelaufen?** (die letzten `ingest`-Läufe) · **was fehlt noch?** (sichtbare Artikel ohne aktiven EK / ohne GP-Struktur / ohne Allergen-Aussage / ohne Nährwerte, je mit Beispielen) · **was hat sich am Preis bewegt?** (aktueller EK gegen Vorgänger, stärkste Bewegungen zuerst, optional je Lieferant). Der Import selbst bleibt artisan — das Tool ist die Auskunft, kein zweiter Import-Pfad.
+
+**Die Entscheidung, die das Tool ehrlich macht: eine Lücke ist „keine Aussage", nicht „keine Zeile".** Eine Allergen- oder Nährwert-Zeile, in der alle Werte NULL sind, ist keine Angabe. Zählte nur ihre Existenz, meldete der Status nach einem Import, der bloß den Artikel-Stamm brachte, grün — ausgerechnet bei der Angabe, die am Gast landet. **Dazu drei weitere Festlegungen:** *Zwei Scopes in einer Antwort* — Läufe team-strikt (ein Lauf ist ein Vorgang, kein vererbbarer Katalog-Datensatz), Artikel team-hierarchisch (D1). · *Das Delta ist die R2.1-Zahl* — `preisTrendBulk` statt einer eigenen Fenster-Rechnung; kein zweiter Trend-Begriff neben dem, den der Alarm bewertet. · *Das Prädikat „aktiver Preis" wird geliehen, nicht kopiert* — wobei auffiel, dass die Datenqualitäts-Ampel eine dritte, laxere Fassung hat und dadurch **zu wenige** Lücken meldet (V-053).
+
+**Was das Tool bewusst NICHT behauptet:** welche Datei zu welchem Lauf gehört. Die Bestands-Lauf-Zeile hat kein Feld dafür (V-047) — die Antwort sagt das in einem eigenen Hinweis-Feld, statt eine Auskunft zu erfinden. Nebenbei geradegezogen: `beendeRun` trägt jetzt auch `total` nach, sonst hätte jeder Lauf strukturell „0 Zeilen, n verarbeitet" gemeldet.
+
+**Suite 1521 · 1517 passed · 4 skipped · 0 Fail · 7140 Assertions (Vorlauf 1512/1508, +9 Tests), 11,7 Min.** Kein Schema-Change, keine Migration ⇒ Write-Smoke entfällt sachlich; **MySQL-Smoke nicht gefahren** (DBngin läuft weiterhin nicht) — nachzuholen als Lese-Smoke gegen die echten 264k Artikel. **Browser-Klickstrecke entfällt** (MCP-Tool, keine UI). **MCP-Lockstep ist der Chunk selbst.** Verbesserungs-Backlog: **V-053** (zwei Definitionen von „aktiver Preis") und **V-054** (ein abgebrochener Lauf bleibt für immer `running` — `bulk_runs` kennt kein Ende ohne Erfolg). Bug-Fund am Rande, nicht selbst gefixt: `DataQualityService::la()` zählt team-blind (D1, #504-Klasse). Nächster Schritt: **S3b** — der explizite Import-Trigger; zuerst zu entscheiden ist die Datei-Frage (fester Ablage-Ordner statt freiem Pfad).
+
+---
+
 ## Update 2026-07-27 (Spec 13 · S2 — Lieferbedingungen: die Vorlage wird jetzt vollständig geschrieben)
 
 **Achtunddreißigster Bau-Lauf der Routine ([Spec 13](PLANUNG/13_Preis_Katalog_Ingest_Q2.md), Etappe S2).** Der Teilschritt war zur Hälfte schon gebaut: E3 sieht für die Konditions-Spalten „EINE Migration, von R9 mitgenutzt" vor — und R9 hat sie am 19.07. tatsächlich angelegt (`2026_07_19_000003`, vier Spalten an `foodalchemist_suppliers`). An HEAD verifiziert statt dem Etappen-Text geglaubt; zu bauen war nur das **Import-Mapping**. Damit schreibt die Kanal-B-Vorlage ab jetzt alles, was sie ankündigt: Artikel-Stamm, Preis, die drei Detail-Blöcke **und** die Lieferbedingungen. Die Liste „erkannt, aber von dieser Stufe nicht geschrieben" ist leer.

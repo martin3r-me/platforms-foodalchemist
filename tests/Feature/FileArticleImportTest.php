@@ -505,6 +505,7 @@ it('Command: Trockenlauf ist Default, --apply schreibt und hinterlässt einen in
     $lauf = \Illuminate\Support\Facades\DB::table('foodalchemist_bulk_runs')->where('type', 'ingest')->first();
     expect($lauf)->not->toBeNull()
         ->and($lauf->status)->toBe('done')
+        ->and((int) $lauf->total)->toBe(1)          // S3a: Zeilenzahl wird beim Beenden nachgetragen (der Reader kennt sie erst dann)
         ->and((int) $lauf->done)->toBe(1)
         ->and((int) $lauf->failed)->toBe(0);
 });

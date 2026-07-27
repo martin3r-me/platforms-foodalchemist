@@ -1333,11 +1333,17 @@ class FileArticleImportService
     public function beendeRun(int $runId, array $bericht): void
     {
         $preisFehler = (int) ($bericht['preise']['fehler'] ?? 0);
+        $done = (int) $bericht['neu'] + (int) $bericht['aktualisiert'] + (int) $bericht['unveraendert']
+            + (int) $bericht['uebersprungen'] - $preisFehler;
+        $failed = (int) $bericht['fehler'] + $preisFehler;
         DB::table('foodalchemist_bulk_runs')->where('id', $runId)->update([
             'status' => 'done',
-            'done' => (int) $bericht['neu'] + (int) $bericht['aktualisiert'] + (int) $bericht['unveraendert']
-                + (int) $bericht['uebersprungen'] - $preisFehler,
-            'failed' => (int) $bericht['fehler'] + $preisFehler,
+            // S3a: `total` wird hier nachgetragen, nicht bei starteRun — die Zeilenzahl kennt
+            // erst der Reader. Ohne das bliebe sie auf 0 stehen und `ingest.STATUS` meldete
+            // strukturell „0 Zeilen, n verarbeitet".
+            'total' => $done + $failed,
+            'done' => $done,
+            'failed' => $failed,
             'updated_at' => now(),
         ]);
     }
