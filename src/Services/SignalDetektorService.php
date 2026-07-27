@@ -712,7 +712,6 @@ class SignalDetektorService
      */
     public function wareneinsatzUeberZiel(Team $team): int
     {
-        $kalk = app(KalkulationService::class);
         $ziel = app(TeamSettingsService::class)->zielWareneinsatzPct($team);
         if ($ziel <= 0) {
             return 0;
@@ -722,28 +721,62 @@ class SignalDetektorService
 
         $n = 0;
         foreach ($gerichte as $r) {
-            $we = $kalk->recipeHk($team, $r)['wareneinsatz_pct'] ?? null;
-            if ($we === null || $we <= $ziel) {
-                continue;
-            }
-            $this->signals->erzeuge(
-                $team,
-                SignalTyp::WareneinsatzUeberZiel,
-                // > 1,5× Ziel = deutlich zu teuer → kritisch, sonst Warnung
-                $we > $ziel * 1.5 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-                $r->name . ' — Wareneinsatz ' . number_format((float) $we, 1, ',', '.') . ' % über Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
-                [
-                    'dedup_key' => 'we-quote-recipe-' . $r->id,
-                    'ref_type' => 'recipe',
-                    'ref_id' => $r->id,
-                    'description' => 'Food-Cost über dem Ziel — günstigeren Lead-LA prüfen, Rezeptur/Portion anpassen oder Verkaufspreis erhöhen.',
-                    'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'sales_net' => (float) $r->sales_net],
-                ]
-            );
-            $n++;
+            $n += $this->wareneinsatzUeberZielFuer($team, $r, $ziel) ? 1 : 0;
         }
 
         return $n;
+    }
+
+    /**
+     * Dieselbe Regel für EIN Gericht (03·L8): die KI-Kaskade meldet ihren Ausreißer
+     * sofort, statt bis zum nächsten Scheduler-Lauf zu warten. Bewusst als
+     * Herausziehen statt als zweite Prüfstelle — Schwelle, Schweregrad-Leiter,
+     * Dedup-Key und Text bleiben an genau einem Ort; ein zweiter Emittent würde
+     * dasselbe Signal mit eigener Auslegung schreiben.
+     *
+     * `$we` kann übergeben werden, wenn der Aufrufer die Quote schon hat (03·L8:
+     * die Kaskade rechnet sie aus der Darreichung — `ek_portion` gegen `sales_net`,
+     * dieselbe Menge auf beiden Seiten). Ohne Übergabe bleibt es beim Batch-Weg über
+     * `recipeHk`. Dass beide Wege bei `sales_unit_count > 1` auseinanderlaufen, ist
+     * ein Bestands-Widerspruch → V-041, hier bewusst nicht mit-entschieden.
+     *
+     * @return bool true, wenn ein Signal erzeugt/aktualisiert wurde
+     */
+    public function wareneinsatzUeberZielFuer(Team $team, FoodAlchemistRecipe $r, ?float $ziel = null, ?float $we = null): bool
+    {
+        $ziel ??= app(TeamSettingsService::class)->zielWareneinsatzPct($team);
+        if ($ziel <= 0) {
+            return false;
+        }
+        $we ??= $this->kalkulation()->recipeHk($team, $r)['wareneinsatz_pct'] ?? null;
+        if ($we === null || $we <= $ziel) {
+            return false;
+        }
+
+        $this->signals->erzeuge(
+            $team,
+            SignalTyp::WareneinsatzUeberZiel,
+            // > 1,5× Ziel = deutlich zu teuer → kritisch, sonst Warnung
+            $we > $ziel * 1.5 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
+            $r->name . ' — Wareneinsatz ' . number_format((float) $we, 1, ',', '.') . ' % über Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
+            [
+                'dedup_key' => 'we-quote-recipe-' . $r->id,
+                'ref_type' => 'recipe',
+                'ref_id' => $r->id,
+                'description' => 'Food-Cost über dem Ziel — günstigeren Lead-LA prüfen, Rezeptur/Portion anpassen oder Verkaufspreis erhöhen.',
+                'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'sales_net' => $r->sales_net !== null ? (float) $r->sales_net : null],
+            ]
+        );
+
+        return true;
+    }
+
+    /** Ein Kalkulator je Lauf — der Batch-Pfad löste ihn früher einmal vor der Schleife auf. */
+    private ?KalkulationService $kalkMemo = null;
+
+    private function kalkulation(): KalkulationService
+    {
+        return $this->kalkMemo ??= app(KalkulationService::class);
     }
 
     /**
