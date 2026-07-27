@@ -355,7 +355,7 @@ it('Kette bleibt still, wenn der bewegte Artikel an keinem GP hängt', function 
         csv(['Artikel-Nr;Bezeichnung;Preis', '70012;Zanderfilet;28,90']), apply: true);
 
     expect($bericht['preise']['neu'])->toBe(1)
-        ->and($bericht['kette'])->toBe(['bewegt' => 1, 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0, 'abgeschnitten' => false]);
+        ->and($bericht['kette'])->toBe(['bewegt' => 1, 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0]);
 });
 
 it('D1: am geerbten Artikel wird auch kein Preis geschrieben', function () {

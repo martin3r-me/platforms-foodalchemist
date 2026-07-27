@@ -433,10 +433,8 @@ class GpService
             fn () => FoodAlchemistRecipeIngredient::where('gp_id', $von->id)->update(['gp_id' => $nach->id])
         );
 
-        $recompute = app(RecipeRecomputeService::class);
-        foreach ($recipeIds as $recipeId) {
-            $recompute->recomputeAndPropagate((int) $recipeId);
-        }
+        // V-049: die Ersetzung trifft eine Menge — einmal rechnen, nicht je Rezept.
+        app(RecipeRecomputeService::class)->recomputeMany($recipeIds->all());
 
         return ['zeilen' => (int) $zeilen, 'rezepte' => $recipeIds->count()];
     }

@@ -87,12 +87,41 @@ class RecipeRecomputeService
      */
     public function recomputeAndPropagate(int $recipeId): array
     {
-        // 1. Betroffene Menge sammeln (Start + alle transitiven Eltern), NOCH nicht rechnen.
-        $betroffen = $this->betroffeneRezepte($recipeId);
+        return $this->recomputeMany([$recipeId]);
+    }
+
+    /**
+     * V-049 · §3.3 für eine MENGE Rezepte: betroffene Vereinigung einmal, Topo einmal,
+     * jedes Rezept **genau einmal** gerechnet.
+     *
+     * Vier Aufrufer haben in Wahrheit eine Menge (Lead-LA-Wechsel, GP-Ersetzung,
+     * Kanal-B-Import, Signal-Fixer) und schleiften bisher `recomputeAndPropagate` in
+     * einer `foreach`. Jeder Durchlauf baute die Eltern-BFS neu auf und rechnete jedes
+     * *gemeinsame* Eltern-Rezept erneut — quadratisch in der Überlappung (200 Basisrezepte
+     * in 5 Gerichten ⇒ diese 5 Gerichte 200-mal, je mit eigener Transaktion,
+     * Darreichungs-Nachlauf und Paket-Stale-Marker). Korrekt war das immer (der letzte
+     * Lauf gewinnt), nur teuer.
+     *
+     * `recomputeAndPropagate` ist ab hier der **Ein-Element-Fall** dieser Methode — eine
+     * Propagations-Wahrheit, kein zweiter Weg. Reihenfolge und Rückgabe sind für ein
+     * Element unverändert (Bestands-Tests belegen das).
+     *
+     * @param  array<int|string>  $recipeIds
+     * @return array<int> betroffene recipe_ids (Start-Menge zuerst, dann transitive Eltern)
+     */
+    public function recomputeMany(array $recipeIds): array
+    {
+        // 1. Betroffene Menge sammeln (Starts + alle transitiven Eltern), NOCH nicht rechnen.
+        $betroffen = $this->betroffeneRezepteMany($recipeIds);
+        if ($betroffen === []) {
+            return [];
+        }
 
         // 2. Topologisch ordnen (Kinder vor Eltern) INNERHALB der betroffenen Menge und in
         //    dieser Reihenfolge rechnen. Diamond-sicher (P→Y→X ∧ P→X): sonst läse P ein noch
         //    nicht neu berechnetes Geschwister-Sub und bliebe dauerhaft stale (I8-Härtung).
+        //    Über mehrere Starts hinweg ist genau das der Gewinn: die gemeinsamen Eltern
+        //    stehen EINMAL in der Ordnung, nicht einmal je Start.
         foreach ($this->topoOrder($betroffen) as $id) {
             try {
                 $this->recomputePipeline($id);
@@ -125,8 +154,37 @@ class RecipeRecomputeService
      */
     public function betroffeneRezepte(int $recipeId): array
     {
-        $besucht = [$recipeId => true];
-        $ebene = [$recipeId];
+        return $this->betroffeneRezepteMany([$recipeId]);
+    }
+
+    /**
+     * V-049: dieselbe BFS für eine **Menge** Start-Rezepte — eine Query je Ebene statt
+     * einer je Ebene UND Start.
+     *
+     * Das Ergebnis ist mengengleich mit der Vereinigung der Einzel-BFS, nicht nur
+     * ähnlich: die gemeinsame BFS vergibt je Knoten die *kleinste* Distanz zu irgendeinem
+     * Start. Ist sie ≤ PROPAGATION_LIMIT, hätte auch die Einzel-BFS von genau diesem Start
+     * den Knoten erreicht; ist sie größer, erreicht ihn keine. Der Äquivalenz-Riegel dazu
+     * steht in `tests/Feature/RecomputeMengeTest.php` (inkl. Kette über die Grenze hinaus).
+     *
+     * @param  array<int|string>  $recipeIds
+     * @return array<int> recipe_ids (Start-Menge zuerst, in Eingabe-Reihenfolge)
+     */
+    public function betroffeneRezepteMany(array $recipeIds): array
+    {
+        $besucht = [];
+        $ebene = [];
+        foreach ($recipeIds as $id) {
+            $id = (int) $id;
+            if (! isset($besucht[$id])) {
+                $besucht[$id] = true;
+                $ebene[] = $id;
+            }
+        }
+        if ($ebene === []) {
+            return [];
+        }
+
         for ($tiefe = 0; $tiefe < self::PROPAGATION_LIMIT && $ebene !== []; $tiefe++) {
             $eltern = FoodAlchemistRecipeIngredient::whereIn('referenced_recipe_id', $ebene)
                 ->whereNull('deleted_at')->distinct()->pluck('recipe_id')

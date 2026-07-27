@@ -171,15 +171,29 @@ class SignalDetektorService
      * Marge-Delta über den Preis-Ratio: aktuelle GP-Zeilenkosten (neuer Preis) skaliert
      * auf den Vorpreis → alt-EK; MargeService alt vs. neu. Direkt-Nutzer je GP (MVP;
      * verschachtelte Eltern-Rezepte werden über die Sub-Rezepte separat erfasst).
+     *
+     * **V-050 · `$gpIds`:** Ein Aufrufer, der weiß, welche GPs er gerade bewegt hat
+     * (Kanal-B-Import), übergibt sie — dann ersetzt diese Menge die Team-weite Suche,
+     * alles danach bleibt identisch (eine Schwelle, ein Dedup-Key, ein Text; kein zweiter
+     * Detektor). Ohne den Parameter zwei Schäden auf einmal: Team-weiter Scan für vier
+     * Artikel im kleinen Fall — und im großen die *stille Auslassung*, weil jenseits von
+     * `$maxGps` die `pluck`-Reihenfolge entscheidet, welche bewegten GPs kein Signal
+     * bekommen. Der Deckel gehört damit dem Scheduler-Pfad; wer die exakte Menge kennt,
+     * setzt ihn auf ihre Größe und kann eine Kappung beim Namen nennen.
+     *
+     * @param  ?array<int>  $gpIds  bewegte GPs; null = Team-weite Suche (Scheduler)
      */
-    public function preisSprungMargeImpact(Team $team, ?float $schwellePct = null, int $lookbackTage = 60, int $maxGps = 500): int
+    public function preisSprungMargeImpact(Team $team, ?float $schwellePct = null, int $lookbackTage = 60, int $maxGps = 500, ?array $gpIds = null): int
     {
         $schwelle = $schwellePct ?? app(TeamSettingsService::class)->preisAlarmSchwellePct($team);
         $cutoff = now()->subDays($lookbackTage)->format('Y-m-d H:i:s');
 
         // GPs mit Lead-LA im Team-Scope: [gp_id => lead_la_id]
+        // Der Team-Scope bleibt AUCH bei gesetztem $gpIds bestehen (D1: eine übergebene
+        // Fremd-GP-ID darf keine Sichtbarkeit erzeugen, die es sonst nicht gibt).
         $leads = DB::table('foodalchemist_gps')
             ->whereIn('team_id', FoodAlchemistGp::teamAncestryIds($team))
+            ->when($gpIds !== null, fn ($q) => $q->whereIn('id', $gpIds === [] ? [0] : $gpIds))
             ->whereNull('deleted_at')->whereNotNull('lead_la_supplier_item_id')
             ->pluck('lead_la_supplier_item_id', 'id');
         if ($leads->isEmpty()) {

@@ -13,8 +13,9 @@ use Platform\FoodAlchemist\Services\FileArticleImportService;
 
 /**
  * Spec 13 · S3b — der scharfe Kanal-B-Import als Queue-Job. Grund für den Job: der Lauf
- * schreibt Artikel, Preise und Detail-Blöcke und zieht danach bis zu 1.000 Rezept-Ketten
- * neu durch (`FileArticleImportService::MAX_RECOMPUTE`) — das gehört nicht in einen
+ * schreibt Artikel, Preise und Detail-Blöcke und rechnet danach die ganze betroffene
+ * Rezept-Menge neu (`RecipeRecomputeService::recomputeMany`, seit V-049 ohne Deckel —
+ * der Job-Timeout ist die verbleibende Schranke) — das gehört nicht in einen
  * synchronen Tool-Call (dieselbe Lehre wie beim Rezept-Generator, ROADMAP „URSACHE 4").
  *
  * **Kein zweiter Import-Pfad:** der Job ruft dasselbe `importiere(..., apply: true)`,

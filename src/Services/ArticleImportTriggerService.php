@@ -20,8 +20,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
  *  2. **Was passiert ohne `apply`?** — der Trockenlauf, synchron, weil sein Bericht das
  *     Ergebnis IST (er wird nirgends abgelegt). Er ist auf {@see self::MAX_VORSCHAU_ZEILEN}
  *     Zeilen begrenzt, weil ein Tool-Call ein Request ist.
- *  3. **Was passiert mit `apply`?** — der scharfe Lauf geht über einen Job. Er kann bis
- *     zu 1.000 Rezept-Ketten neu rechnen (`MAX_RECOMPUTE`) und gehört damit nicht in
+ *  3. **Was passiert mit `apply`?** — der scharfe Lauf geht über einen Job. Er rechnet die
+ *     ganze betroffene Rezept-Menge neu (seit V-049 ohne Deckel) und gehört damit nicht in
  *     einen synchronen Aufruf. Zurück kommt die `run_id`; die Quittung liest
  *     {@see IngestStatusService} (Block `laeufe`) — deshalb war S3a zuerst fällig.
  *

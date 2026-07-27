@@ -149,10 +149,10 @@ class LeadLaService
         if ($recipeIds->isEmpty()) {
             return;
         }
-        $rc = app(RecipeRecomputeService::class);
-        foreach ($recipeIds as $rid) {
-            $rc->recomputeAndPropagate((int) $rid);
-        }
+        // V-049: eine Menge, ein Lauf — gemeinsame Eltern-Gerichte werden einmal gerechnet
+        // statt einmal je Direktnutzer (ein GP steckt typischerweise in vielen Basisrezepten,
+        // die in denselben Gerichten landen).
+        app(RecipeRecomputeService::class)->recomputeMany($recipeIds->all());
     }
 
     /**

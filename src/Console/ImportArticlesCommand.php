@@ -171,12 +171,8 @@ class ImportArticlesCommand extends Command
         $k = $bericht['kette'];
         if ($k['gps'] > 0 || $k['rezepte'] > 0) {
             $this->info($apply
-                ? "   ⛓ Kette: {$k['gps']} GP · {$k['rezepte']} Rezept(e) betroffen · {$k['neu_berechnet']} neu berechnet · {$k['signale']} Preis-Signal(e)"
+                ? "   ⛓ Kette: {$k['gps']} GP · {$k['rezepte']} Rezept(e) direkt betroffen · {$k['neu_berechnet']} neu berechnet (inkl. Eltern) · {$k['signale']} Preis-Signal(e)"
                 : "   ⛓ Kette (Vorschau): {$k['gps']} GP · {$k['rezepte']} Rezept(e) würden neu berechnet");
-            if ($k['abgeschnitten']) {
-                $this->warn('   ! Kette bei ' . FileArticleImportService::MAX_RECOMPUTE
-                    . ' Rezepten abgeschnitten — Rest mit `php artisan foodalchemist:recompute` nachziehen.');
-            }
         } elseif ($k['bewegt'] > 0) {
             $this->line("   ⛓ Kette: kein GP an den {$k['bewegt']} bewegten Artikel(n) — der EK steht, kostet aber noch kein Rezept.");
         } elseif ($pr['neu'] > 0) {

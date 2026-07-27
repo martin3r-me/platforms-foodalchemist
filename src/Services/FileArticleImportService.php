@@ -22,7 +22,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
  * `item_allergens` / `item_declarations` über den SupplierItemService) und seit S2 die
  * **Lieferbedingungen** am Lieferanten (E3, über {@see SupplierService::updateConditions})
  * — alles samt **Post-Import-Kette (E4)**: bewegter Artikel → betroffene GPs →
- * `recomputeAndPropagate` je nutzendem Rezept → `SignalDetektorService::preisSprungMargeImpact`.
+ * `RecipeRecomputeService::recomputeMany` über die nutzenden Rezepte (V-049: eine Menge,
+ * ein Lauf) → `SignalDetektorService::preisSprungMargeImpact` mit **genau dieser** GP-Menge
+ * (V-050) statt der Team-weiten Suche.
  * Das ist der DoD-Kern der Spec: keine stille Drift — weder ein neuer EK noch ein
  * neues Allergen darf am Artikel stehen, während Rezeptkosten, Aushang und
  * Marge-Signale den alten Stand zeigen.
@@ -58,14 +60,17 @@ class FileArticleImportService
     /** Zeilen-Obergrenze je Lauf — schützt vor versehentlich geladenen Voll-Katalogen. */
     public const MAX_ZEILEN = 20000;
 
-    /**
-     * Obergrenze der Post-Import-Kette (E4). Jedes `recomputeAndPropagate` ist eine
-     * eigene Transaktion samt Darreichungs-Nachlauf; ein Voll-Katalog mit tausenden
-     * Preisänderungen würde den Command sonst stundenlang binden. Wird die Grenze
-     * erreicht, sagt der Bericht das ausdrücklich und nennt `foodalchemist:recompute`
-     * als Weg — ein stiller Schnitt wäre genau die Drift, gegen die E4 geschrieben ist.
+    /*
+     * Die Obergrenze `MAX_RECOMPUTE = 1000` ist mit V-049 (12·S2a-1b) **entfallen**.
+     * Sie war eine Krücke gegen ein Problem im Recompute-Service: je Direktnutzer eine
+     * eigene Eltern-BFS samt Transaktion, gemeinsame Gerichte hundertfach gerechnet.
+     * `RecipeRecomputeService::recomputeMany()` löst die betroffene Menge einmal auf und
+     * rechnet jedes Rezept genau einmal — das ist die minimal nötige Arbeit, und ein
+     * Deckel darauf wäre kein Schutz mehr, sondern genau die stille Drift, gegen die
+     * E4 geschrieben ist (der Rest bliebe unbemerkt stale). Die verbleibende Schranke
+     * ist der Job-Timeout (`ImportArticlesJob`, 900 s); der Bericht nennt die Zahl der
+     * neu gerechneten Rezepte.
      */
-    public const MAX_RECOMPUTE = 1000;
 
     /**
      * Spalten-Vorlage (E1): kanonischer Name => [Ziel-Spalte, Typ, Alias-Liste].
@@ -281,7 +286,7 @@ class FileArticleImportService
      *   preise: array{neu: int, geaendert: int, unveraendert: int, fehler: int},
      *   details: array{naehrwerte: int, allergene: int, zusatzstoffe: int},
      *   konditionen: array{status: ?string, grund?: string, gesetzt: array<string, mixed>, unveraendert: list<string>, abgelehnt: list<string>},
-     *   kette: array{bewegt: int, gps: int, rezepte: int, neu_berechnet: int, signale: int, abgeschnitten: bool},
+     *   kette: array{bewegt: int, gps: int, rezepte: int, neu_berechnet: int, signale: int},
      *   spalten: array{erkannt: list<string>, spaeter: list<string>, unbekannt: list<string>},
      *   hinweise: list<string>, befunde: list<array<string, mixed>>
      * }
@@ -304,7 +309,7 @@ class FileArticleImportService
             'preise' => ['neu' => 0, 'geaendert' => 0, 'unveraendert' => 0, 'fehler' => 0],
             'details' => ['naehrwerte' => 0, 'allergene' => 0, 'zusatzstoffe' => 0],
             'konditionen' => ['status' => null, 'gesetzt' => [], 'unveraendert' => [], 'abgelehnt' => []],
-            'kette' => ['bewegt' => 0, 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0, 'abgeschnitten' => false],
+            'kette' => ['bewegt' => 0, 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0],
             'spalten' => $datei['spalten'],
             'hinweise' => $datei['hinweise'],
             'befunde' => [],
@@ -986,12 +991,12 @@ class FileArticleImportService
      * und eine zweite Schwellen-Logik im Importer wäre eine zweite Wahrheit.
      *
      * @param  array<int, true>  $bewegteItems
-     * @return array{bewegt: int, gps: int, rezepte: int, neu_berechnet: int, signale: int, abgeschnitten: bool}
+     * @return array{bewegt: int, gps: int, rezepte: int, neu_berechnet: int, signale: int}
      */
     public function postImportKette(Team $team, array $bewegteItems, bool $apply): array
     {
         $itemIds = array_keys($bewegteItems);
-        $leer = ['bewegt' => count($itemIds), 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0, 'abgeschnitten' => false];
+        $leer = ['bewegt' => count($itemIds), 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0];
         if ($itemIds === []) {
             return $leer;
         }
@@ -1014,21 +1019,22 @@ class FileArticleImportService
             return $kette;   // Vorschau: WAS getroffen würde, ohne zu rechnen
         }
 
-        foreach ($recipeIds as $i => $rid) {
-            if ($i >= self::MAX_RECOMPUTE) {
-                $kette['abgeschnitten'] = true;
-                break;
-            }
-            try {
-                $this->recompute->recomputeAndPropagate($rid);
-                $kette['neu_berechnet']++;
-            } catch (\Throwable $e) {
-                Log::warning("Kanal-B-Kette: Recompute für Rezept {$rid} fehlgeschlagen — {$e->getMessage()}");
-            }
+        // V-049: EIN Lauf über die ganze Menge — die betroffene Vereinigung (Direktnutzer +
+        // transitive Eltern) wird einmal aufgelöst, jedes Rezept genau einmal gerechnet.
+        // `neu_berechnet` zählt deshalb die ganze gerechnete Menge inkl. Eltern, nicht mehr
+        // nur die Direktnutzer; Einzelfehler stehen wie bisher im Log (I8).
+        try {
+            $kette['neu_berechnet'] = count($this->recompute->recomputeMany($recipeIds));
+        } catch (\Throwable $e) {
+            Log::warning("Kanal-B-Kette: Recompute der bewegten Menge fehlgeschlagen — {$e->getMessage()}");
         }
 
         try {
-            $kette['signale'] = app(SignalDetektorService::class)->preisSprungMargeImpact($team);
+            // V-050: der Detektor bekommt die bewegte GP-Menge statt der Team-weiten Suche.
+            // Deckel = Größe der eigenen Menge, damit er hier nie bindet — eine Kappung wäre
+            // in genau dieser Kette die stille Auslassung, gegen die E4 geschrieben ist.
+            $kette['signale'] = app(SignalDetektorService::class)
+                ->preisSprungMargeImpact($team, maxGps: max(count($gpIds), 1), gpIds: $gpIds);
         } catch (\Throwable $e) {
             Log::warning("Kanal-B-Kette: Preis-Sprung-Detektor fehlgeschlagen — {$e->getMessage()}");
         }
