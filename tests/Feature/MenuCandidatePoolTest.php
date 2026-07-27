@@ -122,7 +122,7 @@ it('halb gepflegte Darreichung wird als gemischte Quelle ausgewiesen, nicht als 
         ->and($w['db_eur'])->toBe(15.0);
 });
 
-it('die DB-Achse kostet EINE Query, nicht eine je Gericht', function () {
+it('die DB-Achse kostet keine Query je Gericht — seit V-046 nicht einmal mehr eine für den ganzen Pool', function () {
     for ($i = 0; $i < 12; $i++) {
         $r = ($this->mkGericht)("perf-{$i}", "HG: Perf {$i}", ['sales_net' => 10.00 + $i]);
         ($this->mkDarreichung)($r, 10.00 + $i, 4.00);
@@ -147,7 +147,11 @@ it('die DB-Achse kostet EINE Query, nicht eine je Gericht', function () {
     [, $ohne] = $zaehle(false);
     [$pool, $mit] = $zaehle(true);
 
-    // Gemessen wird der DELTA der neuen Achse: die Darreichungs-Relation ist eager, also +1.
+    // Gemessen wird der DELTA der neuen Achse. **Seit V-046 ist er 0, nicht mehr 1:** die
+    // Standard-Darreichung ist die Preis-Wahrheit auch für den harten Slot-Filter und wird
+    // darum IMMER eager geladen — der Wirtschafts-Modus schaltet nur noch die Rechnung frei,
+    // nicht mehr eine eigene Query. Ein Delta > 0 wäre ab hier ein Rückfall in den
+    // Zustand „zwei Preis-Wahrheiten, je nach Modus".
     // Zusätzlich eine absolute Obergrenze als Regressions-Riegel. Verlauf über die zwei
     // V-045-Halbschritte für dieselben 12 zutatenlosen Gerichte: **38 → 27 → 4**. Der erste
     // Halbschritt hat den `neutral`-Lookup memoisiert und die Zutaten-Requery bei geladener
@@ -159,7 +163,7 @@ it('die DB-Achse kostet EINE Query, nicht eine je Gericht', function () {
     // Verhalten grün, solange sie nur passt.
     expect($pool)->toHaveCount(12)
         ->and($pool->every(fn ($k) => $k['wirtschaft']['vollstaendig'] === true))->toBeTrue()
-        ->and($mit - $ohne)->toBe(1)
+        ->and($mit - $ohne)->toBe(0)
         ->and($ohne)->toBeLessThanOrEqual(6);
 });
 

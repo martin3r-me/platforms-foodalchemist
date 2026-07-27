@@ -93,6 +93,46 @@ class DarreichungResolver
         return $recipe->standardPresentation ?? $recipe->presentations()->orderBy('id')->first();
     }
 
+    /**
+     * VK netto EINES GERICHTS ohne Kontext — die Preis-Leiter selbst: Standard-Darreichung
+     * (M2-Wahrheit) → `recipes.sales_net` (Legacy-Spiegel) → keine Zahl. Gibt die Quelle mit
+     * aus, damit ein Aufrufer sie benennen kann statt sie zu erraten.
+     *
+     * **Warum hier und nicht beim Aufrufer (V-046):** dieselbe Leiter lag verstreut in
+     * `KalkulationService::recipeHk`, im Wirtschafts-Block des Kandidaten-Pools und (in halber
+     * Form) direkt als Rezept-Spalte im Pool-Filter. Solange der harte Preisfilter die eine
+     * Zahl liest und die Zielfunktion die andere, ist ein Optimum nicht erklärbar.
+     *
+     * **Batch-fähig ohne zweiten Weg:** ist `standardPresentation` bereits eager geladen, wird
+     * die geladene Relation genommen (keine Query je Gericht); sonst läuft die volle Leiter über
+     * {@see standardFuer()} inklusive dessen Fallback „erste Darreichung nach id".
+     *
+     * ⚠️ **Bekannte Rest-Divergenz (V-059, NICHT in diesem Zug behoben):** genau dieser Fallback
+     * unterscheidet die beiden Wege. Hat ein Gericht Darreichungen, aber keine mit `is_standard`,
+     * liefert der geladene Weg `null` (⇒ Legacy-Spalte), der ungeladene die erste Darreichung.
+     * Im Bestand ist der Fall leer (0 von 31 Gerichten mit Darreichung, Dev-MySQL 2026-07-27);
+     * ihn aufzulösen heißt, entweder alle Darreichungen eager zu laden oder den Fallback
+     * fallenzulassen — eine Auswahl-Entscheidung, die Dominique gehört.
+     *
+     * @return array{vk: ?float, quelle: 'darreichung'|'legacy'|'keine'}
+     */
+    public function vkNettoMitQuelle(FoodAlchemistRecipe $recipe): array
+    {
+        $standard = $recipe->relationLoaded('standardPresentation')
+            ? $recipe->standardPresentation
+            : $this->standardFuer($recipe);
+
+        if ($standard?->sales_net !== null) {
+            return ['vk' => (float) $standard->sales_net, 'quelle' => 'darreichung'];
+        }
+
+        if ($recipe->sales_net !== null) {
+            return ['vk' => (float) $recipe->sales_net, 'quelle' => 'legacy'];
+        }
+
+        return ['vk' => null, 'quelle' => 'keine'];
+    }
+
     /** VK netto im Kontext (Darreichung zuerst, Legacy-Spalte als Fallback). */
     public function vkNettoFuerSlot(FoodAlchemistConceptSlot $slot): ?float
     {

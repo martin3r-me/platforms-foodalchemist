@@ -29,6 +29,7 @@ class MenuCandidatePoolService
 {
     public function __construct(
         private PairingService $pairing,
+        private DarreichungResolver $darreichungen,
     ) {}
 
     /**
@@ -65,11 +66,12 @@ class MenuCandidatePoolService
                 $query->with(['ingredients.referencedRecipe:id,name']);
             }
         }
-        if ($mitWirtschaft) {
-            // EINE Relation für den ganzen Pool statt `standardFuer()` je Gericht — genau das
-            // ist die Perf-Vorlage aus MargeImpactService (Batch statt Schleifen-Query).
-            $query->with(['standardPresentation:id,recipe_id,sales_net,ek_portion,is_standard']);
-        }
+        // V-046: die Standard-Darreichung ist IMMER eager — nicht nur im Wirtschafts-Modus.
+        // Sie ist die Preis-Wahrheit (M2), und der Preis wird im billigen Pfad als HARTER
+        // Slot-Filter benutzt; ohne sie filterte der Pool auf der Legacy-Spalte und der
+        // Solver optimierte auf der Darreichungs-Zahl. EINE Relation für den ganzen Pool
+        // statt `standardFuer()` je Gericht — die Perf-Vorlage aus MargeImpactService.
+        $query->with(['standardPresentation:id,recipe_id,sales_net,ek_portion,is_standard']);
 
         $kandidaten = $query->get();
 
@@ -94,12 +96,20 @@ class MenuCandidatePoolService
                 }
             }
 
+            // V-046: EINE Preis-Zahl je Kandidat, aus der geteilten Leiter im Resolver
+            // (Standard-Darreichung → Legacy-Spalte). Sie speist BEIDES: den harten
+            // Slot-Preisfilter/das Preis-Anker-Ranking und die Wirtschafts-Achse.
+            $preis = $this->darreichungen->vkNettoMitQuelle($r);
+
             return [
                 'id' => $r->id,
                 'name' => $r->name,
                 'diet_form' => $diet,
                 'hg_label' => mb_strtolower(trim((string) ($r->speisenHauptgruppe?->label ?? $r->dishClass?->mainGroup?->label ?? ''))),
-                'sales_net' => $r->sales_net !== null ? (float) $r->sales_net : null,
+                // auf Cent gerundet wie die Wirtschafts-Achse — sonst wären „dieselbe Zahl"
+                // und „dieselbe Zahl bis auf Rundung" zwei verschiedene Zusicherungen
+                'sales_net' => $preis['vk'] !== null ? round($preis['vk'], 2) : null,
+                'preis_quelle' => $preis['quelle'],
                 'allergene' => $allergene,
                 'begriffe' => $brauchtBegriffe
                     ? mb_strtolower($r->name . ' ' . $r->ingredients->map(fn ($z) => ($z->gp?->name ?? '') . ' ' . ($z->referencedRecipe?->name ?? ''))->implode(' '))
@@ -108,7 +118,7 @@ class MenuCandidatePoolService
                 // Convenience-Anteil = Quote convenience-getaggter GPs unter den Zutaten (null = nicht geladen / keine GP-Zutat)
                 'convenience_ratio' => $this->convenienceRatio($r, $mitConvenience),
                 'anker' => $this->pairing->flacheAnker($ankerJeGericht[$r->id] ?? []),
-                'wirtschaft' => $mitWirtschaft ? $this->wirtschaft($r) : null,
+                'wirtschaft' => $mitWirtschaft ? $this->wirtschaft($r, $preis['vk']) : null,
             ];
         })->keyBy('id');
     }
@@ -126,19 +136,19 @@ class MenuCandidatePoolService
      * die Wareneinsatz-Quoten schon weit auseinanderliegen.
      *
      * Preis-Wahrheit ist die Standard-Darreichung (M2), Legacy-Spalten sind Fallback — dieselbe
-     * Leiter wie in `recipeHk`. Fehlt eine der beiden Zahlen, ist der Kandidat `vollstaendig=false`:
+     * Leiter wie in `recipeHk`. **Seit V-046 wird der VK nicht mehr hier gerechnet, sondern
+     * hereingereicht:** es ist dieselbe Zahl, die auch als `sales_net` im Kandidaten steht und
+     * die der harte Slot-Filter liest. Zwei Preise im selben Array wären genau der Zustand, den
+     * V-046 beschreibt. Fehlt eine der beiden Zahlen, ist der Kandidat `vollstaendig=false`:
      * er fliegt NICHT raus (das wäre eine stille Portfolio-Verengung), aber er trägt kein DB bei
      * und der Solver muss ihn als benannte Lücke ausweisen.
      *
      * @return array{sales_net: ?float, ek_portion: ?float, db_eur: ?float, db_pct: ?float,
      *               wareneinsatz_pct: ?float, quelle: string, vollstaendig: bool}
      */
-    private function wirtschaft(FoodAlchemistRecipe $r): array
+    private function wirtschaft(FoodAlchemistRecipe $r, ?float $vk): array
     {
         $standard = $r->relationLoaded('standardPresentation') ? $r->standardPresentation : null;
-
-        $vk = $standard?->sales_net !== null ? (float) $standard->sales_net
-            : ($r->sales_net !== null ? (float) $r->sales_net : null);
 
         $anzahl = max(1, (int) ($r->sales_unit_count ?? 1));
         $ek = $standard?->ek_portion !== null ? (float) $standard->ek_portion
