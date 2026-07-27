@@ -8,6 +8,22 @@
 
 ---
 
+## Update 2026-07-27 (Spec 13 · S1a — Kanal B: der Katalog bekommt einen Eingang, den ein Mensch bedienen kann)
+
+**Fünfunddreißigster Bau-Lauf der Routine ([Spec 13](PLANUNG/13_Preis_Katalog_Ingest_Q2.md), Etappe S1 — erster von drei Teilschritten).** Frische Lieferanten-Daten kamen bisher nur über den Necta-Erbe-Pfad (`ImportSliceCommand`, Quelle = SQLite) in den Katalog. Für den Quartals-Rhythmus, den E5 festlegt („Datei laden, Command verarbeitet"), gab es keinen Weg. Neu: `FileArticleImportService` + `foodalchemist:import-articles` liest eine CSV/TSV des Lieferanten und upsertet den **Artikel-Stamm**; Preis + Recompute-Kette (S1b) und die Detail-Tabellen (S1c) folgen.
+
+**Der Upsert-Schlüssel ist `(supplier_id, article_number)` mit EAN als Fallback (E2), nicht `legacy_id`.** Der Fallback greift auch, wenn eine Artikelnummer dasteht und nichts trifft — dann hat der Lieferant neu nummeriert, und die EAN ist die stabilere Identität; die neue Nummer wird mitgeschrieben. Trifft ein Schlüssel **mehr als einen** Bestandsartikel, ist die Zeile ein Fehler und keine Rate-Entscheidung: der Unique-Index aus E2 existiert auf den 264k Bestandszeilen noch nicht, und ihn blind zu setzen hieße, eine Dubletten-Messung zu überspringen.
+
+**„Leere Zelle" heißt „steht nicht in der Datei", nicht „lösche den Wert".** Geschrieben wird nur, was die Datei mitbringt *und* befüllt hat. Damit ist der zweite Lauf derselben Datei per Konstruktion ein No-op (die Idempotenz-Zusage der DoD ist eine Bauform, keine Prüfung), ein Teilkatalog überschreibt keine gepflegte Spalte, und „resumefähig" braucht keinen Zwischenzustand — man ruft denselben Befehl nochmal auf. **D1 gilt auch beim Import:** trifft eine Zeile einen geerbten Artikel des Eltern-Teams, wird sie mit Grund übersprungen — nicht verändert (fremdes Eigentum) und auch nicht als team-lokale Kopie angelegt (stiller Doppel-Katalog).
+
+**Was die Stufe nicht schreibt, sagt sie beim Namen.** Preis-, Nährwert-, Allergen- und Konditions-Spalten dürfen jetzt schon in der Datei stehen; der Bericht nennt sie samt Ziel-Stufe. Ein Import, der eine Preis-Spalte kommentarlos verschluckt, wäre genau die stille Drift, die E4 verhindern soll. Ebenso ist der **Trockenlauf der Default** — geschrieben wird nur mit `--apply`, und die Ausgabe ist in beiden Modi dieselbe Codebahn, also eine echte Vorschau.
+
+**Zwei bewusste Abweichungen von der Spec-Zeile:** (a) **kein xlsx** — das wäre eine neue Composer-Abhängigkeit im Modul und damit eine Entscheidung, keine Import-Frage; der Reader nennt stattdessen den Weg („als CSV exportieren"). (b) kein Unique-Index (s. o.). Die dokumentierte Vorlage aus E1 liegt als [`docs/IMPORT_Kanal_B_Artikel_Vorlage.md`](IMPORT_Kanal_B_Artikel_Vorlage.md) samt Beispiel-CSV.
+
+**Suite 1491 · 1487 passed · 4 skipped · 0 Fail (Vorlauf 1479/1475, +12 Tests).** Kein Schema-Change, keine Migration; MySQL-Lesepfad per Trockenlauf gegen die Dev-DB gegengeprüft (4 Zeilen, nichts geschrieben). **Kein MCP-Nachzug:** der Bulk-Import bleibt laut DoD artisan; die MCP-Fläche ist als S3 geschnitten (`ingest.STATUS` + expliziter Trigger). Verbesserungs-Backlog: **V-047** (`bulk_runs` sagt, *dass* ein Lauf lief, nie *woran* — S3 könnte Läufe damit zählen, aber nicht benennen) und **V-048** (der Ancestry-Cache-Flush im Test-Harness ist eine Handliste über 14 von 77 Models; Fehlerfall ist „D1-Test besteht aus dem falschen Grund"). Nächster Schritt: **S1b** — Preis-Write + Post-Import-Kette (E4).
+
+---
+
 ## Update 2026-07-27 (Spec 12 · S2a-1 — der Kandidaten-Pool wird geteilt, und er lernt seinen Deckungsbeitrag)
 
 **Vierunddreißigster Bau-Lauf der Routine ([Spec 12](PLANUNG/12_Wirtschaftlichkeits_Intelligenz_R2-Rest.md), Etappe S2/R2.4 — erster von vier Teilschritten).** R2.4 soll aus dem Portfolio *lösen*: Rahmen rein, DB-maximale Kombination raus. Bevor irgendein Solver rechnen kann, braucht er zwei Dinge, die es so noch nicht gab — eine Menge, aus der er wählen darf, und eine Zahl, die er maximiert. Beides liegt jetzt im neuen `MenuCandidatePoolService`: Pool-Aufbau, Slot-Filter und Filter-Beschreibung sind aus `ConceptGeneratorService` **herausgezogen** (nicht kopiert), der Generator delegiert, das Verhalten ist unverändert (19 Bestands-Tests grün ohne eine Zeile Anpassung).

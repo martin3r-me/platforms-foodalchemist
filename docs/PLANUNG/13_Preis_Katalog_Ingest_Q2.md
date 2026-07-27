@@ -43,7 +43,7 @@
 
 | # | Etappe | Größe | Inhalt |
 |---|---|---|---|
-| **S1** | Kanal B Datei-Import | L | `FileArticleImportService` + Command `foodalchemist:import-articles {--file --supplier --team --dry-run --apply}`: Datei-Reader (xlsx/csv) → Artikel-Upsert (`(supplier_id,article_number)`) → schreibt `item_nutritionals`/`item_allergens`/`item_declarations` → `PriceService::createFor` → `recomputeAndPropagate` betroffener GPs → `preisSprungMargeImpact`. Idempotent, resumefähig, Backup-Hinweis. |
+| **S1** | Kanal B Datei-Import | L | `FileArticleImportService` + Command `foodalchemist:import-articles {--file --supplier --team --dry-run --apply}`: Datei-Reader (xlsx/csv) → Artikel-Upsert (`(supplier_id,article_number)`) → schreibt `item_nutritionals`/`item_allergens`/`item_declarations` → `PriceService::createFor` → `recomputeAndPropagate` betroffener GPs → `preisSprungMargeImpact`. Idempotent, resumefähig, Backup-Hinweis. **In drei Teilschritte geschnitten** (je Schreibziel eine Fehlerklasse): **S1a ✅ 2026-07-27** Reader + Artikel-Stamm · **S1b** Preis + Post-Import-Kette (E4) · **S1c** Detail-Tabellen. |
 | **S2** | Lieferbedingungen | S | Migration: Konditions-Spalten auf `foodalchemist_suppliers` (E3) + Import-Mapping; propagiert später in R9-Marge-Sicht. |
 | **S3** | MCP | S | `ingest.STATUS` (read-only: letzte Läufe, Lücken-Liste, Preis-Deltas; Template `ArtikelListTool`) + expliziter Datei-Import-Trigger-Tool (menschlich angestoßen). |
 | **S4** | Sales-Ist (R2.3-Gate) | M · 🟡 | Format-Spec aus echter Bankettprofi-Beispieldatei dokumentieren (Dominique-Aufgabe) → Fact-Tabelle `foodalchemist_sales_facts` (geteilt mit [12](12_Wirtschaftlichkeits_Intelligenz_R2-Rest.md)/R2.3) + Zeilen-Matcher (Skript-250-Muster, Unmatched→Review). |
@@ -75,5 +75,11 @@
 - Kein Rückkanal (FA schreibt nichts zu Lieferanten zurück).
 - Kein Bestell-/Wareneingangs-Prozess (N-Track).
 - Kein Voll-EDI in v1 — Datei-Ingests reichen.
+
+## 7. Stand-Log
+
+- **2026-07-27 · S1a ✅ (Routine-Lauf 35, `cdde1eb`)** — `src/Services/FileArticleImportService.php` + `src/Console/ImportArticlesCommand.php` + Vorlage [`docs/IMPORT_Kanal_B_Artikel_Vorlage.md`](../IMPORT_Kanal_B_Artikel_Vorlage.md) + Beispiel-CSV. 12 Pest (`FileArticleImportTest`). Entscheidungen: Trockenlauf ist Default · leere Zelle löscht nichts (⇒ Idempotenz per Bauform) · D1 auch beim Import (geerbter Artikel wird übersprungen, nicht kopiert) · Mehrfach-Treffer = Zeilen-Fehler · Lauf-Zeile in `bulk_runs` Typ `ingest` (Grundlage S3). **Abweichungen von E1/E2, bewusst:** kein xlsx-Reader (neue Composer-Abhängigkeit = Entscheid Dominique; der Reader nennt den CSV-Weg), kein Unique-Index auf `(supplier_id, article_number)` (braucht erst eine Dubletten-Messung auf 264k Zeilen). Kein MCP-Nachzug (Bulk bleibt artisan, MCP ist S3). Offen aus diesem Teilschritt: **S1b** (Preis + E4-Kette), **S1c** (Detail-Tabellen).
+
+---
 
 *Verzahnt: R2.1 (Alarm), [12](12_Wirtschaftlichkeits_Intelligenz_R2-Rest.md)/R2.3 (Gate + geteilte `sales_facts`), [14](14_Lieferanten_Management_R9.md)/R9 (geteilte Konditions-Spalten), Skripte 92/250. Dossier 2026-07-18, bau-reif (Kanal B) 2026-07-19.*
