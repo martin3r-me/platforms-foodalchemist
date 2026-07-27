@@ -37,6 +37,7 @@ class ConceptGeneratorService
         private PairingService $pairing,
         private ConceptService $concepts,
         private MenuCandidatePoolService $pool,
+        private MenuAssemblyService $assembly,
     ) {}
 
     // ── Hauptpfad: Gerüst → Konzept ────────────────────────────────────
@@ -61,6 +62,115 @@ class ConceptGeneratorService
         $this->frames->kopiereZu($team, $frame, 'concept', $concept->id, 'concept_generator');
 
         return $this->fuelleBestehendesKonzept($team, $concept, $frame);
+    }
+
+    // ── 12·S2b: Übernahme der marge-optimalen Assemblierung ────────────
+
+    /**
+     * 12·S2b (R2.4) — die **explizite** Übernahme einer Assemblierung als Draft-Konzept.
+     *
+     * Der marge-optimale Zwilling von `generiereAusGeruest`: gleicher Rahmen, gleiche
+     * Schreibwege (`ConceptService::addSlot`/`fillSlot`), nur wählt hier
+     * `MenuAssemblyService` statt des greedy Assemblers. Vier tragende Entscheidungen:
+     *
+     * 1. **Geschrieben wird das Solver-Ergebnis, nicht eine zweite Auswahl.** Die Slots
+     *    entstehen aus `assemblierung['slots']` — dieselbe Liste, die die Vorschau zeigt.
+     *    Ein „Nachwählen" beim Schreiben wäre eine zweite Auswahl-Wahrheit.
+     * 2. **Der Gegenzeichnungs-Riegel** (`$erwartetesDbPp`): stimmt das frisch gerechnete
+     *    DB p. P. nicht mit dem der Vorschau, hat sich der Bestand zwischen Ansicht und
+     *    Klick bewegt (Preis, neues Gericht, geänderte Regel) → Abbruch statt stiller
+     *    Übernahme eines anderen Menüs. Optional, weil ein Erstaufruf noch keine
+     *    Vorschau-Zahl hat.
+     * 3. **Nie in ein befülltes Konzept hinein.** Ein Ziel-Konzept mit Slots wird
+     *    abgelehnt (GL 5: nichts überschreiben, was der Lauf nicht selbst angelegt hat) —
+     *    aufräumen ist eine menschliche Entscheidung, keine Nebenwirkung der Übernahme.
+     * 4. **Ein fremdes Gerüst wird nicht angetastet.** Hat das Ziel-Konzept schon ein
+     *    eigenes Gerüst, bleibt es stehen (Coverage misst weiter dagegen); nur ein
+     *    Konzept *ohne* Gerüst bekommt die Kopie, damit die Messlatte überhaupt existiert.
+     *
+     * @param  ?int  $conceptId  null = neues Draft-Konzept anlegen
+     * @param  ?float  $erwartetesDbPp  DB p. P. aus der Vorschau (optimistischer Riegel)
+     * @return array{concept: FoodAlchemistConcept, assemblierung: array, protokoll: list<array>, kohaesion: array, coverage: array}
+     */
+    public function uebernehmeAssemblierung(
+        Team $team,
+        FoodAlchemistPlanningFrame $frame,
+        ?int $conceptId = null,
+        ?string $name = null,
+        ?int $gaeste = null,
+        ?float $erwartetesDbPp = null,
+        string $via = 'ui'
+    ): array {
+        $assemblierung = $this->assembly->assembliere($team, $frame, $gaeste);
+        $dbPp = (float) $assemblierung['zielfunktion']['db_pp'];
+
+        if ($erwartetesDbPp !== null && abs($dbPp - $erwartetesDbPp) > 0.01) {
+            throw new RuntimeException(
+                'Vorschau veraltet: die Assemblierung liefert jetzt ' . number_format($dbPp, 2, ',', '.')
+                . ' € DB p. P. statt der erwarteten ' . number_format($erwartetesDbPp, 2, ',', '.')
+                . ' € — der Bestand hat sich bewegt. Erst neu ansehen, dann übernehmen.'
+            );
+        }
+
+        if ($conceptId === null) {
+            $concept = $this->concepts->create($team, [
+                'name' => $name !== null && trim($name) !== '' ? trim($name) : 'Konzept-Entwurf (marge-optimal)',
+                'status' => 'draft',
+            ]);
+            $concept->update(['created_via' => 'menu_assembly_' . $via]);
+        } else {
+            $concept = FoodAlchemistConcept::visibleToTeam($team)->find($conceptId);
+            if ($concept === null) {
+                throw new RuntimeException('Ziel-Konzept nicht sichtbar/vorhanden.');
+            }
+            if ((string) $concept->status !== 'draft') {
+                throw new RuntimeException("Ziel-Konzept hat Status „{$concept->status}“ — die Übernahme schreibt nur in Entwürfe.");
+            }
+            $vorhandene = $concept->slots()->count();
+            if ($vorhandene > 0) {
+                throw new RuntimeException(
+                    "Ziel-Konzept hat schon {$vorhandene} Position(en) — die Übernahme überschreibt nichts. "
+                    . 'Entweder leeres Konzept angeben oder ohne concept_id ein neues anlegen lassen.'
+                );
+            }
+        }
+
+        // Gerüst-Kopie nur, wenn das Konzept noch keine eigene Messlatte hat (Punkt 4).
+        if ($this->frames->find('concept', $concept->id) === null) {
+            $this->frames->kopiereZu($team, $frame, 'concept', $concept->id, 'menu_assembly');
+        }
+
+        $protokoll = [];
+        $recipeIds = [];
+        foreach ($assemblierung['slots'] as $zeile) {
+            if ($zeile['gerichte'] === []) {
+                $leer = $this->concepts->addSlot($team, $concept->id, ['role' => $zeile['label']]);
+                $this->concepts->updateSlot($team, $leer->id, ['note' => $zeile['begruendung']]);
+            }
+            foreach ($zeile['gerichte'] as $gericht) {
+                $slot = $this->concepts->addSlot($team, $concept->id, ['role' => $zeile['label']]);
+                $this->concepts->fillSlot($team, $slot->id, ['sales_recipe_id' => $gericht['id'], 'type' => 'gericht']);
+                $recipeIds[$gericht['id']] = true;
+            }
+            $protokoll[] = [
+                'slot' => $zeile['label'],
+                'status' => $zeile['status'],
+                'begruendung' => $zeile['begruendung'],
+                'gerichte' => array_map(fn (array $g) => [
+                    'id' => $g['id'], 'name' => $g['name'], 'diet_form' => $g['diet_form'], 'sales_net' => $g['sales_net'],
+                ], $zeile['gerichte']),
+            ];
+        }
+
+        $dishes = FoodAlchemistRecipe::whereIn('id', array_keys($recipeIds))->get()->all();
+
+        return [
+            'concept' => $concept->refresh(),
+            'assemblierung' => $assemblierung,
+            'protokoll' => $protokoll,
+            'kohaesion' => $this->pairing->menuCohesion($dishes),
+            'coverage' => $this->coverage->coverage($team, 'concept', $concept->id),
+        ];
     }
 
     // ── Brief-Pfad: Freitext → Gerüst (KI) → Konzept ───────────────────

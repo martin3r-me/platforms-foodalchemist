@@ -423,6 +423,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PhasePutTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptSlotVariantePostTool::class, // R4.4
                     \Platform\FoodAlchemist\Tools\ConceptsGenerateTool::class, // R6.1
+                    // 12·S2b (R2.4): Vorschau (read-only) + explizite Übernahme als draft
+                    \Platform\FoodAlchemist\Tools\AssemblierungPostTool::class,
+                    \Platform\FoodAlchemist\Tools\AssemblierungApplyTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplaenePostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanEintraegePostTool::class,
                 ] as $toolClass) {
