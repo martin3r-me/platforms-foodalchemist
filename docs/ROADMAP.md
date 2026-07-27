@@ -8,6 +8,20 @@
 
 ---
 
+## Update 2026-07-27 (Spec 08 · P6a — die Planungs-KI bekommt ihr Concepting-Wissen an die Leitung)
+
+**Dreiunddreißigster Bau-Lauf der Routine ([Spec 08](PLANUNG/08_Planungs_und_Kreativ_Ebene.md), Rest-Etappe P6 — erste Hälfte).** Die Kreativ-Divergenz am Foodbook-Kapitel (E6.4) zieht seit ihrem Bau Wissen über ein Routing, das in keiner Bestands-DB stand: `IdeenService::kiDivergenz` ruft `contextFor('foodbook.plan', …)`, der Seed dafür lebt in `KnowledgeImportCommand` und wird nur bei einem Wissens-Import gesetzt — am lokalen Stand also nie. Die KI plante bisher **ohne** Wissens-Block, und weil ein fehlender Block keine Fehlermeldung erzeugt, sondern nur eine schlechtere Antwort, war davon nichts zu sehen. Neu: eine Migration bringt die Routings `foodbook.plan`/`concept.plan` überall hin, und die neue Kategorie **`concept`** (Concepting-Handwerk: Dramaturgie, Gang-Aufbau, Anlass- und Gäste-Fit, Balance) hängt als eigener Block daran.
+
+**Eine Routing-Zeile allein wirkt nicht — das ist der eigentliche Befund.** `KnowledgeContextService::contextFor` kannte vier fest verdrahtete `category:mode`-Kombinationen; die Tabelle daneben nimmt freie Strings ohne FK und ohne Enum an. `concept:always` wäre also eine Zeile in der DB gewesen, die man sieht, für plausibel hält und die nichts tut. Deshalb ist der Konsum-Pfad (`conceptBlock()`) Teil derselben Etappe und nicht ein „danach": bei 10 Kategorien × 4 Modi sind heute 5 von 40 Kombinationen wirksam, und welche, steht nur im PHP (→ V-043).
+
+**Bewusst `always` statt `discovery`.** Concepting-Wissen beschreibt Handwerk, nicht Produkt. Eine Beschreibungs-Discovery filtert nach Zutaten und würde es genau dann verwerfen, wenn der Brief noch keine nennt — also im Normalfall der Planung. Der Deckel steht stattdessen als Daten in der Routing-Zeile (4 Docs × 4000 Zeichen), und der Block steht **vor** dem Food-Wissen: er sagt, wie ein Konzept gebaut ist, und rahmt die Zutaten-Ebene darunter.
+
+**Was der Spec-Text nicht mehr trifft:** die gemeldete `concept`/`konzept`-Dublette existiert am lokalen Stand nicht (9 Kategorien, keine konzeptseitige). Die Konsolidierung ist trotzdem in der Migration — defensiv, idempotent, nach dem Muster `skill`→`workflow` —, weil demo die deutsche Variante tragen kann und sonst eine zweite entstünde statt eingesammelt zu werden.
+
+**Suite 1471 · 1467 passed · 4 skipped · 0 Fail · 6904 Assertions (Vorlauf 1464/1460, +7 Tests), 11,1 Min.** **MCP-Lockstep im selben Commit** (Kategorie-Enums in `knowledge.SEARCH`/`LIST` + Hinweis in `knowledge.POST`). **MySQL-Smoke offen** (erste Migration dieses Programms auf einer Bestandstabelle — die geteilte Dev-DB wird von der Routine nicht blind mutiert; Dialekt am Text geprüft, SQLite-Strecke durch die Suite belegt). Verbesserungs-Backlog: **V-043** (Routing-Tabelle sieht aus wie Konfiguration, kennt aber nur fünf gültige Zeilen) + **V-044** (Kategorie-Enums der MCP-Wissens-Tools sind Handkopien einer zur Laufzeit pflegbaren Tabelle). **P6b bleibt offen und ist Dominique-Arbeit:** Vault-Ordner `07_WISSEN/07.01_…/Concepting/` anlegen, per Destillation (109/110/111) füllen, `foodalchemist:knowledge-import` — der Import-Pfad steht. Bis dahin ist die Kategorie leer, und leer heißt kein Prompt-Block (Invariante 6).
+
+---
+
 ## Update 2026-07-27 (Spec 03 · L8b-2 — der Ziel-VK wird gehalten, nicht durchgesetzt · L8 und Phase 4 komplett)
 
 **Zweiunddreißigster Bau-Lauf der Routine ([Spec 03](PLANUNG/03_KI_Erstell_Flaechen_512.md), Lücke L8 — letzter Teilschritt).** Der Generator konnte bis hierher alles außer dem, womit jedes Kundengespräch anfängt: „ich brauche ein Gericht für 8,50 €". Neu ist ein optionales Ziel-VK-Feld am VK-Generator, das zweimal wirkt — als Vorgabe im Vorschlag und als Maßstab nach der Kalkulation. **Damit ist L8 komplett und Phase 4 (L7 + L8, der Kaskaden-Umbau) abgeschlossen.**

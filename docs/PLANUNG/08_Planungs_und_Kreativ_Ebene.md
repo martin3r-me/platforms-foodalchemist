@@ -97,6 +97,17 @@ Kreatives Planen ist nur so gut wie sein Wissen. Die Planungs-Ebene zieht — wi
 | **P5** | KI-Divergenz sauber vom Grounding trennen (Prompt „erfinde frei" vs. Assembler „keine Erfindungen") + Anker-Graph als Ideen-Quelle | M |
 | **P6** | Wissens-Ebene: Concepting-Wissen befüllen (Kategorie `concept`, Destillation 109/110/111) + `concept`/`konzept`-Dublette konsolidieren + Routings `concept.plan`/`foodbook.plan` (Concepting- + Food-/Pairing-Wissen) | M |
 
+### P6 — Stand 2026-07-27 (Routine-Lauf 33)
+
+**P6a (Leitung) ✅ gebaut.** Kategorie `concept` + Routings `foodbook.plan`/`concept.plan` (je cross_cutting/always · domain/discovery · **concept/always** mit Deckel 4 Docs × 4000 Zeichen) liegen als Migration `2026_07_27_000001` in jeder Bestands-DB, `KnowledgeContextService::conceptBlock()` konsumiert sie, MCP-Enums (`knowledge.SEARCH`/`LIST`/`POST`) nachgezogen.
+
+Drei Befunde aus der Verifikation an HEAD, die den Spec-Text korrigieren:
+- **Die `concept`/`konzept`-Dublette gibt es am lokalen MySQL-Stand nicht** — dort existieren 9 Kategorien (`domain`, `cross_cutting`, `pairing`, `regelwerk`, `trend`, `kueche`, `niveau`, `skill` inaktiv, `workflow`), **keine** davon konzeptseitig. Die Konsolidierung ist trotzdem in der Migration (defensiv, idempotent), falls demo die deutsche Variante trägt.
+- **Die Routings waren nicht „zu ergänzen", sondern nicht angekommen.** `KnowledgeImportCommand::seedRoutings` kennt `foodbook.plan`/`concept.plan` seit E6.4 — gesetzt werden sie aber nur bei einem Wissens-Import. Folge: `IdeenService::kiDivergenz:276` rief `contextFor('foodbook.plan', …)` und bekam still einen leeren Block, obwohl der Docblock daneben das Routing als Teil des Kontext-Vertrags nennt. Deshalb Migration statt Seed-Ergänzung.
+- **Eine Routing-Zeile allein wirkt nicht** — `contextFor` kannte genau vier fest verdrahtete `category:mode`-Kombinationen; `concept:always` wäre eine Zeile ohne Konsument geblieben (→ V-043).
+
+**P6b (Befüllung) offen und bewusst nicht Routine-Scope:** Vault-Ordner `07_WISSEN/07.01_Lebensmittel_und_Gastronomie/Concepting/` anlegen, per Destillation (109/110/111) füllen, `foodalchemist:knowledge-import` — der Import-Pfad (`concept.`-Präfix) steht. Bis dahin ist die Kategorie leer, und leer heißt: **kein** Prompt-Block (Invariante 6), also kein Verhaltens-Unterschied für Bestands-Features.
+
 **Globale DoD:** Skizze committet/erdet NICHTS bis „Go"; nach „Go" ist alles geerdet (Bestand/Generator/LA-First/Backlog); kein Auto-Go (Mensch drückt); erfundene Gerichte werden nie ohne Erdung Teil eines echten Konzepts. **MCP-Pflicht (00-Invariante):** beide Planungs-Ebenen sind agentisch nutzbar — Tools für Plan anlegen/lesen/ergänzen (z.B. `concept_plans.POST/GET/PUT`, `foodbook_plans.*`) + divergente KI-Vorschläge; das „Go" bleibt auch via MCP ein expliziter, menschlich getriggerter Call. Tools entstehen MIT den Etappen, nicht retrofitted.
 
 ---
