@@ -388,6 +388,15 @@ return [
                 . 'portion_g (Portionsgewicht in GRAMM je Verkaufseinheit — die Menge, die '
                 . 'EIN Gast bekommt, nicht die Charge; ganzzahlig, plausibel 20–3000; '
                 . 'null nur wenn wirklich nicht bestimmbar)}. '
+                // Spec 03 L8b-2: Ziel-VK als CONSTRAINT, nicht als Ausgabe. Das Modell
+                // soll das Gericht auf den Preis hin BAUEN (Komponenten/Qualitäten/
+                // Grammatur) — den Preis selbst rechnet die Cost-plus-Maschine aus dem
+                // Wareneinsatz. Eine Preis-Zahl vom Modell wäre eine Behauptung.
+                . 'Ist parameter.ziel_vk_eur gesetzt, ist das der angestrebte NETTO-Verkaufspreis '
+                . 'je Portion: waehle Komponenten, Qualitaeten und Grammaturen so, dass der '
+                . 'Wareneinsatz zu diesem Preis passt (kleines Ziel => guenstigere Schnitte/'
+                . 'Saisonware/mehr Saettigungsbeilage; grosses Ziel => hochwertigere Komponenten '
+                . 'und mehr Aufwand). GIB KEINEN PREIS AUS — der VK wird gerechnet, nicht gesetzt. '
                 . 'Diät-harte Vorgaben sind VERBINDLICH.',
         ],
         'vk.speisen_klasse' => [

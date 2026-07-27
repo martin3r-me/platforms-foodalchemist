@@ -54,6 +54,23 @@ class VkGeneratorModal extends Component
         ['field' => 'bio_praeferenz', 'label' => 'Bio-Präferenz', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Egal'], 'hint' => ['konventionell' => 'Standard — kein Bio erzwungen (Default)', 'bio' => 'Bio bevorzugt (nur auf Ansage)', 'egal' => 'keine Präferenz']],
     ];
 
+    /**
+     * Spec 03 L8b-2 · optionaler Ziel-VK („Gericht für 8,50 €"), netto je Portion.
+     *
+     * Freitext statt `number`, weil hier deutsch getippt wird (8,50) — die
+     * Normalisierung macht `zielVkEur()`. Der Wert wird NICHT gespeichert: er ist
+     * eine Vorgabe für DIESEN Lauf (Prompt-Constraint) und danach der Maßstab, gegen
+     * den das Wirtschaftlichkeits-Glied sein Ergebnis hält. Der Preis wird nie auf
+     * das Ziel gedrückt — das wäre ein Solver (R2.4), und der VK stimmte dann
+     * zwar, aber die Marge wäre unsichtbar falsch.
+     *
+     * Bewusst NUR an dieser Fläche: das Basisrezept-Modal hat keine Verkaufseinheit,
+     * keinen VK und kein Wirtschaftlichkeits-Glied (das liefert dort `null`). Eine
+     * Pill ohne jede Folge wäre genau die stumme Bedienfläche, die L8b-1 gerade
+     * beseitigt hat.
+     */
+    public string $zielVk = '';
+
     /** 06·H4: opt-in Favoriten-Modus (Default aus → keine Versteifung). */
     public bool $useFavoritesList = false;
 
@@ -81,7 +98,7 @@ class VkGeneratorModal extends Component
     #[On('vk-generator-modal.oeffnen')]
     public function oeffnen(): void
     {
-        $this->reset('fehler', 'ergebnis', 'description', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex');
+        $this->reset('fehler', 'ergebnis', 'description', 'zielVk', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex');
         $this->dispatch('modal.open', name: 'vk-generator-modal');
     }
 
@@ -107,7 +124,43 @@ class VkGeneratorModal extends Component
         $parameter['use_favorites_list'] = $this->useFavoritesList; // 06·H4 opt-in (nach array_filter, sonst würde false gestrippt)
         $parameter['favorites_convenience_only'] = $this->useFavoritesList && $this->favoritesConvenienceOnly; // H4b
 
+        // L8b-2: unbrauchbare Eingabe wird hier GESAGT, nicht still verworfen —
+        // anders als beim KI-Vorschlag (`portionG`, L8b-1). Der Unterschied ist der
+        // Absender: ein Mensch, der 8,5 statt 850 meinte, kann korrigieren; ein
+        // Modell kann es nicht, und dort wäre eine Fehlermeldung nur ein Abbruch.
+        $zielVk = $this->zielVkEur();
+        if (trim($this->zielVk) !== '' && $zielVk === null) {
+            $this->fehler = 'Ziel-VK: bitte einen Netto-Preis je Portion zwischen 0,50 € und 500,00 € angeben (z. B. 8,50) — oder das Feld leer lassen.';
+
+            return;
+        }
+        if ($zielVk !== null) {
+            $parameter['ziel_vk_eur'] = $zielVk;
+        }
+
         $this->starteLauf($team->id, trim($this->description), $parameter, vkModus: true);
+    }
+
+    /**
+     * „8,50 €" → 8.5; alles außerhalb 0,50–500,00 € → null (der Aufrufer meldet es).
+     *
+     * Das Band deckt Fingerfood-Einheit bis Premium-Teller ab. Es sitzt hier und
+     * nicht im Service, weil nur die Eingabe-Fläche einen Absender hat, dem man
+     * antworten kann; der Service kennt nur „positiv oder keine Vorgabe".
+     */
+    private function zielVkEur(): ?float
+    {
+        $roh = str_replace([' ', '€'], '', trim($this->zielVk));
+        if ($roh === '') {
+            return null;
+        }
+        $roh = str_replace(',', '.', $roh);
+        if (! is_numeric($roh)) {
+            return null;
+        }
+        $eur = round((float) $roh, 2);
+
+        return $eur >= 0.5 && $eur <= 500.0 ? $eur : null;
     }
 
     protected function auswahlEvent(): string

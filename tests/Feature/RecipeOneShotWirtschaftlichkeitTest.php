@@ -197,3 +197,60 @@ it('L8b: fehlt die Standard-Darreichung, ist auch DAS eine benannte Lücke (vorh
         ->and($w['sales_net'])->toBeNull()
         ->and($w['fehler'])->toBeNull();          // eine Lücke, kein Fehlschlag
 });
+
+// ── L8b-2: der Ziel-VK wird gehalten, nicht durchgesetzt ────────────────────
+
+it('L8b-2: ohne Vorgabe bleibt der Ziel-Abgleich leer (Bestandspfad unverändert)', function () {
+    $w = $this->svc->anreichern($this->rootTeam, ($this->gericht)())['wirtschaftlichkeit'];
+
+    expect($w['ziel_vk'])->toBeNull()
+        ->and($w['ziel_delta_eur'])->toBeNull()
+        ->and($w['ziel_wareneinsatz_pct'])->toBeNull()
+        ->and($w['ziel_ampel'])->toBe('unbekannt')
+        ->and($w['sales_net'])->toBe(9.6);        // der Rest rechnet wie bisher
+});
+
+it('L8b-2: ein zu niedriger Ziel-VK wird NICHT durchgesetzt — gezeigt wird, was er kosten würde', function () {
+    // Kalkuliert: 9,60 € bei 2,40 € EK je Portion (W 25 %). Vorgabe 6,00 € ⇒ das
+    // Gericht ist zum Wunschpreis nicht zu diesem Aufschlag machbar: der Wareneinsatz
+    // stiege auf 40 %. Genau das ist die Aussage — der Preis bleibt bei 9,60 €.
+    $r = ($this->gericht)();
+
+    $w = $this->svc->anreichern($this->rootTeam, $r, 6.0)['wirtschaftlichkeit'];
+
+    expect($w['sales_net'])->toBe(9.6)            // NICHT auf 6,00 gedrückt (kein Solver)
+        ->and($w['ziel_vk'])->toBe(6.0)
+        ->and($w['ziel_delta_eur'])->toBe(3.6)    // Ist − Ziel, positiv = zu teuer
+        ->and($w['ziel_wareneinsatz_pct'])->toBe(40.0)
+        ->and($w['ziel_ampel'])->toBe('gelb')     // > 30 % Ziel, ≤ 1,5 × ⇒ Warnung
+        ->and($w['ampel'])->toBe('gruen');        // die Ist-Ampel bleibt davon unberührt
+
+    // Und der Preis am Objekt hat sich nicht bewegt — die Vorgabe wird nirgends geschrieben.
+    expect((float) $r->fresh()->sales_net)->toBe(9.6);
+});
+
+it('L8b-2: liegt der kalkulierte VK unter dem Ziel, ist das Ziel tragfähig (negatives Delta)', function () {
+    $w = $this->svc->anreichern($this->rootTeam, ($this->gericht)(), 12.0)['wirtschaftlichkeit'];
+
+    expect($w['ziel_delta_eur'])->toBe(-2.4)
+        ->and($w['ziel_wareneinsatz_pct'])->toBe(20.0)   // 2,40 / 12,00
+        ->and($w['ziel_ampel'])->toBe('gruen');
+});
+
+it('L8b-2: ohne kalkulierten VK bleibt das Delta leer — die Vorgabe steht trotzdem', function () {
+    // Keine Aufschlagsklasse ⇒ kein Ist-Preis. Der Abgleich „was würde 8,50 € bedeuten"
+    // hängt nur am EK je Portion und ist deshalb gerade dann nützlich.
+    $w = $this->svc->anreichern($this->rootTeam, ($this->gericht)(['dish_class_id' => null]), 8.5)['wirtschaftlichkeit'];
+
+    expect($w['sales_net'])->toBeNull()
+        ->and($w['ziel_vk'])->toBe(8.5)
+        ->and($w['ziel_delta_eur'])->toBeNull()
+        ->and($w['luecken'])->toBe(['aufschlagsklasse']);
+});
+
+it('L8b-2: eine nicht-positive Vorgabe ist keine Vorgabe (Schutz im Nenner)', function () {
+    $w = $this->svc->anreichern($this->rootTeam, ($this->gericht)(), 0.0)['wirtschaftlichkeit'];
+
+    expect($w['ziel_vk'])->toBeNull()
+        ->and($w['ziel_wareneinsatz_pct'])->toBeNull();
+});

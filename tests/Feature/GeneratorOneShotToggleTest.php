@@ -303,3 +303,93 @@ it('L8b: das Basisrezept-Modal zeigt keine Wirtschaftlichkeit (Basisrezept hat k
         ->assertDontSee('Kein Auto-VK')
         ->assertDontSee('/ Portion');
 });
+
+// ── L8b-2: die Ziel-VK-Pill (Eingabe) und ihr Abgleich (Ergebnis) ───────────
+
+it('L8b-2: der Ziel-VK geht als Constraint in den Lauf — deutsch getippt, normalisiert', function () {
+    Livewire::test(VkGeneratorModal::class)
+        ->set('description', 'Vorspeise mit gebeiztem Lachs')
+        ->set('zielVk', '8,50 €')
+        ->call('generieren')
+        ->assertSet('laeuft', true);
+
+    // Ein Transportweg für beides: Prompt-Constraint UND Maßstab für den Abgleich.
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['ziel_vk_eur'] ?? null) === 8.5);
+});
+
+it('L8b-2: leer bleibt leer — kein Constraint, kein Abgleich', function () {
+    Livewire::test(VkGeneratorModal::class)
+        ->set('description', 'Irgendein Teller')
+        ->call('generieren');
+
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ! array_key_exists('ziel_vk_eur', $job->parameter));
+});
+
+it('L8b-2: eine unplausible Eingabe wird gesagt, nicht still verworfen (Absender ist ein Mensch)', function () {
+    // 850 statt 8,50 wäre kein Fehler, sondern eine Vorgabe, gegen die nachher jedes
+    // Ergebnis „viel zu billig" aussieht. Also: Rückfrage statt Lauf.
+    Livewire::test(VkGeneratorModal::class)
+        ->set('description', 'Teller')
+        ->set('zielVk', '850')
+        ->call('generieren')
+        ->assertSet('laeuft', false)
+        ->assertSee('bitte einen Netto-Preis je Portion');
+
+    Queue::assertNothingPushed();
+});
+
+it('L8b-2: der Abgleich steht am Ergebnis — Vorgabe, Abstand und was der Zielpreis kostet', function () {
+    $comp = Livewire::test(VkGeneratorModal::class)
+        ->set('description', 'Rinderrücken mit Jus')
+        ->set('zielVk', '6,00')
+        ->call('generieren');
+
+    Cache::put(GenerateRecipeJob::cacheKey($comp->get('runId')), [
+        'status' => 'done', 'recipe_id' => 65, 'name' => '[TEL] Rinderrücken | Jus',
+        'statistik' => ['bestand_gp' => 3, 'bestand_sub' => 1, 'stub_neu' => 0, 'stubs' => [], 'offen' => 0],
+        'offene' => [],
+        'anreicherung' => [
+            'run_id' => 25, 'schritte' => [], 'uebersprungen' => [], 'uebernommen' => 0, 'offen' => 0, 'fehler' => null,
+            'wirtschaftlichkeit' => [
+                'sales_net' => 9.6, 'ek_total_eur' => 24.0, 'ek_pro_portion' => 2.4,
+                'wareneinsatz_pct' => 25.0, 'ziel_pct' => 30.0, 'ampel' => 'gruen',
+                'portion_g' => 200.0, 'aufschlagsklasse' => 'ALC', 'vorlaeufig' => false,
+                'luecken' => [], 'signal' => false, 'ziel_vk' => 6.0, 'ziel_delta_eur' => 3.6,
+                'ziel_wareneinsatz_pct' => 40.0, 'ziel_ampel' => 'gelb', 'fehler' => null,
+            ],
+        ],
+    ], now()->addMinutes(5));
+
+    $comp->call('pruefeErgebnis')
+        ->assertSee('Ziel-VK 6,00 €')
+        ->assertSee('bei Ziel-VK: W 40,0 % / Ziel 30 %')
+        ->assertSee('3,60 € über dem Ziel')
+        ->assertSee('VK 9,60 €');                    // der Ist-Preis steht unverändert daneben
+});
+
+it('L8b-2: ohne Vorgabe erscheint keine Ziel-Zeile', function () {
+    $comp = Livewire::test(VkGeneratorModal::class)
+        ->set('description', 'Teller ohne Zielpreis')
+        ->call('generieren');
+
+    Cache::put(GenerateRecipeJob::cacheKey($comp->get('runId')), [
+        'status' => 'done', 'recipe_id' => 66, 'name' => '[TEL] Teller',
+        'statistik' => ['bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 0, 'stubs' => [], 'offen' => 0],
+        'offene' => [],
+        'anreicherung' => [
+            'run_id' => 26, 'schritte' => [], 'uebersprungen' => [], 'uebernommen' => 0, 'offen' => 0, 'fehler' => null,
+            'wirtschaftlichkeit' => [
+                'sales_net' => 9.6, 'ek_total_eur' => 24.0, 'ek_pro_portion' => 2.4,
+                'wareneinsatz_pct' => 25.0, 'ziel_pct' => 30.0, 'ampel' => 'gruen',
+                'portion_g' => 200.0, 'aufschlagsklasse' => 'ALC', 'vorlaeufig' => false,
+                'luecken' => [], 'signal' => false, 'ziel_vk' => null, 'ziel_delta_eur' => null,
+                'ziel_wareneinsatz_pct' => null, 'ziel_ampel' => 'unbekannt', 'fehler' => null,
+            ],
+        ],
+    ], now()->addMinutes(5));
+
+    $comp->call('pruefeErgebnis')
+        ->assertSee('VK 9,60 €')
+        ->assertDontSee('Ziel-VK 6,00 €')
+        ->assertDontSee('bei Ziel-VK');
+});

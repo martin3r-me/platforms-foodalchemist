@@ -92,6 +92,13 @@
                     <p class="text-[11px] text-gray-500 mt-1">{{ $parameter['aroma'] === '' ? 'Keine Aroma-Vorgabe — KI wählt passend zur Beschreibung' : '' }}</p>
                 </div>
 
+                {{-- Spec 03 L8b-2: Ziel-VK als Vorgabe für den Vorschlag (kein Solver) --}}
+                <div data-richtung="ziel-vk">
+                    <p class="text-xs font-medium text-gray-900 mb-1">🎯 Ziel-VK (optional)</p>
+                    <input type="text" wire:model="zielVk" placeholder="z. B. 8,50" class="{{ $input }} !py-1.5" data-vk-ziel-vk />
+                    <p class="text-[11px] text-gray-500 mt-1">Netto je Portion. Geht als Vorgabe in den Vorschlag (Komponenten, Qualität, Grammatur) und wird nach der Kalkulation gegen den gerechneten VK gehalten — der Preis wird nicht auf das Ziel gedrückt.</p>
+                </div>
+
                 <div class="md:col-span-2" data-richtung="diaet">
                     <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
                     <div class="flex flex-wrap gap-1.5">

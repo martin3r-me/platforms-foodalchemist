@@ -161,6 +161,27 @@ it('L5: Zutat ohne Treffer wird NICHT geraten — kommt als offene Zeile mit Han
         ->and(FoodAlchemistRecipeIngredient::where('recipe_id', $res->data['recipe']['id'])->first()->match_method->value)->toBe('unmatched');   // Lücke bleibt Lücke
 });
 
+it('L8b-2: ziel_vk ausserhalb des Bandes wird abgewiesen — kein Lauf gegen eine Fantasie-Vorgabe', function () {
+    foreach ([0.2, 900.0, 'acht'] as $unsinn) {
+        $res = $this->registry->get('foodalchemist.recipes.GENERATE')
+            ->execute(['description' => 'Teller', 'vk' => true, 'ziel_vk' => $unsinn], $this->kontext);
+
+        expect($res->success)->toBeFalse()
+            ->and($res->errorCode)->toBe('VALIDATION_ERROR');
+    }
+});
+
+it('L8b-2: ziel_vk ohne vk=true ist ein Fehler, keine stille Verwerfung', function () {
+    // Ein Basisrezept hat keinen Verkaufspreis. Würde die Vorgabe hier nur ignoriert,
+    // hielte der Client das Ergebnis für eine Antwort auf seinen Zielpreis.
+    $res = $this->registry->get('foodalchemist.recipes.GENERATE')
+        ->execute(['description' => 'Kalbsfond', 'ziel_vk' => 8.5], $this->kontext);
+
+    expect($res->success)->toBeFalse()
+        ->and($res->errorCode)->toBe('VALIDATION_ERROR')
+        ->and($res->error)->toContain('vk=true');
+});
+
 it('L5: leere description wird sauber abgewiesen (kein LLM-Call)', function () {
     $res = $this->registry->get('foodalchemist.recipes.GENERATE')->execute(['description' => '   '], $this->kontext);
 

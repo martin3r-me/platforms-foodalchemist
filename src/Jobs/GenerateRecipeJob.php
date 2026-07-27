@@ -100,12 +100,26 @@ class GenerateRecipeJob implements ShouldQueue
                 // L7a: der Pass wirft nie — ein Fehlschlag steht als `fehler` im
                 // Ergebnis, das Rezept bleibt trotzdem `done`.
                 $payload['anreicherung'] = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
-                    ->anreichern($team, $r['recipe']);
+                    ->anreichern($team, $r['recipe'], $this->zielVk());
             }
             $this->schreibe($payload);
         } catch (\Throwable $e) {
             $this->schreibe(['status' => 'error', 'fehler' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Spec 03 L8b-2: der Ziel-VK reist im Parameter-Bündel mit (dort ist er der
+     * Prompt-Constraint) und wird danach an das Wirtschaftlichkeits-Glied gereicht,
+     * das ihn gegen den gerechneten Preis hält. Kein eigener Konstruktor-Parameter:
+     * es ist dieselbe Vorgabe, einmal für die KI und einmal für den Abgleich —
+     * zwei Transportwege würden sie auseinanderlaufen lassen.
+     */
+    private function zielVk(): ?float
+    {
+        $roh = $this->parameter['ziel_vk_eur'] ?? null;
+
+        return is_numeric($roh) ? (float) $roh : null;
     }
 
     /** Job-Tod (Timeout/Fatal außerhalb des handle-try) → Status trotzdem setzen, sonst pollt die UI ewig. */

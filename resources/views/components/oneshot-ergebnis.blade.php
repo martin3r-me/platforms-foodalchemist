@@ -69,6 +69,9 @@
         @if(($anreicherung['wirtschaftlichkeit'] ?? null) !== null)
             @php($w = $anreicherung['wirtschaftlichkeit'])
             @php($lueckenText = ['portion' => 'Portionsgröße', 'aufschlagsklasse' => 'Aufschlagsklasse', 'darreichung' => 'Standard-Darreichung'])
+            {{-- EINE Ampel-Zuordnung für beide W%-Pillen (Ist und „bei Ziel-VK") — die
+                 Leiter selbst liegt im Service, hier wird sie nur eingefärbt. --}}
+            @php($ampelPill = ['gruen' => $variantPill['success'], 'gelb' => $variantPill['warning'], 'rot' => $variantPill['danger']])
             <div class="mt-2" data-oneshot-wirtschaftlichkeit>
                 @if(($w['fehler'] ?? null) !== null)
                     <p class="text-[11px] text-amber-700" data-oneshot-wirtschaft-fehler>
@@ -81,7 +84,7 @@
                         @endif
                         @if(($w['wareneinsatz_pct'] ?? null) !== null)
                             {{-- Dieselbe Leiter wie das Signal (L8a Entscheidung 4): über Ziel = gelb, über 1,5 × Ziel = rot --}}
-                            <span class="{{ $pill }} {{ ['gruen' => $variantPill['success'], 'gelb' => $variantPill['warning'], 'rot' => $variantPill['danger']][$w['ampel'] ?? ''] ?? $variantPill['secondary'] }}" data-oneshot-we>
+                            <span class="{{ $pill }} {{ $ampelPill[$w['ampel'] ?? ''] ?? $variantPill['secondary'] }}" data-oneshot-we>
                                 W {{ number_format((float) $w['wareneinsatz_pct'], 1, ',', '.') }} % / Ziel {{ number_format((float) ($w['ziel_pct'] ?? 0), 0, ',', '.') }} %
                             </span>
                         @endif
@@ -104,6 +107,39 @@
                         <p class="text-[11px] text-amber-700 mt-0.5" data-oneshot-wirtschaft-signal>
                             Wareneinsatz über Ziel — als Signal im Cockpit vermerkt.
                         </p>
+                    @endif
+
+                    {{-- L8b-2: die Vorgabe aus der Eingabe, ehrlich gegen das Ergebnis
+                         gehalten. Der Preis wurde NICHT auf das Ziel gedrückt (kein
+                         Solver) — gezeigt wird der Abstand und, wichtiger, was der
+                         Zielpreis für den Wareneinsatz bedeuten würde. --}}
+                    @if(($w['ziel_vk'] ?? null) !== null)
+                        <div class="mt-1.5 pt-1.5 border-t border-black/5" data-oneshot-ziel-vk>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <span class="{{ $pill }} {{ $variantPill['info'] }}">🎯 Ziel-VK {{ number_format((float) $w['ziel_vk'], 2, ',', '.') }} €</span>
+                                @if(($w['ziel_wareneinsatz_pct'] ?? null) !== null)
+                                    <span class="{{ $pill }} {{ $ampelPill[$w['ziel_ampel'] ?? ''] ?? $variantPill['secondary'] }}" data-oneshot-ziel-we>
+                                        bei Ziel-VK: W {{ number_format((float) $w['ziel_wareneinsatz_pct'], 1, ',', '.') }} % / Ziel {{ number_format((float) ($w['ziel_pct'] ?? 0), 0, ',', '.') }} %
+                                    </span>
+                                @endif
+                            </div>
+                            @if(($w['ziel_delta_eur'] ?? null) !== null)
+                                @php($delta = (float) $w['ziel_delta_eur'])
+                                <p class="text-[11px] {{ $delta > 0 ? 'text-amber-700' : 'text-gray-600' }} mt-0.5" data-oneshot-ziel-delta>
+                                    @if($delta > 0)
+                                        Kalkuliert liegt der VK {{ number_format($delta, 2, ',', '.') }} € über dem Ziel — zum Zielpreis verkauft steigt der Wareneinsatz entsprechend. Nicht gedrückt: der Preis bleibt gerechnet, die Entscheidung liegt bei dir.
+                                    @elseif($delta < 0)
+                                        Kalkuliert liegt der VK {{ number_format(abs($delta), 2, ',', '.') }} € unter dem Ziel — der Zielpreis ist mit dieser Aufschlagsklasse tragfähig.
+                                    @else
+                                        Kalkulierter VK und Ziel treffen sich.
+                                    @endif
+                                </p>
+                            @else
+                                <p class="text-[11px] text-gray-500 mt-0.5" data-oneshot-ziel-offen>
+                                    Noch kein kalkulierter VK zum Vergleichen — erst die Lücke oben schließen.
+                                </p>
+                            @endif
+                        </div>
                     @endif
                 @endif
             </div>

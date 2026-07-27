@@ -71,9 +71,14 @@ class RecipeOneShotService
      * gibt es hier keinen zweiten Ebenen-Zweig — dieselbe Regel wie im
      * Rezept-Copilot.
      *
+     * @param ?float $zielVk L8b-2: angestrebter Netto-VK je Portion aus der Eingabe
+     *                       (Generator-Pill / MCP). Reines Durchreich-Datum — es wird
+     *                       NIRGENDS geschrieben, sondern nach der Kalkulation gegen
+     *                       das Ergebnis gehalten (kein Solver, s. `zielAbgleich`).
+     *
      * @return array{run_id: ?int, schritte: list<string>, uebersprungen: list<string>, uebernommen: int, offen: int, fehler: ?string, kohaerenz_urteil: ?array{score: ?int, label: ?string, schwachstelle: ?string, fehler: ?string}, wirtschaftlichkeit: ?array}
      */
-    public function anreichern(Team $team, FoodAlchemistRecipe $recipe): array
+    public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null): array
     {
         $alle = $recipe->is_sales_recipe ? BulkEnrichService::SCHRITTE_VK : BulkEnrichService::SCHRITTE;
         $schritte = $this->bulk->luecken($recipe, $alle);
@@ -109,7 +114,7 @@ class RecipeOneShotService
         }
 
         $ergebnis['kohaerenz_urteil'] = $this->kohaerenzGlied($team, $recipe);
-        $ergebnis['wirtschaftlichkeit'] = $this->wirtschaftlichkeitsGlied($team, $recipe);
+        $ergebnis['wirtschaftlichkeit'] = $this->wirtschaftlichkeitsGlied($team, $recipe, $zielVk);
 
         return $ergebnis;
     }
@@ -203,25 +208,43 @@ class RecipeOneShotService
      *    kein Gegenstück, und eine zweite Schwelle hieße: das Generator-Ergebnis
      *    sagt „grün", das Signal-Cockpit sagt „Warnung".
      *
+     * 5. **L8b-2: der Ziel-VK wird gehalten, nicht durchgesetzt.** Gibt der Mensch
+     *    „Gericht für 8,50 €" vor, geht das als Vorgabe in den Prompt (dort steuert
+     *    es Komponenten-Wahl und Grammatur) — der gerechnete VK bleibt danach
+     *    unangetastet. Die Alternative wäre, den Preis auf das Ziel zu setzen; dann
+     *    stimmte die Zahl und die Marge wäre unsichtbar falsch. Stattdessen wird die
+     *    Frage beantwortet, die wirklich zählt: *was würde der Zielpreis bedeuten?*
+     *    → derselbe Wareneinsatz-Bruch, nur mit dem Ziel-VK im Nenner, beurteilt von
+     *    DERSELBEN Ampel-Leiter (Entscheidung 4). Damit gibt es hier keine eigene
+     *    Toleranz-Schwelle: „Ziel erreichbar" heißt nichts anderes als „bei diesem
+     *    Preis liegt der Wareneinsatz noch im Ziel". Das ist die Brücke zur
+     *    R2.4-Solver-Denke — bewusst ohne Solver.
+     *
      * Nie werfen — ein Rezept ohne Preis ist eine Lücke, kein gescheiterter Lauf.
      *
      * @return array{sales_net: ?float, ek_total_eur: ?float, ek_pro_portion: ?float,
      *               wareneinsatz_pct: ?float, ziel_pct: float, ampel: string, portion_g: ?float,
      *               aufschlagsklasse: ?string, vorlaeufig: bool, luecken: list<string>,
-     *               signal: bool, fehler: ?string}|null
+     *               signal: bool, ziel_vk: ?float, ziel_delta_eur: ?float,
+     *               ziel_wareneinsatz_pct: ?float, ziel_ampel: string, fehler: ?string}|null
      */
-    private function wirtschaftlichkeitsGlied(Team $team, FoodAlchemistRecipe $recipe): ?array
+    private function wirtschaftlichkeitsGlied(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null): ?array
     {
         if (! $recipe->is_sales_recipe) {
             return null;                                          // Basisrezept hat keinen VK
         }
 
         $ziel = $this->settings->zielWareneinsatzPct($team);
+        // Nicht-positive Vorgaben (0, negativ) sind keine Vorgabe — die Bänder stehen
+        // an den Eingängen (Modal/MCP), hier nur der Schutz gegen Unsinn im Nenner.
+        $zielVk = $zielVk !== null && $zielVk > 0 ? round($zielVk, 2) : null;
         $leer = [
             'sales_net' => null, 'ek_total_eur' => null, 'ek_pro_portion' => null,
             'wareneinsatz_pct' => null, 'ziel_pct' => $ziel, 'ampel' => 'unbekannt',
             'portion_g' => null, 'aufschlagsklasse' => null, 'vorlaeufig' => false,
-            'luecken' => [], 'signal' => false, 'fehler' => null,
+            'luecken' => [], 'signal' => false, 'ziel_vk' => $zielVk,
+            'ziel_delta_eur' => null, 'ziel_wareneinsatz_pct' => null, 'ziel_ampel' => 'unbekannt',
+            'fehler' => null,
         ];
 
         try {
@@ -283,6 +306,13 @@ class RecipeOneShotService
             $signal = $we !== null && $we > $ziel
                 && $this->detektor->wareneinsatzUeberZielFuer($team, $recipe, $ziel, $we);
 
+            // ── 5. L8b-2: Ist gegen Ziel — was WÜRDE der Zielpreis bedeuten? ──
+            // Der Wareneinsatz am Ziel-VK braucht nur den EK je Portion, nicht den
+            // gerechneten VK: er steht auch dann, wenn der Ist-Preis noch an einer
+            // Lücke hängt (fehlende Aufschlagsklasse). Genau dann ist er am
+            // nützlichsten — er sagt, ob das Ziel überhaupt tragfähig ist.
+            $zielWe = $zielVk !== null ? ($this->marge->marge($zielVk, $ekPortion)['wareneinsatz_pct'] ?? null) : null;
+
             return [
                 'sales_net' => $vk,
                 'ek_total_eur' => $recipe->ek_total_eur !== null ? (float) $recipe->ek_total_eur : null,
@@ -297,6 +327,13 @@ class RecipeOneShotService
                 'vorlaeufig' => $gesamt > 0 && $bepreist < $gesamt,
                 'luecken' => $luecken,
                 'signal' => $signal,
+                // L8b-2: Vorgabe, Abstand und Folge — drei Zahlen, keine Wertung
+                // darüber hinaus. `ziel_delta_eur` ist Ist − Ziel: positiv = das
+                // Gericht ist zum Zielpreis (noch) nicht kalkulierbar.
+                'ziel_vk' => $zielVk,
+                'ziel_delta_eur' => $zielVk !== null && $vk !== null ? round($vk - $zielVk, 2) : null,
+                'ziel_wareneinsatz_pct' => $zielWe,
+                'ziel_ampel' => $this->weAmpel($zielWe, $ziel),
                 'fehler' => null,
             ];
         } catch (\Throwable $e) {
