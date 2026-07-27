@@ -8,6 +8,22 @@
 
 ---
 
+## Update 2026-07-27 (Spec 12 · S2a-1b — EINE Preis-Wahrheit im Kandidaten-Pool)
+
+**Vierundvierzigster Bau-Lauf der Routine ([Spec 12](PLANUNG/12_Wirtschaftlichkeits_Intelligenz_R2-Rest.md), Etappe S2a-1b, dritter von vier Punkten) — Commit `241c44d`.** Der Kandidaten-Pool filterte hart auf `recipes.sales_net` (den Legacy-Spiegel), während Kalkulation, W%-Ampel und die neue Wirtschafts-Achse längst über die Standard-Darreichung lesen (M2-Preis-Wahrheit). Zwei Preise im selben Kandidaten-Array, und der harte Filter las den älteren. Seit diesem Lauf ist es **eine** Zahl: die Leiter „Standard-Darreichung → Legacy-Spalte → keine Zahl" sitzt als `DarreichungResolver::vkNettoMitQuelle()` an einer Stelle, der Pool lädt die Darreichung **immer** eager (nicht mehr nur im Wirtschafts-Modus) und speist daraus `sales_net`, das neue `preis_quelle` **und** die DB-Zielfunktion.
+
+**Warum das vor dem Solver liegen musste:** R2.4 maximiert Deckungsbeitrag auf der Resolver-Zahl, hätte aber aus einer Menge gewählt, die auf der Legacy-Zahl **hart** vorgefiltert wurde. Ein Optimum unter zwei Preisbegriffen ist nicht erklärbar — und DoD-Punkt 3 („welche Constraints sind bindend") wäre falsch beantwortet worden.
+
+**Der aufschlussreichste der drei vorher roten Tests ist der Preisfilter.** Band 15–25 €, drei Gerichte: vorher überlebte **genau das falsche** — dasjenige, dessen Darreichung 40 € kostet, dessen Legacy-Spalte aber bei 20 € stehengeblieben war; die zwei korrekt bei 20/22 € bepreisten fielen lautlos aus dem Pool, und die Leer-Begründung hätte die Bänder genannt, nicht die Quelle.
+
+**Messung zuerst, wie die Etappe verlangt (Dev-MySQL, read-only):** von 26 VK-Gerichten haben **26** eine Standard-Darreichung, **0** einen abweichenden Preis, **1** gar keinen. Der Umbau ist im Bestand also ein **Nulldurchgang** — kein Gericht wechselt seinen Preis. Der Smoke gegen den echten Code-Pfad bestätigt: 26/26 identisch alt/neu, 0 Kandidaten mit zwei Preisen, Quellen **25× `darreichung` · 1× `keine` · 0× `legacy`**. Dieses `0× legacy` ist der eigentliche Befund: der Pool las durchgehend eine Spalte, die bei keinem einzigen Gericht die Wahrheit ist — sie stimmte nur überall überein (→ **D-006**: der Spiegel hält nicht, weil er gepflegt wird, sondern weil noch niemand `updateVk` benutzt hat, ohne ihn nachzuziehen).
+
+**Golden-Test vor dem Umbau** (`PoolPreisWahrheitGoldenTest`, 5 Tests): Bestandsfall vorher grün und unverändert geblieben (Freeze), die drei Verschiebungs-/EINE-Zahl-Erwartungen vorher **rot** = Gegenbeweis. Ein Bestands-Test zog mit: das Query-Delta der DB-Achse ist **1 → 0**, weil die Relation ohnehin eager ist — umgestellt **mit** Begründung, denn ein Delta > 0 wäre ab hier ein Rückfall in „zwei Preis-Wahrheiten, je nach Modus".
+
+**Suite 1563 · 1559 passed · 4 skipped · 0 Fail · 7363 Assertions (Vorlauf 1558/1554/7347 an `e37fd32`; +5 Tests, +16 Assertions), 12,3 Min.** Kein Schema-Change, keine Migration; **Browser-Klickstrecke entfällt** (Service-Ebene, im Bestand ändert sich keine angezeigte Zahl); **kein MCP-Lockstep-Anlass** (`preis_quelle` ist ein internes Pool-Feld, kein Tool-Schema kennt es). Verbesserungs-Backlog: **V-059** — `standardFuer()` hat einen zweiten Ast („keine `is_standard`-Zeile ⇒ erste Darreichung nach `id`"), der nur bei *nicht* geladener Relation erreichbar ist; damit hängt „welche Darreichung gilt" am Eager-Load des Aufrufers. Latent (0 von 31 Gerichten betroffen, kein Unique-Index), Auflösung = Verhaltenswechsel auf einer Auswahl-Regel ⇒ **22·H2/H5**. Nächster Schritt: **Punkt 4 von 4** — V-049 `recomputeMany` (löst die Kappung `MAX_RECOMPUTE=1000` ab) + V-050 `?array $gpIds`.
+
+---
+
 ## Update 2026-07-27 (Spec 12 · S2a-1b — die Anker-Auflösung batcht: konstante Query-Zahl, und die Auswahl bleibt in SQL)
 
 **Dreiundvierzigster Bau-Lauf der Routine ([Spec 12](PLANUNG/12_Wirtschaftlichkeits_Intelligenz_R2-Rest.md), Etappe S2a-1b, zweiter von vier Punkten).** Der Golden-Test aus dem Vorlauf hat die Auswahl eingefroren — jetzt der Umbau, gegen den er gebaut war: `PairingService::resolveRecipeAnchorsMany(iterable $recipes)`. Die Anker-Auflösung lief bisher je Gericht und darin je Zutaten-Zeile mit eigenen Mapping-Lookups; bei 1.000 Gerichten × ~12 Zutaten sind das ~12.000 Einzel-Queries. Der erste Halbschritt (`058dd15`) hat nur die Per-Gericht-Ebene erwischt — 38 → 27 —, weil er mit **zutatenlosen** Gerichten gemessen wurde.
