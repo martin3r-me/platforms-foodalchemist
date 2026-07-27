@@ -19,6 +19,13 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
  */
 class SupplierItemService
 {
+    /**
+     * Erlaubte Kalkulationseinheiten am LA (GL-11). Bewusst hier als Konstante und
+     * nicht als Literal in `create()`: der Kanal-B-Datei-Import (Spec 13 · S1a) prüft
+     * dieselbe Liste, und zwei Whitelists für dieselbe Regel driften auseinander.
+     */
+    public const UNIT_CODES = ['kg', 'l', 'Stk'];
+
     public function paginateForSupplier(Team $team, int $supplierId, array $filters = [], int $perPage = 25): LengthAwarePaginator
     {
         $q = trim($filters['q'] ?? '');
@@ -218,7 +225,7 @@ class SupplierItemService
             'designation' => $designation,
             'article_number' => ($input['article_number'] ?? '') ?: null,
             'qty' => ($input['qty'] ?? '') !== '' ? (float) str_replace(',', '.', (string) $input['qty']) : null,
-            'unit_code' => in_array($input['unit_code'] ?? '', ['kg', 'l', 'Stk'], true) ? $input['unit_code'] : null,
+            'unit_code' => in_array($input['unit_code'] ?? '', self::UNIT_CODES, true) ? $input['unit_code'] : null,
         ]);
     }
 

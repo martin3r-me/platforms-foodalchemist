@@ -90,6 +90,7 @@ trait SeedsTeamHierarchy
         \Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistDishIdea::flushTeamAncestryCache();
         \Platform\FoodAlchemist\Models\FoodAlchemistDishIdeaGroup::flushTeamAncestryCache();
+        \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::flushTeamAncestryCache(); // Spec 13 S1a (Kanal-B-Import prüft D1 am LA)
 
         // Modul-Routen für Full-Page-Komponenten: der ServiceProvider registriert sie nur
         // hinter PlatformCore/ModuleRouter (modules-Tabelle beim Boot noch leer) — ohne sie

@@ -79,6 +79,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\FavoriteGpsCommand::class,
                 \Platform\FoodAlchemist\Console\BackfillKapitelZieleCommand::class,
                 \Platform\FoodAlchemist\Console\RecipeFindingsCommand::class,
+                \Platform\FoodAlchemist\Console\ImportArticlesCommand::class,
             ]);
         }
     }
