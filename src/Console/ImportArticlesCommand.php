@@ -8,7 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\FileArticleImportService;
 
 /**
- * Spec 13 · S1a — Kanal B: Artikel-Datei eines Lieferanten einlesen.
+ * Spec 13 · S1a/S1b — Kanal B: Artikel-Datei eines Lieferanten einlesen.
  *
  * Bewusst **dry-run als Default**: ein Import berührt den Katalog, aus dem jede
  * Kalkulation ihren EK zieht. Geschrieben wird nur mit `--apply`; die Ausgabe ist
@@ -31,7 +31,7 @@ class ImportArticlesCommand extends Command
         {--apply : wirklich schreiben}
         {--zeilen=25 : höchstens so viele Zeilen-Befunde ausgeben}';
 
-    protected $description = 'Kanal B (Spec 13): Lieferanten-Artikel aus einer CSV-Datei upserten (Preis/Nährwerte/Allergene folgen in S1b/S1c).';
+    protected $description = 'Kanal B (Spec 13): Lieferanten-Artikel + EK aus einer CSV-Datei upserten, inkl. Recompute-/Signal-Kette (Nährwerte/Allergene folgen in S1c).';
 
     public function handle(FileArticleImportService $import): int
     {
@@ -82,7 +82,8 @@ class ImportArticlesCommand extends Command
         $max = max(1, (int) $this->option('zeilen'));
         $gezeigt = 0;
         foreach ($bericht['befunde'] as $b) {
-            if ($b['status'] === 'unveraendert') {
+            $preisEreignis = isset($b['preis']) && $b['preis']['status'] !== 'unveraendert';
+            if ($b['status'] === 'unveraendert' && ! $preisEreignis) {
                 continue; // Rauschen: der Normalfall eines Wiederholungslaufs
             }
             if ($gezeigt++ >= $max) {
@@ -96,6 +97,22 @@ class ImportArticlesCommand extends Command
                 $zeile .= ' · ' . $b['grund'];
             }
             $b['status'] === 'fehler' ? $this->warn($zeile) : $this->line($zeile);
+            if (isset($b['preis'])) {
+                $p = $b['preis'];
+                $text = match ($p['status']) {
+                    'neu' => 'Preis neu: ' . number_format((float) $p['neu'], 2, ',', '.') . ' €',
+                    // ASCII-Pfeil mit Absicht: der Unicode-Pfeil kam in der Konsolen-
+                    // Ausgabe nicht durch (die € daneben schon) — ein verschluckter
+                    // Pfeil las sich wie „37,99 99,99" und damit wie zwei Preise.
+                    'geaendert' => 'Preis ' . number_format((float) $p['alt'], 2, ',', '.') . ' EUR -> '
+                        . number_format((float) $p['neu'], 2, ',', '.') . ' EUR',
+                    'fehler' => 'Preis NICHT gesetzt: ' . $p['grund'],
+                    default => null,
+                };
+                if ($text !== null) {
+                    $p['status'] === 'fehler' ? $this->warn("      € {$text}") : $this->line("      € {$text}");
+                }
+            }
             foreach ($b['warnungen'] ?? [] as $w) {
                 $this->line("      ⚠ {$w}");
             }
@@ -105,10 +122,36 @@ class ImportArticlesCommand extends Command
             . " · unverändert {$bericht['unveraendert']} · übersprungen {$bericht['uebersprungen']}"
             . " · Fehler {$bericht['fehler']}" . ($apply ? '' : ' (nichts geschrieben)'));
 
+        $pr = $bericht['preise'];
+        if (($pr['neu'] + $pr['geaendert'] + $pr['unveraendert'] + $pr['fehler']) > 0) {
+            $this->info("   € Preise: neu {$pr['neu']} · geändert {$pr['geaendert']}"
+                . " · unverändert {$pr['unveraendert']} · Fehler {$pr['fehler']}");
+        }
+
+        // E4: die Kette ist der DoD-Kern — sie wird IMMER berichtet, auch wenn sie
+        // nichts getroffen hat. „0 Rezepte" ist eine Aussage, eine fehlende Zeile nicht.
+        $k = $bericht['kette'];
+        if ($k['gps'] > 0 || $k['rezepte'] > 0) {
+            $this->info($apply
+                ? "   ⛓ Kette: {$k['gps']} GP · {$k['rezepte']} Rezept(e) betroffen · {$k['neu_berechnet']} neu berechnet · {$k['signale']} Preis-Signal(e)"
+                : "   ⛓ Kette (Vorschau): {$k['gps']} GP · {$k['rezepte']} Rezept(e) würden neu berechnet");
+            if ($k['abgeschnitten']) {
+                $this->warn('   ! Kette bei ' . FileArticleImportService::MAX_RECOMPUTE
+                    . ' Rezepten abgeschnitten — Rest mit `php artisan foodalchemist:recompute` nachziehen.');
+            }
+        } elseif ($k['bewegt'] > 0) {
+            $this->line("   ⛓ Kette: kein GP an den {$k['bewegt']} bewegten Artikel(n) — der EK steht, kostet aber noch kein Rezept.");
+        } elseif ($pr['neu'] > 0) {
+            // Trockenlauf auf lauter neuen Artikeln: es gibt noch keine IDs, gegen die
+            // man eine Kette auflösen könnte. Das ist keine leere Kette, sondern eine
+            // unbestimmbare — der Unterschied gehört gesagt.
+            $this->line('   ⛓ Kette: noch nicht bestimmbar (neue Artikel haben vor dem scharfen Lauf keine ID).');
+        }
+
         if (! $apply && ($bericht['neu'] + $bericht['aktualisiert']) > 0) {
             $this->line('   Vor dem scharfen Lauf: DB-Backup ziehen, dann denselben Aufruf mit --apply.');
         }
 
-        return $bericht['fehler'] > 0 ? self::FAILURE : self::SUCCESS;
+        return ($bericht['fehler'] + $pr['fehler']) > 0 ? self::FAILURE : self::SUCCESS;
     }
 }

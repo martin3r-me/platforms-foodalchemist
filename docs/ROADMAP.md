@@ -8,6 +8,24 @@
 
 ---
 
+## Update 2026-07-27 (Spec 13 · S1b — der Preis kommt an, und er bleibt nicht liegen)
+
+**Sechsunddreißigster Bau-Lauf der Routine ([Spec 13](PLANUNG/13_Preis_Katalog_Ingest_Q2.md), Etappe S1 — zweiter von drei Teilschritten).** S1a hat den Artikel-Stamm bekommen, der EK blieb draußen. Jetzt liest derselbe Command eine **Preis-Spalte** (plus optional „Preis-Status" für Aktionspreise) und schreibt sie über `PriceService::createFor` — append-only, Vorgänger wird gestempelt. Wichtiger als das Schreiben ist aber, was danach passiert.
+
+**Ein neuer EK, der nur in der Preistabelle liegt, ist die stille Drift, gegen die E4 geschrieben ist.** Darum hängt jetzt die Post-Import-Kette am Lauf: bewegte Artikel → betroffene GPs → `recomputeAndPropagate` je nutzendem Rezept (samt aller transitiven Eltern) → `preisSprungMargeImpact`. Pest belegt die Strecke am Stück: +100 % am Lead-LA lässt den Rezept-EK steigen **und** erzeugt das `preis_sprung_marge_impact`-Signal. Damit ist die DoD-Zeile „Preis-Import triggert R2.1-Alarm" erfüllt, nicht behauptet.
+
+**Die betroffenen GPs kommen über die LA↔GP-Struktur, nicht über `lead_la_supplier_item_id`.** Naheliegend wäre der Lead gewesen — er treibt den GP-EK. Die T3-Kaskade in `RecipeRecomputeService` nimmt ihn aber nur als *bevorzugten* Kandidaten und fällt sonst auf den Mittelwert aller aktiven LAs zurück; ein Nicht-Lead-Preis bewegt die Kosten also ebenfalls. Der Detektor selbst wird **gerufen, nicht nachgebaut**: er sucht sich frische Änderungen über Lookback und Dedup selbst, eine zweite Schwellen-Logik im Importer wäre eine zweite Wahrheit.
+
+**Nur echte Bewegung schreibt.** Gleicher Preis, gleicher Status ⇒ keine neue Zeile. Bei append-only ist das keine Optimierung: ein Schreiben je Lauf machte die Historie nach drei Quartalen unlesbar und ließe `preisTrendBulk` „Δ 0 %" als jüngste Generation lesen. Die Idempotenz-Zusage aus S1a gilt damit auch für den Preis.
+
+**Drei Werte sind Zeilen-Fehler statt Preise** — die Zeile bleibt verwertbar, der Artikel-Stamm wird geschrieben, nur der EK nicht. `0,00` wäre nach GL-11 ein **aktiver** Standard-EK und zöge die Kosten jedes nutzenden Rezepts auf null: ein Falschpreis, den die Ampel grün meldet, also schlechter als kein Preis. Negativ ist ein Service-Zuschlag (I5) und wird nicht per Masse angelegt. Text ist keine Zahl. Eine Zeile mit Preis-Fehler zählt im `bulk_runs`-Lauf als `failed`, auch wenn ihr Stamm geschrieben wurde — „EK nicht angekommen" ist kein Teilerfolg.
+
+**Die Kette läuft einmal am Ende über die deduplizierte Menge, nicht je Zeile** (ein Katalog rührt dieselben Eltern-Rezepte sonst hundertfach an), der Trockenlauf zeigt sie als **Vorschau** („x GP · y Rezept(e) würden neu berechnet" — die Ermittlung ist reines Lesen), und bei 1.000 Rezepten je Lauf ist Schluss: dann sagt der Bericht das ausdrücklich und nennt `foodalchemist:recompute` als Weg. Kein stiller Schnitt.
+
+**Suite 1499 · 1495 passed · 4 skipped · 0 Fail (Vorlauf 1491/1487, +8 Tests).** Kein Schema-Change, keine Migration → MySQL-Smoke entfällt sachlich; der Lesepfad ist trotzdem gegen die Dev-MySQL gegengeprüft (Trockenlauf auf einem echten Artikel mit GP: „1 GP · 6 Rezept(e) würden neu berechnet", nichts geschrieben). **Kein MCP-Nachzug:** Bulk bleibt laut DoD artisan, die MCP-Fläche ist als S3 geschnitten. Verbesserungs-Backlog: **V-049** (es gibt keinen Einstieg „rechne diese Menge Rezepte neu" — vier Aufrufer schleifen `recomputeAndPropagate` und rechnen gemeinsame Eltern N-mal; genau deshalb brauchte S1b überhaupt eine Kappung) und **V-050** (`preisSprungMargeImpact` kennt nur „das ganze Team" und deckelt bei 500 GPs — im Voll-Katalog eine stille Auslassung in genau der Kette, die gegen stille Drift gebaut ist; L8a hat dieselbe Frage für den Wareneinsatz schon gelöst). Nächster Schritt: **S1c** — Detail-Tabellen (`item_nutritionals`/`item_allergens`/`item_declarations`).
+
+---
+
 ## Update 2026-07-27 (Spec 13 · S1a — Kanal B: der Katalog bekommt einen Eingang, den ein Mensch bedienen kann)
 
 **Fünfunddreißigster Bau-Lauf der Routine ([Spec 13](PLANUNG/13_Preis_Katalog_Ingest_Q2.md), Etappe S1 — erster von drei Teilschritten).** Frische Lieferanten-Daten kamen bisher nur über den Necta-Erbe-Pfad (`ImportSliceCommand`, Quelle = SQLite) in den Katalog. Für den Quartals-Rhythmus, den E5 festlegt („Datei laden, Command verarbeitet"), gab es keinen Weg. Neu: `FileArticleImportService` + `foodalchemist:import-articles` liest eine CSV/TSV des Lieferanten und upsertet den **Artikel-Stamm**; Preis + Recompute-Kette (S1b) und die Detail-Tabellen (S1c) folgen.

@@ -1,5 +1,6 @@
-Artikel-Nr;Bezeichnung;Marke;Hersteller;Herkunftsland;Gebindemenge;Einheit;Gebindeeinheit;Bestelleinheit;EAN Gebinde;MwSt;Bio;Vegan;Ausgelistet;Preis;Zutatenliste
-70012;Zanderfilet mit Haut, 140-160 g;Nordsee Select;Fischwerk Nord GmbH;Deutschland;2,5;kg;Karton;Karton;4012345678901;7,00;nein;nein;nein;28,90;Zander (Sander lucioperca)
-70013;Petersilienoel;Grønn;Grønn AS;Norwegen;0,5;l;Flasche;Karton;4012345678918;19,00;ja;ja;nein;41,50;Rapsoel, Petersilie
-70014;Kalbsfond reduziert;;Fondmanufaktur Sued;Deutschland;1;l;Beutel;Karton;;7,00;nein;nein;nein;12,40;
-70015;Cornichons extrafein;Maison Verte;;Frankreich;1,7;Glas;Glas;Karton;4012345678925;7,00;nein;ja;nein;6,80;Cornichons, Wasser, Branntweinessig, Salz
+Artikel-Nr;Bezeichnung;Marke;Hersteller;Herkunftsland;Gebindemenge;Einheit;Gebindeeinheit;Bestelleinheit;EAN Gebinde;MwSt;Bio;Vegan;Ausgelistet;Preis;Preis-Status;Zutatenliste
+70012;Zanderfilet mit Haut, 140-160 g;Nordsee Select;Fischwerk Nord GmbH;Deutschland;2,5;kg;Karton;Karton;4012345678901;7,00;nein;nein;nein;28,90;Standard;Zander (Sander lucioperca)
+70013;Petersilienoel;Grønn;Grønn AS;Norwegen;0,5;l;Flasche;Karton;4012345678918;19,00;ja;ja;nein;41,50;Standard;Rapsoel, Petersilie
+70014;Kalbsfond reduziert;;Fondmanufaktur Sued;Deutschland;1;l;Beutel;Karton;;7,00;nein;nein;nein;12,40;Aktion;
+70015;Cornichons extrafein;Maison Verte;;Frankreich;1,7;Glas;Glas;Karton;4012345678925;7,00;nein;ja;nein;6,80;Standard;Cornichons, Wasser, Branntweinessig, Salz
+70016;Kalbsbries;;Metzgerei Sued;Deutschland;1;kg;Vakuum;Karton;;7,00;nein;nein;nein;;;
