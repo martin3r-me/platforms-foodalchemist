@@ -36,6 +36,7 @@ class ConceptGeneratorService
         private CoverageService $coverage,
         private PairingService $pairing,
         private ConceptService $concepts,
+        private MenuCandidatePoolService $pool,
     ) {}
 
     // ── Hauptpfad: Gerüst → Konzept ────────────────────────────────────
@@ -219,14 +220,14 @@ class ConceptGeneratorService
         if ($frame->slots->isEmpty()) {
             throw new RuntimeException('Gerüst hat keine Slots.');
         }
-        $pool = $this->kandidatenPool($team, $frame);
+        $pool = $this->pool->fuerFrame($team, $frame);
 
         $protokoll = [];
         $gewaehlt = collect();
         $gewaehlteAnker = [];
         foreach ($frame->slots as $frameSlot) {
             $n = max(1, (int) ($frameSlot->target_count ?? 1));
-            $kandidaten = $this->filterFuerSlot($pool, $frame, $frameSlot)->reject(fn ($k) => $gewaehlt->has($k['id']));
+            $kandidaten = $this->pool->filterFuerSlot($pool, $frame, $frameSlot)->reject(fn ($k) => $gewaehlt->has($k['id']));
             $quoten = $frameSlot->rules->where('rule_type', 'diet_quota')->where('operator', '!=', 'max')->where('unit', 'count');
 
             $slotWahl = collect();
@@ -252,7 +253,7 @@ class ConceptGeneratorService
             }
 
             if ($slotWahl->isEmpty()) {
-                $begruendung = 'Kein VK-Gericht erfüllt die Vorgaben (' . $this->filterBeschreibung($frame, $frameSlot) . ') — Slot bewusst leer gelassen.';
+                $begruendung = 'Kein VK-Gericht erfüllt die Vorgaben (' . $this->pool->filterBeschreibung($frame, $frameSlot) . ') — Slot bewusst leer gelassen.';
                 $leer = $this->concepts->addSlot($team, $concept->id, ['role' => $frameSlot->label]);
                 $this->concepts->updateSlot($team, $leer->id, ['note' => $begruendung]);
                 $protokoll[] = ['slot' => $frameSlot->label, 'status' => 'leer', 'begruendung' => $begruendung, 'gerichte' => []];
@@ -271,7 +272,7 @@ class ConceptGeneratorService
             $protokoll[] = [
                 'slot' => $frameSlot->label,
                 'status' => $fehlend > 0 ? 'teilbefuellt' : 'befuellt',
-                'begruendung' => $fehlend > 0 ? "{$fehlend} von {$n} Plätzen unbefüllbar (" . $this->filterBeschreibung($frame, $frameSlot) . ')' : null,
+                'begruendung' => $fehlend > 0 ? "{$fehlend} von {$n} Plätzen unbefüllbar (" . $this->pool->filterBeschreibung($frame, $frameSlot) . ')' : null,
                 'gerichte' => $slotWahl->map(fn ($k) => ['id' => $k['id'], 'name' => $k['name'], 'diet_form' => $k['diet_form'], 'sales_net' => $k['sales_net']])->values()->all(),
             ];
         }
@@ -325,7 +326,7 @@ class ConceptGeneratorService
         // Convenience-Daten (GP-Tags) nur laden, wenn die Leitplanke wirklich diskriminiert
         // (from_scratch/voll_convenience) — teil_convenience/null bleibt neutral + günstig.
         $mitConvenience = in_array($zielConvenience, ['from_scratch', 'voll_convenience'], true);
-        $pool = $this->kandidatenPool($team, $frame, $mitConvenience);
+        $pool = $this->pool->fuerFrame($team, $frame, $mitConvenience);
 
         // Kohäsions-Basis aus dem Pool selbst (keine zweite Anker-Auflösung): Gerichte, die
         // nicht im Pool sind (draft/Slot-Variante), liefern eben keine Anker — ehrlich, nicht geraten.
@@ -338,10 +339,10 @@ class ConceptGeneratorService
         }
         $basisAnker = array_values(array_unique($basisAnker));
 
-        $kandidaten = $this->filterFuerSlot($pool, $frame, $slot)
+        $kandidaten = $this->pool->filterFuerSlot($pool, $frame, $slot)
             ->reject(fn ($k) => in_array((int) $k['id'], $belegteRecipeIds, true));
         if ($kandidaten->isEmpty()) {
-            return ['kandidaten' => [], 'hinweis' => 'Kein Gericht erfüllt die Vorgaben (' . $this->filterBeschreibung($frame, $slot) . ').'];
+            return ['kandidaten' => [], 'hinweis' => 'Kein Gericht erfüllt die Vorgaben (' . $this->pool->filterBeschreibung($frame, $slot) . ').'];
         }
 
         $limit = max(1, $limit);
@@ -378,7 +379,7 @@ class ConceptGeneratorService
         return [
             'kandidaten' => $out,
             'hinweis' => count($out) < $limit
-                ? 'Nur ' . count($out) . ' zulässige Treffer (' . $this->filterBeschreibung($frame, $slot) . ').'
+                ? 'Nur ' . count($out) . ' zulässige Treffer (' . $this->pool->filterBeschreibung($frame, $slot) . ').'
                 : null,
         ];
     }
@@ -421,144 +422,10 @@ class ConceptGeneratorService
         return implode(' · ', $teile);
     }
 
-    // ── Kandidaten ──────────────────────────────────────────────────────
-
-    /**
-     * Pool echter VK-Gerichte (keine Drafts, keine Slot-Varianten) mit allem, was
-     * Filter + Ranking brauchen: diet_form, Preis, Allergen-Werte, Begriffs-Korpus
-     * (nur wenn No-Go-Zutat-Regeln existieren), Anker-IDs (persistiertes Mapping +
-     * dynamische Auflösung über die Zutaten).
-     */
-    private function kandidatenPool(Team $team, FoodAlchemistPlanningFrame $frame, bool $mitConvenience = false): Collection
-    {
-        $brauchtBegriffe = $frame->rules->where('rule_type', 'nogo_ingredient')->isNotEmpty();
-
-        $query = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->whereNull('variant_source_recipe_id')
-            ->where('status', '!=', 'draft')
-            // Modell A: HG hängt direkt am Recipe (dish_main_group_id); dishClass.mainGroup = Alt-Pfad-Fallback
-            // levelSuitabilities = Niveau-Eignungen (haute_cuisine|gehoben|klassisch) fürs Segment-Ranking (Phase 5)
-            ->with(['dishClass:id,diet_form,dish_main_group_id', 'dishClass.mainGroup:id,code,label', 'speisenHauptgruppe:id,code,label', 'levelSuitabilities']);
-        if ($brauchtBegriffe || $mitConvenience) {
-            // Convenience-Ranking (Leitplanke) braucht das GP-Tag tag_is_convenience je Zutat.
-            $gpSel = 'id,name' . ($mitConvenience ? ',tag_is_convenience' : '');
-            $query->with(["ingredients.gp:{$gpSel}"]);
-            if ($mitConvenience) {
-                // Bis ins Basisrezept: GPs der referenzierten Sub-Rezepte (2 Ebenen tief = 3 Rezept-
-                // Ebenen mit dem Gericht) für die rekursive Convenience-Quote. referencedRecipe
-                // unrestricted → name bleibt für die Begriffe-Suche verfügbar.
-                $query->with([
-                    "ingredients.referencedRecipe.ingredients.gp:{$gpSel}",
-                    "ingredients.referencedRecipe.ingredients.referencedRecipe.ingredients.gp:{$gpSel}",
-                ]);
-            } elseif ($brauchtBegriffe) {
-                $query->with(['ingredients.referencedRecipe:id,name']);
-            }
-        }
-
-        return $query->get()->map(function (FoodAlchemistRecipe $r) use ($brauchtBegriffe, $mitConvenience) {
-            $allergene = [];
-            foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $key) {
-                $allergene[$key] = $r->{'allergen_' . $key} ?? null;
-            }
-            $diet = $r->dishClass?->diet_form;
-            if ($diet === null || $diet === 'neutral') {
-                if ($r->spec_is_vegan === true) {
-                    $diet = 'vegan';
-                } elseif ($r->spec_is_vegetarian === true) {
-                    $diet = $diet ?? 'vegi';
-                }
-            }
-
-            return [
-                'id' => $r->id,
-                'name' => $r->name,
-                'diet_form' => $diet,
-                'hg_label' => mb_strtolower(trim((string) ($r->speisenHauptgruppe?->label ?? $r->dishClass?->mainGroup?->label ?? ''))),
-                'sales_net' => $r->sales_net !== null ? (float) $r->sales_net : null,
-                'allergene' => $allergene,
-                'begriffe' => $brauchtBegriffe
-                    ? mb_strtolower($r->name . ' ' . $r->ingredients->map(fn ($z) => ($z->gp?->name ?? '') . ' ' . ($z->referencedRecipe?->name ?? ''))->implode(' '))
-                    : mb_strtolower($r->name),
-                'niveaus' => $r->levelSuitabilities->pluck('level_slug')->filter()->values()->all(),
-                // Convenience-Anteil = Quote convenience-getaggter GPs unter den Zutaten (null = nicht geladen / keine GP-Zutat)
-                'convenience_ratio' => $this->convenienceRatio($r, $mitConvenience),
-                'anker' => $this->pairing->anchorsForRecipe($r),
-            ];
-        })->keyBy('id');
-    }
-
-    /**
-     * Convenience-Anteil eines Gerichts: Quote der GPs mit tag_is_convenience (0..1) über die
-     * GANZE Komposition — direkte GP-Zutaten UND die GPs in den referenzierten Basisrezepten
-     * (rekursiv bis Tiefe 3, Regelwerk-Basisrezepte §4). So wirkt die Convenience-Leitplanke bis
-     * ins Basisrezept: ein Gericht, das über ein Convenience-Basisrezept convenience ist, wird
-     * erkannt. null = GP-Tags nicht geladen ($mitConvenience=false) oder keine GP im Baum → neutral.
-     */
-    private function convenienceRatio(FoodAlchemistRecipe $r, bool $mitConvenience): ?float
-    {
-        if (! $mitConvenience || ! $r->relationLoaded('ingredients')) {
-            return null;
-        }
-        $gps = $this->alleGpsImBaum($r);
-        if ($gps->isEmpty()) {
-            return null;
-        }
-
-        return round($gps->filter(fn ($g) => (bool) $g->tag_is_convenience)->count() / $gps->count(), 3);
-    }
-
-    /**
-     * Alle GPs der Kompositions-Tiefe sammeln: direkte GP-Zutaten + GPs referenzierter
-     * Basisrezepte (rekursiv). Nur GELADENE Relationen (kein Lazy-Load → kein N+1); Tiefe
-     * durch das Eager-Loading in kandidatenPool begrenzt (max. 3 Rezept-Ebenen).
-     *
-     * @return \Illuminate\Support\Collection<int, \Platform\FoodAlchemist\Models\FoodAlchemistGp>
-     */
-    private function alleGpsImBaum(FoodAlchemistRecipe $r, int $tiefe = 0): Collection
-    {
-        if ($tiefe > 3 || ! $r->relationLoaded('ingredients')) {
-            return collect();
-        }
-        $gps = $r->ingredients->map(fn ($z) => $z->gp)->filter();
-        foreach ($r->ingredients as $z) {
-            if ($z->relationLoaded('referencedRecipe') && $z->referencedRecipe !== null) {
-                $gps = $gps->merge($this->alleGpsImBaum($z->referencedRecipe, $tiefe + 1));
-            }
-        }
-
-        return $gps;
-    }
-
-    /** Harte Filter eines Slots: No-Gos (frame + slot, hart), Allergen-No-Gos, Preisrahmen. */
-    private function filterFuerSlot(Collection $pool, FoodAlchemistPlanningFrame $frame, $frameSlot): Collection
-    {
-        $regeln = $frame->rules->whereNull('slot_id')->merge($frameSlot->rules);
-        $nogoTerms = $regeln->where('rule_type', 'nogo_ingredient')
-            ->map(fn ($r) => mb_strtolower(trim((string) $r->value_text)))->filter()->values();
-        $nogoAllergene = $regeln->where('rule_type', 'nogo_allergen')->pluck('ref_key')->filter()->values();
-
-        return $pool->filter(function ($k) use ($nogoTerms, $nogoAllergene, $frameSlot) {
-            foreach ($nogoTerms as $term) {
-                if (str_contains($k['begriffe'], $term)) {
-                    return false; // No-Gos wirken HART im Generator — nie vorschlagen
-                }
-            }
-            foreach ($nogoAllergene as $key) {
-                if (in_array($k['allergene'][$key] ?? null, ['enthalten', 'spuren'], true)) {
-                    return false;
-                }
-            }
-            if ($frameSlot->price_min !== null && ($k['sales_net'] === null || $k['sales_net'] < (float) $frameSlot->price_min)) {
-                return false;
-            }
-            if ($frameSlot->price_max !== null && ($k['sales_net'] === null || $k['sales_net'] > (float) $frameSlot->price_max)) {
-                return false;
-            }
-
-            return true;
-        });
-    }
+    // ── Ranking ─────────────────────────────────────────────────────────
+    // Der Kandidaten-Pool selbst (Aufbau · Slot-Filter · Filter-Beschreibung) liegt
+    // seit 12·S2a-1 im geteilten MenuCandidatePoolService — der Marge-Solver (R2.4)
+    // wählt aus DEMSELBEN Pool, statt eine zweite Auswahl-Wahrheit aufzumachen.
 
     /**
      * Slot-Semantik: passt die Speisen-Hauptgruppe des Gerichts zum Slot-Label?
@@ -690,29 +557,5 @@ class ConceptGeneratorService
         }
 
         return [$sichereSlots, array_values(array_filter(array_map($regelSaeubern, $rules)))];
-    }
-
-    /** Menschlich lesbare Filter-Zusammenfassung für Leer-Begründungen. */
-    private function filterBeschreibung(FoodAlchemistPlanningFrame $frame, $frameSlot): string
-    {
-        $teile = [];
-        $regeln = $frame->rules->whereNull('slot_id')->merge($frameSlot->rules);
-        $nogos = $regeln->where('rule_type', 'nogo_ingredient')->pluck('value_text')->filter()->all();
-        if ($nogos !== []) {
-            $teile[] = 'No-Go: ' . implode(', ', $nogos);
-        }
-        $allergene = $regeln->where('rule_type', 'nogo_allergen')->pluck('ref_key')->filter()->all();
-        if ($allergene !== []) {
-            $teile[] = 'ohne Allergen: ' . implode(', ', $allergene);
-        }
-        $quoten = $regeln->where('rule_type', 'diet_quota')->map(fn ($r) => $r->operator . ' ' . $r->value_num . ' ' . ($r->unit === 'percent' ? '%' : '×') . ' ' . $r->ref_key)->all();
-        if ($quoten !== []) {
-            $teile[] = 'Diät: ' . implode('; ', $quoten);
-        }
-        if ($frameSlot->price_min !== null || $frameSlot->price_max !== null) {
-            $teile[] = 'Preisrahmen ' . ($frameSlot->price_min ?? '—') . '–' . ($frameSlot->price_max ?? '—') . ' €';
-        }
-
-        return $teile !== [] ? implode(' · ', $teile) : 'keine Regeln, aber kein Gericht im Bestand';
     }
 }
