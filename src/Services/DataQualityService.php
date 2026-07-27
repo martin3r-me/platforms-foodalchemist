@@ -200,11 +200,10 @@ class DataQualityService
         $approved = FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->count();
         $tentative = FoodAlchemistGp::visibleToTeam($team)->where('status', 'tentative')->count();
 
-        // approved, requires_la, ohne Lead-LA (bzw. keine LAs)
-        $ohneLead = FoodAlchemistGp::visibleToTeam($team)
-            ->where('status', 'approved')->where('requires_la', true)
-            ->where(fn ($w) => $w->whereNull('lead_la_supplier_item_id')->orWhere('n_las_total', 0))
-            ->count();
+        // approved, requires_la — die drei Beschaffungs-Lagen einzeln (H2c/V-014)
+        $keinLa = $this->gpLage($team, 'kein_la')->count();
+        $keinPreis = $this->gpLage($team, 'kein_preis')->count();
+        $keinLead = $this->gpLage($team, 'kein_lead')->count();
 
         // approved, requires_la, Lead gesetzt, aber Lead-LA hat keinen gültigen Preis
         $leadOhnePreis = FoodAlchemistGp::visibleToTeam($team)
@@ -232,8 +231,16 @@ class DataQualityService
             $this->info('gp_approved', 'GPs approved', $approved),
             $this->info('gp_tentative', 'GPs tentative (Review-Queue)', $tentative),
             // Signal-Emission bewusst ohne Deskriptor: SignalDetektorService::datenqualitaetGpLa
-            // besitzt diesen Befund bereits (kein Doppel-Signal im Scheduler). Bleibt Info-Metrik.
-            $this->gap('gp_ohne_lead', 'approved-GPs ohne Lead-LA', $ohneLead),
+            // besitzt diesen Befund bereits (kein Doppel-Signal im Scheduler). Bleiben Mess-Metriken.
+            //
+            // H2c/V-014: aus `gp_ohne_lead` sind drei Lagen geworden, weil sie drei
+            // verschiedene Arbeiten sind — Einkauf (kein LA), Preispflege (kein Preis),
+            // eine Auswahl-Entscheidung (kein Lead). Nur die letzte trägt den Auto-Fix-Knopf
+            // (SignalCockpit::DETERMINISTIC); vorher versprach er eine Reparatur über alle
+            // drei und bewegte in der Mehrzahl der Fälle keine Zahl.
+            $this->gap('gp_kein_la', 'approved-GPs ohne Lieferantenartikel (Beschaffungs-Lücke)', $keinLa),
+            $this->gap('gp_kein_preis', 'approved-GPs: LAs vorhanden, keiner bepreist', $keinPreis),
+            $this->gap('gp_kein_lead', 'approved-GPs: bepreister LA vorhanden, kein Lead gewählt', $keinLead),
             $this->gap('gp_lead_ohne_preis', 'approved-GPs: Lead-LA ohne gültigen Preis', $leadOhnePreis, SignalTyp::DatenqualitaetGpLa, 'dq-gp-lead-ohne-preis',
                 'Lead-LA gesetzt, aber ohne aktiven Preis in der Lesart des Money-Paths (GL-11 T1: Status 0/2, nicht gesperrt, Betrag > 0) → GP löst nicht auf einen EK auf.'),
             $this->gap('gp_allergen_konfidenz', 'approved-GPs ohne Allergen-Konfidenz', $allergenKonfidenzFehlt, SignalTyp::DatenqualitaetGpLa, 'dq-gp-allergen-konfidenz',
@@ -1611,6 +1618,85 @@ class DataQualityService
             ->where('foodalchemist_prices.price', '>', 0);
     }
 
+    /**
+     * EXISTS: an diesem GP hängt mindestens ein Lieferantenartikel — über die
+     * Struktur-Tabelle, aus der auch der Money-Path seine LAs holt.
+     *
+     * Spec 22 · H2c (V-014): das ist bewusst NICHT `n_las_total`. Der Zähler wird
+     * inkrementell geführt (`LeadLaService::verknuepfe`/`loese`, Import setzt ihn) und
+     * driftet dadurch — im Bestand weicht er bei 9 von 183 approved GPs von der
+     * Struktur-Tabelle ab, in 8 Fällen steht er auf 0, obwohl LAs verknüpft sind. Der
+     * EK rechnet auf der Struktur-Tabelle (`RecipeRecomputeService::laMitPreis`, Join
+     * über `foodalchemist_supplier_item_structures`), die Ursachen-Kette prüft sie
+     * ebenfalls (`SignalCauseService::gpBeschaffung`) — die Ampel liest jetzt dieselbe
+     * Quelle statt einen Zähler über sie.
+     *
+     * @param  bool  $nurBepreist  zusätzlich: der LA hat einen aktiven Preis (GL-11 T1)
+     */
+    private function laDiesesGp(bool $nurBepreist = false): \Closure
+    {
+        return function ($q) use ($nurBepreist) {
+            $q->select(DB::raw(1))
+                ->from('foodalchemist_supplier_item_structures as s')
+                ->join('foodalchemist_supplier_items as si', 'si.id', '=', 's.supplier_item_id')
+                ->whereColumn('s.gp_id', 'foodalchemist_gps.id')
+                ->whereNull('s.deleted_at')
+                ->whereNull('si.deleted_at');
+
+            if ($nurBepreist) {
+                $q->whereExists($this->aktivPreisFuer('si.id'));
+            }
+
+            return $q;
+        };
+    }
+
+    /**
+     * EXISTS: dieser Lieferantenartikel hat einen aktiven Preis — dieselbe Lesart wie
+     * {@see aktivPreisFuerLead()} (H2b), nur auf eine beliebige Artikel-Spalte
+     * korreliert statt fest auf den Lead. Die zwei Entscheidungen dort (`valid_to`
+     * ungefiltert, `price > 0` strenger als `scopeAktiv`) gelten hier mit.
+     */
+    private function aktivPreisFuer(string $itemSpalte): \Illuminate\Database\Eloquent\Builder
+    {
+        return $this->preise->scopeAktiv(FoodAlchemistPrice::query())
+            ->select(DB::raw(1))
+            ->whereColumn('foodalchemist_prices.supplier_item_id', $itemSpalte)
+            ->where('foodalchemist_prices.price', '>', 0);
+    }
+
+    /**
+     * Die drei Beschaffungs-Lagen eines approved GP als Query — EINE Definition für
+     * Zählung (`gp()`), Liste/Fixer-Satz (`queryFor()`) und Objekt-Frage
+     * (`trifftObjekt()`).
+     *
+     * Reihenfolge und Schnitt spiegeln `SignalCauseService::gpBeschaffung`:
+     *  - `kein_la`    → kein LA am GP: Beschaffungs-Lücke, kein Fixer kann etwas setzen
+     *  - `kein_preis` → LAs da, keiner bepreist: Preispflege/Einkauf, kein Fixer
+     *  - `kein_lead`  → bepreister LA da, aber kein Lead gewählt: **der fixbare Fall**
+     * Die Lagen sind trennscharf (jeder GP in höchstens einer) und decken zusammen die
+     * alte `gp_ohne_lead`-Menge ab — ohne deren Zähler-Fehlalarm (s. `laDiesesGp`).
+     *
+     * **Warum `kein_preis` einen leeren Lead verlangt:** ohne diese Bedingung wäre die
+     * Lage lead-agnostisch und überschnitte sich mit der bestehenden Metrik
+     * `gp_lead_ohne_preis` (H2b) — ein GP mit gesetztem Lead und lauter unbepreisten LAs
+     * stünde in beiden, die Ampel zählte ihn zweimal. Am Bestand gemessen sind das 8 von
+     * 11 Fällen, also der Regelfall und nicht der Rand. Die drei Lagen beantworten
+     * darum ausschließlich die Frage „**dieser GP hat keine gewählte Preisquelle**";
+     * ist ein Lead gewählt und trägt nur keinen Preis, ist das `gp_lead_ohne_preis`.
+     */
+    private function gpLage(Team $team, string $lage): \Illuminate\Database\Eloquent\Builder
+    {
+        $q = FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->where('requires_la', true);
+
+        return match ($lage) {
+            'kein_la' => $q->whereNotExists($this->laDiesesGp()),
+            'kein_preis' => $q->whereExists($this->laDiesesGp())->whereNotExists($this->laDiesesGp(true))
+                ->whereNull('lead_la_supplier_item_id'),
+            'kein_lead' => $q->whereExists($this->laDiesesGp(true))->whereNull('lead_la_supplier_item_id'),
+        };
+    }
+
     /** EXISTS: Rezept hat ein Anker-Mapping. */
     private function rezeptHatAnker(): \Closure
     {
@@ -1712,9 +1798,12 @@ class DataQualityService
         }
 
         switch ($metrik) {
-            case 'gp_ohne_lead':
-                return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->where('requires_la', true)
-                    ->where(fn ($w) => $w->whereNull('lead_la_supplier_item_id')->orWhere('n_las_total', 0)), 'gp'];
+            case 'gp_kein_la':
+            case 'gp_kein_preis':
+            case 'gp_kein_lead':
+                // H2c/V-014: dieselbe Definition wie die Zählung in gp() — der Satz, den
+                // der lead_la-Fixer mutiert, ist der Satz, den die Metrik zeigt.
+                return [$this->gpLage($team, substr($metrik, 3)), 'gp'];
             case 'gp_lead_ohne_preis':
                 return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->where('requires_la', true)
                     ->whereNotNull('lead_la_supplier_item_id')->whereNotExists($this->aktivPreisFuerLead()), 'gp'];

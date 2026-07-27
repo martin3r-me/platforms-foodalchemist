@@ -22,7 +22,13 @@ final class SignalCockpit
     /** Metrik-Key (payload['metrik']) → deterministischer Fixer (SignalFixService::applyFixer). */
     private const DETERMINISTIC = [
         'gp_allergen_konfidenz' => 'allergen',
-        'gp_ohne_lead' => 'lead_la',
+        // H2c/V-014: von den drei Beschaffungs-Lagen (DataQualityService::gpLage) trägt nur
+        // `kein_lead` einen Knopf — dort liegt ein bepreister Artikel, den der Fixer setzen
+        // KANN. `gp_kein_la` (Einkauf) und `gp_kein_preis` (Preispflege) stehen bewusst
+        // nicht hier: ein Knopf, der nichts setzen kann, verspricht eine Reparatur und
+        // bewegt keine Zahl. Vorher hing er an der lumped Metrik `gp_ohne_lead` und griff
+        // über alle drei Lagen.
+        'gp_kein_lead' => 'lead_la',
         'gp_lead_ohne_preis' => 'lead_la',
         'br_anker_fehlt' => 'recipe_anker',
         'vk_anker_fehlt' => 'recipe_anker',
@@ -121,8 +127,13 @@ final class SignalCockpit
             return (string) $pl['metrik'];
         }
         // SignalDetektorService::datenqualitaetGpLa (GP ohne Lead) trägt kein metrik, aber stabilen dedup_key.
+        //
+        // H2c/V-014: die Ableitung zeigt auf die **fixbare** Lage. Das Signal selbst nennt
+        // weiterhin den ganzen Befund (LAs fehlen ODER Lead fehlt) — der Knopf daran darf
+        // aber nur den Teil anfassen, in dem er etwas setzen kann. Die Verschiebung ist
+        // eine Verengung des Schreib-Satzes, nie eine Erweiterung.
         if ($sig->dedup_key === 'datenqualitaet-gp-ohne-la') {
-            return 'gp_ohne_lead';
+            return 'gp_kein_lead';
         }
 
         return null;

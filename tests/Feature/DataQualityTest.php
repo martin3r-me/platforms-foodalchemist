@@ -67,19 +67,23 @@ it('misst die Kaskaden-Lücken pro Ebene korrekt (read-only)', function () {
 
     $e = $this->dq->messeAlleEbenen($this->rootTeam);
 
-    expect(metrik($e, 'gp_ohne_lead')['wert'])->toBe(1)
+    // H2c/V-014: der GP hat keinen LA — das ist die Beschaffungs-Lage `gp_kein_la`,
+    // nicht mehr die lumped `gp_ohne_lead`.
+    expect(metrik($e, 'gp_kein_la')['wert'])->toBe(1)
+        ->and(metrik($e, 'gp_kein_preis')['wert'])->toBe(0)
+        ->and(metrik($e, 'gp_kein_lead')['wert'])->toBe(0)
         ->and(metrik($e, 'gp_anker_fehlt')['wert'])->toBe(1)
         ->and(metrik($e, 'gp_allergen_konfidenz')['wert'])->toBe(1)     // frisch angelegter GP: allergens_confidence NULL
         ->and(metrik($e, 'br_ek_null')['wert'])->toBe(1)                // Basisrezept ohne EK
         ->and(metrik($e, 'vk_ek_null')['wert'])->toBe(1)
         ->and(metrik($e, 'vk_servierform_unbestimmt')['wert'])->toBe(1)
-        ->and(metrik($e, 'gp_ohne_lead')['severity'])->toBe('gelb');    // 1 ≤ Schwelle
+        ->and(metrik($e, 'gp_kein_la')['severity'])->toBe('gelb');      // 1 ≤ Schwelle
 });
 
 it('grün wenn keine Lücken (leeres Team)', function () {
     $e = $this->dq->messeAlleEbenen($this->childB);
-    expect(metrik($e, 'gp_ohne_lead')['wert'])->toBe(0)
-        ->and(metrik($e, 'gp_ohne_lead')['severity'])->toBe('gruen')
+    expect(metrik($e, 'gp_kein_la')['wert'])->toBe(0)
+        ->and(metrik($e, 'gp_kein_la')['severity'])->toBe('gruen')
         ->and(metrik($e, 'vk_servierform_unbestimmt')['wert'])->toBe(0);
 });
 

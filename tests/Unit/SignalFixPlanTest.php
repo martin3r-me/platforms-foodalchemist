@@ -19,7 +19,7 @@ function mkSignal(string $type, ?string $metrik = null, ?string $dedup = null): 
 
 it('mappt Metriken auf deterministische Fixer', function () {
     expect(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', 'gp_allergen_konfidenz'))['fixer'])->toBe('allergen')
-        ->and(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', 'gp_ohne_lead'))['fixer'])->toBe('lead_la')
+        ->and(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', 'gp_kein_lead'))['fixer'])->toBe('lead_la')
         ->and(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', 'gp_lead_ohne_preis'))['fixer'])->toBe('lead_la')
         ->and(SignalCockpit::planFor(mkSignal('anker_fehlt', 'br_anker_fehlt'))['fixer'])->toBe('recipe_anker')
         ->and(SignalCockpit::planFor(mkSignal('anker_fehlt', 'vk_anker_fehlt'))['fixer'])->toBe('recipe_anker')
@@ -36,6 +36,10 @@ it('mappt Assist-Typen auf einen Prompt-Key', function () {
 
 it('gibt kein Plan (null) für reine Urteilssachen', function () {
     expect(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', 'gp_tentative_genutzt')))->toBeNull()
+        // H2c/V-014: die zwei nicht-fixbaren Beschaffungs-Lagen — Einkauf bzw. Preispflege,
+        // beides Handlungen ausserhalb der App, kein Knopf.
+        ->and(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', 'gp_kein_la')))->toBeNull()
+        ->and(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', 'gp_kein_preis')))->toBeNull()
         ->and(SignalCockpit::planFor(mkSignal('naehrwert_plausi')))->toBeNull()
         ->and(SignalCockpit::planFor(mkSignal('veraltete_preise')))->toBeNull()
         ->and(SignalCockpit::planFor(mkSignal('vertragsfrist_faellig')))->toBeNull()
