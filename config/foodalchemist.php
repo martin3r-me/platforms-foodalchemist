@@ -380,7 +380,14 @@ return [
                 . '(Komponenten bevorzugt als Basisrezepte; wenn bestands_inventar mitgegeben ist, benenne '
                 . 'passende Komponenten EXAKT wie dort gelistet — vorhandene Basisrezepte zuerst), '
                 . 'dish_class_id (aus der mitgegebenen Liste, '
-                . 'null wenn unsicher), aufschlagsklasse_code (aus der mitgegebenen Liste)}. '
+                . 'null wenn unsicher), aufschlagsklasse_code (aus der mitgegebenen Liste), '
+                // Spec 03 L8b: die Portion ist PREIS-RELEVANT (Auto-VK = EK je Portion ×
+                // Aufschlag). Sie darf nicht aus dem Yield abgeleitet werden (V-041), also
+                // muss sie hier verbindlich mitkommen — mit engem Band gegen Halluzination
+                // und explizitem null-Ausweg statt geratener Zahl.
+                . 'portion_g (Portionsgewicht in GRAMM je Verkaufseinheit — die Menge, die '
+                . 'EIN Gast bekommt, nicht die Charge; ganzzahlig, plausibel 20–3000; '
+                . 'null nur wenn wirklich nicht bestimmbar)}. '
                 . 'Diät-harte Vorgaben sind VERBINDLICH.',
         ],
         'vk.speisen_klasse' => [

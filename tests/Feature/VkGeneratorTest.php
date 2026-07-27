@@ -82,3 +82,42 @@ it('vkModus: ohne AK-Code greift die Default-AK der Klasse', function () {
 
     expect($res['recipe']->markup_class_id)->toBe($this->alc->id);
 });
+
+// ── Spec 03 L8b: die Portions-Quelle ────────────────────────────────────────
+// Die Portion ist die letzte Vorbedingung des Wirtschaftlichkeits-Glieds (L8a),
+// und die einzige ohne ableitbaren Default: `yield_kg / sales_unit_count` wäre der
+// Chargenpreis (V-041). Sie muss also AUS DEM VORSCHLAG kommen — mit Band, weil ein
+// Zahlendreher hier keinen Fehler erzeugt, sondern einen falschen VK.
+
+it('L8b: portion_g aus dem Vorschlag landet als Portionsgewicht am Gericht', function () {
+    $res = $this->gen->generiere($this->rootTeam, 'Test', [], [
+        'name' => 'HG: Filet | Jus',
+        'zutaten' => [['text' => 'Rotwein-Jus', 'quantity' => 80, 'unit' => 'g']],
+        'dish_class_id' => $this->class->id,
+        'portion_g' => 220,
+    ], vkModus: true);
+
+    expect((float) $res['recipe']->sales_quantity_per_unit_g)->toBe(220.0);
+});
+
+it('L8b: unplausible Portionswerte fallen still auf die Lücke — kein falscher VK', function () {
+    foreach ([19, 3001, 0, -100, 'zweihundert', null] as $raw) {
+        $res = $this->gen->generiere($this->rootTeam, 'Test', [], [
+            'name' => 'HG: Filet | Jus',
+            'zutaten' => [['text' => 'Rotwein-Jus', 'quantity' => 80, 'unit' => 'g']],
+            'portion_g' => $raw,
+        ], vkModus: true);
+
+        expect($res['recipe']->sales_quantity_per_unit_g)->toBeNull("portion_g={$raw} hätte nicht durchgehen dürfen");
+    }
+});
+
+it('L8b: der Basisrezept-Pfad setzt keine Portion (Basisrezepte haben keine Verkaufseinheit)', function () {
+    $res = $this->gen->generiere($this->rootTeam, 'Test', [], [
+        'name' => 'Sauce: Jus',
+        'zutaten' => [['text' => 'Rotwein-Jus', 'quantity' => 80, 'unit' => 'g']],
+        'portion_g' => 220,
+    ], vkModus: false);
+
+    expect($res['recipe']->sales_quantity_per_unit_g)->toBeNull();
+});

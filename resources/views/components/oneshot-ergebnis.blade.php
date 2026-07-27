@@ -15,6 +15,14 @@
     GL-10 §1: zwei Achsen, zwei Anzeigen. Fehlt das Urteil, wird das ehrlich
     gesagt statt weggelassen (sonst liest sich ein stiller Provider-Ausfall wie
     „nicht vorgesehen").
+
+    L8b: und zuletzt das Wirtschaftlichkeits-Glied (L8a). Es ist die einzige
+    Zeile hier, in der eine LÜCKE genauso wichtig ist wie ein Ergebnis: ohne
+    Portionsgröße oder Aufschlagsklasse gibt es keinen VK, und das muss am
+    Erzeugnis stehen statt als stiller Null-Preis im Editor aufzuschlagen. Der
+    Wareneinsatz trägt dieselbe Ampel wie das Signal-Cockpit (eine Schwelle,
+    eine Leiter — L8a Entscheidung 4), und „vorläufig" sagt, dass unbepreiste
+    Park-GPs im EK stecken (#511-F2).
 --}}
 @props(['anreicherung'])
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
@@ -54,6 +62,49 @@
                     <p class="text-[11px] text-amber-700" data-oneshot-kohaerenz-fehler>
                         ⚠️ Kohärenz-Urteil offen: {{ $koh['fehler'] }} — im VK-Detail über «Kohärenz prüfen» nachholen.
                     </p>
+                @endif
+            </div>
+        @endif
+
+        @if(($anreicherung['wirtschaftlichkeit'] ?? null) !== null)
+            @php($w = $anreicherung['wirtschaftlichkeit'])
+            @php($lueckenText = ['portion' => 'Portionsgröße', 'aufschlagsklasse' => 'Aufschlagsklasse', 'darreichung' => 'Standard-Darreichung'])
+            <div class="mt-2" data-oneshot-wirtschaftlichkeit>
+                @if(($w['fehler'] ?? null) !== null)
+                    <p class="text-[11px] text-amber-700" data-oneshot-wirtschaft-fehler>
+                        ⚠️ Kalkulation offen: {{ $w['fehler'] }} — das Gericht steht, der Preis wird im VK-Editor nachgezogen.
+                    </p>
+                @else
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        @if(($w['sales_net'] ?? null) !== null)
+                            <span class="{{ $pill }} {{ $variantPill['success'] }}" data-oneshot-vk>💰 VK {{ number_format((float) $w['sales_net'], 2, ',', '.') }} €</span>
+                        @endif
+                        @if(($w['wareneinsatz_pct'] ?? null) !== null)
+                            {{-- Dieselbe Leiter wie das Signal (L8a Entscheidung 4): über Ziel = gelb, über 1,5 × Ziel = rot --}}
+                            <span class="{{ $pill }} {{ ['gruen' => $variantPill['success'], 'gelb' => $variantPill['warning'], 'rot' => $variantPill['danger']][$w['ampel'] ?? ''] ?? $variantPill['secondary'] }}" data-oneshot-we>
+                                W {{ number_format((float) $w['wareneinsatz_pct'], 1, ',', '.') }} % / Ziel {{ number_format((float) ($w['ziel_pct'] ?? 0), 0, ',', '.') }} %
+                            </span>
+                        @endif
+                        @if(($w['portion_g'] ?? null) !== null)
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ number_format((float) $w['portion_g'], 0, ',', '.') }} g / Portion</span>
+                        @endif
+                        @if($w['vorlaeufig'] ?? false)
+                            <span class="{{ $pill }} {{ $variantPill['warning'] }}" data-oneshot-vorlaeufig>vorläufig</span>
+                        @endif
+                    </div>
+                    @if($w['vorlaeufig'] ?? false)
+                        <p class="text-[11px] text-amber-700 mt-0.5">Unbepreiste Zutaten im EK — der VK ist vorläufig, bis die Lead-LAs stehen.</p>
+                    @endif
+                    @if(count($w['luecken'] ?? []) > 0)
+                        <p class="text-[11px] text-amber-700 mt-0.5" data-oneshot-wirtschaft-luecken>
+                            ⚠️ Kein Auto-VK: {{ implode(' + ', array_map(fn ($l) => $lueckenText[$l] ?? $l, $w['luecken'])) }} fehlt — im VK-Editor setzen, der Preis rechnet sich dann selbst.
+                        </p>
+                    @endif
+                    @if($w['signal'] ?? false)
+                        <p class="text-[11px] text-amber-700 mt-0.5" data-oneshot-wirtschaft-signal>
+                            Wareneinsatz über Ziel — als Signal im Cockpit vermerkt.
+                        </p>
+                    @endif
                 @endif
             </div>
         @endif

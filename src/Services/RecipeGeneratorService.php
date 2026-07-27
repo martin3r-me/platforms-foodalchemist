@@ -164,6 +164,12 @@ class RecipeGeneratorService
                     'dish_main_group_id' => $hg?->id,
                     'markup_class_id' => $ak?->id ?? $klasse?->default_markup_class_id ?? $hg?->default_markup_class_id,
                     'vat_rate' => $ak?->vat_rate,
+                    // L8b: die Portion kommt AUS DEM VORSCHLAG — sie ist die letzte
+                    // Vorbedingung des Wirtschaftlichkeits-Glieds (L8a) und die einzige,
+                    // für die es keinen ableitbaren Default gibt (V-041: `yield_kg /
+                    // sales_unit_count` wäre der Chargenpreis). `portionG()` lässt nur
+                    // plausible Werte durch; alles andere bleibt die benannte Lücke.
+                    'sales_quantity_per_unit_g' => $this->portionG($kiRezept['portion_g'] ?? null),
                 ], fn ($v) => $v !== null));
             }
 
@@ -294,6 +300,31 @@ class RecipeGeneratorService
         }
 
         return preg_match('/^\s*(\d{2})\b/', $raw, $m) === 1 ? $m[1] : null;
+    }
+
+    /**
+     * L8b · Portionsgewicht aus dem Vorschlag — mit engem Plausibilitäts-Band.
+     *
+     * Warum ein Band und kein blindes Durchschreiben: dieser Wert läuft direkt in
+     * die Preis-Formel (`ek_portion = EK/g × Grammatur × Anzahl`). Eine
+     * Halluzination in der falschen Größenordnung erzeugt keinen sichtbaren
+     * Fehler, sondern einen falschen VK — und der ist schlimmer als kein VK,
+     * weil er das Wirtschaftlichkeits-Glied grün melden lässt. 20–3000 g deckt
+     * Amuse (20 g) bis Platte-je-Einheit (3 kg) ab; darüber/darunter ist es
+     * praktisch immer eine Charge oder ein Zahlendreher.
+     *
+     * Alles Unplausible fällt STILL auf null — dann greift die benannte Lücke
+     * aus L8a (`luecken: ['portion']`), die an der Fläche sichtbar ist. Ein
+     * Fehler wäre hier falsch: das Rezept selbst ist verwertbar.
+     */
+    private function portionG(mixed $raw): ?float
+    {
+        if (! is_numeric($raw)) {
+            return null;
+        }
+        $g = round((float) $raw, 1);
+
+        return $g >= 20.0 && $g <= 3000.0 ? $g : null;
     }
 
     private function einheitId(Team $team, string $slug): int

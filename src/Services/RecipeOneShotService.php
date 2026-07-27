@@ -265,6 +265,14 @@ class RecipeOneShotService
             if ($ak === null) {
                 $luecken[] = 'aufschlagsklasse';
             }
+            // L8b: die dritte Vorbedingung war bis hierher stumm. `ensureStandard`
+            // gibt bewusst `null` zurück, wenn es nichts raten darf (Varianten ohne
+            // Standard-Flag) oder das Servierform-Vokabular `unbestimmt` fehlt —
+            // dann gibt es keine Preis-Zeile und damit keinen VK. Ohne diese Lücke
+            // zeigte die Fläche in dem Fall GAR NICHTS: kein Preis, kein Grund.
+            if ($standard === null) {
+                $luecken[] = 'darreichung';
+            }
 
             $gesamt = (int) ($recipe->ek_n_ingredients_total ?? 0);
             $bepreist = (int) ($recipe->ek_n_ingredients_priced ?? 0);

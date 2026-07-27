@@ -182,3 +182,18 @@ it('L8a: ein Basisrezept hat kein Wirtschaftlichkeits-Glied', function () {
     expect($erg['wirtschaftlichkeit'])->toBeNull()
         ->and($r->fresh()->standardPresentation()->first())->toBeNull();
 });
+
+// ── L8b: die dritte Vorbedingung wird auch benannt ──────────────────────────
+
+it('L8b: fehlt die Standard-Darreichung, ist auch DAS eine benannte Lücke (vorher stumm)', function () {
+    // `ensureStandard` darf ohne Servierform-Vokabular nichts anlegen → keine
+    // Preis-Zeile, kein VK. Ohne die Lücke zeigte die Generator-Fläche in diesem
+    // Fall weder Preis noch Grund.
+    FoodAlchemistServierform::where('code', 'unbestimmt')->forceDelete();
+
+    $w = $this->svc->anreichern($this->rootTeam, ($this->gericht)())['wirtschaftlichkeit'];
+
+    expect($w['luecken'])->toContain('darreichung')
+        ->and($w['sales_net'])->toBeNull()
+        ->and($w['fehler'])->toBeNull();          // eine Lücke, kein Fehlschlag
+});

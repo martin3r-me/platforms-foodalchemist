@@ -201,3 +201,105 @@ it('L7b-2: neu angelegte Sub-Rezept-Stubs stehen beim Namen im Ergebnis — auch
         ->assertSee('ausrezeptieren offen')
         ->assertSee('Kalbsfond braun');
 });
+
+// ── L8b: die Wirtschaftlichkeits-Zeile an beiden Flächen ────────────────────
+
+it('L8b: das bepreiste Ergebnis steht am Gericht — VK, Wareneinsatz-Ampel, Portion', function () {
+    $comp = Livewire::test(VkGeneratorModal::class)
+        ->set('description', 'Rinderrücken mit Jus')
+        ->call('generieren');
+
+    Cache::put(GenerateRecipeJob::cacheKey($comp->get('runId')), [
+        'status' => 'done', 'recipe_id' => 61, 'name' => '[TEL] Rinderrücken | Jus',
+        'statistik' => ['bestand_gp' => 3, 'bestand_sub' => 1, 'stub_neu' => 0, 'stubs' => [], 'offen' => 0],
+        'offene' => [],
+        'anreicherung' => [
+            'run_id' => 21, 'schritte' => [], 'uebersprungen' => [], 'uebernommen' => 0, 'offen' => 0, 'fehler' => null,
+            'wirtschaftlichkeit' => [
+                'sales_net' => 9.6, 'ek_total_eur' => 24.0, 'ek_pro_portion' => 2.4,
+                'wareneinsatz_pct' => 25.0, 'ziel_pct' => 30.0, 'ampel' => 'gruen',
+                'portion_g' => 200.0, 'aufschlagsklasse' => 'ALC', 'vorlaeufig' => false,
+                'luecken' => [], 'signal' => false, 'fehler' => null,
+            ],
+        ],
+    ], now()->addMinutes(5));
+
+    $comp->call('pruefeErgebnis')
+        ->assertSee('VK 9,60 €')
+        ->assertSee('W 25,0 % / Ziel 30 %')
+        ->assertSee('200 g / Portion')
+        ->assertDontSee('Kein Auto-VK')
+        ->assertDontSee('vorläufig');
+});
+
+it('L8b: eine fehlende Portion ist eine sichtbare Lücke, kein stiller Null-Preis (V-041)', function () {
+    $comp = Livewire::test(VkGeneratorModal::class)
+        ->set('description', 'Irgendein Teller')
+        ->call('generieren');
+
+    Cache::put(GenerateRecipeJob::cacheKey($comp->get('runId')), [
+        'status' => 'done', 'recipe_id' => 62, 'name' => '[TEL] Teller',
+        'statistik' => ['bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 0, 'stubs' => [], 'offen' => 0],
+        'offene' => [],
+        'anreicherung' => [
+            'run_id' => 22, 'schritte' => [], 'uebersprungen' => [], 'uebernommen' => 0, 'offen' => 0, 'fehler' => null,
+            'wirtschaftlichkeit' => [
+                'sales_net' => null, 'ek_total_eur' => 24.0, 'ek_pro_portion' => null,
+                'wareneinsatz_pct' => null, 'ziel_pct' => 30.0, 'ampel' => 'unbekannt',
+                'portion_g' => null, 'aufschlagsklasse' => null, 'vorlaeufig' => false,
+                'luecken' => ['portion', 'aufschlagsklasse'], 'signal' => false, 'fehler' => null,
+            ],
+        ],
+    ], now()->addMinutes(5));
+
+    $comp->call('pruefeErgebnis')
+        ->assertSee('Kein Auto-VK')
+        ->assertSee('Portionsgröße + Aufschlagsklasse')
+        ->assertDontSee('💰 VK');
+});
+
+it('L8b: unbepreiste Zutaten machen den VK „vorläufig", und der Signal-Fall sagt es', function () {
+    $comp = Livewire::test(VkGeneratorModal::class)
+        ->set('description', 'Teller mit Park-GP')
+        ->call('generieren');
+
+    Cache::put(GenerateRecipeJob::cacheKey($comp->get('runId')), [
+        'status' => 'done', 'recipe_id' => 63, 'name' => '[TEL] Teller',
+        'statistik' => ['bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 0, 'stubs' => [], 'offen' => 0],
+        'offene' => [],
+        'anreicherung' => [
+            'run_id' => 23, 'schritte' => [], 'uebersprungen' => [], 'uebernommen' => 0, 'offen' => 0, 'fehler' => null,
+            'wirtschaftlichkeit' => [
+                'sales_net' => 4.0, 'ek_total_eur' => 12.0, 'ek_pro_portion' => 1.6,
+                'wareneinsatz_pct' => 40.0, 'ziel_pct' => 30.0, 'ampel' => 'gelb',
+                'portion_g' => 180.0, 'aufschlagsklasse' => 'ALC', 'vorlaeufig' => true,
+                'luecken' => [], 'signal' => true, 'fehler' => null,
+            ],
+        ],
+    ], now()->addMinutes(5));
+
+    $comp->call('pruefeErgebnis')
+        ->assertSee('vorläufig')
+        ->assertSee('Unbepreiste Zutaten im EK')
+        ->assertSee('als Signal im Cockpit vermerkt');
+});
+
+it('L8b: das Basisrezept-Modal zeigt keine Wirtschaftlichkeit (Basisrezept hat keinen VK)', function () {
+    $comp = Livewire::test(GeneratorModal::class)
+        ->set('description', 'Kalbsfond')
+        ->call('generieren');
+
+    Cache::put(GenerateRecipeJob::cacheKey($comp->get('runId')), [
+        'status' => 'done', 'recipe_id' => 64, 'name' => 'Fond: Kalb',
+        'statistik' => ['bestand_gp' => 3, 'bestand_sub' => 0, 'stub_neu' => 0, 'stubs' => [], 'offen' => 0],
+        'offene' => [],
+        'anreicherung' => [
+            'run_id' => 24, 'schritte' => [], 'uebersprungen' => ['description'], 'uebernommen' => 0,
+            'offen' => 0, 'fehler' => null, 'kohaerenz_urteil' => null, 'wirtschaftlichkeit' => null,
+        ],
+    ], now()->addMinutes(5));
+
+    $comp->call('pruefeErgebnis')
+        ->assertDontSee('Kein Auto-VK')
+        ->assertDontSee('/ Portion');
+});
