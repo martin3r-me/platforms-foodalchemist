@@ -49,6 +49,10 @@ class KnowledgeImportCommand extends Command
         $stats['trend'] = $this->importOrdner("{$vault}/07.03_Trend_Scouting", 'trend', $dryRun, slugPrefix: 'trend.', recursive: true, excludeDirs: ['Food_Tech_&_Automatisierung'], force: $force);
         // #505: MCP-Orchestrierungs-Workflows (fa.*) — searchbar, NICHT always-geroutet (kein seedRoutings-Eintrag).
         $stats['workflow'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Workflows", 'workflow', $dryRun, slugPrefix: 'workflow.', force: $force);
+        // Spec 08 P6: Concepting-Handwerk (Dramaturgie/Gang-Aufbau/Anlass-Fit) für die Planungs-Ebene.
+        // Der Ordner existiert im Vault noch nicht — die Destillation (109/110/111) ist der Daten-Schritt;
+        // bis dahin warnt importOrdner und die Kategorie bleibt leer (= kein Prompt-Block).
+        $stats['concept'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Concepting", 'concept', $dryRun, slugPrefix: 'concept.', force: $force);
 
         $stats['aliases'] = $this->importAliases($dryRun);
         $stats['routings'] = $this->seedRoutings($dryRun);
@@ -246,10 +250,14 @@ class KnowledgeImportCommand extends Command
             // Spec 19 E6.4 / Spec 08 P6: Kreativ-Divergenz am Kapitel (foodbook.plan) bzw.
             // standalone-Konzept (concept.plan). Concepting- + Food-Wissen, keine Pairing-Grounding
             // (Divergenz ist produkt-blind — der Anker-Graph inspiriert, erdet aber nicht).
+            // Spec 08 P6: dazu das Concepting-Handwerk selbst (Kategorie `concept`, always mit
+            // Deckel). Spiegel von Migration 2026_07_27_000001 — beide Wege müssen dasselbe setzen.
             ['foodbook.plan', 'cross_cutting', 'always', null, null],
             ['foodbook.plan', 'domain', 'discovery', null, null],
+            ['foodbook.plan', 'concept', 'always', 4, 4000],
             ['concept.plan', 'cross_cutting', 'always', null, null],
             ['concept.plan', 'domain', 'discovery', null, null],
+            ['concept.plan', 'concept', 'always', 4, 4000],
             ['ai_extract_recipe', 'cross_cutting', 'none', null, null],     // bewusst leer
             ['ai_suggest_pairings', 'pairing', 'grounding', 5, 1200],
             ['ai_infer_ankers', 'pairing', 'grounding', 3, 1400],

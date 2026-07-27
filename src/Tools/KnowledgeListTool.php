@@ -26,7 +26,7 @@ class KnowledgeListTool extends FoodAlchemistTool implements ToolContract, ToolM
     public function getDescription(): string
     {
         return 'Listet die Catering-Wissensbasis vollständig und seitenweise auf (ohne Suchbegriff, '
-            . 'ohne 50er-Cap). Optional pro Kategorie (trend/pairing/cross_cutting/domain/niveau/regelwerk) '
+            . 'ohne 50er-Cap). Optional pro Kategorie (trend/pairing/cross_cutting/domain/niveau/regelwerk/concept) '
             . 'gefiltert; offset/limit-Paging (next_offset zum Weiterblättern). Liefert slug/title/category '
             . '+ Frontmatter (thema, sub_thema, relevanz, recherche_datum, tags). Volltext via '
             . 'foodalchemist.knowledge.GET, gezielte Stichwortsuche via foodalchemist.knowledge.SEARCH.';
@@ -39,7 +39,7 @@ class KnowledgeListTool extends FoodAlchemistTool implements ToolContract, ToolM
             'properties' => [
                 'category' => [
                     'type' => 'string',
-                    'enum' => ['trend', 'pairing', 'cross_cutting', 'domain', 'niveau', 'regelwerk', 'kueche', 'workflow'],
+                    'enum' => ['trend', 'pairing', 'cross_cutting', 'domain', 'niveau', 'regelwerk', 'kueche', 'workflow', 'concept'],
                     'description' => 'Optionaler Kategorie-Filter. Ohne Angabe: alle Kategorien.',
                 ],
                 'offset' => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => 'Start-Offset fürs Paging (next_offset aus der Vorantwort).'],

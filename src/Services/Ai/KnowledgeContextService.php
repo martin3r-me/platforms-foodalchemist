@@ -36,6 +36,11 @@ class KnowledgeContextService
 
     public const MAX_PARTNERS = 28;
 
+    /** Spec 08 P6: Fallback-Budget für `concept:always`, wenn die Routing-Zeile nichts vorgibt. */
+    public const CONCEPT_MAX_DOCS = 4;
+
+    public const CONCEPT_TRUNCATE_CHARS = 4000;
+
     /**
      * Haupt-Einstieg (Pseudocode §3): baut den Wissens-Block für ein KI-Feature.
      *
@@ -50,6 +55,20 @@ class KnowledgeContextService
 
         $filesUsed = [];
         $parts = [];
+
+        // ── 0. CONCEPTING-WISSEN (Spec 08 P6, nur Planungs-Features) ──
+        // Steht bewusst VOR dem Food-Wissen: es sagt, wie ein Konzept gebaut ist,
+        // und rahmt damit die Zutaten-Ebene darunter. Leere Kategorie ⇒ kein Block.
+        if (($r = $routing->get('concept:always')) !== null) {
+            $concept = $this->conceptBlock(
+                (int) ($r->max_docs ?: self::CONCEPT_MAX_DOCS),
+                (int) ($r->max_chars_per_doc ?: self::CONCEPT_TRUNCATE_CHARS),
+                $filesUsed
+            );
+            if ($concept !== null) {
+                $parts[] = $concept;
+            }
+        }
 
         // ── 1. VAULT-WISSEN: Cross-Cutting (always) + Domains (discovery) ──
         $blocks = [];
@@ -231,6 +250,36 @@ class KnowledgeContextService
         }
 
         return $names;
+    }
+
+    /**
+     * Spec 08 P6: Concepting-Wissen für die Planungs-Features (`foodbook.plan`,
+     * `concept.plan`). Bewusst `always` statt `discovery`: der Bestand ist klein
+     * und beschreibt Handwerk, kein Produkt — eine Beschreibungs-Discovery würde
+     * hier nach Zutaten filtern, wo Dramaturgie gefragt ist. Deckel kommt aus der
+     * Routing-Zeile (max_docs/max_chars_per_doc), Reihenfolge ist Slug-stabil.
+     *
+     * @param  list<string>  $filesUsed  by-ref-Audit
+     */
+    private function conceptBlock(int $maxDocs, int $maxChars, array &$filesUsed): ?string
+    {
+        $docs = DB::table('foodalchemist_knowledge_documents')
+            ->where('category', 'concept')->where('active', 1)->whereNull('deleted_at')
+            ->orderBy('slug')->limit(max(1, $maxDocs))
+            ->get(['slug', 'content_md', 'version']);
+        if ($docs->isEmpty()) {
+            return null;                                             // Invariante 6: fehlende Quelle = leerer Kontext
+        }
+
+        $blocks = [];
+        foreach ($docs as $doc) {
+            $blocks[] = "## CONCEPT: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
+            $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+        }
+
+        return "# CONCEPTING-WISSEN (Konzept-/Menü-Handwerk: Dramaturgie, Gang-Aufbau, Anlass- und Gäste-Fit, Balance)\n\n"
+            . "Maßstab für den PLAN: es sagt, WIE ein gutes Konzept gebaut ist — nicht, welches Gericht darin steht.\n\n"
+            . implode("\n\n---\n\n", $blocks);
     }
 
     /** Die 7 Always-Load-Dokumente in Ist-Reihenfolge (fehlende werden still übersprungen). */

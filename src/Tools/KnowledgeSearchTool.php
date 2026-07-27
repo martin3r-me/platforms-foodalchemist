@@ -35,7 +35,7 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
             'type' => 'object',
             'properties' => [
                 'q' => ['type' => 'string', 'description' => 'Suchbegriffe, z. B. "Mengen Buffet" oder "Substitution Sahne"'],
-                'category' => ['type' => 'string', 'enum' => ['cross_cutting', 'domain', 'pairing', 'regelwerk', 'trend', 'niveau', 'kueche', 'workflow'], 'description' => 'Optionaler Filter (workflow = MCP-Handlungs-Workflows)'],
+                'category' => ['type' => 'string', 'enum' => ['cross_cutting', 'domain', 'pairing', 'regelwerk', 'trend', 'niveau', 'kueche', 'workflow', 'concept'], 'description' => 'Optionaler Filter (workflow = MCP-Handlungs-Workflows, concept = Konzept-/Menü-Handwerk für die Planungs-Ebene)'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 10],
             ],
             'required' => ['q'],
