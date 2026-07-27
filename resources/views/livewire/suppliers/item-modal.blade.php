@@ -114,7 +114,8 @@
             <x-foodalchemist::modal-section title="Allergene (14 EU-Pflichtangaben)">
                 <div class="flex items-center justify-between mb-2" data-allergen-kopf>
                     <p class="text-[11px] text-gray-500">− nicht enthalten · ≈ Spuren · ✓ enthalten · ungesetzt = unbekannt (GL-01). Quelle:
-                        <span class="{{ $pill }} {{ $allergenQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $allergenQuelle ?? 'Import' }}</span>
+                        {{-- Lineage GL-07: NULL = Necta-Bulk, manual = hier gepflegt, datei = Kanal-B-Import (Spec 13 · S1c) --}}
+                        <span class="{{ $pill }} {{ $allergenQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ ['manual' => 'manuell', 'datei' => 'Datei-Import'][$allergenQuelle] ?? ($allergenQuelle ?: 'Import') }}</span>
                     </p>
                     @if($darfEdit)
                         <button type="button" wire:click="allergeneSpeichern" class="{{ $btnGhostXs }} text-violet-600">Allergene speichern</button>
@@ -131,7 +132,7 @@
             <x-foodalchemist::modal-section title="Zusatzstoffe (18 deklarationspflichtige Stoffe, LMIV)">
                 <div class="flex items-center justify-between mb-2" data-deklaration-kopf>
                     <p class="text-[11px] text-gray-500">− nein · ✓ ja · ungesetzt = keine Angabe (GL-09). Quelle:
-                        <span class="{{ $pill }} {{ $deklarationQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $deklarationQuelle ?? 'Import' }}</span>
+                        <span class="{{ $pill }} {{ $deklarationQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ ['manual' => 'manuell', 'datei' => 'Datei-Import'][$deklarationQuelle] ?? ($deklarationQuelle ?: 'Import') }}</span>
                     </p>
                     @if($darfEdit)
                         <button type="button" wire:click="deklarationenSpeichern" class="{{ $btnGhostXs }} text-violet-600">Zusatzstoffe speichern</button>

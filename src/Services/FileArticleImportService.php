@@ -16,17 +16,18 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
  * Artikel (E1); der Upsert-Schlüssel ist `(supplier_id, article_number)` mit EAN
  * als Fallback (E2) — bewusst NICHT `legacy_id`, das ist Necta-Erbe.
  *
- * Was diese Stufe schreibt: den Artikel-Stamm (`foodalchemist_supplier_items`)
- * und — seit S1b — den **Preis** (`foodalchemist_prices` über
- * {@see PriceService::createFor}, append-only) samt **Post-Import-Kette (E4)**:
- * geänderter Preis → betroffene GPs → `recomputeAndPropagate` je nutzendem Rezept
- * → `SignalDetektorService::preisSprungMargeImpact`. Das ist der DoD-Kern der Spec:
- * keine stille Drift — ein neuer EK darf nicht in der Preistabelle liegen, während
- * Rezeptkosten und Marge-Signale den alten Stand zeigen.
+ * Was diese Stufe schreibt: den Artikel-Stamm (`foodalchemist_supplier_items`),
+ * seit S1b den **Preis** (`foodalchemist_prices` über {@see PriceService::createFor},
+ * append-only) und seit S1c die drei **Detail-Blöcke** (`item_nutritionals` /
+ * `item_allergens` / `item_declarations` über den SupplierItemService) — alles samt
+ * **Post-Import-Kette (E4)**: bewegter Artikel → betroffene GPs →
+ * `recomputeAndPropagate` je nutzendem Rezept → `SignalDetektorService::preisSprungMargeImpact`.
+ * Das ist der DoD-Kern der Spec: keine stille Drift — weder ein neuer EK noch ein
+ * neues Allergen darf am Artikel stehen, während Rezeptkosten, Aushang und
+ * Marge-Signale den alten Stand zeigen.
  *
- * Was sie NOCH NICHT schreibt: Nährwerte, Allergene, Deklarationen (S1c),
- * Lieferbedingungen (S2). Diese Spalten werden in der Datei **erkannt und
- * namentlich gemeldet** statt still verschluckt.
+ * Was sie NOCH NICHT schreibt: Lieferbedingungen (S2). Diese Spalten werden in der
+ * Datei **erkannt und namentlich gemeldet** statt still verschluckt.
  *
  * Fünf tragende Regeln:
  *  1. **Leere Zelle heißt „steht nicht in der Datei", nicht „lösche den Wert".**
@@ -145,17 +146,98 @@ class FileArticleImportService
         'rueckverguetung' => 'S2 (Lieferbedingungen am Lieferanten, E3)',
     ];
 
-    /** Präfixe für die Detail-Blöcke der Vorlage (Stufe S1c). */
-    public const SPAETER_PRAEFIXE = [
-        'naehrwert' => 'S1c (item_nutritionals)',
-        'allergen' => 'S1c (item_allergens)',
-        'zusatzstoff' => 'S1c (item_declarations)',
-        'deklaration' => 'S1c (item_declarations)',
+    /**
+     * S1c — die drei Detail-Blöcke. Ihre Spalten heißen `<Präfix> <Wert>`
+     * (`Nährwert kcal`, `Allergen Milch`, `Zusatzstoff Farbstoff`); der Präfix wählt
+     * den Block, der Rest den Schlüssel. Kanonisch wird daraus `nw:…` / `al:…` / `dk:…`
+     * — bewusst ein eigener Namensraum, damit eine Detail-Spalte nie mit einem
+     * Artikel-Feld kollidiert (`Allergen Fisch` vs. eine künftige Spalte `Fisch`).
+     *
+     * @var array<string, array{0: string, 1: string}>  Präfix => [Kürzel, Klartext]
+     */
+    public const DETAIL_PRAEFIXE = [
+        'naehrwerte' => ['nw', 'Nährwert'],
+        'naehrwert' => ['nw', 'Nährwert'],
+        'allergene' => ['al', 'Allergen'],
+        'allergen' => ['al', 'Allergen'],
+        'zusatzstoffe' => ['dk', 'Zusatzstoff'],
+        'zusatzstoff' => ['dk', 'Zusatzstoff'],
+        'deklarationen' => ['dk', 'Zusatzstoff'],
+        'deklaration' => ['dk', 'Zusatzstoff'],
+    ];
+
+    /**
+     * Nährwert-Ziele: nur die **8 Kernwerte** aus {@see SupplierItemService::NAEHRWERT_FELDER}.
+     * Das ist kein Zufalls-Ausschnitt, sondern derselbe Umfang, den `setNutrition` schreibt
+     * — die 36 übrigen BLS-Spalten hat bisher niemand gepflegt, und ein zweiter Schreibweg
+     * nur für sie wäre der zweite Pfad, den die Spec ausdrücklich nicht will.
+     *
+     * @var array<string, list<string>>
+     */
+    public const NAEHRWERT_SPALTEN = [
+        'energy_kcal' => ['kcal', 'energie', 'energiekcal', 'brennwert', 'brennwertkcal'],
+        'energy_kj' => ['kj', 'energiekj', 'brennwertkj'],
+        'protein' => ['eiweiss', 'protein'],
+        'fat' => ['fett', 'fat'],
+        'saturated_fat' => ['gesaettigtefettsaeuren', 'davongesaettigtefettsaeuren', 'gesaettigtefette', 'saturatedfat'],
+        'carbs_absorbable' => ['kohlenhydrate', 'kh', 'carbs'],
+        'sugar' => ['zucker', 'davonzucker', 'sugar'],
+        'sodium' => ['natrium', 'sodium'],
+    ];
+
+    /**
+     * LMIV-Label „Salz" — der Wert, den echte Lieferanten-Datenblätter tragen. Die
+     * Tabelle kennt nur Natrium (mg), darum wird nach GL-08 **umgerechnet**:
+     * Salz (g) = Natrium (mg) × 0,0025 ⇒ Natrium = Salz × 400. Steht beides in der
+     * Datei, gewinnt Natrium (der ungerechnete Wert) und Salz wird als Warnung gemeldet.
+     */
+    public const NAEHRWERT_SALZ = ['salz', 'salt'];
+    public const SALZ_ZU_NATRIUM = 400.0;
+
+    /** Allergen-Ziele (14 EU) — deutsche Datenblatt-Wörter je Schlüssel. */
+    public const ALLERGEN_SPALTEN = [
+        'gluten' => ['gluten', 'glutenhaltigesgetreide', 'getreide'],
+        'crustaceans' => ['krebstiere', 'krustentiere', 'crustaceans'],
+        'eggs' => ['ei', 'eier', 'eggs'],
+        'fish' => ['fisch', 'fish'],
+        'peanuts' => ['erdnuss', 'erdnuesse', 'peanuts'],
+        'soy' => ['soja', 'sojabohnen', 'soy'],
+        'milk' => ['milch', 'milk'],
+        'tree_nuts' => ['schalenfruechte', 'nuesse', 'hartschalenobst', 'treenuts'],
+        'celery' => ['sellerie', 'celery'],
+        'mustard' => ['senf', 'mustard'],
+        'sesame' => ['sesam', 'sesamsamen', 'sesame'],
+        'sulphites' => ['sulfite', 'schwefeldioxid', 'schwefeldioxidundsulfite', 'sulphites'],
+        'lupin' => ['lupine', 'lupinen', 'lupin'],
+        'molluscs' => ['weichtiere', 'mollusken', 'molluscs'],
+    ];
+
+    /** Deklarations-Ziele (18 LMIV) — Kurzwort je Schlüssel, Labels in {@see FoodAlchemistItemDeclaration::STOFFE}. */
+    public const DEKLARATION_SPALTEN = [
+        'with_dye' => ['farbstoff', 'mitfarbstoff'],
+        'with_preservative' => ['konservierungsstoff', 'mitkonservierungsstoff', 'konserviert'],
+        'with_antioxidant' => ['antioxidationsmittel', 'mitantioxidationsmittel'],
+        'with_flavour_enhancer' => ['geschmacksverstaerker', 'mitgeschmacksverstaerker'],
+        'sulphurated' => ['geschwefelt'],
+        'blackened' => ['geschwaerzt'],
+        'waxed' => ['gewachst'],
+        'with_phosphate' => ['phosphat', 'mitphosphat'],
+        'with_sweetener' => ['suessungsmittel', 'mitsuessungsmittel'],
+        'contains_phenylalanine' => ['phenylalanin', 'phenylalaninquelle'],
+        'excessive_consumption_laxative' => ['abfuehrend', 'abfuehrendewirkung'],
+        'packaged_modified_atmosphere' => ['schutzatmosphaere', 'unterschutzatmosphaere'],
+        'caffeinated' => ['koffeinhaltig', 'koffein'],
+        'contains_milk_protein' => ['milcheiweiss'],
+        'contains_quinine' => ['chinin', 'chininhaltig'],
+        'taurine_containing' => ['taurin', 'taurinhaltig'],
+        'can_impair_attention_children' => ['aufmerksamkeitkinder', 'aktivitaetkinder'],
+        'with_type_sugar_sweetener' => ['zuckerartenundsuessungsmittel', 'zuckerartensuessungsmittel'],
     ];
 
     public function __construct(
         private PriceService $preise,
         private RecipeRecomputeService $recompute,
+        private SupplierItemService $artikel,
     ) {
     }
 
@@ -168,6 +250,7 @@ class FileArticleImportService
      *   datei: string, lieferant: string, zeilen: int, apply: bool,
      *   neu: int, aktualisiert: int, unveraendert: int, uebersprungen: int, fehler: int,
      *   preise: array{neu: int, geaendert: int, unveraendert: int, fehler: int},
+     *   details: array{naehrwerte: int, allergene: int, zusatzstoffe: int},
      *   kette: array{bewegt: int, gps: int, rezepte: int, neu_berechnet: int, signale: int, abgeschnitten: bool},
      *   spalten: array{erkannt: list<string>, spaeter: list<string>, unbekannt: list<string>},
      *   hinweise: list<string>, befunde: list<array<string, mixed>>
@@ -189,6 +272,7 @@ class FileArticleImportService
             'apply' => $apply,
             'neu' => 0, 'aktualisiert' => 0, 'unveraendert' => 0, 'uebersprungen' => 0, 'fehler' => 0,
             'preise' => ['neu' => 0, 'geaendert' => 0, 'unveraendert' => 0, 'fehler' => 0],
+            'details' => ['naehrwerte' => 0, 'allergene' => 0, 'zusatzstoffe' => 0],
             'kette' => ['bewegt' => 0, 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0, 'abgeschnitten' => false],
             'spalten' => $datei['spalten'],
             'hinweise' => $datei['hinweise'],
@@ -202,6 +286,11 @@ class FileArticleImportService
             $bericht[$befund['status']]++;
             if (isset($befund['preis']['status'])) {
                 $bericht['preise'][$befund['preis']['status']]++;
+            }
+            foreach (array_keys($bericht['details']) as $block) {
+                if (($befund['details'][$block] ?? []) !== []) {
+                    $bericht['details'][$block]++;
+                }
             }
         }
 
@@ -285,6 +374,21 @@ class FileArticleImportService
             }
             if ($stufe = $this->spaetereStufe($norm)) {
                 $spaeter[] = trim((string) $titel) . ' → ' . $stufe;
+
+                continue;
+            }
+            $detail = $this->detailSpalte($norm, $detailHinweis);
+            if ($detail !== null) {
+                if (in_array($detail, $zuordnung, true)) {
+                    throw new \RuntimeException("Spalte [{$titel}] doppelt belegt (bereits erkannt als: {$detail}) — Vorlage bereinigen.");
+                }
+                $zuordnung[$idx] = $detail;
+                $erkannt[] = $detail;
+
+                continue;
+            }
+            if ($detailHinweis !== null) {
+                $ohneZiel[] = trim((string) $titel) . ' → ' . $detailHinweis;
 
                 continue;
             }
@@ -382,8 +486,10 @@ class FileArticleImportService
                 ]);
             }
 
-            return $befund + ['status' => 'neu', 'felder' => array_keys($werte), 'warnungen' => $warnungen]
-                + $this->verarbeitePreis($team, $neu, $w, $apply, $bewegteItems);
+            $nachlauf = $this->verarbeitePreis($team, $neu, $w, $apply, $bewegteItems)
+                + $this->verarbeiteDetails($team, $neu, $w, $apply, $bewegteItems, $warnungen);
+
+            return $befund + ['status' => 'neu', 'felder' => array_keys($werte), 'warnungen' => $warnungen] + $nachlauf;
         }
 
         // D1: geerbter Artikel des Eltern-Teams — nur der Besitzer pflegt ihn.
@@ -394,17 +500,18 @@ class FileArticleImportService
             ];
         }
 
-        $preis = $this->verarbeitePreis($team, $treffer, $w, $apply, $bewegteItems);
+        $nachlauf = $this->verarbeitePreis($team, $treffer, $w, $apply, $bewegteItems)
+            + $this->verarbeiteDetails($team, $treffer, $w, $apply, $bewegteItems, $warnungen);
 
         $diff = $this->diff($treffer, $werte);
         if ($diff === []) {
-            return $befund + ['status' => 'unveraendert', 'warnungen' => $warnungen] + $preis;
+            return $befund + ['status' => 'unveraendert', 'warnungen' => $warnungen] + $nachlauf;
         }
         if ($apply) {
             $treffer->update($diff);
         }
 
-        return $befund + ['status' => 'aktualisiert', 'felder' => array_keys($diff), 'warnungen' => $warnungen] + $preis;
+        return $befund + ['status' => 'aktualisiert', 'felder' => array_keys($diff), 'warnungen' => $warnungen] + $nachlauf;
     }
 
     /**
@@ -483,6 +590,181 @@ class FileArticleImportService
         ]];
     }
 
+    /**
+     * S1c — die drei Detail-Blöcke einer Zeile (Nährwerte, Allergene, Zusatzstoffe).
+     *
+     * Vier Regeln, die hier zusammenkommen:
+     *
+     *  - **Kein zweiter Schreibweg.** Geschrieben wird ausschließlich über
+     *    {@see SupplierItemService::setNutrition/setAllergens/setDeclarations} — dort
+     *    hängen D1-Prüfung, Wert-Vokabular und Lineage-Stempel schon dran.
+     *  - **Die Setter ersetzen voll, der Import nicht.** Sie schreiben immer alle
+     *    Felder ihres Blocks (die UI-Form postet auch alle). Ein Teil-Katalog mit einer
+     *    Spalte `Allergen Milch` würde damit die übrigen 13 Werte auf `unbekannt`
+     *    zurücksetzen — das Gegenteil von Regel 1. Darum wird hier **gemischt**:
+     *    Ist-Stand lesen, die Datei-Werte darüberlegen, das Ganze zurückschreiben.
+     *  - **Explizit „unbekannt" darf überschreiben, eine leere Zelle nicht.** Die leere
+     *    Zelle heißt „steht nicht in der Datei" (Regel 1); ein hingeschriebenes
+     *    „unbekannt" ist dagegen eine Aussage des Lieferanten und wird übernommen.
+     *  - **Unlesbare Werte sind Warnungen, keine Zeilen-Fehler** — anders als beim Preis.
+     *    Ein nicht gesetzter Allergen-Wert bleibt `unbekannt` und ist damit nach GL-01
+     *    die konservative Seite; ein nicht gesetzter Preis wäre ein fehlender EK. Die
+     *    Asymmetrie ist gewollt und steht so in der Vorlagen-Doku.
+     *
+     * Die geänderten Artikel wandern in `$bewegteItems` und damit in die **E4-Kette**:
+     * Rezept-Allergene, -Zusatzstoffe und -Nährwerte sind aggregierte Felder
+     * ({@see RecipeRecomputeService::recomputePipeline}), kein Live-Join. Ohne Recompute
+     * stünde das neue Allergen am Artikel, während Rezept, Foodbook und Aushang den
+     * alten Stand zeigten — dieselbe stille Drift wie beim Preis, nur mit Haftung.
+     *
+     * @param  array<string, string>  $w
+     * @param  array<int, true>  $bewegteItems
+     * @param  list<string>  $warnungen
+     * @return array{details?: array{naehrwerte: list<string>, allergene: list<string>, zusatzstoffe: list<string>}}
+     */
+    private function verarbeiteDetails(Team $team, ?FoodAlchemistSupplierItem $item, array $w, bool $apply, array &$bewegteItems, array &$warnungen): array
+    {
+        $nw = $this->detailWerte($w, 'nw', $warnungen);
+        $al = $this->detailWerte($w, 'al', $warnungen);
+        $dk = $this->detailWerte($w, 'dk', $warnungen);
+        if ($nw === [] && $al === [] && $dk === []) {
+            return [];
+        }
+
+        // Trockenlauf auf einem neuen Artikel: es gibt noch keine Zeile, gegen die man
+        // mischen könnte. Gemeldet wird, was ankäme — geraten wird nichts.
+        if ($item === null || ! $item->exists) {
+            return ['details' => [
+                'naehrwerte' => array_keys($nw), 'allergene' => array_keys($al), 'zusatzstoffe' => array_keys($dk),
+            ]];
+        }
+
+        $geaendert = ['naehrwerte' => [], 'allergene' => [], 'zusatzstoffe' => []];
+
+        if ($nw !== []) {
+            $ist = $this->artikel->getNutrition($item);
+            $soll = $ist;
+            foreach ($nw as $k => $v) {
+                $soll[$k] = $v;
+                $altZahl = ($ist[$k] ?? '') === '' ? null : (float) $ist[$k];
+                if ($altZahl === null || abs($altZahl - (float) $v) >= 0.0005) {
+                    $geaendert['naehrwerte'][] = $k;
+                }
+            }
+            if ($geaendert['naehrwerte'] !== [] && $apply) {
+                $this->artikel->setNutrition($team, $item, $soll);
+            }
+        }
+
+        foreach ([['al', $al, 'allergene', 'getAllergens', 'setAllergens'], ['dk', $dk, 'zusatzstoffe', 'getDeclarations', 'setDeclarations']] as [$_k, $datei, $block, $lesen, $schreiben]) {
+            if ($datei === []) {
+                continue;
+            }
+            $ist = $this->artikel->{$lesen}($item);
+            $soll = $ist;
+            foreach ($datei as $k => $v) {
+                $soll[$k] = $v;
+                if (($ist[$k] ?? 'unbekannt') !== $v) {
+                    $geaendert[$block][] = $k;
+                }
+            }
+            if ($geaendert[$block] !== [] && $apply) {
+                $this->artikel->{$schreiben}($team, $item, $soll, 'datei');
+            }
+        }
+
+        if ($geaendert['naehrwerte'] !== [] || $geaendert['allergene'] !== [] || $geaendert['zusatzstoffe'] !== []) {
+            $bewegteItems[(int) $item->id] = true;
+        }
+
+        return ['details' => $geaendert];
+    }
+
+    /**
+     * Die befüllten Zellen eines Detail-Blocks → [Ziel-Schlüssel => Wert].
+     * Leere Zellen fallen heraus (Regel 1), unlesbare werden zur Warnung.
+     *
+     * @param  array<string, string>  $w
+     * @param  list<string>  $warnungen
+     * @return array<string, mixed>
+     */
+    private function detailWerte(array $w, string $kuerzel, array &$warnungen): array
+    {
+        $out = [];
+        $salz = null;
+        foreach ($w as $kanon => $roh) {
+            if (! str_starts_with($kanon, "{$kuerzel}:") || trim($roh) === '') {
+                continue;
+            }
+            $key = substr($kanon, strlen($kuerzel) + 1);
+
+            if ($kuerzel === 'nw') {
+                $z = $this->zahl($roh);
+                if ($z === null || $z < 0) {
+                    $warnungen[] = "Nährwert {$key}: [{$roh}] ist keine gültige Zahl je 100 g — Wert nicht gesetzt.";
+
+                    continue;
+                }
+                if ($key === '__salz') {
+                    $salz = $z * self::SALZ_ZU_NATRIUM;
+                } else {
+                    $out[$key] = $z;
+                }
+
+                continue;
+            }
+
+            $wert = $kuerzel === 'al' ? $this->allergenWert($roh) : $this->deklarationsWert($roh);
+            if ($wert === null) {
+                $warnungen[] = ($kuerzel === 'al' ? 'Allergen' : 'Zusatzstoff')
+                    . " {$key}: [{$roh}] ist kein zulässiger Wert — nicht gesetzt.";
+
+                continue;
+            }
+            $out[$key] = $wert;
+        }
+
+        // Salz nur, wenn kein direkter Natriumwert dasteht: der ungerechnete gewinnt.
+        if ($salz !== null) {
+            if (array_key_exists('sodium', $out)) {
+                $warnungen[] = 'Nährwert: Salz UND Natrium in derselben Zeile — Natrium gewinnt, Salz ignoriert.';
+            } else {
+                $out['sodium'] = $salz;
+            }
+        }
+
+        return $out;
+    }
+
+    /** Datenblatt-Wort → GL-01-Wert. `null` = unlesbar (⇒ Warnung, Wert bleibt wie er war). */
+    private function allergenWert(string $roh): ?string
+    {
+        $s = $this->normHeader($roh);
+        if ($s === '' && trim($roh) === '-') {
+            $s = 'nein';   // der Strich im Datenblatt heißt „nicht enthalten", nicht „leer"
+        }
+
+        return match (true) {
+            in_array($s, ['ja', 'j', 'x', '1', 'yes', 'enthalten', 'enthaelt', 'positiv'], true) => 'enthalten',
+            in_array($s, ['spuren', 'spur', 'kannspurenenthalten', 'kannspuren', 'traces', 'moeglich'], true) => 'spuren',
+            in_array($s, ['nein', 'n', '0', 'no', 'nichtenthalten', 'frei', 'ohne', 'negativ'], true) => 'nicht_enthalten',
+            in_array($s, ['unbekannt', 'keineangabe', 'ka', 'unknown'], true) => 'unbekannt',
+            default => null,
+        };
+    }
+
+    /** Datenblatt-Wort → GL-09-Wert (`ja`|`nein`|`unbekannt`). */
+    private function deklarationsWert(string $roh): ?string
+    {
+        $s = $this->normHeader($roh);
+        if (in_array($s, ['unbekannt', 'keineangabe', 'ka', 'unknown'], true)) {
+            return 'unbekannt';
+        }
+        $b = $this->wahrheit($roh);
+
+        return $b === null ? null : ($b ? 'ja' : 'nein');
+    }
+
     /** Preis-Status der Datei → GL-11-Code: `0` Standard-EK, `2` Aktion. */
     private function preisStatus(string $roh): ?string
     {
@@ -496,10 +778,12 @@ class FileArticleImportService
     }
 
     /**
-     * E4 — die Post-Import-Kette. Ein bewegter Preis wandert über die GP-Struktur in
-     * die Rezeptkosten und von dort ins Marge-Signal; passiert das nicht, liegt der
-     * neue EK in der Preistabelle, während Kalkulation und Cockpit den alten Stand
-     * zeigen (genau die „stille Drift" der DoD).
+     * E4 — die Post-Import-Kette. Ein bewegter Artikel wandert über die GP-Struktur in
+     * die Rezept-Aggregate und von dort ins Marge-Signal; passiert das nicht, liegt der
+     * neue Stand am Artikel, während Kalkulation und Cockpit den alten zeigen (genau die
+     * „stille Drift" der DoD). **Bewegt** heißt seit S1c nicht nur „neuer Preis", sondern
+     * auch „neuer Nährwert / neues Allergen / neue Deklaration": diese drei sind am
+     * Rezept aggregierte Spalten, kein Live-Join (s. `RecipeRecomputeService::recomputePipeline`).
      *
      * Bewusst über die **LA↔GP-Struktur**, nicht über `lead_la_supplier_item_id`: die
      * T3-Kaskade in {@see RecipeRecomputeService} nimmt den Lead nur als *bevorzugten*
@@ -736,13 +1020,44 @@ class FileArticleImportService
 
     private function spaetereStufe(string $norm): ?string
     {
-        if (isset(self::SPAETER[$norm])) {
-            return self::SPAETER[$norm];
-        }
-        foreach (self::SPAETER_PRAEFIXE as $praefix => $stufe) {
-            if (str_starts_with($norm, $praefix)) {
-                return $stufe;
+        return self::SPAETER[$norm] ?? null;
+    }
+
+    /**
+     * Detail-Spalte (S1c) → kanonischer Schlüssel `nw:…` / `al:…` / `dk:…`.
+     *
+     * Zwei Rückgaben, die auseinandergehalten werden müssen: `null` heißt „keine
+     * Detail-Spalte" (der Aufrufer sucht weiter), ein `false` im zweiten Parameter
+     * heißt „Detail-Spalte, aber kein Ziel" — die gehört gemeldet und nicht unter
+     * „nicht Teil der Vorlage" begraben, sonst liest der Bediener eine bewusste
+     * Grenze (nur 8 Kernwerte) als Tippfehler in seiner Kopfzeile.
+     */
+    private function detailSpalte(string $norm, ?string &$hinweis = null): ?string
+    {
+        $hinweis = null;
+        // ALLE passenden Präfixe durchprobieren, nicht nur das erste: „Nährwert Eiweiß"
+        // normalisiert zu `naehrwerteiweiss` und trifft damit sowohl `naehrwerte` (Rest
+        // „iweiss", kein Ziel) als auch `naehrwert` (Rest „eiweiss", Treffer). Ein früher
+        // Abbruch beim ersten Präfix hätte die halbe Vorlage verschluckt.
+        foreach (self::DETAIL_PRAEFIXE as $praefix => [$kuerzel, $klartext]) {
+            if (! str_starts_with($norm, $praefix) || $norm === $praefix) {
+                continue;
             }
+            $rest = substr($norm, strlen($praefix));
+            $ziele = match ($kuerzel) {
+                'nw' => self::NAEHRWERT_SPALTEN,
+                'al' => self::ALLERGEN_SPALTEN,
+                default => self::DEKLARATION_SPALTEN,
+            };
+            foreach ($ziele as $key => $aliase) {
+                if ($rest === $key || in_array($rest, $aliase, true)) {
+                    return "{$kuerzel}:{$key}";
+                }
+            }
+            if ($kuerzel === 'nw' && in_array($rest, self::NAEHRWERT_SALZ, true)) {
+                return 'nw:__salz';
+            }
+            $hinweis ??= "{$klartext}-Spalte ohne Ziel — bekannt sind: " . implode(', ', array_keys($ziele));
         }
 
         return null;

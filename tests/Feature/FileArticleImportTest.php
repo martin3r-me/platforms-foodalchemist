@@ -167,14 +167,13 @@ it('Trockenlauf berichtet vollständig, schreibt aber nichts', function () {
 
 it('nennt Spalten späterer Stufen und solche ohne Ziel-Feld, statt sie still zu verschlucken', function () {
     $pfad = csv([
-        'Artikel-Nr;Bezeichnung;Naehrwert kcal;Mindestbestellwert;Preis-Notiz;Lieferzeit Kommentar',
-        '70012;Zanderfilet;92;250;Streichpreis;montags',
+        'Artikel-Nr;Bezeichnung;Mindestbestellwert;Zahlungsziel;Preis-Notiz;Lieferzeit Kommentar',
+        '70012;Zanderfilet;250;30 Tage;Streichpreis;montags',
     ]);
 
     $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
 
     expect($bericht['spalten']['spaeter'])->toHaveCount(2)
-        ->and(implode(' ', $bericht['spalten']['spaeter']))->toContain('S1c')
         ->and(implode(' ', $bericht['spalten']['spaeter']))->toContain('S2')
         ->and($bericht['spalten']['unbekannt'])->toBe(['Lieferzeit Kommentar'])
         ->and(implode(' ', $bericht['hinweise']))->toContain('Ohne Ziel-Feld');
@@ -371,6 +370,122 @@ it('D1: am geerbten Artikel wird auch kein Preis geschrieben', function () {
     expect($bericht['uebersprungen'])->toBe(1)
         ->and($bericht['befunde'][0])->not->toHaveKey('preis')
         ->and(FoodAlchemistPrice::where('supplier_item_id', $geerbt->id)->count())->toBe(0);
+});
+
+// ---- S1c: Nährwerte / Allergene / Zusatzstoffe ---------------------------
+
+it('schreibt alle drei Detail-Blöcke aus einer Zeile', function () {
+    $pfad = csv([
+        'Artikel-Nr;Bezeichnung;Nährwert kcal;Nährwert Eiweiß;Nährwert Salz;Allergen Milch;Allergen Gluten;Allergen Sellerie;Zusatzstoff Farbstoff;Zusatzstoff koffeinhaltig',
+        '70012;Sahnesauce;188;2,4;1,2;ja;Spuren;nein;nein;ja',
+    ]);
+
+    $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
+
+    expect($bericht['neu'])->toBe(1)
+        ->and($bericht['details'])->toBe(['naehrwerte' => 1, 'allergene' => 1, 'zusatzstoffe' => 1]);
+
+    $item = FoodAlchemistSupplierItem::firstWhere('article_number', '70012');
+    $svc = app(\Platform\FoodAlchemist\Services\SupplierItemService::class);
+
+    expect((float) $item->nutritionals->energy_kcal)->toBe(188.0)
+        ->and((float) $item->nutritionals->protein)->toBe(2.4)
+        // Salz (g) → Natrium (mg): GL-08 rückwärts, 1,2 g × 400 = 480 mg ⇒ salzG() = 1,2
+        ->and((float) $item->nutritionals->sodium)->toBe(480.0)
+        ->and(round((float) $item->nutritionals->salzG(), 4))->toBe(1.2);
+
+    $allergene = $svc->getAllergens($item->refresh());
+    expect($allergene['milk'])->toBe('enthalten')
+        ->and($allergene['gluten'])->toBe('spuren')
+        ->and($allergene['celery'])->toBe('nicht_enthalten')
+        ->and($allergene['fish'])->toBe('unbekannt')      // nicht in der Datei ⇒ unberührt
+        ->and($item->allergens->source)->toBe('datei');   // Lineage: NICHT „manual"
+
+    $deklarationen = $svc->getDeclarations($item);
+    expect($deklarationen['with_dye'])->toBe('nein')
+        ->and($deklarationen['caffeinated'])->toBe('ja')
+        ->and($deklarationen['waxed'])->toBe('unbekannt');
+});
+
+it('mischt statt zu ersetzen: eine Teil-Spalte löscht die gepflegten Nachbarwerte nicht', function () {
+    $item = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $this->supplier->id,
+        'article_number' => '70012', 'designation' => 'Sahnesauce',
+    ]);
+    $svc = app(\Platform\FoodAlchemist\Services\SupplierItemService::class);
+    $svc->setAllergens($this->rootTeam, $item, ['milk' => 'enthalten', 'celery' => 'spuren']);
+    $svc->setNutrition($this->rootTeam, $item, ['energy_kcal' => '188', 'protein' => '2,4']);
+
+    // Die Datei kennt NUR Gluten und Fett.
+    $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id,
+        csv(['Artikel-Nr;Bezeichnung;Allergen Gluten;Nährwert Fett', '70012;Sahnesauce;ja;18,5']), apply: true);
+
+    expect($bericht['befunde'][0]['details']['allergene'])->toBe(['gluten'])
+        ->and($bericht['befunde'][0]['details']['naehrwerte'])->toBe(['fat']);
+
+    $allergene = $svc->getAllergens($item->refresh());
+    expect($allergene['gluten'])->toBe('enthalten')
+        ->and($allergene['milk'])->toBe('enthalten')     // gepflegt, nicht in der Datei
+        ->and($allergene['celery'])->toBe('spuren');
+
+    expect((float) $item->nutritionals->fat)->toBe(18.5)
+        ->and((float) $item->nutritionals->energy_kcal)->toBe(188.0);
+});
+
+it('ist auch bei den Detail-Blöcken idempotent und meldet Unlesbares als Warnung', function () {
+    $pfad = csv([
+        'Artikel-Nr;Bezeichnung;Nährwert kcal;Allergen Milch;Zusatzstoff Phosphat',
+        '70012;Sahnesauce;188;ja;ja',
+    ]);
+    $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
+
+    $zweiter = $this->import->importiere($this->rootTeam, $this->supplier->id, $pfad, apply: true);
+    expect($zweiter['details'])->toBe(['naehrwerte' => 0, 'allergene' => 0, 'zusatzstoffe' => 0])
+        ->and($zweiter['unveraendert'])->toBe(1);
+
+    // Unlesbare Werte sind Warnungen, keine Zeilen-Fehler (anders als beim Preis):
+    // der Wert bleibt „unbekannt" und damit nach GL-01 auf der konservativen Seite.
+    $krumm = $this->import->importiere($this->rootTeam, $this->supplier->id,
+        csv(['Artikel-Nr;Bezeichnung;Allergen Milch;Nährwert kcal', '70012;Sahnesauce;vielleicht;viel']), apply: true);
+
+    expect($krumm['fehler'])->toBe(0)
+        ->and($krumm['details'])->toBe(['naehrwerte' => 0, 'allergene' => 0, 'zusatzstoffe' => 0])
+        ->and(implode(' ', $krumm['befunde'][0]['warnungen']))->toContain('Allergen milk')
+        ->and(implode(' ', $krumm['befunde'][0]['warnungen']))->toContain('Nährwert energy_kcal');
+
+    $item = FoodAlchemistSupplierItem::firstWhere('article_number', '70012');
+    expect(app(\Platform\FoodAlchemist\Services\SupplierItemService::class)->getAllergens($item)['milk'])->toBe('enthalten');
+});
+
+it('meldet eine Detail-Spalte ohne Ziel-Feld, statt sie als Tippfehler zu behandeln', function () {
+    $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id,
+        csv(['Artikel-Nr;Bezeichnung;Nährwert Ballaststoffe;Allergen Histamin', '70012;Sahnesauce;3;ja']), apply: true);
+
+    expect($bericht['spalten']['unbekannt'])->toBe([])
+        ->and(implode(' ', $bericht['hinweise']))->toContain('Nährwert-Spalte ohne Ziel')
+        ->and(implode(' ', $bericht['hinweise']))->toContain('Allergen-Spalte ohne Ziel')
+        ->and($bericht['details'])->toBe(['naehrwerte' => 0, 'allergene' => 0, 'zusatzstoffe' => 0]);
+});
+
+it('E4: ein neues Allergen rechnet die nutzenden Rezepte neu — keine stille Drift', function () {
+    $gp = $this->makeGp($this->rootTeam, 'Sahne');
+    $item = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $this->supplier->id,
+        'article_number' => '70012', 'designation' => 'Schlagsahne', 'qty' => 1, 'unit_code' => 'l',
+    ]);
+    FoodAlchemistSupplierItemStructure::create([
+        'team_id' => $this->rootTeam->id, 'supplier_item_id' => $item->id, 'gp_id' => $gp->id,
+    ]);
+    $rezept = $this->makeRecipe($this->rootTeam, 'Rahmsauce');
+    $this->makeIngredient($rezept, 'Schlagsahne', $gp, '500');
+
+    $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id,
+        csv(['Artikel-Nr;Bezeichnung;Allergen Milch', '70012;Schlagsahne;ja']), apply: true);
+
+    expect($bericht['details']['allergene'])->toBe(1)
+        ->and($bericht['kette']['rezepte'])->toBe(1)
+        ->and($bericht['kette']['neu_berechnet'])->toBe(1)
+        ->and($rezept->fresh()->allergen_milk)->toBe('enthalten');
 });
 
 it('Command: Trockenlauf ist Default, --apply schreibt und hinterlässt einen ingest-Lauf', function () {

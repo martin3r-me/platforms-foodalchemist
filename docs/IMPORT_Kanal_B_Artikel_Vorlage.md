@@ -2,7 +2,7 @@
 
 > **Richtung:** nur hinein. Food Alchemist ist Master — es gibt keinen Rückweg zum Lieferanten, keinen VK-Export, keine Rück-Synchronisation (Spec 13 §0).
 > **Frequenz:** manuell, quartalsweise (E5). Datei ablegen, Command laufen lassen.
-> **Stand:** Stufe **S1a + S1b** — Artikel-Stamm **und Preis**, inklusive Post-Import-Kette (Abschnitt 7). Nährwerte, Allergene, Zusatzstoffe (S1c) und Lieferbedingungen (S2) folgen; ihre Spalten dürfen **jetzt schon** in der Datei stehen (sie werden erkannt und im Bericht namentlich genannt, aber noch nicht geschrieben).
+> **Stand:** Stufe **S1a + S1b + S1c** — Artikel-Stamm, **Preis** und die drei **Detail-Blöcke** (Nährwerte / Allergene / Zusatzstoffe), inklusive Post-Import-Kette (Abschnitt 7). Nur die Lieferbedingungen (S2) folgen noch; ihre Spalten dürfen **jetzt schon** in der Datei stehen (sie werden erkannt und im Bericht namentlich genannt, aber noch nicht geschrieben).
 
 ## 1. Aufruf
 
@@ -79,13 +79,51 @@ Header-Schreibweise ist egal (Groß/Klein, Umlaute, Punkte, Bindestriche, Leerze
 
 **Preis-Status** ohne Preis-Spalte bricht den Lauf ab (ein Status ohne Betrag ergibt keine Preis-Zeile). Ohne Status-Spalte gilt `Standard`.
 
+### Detail-Blöcke (S1c) — Nährwerte, Allergene, Zusatzstoffe
+
+Diese Spalten heißen **`<Präfix> <Wert>`**; der Präfix wählt den Block, der Rest den Wert. Groß/Klein, Umlaute, Punkte und Bindestriche sind wie überall egal — `Nährwert kcal`, `Naehrwert-kcal` und `NÄHRWERT KCAL` sind dieselbe Spalte. Erlaubt sind nur die Präfixe unten, jeweils auch im Plural.
+
+| Präfix | Ziel-Tabelle | Werte |
+|---|---|---|
+| `Nährwert …` / `Nährwerte …` | `item_nutritionals` (je **100 g**) | Zahl |
+| `Allergen …` / `Allergene …` | `item_allergens` | `ja` \| `Spuren` \| `nein` \| `unbekannt` |
+| `Zusatzstoff …` / `Deklaration …` | `item_declarations` | `ja` \| `nein` \| `unbekannt` |
+
+**Nährwerte** — geschrieben werden die **8 Kernwerte**, dieselben, die auch das Artikel-Modal pflegt:
+
+| Spalten-Rest | akzeptierte Synonyme | Ziel |
+|---|---|---|
+| kcal | Energie, Brennwert | `energy_kcal` |
+| kJ | Energie kJ | `energy_kj` |
+| Eiweiß | Protein | `protein` |
+| Fett | | `fat` |
+| gesättigte Fettsäuren | davon ges. Fettsäuren | `saturated_fat` |
+| Kohlenhydrate | KH | `carbs_absorbable` |
+| Zucker | davon Zucker | `sugar` |
+| Natrium | | `sodium` (mg) |
+| **Salz** | Salt | wird nach GL-08 in Natrium umgerechnet: Natrium (mg) = Salz (g) × 400 |
+
+`Nährwert Salz` ist der Wert, den echte Datenblätter tragen — die Tabelle kennt nur Natrium, darum die Umrechnung. Stehen **beide** in einer Zeile, gewinnt Natrium (der ungerechnete Wert) und Salz wird als Warnung gemeldet. Alle übrigen BLS-Spalten (Ballaststoffe, Mineralstoffe, Aminosäuren …) sind **kein** Import-Ziel; eine solche Spalte wird als „Nährwert-Spalte ohne Ziel" gemeldet, nicht als Tippfehler.
+
+**Allergene** (14 EU) — Spalten-Rest: Gluten (glutenhaltiges Getreide), Krebstiere, Eier, Fisch, Erdnüsse, Soja, Milch, Schalenfrüchte (Nüsse), Sellerie, Senf, Sesam, Sulfite (Schwefeldioxid), Lupine, Weichtiere.
+Werte: `ja`/`x`/`enthalten` → **enthalten** · `Spuren`/`kann Spuren enthalten` → **Spuren** · `nein`/`-`/`frei` → **nicht enthalten** · `unbekannt`/`k.A.` → **unbekannt**.
+
+**Zusatzstoffe / Deklarationen** (18 LMIV) — Spalten-Rest: Farbstoff, Konservierungsstoff, Antioxidationsmittel, Geschmacksverstärker, geschwefelt, geschwärzt, gewachst, Phosphat, Süßungsmittel, Phenylalanin, abführend, Schutzatmosphäre, koffeinhaltig, Milcheiweiß, Chinin, Taurin, Aufmerksamkeit Kinder, Zuckerarten und Süßungsmittel.
+
+Drei Regeln für alle drei Blöcke:
+
+1. **Teil-Datei ergänzt, sie ersetzt nicht.** Eine Datei mit nur `Allergen Milch` setzt die übrigen 13 Werte **nicht** zurück — der Import mischt mit dem Ist-Stand. (Das Artikel-Modal dagegen ersetzt voll, weil sein Formular alle Werte postet.)
+2. **Leere Zelle ändert nichts, ein hingeschriebenes `unbekannt` schon.** Die leere Zelle heißt „steht nicht in der Datei"; `unbekannt` ist eine Aussage des Lieferanten und wird übernommen.
+3. **Unlesbare Werte sind Warnungen, keine Zeilen-Fehler** — anders als beim Preis. Ein nicht gesetzter Allergen-Wert bleibt `unbekannt` und damit nach GL-01 auf der konservativen Seite; ein nicht gesetzter Preis wäre dagegen ein fehlender EK.
+
+Zeilen aus dem Datei-Import tragen die Lineage `source = datei` (das Artikel-Modal zeigt sie als Quelle an) — nicht `manual` und nicht leer: leer steht im Bestand für den alten Necta-Bulk-Import.
+
 ### Spalten für spätere Stufen
 
 Diese dürfen in der Datei stehen; der Bericht nennt sie und sagt, welche Stufe sie schreibt:
 
 | Spalte | Stufe |
 |---|---|
-| `Nährwert…`, `Allergen…`, `Zusatzstoff…`, `Deklaration…` (Präfix) | **S1c** — `item_nutritionals` / `item_allergens` / `item_declarations` |
 | Mindestbestellwert, Frei-Haus ab, Zahlungsziel, Rückvergütung | **S2** — Lieferbedingungen am Lieferanten (E3) |
 
 **Preis-Notiz** wird erkannt und als „ohne Ziel-Feld" gemeldet: Preis-Zeilen tragen keine Notiz. Alles andere wird ignoriert und im Bericht als „nicht Teil der Vorlage" aufgeführt.
@@ -106,13 +144,13 @@ Der Import schreibt in das Team aus `--team`. Trifft eine Zeile einen **geerbten
 
 ## 6. Wiederholung / Abbruch
 
-Der Upsert ist idempotent: derselbe Lauf mit derselben Datei meldet beim zweiten Mal alles als „unverändert" und schreibt nichts — **auch keine Preis-Zeile**. Das ist beim Preis kein Nebeneffekt, sondern Absicht: `foodalchemist_prices` ist append-only, ein Schreiben je Lauf machte die Historie nach drei Quartalen unlesbar und ließe den Preis-Trend „Δ 0 %" als jüngste Generation lesen. Ein abgebrochener Lauf wird also einfach durch erneutes Ausführen fortgesetzt — es gibt keinen Zwischenzustand zu reparieren.
+Der Upsert ist idempotent: derselbe Lauf mit derselben Datei meldet beim zweiten Mal alles als „unverändert" und schreibt nichts — **auch keine Preis-Zeile und keinen Detail-Block**. Das ist beim Preis kein Nebeneffekt, sondern Absicht: `foodalchemist_prices` ist append-only, ein Schreiben je Lauf machte die Historie nach drei Quartalen unlesbar und ließe den Preis-Trend „Δ 0 %" als jüngste Generation lesen. Ein abgebrochener Lauf wird also einfach durch erneutes Ausführen fortgesetzt — es gibt keinen Zwischenzustand zu reparieren.
 
 Jeder scharfe Lauf hinterlässt eine Zeile in `foodalchemist_bulk_runs` (Typ `ingest`); eine Zeile mit Preis-Fehler zählt dort als `failed`, auch wenn ihr Artikel-Stamm geschrieben wurde („EK nicht angekommen" ist kein Teilerfolg). Darauf setzt S3 (`ingest.STATUS`) auf.
 
-## 7. Post-Import-Kette (E4) — was nach dem Preis passiert
+## 7. Post-Import-Kette (E4) — was nach dem Schreiben passiert
 
-Ein neuer EK, der nur in der Preistabelle liegt, ist die **stille Drift**: Kalkulation, Marge und Cockpit zeigten weiter den alten Stand. Darum läuft nach dem Import automatisch:
+Ein neuer EK, der nur in der Preistabelle liegt, ist die **stille Drift**: Kalkulation, Marge und Cockpit zeigten weiter den alten Stand. Für Allergene, Zusatzstoffe und Nährwerte gilt dasselbe — sie sind am Rezept **aggregierte Spalten**, kein Live-Join; ohne Recompute stünde das neue Allergen am Artikel, während Rezept, Foodbook und Aushang den alten Stand zeigen. Ein bewegter Artikel ist darum jeder mit neuem Preis **oder** neuem Detail-Wert. Nach dem Import läuft automatisch:
 
 1. **Betroffene GPs** — über die LA↔GP-Struktur (nicht nur über den Lead-LA: die Kosten-Kaskade nimmt den Lead als *bevorzugten* Kandidaten und fällt sonst auf den Mittelwert aller aktiven LAs zurück, ein Nicht-Lead-Preis bewegt die Kosten also ebenfalls).
 2. **`recomputeAndPropagate`** je nutzendem Rezept — samt aller transitiven Eltern (Basisrezept → Gericht → Paket).
@@ -124,4 +162,4 @@ Die Kette läuft **einmal am Ende** über die deduplizierte Menge, nicht je Zeil
 
 ## 8. Beispiel
 
-Siehe [kanal_b_artikel_beispiel.csv](kanal_b_artikel_beispiel.csv) — fünf Zeilen mit den häufigsten Fällen (Vollzeile mit Preis, nur Schlüssel + Bezeichnung, Aktionspreis, unbekannte Einheit, Zeile ohne Preis).
+Siehe [kanal_b_artikel_beispiel.csv](kanal_b_artikel_beispiel.csv) — fünf Zeilen mit den häufigsten Fällen (Vollzeile mit Preis + allen drei Detail-Blöcken, Aktionspreis mit Spuren-Werten, unbekannte Einheit, Zeile ganz ohne Preis und Details).

@@ -89,8 +89,18 @@ class SupplierItemService
             ->all();
     }
 
-    /** Edit nur Besitzer-Team (D1); manuelle Pflege setzt source='manual' (GL-07-Lineage). */
-    public function setAllergens(Team $team, FoodAlchemistSupplierItem $item, array $werte): FoodAlchemistItemAllergen
+    /**
+     * Edit nur Besitzer-Team (D1); manuelle Pflege setzt source='manual' (GL-07-Lineage).
+     *
+     * `$source` ist die Lineage-Stempelung und bleibt für die UI auf `manual`. Der
+     * Kanal-B-Datei-Import (Spec 13 · S1c) stempelt `datei`: NULL steht im Bestand für
+     * den Necta-Bulk-Import, und beides gleich zu stempeln machte die Lineage genau dort
+     * wertlos, wo sie gebraucht wird („welche Zeile kam aus einer gepflegten Datei?").
+     *
+     * **Voll-Ersatz-Semantik:** was nicht in `$werte` steht, wird `unbekannt`. Wer nur
+     * einzelne Werte setzen will (Import), mischt vorher mit {@see getAllergens}.
+     */
+    public function setAllergens(Team $team, FoodAlchemistSupplierItem $item, array $werte, string $source = 'manual'): FoodAlchemistItemAllergen
     {
         if (! $item->isOwnedBy($team)) {
             throw new \RuntimeException('Geerbter Katalog-Artikel — Allergen-Pflege nur durch das Besitzer-Team (D1).');
@@ -108,7 +118,7 @@ class SupplierItemService
 
         return FoodAlchemistItemAllergen::updateOrCreate(
             ['supplier_item_id' => $item->id],
-            [...$attribute, 'team_id' => $item->team_id, 'source' => 'manual'],
+            [...$attribute, 'team_id' => $item->team_id, 'source' => $source],
         );
     }
 
@@ -136,7 +146,11 @@ class SupplierItemService
             ->all();
     }
 
-    /** Edit nur Besitzer-Team (D1). Leer ⇒ NULL; negativ/nicht-numerisch ⇒ NULL (kein stiller 0). */
+    /**
+     * Edit nur Besitzer-Team (D1). Leer ⇒ NULL; negativ/nicht-numerisch ⇒ NULL (kein stiller 0).
+     * Voll-Ersatz **über die 8 Kernwerte** (die übrigen BLS-Spalten bleiben unangetastet);
+     * wer nur einzelne setzen will (Import), mischt vorher mit {@see getNutrition}.
+     */
     public function setNutrition(Team $team, FoodAlchemistSupplierItem $item, array $werte): FoodAlchemistItemNutritional
     {
         if (! $item->isOwnedBy($team)) {
@@ -179,8 +193,11 @@ class SupplierItemService
             ->all();
     }
 
-    /** Edit nur Besitzer-Team; manuelle Pflege stempelt source=manual. Schreibt ROHE Domäne (GL-09 A1). */
-    public function setDeclarations(Team $team, FoodAlchemistSupplierItem $item, array $werte): FoodAlchemistItemDeclaration
+    /**
+     * Edit nur Besitzer-Team; manuelle Pflege stempelt source=manual. Schreibt ROHE Domäne (GL-09 A1).
+     * `$source` wie bei {@see setAllergens} (Kanal B stempelt `datei`); Voll-Ersatz-Semantik ebenso.
+     */
+    public function setDeclarations(Team $team, FoodAlchemistSupplierItem $item, array $werte, string $source = 'manual'): FoodAlchemistItemDeclaration
     {
         if (! $item->isOwnedBy($team)) {
             throw new \RuntimeException('Geerbter Katalog-Artikel — Deklarations-Pflege nur durch das Besitzer-Team (D1).');
@@ -199,7 +216,7 @@ class SupplierItemService
 
         return FoodAlchemistItemDeclaration::updateOrCreate(
             ['supplier_item_id' => $item->id],
-            [...$attribute, 'team_id' => $item->team_id, 'source' => 'manual'],
+            [...$attribute, 'team_id' => $item->team_id, 'source' => $source],
         );
     }
 

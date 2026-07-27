@@ -8,7 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\FileArticleImportService;
 
 /**
- * Spec 13 · S1a/S1b — Kanal B: Artikel-Datei eines Lieferanten einlesen.
+ * Spec 13 · S1a/S1b/S1c — Kanal B: Artikel-Datei eines Lieferanten einlesen.
  *
  * Bewusst **dry-run als Default**: ein Import berührt den Katalog, aus dem jede
  * Kalkulation ihren EK zieht. Geschrieben wird nur mit `--apply`; die Ausgabe ist
@@ -31,7 +31,7 @@ class ImportArticlesCommand extends Command
         {--apply : wirklich schreiben}
         {--zeilen=25 : höchstens so viele Zeilen-Befunde ausgeben}';
 
-    protected $description = 'Kanal B (Spec 13): Lieferanten-Artikel + EK aus einer CSV-Datei upserten, inkl. Recompute-/Signal-Kette (Nährwerte/Allergene folgen in S1c).';
+    protected $description = 'Kanal B (Spec 13): Lieferanten-Artikel + EK + Nährwerte/Allergene/Zusatzstoffe aus einer CSV-Datei upserten, inkl. Recompute-/Signal-Kette (Lieferbedingungen folgen in S2).';
 
     public function handle(FileArticleImportService $import): int
     {
@@ -83,7 +83,8 @@ class ImportArticlesCommand extends Command
         $gezeigt = 0;
         foreach ($bericht['befunde'] as $b) {
             $preisEreignis = isset($b['preis']) && $b['preis']['status'] !== 'unveraendert';
-            if ($b['status'] === 'unveraendert' && ! $preisEreignis) {
+            $detailEreignis = array_filter($b['details'] ?? []) !== [];
+            if ($b['status'] === 'unveraendert' && ! $preisEreignis && ! $detailEreignis) {
                 continue; // Rauschen: der Normalfall eines Wiederholungslaufs
             }
             if ($gezeigt++ >= $max) {
@@ -113,6 +114,12 @@ class ImportArticlesCommand extends Command
                     $p['status'] === 'fehler' ? $this->warn("      € {$text}") : $this->line("      € {$text}");
                 }
             }
+            foreach (['naehrwerte' => 'Nährwerte', 'allergene' => 'Allergene', 'zusatzstoffe' => 'Zusatzstoffe'] as $block => $label) {
+                $felder = $b['details'][$block] ?? [];
+                if ($felder !== []) {
+                    $this->line("      ⊞ {$label}: " . implode(', ', $felder));
+                }
+            }
             foreach ($b['warnungen'] ?? [] as $w) {
                 $this->line("      ⚠ {$w}");
             }
@@ -126,6 +133,12 @@ class ImportArticlesCommand extends Command
         if (($pr['neu'] + $pr['geaendert'] + $pr['unveraendert'] + $pr['fehler']) > 0) {
             $this->info("   € Preise: neu {$pr['neu']} · geändert {$pr['geaendert']}"
                 . " · unverändert {$pr['unveraendert']} · Fehler {$pr['fehler']}");
+        }
+
+        $d = $bericht['details'];
+        if (($d['naehrwerte'] + $d['allergene'] + $d['zusatzstoffe']) > 0) {
+            $this->info("   ⊞ Detail-Blöcke (Zeilen): Nährwerte {$d['naehrwerte']}"
+                . " · Allergene {$d['allergene']} · Zusatzstoffe {$d['zusatzstoffe']}");
         }
 
         // E4: die Kette ist der DoD-Kern — sie wird IMMER berichtet, auch wenn sie
