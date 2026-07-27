@@ -8,6 +8,20 @@
 
 ---
 
+## Update 2026-07-27 (Spec 03 · L8b-2 — der Ziel-VK wird gehalten, nicht durchgesetzt · L8 und Phase 4 komplett)
+
+**Zweiunddreißigster Bau-Lauf der Routine ([Spec 03](PLANUNG/03_KI_Erstell_Flaechen_512.md), Lücke L8 — letzter Teilschritt).** Der Generator konnte bis hierher alles außer dem, womit jedes Kundengespräch anfängt: „ich brauche ein Gericht für 8,50 €". Neu ist ein optionales Ziel-VK-Feld am VK-Generator, das zweimal wirkt — als Vorgabe im Vorschlag und als Maßstab nach der Kalkulation. **Damit ist L8 komplett und Phase 4 (L7 + L8, der Kaskaden-Umbau) abgeschlossen.**
+
+**Gehalten, nicht durchgesetzt — und deshalb ohne eigene Schwelle.** Die naheliegende Lesart wäre, den VK auf das Ziel zu setzen. Dann stimmte die Zahl und die Marge wäre unsichtbar falsch: dasselbe Muster wie der grün gemeldete Falschpreis, gegen den L8b-1 das Portions-Band gesetzt hat, nur eine Ebene höher. Der Preis bleibt also gerechnet; beantwortet wird die Frage, die wirklich zählt — **was würde der Zielpreis bedeuten?** `ziel_wareneinsatz_pct` ist derselbe Bruch wie die Ist-Quote, nur mit dem Ziel-VK im Nenner, beurteilt von **derselben** Ampel-Leiter. Es gibt damit keine dritte Schwelle im System: „Ziel erreichbar" heißt exakt „bei diesem Preis liegt der Wareneinsatz noch im Ziel". Das ist die Brücke zur R2.4-Solver-Denke — bewusst ohne Solver. Konkret: 9,60 € kalkuliert gegen 6,00 € Ziel ⇒ „+3,60 € über dem Ziel · bei Ziel-VK: W 40,0 % / Ziel 30 %".
+
+**Ein Transportweg für beide Wirkungen.** Der Wert reist als `parameter.ziel_vk_eur` in den Prompt (`vk.generator`: auf den Preis hin bauen — Komponenten, Qualitäten, Grammatur —, **keinen Preis ausgeben**) und wird vom Job dort wieder herausgelesen und an das Wirtschaftlichkeits-Glied gereicht. Ein zweiter Konstruktor-Parameter wäre bequemer gewesen und hätte die zwei Wirkungen auseinanderlaufen lassen. Geschrieben wird nichts: Pest hält fest, dass der VK nach einem 6,00-€-Ziel unverändert bei 9,60 € steht.
+
+**Rückfrage statt stiller Verwerfung — spiegelbildlich zu L8b-1.** Beim KI-Vorschlag fällt Unplausibles still auf die Lücke, weil man einem Modell nicht antworten kann. Hier ist der Absender ein Mensch: „850" statt „8,50" ist ein Tippfehler, gegen den nachher jedes Ergebnis „viel zu billig" aussähe. Also Band 0,50–500 € mit Fehlzeile und ohne Lauf; über MCP dieselbe Grenze als `VALIDATION_ERROR`, ebenso `ziel_vk` ohne `vk=true` — ein ignorierter Constraint sähe für einen Client aus wie eine Antwort auf seine Vorgabe. Bewusst nur am VK-Modal: das Basisrezept-Modal hat keinen VK, und eine Pill ohne Folge wäre die stumme Bedienfläche, die L8b-1 gerade beseitigt hat. Ohne Ist-Preis steht der Ziel-Wareneinsatz trotzdem — er braucht nur den EK je Portion und sagt dann, ob das Ziel überhaupt tragfähig ist, bevor der Preis existiert.
+
+**Suite 1464 · 1460 passed · 4 skipped · 0 Fail · 6879 Assertions (Vorlauf 1452/1448, +12 Tests), 11,1 Min.** Commit `a13c5bc`. **Kein Schema-Change, keine Migration, kein neues SQL** → MySQL-Smoke entfällt sachlich. **MCP-Lockstep im selben Commit** (`ziel_vk` samt beider Wirkungen in der Description). **Manuell offen:** Browser-Klickstrecke (headless nicht fahrbar) — Feld und Ziel-Zeile sind in Render-Tests belegt. Verbesserungs-Backlog: **V-042** (jede neue Generator-Option erfindet ihren eigenen Transportweg — drei Optionen, drei Muster, alle Fehlermodi still). Nächste Etappe: **Phase 5 · Spec 08 P6** (Wissens-Ebene).
+
+---
+
 ## Update 2026-07-27 (Spec 03 · L8b-1 — der Preis steht am Erzeugnis, und die Portion kommt aus dem Vorschlag)
 
 **Einunddreißigster Bau-Lauf der Routine ([Spec 03](PLANUNG/03_KI_Erstell_Flaechen_512.md), Lücke L8 — Teilschritt b-1 von zwei).** L8a hatte das Wirtschaftlichkeits-Glied gebaut, aber niemand konnte es sehen: die Zahlen lagen im Ergebnis-Array und im MCP-Output, an den beiden Generator-Flächen stand nichts. Dazu war die Portionsgröße — die einzige Vorbedingung ohne ableitbaren Default — im Regelfall leer. Beides ist geschlossen. **L8b ist geschnitten**: hier Fläche + Portions-Quelle, in L8b-2 die optionale Ziel-VK-Pill an der Eingabe.
