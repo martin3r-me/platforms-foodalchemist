@@ -213,6 +213,147 @@ class PairingService
     }
 
     /**
+     * V-045 (zweiter Halbschritt): die Mapping-Lookups für MEHRERE Rezepte in einem Zug.
+     *
+     * Der Einzel-Fall {@see resolveRecipeAnchors} delegiert hierher — es gibt genau **eine**
+     * Auflösungs-Wahrheit, damit Pool und Solver nicht auf einer zweiten Auswahl-Logik
+     * rechnen als die Detail-Anzeige. Dominante Ebene sind die Mapping-Lookups **je Zutat**
+     * (bei 1.000 Gerichten × ~12 Zutaten rund 12.000 Einzel-Queries); der erste Halbschritt
+     * hat nur die Per-Gericht-Ebene erwischt.
+     *
+     * **Die Auswahl bleibt in SQL.** Jede der drei Mapping-Tabellen wird mit demselben
+     * `ORDER BY COALESCE(ai_confidence, 1.0) DESC, id` gelesen wie vorher, nur mit `whereIn`
+     * über alle Schlüssel; „gewonnen" hat die **erste** Zeile je Schlüssel. Die Auswahl in PHP
+     * nachzubauen wäre die eigentliche Gefahr dieses Umbaus (NULL sortiert anders, Gleichstand
+     * über Einfüge- statt `id`-Reihenfolge) — sie ist deshalb bewusst nicht nachgebaut. Der
+     * Golden-Test `AnkerAufloesungGoldenTest` friert genau das ein.
+     *
+     * @param  iterable<int, FoodAlchemistRecipe>  $recipes
+     * @return array<int, array<int, array{label: string, kern: ?int, prozess: array<int>, via: string}>> keyBy recipe id
+     */
+    public function resolveRecipeAnchorsMany(iterable $recipes): array
+    {
+        /** @var \Illuminate\Database\Eloquent\Collection<int, FoodAlchemistRecipe> $rezepte */
+        $rezepte = (new \Illuminate\Database\Eloquent\Collection(
+            $recipes instanceof \Traversable ? iterator_to_array($recipes) : (array) $recipes
+        ))->filter(fn ($r) => $r instanceof FoodAlchemistRecipe && $r->id !== null)->keyBy('id');
+
+        if ($rezepte->isEmpty()) {
+            return [];
+        }
+
+        // Zutaten + Label-Relationen für den ganzen Satz — `loadMissing`, weil ein Aufrufer
+        // sie mit einem breiteren Select geladen haben kann (Pool: `gp:id,name,tag_is_convenience`).
+        // Ein blindes `load` würde diese Spalten still wegnehmen und den Convenience-Anteil kippen.
+        $rezepte->loadMissing(['ingredients', 'ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name']);
+
+        $zutatenJeRezept = [];
+        $subRezeptIds = [];
+        $gpIds = [];
+        foreach ($rezepte as $rid => $recipe) {
+            $zutaten = $this->ankerZutaten($recipe);
+            $zutatenJeRezept[$rid] = $zutaten;
+            foreach ($zutaten as $z) {
+                if ($z->referenced_recipe_id !== null) {
+                    $subRezeptIds[$z->referenced_recipe_id] = true;
+                } elseif ($z->gp_id !== null) {
+                    $gpIds[$z->gp_id] = true;
+                }
+            }
+        }
+
+        $rezeptKerne = $this->kernMappingsBatch('foodalchemist_recipe_anchor_mappings', 'recipe_id', array_keys($subRezeptIds));
+        $gpKerne = $this->kernMappingsBatch('foodalchemist_gp_anchor_mappings', 'gp_id', array_keys($gpIds));
+        $subProzess = $this->prozessAnkerBatch(array_keys($subRezeptIds));
+        $eigenerZustand = $this->eigenerZustandBatch($rezepte->keys()->all());
+
+        $out = [];
+        foreach ($zutatenJeRezept as $rid => $zutaten) {
+            $out[$rid] = $this->ankerZeilen(
+                $zutaten,
+                $rezeptKerne,
+                $gpKerne,
+                $subProzess,
+                $eigenerZustand[$rid] ?? [],
+            );
+        }
+
+        return $out;
+    }
+
+    /**
+     * Kern-Mapping je Schlüssel: dieselbe Sortierung wie der frühere Einzel-`value()`-Aufruf,
+     * nur mit `whereIn`. Die erste Zeile je Schlüssel gewinnt (`isset`-Riegel) — die DB
+     * entscheidet also weiterhin, nicht PHP.
+     *
+     * @param  array<int, int|string>  $ids
+     * @return array<int|string, mixed> Schlüssel → anchor_id (untypisiert wie zuvor)
+     */
+    private function kernMappingsBatch(string $tabelle, string $spalte, array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $treffer = [];
+        foreach (DB::table($tabelle)->whereIn($spalte, $ids)->where('role', 'kern')->whereNull('deleted_at')
+            ->orderByRaw('COALESCE(ai_confidence, 1.0) DESC')->orderBy('id')
+            ->get([$spalte, 'anchor_id']) as $zeile) {
+            if (! isset($treffer[$zeile->{$spalte}])) {
+                $treffer[$zeile->{$spalte}] = $zeile->anchor_id;
+            }
+        }
+
+        return $treffer;
+    }
+
+    /**
+     * Prozess-Anker der Sub-Rezepte. Ohne Join auf das Anker-Vokabular — genau wie der
+     * frühere Einzel-Read; der Zustands-Block unten prüft dagegen die Anker-Soft-Deletes
+     * mit. Diesen Unterschied nicht einzuziehen ist Absicht: er wäre ein Verhaltenswechsel
+     * (→ als Befund notiert, nicht hier geheilt).
+     *
+     * @param  array<int, int|string>  $subRezeptIds
+     * @return array<int|string, array<int, mixed>>
+     */
+    private function prozessAnkerBatch(array $subRezeptIds): array
+    {
+        if ($subRezeptIds === []) {
+            return [];
+        }
+        $je = [];
+        foreach (DB::table('foodalchemist_recipe_process_anchors')
+            ->whereIn('recipe_id', $subRezeptIds)->whereNull('deleted_at')
+            ->get(['recipe_id', 'anchor_id']) as $zeile) {
+            $je[$zeile->recipe_id][] = $zeile->anchor_id;
+        }
+
+        return $je;
+    }
+
+    /**
+     * Eigen-Zustands-Block je Rezept (Prozess-Anker AM Gericht, mit Anker-Soft-Delete-Prüfung).
+     *
+     * @param  array<int, int>  $recipeIds
+     * @return array<int, array<int, object>>
+     */
+    private function eigenerZustandBatch(array $recipeIds): array
+    {
+        if ($recipeIds === []) {
+            return [];
+        }
+        $je = [];
+        foreach (DB::table('foodalchemist_recipe_process_anchors AS p')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'p.anchor_id')
+            ->whereIn('p.recipe_id', $recipeIds)->whereNull('p.deleted_at')
+            ->whereNull('a.deleted_at')
+            ->get(['p.recipe_id', 'p.anchor_id', 'a.slug']) as $zeile) {
+            $je[(int) $zeile->recipe_id][] = $zeile;
+        }
+
+        return $je;
+    }
+
+    /**
      * resolve_recipe_anchors (Tabelle 4): pro Zutaten-Zeile GENAU EIN Kern
      * (+ Prozess-Anker nur bei Sub-Rezepten).
      *
@@ -220,33 +361,52 @@ class PairingService
      */
     public function resolveRecipeAnchors(FoodAlchemistRecipe $recipe): array
     {
+        return $this->resolveRecipeAnchorsMany([$recipe])[$recipe->id] ?? [];
+    }
+
+    /**
+     * Die Zeilen-Schleife selbst — unverändert in der Logik, sie liest die Mappings jetzt
+     * aus den Batch-Karten statt sie je Zutat zu erfragen.
+     *
+     * @param  iterable<int, \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient>  $zutaten
+     * @param  array<int|string, mixed>  $rezeptKerne
+     * @param  array<int|string, mixed>  $gpKerne
+     * @param  array<int|string, array<int, mixed>>  $subProzess
+     * @param  array<int, object>  $eigenerZustand
+     * @return array<int, array{label: string, kern: ?int, prozess: array<int>, via: string}>
+     */
+    private function ankerZeilen(
+        iterable $zutaten,
+        array $rezeptKerne,
+        array $gpKerne,
+        array $subProzess,
+        array $eigenerZustand,
+    ): array {
         $neutralId = $this->neutralAnkerId();
         $out = [];
-        foreach ($this->ankerZutaten($recipe) as $z) {
+        foreach ($zutaten as $z) {
             $label = $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->raw_text;
             $kern = null;
             $via = 'unresolved';
             $prozess = [];
 
             if ($z->referenced_recipe_id !== null) {
-                $mapping = DB::table('foodalchemist_recipe_anchor_mappings')
-                    ->where('recipe_id', $z->referenced_recipe_id)->where('role', 'kern')->whereNull('deleted_at')
-                    ->orderByRaw('COALESCE(ai_confidence, 1.0) DESC')->orderBy('id')
-                    ->value('anchor_id');
+                $mapping = $rezeptKerne[$z->referenced_recipe_id] ?? null;
                 if ($mapping !== null) {
                     [$kern, $via] = $mapping === $neutralId ? [null, 'neutral'] : [$mapping, 'recipe_anker'];
                 } else {
                     $kern = $this->resolveByName($z->referencedRecipe->name);
                     $via = $kern !== null ? 'name_match' : 'unresolved';
                 }
-                $prozess = DB::table('foodalchemist_recipe_process_anchors')
-                    ->where('recipe_id', $z->referenced_recipe_id)->whereNull('deleted_at')
-                    ->where('anchor_id', '!=', $kern ?? 0)->pluck('anchor_id')->all();
+                // `anchor_id != $kern` lief vorher in SQL; in PHP numerisch vergleichen, weil
+                // beide Seiten je Treiber int ODER string sein können (SQL verglich numerisch).
+                $ausschluss = (int) ($kern ?? 0);
+                $prozess = array_values(array_filter(
+                    $subProzess[$z->referenced_recipe_id] ?? [],
+                    fn ($a) => (int) $a !== $ausschluss,
+                ));
             } elseif ($z->gp_id !== null) {
-                $mapping = DB::table('foodalchemist_gp_anchor_mappings')
-                    ->where('gp_id', $z->gp_id)->where('role', 'kern')->whereNull('deleted_at')
-                    ->orderByRaw('COALESCE(ai_confidence, 1.0) DESC')->orderBy('id')
-                    ->value('anchor_id');
+                $mapping = $gpKerne[$z->gp_id] ?? null;
                 if ($mapping !== null) {
                     [$kern, $via] = $mapping === $neutralId ? [null, 'neutral'] : [$mapping, 'gp_anker'];
                 } else {
@@ -279,12 +439,7 @@ class PairingService
         // SUB-Rezepten (oben via referenced_recipe_id). Dedupe gegen bereits als kern
         // aufgelöste Anker, damit keine Selbst-Paare entstehen.
         $vorhandeneKerne = array_filter(array_map(fn ($k) => $k['kern'], $out));
-        $eigeneProzess = DB::table('foodalchemist_recipe_process_anchors AS p')
-            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'p.anchor_id')
-            ->where('p.recipe_id', $recipe->id)->whereNull('p.deleted_at')
-            ->whereNull('a.deleted_at')
-            ->get(['p.anchor_id', 'a.slug']);
-        foreach ($eigeneProzess as $pa) {
+        foreach ($eigenerZustand as $pa) {
             if (in_array((int) $pa->anchor_id, $vorhandeneKerne, true)) {
                 continue;
             }
@@ -378,8 +533,20 @@ class PairingService
     /** R6.1: flache, eindeutige Anker-IDs eines Rezepts (kern + prozess über alle Zutaten). */
     public function anchorsForRecipe(FoodAlchemistRecipe $recipe): array
     {
+        return $this->flacheAnker($this->resolveRecipeAnchors($recipe));
+    }
+
+    /**
+     * Dieselbe Abflachung wie {@see anchorsForRecipe}, aber auf schon aufgelösten Komponenten —
+     * damit ein Batch-Aufrufer (Pool/Solver) nicht seine eigene Variante schreibt.
+     *
+     * @param  array<int, array{label: string, kern: ?int, prozess: array<int>, via: string}>  $komponenten
+     * @return array<int, int|string>
+     */
+    public function flacheAnker(array $komponenten): array
+    {
         $ids = [];
-        foreach ($this->resolveRecipeAnchors($recipe) as $k) {
+        foreach ($komponenten as $k) {
             foreach (array_merge($k['kern'] !== null ? [$k['kern']] : [], $k['prozess']) as $a) {
                 $ids[$a] = true;
             }

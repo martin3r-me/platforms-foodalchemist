@@ -71,7 +71,16 @@ class MenuCandidatePoolService
             $query->with(['standardPresentation:id,recipe_id,sales_net,ek_portion,is_standard']);
         }
 
-        return $query->get()->map(function (FoodAlchemistRecipe $r) use ($brauchtBegriffe, $mitConvenience, $mitWirtschaft) {
+        $kandidaten = $query->get();
+
+        // V-045 (zweiter Halbschritt): die Anker-Auflösung EINMAL für den ganzen Pool.
+        // Je Gericht gerufen kostete sie die Mapping-Lookups je Zutat (bei 1.000 Gerichten
+        // × ~12 Zutaten rund 12.000 Einzel-Queries) — die dominante Ebene, die der erste
+        // Halbschritt nicht erwischt hat. Die Auswahl-Logik selbst bleibt im PairingService
+        // (eine Auflösungs-Wahrheit), abgeflacht wird über dessen `flacheAnker`.
+        $ankerJeGericht = $this->pairing->resolveRecipeAnchorsMany($kandidaten);
+
+        return $kandidaten->map(function (FoodAlchemistRecipe $r) use ($brauchtBegriffe, $mitConvenience, $mitWirtschaft, $ankerJeGericht) {
             $allergene = [];
             foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $key) {
                 $allergene[$key] = $r->{'allergen_' . $key} ?? null;
@@ -98,7 +107,7 @@ class MenuCandidatePoolService
                 'niveaus' => $r->levelSuitabilities->pluck('level_slug')->filter()->values()->all(),
                 // Convenience-Anteil = Quote convenience-getaggter GPs unter den Zutaten (null = nicht geladen / keine GP-Zutat)
                 'convenience_ratio' => $this->convenienceRatio($r, $mitConvenience),
-                'anker' => $this->pairing->anchorsForRecipe($r),
+                'anker' => $this->pairing->flacheAnker($ankerJeGericht[$r->id] ?? []),
                 'wirtschaft' => $mitWirtschaft ? $this->wirtschaft($r) : null,
             ];
         })->keyBy('id');

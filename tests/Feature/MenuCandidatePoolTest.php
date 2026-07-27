@@ -148,15 +148,19 @@ it('die DB-Achse kostet EINE Query, nicht eine je Gericht', function () {
     [$pool, $mit] = $zaehle(true);
 
     // Gemessen wird der DELTA der neuen Achse: die Darreichungs-Relation ist eager, also +1.
-    // Zusätzlich eine absolute Obergrenze als Regressions-Riegel — V-045 (Halbschritt) hat den
-    // `neutral`-Lookup memoisiert und die Zutaten-Requery bei geladener Relation abgestellt und
-    // damit 38 → 27 für 12 zutatenlose Gerichte gebracht. Der Rest sind die zwei noch offenen
-    // Per-Gericht-Queries (Zutaten-Requery, weil hier OHNE Begriffe/Convenience nichts eager
-    // geladen ist, + `recipe_process_anchors`) — die Batch-Variante ist der zweite Halbschritt.
+    // Zusätzlich eine absolute Obergrenze als Regressions-Riegel. Verlauf über die zwei
+    // V-045-Halbschritte für dieselben 12 zutatenlosen Gerichte: **38 → 27 → 4**. Der erste
+    // Halbschritt hat den `neutral`-Lookup memoisiert und die Zutaten-Requery bei geladener
+    // Relation abgestellt; der zweite (`resolveRecipeAnchorsMany`) hat die letzten beiden
+    // Per-Gericht-Queries gezogen — die Zutaten-Ladung läuft jetzt als EIN `whereIn` über den
+    // ganzen Pool, und ohne GP-/Sub-Zutaten entfallen die Mapping-Batches ganz.
+    // **Der Riegel gegen Proportionalität steht in `AnkerAufloesungBatchTest`** (doppelte
+    // Gericht-Zahl, gleiche Query-Zahl) — eine absolute Zahl allein wäre auf proportionalem
+    // Verhalten grün, solange sie nur passt.
     expect($pool)->toHaveCount(12)
         ->and($pool->every(fn ($k) => $k['wirtschaft']['vollstaendig'] === true))->toBeTrue()
         ->and($mit - $ohne)->toBe(1)
-        ->and($ohne)->toBeLessThanOrEqual(27);
+        ->and($ohne)->toBeLessThanOrEqual(6);
 });
 
 it('V-045: bei eager geladenen Zutaten fragt die Anker-Auflösung sie NICHT neu', function () {
