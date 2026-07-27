@@ -82,9 +82,7 @@ class ImportArticlesCommand extends Command
         $max = max(1, (int) $this->option('zeilen'));
         $gezeigt = 0;
         foreach ($bericht['befunde'] as $b) {
-            $preisEreignis = isset($b['preis']) && $b['preis']['status'] !== 'unveraendert';
-            $detailEreignis = array_filter($b['details'] ?? []) !== [];
-            if ($b['status'] === 'unveraendert' && ! $preisEreignis && ! $detailEreignis) {
+            if (! FileArticleImportService::istEreignis($b)) {
                 continue; // Rauschen: der Normalfall eines Wiederholungslaufs
             }
             if ($gezeigt++ >= $max) {

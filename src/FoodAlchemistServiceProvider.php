@@ -282,8 +282,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\FoodbooksGetTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelSearchTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelListTool::class,
-                    // Spec 13 · S3: Katalog-/Preis-Ingest — Lese-Fläche (Läufe, Lücken, Preis-Deltas); Import bleibt artisan
+                    // Spec 13 · S3: Katalog-/Preis-Ingest — Lese-Fläche (Läufe, Lücken, Preis-Deltas)
                     \Platform\FoodAlchemist\Tools\IngestStatusTool::class,
+                    // Spec 13 · S3b: die Auslösung (Dateiname aus dem festen Ablage-Ordner, Trockenlauf-Default, scharf als Job)
+                    \Platform\FoodAlchemist\Tools\IngestImportTool::class,
                     \Platform\FoodAlchemist\Tools\SuppliersSearchTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbooksSearchTool::class,
                     \Platform\FoodAlchemist\Tools\LabNotesSearchTool::class,

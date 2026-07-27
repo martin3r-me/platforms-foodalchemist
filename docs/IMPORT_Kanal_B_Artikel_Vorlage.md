@@ -1,7 +1,7 @@
 # Kanal B — Artikel-Datei-Vorlage (Spec 13 · E1)
 
 > **Richtung:** nur hinein. Food Alchemist ist Master — es gibt keinen Rückweg zum Lieferanten, keinen VK-Export, keine Rück-Synchronisation (Spec 13 §0).
-> **Frequenz:** manuell, quartalsweise (E5). Datei ablegen, Command laufen lassen.
+> **Frequenz:** manuell, quartalsweise (E5). Datei ablegen, Command laufen lassen — oder über MCP auslösen (Abschnitt 1).
 > **Stand:** Stufe **S1a + S1b + S1c + S2** — die Vorlage wird **vollständig** geschrieben: Artikel-Stamm, **Preis**, die drei **Detail-Blöcke** (Nährwerte / Allergene / Zusatzstoffe) und die **Lieferbedingungen** am Lieferanten, inklusive Post-Import-Kette (Abschnitt 7). Was der Reader nicht kennt, wird im Bericht namentlich genannt statt still verschluckt.
 
 ## 1. Aufruf
@@ -17,6 +17,19 @@ php artisan foodalchemist:import-articles --file=/pfad/katalog.csv --supplier=12
 ```
 
 Vor dem ersten scharfen Lauf auf echten Daten: DB-Backup ziehen.
+
+### Auslösung über MCP (S3b) — `foodalchemist.ingest.IMPORT`
+
+Derselbe Import, anderer Auslöser. Geschrieben wird weiterhin nur von `FileArticleImportService` — das Tool ist die **Auslösung**, kein zweiter Import-Pfad (DoD „Bulk bleibt artisan").
+
+| Punkt | Regel |
+|---|---|
+| **Ablage-Ordner** | `storage/app/foodalchemist/import/`. Der Parameter `datei` ist ein **reiner Dateiname**, kein Pfad — Verzeichnis-Anteile, `..`, absolute Pfade, Punkt-Dateien und fremde Endungen werden abgelehnt, ebenso ein Symlink, der aus dem Ordner heraus zeigt. Der Ordner ist absichtlich **nicht konfigurierbar**: ein Tool, das einen freien Pfad annimmt, ist ein Lese-Zugriff auf das Server-Dateisystem. |
+| **Ohne `datei`** | listet das Tool, was im Ordner liegt (Name, Größe, Änderungsdatum, geschätzte Zeilenzahl). Damit muss niemand Dateinamen raten. |
+| **`apply=false`** (Default) | Trockenlauf, synchron, schreibt nichts — auch keine Lauf-Zeile (ein Trockenlauf ist kein Vorgang, sondern eine Frage). Grenze: **2.000 Zeilen** (`MAX_VORSCHAU_ZEILEN`); größere Dateien prüft man mit dem Kommando oben, dort gilt nur `MAX_ZEILEN`. |
+| **`apply=true`** | stellt scharf und reiht einen **Job** ein (`ImportArticlesJob`, Timeout 900 s, `tries=1`) — der Lauf kann bis zu 1.000 Rezept-Ketten neu rechnen und gehört nicht in einen synchronen Aufruf. Zurück kommt die `run_id`; Fortschritt und Ergebnis liest `foodalchemist.ingest.STATUS` (Block `laeufe`). Stirbt der Job, steht der Lauf auf `failed` statt für immer auf `running`. |
+| **Lieferant** | `supplier_id` ist Pflicht, sobald `datei` gesetzt ist (die Datei enthält nur Artikelnummern, nicht ihren Lieferanten) und muss in der Team-Kette sichtbar sein. Geschrieben wird in das Team des Aufruf-Kontexts. |
+| **Kein Lauf-Lock** | ein offener `ingest`-Lauf sperrt nichts, er wird nur als Hinweis mitgegeben (`laufende_laeufe`). Eine Sperre auf `running` wäre im Fehlerfall eine Dauer-Sperre — `bulk_runs` kennt kein Ende ohne Erfolg. |
 
 ## 2. Datei-Format
 

@@ -1307,15 +1307,41 @@ class FileArticleImportService
     }
 
     /**
+     * Ist an dieser Zeile überhaupt etwas passiert? Eine unveränderte Zeile ohne Preis-
+     * und ohne Detail-Bewegung ist der **Normalfall** eines Wiederholungslaufs und damit
+     * Rauschen — sie wird weder in der Konsole noch in der MCP-Vorschau ausgegeben.
+     *
+     * Bewusst hier und nicht zweimal beim Leser: was ein Ereignis ist, entscheidet der
+     * Bericht-Erzeuger, sonst driften Konsolen- und Tool-Ausgabe auseinander.
+     *
+     * @param array<string, mixed> $befund
+     */
+    public static function istEreignis(array $befund): bool
+    {
+        if (($befund['status'] ?? null) !== 'unveraendert') {
+            return true;
+        }
+        if (isset($befund['preis']['status']) && $befund['preis']['status'] !== 'unveraendert') {
+            return true;
+        }
+
+        return array_filter($befund['details'] ?? []) !== [];
+    }
+
+    /**
      * Lauf-Bookkeeping in `foodalchemist_bulk_runs` (Typ `ingest`) — dieselbe Tabelle
      * wie Anreicherungs- und Review-Läufe, damit „welche Läufe sind gelaufen?" eine
      * Antwort hat und nicht drei. Grundlage für S3 `ingest.STATUS`.
      */
-    public function starteRun(int $teamId, int $total): int
+    public function starteRun(int $teamId, int $total, ?int $userId = null): int
     {
         DB::table('foodalchemist_bulk_runs')->insert([
             'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
             'team_id' => $teamId, 'type' => 'ingest', 'status' => 'running',
+            // S3b: wer ausgelöst hat. Beim Kommando bleibt es NULL (die Konsole hat keinen
+            // Benutzer), über MCP steht es drin — der Trigger ist ausdrücklich ein
+            // menschlich angestoßener Vorgang, und das soll am Lauf ablesbar sein.
+            'user_id' => $userId,
             'total' => $total, 'created_at' => now(), 'updated_at' => now(),
         ]);
 
