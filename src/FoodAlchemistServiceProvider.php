@@ -80,6 +80,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\BackfillKapitelZieleCommand::class,
                 \Platform\FoodAlchemist\Console\RecipeFindingsCommand::class,
                 \Platform\FoodAlchemist\Console\ImportArticlesCommand::class,
+                \Platform\FoodAlchemist\Console\MoneyTruthReportCommand::class,
             ]);
         }
     }
