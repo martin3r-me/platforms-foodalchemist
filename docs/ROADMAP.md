@@ -8,6 +8,20 @@
 
 ---
 
+## Update 2026-07-27 (Spec 12 · S2a-1 — der Kandidaten-Pool wird geteilt, und er lernt seinen Deckungsbeitrag)
+
+**Vierunddreißigster Bau-Lauf der Routine ([Spec 12](PLANUNG/12_Wirtschaftlichkeits_Intelligenz_R2-Rest.md), Etappe S2/R2.4 — erster von vier Teilschritten).** R2.4 soll aus dem Portfolio *lösen*: Rahmen rein, DB-maximale Kombination raus. Bevor irgendein Solver rechnen kann, braucht er zwei Dinge, die es so noch nicht gab — eine Menge, aus der er wählen darf, und eine Zahl, die er maximiert. Beides liegt jetzt im neuen `MenuCandidatePoolService`: Pool-Aufbau, Slot-Filter und Filter-Beschreibung sind aus `ConceptGeneratorService` **herausgezogen** (nicht kopiert), der Generator delegiert, das Verhalten ist unverändert (19 Bestands-Tests grün ohne eine Zeile Anpassung).
+
+**Warum die Naht vor dem Motor kommt.** Ein Solver mit eigenem Kandidaten-Aufbau wäre eine zweite Auswahl-Wahrheit neben dem Generator — und damit zwei Orte, an denen die Invariante „nur echte VK-Gerichte, nichts Erfundenes" hängt. Sie hängt jetzt an einem. Alles, was danach aus dem Pool wählt (Generator, Brief-Pfad, Weg-B-Slot-Vorschlag, Solver), erbt sie per Konstruktion.
+
+**Der DB kommt aus der Standard-Darreichung, nicht aus der Vollkosten-Rechnung.** `KalkulationService::recipeHk` rechnet `db_eur` gegen HK2 (Wareneinsatz + Lohn-Zuschlag). Der Solver nimmt bewusst dasselbe Zahlenpaar wie das L8-Wirtschaftlichkeits-Glied und die W%-Ampel: `ek_portion` gegen `sales_net`, beide an der Standard-Darreichung, dieselbe Menge auf beiden Seiten. Eine Zahl, mehrere Anzeigen — ein Solver, der ein anderes DB rechnet als die Ampel daneben zeigt, ist nicht gegenzeichenbar. Fehlt eine der beiden Größen, fliegt der Kandidat **nicht** raus (das wäre eine stille Portfolio-Verengung), sondern steht als `vollstaendig=false` mit ausgewiesener Quelle (`darreichung`/`gemischt`/`legacy`) da.
+
+**Der Perf-Befund ist der eigentliche Ertrag des Laufs.** Die DoD verlangt „~1.000 Gerichte < 15 s". Der Pool lädt alles eager — Dish-Klasse, Hauptgruppe, Niveaus, Zutaten-GPs bis Tiefe 3, neu die Darreichung (die neue Achse kostet genau **+1 Query**, im Test festgenagelt). Eine Spalte durchbricht das: die Anker-Auflösung läuft je Gericht und holt die Zutaten erneut aus der DB, obwohl sie geladen sind. Hart gemessen: **39 Queries für 12 Gerichte ohne eine einzige Zutat.** Hochgerechnet steht der Solver bei ~2.700 Queries vor den Zutaten. Bewusst **nicht** mit-behoben (Fremd-Scope, `PairingService`) → **V-045**, mit Batch-Vorschlag. Zweiter Befund: der Slot-Preisfilter liest `recipes.sales_net`, während der Money-Path längst über den Darreichungs-Resolver geht — ein hartes Ausschluss-Kriterium auf einer Zahl, die sonst niemand mehr benutzt (→ **V-046**).
+
+**Suite 1479 · 1475 passed · 4 skipped · 0 Fail (Vorlauf 1471/1467, +8 Tests).** Kein Schema-Change, keine neue Fähigkeit an der Oberfläche → **kein MCP-Nachzug** (die MCP-Fläche kommt mit S2b, `assemblierung.POST`). Nächster Schritt S2a-2: der Solver-Motor selbst.
+
+---
+
 ## Update 2026-07-27 (Spec 08 · P6a — die Planungs-KI bekommt ihr Concepting-Wissen an die Leitung)
 
 **Dreiunddreißigster Bau-Lauf der Routine ([Spec 08](PLANUNG/08_Planungs_und_Kreativ_Ebene.md), Rest-Etappe P6 — erste Hälfte).** Die Kreativ-Divergenz am Foodbook-Kapitel (E6.4) zieht seit ihrem Bau Wissen über ein Routing, das in keiner Bestands-DB stand: `IdeenService::kiDivergenz` ruft `contextFor('foodbook.plan', …)`, der Seed dafür lebt in `KnowledgeImportCommand` und wird nur bei einem Wissens-Import gesetzt — am lokalen Stand also nie. Die KI plante bisher **ohne** Wissens-Block, und weil ein fehlender Block keine Fehlermeldung erzeugt, sondern nur eine schlechtere Antwort, war davon nichts zu sehen. Neu: eine Migration bringt die Routings `foodbook.plan`/`concept.plan` überall hin, und die neue Kategorie **`concept`** (Concepting-Handwerk: Dramaturgie, Gang-Aufbau, Anlass- und Gäste-Fit, Balance) hängt als eigener Block daran.

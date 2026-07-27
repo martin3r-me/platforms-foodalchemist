@@ -53,6 +53,12 @@ Trennung: interne Live-Marge ↔ veröffentlichter, freigegebener VK.
 
 Aus dem Portfolio **lösen**: Rahmen rein → DB-maximale Kombination raus.
 
+> **Teilschritt S2a-1 GEBAUT 2026-07-27 (Routine-Lauf 34):** Die Naht vor dem Motor. Neu `MenuCandidatePoolService` — Pool-Aufbau, `filterFuerSlot` und `filterBeschreibung` sind aus `ConceptGeneratorService` **herausgezogen** (dort gelöscht, per Dependency delegiert, Verhalten unverändert: 19 Bestands-Tests grün ohne Anpassung). Dazu die Zielfunktion als opt-in Achse `$mitWirtschaft`: DB je Portion = `ek_portion` gegen `sales_net` **an der Standard-Darreichung** — bewusst dasselbe Zahlenpaar wie 03·L8 und die W%-Ampel, nicht `recipeHk`s HK2-Rechnung (ein Solver, der ein anderes DB maximiert als die Ampel daneben zeigt, erfüllt DoD-Punkt 3 nicht). Unvollständige Kandidaten bleiben im Pool als `vollstaendig=false` + ausgewiesene `quelle`, statt still zu verschwinden. `MenuCandidatePoolTest` 8/8.
+>
+> ⚠️ **Perf-DoD ist gefährdet und die Ursache liegt außerhalb dieser Etappe:** hart gemessen **39 Queries für 12 Gerichte ohne Zutaten** — `PairingService::resolveRecipeAnchors` läuft je Gericht und holt die Zutaten erneut, obwohl sie eager geladen sind. Hochgerechnet ~2.700 Queries bei 1.000 Gerichten, vor der ersten Zutat. Die neue Achse selbst kostet **+1 Query** (im Test festgenagelt). Nicht mit-behoben → **V-045** (Batch-`anchorsForRecipes`). **Vor S2a-2 zu entscheiden.** Zweiter Fund: `filterFuerSlot` schließt hart über `recipes.sales_net` aus, während der Money-Path über den Darreichungs-Resolver geht → **V-046**.
+>
+> **Restliche Teilschritte:** S2a-2 Solver-Motor (`MenuAssemblyService`, B&B exakt / Greedy+Local-Swap bei Skala) · S2a-3 Erklärung (bindende Constraints, Lockerungs-Delta) · S2b MCP `assemblierung.POST` + explizite Übernahme als `draft`.
+
 **Bau:** NEU `MenuAssemblyService` — optimiert DB über `kandidatenPool`/`filterFuerSlot` unter Frame-Bändern + Diät-Quoten; validiert über `CoverageService`; Perf über die `MargeImpactService`-Eviction. **Algorithmus (E-Entscheid):** slot-unabhängige DB-Max wo Slots unabhängig; bei menü-weiten Constraints (Diät-Quote) **bounded exhaustive/Branch-and-Bound für kleine Slot-Zahlen (exakt), Constraint-aware-Greedy + Local-Swap bei Skala** (kein externer Solver-Lib in v1).
 
 **DoD:**
