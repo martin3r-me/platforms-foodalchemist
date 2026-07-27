@@ -100,9 +100,11 @@
 - [ ] 13·S2 Lieferbedingungen · S · und 13·S3 MCP `ingest.STATUS` · S
 - [ ] **05·Etappe 2** KI-Datenqualität · M — via OpenAI über Core-Provider (Entscheid: serverseitig auf demo, Review in demo-UI); u.a. `--mode=ki` für mehrdeutige Prep-Texte (Prozessanker), unbestimmte Servierformen je Gericht
 
-## Phase 7 — Vektor-DB-Track (Store-Frage)
-- [ ] **15 · Backfill + Observer** — laut Spec §79 **vom Ingest entkoppelt und jederzeit baubar**; kann bei Bedarf vorgezogen werden
-- [ ] **15 · LA-Pool** — erst wenn die ~50k-Grenze beantwortet ist (Qdrant/Partitionierung = die geplante Vektor-DB); dann RAG-Speicher als **Backend-Swap** umhängen, Additiv-Fallback halten
+## ⏸️ Phase 7 — Vektor-DB-Track (Store-Frage) · **AUSGESETZT (Entscheid Dominique 2026-07-27)**
+> **Die Routine baut hier NICHTS und wartet auch nicht darauf.** Dominique braucht zuerst Infos von Martin zur Store-/Vektor-DB-Frage. Beide Punkte zählen für die Abschluss-Bedingung als **erledigt-durch-Aussetzung** — sind alle übrigen Phasen durch, deaktiviert sich die Routine und schreibt den Abschlussbericht, **ohne** Phase 7 anzufassen.
+> ⚠️ Achtung: „15 · Backfill + Observer" ist technisch **nicht** store-gated (Spec §79: jederzeit baubar) — es wäre also greifbar. Genau deshalb steht die Aussetzung hier explizit: nicht anfangen, auch wenn es als nächster offener Punkt aussieht.
+- [ ] ⏸️ **15 · Backfill + Observer** — ausgesetzt, obwohl baubar (wartet mit dem LA-Pool auf die Store-Entscheidung)
+- [ ] ⏸️ **15 · LA-Pool** — ausgesetzt; braucht die Antwort auf die ~50k-Grenze (Qdrant/Partitionierung). Dann RAG-Speicher als **Backend-Swap** umhängen, Additiv-Fallback halten
 
 ## Deferred / extern (NICHT anfassen)
 12·R2.3 (gated auf Q2-Format-Spec aus echter Bankettprofi-Datei = Dominique-Aufgabe) · 13·S4 Sales-Ist (dito) · 13·E6 Kanal A (extern) · 09·R6.10 produktiv (Q1-Contract) · 11·KI-Narrativ (optional) · #492-Blindtest (braucht 3 echte Kunden-Briefs — Dominique liefert; nicht erfinden).
