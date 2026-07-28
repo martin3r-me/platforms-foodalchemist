@@ -74,6 +74,9 @@ class SignaleListTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'status' => $s->status instanceof \BackedEnum ? $s->status->value : $s->status,
                 'title' => $s->title,
                 'created_at' => (string) $s->created_at,
+                // V-009 (22·H4a), gleiche Projektion wie in `signale.SEARCH`.
+                'zuletzt_gesehen' => $s->last_seen_at !== null ? (string) $s->last_seen_at : null,
+                'gesehen_zaehler' => (int) ($s->seen_count ?? 1),
             ])->all(),
         ]);
     }

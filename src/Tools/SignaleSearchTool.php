@@ -61,6 +61,11 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'status' => $s->status instanceof \BackedEnum ? $s->status->value : $s->status,
                 'title' => $s->title,
                 'created_at' => (string) $s->created_at,
+                // V-009 (22·H4a): erstmals gesehen ist `created_at`, zuletzt gesehen und wie
+                // oft steht hier. Ein Befund mit hohem `gesehen_zaehler` ist ein Prozess-
+                // Problem und kein Datenfehler — ohne die Zahl liest ein LLM beide gleich.
+                'zuletzt_gesehen' => $s->last_seen_at !== null ? (string) $s->last_seen_at : null,
+                'gesehen_zaehler' => (int) ($s->seen_count ?? 1),
             ])->all(),
         ]);
     }

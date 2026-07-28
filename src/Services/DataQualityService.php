@@ -145,14 +145,51 @@ class DataQualityService
      * Emittiert für jede Lücken-Metrik (wert > 0) mit Signal-Deskriptor ein Signal.
      * Idempotent über dedup_key (SignalService dedupt offene Signale je Team+Typ+Key).
      *
+     * Seit 22·H4a schließt derselbe Durchlauf auch die auf 0 gemessenen Lücken (V-011).
+     * Die **Rückgabe bleibt bewusst die Emissions-Zahl** — an ihr hängen die Ausgabe von
+     * `foodalchemist:data-quality` und die Summe in `SignalDetektorService::laufen()`, und
+     * „5 Signale" darf dort nicht plötzlich „5 emittiert + 3 geschlossen" heißen. Wer beide
+     * Zahlen braucht, ruft `emittiereUndSchliesse()`.
+     *
      * @return int Anzahl erzeugter/aktualisierter Signale
      */
     public function emittiereSignale(Team $team): int
     {
+        return $this->emittiereUndSchliesse($team)['emittiert'];
+    }
+
+    /**
+     * Dieselbe Voll-Messung, aber mit beiden Richtungen des Lifecycles (Spec 22 · H4a).
+     *
+     * `wert > 0` emittiert wie bisher; **`wert === 0` schließt** ein offenes Signal desselben
+     * Typs+`dedup_key` aus derselben Quelle (V-011). Beide Zweige teilen sich denselben
+     * Durchlauf, weil `messeAlleEbenen()` die teure Operation ist — ein zweiter Pass nur zum
+     * Schließen hätte die Messkosten verdoppelt und, schlimmer, zwei Messungen gegen einen
+     * womöglich zwischenzeitlich geänderten Bestand gestellt.
+     *
+     * Geschlossen wird ausdrücklich **nur, was diese Ampel selbst emittiert hat**
+     * (`source = 'data-quality'`, s. `SignalService::schliesseGemessen()`).
+     *
+     * @return array{emittiert:int,geschlossen:int}
+     */
+    public function emittiereUndSchliesse(Team $team): array
+    {
         $n = 0;
+        $geschlossen = 0;
         foreach ($this->messeAlleEbenen($team) as $ebene) {
             foreach ($ebene['metriken'] as $m) {
-                if (($m['signal'] ?? null) === null || (int) $m['wert'] === 0) {
+                if (($m['signal'] ?? null) === null) {
+                    continue;
+                }
+                if ((int) $m['wert'] === 0) {
+                    $geschlossen += $this->signals->schliesseGemessen(
+                        $team,
+                        $m['signal']['typ'],
+                        $m['signal']['dedup'],
+                        'data-quality',
+                        'Lücke gemessen 0 — automatisch geschlossen',
+                    );
+
                     continue;
                 }
                 $wert = (int) $m['wert'];
@@ -174,7 +211,7 @@ class DataQualityService
             }
         }
 
-        return $n;
+        return ['emittiert' => $n, 'geschlossen' => $geschlossen];
     }
 
     // ---- Ebenen-Messungen -------------------------------------------------

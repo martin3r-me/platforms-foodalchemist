@@ -34,6 +34,10 @@ class FoodAlchemistSignal extends Model
         'payload' => 'array',
         'erledigt_at' => 'datetime',
         'ignoriert_at' => 'datetime',
+        // V-009 (22·H4a): Wiederkehr-Historie. `last_seen_at` ist bei Alt-Zeilen NULL —
+        // nicht auf `created_at` geraten, s. Migration 2026_07_28_000004.
+        'last_seen_at' => 'datetime',
+        'seen_count' => 'integer',
     ];
 
     public function scopeOffen(Builder $q): Builder

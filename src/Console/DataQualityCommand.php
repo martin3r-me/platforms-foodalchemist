@@ -58,8 +58,10 @@ class DataQualityCommand extends Command
             }
 
             if ($this->option('signals')) {
-                $n = $dq->emittiereSignale($team);
-                $this->line("  → {$n} Signal(e) geschrieben/aktualisiert.");
+                // 22·H4a: der Lauf hat zwei Richtungen — er meldet auch, was er zugemacht hat.
+                // Ohne die zweite Zahl bliebe der Schließ-Zweig (V-011) im Betrieb unsichtbar.
+                ['emittiert' => $n, 'geschlossen' => $zu] = $dq->emittiereUndSchliesse($team);
+                $this->line("  → {$n} Signal(e) geschrieben/aktualisiert, {$zu} automatisch geschlossen (Lücke gemessen 0).");
             }
 
             // Reihenfolge ist Absicht: erst Signale emittieren, dann snapshotten — sonst

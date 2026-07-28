@@ -33,6 +33,11 @@ class SignalService
                     'title' => $titel,
                     'description' => $opts['description'] ?? $vorhanden->description,
                     'payload' => $opts['payload'] ?? $vorhanden->payload,
+                    // V-009: die Wiederkehr ist der eigentliche Befund. Ein Signal, das nach
+                    // jedem Fix zurückkommt, ist ein Prozess-Problem und kein Datenfehler —
+                    // ohne Zähler sieht es aus wie jedes andere.
+                    'last_seen_at' => now(),
+                    'seen_count' => ((int) ($vorhanden->seen_count ?? 1)) + 1,
                 ]);
 
                 return $vorhanden->refresh();
@@ -51,7 +56,59 @@ class SignalService
             'ref_type' => $opts['ref_type'] ?? null,
             'ref_id' => $opts['ref_id'] ?? null,
             'source' => $opts['source'] ?? 'detektor',
+            // Die Anlage IST die erste Sichtung — `seen_count = 1` ab Zeile eins, damit
+            // „einmal gesehen" und „nie gezählt" nicht dieselbe Zahl sind.
+            'last_seen_at' => now(),
+            'seen_count' => 1,
         ]);
+    }
+
+    /**
+     * V-011 — der Gegenzweig zum Emittieren: eine Lücke, die auf 0 gemessen wurde, schließt
+     * ihr offenes Signal, statt es als Phantom stehen zu lassen.
+     *
+     * Bis hier war der eingebaute Fixer die **einzige** Schließ-Stelle (`SignalFixService`).
+     * Wurde derselbe Befund auf anderem Weg behoben — Rezept von Hand korrigiert, Lead-LA im
+     * GP-Editor gesetzt, Import-Nachlauf, Bulk-Skript —, blieb das offene Signal mit seinem
+     * alten Titel („42 — …") stehen, bis ein Mensch es manuell abhakte. Zeitreihe (E1) und
+     * Zustands-Zeile (E2) zählen aber **offene Zeilen**, nicht gemessene Lücken: das Phantom
+     * hielt beide hoch, während die Ampel-Hälfte im selben Cockpit längst 0 zeigte.
+     *
+     * **`$source` ist Pflicht, nicht optional.** Geschlossen wird nur, was aus derselben
+     * Quelle stammt, die gerade gemessen hat. Ampel und Detektor teilen sich Signal-Typen
+     * (`DatenqualitaetGpLa` kommt aus beiden), und „Befund weg" ist auf der Detektor-Seite
+     * je Detektor definiert und nicht generisch ableitbar (V-011, zweiter Absatz). Ohne den
+     * Filter würde eine Ampel-Messung fremde Signale mit-abräumen — genau die stille
+     * Verschiebung, gegen die dieser Umbau geschrieben ist.
+     *
+     * Der Grund landet im `payload` und **nicht** in `description`/`title`: beide Felder
+     * werden angezeigt und tragen den Befund selbst; sie zu überschreiben würde die Historie
+     * der Zeile beim Schließen löschen.
+     *
+     * @return int Anzahl geschlossener Signale (0 oder 1 im Normalfall — der Dedup lässt
+     *             pro Team+Typ+Key nur eine offene Zeile zu)
+     */
+    public function schliesseGemessen(Team $team, SignalTyp $typ, string $dedupKey, string $source, string $grund): int
+    {
+        $offene = FoodAlchemistSignal::where('team_id', $team->id)
+            ->where('type', $typ->value)
+            ->where('dedup_key', $dedupKey)
+            ->where('source', $source)
+            ->where('status', SignalStatus::Offen->value)
+            ->get();
+
+        foreach ($offene as $s) {
+            $s->update([
+                'status' => SignalStatus::Erledigt->value,
+                'erledigt_at' => now(),
+                'payload' => array_merge((array) ($s->payload ?? []), [
+                    'auto_geschlossen' => $grund,
+                    'auto_geschlossen_am' => now()->toIso8601String(),
+                ]),
+            ]);
+        }
+
+        return $offene->count();
     }
 
     public function abschliessen(Team $team, int $id): void
