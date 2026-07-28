@@ -210,6 +210,28 @@ return [
      * M7-10 / D8: STT (sync Kurz-Audio). provider 'fake' = Sandbox/Tests;
      * 'assemblyai' braucht ASSEMBLYAI_API_KEY (Deploy-Rest bei Martin).
      */
+    /*
+    |--------------------------------------------------------------------------
+    | Geplante Läufe
+    |--------------------------------------------------------------------------
+    |
+    | Der Qualitäts-Lauf (`foodalchemist:signale-detektor`) wird vom Modul selbst
+    | eingeplant, nicht vom Host-Console-Kernel — dort war er zwar vorgesehen, aber nie
+    | registriert, und darum sind auf demo 20+ Signal-Typen und die ganze Zeitreihe nie
+    | entstanden. Der Host behält die Hoheit: `enabled = false` schaltet den Eintrag ab.
+    |
+    | Der Copilot-Batch (`foodalchemist:recipe-findings`) wird bewusst NICHT eingeplant —
+    | er ruft das Modell pro Rezept, und ein nächtlicher Job, der ungefragt Provider-Geld
+    | ausgibt, ist eine unbemerkte Rechnung. Der bleibt Knopf und MCP-Aufruf.
+    |
+    */
+    'scheduler' => [
+        'enabled' => env('FOODALCHEMIST_SCHEDULER', true),
+        // Nach dem DB-Snapshot (23:00) und weit vor dem Arbeitstag: der Lauf ist die
+        // teuerste lesende Operation des Moduls und soll nicht neben der Nutzung liegen.
+        'detektor_zeit' => env('FOODALCHEMIST_DETEKTOR_ZEIT', '03:20'),
+    ],
+
     'stt' => [
         'provider' => env('FOODALCHEMIST_STT_PROVIDER', 'fake'),
         'key' => env('ASSEMBLYAI_API_KEY', ''),

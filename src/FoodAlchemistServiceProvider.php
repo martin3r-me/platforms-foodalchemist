@@ -82,7 +82,49 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ImportArticlesCommand::class,
                 \Platform\FoodAlchemist\Console\MoneyTruthReportCommand::class,
             ]);
+
+            $this->planeLaeufe();
         }
+    }
+
+    /**
+     * Den Qualitäts-Lauf täglich einplanen — **im Modul**, nicht im Host-Kernel.
+     *
+     * Der Command trug seit seiner Entstehung den Kommentar „Registrierung der Cron-Frequenz
+     * ist Host-/Deploy-Sache (Console-Kernel der office.bhg-App)". Dort ist es nie passiert.
+     * Die Folge war ein blinder Fleck, der wie ein fehlendes Feature aussah: die 20+ Signal-
+     * Typen für Rezepte/Konzepte/Foodbooks und die komplette Zeitreihe existierten im Code,
+     * aber nie in den Daten — eine Ampel, die nur leuchtet, wenn jemand eine Shell öffnet.
+     *
+     * Ein Modul, dessen Kernfunktion von einer Registrierung in einem fremden Repo abhängt,
+     * hat diese Funktion nicht. Darum hängt der Plan jetzt hier: mitdeployt, mitversioniert,
+     * ohne Zutun von außen. Der Host behält die Hoheit — er kann den Eintrag über
+     * `foodalchemist.scheduler.enabled` abschalten.
+     *
+     * Bewusst NUR der Detektor. `recipe-findings` bleibt manuell: er ruft das Modell pro
+     * Rezept, und ein nächtlicher Job, der ungefragt Provider-Geld ausgibt, ist keine
+     * Bequemlichkeit, sondern eine unbemerkte Rechnung.
+     *
+     * 03:20 Uhr: nach dem DB-Snapshot (23:00) und weit vor dem Arbeitstag — der Lauf ist die
+     * teuerste lesende Operation des Moduls und soll nicht neben der Nutzung liegen.
+     */
+    private function planeLaeufe(): void
+    {
+        if (! config('foodalchemist.scheduler.enabled', true)) {
+            return;
+        }
+
+        // `booted`, weil der Scheduler beim Registrieren des Providers noch nicht steht.
+        $this->app->booted(function () {
+            $schedule = $this->app->make(\Illuminate\Console\Scheduling\Schedule::class);
+
+            $schedule->command(\Platform\FoodAlchemist\Console\SignaleDetektorCommand::class)
+                ->dailyAt(config('foodalchemist.scheduler.detektor_zeit', '03:20'))
+                ->withoutOverlapping()   // ein zweiter Lauf würde in dieselbe Zeitreihe schreiben
+                ->onOneServer()          // Hausschreibweise des Hosts (routes/console.php)
+                ->runInBackground()
+                ->description('FoodAlchemist: Qualitäts-Lauf (Signale, DQ-Kaskade, Zeitreihen-Snapshot, Drift)');
+        });
     }
 
     /**
@@ -289,6 +331,13 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\IngestImportTool::class,
                     // Spec 22 · H3c: die allgemeine Lauf-Quittung über ALLE Lauf-Arten (V-055)
                     \Platform\FoodAlchemist\Tools\RunsGetTool::class,
+                    // Die beiden Qualitäts-Läufe als Auslöser (2026-07-28). Vorher war der
+                    // Detektor NUR über artisan erreichbar und in keinem Scheduler — auf demo
+                    // ist er darum nie gelaufen, und 20+ Signal-Typen plus die ganze Zeitreihe
+                    // existierten im Code, aber nie in den Daten. Getrennt, weil die Ampel
+                    // gratis ist und der Befunde-Batch pro Rezept Provider-Geld kostet.
+                    \Platform\FoodAlchemist\Tools\QualityRunPostTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeFindingsRunPostTool::class,
                     \Platform\FoodAlchemist\Tools\SuppliersSearchTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbooksSearchTool::class,
                     \Platform\FoodAlchemist\Tools\LabNotesSearchTool::class,

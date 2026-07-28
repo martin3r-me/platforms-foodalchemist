@@ -8,6 +8,64 @@
 
 ---
 
+## Update 2026-07-28 (Qualitäts-Läufe auslösbar — **die Ampel war nie an**)
+
+**Befund (bei der demo-Abnahme gefunden, nicht geplant).** Auf demo fehlten 20+ Signal-Typen
+(Rezept/Konzept/Foodbook) und die komplette Zeitreihe. Nicht weil sie ungebaut waren — sie
+existierten seit Wochen im Code — sondern weil der Detektor **nie gelaufen** ist. Drei Ursachen
+übereinander, jede einzeln harmlos, zusammen ein toter Feature-Strang:
+
+1. **Der Knopf war unerreichbar.** „Prüfen" lag seit `a372369` (2026-06-17) im `<x-slot:end>` des
+   Core-`x-ui-page-actionbar` — und dessen Inhalt **rendert auf demo nicht**. Verifiziert am
+   Zwilling: die Wissens-Seite verlor auf demselben Weg „+ Neues Wissen", obwohl ihr eigener
+   Hinweistext wörtlich darauf zeigt („oben rechts «+ Neues Wissen»") — auf demo war Wissen
+   damit überhaupt nicht anlegbar. Das sind die **einzigen zwei** FA-Views mit diesem Slot, und
+   beide waren betroffen. **Ursache liegt in platform-core → Martin.**
+2. **Kein Scheduler.** Der Command trug seit je den Kommentar „Registrierung der Cron-Frequenz ist
+   Host-/Deploy-Sache (Console-Kernel der office.bhg-App)". Dort ist es nie passiert: die
+   `routes/console.php` des Hosts plant 17 Commands (Planner, Meetings, OKR, Drip, Helpdesk, HCM,
+   core) und **keinen einzigen FoodAlchemist-Command**. ⚠️ **Korrektur einer früheren Notiz:** der
+   Eintrag *2026-07-14 (5)* behauptet „der bestehende `signale-detektor`-Scheduler (auf demo
+   aktiv)" — **das war falsch und hat den Fund zwei Wochen verdeckt.** Ein Modul, dessen
+   Kernfunktion an einer Registrierung in einem fremden Repo hängt, hat diese Funktion nicht.
+3. **Synchron im Request.** `ReviewQueue::detektorLaufen()` rief `SignalDetektorService::laufen()`
+   inline: 11 Detektoren + Voll-Messung der Kaskade + Snapshot + Drift, auf demo über 7.942 Artikel
+   und 2.297 Rezepte. Auch mit sichtbarem Knopf wäre das ins Timeout gelaufen.
+
+**Gebaut.** Zwei getrennte, auslösbare Läufe — Knopf, MCP und Scheduler auf **einem** Pfad
+(`QualityRunService`):
+
+- `BulkRunType::Detektor` + `QualityRunJob` (async, `timeout` 1800, `tries` 1, `failed()`-Zweig →
+  kein Lauf bleibt auf „läuft gerade"). Doppelklick-Schutz: läuft schon eine Messung, kommt **deren**
+  `run_id` zurück — zwei parallele Läufe schrieben sonst beide in dieselbe Zeitreihe und der
+  Drift-Vergleich (E3) hielte einen Punkt gegen sich selbst.
+- `RecipeFindingsBatchService` (die Batch-Schleife aus `RecipeFindingsCommand` herausgezogen — sie hat
+  jetzt drei Aufrufer) + `RecipeFindingsRunJob`. Hier **kein** Doppelklick-Schutz: die Bremse ist das
+  Limit, mehrfaches Starten arbeitet den Bestand ab. Hart gedeckelt auf `MAX_LIMIT` 200, damit ein
+  manipulierter Livewire-Payload keine Volllast auslöst.
+- **Knöpfe raus aus dem Core-Slot**, in unser eigenes Markup (Signale *und* Wissen). Der Core-Slot
+  bleibt kaputt — Workaround, keine Reparatur.
+- MCP im Lockstep: `quality_run.POST` (gratis, idempotent, `safe`) + `recipe_findings_run.POST`
+  (`external_api_paid`, `idempotent: false`, `caution`). Beide geben eine `run_id` **vor** dem Worker
+  heraus → Quittung über `runs.GET`.
+- **Scheduler modul-lokal** (`FoodAlchemistServiceProvider::planeLaeufe`, täglich 03:20, `withoutOverlapping`
+  + `onOneServer`, abschaltbar über `foodalchemist.scheduler.enabled`). Der Copilot-Batch bleibt
+  bewusst **un**geplant: er ruft das Modell pro Rezept, und ein nächtlicher Job, der ungefragt
+  Provider-Geld ausgibt, ist eine unbemerkte Rechnung.
+- **Kosten-Trennlinie repariert:** `BulkRunType::istKiLauf()` war als Negativ-Liste (`!== Ingest`)
+  geschrieben — jeder neue Lauf-Typ wurde dadurch stillschweigend zum Kostenträger. Genau das wäre
+  dem täglich laufenden, gratis arbeitenden `Detektor` passiert: dauerhaft verfälschte Auswertung,
+  ohne eine Zeile Fehler. Jetzt Positiv-Liste mit erschöpfendem `match`.
+
+`QualityRunTest` (10 Pest) nagelt die drei Eigenschaften fest, deren Fehlen das verursacht hat:
+**asynchron**, **Quittung**, **eingeplant** — inkl. Negativ-Test, dass `recipe-findings` nicht im
+Scheduler steht. Beide geänderten Blades echt kompiliert (`Blade::compileString`).
+
+**Offen:** demo-Deploy (macht es sichtbar) · Core-`<x-slot:end>` → Martin · nach dem Deploy den Lauf
+**zweimal** fahren, sonst bleibt der Trend leer (ein Snapshot = kein Delta).
+
+---
+
 ## Update 2026-07-28 (Spec 12 · S3b — die Slot-Rolle bindet den Slot, ohne ihn zu sperren · **Bug #651 im Kern behoben**)
 
 **Sechzigster Bau-Lauf der Routine ([Spec 12](PLANUNG/12_Wirtschaftlichkeits_Intelligenz_R2-Rest.md), Etappe S3b).** Die Lesart ist entschieden (**(b) lexikografisch**, Dominique) — damit ist verdrahtet, was S3a vorbereitet hat: der Solver rechnet **Verletzungen → Rollen-Brüche → DB**. Der Hauptgang bekommt Hauptgerichte, nicht den margenstärkeren Kuchen.

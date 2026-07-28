@@ -11,15 +11,23 @@
             ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
             ['label' => 'Wissen'],
         ]">
-            <x-slot:end>
-                <button type="button" wire:click="neu" class="{{ $btnPrimary }}" data-wissen-neu>+ Neues Wissen</button>
-            </x-slot:end>
+            {{-- Kein `<x-slot:end>` mehr: der Slot rendert auf demo nicht (Core-Komponente).
+                 Der Knopf war dadurch unerreichbar, obwohl der Hinweistext rechts wörtlich
+                 auf ihn zeigt („oben rechts «+ Neues Wissen»") — auf demo war Wissen also
+                 überhaupt nicht anlegbar. Er steht jetzt im Seitenkörper. --}}
         </x-ui-page-actionbar>
     </x-slot>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
 
-        @if($fehler !== null)<p class="text-xs text-rose-600" data-wissen-fehler>{{ $fehler }}</p>@endif
+        <div class="flex items-center justify-between gap-3">
+            @if($fehler !== null)
+                <p class="text-xs text-rose-600" data-wissen-fehler>{{ $fehler }}</p>
+            @else
+                <span></span>
+            @endif
+            <button type="button" wire:click="neu" class="{{ $btnPrimary }}" data-wissen-neu>+ Neues Wissen</button>
+        </div>
 
         <div class="flex gap-4 items-start">
             {{-- LINKS: Liste + Filter --}}

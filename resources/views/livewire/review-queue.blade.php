@@ -14,14 +14,9 @@
             ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
             ['label' => 'Signale'],
         ]">
-            <x-slot:end>
-                <button type="button" wire:click="detektorLaufen" wire:target="detektorLaufen" wire:loading.attr="disabled"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 bg-white/60 border border-black/5 hover:bg-white/90 hover:text-gray-900 transition-all disabled:opacity-60"
-                        title="Detektor jetzt laufen lassen">
-                    <span wire:loading.remove wire:target="detektorLaufen" class="inline-flex items-center gap-1.5">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5') Prüfen</span>
-                    <span wire:loading wire:target="detektorLaufen" class="inline-flex items-center gap-1.5">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin') Prüfe …</span>
-                </button>
-            </x-slot:end>
+            {{-- Kein `<x-slot:end>` mehr: der Slot rendert auf demo nicht (Core-Komponente),
+                 der „Prüfen"-Knopf lag hier seit a372369 (2026-06-17) unerreichbar. Die
+                 Lauf-Knöpfe stehen jetzt über der Tab-Leiste im Seitenkörper. --}}
         </x-ui-page-actionbar>
     </x-slot>
 
@@ -61,18 +56,51 @@
                 ['key' => 'pflege', 'label' => 'Pflege', 'icon' => 'heroicon-o-wrench-screwdriver', 'count' => $pflegeGesamt],
             ];
         @endphp
-        <div class="flex flex-wrap items-center gap-0.5 p-1 rounded-xl bg-black/[0.03] w-fit" data-rq-tabs>
-            @foreach($tabs as $t)
-                <button type="button" wire:key="tab-{{ $t['key'] }}" wire:click="setTab('{{ $t['key'] }}')"
-                        data-rq-tab="{{ $t['key'] }}"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all {{ $tab === $t['key'] ? 'bg-white shadow-sm font-medium text-violet-700' : 'text-gray-500 hover:text-gray-900' }}">
-                    @svg($t['icon'], 'w-3.5 h-3.5 '.($tab === $t['key'] ? 'text-violet-600' : 'text-gray-400'))
-                    {{ $t['label'] }}
-                    @if($t['count'] !== null && $t['count'] > 0)
-                        <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold {{ $tab === $t['key'] ? 'bg-violet-500/15 text-violet-700' : 'bg-black/[0.06] text-gray-500' }}">{{ number_format($t['count'], 0, ',', '.') }}</span>
-                    @endif
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-0.5 p-1 rounded-xl bg-black/[0.03] w-fit" data-rq-tabs>
+                @foreach($tabs as $t)
+                    <button type="button" wire:key="tab-{{ $t['key'] }}" wire:click="setTab('{{ $t['key'] }}')"
+                            data-rq-tab="{{ $t['key'] }}"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all {{ $tab === $t['key'] ? 'bg-white shadow-sm font-medium text-violet-700' : 'text-gray-500 hover:text-gray-900' }}">
+                        @svg($t['icon'], 'w-3.5 h-3.5 '.($tab === $t['key'] ? 'text-violet-600' : 'text-gray-400'))
+                        {{ $t['label'] }}
+                        @if($t['count'] !== null && $t['count'] > 0)
+                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold {{ $tab === $t['key'] ? 'bg-violet-500/15 text-violet-700' : 'bg-black/[0.06] text-gray-500' }}">{{ number_format($t['count'], 0, ',', '.') }}</span>
+                        @endif
+                    </button>
+                @endforeach
+            </div>
+
+            {{-- Die beiden Lauf-Knöpfe. Sie standen bis 2026-07-28 im `<x-slot:end>` des
+                 Core-`x-ui-page-actionbar` — und dessen Inhalt rendert auf demo NICHT (dieselbe
+                 Ursache liess auf der Wissens-Seite „+ Neues Wissen" verschwinden, obwohl der
+                 Hinweistext dort darauf zeigt). Ein Feature-Eingang, den niemand anklicken kann,
+                 ist kein Feature: darum leben sie hier, in unserem eigenen Markup, wo wir das
+                 Rendering kontrollieren. Der Core-Slot bleibt für Martin zu reparieren.
+                 Getrennt, weil links gratis ist und rechts Provider-Geld kostet. --}}
+            <div class="flex flex-wrap items-center gap-2" data-rq-laeufe>
+                <button type="button" wire:click="detektorLaufen" wire:target="detektorLaufen" wire:loading.attr="disabled"
+                        data-rq-ampel
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 bg-white/60 border border-black/5 hover:bg-white/90 hover:text-gray-900 transition-all disabled:opacity-60"
+                        title="Detektoren, Datenqualitäts-Kaskade, Zeitreihen-Snapshot und Drift neu rechnen. Deterministisch, kostet nichts, läuft im Hintergrund.">
+                    <span wire:loading.remove wire:target="detektorLaufen" class="inline-flex items-center gap-1.5">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5') Ampel neu messen</span>
+                    <span wire:loading wire:target="detektorLaufen" class="inline-flex items-center gap-1.5">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin') Reihe ein …</span>
                 </button>
-            @endforeach
+
+                <div class="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg bg-white/60 border border-black/5">
+                    <button type="button" wire:click="befundeLaufen" wire:target="befundeLaufen" wire:loading.attr="disabled"
+                            data-rq-befunde
+                            class="inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 hover:text-violet-900 transition-all disabled:opacity-60"
+                            title="Rezept-Copilot über die fälligen Rezepte laufen lassen. Ruft das Modell PRO Rezept — das Limit rechts ist die Kostenbremse.">
+                        <span wire:loading.remove wire:target="befundeLaufen" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Befunde sammeln</span>
+                        <span wire:loading wire:target="befundeLaufen" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 animate-spin') Reihe ein …</span>
+                    </button>
+                    <input type="number" wire:model="befundeLimit" min="1" max="{{ \Platform\FoodAlchemist\Services\RecipeFindingsBatchService::MAX_LIMIT }}"
+                           data-rq-befunde-limit
+                           class="w-14 text-xs text-right bg-transparent border-0 focus:ring-0 text-gray-600 tabular-nums"
+                           title="Höchstens so viele Rezepte je Lauf (Egress-Bremse)." />
+                </div>
+            </div>
         </div>
 
         {{-- ════════════════════════ TAB: ÜBERBLICK ════════════════════════ --}}

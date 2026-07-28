@@ -58,11 +58,16 @@ it('legt leeren Kontext als NULL ab statt als leeres Objekt', function () {
         ->and(FoodAlchemistBulkRun::findOrFail($run->id)->context)->toBeNull();
 });
 
-it('kennt genau die fünf Lauf-Arten, die im Bestand geschrieben werden', function () {
+it('kennt genau die sechs Lauf-Arten, die im Bestand geschrieben werden', function () {
     // Registry-Riegel im Muster von 22·H1 (V-003): jede Art braucht ein Label, und
     // die Menge selbst ist die Dokumentation — nicht der Migrations-Kommentar (V-020).
+    //
+    // `detektor` kam 2026-07-28 dazu (Qualitäts-Lauf „Ampel neu messen"): der Detektor lief
+    // bis dahin synchron im Livewire-Request und war darum weder abbrechbar noch nachlesbar.
+    // Als eingereihter Lauf braucht er dieselbe Quittung wie die KI-Läufe — sonst ist ein
+    // Klick, der 90 Sekunden dauert, von einem Klick ins Timeout nicht zu unterscheiden.
     expect(array_map(fn (BulkRunType $t) => $t->value, BulkRunType::cases()))
-        ->toBe(['enrich', 'enrich_vk', 'enrich_gp', 'ingest', 'review']);
+        ->toBe(['enrich', 'enrich_vk', 'enrich_gp', 'ingest', 'review', 'detektor']);
 
     foreach (BulkRunType::cases() as $typ) {
         expect($typ->label())->not->toBeEmpty();
@@ -71,9 +76,15 @@ it('kennt genau die fünf Lauf-Arten, die im Bestand geschrieben werden', functi
         expect($status->label())->not->toBeEmpty();
     }
 
-    // Der Datei-Import ist der einzige Lauf ohne Provider-Call.
+    // Zwei Lauf-Arten kommen ohne Provider-Call aus: der Datei-Import und der Qualitäts-Lauf.
+    // Die Trennlinie war bis 2026-07-28 als Negativ-Liste (`!== Ingest`) geschrieben — damit
+    // wäre der täglich eingeplante, gratis arbeitende Detektor stillschweigend als
+    // Kostenträger gezählt worden. Jetzt erschöpfendes `match`, das jeden neuen Fall zur
+    // Entscheidung zwingt; dieser Test ist der Riegel dagegen.
     expect(BulkRunType::Ingest->istKiLauf())->toBeFalse()
-        ->and(BulkRunType::EnrichGp->istKiLauf())->toBeTrue();
+        ->and(BulkRunType::Detektor->istKiLauf())->toBeFalse()
+        ->and(BulkRunType::EnrichGp->istKiLauf())->toBeTrue()
+        ->and(BulkRunType::Review->istKiLauf())->toBeTrue();
 });
 
 it('schreibt beim Anreicherungs-Lauf die Schrittfolge als Gegenstand mit', function () {

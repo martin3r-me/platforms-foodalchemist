@@ -11,7 +11,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
 use Platform\FoodAlchemist\Services\BulkEnrichService;
 use Platform\FoodAlchemist\Services\MatchService;
-use Platform\FoodAlchemist\Services\SignalDetektorService;
+use Platform\FoodAlchemist\Services\QualityRunService;
+use Platform\FoodAlchemist\Services\RecipeFindingsBatchService;
 use Platform\FoodAlchemist\Services\SignalService;
 use Platform\FoodAlchemist\Services\TerminologyService;
 
@@ -41,6 +42,16 @@ class ReviewQueue extends Component
 
     /** KI-Assistenz-Entwurf (transient): ['signal_id','draft','confidence'] fürs offene Panel. */
     public ?array $kiDraft = null;
+
+    /**
+     * Wie viele fällige Rezepte darf der KI-Befunde-Lauf höchstens prüfen?
+     *
+     * Steht sichtbar am Knopf, weil jeder Schritt Provider-Geld kostet — ein Limit, das
+     * nur im Code steht, ist für den Klickenden kein Limit. Der Service deckelt zusätzlich
+     * hart auf {@see RecipeFindingsBatchService::MAX_LIMIT}, damit ein manipulierter
+     * Livewire-Payload keine Volllast auslösen kann.
+     */
+    public int $befundeLimit = RecipeFindingsBatchService::DEFAULT_LIMIT;
 
     #[Url(as: 'sig_status')]
     public string $signalStatus = 'offen';
@@ -194,7 +205,16 @@ class ReviewQueue extends Component
         }, 'Anti-Marker gelernt — Verwechslung ist gesperrt.');
     }
 
-    /** Detektor manuell anstoßen (sonst via Scheduler/Command). */
+    /**
+     * „Ampel neu messen" — Detektor-Lauf anstoßen (sonst via Scheduler/Command).
+     *
+     * ASYNC seit 2026-07-28. Vorher rief das hier `SignalDetektorService::laufen()`
+     * **synchron im Livewire-Request**: 11 Detektoren, Voll-Messung der Kaskade, Snapshot
+     * und Drift — auf demo über 7.942 Artikel und 2.297 Rezepte. Das war kein Request,
+     * das war ein Batch, und er wäre ins Timeout gelaufen. Jetzt gibt es eine `run_id`
+     * und damit eine Quittung (`runs.GET`), statt eines Klicks, dessen Ausgang niemand
+     * nachlesen kann.
+     */
     public function detektorLaufen(): void
     {
         $this->meldung = null;
@@ -203,8 +223,37 @@ class ReviewQueue extends Component
         if ($team === null) {
             return;
         }
-        $n = app(SignalDetektorService::class)->laufen($team);
-        $this->meldung = "Detektor gelaufen — {$n} Signal(e) erzeugt/aktualisiert.";
+
+        ['run_id' => $runId, 'bereits_laufend' => $schonDa] = app(QualityRunService::class)
+            ->starteAmpelLauf($team, Auth::id());
+
+        $this->meldung = $schonDa
+            ? "Es läuft schon eine Messung (Lauf {$runId}) — kein zweiter Lauf gestartet."
+            : "Messung gestartet (Lauf {$runId}) — die Signale erscheinen, sobald sie durch ist.";
+    }
+
+    /**
+     * „KI-Befunde sammeln" — der Copilot-Batch über die fällige Arbeitsmenge.
+     *
+     * Bewusst ein **eigener** Knopf und nicht in die Ampel-Messung gefaltet: dieser Lauf
+     * ruft das Modell pro Rezept und kostet Provider-Geld. Wer die Ampel neu messen will,
+     * soll damit keine Rechnung auslösen. Das Limit steht darum am Knopf und ist die
+     * Egress-Bremse (V-047), nicht eine Bequemlichkeit.
+     */
+    public function befundeLaufen(): void
+    {
+        $this->meldung = null;
+        $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+
+        ['run_id' => $runId, 'limit' => $limit] = app(QualityRunService::class)
+            ->starteBefundeLauf($team, $this->befundeLimit, userId: Auth::id());
+
+        $this->meldung = "KI-Befunde gestartet (Lauf {$runId}) — höchstens {$limit} fällige Rezepte, "
+            . 'die Befunde landen im Copilot-Panel des jeweiligen Rezepts.';
     }
 
     public function setSignalStatus(string $s): void

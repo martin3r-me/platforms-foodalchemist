@@ -3,14 +3,9 @@
 namespace Platform\FoodAlchemist\Console;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
-use Platform\FoodAlchemist\Enums\BulkRunStatus;
-use Platform\FoodAlchemist\Enums\BulkRunType;
-use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
-use Platform\FoodAlchemist\Services\RecipeBauartService;
 use Platform\FoodAlchemist\Services\RecipeFindingService;
-use Platform\FoodAlchemist\Services\RecipeReviewService;
+use Platform\FoodAlchemist\Services\RecipeFindingsBatchService;
 
 /**
  * Spec 21 · S5a (Tranche B) — der Batch-Lauf des L6-Copilot über den Bestand.
@@ -19,6 +14,11 @@ use Platform\FoodAlchemist\Services\RecipeReviewService;
  * beiden Modals fahren; hier nur über eine Arbeitsmenge statt über ein Rezept, und
  * mit Ablage (`RecipeFindingService`). Die Signale daraus baut S5b — dieser Lauf
  * schreibt bewusst noch keine.
+ *
+ * Die Schleife selbst liegt seit 2026-07-28 in {@see RecipeFindingsBatchService}: derselbe
+ * Batch ist jetzt auch über den Cockpit-Knopf und über MCP auslösbar, und ein Batch mit
+ * drei Aufrufern darf nicht in einem Command wohnen. Hier bleibt nur die CLI-Haut —
+ * Team-Auswahl, Pass-Validierung und die Ausgabe.
  *
  * Egress-Disziplin (der Grund für `--limit` als Default und für `ai_reviewed_at`):
  * ein Lauf prüft nur, was fällig ist (nie geprüft oder seit der Prüfung geändert),
@@ -40,7 +40,7 @@ class RecipeFindingsCommand extends Command
 
     protected $description = 'Rezept-Copilot als Batch: prüft fällige Rezepte und legt die Befunde ab (Spec 21 Tranche B).';
 
-    public function handle(RecipeFindingService $findings, RecipeReviewService $review): int
+    public function handle(RecipeFindingsBatchService $batch): int
     {
         // S5b-2: zwei Pässe, EIN Command — sie teilen Arbeitsmengen-Logik, Lauf-
         // Bookkeeping und Egress-Bremse. Was sie NICHT teilen (Erzeuger, Prüf-Stempel,
@@ -66,76 +66,24 @@ class RecipeFindingsCommand extends Command
         $trocken = (bool) $this->option('dry-run');
 
         foreach ($teams as $team) {
-            $ids = $this->option('recipe')
-                ? [(int) $this->option('recipe')]
-                : $findings->arbeitsmenge($team, (bool) $this->option('nur-verkauf'), $pass)->limit($limit)->pluck('id')->all();
+            $this->info("── Team {$team->id} ({$team->name}) · Pass {$pass}" . ($trocken ? ' · dry-run' : ''));
 
-            if ($ids === []) {
-                $this->line("── Team {$team->id} ({$team->name}): nichts fällig ({$pass}).");
+            $e = $batch->laufe(
+                team: $team,
+                limit: $limit,
+                nurVerkauf: (bool) $this->option('nur-verkauf'),
+                pass: $pass,
+                nurRezept: $this->option('recipe') ? (int) $this->option('recipe') : null,
+                trocken: $trocken,
+                log: fn (string $zeile) => $this->line('   ' . $zeile),
+            );
 
-                continue;
-            }
-
-            $this->info("── Team {$team->id} ({$team->name}): " . count($ids) . " fällige(s) Rezept(e) · Pass {$pass}"
-                . ($trocken ? ' · dry-run' : ''));
-
-            $runId = $trocken ? null : $this->starteRun($team->id, count($ids), $pass, $limit);
-            $summe = ['neu' => 0, 'wieder' => 0, 'offen' => 0, 'verschwunden' => 0];
-            $fehler = 0;
-
-            foreach ($ids as $recipeId) {
-                try {
-                    if ($trocken) {
-                        $n = count($pass === RecipeFindingService::PASS_BAUART
-                            ? app(RecipeBauartService::class)->pruefe($team, $recipeId)['befunde']
-                            : $review->pruefe($team, $recipeId)['befunde']);
-                        $this->line("   #{$recipeId}: {$n} Befund(e) (nicht abgelegt)");
-
-                        continue;
-                    }
-                    $z = $findings->pruefeUndAblegen($team, $recipeId, $runId, $pass);
-                    foreach ($summe as $k => $_) {
-                        $summe[$k] += $z[$k];
-                    }
-                    $this->line("   #{$recipeId}: {$z['offen']} offen (neu {$z['neu']}, wieder {$z['wieder']}, "
-                        . "geschlossen {$z['verschwunden']})");
-                } catch (\Throwable $e) {
-                    $fehler++;
-                    $this->warn("   #{$recipeId}: {$e->getMessage()}");
-                } finally {
-                    // Fortschritt zählt auch das gescheiterte Rezept mit (`done` ist
-                    // „abgearbeitet", nicht „gelungen"); `failed` wird am Lauf-Ende gesetzt.
-                    if ($runId !== null) {
-                        FoodAlchemistBulkRun::whereKey($runId)->update([
-                            'done' => DB::raw('done + 1'), 'updated_at' => now(),
-                        ]);
-                    }
-                }
-            }
-
-            if ($runId !== null) {
-                FoodAlchemistBulkRun::whereKey($runId)
-                    ->update(['status' => BulkRunStatus::Done->value, 'failed' => $fehler, 'updated_at' => now()]);
-                $this->line("   → offen {$summe['offen']} · neu {$summe['neu']} · wieder {$summe['wieder']}"
-                    . " · geschlossen {$summe['verschwunden']} · Fehler {$fehler} (Lauf {$runId})");
+            if ($e['geprueft'] > 0 && $e['run_id'] !== null) {
+                $this->line("   → offen {$e['offen']} · neu {$e['neu']} · wieder {$e['wieder']}"
+                    . " · geschlossen {$e['verschwunden']} · Fehler {$e['fehler']} (Lauf {$e['run_id']})");
             }
         }
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Lauf-Bookkeeping in `foodalchemist_bulk_runs` (Typ `review`) — bewusst dieselbe
-     * Tabelle wie der Anreicherungs-Autopilot: „welche KI-Läufe sind gelaufen?" soll
-     * eine Antwort haben, nicht zwei. Die Befunde selbst hängen ohne FK daran.
-     */
-    private function starteRun(int $teamId, int $total, string $pass, ?int $limit): int
-    {
-        // V-047: Pass und Limit sind der Gegenstand eines Review-Laufs — zwei Läufe
-        // desselben Tages unterscheiden sich sonst nur durch ihre Zeilennummer.
-        return (int) FoodAlchemistBulkRun::starte($teamId, BulkRunType::Review, $total, [
-            'pass' => $pass,
-            'limit' => $limit,
-        ])->id;
     }
 }
