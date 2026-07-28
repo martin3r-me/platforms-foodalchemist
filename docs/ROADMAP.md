@@ -56,6 +56,49 @@ Konflikt-Meldung, erst-erden-dann-maxen) grün, Gesamt-Suite ohne Regression.
 
 ---
 
+## Update 2026-07-28 (Kreativ-Tab: **E9 + E6.3 waren unerreichbar** — Cockpit XOR Kapitel)
+
+**Befund, bewiesen im Code, nicht vermutet.** Der Kreativ-Tab des Foodbook-Cockpits zeigte auf demo
+nur „Kreative Leitplanken" und „Tonalität". Alles Kapitel-gebundene fehlte. Ursache sind zwei
+Bedingungen, die sich gegenseitig ausschließen:
+
+| Ort | Bedingung |
+|---|---|
+| Cockpit samt Tab-Leiste und allen 7 Panels (`index.blade.php:87`) | `@if($selectedKapitelId === null)` |
+| Modus-Schalter · Skizzen-Inhalt · Pairing-Inspiration (Blade 370 / 460) | `@if($kapitel)` |
+
+Und `$kapitel` ist (`Livewire/Foodbooks/Index.php:1177`) **genau dann** gesetzt, wenn
+`selectedKapitelId` gesetzt ist. Innerhalb des Cockpits war `$kapitel` also **immer null** ⇒ toter
+Zweig. **Unerreichbar war damit:** der 3-Modus-Schalter `voll_kreativ|hybrid|datenbank` (E9.4), die
+komplette Pairing-Inspiration (Seed-Feld, „Inspirieren", Lücke-Meldung), die Skizzen-Inhalte samt
+„aus Bestand"-Auswahl und Ideen-/Pakete-Liste (E6.3) sowie der Papierkorb-Schalter. Also praktisch
+die ganze E9-Nachtrag-Etappe und der Inhalt der Skizzenfläche.
+
+Die Selbstanzeige stand im Tab: **„Wähle links ein Kapitel"** — eine Anweisung, deren Ausführung die
+Oberfläche selbst unmöglich machte (die Kapitelwahl entfernte das Cockpit samt Tab-Leiste).
+
+**Warum 436 grüne Tests das nicht gemerkt haben.** `FoodbookKreativTabTest` rief
+`->call('kreativModusSetzen', …)` und prüfte den DB-Wert. Livewire-Methoden lassen sich direkt
+aufrufen, unabhängig davon, ob ein Knopf dafür rendert — kein einziges `assertSee` mit gewähltem
+Kapitel. Der Test bewies das *Verhalten* und schwieg zur *Erreichbarkeit*.
+
+⚠️ **Das ist am selben Tag zum zweiten Mal passiert** (s. Eintrag unten: der „Prüfen"-Knopf im
+nicht-rendernden Core-Slot). Zwei Vorfälle in einem Strang sind kein Zufall, sondern eine fehlende
+Testklasse: **wir prüfen, ob Features funktionieren, nicht ob man sie anklicken kann.**
+
+**Fix.** Der Wächter in Zeile 87 ist entfallen — das Cockpit rendert immer, der Kapitel-Editor steht
+darunter. Das war immer die Absicht (der Hinweistext, der `@else`-Zweig und die E9.4-Tests gehen
+alle von Koexistenz aus). Der „links ein Kapitel wählen"-Platzhalter ist entfallen: mit sichtbarem
+Cockpit wäre er eine leere Karte unter einer vollen Seite.
+
+**+3 Erreichbarkeits-Tests** in `FoodbookKreativTabTest`, die auf das **gerenderte Markup**
+assertieren (`data-fb-kreativ-modus`, `data-fb-modus="…"`, `data-fb-pairing-inspiration`,
+`data-fb-seed`, Tab-Leiste **und** Kapitel-Editor gleichzeitig). **Gegenprobe gefahren:** auf dem
+Alt-Stand fallen genau diese 3 um (5 alt grün, 3 neu rot) — sie fangen also wirklich den Bug und
+nicht bloß den Ist-Zustand.
+
+---
+
 ## Update 2026-07-28 (Qualitäts-Läufe auslösbar — **die Ampel war nie an**)
 
 **Befund (bei der demo-Abnahme gefunden, nicht geplant).** Auf demo fehlten 20+ Signal-Typen

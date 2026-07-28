@@ -84,8 +84,18 @@
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         @if($fb)
-            @if($selectedKapitelId === null)
             {{-- ═══════════════ FOODBOOK-KOPF — Planungs-Cockpit (Tabs) ═══════════════ --}}
+            {{-- Das Cockpit rendert IMMER, auch mit gewähltem Kapitel. Bis 2026-07-28 stand hier
+                 `@if($selectedKapitelId === null)` — Cockpit XOR Kapitel. Das machte einen ganzen
+                 Feature-Strang unerreichbar, weil `$kapitel` (Index.php:1177) genau dann gesetzt ist,
+                 wenn `selectedKapitelId` gesetzt ist: innerhalb des Cockpits war `$kapitel` also
+                 IMMER null, und damit rendete nichts, was ein Kapitel braucht — der
+                 3-Modus-Schalter (E9.4), die Skizzen-Inhalte samt „aus Bestand"-Auswahl und
+                 Ideen-/Pakete-Liste (E6.3) und die komplette Pairing-Inspiration.
+                 Die Selbstanzeige des Fehlers stand im Kreativ-Tab: „Wähle links ein Kapitel" —
+                 eine Anweisung, deren Ausführung die Oberfläche selbst unmöglich machte.
+                 Die Absicht war immer Koexistenz (dieser Hinweistext, der `@else`-Zweig und die
+                 E9.4-Tests gehen alle davon aus). Kapitel-Editor kommt darunter. --}}
             {{-- Tab-Zustand hält Alpine über Livewire-Morphs hinweg (stabiler wire:key), Muster wie Concepter-Editor.
                  Kalkulations-Leiste bleibt die rechte activity-Sidebar. Phase 1: reiner Reuse, Modals raus. --}}
             {{-- E5.2: Sprung-Event-Bus — die Checkliste dispatcht `fb-goto` {tab, anker}; der Cockpit-Root
@@ -802,8 +812,8 @@
 
             </div>{{-- /fbcockpit --}}
 
-            @else
             {{-- ═══════════════ KAPITEL (den „einzelnen Strukturen" — nur die Speisen) ═══════════════ --}}
+            {{-- Steht jetzt UNTER dem Cockpit statt an seiner Stelle (s. Begründung oben). --}}
             @if($kapitel)
                 {{-- Kapitel-Kopf --}}
                 <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="kaphdr-{{ $kapitel->id }}">
@@ -1090,10 +1100,8 @@
                         </x-slot:footer>
                     </x-foodalchemist::modal>
                 </div>
-            @else
-                <div class="{{ $card }} p-8 text-center text-sm text-gray-500">Links ein Kapitel wählen oder anlegen.</div>
-            @endif
-            @endif{{-- /Foodbook-Kopf vs. Kapitel-Ansicht --}}
+            @endif{{-- /Kapitel-Editor — der „links ein Kapitel wählen"-Platzhalter ist entfallen:
+                       mit sichtbarem Cockpit wäre er eine leere Karte unter einer vollen Seite. --}}
         @else
             <div class="{{ $card }} p-10 text-center text-sm text-gray-500">
                 Links ein Foodbook wählen oder „+ Neues Foodbook". Das Foodbook bündelt fertige <strong>Concepts</strong> zu einem <strong>person-unabhängigen Portfolio</strong> (Kapitel, €/Person) — Pax &amp; Gesamtpreis liegen im <strong>Angebot</strong>, Einzel-Gerichte im Concepter.

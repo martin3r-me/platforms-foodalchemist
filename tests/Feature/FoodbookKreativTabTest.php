@@ -114,3 +114,57 @@ it('E9.4: luckeMelden legt Signal an + setzt Hinweis', function () {
     expect(FoodAlchemistSignal::where('team_id', $this->rootTeam->id)
         ->where('type', 'sortiments_luecke')->count())->toBe(1);
 });
+
+/**
+ * Der Erreichbarkeits-Riegel (2026-07-28).
+ *
+ * Bis hier prüfte diese Datei ausschließlich **Verhalten**: `->call('kreativModusSetzen', …)`
+ * und dann der DB-Wert. Livewire-Methoden lassen sich direkt aufrufen — unabhängig davon, ob
+ * irgendein Knopf dafür rendert. Genau deshalb blieb der Test grün, während das Feature für
+ * jeden Menschen unerreichbar war: das Cockpit stand hinter `@if($selectedKapitelId === null)`,
+ * der Modus-Schalter hinter `@if($kapitel)` — zwei Bedingungen, die sich ausschließen.
+ *
+ * Dieselbe Lücke hatte am selben Tag der „Prüfen"-Knopf der Signale-Seite (unerreichbarer
+ * Core-Slot). Zweimal dasselbe Muster ist kein Zufall, sondern eine fehlende Testklasse:
+ * **wir prüfen, ob Features funktionieren, nicht ob man sie anklicken kann.**
+ *
+ * Darum assertiert das hier auf das GERENDERTE Markup und nicht auf Zustand.
+ */
+it('E9.4: der Modus-Schalter ist mit gewähltem Kapitel wirklich SICHTBAR (nicht nur aufrufbar)', function () {
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('kapitelWaehle', $this->kap->id)
+        // Die drei Modus-Knöpfe des Kreativ-Tabs …
+        ->assertSee('Voll kreativ')
+        ->assertSee('Hybrid')
+        ->assertSee('Datenbank')
+        // … und ihr Träger-Markup (fängt auch ein Umbenennen der Labels).
+        ->assertSeeHtml('data-fb-kreativ-modus')
+        ->assertSeeHtml('data-fb-modus="voll_kreativ"')
+        ->assertSeeHtml('data-fb-modus="hybrid"')
+        ->assertSeeHtml('data-fb-modus="datenbank"');
+});
+
+it('E9.4: die Pairing-Inspiration ist mit gewähltem Kapitel sichtbar', function () {
+    // Lag im selben toten Zweig — Seed-Feld und „Inspirieren" waren nie erreichbar.
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('kapitelWaehle', $this->kap->id)
+        ->assertSeeHtml('data-fb-pairing-inspiration')
+        ->assertSeeHtml('data-fb-seed')
+        ->assertSeeHtml('data-fb-inspirieren');
+});
+
+it('das Cockpit bleibt mit gewähltem Kapitel stehen — Tab-Leiste UND Kapitel-Editor', function () {
+    // Der eigentliche Fix: Cockpit XOR Kapitel war die Ursache. Beides muss koexistieren,
+    // sonst ist der Hinweis „Wähle links ein Kapitel" eine Anweisung ins Leere.
+    $comp = Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('kapitelWaehle', $this->kap->id);
+
+    // Tab-Leiste (Cockpit) …
+    $comp->assertSeeHtml('data-fb-tab="kreativ"')
+        ->assertSeeHtml('data-fb-panel="kreativ"')
+        // … und gleichzeitig der Kapitel-Editor.
+        ->assertSee('Konsumententitel');
+});
