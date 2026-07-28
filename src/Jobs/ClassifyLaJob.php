@@ -7,6 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
@@ -112,5 +113,20 @@ class ClassifyLaJob implements ShouldQueue
                 'ai_reasoning' => $vorschlag->reasoning,
             ],
         );
+    }
+
+    /**
+     * 22·H3b · V-054 (Queue-Pfad): kein Lauf, kein Statusfeld — der LA bleibt einfach
+     * unklassifiziert, und das ist fachlich richtig (der Mint hängt nicht daran). Der
+     * Unterschied, den dieser Hook macht: „nie klassifiziert, weil kein Provider" und
+     * „nie klassifiziert, weil der Job starb" waren bis hier dasselbe Nichts. Ein
+     * unklassifizierter LA ohne Spur wird nie nachgeholt, weil ihn keiner vermisst.
+     */
+    public function failed(?\Throwable $e): void
+    {
+        Log::warning('[FA/H3b] ClassifyLaJob abgebrochen — LA bleibt unklassifiziert', [
+            'supplier_item_id' => $this->supplierItemId, 'team_id' => $this->teamId,
+            'fehler' => $e?->getMessage(),
+        ]);
     }
 }

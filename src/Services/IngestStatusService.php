@@ -86,7 +86,11 @@ final class IngestStatusService
             'laeufe' => $this->laeufe($team, $laeufe),
             'laeufe_hinweis' => 'Jeder Lauf nennt seit 22·H3a seinen Gegenstand (`datei`, `lieferant`, '
                 . '`ausgeloest_ueber`). Bei älteren Läufen sind diese Felder NULL — der Kontext wurde damals '
-                . 'nicht mitgeschrieben und wird nicht nachträglich erraten. Was tatsächlich in den Daten '
+                . 'nicht mitgeschrieben und wird nicht nachträglich erraten. '
+                . 'Seit 22·H3b endet ein Lauf auch ohne Erfolg: `status=failed` mit `fehler_grund` ist ein '
+                . 'gescheiterter Lauf, und `verwaist=true` heißt „steht auf running, hat sich aber seit über '
+                . FoodAlchemistBulkRun::VERWAIST_NACH_STUNDEN . ' Stunden nicht gemeldet" — nicht erneut '
+                . 'auslösen, ohne die Ursache zu kennen. Was tatsächlich in den Daten '
                 . 'angekommen ist, sagen unabhängig davon die Blöcke `luecken` und `preis_deltas`.',
             'luecken' => $this->luecken($team, $supplierId, $beispiele),
             'preis_deltas' => $this->preisDeltas($team, $supplierId, $tage, $beispiele),
@@ -131,10 +135,17 @@ final class IngestStatusService
             ->map(fn (FoodAlchemistBulkRun $r) => [
                 'run_id' => (int) $r->id,
                 'status' => $r->status->value,
-                'status_label' => $r->status->label(),
+                'status_label' => $r->zustandLabel(),
+                // 22·H3b · V-054: ein `running`-Lauf ohne Rückmeldung seit
+                // VERWAIST_NACH_STUNDEN ist kein laufender Lauf. Die Spalte bleibt
+                // `running` (niemand erklärt ihn ohne Beweis für tot), aber der Leser
+                // erfährt es — sonst antwortet ein toter Import-Lauf auf „ist das
+                // Quartal durch?" dauerhaft mit „läuft gerade".
+                'verwaist' => $r->istVerwaist(),
                 'zeilen' => (int) $r->total,
                 'verarbeitet' => (int) $r->done,
                 'fehler' => (int) $r->failed,
+                'fehler_grund' => $r->context['fehler'] ?? null,
                 'gestartet' => (string) $r->created_at,
                 'beendet' => $r->status === BulkRunStatus::Running ? null : (string) $r->updated_at,
                 // V-047: der Gegenstand. NULL bei Läufen von vor 22·H3a — „unbekannt"

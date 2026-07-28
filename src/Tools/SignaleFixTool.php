@@ -36,7 +36,10 @@ class SignaleFixTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return 'Führt „KI erledigen lassen" für ein Signal aus: deterministischer Auto-Fix (Allergen-Konfidenz, '
             . 'Lead-LA-Repick+Recompute, Flavor-Anker) über den betroffenen Satz → Signal schließt bei 0; ODER '
             . 'eine KI-Assistenz (Lieferanten-Mail-Entwurf, Marge-Hebel, Servierform-Vorschlag) als Entwurf. '
-            . 'Nicht jeder Signaltyp ist fixbar (dann ACTION_NOT_AVAILABLE).';
+            . 'Nicht jeder Signaltyp ist fixbar (dann ACTION_NOT_AVAILABLE). '
+            . 'Beim Auto-Fix zählt fixed die geheilten Objekte und failed die technisch gescheiterten; '
+            . 'fixed 0 mit failed 0 heißt „nichts auflösbar" (echte Daten-/Beschaffungslücke, ein '
+            . 'erneuter Versuch bringt nichts), fixed 0 mit failed > 0 heißt „hier ist etwas kaputt".';
     }
 
     public function getSchema(): array
@@ -95,7 +98,13 @@ class SignaleFixTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
                 return ToolResult::success([
                     'signal_id' => (int) $sig->id, 'kind' => 'deterministic', 'scope' => $res['scope'],
-                    'fixed' => $res['fixed'], 'remaining' => $res['remaining'], 'closed' => $res['closed'],
+                    'fixed' => $res['fixed'],
+                    // 22·H3b · V-013: technische Fehlschläge getrennt von echten Lücken.
+                    // Ohne diese Zahl ist `fixed: 0` zweideutig — „nichts auflösbar" oder
+                    // „alles geworfen" — und ein LLM kann nicht entscheiden, ob ein
+                    // erneuter Versuch überhaupt Sinn hat.
+                    'failed' => $res['failed'],
+                    'remaining' => $res['remaining'], 'closed' => $res['closed'],
                 ]);
             }
             if ($dryRun) {

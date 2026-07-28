@@ -7,6 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
 use Platform\FoodAlchemist\Services\SignalFixService;
@@ -51,8 +52,30 @@ class SignalFixJob implements ShouldQueue
 
         try {
             $svc->execute($team, $sig, $this->ids);
-        } catch (\RuntimeException) {
-            // Kein automatischer Fix für dieses Signal (z. B. Plan-Änderung) → No-op.
+        } catch (\RuntimeException $e) {
+            // Kein automatischer Fix für dieses Signal (z. B. Plan-Änderung) → No-op,
+            // aber ab 22·H3b nicht mehr stumm: ein Signal, dessen Plan sich unter dem
+            // Klick geändert hat, sieht sonst aus wie ein Fix, der nichts fand.
+            Log::warning('[FA/H3b] SignalFixJob: kein automatischer Fix', [
+                'signal_id' => $this->signalId, 'team_id' => $this->teamId, 'fehler' => $e->getMessage(),
+            ]);
         }
+    }
+
+    /**
+     * 22·H3b · V-054 (Queue-Pfad): dieser Job führt keine Lauf-Zeile und hat kein Feld,
+     * das er auf „gescheitert" setzen könnte — das Signal selbst bleibt korrekt offen.
+     * Was fehlte, ist die **Spur**: stirbt er am Timeout (600 s, Bulk-Recompute), sieht
+     * ein Nutzer, der „diese 12 fixen" gedrückt hat, danach 12 offene Objekte und kann
+     * „nicht auflösbar" nicht von „abgestürzt" unterscheiden. Eine Log-Zeile ist hier die
+     * ganze mögliche Ehrlichkeit — sie ist mehr als die vorherige Stille.
+     */
+    public function failed(?\Throwable $e): void
+    {
+        Log::warning('[FA/H3b] SignalFixJob abgebrochen', [
+            'signal_id' => $this->signalId, 'team_id' => $this->teamId,
+            'auswahl' => $this->ids === null ? 'alle' : count($this->ids),
+            'fehler' => $e?->getMessage(),
+        ]);
     }
 }

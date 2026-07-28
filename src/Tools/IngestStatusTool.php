@@ -34,7 +34,10 @@ class IngestStatusTool extends FoodAlchemistTool implements ToolContract, ToolMe
             . 'stärkste Bewegungen zuerst). Optional auf einen Lieferanten eingeschränkt. Read-only — '
             . 'der Import selbst läuft als Kommando foodalchemist:import-articles. '
             . 'Jeder Lauf nennt Datei, Lieferant und Auslöse-Weg (bei Läufen vor 22-07-28 sind diese '
-            . 'Felder NULL — der Kontext wurde damals nicht mitgeschrieben und wird nicht erraten).';
+            . 'Felder NULL — der Kontext wurde damals nicht mitgeschrieben und wird nicht erraten). '
+            . 'Ein Lauf kann auch ohne Erfolg enden: status=failed nennt den Grund in fehler_grund, '
+            . 'und verwaist=true heißt „steht auf running, hat sich aber seit Stunden nicht gemeldet" '
+            . '(vermutlich abgebrochen) — in beiden Fällen NICHT blind erneut auslösen.';
     }
 
     public function getSchema(): array

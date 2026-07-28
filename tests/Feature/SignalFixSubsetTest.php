@@ -158,3 +158,38 @@ it('MCP: ohne auflösbares Team → NO_TEAM (Tenancy-Negativtest)', function () 
 
     expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('NO_TEAM');
 });
+
+/**
+ * Spec 22 · H3b — V-013: „nichts auflösbar" und „alles geworfen" waren dieselbe Antwort.
+ *
+ * Der Fixer ist bewusst best-effort (ein Einzelfehler darf die Masse nicht reißen, I8) —
+ * aber er verschluckte seine `catch`-Zweige vollständig: keine Log-Zeile, kein Zähler.
+ * Ein systematisch scheiternder Fixer (falsches Scope, leeres Vokabular, Constraint) sah
+ * damit aus wie ein Bestand, der eben nicht heilbar ist.
+ */
+it('zählt technische Fehlschläge getrennt von echten Lücken und protokolliert sie', function () {
+    // Der `recompute`-Fixer wirft für JEDES Objekt — die Masse darf trotzdem nicht reißen.
+    $this->mock(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class, function ($m) {
+        $m->shouldReceive('recomputeAndPropagate')->andThrow(new \RuntimeException('Deadlock'));
+        $m->shouldReceive('betroffeneRezepte')->andReturn([]);
+    });
+    \Illuminate\Support\Facades\Log::shouldReceive('warning')->atLeast()->times(3);
+
+    $res = app(SignalFixService::class)->execute($this->rootTeam, $this->sig);
+
+    expect($res['ok'])->toBeTrue()               // best effort bleibt best effort
+        ->and($res['angefragt'])->toBe(3)
+        ->and($res['fixed'])->toBe(0)
+        ->and($res['failed'])->toBe(3);          // ⇒ „hier ist etwas kaputt", nicht „nichts auflösbar"
+});
+
+it('meldet failed 0, wenn der Fixer sauber nichts zu tun findet', function () {
+    // Die Gegenprobe zur Zahl: derselbe Nulldurchgang, aber ohne Wurf — das ist eine
+    // echte Lücke und darf nicht wie ein Fehler aussehen.
+    $fremd = $this->makeRecipe($this->rootTeam, 'Fond: bepreist', [
+        'ek_total_eur' => 12.5, 'ek_n_ingredients_priced' => 2, 'ek_n_ingredients_total' => 2,
+    ]);
+    $res = $this->fix->execute($this->rootTeam, $this->sig, [$fremd->id]);
+
+    expect($res['fixed'])->toBe(0)->and($res['failed'])->toBe(0);
+});

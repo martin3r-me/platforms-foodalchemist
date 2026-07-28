@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Support\Facades\Log;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -64,8 +65,16 @@ class SignalFixService
      * Teilmenge, die zufällig den letzten offenen Fall heilt, darf das Signal schließen —
      * andernfalls bliebe ein Signal mit 0 Treffern als Phantom stehen (vgl. V-011).
      *
+     * `failed` zählt seit 22·H3b die **technischen** Fehlschläge (geworfene Ausnahme),
+     * getrennt von den Objekten, die der Fixer legitim nicht heilen konnte (Sourcing- oder
+     * Vokabular-Lücke ⇒ `false` ohne Wurf). Ohne diese Trennung sieht ein systematisch
+     * scheiternder Fixer — falsches Team-Scope, leere Vokabular-Tabelle, Constraint —
+     * genauso aus wie ein Bestand, der eben nicht auflösbar ist: `fixed: 0`, Signal bleibt
+     * offen, Ursache unbekannt (V-013). `fixed + failed < angefragt` heißt also „echte
+     * Lücken", `failed > 0` heißt „hier ist etwas kaputt".
+     *
      * @param  list<int>|null  $ids  Auswahl von Objekt-IDs; wird gegen betroffene() geschnitten
-     * @return array{ok:bool,kind:string,scope:string,angefragt:int,fixed:int,remaining:int,closed:bool}
+     * @return array{ok:bool,kind:string,scope:string,angefragt:int,fixed:int,failed:int,remaining:int,closed:bool}
      */
     public function execute(Team $team, FoodAlchemistSignal $sig, ?array $ids = null): array
     {
@@ -79,20 +88,32 @@ class SignalFixService
         $satz = $this->satz($team, $metrik, $ids);
 
         $fixed = 0;
+        $failed = 0;
         foreach ($satz as $it) {
             try {
                 if ($this->applyFixer($team, $fixer, $it)) {
                     $fixed++;
                 }
-            } catch (\Throwable) {
-                // Einzelfehler darf den Lauf nicht reißen (best effort, wie recomputeAndPropagate/I8).
+            } catch (\Throwable $e) {
+                // Einzelfehler darf den Lauf nicht reißen (best effort, wie recomputeAndPropagate/I8)
+                // — aber gezählt und protokolliert, im wortgleichen Muster wie dort (V-013).
+                $failed++;
+                Log::warning('[FA/H3b] Signal-Fixer gescheitert', [
+                    'fixer' => $fixer, 'metrik' => $metrik, 'objekt' => $it['kind'] ?? '?',
+                    'id' => (int) ($it['id'] ?? 0), 'fehler' => $e->getMessage(),
+                ]);
             }
         }
 
         // Aggregat-Signale (DataQuality): Count/Titel frisch ziehen; danach ggf. schließen.
         try {
             $this->dq->emittiereSignale($team);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            // Auch hier keine Stille: schlägt die Neu-Messung fehl, ist `remaining` unten
+            // der ALTE Stand — dann sieht ein Nutzer einen Fix, der nichts bewegt hat.
+            Log::warning('[FA/H3b] Signal-Neumessung nach dem Fix gescheitert', [
+                'metrik' => $metrik, 'signal_id' => (int) $sig->id, 'fehler' => $e->getMessage(),
+            ]);
         }
         $remaining = $this->dq->countFor($team, $metrik);
         $closed = false;
@@ -102,7 +123,7 @@ class SignalFixService
         }
 
         return ['ok' => true, 'kind' => 'deterministic', 'scope' => $ids === null ? 'alle' : 'teilmenge',
-            'angefragt' => $ids === null ? count($satz) : count($ids), 'fixed' => $fixed,
+            'angefragt' => $ids === null ? count($satz) : count($ids), 'fixed' => $fixed, 'failed' => $failed,
             'remaining' => $remaining, 'closed' => $closed];
     }
 

@@ -7,9 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
-use Platform\FoodAlchemist\Enums\BulkRunStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Services\FileArticleImportService;
 
@@ -50,7 +48,7 @@ class ImportArticlesJob implements ShouldQueue
     {
         $team = Team::find($this->teamId);
         if ($team === null) {
-            $this->markiere(BulkRunStatus::Failed);
+            FoodAlchemistBulkRun::markiereGescheitert($this->runId, "Team #{$this->teamId} existiert nicht (mehr).");
 
             return;
         }
@@ -62,17 +60,14 @@ class ImportArticlesJob implements ShouldQueue
     /**
      * Der eigene Fehl-Pfad — greift bei Ausnahme UND Timeout. Ohne ihn stünde die
      * Lauf-Zeile für immer auf `running` und `ingest.STATUS` meldete einen toten Lauf
-     * dauerhaft als „läuft gerade" (V-054). Die Bestands-Schreiber (Kommandos,
-     * Bulk-Autopilot) behalten ihr Verhalten — das ist bewusst keine Sammel-Reparatur.
+     * dauerhaft als „läuft gerade" (V-054).
+     *
+     * Seit 22·H3b läuft er über {@see FoodAlchemistBulkRun::markiereGescheitert} — eine
+     * Fehl-Stelle für alle vier lauf-führenden Jobs, und der Grund landet mit im Kontext
+     * statt verloren zu gehen.
      */
     public function failed(?\Throwable $e): void
     {
-        $this->markiere(BulkRunStatus::Failed);
-    }
-
-    private function markiere(BulkRunStatus $status): void
-    {
-        FoodAlchemistBulkRun::whereKey($this->runId)
-            ->update(['status' => $status->value, 'updated_at' => now()]);
+        FoodAlchemistBulkRun::markiereGescheitert($this->runId, $e);
     }
 }

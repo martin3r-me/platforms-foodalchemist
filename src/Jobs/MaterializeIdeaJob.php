@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Auth;
 use Platform\Core\Models\Team;
 use Platform\Core\Models\User;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Services\FoodbookService;
 
 /**
@@ -62,5 +63,36 @@ class MaterializeIdeaJob implements ShouldQueue
         // Graceful by design — der Service verschluckt Provider-/Grounding-Fehler und
         // markiert die Skizze (queued „wartet auf KI" / fehlgeschlagen). Kein Rethrow.
         $foodbooks->materialisiereFreitextIdee($team, $this->ideaId);
+    }
+
+    /**
+     * 22·H3b · V-054 (zweiter Fundort, Queue-Pfad): der Job führt keine Lauf-Zeile, aber
+     * dieselbe Lüge steht bei ihm an der Skizze. Stirbt er **vor** dem Service — Timeout
+     * (300 s), Fatal, Worker-Neustart, also genau die Fälle, die `handle()` nicht sieht —
+     * bleibt `generation_status='queued'` stehen und die Oberfläche sagt dauerhaft
+     * „wartet auf KI", obwohl niemand mehr wartet.
+     *
+     * Wortgleich zum eigenen `catch` des Services (`fehlgeschlagen` + `generation_fehler`),
+     * damit es nicht zwei Fehl-Formen für dieselbe Sache gibt. Nur noch-queued Skizzen
+     * werden angefasst: ein Lauf, der durchkam und erst danach starb, hat sein Ergebnis
+     * schon geschrieben.
+     */
+    public function failed(?\Throwable $e): void
+    {
+        $idee = FoodAlchemistDishIdea::query()
+            ->whereKey($this->ideaId)
+            ->where('generation_status', 'queued')
+            ->whereNull('materialized_at')
+            ->first();
+        if ($idee === null) {
+            return;
+        }
+
+        $idee->update([
+            'generation_status' => 'fehlgeschlagen',
+            'source_meta' => array_merge($idee->source_meta ?? [], [
+                'generation_fehler' => 'Job abgebrochen: ' . mb_substr($e?->getMessage() ?? 'unbekannt', 0, 500),
+            ]),
+        ]);
     }
 }

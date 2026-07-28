@@ -8,6 +8,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Services\BulkEnrichService;
 
 /**
@@ -35,10 +36,23 @@ class BulkEnrichJob implements ShouldQueue
     {
         $team = Team::find($this->teamId);
         if ($team === null) {
+            FoodAlchemistBulkRun::markiereGescheitert($this->runId, "Team #{$this->teamId} existiert nicht (mehr).");
+
             return;
         }
         foreach ($this->recipeIds as $recipeId) {
             $bulk->verarbeiteRezept($team, $this->runId, (int) $recipeId, $this->schritte);
         }
+    }
+
+    /**
+     * 22·H3b · V-054: der Fehl-Pfad. Die Einzel-Fehler zählt `verarbeiteRezept` selbst
+     * (`failed`-Spalte, der Lauf läuft weiter) — hier geht es um den Tod des Laufs
+     * **als Ganzes**: Timeout (3600 s), Fatal, Worker-Neustart. Ohne diesen Hook bliebe
+     * die Zeile auf `running` und die Fortschritts-Anzeige pollte gegen einen Toten.
+     */
+    public function failed(?\Throwable $e): void
+    {
+        FoodAlchemistBulkRun::markiereGescheitert($this->runId, $e);
     }
 }

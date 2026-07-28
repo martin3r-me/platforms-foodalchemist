@@ -8,6 +8,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Services\BulkEnrichService;
 
 /**
@@ -34,10 +35,18 @@ class BulkEnrichGpJob implements ShouldQueue
     {
         $team = Team::find($this->teamId);
         if ($team === null) {
+            FoodAlchemistBulkRun::markiereGescheitert($this->runId, "Team #{$this->teamId} existiert nicht (mehr).");
+
             return;
         }
         foreach ($this->gpIds as $gpId) {
             $bulk->verarbeiteGp($team, $this->runId, (int) $gpId, $this->schritte);
         }
+    }
+
+    /** 22·H3b · V-054 — wie {@see BulkEnrichJob::failed}: der Tod des Laufs als Ganzes. */
+    public function failed(?\Throwable $e): void
+    {
+        FoodAlchemistBulkRun::markiereGescheitert($this->runId, $e);
     }
 }

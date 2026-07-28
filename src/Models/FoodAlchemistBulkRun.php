@@ -54,6 +54,25 @@ class FoodAlchemistBulkRun extends Model
     ];
 
     /**
+     * Ab wann gilt ein `running`-Lauf als verwaist (22·H3b · V-054)?
+     *
+     * ⚠️ **Annahme, keine Messung.** Auf der Dev-DB gibt es 0 offene Läufe (D-016) — die
+     * Schwelle ist dort nicht messbar und darum aus dem **längsten Job-Timeout des Moduls**
+     * abgeleitet: `BulkEnrichJob`/`BulkEnrichGpJob` 3600 s (die übrigen 900 / 600 / 300 s).
+     * Ein Lauf, der doppelt so lange nichts mehr gemeldet hat, kann nicht mehr am Leben
+     * sein — der Worker hätte ihn längst abgeschossen. Doppelt statt einfach, weil
+     * `updated_at` erst je fertigem Item fortschreibt und ein einzelnes Item das Timeout
+     * ausschöpfen darf: die Schwelle darf einen langsamen Lauf nicht für tot erklären.
+     *
+     * Bewusst **nur ein Lese-Kriterium**: niemand schreibt daraufhin `failed`. Ein Reaper
+     * ohne Beweis würde einen noch lebenden Lauf für abgebrochen erklären, und das wäre
+     * dieselbe Lüge wie das ewige „läuft gerade", nur in die andere Richtung. Wer liest,
+     * erfährt „vermutlich abgebrochen"; wer den Lauf wirklich beendet, ist der Job selbst
+     * ({@see markiereGescheitert}).
+     */
+    public const VERWAIST_NACH_STUNDEN = 2;
+
+    /**
      * Der gemeinsame Einstieg für jede Lauf-Art (V-032: „damit die nächste Lauf-Art nur
      * den Enum-Fall ergänzt"). Vier Insert-Blöcke in vier Dateien haben bis hier jeweils
      * ihre eigene uuid erzeugt und ihre eigenen Strings gesetzt.
@@ -78,5 +97,63 @@ class FoodAlchemistBulkRun extends Model
             'total' => $total,
             'context' => $context === [] ? null : $context,
         ]);
+    }
+
+    /**
+     * Das Ende ohne Erfolg (22·H3b · V-054). Bis hier war die Statusmenge faktisch
+     * `running | done` und der einzige Schreiber von `done` der Erfolgspfad — ein
+     * abgestürzter Lauf blieb für immer „läuft gerade" und beantwortete damit die Frage
+     * „ist der Quartals-Import durch?" dauerhaft falsch.
+     *
+     * Ein **beendeter** Lauf wird nicht rückdatiert: läuft `handle()` durch und stirbt
+     * erst der Nachlauf, ist das Teilergebnis echt und `done` die wahre Antwort. Darum
+     * greift der Fehl-Pfad nur auf `running` und meldet per Rückgabewert, ob er gegriffen
+     * hat (idempotent — `failed()` darf mehrfach kommen).
+     *
+     * Der Grund landet im Kontext-Feld aus H3a (`fehler` + `fehler_klasse`), nicht in einer
+     * neuen Spalte: der Lauf trägt seinen Gegenstand schon, sein Ausgang gehört daneben.
+     */
+    public static function markiereGescheitert(int $runId, \Throwable|string|null $grund = null): bool
+    {
+        $lauf = self::whereKey($runId)->first();
+        if ($lauf === null || $lauf->status !== BulkRunStatus::Running) {
+            return false;
+        }
+
+        $kontext = is_array($lauf->context) ? $lauf->context : [];
+        if ($grund instanceof \Throwable) {
+            $kontext['fehler'] = mb_strimwidth($grund->getMessage(), 0, 500, '…');
+            $kontext['fehler_klasse'] = $grund::class;
+        } elseif (is_string($grund) && trim($grund) !== '') {
+            $kontext['fehler'] = mb_strimwidth($grund, 0, 500, '…');
+        }
+
+        $lauf->status = BulkRunStatus::Failed;
+        $lauf->context = $kontext === [] ? null : $kontext;
+        $lauf->save();
+
+        return true;
+    }
+
+    /**
+     * Ein `running`-Lauf, von dem seit {@see VERWAIST_NACH_STUNDEN} nichts mehr kam.
+     * Kein Zustand in der Spalte, sondern ein Urteil beim Lesen — die Begründung steht
+     * an der Konstante.
+     */
+    public function istVerwaist(): bool
+    {
+        return $this->status === BulkRunStatus::Running
+            && $this->updated_at !== null
+            && $this->updated_at->lt(now()->subHours(self::VERWAIST_NACH_STUNDEN));
+    }
+
+    /**
+     * Das Etikett, das ein Leser sehen soll — inklusive des Urteils über verwaiste Läufe.
+     * `status->label()` bleibt die reine Spalten-Auskunft; wer den Lauf **anzeigt**, will
+     * die hier.
+     */
+    public function zustandLabel(): string
+    {
+        return $this->istVerwaist() ? 'abgebrochen (keine Rückmeldung)' : $this->status->label();
     }
 }
