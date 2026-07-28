@@ -8,6 +8,54 @@
 
 ---
 
+## Update 2026-07-28 (Sensorik-Erdung — **Salzig/Süß/Fettig werden gemessen, nicht geraten**)
+
+**Befund (aus der Nutzung, nicht geplant).** „Achiote-Paste: konserviert" stand im GP-Sensorik-Tab
+mit `salzig 0.60`. Die zwei verknüpften LAs melden 1640/1200 mg Natrium = **3,55 g Salz/100 g**, und
+in der Zutatenliste ist Speisesalz Zutat #2. Ursache: der GP-Geschmacksvektor stammt 1:1 aus dem
+Vault-Skript `244_sensorik_gemini.py`, das je GP **nur `gp_name` + `warengruppe`** an Gemini schickt —
+kein Label, keine Nährwerte, keine Zutatenliste. `SensorikService::fuerGp()` las diese Schätzung
+unverändert aus `foodalchemist_gp_taste_vectors`; einen Schreib-/Korrekturpfad gab es im Modul nicht.
+Systemisch: 838 GPs liegen ≥ 1,5 g Salz/100 g (FSA „hoch"), **262** davon trugen `salzig < 0,4`.
+
+**Gebaut.** Erdung im Lesepfad — die drei Achsen, die auf dem Etikett stehen, werden aus den
+LA-Nährwerten gerechnet statt geschätzt (`SensorikService::erdungBulk()` / `vektorenFuerGps()`):
+
+- **Quelle = GL-08-Pfad** wie `GpAggregateService::naehrwerte()`: Ø über nicht-ausgelistete LAs,
+  Salz = `sodium × 0,0025`. EINE Query je Auswertung (kein N+1 im Zutaten-Durchlauf).
+- **Kurve** = log-Interpolation über Gehalts-Stützstellen aus dem Regelwerk, nicht frei gewählt:
+  EU-VO 1924/2006 („salzarm" 0,3 g · „zuckerarm" 5 g · „fettarm" 3 g) + FSA-Front-of-Pack-Schwelle
+  „hoch" (Salz 1,5 g · Zucker 22,5 g · Fett 17,5 g) + Reinstoff = 1,0. Gegenprobe an den kuratierten
+  Regel-Seeds: Sojasauce misst 15,8 g Salz → **0,90** (Seed 0,90), Meersalz 96,7 g → **1,00** (Seed 1,00).
+- **Gemessen schlägt geschätzt**, aber nur für salzig/süß/fettig. Sauer/bitter/umami/scharf bleiben
+  KI — dafür gibt das Label nichts her. Erst je GP erden, dann über die GPs maxen (sonst verliert ein
+  GP ohne Label gegen den Messwert eines anderen).
+- **Nichts wird gespiegelt.** Keine Migration, kein Backfill, kein Overwrite: neue LA-Nährwerte wirken
+  beim nächsten Aufruf, kuratierte/manuelle Vektoren bleiben in der Tabelle unangetastet.
+- **Datenqualitäts-Guards** (der Bestand ist nicht sauber): Leer-Label-Zeilen (9.385 Stück, alles 0)
+  fallen raus; je Nährstoff ist eine exakte `0` per `NULLIF` **keine Messung**, sondern „nicht
+  deklariert" (sonst hätte „Cola: konserviert" seine Süße 0,90 an ein 0-Zucker-Label verloren);
+  Zucker > Kohlenhydrate ist LMIV-widersprüchlich → verworfen (106 Zeilen).
+- **Asymmetrischer Konflikt-Umgang**, weil der Datenfehler asymmetrisch ist: ein zu hoher Label-Wert
+  ist fast immer echt und wird übernommen + markiert; ein Absturz ≥ 0,4 unter die Schätzung ist das
+  bekannte Import-Muster (Praline mit 0,8 g Zucker, Margarine mit 0,01 g Fett) → **nicht** übernommen,
+  Schätzung bleibt, Widerspruch wird im Panel gemeldet.
+- **UI** (`partials/sensorik.blade.php`, greift in GP-/Rezept-/VK-/Concepter-Tab): Kasten „📊 Aus
+  LA-Nährwerten gemessen" mit Achse, Wert und Basis (`Salz 58,5 g/100 g · Ø 2 LA`) + ⚠-Zeile bei
+  Widerspruch. Das Rezept-Grounding (`groundingKontext()`) reicht die gemessenen Roh-Werte als
+  `[gemessen: …]` an die KI weiter, damit sie sie nicht gegen eine eigene Schätzung tauscht.
+
+**Wirkung** (gegen den Sandbox-Bestand gerechnet): salzig 3.464 GPs geerdet (2.034 hoch / 297 runter),
+fettig 3.742 (1.785 / 522), süß 3.629 (834 / 1.671); 640 Widersprüche markiert, 92 unplausible Label
+verworfen. Achiote: **0,60 → 0,74**. Nebeneffekt: die Erdung macht LA-Fehlzuordnungen sichtbar —
+„Knollensellerie: frisch, Stifte 2 mm" misst 80 g Salz/100 g und wird jetzt als Widerspruch geflaggt.
+
+**DoD:** `tests/Feature/SensorikErdungTest.php` (10 Fälle: Achiote-Fall, Abwärts-Korrektur,
+Kurven-Anker, Leer-Label, ausgelistete LAs, 0-als-Nichtmessung, LMIV-Guard, Absturz-Unterdrückung,
+Konflikt-Meldung, erst-erden-dann-maxen) grün, Gesamt-Suite ohne Regression.
+
+---
+
 ## Update 2026-07-28 (Qualitäts-Läufe auslösbar — **die Ampel war nie an**)
 
 **Befund (bei der demo-Abnahme gefunden, nicht geplant).** Auf demo fehlten 20+ Signal-Typen

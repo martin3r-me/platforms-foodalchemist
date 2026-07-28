@@ -45,6 +45,25 @@
                 <div class="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 content-start">
                     <div class="space-y-3">
                         <p class="text-[11px] text-gray-500">Netz = gegarte Sensorik je Achse (0–1), Quelle s. Badge oben. Aroma-Anker-Wert je Achse im Tooltip (Hover).</p>
+                        {{-- Erdung: Achsen, die auf dem Etikett stehen, sind gerechnet (LA-Nährwerte), nicht geschätzt. --}}
+                        @if(count($sensorik['erdung'] ?? []))
+                            <div class="rounded-lg border border-emerald-600/20 bg-emerald-50/60 px-2.5 py-2">
+                                <p class="text-[11px] font-medium text-emerald-800 mb-1">📊 Aus LA-Nährwerten gemessen</p>
+                                <ul class="space-y-1">
+                                    @foreach($sensorik['erdung'] as $dim => $e)
+                                        <li class="text-[11px] {{ $e['angewendet'] ? 'text-emerald-900/80' : 'text-emerald-900/50' }}">
+                                            <span class="font-medium">{{ $dimLabel[$dim] ?? $dim }} {{ number_format((float) ($sensorik['geschmack'][$dim] ?? 0), 2, ',', '.') }}</span>
+                                            <span class="opacity-70">· {{ $e['basis'] }}</span>
+                                            @unless($e['angewendet'])<span class="opacity-70">· geschätzt</span>@endunless
+                                            @if($e['konflikt'])
+                                                <span class="block text-amber-700">⚠ {{ $e['konflikt'] }}</span>
+                                            @endif
+                                        </li>
+                                    @endforeach
+                                </ul>
+                                <p class="text-[10px] text-emerald-900/50 mt-1">Übrige Achsen = KI-Schätzung (nicht aus dem Label ableitbar).</p>
+                            </div>
+                        @endif
                         @if(count($sensorik['dominant']) || count($sensorik['luecken']))
                             <div class="flex flex-wrap gap-1">
                                 @foreach($sensorik['dominant'] as $d)<span class="{{ $pill }} {{ $variantPill['success'] }}">dominant: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
