@@ -1341,14 +1341,20 @@ class FileArticleImportService
      * Lauf-Bookkeeping in `foodalchemist_bulk_runs` (Typ `ingest`) — dieselbe Tabelle
      * wie Anreicherungs- und Review-Läufe, damit „welche Läufe sind gelaufen?" eine
      * Antwort hat und nicht drei. Grundlage für S3 `ingest.STATUS`.
+     *
+     * `$umfangSteht=false` heißt: `$total` ist ein **Platzhalter**, die Zeilenzahl kennt
+     * erst {@see beendeRun}. Nur der Konsolen-Weg braucht das (er liest die Datei nicht
+     * vor dem Anlegen); der MCP-Trigger zählt vorher und lehnt eine Datei ohne Datenzeile
+     * sogar ab. Ohne die Unterscheidung läse die Leer-Regel aus 22·H3c (V-073) den
+     * Platzhalter als „nichts zu tun" und der Import wäre beim Anlegen schon „fertig".
      */
-    public function starteRun(int $teamId, int $total, ?int $userId = null, array $context = []): int
+    public function starteRun(int $teamId, int $total, ?int $userId = null, array $context = [], bool $umfangSteht = true): int
     {
         // S3b: wer ausgelöst hat, steckt in `user_id`. Beim Kommando bleibt es NULL (die
         // Konsole hat keinen Benutzer), über MCP steht es drin — der Trigger ist
         // ausdrücklich ein menschlich angestoßener Vorgang, und das soll am Lauf ablesbar
         // sein. H3a ergänzt WORAN (V-047): Datei + Lieferant liegen im `context`.
-        return (int) FoodAlchemistBulkRun::starte($teamId, BulkRunType::Ingest, $total, $context, $userId)->id;
+        return (int) FoodAlchemistBulkRun::starte($teamId, BulkRunType::Ingest, $total, $context, $userId, $umfangSteht)->id;
     }
 
     /**

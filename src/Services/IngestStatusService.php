@@ -5,7 +5,6 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
-use Platform\FoodAlchemist\Enums\BulkRunStatus;
 use Platform\FoodAlchemist\Enums\BulkRunType;
 use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
@@ -59,7 +58,7 @@ final class IngestStatusService
     /** Nährwert-Kernwerte = derselbe Umfang, den `setNutrition` schreibt (eine Wahrheit). */
     public const NAEHRWERT_SPALTEN = SupplierItemService::NAEHRWERT_FELDER;
 
-    public function __construct(private PriceService $preise)
+    public function __construct(private PriceService $preise, private BulkRunStatusService $laufStatus)
     {
     }
 
@@ -128,34 +127,39 @@ final class IngestStatusService
      */
     private function laeufe(Team $team, int $limit): array
     {
-        return FoodAlchemistBulkRun::query()
-            ->where('team_id', $team->id)
-            ->where('type', self::LAUF_TYP)
-            ->orderByDesc('id')->limit($limit)->get()
-            ->map(fn (FoodAlchemistBulkRun $r) => [
-                'run_id' => (int) $r->id,
-                'status' => $r->status->value,
-                'status_label' => $r->zustandLabel(),
+        // 22·H3c: die allgemeine Lauf-Projektion kommt aus EINER Stelle
+        // ({@see BulkRunStatusService::zeile}) — Status, Verwaist-Urteil, Zähler und
+        // Zeitpunkte werden hier nicht ein zweites Mal zusammengesetzt. Diese Sicht
+        // ergänzt nur, was ein *Import*-Lauf zusätzlich hat, und benennt den Umfang
+        // in der Sprache dieser Fläche (`zeilen` statt `umfang` — es sind Datei-Zeilen).
+        return array_map(function (array $z) {
+            $kontext = $z['gegenstand'] ?? [];
+
+            return [
+                'run_id' => $z['run_id'],
+                'status' => $z['status'],
+                'status_label' => $z['zustand'],
                 // 22·H3b · V-054: ein `running`-Lauf ohne Rückmeldung seit
                 // VERWAIST_NACH_STUNDEN ist kein laufender Lauf. Die Spalte bleibt
                 // `running` (niemand erklärt ihn ohne Beweis für tot), aber der Leser
                 // erfährt es — sonst antwortet ein toter Import-Lauf auf „ist das
                 // Quartal durch?" dauerhaft mit „läuft gerade".
-                'verwaist' => $r->istVerwaist(),
-                'zeilen' => (int) $r->total,
-                'verarbeitet' => (int) $r->done,
-                'fehler' => (int) $r->failed,
-                'fehler_grund' => $r->context['fehler'] ?? null,
-                'gestartet' => (string) $r->created_at,
-                'beendet' => $r->status === BulkRunStatus::Running ? null : (string) $r->updated_at,
+                'verwaist' => $z['verwaist'],
+                'zeilen' => $z['umfang'],
+                'verarbeitet' => $z['verarbeitet'],
+                'fehler' => $z['fehler'],
+                'fehler_grund' => $z['fehler_grund'],
+                'gestartet' => $z['gestartet'],
+                'beendet' => $z['beendet'],
                 // V-047: der Gegenstand. NULL bei Läufen von vor 22·H3a — „unbekannt"
                 // ist die ehrliche Antwort, ein aus dem Datum geratener Dateiname wäre
                 // eine erfundene.
-                'datei' => $r->context['datei'] ?? null,
-                'lieferant' => $r->context['lieferant'] ?? null,
-                'lieferant_id' => isset($r->context['supplier_id']) ? (int) $r->context['supplier_id'] : null,
-                'ausgeloest_ueber' => $r->context['quelle'] ?? null,
-            ])->all();
+                'datei' => $kontext['datei'] ?? null,
+                'lieferant' => $kontext['lieferant'] ?? null,
+                'lieferant_id' => isset($kontext['supplier_id']) ? (int) $kontext['supplier_id'] : null,
+                'ausgeloest_ueber' => $kontext['quelle'] ?? null,
+            ];
+        }, $this->laufStatus->laeufe($team, null, BulkRunType::Ingest, $limit));
     }
 
     /**

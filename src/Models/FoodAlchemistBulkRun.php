@@ -33,7 +33,9 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  * seine acht Zugriffs-Stellen hängen alle an `DB::table` mit handgeschriebenem
  * `json_encode`/`json_decode` — ein `value`-Cast ist dort ein Verhaltenswechsel an acht
  * Stellen gleichzeitig und braucht einen eigenen Riegel. Ein Model ohne einen einzigen
- * Aufrufer wäre Vorrat statt Naht (Klasse V-025). Nachzuziehen in 22·H3c.
+ * Aufrufer wäre Vorrat statt Naht (Klasse V-025). Nachzuziehen in **22·H3c-2** (H3c-1 hat
+ * die Lauf-Quittung gebaut, nicht den Vorschlags-Speicher) — vorher V-072 lesen: die
+ * Leer-Bewertung eines Vorschlags ist im Rezept- und im GP-Pfad heute verschieden.
  */
 class FoodAlchemistBulkRun extends Model
 {
@@ -73,14 +75,42 @@ class FoodAlchemistBulkRun extends Model
     public const VERWAIST_NACH_STUNDEN = 2;
 
     /**
+     * Der Grund, aus dem ein Lauf ohne ein einziges Item sofort abgeschlossen wird
+     * (22·H3c · V-073). Steht im `context`, nicht in einer eigenen Spalte: der Lauf trägt
+     * dort schon seinen Gegenstand, und „warum ist er sofort fertig" gehört daneben —
+     * dieselbe Ablage wie `fehler` aus H3b.
+     */
+    public const HINWEIS_LEERE_MENGE = 'leere Arbeitsmenge — nichts zu tun';
+
+    /**
      * Der gemeinsame Einstieg für jede Lauf-Art (V-032: „damit die nächste Lauf-Art nur
      * den Enum-Fall ergänzt"). Vier Insert-Blöcke in vier Dateien haben bis hier jeweils
      * ihre eigene uuid erzeugt und ihre eigenen Strings gesetzt.
+     *
+     * **Ein Lauf über eine leere Arbeitsmenge ist sofort fertig (22·H3c · V-073).** Der
+     * Abschluss hängt sonst am Fortschritt (`zaehleFortschritt` ist der einzige Schreiber
+     * von `done`), und ohne ein einziges Item läuft der nie: die Zeile bliebe für immer
+     * `running`, obwohl nichts gescheitert ist. Für einen Leser ist das von V-054
+     * ununterscheidbar — die Alterschwelle aus H3b stuft sie nach zwei Stunden sogar als
+     * *abgebrochen* ein, was die falsche Diagnose für einen Lauf ist, der nie lebte.
+     * Erreichbar ohne Ausnahmefall: eine Auswahl, deren Rezepte zwischen Klick und
+     * Dispatch soft-deleted wurden, oder IDs eines Teams, das die Kette nicht sieht.
+     * Angelegt wird er trotzdem (der Klick ist passiert, das ist die Wahrheit) — mit dem
+     * Grund im Kontext, damit „nichts zu tun" von „hängt" unterscheidbar bleibt.
      *
      * @param  array<string, mixed>  $context  Gegenstand des Laufs (V-047) — Datei, Lieferant,
      *                                         Pass, Schritte; leer wird als NULL abgelegt,
      *                                         damit „kein Kontext" und „leerer Kontext"
      *                                         dieselbe Antwort geben.
+     * @param  bool  $umfangSteht  Ist `$total` schon die endgültige Arbeitsmenge? Für vier der
+     *                             fünf Schreiber ja — sie zählen ihre Menge vor dem Anlegen.
+     *                             Der Datei-Import über die Konsole kennt die Zeilenzahl erst
+     *                             beim Lesen und legt den Lauf mit einer 0 als *Platzhalter*
+     *                             an ({@see \Platform\FoodAlchemist\Services\FileArticleImportService::beendeRun}
+     *                             trägt sie nach). Dieselbe 0, zwei Bedeutungen — ohne diese
+     *                             Unterscheidung würde die Leer-Regel den Import beim Anlegen
+     *                             als fertig melden und `markiereGescheitert()` (greift nur auf
+     *                             `running`) könnte sein Scheitern nicht mehr buchen.
      */
     public static function starte(
         ?int $teamId,
@@ -88,13 +118,19 @@ class FoodAlchemistBulkRun extends Model
         int $total,
         array $context = [],
         ?int $userId = null,
+        bool $umfangSteht = true,
     ): self {
+        $leer = $umfangSteht && $total <= 0;
+        if ($leer) {
+            $context['hinweis'] = self::HINWEIS_LEERE_MENGE;
+        }
+
         return self::create([
             'team_id' => $teamId,
             'user_id' => $userId,
             'type' => $type,
-            'status' => BulkRunStatus::Running,
-            'total' => $total,
+            'status' => $leer ? BulkRunStatus::Done : BulkRunStatus::Running,
+            'total' => max(0, $total),
             'context' => $context === [] ? null : $context,
         ]);
     }

@@ -287,6 +287,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\IngestStatusTool::class,
                     // Spec 13 · S3b: die Auslösung (Dateiname aus dem festen Ablage-Ordner, Trockenlauf-Default, scharf als Job)
                     \Platform\FoodAlchemist\Tools\IngestImportTool::class,
+                    // Spec 22 · H3c: die allgemeine Lauf-Quittung über ALLE Lauf-Arten (V-055)
+                    \Platform\FoodAlchemist\Tools\RunsGetTool::class,
                     \Platform\FoodAlchemist\Tools\SuppliersSearchTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbooksSearchTool::class,
                     \Platform\FoodAlchemist\Tools\LabNotesSearchTool::class,

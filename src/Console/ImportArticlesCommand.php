@@ -69,7 +69,10 @@ class ImportArticlesCommand extends Command
                 'supplier_id' => $supplierId,
                 'apply' => true,
                 'quelle' => 'konsole',
-            ]) : null;
+                // 22·H3c · V-073: die 0 oben ist ein Platzhalter, keine leere Arbeitsmenge —
+                // die Zeilenzahl kennt erst `beendeRun`. Ohne dieses `false` gälte der Lauf
+                // schon beim Anlegen als abgeschlossen.
+            ], umfangSteht: false) : null;
             $bericht = $import->importiere($team, $supplierId, $pfad, $apply);
             if ($runId !== null) {
                 $import->beendeRun($runId, $bericht);
