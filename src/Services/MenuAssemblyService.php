@@ -45,13 +45,16 @@ use RuntimeException;
  * Drei Konsequenzen, die das Verfahren tragen:
  * · **Kein `reject` im Filter.** Die Zulässigkeit (`filterFuerSlot`) bleibt unverändert —
  *   sonst zöge die Regel automatisch auch im Generator, also am Bestandspfad.
- * · **Auflösbarkeit ist eine Eigenschaft des Labels gegen den Bestand**, nicht gegen die
+ * · **Auflösbarkeit ist eine Eigenschaft des Slots gegen den Bestand**, nicht gegen die
  *   gefilterte Restmenge: gemessen wird gegen den **ganzen** Pool. Sonst verlöre ein Slot
  *   seine Rolle genau dann still, wenn das Preisband die passenden Gerichte wegfiltert —
- *   also im Fall, in dem der Fremdling gemeldet werden MUSS.
- * · **Ein Bruch bleibt sichtbar**: je Slot (`rolle_aufloesbar`/`hg_fremdlinge`), je Gericht
- *   (`passt_zum_slot`) und in `erklaere()` als eigene, lockerbare Vorgabe (`slot_rollen`) —
- *   die Zahl dahinter ist das DB, das die Rollen-Treue kostet.
+ *   also im Fall, in dem der Fremdling gemeldet werden MUSS. **Seit 12·S3c** kommt die
+ *   Antwort aus `MenuCandidatePoolService::rolleFuerSlot()`: ein am Slot **gebundener**
+ *   Fremdschlüssel (`dish_main_group_id`) gilt unabhängig vom Pool, die Label-Näherung
+ *   nur, solange sie trifft — `rolle_quelle` weist das je Slot aus.
+ * · **Ein Bruch bleibt sichtbar**: je Slot (`rolle_aufloesbar`/`rolle_quelle`/`hg_fremdlinge`),
+ *   je Gericht (`passt_zum_slot`) und in `erklaere()` als eigene, lockerbare Vorgabe
+ *   (`slot_rollen`) — die Zahl dahinter ist das DB, das die Rollen-Treue kostet.
  *
  * Begründung: eine „mind. 2× vegan"-Quote, die der Bestand nicht hergibt, darf nicht
  * dazu führen, dass der Solver **nichts** liefert — das wäre eine unbrauchbare Antwort
@@ -124,7 +127,7 @@ class MenuAssemblyService
      *   zielfunktion:array{db_gesamt:float, vk_pp:float, ek_pp:float, wareneinsatz_pct:?float, db_pp:float},
      *   gaeste:?int, db_gesamt_gaeste:?float,
      *   slots:list<array>, gerichte:list<array>, unvollstaendig:list<array>,
-     *   slot_semantik:array{ebene_aktiv:bool, fremdlinge:int, brueche:list<array>, nicht_aufloesbar:list<string>, hinweis:?string},
+     *   slot_semantik:array{ebene_aktiv:bool, fremdlinge:int, brueche:list<array>, nicht_aufloesbar:list<string>, quellen:array<string,int>, hinweis:?string},
      *   befunde:list<array>, zusammenfassung:array<string,int>, ampel_gesamt:string,
      *   verletzungen:int, nicht_bewertet:list<string>, pool:array{gesamt:int, mit_db:int}
      * }
@@ -173,6 +176,7 @@ class MenuAssemblyService
                 'slot_preis' => in_array((int) $frameSlot->id, $ohnePreisSlots, true),
             ];
             $semantik = MenuCandidatePoolService::semantikJeKandidat($pool, $frameSlot);
+            $rolle = MenuCandidatePoolService::rolleFuerSlot($pool, $frameSlot);
             $kandidaten = $this->pool->filterFuerSlot($pool, $frame, $frameSlot, $slotLockerung)
                 ->map(fn (array $k) => $this->kandidat($k) + ['semantik' => $semantik[(int) $k['id']] ?? 0])
                 ->sortBy($semantikAktiv
@@ -183,11 +187,16 @@ class MenuAssemblyService
                 'slot' => $frameSlot,
                 'n' => max(1, (int) ($frameSlot->target_count ?? 1)),
                 'kandidaten' => $kandidaten,
-                // Löst das Slot-Label überhaupt auf eine Hauptgruppe im Bestand auf? Nein ⇒
-                // die Ebene schweigt für diesen Slot, statt jeden Kandidaten zum Fremdling
-                // zu erklären. „Ich kann es nicht sagen" ist eine andere Aussage als „es
-                // passt keiner" — und nur die erste ist hier wahr.
-                'rolle_aufloesbar' => in_array(1, $semantik, true),
+                // Kennen wir die Rolle dieses Slots? Nein ⇒ die Ebene schweigt für ihn, statt
+                // jeden Kandidaten zum Fremdling zu erklären. „Ich kann es nicht sagen" ist
+                // eine andere Aussage als „es passt keiner" — und nur die erste war vor
+                // 12·S3c hier wahr. Seit der Bindung entscheidet die geteilte Naht, und
+                // `quelle` sagt, WORAUF sich die Antwort stützt: `gebunden` (Fremdschlüssel
+                // am Slot, gilt auch ohne einen einzigen Treffer im Pool — dann ist die
+                // Fremdling-Zahl ein echter Portfolio-Befund), `label` (Näherung greift),
+                // `unbekannt` (weder noch).
+                'rolle_aufloesbar' => $rolle['aufloesbar'],
+                'rolle_quelle' => $rolle['quelle'],
                 'best_db' => $kandidaten === [] ? 0.0 : max(0.0, max(array_column($kandidaten, 'db'))),
                 'quoten' => $frameSlot->rules->where('rule_type', 'diet_quota')
                     ->reject(fn ($r) => in_array((int) $r->id, $ohneRegeln, true))->values()->all(),
@@ -451,9 +460,9 @@ class MenuAssemblyService
                 'Rollen-Ebene aufgehoben: der Motor wählt rein nach DB, ein Dessert im Hauptgang wird zulässig',
                 ['slot_semantik' => true]);
         } else {
-            $nicht[] = 'Slot-Rollen — kein Slot-Label löst auf eine Speisen-Hauptgruppe im Bestand auf; '
-                . 'die Ebene wirkt nicht und ist deshalb auch nicht lockerbar (Auflösung heute über das Label, '
-                . 'persistierte Bindung ist 12·S3c).';
+            $nicht[] = 'Slot-Rollen — kein Slot ist an eine Speisen-Hauptgruppe gebunden, und kein Slot-Label '
+                . 'löst über die Näherung auf eine auf; die Ebene wirkt nicht und ist deshalb auch nicht '
+                . 'lockerbar (Bindung setzbar am Slot: dish_main_group_id, 12·S3c).';
         }
 
         // 1. Menü-weit: das Preisband p. P. — die beiden Enden getrennt, weil sie
@@ -979,10 +988,15 @@ class MenuAssemblyService
      * 12·S3b — Slot-Rollen-Brüche einer Wahl: gewählte Gerichte, deren Hauptgruppe nicht
      * zur Rolle des Slots passt.
      *
-     * Gezählt wird **nur** in Slots, deren Label überhaupt auf eine Hauptgruppe im Bestand
-     * auflöst (`rolle_aufloesbar`). Ein Slot „Station Süß" ohne Auflösung liefert sonst
-     * lauter Fremdlinge — eine Zahl, die nichts über die Auswahl sagt, aber jede Ebene
-     * darunter (das DB) mit einem konstanten Rauschen überlagert.
+     * Gezählt wird **nur** in Slots mit bekannter Rolle (`rolle_aufloesbar`). Ein Slot
+     * „Station Süß" ohne Rolle liefert sonst lauter Fremdlinge — eine Zahl, die nichts
+     * über die Auswahl sagt, aber jede Ebene darunter (das DB) mit einem konstanten
+     * Rauschen überlagert.
+     *
+     * **12·S3c:** ein *gebundener* Slot ist immer auflösbar, auch wenn kein einziger
+     * Kandidat seine Hauptgruppe trägt. Dann zählt die Ebene die volle Belegung als
+     * Brüche — und das ist richtig: die Rolle steht fest, das Portfolio hält sie nicht
+     * ein. Vor der Bindung war derselbe Fall vom „unbekannten Label" nicht zu trennen.
      *
      * @param  array<int, list<array>>  $wahl
      */
@@ -1131,10 +1145,13 @@ class MenuAssemblyService
         $scopes = [];
         $rollenBruch = [];
         $nichtAufloesbar = [];
+        $rollenQuellen = ['gebunden' => 0, 'label' => 0, 'unbekannt' => 0];
         foreach ($aufgaben as $si => $a) {
             $gewaehlt = $wahl[$si] ?? [];
             $fehlend = $a['n'] - count($gewaehlt);
             $aufloesbar = ($a['rolle_aufloesbar'] ?? false) === true;
+            $rolleQuelle = (string) ($a['rolle_quelle'] ?? 'unbekannt');
+            $rollenQuellen[$rolleQuelle] = ($rollenQuellen[$rolleQuelle] ?? 0) + 1;
             $fremde = $aufloesbar
                 ? array_values(array_filter($gewaehlt, fn (array $k) => (int) ($k['semantik'] ?? 0) !== 1))
                 : [];
@@ -1154,10 +1171,15 @@ class MenuAssemblyService
                 'slot_id' => (int) $a['slot']->id,
                 'label' => (string) $a['slot']->label,
                 'target_count' => $a['n'],
-                // 12·S3b: die Rollen-Sicht des Slots. `rolle_aufloesbar=false` heißt „das Label
-                // lässt sich keiner Hauptgruppe zuordnen" — dann ist `hg_fremdlinge` NULL und
-                // nicht 0, weil „geprüft und in Ordnung" etwas anderes ist als „nicht prüfbar".
+                // 12·S3b: die Rollen-Sicht des Slots. `rolle_aufloesbar=false` heißt „die Rolle
+                // ist unbekannt" — dann ist `hg_fremdlinge` NULL und nicht 0, weil „geprüft und
+                // in Ordnung" etwas anderes ist als „nicht prüfbar".
+                // 12·S3c: `rolle_quelle` sagt, woher die Antwort kommt — `gebunden` ist eine
+                // Entscheidung am Slot, `label` eine Näherung über die Bezeichnung. Nur bei
+                // `gebunden` ist `hg_fremdlinge` eine belastbare Zahl.
                 'rolle_aufloesbar' => $aufloesbar,
+                'rolle_quelle' => $rolleQuelle,
+                'dish_main_group_id' => $a['slot']->dish_main_group_id !== null ? (int) $a['slot']->dish_main_group_id : null,
                 'hg_fremdlinge' => $aufloesbar ? count($fremde) : null,
                 'status' => $gewaehlt === [] ? 'leer' : ($fehlend > 0 ? 'teilbefuellt' : 'befuellt'),
                 'begruendung' => $gewaehlt === []
@@ -1241,11 +1263,11 @@ class MenuAssemblyService
                 'fremdlinge' => count($rollenBruch),
                 'brueche' => $rollenBruch,
                 'nicht_aufloesbar' => $nichtAufloesbar,
-                'hinweis' => $nichtAufloesbar === []
-                    ? null
-                    : 'Für ' . count($nichtAufloesbar) . ' Slot-Label(s) ist keine Speisen-Hauptgruppe im Bestand auflösbar ('
-                        . implode(', ', $nichtAufloesbar) . ') — dort ist die Rolle nicht geprüft, nicht erfüllt. '
-                        . 'Auflösung über das Label bleibt eine Näherung, bis die Bindung am Slot persistiert ist (12·S3c).',
+                // 12·S3c: woher die Rollen stammen. `label` > 0 heißt: für so viele Slots
+                // rechnet die Ebene auf einer Näherung — die Zahl ist der Fortschritts-
+                // Balken der Bindung, nicht bloß Statistik.
+                'quellen' => $rollenQuellen,
+                'hinweis' => $this->rollenHinweis($nichtAufloesbar, $rollenQuellen),
             ],
             'befunde' => $befunde,
             'zusammenfassung' => $rollup['zusammenfassung'],
@@ -1257,5 +1279,32 @@ class MenuAssemblyService
                 'mit_db' => $pool->filter(fn (array $k) => ($k['wirtschaft']['vollstaendig'] ?? false) === true)->count(),
             ],
         ];
+    }
+
+    /**
+     * 12·S3c — der Rollen-Hinweis in EINEM Satz, aus zwei unabhängigen Gründen: Slots
+     * ohne erkennbare Rolle (die Ebene schweigt dort) und Slots, die nur über die
+     * Label-Näherung tragen (die Ebene rechnet dort auf einem unscharfen Prädikat).
+     *
+     * Beides gehört genannt, und beides verschwindet über denselben Weg — eine Bindung
+     * am Slot. Ohne die zweite Hälfte wäre ein Ergebnis mit lauter Label-Slots vom
+     * gebundenen Fall nicht zu unterscheiden.
+     *
+     * @param  list<string>  $nichtAufloesbar
+     * @param  array<string,int>  $quellen
+     */
+    private function rollenHinweis(array $nichtAufloesbar, array $quellen): ?string
+    {
+        $teile = [];
+        if ($nichtAufloesbar !== []) {
+            $teile[] = 'Für ' . count($nichtAufloesbar) . ' Slot(s) ist keine Speisen-Hauptgruppe bekannt ('
+                . implode(', ', $nichtAufloesbar) . ') — dort ist die Rolle nicht geprüft, nicht erfüllt.';
+        }
+        if (($quellen['label'] ?? 0) > 0) {
+            $teile[] = $quellen['label'] . ' Slot(s) tragen nur über die Label-Näherung; setze '
+                . 'dish_main_group_id am Slot, um die Rolle zu entscheiden statt sie zu schätzen (12·S3c).';
+        }
+
+        return $teile === [] ? null : implode(' ', $teile);
     }
 }

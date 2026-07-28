@@ -189,8 +189,13 @@ it('ohne auflösbare Rolle wird die Ebene nicht als geprüfte Lockerung gezählt
 
     expect(collect($res['erklaerung']['constraints'])->pluck('schluessel')->all())
         ->not->toContain('slot_rollen')
+        // 12·S3c: die Begründung nennt jetzt BEIDE Wege, die eine Rolle liefern könnten —
+        // die Bindung am Slot und die Label-Näherung. Vorher stand dort nur das Label,
+        // weil es der einzige Weg war.
         ->and(implode(' | ', $res['erklaerung']['nicht_gelockert']))
-        ->toContain('kein Slot-Label löst auf eine Speisen-Hauptgruppe');
+        ->toContain('kein Slot ist an eine Speisen-Hauptgruppe gebunden')
+        ->and(implode(' | ', $res['erklaerung']['nicht_gelockert']))
+        ->toContain('dish_main_group_id');
 });
 
 it('ohne Hauptgruppen am Rezept ist die Ebene inert — der Bestandspfad rechnet unverändert', function () {

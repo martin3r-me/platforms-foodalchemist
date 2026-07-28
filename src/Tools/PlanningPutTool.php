@@ -25,7 +25,10 @@ class PlanningPutTool extends FoodAlchemistTool implements ToolContract, ToolMet
     {
         return 'Setzt das Planungs-Gerüst eines Foodbooks/Konzepts (legt es bei Bedarf als draft an). '
             . 'head = Preisarchitektur p. P. (target_price_pp, price_min_pp, price_max_pp, note). '
-            . 'slots (ERSETZT alle Slots, Reihenfolge = Dramaturgie): {label*, slot_type gang|station|kapitel, target_count, '
+            . 'slots (ERSETZT alle Slots, Reihenfolge = Dramaturgie): {label*, slot_type gang|station|kapitel, '
+            . 'dish_main_group_id (Rolle des Slots: welche Speisen-Hauptgruppe gehört hierher? null = nicht gebunden, '
+            . 'dann nähert die Label-Semantik. Gültige IDs zeigt heute nur planning.GET an schon gebundenen Slots '
+            . 'bzw. die UI — eine unbekannte oder fremde ID wird abgelehnt statt geraten), target_count, '
             . 'price_anchor, price_min, price_max, is_pflicht, rules[]}. '
             . 'rules (ERSETZT Frame-Regeln): {rule_type* diet_quota|season_coverage|nogo_ingredient|nogo_allergen|allergen_line, '
             . 'ref_key (diet_form fleisch|fisch|vegi|vegan|neutral|allergie bzw. EU-14-Allergen-Key), ref_id (season_id), '
@@ -42,7 +45,7 @@ class PlanningPutTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'owner_type' => ['type' => 'string', 'enum' => ['foodbook', 'concept']],
                 'owner_id' => ['type' => 'integer'],
                 'head' => ['type' => 'object', 'description' => 'target_price_pp, price_min_pp, price_max_pp, note (leer löscht)'],
-                'slots' => ['type' => 'array', 'items' => ['type' => 'object'], 'description' => 'Ersetzt ALLE Slots (Reihenfolge = Dramaturgie); Slot-Regeln als rules[] im Slot'],
+                'slots' => ['type' => 'array', 'items' => ['type' => 'object'], 'description' => 'Ersetzt ALLE Slots (Reihenfolge = Dramaturgie); Slot-Regeln als rules[] im Slot; dish_main_group_id bindet die Slot-Rolle (12·S3c) und wird bei einem Rerun ohne eigenen Wert per Label-Match erhalten'],
                 'rules' => ['type' => 'array', 'items' => ['type' => 'object'], 'description' => 'Ersetzt alle Frame-Regeln (slot-unabhängige Quoten/Politik)'],
             ],
             'required' => ['owner_type', 'owner_id'],

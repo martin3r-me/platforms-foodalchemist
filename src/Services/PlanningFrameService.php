@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameRule;
@@ -79,6 +80,12 @@ class PlanningFrameService
                 'price_min' => $slot->price_min, 'price_max' => $slot->price_max,
                 'is_pflicht' => (bool) $slot->is_pflicht, 'note' => $slot->note,
                 // chapter_id bewusst NICHT kopiert — der Ist-Bezug gilt nur beim Quell-Owner
+                // 12·S3c: dish_main_group_id WIRD kopiert — anders als chapter_id ist das
+                // keine Verankerung am Quell-Owner, sondern eine SOLL-Eigenschaft des Slots
+                // („in diesen Gang gehören Hauptgerichte"). Sie reist mit dem Gerüst, sonst
+                // müsste jede Kopie neu gebunden werden und die Kopie wäre unschärfer als
+                // das Original. Die Team-Prüfung läuft in addSlot (Kopie kann ins Kind-Team).
+                'dish_main_group_id' => $slot->dish_main_group_id,
             ]);
         }
         // rules (hasMany über frame_id) enthält frame- UND slot-scoped Regeln — kein Merge nötig
@@ -137,6 +144,7 @@ class PlanningFrameService
             'position' => $attrs['position'] ?? $pos,
             'label' => $label,
             'slot_type' => $slotType,
+            'dish_main_group_id' => $this->pruefeHauptgruppe($team, $attrs['dish_main_group_id'] ?? null),
             'chapter_id' => $attrs['chapter_id'] ?? null,
             'target_count' => $attrs['target_count'] ?? null,
             'price_anchor' => $attrs['price_anchor'] ?? null,
@@ -151,9 +159,9 @@ class PlanningFrameService
     {
         $slot = FoodAlchemistPlanningFrameSlot::with('frame')->findOrFail($slotId);
         $this->guardWrite($team, $slot->frame);
-        $erlaubt = ['position', 'label', 'slot_type', 'chapter_id', 'target_count', 'price_anchor', 'price_min', 'price_max', 'is_pflicht', 'note'];
+        $erlaubt = ['position', 'label', 'slot_type', 'dish_main_group_id', 'chapter_id', 'target_count', 'price_anchor', 'price_min', 'price_max', 'is_pflicht', 'note'];
         $daten = array_intersect_key($attrs, array_flip($erlaubt));
-        foreach (['target_count', 'price_anchor', 'price_min', 'price_max', 'chapter_id', 'slot_type', 'note'] as $nullable) {
+        foreach (['target_count', 'price_anchor', 'price_min', 'price_max', 'dish_main_group_id', 'chapter_id', 'slot_type', 'note'] as $nullable) {
             if (array_key_exists($nullable, $daten) && ($daten[$nullable] === '' || $daten[$nullable] === null)) {
                 $daten[$nullable] = null;
             }
@@ -164,9 +172,40 @@ class PlanningFrameService
         if (($daten['slot_type'] ?? null) !== null && ! in_array($daten['slot_type'], FoodAlchemistPlanningFrameSlot::SLOT_TYPES, true)) {
             throw new RuntimeException('Ungültiger slot_type — erlaubt: ' . implode('|', FoodAlchemistPlanningFrameSlot::SLOT_TYPES) . '.');
         }
+        // 12·S3c: die Rolle wird gegen das sichtbare Vokabular geprüft. Das Lösen der
+        // Bindung (explizite `null`) bleibt erlaubt — sie ist eine Entscheidung, die
+        // zurückgenommen werden darf; sie darf nur nicht auf eine fremde ID zeigen.
+        if (array_key_exists('dish_main_group_id', $daten)) {
+            $daten['dish_main_group_id'] = $this->pruefeHauptgruppe($team, $daten['dish_main_group_id']);
+        }
         $slot->update($daten);
 
         return $slot->refresh();
+    }
+
+    /**
+     * 12·S3c — Zulässigkeit der Slot-Rolle: existiert die Hauptgruppe, und ist sie für
+     * dieses Team sichtbar?
+     *
+     * Die Spalte trägt bewusst keine DB-seitige FK-Einschränkung (Begründung in der
+     * Migration), also ist dies die einzige Stelle, an der die Bindung geprüft wird.
+     * Der Team-Scope ist kein Formalismus: ohne ihn könnte ein Aufrufer eine fremde
+     * Hauptgruppen-ID setzen und damit über die Slot-Rolle Existenz und Label einer
+     * Zeile erfahren, die er nicht sehen darf (D1-Fall wie bei `?array $gpIds` in
+     * `preisSprungMargeImpact`, V-050).
+     */
+    private function pruefeHauptgruppe(Team $team, mixed $id): ?int
+    {
+        if ($id === null || $id === '') {
+            return null;
+        }
+        $id = (int) $id;
+        $ok = FoodAlchemistDishMainGroup::visibleToTeam($team)->whereKey($id)->exists();
+        if (! $ok) {
+            throw new RuntimeException("Speisen-Hauptgruppe #{$id} existiert nicht oder ist für dieses Team nicht sichtbar.");
+        }
+
+        return $id;
     }
 
     public function removeSlot(Team $team, int $slotId): void
@@ -298,6 +337,18 @@ class PlanningFrameService
                         $altLabels[$key] = (string) $alt->label;
                     }
                 }
+                // 12·S3c: dieselbe Sicherung für die Slot-Rolle. Sie ist eine **menschlich
+                // bestätigte** Zuordnung (S3c-2 schlägt vor, der Mensch gibt frei) — ein
+                // Gerüst-Rerun aus einem Generator-Payload, der die Spalte nicht kennt,
+                // darf sie nicht stillschweigend wegräumen. Der Payload gewinnt weiterhin,
+                // wenn er selbst eine Bindung mitbringt.
+                $altRollen = [];  // labelKey → dish_main_group_id
+                foreach ($frame->slots()->whereNotNull('dish_main_group_id')->get(['label', 'dish_main_group_id']) as $alt) {
+                    $key = $this->labelKey($alt->label);
+                    if ($key !== '') {
+                        $altRollen[$key] = (int) $alt->dish_main_group_id;
+                    }
+                }
                 $wiederverwendet = [];
 
                 $frame->rules()->whereNotNull('slot_id')->delete();
@@ -313,6 +364,13 @@ class PlanningFrameService
                         if ($key !== '' && isset($altLinks[$key])) {
                             $slotAttrs['chapter_id'] = $altLinks[$key];
                             $wiederverwendet[$key] = true;
+                        }
+                    }
+                    // 12·S3c: Slot-Rolle analog erhalten (Payload gewinnt, wenn er eine bringt).
+                    if (empty($slotAttrs['dish_main_group_id'])) {
+                        $rolleKey = $this->labelKey($slotAttrs['label'] ?? null);
+                        if ($rolleKey !== '' && isset($altRollen[$rolleKey])) {
+                            $slotAttrs['dish_main_group_id'] = $altRollen[$rolleKey];
                         }
                     }
                     $slot = $this->addSlot($team, $frame, $slotAttrs);
@@ -356,7 +414,7 @@ class PlanningFrameService
     /** Strukturierte Voll-Sicht des Gerüsts (UI-State + MCP-GET). */
     public function summary(FoodAlchemistPlanningFrame $frame): array
     {
-        $frame->loadMissing(['slots.rules', 'rules']);
+        $frame->loadMissing(['slots.rules', 'slots.dishMainGroup:id,code,label', 'rules']);
         $ruleOut = fn (FoodAlchemistPlanningFrameRule $r) => [
             'id' => $r->id,
             'slot_id' => $r->slot_id,
@@ -384,6 +442,11 @@ class PlanningFrameService
                 'position' => $s->position,
                 'label' => $s->label,
                 'slot_type' => $s->slot_type,
+                // 12·S3c: die Rolle des Slots. `null` heißt „nicht gebunden" — dann nähert
+                // die Label-Semantik sie an; das Label-Ergebnis steht bewusst NICHT hier,
+                // sonst wäre eine Näherung von einer Entscheidung nicht zu unterscheiden.
+                'dish_main_group_id' => $s->dish_main_group_id,
+                'dish_main_group_label' => $s->dishMainGroup?->label,
                 'chapter_id' => $s->chapter_id,
                 'target_count' => $s->target_count,
                 'price_anchor' => $s->price_anchor !== null ? (float) $s->price_anchor : null,

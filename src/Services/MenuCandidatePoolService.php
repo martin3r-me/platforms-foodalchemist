@@ -106,6 +106,13 @@ class MenuCandidatePoolService
                 'name' => $r->name,
                 'diet_form' => $diet,
                 'hg_label' => mb_strtolower(trim((string) ($r->speisenHauptgruppe?->label ?? $r->dishClass?->mainGroup?->label ?? ''))),
+                // 12·S3c: die Hauptgruppe auch als ID — dieselbe Leiter wie `hg_label`
+                // (Modell A direkt am Rezept, Alt-Pfad über die Klasse). Sobald ein Slot
+                // gebunden ist, ist „passt das Gericht?" ein ID-Vergleich; das Label ist
+                // dann nur noch Anzeige.
+                'hg_id' => $r->dish_main_group_id !== null
+                    ? (int) $r->dish_main_group_id
+                    : ($r->dishClass?->dish_main_group_id !== null ? (int) $r->dishClass->dish_main_group_id : null),
                 // auf Cent gerundet wie die Wirtschafts-Achse — sonst wären „dieselbe Zahl"
                 // und „dieselbe Zahl bis auf Rundung" zwei verschiedene Zusicherungen
                 'sales_net' => $preis['vk'] !== null ? round($preis['vk'], 2) : null,
@@ -306,16 +313,73 @@ class MenuCandidatePoolService
      * Semantik-Wert je Kandidaten-Zeile am Slot — die Sicht, die ein Konsument
      * wirklich braucht („welcher Kandidat passt zur Rolle dieses Slots?").
      *
-     * @param  Collection<int, array<string,mixed>>  $kandidaten Pool-Zeilen (mit `hg_label`)
+     * **12·S3c: zwei Quellen, eine Rangfolge.** Ist am Slot `dish_main_group_id`
+     * gesetzt, entscheidet ein **ID-Vergleich** — die Rolle ist dann entschieden und
+     * hingeschrieben, nicht geraten, und die Fehlerklasse „Vorspeise vs Vorspeisen"
+     * existiert für diesen Slot nicht mehr. Ohne Bindung bleibt es beim Label-Pfad
+     * ({@see slotSemantik}), unverändert gegenüber dem Bestand — NULL ist der Normalfall
+     * jedes Alt-Slots, und die Spalte kam ohne Backfill (Riegel: `SlotSemantikGoldenTest`).
+     *
+     * Ein gebundener Slot, dessen Hauptgruppe im Pool gar nicht vorkommt, liefert
+     * folgerichtig überall 0 — das ist dann eine **Portfolio-Lücke**, kein unscharfes
+     * Prädikat, und `rolleFuerSlot()` sagt genau diesen Unterschied.
+     *
+     * @param  Collection<int, array<string,mixed>>  $kandidaten Pool-Zeilen (mit `hg_label`/`hg_id`)
      * @return array<int, int> keyBy Rezept-ID → 0|1
      */
     public static function semantikJeKandidat(Collection $kandidaten, $frameSlot): array
     {
+        $gebunden = self::gebundeneHauptgruppe($frameSlot);
+        if ($gebunden !== null) {
+            return $kandidaten->mapWithKeys(fn ($k) => [
+                (int) $k['id'] => (($k['hg_id'] ?? null) !== null && (int) $k['hg_id'] === $gebunden) ? 1 : 0,
+            ])->all();
+        }
+
         $label = (string) ($frameSlot->label ?? '');
 
         return $kandidaten->mapWithKeys(fn ($k) => [
             (int) $k['id'] => self::slotSemantik($label, (string) ($k['hg_label'] ?? '')),
         ])->all();
+    }
+
+    /**
+     * 12·S3c — die EINE Antwort auf „kennen wir die Rolle dieses Slots überhaupt?"
+     * samt Herkunft. Vorher stand diese Frage als `in_array(1, $semantik, true)` im
+     * Solver: „auflösbar" hieß dort faktisch „mindestens ein Kandidat trifft" — und
+     * damit sagte ein leerer Treffer zwei verschiedene Dinge gleichzeitig („Label
+     * unbekannt" und „Portfolio-Lücke"). Mit der Bindung sind das zwei Zustände:
+     *
+     *   · `gebunden`   Fremdschlüssel am Slot ⇒ auflösbar, **unabhängig** vom Pool.
+     *                  Trifft kein Kandidat, ist das ein echter Befund (alle Fremdlinge).
+     *   · `label`      keine Bindung, aber das Label trifft im Pool ⇒ Näherung, trägt.
+     *   · `unbekannt`  keine Bindung, kein Treffer ⇒ die Ebene schweigt für diesen Slot.
+     *
+     * @param  Collection<int, array<string,mixed>>  $kandidaten
+     * @return array{quelle: 'gebunden'|'label'|'unbekannt', aufloesbar: bool, main_group_id: ?int}
+     */
+    public static function rolleFuerSlot(Collection $kandidaten, $frameSlot): array
+    {
+        $gebunden = self::gebundeneHauptgruppe($frameSlot);
+        if ($gebunden !== null) {
+            return ['quelle' => 'gebunden', 'aufloesbar' => true, 'main_group_id' => $gebunden];
+        }
+        $label = (string) ($frameSlot->label ?? '');
+        $treffer = $kandidaten->contains(fn ($k) => self::slotSemantik($label, (string) ($k['hg_label'] ?? '')) === 1);
+
+        return [
+            'quelle' => $treffer ? 'label' : 'unbekannt',
+            'aufloesbar' => $treffer,
+            'main_group_id' => null,
+        ];
+    }
+
+    /** Die persistierte Slot-Rolle (12·S3c) oder null — eine Lesart, an einer Stelle. */
+    private static function gebundeneHauptgruppe($frameSlot): ?int
+    {
+        $id = $frameSlot->dish_main_group_id ?? null;
+
+        return ($id === null || (int) $id === 0) ? null : (int) $id;
     }
 
     /** Menschlich lesbare Filter-Zusammenfassung für Leer-Begründungen. */

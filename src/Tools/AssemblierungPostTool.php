@@ -35,7 +35,9 @@ class AssemblierungPostTool extends FoodAlchemistTool implements ToolContract, T
             . 'Slot-Rollen-Brüche (die Speisen-Hauptgruppe muss zum Slot passen: kein Dessert im Hauptgang), dann '
             . 'hohes DB; eine unerfüllbare Vorgabe liefert also eine Antwort PLUS roten Befund statt gar nichts. '
             . 'Die Rollen-Ebene bindet, sperrt aber nicht: bleibt ein Fremdling stehen, steht er in slot_semantik '
-            . '(brueche) und je Gericht in passt_zum_slot; nicht auflösbare Slot-Labels sagen das (rolle_aufloesbar=false). '
+            . '(brueche) und je Gericht in passt_zum_slot; Slots ohne bekannte Rolle sagen das (rolle_aufloesbar=false). '
+            . 'rolle_quelle je Slot = gebunden (dish_main_group_id am Slot, verbindlich) | label (Näherung über die '
+            . 'Bezeichnung) | unbekannt; slot_semantik.quellen zählt sie. '
             . 'Ampel = die '
             . 'R4.2-Coverage (keine zweite Messlatte). erklaerung=true sagt zusätzlich, welche Vorgabe bindet und '
             . 'wie viel DB hinter ihrer Lockerung liegt. Übernahme in ein Draft-Konzept: foodalchemist.assemblierung.APPLY.';

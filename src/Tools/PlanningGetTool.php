@@ -23,7 +23,8 @@ class PlanningGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
     public function getDescription(): string
     {
         return 'Liest das Planungs-Gerüst (Soll-Rahmen) eines Foodbooks oder Konzepts: Preisarchitektur p. P., '
-            . 'Slots (Gänge/Stationen mit Soll-Gerichtszahl + Preis-Anker/Spanne, Dramaturgie-Reihenfolge) und Regeln '
+            . 'Slots (Gänge/Stationen mit Soll-Gerichtszahl + Preis-Anker/Spanne, Dramaturgie-Reihenfolge, '
+            . 'dish_main_group_id/-label = gebundene Slot-Rolle oder null) und Regeln '
             . '(diet_quota, season_coverage, nogo_ingredient, nogo_allergen, allergen_line). '
             . 'VOR KI-Konzept-/Foodbook-Befüllung lesen — das Gerüst ist der verbindliche Soll-Rahmen. '
             . 'Liefert zusätzlich prompt_kontext (fertiger KI-Kontext-Block).';
