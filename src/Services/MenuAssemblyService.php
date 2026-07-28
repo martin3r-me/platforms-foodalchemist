@@ -30,8 +30,28 @@ use RuntimeException;
  * **Hart** sind nur die Slot-Filter des Pools (No-Go-Zutat, No-Go-Allergen, Slot-
  * Preisband): sie bestimmen, wer überhaupt Kandidat ist, und wirken schon heute im
  * Generator hart. Alles Menü-weite (Diät-Quoten, Preisband p. P.) ist **lexikografisch**
- * gewichtet: der Motor minimiert zuerst die Zahl verletzter Vorgaben, maximiert dann
- * das DB.
+ * gewichtet: der Motor minimiert zuerst die Zahl verletzter Vorgaben, dann die Zahl der
+ * Slot-Rollen-Brüche (12·S3b), und maximiert erst danach das DB.
+ *
+ * ## 12·S3b — die Slot-Rolle bindet den Slot (Lesart (b), entschieden 2026-07-28)
+ * Der greedy Generator kennt eine Slot-Semantik (passt die Speisen-Hauptgruppe des
+ * Gerichts zur Rolle des Slots?) und wertet sie als erstes Ranking-Kriterium; der Solver
+ * kannte sie nicht — am echten Gerüst landete damit `[FIN]`-Kuchen im Hauptgang (Bug #651).
+ * Gewählte Lesart ist **nicht** „hart" (das hätte am heutigen Bestand die Hälfte des
+ * Hauptgangs leer gelassen: Slot will 4 Plätze, 2 passende Kandidaten), sondern eine
+ * **weitere lexikografische Ebene vor dem DB** — dieselbe Haltung wie bei den Menü-Quoten:
+ * der Slot wird voll, und der Bruch wird ein benannter Befund statt einer Verweigerung.
+ *
+ * Drei Konsequenzen, die das Verfahren tragen:
+ * · **Kein `reject` im Filter.** Die Zulässigkeit (`filterFuerSlot`) bleibt unverändert —
+ *   sonst zöge die Regel automatisch auch im Generator, also am Bestandspfad.
+ * · **Auflösbarkeit ist eine Eigenschaft des Labels gegen den Bestand**, nicht gegen die
+ *   gefilterte Restmenge: gemessen wird gegen den **ganzen** Pool. Sonst verlöre ein Slot
+ *   seine Rolle genau dann still, wenn das Preisband die passenden Gerichte wegfiltert —
+ *   also im Fall, in dem der Fremdling gemeldet werden MUSS.
+ * · **Ein Bruch bleibt sichtbar**: je Slot (`rolle_aufloesbar`/`hg_fremdlinge`), je Gericht
+ *   (`passt_zum_slot`) und in `erklaere()` als eigene, lockerbare Vorgabe (`slot_rollen`) —
+ *   die Zahl dahinter ist das DB, das die Rollen-Treue kostet.
  *
  * Begründung: eine „mind. 2× vegan"-Quote, die der Bestand nicht hergibt, darf nicht
  * dazu führen, dass der Solver **nichts** liefert — das wäre eine unbrauchbare Antwort
@@ -104,6 +124,7 @@ class MenuAssemblyService
      *   zielfunktion:array{db_gesamt:float, vk_pp:float, ek_pp:float, wareneinsatz_pct:?float, db_pp:float},
      *   gaeste:?int, db_gesamt_gaeste:?float,
      *   slots:list<array>, gerichte:list<array>, unvollstaendig:list<array>,
+     *   slot_semantik:array{ebene_aktiv:bool, fremdlinge:int, brueche:list<array>, nicht_aufloesbar:list<string>, hinweis:?string},
      *   befunde:list<array>, zusammenfassung:array<string,int>, ampel_gesamt:string,
      *   verletzungen:int, nicht_bewertet:list<string>, pool:array{gesamt:int, mit_db:int}
      * }
@@ -119,7 +140,7 @@ class MenuAssemblyService
         $aufgaben = $this->aufgabenFuer($pool, $frame);
         $l = $this->loese($aufgaben, $this->menuQuoten($frame), $this->band($frame));
 
-        return $this->ergebnis($frame, $aufgaben, $l['wahl'], $pool, $gaeste, $l['verfahren'], $l['exakt'], $l['knoten'], $l['deckel'], $l['raum']);
+        return $this->ergebnis($frame, $aufgaben, $l['wahl'], $pool, $gaeste, $l['verfahren'], $l['exakt'], $l['knoten'], $l['deckel'], $l['raum'], true);
     }
 
     /**
@@ -129,12 +150,21 @@ class MenuAssemblyService
      * `$lockerung` (12·S2a-3) hebt einzelne Vorgaben testweise aus — die Kandidaten-Menge
      * kommt trotzdem aus `filterFuerSlot`, es gibt also keine zweite Zulässigkeits-Wahrheit.
      *
-     * @param  array{regel_ids?: list<int>, slot_preis?: list<int>}  $lockerung
+     * **12·S3b:** je Kandidat kommt die Slot-Semantik aus der geteilten Naht
+     * (`MenuCandidatePoolService::semantikJeKandidat`) mit — und zwar über den **ganzen**
+     * Pool ausgewertet, nicht über die gefilterte Restmenge (Begründung im Klassen-Docblock).
+     * Sie geht in die Sortierung **vor** dem DB ein; damit respektiert auch der Pfad
+     * `slot_unabhaengig`, der schlicht die ersten n nimmt, die Slot-Rolle. Ist die Ebene
+     * gelockert (`slot_semantik`), fällt sie aus der Sortierung heraus — sonst wäre die
+     * „gelockerte" Variante in genau diesem Pfad keine.
+     *
+     * @param  array{regel_ids?: list<int>, slot_preis?: list<int>, slot_semantik?: bool}  $lockerung
      */
     private function aufgabenFuer(Collection $pool, FoodAlchemistPlanningFrame $frame, array $lockerung = []): array
     {
         $ohneRegeln = $lockerung['regel_ids'] ?? [];
         $ohnePreisSlots = $lockerung['slot_preis'] ?? [];
+        $semantikAktiv = ($lockerung['slot_semantik'] ?? false) !== true;
 
         $aufgaben = [];
         foreach ($frame->slots as $frameSlot) {
@@ -142,14 +172,22 @@ class MenuAssemblyService
                 'regel_ids' => $ohneRegeln,
                 'slot_preis' => in_array((int) $frameSlot->id, $ohnePreisSlots, true),
             ];
+            $semantik = MenuCandidatePoolService::semantikJeKandidat($pool, $frameSlot);
             $kandidaten = $this->pool->filterFuerSlot($pool, $frame, $frameSlot, $slotLockerung)
-                ->map(fn (array $k) => $this->kandidat($k))
-                ->sortBy([['db', 'desc'], ['name', 'asc'], ['id', 'asc']])
+                ->map(fn (array $k) => $this->kandidat($k) + ['semantik' => $semantik[(int) $k['id']] ?? 0])
+                ->sortBy($semantikAktiv
+                    ? [['semantik', 'desc'], ['db', 'desc'], ['name', 'asc'], ['id', 'asc']]
+                    : [['db', 'desc'], ['name', 'asc'], ['id', 'asc']])
                 ->values()->all();
             $aufgaben[] = [
                 'slot' => $frameSlot,
                 'n' => max(1, (int) ($frameSlot->target_count ?? 1)),
                 'kandidaten' => $kandidaten,
+                // Löst das Slot-Label überhaupt auf eine Hauptgruppe im Bestand auf? Nein ⇒
+                // die Ebene schweigt für diesen Slot, statt jeden Kandidaten zum Fremdling
+                // zu erklären. „Ich kann es nicht sagen" ist eine andere Aussage als „es
+                // passt keiner" — und nur die erste ist hier wahr.
+                'rolle_aufloesbar' => in_array(1, $semantik, true),
                 'best_db' => $kandidaten === [] ? 0.0 : max(0.0, max(array_column($kandidaten, 'db'))),
                 'quoten' => $frameSlot->rules->where('rule_type', 'diet_quota')
                     ->reject(fn ($r) => in_array((int) $r->id, $ohneRegeln, true))->values()->all(),
@@ -189,9 +227,12 @@ class MenuAssemblyService
      * Die Pfad-Wahl + Suche selbst — ohne Ergebnis-Aufbereitung, damit die Erklärung
      * (12·S2a-3) denselben Motor mit gelockerten Vorgaben erneut fahren kann.
      *
+     * `$semantikAktiv=false` hebt die Slot-Rollen-Ebene aus (12·S3b) — dieselbe Mechanik wie
+     * jede andere Lockerung in `erklaere()`: derselbe Motor, eine Vorgabe weniger.
+     *
      * @return array{wahl: array<int, list<array>>, verfahren: string, exakt: bool, knoten: int, deckel: bool, raum: float}
      */
-    private function loese(array $aufgaben, array $menuQuoten, array $band): array
+    private function loese(array $aufgaben, array $menuQuoten, array $band, bool $semantikAktiv = true): array
     {
         $menuWeit = $menuQuoten !== [] || $band['min'] !== null || $band['max'] !== null;
         $slotQuoten = collect($aufgaben)->contains(fn (array $a) => $a['quoten'] !== []);
@@ -204,6 +245,8 @@ class MenuAssemblyService
         if (! $menuWeit && ! $slotQuoten && $this->disjunkt($aufgaben)) {
             // Slots sind wirklich unabhängig: kein Menü-weiter Constraint, keine Slot-Quote,
             // und kein Gericht kann zwei Slots bedienen → je Slot die besten n ist optimal.
+            // „Beste" heißt seit 12·S3b: erst rollen-treu, dann DB — das steckt in der
+            // Sortierung aus `aufgabenFuer`, weshalb dieser Pfad hier unverändert bleibt.
             $wahl = $this->slotUnabhaengig($aufgaben);
             $verfahren = 'slot_unabhaengig';
             $exakt = true;
@@ -213,7 +256,7 @@ class MenuAssemblyService
             $exakt = false;
 
             if ($raum <= self::EXAKT_RAUM_MAX) {
-                $bnb = $this->branchAndBound($aufgaben, $menuQuoten, $band, $wahl);
+                $bnb = $this->branchAndBound($aufgaben, $menuQuoten, $band, $wahl, $semantikAktiv);
                 $knoten = $bnb['knoten'];
                 $deckel = $bnb['deckel'];
                 if ($bnb['wahl'] !== null) {
@@ -225,7 +268,7 @@ class MenuAssemblyService
                 }
             }
             if (! $exakt) {
-                $wahl = $this->localSwap($aufgaben, $wahl, $menuQuoten, $band);
+                $wahl = $this->localSwap($aufgaben, $wahl, $menuQuoten, $band, $semantikAktiv);
             }
         }
 
@@ -277,10 +320,10 @@ class MenuAssemblyService
         $basisLoesung = $this->loese($basisAufgaben, $this->menuQuoten($frame), $this->band($frame));
         $basis = $this->ergebnis(
             $frame, $basisAufgaben, $basisLoesung['wahl'], $pool, $gaeste,
-            $basisLoesung['verfahren'], $basisLoesung['exakt'], $basisLoesung['knoten'], $basisLoesung['deckel'], $basisLoesung['raum']
+            $basisLoesung['verfahren'], $basisLoesung['exakt'], $basisLoesung['knoten'], $basisLoesung['deckel'], $basisLoesung['raum'], true
         );
 
-        ['kandidaten' => $lockerungen, 'nicht_gelockert' => $nichtGelockert] = $this->lockerungsKandidaten($frame);
+        ['kandidaten' => $lockerungen, 'nicht_gelockert' => $nichtGelockert] = $this->lockerungsKandidaten($frame, $basisAufgaben);
         $gesamt = count($lockerungen);
         $abgeschnitten = $gesamt > self::LOCKERUNGEN_MAX;
         if ($abgeschnitten) {
@@ -294,15 +337,17 @@ class MenuAssemblyService
         $zeilen = [];
         foreach ($lockerungen as $c) {
             $l = $c['lockerung'];
+            $semantikAktiv = ($l['slot_semantik'] ?? false) !== true;
             $aufgaben = $this->aufgabenFuer($pool, $frame, $l);
-            $loesung = $this->loese($aufgaben, $this->menuQuoten($frame, $l['regel_ids'] ?? []), $this->band($frame, $l));
+            $loesung = $this->loese($aufgaben, $this->menuQuoten($frame, $l['regel_ids'] ?? []), $this->band($frame, $l), $semantikAktiv);
             $variante = $this->ergebnis(
                 $frame, $aufgaben, $loesung['wahl'], $pool, $gaeste,
-                $loesung['verfahren'], $loesung['exakt'], $loesung['knoten'], $loesung['deckel'], $loesung['raum']
+                $loesung['verfahren'], $loesung['exakt'], $loesung['knoten'], $loesung['deckel'], $loesung['raum'], $semantikAktiv
             );
 
             $deltaDb = round($variante['zielfunktion']['db_pp'] - $basis['zielfunktion']['db_pp'], 2);
             $deltaVerl = $variante['verletzungen'] - $basis['verletzungen'];
+            $deltaFremd = $variante['slot_semantik']['fremdlinge'] - $basis['slot_semantik']['fremdlinge'];
             $untergrenze = ! $basisLoesung['exakt'] || ! $loesung['exakt'];
 
             $zeilen[] = [
@@ -321,6 +366,12 @@ class MenuAssemblyService
                 'delta_db_pp' => $deltaDb,
                 'delta_db_gaeste' => $gaeste !== null && $gaeste > 0 ? round($deltaDb * $gaeste, 2) : null,
                 'delta_verletzungen' => $deltaVerl,
+                // 12·S3b: wie viele Slot-Rollen-Brüche die Lockerung kostet (positiv) oder
+                // löst (negativ). Bewusst NUR informativ und NICHT in `bindend`: dessen
+                // Definition (DB oder Ampel-Verletzung) ist eine bestehende, berichtete
+                // Aussage — sie hier lexikografisch nachzuziehen wäre eine stille
+                // Verschiebung an einer Auswahl-Nachbarschaft (→ Backlog, nicht Chunk).
+                'delta_fremdlinge' => $deltaFremd,
                 'kandidaten_delta' => $this->kandidatenSumme($aufgaben) - $basisKandidaten,
                 'db_pp_gelockert' => $variante['zielfunktion']['db_pp'],
                 'delta_ist_untergrenze' => $untergrenze,
@@ -384,10 +435,26 @@ class MenuAssemblyService
      *
      * @return array{kandidaten: list<array<string,mixed>>, nicht_gelockert: list<string>}
      */
-    private function lockerungsKandidaten(FoodAlchemistPlanningFrame $frame): array
+    private function lockerungsKandidaten(FoodAlchemistPlanningFrame $frame, array $aufgaben): array
     {
         $kandidaten = [];
         $nicht = [];
+
+        // 0. Menü-weit und ganz vorn: die Slot-Rollen-Ebene (12·S3b). Sie steht zuerst, weil
+        //    sie ALLE Slots bindet und lexikografisch über dem DB liegt — ihre Zahl ist die
+        //    Antwort auf „was kostet es, dass im Hauptgang kein Kuchen steht?".
+        $aufloesbar = array_values(array_filter($aufgaben, fn (array $a) => ($a['rolle_aufloesbar'] ?? false) === true));
+        if ($aufloesbar !== []) {
+            $kandidaten[] = $this->lockerungsZeile('slot_rollen', 'slot_rollen', 'menue', null, null,
+                'Slot-Rollen — die Speisen-Hauptgruppe muss zum Slot passen (' . count($aufloesbar) . ' von '
+                    . count($aufgaben) . ' Slots auflösbar)',
+                'Rollen-Ebene aufgehoben: der Motor wählt rein nach DB, ein Dessert im Hauptgang wird zulässig',
+                ['slot_semantik' => true]);
+        } else {
+            $nicht[] = 'Slot-Rollen — kein Slot-Label löst auf eine Speisen-Hauptgruppe im Bestand auf; '
+                . 'die Ebene wirkt nicht und ist deshalb auch nicht lockerbar (Auflösung heute über das Label, '
+                . 'persistierte Bindung ist 12·S3c).';
+        }
 
         // 1. Menü-weit: das Preisband p. P. — die beiden Enden getrennt, weil sie
         //    verschiedene Fragen sind („zu teuer" vs. „zu billig fürs Versprechen").
@@ -546,6 +613,9 @@ class MenuAssemblyService
             'id' => (int) $k['id'],
             'name' => (string) $k['name'],
             'diet_form' => $k['diet_form'],
+            // 12·S3b: die Hauptgruppe als Klartext mit, damit ein Rollen-Bruch im Ergebnis
+            // benennbar ist („Bienenstich (Dessert) im Slot Hauptgang") und nicht nur zählbar.
+            'hg_label' => (string) ($k['hg_label'] ?? ''),
             'sales_net' => $k['sales_net'] !== null ? (float) $k['sales_net'] : null,
             'db' => ($w['db_eur'] ?? null) !== null ? (float) $w['db_eur'] : 0.0,
             'ek_portion' => ($w['ek_portion'] ?? null) !== null ? (float) $w['ek_portion'] : null,
@@ -590,23 +660,26 @@ class MenuAssemblyService
      * Exakte Suche über alle Plätze, mit Eindeutigkeit über das GANZE Menü (ein Gericht
      * kommt nie zweimal vor — dieselbe Regel wie im Generator).
      *
-     * Zielfunktion lexikografisch: **erst** wenige verletzte Vorgaben, **dann** hohes DB.
-     * Beschnitten wird über (a) die untere Schranke der schon unvermeidbaren Verletzungen,
-     * (b) die obere DB-Schranke aus den je Slot bestmöglichen Restplätzen und (c) die
-     * Anordnung innerhalb eines Slots (Index strikt steigend) — damit ist eine Slot-Auswahl
-     * eine Menge und keine Permutation.
+     * Zielfunktion lexikografisch: **erst** wenige verletzte Vorgaben, **dann** wenige
+     * Slot-Rollen-Brüche (12·S3b), **dann** hohes DB. Beschnitten wird über (a) die untere
+     * Schranke der schon unvermeidbaren Verletzungen, (a2) die schon gesetzten Fremdlinge
+     * (auch sie können nur wachsen, sind also eine gültige monotone Schranke), (b) die obere
+     * DB-Schranke aus den je Slot bestmöglichen Restplätzen und (c) die Anordnung innerhalb
+     * eines Slots (Index strikt steigend) — damit ist eine Slot-Auswahl eine Menge und keine
+     * Permutation.
      *
      * @param  array<int, list<array>>|null  $seed  Greedy-Lösung als Startschranke
      * @return array{wahl:array<int, list<array>>|null, knoten:int, deckel:bool}
      */
-    private function branchAndBound(array $aufgaben, array $menuQuoten, array $band, ?array $seed): array
+    private function branchAndBound(array $aufgaben, array $menuQuoten, array $band, ?array $seed, bool $semantikAktiv = true): array
     {
-        $st = ['knoten' => 0, 'deckel' => false, 'wahl' => null, 'db' => -INF, 'verl' => PHP_INT_MAX];
+        $st = ['knoten' => 0, 'deckel' => false, 'wahl' => null, 'db' => -INF, 'verl' => PHP_INT_MAX, 'fremd' => PHP_INT_MAX, 'semantik' => $semantikAktiv];
         if ($seed !== null) {
             $flach = $this->flach($seed);
             $st['wahl'] = $seed;
             $st['db'] = $this->dbSumme($flach);
             $st['verl'] = $this->verletzungenIntern($flach, $aufgaben, $seed, $menuQuoten, $band);
+            $st['fremd'] = $semantikAktiv ? $this->fremdlinge($seed, $aufgaben) : 0;
         }
 
         $this->bnbSchritt($aufgaben, 0, 0, 0, [], [], 0.0, 0.0, $st, $menuQuoten, $band);
@@ -634,8 +707,10 @@ class MenuAssemblyService
         if ($si >= count($aufgaben)) {
             $flach = $this->flach($aktuell);
             $verl = $this->verletzungenIntern($flach, $aufgaben, $aktuell, $menuQuoten, $band);
-            if ($verl < $st['verl'] || ($verl === $st['verl'] && $db > $st['db'])) {
+            $fremd = $st['semantik'] ? $this->fremdlinge($aktuell, $aufgaben) : 0;
+            if ($this->lexBesser($verl, $fremd, $db, $st['verl'], $st['fremd'], $st['db'])) {
                 $st['verl'] = $verl;
+                $st['fremd'] = $fremd;
                 $st['db'] = $db;
                 $st['wahl'] = $aktuell;
             }
@@ -648,8 +723,16 @@ class MenuAssemblyService
         if ($verlUnten > $st['verl']) {
             return;
         }
-        // (b) Obere DB-Schranke: pro Restplatz das Beste seines Slots (Eindeutigkeit relaxiert)
-        if ($verlUnten === $st['verl'] && $db + $this->restSchranke($aufgaben, $si, $wi) <= $st['db']) {
+        // (a2) Schon gesetzte Rollen-Brüche — ebenfalls monoton (Plätze kommen nur dazu).
+        // Greift nur, wenn die Verletzungs-Ebene den Vergleich nicht mehr entscheidet.
+        $fremdUnten = $st['semantik'] ? $this->fremdlinge($aktuell, $aufgaben) : 0;
+        if ($verlUnten === $st['verl'] && $fremdUnten > $st['fremd']) {
+            return;
+        }
+        // (b) Obere DB-Schranke: pro Restplatz das Beste seines Slots (Eindeutigkeit relaxiert).
+        // Nur zulässig, wenn beide vorgelagerten Ebenen gleichstehen — sonst könnte ein Zweig
+        // mit weniger Fremdlingen an einer DB-Schranke sterben, obwohl er lexikografisch führt.
+        if ($verlUnten === $st['verl'] && $fremdUnten === $st['fremd'] && $db + $this->restSchranke($aufgaben, $si, $wi) <= $st['db']) {
             return;
         }
 
@@ -829,10 +912,11 @@ class MenuAssemblyService
      * @param  array<int, list<array>>  $wahl
      * @return array<int, list<array>>
      */
-    private function localSwap(array $aufgaben, array $wahl, array $menuQuoten, array $band): array
+    private function localSwap(array $aufgaben, array $wahl, array $menuQuoten, array $band, bool $semantikAktiv = true): array
     {
         $bestDb = $this->dbSumme($this->flach($wahl));
         $bestVerl = $this->verletzungenIntern($this->flach($wahl), $aufgaben, $wahl, $menuQuoten, $band);
+        $bestFremd = $semantikAktiv ? $this->fremdlinge($wahl, $aufgaben) : 0;
 
         for ($runde = 0; $runde < self::SWAP_RUNDEN; $runde++) {
             $verbessert = false;
@@ -850,10 +934,12 @@ class MenuAssemblyService
                         $probe[$si][$pi] = $neu;
                         $flach = $this->flach($probe);
                         $verl = $this->verletzungenIntern($flach, $aufgaben, $probe, $menuQuoten, $band);
+                        $fremd = $semantikAktiv ? $this->fremdlinge($probe, $aufgaben) : 0;
                         $db = $this->dbSumme($flach);
-                        if ($verl < $bestVerl || ($verl === $bestVerl && $db > $bestDb + 0.0001)) {
+                        if ($this->lexBesser($verl, $fremd, $db, $bestVerl, $bestFremd, $bestDb, 0.0001)) {
                             $wahl = $probe;
                             $bestVerl = $verl;
+                            $bestFremd = $fremd;
                             $bestDb = $db;
                             $verbessert = true;
                             break;
@@ -887,6 +973,54 @@ class MenuAssemblyService
     private function dbSumme(array $flach): float
     {
         return round(array_sum(array_column($flach, 'db')), 4);
+    }
+
+    /**
+     * 12·S3b — Slot-Rollen-Brüche einer Wahl: gewählte Gerichte, deren Hauptgruppe nicht
+     * zur Rolle des Slots passt.
+     *
+     * Gezählt wird **nur** in Slots, deren Label überhaupt auf eine Hauptgruppe im Bestand
+     * auflöst (`rolle_aufloesbar`). Ein Slot „Station Süß" ohne Auflösung liefert sonst
+     * lauter Fremdlinge — eine Zahl, die nichts über die Auswahl sagt, aber jede Ebene
+     * darunter (das DB) mit einem konstanten Rauschen überlagert.
+     *
+     * @param  array<int, list<array>>  $wahl
+     */
+    private function fremdlinge(array $wahl, array $aufgaben): int
+    {
+        $n = 0;
+        foreach ($aufgaben as $si => $a) {
+            if (($a['rolle_aufloesbar'] ?? false) !== true) {
+                continue;
+            }
+            foreach (($wahl[$si] ?? []) as $k) {
+                if ((int) ($k['semantik'] ?? 0) !== 1) {
+                    $n++;
+                }
+            }
+        }
+
+        return $n;
+    }
+
+    /**
+     * Die lexikografische Ordnung an EINER Stelle: wenige Verletzungen → wenige Rollen-
+     * Brüche → hohes DB. Vorher stand derselbe Vergleich zweimal ausgeschrieben (B&B-Blatt,
+     * Local-Swap) und hätte beim Einzug der dritten Ebene zweimal gepflegt werden müssen.
+     *
+     * `$eps` ist die DB-Toleranz des Aufrufers (der Swap fordert einen echten Gewinn, das
+     * B&B-Blatt vergleicht scharf) — die Ebenen darüber sind ganzzahlig und brauchen keine.
+     */
+    private function lexBesser(int $verl, int $fremd, float $db, int $bVerl, int $bFremd, float $bDb, float $eps = 0.0): bool
+    {
+        if ($verl !== $bVerl) {
+            return $verl < $bVerl;
+        }
+        if ($fremd !== $bFremd) {
+            return $fremd < $bFremd;
+        }
+
+        return $db > $bDb + $eps;
     }
 
     /**
@@ -986,7 +1120,7 @@ class MenuAssemblyService
      * von `CoverageService::istConcept` gebaut — die Pool-Zeile IST bereits die
      * Gericht-Zeile, es gibt also keine Umrechnung und keinen zweiten Preisbegriff.
      */
-    private function ergebnis(FoodAlchemistPlanningFrame $frame, array $aufgaben, array $wahl, Collection $pool, ?int $gaeste, string $verfahren, bool $exakt, int $knoten, bool $deckel, float $raum): array
+    private function ergebnis(FoodAlchemistPlanningFrame $frame, array $aufgaben, array $wahl, Collection $pool, ?int $gaeste, string $verfahren, bool $exakt, int $knoten, bool $deckel, float $raum, bool $semantikAktiv = true): array
     {
         $flach = $this->flach($wahl);
         $vkPp = round(array_sum(array_map(fn (array $k) => $k['sales_net'] ?? 0.0, $flach)), 2);
@@ -995,13 +1129,36 @@ class MenuAssemblyService
 
         $slots = [];
         $scopes = [];
+        $rollenBruch = [];
+        $nichtAufloesbar = [];
         foreach ($aufgaben as $si => $a) {
             $gewaehlt = $wahl[$si] ?? [];
             $fehlend = $a['n'] - count($gewaehlt);
+            $aufloesbar = ($a['rolle_aufloesbar'] ?? false) === true;
+            $fremde = $aufloesbar
+                ? array_values(array_filter($gewaehlt, fn (array $k) => (int) ($k['semantik'] ?? 0) !== 1))
+                : [];
+            if (! $aufloesbar) {
+                $nichtAufloesbar[] = (string) $a['slot']->label;
+            }
+            foreach ($fremde as $k) {
+                $rollenBruch[] = [
+                    'slot_id' => (int) $a['slot']->id,
+                    'slot_label' => (string) $a['slot']->label,
+                    'recipe_id' => $k['id'],
+                    'name' => $k['name'],
+                    'hg_label' => $k['hg_label'],
+                ];
+            }
             $slots[] = [
                 'slot_id' => (int) $a['slot']->id,
                 'label' => (string) $a['slot']->label,
                 'target_count' => $a['n'],
+                // 12·S3b: die Rollen-Sicht des Slots. `rolle_aufloesbar=false` heißt „das Label
+                // lässt sich keiner Hauptgruppe zuordnen" — dann ist `hg_fremdlinge` NULL und
+                // nicht 0, weil „geprüft und in Ordnung" etwas anderes ist als „nicht prüfbar".
+                'rolle_aufloesbar' => $aufloesbar,
+                'hg_fremdlinge' => $aufloesbar ? count($fremde) : null,
                 'status' => $gewaehlt === [] ? 'leer' : ($fehlend > 0 ? 'teilbefuellt' : 'befuellt'),
                 'begruendung' => $gewaehlt === []
                     ? 'Kein VK-Gericht erfüllt die Vorgaben (' . $a['filter'] . ') — Slot bleibt leer.'
@@ -1012,6 +1169,8 @@ class MenuAssemblyService
                     'sales_net' => $k['sales_net'], 'ek_portion' => $k['ek_portion'],
                     'db_eur' => $k['vollstaendig'] ? round($k['db'], 2) : null,
                     'preis_quelle' => $k['preis_quelle'],
+                    'hg_label' => $k['hg_label'] !== '' ? $k['hg_label'] : null,
+                    'passt_zum_slot' => $aufloesbar ? ((int) ($k['semantik'] ?? 0) === 1) : null,
                 ], $gewaehlt),
             ];
             // Auch ein LEERER Slot bekommt seinen Scope (leere Menge) — sonst meldete die
@@ -1073,6 +1232,21 @@ class MenuAssemblyService
                 fn (array $k) => ['id' => $k['id'], 'name' => $k['name'], 'preis_quelle' => $k['preis_quelle']],
                 array_filter($flach, fn (array $k) => ! $k['vollstaendig'])
             )),
+            // 12·S3b — die Rollen-Ebene, offen ausgewiesen: die Ebene bindet den Slot, aber sie
+            // schließt ihn nicht. Bleibt ein Fremdling stehen, ist das die einzige Stelle, an
+            // der man es sieht, ohne die Slots durchzugehen — und `ebene_aktiv=false` sagt,
+            // dass hier eine LOCKERUNG gerechnet wurde (`erklaere()`), nicht der Normalfall.
+            'slot_semantik' => [
+                'ebene_aktiv' => $semantikAktiv,
+                'fremdlinge' => count($rollenBruch),
+                'brueche' => $rollenBruch,
+                'nicht_aufloesbar' => $nichtAufloesbar,
+                'hinweis' => $nichtAufloesbar === []
+                    ? null
+                    : 'Für ' . count($nichtAufloesbar) . ' Slot-Label(s) ist keine Speisen-Hauptgruppe im Bestand auflösbar ('
+                        . implode(', ', $nichtAufloesbar) . ') — dort ist die Rolle nicht geprüft, nicht erfüllt. '
+                        . 'Auflösung über das Label bleibt eine Näherung, bis die Bindung am Slot persistiert ist (12·S3c).',
+            ],
             'befunde' => $befunde,
             'zusammenfassung' => $rollup['zusammenfassung'],
             'ampel_gesamt' => $rollup['ampel_gesamt'],

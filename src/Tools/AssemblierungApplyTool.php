@@ -33,6 +33,8 @@ class AssemblierungApplyTool extends FoodAlchemistTool implements ToolContract, 
             . 'Konzept mit Positionen wird abgelehnt, nichts wird überschrieben. erwartetes_db_pp (aus der Vorschau) '
             . 'wirkt als Riegel: hat sich der Bestand zwischenzeitlich bewegt, bricht die Übernahme ab statt ein '
             . 'anderes Menü zu schreiben. Leere Slots werden mit Begründung angelegt (nie erfundene Gerichte). '
+            . 'Übernommen wird das Solver-Ergebnis inklusive Slot-Rollen-Ebene (Hauptgruppe passt zum Slot, '
+            . 'lexikografisch vor dem DB) — bleibt ein Rollen-Bruch stehen, steht er in der Vorschau. '
             . 'Liefert Konzept-ID, Protokoll, Kohäsion und R4.2-Coverage. Freigabe bleibt menschlich.';
     }
 

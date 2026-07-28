@@ -31,8 +31,12 @@ class AssemblierungPostTool extends FoodAlchemistTool implements ToolContract, T
             . 'owner_type=foodbook|concept + owner_id → je Slot die DB-stärksten zulässigen VK-Gerichte. '
             . 'Ausschließlich echte Gerichte des Teams (Slot ohne Treffer bleibt leer MIT Begründung, nie erfunden). '
             . 'Harte Vorgaben sind die Slot-Filter (No-Go-Zutat/-Allergen, Slot-Preisrahmen); Menü-weite Vorgaben '
-            . '(Diät-Quoten, Preisband p. P.) sind lexikografisch — erst wenige Verletzungen, dann hohes DB, eine '
-            . 'unerfüllbare Vorgabe liefert also eine Antwort PLUS roten Befund statt gar nichts. Ampel = die '
+            . '(Diät-Quoten, Preisband p. P.) sind lexikografisch — erst wenige Verletzungen, dann wenige '
+            . 'Slot-Rollen-Brüche (die Speisen-Hauptgruppe muss zum Slot passen: kein Dessert im Hauptgang), dann '
+            . 'hohes DB; eine unerfüllbare Vorgabe liefert also eine Antwort PLUS roten Befund statt gar nichts. '
+            . 'Die Rollen-Ebene bindet, sperrt aber nicht: bleibt ein Fremdling stehen, steht er in slot_semantik '
+            . '(brueche) und je Gericht in passt_zum_slot; nicht auflösbare Slot-Labels sagen das (rolle_aufloesbar=false). '
+            . 'Ampel = die '
             . 'R4.2-Coverage (keine zweite Messlatte). erklaerung=true sagt zusätzlich, welche Vorgabe bindet und '
             . 'wie viel DB hinter ihrer Lockerung liegt. Übernahme in ein Draft-Konzept: foodalchemist.assemblierung.APPLY.';
     }
