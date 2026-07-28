@@ -13,7 +13,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Spec 22 · H4b (V-033) — die §9-Registry: **kein Signal ohne Weg oder Begründung.**
  *
  * Spec 21 §9 verlangt „kein Signal ohne Fixer-Weg"; bis H4b war das eine Absicht, die
- * niemand nachhielt — 29 der 37 Typen fielen im Panel auf `null` und rendern gar nichts,
+ * niemand nachhielt — bei der Aufnahme von V-033 fielen 29 von damals 37 Typen im Panel
+ * auf `null` und rendern gar nichts (heute sind es 38 — dass die Zahl wächst, ist genau
+ * der Grund für diesen Test),
  * womit drei verschiedene Lagen identisch aussahen: echte Urteilssache, „der Weg führt
  * woanders hin" und „die Ursache liegt ausserhalb". Dieser Test macht daraus eine
  * Zusicherung: **jeder** Typ ist genau einer Antwort zugeordnet, und jede einzelne
