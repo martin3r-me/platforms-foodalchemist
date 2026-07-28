@@ -53,11 +53,6 @@ class FoodAlchemistBulkRun extends Model
         'context' => 'array',
     ];
 
-    public function proposals(): HasMany
-    {
-        return $this->hasMany(FoodAlchemistBulkProposal::class, 'run_id');
-    }
-
     /**
      * Der gemeinsame Einstieg für jede Lauf-Art (V-032: „damit die nächste Lauf-Art nur
      * den Enum-Fall ergänzt"). Vier Insert-Blöcke in vier Dateien haben bis hier jeweils
