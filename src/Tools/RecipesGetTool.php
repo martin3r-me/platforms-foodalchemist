@@ -19,7 +19,9 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
     public function getDescription(): string
     {
         return 'Liefert ein Basisrezept im Detail: Kopf, Zutaten (mit GP-/Sub-Rezept-Verknüpfung), '
-            . 'Yield/EK-Aggregate (GL-02) und Allergen-Konfidenz.';
+            . 'Yield/EK-Aggregate (GL-02) und Allergen-Konfidenz. `ek_price_basis` nennt die '
+            . 'Herkunft des EK (lead = gewählte Lieferantenartikel, avg = Lieferanten-Durchschnitt '
+            . 'und damit eine Schätzung, mixed = teils, unknown = nicht nachvollziehbar).';
     }
 
     public function getSchema(): array
@@ -46,6 +48,12 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'id' => $r->id, 'name' => $r->name, 'status' => $r->status->value,
             'description' => $r->description, 'yield_kg' => $r->yield_kg,
             'ek_total_eur' => $r->ek_total_eur, 'ek_per_kg_eur' => $r->ek_per_kg_eur,
+            // V-014: woher der EK kommt — `lead` = gewählte Artikel, `avg` = Lieferanten-
+            // Durchschnitt (Schätzung!), `mixed` = teils, `unknown` = nicht nachvollziehbar,
+            // NULL = kein EK oder vor Einführung des Feldes gerechnet. Ohne diese Angabe
+            // liest jede KI einen gemittelten EK als entschieden.
+            'ek_price_basis' => $r->ek_price_basis?->value,
+            'ek_price_basis_label' => $r->ek_price_basis?->label(),
             'allergens_confidence' => $r->allergens_confidence,
             'zutaten' => $r->ingredients->map(fn ($z) => [
                 'quantity' => $z->quantity, 'unit' => $z->unit?->slug,

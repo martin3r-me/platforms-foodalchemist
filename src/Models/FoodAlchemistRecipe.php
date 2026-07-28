@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
+use Platform\FoodAlchemist\Enums\EkPriceBasis;
 use Platform\FoodAlchemist\Enums\RecipeStatus;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
@@ -40,6 +41,7 @@ class FoodAlchemistRecipe extends Model
         'yield_pieces' => 'decimal:2',   // Basisrezept-Ertrag in Stück (kg↔Stück)
         'ek_total_eur' => 'decimal:4',
         'ek_per_kg_eur' => 'decimal:4',
+        'ek_price_basis' => EkPriceBasis::class,   // V-014: woher die EK-Zahl kommt (lead/avg/mixed/unknown)
         'additional_costs_eur' => 'decimal:4',
         'n_ingredients_total' => 'integer',
         'n_ingredients_unmapped' => 'integer',

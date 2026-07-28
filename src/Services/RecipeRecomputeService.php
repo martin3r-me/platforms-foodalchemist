@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\AllergenValue;
+use Platform\FoodAlchemist\Enums\EkPriceBasis;
 use Platform\FoodAlchemist\Enums\MatchMethod;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
@@ -597,18 +598,24 @@ class RecipeRecomputeService
         $ekTotal = 0.0;
         $nKosten = 0;
         $nPriced = 0;
+        $basen = [];
 
         foreach ($this->aggregationsZutaten($zutaten) as $z) {
             $nKosten++;
-            [$kosten, $priced] = $this->zutatKosten($z);
+            [$kosten, $priced, $basis] = $this->zutatKosten($z);
             if ($priced) {
                 $nPriced++;
+                // Nur bepreiste Zeilen wiegen in der Basis — eine Lücke trägt keinen Cent
+                // zum EK bei und darf die Aussage über die bepreiste Hälfte nicht verwässern.
+                $basen[] = $basis ?? EkPriceBasis::Unknown;
             }
             $ekTotal += $kosten;
         }
 
         $recipe->ek_n_ingredients_total = $nKosten;
         $recipe->ek_n_ingredients_priced = $nPriced;
+        // V-014: woher die Zahl kommt, wird mitgeführt statt vergessen (schwächstes Glied).
+        $recipe->ek_price_basis = EkPriceBasis::aggregiere($basen);
         $recipe->ek_total_eur = $ekTotal > 0 ? round($ekTotal, 2) : null;
         // I7: Nenner = bereits GERUNDETES yield (Kalkulationswert = COALESCE manual, auto — A-3)
         $yield = $recipe->yield_kg_manual !== null ? (float) $recipe->yield_kg_manual : ($recipe->yield_kg !== null ? (float) $recipe->yield_kg : null);
@@ -802,42 +809,59 @@ class RecipeRecomputeService
         return false;
     }
 
-    /** T3-Kaskade für EINE Zutat: [kosten €, priced?]. */
+    /**
+     * T3-Kaskade für EINE Zutat: [kosten €, priced?, basis|null].
+     *
+     * Die dritte Stelle ist V-014 (Spec 22 H2d): sie sagt, aus welchem Zweig der Kaskade
+     * die Zahl kommt — gewählter Artikel oder Lieferanten-Durchschnitt. Sie wird DORT
+     * ermittelt, wo die Kaskade ohnehin entscheidet, statt hinterher rekonstruiert zu
+     * werden (rekonstruierbar ist sie nicht: derselbe Betrag kann aus beiden Zweigen
+     * stammen). Die zwei Alt-Aufrufer, die nur `[$kosten, $priced]` auspacken, bleiben
+     * gültig — PHP-Destructuring ignoriert überzählige Elemente.
+     */
     private function zutatKosten(FoodAlchemistRecipeIngredient $z): array
     {
         $mengeAvg = $this->mengeAvg($z);
         $mengeG = $mengeAvg * $this->grammFaktor($z);
 
         $gp = $z->gp;
-        $pG = $gp !== null ? $this->preisProGrammFuer($gp) : null;
-        $pStk = $gp !== null ? $this->preisProStueckFuer($gp) : null;
+        [$pG, $bG] = $gp !== null ? $this->preisProGrammMitBasis($gp) : [null, null];
+        [$pStk, $bStk] = $gp !== null ? $this->preisProStueckMitBasis($gp) : [null, null];
         $pSub = $z->referencedRecipe?->ek_per_kg_eur !== null
             ? ((float) $z->referencedRecipe->ek_per_kg_eur) / 1000 : null;
+        // Vererbung statt Neu-Erfinden: das Eltern-Rezept kennt vom Sub nur den €/kg.
+        // Trägt das Sub (noch) keine Basis, ist die Herkunft unbekannt — nicht `avg`.
+        $bSub = $pSub !== null
+            ? ($z->referencedRecipe->ek_price_basis ?? EkPriceBasis::Unknown)
+            : null;
 
         if ($z->unit?->dimension === 'count') {                 // T3 Zeile count
             if ($pStk !== null) {
-                return [$mengeAvg * $pStk, true];
+                return [$mengeAvg * $pStk, true, $bStk];
             }
             if ($mengeG > 0 && $pG !== null) {                     // count→mass-Brücke
-                return [$mengeG * $pG, true];
+                return [$mengeG * $pG, true, $bG];
             }
             if ($mengeG > 0 && $pSub !== null) {                   // Sub-Rezept per Stück: g/Stück (s. grammFaktor) × €/g des Sub
-                return [$mengeG * $pSub, true];
+                return [$mengeG * $pSub, true, $bSub];
             }
 
-            return [0.0, false];
+            return [0.0, false, null];
         }
 
         // mass/volume/pinch/piece
         $stkDefaultG = $gp?->piece_default_g !== null ? (float) $gp->piece_default_g : null;
-        $source = $pG
-            ?? ($pStk !== null && $stkDefaultG > 0 ? $pStk / $stkDefaultG : null)  // Stk→g-Brücke
-            ?? $pSub;
+        [$source, $basis] = match (true) {
+            $pG !== null => [$pG, $bG],
+            $pStk !== null && $stkDefaultG > 0 => [$pStk / $stkDefaultG, $bStk],   // Stk→g-Brücke
+            $pSub !== null => [$pSub, $bSub],
+            default => [null, null],
+        };
         if ($source !== null && $mengeG > 0) {                     // T2: qs (Faktor 0) bleibt unpriced
-            return [$mengeG * $source, true];
+            return [$mengeG * $source, true, $basis];
         }
 
-        return [0.0, false];
+        return [0.0, false, null];
     }
 
     // ── intern ───────────────────────────────────────────────────────────
@@ -953,11 +977,22 @@ class RecipeRecomputeService
     /** T3: Lead-€/g, sonst AVG-€/g über aktive kg/l-LAs (GL-11-Normalisierung). */
     private function preisProGrammFuer(FoodAlchemistGp $gp): ?float
     {
+        return $this->preisProGrammMitBasis($gp)[0];
+    }
+
+    /**
+     * Dieselbe T3-Kaskade, aber mit der Herkunft (V-014): [€/g|null, basis|null].
+     * Eine Regel-Stelle — `preisProGrammFuer` ist die Ein-Wert-Sicht darauf.
+     *
+     * @return array{0: ?float, 1: ?EkPriceBasis}
+     */
+    private function preisProGrammMitBasis(FoodAlchemistGp $gp): array
+    {
         foreach ($this->preisKandidaten($gp) as $la) {
             if (in_array($la->unit_code, ['kg', 'l'], true)) {
                 $pg = $this->preise->preisProGramm($la, (float) $la->aktiver_preis);
                 if ($pg !== null) {
-                    return $pg;
+                    return [$pg, EkPriceBasis::Lead];
                 }
             }
         }
@@ -974,15 +1009,25 @@ class RecipeRecomputeService
             }
         }
 
-        return $n > 0 ? $summe / $n : null;
+        return $n > 0 ? [$summe / $n, EkPriceBasis::Avg] : [null, null];
     }
 
     /** T3: Lead-€/Stk, sonst AVG-€/Stk über aktive Stk-LAs. */
     private function preisProStueckFuer(FoodAlchemistGp $gp): ?float
     {
+        return $this->preisProStueckMitBasis($gp)[0];
+    }
+
+    /**
+     * Stk-Zwilling von `preisProGrammMitBasis` (V-014): [€/Stk|null, basis|null].
+     *
+     * @return array{0: ?float, 1: ?EkPriceBasis}
+     */
+    private function preisProStueckMitBasis(FoodAlchemistGp $gp): array
+    {
         foreach ($this->preisKandidaten($gp) as $la) {
             if ($la->unit_code === 'Stk' && $la->qty > 0 && $la->aktiver_preis !== null) {
-                return (float) $la->aktiver_preis / (float) $la->qty;
+                return [(float) $la->aktiver_preis / (float) $la->qty, EkPriceBasis::Lead];
             }
         }
 
@@ -995,7 +1040,7 @@ class RecipeRecomputeService
             }
         }
 
-        return $n > 0 ? $summe / $n : null;
+        return $n > 0 ? [$summe / $n, EkPriceBasis::Avg] : [null, null];
     }
 
     /** Lead-LA (falls gesetzt) als bevorzugter Preis-Kandidat. */
