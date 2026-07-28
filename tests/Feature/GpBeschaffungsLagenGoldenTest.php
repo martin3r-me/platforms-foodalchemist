@@ -205,9 +205,14 @@ it('gibt den Auto-Fix-Knopf nur der Lage, in der er etwas bewegen kann', functio
     // Nur „Auswahl offen" ist fixbar: der lead_la-Fixer braucht einen bepreisten Artikel,
     // den er setzen kann. Ohne LA / ohne Preis kann er nichts, und der Knopf verspräche
     // eine Reparatur, die keine Zahl bewegt (V-014).
+    // 22·H4b/V-033: die eingefrorene Zusicherung ist „kein KNOPF", nicht „kein Text" —
+    // gemessen ab hier über `kiPlan()`. Die beiden hebellosen Lagen tragen seitdem einen
+    // `navigate`-Weg-Satz (Einkauf bzw. Preispflege); ein Executor greift auf keinen davon.
     expect(SignalCockpit::planFor($sig('gp_kein_lead'))['fixer'])->toBe('lead_la')
-        ->and(SignalCockpit::planFor($sig('gp_kein_la')))->toBeNull()
-        ->and(SignalCockpit::planFor($sig('gp_kein_preis')))->toBeNull();
+        ->and(SignalCockpit::kiPlan($sig('gp_kein_la')))->toBeNull()
+        ->and(SignalCockpit::kiPlan($sig('gp_kein_preis')))->toBeNull()
+        ->and(SignalCockpit::planFor($sig('gp_kein_la'))['kind'])->toBe('navigate')
+        ->and(SignalCockpit::planFor($sig('gp_kein_preis'))['kind'])->toBe('navigate');
 });
 
 it('haengt das Detektor-Signal an die fixbare Lage (der Knopf trifft nur, wo er wirkt)', function () {

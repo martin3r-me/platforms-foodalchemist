@@ -103,7 +103,9 @@ class ReviewQueue extends Component
 
             return;
         }
-        $plan = \Platform\FoodAlchemist\Support\SignalCockpit::planFor($sig);
+        // 22·H4b/V-033: nur die zwei ausführbaren Arten — ein `navigate`-Plan hat keinen
+        // Executor und käme sonst im else-Zweig als „kein Assistenz-Schritt" heraus.
+        $plan = \Platform\FoodAlchemist\Support\SignalCockpit::kiPlan($sig);
         if ($plan === null) {
             $this->fehler = 'Für dieses Signal gibt es keinen KI-Schritt.';
 

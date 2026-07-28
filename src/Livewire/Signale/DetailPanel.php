@@ -376,6 +376,9 @@ class DetailPanel extends Component
         return view('foodalchemist::livewire.signale.detail-panel', [
             'sig' => $sig,
             'plan' => $sig !== null ? SignalCockpit::planFor($sig) : null,
+            // 22·H4b/V-033: die Begründung, wenn es keinen Plan gibt — die Fläche zeigt sie
+            // STATT des Plan-Kastens, damit „nichts zu tun" eine Aussage bleibt.
+            'ohneWeg' => $sig !== null ? SignalCockpit::ohneWegGrund($sig) : null,
             'betroffen' => $betroffen,
             'objektSignale' => $objektSignale,
             'objektUrsachen' => $objektUrsachen,

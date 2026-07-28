@@ -124,7 +124,10 @@ it('S5b: der Typ ist ein Rezept-Qualitätssignal mit KI-Herkunft und ohne Knopf'
     ]);
 
     // Kein Fixer, kein Assist: hinter dem Signal liegt bereits ein KI-Urteil je Befund.
-    expect(SignalCockpit::planFor($sig))->toBeNull()
+    // Seit 22·H4b sagt das Panel dafür, WO entschieden wird (`navigate`) — der Knopf
+    // bleibt aus, und genau das prüft `kiPlan()`.
+    expect(SignalCockpit::kiPlan($sig))->toBeNull()
+        ->and(SignalCockpit::planFor($sig)['kind'])->toBe('navigate')
         ->and(SignalCockpit::metrik($sig))->toBe('rezept_plausi_ki');
 });
 

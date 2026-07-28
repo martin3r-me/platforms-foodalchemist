@@ -136,7 +136,10 @@ class SignalObjectService
                 'icon' => $sig->type->icon(),
                 'severity' => $sig->severity->value,
                 'title' => (string) $sig->title,
-                'hat_ki' => SignalCockpit::planFor($sig) !== null,
+                // 22·H4b/V-033: `kiPlan` statt `planFor` — seit es die dritte Plan-Art
+                // `navigate` gibt, ist „es gibt einen Plan" nicht mehr dasselbe wie „es
+                // gibt einen KI-Knopf". Das ✨ am Objekt verspricht den Knopf.
+                'hat_ki' => SignalCockpit::kiPlan($sig) !== null,
             ];
         }
 

@@ -34,16 +34,24 @@ it('mappt Assist-Typen auf einen Prompt-Key', function () {
         ->and(SignalCockpit::planFor(mkSignal('preis_anomalie'))['prompt'])->toBe('price.plausi');
 });
 
-it('gibt kein Plan (null) für reine Urteilssachen', function () {
-    expect(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', 'gp_tentative_genutzt')))->toBeNull()
-        // H2c/V-014: die zwei nicht-fixbaren Beschaffungs-Lagen — Einkauf bzw. Preispflege,
-        // beides Handlungen ausserhalb der App, kein Knopf.
-        ->and(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', 'gp_kein_la')))->toBeNull()
-        ->and(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', 'gp_kein_preis')))->toBeNull()
-        ->and(SignalCockpit::planFor(mkSignal('naehrwert_plausi')))->toBeNull()
-        ->and(SignalCockpit::planFor(mkSignal('veraltete_preise')))->toBeNull()
-        ->and(SignalCockpit::planFor(mkSignal('vertragsfrist_faellig')))->toBeNull()
-        ->and(SignalCockpit::planFor(mkSignal('widerspruch_wissen_graph')))->toBeNull();
+it('gibt keinen KI-Knopf für Lagen, in denen ein Fixer nichts bewegen könnte', function () {
+    // 22·H4b/V-033 — die Aussage dieses Tests hat sich VERSCHOBEN, nicht abgeschwächt:
+    // geprüft wird weiterhin „hier gibt es keinen Knopf", aber über `kiPlan()` statt über
+    // `planFor() === null`. Seit H4b tragen dieselben Lagen einen `navigate`-Weg-Satz —
+    // ein Erklärtext ohne Executor. Die Garantie „kein Knopf" bleibt damit wortgleich,
+    // die Garantie „gar nichts" war nie gewollt (sie WAR der Befund V-033).
+    foreach (['gp_tentative_genutzt', 'gp_kein_la', 'gp_kein_preis'] as $metrik) {
+        expect(SignalCockpit::kiPlan(mkSignal('datenqualitaet_gp_la', $metrik)))->toBeNull()
+            ->and(SignalCockpit::planFor(mkSignal('datenqualitaet_gp_la', $metrik))['kind'])->toBe('navigate');
+    }
+    expect(SignalCockpit::kiPlan(mkSignal('naehrwert_plausi')))->toBeNull()
+        ->and(SignalCockpit::kiPlan(mkSignal('veraltete_preise')))->toBeNull()
+        ->and(SignalCockpit::kiPlan(mkSignal('vertragsfrist_faellig')))->toBeNull()
+        ->and(SignalCockpit::kiPlan(mkSignal('widerspruch_wissen_graph')))->toBeNull();
+
+    // Und die eine Lage, die auch keinen Weg hat: die Begründung steht trotzdem bereit.
+    expect(SignalCockpit::planFor(mkSignal('vertragsfrist_faellig')))->toBeNull()
+        ->and(SignalCockpit::ohneWegGrund(mkSignal('vertragsfrist_faellig')))->not->toBeNull();
 });
 
 it('gibt der Rezept-Kategorie einen Assist-Vorschlag und lässt den Rest von Tranche A knopflos', function () {
@@ -56,11 +64,14 @@ it('gibt der Rezept-Kategorie einen Assist-Vorschlag und lässt den Rest von Tra
         //  dieser Unit-Test läuft ohne App-Container.)
 
     // Bewusst ohne Knopf: Küchen-Wissen am Einzelfall bzw. reine Entscheidung — ein Sammel-propose
-    // über 15 Beispiele würde hier Scheinsicherheit erzeugen.
+    // über 15 Beispiele würde hier Scheinsicherheit erzeugen. Seit 22·H4b haben vier der fünf
+    // dafür einen Weg-Satz (`navigate`), `rezept_verwaist` eine Begründung — knopflos bleiben alle.
     foreach (['rezept_ohne_zubereitung', 'rezept_mengen_luecke', 'rezept_ein_zutat', 'rezept_verwaist',
         'rezept_zutaten_ungemappt'] as $typ) {
-        expect(SignalCockpit::planFor(mkSignal($typ, $typ)))->toBeNull();
+        expect(SignalCockpit::kiPlan(mkSignal($typ, $typ)))->toBeNull();
     }
+    expect(SignalCockpit::planFor(mkSignal('rezept_verwaist', 'rezept_verwaist')))->toBeNull()
+        ->and(SignalCockpit::planFor(mkSignal('rezept_mengen_luecke', 'rezept_mengen_luecke'))['kind'])->toBe('navigate');
 });
 
 it('leitet den Detektor-gp-ohne-la-Fix aus dem dedup_key ab (kein payload.metrik)', function () {

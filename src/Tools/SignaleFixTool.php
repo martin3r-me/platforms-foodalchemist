@@ -17,7 +17,10 @@ use Platform\FoodAlchemist\Support\SignalCockpit;
  *  - deterministic → behebt den betroffenen Satz (scoped) und schließt das Signal bei count 0.
  *    Reversibel: das Schließen über foodalchemist.signale.PUT (wieder_oeffnen).
  *  - assist        → erzeugt einen Entwurf/Vorschlag via LLM (kein Schreiben, kein Close).
- *  - kein Plan     → ACTION_NOT_AVAILABLE (reine Urteilssache / externe Daten).
+ *  - navigate      → ACTION_NOT_AVAILABLE, aber MIT dem Weg-Satz (22·H4b/V-033): wo der
+ *    Mensch hingeht und was dort zu entscheiden ist.
+ *  - kein Plan     → ACTION_NOT_AVAILABLE, mit der hinterlegten Begründung, falls es eine
+ *    gibt (Urteilssache / Ursache ausserhalb der App).
  *
  * Lockstep zu Spec 21 · S3b: `object_ids` schneidet auf eine Teilmenge (der Service
  * schneidet jede Auswahl gegen das Metrik-Prädikat — eine ID außerhalb wird nie
@@ -36,7 +39,9 @@ class SignaleFixTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return 'Führt „KI erledigen lassen" für ein Signal aus: deterministischer Auto-Fix (Allergen-Konfidenz, '
             . 'Lead-LA-Repick+Recompute, Flavor-Anker) über den betroffenen Satz → Signal schließt bei 0; ODER '
             . 'eine KI-Assistenz (Lieferanten-Mail-Entwurf, Marge-Hebel, Servierform-Vorschlag) als Entwurf. '
-            . 'Nicht jeder Signaltyp ist fixbar (dann ACTION_NOT_AVAILABLE). '
+            . 'Nicht jeder Signaltyp ist fixbar — dann ACTION_NOT_AVAILABLE, und die Fehlermeldung nennt '
+            . 'entweder den Weg zum Fix („Kein automatischer Fix — aber ein Weg: …", zum Weitergeben an den '
+            . 'Menschen) oder die Begründung, warum es im System nichts zu tun gibt. '
             . 'Beim Auto-Fix zählt fixed die geheilten Objekte und failed die technisch gescheiterten; '
             . 'fixed 0 mit failed 0 heißt „nichts auflösbar" (echte Daten-/Beschaffungslücke, ein '
             . 'erneuter Versuch bringt nichts), fixed 0 mit failed > 0 heißt „hier ist etwas kaputt".';
@@ -72,8 +77,18 @@ class SignaleFixTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         }
 
         $plan = SignalCockpit::planFor($sig);
+        // 22·H4b/V-033: drei Absagen statt einer. Ein Agent, der nur „nicht verfügbar"
+        // hört, probiert es beim nächsten Signal desselben Typs wieder; er soll stattdessen
+        // den Weg weitergeben können (`navigate`) bzw. wissen, dass es keinen gibt.
+        if ($plan !== null && $plan['kind'] === 'navigate') {
+            return ToolResult::error('Kein automatischer Fix — aber ein Weg: ' . $plan['plan'], 'ACTION_NOT_AVAILABLE');
+        }
         if ($plan === null) {
-            return ToolResult::error('Für dieses Signal gibt es keinen automatischen Fix/Assistenz-Schritt (Urteilssache).', 'ACTION_NOT_AVAILABLE');
+            $grund = SignalCockpit::ohneWegGrund($sig);
+
+            return ToolResult::error($grund !== null
+                ? 'Für dieses Signal gibt es keinen Weg im System: ' . $grund
+                : 'Für dieses Signal gibt es keinen automatischen Fix/Assistenz-Schritt (Urteilssache).', 'ACTION_NOT_AVAILABLE');
         }
 
         $ids = $arguments['object_ids'] ?? null;

@@ -4,7 +4,10 @@
      sondern das rechte Signal-Panel (volle Liste + objekt-zentrische Sicht). --}}
 @php
     extract(\Platform\FoodAlchemist\Support\Ui::maps());
-    $ki = \Platform\FoodAlchemist\Support\SignalCockpit::planFor($sig);
+    // 22·H4b/V-033: der Knopf hängt am AUSFÜHRBAREN Plan. `navigate` ist ein Weg-Satz
+    // ohne Executor — er wird im Detail-Panel erklärt, nicht hier als Knopf angeboten.
+    // (Kommentar-Syntax: hier drin gilt PHP, kein Blade — s. BladeCompilesTest.)
+    $ki = \Platform\FoodAlchemist\Support\SignalCockpit::kiPlan($sig);
     $sevMap = [
         'kritisch' => ['bar' => 'bg-rose-500',  'tint' => 'bg-rose-500/10 text-rose-600',  'text' => 'text-rose-600'],
         'warnung'  => ['bar' => 'bg-amber-400', 'tint' => 'bg-amber-500/10 text-amber-600', 'text' => 'text-amber-600'],

@@ -57,14 +57,31 @@
             </p>
         </div>
 
-        {{-- KI-Plan als Erklärtext (der Knopf bleibt in der Signal-Zeile — eine Wahrheit) --}}
+        {{-- Plan als Erklärtext (der Knopf bleibt in der Signal-Zeile — eine Wahrheit).
+             22·H4b/V-033: drei Lagen, drei Ausgaben — Auto-Fix/KI-Assistenz (violett, Knopf
+             in der Zeile), `navigate` (sachlich, KEIN Knopf: der Mensch geht selbst hin) und
+             „kein Weg" mit ausdrücklicher Begründung. Vorher war Letzteres ein leerer Bereich
+             und damit von „hier hat nur niemand nachgedacht" nicht zu unterscheiden. --}}
+        @php($istWeg = $plan !== null && $plan['kind'] === 'navigate')
         @if($plan !== null && $sig->status->istOffen())
-            <div class="rounded-xl border border-violet-500/20 bg-violet-500/[0.04] px-3.5 py-2.5">
+            <div class="rounded-xl border px-3.5 py-2.5 {{ $istWeg ? 'border-sky-500/20 bg-sky-500/[0.04]' : 'border-violet-500/20 bg-violet-500/[0.04]' }}">
                 <div class="flex items-center gap-1.5 mb-1">
-                    @svg($plan['kind'] === 'deterministic' ? 'heroicon-o-bolt' : 'heroicon-o-sparkles', 'w-3.5 h-3.5 text-violet-500')
+                    @if($istWeg)
+                        @svg('heroicon-o-map-pin', 'w-3.5 h-3.5 text-sky-500')
+                    @else
+                        @svg($plan['kind'] === 'deterministic' ? 'heroicon-o-bolt' : 'heroicon-o-sparkles', 'w-3.5 h-3.5 text-violet-500')
+                    @endif
                     <span class="text-[11px] font-medium text-gray-700">{{ $plan['flavorLabel'] }}</span>
                 </div>
                 <p class="text-[11px] leading-relaxed text-gray-600">{{ $plan['plan'] }}</p>
+            </div>
+        @elseif($plan === null && $ohneWeg !== null && $sig->status->istOffen())
+            <div class="rounded-xl border border-black/[0.06] bg-black/[0.02] px-3.5 py-2.5" data-signal-ohne-weg>
+                <div class="flex items-center gap-1.5 mb-1">
+                    @svg('heroicon-o-hand-raised', 'w-3.5 h-3.5 text-gray-400')
+                    <span class="text-[11px] font-medium text-gray-600">Kein Weg im System</span>
+                </div>
+                <p class="text-[11px] leading-relaxed text-gray-500">{{ $ohneWeg }}</p>
             </div>
         @endif
 
