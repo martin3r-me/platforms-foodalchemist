@@ -29,13 +29,12 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  * Ereignis, kein Stammdatum. Der Trait ist die Zusicherung, dass er auch künftig nicht
  * hart aus der Buchhaltung verschwindet.
  *
- * ⚠️ `foodalchemist_bulk_proposals` (der Zwilling aus V-032) hat bewusst noch KEIN Model:
- * seine acht Zugriffs-Stellen hängen alle an `DB::table` mit handgeschriebenem
- * `json_encode`/`json_decode` — ein `value`-Cast ist dort ein Verhaltenswechsel an acht
- * Stellen gleichzeitig und braucht einen eigenen Riegel. Ein Model ohne einen einzigen
- * Aufrufer wäre Vorrat statt Naht (Klasse V-025). Nachzuziehen in **22·H3c-2** (H3c-1 hat
- * die Lauf-Quittung gebaut, nicht den Vorschlags-Speicher) — vorher V-072 lesen: die
- * Leer-Bewertung eines Vorschlags ist im Rezept- und im GP-Pfad heute verschieden.
+ * Die beiden Vorschlags-Speicher an dieser Tabelle haben seit **22·H3c-2** ebenfalls ihr
+ * Model ({@see FoodAlchemistBulkProposal} · {@see FoodAlchemistBulkGpProposal}); V-032 ist
+ * damit ganz eingelöst. Bewusst **keine** `HasMany`-Relation von hier aus: sie hätte bis
+ * heute keinen Aufrufer — jeder Leser fragt über `run_id` **und** `team_id` (die Zähler an
+ * den Modalen) oder gar nicht. Genau diese Kombination (deklariert, unbenutzt, kaputt) war
+ * der H3b-Fund an der alten `proposals()`-Methode.
  */
 class FoodAlchemistBulkRun extends Model
 {

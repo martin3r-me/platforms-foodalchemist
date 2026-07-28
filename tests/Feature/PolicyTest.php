@@ -75,8 +75,19 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
      *    implementieren (`where team_id`); der Trait hätte die Sichtbarkeit *geändert*, statt
      *    sie abzubilden — ein Kind-Team sähe die Provider-Läufe des Eltern-Teams in seiner
      *    eigenen Fortschritts-Anzeige.
+     *  - `FoodAlchemistBulkProposal` + `FoodAlchemistBulkGpProposal` (Spec 22 · H3c-2):
+     *    dieselbe Lesart wie der Lauf, an dem sie hängen — ein Vorschlag ist Teil EINES
+     *    Vorgangs samt der menschlichen Entscheidung darüber (`offen` → `uebernommen` |
+     *    `verworfen`), kein vererbbarer Katalog-Eintrag. Mit Vererbung fände ein Kind-Team
+     *    die offenen Vorschläge des Eltern-Teams in seiner Review-Liste und könnte sie
+     *    annehmen. ⚠️ Die Review-Queue liest sie heute trotzdem über die Team-Kette, während
+     *    `BulkEnrichService` strikt filtert — dieselbe Tabelle, zwei Sicht-Weiten; als Befund
+     *    hochgegeben, nicht hier entschieden (das wäre ein Sichtbarkeits-Wechsel).
      */
-    $messreihen = ['FoodAlchemistSignalSnapshot', 'FoodAlchemistRecipeFinding', 'FoodAlchemistBulkRun'];
+    $messreihen = [
+        'FoodAlchemistSignalSnapshot', 'FoodAlchemistRecipeFinding', 'FoodAlchemistBulkRun',
+        'FoodAlchemistBulkProposal', 'FoodAlchemistBulkGpProposal',
+    ];
     $modelDir = dirname((new ReflectionClass(FoodAlchemistRecipe::class))->getFileName());
     $fehlend = [];
     foreach (glob($modelDir . '/*.php') as $datei) {

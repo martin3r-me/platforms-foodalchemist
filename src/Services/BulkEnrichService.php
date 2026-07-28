@@ -5,8 +5,11 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\BulkProposalStatus;
 use Platform\FoodAlchemist\Enums\BulkRunStatus;
 use Platform\FoodAlchemist\Enums\BulkRunType;
+use Platform\FoodAlchemist\Models\FoodAlchemistBulkGpProposal;
+use Platform\FoodAlchemist\Models\FoodAlchemistBulkProposal;
 use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -134,23 +137,22 @@ class BulkEnrichService
         foreach ($r === null ? [] : $schritte as $feld) {
             try {
                 $vorschlag = $this->proposeFeld($team, $r, $feld);
-                DB::table('foodalchemist_bulk_proposals')->insert([
-                    'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+                FoodAlchemistBulkProposal::create([
                     'team_id' => $team->id, 'run_id' => $runId, 'recipe_id' => $r->id, 'field' => $feld,
-                    'value' => json_encode($vorschlag['value']),
+                    'value' => $vorschlag['value'],
                     'confidence' => $vorschlag['confidence'],
                     'reasoning' => $vorschlag['reasoning'],
                     'call_log_id' => $vorschlag['call_log_id'],
-                    'status' => $vorschlag['value'] === null || $vorschlag['value'] === '' ? 'leer' : 'offen',
-                    'created_at' => now(), 'updated_at' => now(),
+                    // V-072: der GP-Zwilling wertet zusätzlich `[]` als leer. Die Abweichung
+                    // ist bekannt und eingefroren — hier NICHT im Vorbeigehen angeglichen.
+                    'status' => $vorschlag['value'] === null || $vorschlag['value'] === ''
+                        ? BulkProposalStatus::Leer : BulkProposalStatus::Offen,
                 ]);
             } catch (\Throwable $e) {
                 $fehler = true;
-                DB::table('foodalchemist_bulk_proposals')->insert([
-                    'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+                FoodAlchemistBulkProposal::create([
                     'team_id' => $team->id, 'run_id' => $runId, 'recipe_id' => $recipeId, 'field' => $feld,
-                    'status' => 'leer', 'error' => mb_strimwidth($e->getMessage(), 0, 500),
-                    'created_at' => now(), 'updated_at' => now(),
+                    'status' => BulkProposalStatus::Leer, 'error' => mb_strimwidth($e->getMessage(), 0, 500),
                 ]);
             }
         }
@@ -221,7 +223,7 @@ class BulkEnrichService
     /** Review: EIN Vorschlag übernehmen (Override-First, Lineage ki, Stempel). */
     public function uebernehmen(Team $team, int $proposalId): bool
     {
-        $prop = DB::table('foodalchemist_bulk_proposals')->where('id', $proposalId)->where('status', 'offen')->first();
+        $prop = FoodAlchemistBulkProposal::whereKey($proposalId)->where('status', BulkProposalStatus::Offen)->first();
         if ($prop === null) {
             return false;
         }
@@ -229,7 +231,7 @@ class BulkEnrichService
         if ($r === null) {
             return false;
         }
-        $wert = json_decode((string) $prop->value, true);
+        $wert = $prop->value;                                        // `array`-Cast = das bisherige json_decode
 
         if ($prop->field === 'speisen_klasse') {
             return $this->uebernehmeSpeisenKlasse($team, $r->id, $wert, $prop);
@@ -257,7 +259,7 @@ class BulkEnrichService
 
         $r->update($update);
         $this->ki->stempleAccepted($prop->call_log_id !== null ? (int) $prop->call_log_id : null);
-        DB::table('foodalchemist_bulk_proposals')->where('id', $proposalId)->update(['status' => 'uebernommen', 'updated_at' => now()]);
+        $prop->update(['status' => BulkProposalStatus::Uebernommen]);
 
         return true;
     }
@@ -268,7 +270,7 @@ class BulkEnrichService
      * stehen — und der Accept-Stempel mit. Ein Veto kommt dort als Exception; hier
      * bleibt der Vorschlag dann offen (Review kann später entscheiden).
      */
-    private function uebernehmeSpeisenKlasse(Team $team, int $recipeId, mixed $wert, object $prop): bool
+    private function uebernehmeSpeisenKlasse(Team $team, int $recipeId, mixed $wert, FoodAlchemistBulkProposal $prop): bool
     {
         $klasseId = is_array($wert) ? ($wert['dish_class_id'] ?? null) : $wert;
         if (! is_numeric($klasseId)) {
@@ -282,7 +284,7 @@ class BulkEnrichService
         } catch (\Throwable) {
             return false;                                            // manual / geerbt / ungültige Klasse
         }
-        DB::table('foodalchemist_bulk_proposals')->where('id', $prop->id)->update(['status' => 'uebernommen', 'updated_at' => now()]);
+        $prop->update(['status' => BulkProposalStatus::Uebernommen]);
 
         return true;
     }
@@ -291,7 +293,7 @@ class BulkEnrichService
     public function alleUebernehmen(Team $team, int $runId): int
     {
         $n = 0;
-        foreach (DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('status', 'offen')->orderBy('id')->pluck('id') as $id) {
+        foreach (FoodAlchemistBulkProposal::where('run_id', $runId)->where('status', BulkProposalStatus::Offen)->orderBy('id')->pluck('id') as $id) {
             $n += $this->uebernehmen($team, (int) $id) ? 1 : 0;
         }
 
@@ -300,9 +302,9 @@ class BulkEnrichService
 
     public function verwerfen(Team $team, int $proposalId): void
     {
-        $prop = DB::table('foodalchemist_bulk_proposals')->where('id', $proposalId)->first();
+        $prop = FoodAlchemistBulkProposal::find($proposalId);
         if ($prop !== null && FoodAlchemistRecipe::visibleToTeam($team)->whereKey($prop->recipe_id)->exists()) {
-            DB::table('foodalchemist_bulk_proposals')->where('id', $proposalId)->update(['status' => 'verworfen', 'updated_at' => now()]);
+            $prop->update(['status' => BulkProposalStatus::Verworfen]);
             $this->ki->stempleRejected($prop->call_log_id !== null ? (int) $prop->call_log_id : null);
         }
     }
@@ -333,8 +335,8 @@ class BulkEnrichService
 
     public function offeneVorschlaege(Team $team, int $runId): int
     {
-        return DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('team_id', $team->id)
-            ->where('status', 'offen')->count();
+        return FoodAlchemistBulkProposal::where('run_id', $runId)->where('team_id', $team->id)
+            ->where('status', BulkProposalStatus::Offen)->count();
     }
 
     // ── GP-Bulk-Autopilot (Pendant zum Rezept-Pfad, eigener Vorschlags-Speicher) ──
@@ -358,24 +360,22 @@ class BulkEnrichService
         foreach ($gp === null ? [] : $schritte as $feld) {
             try {
                 $vorschlag = $this->proposeGpFeld($team, $gp, $feld);
+                // V-072: hier zählt zusätzlich `[]` als leer — der Rezept-Zwilling kennt
+                // den dritten Fall nicht. Bekannte Abweichung, eingefroren, nicht angeglichen.
                 $leer = $vorschlag['value'] === null || $vorschlag['value'] === '' || $vorschlag['value'] === [];
-                DB::table('foodalchemist_bulk_gp_proposals')->insert([
-                    'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+                FoodAlchemistBulkGpProposal::create([
                     'team_id' => $team->id, 'run_id' => $runId, 'gp_id' => $gp->id, 'field' => $feld,
-                    'value' => json_encode($vorschlag['value']),
+                    'value' => $vorschlag['value'],
                     'confidence' => $vorschlag['confidence'],
                     'reasoning' => $vorschlag['reasoning'],
                     'call_log_id' => $vorschlag['call_log_id'],
-                    'status' => $leer ? 'leer' : 'offen',
-                    'created_at' => now(), 'updated_at' => now(),
+                    'status' => $leer ? BulkProposalStatus::Leer : BulkProposalStatus::Offen,
                 ]);
             } catch (\Throwable $e) {
                 $fehler = true;
-                DB::table('foodalchemist_bulk_gp_proposals')->insert([
-                    'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+                FoodAlchemistBulkGpProposal::create([
                     'team_id' => $team->id, 'run_id' => $runId, 'gp_id' => $gpId, 'field' => $feld,
-                    'status' => 'leer', 'error' => mb_strimwidth($e->getMessage(), 0, 500),
-                    'created_at' => now(), 'updated_at' => now(),
+                    'status' => BulkProposalStatus::Leer, 'error' => mb_strimwidth($e->getMessage(), 0, 500),
                 ]);
             }
         }
@@ -414,7 +414,7 @@ class BulkEnrichService
     /** Review: EIN GP-Vorschlag übernehmen (Override-First, Lineage ki, Stempel). */
     public function uebernehmenGp(Team $team, int $proposalId): bool
     {
-        $prop = DB::table('foodalchemist_bulk_gp_proposals')->where('id', $proposalId)->where('status', 'offen')->first();
+        $prop = FoodAlchemistBulkGpProposal::whereKey($proposalId)->where('status', BulkProposalStatus::Offen)->first();
         if ($prop === null) {
             return false;
         }
@@ -422,7 +422,7 @@ class BulkEnrichService
         if ($gp === null || ! $gp->isOwnedBy($team)) {                 // D1: nur eigene GPs
             return false;
         }
-        $wert = json_decode((string) $prop->value, true);
+        $wert = $prop->value;                                        // `array`-Cast = das bisherige json_decode
         $ok = false;
 
         if ($prop->field === 'condition') {
@@ -475,7 +475,7 @@ class BulkEnrichService
             return false;                                              // Override-First / ungültig — Vorschlag bleibt offen
         }
         $this->ki->stempleAccepted($prop->call_log_id !== null ? (int) $prop->call_log_id : null);
-        DB::table('foodalchemist_bulk_gp_proposals')->where('id', $proposalId)->update(['status' => 'uebernommen', 'updated_at' => now()]);
+        $prop->update(['status' => BulkProposalStatus::Uebernommen]);
 
         return true;
     }
@@ -484,7 +484,7 @@ class BulkEnrichService
     public function alleUebernehmenGp(Team $team, int $runId): int
     {
         $n = 0;
-        foreach (DB::table('foodalchemist_bulk_gp_proposals')->where('run_id', $runId)->where('status', 'offen')->orderBy('id')->pluck('id') as $id) {
+        foreach (FoodAlchemistBulkGpProposal::where('run_id', $runId)->where('status', BulkProposalStatus::Offen)->orderBy('id')->pluck('id') as $id) {
             $n += $this->uebernehmenGp($team, (int) $id) ? 1 : 0;
         }
 
@@ -493,9 +493,9 @@ class BulkEnrichService
 
     public function verwerfenGp(Team $team, int $proposalId): void
     {
-        $prop = DB::table('foodalchemist_bulk_gp_proposals')->where('id', $proposalId)->first();
+        $prop = FoodAlchemistBulkGpProposal::find($proposalId);
         if ($prop !== null && FoodAlchemistGp::visibleToTeam($team)->whereKey($prop->gp_id)->exists()) {
-            DB::table('foodalchemist_bulk_gp_proposals')->where('id', $proposalId)->update(['status' => 'verworfen', 'updated_at' => now()]);
+            $prop->update(['status' => BulkProposalStatus::Verworfen]);
             $this->ki->stempleRejected($prop->call_log_id !== null ? (int) $prop->call_log_id : null);
         }
     }
@@ -503,14 +503,15 @@ class BulkEnrichService
     /** Offene GP-Vorschläge eines Runs (Review-Zähler). */
     public function offeneGpVorschlaege(Team $team, int $runId): int
     {
-        return DB::table('foodalchemist_bulk_gp_proposals')->where('run_id', $runId)->where('team_id', $team->id)
-            ->where('status', 'offen')->count();
+        return FoodAlchemistBulkGpProposal::where('run_id', $runId)->where('team_id', $team->id)
+            ->where('status', BulkProposalStatus::Offen)->count();
     }
 
     /** GP-Vorschläge eines Runs fürs Review-Panel (mit Feld + Wert-Vorschau). */
     public function gpVorschlaege(Team $team, int $runId): \Illuminate\Support\Collection
     {
-        return DB::table('foodalchemist_bulk_gp_proposals')->where('run_id', $runId)->where('team_id', $team->id)
-            ->whereIn('status', ['offen', 'uebernommen'])->orderBy('field')->get();
+        return FoodAlchemistBulkGpProposal::where('run_id', $runId)->where('team_id', $team->id)
+            ->whereIn('status', [BulkProposalStatus::Offen, BulkProposalStatus::Uebernommen])
+            ->orderBy('field')->get();
     }
 }
