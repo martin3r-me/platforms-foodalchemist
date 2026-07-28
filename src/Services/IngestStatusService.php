@@ -5,6 +5,9 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\BulkRunStatus;
+use Platform\FoodAlchemist\Enums\BulkRunType;
+use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
@@ -21,11 +24,12 @@ use Platform\FoodAlchemist\Support\TeamScope;
  *  3. **Preis-Deltas** — Artikel mit frisch geschriebener Preis-Zeile, Delta
  *     gegen den Vorgänger (dieselbe Zahl, die R2.1 alarmiert).
  *
- * **Was dieses Tool NICHT kann (V-047):** die Lauf-Zeile trägt vier Zähler, aber
- * kein Feld für den *Gegenstand* des Laufs — weder Datei noch Lieferant. Läufe
- * lassen sich damit zählen und datieren, nicht benennen. Das wird in der Antwort
- * ausdrücklich gesagt statt kaschiert; die Lücken- und Delta-Blöcke beantworten
- * die eigentliche Frage („was ist angekommen?") ohnehin aus den Zieldaten.
+ * **Der Lauf benennt seinen Gegenstand (V-047, seit 22·H3a):** `bulk_runs.context`
+ * trägt Datei, Lieferant und Auslöse-Weg; „welche Datei ist zuletzt für Hanos
+ * gelaufen?" ist damit beantwortbar statt nur zählbar. Für Läufe von VOR H3a bleibt
+ * der Kontext leer — dort steht `beschreibung: null` statt einer erfundenen Angabe,
+ * und die Lücken-/Delta-Blöcke beantworten „was ist angekommen?" wie bisher aus den
+ * Zieldaten.
  *
  * **Lücke = keine Aussage, nicht „keine Zeile".** Eine Allergen-/Nährwert-Zeile,
  * in der alle Werte NULL sind, ist keine Angabe — sie zählt als Lücke. Sonst
@@ -34,8 +38,12 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 final class IngestStatusService
 {
-    /** Lauf-Art in der geteilten `bulk_runs`-Tabelle (Schreiber: {@see FileArticleImportService::starteRun}). */
-    public const LAUF_TYP = 'ingest';
+    /**
+     * Lauf-Art in der geteilten `bulk_runs`-Tabelle (Schreiber: {@see FileArticleImportService::starteRun}).
+     * Der Wert kommt seit 22·H3a aus {@see BulkRunType} — die Konstante bleibt als
+     * benannter Einstieg für die Leser stehen, ist aber keine zweite Wahrheit mehr.
+     */
+    public const LAUF_TYP = BulkRunType::Ingest->value;
 
     public const MAX_LAEUFE = 20;
 
@@ -76,10 +84,10 @@ final class IngestStatusService
             'lieferant' => $supplier ? ['id' => (int) $supplier->id, 'name' => (string) $supplier->name] : null,
             'artikel_sichtbar' => $this->basis($team, $supplierId)->count(),
             'laeufe' => $this->laeufe($team, $laeufe),
-            'laeufe_hinweis' => 'Die Lauf-Zeile kennt weder Datei noch Lieferant (Bestands-Schema '
-                . '`foodalchemist_bulk_runs`: nur type/status/total/done/failed). Ein Lauf lässt sich damit '
-                . 'zählen und datieren, nicht benennen — was tatsächlich angekommen ist, sagen die Blöcke '
-                . '`luecken` und `preis_deltas` aus den Zieldaten.',
+            'laeufe_hinweis' => 'Jeder Lauf nennt seit 22·H3a seinen Gegenstand (`datei`, `lieferant`, '
+                . '`ausgeloest_ueber`). Bei älteren Läufen sind diese Felder NULL — der Kontext wurde damals '
+                . 'nicht mitgeschrieben und wird nicht nachträglich erraten. Was tatsächlich in den Daten '
+                . 'angekommen ist, sagen unabhängig davon die Blöcke `luecken` und `preis_deltas`.',
             'luecken' => $this->luecken($team, $supplierId, $beispiele),
             'preis_deltas' => $this->preisDeltas($team, $supplierId, $tage, $beispiele),
         ];
@@ -116,18 +124,26 @@ final class IngestStatusService
      */
     private function laeufe(Team $team, int $limit): array
     {
-        return DB::table('foodalchemist_bulk_runs')
+        return FoodAlchemistBulkRun::query()
             ->where('team_id', $team->id)
             ->where('type', self::LAUF_TYP)
             ->orderByDesc('id')->limit($limit)->get()
-            ->map(fn ($r) => [
+            ->map(fn (FoodAlchemistBulkRun $r) => [
                 'run_id' => (int) $r->id,
-                'status' => (string) $r->status,
+                'status' => $r->status->value,
+                'status_label' => $r->status->label(),
                 'zeilen' => (int) $r->total,
                 'verarbeitet' => (int) $r->done,
                 'fehler' => (int) $r->failed,
                 'gestartet' => (string) $r->created_at,
-                'beendet' => $r->status === 'done' ? (string) $r->updated_at : null,
+                'beendet' => $r->status === BulkRunStatus::Running ? null : (string) $r->updated_at,
+                // V-047: der Gegenstand. NULL bei Läufen von vor 22·H3a — „unbekannt"
+                // ist die ehrliche Antwort, ein aus dem Datum geratener Dateiname wäre
+                // eine erfundene.
+                'datei' => $r->context['datei'] ?? null,
+                'lieferant' => $r->context['lieferant'] ?? null,
+                'lieferant_id' => isset($r->context['supplier_id']) ? (int) $r->context['supplier_id'] : null,
+                'ausgeloest_ueber' => $r->context['quelle'] ?? null,
             ])->all();
     }
 

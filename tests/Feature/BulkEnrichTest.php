@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\DB;
+use Platform\FoodAlchemist\Enums\BulkRunStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\FakeAiProvider;
 use Platform\FoodAlchemist\Services\BulkEnrichService;
@@ -43,7 +44,7 @@ it('DoD: 50er-Bulk läuft durch — Fortschritt done/total, Vorschläge offen, K
     $runId = $this->svc->starte($this->rootTeam, $this->rezepte->pluck('id')->all());
 
     $run = $this->svc->status($this->rootTeam, $runId);
-    expect($run->status)->toBe('done')                                // Queue sync ⇒ sofort fertig
+    expect($run->status)->toBe(BulkRunStatus::Done)                   // Queue sync ⇒ sofort fertig
         ->and((int) $run->total)->toBe(50)
         ->and((int) $run->done)->toBe(50)
         ->and((int) $run->failed)->toBe(0);
@@ -79,7 +80,7 @@ it('Kill-Switch mitten im Bulk: Items zählen als Fehler, Run wird trotzdem done
     $runId = $this->svc->starte($this->rootTeam, $this->rezepte->take(5)->pluck('id')->all());
     $run = $this->svc->status($this->rootTeam, $runId);
 
-    expect($run->status)->toBe('done')
+    expect($run->status)->toBe(BulkRunStatus::Done)
         ->and((int) $run->failed)->toBe(5)
         ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->whereNotNull('error')->count())->toBe(15);
 });

@@ -3,6 +3,9 @@
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
+use Platform\FoodAlchemist\Enums\BulkRunStatus;
+use Platform\FoodAlchemist\Enums\BulkRunType;
+use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemNutritional;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
@@ -44,12 +47,12 @@ beforeEach(function () {
         'unit_code' => 'kg',
     ]);
 
-    $this->lauf = fn (string $typ, int $total, int $done, int $failed, ?int $teamId = null) => DB::table('foodalchemist_bulk_runs')->insert([
-        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-        'team_id' => $teamId ?? $this->rootTeam->id,
-        'type' => $typ, 'status' => 'done', 'total' => $total, 'done' => $done, 'failed' => $failed,
-        'created_at' => now(), 'updated_at' => now(),
-    ]);
+    $this->lauf = function (string $typ, int $total, int $done, int $failed, ?int $teamId = null, ?array $context = null) {
+        $run = FoodAlchemistBulkRun::starte($teamId ?? $this->rootTeam->id, BulkRunType::from($typ), $total, $context ?? []);
+        $run->update(['status' => BulkRunStatus::Done, 'done' => $done, 'failed' => $failed]);
+
+        return $run;
+    };
 });
 
 it('S3: das Tool ist registriert und read-only (der Import bleibt artisan)', function () {
@@ -73,8 +76,27 @@ it('S3: listet nur die Ingest-Läufe des eigenen Teams, neueste zuerst', functio
     expect($res->success)->toBeTrue()
         ->and($laeufe)->toHaveCount(2)
         ->and($laeufe[0]['zeilen'])->toBe(7)                        // neueste zuerst
-        ->and($laeufe[1]['fehler'])->toBe(1)
-        ->and($res->data['laeufe_hinweis'])->toContain('weder Datei noch Lieferant');
+        ->and($laeufe[1]['fehler'])->toBe(1);
+});
+
+it('S3/H3a: benennt den Gegenstand des Laufs — und erfindet ihn nicht, wo er fehlt', function () {
+    // V-047: bis 22·H3a konnte das Tool Läufe zählen und datieren, nicht benennen.
+    ($this->lauf)('ingest', 3, 3, 0, null, null);                   // Alt-Lauf ohne Kontext
+    ($this->lauf)('ingest', 12, 12, 0, null, [
+        'datei' => 'hanos_q3.csv', 'supplier_id' => $this->supplier->id,
+        'lieferant' => 'Hanos', 'apply' => true, 'quelle' => 'mcp',
+    ]);
+
+    $laeufe = $this->registry->get('foodalchemist.ingest.STATUS')->execute([], $this->kontext)->data['laeufe'];
+
+    expect($laeufe[0]['datei'])->toBe('hanos_q3.csv')               // neuester zuerst
+        ->and($laeufe[0]['lieferant'])->toBe('Hanos')
+        ->and($laeufe[0]['lieferant_id'])->toBe((int) $this->supplier->id)
+        ->and($laeufe[0]['ausgeloest_ueber'])->toBe('mcp')
+        ->and($laeufe[0]['status_label'])->toBe('abgeschlossen')
+        // Der Alt-Lauf bleibt ehrlich leer statt einen Dateinamen zu raten.
+        ->and($laeufe[1]['datei'])->toBeNull()
+        ->and($laeufe[1]['lieferant'])->toBeNull();
 });
 
 it('S3: zählt die vier Lücken-Arten und nennt Beispiele', function () {

@@ -14,8 +14,9 @@ use Platform\FoodAlchemist\Services\IngestStatusService;
  *
  * Beantwortet die drei Fragen nach einem Quartals-Import: **ist er gelaufen?**
  * (Läufe), **was fehlt noch?** (Lücken), **was hat sich am Preis bewegt?** (Deltas).
- * Was das Tool bewusst NICHT behauptet: welche Datei zu welchem Lauf gehört — die
- * Bestands-Lauf-Zeile hat kein Feld dafür (V-047), und die Antwort sagt das.
+ * Seit 22·H3a benennt ein Lauf auch seinen Gegenstand (Datei, Lieferant, Auslöse-Weg
+ * aus `bulk_runs.context`, V-047). Bei Läufen von davor bleiben diese Felder NULL —
+ * die Antwort sagt das, statt einen Dateinamen zu erraten.
  */
 class IngestStatusTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -32,8 +33,8 @@ class IngestStatusTool extends FoodAlchemistTool implements ToolContract, ToolMe
             . 'Beispielen) und die Preis-Deltas des Zeitfensters (aktueller EK gegen Vorgänger, '
             . 'stärkste Bewegungen zuerst). Optional auf einen Lieferanten eingeschränkt. Read-only — '
             . 'der Import selbst läuft als Kommando foodalchemist:import-articles. '
-            . 'Hinweis: Läufe lassen sich zählen und datieren, aber nicht benennen (die Lauf-Zeile '
-            . 'kennt weder Datei noch Lieferant); was angekommen ist, sagen Lücken und Deltas.';
+            . 'Jeder Lauf nennt Datei, Lieferant und Auslöse-Weg (bei Läufen vor 22-07-28 sind diese '
+            . 'Felder NULL — der Kontext wurde damals nicht mitgeschrieben und wird nicht erraten).';
     }
 
     public function getSchema(): array

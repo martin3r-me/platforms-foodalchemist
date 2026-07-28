@@ -69,8 +69,14 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
      *    Kind dürfen zum selben Eltern-Rezept getrennt urteilen; geerbte Sichtbarkeit
      *    würde ein fremdes „verworfen" in die eigene Inbox mischen und den Befund dort
      *    stumm stellen.
+     *  - `FoodAlchemistBulkRun` (Spec 22 · H3a): ein *Vorgang* des Teams, das ihn gestartet
+     *    hat — kein Katalog-Datensatz. Die strikte Lesart ist nicht neu, sondern die, die
+     *    `BulkEnrichService::runStatus` und `IngestStatusService::laeufe` seit jeher
+     *    implementieren (`where team_id`); der Trait hätte die Sichtbarkeit *geändert*, statt
+     *    sie abzubilden — ein Kind-Team sähe die Provider-Läufe des Eltern-Teams in seiner
+     *    eigenen Fortschritts-Anzeige.
      */
-    $messreihen = ['FoodAlchemistSignalSnapshot', 'FoodAlchemistRecipeFinding'];
+    $messreihen = ['FoodAlchemistSignalSnapshot', 'FoodAlchemistRecipeFinding', 'FoodAlchemistBulkRun'];
     $modelDir = dirname((new ReflectionClass(FoodAlchemistRecipe::class))->getFileName());
     $fehlend = [];
     foreach (glob($modelDir . '/*.php') as $datei) {

@@ -5,6 +5,9 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\BulkRunStatus;
+use Platform\FoodAlchemist\Enums\BulkRunType;
+use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 
@@ -1339,19 +1342,13 @@ class FileArticleImportService
      * wie Anreicherungs- und Review-Läufe, damit „welche Läufe sind gelaufen?" eine
      * Antwort hat und nicht drei. Grundlage für S3 `ingest.STATUS`.
      */
-    public function starteRun(int $teamId, int $total, ?int $userId = null): int
+    public function starteRun(int $teamId, int $total, ?int $userId = null, array $context = []): int
     {
-        DB::table('foodalchemist_bulk_runs')->insert([
-            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-            'team_id' => $teamId, 'type' => 'ingest', 'status' => 'running',
-            // S3b: wer ausgelöst hat. Beim Kommando bleibt es NULL (die Konsole hat keinen
-            // Benutzer), über MCP steht es drin — der Trigger ist ausdrücklich ein
-            // menschlich angestoßener Vorgang, und das soll am Lauf ablesbar sein.
-            'user_id' => $userId,
-            'total' => $total, 'created_at' => now(), 'updated_at' => now(),
-        ]);
-
-        return (int) DB::getPdo()->lastInsertId();
+        // S3b: wer ausgelöst hat, steckt in `user_id`. Beim Kommando bleibt es NULL (die
+        // Konsole hat keinen Benutzer), über MCP steht es drin — der Trigger ist
+        // ausdrücklich ein menschlich angestoßener Vorgang, und das soll am Lauf ablesbar
+        // sein. H3a ergänzt WORAN (V-047): Datei + Lieferant liegen im `context`.
+        return (int) FoodAlchemistBulkRun::starte($teamId, BulkRunType::Ingest, $total, $context, $userId)->id;
     }
 
     /**
@@ -1368,8 +1365,8 @@ class FileArticleImportService
         $done = (int) $bericht['neu'] + (int) $bericht['aktualisiert'] + (int) $bericht['unveraendert']
             + (int) $bericht['uebersprungen'] - $preisFehler;
         $failed = (int) $bericht['fehler'] + $preisFehler;
-        DB::table('foodalchemist_bulk_runs')->where('id', $runId)->update([
-            'status' => 'done',
+        FoodAlchemistBulkRun::whereKey($runId)->update([
+            'status' => BulkRunStatus::Done->value,
             // S3a: `total` wird hier nachgetragen, nicht bei starteRun — die Zeilenzahl kennt
             // erst der Reader. Ohne das bliebe sie auf 0 stehen und `ingest.STATUS` meldete
             // strukturell „0 Zeilen, n verarbeitet".

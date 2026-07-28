@@ -168,11 +168,15 @@ it('S3b: apply=true reiht einen Job ein und liefert die run_id samt Quittung auf
         ->and($d['quittung'])->toContain('ingest.STATUS');
 
     // Lauf-Zeile ist offen, trägt die Zeilenzahl und den Auslöser (Trigger = menschlich)
-    $lauf = DB::table('foodalchemist_bulk_runs')->where('id', $d['run_id'])->first();
-    expect($lauf->type)->toBe('ingest')
-        ->and($lauf->status)->toBe('running')
+    $lauf = \Platform\FoodAlchemist\Models\FoodAlchemistBulkRun::findOrFail($d['run_id']);
+    expect($lauf->type->value)->toBe('ingest')
+        ->and($lauf->status->value)->toBe('running')
         ->and((int) $lauf->total)->toBe(1)
-        ->and((int) $lauf->user_id)->toBe((int) $this->user->id);
+        ->and((int) $lauf->user_id)->toBe((int) $this->user->id)
+        // 22·H3a / V-047: der Lauf nennt seinen Gegenstand, nicht nur seine Zähler.
+        ->and($lauf->context['datei'])->toBe('fa_s3b_scharf.csv')
+        ->and((int) $lauf->context['supplier_id'])->toBe((int) $this->supplier->id)
+        ->and($lauf->context['quelle'])->toBe('mcp');
 
     // Nichts geschrieben, solange der Job nicht gelaufen ist — der Tool-Call importiert nicht selbst
     expect(FoodAlchemistSupplierItem::where('article_number', '70012')->exists())->toBeFalse();

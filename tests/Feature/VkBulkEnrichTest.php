@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
+use Platform\FoodAlchemist\Enums\BulkRunStatus;
+use Platform\FoodAlchemist\Enums\BulkRunType;
 use Platform\FoodAlchemist\Livewire\Verkauf\VkModal;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
@@ -64,8 +66,11 @@ it('L1b: der Lauf am Gericht erzeugt die VIER VK-Vorschläge — und schreibt ni
     $runId = $this->svc->starteVk($this->rootTeam, [$this->vk->id]);
 
     $run = $this->svc->status($this->rootTeam, $runId);
-    expect($run->status)->toBe('done')
-        ->and($run->type)->toBe('enrich_vk')                          // eigener Lauf-Typ, vom Basisrezept-Lauf unterscheidbar
+    expect($run->status)->toBe(BulkRunStatus::Done)
+        ->and($run->type)->toBe(BulkRunType::EnrichVk)                // eigener Lauf-Typ, vom Basisrezept-Lauf unterscheidbar
+        // 22·H3a / V-047: die Schrittfolge ist der Gegenstand des Anreicherungs-Laufs —
+        // zwei Läufe am selben Gericht unterscheiden sich sonst durch nichts.
+        ->and($run->context['schritte'])->toBe(BulkEnrichService::SCHRITTE_VK)
         ->and((int) $run->failed)->toBe(0);
 
     $felder = DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('status', 'offen')

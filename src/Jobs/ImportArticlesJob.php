@@ -9,6 +9,8 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\BulkRunStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Services\FileArticleImportService;
 
 /**
@@ -48,7 +50,7 @@ class ImportArticlesJob implements ShouldQueue
     {
         $team = Team::find($this->teamId);
         if ($team === null) {
-            $this->markiere('failed');
+            $this->markiere(BulkRunStatus::Failed);
 
             return;
         }
@@ -65,12 +67,12 @@ class ImportArticlesJob implements ShouldQueue
      */
     public function failed(?\Throwable $e): void
     {
-        $this->markiere('failed');
+        $this->markiere(BulkRunStatus::Failed);
     }
 
-    private function markiere(string $status): void
+    private function markiere(BulkRunStatus $status): void
     {
-        DB::table('foodalchemist_bulk_runs')->where('id', $this->runId)
-            ->update(['status' => $status, 'updated_at' => now()]);
+        FoodAlchemistBulkRun::whereKey($this->runId)
+            ->update(['status' => $status->value, 'updated_at' => now()]);
     }
 }

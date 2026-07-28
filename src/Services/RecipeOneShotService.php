@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\BulkRunType;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
 /**
@@ -99,7 +100,16 @@ class RecipeOneShotService
                 // Lauf-Zeile = Fortschritts-Anker (die UI pollt sie über `status()`)
                 // UND Audit-Spur: die Vorschläge bleiben in der Review-Queue sichtbar,
                 // auch wenn sie in derselben Sekunde übernommen wurden.
-                $runId = $this->bulk->laufAnlegen($team, 1, $recipe->is_sales_recipe ? 'enrich_vk' : 'enrich');
+                $runId = $this->bulk->laufAnlegen(
+                    $team,
+                    1,
+                    $recipe->is_sales_recipe ? BulkRunType::EnrichVk : BulkRunType::Enrich,
+                    // V-047: der One-Shot ist der einzige Anreicherungs-Pfad, der seine
+                    // Schrittfolge erst zur Laufzeit aus den Lücken schneidet — ohne
+                    // Kontext bliebe unauffindbar, warum dieser Lauf drei Schritte fuhr
+                    // und der nächste am selben Rezept keinen.
+                    ['schritte' => array_values($schritte), 'quelle' => 'one_shot', 'recipe_id' => (int) $recipe->id],
+                );
                 $ergebnis['run_id'] = $runId;
 
                 $this->bulk->verarbeiteRezept($team, $runId, $recipe->id, $schritte);

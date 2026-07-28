@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\DB;
+use Platform\FoodAlchemist\Enums\BulkRunStatus;
+use Platform\FoodAlchemist\Enums\BulkRunType;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup;
@@ -92,8 +94,8 @@ it('L7a: die Kaskade füllt die Lücken selbst — mit Lineage, ohne die Bestand
     // Die Strecke ist die bestehende: Lauf-Zeile + Vorschlags-Speicher (Audit),
     // nur ohne den zweiten Job.
     $lauf = app(BulkEnrichService::class)->status($this->rootTeam, $erg['run_id']);
-    expect($lauf->type)->toBe('enrich')
-        ->and($lauf->status)->toBe('done')
+    expect($lauf->type)->toBe(BulkRunType::Enrich)
+        ->and($lauf->status)->toBe(BulkRunStatus::Done)
         ->and((int) $lauf->failed)->toBe(0)
         ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $erg['run_id'])
             ->where('status', 'uebernommen')->count())->toBe(2);

@@ -4,6 +4,8 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\BulkRunStatus;
+use Platform\FoodAlchemist\Enums\BulkRunType;
 use Platform\FoodAlchemist\Jobs\ImportArticlesJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 
@@ -196,7 +198,16 @@ final class ArticleImportTriggerService
             throw new \InvalidArgumentException('Datei enthält keine Datenzeile (nur die Kopfzeile).');
         }
 
-        $runId = $this->import->starteRun($team->id, $zeilen, $userId);
+        $runId = $this->import->starteRun($team->id, $zeilen, $userId, [
+            // V-047: der Gegenstand des Laufs. „welche Datei ist zuletzt für Hanos
+            // gelaufen?" ist die Frage beim quartalsweisen Multi-Lieferanten-Import —
+            // sie war bis hier aus der Lauf-Zeile nicht zu beantworten.
+            'datei' => $datei,
+            'supplier_id' => (int) $supplier->id,
+            'lieferant' => (string) $supplier->name,
+            'apply' => true,
+            'quelle' => 'mcp',
+        ]);
         ImportArticlesJob::dispatch($runId, $team->id, $supplierId, $pfad);
 
         return [
@@ -300,8 +311,8 @@ final class ArticleImportTriggerService
     {
         return DB::table('foodalchemist_bulk_runs')
             ->where('team_id', $team->id)
-            ->where('type', IngestStatusService::LAUF_TYP)
-            ->where('status', 'running')
+            ->where('type', BulkRunType::Ingest->value)
+            ->where('status', BulkRunStatus::Running->value)
             ->orderByDesc('id')->limit(5)
             ->get(['id', 'created_at', 'total', 'done'])
             ->map(fn ($r) => [

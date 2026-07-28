@@ -5,6 +5,9 @@ namespace Platform\FoodAlchemist\Console;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\BulkRunStatus;
+use Platform\FoodAlchemist\Enums\BulkRunType;
+use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Services\RecipeBauartService;
 use Platform\FoodAlchemist\Services\RecipeFindingService;
 use Platform\FoodAlchemist\Services\RecipeReviewService;
@@ -76,7 +79,7 @@ class RecipeFindingsCommand extends Command
             $this->info("── Team {$team->id} ({$team->name}): " . count($ids) . " fällige(s) Rezept(e) · Pass {$pass}"
                 . ($trocken ? ' · dry-run' : ''));
 
-            $runId = $trocken ? null : $this->starteRun($team->id, count($ids));
+            $runId = $trocken ? null : $this->starteRun($team->id, count($ids), $pass, $limit);
             $summe = ['neu' => 0, 'wieder' => 0, 'offen' => 0, 'verschwunden' => 0];
             $fehler = 0;
 
@@ -103,7 +106,7 @@ class RecipeFindingsCommand extends Command
                     // Fortschritt zählt auch das gescheiterte Rezept mit (`done` ist
                     // „abgearbeitet", nicht „gelungen"); `failed` wird am Lauf-Ende gesetzt.
                     if ($runId !== null) {
-                        DB::table('foodalchemist_bulk_runs')->where('id', $runId)->update([
+                        FoodAlchemistBulkRun::whereKey($runId)->update([
                             'done' => DB::raw('done + 1'), 'updated_at' => now(),
                         ]);
                     }
@@ -111,8 +114,8 @@ class RecipeFindingsCommand extends Command
             }
 
             if ($runId !== null) {
-                DB::table('foodalchemist_bulk_runs')->where('id', $runId)
-                    ->update(['status' => 'done', 'failed' => $fehler, 'updated_at' => now()]);
+                FoodAlchemistBulkRun::whereKey($runId)
+                    ->update(['status' => BulkRunStatus::Done->value, 'failed' => $fehler, 'updated_at' => now()]);
                 $this->line("   → offen {$summe['offen']} · neu {$summe['neu']} · wieder {$summe['wieder']}"
                     . " · geschlossen {$summe['verschwunden']} · Fehler {$fehler} (Lauf {$runId})");
             }
@@ -126,14 +129,13 @@ class RecipeFindingsCommand extends Command
      * Tabelle wie der Anreicherungs-Autopilot: „welche KI-Läufe sind gelaufen?" soll
      * eine Antwort haben, nicht zwei. Die Befunde selbst hängen ohne FK daran.
      */
-    private function starteRun(int $teamId, int $total): int
+    private function starteRun(int $teamId, int $total, string $pass, ?int $limit): int
     {
-        DB::table('foodalchemist_bulk_runs')->insert([
-            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-            'team_id' => $teamId, 'type' => 'review', 'status' => 'running',
-            'total' => $total, 'created_at' => now(), 'updated_at' => now(),
-        ]);
-
-        return (int) DB::getPdo()->lastInsertId();
+        // V-047: Pass und Limit sind der Gegenstand eines Review-Laufs — zwei Läufe
+        // desselben Tages unterscheiden sich sonst nur durch ihre Zeilennummer.
+        return (int) FoodAlchemistBulkRun::starte($teamId, BulkRunType::Review, $total, [
+            'pass' => $pass,
+            'limit' => $limit,
+        ])->id;
     }
 }

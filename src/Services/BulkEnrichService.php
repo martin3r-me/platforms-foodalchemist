@@ -5,6 +5,9 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\BulkRunStatus;
+use Platform\FoodAlchemist\Enums\BulkRunType;
+use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
@@ -91,23 +94,19 @@ class BulkEnrichService
      * asynchronen Generier-Job und darf deshalb keinen zweiten Job dispatchen —
      * sie braucht die Lauf-Zeile ohne `starte()`. Ein Insert, eine Wahrheit.
      */
-    public function laufAnlegen(Team $team, int $total, string $type = 'enrich'): int
+    public function laufAnlegen(Team $team, int $total, BulkRunType $type = BulkRunType::Enrich, array $context = []): int
     {
-        DB::table('foodalchemist_bulk_runs')->insert([
-            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-            'team_id' => $team->id, 'user_id' => Auth::id(),
-            'type' => $type, 'status' => 'running', 'total' => $total,
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-
-        return (int) DB::getPdo()->lastInsertId();
+        return (int) FoodAlchemistBulkRun::starte($team->id, $type, $total, $context, Auth::id())->id;
     }
 
     /** Startet einen Run (Job ist queued; Sandbox/Tests: sync). */
-    public function starte(Team $team, array $recipeIds, array $schritte = self::SCHRITTE, string $type = 'enrich'): int
+    public function starte(Team $team, array $recipeIds, array $schritte = self::SCHRITTE, BulkRunType $type = BulkRunType::Enrich): int
     {
         $ids = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $recipeIds)->pluck('id')->all();
-        $runId = $this->laufAnlegen($team, count($ids), $type);
+        // V-047: woran der Lauf arbeitete — die Schrittfolge ist der Gegenstand der
+        // Anreicherung, die Arbeitsmenge ihr Umfang. Ohne beides sagt die Zeile nur
+        // „enrich, 12 done" und ein zweiter Lauf mit anderer Schrittfolge sieht gleich aus.
+        $runId = $this->laufAnlegen($team, count($ids), $type, ['schritte' => array_values($schritte)]);
 
         \Platform\FoodAlchemist\Jobs\BulkEnrichJob::dispatch($runId, $team->id, $ids, $schritte);
 
@@ -124,7 +123,7 @@ class BulkEnrichService
     {
         $ids = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->whereIn('id', $recipeIds)->pluck('id')->all();
 
-        return $this->starte($team, $ids, $schritte, 'enrich_vk');
+        return $this->starte($team, $ids, $schritte, BulkRunType::EnrichVk);
     }
 
     /** Job-Kern: ein Rezept × Schritte → Vorschläge (kein Fach-Write). */
@@ -156,13 +155,7 @@ class BulkEnrichService
             }
         }
 
-        DB::table('foodalchemist_bulk_runs')->where('id', $runId)->update([
-            'done' => DB::raw('done + 1'),
-            'failed' => DB::raw('failed + ' . ($fehler || $r === null ? 1 : 0)),
-            'updated_at' => now(),
-        ]);
-        DB::table('foodalchemist_bulk_runs')->where('id', $runId)->whereColumn('done', '>=', 'total')
-            ->update(['status' => 'done', 'updated_at' => now()]);
+        $this->zaehleFortschritt($runId, $fehler || $r === null);
     }
 
     /** @return array{wert: mixed, confidence: ?float, reasoning: ?string, call_log_id: ?int} */
@@ -315,9 +308,27 @@ class BulkEnrichService
     }
 
     /** Fortschritts-Polling (Browser-Pill). */
-    public function status(Team $team, int $runId): ?object
+    public function status(Team $team, int $runId): ?FoodAlchemistBulkRun
     {
-        return DB::table('foodalchemist_bulk_runs')->where('id', $runId)->where('team_id', $team->id)->first();
+        return FoodAlchemistBulkRun::where('id', $runId)->where('team_id', $team->id)->first();
+    }
+
+    /**
+     * Ein abgearbeitetes Element zählen und den Lauf schließen, sobald `done` das Soll
+     * erreicht. V-032: bis hier stand derselbe Doppel-Update zweimal im selben Service
+     * (Rezept- und GP-Pfad), jede neue Lauf-Art hätte ihn ein drittes Mal kopiert.
+     * Die Zähler bleiben bewusst SQL-seitig (`done + 1`) — zwei parallele Job-Worker
+     * dürfen sich nicht gegenseitig überschreiben.
+     */
+    private function zaehleFortschritt(int $runId, bool $fehler): void
+    {
+        FoodAlchemistBulkRun::whereKey($runId)->update([
+            'done' => DB::raw('done + 1'),
+            'failed' => DB::raw('failed + ' . ($fehler ? 1 : 0)),
+            'updated_at' => now(),
+        ]);
+        FoodAlchemistBulkRun::whereKey($runId)->whereColumn('done', '>=', 'total')
+            ->update(['status' => BulkRunStatus::Done->value, 'updated_at' => now()]);
     }
 
     public function offeneVorschlaege(Team $team, int $runId): int
@@ -332,7 +343,7 @@ class BulkEnrichService
     public function starteGp(Team $team, array $gpIds, array $schritte = self::SCHRITTE_GP): int
     {
         $ids = FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $gpIds)->pluck('id')->all();
-        $runId = $this->laufAnlegen($team, count($ids), 'enrich_gp');
+        $runId = $this->laufAnlegen($team, count($ids), BulkRunType::EnrichGp, ['schritte' => array_values($schritte)]);
 
         \Platform\FoodAlchemist\Jobs\BulkEnrichGpJob::dispatch($runId, $team->id, $ids, $schritte);
 
@@ -369,13 +380,7 @@ class BulkEnrichService
             }
         }
 
-        DB::table('foodalchemist_bulk_runs')->where('id', $runId)->update([
-            'done' => DB::raw('done + 1'),
-            'failed' => DB::raw('failed + ' . ($fehler || $gp === null ? 1 : 0)),
-            'updated_at' => now(),
-        ]);
-        DB::table('foodalchemist_bulk_runs')->where('id', $runId)->whereColumn('done', '>=', 'total')
-            ->update(['status' => 'done', 'updated_at' => now()]);
+        $this->zaehleFortschritt($runId, $fehler || $gp === null);
     }
 
     /** @return array{wert: mixed, confidence: ?float, reasoning: ?string, call_log_id: ?int} */

@@ -62,7 +62,14 @@ class ImportArticlesCommand extends Command
         }
 
         try {
-            $runId = $apply ? $import->starteRun($team->id, 0) : null;
+            $runId = $apply ? $import->starteRun($team->id, 0, null, [
+                // V-047: derselbe Gegenstand wie beim MCP-Trigger, nur ohne Benutzer —
+                // die Konsole hat keinen. `quelle` unterscheidet die beiden Türen.
+                'datei' => basename($pfad),
+                'supplier_id' => $supplierId,
+                'apply' => true,
+                'quelle' => 'konsole',
+            ]) : null;
             $bericht = $import->importiere($team, $supplierId, $pfad, $apply);
             if ($runId !== null) {
                 $import->beendeRun($runId, $bericht);
