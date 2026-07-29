@@ -1,5 +1,12 @@
 # ROADMAP — Food Alchemist
 
+> **Dokumentstatus: historisches Arbeits- und Änderungsjournal.** Dieses Dokument
+> bleibt als Nachweis der bisherigen Pakete erhalten, ist aber nicht mehr die
+> priorisierte aktuelle Roadmap. Verbindlich sind das
+> [Zielbild 2029](Zielbild_2029_und_Huerden_Food_Alchemist.md) und der
+> [Umsetzungsplan zum Zielbild](PLANUNG/24_Zielbild_2029_Umsetzungsplan.md).
+> Die Rollen der Dokumente erklärt [docs/README.md](README.md).
+
 > Ausführungsplan zu [[GOALS]] (Stand 2026-07-03). Jedes Arbeitspaket hat eine **Definition of Done (DoD)** —
 > messbar, nicht verhandelbar. Ein Paket ohne erfüllte DoD ist „in Arbeit", nie „fertig".
 > Tracking: Dev-Modul, Package `platforms-food-alchemisten` (ID 23). Diese Datei ist die Landkarte, das Dev-Modul der Tacho.

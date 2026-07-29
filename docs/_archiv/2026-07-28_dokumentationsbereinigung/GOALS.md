@@ -1,5 +1,11 @@
 # GOALS — Food Alchemist & Plattform-Module
 
+> **Dokumentstatus: historisch gewachsener Ziel- und Backlogkontext.** Strategische
+> Zielsetzung und Systemgrenzen werden bei Widersprüchen vom
+> [Zielbild 2029](Zielbild_2029_und_Huerden_Food_Alchemist.md) und der
+> [aktuellen Architektur](ARCHITEKTUR.md) überstimmt. Die ausführbare Reihenfolge
+> steht im [Zielbild-Umsetzungsplan](PLANUNG/24_Zielbild_2029_Umsetzungsplan.md).
+
 > **Vision:** Eines der mächtigsten Food-Concepter- und Rezeptur-Verwaltungssysteme am Markt —
 > das kulinarische Gehirn der Plattform: Rezeptur, Kalkulation, Konzeption, Deklaration, KI.
 > (Stand 2026-07-03, Dominique + Claude; Ausführungs-Tracking im Dev-Modul, Package `platforms-food-alchemisten`.)

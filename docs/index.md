@@ -58,5 +58,5 @@ Was dein Team anlegt, sieht dein Team. Übergreifende Stammdaten (z. B. ein zent
 ---
 
 > **Wo wird das Modul weiterentwickelt?** Dieses Handbuch beschreibt, wie das Modul **benutzt** wird. Das *Wie-es-gebaut-ist* + *Warum/Wohin*:
-> [`ARCHITEKTUR.md`](ARCHITEKTUR.md) (System-/Datenarchitektur) · [`VISION.md`](VISION.md) (Zielbild) · [`ROADMAP.md`](ROADMAP.md) (Pakete/DoD).
+> [`README.md`](README.md) (Dokumentationsübersicht) · [`ARCHITEKTUR.md`](ARCHITEKTUR.md) (System-/Datenarchitektur) · [`Zielbild 2029`](Zielbild_2029_und_Huerden_Food_Alchemist.md) (Warum/Wohin) · [`Umsetzungsplan`](PLANUNG/24_Zielbild_2029_Umsetzungsplan.md) (Reihenfolge/Gates).
 > Die laufende Planung (Features, Bugs, Entscheidungen) trackt das **Dev-Modul** auf `office.bhgdigital.de` (Package `platforms-food-alchemist`).

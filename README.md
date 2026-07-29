@@ -1,226 +1,175 @@
-# Platform Food Alchemist
+# Food Alchemist
 
-Dieses Modul dient als **Template und Startpunkt** für neue Module in der Platform.
+Food Alchemist ist das fachliche Plattformmodul für Zutaten, Lieferantenartikel,
+Rezepte, Gerichte, Kalkulation, Konzepte und Foodbooks. Es verbindet kulinarische
+Kreativität mit belastbaren Stamm-, Preis- und Herkunftsdaten.
 
-## 📋 Übersicht
+Das Modul ist **kein eigenständiges Laravel-Produkt**. Es läuft als Package in der
+Platform-Shell und verwendet deren Authentifizierung, Teams, Navigation und
+Tool-Infrastruktur.
 
-Dieses Template zeigt die **minimale Struktur** eines Platform-Moduls:
-- ✅ Service Provider mit Modul-Registrierung
-- ✅ Config-Datei mit Navigation und Sidebar
-- ✅ Routes (Dashboard + Test-Seite)
-- ✅ Livewire Components (Dashboard, Sidebar, Test)
-- ✅ Views mit beiden Sidebars (links & rechts)
-- ✅ Vollständige Dokumentation für LLMs
+## In fünf Minuten orientiert
 
-## 🚀 Schnellstart
+1. Lies die [Dokumentationsübersicht](docs/README.md).
+2. Lies die [Architektur](docs/ARCHITEKTUR.md), besonders Mandantenmodell und
+   Schreibregeln.
+3. Lies vor Produktentscheidungen das verbindliche
+   [Zielbild 2029](docs/Zielbild_2029_und_Huerden_Food_Alchemist.md).
+4. Prüfe vor Änderungen den aktuellen
+   [Umsetzungsplan zum Zielbild](docs/PLANUNG/24_Zielbild_2029_Umsetzungsplan.md).
+5. Suche die betroffene kleine Funktion und ihren Abnahmetest in der
+   [Business-Case-Funktionsmatrix](docs/PLANUNG/25_Business_Case_Funktionsmatrix.md).
+6. Verwende für KI-gestützte Änderungen zusätzlich den [LLM Guide](LLM_GUIDE.md).
 
-### 1. Modul kopieren und umbenennen
+## Fachlicher Durchstich
+
+```text
+Lieferant
+  -> Lieferantenartikel mit Preis und Deklaration
+    -> Grundprodukt als fachliche Zutat
+      -> Basisrezept als produzierte Komponente
+        -> Verkaufsgericht mit Darreichung, EK, VK und Marge
+          -> Konzept und Paket
+            -> Foodbook oder Angebot für den Kunden
+```
+
+Änderungen am unteren Ende der Kette können Preise, Allergene, Zusatzstoffe,
+Nährwerte und Qualitätsbefunde weiter oben beeinflussen. Deshalb gehören fachliche
+Mutation und anschließender Recompute zusammen.
+
+## Architektur in Kürze
+
+- Laravel-Package unter dem Namespace `Platform\FoodAlchemist`.
+- MySQL ist die produktive Daten- und Rechenwahrheit; SQLite wird nur in Tests
+  verwendet.
+- Tabellen tragen überwiegend das Präfix `foodalchemist_`.
+- Die Oberfläche besteht hauptsächlich aus Livewire-Komponenten und Blade-Views.
+- Fachliche Regeln gehören in Services, nicht in Views oder Livewire-Renderpfade.
+- KI und MCP sind Adapter auf dieselben fachlichen Services; sie dürfen keine
+  abweichenden Schreibpfade besitzen.
+- Globale und geerbte Daten sind für Kind-Teams sichtbar, aber nur Datensätze des
+  eigenen Teams dürfen verändert werden.
+
+Die verbindlichen Details stehen in [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md).
+
+## Verzeichnisstruktur
+
+| Pfad | Verantwortung |
+|---|---|
+| `src/Models` | Eloquent-Modelle und Beziehungen |
+| `src/Services` | Fachliche Use Cases, Berechnung und Orchestrierung |
+| `src/Livewire` | UI-Zustand und Benutzerinteraktionen |
+| `src/Policies` | Autorisierungsregeln |
+| `src/Tools` | MCP-/KI-Werkzeuge als Adapter auf Fachservices |
+| `src/Jobs` | Asynchrone und größere Verarbeitung |
+| `src/Console` | Wartungs-, Import- und Diagnosebefehle |
+| `src/Support` | Querschnittshelfer, insbesondere Team-Scoping |
+| `database/migrations` | Schemahistorie des Moduls |
+| `resources/views` | Blade- und Livewire-Views |
+| `routes` | Authentifizierte Modulrouten und öffentliche Assets |
+| `tests` | Unit- und Featuretests des Moduls |
+| `docs` | Produkt-, Architektur-, Benutzer- und Planungsdokumentation |
+
+## Lokale Entwicklung
+
+Die vollständige Laufzeit befindet sich in der benachbarten Sandbox
+`sandbox-food-alchemist`. Das Modul wird dort über ein Composer-Path-Repository
+eingebunden. Änderungen am Modul sind dadurch unmittelbar in der Sandbox sichtbar.
+
+### Voraussetzungen
+
+- kompatible PHP- und Composer-Version der Platform-Shell
+- Node.js für den JavaScript-Build
+- eine bewusst konfigurierte Test- oder Entwicklungsdatenbank
+- installierte Abhängigkeiten in Modul und Sandbox
+
+### Häufige Befehle
+
+Vom Modulverzeichnis aus:
 
 ```bash
-# Kopiere das Template-Modul
-cp -r platform/modules/foodalchemist platform/modules/dein-modul-name
-
-# Gehe in das neue Modul
-cd platform/modules/dein-modul-name
+npm run build
+composer validate --strict --no-check-publish
 ```
 
-### 2. Dateien umbenennen und anpassen
-
-**WICHTIG:** Ersetze in ALLEN Dateien:
-- `FoodAlchemist` → `DeinModulName` (Namespace)
-- `foodalchemist` → `dein-modul-name` (Verzeichnisname, Route-Prefix)
-- `module_template` → `dein_modul_name` (Config-Key, Tabellennamen)
-
-**Dateien die angepasst werden müssen:**
-- `composer.json` - Name, Namespace, Provider
-- `config/foodalchemist.php` → `config/dein-modul-name.php`
-- `src/FoodAlchemistServiceProvider.php` → `src/DeinModulNameServiceProvider.php`
-- Alle PHP-Dateien: Namespace ändern
-- Alle Blade-Dateien: `foodalchemist::` → `dein-modul-name::`
-- Routes: `foodalchemist` → `dein-modul-name`
-
-### 3. Composer registrieren
-
-Füge das Modul zur Hauptanwendung hinzu:
-
-**In `composer.json` der Hauptanwendung:**
-```json
-{
-  "require": {
-    "martin3r/platform-dein-modul-name": "dev-main"
-  },
-  "repositories": [
-    {
-      "type": "path",
-      "url": "../platform/modules/dein-modul-name"
-    }
-  ]
-}
-```
-
-Dann:
-```bash
-composer update
-```
-
-### 4. Config publizieren (optional)
+Die Modultests laufen aus der Sandbox:
 
 ```bash
-php artisan vendor:publish --tag=config --provider="Platform\DeinModulName\DeinModulNameServiceProvider"
+cd ../../../sandbox-food-alchemist
+php -d memory_limit=1G vendor/bin/pest --testsuite=FoodAlchemist
 ```
 
-## 📁 Struktur
+> **Sicherheitsregel:** Vor jedem Testlauf Verbindung, Host und Datenbanknamen
+> prüfen. Die Tests dürfen ausschließlich gegen eine dafür vorgesehene, löschbare
+> Testdatenbank laufen. Der technische Hard-Guard dafür ist im Zielbild-Plan als
+> Release-Blocker geführt.
 
-```
-foodalchemist/
-├── composer.json              # Package-Definition
-├── config/
-│   └── foodalchemist.php    # Modul-Konfiguration
-├── database/
-│   └── migrations/            # Migrationen (optional)
-├── resources/
-│   └── views/
-│       └── livewire/
-│           ├── dashboard.blade.php    # Dashboard-View
-│           ├── test.blade.php         # Test-Seite
-│           └── sidebar.blade.php      # Sidebar-View
-├── routes/
-│   └── web.php                # Web-Routes
-├── src/
-│   ├── FoodAlchemistServiceProvider.php  # Service Provider
-│   └── Livewire/
-│       ├── Dashboard.php       # Dashboard Component
-│       ├── Test.php           # Test Component
-│       └── Sidebar.php        # Sidebar Component
-└── README.md                   # Diese Datei
-```
+Für Änderungen an MySQL-spezifischen Migrationen oder Queries reicht SQLite nicht.
+Zusätzlich ist ein gezielter MySQL-Smoke-Test erforderlich.
 
-## 🔧 Wichtige Komponenten
+## Regeln für Änderungen
 
-### Service Provider
+### Mandantenfähigkeit
 
-Der `FoodAlchemistServiceProvider` ist das Herzstück des Moduls:
+- Lesen: nur globale Daten und die für das aktuelle Team sichtbare Vererbungskette.
+- Schreiben und Löschen: ausschließlich Datensätze des aktuellen Teams.
+- Jede aus Request, Livewire oder Tool übergebene ID wird erneut team-scoped
+  aufgelöst.
+- `visibleToTeam()` ist keine Schreibberechtigung.
+- Rohe Query-Builder-Abfragen verwenden die zentrale Team-Scope-Hilfe.
+- Neue öffentliche Actions brauchen mindestens einen negativen Cross-Tenant-Test.
 
-1. **register()**: Config wird hier geladen (Laravel Best Practice)
-2. **boot()**: 
-   - Modul wird bei PlatformCore registriert
-   - Routes werden geladen (nur wenn Modul aktiv)
-   - Views und Livewire-Komponenten werden registriert
+### Fachlogik
 
-### Config-Datei
+- Livewire validiert Eingaben und delegiert einen Use Case.
+- Services besitzen Transaktionen, Invarianten und Recompute-Aufrufe.
+- Models definieren Beziehungen und kleine lokale Zustandsregeln.
+- Tools und Jobs rufen Services auf, statt Fachlogik zu duplizieren.
+- Geldbeträge, Portionen und Yield werden nicht in Views berechnet.
 
-Die Config (`config/foodalchemist.php`) definiert:
-- **routing**: Route-Modus (path/subdomain) und Prefix
-- **navigation**: Hauptnavigation (Icon, Route, Order)
-- **sidebar**: Sidebar-Struktur für das Modul
+### KI und Herkunft
 
-### Routes
+- KI erzeugt Vorschläge, keine stillen Wahrheiten.
+- Herkunft, Confidence und Prüfstatus bleiben erhalten.
+- Allergene, Zusatzstoffe, Nährwerte und Preise benötigen deterministische
+  Fallbacks und einen menschlich nachvollziehbaren Freigabepfad.
+- Ein KI- oder Tool-Fehler darf keine Capability unbemerkt entfernen.
 
-- `/foodalchemist` → Dashboard
-- `/foodalchemist/test` → Test-Seite
+### Definition of Done
 
-### Livewire Components
+Eine Änderung ist erst abgeschlossen, wenn:
 
-- **Dashboard**: Hauptübersicht
-- **Test**: Test-Seite für Entwicklung
-- **Sidebar**: Modul-spezifische Sidebar
+- der fachliche Use Case und seine Invarianten getestet sind,
+- Tenant-Sichtbarkeit und Ownership getestet sind,
+- Migrationen vorwärtskompatibel sind,
+- MCP-/Tool-Adapter bei betroffenen Use Cases mitgezogen wurden,
+- relevante Dokumentation aktualisiert ist,
+- PHP-Syntax, Frontend-Build und passende Pest-Suite grün sind,
+- bei MySQL-spezifischem Verhalten ein MySQL-Smoke dokumentiert ist.
 
-## 📝 Anpassungen für dein Modul
+## Dokumentationsregeln
 
-### 1. Models hinzufügen
+- `docs/Zielbild_2029_und_Huerden_Food_Alchemist.md` beantwortet **Warum und
+  Wohin** und besitzt bei Strategiefragen Vorrang.
+- `docs/ARCHITEKTUR.md` beantwortet **Wie ist das System gebaut und welche Regeln
+  sind verbindlich**.
+- `docs/PLANUNG/24_Zielbild_2029_Umsetzungsplan.md` beantwortet **Was kommt als
+  Nächstes und welches Gate entscheidet über den Abschluss**.
+- `docs/PLANUNG/25_Business_Case_Funktionsmatrix.md` und
+  `26_LLM_MCP_Funktionsmatrix.md` beantworten **Welche Business-, LLM- und
+  MCP-Funktion wird wie abgenommen**.
+- `docs/PLANUNG/` enthält nur aktive Steuerung, Audit und Arbeitsnachweise.
+- `docs/_archiv/` ist historischer Kontext und keine aktuelle Wahrheit.
+- `docs/index.md` und die Bereichsdokumente richten sich an Anwender.
 
-Erstelle Models in `src/Models/`:
-```php
-<?php
-namespace Platform\DeinModulName\Models;
+Wenn Dokumente widersprechen, gilt die Priorität aus
+[docs/README.md](docs/README.md).
 
-use Illuminate\Database\Eloquent\Model;
-use Platform\ActivityLog\Traits\LogsActivity;
+## Aktueller Reifehinweis
 
-class DeinModulNameEntity extends Model
-{
-    use LogsActivity;
-    
-    protected $table = 'dein_modul_name_entities';
-    // ...
-}
-```
-
-### 2. Migrationen erstellen
-
-```bash
-php artisan make:migration create_dein_modul_name_entities_table
-```
-
-### 3. Livewire Components erweitern
-
-Füge neue Components in `src/Livewire/` hinzu:
-- Index-Views für Listen
-- Create/Edit Modals
-- Show-Views für Details
-
-### 4. Routes erweitern
-
-In `routes/web.php`:
-```php
-Route::get('/entities', Entity\Index::class)->name('dein-modul-name.entities.index');
-```
-
-## 🎯 Best Practices
-
-1. **Immer Team-basiert**: Nutze `$user->currentTeam->id` für Team-Filterung
-2. **Activity Logging**: Nutze `LogsActivity` Trait für Models
-3. **UUIDs**: Verwende UUIDs für alle Models (UuidV7)
-4. **Policies**: Erstelle Policies für Authorization
-5. **Sidebars**: Beide Sidebars (links & rechts) in allen Views
-6. **Modals**: Immer innerhalb von `<x-ui-page>` platzieren
-
-## 🤖 Für LLMs
-
-Dieses Template ist so strukturiert, dass LLMs es verstehen können:
-
-- **Klare Namenskonventionen**: Alles folgt dem Muster `{modul-name}`
-- **Ausführliche Kommentare**: Alle wichtigen Stellen sind dokumentiert
-- **Konsistente Struktur**: Gleiche Struktur wie andere Module (HCM, Planner)
-- **Beispiele**: Dashboard und Test-Seite zeigen alle Patterns
-
-**Wichtige Patterns:**
-- Service Provider Pattern (wie in HCM/Planner)
-- Livewire Component Pattern
-- Route Registration Pattern
-- Sidebar Pattern (links & rechts)
-
-## 📚 Weitere Ressourcen
-
-- Siehe `platform/modules/hcm` für komplexere Beispiele
-- Siehe `platform/modules/planner` für Modals und erweiterte Features
-- Siehe `platform/core/src/PlatformCore.php` für Modul-Registrierung
-
-## ✅ Checkliste für neues Modul
-
-- [ ] Modul kopiert und umbenannt
-- [ ] Alle Namespaces angepasst
-- [ ] Composer.json angepasst
-- [ ] Config-Datei angepasst
-- [ ] Routes angepasst
-- [ ] Service Provider angepasst
-- [ ] Views angepasst
-- [ ] In Hauptanwendung registriert
-- [ ] `composer dump-autoload` ausgeführt
-- [ ] Config publiziert (optional)
-- [ ] Getestet
-
-## 🐛 Troubleshooting
-
-**Routen funktionieren nicht:**
-- Config publiziert? → `php artisan vendor:publish --tag=config`
-- Config-Cache geleert? → `php artisan config:clear`
-- Route-Cache geleert? → `php artisan route:clear`
-
-**Modul erscheint nicht in Navigation:**
-- Modul in Datenbank registriert? → Prüfe `modules` Tabelle
-- Config korrekt? → Prüfe `config/dein-modul-name.php`
-
-**Livewire Components nicht gefunden:**
-- Service Provider registriert? → Prüfe `composer.json`
-- `composer dump-autoload` ausgeführt?
+Das Modul besitzt breite fachliche Fähigkeiten und eine große Testsuite, ist aber
+noch nicht als vollständig mandantensicheres, autonom betreibbares SaaS freigegeben.
+Die offenen Release-Gates und ihre Reihenfolge stehen im
+[Zielbild-Umsetzungsplan](docs/PLANUNG/24_Zielbild_2029_Umsetzungsplan.md). Der
+detaillierte Befundkatalog liegt im
+[MVP-Audit](docs/PLANUNG/23_MVP_Audit.md).

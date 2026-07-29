@@ -1,82 +1,310 @@
-# Food Alchemist — Architektur
+# Architektur — Food Alchemist
 
-> **Was dieses Dokument ist:** die **System- & Datenarchitektur** des FA-Moduls — *wie* es gebaut ist.
-> Stand 2026-07-12. Ergänzt: [`VISION.md`](VISION.md) (*Warum/Wohin*) · [`ROADMAP.md`](ROADMAP.md) (*Wie/Wann*).
-> **Verbindliche Domänen-Regeln** (Naming/Struktur/Mapping) = die Regelwerke (GP v3.3.2, Basisrezepte v1.1,
-> Lieferantenartikel v1.0) in `07_WISSEN` — bei Konflikt gewinnt das Regelwerk.
->
-> Löst die alte `00_SYSTEM/00.07_App/_ARCHITEKTUR_SPEC.md` (Cooking-Jarvis/WaWi/Tauri-Ära, Mai 2026) ab.
+- **Zweck:** verbindliche technische Orientierung für Entwicklung, Review und Betrieb
+- **Zielgruppe:** interne und externe Entwickler, Architektur, Produkt und Betrieb
+- **Stand:** 28.07.2026
+- **Strategischer Rahmen:** [Zielbild 2029](Zielbild_2029_und_Huerden_Food_Alchemist.md)
+- **Aktuelle Lücken:** [MVP-Audit](PLANUNG/23_MVP_Audit.md) und
+  [Zielbild-Plan](PLANUNG/24_Zielbild_2029_Umsetzungsplan.md)
 
----
+Dieses Dokument beschreibt die beabsichtigte und heute überwiegend vorhandene
+Architektur. Bekannte Abweichungen werden ausdrücklich als solche markiert.
 
-## 1. Laufzeit-Architektur — EINE SQL-Wahrheit
+## 1. Systemkontext
 
-- **FA ist ein Laravel-Modul** (`Platform\FoodAlchemist`) in der Platform-Shell, kein eigenständiges Deployment.
-- **Eine MySQL = Wahrheit + Laufzeit + Rechenbasis.** Dev = lokales MySQL 8.4; demo/prod = Forge-MySQL. ~120 Tabellen mit Präfix `foodalchemist_`.
-- **Kein Graph, kein Polyglot/3-DB.** Frühere Neo4j/SPARQL-Entwürfe sind verworfen. Mehr-Hop/Vererbung = MySQL `WITH RECURSIVE`; Aroma-Nähe = vorberechnete `pairing_computed`-Scores in SQL.
-- **SQLite** nur noch als **In-Memory-Test-Harness** (Pest). ⚠️ Fängt MySQL-only-Bugs NICHT (Rename-Drift, `||`-Semantik, 64-Zeichen-Index-Limit, Strict-Mode) → solche Fixes per MySQL-Smoke prüfen.
-- **WaWi-SQLite (`wawi_1494.sqlite`)** = eingefrorenes Read-only-Archiv (Daten-Herkunft), nicht mehr Master.
-- **Cooking-Jarvis-Tauri-App = eingefroren.** Produkt ist das FA-Modul.
+Food Alchemist ist ein Laravel-Package innerhalb der Platform-Shell. Die Shell
+liefert Anmeldung, Teamkontext, Navigation und die gemeinsame Tool-Infrastruktur.
+Food Alchemist besitzt seine fachlichen Tabellen, Services, Livewire-Oberflächen,
+Jobs, Befehle und Tool-Adapter selbst.
 
-## 2. Code-Topologie
-
-- **Code-Wahrheit (git):** `platform/modules/platforms-foodalchemist` — `src/` (`Models` 67, `Livewire` 56, `Services` 60, `Tools` 43 = MCP, `Enums`, `Jobs`, `Console`, `Policies`, `Support`), `database/migrations` (~100), `docs/`, `resources/views` (Blade).
-- **Host/Test:** `sandbox-food-alchemist` bindet das Modul per **composer path-repo Symlink** ein → Edits sofort live. `.env` → lokales MySQL.
-- **Deploy:** demo zieht `main`; Server-Schritte (`composer update` + `migrate --force` + `import-master`) = Martin (Roadmap R0.1).
-
-## 3. Fachliche Produkt-Hierarchie
-
+```mermaid
+flowchart LR
+    user["Anwender"] --> web["Platform-Shell und Livewire"]
+    agent["KI oder externer Agent"] --> tools["Platform Tool Registry"]
+    import["Kataloge und Dateien"] --> jobs["Imports, Jobs und Commands"]
+    web --> domain["Food-Alchemist-Fachservices"]
+    tools --> domain
+    jobs --> domain
+    domain --> sql["MySQL: fachliche Wahrheit"]
+    domain --> ai["optionale KI-/Embedding-Provider"]
+    domain --> export["PDF, CSV und Kundendokumente"]
 ```
-Konzept / Event            (Concepter: Anlass, Servierform, Facetten)
-  └─ Paket                 (Baustein-Bündel)
-       └─ VK-Gericht        (Verkaufsrezept, ist_sales_recipe=1)  ── Darreichungen (Servierformen, EK/VK je Form)
-            └─ Basisrezept  (Eigenproduktion: Sauce/Fond/Püree)   ── max. 3 Sub-Ebenen
-                 └─ Grundprodukt (GP, abstrakt)
-                      └─ Lieferantenartikel (LA, konkret + Preis)
-                           └─ Lieferant
+
+### Deploymentgrenze
+
+- Das Modul wird nicht separat deployed.
+- Der Service Provider registriert Config, Views, Migrationen, Livewire-Komponenten,
+  Routen, Policies, Jobs und Tools in der Host-Anwendung.
+- Demo und Produktion verwenden MySQL.
+- Die lokale Sandbox bindet das Modul per Composer-Path-Repository ein.
+- SQLite ist Test-Harness, aber kein produktionsgleiches Datenbanksystem.
+
+## 2. Fachlicher Kern
+
+### Produkt- und Datenkette
+
+```mermaid
+flowchart TD
+    supplier["Lieferant"] --> item["Lieferantenartikel\nPreis, Deklaration, Quelle"]
+    item --> gp["Grundprodukt\nfachliche Zutat"]
+    gp --> base["Basisrezept\nproduzierte Komponente"]
+    base --> dish["Verkaufsgericht\nDarreichung, EK, VK, Marge"]
+    gp --> dish
+    dish --> concept["Konzept und Paket"]
+    concept --> foodbook["Foodbook oder Angebot"]
+    dish --> foodbook
 ```
-- **Rezept-Zutat:** `gp_id` **XOR** `referenced_recipe_id` (Service-erzwungen). Jede Mutation triggert Recompute + Propagation.
-- **Allergene/Zusatzstoffe** vererben 1→5 nach oben (ALL-MAXIMAL, „schwächstes Glied" rekursiv, kein false-confident — Regelwerk §7).
 
-## 4. Zwei orthogonale Klassifikations-Achsen (beide gebaut)
+Die Kette ist nicht nur Navigation. Sie bestimmt Berechnung und Vererbung:
 
-- **Achse A — „Was ist die Zutat?" (GP-Klassifikation):** Warengruppe (§3, 15 WG) → Sub-Kategorie → GP. Steuert Suche/Filter/Disposition/Allergen-Vererbung. Tabellen `foodalchemist_gps` + Lookups. ✅
-- **Achse B — „Wie verkauft sich das Gericht?" (VK-/Speisen-Klassifikation):** Hauptgruppe → Klasse (+ Aufschlagsklasse). Steuert Foodbook-Filter, Aufschlag, Preisbildung. `foodalchemist_dish_main_groups` + `dish_classes` + `markup_classes` (Migration 299, Modell A). ✅ (in der Alt-Spec noch „fehlt").
+- Preise laufen vom konkreten Lieferantenartikel nach oben.
+- Yield und Mengen beeinflussen Einstand und Portion.
+- Allergene, Zusatzstoffe und Nährwerte werden aus den verwendeten Bestandteilen
+  aggregiert.
+- Änderungen können abhängige Rezepte, Gerichte, Konzepte und Dokumente veralten
+  lassen.
+- Kundenfähige Ergebnisse benötigen eine nachvollziehbare Quelle und einen
+  Freigabestatus.
 
-## 5. Mandanten-Architektur — Master-Vererbung (2026-07-12)
+### Klassifikationsachsen
 
-- **BHG.DIGITAL (Root) = Master.** Globaler Seed (`team_id NULL`) + Master-Katalog **kaskadieren** zu den Kind-Teams (alle Caterer sind direkte Kinder). Jedes Team verwaltet Eigenes; Master/Seed sind **read-only** für Kinder.
-- **Regel:** sichtbar = `team_id NULL ∪ Ancestry`; editierbar = eigenes Team.
-- **Mechanik:** Trait `Models\Concerns\BelongsToTeamHierarchy` (`scopeVisibleToTeam` / `isOwnedBy`), Helper `Support\TeamScope` (für rohe `DB::table`-Queries). Kein globaler Auto-Scope (Opt-in, damit CLI/Import ohne Auth-Team laufen).
-- (Ersetzt die Alt-Spec-Aussage „Multi-Tenancy = Single-User-Tool" — überholt.)
+Zwei Achsen dürfen nicht vermischt werden:
 
-## 6. Rechen-Kern & Geld-Pfad
+1. **Zutatenklassifikation:** Warengruppe, Unterkategorie und Grundprodukt. Sie
+   unterstützt Suche, Disposition, Matching und Deklaration.
+2. **Verkaufsklassifikation:** Hauptgruppe, Gerichtsklasse und Aufschlagsklasse. Sie
+   unterstützt Portfolio, Foodbook, Kalkulation und Preisbildung.
 
-- **`RecipeRecomputeService`** — Yield · Allergene · Zusatzstoffe · EK, **+ topologische Propagation** (Kahn, Kinder vor Eltern, Diamond-sicher). `recomputeAll` (Bulk) + `recomputeAndPropagate` (Inkrement).
-- **Geld:** `DarreichungService` (ek_portion je Form + Delta-Mischpreis, Auto-VK), `MargeService` (VK/Marge-Formel), `KalkulationService`, `SimulationService` (Was-wäre-wenn, read-only, R2.2), `SignalService`/Detektor (Preis-Alarm R2.1), `BenchmarkService` (R2.7), `FeedbackService` (R2.6).
-- **Wording:** `WordingResolver`-Kette (interner Name → Kunden-Rechnungstext).
-- **Sync-Richtung: EINBAHN SQL → MD** (Vault-Spiegel). Manuelle Edits an gespiegelten Feldern werden überschrieben; freies Feld `notizen_manual` (Regelwerke §9).
+## 3. Laufzeit- und Datenschichten
 
-## 7. Chemie / Foodpairing — SQL-nativ
+| Schicht | Hauptverantwortung | Beispiele |
+|---|---|---|
+| Routes/Livewire | Authentifizierter Einstieg, Validierung, UI-Zustand | Browser, Editor, Cockpits |
+| Tools | Maschinenlesbare Adapter mit `ToolContext` | `*.GET`, `*.POST`, `*.PUT` |
+| Jobs/Commands | Import, Batch, Wartung, Wiederaufnahme | Katalogimport, Recompute, Qualität |
+| Services | Fachliche Use Cases, Transaktionen und Invarianten | Recipe, Price, Foodbook, Pairing |
+| Policies/Scopes | Sichtbarkeit, Ownership und Autorisierung | Teamhierarchie, Policy-Prüfung |
+| Models | Relationen, Casts und lokaler Zustand | `FoodAlchemist*`-Models |
+| MySQL | Persistente Wahrheit und transaktionale Rechenbasis | `foodalchemist_*`-Tabellen |
 
-- Tabellen `molecules` (~74k) · `ingredient_molecule` (~97k) · `molecule_descriptors` · `ingredient_aroma_vector` · `anchor_*` · **`pairing_computed` (~341k vorberechnete Match-Scores)**.
-- `PairingService` (panelRecipe/cohesion/suggest/bridge) rechnet über diese Tabellen — **kein** Graph.
-- Gemessene Realität: Coverage ~76 % (FooDB-Datenlimit), Kalibrierung ρ ≈ 0,54, Teller-Kohärenz ~0,2 % = das eigentliche Loch (R6). Detail-Modell → [`VISION.md`](VISION.md).
+### Abhängigkeitsregel
 
-## 8. Wissens-DB in FA
+Web, Tools, Jobs und Commands dürfen Fachlogik nicht getrennt voneinander
+implementieren. Sie rufen denselben Service-Use-Case auf. Services dürfen nicht von
+Livewire oder Blade abhängen.
 
-- `knowledge_documents` / `_aliases` / `_routings` — pflegbar im Browser (#469), deterministisch on-demand in ~48 KI-Prompts injiziert (`AiGatewayService` + `KnowledgeContextService`). Enthält Regelwerke, Domänen, Cross-Cutting, **Muttersaucen**. Kein separates Modul, kein Graph.
+```text
+erlaubt:  UI/Tool/Job -> Service -> Model/DB
+nicht:    Service -> Livewire
+nicht:    Tool -> eigene Preis- oder Tenant-Logik
+nicht:    View -> DB-Abfrage oder Geschäftsberechnung
+```
 
-## 9. MCP-Ebene (43 Tools, `src/Tools/`)
+## 4. Mandantenmodell
 
-- Läuft mit `ToolContext(user, team)`. **Reads** über `visibleToTeam` (erbt die Mandanten-Regel), **Writes** über die Services (own-only/`isOwnedBy`, D1).
-- **Regel:** MCP wird bei JEDEM Feature/Datenmodell-Change im Lockstep mitgezogen — kein Retrofit (Präzedenz R0.2).
+Food Alchemist verwendet hierarchische Vererbung:
 
-## 10. USPs vs. Necta (bleiben gültig)
+- `team_id = NULL`: globaler Seed oder globaler Referenzwert
+- `team_id = Root-Team`: zentral kuratierter Masterbestand
+- `team_id = Kundenteam`: kundeneigener Bestand
 
-Feinere GP-Klassifikation (Warengruppen + Convenience-Subtypen 13.1–13.7) · **GP-Derivate** (`is_derivat`, §11, LIVE-Allergen-Vererbung) · **Flavor-Pairing** (Necta hat null — FA-USP) · KI-Rezept-Beschreibung · `match_confidence` je Zutat · erweiterbare Saison-/Diät-/Pairing-Vokabulare · **Kreativ-Ökonomie live beim Schreiben** (VISION §4.5).
+Für ein Team gilt:
 
-## 11. Bewusst NICHT (Scope-Grenzen)
+```text
+sichtbar   = globale Datensätze ∪ Datensätze der Team-Ancestry
+editierbar = ausschließlich Datensätze mit team_id des aktuellen Teams
+```
 
-Kein Lager/Bestellwesen/Touren/Buchhaltung · keine Kostformen/Mensa-Zeitfenster/Subscription-Menüpläne · keine Necta-Cryptic-Varianten · kein Combi-Steamer-HACCP/Standardgarprogramme (nicht MVP) · kein Graph/Neo4j/3-DB · keine 27 GB MISKG-Bilddaten.
-*(Korrektur ggü. Alt-Spec: **Multi-Tenancy ist jetzt IN** — siehe §5.)*
+`BelongsToTeamHierarchy::visibleToTeam()` und `Support\TeamScope` bilden die
+Leseregel ab. Es gibt bewusst keinen globalen Eloquent-Scope, da Commands und
+Importe auch ohne angemeldeten Benutzer arbeiten.
+
+### Verbindliche Schreibregel
+
+Jeder schreibende Pfad muss:
+
+1. den Teamkontext aus Authentifizierung, `ToolContext` oder explizitem Jobkontext
+   beziehen,
+2. das Zielobjekt als **eigenen** Datensatz auflösen,
+3. jede referenzierte ID zusätzlich im sichtbaren oder eigenen Teamraum prüfen,
+4. die Änderung und abhängige Berechnungen transaktional ausführen,
+5. einen negativen Cross-Tenant-Test besitzen.
+
+`visibleToTeam()` allein ist ausdrücklich keine Berechtigung für `update()` oder
+`delete()`.
+
+### Bekannte Abweichung
+
+Der aktuelle Code setzt diese Regel nicht in allen Livewire- und Servicepfaden
+konsistent um. Das ist ein Release-Blocker und Phase 0 des
+[Zielbild-Plans](PLANUNG/24_Zielbild_2029_Umsetzungsplan.md).
+
+## 5. Berechnungs- und Wahrheitsmodell
+
+### Eine Formel pro fachlicher Wahrheit
+
+- Rezeptkosten, Yield und Deklarationsaggregation laufen über zentrale
+  Recompute-Services.
+- Darreichung und Marge verwenden zentrale Services.
+- Simulationen dürfen die produktive Wahrheit nicht still verändern.
+- Exporte lesen dieselbe freigegebene Wahrheit wie die UI.
+- Rundung findet an definierten fachlichen Grenzen statt, nicht zufällig je View.
+
+### Herkunft und Aktualität
+
+Für entscheidungsrelevante Werte müssen mindestens Quelle und Aktualität ermittelbar
+sein. Für importierte oder KI-angereicherte Felder kommen Confidence,
+Freigabestatus und gegebenenfalls manuelle Übersteuerung hinzu.
+
+Zielreihenfolge für konkurrierende Quellen:
+
+```text
+explizit freigegebene manuelle Kuration
+  > vertraglich priorisierte Lieferantenquelle
+    > normaler Import
+      > geerbter Masterwert
+        > KI-Vorschlag
+```
+
+Die genaue Feldmatrix ist noch als Zielbild-Arbeit zu finalisieren. Bis dahin darf
+ein Import einen manuell kuratierten Wert nicht still überschreiben.
+
+### Preiswahrheit
+
+Ein Preis ist nur entscheidungsfähig, wenn Artikel, Lieferant, Einheit,
+Gültigkeitszeitraum, Erfassungszeitpunkt und Quelle bekannt sind. „Letzter Wert“ und
+„gültiger aktueller Wert“ sind nicht automatisch dasselbe. UI, Kalkulation und
+Export müssen veraltete oder fehlende Preise sichtbar machen.
+
+## 6. KI, Wissen, Pairing und Tools
+
+### KI-Grundregel
+
+KI ist Vorschlags- und Analyseebene. Deterministische Datenbank- und Fachlogik
+entscheidet über Tenantzugriff, Berechnung, Freigabe und Persistenz.
+
+- Prompts erhalten kuratierten Wissenskontext.
+- Ergebnisse speichern Quelle, Modellkontext und Confidence, soweit fachlich nötig.
+- Unsichere Ergebnisse landen in einer Prüfstrecke.
+- KI-Ausfall muss als Betriebszustand sichtbar sein und darf Kern-CRUD nicht
+  unbrauchbar machen.
+
+### Foodpairing
+
+Foodpairing ist SQL-nativ. Vorberechnete Scores und Aroma-/Moleküldaten liegen in
+MySQL. Es gibt keinen produktiven Neo4j- oder SPARQL-Pfad. Ein heuristisches Ergebnis
+muss als heuristisch gekennzeichnet bleiben.
+
+### Tool-Ebene
+
+Tools sind eine alternative Oberfläche auf vorhandene Use Cases:
+
+- Teamkontext kommt aus `ToolContext`.
+- Reads verwenden dieselben Scopes wie Webpfade.
+- Writes verwenden dieselben Services und Policies.
+- Registrierungsfehler werden künftig geloggt und über Healthchecks sichtbar.
+- Bei einem Fachmodell-Change werden Tool-Schema, Tests und Dokumentation im selben
+  Arbeitspaket angepasst.
+
+## 7. Importe und Exporte
+
+### Importe
+
+Importe sind untrusted input und benötigen:
+
+- festgelegtes Eingangsverzeichnis und Schutz vor Path Traversal/Symlinks,
+- Formatvalidierung und verständlichen Fehlerbericht,
+- Dry-Run, wo fachlich sinnvoll,
+- idempotente Wiederholung,
+- team- und ownership-sichere Auflösung,
+- Feld-Provenienz und explizite Überschreibungsregeln,
+- Recompute beziehungsweise Folgejob nach erfolgreichem Commit.
+
+### Exporte
+
+- PDF und CSV dürfen nur für den aktuellen Teamkontext erzeugt werden.
+- CSV-Felder müssen gegen Spreadsheet-Formeln neutralisiert werden.
+- Haftungsrelevante Inhalte zeigen Freigabe und Aktualität oder blockieren den
+  finalen Export.
+- Kundendokumente dürfen keine internen Confidence- oder Diagnosewerte offenlegen,
+  sofern sie nicht ausdrücklich Teil des Produkts sind.
+
+## 8. Nebenläufigkeit und Batchverarbeitung
+
+- Große Imports, Recomputes und Qualitätsläufe gehören in resumierbare Jobs oder
+  Commands.
+- Jobs tragen einen expliziten Team- und Korrelationskontext.
+- `withoutOverlapping` schützt nur vor Parallelität, nicht vor fachlicher
+  Idempotenz; beides ist erforderlich.
+- Externe Aufrufe benötigen Timeout, begrenzte Retries und eine sichtbare
+  Fehlerablage.
+- Lange Transaktionen über Netzwerkaufrufe sind zu vermeiden.
+
+## 9. Qualität, Tests und Betriebsfähigkeit
+
+### Testpyramide
+
+| Ebene | Zweck |
+|---|---|
+| Unit | Formeln, Resolver, Parser und lokale Invarianten |
+| Feature | Service-, DB-, Livewire-, Tool- und Tenantverhalten |
+| MySQL-Smoke | Datenbankspezifische Migrationen und Queries |
+| Browser/E2E | echte Nutzerstrecken und JavaScript-Interaktion |
+| Golden/Performance | Solver, Recompute, Import und Dokumenterzeugung |
+| Realfall-Gate | echter Kunden-Foodbook-Durchlauf ohne Experteneingriff |
+
+Tests dürfen ausschließlich auf einer explizit erlaubten Testdatenbank laufen.
+Eine technische Allowlist dafür ist noch umzusetzen.
+
+### Mindest-Observability
+
+Künftig zu messen sind mindestens:
+
+- Importerfolg, Abweisungen und Konflikte je Quelle,
+- Datenqualitätsbefunde und Zeit bis zur Behebung,
+- Anteil fehlender beziehungsweise veralteter Preise,
+- Recompute-Dauer und Fehler,
+- Solver-Modus, Kandidatenzahl und Laufzeit,
+- Tool-Registrierungs- und Ausführungsfehler,
+- KI-Kosten, Latenz und manuelle Korrekturquote je Kunde,
+- Freigabestatus haftungsrelevanter Kundendokumente.
+
+## 10. Produkt- und Modulgrenzen
+
+Im Modul liegen:
+
+- kulinarische Stammdaten und Lieferantenbezug,
+- Rezepte, Gerichte, Darreichungen und Kalkulation,
+- Konzepte, Pakete, Foodbooks und Angebote,
+- Qualitäts-, Pairing-, Wissens- und KI-Unterstützung,
+- einfache, aus Foodbooks abgeleitete Produktions- und Bestellvorschläge, soweit sie
+  der kalkulierbaren und bestellbaren Ergebnisstrecke dienen.
+
+Nicht Ziel des Moduls sind:
+
+- vollwertige Lagerwirtschaft und permanente Bestandsführung,
+- Buchhaltung, Faktura und Zahlungsverkehr,
+- Touren- und Personalplanung,
+- ein allgemeines ERP,
+- eigenständige graphbasierte Infrastruktur ohne belegten Produktnutzen.
+
+Die Grenze bei Produktion und Bestellung ist bewusst schmal: Food Alchemist darf
+den fachlich berechneten Bedarf erzeugen und einfach ausführbar machen. Komplexe
+operative Lager-, Logistik- oder ERP-Prozesse gehören in Nachbarmodule über stabile
+Contracts.
+
+## 11. Architekturentscheidungen und Änderungen
+
+Eine Änderung benötigt eine dokumentierte Architekturentscheidung, wenn sie:
+
+- Datenbesitz oder Tenantvererbung verändert,
+- eine neue persistente Wahrheitsquelle einführt,
+- Modulgrenzen verschiebt,
+- Kernformeln oder Haftungsfreigaben verändert,
+- einen neuen externen Provider zwingend macht,
+- eine neue Synchronisationsrichtung einführt.
+
+Die Entscheidung enthält Problem, Optionen, gewählte Lösung, Konsequenzen,
+Migration und Rückweg. Bis ein eigener ADR-Ordner etabliert ist, wird sie in der
+zugehörigen aktiven Spezifikation unter `PLANUNG/` festgehalten und von hier
+verlinkt.

@@ -1,5 +1,10 @@
 # Food Alchemist — Vision & Zielbild
 
+> **Dokumentstatus: ergänzender Produktkontext.** Bei Abweichungen gilt das
+> [Zielbild 2029](Zielbild_2029_und_Huerden_Food_Alchemist.md). Aktuelle Prioritäten
+> und Nachweise stehen im
+> [Umsetzungsplan](PLANUNG/24_Zielbild_2029_Umsetzungsplan.md).
+
 > **Was dieses Dokument ist:** das **Nordstern-Zielbild** von Food Alchemist — wohin das Produkt geht.
 > Stand 2026-07-12, auf den heutigen Wissens- und Architektur-Stand gebracht.
 >

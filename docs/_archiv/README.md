@@ -1,5 +1,12 @@
 # 📦 Archiv — eingefrorener Spec-Korpus
 
+## Dokumentationsbereinigung vom 28.07.2026
+
+Die zuletzt abgelösten Roadmaps, Ziele, Specs 00–22, Journale und Übergaben liegen
+gebündelt unter
+[`2026-07-28_dokumentationsbereinigung/`](2026-07-28_dokumentationsbereinigung/README.md).
+Die aktive Dokumentation beginnt in [`../README.md`](../README.md).
+
 Dieser Ordner enthält den **ursprünglichen Spezifikations- und Planungs-Korpus** des Moduls (Etappen E1–E5: Architektur, Datenmodell, 13 Grundlogiken, 8 Domänen, KI-Spezifikation, Migration/Seed, Testkatalog, Roadmaps, Masterpläne, Regelwerke).
 
 Er wurde am **2026-06-15** hierher verschoben, weil er nicht mehr die laufende Quelle ist.
