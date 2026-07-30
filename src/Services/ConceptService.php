@@ -109,15 +109,35 @@ class ConceptService
         'serving_form_id', 'event_type_id',
     ];
 
+    /**
+     * Referenzierte Fremdschlüssel der FELDER-Whitelist und ihre Herkunftstabelle (MVP-052, P0).
+     * Wie bei den Gerichten (MVP-050): eine Whitelist erlaubt das Schreiben des Felds, sagt aber
+     * nichts über die Zulässigkeit der ID — die kam roh aus dem client-kontrollierten Formular.
+     * `TeamScope::referenz()` prüft SICHTBARKEIT (geerbt/global bleibt nutzbar), nicht Eigentum.
+     */
+    private const REFERENZEN = [
+        'category_id' => FoodAlchemistConceptCategory::class,
+        'writing_style_id' => \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::class,
+        'serving_form_id' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::class,
+        'event_type_id' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::class,
+    ];
+
     public function update(Team $team, int $id, array $in): FoodAlchemistConcept
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
         $this->guardOwner($concept, $team);
         $update = array_intersect_key($in, array_flip(self::FELDER));
+        // Erst NULL-Normalisierung (leeres FK-Feld leeren) …
         foreach (self::FELDER_NULLBAR as $feld) {
             if (array_key_exists($feld, $update) && ($update[$feld] === '' || $update[$feld] === null
                 || (in_array($feld, ['category_id', 'writing_style_id'], true) && (int) $update[$feld] === 0))) {
                 $update[$feld] = null;
+            }
+        }
+        // … dann die verbliebenen Referenzen autorisieren (MVP-052).
+        foreach (self::REFERENZEN as $feld => $modelClass) {
+            if (array_key_exists($feld, $update)) {
+                $update[$feld] = \Platform\FoodAlchemist\Support\TeamScope::referenz($modelClass, $update[$feld], $team, $feld);
             }
         }
         if (array_key_exists('class', $update)) {
@@ -135,7 +155,10 @@ class ConceptService
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
         $this->guardOwner($concept, $team);
-        $concept->serviceMoments()->sync(array_map('intval', $ids));
+        // MVP-052: Pivot-IDs vor dem sync() gegen die Sichtbarkeit prüfen (ein whereIn-Query).
+        $geprueft = \Platform\FoodAlchemist\Support\TeamScope::referenzen(
+            \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::class, $ids, $team, 'Einsatzmoment');
+        $concept->serviceMoments()->sync($geprueft);
     }
 
     /** @param  list<int>  $ids */
@@ -143,7 +166,9 @@ class ConceptService
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
         $this->guardOwner($concept, $team);
-        $concept->seasons()->sync(array_map('intval', $ids));
+        $geprueft = \Platform\FoodAlchemist\Support\TeamScope::referenzen(
+            \Platform\FoodAlchemist\Models\FoodAlchemistSaison::class, $ids, $team, 'Saison');
+        $concept->seasons()->sync($geprueft);
     }
 
     // ── Sektor-Eignung (Politur · VK-Parität §10.8, mehrwertig wie Rezept) ───

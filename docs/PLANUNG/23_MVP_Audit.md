@@ -1057,7 +1057,7 @@ verlinkt ist.
 | MVP-022 | UX-07, RE-10 | Phase A/C | behoben | `StatusUndLabelsTest` (sichtbarer Fehler + Rollback) · `766e90f`-Reihe, Commit R5 |
 | MVP-023 | RE-10, UX-07 | Phase A/C | behoben | `StatusUndLabelsTest` (Labels-Snapshot, keine Rohwerte) + Sandbox-Browser |
 | MVP-024 | RE-10 | Phase A/C | behoben | `StatusUndLabelsTest` (VK-Statusfehler + zentrale Labels) |
-| MVP-025 | CO-03, AD-18 | A-02–A-04 | offen | Servierform Team A/B |
+| MVP-025 | CO-03, AD-18 | A-02–A-04 | behoben | `ConcepterReferenzTenantTest` + Servierform/basisKategorien visibleToTeam · Commit R9 |
 | MVP-026 | CO-01–11 | Phase A/C | offen | Zerlegung entlang Use Cases plus Regression |
 | MVP-027 | FB-03, FB-05 | A-02–A-04 | offen | Kapitel-/Block-IDOR-Test |
 | MVP-028 | FB-01–17 | Phase A/C | offen | getrennte Komponenten und Business-E2E |
@@ -1084,7 +1084,7 @@ verlinkt ist.
 | MVP-049 | RE-13, RE-14 | Phase A/C | behoben | `ReferenzAutorisierungTest` (HG setzbar) + Sandbox (HG 2→14) · `cc9e94a` |
 | MVP-050 | RE-14 | A-02–A-04 | behoben | `ReferenzAutorisierungTest` (fremde Klasse/AK abgewiesen) + Sandbox-Angriff · `cc9e94a` |
 | MVP-051 | CO-01 | Phase A/C | offen | Deep-Link/Reload hydriert Auswahl |
-| MVP-052 | CO-03 | A-02–A-04 | offen | Dimensions-ID Team A/B |
+| MVP-052 | CO-03 | A-02–A-04 | behoben | `ConcepterReferenzTenantTest` (fremde Dimension/Pivot abgewiesen, geerbt akzeptiert) |
 | MVP-053 | CO-01, CO-11 | Phase A/C | offen | atomarer Gesamtabschluss und Fehlerfall |
 | MVP-054 | CO-01 | Phase A/C | offen | Treffer-/Facettenmengen gegen Query |
 | MVP-055 | FB-01, FB-03 | Phase A/C | offen | Foodbook-Deep-Link/Reload |

@@ -1270,7 +1270,8 @@ class Editor extends Component
             'gerichtListe' => $gerichtListe ?? collect(),
             'basisHauptgruppen' => $this->type === 'concepts' ? app(\Platform\FoodAlchemist\Services\RecipeService::class)->mainGroups($team) : collect(),
             'basisKategorien' => ($this->type === 'concepts' && $this->basisHg !== null)
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::where('main_group_id', $this->basisHg)->orderBy('label')->get(['id', 'label'])
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::visibleToTeam($team)
+                    ->where('main_group_id', $this->basisHg)->orderBy('label')->get(['id', 'label'])
                 : collect(),
             'basisNiveaus' => [['slug' => 'haute_cuisine', 'label' => 'Haute'], ['slug' => 'gehoben', 'label' => 'Gehoben'], ['slug' => 'klassisch', 'label' => 'Klassisch']],
             'typFarben' => app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->typFarben($team),
@@ -1278,8 +1279,9 @@ class Editor extends Component
             'sektorSlugs' => $concept !== null ? $concepts->sektorEignungSlugs($concept) : [],
             // 4c: Kategorie-Feld abgelöst — kategorienFlat nicht mehr benötigt
             // Facetten-Vokabulare (Umbau-Spec Phase 4b)
-            'servierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
-                ->orderBy('sort_order')->get(['id', 'code', 'label']),
+            // MVP-025: teamgescopt wie die drei Facetten darunter — vorher als Einzelfall ungescopt.
+            'servierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'code', 'label']),
             'eventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
             'einsatzmomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
