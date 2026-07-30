@@ -127,22 +127,28 @@ class Browser extends Component
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
 
-        $rezepte = $verkauf->paginateBrowser([
+        // EIN Filtersatz für Tabelle und Facetten (MVP-048): vorher kannten die Zähler die
+        // aktive Klasse, Suche und den Status nicht — `?class=61&hg=10` lieferte dann 0 Treffer.
+        $filters = [
             'search' => $this->search,
             'hauptgruppe' => $this->hauptgruppe,
             'class' => $this->klasse,
             'status' => $this->status,
             'geschmack' => $this->geschmack,
-        ], $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100);
+        ];
+
+        $rezepte = $verkauf->paginateBrowser($filters, $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100);
 
         return view('foodalchemist::livewire.verkauf.browser', [
             'rezepte' => $rezepte,
             'hauptgruppen' => $verkauf->dishMainGroups($team),
-            'hgCounts' => $verkauf->hauptgruppenCounts($team),
+            'gesamtCount' => $verkauf->gesamtCount($team, $filters),
+            'hgCounts' => $verkauf->hauptgruppenCounts($team, $filters),
             // Modell A: Klasse = die 4 flachen Diätformen (unabhängige Achse). Baum-Ansicht
-            // 2026-07-06: Counts auf die gewählte HG gescoped, wenn ein HG-Knoten offen ist.
+            // 2026-07-06: Counts auf die gewählte HG gescoped, wenn ein HG-Knoten offen ist —
+            // die HG steckt jetzt im Filtersatz statt in einem eigenen Parameter.
             'klassen' => FoodAlchemistDishClass::visibleToTeam($team)->whereNull('dish_main_group_id')->orderBy('id')->get(),
-            'klassenCounts' => $verkauf->klassenCounts($team, $this->hauptgruppe),
+            'klassenCounts' => $verkauf->klassenCounts($team, $filters),
             'statusFaelle' => RecipeStatus::cases(),
             'statusCounts' => $verkauf->statusCounts($team),
         ])->layout('platform::layouts.app');

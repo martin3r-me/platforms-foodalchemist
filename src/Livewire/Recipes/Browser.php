@@ -30,6 +30,15 @@ class Browser extends Component
     #[Url(as: 'kat')]
     public ?int $kategorie = null;
 
+    /**
+     * MVP-042: eigener Arbeitsvorrat „Rezepte ohne Kategorie". Bewusst ein eigener Schalter und
+     * kein Sentinel in `$kategorie` — der ist `?int`, ein „none"-String hätte den Typ und jeden
+     * Vergleich in der View aufgeweicht. Gehört zur selben Achse wie HG/Kategorie, schließt sie
+     * also gegenseitig aus.
+     */
+    #[Url(as: 'ohne_kat')]
+    public bool $ohneKategorie = false;
+
     #[Url]
     public string $status = '';
 
@@ -75,12 +84,23 @@ class Browser extends Component
     {
         $this->hauptgruppe = $this->hauptgruppe === $id ? null : $id;
         $this->kategorie = null;
+        $this->ohneKategorie = false;                               // eine Achse, eine Auswahl
         $this->resetPage();
     }
 
     public function waehleKategorie(int $id): void
     {
         $this->kategorie = $this->kategorie === $id ? null : $id;
+        $this->ohneKategorie = false;
+        $this->resetPage();
+    }
+
+    /** MVP-042: der gezählte Arbeitsvorrat wird anklickbar statt nur sichtbar. */
+    public function waehleOhneKategorie(): void
+    {
+        $this->ohneKategorie = ! $this->ohneKategorie;
+        $this->hauptgruppe = null;
+        $this->kategorie = null;
         $this->resetPage();
     }
 
@@ -204,6 +224,7 @@ class Browser extends Component
             'geschmack' => $this->geschmack,
             'fertigung' => $this->fertigung,
             'nur_templates' => $this->nurTemplates,
+            'ohne_kategorie' => $this->ohneKategorie,
         ];
 
         $rezepte = $recipes->paginateBrowser($filters, $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100);
@@ -215,8 +236,11 @@ class Browser extends Component
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()->where('is_template', true)->orderBy('name')->get(['id', 'name', 'yield_kg', 'n_ingredients_total'])
                 : collect(),
             'hauptgruppen' => $recipes->mainGroups($team),
+            // Alle Baum-Zahlen aus DEMSELBEN Filtersatz wie die Tabelle (MVP-042/043).
+            'gesamtCount' => $recipes->gesamtCount($team, $filters),
             'hgCounts' => $recipes->hauptgruppenCounts($team, $filters),
-            'katCounts' => $this->hauptgruppe !== null ? $recipes->kategorieCounts($team, $this->hauptgruppe) : [],
+            'ohneKategorieCount' => $recipes->ohneKategorieCount($team, $filters),
+            'katCounts' => $this->hauptgruppe !== null ? $recipes->kategorieCounts($team, $this->hauptgruppe, $filters) : [],
             'kategorien' => $this->hauptgruppe !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::visibleToTeam($team)->where('main_group_id', $this->hauptgruppe)->orderBy('sort_order')->get()
                 : collect(),

@@ -24,11 +24,26 @@ class SalesRecipeService
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
+        return $this->browserQuery($team, $filters)
+            ->with(['speisenKlasse:id,label,diet_form', 'speisenHauptgruppe:id,code,label'])
+            ->orderBy('name')
+            ->paginate($perPage);
+    }
+
+    /**
+     * DER Filtervertrag der VK-Sicht — eine Stelle für Tabelle UND Facetten (MVP-048).
+     *
+     * Vorher lebte der Filtersatz nur in `paginateBrowser()`; die Facetten-Zähler bauten ihre
+     * eigenen Queries und kannten Suche, Status und Geschmack gar nicht. Ergebnis: `?class=61&hg=10`
+     * versprach Treffer und lieferte 0. Zähler und Zielmenge müssen aus derselben Quelle kommen,
+     * sonst laufen sie beim nächsten neuen Filter sofort wieder auseinander.
+     */
+    private function browserQuery(Team $team, array $filters): \Illuminate\Database\Eloquent\Builder
+    {
         // Modell A (Regelwerk_Verkaufsgerichte v1.1): HG = Kategorie (recipes.dish_main_group_id),
         // Klasse = Diätform (recipes.dish_class_id) — beide Achsen unabhängig filterbar.
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->whereNull('variant_source_recipe_id') // R4.4: konzept-lokale Slot-Varianten bleiben aus dem Katalog
-            ->with(['speisenKlasse:id,label,diet_form', 'speisenHauptgruppe:id,code,label'])
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
                 // Multi-Wort: jedes Token muss treffen (Name / Standard-Wording / Marketing /
                 // Kunden-Wording). §4.1 — Treffer dürfen über die Felder verteilt sein.
@@ -46,9 +61,7 @@ class SalesRecipeService
             ->when($filters['hauptgruppe'] ?? null, fn ($q, $hg) => $q->where('dish_main_group_id', $hg))
             ->when($filters['class'] ?? null, fn ($q, $k) => $q->where('dish_class_id', $k))
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
-            ->when(($filters['geschmack'] ?? '') !== '', fn ($q) => $q->where('taste_direction', $filters['geschmack']))
-            ->orderBy('name')
-            ->paginate($perPage);
+            ->when(($filters['geschmack'] ?? '') !== '', fn ($q) => $q->where('taste_direction', $filters['geschmack']));
     }
 
     /** 16 VK-Hauptgruppen mit Codes (aktive zuerst nach sort_order, dann Code). */
@@ -58,10 +71,23 @@ class SalesRecipeService
             ->where('is_inactive', false)->orderBy('sort_order')->orderBy('code')->get();
     }
 
-    /** @return array<int, int> recipe-Counts je VK-Hauptgruppe (Modell A: direkt über dish_main_group_id) */
-    public function hauptgruppenCounts(Team $team): array
+    /** Gesamtzähler („Alle Hauptgruppen") aus der Tabellenquery — keine Facettensumme (MVP-042/048). */
+    public function gesamtCount(Team $team, array $filters = []): int
     {
-        return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
+        return $this->browserQuery($team, array_diff_key($filters, ['hauptgruppe' => 1]))->count();
+    }
+
+    /**
+     * recipe-Counts je VK-Hauptgruppe (Modell A: direkt über dish_main_group_id).
+     *
+     * Rechnet mit allen aktiven Filtern AUSSER der eigenen Achse (MVP-048) — eine Hauptgruppe
+     * neben einer aktiven Klasse muss die Menge zeigen, die der Klick wirklich liefert.
+     *
+     * @return array<int, int>
+     */
+    public function hauptgruppenCounts(Team $team, array $filters = []): array
+    {
+        return $this->browserQuery($team, array_diff_key($filters, ['hauptgruppe' => 1]))
             ->whereNotNull('dish_main_group_id')
             ->groupBy('dish_main_group_id')
             ->pluck(DB::raw('COUNT(*) AS n'), 'dish_main_group_id')
@@ -69,16 +95,19 @@ class SalesRecipeService
     }
 
     /**
-     * recipe-Counts je Diät-Klasse — optional auf eine Hauptgruppe gescoped
-     * (Baum-Ansicht 2026-07-06: Klassen als aufklappbare Ebene unterm aktiven HG-Knoten).
+     * recipe-Counts je Diät-Klasse — mit allen aktiven Filtern außer der Klassen-Achse.
+     *
+     * Die Hauptgruppe bleibt bewusst IM Filtersatz (Baum-Ansicht 2026-07-06: Klassen sind die
+     * aufklappbare Ebene unterm aktiven HG-Knoten, also ist die HG dort Kontext und nicht die
+     * eigene Achse). Vorher kam sie als separater `?int`-Parameter herein und alle übrigen
+     * Filter fehlten ganz.
      *
      * @return array<int, int>
      */
-    public function klassenCounts(Team $team, ?int $hauptgruppe = null): array
+    public function klassenCounts(Team $team, array $filters = []): array
     {
-        return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
+        return $this->browserQuery($team, array_diff_key($filters, ['class' => 1]))
             ->whereNotNull('dish_class_id')
-            ->when($hauptgruppe, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
             ->groupBy('dish_class_id')
             ->pluck(DB::raw('COUNT(*) AS n'), 'dish_class_id')
             ->map(fn ($n) => (int) $n)->all();

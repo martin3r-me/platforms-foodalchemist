@@ -18,10 +18,37 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup;
  */
 class RecipeService
 {
+    /**
+     * Filterschlüssel der Taxonomie-Achse (MVP-042/043). Eine Facette rechnet immer OHNE die
+     * eigene Achse — sonst zählt sie die Auswahl, die sie gerade ersetzen soll. „Ohne Kategorie"
+     * gehört zur selben Achse wie Hauptgruppe/Kategorie: die drei schließen sich gegenseitig aus.
+     */
+    private const TAXONOMIE_ACHSE = ['hauptgruppe' => 1, 'category' => 1, 'ohne_kategorie' => 1];
+
+    /**
+     * Gesamtzähler („Alle Hauptgruppen") aus DERSELBEN Query wie die Tabelle (MVP-042).
+     *
+     * Vorher summierte die View die Hauptgruppen-Facetten — und verlor damit jedes Rezept ohne
+     * Kategorie (Tabelle 64, Baum 62). Eine Summe von Facetten ist nie die Gesamtmenge, sobald
+     * eine Facette nicht alle Zeilen abdeckt.
+     */
+    public function gesamtCount(Team $team, array $filters = []): int
+    {
+        return $this->browserQuery($team, array_diff_key($filters, self::TAXONOMIE_ACHSE))->count();
+    }
+
+    /** Eigener Arbeitsvorrat: Rezepte ohne Kategorie — im Baum sonst unerreichbar (MVP-042). */
+    public function ohneKategorieCount(Team $team, array $filters = []): int
+    {
+        return $this->browserQuery($team, array_diff_key($filters, self::TAXONOMIE_ACHSE))
+            ->whereNull('foodalchemist_recipes.category_id')
+            ->count();
+    }
+
     /** Hauptgruppen-Zähler in einer GROUP-BY-Query (Baum links, P-1). */
     public function hauptgruppenCounts(Team $team, array $filters = []): array
     {
-        return $this->browserQuery($team, array_diff_key($filters, ['hauptgruppe' => 1, 'category' => 1]))
+        return $this->browserQuery($team, array_diff_key($filters, self::TAXONOMIE_ACHSE))
             ->join('foodalchemist_recipe_categories AS k', 'k.id', '=', 'foodalchemist_recipes.category_id')
             ->selectRaw('k.main_group_id, COUNT(*) AS n')
             ->groupBy('k.main_group_id')
@@ -29,10 +56,16 @@ class RecipeService
             ->all();
     }
 
-    /** Kategorie-Zähler der gewählten Hauptgruppe (zweite Baum-Ebene). */
-    public function kategorieCounts(Team $team, int $mainGroupId): array
+    /**
+     * Kategorie-Zähler der gewählten Hauptgruppe (zweite Baum-Ebene).
+     *
+     * `$filters` ist Pflicht-Kontext, nicht Kür (MVP-043): vorher rechnete die Methode mit
+     * `browserQuery($team, [])` und verwarf Suche, Status, Geschmack und Fertigung. Der Zähler
+     * versprach dann 1 Treffer, der Klick auf `?status=review&hg=31&kat=189` lieferte 0.
+     */
+    public function kategorieCounts(Team $team, int $mainGroupId, array $filters = []): array
     {
-        return $this->browserQuery($team, [])
+        return $this->browserQuery($team, array_diff_key($filters, self::TAXONOMIE_ACHSE))
             ->join('foodalchemist_recipe_categories AS k', 'k.id', '=', 'foodalchemist_recipes.category_id')
             ->where('k.main_group_id', $mainGroupId)
             ->selectRaw('foodalchemist_recipes.category_id, COUNT(*) AS n')
@@ -606,6 +639,8 @@ class RecipeService
                     ->where('main_group_id', (int) $filters['hauptgruppe'])->pluck('id')))
             ->when(($filters['category'] ?? null) !== null && $filters['category'] !== '', fn (Builder $q) => $q
                 ->where('category_id', (int) $filters['category']))
+            ->when($filters['ohne_kategorie'] ?? false, fn (Builder $q) => $q
+                ->whereNull('foodalchemist_recipes.category_id'))       // MVP-042: eigener Arbeitsvorrat
             ->when(($filters['status'] ?? '') !== '', fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(($filters['geschmack'] ?? '') !== '', fn (Builder $q) => $q->where('taste_direction', $filters['geschmack']))
             ->when(($filters['fertigung'] ?? '') !== '', fn (Builder $q) => $q->where('production_depth', $filters['fertigung']))

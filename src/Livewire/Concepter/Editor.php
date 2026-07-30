@@ -1241,7 +1241,8 @@ class Editor extends Component
             'pickKlassen' => $this->pickHg !== null
                 ? FoodAlchemistDishClass::where('dish_main_group_id', $this->pickHg)->orderBy('label')->get(['id', 'label'])
                 : collect(),
-            'pickKlassenCounts' => $this->pickHg !== null ? $sales->klassenCounts($team, $this->pickHg) : [],
+            // Die Hauptgruppe reist jetzt im Filtersatz statt als eigener Parameter (MVP-048).
+            'pickKlassenCounts' => $this->pickHg !== null ? $sales->klassenCounts($team, ['hauptgruppe' => $this->pickHg]) : [],
             'concept' => $concept,
             'paket' => $paket,
             'cockpit' => $cockpit,

@@ -39,7 +39,9 @@
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
                             : 'text-gray-700 hover:bg-black/[0.03]' }}">
                     <span class="font-medium">Alle Hauptgruppen</span>
-                    <span class="text-[11px] text-gray-500">{{ number_format(array_sum($hgCounts), 0, ',', '.') }}</span>
+                    {{-- Aus der Tabellenquery, nicht als Facettensumme: Gerichte ohne Hauptgruppe
+                         fehlen in `$hgCounts` und verschwanden damit aus der Gesamtzahl (MVP-042). --}}
+                    <span class="text-[11px] text-gray-500" data-gesamt-count>{{ number_format($gesamtCount, 0, ',', '.') }}</span>
                 </button>
                 @if($hauptgruppe === null)
                     <div class="ml-4 -mt-1 space-y-0.5" data-vk-klassen-ast>

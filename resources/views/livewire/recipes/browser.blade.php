@@ -48,12 +48,14 @@
                     <span class="text-[11px] {{ $nurTemplates ? 'text-orange-500 font-medium' : 'text-gray-500' }}">{{ $nurTemplates ? 'active' : $templateAnzahl }}</span>
                 </button>
 
+                {{-- MVP-042: Gesamtzahl kommt aus der Tabellenquery, NICHT aus array_sum($hgCounts) —
+                     die Summe der Hauptgruppen verlor jedes Rezept ohne Kategorie (64 vs. 62). --}}
                 <button type="button" wire:click="waehleHauptgruppe(null)"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === null
+                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === null && ! $ohneKategorie
                             ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
                             : 'text-gray-700 hover:bg-black/[0.03]' }}">
                     <span class="font-medium">Alle Hauptgruppen</span>
-                    <span class="text-[11px] text-gray-500">{{ number_format(array_sum($hgCounts), 0, ',', '.') }}</span>
+                    <span class="text-[11px] text-gray-500" data-gesamt-count>{{ number_format($gesamtCount, 0, ',', '.') }}</span>
                 </button>
 
                 <div class="space-y-0.5 -mx-1" data-hg-liste>
@@ -83,6 +85,21 @@
                             @endif
                         </div>
                     @endforeach
+
+                    {{-- MVP-042: Rezepte ohne Kategorie waren in der Tabelle sichtbar, über den Baum
+                         aber unerreichbar. Nur zeigen, wenn es welche gibt — sonst wäre es eine
+                         Dauer-Null, die den Baum verrauscht. --}}
+                    @if($ohneKategorieCount > 0 || $ohneKategorie)
+                        <button type="button" wire:click="waehleOhneKategorie"
+                                class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $ohneKategorie
+                                    ? 'bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-amber-700'
+                                    : 'text-gray-600 hover:bg-black/[0.03]' }}"
+                                title="Basisrezepte ohne Kategorie — über die Hauptgruppen nicht auffindbar"
+                                data-ohne-kategorie>
+                            <span class="min-w-0 truncate italic">Ohne Kategorie</span>
+                            <span class="text-[11px] text-gray-500 shrink-0 ml-2">{{ $ohneKategorieCount }}</span>
+                        </button>
+                    @endif
                 </div>
             </div>
         </x-ui-page-sidebar>
