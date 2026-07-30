@@ -25,3 +25,6 @@ Thumbs.db
 # OS
 .DS_Store
 Thumbs.db
+
+# Lokale Migrations-Sicherungsdumps (PRE_*.sql/.json) — nie versionieren
+database/backups/
