@@ -1045,9 +1045,9 @@ verlinkt ist.
 | MVP-010 | UX-07, QL-02 | Phase A | offen | zentrale Label-Snapshots |
 | MVP-011 | QL-02 | Phase A/D | offen | aktiver Tab plus Querybudget |
 | MVP-012 | UX-10, AD-12 | Phase A/C | offen | kompletter Nicht-KI-Pfad |
-| MVP-013 | ST-05 | A-02–A-04 | offen | own/parent/global/sibling Delete-Test |
-| MVP-014 | ST-17 | A-03, A-04 | offen | Vorschlagsliste Team A/B |
-| MVP-015 | ST-05 | A-03 | offen | atomarer Bulk-Fehlertest |
+| MVP-013 | ST-05 | A-02–A-04 | behoben | `LieferantenBulkTenantTest` (geerbter Artikel nicht löschbar, eigener schon) · `acebc04` |
+| MVP-014 | ST-17 | A-03, A-04 | behoben | `LieferantenBulkTenantTest` (fremde Vorschläge nicht in Review-Liste) |
+| MVP-015 | ST-05 | A-03 | behoben | `LieferantenBulkTenantTest` (gemischter Bulk rollt atomar zurück) |
 | MVP-016 | ST-02 | Phase A/D | offen | Pagination und Mengenbudget |
 | MVP-017 | UX-07, ST-19 | Phase A | offen | sichtbarer Statusfehler und Rollback |
 | MVP-018 | ST-19 | Phase A/D | offen | Accessibility-Snapshot Statusfeld |
@@ -1071,9 +1071,9 @@ verlinkt ist.
 | MVP-036 | KN-01 | A-02–A-04 | offen | Knowledge Read Team A/B |
 | MVP-037 | KN-03, KN-04 | A-02–A-04 | offen | Alias-/Binding-Ownership-Test |
 | MVP-038 | KN-01 | Phase A/D | offen | serverseitige Pagination und Querybudget |
-| MVP-039 | AD-16 | A-02–A-04 | offen | Parent/global read-only, own CRUD |
-| MVP-040 | AD-16 | A-03 | offen | teamgescopter Verwendungszähler |
-| MVP-041 | AD-03, AD-16 | A-10, A-02 | offen | dokumentierte Rollenmatrix entspricht UI/Policy |
+| MVP-039 | AD-16 | A-02–A-04 | behoben | `AufschlagsklassenTenantTest` (geerbt/global read-only, eigene mutierbar) · Commit R7 |
+| MVP-040 | AD-16 | A-03 | behoben | `AufschlagsklassenTenantTest` (Zähler ohne Fremd-Team) + Löschsperre visibleToTeam |
+| MVP-041 | AD-03, AD-16 | A-10, A-02 | teilweise | falscher row-gated-Kommentar in Settings/Index korrigiert (Server-Guard geführt); Dimensions-Labels der Einheiten offen |
 | MVP-042 | RE-11 | Phase A | behoben | `FacettenVertragTest` (Gesamtzähler == Tabelle, „Ohne Kategorie") · `16ea773` |
 | MVP-043 | RE-11 | Phase A | behoben | `FacettenVertragTest` (Kategorie-Zähler mit aktiven Filtern) |
 | MVP-044 | RE-03 | A-02–A-04 | behoben | `ReferenzAutorisierungTest` (fremde Kategorie abgewiesen, Eltern akzeptiert) · `cc9e94a` |

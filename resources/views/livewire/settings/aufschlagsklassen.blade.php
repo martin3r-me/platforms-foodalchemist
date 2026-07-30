@@ -45,11 +45,17 @@
                         </td>
                         <td class="{{ $td }} !px-2">{{ $zaehler[$ak->id] ?? 0 }}</td>
                         <td class="{{ $td }} !px-2 whitespace-nowrap">
-                            <button type="button" wire:click="edit({{ $ak->id }})" class="{{ $btnGhostXs }}" data-ak-edit>Bearbeiten</button>
-                            <button type="button" wire:click="toggleInactive({{ $ak->id }})" class="{{ $btnGhostXs }}">{{ $ak->is_inactive ? 'aktivieren' : 'deaktivieren' }}</button>
-                            <button type="button" wire:click="delete({{ $ak->id }})" wire:confirm="Diese Aufschlagsklasse löschen?" @disabled(($zaehler[$ak->id] ?? 0) > 0)
-                                    class="{{ $btnGhostXs }} {{ ($zaehler[$ak->id] ?? 0) > 0 ? 'opacity-40 cursor-not-allowed' : 'text-red-500' }}"
-                                    title="{{ ($zaehler[$ak->id] ?? 0) > 0 ? 'Wird von Rezepten genutzt — erst umhängen/deaktivieren' : 'löschen' }}">Löschen</button>
+                            {{-- MVP-039/041: geerbte (Ancestor) und globale (team_id NULL) Klassen sind
+                                 read-only. UI blendet die Aktionen aus, der Server verweigert zusätzlich. --}}
+                            @if(\Platform\FoodAlchemist\Support\TeamScope::owns($ak->team_id, $team))
+                                <button type="button" wire:click="edit({{ $ak->id }})" class="{{ $btnGhostXs }}" data-ak-edit>Bearbeiten</button>
+                                <button type="button" wire:click="toggleInactive({{ $ak->id }})" class="{{ $btnGhostXs }}">{{ $ak->is_inactive ? 'aktivieren' : 'deaktivieren' }}</button>
+                                <button type="button" wire:click="delete({{ $ak->id }})" wire:confirm="Diese Aufschlagsklasse löschen?" @disabled(($zaehler[$ak->id] ?? 0) > 0)
+                                        class="{{ $btnGhostXs }} {{ ($zaehler[$ak->id] ?? 0) > 0 ? 'opacity-40 cursor-not-allowed' : 'text-red-500' }}"
+                                        title="{{ ($zaehler[$ak->id] ?? 0) > 0 ? 'Wird von Rezepten genutzt — erst umhängen/deaktivieren' : 'löschen' }}">Löschen</button>
+                            @else
+                                <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-ak-readonly title="{{ $ak->team_id === null ? 'Globaler Standard' : 'Vom Master geerbt' }} — read-only">{{ $ak->team_id === null ? 'global' : 'geerbt' }}</span>
+                            @endif
                         </td>
                     @endif
                 </tr>

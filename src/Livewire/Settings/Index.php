@@ -10,8 +10,12 @@ use Livewire\Component;
  * eine eigene URL (V-17: kein Tab-State-Verlust). Die Sektionen selbst sind
  * eigenständige Livewire-Komponenten (Isolation, lazy pro Route).
  *
- * Edit-Gating macht jede Sektion zeilen-genau über Curate::canCurate (M1-08);
- * das Gerüst zeigt Kind-Teams nur den Read-only-Hinweis (D1: geerbter Katalog).
+ * Edit-Gating verantwortet JEDE Sektion selbst — es gibt kein zentrales Gate im Gerüst.
+ * Der Vertrag pro mutierender Sektion (MVP-039/041): serverseitig `TeamScope::owns()` bzw.
+ * `isOwnedBy()` vor jedem Write; globale (team_id NULL) und geerbte Zeilen sind read-only.
+ * `Curate::canCurate` blendet im UI die Buttons aus — es ersetzt den Server-Guard NICHT
+ * (UI versteckt, Server verweigert; nie nur eins von beidem). Aufschlagsklassen war die
+ * Ausnahme, die den früheren pauschalen „row-gated"-Kommentar widerlegte; jetzt geführt.
  */
 class Index extends Component
 {

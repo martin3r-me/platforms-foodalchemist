@@ -27,9 +27,35 @@ class Aufschlagsklassen extends Component
 
     private const PROZENT_FELDER = ['raw_markup_pct', 'service_pct', 'profit_pct', 'vat_rate'];
 
+    /**
+     * MVP-039 (P0): eine Klasse ist mutierbar nur fürs Besitzer-Team. Sichtbar (global +
+     * Ancestry) genügt zum Lesen/Referenzieren, nie zum Schreiben. `TeamScope::owns()` liefert
+     * für globale Zeilen (team_id NULL) korrekt `false` — das schließt das Loch, in dem
+     * `delete()` nur Fremd-Teams mit nicht-null team_id blockierte.
+     */
+    private function eigeneKlasse(int $id): ?FoodAlchemistMarkupClass
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $ak = TeamScope::applyVisible(FoodAlchemistMarkupClass::query(), 'team_id', $team)->find($id);
+        if ($ak === null) {
+            $this->fehler = 'Aufschlagsklasse nicht gefunden oder nicht sichtbar.';
+
+            return null;
+        }
+        if (! TeamScope::owns($ak->team_id, $team)) {
+            $this->fehler = 'Geerbte oder globale Aufschlagsklasse — Pflege nur durchs Besitzer-Team (D1).';
+
+            return null;
+        }
+        $this->fehler = null;
+
+        return $ak;
+    }
+
     public function edit(int $id): void
     {
-        $ak = FoodAlchemistMarkupClass::find($id);
+        // Öffnen nur, wenn speicherbar — sonst zeigt das Formular eine Aktion, die immer scheitert.
+        $ak = $this->eigeneKlasse($id);
         if ($ak === null) {
             return;
         }
@@ -53,11 +79,17 @@ class Aufschlagsklassen extends Component
 
     public function save(): void
     {
+        // MVP-039: Owner-Guard auch am Write, nicht nur beim Öffnen — ein manipuliertes editId
+        // im Payload kommt hier nicht durch.
+        $ak = $this->eigeneKlasse((int) $this->editId);
+        if ($ak === null) {
+            return;
+        }
         $werte = $this->validiert($this->form);
         if ($werte === null) {
             return;
         }
-        FoodAlchemistMarkupClass::findOrFail($this->editId)->update($werte);
+        $ak->update($werte);
         $this->cancel();
         $this->dispatch('recipe-gespeichert');                        // Marge-Anzeigen (Cockpit) neu rechnen
     }
@@ -70,7 +102,10 @@ class Aufschlagsklassen extends Component
 
             return;
         }
-        if (FoodAlchemistMarkupClass::where('code', $code)->exists()) {
+        // Unique ist (team_id, code) — die Kollision nur im EIGENEN Team prüfen, sonst blockiert
+        // ein fremder/globaler Code das Anlegen (und verrät ihn).
+        $teamId = Auth::user()?->currentTeamRelation?->id;
+        if (FoodAlchemistMarkupClass::where('team_id', $teamId)->where('code', $code)->exists()) {
             $this->fehler = "Code «{$code}» ist schon vergeben.";
 
             return;
@@ -88,25 +123,25 @@ class Aufschlagsklassen extends Component
 
     public function toggleInactive(int $id): void
     {
-        $ak = FoodAlchemistMarkupClass::find($id);
+        $ak = $this->eigeneKlasse($id);                               // MVP-039
         $ak?->update(['is_inactive' => ! $ak->is_inactive]);
     }
 
     /** Phase 5: hart löschen, wenn unbenutzt (sonst locked → deaktivieren). */
     public function delete(int $id): void
     {
-        $ak = FoodAlchemistMarkupClass::find($id);
+        // MVP-039: owns()-Guard schließt das team_id-null-Loch (global war vorher löschbar).
+        $ak = $this->eigeneKlasse($id);
         if ($ak === null) {
             return;
         }
         $team = Auth::user()?->currentTeamRelation;
-        if ($ak->team_id !== null && $team !== null && (int) $ak->team_id !== (int) $team->id) {
-            $this->fehler = 'Geerbte Aufschlagsklasse — nur das Besitzer-Team kann löschen.';
-
-            return;
-        }
-        $nRec = DB::table('foodalchemist_recipes')->whereNull('deleted_at')->where('markup_class_id', $id)->count();
-        $nCls = DB::table('foodalchemist_dish_classes')->whereNull('deleted_at')->where('default_markup_class_id', $id)->count();
+        // MVP-040: Verwendung nur im SICHTBAREN Set zählen (kein Fremd-Team-Leak). `markup_class_id`
+        // ist nullOnDelete, deshalb ist die Sperre eine UX-Sicherung, keine FK-Notwendigkeit.
+        $nRec = TeamScope::applyVisible(DB::table('foodalchemist_recipes'), 'team_id', $team)
+            ->whereNull('deleted_at')->where('markup_class_id', $id)->count();
+        $nCls = TeamScope::applyVisible(DB::table('foodalchemist_dish_classes'), 'team_id', $team)
+            ->whereNull('deleted_at')->where('default_markup_class_id', $id)->count();
         if ($nRec + $nCls > 0) {
             $this->fehler = "Wird von {$nRec} Gericht(en) + {$nCls} Klasse(n) genutzt — erst umhängen oder deaktivieren.";
 
@@ -146,9 +181,12 @@ class Aufschlagsklassen extends Component
         $team = Auth::user()?->currentTeamRelation;
 
         return view('foodalchemist::livewire.settings.aufschlagsklassen', [
+            'team' => $team,
             'klassen' => TeamScope::applyVisible(FoodAlchemistMarkupClass::query(), 'team_id', $team)->orderBy('code')->get(),
-            'zaehler' => DB::table('foodalchemist_recipes')->whereNull('deleted_at')
-                ->whereNotNull('markup_class_id')->selectRaw('markup_class_id, COUNT(*) AS n')
+            // MVP-040: nur sichtbare Gerichte zählen — der Zähler verriet sonst fremde Team-Nutzung.
+            'zaehler' => TeamScope::applyVisible(DB::table('foodalchemist_recipes'), 'team_id', $team)
+                ->whereNull('deleted_at')->whereNotNull('markup_class_id')
+                ->selectRaw('markup_class_id, COUNT(*) AS n')
                 ->groupBy('markup_class_id')->pluck('n', 'markup_class_id'),
         ]);
     }
