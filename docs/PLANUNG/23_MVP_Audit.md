@@ -1059,7 +1059,7 @@ verlinkt ist.
 | MVP-024 | RE-10 | Phase A/C | behoben | `StatusUndLabelsTest` (VK-Statusfehler + zentrale Labels) |
 | MVP-025 | CO-03, AD-18 | A-02–A-04 | behoben | `ConcepterReferenzTenantTest` + Servierform/basisKategorien visibleToTeam · Commit R9 |
 | MVP-026 | CO-01–11 | Phase A/C | offen | Zerlegung entlang Use Cases plus Regression |
-| MVP-027 | FB-03, FB-05 | A-02–A-04 | offen | Kapitel-/Block-IDOR-Test |
+| MVP-027 | FB-03, FB-05 | A-02–A-04 | behoben | `FoodbookPrefillTenantTest` (fremdes Kapitel/Block nicht prefillbar, eigene weiterhin) · Commit R10 |
 | MVP-028 | FB-01–17 | Phase A/C | offen | getrennte Komponenten und Business-E2E |
 | MVP-029 | WI-03 | Phase A/C | offen | fachlicher Artikelpicker im Browser |
 | MVP-030 | WI-03, ST-19 | A-03, A-04 | offen | fremde GP-ID wird abgewiesen |

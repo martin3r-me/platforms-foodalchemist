@@ -802,8 +802,33 @@ class Index extends Component
         $this->ladeKapitelForm($svc);
     }
 
+    /**
+     * MVP-027 (P0): Ein Kapitel nur laden, wenn es dem Team gehört. Vorher prefillte eine
+     * manipulierte fremde ID Titel/Kundentext/Preise in public Properties (Leseleck). Die
+     * nachgelagerten Writes waren via FoodbookService::ownedKapitel geschützt — das Prefill nicht.
+     */
+    private function eigenesKapitel(int $id): ?\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $k = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::visibleToTeam($team)->find($id);
+
+        return ($k !== null && $k->isOwnedBy($team)) ? $k : null;
+    }
+
+    private function eigenerBlock(int $id): ?\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $b = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::visibleToTeam($team)->find($id);
+
+        return ($b !== null && $b->isOwnedBy($team)) ? $b : null;
+    }
+
     public function kapitelWaehle(int $id, FoodbookService $svc): void
     {
+        // Fremde/geerbte Kapitel gar nicht erst auswählen — sonst lädt ladeKapitelForm() ihre Daten.
+        if ($this->eigenesKapitel($id) === null) {
+            return;
+        }
         $this->selectedKapitelId = $id;
         $this->ladeKapitelForm($svc);
         $this->editBlockId = null;
@@ -831,7 +856,7 @@ class Index extends Component
         if ($this->selectedKapitelId === null) {
             return;
         }
-        $k = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($this->selectedKapitelId);
+        $k = $this->eigenesKapitel($this->selectedKapitelId);        // MVP-027: nur eigenes prefillen
         if ($k) {
             $this->kapitelForm = [
                 'title' => $k->title, 'consumer_title' => $k->consumer_title ?? '',
@@ -1020,7 +1045,7 @@ class Index extends Component
 
     public function blockBearbeiten(int $id): void
     {
-        $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::find($id);
+        $block = $this->eigenerBlock($id);                           // MVP-027: kein fremdes Prefill
         if ($block === null) {
             return;
         }
