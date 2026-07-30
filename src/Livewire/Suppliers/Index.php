@@ -232,18 +232,24 @@ class Index extends Component
 
     public function bulkLoeschen(): void
     {
+        // MVP-013 (P0): Löschen über den Service-Guard (isOwnedBy), nicht über den Lese-Scope.
         $this->bulkArtikelAktion(function ($items, $team, $id) {
-            \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)->findOrFail($id)->delete();
+            $item = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)->findOrFail($id);
+            $items->loesche($team, $item);
         });
     }
 
     public function bulkMappingEntfernen(): void
     {
         $this->bulkArtikelAktion(function ($items, $team, $id) {
+            // MVP-013 (P0): das Umhängen des Mappings ist ein Schreibvorgang am Artikel — nur am
+            // eigenen erlaubt. Vorher wurde die Artikel-ID gar nicht geprüft und das GP ungescopt
+            // per ::find() geladen.
+            $items->assertOwned($team, (int) $id);
             $struktur = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_item_structures')
                 ->where('supplier_item_id', $id)->whereNull('deleted_at')->first();
             if ($struktur?->gp_id !== null) {
-                $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::find($struktur->gp_id);
+                $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($struktur->gp_id);
                 if ($gp !== null) {
                     app(\Platform\FoodAlchemist\Services\LeadLaService::class)->entknuepfen($team, $gp, $id);
                 }
@@ -255,7 +261,9 @@ class Index extends Component
     {
         $this->bulkGpSuche = '';
         $this->bulkArtikelAktion(function ($items, $team, $id) use ($gpId) {
+            // GP darf geerbt/global sein (Vererbung), der Artikel muss dem Team gehören.
             $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+            $items->assertOwned($team, (int) $id);
             $struktur = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_item_structures')
                 ->where('supplier_item_id', $id)->whereNull('deleted_at')->first();
             if ($struktur === null || $struktur->gp_id !== null) {
@@ -265,15 +273,22 @@ class Index extends Component
         });
     }
 
+    /**
+     * MVP-015 (P0): all-or-nothing. Vorher iterierte die Bulk-Aktion ohne Transaktion — brach
+     * sie bei Artikel n ab, blieben 1…n-1 persistiert (halber Zustand). Jetzt rollt ein Fehler
+     * den ganzen Lauf zurück, und die Auswahl wird erst nach Erfolg geleert.
+     */
     private function bulkArtikelAktion(\Closure $aktion): void
     {
         $this->fehler = null;
         $team = Auth::user()?->currentTeamRelation;
         $items = app(SupplierItemService::class);
         try {
-            foreach (array_keys(array_filter($this->auswahl)) as $id) {
-                $aktion($items, $team, (int) $id);
-            }
+            \Illuminate\Support\Facades\DB::transaction(function () use ($aktion, $items, $team) {
+                foreach (array_keys(array_filter($this->auswahl)) as $id) {
+                    $aktion($items, $team, (int) $id);
+                }
+            });
             $this->auswahl = [];
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -314,14 +329,19 @@ class Index extends Component
             'globaleSuche' => $globaleSuche,
             'aktiverLieferant' => $globaleSuche ? null : $liste->firstWhere('id', $this->supplierId),
             'darfLieferantEdit' => ! $globaleSuche && Curate::canCurate(Auth::user(), $liste->firstWhere('id', $this->supplierId)),
-            // M3-11: offene Match-Vorschläge des Lieferanten (Review-Liste)
+            // M3-11: offene Match-Vorschläge des Lieferanten (Review-Liste).
+            // MVP-014 (P0): team-scoped wie der Banner-Zähler (:310) und die Write-Pfade im
+            // MatchService — vorher lasen diese beiden Keys teamübergreifend (Leseleck über
+            // fremde Artikel-/GP-Namen + Scores).
             'vorschlaege' => $this->reviewOffen && $this->supplierId !== null
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::with(['item:id,designation', 'gp:id,name'])
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::where('team_id', $team->id)
+                    ->with(['item:id,designation', 'gp:id,name'])
                     ->whereHas('item', fn ($q) => $q->where('supplier_id', $this->supplierId))
                     ->where('status', 'offen')->orderByDesc('score')->limit(100)->get()
                 : collect(),
             'offeneVorschlaege' => $this->supplierId !== null
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::whereHas('item', fn ($q) => $q->where('supplier_id', $this->supplierId))
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::where('team_id', $team->id)
+                    ->whereHas('item', fn ($q) => $q->where('supplier_id', $this->supplierId))
                     ->where('status', 'offen')->count()
                 : 0,
             'bulkGpKandidaten' => $this->bulkGpSuche !== ''

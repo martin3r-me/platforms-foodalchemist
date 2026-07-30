@@ -254,4 +254,33 @@ class SupplierItemService
         }
         $item->update(['is_discontinued' => $discontinued]);
     }
+
+    /**
+     * Löschen — MVP-013 (P0): nur das Besitzer-Team. Vorher löschte die Bulk-Leiste per
+     * `visibleToTeam(...)->findOrFail()->delete()`, also mit dem LESE-Scope als Schreibrecht:
+     * ein Kind-Team konnte geerbte Master-Katalog-Artikel löschen. Der Owner-Check ist die
+     * Grenze, spiegelbildlich zu setDiscontinued().
+     */
+    public function loesche(Team $team, FoodAlchemistSupplierItem $item): void
+    {
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Artikel — nur das Besitzer-Team darf löschen (D1).');
+        }
+        $item->delete();
+    }
+
+    /**
+     * Guard für Schreibvorgänge, die den Artikel selbst nicht laden (Mapping-Umhängen, MVP-013):
+     * lädt sichtbar und prüft Eigentum. Wirft `ModelNotFoundException` (nicht sichtbar) bzw.
+     * `RuntimeException` (sichtbar, aber geerbt).
+     */
+    public function assertOwned(Team $team, int $itemId): FoodAlchemistSupplierItem
+    {
+        $item = FoodAlchemistSupplierItem::visibleToTeam($team)->findOrFail($itemId);
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Artikel — Mapping-Pflege nur durchs Besitzer-Team (D1).');
+        }
+
+        return $item;
+    }
 }
