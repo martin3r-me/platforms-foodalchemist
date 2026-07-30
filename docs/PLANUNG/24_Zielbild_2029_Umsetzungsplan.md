@@ -117,10 +117,10 @@ aber nicht durch Code erfüllen.
 | ID | Arbeitspaket | Ergebnis / Abnahme | Status |
 |---|---|---|---|
 | A-01 | Tenant-Angriffsfläche inventarisieren | Matrix aller öffentlichen Livewire-, Route-, Tool- und Job-Aktionen mit Read/Write/Ownership | offen |
-| A-02 | Zentrale Ownership-API | ein konsistenter Pfad für own-only Load, Update und Delete; direkte unsichere Mutationen entfernt | offen |
-| A-03 | Cross-Tenant-Funde schließen | alle P0/P1-Funde aus Audit 23 behoben und regression-getestet | offen |
-| A-04 | Adversarial Tenant Suite | Global-, Parent-, eigenes Team- und Fremdteam-Fall je Aktion | offen |
-| A-05 | Testdatenbank-Hard-Guard | Suite bricht vor Migration/Write ab, wenn Host/DB nicht allowlisted ist | offen |
+| A-02 | Zentrale Ownership-API | ein konsistenter Pfad für own-only Load, Update und Delete; direkte unsichere Mutationen entfernt | teilweise — `TeamScope::referenz()`/`referenzen()` als dritte Zugriffsart gebaut (Referenz-Autorisierung), in Rezept-/Gerichte-Services genutzt (`cc9e94a`); Load/Delete-Vereinheitlichung offen |
+| A-03 | Cross-Tenant-Funde schließen | alle P0/P1-Funde aus Audit 23 behoben und regression-getestet | teilweise — Paket R schließt die P0 der Rezepte/Gerichte (MVP-044/046/050) + P1 (042/043/048/022/024); Lieferanten/Wissen/Einstellungen/Concepter/Foodbook offen |
+| A-04 | Adversarial Tenant Suite | Global-, Parent-, eigenes Team- und Fremdteam-Fall je Aktion | teilweise — `ReferenzAutorisierungTest` (own/parent/global/sibling je Referenzfeld) als Muster gebaut; Vollmatrix über alle Aktionen offen |
+| A-05 | Testdatenbank-Hard-Guard | Suite bricht vor Migration/Write ab, wenn Host/DB nicht allowlisted ist | gebaut — zweischichtig (Env vor App-Boot + Config danach), `tests/TestCase.php`, `TestDbGuardVertragTest`, `ce03f5a` |
 | A-06 | Composer und Dependency-Wahrheit | gültiges Manifest/Lock-Konzept, reproduzierbare Installation dokumentiert | offen |
 | A-07 | CI als Merge-Gate | Syntax, Composer Validate, Frontend-Build, Tests und statische Analyse verpflichtend | offen |
 | A-08 | Tool-Registry-Health | Registrierungsfehler geloggt; erwartete Tool-Anzahl und Namen im Healthcheck getestet | offen |
