@@ -47,11 +47,40 @@ class Browser extends Component
 
     public bool $creating = false;
 
+    /**
+     * MVP-036/037: Ein sichtbares Dokument laden (global + eigenes Team/Master-Kette). Rohe
+     * DB::table-Query, deshalb über TeamScope::applyVisible statt eines Model-Scopes. Gibt null,
+     * wenn nicht sichtbar — die Aufrufer setzen dann keinen State.
+     */
+    private function sichtbaresDoc(int $id, array $spalten = ['*']): ?object
+    {
+        return TeamScope::applyVisible(
+            DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at'),
+            'team_id', Auth::user()?->currentTeamRelation
+        )->where('id', $id)->first($spalten);
+    }
+
+    /**
+     * Ein EIGENES Dokument für Schreibaktionen an Aliassen/Bindungen (MVP-037). Vorher schrieben
+     * diese Aktionen ohne jede Eigentumsprüfung und löschten Kind-IDs quer über alle Teams.
+     */
+    private function eigenesDoc(int $id): ?object
+    {
+        $doc = $this->sichtbaresDoc($id, ['id', 'team_id']);
+        if ($doc === null || ! TeamScope::owns($doc->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbtes/Master-Wissen — Aliasse und Bindungen pflegt nur das Besitzer-Team.';
+
+            return null;
+        }
+
+        return $doc;
+    }
+
     public function select(int $id): void
     {
         $this->creating = false;
         $this->fehler = null;
-        $doc = DB::table('foodalchemist_knowledge_documents')->where('id', $id)->first();
+        $doc = $this->sichtbaresDoc($id);
         if ($doc === null) {
             return;
         }
@@ -153,6 +182,9 @@ class Browser extends Component
         if ($alias === '' || $this->selectedId === null) {
             return;
         }
+        if ($this->eigenesDoc($this->selectedId) === null) {          // MVP-037
+            return;
+        }
         $exists = DB::table('foodalchemist_knowledge_aliases')
             ->where('alias_slug', $alias)->where('knowledge_document_id', $this->selectedId)->exists();
         if (! $exists) {
@@ -167,6 +199,12 @@ class Browser extends Component
 
     public function removeAlias(int $aliasId): void
     {
+        // MVP-037: Eltern-Doc über die Alias-ID auflösen und Eigentum prüfen — vorher löschte
+        // die Methode jede beliebige Alias-ID quer über alle Teams.
+        $docId = DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->value('knowledge_document_id');
+        if ($docId === null || $this->eigenesDoc((int) $docId) === null) {
+            return;
+        }
         DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->delete();
     }
 
@@ -174,6 +212,9 @@ class Browser extends Component
     public function addBinding(): void
     {
         if ($this->selectedId === null) {
+            return;
+        }
+        if ($this->eigenesDoc($this->selectedId) === null) {          // MVP-037
             return;
         }
         $target = trim((string) ($this->newBinding['target_key'] ?? ''));
@@ -210,6 +251,11 @@ class Browser extends Component
 
     public function removeBinding(int $bindingId): void
     {
+        // MVP-037: Eltern-Doc über die Binding-ID auflösen und Eigentum prüfen (wie removeAlias).
+        $docId = DB::table('foodalchemist_knowledge_bindings')->where('id', $bindingId)->value('knowledge_document_id');
+        if ($docId === null || $this->eigenesDoc((int) $docId) === null) {
+            return;
+        }
         DB::table('foodalchemist_knowledge_bindings')->where('id', $bindingId)->delete();
     }
 
@@ -240,7 +286,12 @@ class Browser extends Component
             }
         }
 
-        $basis = DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at')
+        // MVP-036: Liste team-scopen (global + eigenes Team/Master-Kette) — vorher las sie
+        // teamübergreifend, obwohl save()/toggleActive() schon korrekt scopen.
+        $basis = TeamScope::applyVisible(
+            DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at'),
+            'team_id', Auth::user()?->currentTeamRelation
+        )
             ->when($this->filterCategory !== '', fn ($q) => $q->where('category', $this->filterCategory))
             ->when($this->filterStatus === 'active', fn ($q) => $q->where('active', true))
             ->when($this->filterStatus === 'inactive', fn ($q) => $q->where('active', false));
@@ -265,7 +316,7 @@ class Browser extends Component
         }
 
         $selected = $this->selectedId !== null
-            ? DB::table('foodalchemist_knowledge_documents')->where('id', $this->selectedId)->first()
+            ? $this->sichtbaresDoc($this->selectedId)          // MVP-036: nur Sichtbares ins Detail
             : null;
 
         $aliases = $selected
@@ -301,11 +352,14 @@ class Browser extends Component
 
         // v2: Rückwärts-Ansicht — welche Docs hängen am gewählten Einsatzort
         $traceResults = $this->traceTarget !== ''
-            ? DB::table('foodalchemist_knowledge_bindings as b')
-                ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
-                ->whereNull('b.deleted_at')->where('b.active', true)
-                ->where('b.binding_type', 'layer')->where('b.target_key', $this->traceTarget)
-                ->whereNull('d.deleted_at')
+            ? TeamScope::applyVisible(
+                DB::table('foodalchemist_knowledge_bindings as b')
+                    ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
+                    ->whereNull('b.deleted_at')->where('b.active', true)
+                    ->where('b.binding_type', 'layer')->where('b.target_key', $this->traceTarget)
+                    ->whereNull('d.deleted_at'),
+                'd.team_id', Auth::user()?->currentTeamRelation          // MVP-036: Rückansicht nur eigene/globale Docs
+            )
                 ->orderBy('d.title')
                 ->get(['d.id', 'd.title', 'd.category', 'b.mode'])
             : collect();

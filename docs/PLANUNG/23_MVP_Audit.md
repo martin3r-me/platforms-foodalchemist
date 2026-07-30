@@ -1068,9 +1068,9 @@ verlinkt ist.
 | MVP-033 | PR-02 | Phase D | offen | DB-Filter/Pagination und Lasttest |
 | MVP-034 | OR-05, UX-07 | Phase A/D | offen | sichtbarer Ladefehler |
 | MVP-035 | OR-02 | Phase D | offen | DB-Filter/Pagination und Lasttest |
-| MVP-036 | KN-01 | A-02–A-04 | offen | Knowledge Read Team A/B |
-| MVP-037 | KN-03, KN-04 | A-02–A-04 | offen | Alias-/Binding-Ownership-Test |
-| MVP-038 | KN-01 | Phase A/D | offen | serverseitige Pagination und Querybudget |
+| MVP-036 | KN-01 | A-02–A-04 | behoben | `WissenTenantTest` (Liste/select/Trace nur sichtbare Docs) · Commit R8 |
+| MVP-037 | KN-03, KN-04 | A-02–A-04 | behoben | `WissenTenantTest` (Alias/Binding-Add+Remove nur am eigenen Doc) |
+| MVP-038 | KN-01 | Phase A/D | offen | Pagination — bewusst eigenes Paket (zieht WithPagination + Test-Umbau nach); 1024 Docs bestätigt |
 | MVP-039 | AD-16 | A-02–A-04 | behoben | `AufschlagsklassenTenantTest` (geerbt/global read-only, eigene mutierbar) · Commit R7 |
 | MVP-040 | AD-16 | A-03 | behoben | `AufschlagsklassenTenantTest` (Zähler ohne Fremd-Team) + Löschsperre visibleToTeam |
 | MVP-041 | AD-03, AD-16 | A-10, A-02 | teilweise | falscher row-gated-Kommentar in Settings/Index korrigiert (Server-Guard geführt); Dimensions-Labels der Einheiten offen |
