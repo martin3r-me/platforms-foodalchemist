@@ -110,21 +110,38 @@ class Browser extends Component
         $this->dispatch('recipe-selected', id: $id);
     }
 
+    /**
+     * MVP-022: transienter Statusfehler. Ein fehlgeschlagener Statuswechsel wird ANGEZEIGT
+     * (Rollback der sichtbaren Auswahl passiert durch das Re-Render von selbst — die Option
+     * spiegelt den persistierten Wert). Vorher fing ein leerer catch alles ab.
+     */
+    public ?string $statusFehler = null;
+
     /** Inline-Status-Pflege aus der Liste (canCurate-Gate, D1) — Setter existiert im Service. */
     public function statusSetzen(int $id, string $status, RecipeService $svc): void
     {
+        $this->statusFehler = null;
         $team = Auth::user()?->currentTeamRelation;
         $recipe = $team !== null ? FoodAlchemistRecipe::visibleToTeam($team)->find($id) : null;
-        if ($recipe === null || ! Curate::canCurate(Auth::user(), $recipe)) {
+        if ($recipe === null) {
+            $this->statusFehler = 'Rezept nicht gefunden oder nicht sichtbar — Status nicht geändert.';
+
+            return;
+        }
+        if (! Curate::canCurate(Auth::user(), $recipe)) {
+            $this->statusFehler = 'Geerbtes Rezept — Statuspflege nur durchs Besitzer-Team.';
+
             return;
         }
         if (RecipeStatus::tryFrom($status) === null) {
+            $this->statusFehler = "Unbekannter Status [{$status}] — nicht gesetzt.";
+
             return;
         }
         try {
             $svc->setStatus($team, $id, $status);
-        } catch (\RuntimeException) {
-            // ungültig — still ignorieren
+        } catch (\RuntimeException $e) {
+            $this->statusFehler = $e->getMessage();
         }
     }
 

@@ -24,11 +24,11 @@
                         <option value="{{ $fall->value }}">{{ $fall->label() }} ({{ $statusCounts[$fall->value] ?? 0 }})</option>
                     @endforeach
                 </select>
-                {{-- Geschmacks-Pills (13_REFERENZ) --}}
+                {{-- Geschmacks-Pills (13_REFERENZ) — Labels zentral, keine Doppelpflege (MVP-024) --}}
                 <div class="flex gap-1.5" data-geschmack-pills>
-                    @foreach(['suess' => 'Süß', 'herzhaft' => 'Herzhaft', 'neutral' => 'Neutral'] as $wert => $lbl)
+                    @foreach(['suess', 'herzhaft', 'neutral'] as $wert)
                         <button type="button" wire:click="waehleGeschmack('{{ $wert }}')"
-                                class="{{ $pill }} transition-colors {{ $geschmack === $wert ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $lbl }}</button>
+                                class="{{ $pill }} transition-colors {{ $geschmack === $wert ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($wert) }}</button>
                     @endforeach
                 </div>
                 {{-- Baum-Ansicht (2026-07-06, User-Wunsch — Parität zum Basisrezept-Browser):
@@ -114,6 +114,10 @@
         </div>
         <div class="relative overflow-hidden {{ $card }}" data-vk-tabelle>
             <div class="{{ $cardAccent }}"></div>
+            {{-- MVP-024: Statuswechsel-Fehler sichtbar statt still verschluckt --}}
+            @if($statusFehler !== null)
+                <div class="mx-5 mt-4 rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-700" data-status-fehler>{{ $statusFehler }}</div>
+            @endif
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                 <h3 class="font-medium tracking-tight text-gray-900">Gerichte</h3>
                 <span class="{{ $label }} flex items-center gap-2">
@@ -142,7 +146,7 @@
                                 <span class="text-gray-900 hover:text-violet-600 hover:underline cursor-pointer" data-vk-name>{{ $r->name }}</span>
                             </td>
                             <td class="{{ $td }} text-[11px] italic text-gray-600 whitespace-nowrap">{{ $r->dishClass?->label ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($r->taste_direction) }}</td>
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
@@ -160,7 +164,7 @@
                             <td class="{{ $td }} text-gray-600 whitespace-nowrap text-right tabular-nums">{{ $r->ek_total_eur !== null ? number_format((float) $r->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</td>
                             <td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $r->n_ingredients_total }}</td>
                             <td class="{{ $td }}">
-                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
+                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</span>
                             </td>
                             <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->dishMainGroup?->code ?? '—' }}</td>
                         </tr>

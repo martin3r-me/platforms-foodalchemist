@@ -25,16 +25,17 @@
                     @endforeach
                 </select>
                 <div class="grid grid-cols-2 gap-2">
+                    {{-- MVP-023: zentrale deutsche Labels statt Rohwerte/„from scratch" --}}
                     <select wire:model.live="geschmack" class="{{ $input }}">
                         <option value="">Geschmack</option>
-                        @foreach(['suess' => 'süß', 'herzhaft' => 'herzhaft', 'neutral' => 'neutral'] as $wert => $lbl)
-                            <option value="{{ $wert }}">{{ $lbl }}</option>
+                        @foreach(['suess', 'herzhaft', 'neutral'] as $wert)
+                            <option value="{{ $wert }}">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($wert) }}</option>
                         @endforeach
                     </select>
                     <select wire:model.live="fertigung" class="{{ $input }}">
                         <option value="">Fertigung</option>
-                        @foreach(['from_scratch' => 'from scratch', 'teilfertig' => 'teilfertig', 'convenience' => 'Convenience'] as $wert => $lbl)
-                            <option value="{{ $wert }}">{{ $lbl }}</option>
+                        @foreach(['from_scratch', 'teilfertig', 'convenience'] as $wert)
+                            <option value="{{ $wert }}">{{ \Platform\FoodAlchemist\Support\Labels::fertigung($wert) }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -185,6 +186,10 @@
         </div>
         <div class="relative overflow-hidden {{ $card }}" data-rezept-tabelle>
             <div class="{{ $cardAccent }}"></div>
+            {{-- MVP-022: Statuswechsel-Fehler sichtbar statt still verschluckt --}}
+            @if($statusFehler !== null)
+                <div class="mx-5 mt-4 rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-700" data-status-fehler>{{ $statusFehler }}</div>
+            @endif
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                 <h3 class="font-medium tracking-tight text-gray-900">Basisrezepte</h3>
                 <span class="{{ $label }} flex items-center gap-2">
@@ -218,8 +223,8 @@
                                 @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>📐 Template</span>@endif
                             </td>
                             <td class="{{ $td }} text-[11px] italic text-gray-600 truncate max-w-[12rem] whitespace-nowrap">{{ $r->category?->label ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->taste_direction ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->production_depth ?? '—' }}</td>
+                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($r->taste_direction) }}</td>
+                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::fertigung($r->production_depth) }}</td>
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge — Auto-Zustand) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
@@ -239,7 +244,7 @@
                             </td>
                             <td class="{{ $td }} text-gray-600 whitespace-nowrap text-right tabular-nums">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '—' }}</td>
                             <td class="{{ $td }}">
-                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ $r->allergens_confidence }}</span>
+                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</span>
                             </td>
                         </tr>
                     @empty

@@ -77,20 +77,34 @@ class Browser extends Component
         $this->dispatch('vk-recipe-selected', id: $id);
     }
 
+    /** MVP-024: sichtbarer Statusfehler, spiegelbildlich zum Basisrezept-Browser. */
+    public ?string $statusFehler = null;
+
     /** Inline-Status-Pflege aus der Gerichte-Liste (canCurate-Gate, D1) — Setter im RecipeService. */
     public function statusSetzen(int $id, string $status, RecipeService $svc): void
     {
+        $this->statusFehler = null;
         $team = Auth::user()?->currentTeamRelation;
         $recipe = $team !== null ? FoodAlchemistRecipe::visibleToTeam($team)->find($id) : null;
-        if ($recipe === null || ! Curate::canCurate(Auth::user(), $recipe)) {
+        if ($recipe === null) {
+            $this->statusFehler = 'Gericht nicht gefunden oder nicht sichtbar — Status nicht geändert.';
+
+            return;
+        }
+        if (! Curate::canCurate(Auth::user(), $recipe)) {
+            $this->statusFehler = 'Geerbtes Gericht — Statuspflege nur durchs Besitzer-Team.';
+
             return;
         }
         if (RecipeStatus::tryFrom($status) === null) {
+            $this->statusFehler = "Unbekannter Status [{$status}] — nicht gesetzt.";
+
             return;
         }
         try {
             $svc->setStatus($team, $id, $status);
-        } catch (\RuntimeException) {
+        } catch (\RuntimeException $e) {
+            $this->statusFehler = $e->getMessage();
         }
     }
 
