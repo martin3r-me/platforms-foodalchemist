@@ -48,12 +48,50 @@ class IngredientEditor extends Component
         $this->dispatch('modal.open', name: 'zutaten-editor');
     }
 
-    /** @param array<int, array> $zeilen kompletter Client-Stand (Reihenfolge = Position) */
-    public function speichern(array $zeilen): void
+    /**
+     * MVP-046: Beim Schließen den Zeiger löschen. Vorher blieb `recipeId` nach dem Schließen
+     * unbegrenzt stehen — dieser stale Zeiger war die Voraussetzung dafür, dass ein späterer,
+     * fremder Speichern-Klick überhaupt ein unsichtbares Rezept treffen konnte.
+     *
+     * Nur die Standalone-Instanz: die eingebetteten gehören zu ihrem Editor und verschwinden
+     * mit ihm; ihnen den Zeiger wegzunehmen würde ihr eigenes Speichern brechen.
+     */
+    #[On('modal.closed')]
+    public function beiModalClosed(?string $name = null): void
+    {
+        if ($name === 'zutaten-editor' && ! $this->eingebettet) {
+            $this->recipeId = null;
+            $this->fehler = null;
+        }
+    }
+
+    /**
+     * @param  array<int, array>  $zeilen  kompletter Client-Stand (Reihenfolge = Position)
+     * @param  int|null  $recipeId  Ziel-Rezept des Aufrufs; null = „diese Instanz" (Direktaufruf
+     *                              aus dem eigenen Knopf). Ist es gesetzt und passt nicht, wird
+     *                              abgewiesen.
+     *
+     * MVP-046 (P0): DIE Grenze gegen den Datenverlust. Vorher schrieb die Methode bedingungslos
+     * auf `$this->recipeId` — und da der Speichern-Klick als ungescopter Window-Broadcast bei
+     * JEDER montierten Editor-Instanz ankam, ersetzte `syncIngredients()` den kompletten
+     * Zutatensatz eines Rezepts, das der Nutzer gerade nicht einmal sah.
+     *
+     * Der Client-Guard in der View ist Komfort; diese Prüfung ist die Grenze — ein manipulierter
+     * Livewire-Call kommt hier nicht durch. Und sie schweigt nicht: eine verworfene Speicherung
+     * ohne Rückmeldung wäre genau der stille Fehlschlag, den das Audit an anderer Stelle rügt.
+     */
+    public function speichern(array $zeilen, ?int $recipeId = null): void
     {
         $this->fehler = null;
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null || $this->recipeId === null) {
+            return;
+        }
+
+        if ($recipeId !== null && $recipeId !== $this->recipeId) {
+            $this->fehler = 'Speichern verworfen: der Auftrag gehört zu einem anderen Rezept. '
+                . 'Bitte den Zutaten-Editor des gemeinten Rezepts benutzen.';
+
             return;
         }
 

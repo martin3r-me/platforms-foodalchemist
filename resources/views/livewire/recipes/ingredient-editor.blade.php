@@ -10,7 +10,7 @@
 
             <x-slot:footer>
                 <button type="button" wire:click="$dispatch('modal.close', { name: 'zutaten-editor' })" class="{{ $btnGhost }}">Abbrechen</button>
-                <button type="button" x-data @click="$dispatch('zutaten-speichern')" class="{{ $btnPrimary }}" data-zutaten-speichern>Speichern</button>
+                <button type="button" x-data @click="$dispatch('zutaten-speichern', { recipeId: $wire.recipeId })" class="{{ $btnPrimary }}" data-zutaten-speichern>Speichern</button>
             </x-slot:footer>
         </x-foodalchemist::modal>
     @endif
@@ -175,10 +175,30 @@
             },
             init() {
                 // Window-Event: der Haupt-"Speichern" des Rezept-Modals (UND der Standalone-Modal-Footer)
-                // stoßen damit das Zutaten-Speichern an. Auch die EINGEBETTETE Instanz lauscht jetzt —
+                // stoßen damit das Zutaten-Speichern an. Auch die EINGEBETTETE Instanz lauscht —
                 // sonst gehen Zutaten-Edits (Garverlust/Menge/Tausch) verloren, wenn man "Speichern"
-                // statt des separaten "Zutaten speichern" klickt.
-                window.addEventListener('zutaten-speichern', () => this.$wire.speichern(this.payload()));
+                // statt des separaten "Zutaten speichern" klickt. Diese Absicht bleibt.
+                //
+                // MVP-046 (P0): das Event ist jetzt ADRESSIERT. Vorher blubberte ein nackter
+                // Broadcast bis window und JEDE montierte Instanz (Standalone + eingebettet im
+                // Rezept-Editor + eingebettet im Gerichte-Editor) schrieb ihren eigenen
+                // Client-Stand auf ihr eigenes Rezept — ein Klick, bis zu drei Rezepte
+                // überschrieben, davon mindestens eines unsichtbar.
+                window.addEventListener('zutaten-speichern', (e) => {
+                    const detail = e.detail ?? {};
+                    if (! ('recipeId' in detail)) {
+                        // Kein stiller No-op: ein unadressierter Sender ist ein Fehler, nicht ein
+                        // Sonderfall. Der Blade-Vertrag in ZutatenSaveVertragTest hält die Sender
+                        // adressiert; das hier ist die Reißleine, wenn doch einer durchkommt.
+                        console.warn('[zutaten-speichern] Event ohne recipeId verworfen — Sender muss das Ziel benennen.');
+                        return;
+                    }
+                    // Ausdrücklich `null` heißt „der Sender hat noch kein Rezept" (Anlage-Modus):
+                    // regulärer Zustand, nichts zu speichern, keine Warnung.
+                    if (detail.recipeId === null) return;
+                    if (Number(detail.recipeId) !== Number(this.$wire.recipeId)) return;   // meint eine andere Instanz
+                    this.$wire.speichern(this.payload(), Number(detail.recipeId));
+                });
                 this.browse();                                       // R18: Seitenspalten initial füllen
             },
             zahl(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; },

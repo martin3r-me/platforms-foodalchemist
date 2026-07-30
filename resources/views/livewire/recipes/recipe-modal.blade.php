@@ -6,7 +6,7 @@
 <x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten: ' . $form['name']" size="max-w-3xl" :fullscreen="! $neu" :close-via="'schliessenOderZurueck'">
     {{-- Aktionsleiste (D-5 §4.2.1) --}}
     <x-slot:actions>
-        <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern')" class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
+        <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern', { recipeId: @js($recipeId) })" class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
         @if(!$neu)
             <button type="button" wire:click="loeschen" wire:confirm="Rezept wirklich löschen? (Als Sub-Rezept referenzierte Rezepte sind geschützt)"
                     class="{{ $btnGhostXs }} text-rose-600" data-rezept-loeschen>Löschen</button>
@@ -509,6 +509,6 @@
 
     <x-slot:footer>
         <button type="button" wire:click="$dispatch('modal.close', { name: 'recipe-modal' })" class="{{ $btnGhost }}">Abbrechen</button>
-        <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern')" class="{{ $btnPrimary }}" data-rezept-speichern-footer>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
+        <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern', { recipeId: @js($recipeId) })" class="{{ $btnPrimary }}" data-rezept-speichern-footer>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
     </x-slot:footer>
 </x-foodalchemist::modal>
