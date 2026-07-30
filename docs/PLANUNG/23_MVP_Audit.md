@@ -1,9 +1,17 @@
 # MVP- und Codequalitäts-Audit Food Alchemist
 
-**Stand:** 2026-07-28
-**Status:** vollständig geprüft; Stabilisierung erforderlich
+**Stand:** 2026-07-28 · **Umsetzungsstand nachgeführt:** 2026-07-30
+**Status:** vollständig geprüft; Stabilisierung läuft (Paket R, Branch `fix/paket-r-rezepte-gerichte`)
 **Ziel:** Ein zeitnah stabiles Produkt, dessen Kernfunktion ohne KI funktioniert.
-**Audit-Scope:** Review; es wurden weder Produktcode noch Masterdaten geändert.
+**Audit-Scope:** Review; der ursprüngliche Audit änderte weder Produktcode noch Masterdaten.
+
+> **Umsetzungsstand 2026-07-30 (Paket R · Basisrezepte + Gerichte).** Geschlossen mit
+> Testnachweis: MVP-042/043/048 (Facetten-Zähler), MVP-044/049/050 (Gerichte-Editor Modell A
+> + Referenz-Autorisierung, 2 P0), MVP-046 (Zutaten-Datenverlust, 1 P0), MVP-022/023/024
+> (Statusfehler + Labels). **MVP-045 ist als nicht reproduzierbar geschlossen** (ungültige
+> `offsetParent`-Sonde — Details im Befund). Ergänzt: der Testdatenbank-Guard (A-05) fehlte im
+> Code und ist scharfgestellt. Verbleibende P0 (Lieferanten, Wissen, Einstellungen, Concepter,
+> Foodbook) sind offen. Live-Status je Befund → Abschnitt 9.
 
 ## 1. Ergebnis
 
@@ -432,17 +440,17 @@ serverseitige Eigentumsprüfung `isOwnedBy()` sind vorhanden.
 | Ursache/Evidenz | Serverseitige Validierung verlässt sich auf die UI-Optionsliste. |
 | Empfehlung | Kategorie über `visibleToTeam($team)` auflösen, HG-Konsistenz prüfen und manipulierten Team-A/B-Livewire-Test ergänzen. |
 
-#### MVP-045 · Namensklick lädt den Editor, öffnet ihn aber nicht sichtbar
+#### MVP-045 · Namensklick lädt den Editor, öffnet ihn aber nicht sichtbar — ⚠ NICHT REPRODUZIERBAR (2026-07-30)
 
 | Feld | Wert |
 |---|---|
-| Bereich / Priorität / Art | Basisrezepte · P1 · Bug/Klickroute |
+| Bereich / Priorität / Art | Basisrezepte · P1 · Bug/Klickroute — **geschlossen als nicht reproduzierbar** |
 | Fundort | `resources/views/livewire/recipes/browser.blade.php:191-200`; `src/Livewire/Recipes/Browser.php:60-65`; `RecipeModal.php:46-57,78-113` |
 | Reproduktion | Basisrezeptname beziehungsweise dessen Namenszelle anklicken. |
-| Ist-Verhalten | URL wird zu `?rezept=1909`, Form/Titel werden mit „Rezept bearbeiten …“ geladen, `data-rezept-speichern` bleibt aber unsichtbar (`offsetParent = false`). Dasselbe Verhalten wurde bei Gerichten reproduziert. |
-| Erwartet | Namensklick öffnet den Voll-Editor sichtbar; Zeilenklick außerhalb des Namens öffnet nur das Detailpanel. |
-| Ursache/Evidenz | Die verschachtelte Dispatch-Kette lädt die Modal-Komponente, der nachgelagerte `modal.open`-Effekt erreicht den sichtbaren Dialog im Klickpfad nicht zuverlässig. |
-| Empfehlung | Einen getesteten, direkten Open-Vertrag verwenden; Browser-E2E für Name → sichtbares Modal → Abbrechen. |
+| Ist-Verhalten | **Der Editor öffnet sichtbar.** Nachgemessen in der Sandbox (Viewport 1280×844, Rezept 461): `Alpine.$data(dialog).open === true`, Wrapper füllt den Viewport, `document.elementFromPoint()` auf der Mitte des Speichern-Knopfes trifft den Knopf selbst. Gegenprobe mit unverändertem Code: identisches Verhalten. |
+| Ursache der Fehldiagnose | Die Evidenz `offsetParent = false` ist eine ungültige Sonde: `offsetParent` ist für `position: fixed`-Elemente laut Spezifikation **immer** `null`, unabhängig von der Sichtbarkeit — der Modal-Wrapper ist fixed. Belastbar sind `checkVisibility()` und ein Hit-Test per `elementFromPoint`. Zweite Falle: Messung direkt nach dem Klick misst mitten im Livewire-Roundtrip (Serverzustand/Markup noch der Stand von vorher). |
+| Konsequenz für die Messreihe | Die Preview-Pane meldete beim Nachmessen zeitweise ein 0×0-Viewport, in dem jede Geometriemessung wertlos ist. **Alle geometriebasierten Befunde derselben Messreihe brauchen eine Nachprüfung, bevor daran gearbeitet wird — insbesondere MVP-003** (390-px-Layout: „Neu-Knopf und Tabelle beginnen bei x≈632"). |
+| Status | Fix-Versuch (`766e90f`) zurückgebaut (`a76c8d5`). Behalten: der korrigierte `modal.closed`-Kommentar in VkModal und ein Öffnen-Vertragstest (`EditorOeffnenVertragTest`) auf der Kette Namensklick → Öffnen-Event → geladener Editor → Rückweg. |
 
 #### MVP-046 · Globales Zutaten-Speicherevent kann mehrere Rezepte überschreiben
 
@@ -1046,9 +1054,9 @@ verlinkt ist.
 | MVP-019 | AD-05 | Phase D | offen | zugängliche Eingaben und URL-Kontext |
 | MVP-020 | RE-22 | Phase A/D | offen | >100 Favoriten, korrekter Zähler |
 | MVP-021 | UX-05, RE-22 | Phase A | offen | URL-/Reload-/Zurück-Test |
-| MVP-022 | UX-07, RE-10 | Phase A/C | offen | Rezeptstatus-Fehlervertrag |
-| MVP-023 | RE-10, UX-07 | Phase A/C | offen | Label-/Modal-Browsertest |
-| MVP-024 | RE-10 | Phase A/C | offen | zentraler Status-/Schwierigkeitsvertrag |
+| MVP-022 | UX-07, RE-10 | Phase A/C | behoben | `StatusUndLabelsTest` (sichtbarer Fehler + Rollback) · `766e90f`-Reihe, Commit R5 |
+| MVP-023 | RE-10, UX-07 | Phase A/C | behoben | `StatusUndLabelsTest` (Labels-Snapshot, keine Rohwerte) + Sandbox-Browser |
+| MVP-024 | RE-10 | Phase A/C | behoben | `StatusUndLabelsTest` (VK-Statusfehler + zentrale Labels) |
 | MVP-025 | CO-03, AD-18 | A-02–A-04 | offen | Servierform Team A/B |
 | MVP-026 | CO-01–11 | Phase A/C | offen | Zerlegung entlang Use Cases plus Regression |
 | MVP-027 | FB-03, FB-05 | A-02–A-04 | offen | Kapitel-/Block-IDOR-Test |
@@ -1066,15 +1074,15 @@ verlinkt ist.
 | MVP-039 | AD-16 | A-02–A-04 | offen | Parent/global read-only, own CRUD |
 | MVP-040 | AD-16 | A-03 | offen | teamgescopter Verwendungszähler |
 | MVP-041 | AD-03, AD-16 | A-10, A-02 | offen | dokumentierte Rollenmatrix entspricht UI/Policy |
-| MVP-042 | RE-11 | Phase A | offen | Hauptgruppenzähler gegen Listenquery |
-| MVP-043 | RE-11 | Phase A | offen | Kategorie-/Kombifiltertest |
-| MVP-044 | RE-03 | A-02–A-04 | offen | Kategorie-ID Team A/B/Parent |
-| MVP-045 | RE-02, RE-11 | Phase A/C | offen | Namensklick öffnet sichtbaren Editor |
-| MVP-046 | RE-02 | A-03 | offen | Zwei-Rezepte-Event-/Race-Test |
+| MVP-042 | RE-11 | Phase A | behoben | `FacettenVertragTest` (Gesamtzähler == Tabelle, „Ohne Kategorie") · `16ea773` |
+| MVP-043 | RE-11 | Phase A | behoben | `FacettenVertragTest` (Kategorie-Zähler mit aktiven Filtern) |
+| MVP-044 | RE-03 | A-02–A-04 | behoben | `ReferenzAutorisierungTest` (fremde Kategorie abgewiesen, Eltern akzeptiert) · `cc9e94a` |
+| MVP-045 | RE-02, RE-11 | Phase A/C | nicht reproduzierbar | Sandbox-Messung + Gegenprobe; Revert `a76c8d5`. Siehe Befund oben. |
+| MVP-046 | RE-02 | A-03 | behoben | `ZutatenSaveVertragTest` (Zwei-Rezepte, Ziel-Guard) + Sandbox-Klickstrecke · `6702780` |
 | MVP-047 | RE-02, RE-10 | Phase A/C | offen | atomarer Save, Dirty-State, Child-Fehler |
-| MVP-048 | RE-11, RE-14 | Phase A | offen | kombinierte HG-/Klassenfilter |
-| MVP-049 | RE-13, RE-14 | Phase A/C | offen | Browser/Editor/Persistenz dasselbe Klassenmodell |
-| MVP-050 | RE-14 | A-02–A-04 | offen | Klasse/Aufschlagsklasse Team A/B |
+| MVP-048 | RE-11, RE-14 | Phase A | behoben | `FacettenVertragTest` (VK-Facetten kombiniert) · `16ea773` |
+| MVP-049 | RE-13, RE-14 | Phase A/C | behoben | `ReferenzAutorisierungTest` (HG setzbar) + Sandbox (HG 2→14) · `cc9e94a` |
+| MVP-050 | RE-14 | A-02–A-04 | behoben | `ReferenzAutorisierungTest` (fremde Klasse/AK abgewiesen) + Sandbox-Angriff · `cc9e94a` |
 | MVP-051 | CO-01 | Phase A/C | offen | Deep-Link/Reload hydriert Auswahl |
 | MVP-052 | CO-03 | A-02–A-04 | offen | Dimensions-ID Team A/B |
 | MVP-053 | CO-01, CO-11 | Phase A/C | offen | atomarer Gesamtabschluss und Fehlerfall |
