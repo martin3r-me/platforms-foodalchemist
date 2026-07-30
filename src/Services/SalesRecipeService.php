@@ -9,6 +9,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * M6-03 / D-6 §3.1: VK-Sicht aufs geteilte Rezept-Modell — erzwingt den
@@ -139,9 +140,32 @@ class SalesRecipeService
 
     // ── M6-04: Editor-Schreibpfade (V-07: Mehr-Zeilen-Writes in Transaktionen) ──
 
+    /**
+     * Referenzierte Fremdschlüssel der VK-Whitelist und ihre Herkunftstabelle (MVP-050, P0).
+     *
+     * Eine Whitelist sagt „dieses Feld darf geschrieben werden" — sie sagt nichts darüber, ob
+     * der WERT zulässig ist. Genau diese Lücke war der Befund: die IDs kamen per
+     * `array_intersect_key` roh aus einem client-kontrollierten Formular, die einzige Prüfung
+     * war die Options-Liste im Browser. Jede ID hier wird gegen `visibleToTeam` aufgelöst.
+     *
+     * Bewusst SICHTBARKEIT und nicht Eigentum: geerbte und globale Vokabeln müssen am eigenen
+     * Gericht verwendbar bleiben (Master-Vererbung). Siehe `TeamScope::referenz()`.
+     */
+    private const VK_REFERENZEN = [
+        'dish_class_id' => FoodAlchemistDishClass::class,
+        'dish_main_group_id' => FoodAlchemistDishMainGroup::class,
+        'markup_class_id' => \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::class,
+        'sales_unit_vocab_id' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::class,
+    ];
+
     /** Erlaubte VK-Feldgruppen (V-12: Policy-Grenze mitten durchs geteilte Modell). */
     private const VK_FELDER = [
         'name', 'sales_wording_standard', 'dish_class_id', 'markup_class_id', 'vat_rate',
+        // MVP-049: Modell A — die Hauptgruppe ist eine EIGENE Achse am Gericht und musste
+        // persistierbar werden. Vorher leitete der Editor sie aus `dishClass.dish_main_group_id`
+        // ab (immer NULL, seit die Klassen die vier flachen Diätformen sind) und konnte sie nicht
+        // speichern: der Klassifikations-Block war damit funktionslos.
+        'dish_main_group_id',
         'sales_net', 'sales_unit_vocab_id', 'sales_unit_count', 'sales_quantity_per_unit_g',
         'container_warm_vocab_id', 'container_warm_count', 'container_cold_vocab_id', 'container_cold_count',
         'serving_vehicle_vocab_id', 'taste_direction',
@@ -160,6 +184,14 @@ class SalesRecipeService
 
         return DB::transaction(function () use ($team, $recipe, $in) {
             $update = array_intersect_key($in, array_flip(self::VK_FELDER));
+
+            // MVP-050 (P0): Referenzen autorisieren, BEVOR sie geschrieben werden. Der
+            // Owner-Guard oben schützt das Rezept — nicht die daran gehängten Fremdschlüssel.
+            foreach (self::VK_REFERENZEN as $feld => $modelClass) {
+                if (array_key_exists($feld, $update)) {
+                    $update[$feld] = TeamScope::referenz($modelClass, $update[$feld], $team, $feld);
+                }
+            }
             // Wording/Marketing/Plating manuell editiert → Lineage auf manual (GL-07).
             // Spalten-Muster: <feld>_source + <feld>_ai_confidence (English-Rename).
             foreach (['sales_wording_standard' => 'sales_wording', 'marketing_text' => 'marketing_text', 'plating_text' => 'plating'] as $feld => $praefix) {

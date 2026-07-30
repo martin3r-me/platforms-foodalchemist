@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * M4-04/05 / D-5 §3.1 (Listen-Teil): Basisrezept-Browser — Scope basis() wird
@@ -155,12 +157,18 @@ class RecipeService
         if ($name === '') {
             throw new \RuntimeException('Rezept-Name ist Pflicht (§1).');
         }
-        $kategorieId = $in['category_id'] ?? null;
+        // MVP-044 (P0): Kategorie ist eine REFERENZ und wird autorisiert, bevor sie irgendwo
+        // landet — vorher übernahmen Create und Update die rohe ID aus dem client-kontrollierten
+        // Formular, die einzige Prüfung war die Options-Liste im Browser. Geprüft wird
+        // Sichtbarkeit, nicht Eigentum: die geerbte Master-Kategorie muss nutzbar bleiben.
+        $kategorieId = TeamScope::referenz(
+            FoodAlchemistRecipeCategory::class, $in['category_id'] ?? null, $team, 'Kategorie'
+        );
 
         $key = $this->rezeptKey($name);
         if ($this->keyVergeben($team, $key)) {                     // §1.8: Kategorie als Diskriminator
             $kategorie = $kategorieId !== null
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::find($kategorieId)?->label
+                ? FoodAlchemistRecipeCategory::visibleToTeam($team)->find($kategorieId)?->label
                 : null;
             if ($kategorie !== null) {
                 $key = $this->rezeptKey($name) . '_' . $this->rezeptKey($kategorie);
@@ -219,7 +227,9 @@ class RecipeService
         $recipe->update([
             'name' => $name,
             'origin_source' => array_key_exists('origin_source', $in) ? (($in['origin_source'] ?? '') ?: null) : $recipe->origin_source,
-            'category_id' => $in['category_id'] ?? $recipe->category_id,
+            'category_id' => array_key_exists('category_id', $in)
+                ? TeamScope::referenz(FoodAlchemistRecipeCategory::class, $in['category_id'], $team, 'Kategorie')
+                : $recipe->category_id,
             'taste_direction' => array_key_exists('taste_direction', $in) ? (($in['taste_direction'] ?? '') ?: null) : $recipe->taste_direction,
             'production_depth' => array_key_exists('production_depth', $in) ? (($in['production_depth'] ?? '') ?: null) : $recipe->production_depth,
             'work_time_min' => array_key_exists('work_time_min', $in) ? $in['work_time_min'] : $recipe->work_time_min,

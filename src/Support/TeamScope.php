@@ -49,4 +49,62 @@ final class TeamScope
     {
         return $team !== null && $rowTeamId !== null && (int) $rowTeamId === (int) $team->id;
     }
+
+    /**
+     * Die dritte Zugriffsart: einen REFERENZIERTEN Fremdschlüssel autorisieren (MVP-044/050).
+     *
+     * Nicht zu verwechseln mit `owns()`. Geprüft wird SICHTBARKEIT, nicht Eigentum — genau
+     * darin liegt der Zweck der Master-Vererbung: ein Kind-Team muss die geerbte Kategorie,
+     * Klasse und Aufschlagsklasse am EIGENEN Rezept verwenden dürfen. Wer hier versehentlich
+     * `owns()` einsetzt, macht den Master-Katalog unbenutzbar.
+     *
+     * Anlass: UI-Selects waren gescopt, die Services übernahmen die ID danach roh aus einem
+     * client-kontrollierten Formular (`array_intersect_key` über eine Whitelist). Damit war die
+     * Auswahlliste die einzige „Prüfung" — und die liegt im Browser.
+     *
+     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $modelClass  muss BelongsToTeamHierarchy nutzen
+     * @param  mixed  $id  rohe ID aus dem Formular; '', null und 0 leeren das Feld regulär
+     * @return int|null die geprüfte ID, oder null wenn das Feld geleert wird
+     *
+     * @throws \RuntimeException wenn die ID in diesem Team nicht sichtbar ist
+     */
+    public static function referenz(string $modelClass, mixed $id, ?Team $team, string $feld): ?int
+    {
+        if ($id === null || $id === '' || (int) $id === 0) {
+            return null;
+        }
+
+        if (! $modelClass::visibleToTeam($team)->whereKey((int) $id)->exists()) {
+            throw new \RuntimeException("{$feld}: die gewählte Zuordnung ist in diesem Team nicht verfügbar.");
+        }
+
+        return (int) $id;
+    }
+
+    /**
+     * Mengenvariante für Pivot-Syncs — EIN Query statt einer Prüfung pro ID, sonst tauscht man
+     * ein Sicherheits- gegen ein Performance-Problem.
+     *
+     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $modelClass
+     * @param  array<int|string>  $ids
+     * @return array<int, int>
+     *
+     * @throws \RuntimeException wenn mindestens eine ID nicht sichtbar ist
+     */
+    public static function referenzen(string $modelClass, array $ids, ?Team $team, string $feld): array
+    {
+        $gewuenscht = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($gewuenscht === []) {
+            return [];
+        }
+
+        $sichtbar = $modelClass::visibleToTeam($team)->whereKey($gewuenscht)->pluck('id')
+            ->map(fn ($i) => (int) $i)->all();
+
+        if (count($sichtbar) !== count($gewuenscht)) {
+            throw new \RuntimeException("{$feld}: mindestens eine gewählte Zuordnung ist in diesem Team nicht verfügbar.");
+        }
+
+        return $gewuenscht;
+    }
 }

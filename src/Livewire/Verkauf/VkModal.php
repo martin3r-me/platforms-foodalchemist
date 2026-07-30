@@ -33,7 +33,6 @@ class VkModal extends Component
     /** @var array<string, mixed> */
     public array $form = [];
 
-    public ?int $hauptgruppeId = null;                               // UI-Kaskade für den Klassen-Select
 
     // Anlage-Modus
     public string $neuName = '';
@@ -107,7 +106,11 @@ class VkModal extends Component
                 'plating_text' => $r->plating_text,
                 'notes_manual' => $r->notes_manual,
             ];
-            $this->hauptgruppeId = $r->dishClass?->dish_main_group_id;
+            // MVP-049: Modell A — die Hauptgruppe hängt am Gericht (`recipes.dish_main_group_id`),
+            // nicht an der Klasse. Die alte Ableitung aus `dishClass.dish_main_group_id` war seit
+            // der Umstellung auf die vier flachen Diätformen immer NULL: HG leer, Klassen-Select
+            // deaktiviert, Klassifikation funktionslos.
+            $this->form['dish_main_group_id'] = $r->dish_main_group_id;
         }
         $this->ladeDarreichungen();
         if ($copilot && $this->recipeId !== null) {
@@ -216,16 +219,12 @@ class VkModal extends Component
     // ohne jedes Event greift.)
     private function formZuruecksetzen(): void
     {
-        $this->reset(['recipeId', 'form', 'hauptgruppeId', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege',
+        $this->reset(['recipeId', 'form', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege',
             'ueberarbeitenOffen', 'anweisung', 'ueberarbeitung',     // L1a: Revise-Vorschau darf nicht ins nächste Gericht lecken
             'bulkRunId']);                                          // L1b: dito für die Anreicherungs-Lauf-Box
         $this->copilotZuruecksetzen();                              // L6b: Befunde gehören zu GENAU diesem Gericht
     }
 
-    public function updatedHauptgruppeId(): void
-    {
-        $this->form['dish_class_id'] = null;                     // Kaskade Reset-korrekt (§4.1)
-    }
 
     public function anlegen(): void
     {
@@ -787,10 +786,14 @@ class VkModal extends Component
             'gProStueck' => $gProStueck,
             'anteile' => $anteile,
             'hauptgruppen' => $team !== null ? $verkauf->dishMainGroups($team) : collect(),
-            'klassen' => $this->hauptgruppeId !== null
-                ? FoodAlchemistDishClass::where('dish_main_group_id', $this->hauptgruppeId)->orderBy('label')->get(['id', 'label', 'diet_form'])
-                : collect(),
-            'aufschlagsklassen' => FoodAlchemistMarkupClass::where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'raw_markup_pct', 'formula_type']),
+            // MVP-049 + MVP-050 (P0): identisch zum Browser (Verkauf/Browser::render) — Klasse ist
+            // die Diätform als EIGENE Achse (`dish_main_group_id IS NULL`), unabhängig von der
+            // Hauptgruppe. Beide Listen teamgescopt; vorher lasen sie über alle Teams hinweg,
+            // während die Nachbarzeilen darunter es korrekt machten.
+            'klassen' => FoodAlchemistDishClass::visibleToTeam($team)
+                ->whereNull('dish_main_group_id')->orderBy('id')->get(['id', 'label', 'diet_form']),
+            'aufschlagsklassen' => FoodAlchemistMarkupClass::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'raw_markup_pct', 'formula_type']),
             'einheiten' => $team !== null ? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)->orderBy('slug')->get(['id', 'slug', 'display_de']) : collect(),
             'behaelter' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at'), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
             'geraete' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['id', 'name', 'is_inactive']),

@@ -161,8 +161,11 @@
         <x-foodalchemist::modal-section title="Klassifikation">
             <div class="grid grid-cols-2 gap-3" data-vk-klassifikation>
                 <div>
+                    {{-- Modell A (MVP-049): HG ist ein normales Formularfeld am Gericht, keine
+                         Kaskaden-Steuerung mehr — deshalb `form.dish_main_group_id` statt eines
+                         separaten Props und kein `.live` (nichts hängt am Wechsel). --}}
                     <label class="block {{ $label }} mb-1">Speisen-Hauptgruppe</label>
-                    <select wire:model.live="hauptgruppeId" class="{{ $input }}" data-vk-hg>
+                    <select wire:model="form.dish_main_group_id" class="{{ $input }}" data-vk-hg>
                         <option value="">—</option>
                         @foreach($hauptgruppen as $hg)
                             <option value="{{ $hg->id }}">[{{ $hg->code }}] {{ $hg->label }}</option>
@@ -170,8 +173,9 @@
                     </select>
                 </div>
                 <div>
+                    {{-- Unabhängige Achse: die vier Diätformen, nie von der HG abhängig. --}}
                     <label class="block {{ $label }} mb-1">Speisen-Klasse (Diätform)</label>
-                    <select wire:model="form.dish_class_id" class="{{ $input }}" data-vk-klasse @if($klassen->isEmpty()) disabled @endif>
+                    <select wire:model="form.dish_class_id" class="{{ $input }}" data-vk-klasse>
                         <option value="">—</option>
                         @foreach($klassen as $k)
                             <option value="{{ $k->id }}">{{ $k->label }} ({{ $k->diet_form }})</option>
