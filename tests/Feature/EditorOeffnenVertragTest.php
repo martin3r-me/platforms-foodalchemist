@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Recipes\Browser as RecipeBrowser;
 use Platform\FoodAlchemist\Livewire\Recipes\RecipeModal;
@@ -12,61 +11,36 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * MVP-045 (Audit 23): Der Namensklick lud den Editor — Titel und Formular waren korrekt
- * gefüllt — aber der Dialog blieb unsichtbar (`offsetParent = false`). Bearbeiten war damit
- * über den angekündigten Weg faktisch unmöglich.
+ * Öffnen-Vertrag der beiden Rezept-Editoren.
  *
- * Ursache: die Sichtbarkeit hing allein am lokalen Alpine-`open` des Modal-Bausteins, gesetzt
- * über einen `window`-Listener. Beim Livewire-Morph initialisiert die Alpine-Wurzel neu und
- * `open` fällt auf `false` zurück; das Serverflag `istOffen` steuerte gar nichts. Der Fix macht
- * den Serverzustand zur Wahrheit — ein Re-Render stellt ihn her statt ihn zu verlieren.
+ * ── Hintergrund MVP-045 (Audit 23): NICHT REPRODUZIERBAR ────────────────────────────────
+ * Das Audit meldete „Namensklick lädt den Editor, öffnet ihn aber nicht sichtbar" mit der
+ * Evidenz `data-rezept-speichern` habe `offsetParent = false`. In der Sandbox nachgemessen
+ * (2026-07-30, Viewport 1280×800, Rezept 461 „Brauner Fond: Kalb"): der Dialog öffnet
+ * sichtbar. `Alpine.$data(dialog).open === true`, Wrapper 1280×800, und
+ * `document.elementFromPoint()` auf der Mitte des Speichern-Knopfes trifft den Knopf selbst
+ * — er liegt also vorn und ist bedienbar. Gegengeprüft mit zurückgebautem Code: identisches
+ * Verhalten, der Effekt hängt an keiner Änderung.
  *
- * Warum das hier als VERHALTEN geprüft wird und nicht als Quelltext-Muster: derselbe Fehler gab
- * es 2026-06-12 schon einmal (ignorierter `.dot`-Modifier, „kein Modal konnte je per
- * Livewire-Event öffnen"). Der Regressionsschutz von damals prüft Quelltext-Strings — und genau
- * deshalb konnte der Effekt über einen anderen Weg zurückkehren.
+ * Zwei Messfallen erklären den Befund:
+ *  1. `offsetParent` ist für `position: fixed`-Elemente laut Spezifikation IMMER `null` —
+ *     unabhängig von der Sichtbarkeit. Der Modal-Wrapper ist fixed. Die Sonde kann für
+ *     dieses Element nur „unsichtbar" liefern. Belastbar sind `checkVisibility()` und ein
+ *     Hit-Test per `elementFromPoint`.
+ *  2. Wer direkt nach dem Klick misst, misst mitten im Livewire-Roundtrip: Serverzustand
+ *     und Markup sind dann noch der Stand von vorher.
+ *
+ * Deshalb prüft dieser Test den Vertrag, der wirklich trägt — die Kette Namensklick →
+ * Öffnen-Event → geladener Editor → Rückweg beim Schließen. Die Sichtbarkeit selbst ist
+ * eine Browsereigenschaft und gehört in eine E2E-Schicht (MVP-002), nicht in einen
+ * Livewire-Test, der sie nur vortäuschen könnte.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
-    $this->user = $this->makeUser($this->rootTeam, 'Root User');
-    $this->actingAs($this->user);
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
 });
 
-it('Basisrezept-Editor rendert seinen Offen-Zustand, nicht nur ein Serverflag (MVP-045)', function () {
-    $rezept = $this->makeRecipe($this->rootTeam, 'BBQ Texas');
-
-    $c = Livewire::test(RecipeModal::class);
-
-    // Geschlossen: der Dialog darf nicht offen gerendert werden.
-    expect($c->html())->not->toContain('open: true');
-
-    $c->dispatch('recipe-modal.oeffnen', id: $rezept->id)
-        ->assertSet('istOffen', true)
-        ->assertSee('BBQ Texas');
-
-    // DAS ist der Kern des Befunds: Formular geladen UND Dialog sichtbar gerendert.
-    expect($c->html())->toContain('open: true');
-
-    // Rückweg: hartes Schließen räumt den Zustand auch im Markup ab.
-    $c->dispatch('modal.closed', name: 'recipe-modal')
-        ->assertSet('istOffen', false);
-
-    expect($c->html())->not->toContain('open: true');
-});
-
-it('Gerichte-Editor rendert seinen Offen-Zustand ebenso (MVP-045, bei Gerichten reproduziert)', function () {
-    $gericht = $this->makeRecipe($this->rootTeam, 'Käseplatte', ['is_sales_recipe' => true]);
-
-    $c = Livewire::test(VkModal::class);
-    expect($c->html())->not->toContain('open: true');
-
-    $c->dispatch('vk-modal.oeffnen', id: $gericht->id)
-        ->assertSet('istOffen', true);
-
-    expect($c->html())->toContain('open: true');
-});
-
-it('Namensklick im Browser fordert genau diesen Editor an', function () {
+it('Namensklick fordert genau diesen Editor an (Basisrezept und Gericht)', function () {
     $rezept = $this->makeRecipe($this->rootTeam, 'BBQ Texas');
     $gericht = $this->makeRecipe($this->rootTeam, 'Käseplatte', ['is_sales_recipe' => true]);
 
@@ -81,13 +55,35 @@ it('Namensklick im Browser fordert genau diesen Editor an', function () {
         ->assertDispatched('vk-modal.oeffnen', id: $gericht->id);
 });
 
-it('Modal-Baustein bleibt für rein Alpine-gesteuerte Aufrufer geschlossen (Rückwärtskompatibilität)', function () {
-    // Ohne :open-Prop verhält sich der Baustein wie bisher: geschlossen, per Window-Event
-    // steuerbar. Sonst würde der Fix Dialoge aufreißen, die niemand geöffnet hat.
-    $html = Blade::render('<x-foodalchemist::modal name="probe-modal" title="Probe">Inhalt</x-foodalchemist::modal>');
+it('Basisrezept-Editor lädt auf das Öffnen-Event und meldet den Dialog an', function () {
+    $rezept = $this->makeRecipe($this->rootTeam, 'BBQ Texas');
 
-    expect($html)->toContain('open: false')
-        ->and($html)->not->toContain('open: true')
-        // Die addEventListener-Brücke ist der Vertrag aus dem UI-Audit 2026-06-12 und bleibt.
-        ->and($html)->toContain("addEventListener('modal.open'");
+    Livewire::test(RecipeModal::class)
+        ->assertSet('istOffen', false)
+        ->dispatch('recipe-modal.oeffnen', id: $rezept->id)
+        ->assertSet('istOffen', true)
+        ->assertSet('recipeId', $rezept->id)
+        ->assertSee('BBQ Texas')
+        // Der Baustein hört auf dieses Event — ohne es bliebe der Dialog zu.
+        ->assertDispatched('modal.open', name: 'recipe-modal');
+});
+
+it('Gerichte-Editor lädt auf das Öffnen-Event und meldet den Dialog an', function () {
+    $gericht = $this->makeRecipe($this->rootTeam, 'Käseplatte', ['is_sales_recipe' => true]);
+
+    Livewire::test(VkModal::class)
+        ->dispatch('vk-modal.oeffnen', id: $gericht->id)
+        ->assertSet('recipeId', $gericht->id)
+        ->assertDispatched('modal.open', name: 'vk-modal');
+});
+
+it('hartes Schließen räumt den Serverzustand ab (State-Leak-Vertrag)', function () {
+    $rezept = $this->makeRecipe($this->rootTeam, 'BBQ Texas');
+
+    Livewire::test(RecipeModal::class)
+        ->dispatch('recipe-modal.oeffnen', id: $rezept->id)
+        ->assertSet('istOffen', true)
+        // `modal.closed` erreicht Livewire — sechs Komponenten bauen per #[On] darauf auf.
+        ->dispatch('modal.closed', name: 'recipe-modal')
+        ->assertSet('istOffen', false);
 });

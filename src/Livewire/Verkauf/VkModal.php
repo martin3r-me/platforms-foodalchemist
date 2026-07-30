@@ -35,13 +35,6 @@ class VkModal extends Component
 
     public ?int $hauptgruppeId = null;                               // UI-Kaskade für den Klassen-Select
 
-    /**
-     * MVP-045: Offen-Zustand als Serverwahrheit — der Modal-Baustein seedet sein Alpine-`open`
-     * daraus, damit ein Livewire-Morph den Dialog nicht unsichtbar macht. RecipeModal hatte das
-     * Flag schon, VkModal nicht; der Befund war bei Gerichten identisch reproduzierbar.
-     */
-    public bool $istOffen = false;
-
     // Anlage-Modus
     public string $neuName = '';
 
@@ -120,23 +113,7 @@ class VkModal extends Component
         if ($copilot && $this->recipeId !== null) {
             $this->copilotAusAblage();
         }
-        $this->istOffen = true;
         $this->dispatch('modal.open', name: 'vk-modal');
-    }
-
-    /**
-     * Rückweg des Offen-Zustands (MVP-045). Ohne den würde der Server nach Escape/Backdrop
-     * weiter „offen" behaupten und der Baustein den Dialog beim nächsten Re-Render erneut
-     * aufziehen. `modal.closed` erreicht Livewire — sechs Komponenten bauen per #[On] darauf
-     * auf, der Modal-Baustein dokumentiert es als State-Leak-Vertrag (der Kommentar bei
-     * formZuruecksetzen() sagte lange das Gegenteil).
-     */
-    #[On('modal.closed')]
-    public function beiModalClosed(?string $name = null): void
-    {
-        if ($name === 'vk-modal') {
-            $this->istOffen = false;
-        }
     }
 
     // ── Darreichungen (Umbau-Spec Phase 5) ──────────────────────────────
@@ -233,9 +210,10 @@ class VkModal extends Component
     }
 
     // P-2-State-Leak-Schutz wie RecipeModal/GeneratorModal: Reset beim ÖFFNEN.
-    // (Der frühere Zusatz „modal.closed erreicht Livewire nicht" war falsch — s.
-    // beiModalClosed() oben und den State-Leak-Vertrag im Modal-Baustein. Der Reset bleibt
-    // trotzdem beim Öffnen: er ist die Stelle, die auch ohne jedes Event greift.)
+    // (Der frühere Zusatz „modal.closed erreicht Livewire nicht" war falsch: sechs Komponenten
+    // hören per #[On('modal.closed')] darauf, und der Modal-Baustein dokumentiert es als
+    // State-Leak-Vertrag. Der Reset bleibt trotzdem beim Öffnen — er ist die Stelle, die auch
+    // ohne jedes Event greift.)
     private function formZuruecksetzen(): void
     {
         $this->reset(['recipeId', 'form', 'hauptgruppeId', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege',
@@ -289,7 +267,6 @@ class VkModal extends Component
             return;
         }
         $this->dispatch('recipe-gespeichert');
-        $this->istOffen = false;
         $this->dispatch('modal.close', name: 'vk-modal');
     }
 
@@ -308,7 +285,6 @@ class VkModal extends Component
             return;
         }
         $this->dispatch('recipe-gespeichert');
-        $this->istOffen = false;
         $this->dispatch('modal.close', name: 'vk-modal');
     }
 
