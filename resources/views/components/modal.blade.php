@@ -28,14 +28,26 @@
     'size' => 'max-w-4xl',
     'fullscreen' => false,                                            {{-- Editor-Parität R4: Voll-Editor nimmt den ganzen Viewport --}}
     'closeVia' => null,                                               {{-- optional: Livewire-Methode für das ✕ (z.B. Nav-Stack-Zurück) statt Alpine-close(); Backdrop/Escape bleiben hartes Schließen --}}
+    'open' => false,                                                  {{-- MVP-045: Offen-Zustand aus dem Serverstate, s. unten --}}
 ])
 
 @php
     $label = 'text-[11px] font-medium uppercase tracking-wider text-gray-500';
 @endphp
 
+{{-- MVP-045 (Audit 23): `open` wird aus dem Serverstate GESEEDET, nicht hart auf false.
+
+     Vorher lebte die Sichtbarkeit ausschließlich in diesem Alpine-Local, gesetzt über den
+     window-Listener unten. Beim Livewire-Morph initialisiert die Alpine-Wurzel neu und `open`
+     fiel auf false zurück — der Namensklick lud Titel und Formular korrekt, der Dialog blieb
+     unsichtbar. Mit dem Seed stellt ein Re-Render den Zustand her statt ihn zu verlieren.
+
+     Bedingung dafür (und der Grund, warum das kein reiner View-Fix ist): die besitzende
+     Komponente MUSS ihr Flag beim Schließen zurücksetzen — dafür feuert close() weiterhin
+     `modal.closed`. Ohne das würde der Server "offen" behaupten und der Dialog beim nächsten
+     Re-Render wieder aufreißen. Aufrufer ohne :open-Prop verhalten sich unverändert (false). --}}
 <div x-data="{
-        open: false,
+        open: @js((bool) $open),
         close() { this.open = false; this.$dispatch('modal.closed', { name: '{{ $name }}' }); },
      }"
      {{-- UI-Audit 2026-06-12: `.dot` wird vom gebündelten Alpine 3.15 IGNORIERT
