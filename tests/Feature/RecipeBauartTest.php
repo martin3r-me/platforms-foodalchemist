@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Services\DataQualityService;
 use Platform\FoodAlchemist\Services\RecipeBauartService;
 use Platform\FoodAlchemist\Services\RecipeFindingService;
 use Platform\FoodAlchemist\Services\RecipeReviewService;
+use Platform\FoodAlchemist\Tests\Support\CopilotStub;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -138,7 +139,7 @@ it('S5b-2: die zwei Pässe räumen sich nicht gegenseitig ab', function () {
     $svc = app(RecipeFindingService::class);
 
     // Copilot-Pass legt einen Mengen-Befund ab …
-    bindCopilotStub([['art' => 'menge', 'zutat_id' => $this->zeileId, 'quantity' => 600,
+    CopilotStub::bind([['art' => 'menge', 'zutat_id' => $this->zeileId, 'quantity' => 600,
         'begruendung' => 'Zu wenig.', 'konfidenz' => 0.9]]);
     $svc->pruefeUndAblegen($this->rootTeam, $this->recipe->id);
 

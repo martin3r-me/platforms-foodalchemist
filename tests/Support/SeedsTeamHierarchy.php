@@ -33,23 +33,13 @@ trait SeedsTeamHierarchy
 
         // Stub: die AI-User-Migration hängt einen FK auf core_ai_models an users —
         // SQLite validiert ALLE Tabellen-FKs beim Insert, also muss die Tabelle existieren.
+        // Der INHALT ist hier bewusst irrelevant: kein Test und kein gerenderter
+        // Core-Component liest die Tabelle, sie erfüllt nur den FK. Cores echte Migration
+        // zöge `core_ai_providers` als Abhängigkeit nach — dafür ist hier kein Bedarf.
+        // (Sobald etwas die Tabelle WIRKLICH liest, gehört sie in die --path-Liste unten.)
         if (! \Illuminate\Support\Facades\Schema::hasTable('core_ai_models')) {
             \Illuminate\Support\Facades\Schema::create('core_ai_models', function ($table) {
                 $table->id();
-                $table->timestamps();
-            });
-        }
-
-        // Stub: Cores Navbar (über x-ui-page-navbar) rendert die Zeiterfassung aus
-        // platform-organization — `checkins` muss existieren, Inhalt egal (M3-02).
-        if (! \Illuminate\Support\Facades\Schema::hasTable('checkins')) {
-            \Illuminate\Support\Facades\Schema::create('checkins', function ($table) {
-                $table->id();
-                $table->unsignedBigInteger('user_id')->nullable();
-                $table->unsignedBigInteger('team_id')->nullable();
-                $table->date('date')->nullable();
-                $table->dateTime('check_in')->nullable();
-                $table->dateTime('check_out')->nullable();
                 $table->timestamps();
             });
         }
@@ -67,6 +57,16 @@ trait SeedsTeamHierarchy
                 $core . '/2025_11_08_150001_add_scope_type_to_modules_table.php',
                 $core . '/2025_12_20_000001_create_team_user_last_modules_table.php',
                 $core . '/2026_04_12_000004_create_module_usage_counts_table.php',
+                // `checkins` gehört CORE (nicht platform-organization — der frühere Kommentar
+                // hier war falsch und hat die Suche nach einer Organization-Abhängigkeit
+                // ausgelöst, die es nicht gibt). Gebraucht, weil x-ui-page-navbar per
+                // @livewire('core.navbar-checkin') bei JEDEM Full-Page-Render darauf zugreift
+                // (liest mood_score/daily_goal, ruft Checkin::currentStreak) — M3-02.
+                // Bewusst Cores echte Migrationen statt eines handgebauten Stubs: der Stub
+                // erfand team_id/check_in/check_out und ließ mood_score/daily_goal weg; er
+                // trug nur, solange die Tabelle leer blieb. Reihenfolge: nach users (FK).
+                $core . '/2025_01_09_000001_create_checkins_table.php',
+                $core . '/2025_01_21_000001_add_kpi_fields_to_checkins_table.php',
                 $module,
             ],
         ])->run();

@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeReviewService;
+use Platform\FoodAlchemist\Tests\Support\CopilotStub;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -50,53 +51,10 @@ beforeEach(function () {
     $this->idButter = ($this->zeile)($this->gpButter->id, 'Butter', 80, ['position' => 2, 'is_value_relevant' => true]);
 });
 
-/** Provider-Stub: liefert genau die übergebene Befund-Liste (der Fake-Provider echot nur den Kontext). */
-function bindCopilotStub(array $befunde, string $urteil = 'Solide Basis, kleine Lücken.'): void
-{
-    config(['foodalchemist.ai.provider' => 'core']);
-    app()->bind(LLMProviderContract::class, fn () => new class($befunde, $urteil) implements LLMProviderContract
-    {
-        public function __construct(private array $befunde, private string $urteil) {}
-
-        public function getName(): string
-        {
-            return 'test-stub';
-        }
-
-        public function chat(array $messages, array $options = []): array
-        {
-            $GLOBALS['l6_user_prompt'] = collect($messages)->where('role', 'user')->last()['content'] ?? '';
-
-            return ['content' => json_encode(['werte' => ['befunde' => $this->befunde, 'gesamturteil' => $this->urteil],
-                'confidence' => 0.8, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
-        }
-
-        public function streamChat(array $messages, callable $onDelta, array $options = []): void
-        {
-            $onDelta($this->chat($messages, $options)['content']);
-        }
-
-        public function getAvailableModels(): array
-        {
-            return ['stub'];
-        }
-
-        public function getDefaultModel(): string
-        {
-            return 'stub';
-        }
-
-        public function isAvailable(): bool
-        {
-            return true;
-        }
-    });
-}
-
 it('L6: normalisiert die Befunde und entscheidet je Befund, ob er anwendbar IST', function () {
     $this->makeGp($this->rootTeam, 'Muskatnuss');                     // fehlt-Befund findet ein Ziel
 
-    bindCopilotStub([
+    CopilotStub::bind([
         ['art' => 'menge', 'zutat_id' => $this->idButter, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett für 1 kg Kartoffeln.', 'konfidenz' => 0.8],
         ['art' => 'einheit', 'zutat_id' => $this->idKartoffel, 'einheit_slug' => 'kg', 'quantity' => 1, 'begruendung' => 'kg ist die übliche Ansatz-Einheit.', 'konfidenz' => 'hoch'],
         ['art' => 'fehlt', 'zutat_text' => 'Muskatnuss', 'quantity' => 1, 'einheit_slug' => 'g', 'begruendung' => 'Klassische Würzung fehlt.', 'konfidenz' => 90],
@@ -128,7 +86,7 @@ it('L6: normalisiert die Befunde und entscheidet je Befund, ob er anwendbar IST'
 });
 
 it('L6: findet die Zielzeile auch über den Namen, wenn das Modell keine id mitschickt', function () {
-    bindCopilotStub([['art' => 'menge', 'zutat_text' => 'Butter', 'quantity' => 150, 'begruendung' => 'Mehr Fett.']]);
+    CopilotStub::bind([['art' => 'menge', 'zutat_text' => 'Butter', 'quantity' => 150, 'begruendung' => 'Mehr Fett.']]);
 
     $b = app(RecipeReviewService::class)->pruefe($this->rootTeam, $this->recipe->id)['befunde'][0];
 
@@ -201,7 +159,7 @@ it('L6: das Gericht läuft über den VK-Prompt und bekommt die Verkaufs-Facetten
         'quantity' => 20, 'unit_vocab_id' => $this->g->id, 'position' => 1, 'created_at' => now(), 'updated_at' => now(),
     ]);
 
-    bindCopilotStub([['art' => 'hinweis', 'begruendung' => '60 g pro Stück ist für Fingerfood grenzwertig.']]);
+    CopilotStub::bind([['art' => 'hinweis', 'begruendung' => '60 g pro Stück ist für Fingerfood grenzwertig.']]);
     $ergebnis = app(RecipeReviewService::class)->pruefe($this->rootTeam, $vk->id);
 
     expect($ergebnis['befunde'])->toHaveCount(1)
