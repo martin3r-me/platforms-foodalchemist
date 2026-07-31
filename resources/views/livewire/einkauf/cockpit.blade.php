@@ -51,6 +51,9 @@
             @endif
         </div>
 
+        @if($hinweis)<div class="{{ $sectionCard }} !bg-emerald-500/[0.06] !border-emerald-500/20 text-[12px] text-emerald-700" data-einkauf-hinweis>✓ {{ $hinweis }}</div>@endif
+        @if($fehler)<div class="{{ $sectionCard }} !bg-rose-500/[0.06] !border-rose-500/20 text-[12px] text-rose-700" data-einkauf-fehler>{{ $fehler }}</div>@endif
+
         @if(! $aktiv)
             {{-- Leerzustand (Such-first) --}}
             <div class="{{ $sectionCard }} text-center py-12">
@@ -77,6 +80,7 @@
                             <th class="px-3 py-2 font-medium text-right">Spanne</th>
                             <th class="px-3 py-2 font-medium text-right">Lief.</th>
                             @if($supplierId)<th class="px-3 py-2 font-medium text-right">gefilt. Lief.</th>@endif
+                            <th class="px-3 py-2 font-medium text-right">Aktion</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -96,6 +100,10 @@
                                         @if($z['filter_supplier_ist_guenstigster']) ★@endif
                                     </td>
                                 @endif
+                                <td class="px-3 py-2 text-right whitespace-nowrap">
+                                    <button type="button" wire:click="uebernehmen({{ $z['guenstigster_la_id'] }})"
+                                            class="{{ $btnGhostXs }} text-violet-600" title="Günstigsten Lieferantenartikel in die Bestellschiene übernehmen">→ Schiene</button>
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>

@@ -8,9 +8,11 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\LeadLaService;
+use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\RebateService;
 use Platform\FoodAlchemist\Services\VocabularyService;
 use Platform\FoodAlchemist\Support\Suche;
+use RuntimeException;
 
 /**
  * Einkauf E3 — Einkaufs-Cockpit (Startseite des „reinen Einkäufers").
@@ -40,6 +42,33 @@ class Cockpit extends Component
 
     #[Url(as: 'rv')]
     public bool $mitRabatt = false;
+
+    public ?string $hinweis = null;
+
+    public ?string $fehler = null;
+
+    /**
+     * Einkauf E3: den günstigsten Lieferantenartikel eines GP in die Bestellschiene
+     * seines Lieferanten übernehmen (1 Gebinde). OrderService holt/erstellt den Draft
+     * und upsertet die Zeile (D1-gescopt). Das ist die Kern-Aktion des „reinen Einkäufers".
+     */
+    public function uebernehmen(int $laId): void
+    {
+        $this->hinweis = null;
+        $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet.';
+
+            return;
+        }
+        try {
+            $line = app(OrderService::class)->addManualLine($team, $laId, 1.0, 'aus Preisvergleich', Auth::id());
+            $this->hinweis = '„' . ($line->designation ?? 'Artikel') . '" in die Bestellschiene übernommen (1 Gebinde).';
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
 
     public function render(LeadLaService $lead, RebateService $rebate)
     {
@@ -123,6 +152,7 @@ class Cockpit extends Component
             'name' => $gp->name,
             'wg' => $gp->commodity_group_code,
             'n' => $bepreist->count(),
+            'guenstigster_la_id' => (int) $guenstigster->id,
             'guenstigster_supplier' => $guenstigster->supplier_name,
             'guenstigster_preis' => $minP,
             'teuerster_supplier' => $teuerster->supplier_name,
