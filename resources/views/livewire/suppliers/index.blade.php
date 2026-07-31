@@ -156,15 +156,15 @@
                     </select>
                 </span>
             </div>
-            <div class="overflow-x-auto">{{-- R13: schmaler Mittelteil scrollt statt abzuschneiden --}}
+            <div class="max-h-[70vh] overflow-auto">{{-- R13: schmaler Mittelteil scrollt statt abzuschneiden --}}
             <table class="{{ $table }}">
                 <thead>
                     <tr class="text-left">
-                        <th class="{{ $th }} !pr-0 w-8"></th>
+                        <th class="{{ $th }} !pr-0 w-8 sticky top-0 z-20 bg-white/95 backdrop-blur-xl"></th>
                         @if($globaleSuche)<th class="{{ $th }}">Lieferant</th>@endif
                         {{-- R13 (Jarvis-Dichte): Bezeichnung flexibel, Preise rechtsbündig --}}
                         @foreach([['ArtNr', ''], ['Bezeichnung', 'w-full'], ['Gebinde', ''], ['Status', ''], ['EK', 'text-right'], ['Vergleichspreis', 'text-right'], ['Grundprodukt', ''], ['★', 'text-right']] as [$head, $align])
-                            <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
+                            <th class="{{ $th }} {{ $align }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $head }}</th>
                         @endforeach
                     </tr>
                 </thead>

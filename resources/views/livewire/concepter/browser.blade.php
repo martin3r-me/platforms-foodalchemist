@@ -128,22 +128,24 @@
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="relative overflow-hidden {{ $card }}">
             <div class="{{ $cardAccent }}"></div>
+            {{-- Spec 28: eigener Scroll-Kasten, damit der Tabellenkopf kleben kann --}}
+            <div class="max-h-[70vh] overflow-auto">
             <table class="{{ $table }}">
                 <thead>
                     <tr>
-                        <th class="{{ $th }} w-full text-left">Name</th>
+                        <th class="{{ $th }} w-full text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
                         @if($tab === 'pakete')
-                            <th class="{{ $th }} text-left">Rolle</th>
-                            <th class="{{ $th }} text-left">Klasse</th>
-                            <th class="{{ $th }} text-right">Gerichte</th>
-                            <th class="{{ $th }} text-right">€/Person</th>
-                            <th class="{{ $th }} text-right">W%</th>
+                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Rolle</th>
+                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Klasse</th>
+                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Gerichte</th>
+                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">€/Person</th>
+                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">W%</th>
                         @else
-                            <th class="{{ $th }} text-left">Klasse</th>
-                            <th class="{{ $th }} text-left">Eventtyp · Servierform</th>
-                            <th class="{{ $th }} text-left">Status</th>
-                            <th class="{{ $th }} text-right">Slots</th>
-                            <th class="{{ $th }} text-right">€/Person</th>
+                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Klasse</th>
+                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Eventtyp · Servierform</th>
+                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Status</th>
+                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Slots</th>
+                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">€/Person</th>
                         @endif
                     </tr>
                 </thead>
@@ -191,6 +193,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
         </div>
         <div>{{ $items->links() }}</div>
     </x-ui-page-container>

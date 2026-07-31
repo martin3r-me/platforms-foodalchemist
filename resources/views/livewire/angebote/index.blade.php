@@ -43,15 +43,17 @@
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="relative overflow-hidden {{ $card }}">
             <div class="{{ $cardAccent }}"></div>
+            {{-- Spec 28: eigener Scroll-Kasten, damit der Tabellenkopf kleben kann --}}
+            <div class="max-h-[70vh] overflow-auto">
             <table class="{{ $table }}">
                 <thead>
                     <tr>
-                        <th class="{{ $th }} w-full text-left">Name</th>
-                        <th class="{{ $th }} text-left">Status</th>
-                        <th class="{{ $th }} text-left">Anlass</th>
-                        <th class="{{ $th }} text-right">Pax</th>
-                        <th class="{{ $th }} text-left">Datum</th>
-                        <th class="{{ $th }} text-right">Gesamt €</th>
+                        <th class="{{ $th }} w-full text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
+                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Status</th>
+                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Anlass</th>
+                        <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Pax</th>
+                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Datum</th>
+                        <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Gesamt €</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -73,6 +75,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
         </div>
         <div>{{ $items->links() }}</div>
     </x-ui-page-container>

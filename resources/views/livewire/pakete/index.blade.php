@@ -145,11 +145,11 @@
         </div>
         <div class="relative overflow-hidden {{ $card }}">
             <div class="{{ $cardAccent }}"></div>
-            <div class="overflow-x-auto">
+            <div class="max-h-[70vh] overflow-auto">
                 <table class="{{ $table }}">
                     <thead><tr class="text-left">
                         @foreach([['Name', 'w-full'], ['Rolle', ''], ['Niveau', ''], ['Gerichte', 'text-right'], ['€ / Person', 'text-right'], ['W %', 'text-right'], ['Modus', '']] as [$head, $align])
-                            <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
+                            <th class="{{ $th }} {{ $align }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $head }}</th>
                         @endforeach
                     </tr></thead>
                     <tbody>

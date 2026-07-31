@@ -95,12 +95,14 @@
                     </select>
                 </span>
             </div>
-            <div class="overflow-x-auto">{{-- R13: schmaler Mittelteil scrollt statt abzuschneiden --}}
+            <div class="max-h-[70vh] overflow-auto">{{-- PROTOTYP Spec 28: eigener Scroll-Container,
+                 damit der sticky Tabellenkopf einen Weg zum Kleben hat. R13 (horizontal
+                 scrollen statt abschneiden) bleibt erhalten. --}}
             <table class="{{ $table }}">
                 <thead><tr class="text-left">
                     {{-- R13 (Jarvis-Dichte): Name flexibel, Rest schmal — Zahlen-Spalten rechtsbündig --}}
                     @foreach([['Name', 'w-full'], ['Warengruppe', ''], ['Status', ''], ['LAs', 'text-right'], ['Lead-Preis', 'text-right'], ['Rezepte', 'text-right'], ['Allergene', '']] as [$head, $align])
-                        <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
+                        <th class="{{ $th }} {{ $align }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $head }}</th>
                     @endforeach
                 </tr></thead>
                 <tbody>

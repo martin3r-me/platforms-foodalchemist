@@ -56,15 +56,15 @@
                 <h3 class="font-medium tracking-tight text-gray-900">Produktionsaufträge</h3>
                 <span class="{{ $label }}">{{ number_format($auftraege->count(), 0, ',', '.') }} Treffer</span>
             </div>
-            <div class="overflow-x-auto">
+            <div class="max-h-[70vh] overflow-auto">
                 <table class="{{ $table }}">
                     <thead><tr class="text-left">
-                        <th class="{{ $th }}">Name</th>
-                        <th class="{{ $th }} w-full">Ziele</th>
-                        <th class="{{ $th }} whitespace-nowrap">Ansätze / Port.</th>
-                        <th class="{{ $th }}">Datum</th>
-                        <th class="{{ $th }}">Status</th>
-                        <th class="{{ $th }}">Einkauf</th>
+                        <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
+                        <th class="{{ $th }} w-full sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Ziele</th>
+                        <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Ansätze / Port.</th>
+                        <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Datum</th>
+                        <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Status</th>
+                        <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Einkauf</th>
                     </tr></thead>
                     <tbody>
                         @php($einkaufPill = ['keine' => ['—', $variantPill['secondary'] ?? ''], 'offen' => ['offen', $variantPill['warning'] ?? ''], 'versendet' => ['versendet', $variantPill['success'] ?? '']])

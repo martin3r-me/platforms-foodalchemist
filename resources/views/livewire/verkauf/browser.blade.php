@@ -110,12 +110,12 @@
                     </select>
                 </span>
             </div>
-            <div class="overflow-x-auto">{{-- R13: schmaler Mittelteil scrollt statt abzuschneiden --}}
+            <div class="max-h-[70vh] overflow-auto">{{-- R13: schmaler Mittelteil scrollt statt abzuschneiden --}}
             <table class="{{ $table }}">
                 <thead><tr class="text-left">
                     {{-- R13 (Jarvis-Dichte): Name flexibel, Geld/Zahlen rechtsbündig --}}
                     @foreach([['Name', 'w-full'], ['Klasse', ''], ['Geschmack', ''], ['Status', ''], ['VK netto', 'text-right'], ['EK', 'text-right'], ['Zutaten', 'text-right'], ['Allergen-Konf.', ''], ['Hauptgruppe', '']] as [$head, $align])
-                        <th class="{{ $th }} {{ $align }}">{{ $head }}</th>
+                        <th class="{{ $th }} {{ $align }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $head }}</th>
                     @endforeach
                 </tr></thead>
                 <tbody>
