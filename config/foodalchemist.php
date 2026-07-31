@@ -159,6 +159,17 @@ return [
             ],
         ],
         [
+            // Einkauf E3: Cross-Lieferanten-Preisvergleich (Startseite „reiner Einkäufer").
+            'group' => 'Einkauf',
+            'items' => [
+                [
+                    'label' => 'Preisvergleich',
+                    'route' => 'foodalchemist.einkauf.index',
+                    'icon'  => 'heroicon-o-scale',
+                ],
+            ],
+        ],
+        [
             // Planung: Zeitachse (Speiseplan) + operative Planungs-Blätter (R7.1).
             'group' => 'Planung',
             'items' => [

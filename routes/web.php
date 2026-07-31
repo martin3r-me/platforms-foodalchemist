@@ -66,6 +66,13 @@ Route::get('/lieferanten', \Platform\FoodAlchemist\Livewire\Suppliers\Index::cla
     ->name('foodalchemist.suppliers.index');
 
 /**
+ * Einkauf E3 — Einkaufs-Cockpit: Cross-Lieferanten-Preisvergleich (Such-first,
+ * Rückvergütungs-Toggle). Startseite des „reinen Einkäufers".
+ */
+Route::get('/einkauf', \Platform\FoodAlchemist\Livewire\Einkauf\Cockpit::class)
+    ->name('foodalchemist.einkauf.index');
+
+/**
  * #388 Geschirr-Datenbank (non-food) — Leih-Lieferant → Geschirr-Artikel,
  * Master-Detail nach Lieferanten-Vorbild. Auswahl/Suche in der URL (V-17).
  */
