@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
+use Platform\FoodAlchemist\Livewire\Settings\Concerns\ReordersLists;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Services\VocabularyService;
@@ -18,6 +19,8 @@ use RuntimeException;
  */
 class VkTaxonomie extends Component
 {
+    use ReordersLists;
+
     public ?int $hauptgruppeId = null;
 
     public ?string $meldung = null;
@@ -122,6 +125,38 @@ class VkTaxonomie extends Component
             app(VocabularyService::class)->deleteDishClass($this->team(), $id);
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
+        }
+    }
+
+    // ── Umsortieren (Pfeile / Drag-and-Drop) ──
+
+    public function hgHoch(int $id): void
+    {
+        $this->reorderHg($id, -1);
+    }
+
+    public function hgRunter(int $id): void
+    {
+        $this->reorderHg($id, 1);
+    }
+
+    private function reorderHg(int $id, int $richtung): void
+    {
+        $vocab = app(VocabularyService::class);
+        $ids = FoodAlchemistDishMainGroup::visibleToTeam($this->team())
+            ->orderBy('sort_order')->orderBy('code')->pluck('id')->all();
+        if ($neu = $this->reorderNachbar($ids, $id, $richtung)) {
+            $vocab->reorderDishMainGroups($this->team(), $neu);
+        }
+    }
+
+    public function hgVerschieben(int $id, int $afterId): void
+    {
+        $vocab = app(VocabularyService::class);
+        $ids = FoodAlchemistDishMainGroup::visibleToTeam($this->team())
+            ->orderBy('sort_order')->orderBy('code')->pluck('id')->all();
+        if ($neu = $this->reorderHinter($ids, $id, $afterId)) {
+            $vocab->reorderDishMainGroups($this->team(), $neu);
         }
     }
 

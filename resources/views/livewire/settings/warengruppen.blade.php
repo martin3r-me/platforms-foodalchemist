@@ -13,7 +13,7 @@
 
     <div class="flex gap-4 items-start">
         {{-- Warengruppen links --}}
-        <div class="w-96 shrink-0 {{ $card }} p-3 space-y-0.5" data-warengruppen-liste>
+        <div class="w-96 shrink-0 {{ $card }} p-3 space-y-0.5" data-warengruppen-liste x-data="{ dragId: null }">
             <div class="{{ $label }} px-2 pb-2">Warengruppen ({{ $warengruppen->count() }})</div>
             <div class="flex gap-1 px-1 pb-2 mb-1 border-b border-black/5" data-wg-neu>
                 <input type="text" wire:model="neuWg" wire:keydown.enter="wgNeu" placeholder="Eigene Warengruppe …" class="{{ $input }} !py-0.5 flex-1" />
@@ -22,12 +22,16 @@
             @foreach($warengruppen as $wg)
                 @php($darfEdit = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $wg))
                 @php($istParagraf3 = in_array($wg->code, $paragraf3, true))
-                <div wire:key="wg-{{ $wg->id }}" class="group flex items-center gap-1 rounded-lg {{ $subWg === $wg->code ? $katAktiv : $katHover }}">
+                <div wire:key="wg-{{ $wg->id }}" class="group flex items-center gap-1 rounded-lg {{ $subWg === $wg->code ? $katAktiv : $katHover }}"
+                     @dragover.prevent
+                     @drop.prevent="if (dragId !== null && dragId !== {{ $wg->id }}) $wire.wgVerschieben(dragId, {{ $wg->id }}); dragId = null"
+                     :class="{ 'ring-1 ring-inset ring-violet-400/40': dragId !== null && dragId !== {{ $wg->id }} }">
                     @if($editId === $wg->id)
                         <span class="font-mono text-[11px] text-gray-500 pl-2">{{ $wg->code }}</span>
                         <input type="text" wire:model="editName" wire:keydown.enter="saveName" wire:keydown.escape="$set('editId', null)" class="{{ $input }} !py-0.5 flex-1" autofocus />
                         <button type="button" wire:click="saveName" class="{{ $btnGhostXs }} text-violet-600 shrink-0">OK</button>
                     @else
+                        <span class="shrink-0 flex items-center pl-1">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $wg->id, 'upMethod' => 'wgHoch', 'downMethod' => 'wgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
                         <button type="button" wire:click="waehleWg('{{ $wg->code }}')" class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-2 py-1 text-xs">
                             <span class="font-mono text-[10px] text-gray-500">{{ $wg->code }}</span>
                             <span class="min-w-0 truncate">{{ $wg->name }}</span>
@@ -47,7 +51,7 @@
 
         {{-- Sub-Kategorien rechts --}}
         <div class="flex-1 min-w-0">
-            <div class="relative overflow-hidden {{ $card }}" data-subkat>
+            <div class="relative overflow-hidden {{ $card }}" data-subkat x-data="{ dragIdx: null }">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                     <div>
@@ -61,10 +65,27 @@
                     <button type="button" wire:click="addSub" class="{{ $btnGhostXs }}" @disabled($subWg === '')>+ Sub-Kategorie</button>
                 </div>
                 <table class="{{ $table }}">
-                    <thead><tr class="text-left">@foreach(['Sub-Kategorie', 'GPs', ''] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>
+                    <thead><tr class="text-left">@foreach(['', 'Sub-Kategorie', 'GPs', ''] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>
                     <tbody>
                         @forelse($subKategorien as $sub)
-                            <tr wire:key="sub-{{ md5($sub->sub_category) }}" class="{{ $tr }}">
+                            <tr wire:key="sub-{{ md5($sub->sub_category) }}" class="{{ $tr }}"
+                                @dragover.prevent
+                                @drop.prevent="if (dragIdx !== null && dragIdx !== {{ $loop->index }}) $wire.subVerschieben(dragIdx, {{ $loop->index }}); dragIdx = null"
+                                :class="{ 'ring-1 ring-inset ring-violet-400/40': dragIdx !== null && dragIdx !== {{ $loop->index }} }">
+                                {{-- Umsortieren: Ziehgriff (Drag-and-Drop) + ▲▼ als zuverlässige Alternative --}}
+                                <td class="{{ $td }} !px-1.5 whitespace-nowrap align-middle">
+                                    <span class="inline-block cursor-grab active:cursor-grabbing text-gray-400 hover:text-violet-500 select-none align-middle mr-0.5"
+                                          draggable="true"
+                                          @dragstart="dragIdx = {{ $loop->index }}; $event.dataTransfer.effectAllowed = 'move'"
+                                          @dragend="dragIdx = null"
+                                          title="ziehen zum Umsortieren">⠿</span>
+                                    <span class="inline-flex flex-col align-middle leading-none">
+                                        <button type="button" wire:click="subHoch({{ $loop->index }})" @disabled($loop->first)
+                                                class="text-[9px] leading-none {{ $loop->first ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-violet-500' }}" title="hoch">▲</button>
+                                        <button type="button" wire:click="subRunter({{ $loop->index }})" @disabled($loop->last)
+                                                class="text-[9px] leading-none {{ $loop->last ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-violet-500' }}" title="runter">▼</button>
+                                    </span>
+                                </td>
                                 @if($renameAlt === $sub->sub_category)
                                     <td class="{{ $td }}"><input type="text" wire:model="renameNeu" wire:keydown.enter="rename" wire:keydown.escape="$set('renameAlt', null)" class="{{ $input }} !py-1" autofocus /></td>
                                     <td class="{{ $td }} text-gray-600">{{ $sub->n }}</td>
@@ -82,7 +103,7 @@
                                 @endif
                             </tr>
                         @empty
-                            <tr><td colspan="3" class="{{ $td }} text-gray-500 py-4 text-center">Keine Sub-Kategorien in dieser Warengruppe.</td></tr>
+                            <tr><td colspan="4" class="{{ $td }} text-gray-500 py-4 text-center">Keine Sub-Kategorien in dieser Warengruppe.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

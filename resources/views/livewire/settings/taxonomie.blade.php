@@ -8,17 +8,21 @@
 
     <div class="flex gap-4 items-start">
         {{-- Hauptgruppen --}}
-        <div class="w-80 shrink-0 {{ $card }} p-3 space-y-0.5" data-taxonomie-hg>
+        <div class="w-80 shrink-0 {{ $card }} p-3 space-y-0.5" data-taxonomie-hg x-data="{ dragId: null }">
             <div class="{{ $label }} px-2 pb-2">Hauptgruppen ({{ $hauptgruppen->count() }})</div>
             @foreach($hauptgruppen as $hg)
                 @php($darfEditHg = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $hg))
                 <div wire:key="hg-{{ $hg->id }}" class="group flex items-center gap-1 rounded-lg {{ $hauptgruppeId === $hg->id
                         ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
-                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
+                        : 'text-gray-600 hover:bg-black/[0.03]' }}"
+                        @dragover.prevent
+                        @drop.prevent="if (dragId !== null && dragId !== {{ $hg->id }}) $wire.hgVerschieben(dragId, {{ $hg->id }}); dragId = null"
+                        :class="{ 'ring-1 ring-inset ring-violet-400/40': dragId !== null && dragId !== {{ $hg->id }} }">
                     @if($hgEditId === $hg->id)
                         <input type="text" wire:model="hgEditName" wire:keydown.enter="hgSave" wire:keydown.escape="$set('hgEditId', null)" class="{{ $input }} !py-0.5 flex-1" autofocus />
                         <button type="button" wire:click="hgSave" class="{{ $btnGhostXs }} text-violet-600 shrink-0">OK</button>
                     @else
+                        <span class="shrink-0 flex items-center pl-1">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $hg->id, 'upMethod' => 'hgHoch', 'downMethod' => 'hgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
                         <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $hg->label }}</button>
                         <span class="text-[11px] text-gray-500 shrink-0">{{ $hg->kategorie_count }}</span>
                         @if($darfEditHg)
@@ -40,7 +44,7 @@
 
         {{-- Kategorien der gewählten HG --}}
         <div class="flex-1 min-w-0 space-y-4">
-            <div class="relative overflow-hidden {{ $card }}" data-taxonomie-kategorien>
+            <div class="relative overflow-hidden {{ $card }}" data-taxonomie-kategorien x-data="{ dragId: null }">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                     <h3 class="font-medium tracking-tight text-gray-900">Kategorien</h3>
@@ -48,12 +52,16 @@
                 </div>
                 <table class="{{ $table }}">
                     <thead><tr class="text-left">
-                        @foreach(['Bezeichnung', 'Technik', 'Sort', 'Rezepte', ''] as $head)<th class="{{ $th }}">{{ $head }}</th>@endforeach
+                        @foreach(['', 'Bezeichnung', 'Technik', 'Sort', 'Rezepte', ''] as $head)<th class="{{ $th }}">{{ $head }}</th>@endforeach
                     </tr></thead>
                     <tbody>
                         @foreach($kategorien as $kat)
                             @php($darfEdit = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $kat))
-                            <tr wire:key="kat-{{ $kat->id }}" class="{{ $tr }}">
+                            <tr wire:key="kat-{{ $kat->id }}" class="{{ $tr }}"
+                                @dragover.prevent
+                                @drop.prevent="if (dragId !== null && dragId !== {{ $kat->id }}) $wire.katVerschieben(dragId, {{ $kat->id }}); dragId = null"
+                                :class="{ 'ring-1 ring-inset ring-violet-400/40': dragId !== null && dragId !== {{ $kat->id }} }">
+                                <td class="{{ $td }} !px-1.5 whitespace-nowrap align-middle">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $kat->id, 'upMethod' => 'katHoch', 'downMethod' => 'katRunter', 'first' => $loop->first, 'last' => $loop->last])</td>
                                 @if($editId === $kat->id)
                                     <td class="{{ $td }}"><input type="text" wire:model="form.label" wire:keydown.enter="save" class="{{ $input }} !py-1" /></td>
                                     <td class="{{ $td }}"><input type="text" wire:model="form.technik" wire:keydown.enter="save" class="{{ $input }} !py-1" /></td>

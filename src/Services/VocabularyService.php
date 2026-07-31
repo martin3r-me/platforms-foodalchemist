@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
@@ -311,6 +312,54 @@ class VocabularyService
         return app(GpService::class)->clearSubKategorie($team, $warengruppeCode, $wert);
     }
 
+    /**
+     * Sub-Kategorien einer Warengruppe manuell sortieren (Pfeile/Drag-and-Drop, Settings).
+     *
+     * `$namesInOrder` ist die vollständige, angezeigte Reihenfolge — inkl. bislang unverwalteter
+     * GP-Freitextwerte. Da nur verwaltete Einträge eine `position` speichern können, werden
+     * Freitextwerte beim ersten Umsortieren team-lokal materialisiert (die GPs selbst bleiben
+     * unberührt — `n` zählt weiter aus dem Bestand). Nur eigene Zeilen (isOwnedBy) werden
+     * geschrieben; geerbte/globale Einträge bekommen bei Bedarf eine team-lokale Ordnung.
+     */
+    public function reorderSubCategories(Team $team, string $warengruppeCode, array $namesInOrder): void
+    {
+        if ($warengruppeCode === '') {
+            return;
+        }
+
+        DB::transaction(function () use ($team, $warengruppeCode, $namesInOrder) {
+            $pos = 0;
+            foreach ($namesInOrder as $name) {
+                $name = trim((string) $name);
+                if ($name === '') {
+                    continue;
+                }
+
+                $row = FoodAlchemistWarengruppeSubkategorie::withTrashed()
+                    ->where('team_id', $team->id)
+                    ->where('commodity_group_code', $warengruppeCode)
+                    ->where('name', $name)
+                    ->first();
+
+                if ($row) {
+                    if ($row->trashed()) {
+                        $row->restore();
+                    }
+                    $row->update(['position' => $pos]);
+                } else {
+                    FoodAlchemistWarengruppeSubkategorie::create([
+                        'team_id' => $team->id,
+                        'commodity_group_code' => $warengruppeCode,
+                        'name' => $name,
+                        'position' => $pos,
+                    ]);
+                }
+
+                $pos++;
+            }
+        });
+    }
+
     // ── Produktions-Taxonomie (M1-04, D-1) — von M4-Browser-Bäumen gelesen ──
 
     /** Hauptgruppen mit Kategorie-Zählern, sortiert (M4-Baum-Quelle). */
@@ -546,6 +595,51 @@ class VocabularyService
             throw new RuntimeException('Geerbte Hauptgruppe — Pflege nur durch das Besitzer-Team (D1).');
         }
         $hg->update(['sort_order' => $sortOrder]);
+    }
+
+    // ── Manuelle Sortierung (Pfeile / Drag-and-Drop, Settings) — sort_order = Anzeige-Index ──
+
+    /** Warengruppen (linke Liste) in die übergebene ID-Reihenfolge bringen. */
+    public function reorderWarengruppen(Team $team, array $ids): void
+    {
+        $this->applyReorder(FoodAlchemistLookupWarengruppe::class, $team, $ids);
+    }
+
+    /** Rezept-Hauptgruppen in die übergebene ID-Reihenfolge bringen. */
+    public function reorderMainGroups(Team $team, array $ids): void
+    {
+        $this->applyReorder(FoodAlchemistRecipeMainGroup::class, $team, $ids);
+    }
+
+    /** Rezept-Kategorien (innerhalb einer Hauptgruppe) in die übergebene ID-Reihenfolge bringen. */
+    public function reorderRecipeCategories(Team $team, array $ids): void
+    {
+        $this->applyReorder(FoodAlchemistRecipeCategory::class, $team, $ids);
+    }
+
+    /** Speisen-Hauptgruppen (VK-Taxonomie) in die übergebene ID-Reihenfolge bringen. */
+    public function reorderDishMainGroups(Team $team, array $ids): void
+    {
+        $this->applyReorder(FoodAlchemistDishMainGroup::class, $team, $ids);
+    }
+
+    /**
+     * Setzt `sort_order` = Position in der übergebenen ID-Reihenfolge. Nur eigene Zeilen
+     * (isOwnedBy) werden geschrieben — geerbte/globale Einträge bleiben unberührt (D1).
+     *
+     * @param  class-string  $modelClass
+     * @param  array<int>  $ids
+     */
+    private function applyReorder(string $modelClass, Team $team, array $ids): void
+    {
+        DB::transaction(function () use ($modelClass, $team, $ids) {
+            foreach (array_values($ids) as $i => $id) {
+                $row = $modelClass::visibleToTeam($team)->find((int) $id);
+                if ($row !== null && $row->isOwnedBy($team)) {
+                    $row->update(['sort_order' => $i]);
+                }
+            }
+        });
     }
 
     /** Rezept-Hauptgruppe umbenennen (Code bleibt stabil — Rezept-Kategorien hängen am code/id). */

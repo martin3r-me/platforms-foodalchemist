@@ -9,16 +9,20 @@
 
     <div class="flex gap-4 items-start">
         {{-- Speisen-Hauptgruppen links --}}
-        <div class="w-80 shrink-0 {{ $card }} p-3 space-y-0.5" data-taxo-hgs>
+        <div class="w-80 shrink-0 {{ $card }} p-3 space-y-0.5" data-taxo-hgs x-data="{ dragId: null }">
             <div class="{{ $label }} px-2 pb-2">Speisen-Hauptgruppen ({{ $hauptgruppen->count() }})</div>
             @foreach($hauptgruppen as $hg)
                 @php($darfEditHg = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $hg))
                 @php($nKl = $klassenJeHg[$hg->id] ?? 0)
-                <div wire:key="thg-{{ $hg->id }}" class="group flex items-center gap-1 rounded-lg {{ $hauptgruppeId === $hg->id ? $katAktiv : $katHover }} {{ $hg->is_inactive ? 'opacity-50' : '' }}">
+                <div wire:key="thg-{{ $hg->id }}" class="group flex items-center gap-1 rounded-lg {{ $hauptgruppeId === $hg->id ? $katAktiv : $katHover }} {{ $hg->is_inactive ? 'opacity-50' : '' }}"
+                        @dragover.prevent
+                        @drop.prevent="if (dragId !== null && dragId !== {{ $hg->id }}) $wire.hgVerschieben(dragId, {{ $hg->id }}); dragId = null"
+                        :class="{ 'ring-1 ring-inset ring-violet-400/40': dragId !== null && dragId !== {{ $hg->id }} }">
                     @if($hgEditId === $hg->id)
                         <input type="text" wire:model="hgEditName" wire:keydown.enter="hgSave" wire:keydown.escape="$set('hgEditId', null)" class="{{ $input }} !py-0.5 flex-1" autofocus />
                         <button type="button" wire:click="hgSave" class="{{ $btnGhostXs }} text-violet-600 shrink-0">OK</button>
                     @else
+                        <span class="shrink-0 flex items-center pl-1">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $hg->id, 'upMethod' => 'hgHoch', 'downMethod' => 'hgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
                         <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-2 py-1.5 text-xs">
                             <span class="font-mono text-[10px] text-gray-500">{{ $hg->code }}</span>
                             <span class="min-w-0 truncate">{{ $hg->label }}</span>

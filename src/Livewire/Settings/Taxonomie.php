@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\FoodAlchemist\Livewire\Settings\Concerns\ReordersLists;
 use Platform\FoodAlchemist\Services\VocabularyService;
 use RuntimeException;
 
@@ -13,6 +14,8 @@ use RuntimeException;
  */
 class Taxonomie extends Component
 {
+    use ReordersLists;
+
     public ?int $hauptgruppeId = null;
 
     public ?int $editId = null;
@@ -127,6 +130,64 @@ class Taxonomie extends Component
             app(VocabularyService::class)->updateMainGroupSort($this->team(), $id, $sortOrder);
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
+        }
+    }
+
+    // ── Umsortieren (Pfeile / Drag-and-Drop) ──
+
+    public function hgHoch(int $id): void
+    {
+        $this->reorderHg($id, -1);
+    }
+
+    public function hgRunter(int $id): void
+    {
+        $this->reorderHg($id, 1);
+    }
+
+    private function reorderHg(int $id, int $richtung): void
+    {
+        $vocab = app(VocabularyService::class);
+        $ids = $vocab->listMainGroups($this->team())->pluck('id')->all();
+        if ($neu = $this->reorderNachbar($ids, $id, $richtung)) {
+            $vocab->reorderMainGroups($this->team(), $neu);
+        }
+    }
+
+    public function hgVerschieben(int $id, int $afterId): void
+    {
+        $vocab = app(VocabularyService::class);
+        $ids = $vocab->listMainGroups($this->team())->pluck('id')->all();
+        if ($neu = $this->reorderHinter($ids, $id, $afterId)) {
+            $vocab->reorderMainGroups($this->team(), $neu);
+        }
+    }
+
+    public function katHoch(int $id): void
+    {
+        $this->reorderKat($id, -1);
+    }
+
+    public function katRunter(int $id): void
+    {
+        $this->reorderKat($id, 1);
+    }
+
+    private function reorderKat(int $id, int $richtung): void
+    {
+        $vocab = app(VocabularyService::class);
+        $ids = $vocab->listRecipeCategories($this->team(), $this->hauptgruppeId)->pluck('id')->all();
+        if ($neu = $this->reorderNachbar($ids, $id, $richtung)) {
+            $vocab->reorderRecipeCategories($this->team(), $neu);
+        }
+    }
+
+    public function katVerschieben(int $id, int $afterId): void
+    {
+        $vocab = app(VocabularyService::class);
+        $ids = $vocab->listRecipeCategories($this->team(), $this->hauptgruppeId)->pluck('id')->all();
+        if ($neu = $this->reorderHinter($ids, $id, $afterId)) {
+            $vocab->reorderRecipeCategories($this->team(), $neu);
         }
     }
 

@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\FoodAlchemist\Livewire\Settings\Concerns\ReordersLists;
 use Platform\FoodAlchemist\Services\VocabularyService;
 use RuntimeException;
 
@@ -14,6 +15,8 @@ use RuntimeException;
  */
 class Warengruppen extends Component
 {
+    use ReordersLists;
+
     public ?int $editId = null;
 
     public string $editName = '';
@@ -81,6 +84,36 @@ class Warengruppen extends Component
         }
     }
 
+    // ── Warengruppen umsortieren (Pfeile / Drag-and-Drop) ──
+
+    public function wgHoch(int $id): void
+    {
+        $this->reorderWg($id, -1);
+    }
+
+    public function wgRunter(int $id): void
+    {
+        $this->reorderWg($id, 1);
+    }
+
+    private function reorderWg(int $id, int $richtung): void
+    {
+        $vocab = app(VocabularyService::class);
+        $ids = $vocab->listWarengruppen($this->team())->pluck('id')->all();
+        if ($neu = $this->reorderNachbar($ids, $id, $richtung)) {
+            $vocab->reorderWarengruppen($this->team(), $neu);
+        }
+    }
+
+    public function wgVerschieben(int $id, int $afterId): void
+    {
+        $vocab = app(VocabularyService::class);
+        $ids = $vocab->listWarengruppen($this->team())->pluck('id')->all();
+        if ($neu = $this->reorderHinter($ids, $id, $afterId)) {
+            $vocab->reorderWarengruppen($this->team(), $neu);
+        }
+    }
+
     public function startRename(string $wert): void
     {
         $this->renameAlt = $wert;
@@ -115,6 +148,55 @@ class Warengruppen extends Component
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    /** Sub-Kategorie eine Position höher (▲). Index bezieht sich auf die angezeigte Reihenfolge. */
+    public function subHoch(int $index): void
+    {
+        $this->verschiebeSub($index, -1);
+    }
+
+    /** Sub-Kategorie eine Position tiefer (▼). */
+    public function subRunter(int $index): void
+    {
+        $this->verschiebeSub($index, 1);
+    }
+
+    private function verschiebeSub(int $index, int $richtung): void
+    {
+        $namen = $this->subNamenInReihenfolge();
+        $ziel = $index + $richtung;
+        if (! isset($namen[$index], $namen[$ziel])) {
+            return;
+        }
+        [$namen[$index], $namen[$ziel]] = [$namen[$ziel], $namen[$index]];
+        app(VocabularyService::class)->reorderSubCategories($this->team(), $this->subWg, $namen);
+    }
+
+    /** Drag-and-Drop: gezogene Zeile ($von) hinter die Ziel-Zeile ($nach) einsortieren. */
+    public function subVerschieben(int $von, int $nach): void
+    {
+        $namen = $this->subNamenInReihenfolge();
+        if (! isset($namen[$von], $namen[$nach]) || $von === $nach) {
+            return;
+        }
+        $item = $namen[$von];
+        $zielName = $namen[$nach];
+        unset($namen[$von]);
+        $namen = array_values($namen);
+        $at = array_search($zielName, $namen, true);
+        array_splice($namen, $at + 1, 0, [$item]);
+        app(VocabularyService::class)->reorderSubCategories($this->team(), $this->subWg, $namen);
+    }
+
+    /** @return array<int, string> angezeigte Sub-Kategorie-Namen der gewählten WG, in Anzeige-Reihenfolge. */
+    private function subNamenInReihenfolge(): array
+    {
+        return app(VocabularyService::class)
+            ->listSubCategories($this->team(), $this->subWg)
+            ->pluck('sub_category')
+            ->values()
+            ->all();
     }
 
     public function render(VocabularyService $vocab)
