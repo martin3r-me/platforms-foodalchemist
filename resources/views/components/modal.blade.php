@@ -29,6 +29,7 @@
     'fullscreen' => false,                                            {{-- Editor-Parität R4: Voll-Editor nimmt den ganzen Viewport --}}
     'closeVia' => null,                                               {{-- optional: Livewire-Methode für das ✕ (z.B. Nav-Stack-Zurück) statt Alpine-close(); Backdrop/Escape bleiben hartes Schließen --}}
     'darkCanvas' => false,                                            {{-- 2026-07-31: dunkler Editor-Grund im Body (nur grosse Editoren); Karten schweben darauf --}}
+    'titleName' => null,                                              {{-- 2026-07-31: hebt einen Namen (z.B. Rezept) im Titel als gerahmten Akzent-Chip hervor — präsenter, nicht grösser --}}
     'tabInit' => null,                                                {{-- 2026-07-31: aktiviert eine fixe Tab-Leiste im Kopf (via <x-slot:tabs>); Wert = Start-Tab. Alpine-`tab` lebt am Panel, umspannt Kopf-Tabs + Body-Panels --}}
 ])
 
@@ -54,7 +55,7 @@
      @keydown.window.escape="if (open) close()"
      class="fixed inset-0 z-[100] flex items-center justify-center p-4"
      data-modal="{{ $name }}"
-     role="dialog" aria-modal="true" @if($title) aria-label="{{ $title }}" @endif>
+     role="dialog" aria-modal="true" @if($title) aria-label="{{ trim($title . ($titleName !== null ? ': ' . $titleName : '')) }}" @endif>
 
     {{-- 2026-07-31: echter dunkler Editor (nur bei darkCanvas). Gescopet auf .fa-editor-panel,
          damit helle Kontexte (Settings, kleine Modals) unberührt bleiben. Reines CSS statt
@@ -82,6 +83,17 @@
             /* KI-Chips (btnAi): weisse Schrift + sichtbarer violetter Rand statt violett-auf-dunkel */
             .fa-editor-panel .bg-violet-500\/10{ background:rgba(139,92,246,.14) !important; color:#fff !important; }
             .fa-editor-panel .ring-violet-500\/20{ --tw-ring-color:rgba(167,139,250,.65) !important; }
+            /* Sensorik-Spinne: die Gitterlinien sind rgb(0 0 0 …)-Attribute (hell-Theme) und auf
+               dem dunklen Grund unsichtbar → hier auf sichtbares Slate heben (Attribute + inline-fill). */
+            .fa-editor-panel .fa-taste-grid{ stroke:rgba(148,163,184,.28) !important; }
+            .fa-editor-panel .fa-taste-grid-strong{ stroke:rgba(148,163,184,.5) !important; }
+            .fa-editor-panel .fa-taste-axislabel{ fill:#e2e8f0 !important; }
+            .fa-editor-panel .fa-taste-axislabel-dim{ fill:#94a3b8 !important; }
+            .fa-editor-panel .fa-taste-ringlabel{ fill:#94a3b8 !important; }
+            /* GP-Peek (Lieferantenartikel hinter dem GP): das Panel erzwingt bg-white → auf dem
+               dunklen Grund würde die (aufgehellte) graue Schrift auf Weiss verblassen. Panel dunkel-
+               konsistent machen, dann liest die helle Schrift wieder. */
+            .fa-editor-panel [data-gp-peek-tabelle]{ background:rgba(255,255,255,.05) !important; border-color:rgba(255,255,255,.10) !important; }
         </style>
     @endif
 
@@ -98,7 +110,21 @@
         {{-- Kopf: Titel + Schließen, darunter fixe Aktionen oben links (P-2) --}}
         <div class="shrink-0 border-b border-black/5">
             <div class="px-6 pt-4 pb-3 flex items-center justify-between gap-4">
-                <h2 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $title }}</h2>
+                @if($titleName !== null)
+                    {{-- Name als gerahmter Akzent-Chip — gleiche Schriftgrösse wie der Titel, aber
+                         auffälliger (violetter Rahmen). Farben als rohes CSS, damit sie auf hellem
+                         UND dunklem Editor-Grund (.fa-editor-panel) sauber sitzen. --}}
+                    <style>
+                        [data-modal-title-name]{ background:rgba(139,92,246,.10); color:#6d28d9; box-shadow:inset 0 0 0 1px rgba(139,92,246,.30); }
+                        .fa-editor-panel [data-modal-title-name]{ background:rgba(139,92,246,.22); color:#fff; box-shadow:inset 0 0 0 1px rgba(167,139,250,.55); }
+                    </style>
+                    <h2 class="text-lg font-semibold tracking-tight text-gray-900 truncate flex items-center gap-2 min-w-0">
+                        <span class="shrink-0">{{ $title }}</span>
+                        <span class="min-w-0 truncate px-2.5 py-0.5 rounded-lg" data-modal-title-name>{{ $titleName }}</span>
+                    </h2>
+                @else
+                    <h2 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $title }}</h2>
+                @endif
                 <button type="button" @click="{{ $closeVia ? '$wire.' . $closeVia . '()' : 'close()' }}"
                         class="p-1.5 rounded-md text-gray-500 hover:text-violet-600 hover:bg-black/5 transition-colors duration-150"
                         aria-label="Schließen">

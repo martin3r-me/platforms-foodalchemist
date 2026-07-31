@@ -3,7 +3,7 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 {{-- R4 (Dominique): Voll-Editor nimmt den ganzen Bildschirm — 19-Zutaten-Rezepte brauchen die Fläche --}}
-<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten: ' . $form['name']" size="max-w-3xl" :fullscreen="! $neu" :dark-canvas="! $neu" :close-via="'schliessenOderZurueck'">
+<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten'" :title-name="$neu ? null : $form['name']" size="max-w-3xl" :fullscreen="! $neu" :dark-canvas="! $neu" :close-via="'schliessenOderZurueck'">
     {{-- Aktionsleiste (D-5 §4.2.1) --}}
     <x-slot:actions>
         <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern', { recipeId: @js($recipeId) })" class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
@@ -24,26 +24,58 @@
     {{-- Phase 1: KPI-Streifen fix im Modal-Kopf (immer sichtbar, scrollt nie weg) --}}
     @if($voll !== null)
         <x-slot:kpiHeader>
+            @php($ekComplete = ($voll->ek_n_ingredients_total ?? 0) > 0 && ($voll->ek_n_ingredients_priced ?? 0) >= ($voll->ek_n_ingredients_total ?? 0))
+            {{-- KPI-Kacheln — grössere Werte + semantische, ruhige Tönung je Kachel (2026-07-31).
+                 EK/kg ist der Leitwert → violetter Marken-Akzent (kein Alarm-Orange). „Mit Preis"
+                 grün wenn vollständig / bernstein wenn Lücke; Allergen-Konf. in der Konfidenz-Farbe.
+                 Farben als rohes CSS für hell UND dunkel (.fa-editor-panel) — schlägt die generische
+                 KPI-Kachel-Regel des Editor-Grunds. --}}
+            <style>
+                [data-editor-kpis] .kpi-label{ font-size:11px !important; }
+                [data-editor-kpis] .kpi-value{ font-size:16px !important; font-weight:600; line-height:1.15; margin-top:2px; }
+                /* Hell-Theme */
+                [data-editor-kpis] .kpi-neutral{ background:#fff !important; border-color:rgba(0,0,0,.06) !important; }
+                [data-editor-kpis] .kpi-accent { background:rgba(139,92,246,.08) !important; border-color:rgba(139,92,246,.25) !important; }
+                [data-editor-kpis] .kpi-good   { background:rgba(16,185,129,.09) !important; border-color:rgba(16,185,129,.26) !important; }
+                [data-editor-kpis] .kpi-warn   { background:rgba(245,158,11,.11) !important; border-color:rgba(245,158,11,.30) !important; }
+                [data-editor-kpis] .kpi-bad    { background:rgba(244,63,94,.08) !important; border-color:rgba(244,63,94,.26) !important; }
+                [data-editor-kpis] .kpi-neutral .kpi-value{ color:#111827; }
+                [data-editor-kpis] .kpi-accent  .kpi-value{ color:#6d28d9; }
+                [data-editor-kpis] .kpi-good    .kpi-value{ color:#047857; }
+                [data-editor-kpis] .kpi-warn    .kpi-value{ color:#b45309; }
+                [data-editor-kpis] .kpi-bad     .kpi-value{ color:#be123c; }
+                /* Dunkel-Theme (Editor-Grund) */
+                .fa-editor-panel [data-editor-kpis] .kpi-neutral{ background:rgba(255,255,255,.06) !important; border-color:rgba(255,255,255,.10) !important; }
+                .fa-editor-panel [data-editor-kpis] .kpi-accent { background:rgba(139,92,246,.17) !important; border-color:rgba(167,139,250,.42) !important; }
+                .fa-editor-panel [data-editor-kpis] .kpi-good   { background:rgba(16,185,129,.16) !important; border-color:rgba(16,185,129,.40) !important; }
+                .fa-editor-panel [data-editor-kpis] .kpi-warn   { background:rgba(245,158,11,.16) !important; border-color:rgba(245,158,11,.40) !important; }
+                .fa-editor-panel [data-editor-kpis] .kpi-bad    { background:rgba(244,63,94,.16) !important; border-color:rgba(244,63,94,.40) !important; }
+                .fa-editor-panel [data-editor-kpis] .kpi-neutral .kpi-value{ color:#f1f5f9; }
+                .fa-editor-panel [data-editor-kpis] .kpi-accent  .kpi-value{ color:#c4b5fd; }
+                .fa-editor-panel [data-editor-kpis] .kpi-good    .kpi-value{ color:#6ee7b7; }
+                .fa-editor-panel [data-editor-kpis] .kpi-warn    .kpi-value{ color:#fcd34d; }
+                .fa-editor-panel [data-editor-kpis] .kpi-bad     .kpi-value{ color:#fda4af; }
+            </style>
             <div class="grid grid-cols-2 md:grid-cols-5 gap-2" data-editor-kpis>
-                <div class="rounded-lg bg-white border border-black/5 shadow-sm px-3 py-2">
-                    <span class="{{ $dt }}">Yield</span>
-                    <p class="text-xs font-semibold text-gray-900">{{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
+                <div class="rounded-lg border shadow-sm px-3 py-2 kpi-neutral" data-kpi="yield">
+                    <span class="{{ $dt }} kpi-label">Yield</span>
+                    <p class="kpi-value">{{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
                 </div>
-                <div class="rounded-lg bg-white border border-black/5 shadow-sm px-3 py-2">
-                    <span class="{{ $dt }}">EK gesamt</span>
-                    <p class="text-xs font-semibold text-gray-900">{{ $voll->ek_total_eur !== null ? number_format((float) $voll->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
+                <div class="rounded-lg border shadow-sm px-3 py-2 kpi-neutral" data-kpi="ek">
+                    <span class="{{ $dt }} kpi-label">EK gesamt</span>
+                    <p class="kpi-value">{{ $voll->ek_total_eur !== null ? number_format((float) $voll->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
-                <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600">EK / kg</span>
-                    <p class="text-xs font-bold text-orange-700">{{ $voll->ek_per_kg_eur !== null ? number_format((float) $voll->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
+                <div class="rounded-lg border shadow-sm px-3 py-2 kpi-accent" data-kpi="ekkg">
+                    <span class="{{ $dt }} kpi-label">EK / kg</span>
+                    <p class="kpi-value">{{ $voll->ek_per_kg_eur !== null ? number_format((float) $voll->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
                 </div>
-                <div class="rounded-lg bg-white border border-black/5 shadow-sm px-3 py-2">
-                    <span class="{{ $dt }}">Mit Preis</span>
-                    <p class="text-xs font-semibold text-gray-900">{{ $voll->ek_n_ingredients_priced ?? 0 }}/{{ $voll->ek_n_ingredients_total ?? 0 }}</p>
+                <div class="rounded-lg border shadow-sm px-3 py-2 {{ $ekComplete ? 'kpi-good' : 'kpi-warn' }}" data-kpi="priced">
+                    <span class="{{ $dt }} kpi-label">Mit Preis</span>
+                    <p class="kpi-value">{{ $voll->ek_n_ingredients_priced ?? 0 }}/{{ $voll->ek_n_ingredients_total ?? 0 }}</p>
                 </div>
-                <div class="rounded-lg bg-white border border-black/5 shadow-sm px-3 py-2">
-                    <span class="{{ $dt }}">Allergen-Konf.</span>
-                    <p class="text-xs font-semibold {{ ['high' => 'text-emerald-600', 'medium' => 'text-amber-600', 'low' => 'text-rose-600'][$voll->allergens_confidence] ?? 'text-gray-500' }}">{{ strtoupper((string) $voll->allergens_confidence) }}</p>
+                <div class="rounded-lg border shadow-sm px-3 py-2 {{ ['high' => 'kpi-good', 'medium' => 'kpi-warn', 'low' => 'kpi-bad'][$voll->allergens_confidence] ?? 'kpi-neutral' }}" data-kpi="allergen">
+                    <span class="{{ $dt }} kpi-label">Allergen-Konf.</span>
+                    <p class="kpi-value">{{ strtoupper((string) $voll->allergens_confidence) }}</p>
                 </div>
             </div>
         </x-slot:kpiHeader>
@@ -71,7 +103,12 @@
          für Tabs + Panels — Header/Body-Split desynct unter Livewire-Morph). --}}
     {{-- wire:key erzwingt Element-Ersatz bei Rezept-Wechsel (Alpine wertet x-data/-Bindings bei morphdom
          NICHT neu aus → sonst bleibt der aktive Tab „stale"; gleiches Muster wie im Zutaten-Editor). --}}
-    <div wire:key="rezept-tabs-{{ $recipeId ?? 'neu' }}" x-data="{ tab: '{{ $neu ? 'eigenschaften' : 'aufbau' }}' }" data-rezept-tabs>
+    {{-- x-effect setzt den Tab bei JEDEM Öffnen zurück (liest das `open` der Modal-Scope):
+         der Editor landet immer auf «Aufbau» (bzw. «Stammdaten» bei Neuanlage — Aufbau ist
+         ohne Zutaten leer). Ohne das blieb der zuletzt gewählte Tab beim erneuten Öffnen
+         desselben Rezepts „stale" stehen (Element wird per wire:key nur bei Rezept-Wechsel ersetzt). --}}
+    <div wire:key="rezept-tabs-{{ $recipeId ?? 'neu' }}" x-data="{ tab: '{{ $neu ? 'eigenschaften' : 'aufbau' }}' }"
+         x-effect="if (open) tab = '{{ $neu ? 'eigenschaften' : 'aufbau' }}'" data-rezept-tabs>
         <div class="flex gap-4 border-b border-black/5 sticky top-0 z-20 -mx-6 -mt-4 px-6 pt-4 bg-white/90 backdrop-blur-xl shadow-md rounded-b-xl">
             @php($rezTabs = array_filter(['aufbau' => 'Aufbau', 'eigenschaften' => 'Stammdaten', 'preparation' => 'Zubereitung', 'details' => 'Deklaration', 'sensorik' => $neu ? null : 'Sensorik & Pairing', 'feedback' => $neu ? null : 'Feedback', 'notes' => 'Notizen']))
             @foreach($rezTabs as $tabKey => $tabLabel)

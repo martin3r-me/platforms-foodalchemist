@@ -34,16 +34,19 @@
             </radialGradient>
         </defs>
 
-        {{-- Gitter-Ringe --}}
+        {{-- Gitter-Ringe. Klassen fa-taste-grid → auf dunklem Editor-Grund (.fa-editor-panel)
+             wird der Strich per CSS aufgehellt; die hardcodierten rgb(0 0 0 …)-Attribute lassen
+             sich sonst nicht überschreiben und sind auf Dunkel unsichtbar. --}}
         @foreach($rings as $lv)
-            <circle cx="{{ $cx }}" cy="{{ $cy }}" r="{{ round($lv * $maxR, 2) }}"
+            <circle class="fa-taste-grid{{ $lv == 1.0 ? ' fa-taste-grid-strong' : '' }}"
+                cx="{{ $cx }}" cy="{{ $cy }}" r="{{ round($lv * $maxR, 2) }}"
                 fill="none" stroke="{{ $lv == 1.0 ? 'rgb(0 0 0 / 0.14)' : 'rgb(0 0 0 / 0.07)' }}" stroke-width="1" />
         @endforeach
 
         {{-- Speichen --}}
         @foreach($axes as $i => $k)
             @php([$sx, $sy] = $pt(1, $i))
-            <line x1="{{ $cx }}" y1="{{ $cy }}" x2="{{ $sx }}" y2="{{ $sy }}" stroke="rgb(0 0 0 / 0.08)" stroke-width="1" />
+            <line class="fa-taste-grid" x1="{{ $cx }}" y1="{{ $cy }}" x2="{{ $sx }}" y2="{{ $sy }}" stroke="rgb(0 0 0 / 0.08)" stroke-width="1" />
         @endforeach
 
         {{-- Zentrum-Glow --}}
@@ -67,7 +70,7 @@
 
         {{-- Ring-Wert-Labels (entlang der oberen Achse) --}}
         @foreach($rings as $lv)
-            <text x="{{ $cx + 4 }}" y="{{ round($cy - $lv * $maxR + 3, 2) }}" style="font-size: 7px; fill: #cbd5e1;">{{ number_format($lv, 2, ',', '.') }}</text>
+            <text class="fa-taste-ringlabel" x="{{ $cx + 4 }}" y="{{ round($cy - $lv * $maxR + 3, 2) }}" style="font-size: 7px; fill: #cbd5e1;">{{ number_format($lv, 2, ',', '.') }}</text>
         @endforeach
 
         {{-- Achsen-Labels --}}
@@ -77,7 +80,7 @@
             @php($ly = round($cy + ($maxR + 16) * sin(deg2rad($a)), 2))
             @php($anchor = ($a > -80 && $a < 80) ? 'start' : (($a > 100 || $a < -100) ? 'end' : 'middle'))
             @php($isLuk = in_array($k, $luk, true))
-            <text x="{{ $lx }}" y="{{ $ly }}" text-anchor="{{ $anchor }}" dominant-baseline="central"
+            <text class="{{ $isLuk ? 'fa-taste-axislabel-dim' : 'fa-taste-axislabel' }}" x="{{ $lx }}" y="{{ $ly }}" text-anchor="{{ $anchor }}" dominant-baseline="central"
                 style="font-size: 9px; font-weight: {{ $isLuk ? '400' : '600' }}; fill: {{ $isLuk ? '#9ca3af' : '#4b5563' }};">{{ $radarLabels[$k] }}</text>
         @endforeach
 

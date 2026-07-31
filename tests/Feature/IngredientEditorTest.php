@@ -152,7 +152,7 @@ it('gpArtikel (GP-Peek): liefert LAs hinter dem GP mit ★-Lead zuerst, VPE, Pre
     expect($html)->toContain('data-drag-handle')->toContain('data-gp-peek');
 });
 
-it('#513: Bäckerprozent-Spalte + Alpine-Verdrahtung im Editor-Markup', function () {
+it('Editor zeigt Gewichtsanteil (% vom Gesamt) statt Bäckerprozent — Bäcker lebt im Rechner', function () {
     $this->actingAs($this->makeUser($this->rootTeam));   // render() braucht Team für einheiten
     $gp = ($this->mkGpMitPreis)('Mehl: Weizen 405', 1.20);
     $this->svc->syncIngredients($this->rootTeam, $this->rezept->id, [
@@ -162,9 +162,9 @@ it('#513: Bäckerprozent-Spalte + Alpine-Verdrahtung im Editor-Markup', function
 
     $html = Livewire::test(IngredientEditor::class, ['recipeId' => $this->rezept->id, 'eingebettet' => true])->html();
 
-    expect($html)
-        ->toContain('Bäcker-%')       // Spalten-Header neben Garv. %
-        ->toContain('data-baker-pct') // editierbares Feld (Masse-Zeilen)
-        ->toContain('setBakerPct(')   // %→Gramm-Rückschreiben (Modus B, client)
-        ->toContain('istMasse(');     // Einheiten-Guard (nur Masse editierbar)
+    // Neue Spalte: Gewichtsanteil (Summe 100 %), read-only.
+    expect($html)->toContain('Anteil %')->toContain('anteilPctFmt(');
+    // Bäckerprozent (Referenz + %→Gramm-Rückschreiben) ist raus aus dem Editor → nur noch im ProportionService/MCP.
+    expect($html)->not->toContain('data-baker-pct');
+    expect($html)->not->toContain('setBakerPct(');
 });

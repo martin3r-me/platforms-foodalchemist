@@ -102,6 +102,29 @@ it('Bäckerprozent-Sicht eines Rezepts: schwerste Zutat = 100 %', function () {
         ->and($byName['Salz']['baker_percent'])->toBe(1.8);
 });
 
+it('Bäckerprozent-Referenz ist massebasiert: schwere Liter-Zeile wird NICHT die 100 %-Referenz', function () {
+    // Parmesan-Rahm (Screenshot 2026-07-31): Sahne 0,14 l ≈ 140 g wäre die schwerste Zeile
+    // überhaupt — ist aber Volumen. Referenz (100 %) muss die schwerste MASSE-Zeile sein (Parmesan).
+    [$recipe] = ($this->mkRezept)([['Sahne', 0.14, 'l'], ['Parmesan', 0.06, 'kg'], ['Salz', 0.001, 'kg']]);
+
+    $sicht = $this->svc->bakerPercentagesForRecipe($this->rootTeam, $recipe->id);
+    $byName = collect($sicht['lines'])->keyBy('name');
+
+    expect($sicht['ref_mass_g'])->toBe(60.0)                          // Parmesan 60 g — nicht Sahne 140 g
+        ->and($byName['Parmesan']['baker_percent'])->toBe(100.0)
+        ->and($byName['Sahne']['baker_percent'])->toBe(233.33)        // 140/60 — Volumen sichtbar, aber read-only
+        ->and($byName['Salz']['baker_percent'])->toBe(1.67);          // 1/60
+});
+
+it('Bäckerprozent-Referenz: reines Volumen-Rezept fällt auf die schwerste Zeile zurück', function () {
+    [$recipe] = ($this->mkRezept)([['Wasser', 1, 'l'], ['Sirup', 0.25, 'l']]);
+
+    $sicht = $this->svc->bakerPercentagesForRecipe($this->rootTeam, $recipe->id);
+
+    expect($sicht['ref_mass_g'])->toBe(1000.0)                        // 1 l = 1000 g, schwerste Zeile (keine Masse da)
+        ->and(collect($sicht['lines'])->firstWhere('name', 'Sirup')['baker_percent'])->toBe(25.0);
+});
+
 it('Modus A — rescaleRecipe: alle Mengen × Faktor, %-Verhältnis bleibt', function () {
     [$recipe] = ($this->mkRezept)([['Mehl', 1000, 'g'], ['Wasser', 650, 'g']]);
 

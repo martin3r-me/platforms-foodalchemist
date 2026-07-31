@@ -155,10 +155,15 @@ class ProportionService
                 'ingredient_id' => (int) $z->id,
                 'name' => (string) ($z->display_name ?: $z->raw_text ?: ($z->gp?->name ?? 'Zutat')),
                 'mass_g' => round($recompute->bruttoMasseG($z), 3),
+                // Bäckerprozent ist massebasiert → nur Masse-Zeilen kommen als Referenz infrage.
+                'is_mass' => ($z->unit?->dimension === 'mass'),
             ];
         }
 
-        // Referenz bestimmen: explizit gewählt, sonst schwerste Zeile (>0 g).
+        // Referenz bestimmen: explizit gewählt, sonst schwerste MASSE-Zeile (>0 g). Nur wenn
+        // das Rezept gar keine Masse-Zeile hat, fällt sie auf die schwerste Zeile überhaupt
+        // zurück — sonst wäre eine Liter-/Stück-Zeile die 100 %-Referenz, obwohl genau diese
+        // Einheiten in der %-Sicht read-only sind (Widerspruch, s. setIngredientBakerPercent).
         $ref = null;
         if ($refIngredientId !== null) {
             foreach ($rows as $r) {
@@ -169,7 +174,9 @@ class ProportionService
             }
         }
         if ($ref === null) {
-            foreach ($rows as $r) {
+            $masse = array_filter($rows, fn ($r) => $r['is_mass'] && $r['mass_g'] > 0);
+            $pool = $masse !== [] ? $masse : $rows;
+            foreach ($pool as $r) {
                 if ($ref === null || $r['mass_g'] > $ref['mass_g']) {
                     $ref = $r;
                 }

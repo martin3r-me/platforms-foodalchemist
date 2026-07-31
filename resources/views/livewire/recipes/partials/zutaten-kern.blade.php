@@ -2,6 +2,24 @@
     {{-- Phase 5: Typ-Farben (Settings) als Inline-Style — Text = Hex, Hintergrund = Hex+1a (10%). --}}
     @php($typFarben = $typFarben ?? \Platform\FoodAlchemist\Services\TeamSettingsService::TYP_FARBEN_DEFAULTS)
     @php($typStyle = fn (string $t) => isset($typFarben[$t]) ? 'color:' . $typFarben[$t] . ';background-color:' . $typFarben[$t] . '1a' : '')
+    {{-- Zutaten-Editor — grössere, ruhigere Typografie + mehr Zeilenluft (2026-07-31, Dominique).
+         EIN Ort statt ~15 Inline-Bumps; gescopet auf die Editier-Tabelle + Add-Zeile — die
+         Browser-Seitenspalten bleiben kompakt. Rohes CSS (nicht Tailwind): Attribut-Selektor +
+         !important schlagen die Zell-Klassen !text-[11px]/!py-0.5, und ein arbitrary !text-[13px]
+         wäre im Host-Build gar nicht kompiliert (JIT-Lücke, s. DESIGN.md / modal.blade.php). --}}
+    <style>
+        [data-zutaten-tabelle]{ font-size:13px; }
+        [data-zutaten-tabelle] td{ padding-top:.4rem !important; padding-bottom:.4rem !important; }
+        [data-zutaten-tabelle] input,
+        [data-zutaten-tabelle] select,
+        [data-add-zeile] input,
+        [data-add-zeile] select{ font-size:13px !important; }
+        [data-zutaten-tabelle] .fa-zk-name{ font-size:13.5px !important; }
+        [data-zutaten-tabelle] .fa-zk-num{ font-size:13px !important; }
+        /* GP-Peek (Lieferantenartikel-Tabelle hinter dem GP) — gleicher, ruhigerer Stil. */
+        [data-zutaten-tabelle] [data-gp-peek-tabelle] table{ font-size:12px; }
+        [data-zutaten-tabelle] [data-gp-peek-tabelle] thead{ font-size:10.5px; }
+    </style>
     @if($fehler !== null)
         <p class="text-xs text-rose-600 mb-3" data-editor-fehler>{{ $fehler }}</p>
     @endif
@@ -99,12 +117,12 @@
             <p class="text-[10px] text-gray-500 mt-1">Erst Produkt/Rezept per [+] wählen — Einheit kommt automatisch mit, dann Menge + Enter (§1.2)</p>
         </div>
         <div class="overflow-x-auto">{{-- R18: Mitte scrollt intern statt unter die Seitenspalten zu laufen --}}
-        <table class="{{ $table }} border-collapse">
+        <table class="{{ $table }} border-collapse" data-zutaten-tabelle>
             {{-- R5: BIS-Spalte raus (Dominique) — quantity_max bleibt in den Daten erhalten; 3 EK-Sichten statt einer --}}
             <thead><tr class="text-left">
                 @php($koepfe = ['#' => null, 'Menge' => null, 'Einheit' => null, 'Verknüpfung / Beschreibung' => 'Klick auf den Namen öffnet GP/Rezept als Fenster über dem Editor']
                     + ($vkKontext ? ['Rolle' => 'V-21: aroma_treiber · komponente · beilage · garnitur (🎭 verteilt per KI)'] : [])
-                    + ['Garv. %' => null, 'Bäcker-%' => 'Bäckerprozent = % der schwersten Zutat (Referenz = 100 %). Grammatur bleibt Master — % wird nie gespeichert. Ändern schreibt die Gramm zurück; Stück/Liter sind read-only (% ist massebasiert).', 'EK €' => 'EK nach Lead-LA-Strategie (V-27 — damit rechnet das Rezept)', 'EK ↓' => 'günstigster Lieferantenartikel hinter dem GP', 'EK Ø' => 'Durchschnitt über alle Lieferantenartikel hinter dem GP', '' => null])
+                    + ['Garv. %' => null, 'Anteil %' => 'Gewichtsanteil = % vom Gesamtgewicht des Rezepts (Summe = 100 %). Optionale Zutaten und Zeilen ohne Gramm-Umrechnung zählen nicht. Reine Anzeige — Bäckerprozent (Referenz-Sicht) lebt im Grammaturen-Rechner.', 'EK €' => 'EK nach Lead-LA-Strategie (V-27 — damit rechnet das Rezept)', 'EK ↓' => 'günstigster Lieferantenartikel hinter dem GP', 'EK Ø' => 'Durchschnitt über alle Lieferantenartikel hinter dem GP', '' => null])
                 {{-- R22: schmale Spalten auf Inhaltsbreite (w-px) — der Restplatz gehört der Zutat --}}
                 @foreach($koepfe as $head => $tip)
                     <th class="{{ $th }} !px-2 {{ str_starts_with($head, 'Verknüpfung') ? 'w-full' : 'w-px' }} {{ $tip ? 'cursor-help underline decoration-dotted decoration-gray-300 underline-offset-2' : '' }}" @if($tip) title="{{ $tip }}" @endif>{{ $head }}</th>
@@ -141,7 +159,7 @@
                                  blockiert → Klick öffnet das Ziel als MODAL über dem Editor (Stand bleibt) --}}
                             <template x-if="zeile.gp_id || zeile.referenced_recipe_id">
                                 <button type="button"
-                                        class="text-[11px] text-violet-600 hover:underline text-left"
+                                        class="fa-zk-name text-[11px] text-violet-600 hover:underline text-left"
                                         x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
                                         :title="(zeile.lineage ? 'via ' + zeile.lineage + ' — ' : '') + (zeile.gp_id ? 'GP öffnen' : 'Rezept öffnen')"
                                         @click="zeile.gp_id
@@ -150,7 +168,7 @@
                                         data-ziel-link></button>
                             </template>
                             <template x-if="!zeile.gp_id && !zeile.referenced_recipe_id">
-                                <span class="text-[11px] text-gray-500" x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
+                                <span class="fa-zk-name text-[11px] text-gray-500" x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
                                       :title="zeile.lineage ? 'Verknüpfung via ' + zeile.lineage : ''"></span>
                             </template>
                             <button type="button" x-show="zeile.gp_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Lieferantenartikel hinter dem GP (Peek)"
@@ -170,21 +188,12 @@
                             </td>
                         @endif
                         <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.cooking_loss_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" /></td>
-                        {{-- #513: Bäckerprozent — abgeleitete Sicht (Referenz = schwerste Zutat). Ändern schreibt
-                             Gramm in die Menge zurück (Grammatur bleibt Master); Referenz + Stück/Liter read-only. --}}
+                        {{-- Gewichtsanteil — % vom Gesamtgewicht (Summe 100 %), reine Anzeige.
+                             Bäckerprozent (Referenz-Sicht + %→Gramm-Rückschreiben) lebt jetzt im
+                             Grammaturen-Rechner (ProportionService/MCP), nicht mehr im Editor. --}}
                         <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap">
-                            <template x-if="istRef(zeile)">
-                                <span class="text-[11px] text-gray-400" title="Referenzzutat = 100 %">100&nbsp;🔒</span>
-                            </template>
-                            <template x-if="!istRef(zeile) && istMasse(zeile)">
-                                <input type="text" :value="bakerPctFmt(zeile)" @change="setBakerPct(zeile, $event.target.value)"
-                                       placeholder="—" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" data-baker-pct
-                                       title="Bäckerprozent ändern → Gramm werden zurückgeschrieben (Grammatur bleibt Master)" />
-                            </template>
-                            <template x-if="!istRef(zeile) && !istMasse(zeile)">
-                                <span class="text-[11px] text-gray-400" title="% ist massebasiert — Stück/Liter read-only"
-                                      x-text="bakerPct(zeile) !== null ? bakerPctFmt(zeile) + ' 🔒' : '—'"></span>
-                            </template>
+                            <span class="fa-zk-num text-[11px] text-gray-500" x-text="anteilPctFmt(zeile)"
+                                  :title="anteilPct(zeile) !== null ? 'Anteil am Gesamtgewicht' : (zeile.is_optional ? 'optional — zählt nicht' : 'keine Gramm-Umrechnung')"></span>
                         </td>
                         <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
                             {{-- F2 (#511a): Tausch/Add auf einen unbepreisten GP zeigt jetzt einen sichtbaren
