@@ -25,8 +25,9 @@ class RecipeStepsGetTool extends FoodAlchemistTool implements ToolContract, Tool
     {
         return 'Liest die Zubereitung eines Rezepts als Schrittfolge: position (1-basiert, ergibt die '
             . 'Nummer), phase (Abschnitt wie „Mise en Place" oder null), text und die am Schritt '
-            . 'verknüpften Fotos. Die Schritte sind der Master — das Markdown-Feld `preparation` ist '
-            . 'nur ihr gerenderter Spiegel.';
+            . 'verknüpften Fotos. Zusätzlich `result_photo` = das Endprodukt-Bild („so soll es fertig '
+            . 'aussehen"), falls markiert. Die Schritte sind der Master — das Markdown-Feld '
+            . '`preparation` ist nur ihr gerenderter Spiegel.';
     }
 
     public function getSchema(): array
@@ -54,9 +55,15 @@ class RecipeStepsGetTool extends FoodAlchemistTool implements ToolContract, Tool
         $steps = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
             ->with('photos')->orderBy('position')->orderBy('id')->get();
 
+        $endprodukt = app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->endprodukt($recipe->id);
+
         return ToolResult::success([
             'recipe' => ['id' => $recipe->id, 'name' => $recipe->name],
             'n_steps' => $steps->count(),
+            // Endprodukt-Bild: „so soll es fertig aussehen" (null = keins markiert)
+            'result_photo' => $endprodukt === null ? null : [
+                'id' => $endprodukt->id, 'url' => $endprodukt->url(), 'caption' => $endprodukt->caption,
+            ],
             'steps' => $steps->map(fn (FoodAlchemistRecipeStep $s) => [
                 'id' => $s->id,
                 'position' => (int) $s->position,
@@ -64,6 +71,7 @@ class RecipeStepsGetTool extends FoodAlchemistTool implements ToolContract, Tool
                 'text' => $s->text,
                 'photos' => $s->photos->map(fn ($f) => [
                     'id' => $f->id, 'url' => $f->url(), 'caption' => $f->caption,
+                    'is_result' => (bool) $f->is_result,
                 ])->values()->all(),
             ])->values()->all(),
         ]);

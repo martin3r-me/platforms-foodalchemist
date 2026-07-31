@@ -425,14 +425,26 @@ Route::get('/rezepte/{recipe}/anleitung', function (int $recipe) {
         'einheit' => $z->unit?->slug,
     ])->filter(fn ($z) => trim((string) $z['name']) !== '')->values();
 
+    // Endprodukt-Bild („so soll es fertig aussehen"). Quelle wie bei den Schritt-Fotos:
+    // lokaler Pfad fürs PDF, URL fürs HTML.
+    $istPdf = request()->boolean('pdf');
+    $hero = app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->endprodukt($rezept->id);
+    $endprodukt = $hero === null ? null : [
+        'quelle' => $istPdf
+            ? ($disk->exists($hero->pfad) ? $disk->path($hero->pfad) : null)
+            : $hero->url(),
+        'caption' => $hero->caption,
+    ];
+
     $data = [
         'rezept' => $rezept,
         'schritte' => $schritte,
         'zutaten' => $zutaten,
+        'endprodukt' => $endprodukt,
         'mitFotos' => request()->query('fotos') !== '0',
     ];
 
-    if (request()->boolean('pdf')) {
+    if ($istPdf) {
         if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
             \Illuminate\Support\Facades\Log::warning('Anleitungs-PDF angefordert, aber DomPDF ist nicht installiert.', ['recipe' => $recipe]);
             abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');

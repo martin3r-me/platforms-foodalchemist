@@ -231,6 +231,42 @@ class RecipeStepService
     }
 
     /**
+     * Endprodukt-Bild setzen/aufheben („so soll es fertig aussehen").
+     *
+     * Genau EINES je Rezept: die Eindeutigkeit wird hier erzwungen, nicht per
+     * DB-Constraint (partielles Unique WHERE is_result=1 kann MySQL nicht).
+     * `$photoId = null` oder dasselbe Foto erneut = Markierung aufheben.
+     */
+    public function endproduktSetzen(FoodAlchemistRecipe $recipe, ?int $photoId): ?FoodAlchemistRecipeStepPhoto
+    {
+        return DB::transaction(function () use ($recipe, $photoId) {
+            $foto = $photoId !== null
+                ? FoodAlchemistRecipeStepPhoto::where('recipe_id', $recipe->id)->whereKey($photoId)->first()
+                : null;
+
+            $warSchon = $foto !== null && (bool) $foto->is_result;
+
+            FoodAlchemistRecipeStepPhoto::where('recipe_id', $recipe->id)
+                ->where('is_result', true)->update(['is_result' => false]);
+
+            if ($foto === null || $warSchon) {
+                return null;   // aufgehoben
+            }
+
+            $foto->update(['is_result' => true]);
+
+            return $foto->refresh();
+        });
+    }
+
+    /** Das Endprodukt-Bild eines Rezepts (null = keins markiert). */
+    public function endprodukt(int $recipeId): ?FoodAlchemistRecipeStepPhoto
+    {
+        return FoodAlchemistRecipeStepPhoto::where('recipe_id', $recipeId)
+            ->where('is_result', true)->first();
+    }
+
+    /**
      * Markdown-Eingang: parst Freitext in Schritte. Wird von den bestehenden
      * Schreibwegen genutzt (Generator, MCP recipes.POST/PUT, Editor-Import) —
      * damit erzeugt jeder Markdown-Write weiterhin echte Schritte.

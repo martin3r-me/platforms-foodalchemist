@@ -171,6 +171,39 @@ it('Markdown-Import ohne erkennbaren Schritt meldet den Fehler statt still zu sc
     expect(FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->count())->toBe(0);
 });
 
+it('Endprodukt-Bild: genau eines je Rezept, zweiter Klick hebt auf', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root J'));
+
+    $a = ($this->foto)('teller-a.jpg');
+    $b = ($this->foto)('teller-b.jpg');
+
+    $lw = ($this->editor)()->call('endproduktUmschalten', $a->id);
+    expect($a->fresh()->is_result)->toBeTrue();
+
+    // Zweites Foto markieren → das erste verliert die Markierung (max. 1 je Rezept)
+    $lw->call('endproduktUmschalten', $b->id);
+    expect($a->fresh()->is_result)->toBeFalse()
+        ->and($b->fresh()->is_result)->toBeTrue();
+
+    // Erneut dasselbe → Markierung aufgehoben, das Foto bleibt im Pool
+    $lw->call('endproduktUmschalten', $b->id);
+    expect($b->fresh()->is_result)->toBeFalse()
+        ->and(FoodAlchemistRecipeStepPhoto::whereKey($b->id)->exists())->toBeTrue();
+});
+
+it('Endprodukt-Bild darf gleichzeitig an einem Schritt hängen', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root K'));
+
+    app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($this->rezept, [['text' => 'Anrichten.']]);
+    $s = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->firstOrFail();
+    $f = ($this->foto)('anrichten.jpg');
+
+    ($this->editor)()->call('fotoUmschalten', $s->id, $f->id)->call('endproduktUmschalten', $f->id);
+
+    expect($f->fresh()->is_result)->toBeTrue()
+        ->and($s->fresh()->photos->pluck('id')->all())->toBe([$f->id]);
+});
+
 it('D1: ein geerbtes Rezept ist lesbar, aber nicht schreibbar', function () {
     // Nutzer im Kind-Team, Rezept gehört dem Root-Team → sichtbar (Kette aufwärts), nicht editierbar.
     $this->actingAs($this->makeUser($this->childA, 'Kind A'));

@@ -14,6 +14,22 @@
 | 3 KI + Spiegel | ✅ | Prompt-Key `recipe.steps` (Tier A, in `FOOD_DNA_KEYS`) · `StepEditor::kiSchritte/kiUebernehmen` (GL-07) · Markdown-Eingang zentral in `RecipeService::create/update` · MCP `recipe_steps.GET` + `recipe_steps.PUT` · `RecipeStepsMcpTest` (8) |
 | 4 Produktionsdruck | ✅ | `PlanungsblattService::schritteFuer` · geteiltes Partial `dokumente/partials/schritt-karten(-css)` in `blatt` + `produktionsauftrag` · neue Ansicht `dokumente/anleitung` + Route `foodalchemist.rezepte.anleitung` · `?fotos=0|1` · `steps_snapshot` an `production_order_lines` · `RecipeStepPrintTest` (6) |
 
+### Nachtrag: Endprodukt-Bild (2026-07-31, mit Dominique)
+
+Ein Foto je Rezept trägt das Flag **`is_result`** = „so soll es fertig aussehen".
+
+- **Flag am Foto, kein `hero_pfad` am Rezept:** das Bild liegt sowieso im Pool; ein zweites
+  Feld würde die Datei doppelt führen und beim Löschen auseinanderlaufen. Als Flag ist das
+  Bild außerdem gleichzeitig als Schritt-Foto nutzbar (letzter Schritt = Anrichten).
+- **Genau eines je Rezept**, erzwungen in `RecipeStepService::endproduktSetzen` — ein partielles
+  Unique (`WHERE is_result = 1`) kann MySQL nicht.
+- **Gezeigt** in: Schritt-Editor (Hero über den Karten), **rechtes Detail-Panel** (eigene Sektion
+  ganz oben) und Postenzettel „Anleitung" (großes Bild über den Zutaten, entfällt bei `?fotos=0`).
+- **Bewusst noch NICHT** in Foodbook/Angebot/VK-Ansichten — Scope war „erstmal nur die
+  Step-by-Step-Anleitung". Weil Basisrezepte und Gerichte dasselbe Model sind, trägt das Feld
+  dort später ohne Umbau.
+- Migration `2026_07_31_000007_add_is_result_to_foodalchemist_recipe_step_photos.php`.
+
 **Entscheidungen aus der Umsetzung (Phase 3/4):**
 - **Markdown bleibt Eingangskanal, aber Schritte gewinnen:** `RecipeService::create/update` parst ankommendes `preparation` in Schritte — hat das Rezept schon Schritte, wird der Markdown-Write **verworfen** und der Spiegel aus den Schritten neu gerendert (sonst stünde im Feld ein Text, den die Anleitung nicht sagt). Wer Schritte ändern will, nutzt `recipe_steps.PUT` bzw. den Editor.
 - **Kein `recipe.preparation`-Aufruf mehr im Editor**, der Prompt-Key bleibt aber im Inventar (Generator/Revise liefern weiter Markdown).

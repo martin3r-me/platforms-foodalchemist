@@ -110,7 +110,14 @@ it('recipe_steps.GET liefert Schritte inkl. Fotos und ist team-gescoped', functi
 
     expect($data['n_steps'])->toBe(1)
         ->and($data['steps'][0]['phase'])->toBe('Garen')
-        ->and($data['steps'][0]['photos'][0]['caption'])->toBe('Pfanne');
+        ->and($data['steps'][0]['photos'][0]['caption'])->toBe('Pfanne')
+        ->and($data['result_photo'])->toBeNull();            // noch kein Endprodukt markiert
+
+    // Endprodukt-Bild markieren → Tool weist es aus, auch am Schritt-Foto
+    app(RecipeStepService::class)->endproduktSetzen($this->rezept, $foto->id);
+    $mitHero = (new RecipeStepsGetTool)->execute(['recipe_id' => $this->rezept->id], ($this->ctx)($this->rootTeam))->data;
+    expect($mitHero['result_photo']['id'])->toBe($foto->id)
+        ->and($mitHero['steps'][0]['photos'][0]['is_result'])->toBeTrue();
 
     // Kind-Team darf LESEN (Kette aufwärts) …
     $rKind = (new RecipeStepsGetTool)->execute(['recipe_id' => $this->rezept->id], ($this->ctx)($this->childA));

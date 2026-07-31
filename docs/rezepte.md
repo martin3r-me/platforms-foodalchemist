@@ -30,6 +30,7 @@ Die Zubereitung ist keine Textwand, sondern eine **Liste aus Schritten**. Ein Sc
 - **Fotos kleben am Schritt**, nicht an einer Nummer. Umsortieren verliert also keine Bildzuordnung mehr.
 - Ein Foto darf an **mehreren Schritten** hängen (dasselbe Mise-en-Place-Bild bei Vorbereitung und Anrichten), und ein Foto ohne Schritt-Zuordnung gilt als allgemeines Rezept-Foto.
 - Alle Fotos eines Rezepts liegen in einem **Pool** — man wählt per Klick, statt eine Schrittnummer einzutippen.
+- Genau ein Foto lässt sich per **★ als Endprodukt-Bild** markieren: „so soll es fertig aussehen". Es steht dann oben in der Anleitung, im rechten Detail-Panel und auf dem Postenzettel — und darf zusätzlich an einem Schritt hängen (typisch: Anrichten).
 - Vorhandenen Text (z. B. aus Word) kann man per **„Markdown einfügen"** übernehmen: `##` wird zum Abschnitt, `1.` oder `-` zum Schritt.
 - Die **KI** schlägt auf Wunsch eine komplette Schrittfolge aus den Zutaten vor — als Vorschlag, der erst mit „Übernehmen" gespeichert wird.
 

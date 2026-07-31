@@ -31,6 +31,12 @@
         .anleitung .schritt-foto img { width: 180px; height: 126px; }
         .anleitung .schritt-foto .cap { max-width: 180px; font-size: 10px; }
         .anleitung-phase { font-size: 12px; margin: 16px 0 4px; }
+        /* Endprodukt-Bild: der Koch soll erst sehen, wo er hin will. */
+        .endprodukt { margin: 0 0 18px; page-break-inside: avoid; }
+        .endprodukt:after { content: ""; display: block; clear: both; }
+        .endprodukt img { float: left; width: 220px; height: 154px; object-fit: cover; border: 1px solid #e5e7eb; border-radius: 6px; margin-right: 12px; }
+        .endprodukt .label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #b45309; font-weight: bold; }
+        .endprodukt .cap { font-size: 12px; color: #374151; margin-top: 2px; }
     </style>
 </head>
 <body>
@@ -55,6 +61,17 @@
             @if($rezept->work_time_min !== null) · {{ (int) $rezept->work_time_min }} min Arbeitszeit @endif
         </div>
     </div>
+
+    {{-- Endprodukt-Bild zuerst — nur wenn Fotos gedruckt werden --}}
+    @if($mitFotos && ($endprodukt['quelle'] ?? null))
+        <div class="endprodukt">
+            <img src="{{ $endprodukt['quelle'] }}" alt="{{ $endprodukt['caption'] ?? 'Endprodukt' }}" />
+            <p class="label">So soll es fertig aussehen</p>
+            @if($endprodukt['caption'] ?? null)
+                <p class="cap">{{ $endprodukt['caption'] }}</p>
+            @endif
+        </div>
+    @endif
 
     @if($zutaten->isNotEmpty())
         <p class="zutaten-kurz">

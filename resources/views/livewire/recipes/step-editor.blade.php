@@ -23,6 +23,10 @@
         [data-schritt-editor] .fa-step-card{ background:rgba(0,0,0,.03); border-radius:.625rem; padding:.625rem .75rem; }
         [data-schritt-editor] .fa-step-phasehead{ font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#6d28d9; }
         [data-schritt-editor] .fa-step-hint{ font-size:11px; color:#6b7280; }
+        [data-schritt-editor] .fa-step-hero-on{ background:#f59e0b; color:#fff; }
+        [data-schritt-editor] .fa-step-hero{ display:flex; gap:.75rem; align-items:flex-start; background:rgba(245,158,11,.10); border-radius:.625rem; padding:.5rem .625rem; margin-bottom:.5rem; }
+        [data-schritt-editor] .fa-step-hero img{ width:9rem; height:6.5rem; object-fit:cover; border-radius:.5rem; border:1px solid rgba(0,0,0,.10); }
+        [data-schritt-editor] .fa-step-hero-label{ font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#b45309; }
 
         .fa-editor-panel [data-schritt-editor] .fa-step-row{ border-color:rgba(255,255,255,.08); }
         .fa-editor-panel [data-schritt-editor] .fa-step-nr{ background:rgba(139,92,246,.30); color:#e9d5ff; }
@@ -31,6 +35,9 @@
         .fa-editor-panel [data-schritt-editor] .fa-step-card{ background:rgba(255,255,255,.06); }
         .fa-editor-panel [data-schritt-editor] .fa-step-phasehead{ color:#c4b5fd; }
         .fa-editor-panel [data-schritt-editor] .fa-step-hint{ color:#94a3b8; }
+        .fa-editor-panel [data-schritt-editor] .fa-step-hero{ background:rgba(245,158,11,.16); }
+        .fa-editor-panel [data-schritt-editor] .fa-step-hero img{ border-color:rgba(255,255,255,.15); }
+        .fa-editor-panel [data-schritt-editor] .fa-step-hero-label{ color:#fcd34d; }
     </style>
 
     @if($fehler)
@@ -202,6 +209,18 @@
 
         {{-- ── ANSICHT: ANLEITUNG (Karten) ─────────────────────────────── --}}
         <div x-show="ansicht === 'anleitung'" x-cloak class="space-y-2" data-anleitung>
+            {{-- Endprodukt zuerst: der Koch will erst sehen, wo er hin will --}}
+            @if($endprodukt !== null)
+                <div class="fa-step-hero" data-endprodukt>
+                    <img src="{{ $endprodukt->url() }}" alt="{{ $endprodukt->caption ?? 'Endprodukt' }}" loading="lazy" />
+                    <div class="min-w-0">
+                        <p class="fa-step-hero-label">So soll es fertig aussehen</p>
+                        @if($endprodukt->caption)
+                            <p class="text-[12px] leading-snug mt-0.5">{{ $endprodukt->caption }}</p>
+                        @endif
+                    </div>
+                </div>
+            @endif
             @php($letztePhase = '__init__')
             @forelse($schritte as $s)
                 @if(($s->phase ?? '') !== $letztePhase)

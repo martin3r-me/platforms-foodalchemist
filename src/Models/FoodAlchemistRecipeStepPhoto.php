@@ -25,8 +25,11 @@ class FoodAlchemistRecipeStepPhoto extends Model
 
     protected $guarded = ['id'];
 
-    /** @deprecated Spec 27 — `schritt_nr` ist die alte Zahlen-Kopplung, wird nicht mehr geschrieben. */
-    protected $casts = ['schritt_nr' => 'integer'];
+    protected $casts = [
+        // @deprecated Spec 27 — `schritt_nr` ist die alte Zahlen-Kopplung, wird nicht mehr geschrieben.
+        'schritt_nr' => 'integer',
+        'is_result' => 'boolean',   // Endprodukt-Bild: so soll es fertig aussehen (max. 1 je Rezept)
+    ];
 
     public function recipe(): BelongsTo
     {

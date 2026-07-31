@@ -185,6 +185,17 @@
             </div>
         </x-foodalchemist::section>
 
+        {{-- Spec 27: Endprodukt-Bild — „so soll es fertig aussehen", ganz oben im Panel --}}
+        @if($endprodukt !== null)
+            <x-foodalchemist::section title="Endprodukt" icon="heroicon-o-sparkles" data-panel-endprodukt>
+                <img src="{{ $endprodukt->url() }}" alt="{{ $endprodukt->caption ?? 'Endprodukt' }}"
+                     class="w-full max-h-48 object-cover rounded-lg border border-black/10" loading="lazy" />
+                @if($endprodukt->caption)
+                    <p class="text-[11px] text-gray-500 mt-1">{{ $endprodukt->caption }}</p>
+                @endif
+            </x-foodalchemist::section>
+        @endif
+
         {{-- Spec 27: Anleitung = Schritt-Karten (Nummer + Text + Foto inline), read-only --}}
         @if($schritte->isNotEmpty())
             <x-foodalchemist::section title="Anleitung" icon="heroicon-o-list-bullet" data-panel-anleitung>

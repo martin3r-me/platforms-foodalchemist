@@ -233,6 +233,17 @@ class StepEditor extends Component
         $this->reset('fotoUpload', 'fotoCaption');
     }
 
+    /** Endprodukt-Bild markieren/aufheben („so soll es fertig aussehen", max. 1 je Rezept). */
+    public function endproduktUmschalten(int $photoId): void
+    {
+        $r = $this->schreibbaresRezept();
+        if ($r === null) {
+            return;
+        }
+
+        app(RecipeStepService::class)->endproduktSetzen($r, $photoId);
+    }
+
     /** Foto endgültig aus dem Pool entfernen (inkl. Datei + aller Verknüpfungen). */
     public function fotoLoeschen(int $photoId): void
     {
@@ -406,14 +417,17 @@ class StepEditor extends Component
                 ->orderBy('sort_order')->orderBy('id')->get()
             : collect();
 
-        // Freie Fotos = im Pool, aber an keinem Schritt („allgemein"/Hero).
-        $verlinkteIds = $schritte->flatMap(fn ($s) => $s->photos->pluck('id'))->unique()->all();
+        // Freie Fotos = im Pool, aber an keinem Schritt UND nicht das Endprodukt-Bild
+        // (das hat seinen eigenen Platz — es soll nicht als „hängt nirgends" gemeldet werden).
+        $verlinkteIds = $schritte->flatMap(fn ($s) => $s->photos->pluck('id'))
+            ->merge($pool->where('is_result', true)->pluck('id'))->unique()->all();
 
         return view('foodalchemist::livewire.recipes.step-editor', [
             'rezept' => $r,
             'schritte' => $schritte,
             'pool' => $pool,
             'freieFotoIds' => array_values(array_diff($pool->pluck('id')->all(), $verlinkteIds)),
+            'endprodukt' => $pool->firstWhere('is_result', true),   // „so soll es fertig aussehen"
             'phasenVorschlaege' => $schritte->pluck('phase')->filter()->unique()->values()->all(),
             'schreibbar' => $r !== null && (int) $r->team_id === (int) (Auth::user()?->currentTeamRelation?->id ?? 0),
         ]);

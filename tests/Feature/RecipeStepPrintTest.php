@@ -98,6 +98,30 @@ it('Postenzettel „Anleitung" druckt nur die Schritte und schaltet Fotos um', f
         ->assertDontSee('<img', false);
 });
 
+it('Postenzettel zeigt das Endprodukt-Bild, aber nicht bei ?fotos=0', function () {
+    $r = $this->makeRecipe($this->rootTeam, 'Fond: Endprodukt', ['preparation' => null, 'yield_kg' => 2.0]);
+    app(RecipeStepService::class)->sync($r, [['text' => 'Anrichten.']]);
+
+    \Illuminate\Support\Facades\Storage::disk('public')->put('spec27/teller.jpg', 'x');
+    $hero = FoodAlchemistRecipeStepPhoto::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $r->id,
+        'pfad' => 'spec27/teller.jpg', 'caption' => 'Auf flachem Teller, Sauce separat',
+    ]);
+    app(RecipeStepService::class)->endproduktSetzen($r, $hero->id);
+
+    $url = route('foodalchemist.rezepte.anleitung', ['recipe' => $r->id]);
+
+    $this->get($url)->assertOk()
+        ->assertSee('So soll es fertig aussehen')
+        ->assertSee('Auf flachem Teller, Sauce separat');
+
+    $this->get($url . '?fotos=0')->assertOk()
+        ->assertDontSee('So soll es fertig aussehen')
+        ->assertDontSee('<img', false);
+
+    \Illuminate\Support\Facades\Storage::disk('public')->delete('spec27/teller.jpg');
+});
+
 it('Postenzettel ist team-gescoped', function () {
     $fremd = $this->makeRecipe($this->childB, 'Fremd: Posten', ['yield_kg' => 1.0]);
     $this->actingAs($this->makeUser($this->childA, 'Kind A'));

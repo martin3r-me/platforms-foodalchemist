@@ -40,6 +40,11 @@
                     <button type="button" wire:click="fotoLoeschen({{ $foto->id }})" wire:confirm="Foto endgültig löschen (aus allen Schritten)?"
                             class="hidden group-hover:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center rounded-full bg-rose-500 text-white text-[9px]"
                             title="Foto endgültig löschen" data-foto-loeschen>✕</button>
+                    {{-- Endprodukt-Bild: „so soll es fertig aussehen" (max. 1 je Rezept) --}}
+                    <button type="button" wire:click="endproduktUmschalten({{ $foto->id }})"
+                            title="{{ $foto->is_result ? 'ist das Endprodukt-Bild — Klick hebt auf' : 'als Endprodukt-Bild markieren (so soll es fertig aussehen)' }}"
+                            class="{{ $foto->is_result ? 'flex' : 'hidden group-hover:flex' }} absolute -bottom-1.5 -right-1.5 w-4 h-4 items-center justify-center rounded-full text-[9px] {{ $foto->is_result ? 'fa-step-hero-on' : 'bg-slate-700 text-white' }}"
+                            data-endprodukt-toggle>★</button>
                 </span>
             @endforeach
         </div>

@@ -239,10 +239,16 @@ class DetailPanel extends Component
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $rezept->id)
                     ->with('photos')->orderBy('position')->orderBy('id')->get()
                 : collect(),
-            // Fotos ohne Schritt-Verknüpfung = allgemeine Rezept-Fotos (Hero/Ergebnis)
+            // Endprodukt-Bild („so soll es fertig aussehen") — steht ganz oben im Panel
+            'endprodukt' => $rezept !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $rezept->id)
+                    ->where('is_result', true)->first()
+                : null,
+            // Fotos ohne Schritt-Verknüpfung und ohne Endprodukt-Markierung = sonstige Rezept-Fotos
             'allgemeineFotos' => $rezept !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $rezept->id)
-                    ->whereDoesntHave('steps')->orderBy('sort_order')->orderBy('id')->get()
+                    ->where('is_result', false)->whereDoesntHave('steps')
+                    ->orderBy('sort_order')->orderBy('id')->get()
                 : collect(),
             // Nachtrag 13_REFERENZ: EK je Zeile — dieselbe T3-Kaskade wie der Recompute (eine Regel-Stelle)
             'zeilenEk' => $rezept !== null ? app(RecipeRecomputeService::class)->zeilenKosten($rezept) : [],
