@@ -381,6 +381,11 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Einkauf E1: Rückvergütungs-Staffeln (strukturiert, team-scoped)
                     \Platform\FoodAlchemist\Tools\SupplierRebateGetTool::class,
                     \Platform\FoodAlchemist\Tools\SupplierRebatePutTool::class,
+                    // Einkauf E5: Preisvergleich · Optimierung · Spend · Ausreißer (read, Lockstep)
+                    \Platform\FoodAlchemist\Tools\EinkaufPreisvergleichGetTool::class,
+                    \Platform\FoodAlchemist\Tools\EinkaufOptimierungGetTool::class,
+                    \Platform\FoodAlchemist\Tools\EinkaufSpendGetTool::class,
+                    \Platform\FoodAlchemist\Tools\EinkaufAnomalienGetTool::class,
                     \Platform\FoodAlchemist\Tools\GpLeadGetTool::class,
                     \Platform\FoodAlchemist\Tools\GpLeadPutTool::class,
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)
