@@ -229,16 +229,39 @@
         <x-slot:actions>
             @if(!$neu)<button type="button" wire:click="kiEquipment" class="{{ $btnAi }}" title="Set-Vorschlag aus den Zutaten (in die Auswahl, nichts persistiert)">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Equipment</button>@endif
         </x-slot:actions>
+        {{-- Gewählte Geräte deutlich hervorheben (gefüllt violett + ✓) + Zusammenfassung oben,
+             damit die Auswahl im ~40-Chip-Raster nicht untergeht. Farben als rohes CSS (hell + dunkel). --}}
+        <style>
+            [data-rezept-equipment] .fa-eq{ transition:background-color .15s, color .15s, box-shadow .15s; }
+            [data-rezept-equipment] .fa-eq-off{ background:rgba(148,163,184,.16); color:#64748b; }
+            [data-rezept-equipment] .fa-eq-off:hover{ background:rgba(139,92,246,.12); color:#6d28d9; }
+            [data-rezept-equipment] .fa-eq-on{ background:#7c3aed; color:#fff; font-weight:600; box-shadow:0 1px 5px rgba(124,58,237,.35); }
+            [data-rezept-equipment] .fa-eq-summary{ color:#6d28d9; }
+            .fa-editor-panel [data-rezept-equipment] .fa-eq-off{ background:rgba(255,255,255,.07); color:#94a3b8; }
+            .fa-editor-panel [data-rezept-equipment] .fa-eq-off:hover{ background:rgba(139,92,246,.22); color:#e9d5ff; }
+            .fa-editor-panel [data-rezept-equipment] .fa-eq-on{ background:#8b5cf6; color:#fff; box-shadow:0 1px 6px rgba(139,92,246,.5); }
+            .fa-editor-panel [data-rezept-equipment] .fa-eq-summary{ color:#c4b5fd; }
+        </style>
         <div class="space-y-1.5" data-rezept-equipment>
+            @php($eqGewaehlt = $equipmentListe->filter(fn ($g) => in_array((string) $g->id, $form['equipment_ids'], true)))
+            <div class="flex items-start gap-2 pb-1.5 mb-1 border-b border-black/5" data-equipment-gewaehlt>
+                <span class="{{ $dt }} w-28 shrink-0 pt-0.5">Gewählt ({{ $eqGewaehlt->count() }})</span>
+                @if($eqGewaehlt->isNotEmpty())
+                    <span class="fa-eq-summary text-xs font-medium leading-snug">{{ $eqGewaehlt->pluck('name')->join(' · ') }}</span>
+                @else
+                    <span class="text-[11px] text-gray-400">— noch nichts gewählt —</span>
+                @endif
+            </div>
             @foreach($equipmentListe->groupBy(fn ($g) => $g->group_name ?? 'sonstig') as $gruppe => $geraete)
                 <div class="flex items-start gap-2">
                     <span class="{{ $dt }} w-28 shrink-0 pt-1">{{ $gruppe }}</span>
                     <div class="flex flex-wrap gap-1.5">
                         @foreach($geraete as $geraet)
-                            <label class="inline-flex items-center gap-1 {{ $pill }} cursor-pointer transition-colors
-                                          {{ in_array((string) $geraet->id, $form['equipment_ids'], true) ? $variantPill['primary'] : $variantPill['secondary'] }}"
+                            @php($eqOn = in_array((string) $geraet->id, $form['equipment_ids'], true))
+                            <label class="fa-eq {{ $eqOn ? 'fa-eq-on' : 'fa-eq-off' }} inline-flex items-center gap-1 {{ $pill }} cursor-pointer"
                                    wire:key="eq-{{ $geraet->id }}">
                                 <input type="checkbox" wire:model.live="form.equipment_ids" value="{{ $geraet->id }}" class="hidden" />
+                                @if($eqOn)@svg('heroicon-o-check', 'w-3 h-3 shrink-0')@endif
                                 {{ $geraet->name }}
                             </label>
                         @endforeach
