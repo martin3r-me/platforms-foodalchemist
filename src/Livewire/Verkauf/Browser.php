@@ -45,6 +45,40 @@ class Browser extends Component
     #[Url(as: 'zeilen')]
     public int $perPage = 100;
 
+    /**
+     * Spec 28 / E14: Spalten-Ansichten (Muster wie im Basisrezept-Browser).
+     * Katalog-Reihenfolge = Anzeige-Reihenfolge = Reihenfolge der <td> im Blade. Ansichten sind
+     * MENGEN — würde der Kopf der Ansichts-Ordnung folgen, stünden Kopf und Zellen versetzt.
+     */
+    #[Url(as: 'ansicht')]
+    public string $ansicht = 'standard';
+
+    public const SPALTEN = [
+        'klasse' => ['Klasse', ''],
+        'geschmack' => ['Geschmack', ''],
+        'hauptgruppe' => ['HG', ''],
+        'ek' => ['EK', 'text-right'],
+        'vk' => ['VK netto', 'text-right'],
+        'we' => ['W %', 'text-right'],           // Wareneinsatz — die Entscheidungszahl am Gericht
+        'zutaten' => ['Zutaten', 'text-right'],
+        'allergen' => ['Allergen-Konf.', ''],
+        'status' => ['Status', ''],
+    ];
+
+    public const ANSICHTEN = [
+        'standard' => ['Standard', ['klasse', 'vk', 'we', 'status']],
+        'kalkulation' => ['Kalkulation', ['klasse', 'ek', 'vk', 'we', 'status']],
+        'pflege' => ['Datenpflege', ['klasse', 'hauptgruppe', 'zutaten', 'allergen', 'status']],
+    ];
+
+    /** Sichtbare Spalten in KATALOG-Reihenfolge; unbekannte Ansicht fällt auf Standard zurück. */
+    public function spalten(): array
+    {
+        $menge = (self::ANSICHTEN[$this->ansicht] ?? self::ANSICHTEN['standard'])[1];
+
+        return array_values(array_filter(array_keys(self::SPALTEN), fn ($k) => in_array($k, $menge, true)));
+    }
+
     public function waehleHauptgruppe(?int $id): void
     {
         // Modell A: HG und Klasse(Diät) sind unabhängige Achsen — kein Kaskaden-Reset mehr.
@@ -154,6 +188,9 @@ class Browser extends Component
         $rezepte = $verkauf->paginateBrowser($filters, $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100);
 
         return view('foodalchemist::livewire.verkauf.browser', [
+            'spalten' => $this->spalten(),
+            'spaltenKatalog' => self::SPALTEN,
+            'ansichten' => self::ANSICHTEN,
             'rezepte' => $rezepte,
             'hauptgruppen' => $verkauf->dishMainGroups($team),
             'gesamtCount' => $verkauf->gesamtCount($team, $filters),

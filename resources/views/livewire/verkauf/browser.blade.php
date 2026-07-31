@@ -104,6 +104,15 @@
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                 <h3 class="font-medium tracking-tight text-gray-900">Gerichte</h3>
                 <span class="{{ $label }} flex items-center gap-2">
+                    {{-- E14: Ansichts-Schalter --}}
+                    <span class="flex items-center gap-1" data-ansicht-schalter>
+                        @foreach($ansichten as $ak => [$al, $unused])
+                            <button type="button" wire:click="$set('ansicht', '{{ $ak }}')"
+                                    class="{{ $pill }} {{ $ansicht === $ak ? $variantPill['primary'] : $variantPill['secondary'] }}"
+                                    data-ansicht="{{ $ak }}">{{ $al }}</button>
+                        @endforeach
+                    </span>
+                    <span class="text-gray-300">·</span>
                     {{ number_format($rezepte->total(), 0, ',', '.') }} Treffer ·
                     <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 cursor-pointer focus:ring-0" data-per-page>
                         @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
@@ -114,8 +123,12 @@
             <table class="{{ $table }}">
                 <thead><tr class="text-left">
                     {{-- R13 (Jarvis-Dichte): Name flexibel, Geld/Zahlen rechtsbündig --}}
-                    @foreach([['Name', 'w-full'], ['Klasse', ''], ['Geschmack', ''], ['Status', ''], ['VK netto', 'text-right'], ['EK', 'text-right'], ['Zutaten', 'text-right'], ['Allergen-Konf.', ''], ['Hauptgruppe', '']] as [$head, $align])
-                        <th class="{{ $th }} {{ $align }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $head }}</th>
+                    {{-- E14: Kopf folgt dem KATALOG, nicht der Ansicht (sonst Versatz zu den Zellen) --}}
+                    <th class="{{ $th }} w-full sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
+                    @foreach($spaltenKatalog as $sk => [$skLabel, $skAlign])
+                        @if(in_array($sk, $spalten, true))
+                            <th class="{{ $th }} {{ $skAlign }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $skLabel }}</th>
+                        @endif
                     @endforeach
                 </tr></thead>
                 <tbody>
@@ -124,13 +137,21 @@
                             x-data x-on:click="$store.ui?.mSet('activity_verkauf', 'open', true)"
                             data-vk-zeile="{{ $r->id }}">
                             {{-- R6: Namens-Klick öffnet direkt den VK-Editor --}}
-                            <td class="{{ $td }} font-medium w-full min-w-[24rem] whitespace-normal break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
+                            <td class="{{ $td }} font-medium w-full min-w-[8rem] whitespace-normal break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
                                 <span class="text-gray-900 hover:text-violet-600 hover:underline cursor-pointer" data-vk-name>{{ $r->name }}</span>
                             </td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-600 whitespace-nowrap">{{ $r->dishClass?->label ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($r->taste_direction) }}</td>
+                            @if(in_array('klasse', $spalten, true))<td class="{{ $td }} text-[11px] italic text-gray-600 whitespace-nowrap">{{ $r->dishClass?->label ?? '—' }}</td>@endif
+                            @if(in_array('geschmack', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($r->taste_direction) }}</td>@endif
+                            @if(in_array('hauptgruppe', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->dishMainGroup?->code ?? '—' }}</td>@endif
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge) --}}
-                            <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
+                            @if(in_array('ek', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap text-right tabular-nums">{{ $r->ek_total_eur !== null ? number_format((float) $r->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</td>@endif
+                            @if(in_array('vk', $spalten, true))<td class="{{ $td }} text-gray-900 whitespace-nowrap text-right tabular-nums">{{ $r->sales_net !== null ? number_format((float) $r->sales_net, 2, ',', '.') . ' €' : '—' }}</td>@endif
+                            @if(in_array('we', $spalten, true))<td class="{{ $td }} whitespace-nowrap text-right tabular-nums" title="Wareneinsatz = EK / VK netto">{{ ($r->sales_net !== null && (float) $r->sales_net > 0 && $r->ek_total_eur !== null) ? number_format((float) $r->ek_total_eur / (float) $r->sales_net * 100, 1, ',', '.') : '—' }}</td>@endif
+                            @if(in_array('zutaten', $spalten, true))<td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $r->n_ingredients_total }}</td>@endif
+                            @if(in_array('allergen', $spalten, true))<td class="{{ $td }}">
+                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</span>
+                            </td>@endif
+                            @if(in_array('status', $spalten, true))<td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
                                     <select wire:key="vst-{{ $r->id }}-{{ $r->status->value }}" wire:change="statusSetzen({{ $r->id }}, $event.target.value)"
                                             class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6" data-status-select>
@@ -141,17 +162,10 @@
                                 @else
                                     <span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span>
                                 @endif
-                            </td>
-                            <td class="{{ $td }} text-gray-900 whitespace-nowrap text-right tabular-nums">{{ $r->sales_net !== null ? number_format((float) $r->sales_net, 2, ',', '.') . ' €' : '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 whitespace-nowrap text-right tabular-nums">{{ $r->ek_total_eur !== null ? number_format((float) $r->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $r->n_ingredients_total }}</td>
-                            <td class="{{ $td }}">
-                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</span>
-                            </td>
-                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->dishMainGroup?->code ?? '—' }}</td>
+                            </td>@endif
                         </x-foodalchemist::table-row>
                     @empty
-                        <tr><td colspan="9" class="px-5 py-10 text-center text-gray-500">Keine Gerichte gefunden.</td></tr>
+                        <tr><td colspan="{{ count($spalten) + 1 }}" class="px-5 py-10 text-center text-gray-500">Keine Gerichte gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>

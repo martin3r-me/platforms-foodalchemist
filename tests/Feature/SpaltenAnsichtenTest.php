@@ -21,17 +21,43 @@ beforeEach(function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
 });
 
-it('Katalog-Reihenfolge und Zellen-Reihenfolge im Blade sind identisch', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/recipes/browser.blade.php');
+/** Alle Browser mit Spalten-Ansichten: Klasse => Blade-Pfad. */
+dataset('browser', [
+    'Basisrezepte' => [RecipeBrowser::class, 'recipes/browser'],
+    'Gerichte' => [\Platform\FoodAlchemist\Livewire\Verkauf\Browser::class, 'verkauf/browser'],
+    'Grundprodukte' => [\Platform\FoodAlchemist\Livewire\Gps\Browser::class, 'gps/browser'],
+]);
 
-    preg_match_all("/@if\(in_array\('(\w+)', \\\$spalten, true\)\)/", $blade, $treffer);
-    $imBlade = $treffer[1];
+it('Katalog-Reihenfolge und Zellen-Reihenfolge im Blade sind identisch', function (string $klasse, string $blade) {
+    $html = file_get_contents(__DIR__ . '/../../resources/views/livewire/' . $blade . '.blade.php');
 
-    $imKatalog = array_keys(RecipeBrowser::SPALTEN);
+    preg_match_all("/@if\(in_array\('(\w+)', \\\$spalten, true\)\)/", $html, $treffer);
 
-    // Jede Katalog-Spalte braucht eine Zelle, und zwar in derselben Ordnung.
-    expect($imBlade)->toBe($imKatalog);
-});
+    // Ordnung vergleichen, nicht Menge: beim Bau stimmte die ANZAHL und nur die Reihenfolge war
+    // falsch — „€/kg" stand über dem Status-Select.
+    expect($treffer[1])->toBe(array_keys($klasse::SPALTEN));
+})->with('browser');
+
+it('jeder Browser hat eine Standard-Ansicht und nennt nur bekannte Spalten', function (string $klasse) {
+    expect($klasse::ANSICHTEN)->toHaveKey('standard');
+    $katalog = array_keys($klasse::SPALTEN);
+
+    foreach ($klasse::ANSICHTEN as $key => [$label, $spalten]) {
+        expect($label)->not->toBeEmpty();
+        expect(array_diff($spalten, $katalog))->toBe([], "Ansicht [{$key}] nennt unbekannte Spalten");
+    }
+})->with('browser');
+
+it('spalten() sortiert jede Ansicht in Katalog-Ordnung', function (string $klasse) {
+    $katalog = array_keys($klasse::SPALTEN);
+
+    foreach (array_keys($klasse::ANSICHTEN) as $ansicht) {
+        $c = Livewire::test($klasse)->set('ansicht', $ansicht);
+        $spalten = $c->instance()->spalten();
+        $erwartet = array_values(array_filter($katalog, fn ($k) => in_array($k, $spalten, true)));
+        expect($spalten)->toBe($erwartet);
+    }
+})->with('browser');
 
 it('jede Ansicht nennt nur Spalten, die es im Katalog gibt', function () {
     $katalog = array_keys(RecipeBrowser::SPALTEN);
