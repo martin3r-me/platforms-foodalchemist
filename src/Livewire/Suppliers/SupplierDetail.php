@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Suppliers;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Services\RebateService;
 use Platform\FoodAlchemist\Services\SupplierAgreementService;
 use Platform\FoodAlchemist\Services\SupplierService;
 use RuntimeException;
@@ -27,6 +28,13 @@ class SupplierDetail extends Component
 
     /** R9.1 (E4) Konditionen — vorbelegt beim Öffnen, gespeichert per updateConditions. */
     public array $konditionen = ['rebate_pct' => '', 'payment_term_days' => '', 'min_order_value' => '', 'free_shipping_threshold' => ''];
+
+    /** Einkauf E1: Rückvergütungs-Staffel (Zeilen threshold_eur/percent) + Config + Live-Info. */
+    public array $staffel = [];
+
+    public array $rebateConfig = ['active' => true, 'assumed_annual_revenue' => '', 'selected_threshold' => '', 'excluded' => ''];
+
+    public array $stufenInfo = [];
 
     /** Spec 17/S1 Bestell-Logistik: Liefertage (ISO-Wochentage) + Bestellschluss/Vorlaufzeit. */
     public array $liefertage = [];
@@ -63,6 +71,7 @@ class SupplierDetail extends Component
             'order_cutoff_time' => $sb['bestellung']['order_cutoff_time'] ?? '',
             'order_lead_days' => $sb['bestellung']['order_lead_days'] ?? '',
         ];
+        $this->ladeRueckverguetung($id);
         $this->dispatch('modal.open', name: 'supplier-detail');
     }
 
@@ -85,6 +94,78 @@ class SupplierDetail extends Component
     {
         $this->fuehreAus(fn ($svc, $team) => $svc->updateConditions($team, $this->supplierId, $this->konditionen),
             'Konditionen gespeichert.');
+    }
+
+    /** Einkauf E1: Staffel + Config eines Lieferanten in den Editor-State laden. */
+    private function ladeRueckverguetung(int $supplierId): void
+    {
+        $rebate = app(RebateService::class);
+        $team = $this->team();
+        $this->staffel = $rebate->tiersFor($team, $supplierId)->map(fn ($t) => [
+            'threshold_eur' => (float) $t->threshold_eur,
+            'percent' => (float) $t->percent,
+        ])->all();
+        $config = $rebate->configFor($team, $supplierId);
+        $selThreshold = '';
+        if ($config?->selected_tier_id !== null && $config !== null) {
+            $sel = $rebate->tiersFor($team, $supplierId)->firstWhere('id', $config->selected_tier_id);
+            $selThreshold = $sel !== null ? (string) (float) $sel->threshold_eur : '';
+        }
+        $this->rebateConfig = [
+            'active' => $config?->active ?? true,
+            'assumed_annual_revenue' => $config?->assumed_annual_revenue !== null ? (string) (float) $config->assumed_annual_revenue : '',
+            'selected_threshold' => $selThreshold,
+            'excluded' => is_array($config?->excluded_commodity_groups) ? implode(', ', $config->excluded_commodity_groups) : '',
+        ];
+        $this->stufenInfo = $rebate->stufenInfo($team, $supplierId);
+    }
+
+    public function staffelZeileHinzufuegen(): void
+    {
+        $this->staffel[] = ['threshold_eur' => '', 'percent' => ''];
+    }
+
+    public function staffelZeileEntfernen(int $i): void
+    {
+        unset($this->staffel[$i]);
+        $this->staffel = array_values($this->staffel);
+    }
+
+    /** Einkauf E1: Staffel (Replace-Set) + Config speichern; manuelle Stufe per Schwelle (ID-Churn-fest). */
+    public function rueckverguetungSpeichern(): void
+    {
+        $this->fehler = null;
+        $team = $this->team();
+        try {
+            $rebate = app(RebateService::class);
+            $created = $rebate->saveTiers($team, $this->supplierId, array_map(
+                fn ($z) => ['threshold_eur' => $z['threshold_eur'] ?? 0, 'percent' => $z['percent'] ?? 0],
+                $this->staffel
+            ));
+
+            $selThreshold = (string) ($this->rebateConfig['selected_threshold'] ?? '');
+            $selTierId = null;
+            if ($selThreshold !== '') {
+                $selTierId = optional($created->first(
+                    fn ($t) => abs((float) $t->threshold_eur - (float) $selThreshold) < 0.005
+                ))->id;
+            }
+
+            $excluded = array_values(array_filter(array_map('trim',
+                explode(',', (string) ($this->rebateConfig['excluded'] ?? '')))));
+
+            $rebate->saveConfig($team, $this->supplierId, [
+                'active' => (bool) ($this->rebateConfig['active'] ?? true),
+                'assumed_annual_revenue' => $this->rebateConfig['assumed_annual_revenue'] ?? '',
+                'selected_tier_id' => $selTierId,
+                'excluded_commodity_groups' => $excluded,
+            ]);
+
+            $this->ladeRueckverguetung($this->supplierId);
+            $this->melde('Rückvergütungs-Staffel gespeichert.');
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     /** Spec 17/S1: Bestell-Logistik speichern — Liefertage (ISO-CSV) + Bestellschluss/Vorlaufzeit. */
@@ -182,7 +263,7 @@ class SupplierDetail extends Component
 
     private function resetState(): void
     {
-        $this->reset('status', 'konditionen', 'liefertage', 'bestellung', 'neuKontakt', 'neueAbsprache', 'neuesDokument', 'fehler', 'hinweis');
+        $this->reset('status', 'konditionen', 'staffel', 'rebateConfig', 'stufenInfo', 'liefertage', 'bestellung', 'neuKontakt', 'neueAbsprache', 'neuesDokument', 'fehler', 'hinweis');
     }
 
     private function team()

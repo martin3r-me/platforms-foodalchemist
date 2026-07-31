@@ -81,6 +81,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\RecipeFindingsCommand::class,
                 \Platform\FoodAlchemist\Console\ImportArticlesCommand::class,
                 \Platform\FoodAlchemist\Console\MoneyTruthReportCommand::class,
+                \Platform\FoodAlchemist\Console\SeedRebateTiersCommand::class,
             ]);
 
             $this->planeLaeufe();
@@ -377,6 +378,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SuppliersPutTool::class,
                     \Platform\FoodAlchemist\Tools\SupplierAgreementsPostTool::class,
                     \Platform\FoodAlchemist\Tools\SuppliersVolumeTool::class,
+                    // Einkauf E1: Rückvergütungs-Staffeln (strukturiert, team-scoped)
+                    \Platform\FoodAlchemist\Tools\SupplierRebateGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SupplierRebatePutTool::class,
                     \Platform\FoodAlchemist\Tools\GpLeadGetTool::class,
                     \Platform\FoodAlchemist\Tools\GpLeadPutTool::class,
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)

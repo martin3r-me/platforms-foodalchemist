@@ -121,7 +121,60 @@
                     @if($darfEdit)
                         <button type="button" wire:click="konditionenSpeichern" class="{{ $btnPrimary }}" data-kond-save>Konditionen speichern</button>
                     @endif
-                    <p class="text-[11px] text-gray-500">Rückvergütung ≠ Listen-EK — fließt langfristig in die echte Marge (R2).</p>
+                    <p class="text-[11px] text-gray-500">Flaches Feld oben = Bestandsschutz; es greift nur, solange unten keine Staffel hinterlegt ist.</p>
+
+                    {{-- ── Einkauf E1: Rückvergütungs-Staffeln (Volumen-Rabatt, team-scopes Overlay) ── --}}
+                    <div class="pt-3 mt-1 border-t border-black/5" data-staffel-editor>
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="{{ $label }}">Rückvergütungs-Staffeln</p>
+                            @php($eff = (float) ($stufenInfo['prozent'] ?? 0))
+                            <span class="{{ $pill }} {{ $eff > 0 ? $variantPill['success'] : $variantPill['secondary'] }}" data-staffel-effektiv>
+                                effektiv {{ number_format($eff, 2, ',', '.') }} %<span class="opacity-60"> · {{ $stufenInfo['quelle'] ?? '—' }}</span>
+                            </span>
+                        </div>
+
+                        <div class="space-y-1" data-staffel-zeilen>
+                            <div class="grid grid-cols-[1fr_1fr_auto] gap-2 {{ $label }}">
+                                <span>Schwelle ab €</span><span>Rabatt %</span><span></span>
+                            </div>
+                            @forelse($staffel as $i => $z)
+                                <div wire:key="staffel-{{ $i }}" class="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                                    <input type="text" wire:model="staffel.{{ $i }}.threshold_eur" @disabled(! $darfEdit) class="{{ $input }} tabular-nums" />
+                                    <input type="text" wire:model="staffel.{{ $i }}.percent" @disabled(! $darfEdit) class="{{ $input }} tabular-nums" />
+                                    @if($darfEdit)
+                                        <button type="button" wire:click="staffelZeileEntfernen({{ $i }})" class="{{ $btnGhostXs }} text-rose-600" title="Stufe entfernen">✕</button>
+                                    @else<span></span>@endif
+                                </div>
+                            @empty
+                                <p class="text-xs text-gray-500">Noch keine Staffel — der flache Bonus oben greift als Fallback.</p>
+                            @endforelse
+                        </div>
+
+                        @if($darfEdit)
+                            <button type="button" wire:click="staffelZeileHinzufuegen" class="{{ $btnGhostXs }} text-violet-600 mt-1" data-staffel-add>+ Stufe</button>
+
+                            <div class="grid grid-cols-2 gap-3 mt-3">
+                                <label class="inline-flex items-center gap-2 text-xs text-gray-700 col-span-2">
+                                    <input type="checkbox" wire:model="rebateConfig.active" /> Rückvergütung anrechnen
+                                </label>
+                                <div><label class="block {{ $label }} mb-1">Angenommener Jahresumsatz € (Auto-Stufe)</label>
+                                    <input type="text" wire:model="rebateConfig.assumed_annual_revenue" class="{{ $input }} tabular-nums" data-staffel-revenue /></div>
+                                <div><label class="block {{ $label }} mb-1">Angenommene Stufe (manuell)</label>
+                                    <select wire:model="rebateConfig.selected_threshold" class="{{ $input }}" data-staffel-selected>
+                                        <option value="">— aus Umsatz ableiten —</option>
+                                        @foreach($staffel as $z)
+                                            @if(($z['threshold_eur'] ?? '') !== '' && ($z['percent'] ?? '') !== '')
+                                                <option value="{{ (float) $z['threshold_eur'] }}">ab {{ number_format((float) $z['threshold_eur'], 0, ',', '.') }} € → {{ number_format((float) $z['percent'], 2, ',', '.') }} %</option>
+                                            @endif
+                                        @endforeach
+                                    </select></div>
+                                <div class="col-span-2"><label class="block {{ $label }} mb-1">Ausgeschlossene Warengruppen (Codes, kommagetrennt)</label>
+                                    <input type="text" wire:model="rebateConfig.excluded" placeholder="z. B. 2.1, 2.4" class="{{ $input }}" /></div>
+                            </div>
+                            <button type="button" wire:click="rueckverguetungSpeichern" class="{{ $btnPrimary }} mt-2" data-staffel-save>Rückvergütung speichern</button>
+                        @endif
+                        <p class="text-[11px] text-gray-500 mt-2">Rückvergütung = rückwirkender Jahresbonus → „effektiver Netto-Preis" fürs Vergleichen/Optimieren, nicht der gebuchte Bestellpreis.</p>
+                    </div>
 
                     {{-- Spec 17/S1 — Bestell-Logistik (N-Track): Liefertage + Bestellschluss/Vorlaufzeit --}}
                     <div class="pt-3 mt-1 border-t border-black/5">
