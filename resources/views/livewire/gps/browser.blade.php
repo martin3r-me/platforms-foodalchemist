@@ -40,20 +40,20 @@
                         <div wire:key="wg-{{ $wg->code }}">
                             <button type="button" wire:click="waehleWg('{{ $wg->code }}')"
                                     class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $commodity_group === $wg->code
-                                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
-                                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
+                                        ? 'border-l-2 border-violet-500 text-violet-700 font-medium ' . ($subKategorie !== '' ? '' : 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10')
+                                        : 'border-l-2 border-transparent text-gray-700 hover:bg-black/[0.03]' }}">
                                 <span class="min-w-0 truncate">{{ $wg->codedLabel() }}</span>
-                                <span class="text-[11px] text-gray-500 shrink-0 ml-2">{{ $wgCounts[$wg->code] ?? 0 }}</span>
+                                <span class="text-[11px] text-gray-500 shrink-0 ml-2 tabular-nums">{{ $wgCounts[$wg->code] ?? 0 }}</span>
                             </button>
                             @if($commodity_group === $wg->code && count($subCounts) > 0)
-                                <div class="ml-4 mt-0.5 space-y-0.5" data-sub-liste>
+                                <div class="ml-3 mt-1 mb-1 pl-2 border-l border-black/10 space-y-0.5" data-sub-liste>
                                     @foreach($subCounts as $sub => $n)
                                         <button type="button" wire:key="sub-{{ md5($sub) }}" wire:click="waehleSub('{{ addslashes($sub) }}')"
                                                 class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $subKategorie === $sub
-                                                    ? 'bg-violet-500/10 text-violet-700'
-                                                    : 'text-gray-600 hover:bg-black/[0.03]' }}">
+                                                    ? 'bg-violet-500/10 text-violet-700 font-medium'
+                                                    : 'text-gray-700 hover:bg-black/[0.03]' }}">
                                             <span class="min-w-0 truncate">{{ $sub }}</span>
-                                            <span class="text-gray-500 shrink-0 ml-2">{{ $n }}</span>
+                                            <span class="text-gray-500 shrink-0 ml-2 tabular-nums">{{ $n }}</span>
                                         </button>
                                     @endforeach
                                 </div>
@@ -118,7 +118,7 @@
                     @forelse($gps as $gp)
                         <tr wire:key="gp-{{ $gp->id }}" wire:click="waehleGp({{ $gp->id }})"
                             x-data x-on:click="$store.ui?.mSet('activity_gps', 'open', true)"
-                            class="{{ $tr }} cursor-pointer {{ $gpId === $gp->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
+                            class="{{ $tr }} cursor-pointer {{ $gpId === $gp->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border-l-2 border-violet-500' : 'border-l-2 border-transparent' }}"
                             data-gp-zeile="{{ $gp->id }}">
                             {{-- R6: Namens-Klick öffnet direkt den GP-Editor (Zeilen-Klick bleibt Panel) --}}
                             {{-- R13: w-full + max-w-0 = Spalte nimmt allen Restplatz und truncated — Tabelle bläht NIE über den Container --}}

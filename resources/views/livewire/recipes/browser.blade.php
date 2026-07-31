@@ -64,21 +64,21 @@
                         <div wire:key="hg-{{ $hg->id }}">
                             <button type="button" wire:click="waehleHauptgruppe({{ $hg->id }})"
                                     class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === $hg->id
-                                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
-                                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
+                                        ? 'border-l-2 border-violet-500 text-violet-700 font-medium ' . ($kategorie !== null ? '' : 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10')
+                                        : 'border-l-2 border-transparent text-gray-700 hover:bg-black/[0.03]' }}">
                                 <span class="min-w-0 truncate">{{ $hg->label }}</span>
-                                <span class="text-[11px] text-gray-500 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
+                                <span class="text-[11px] text-gray-500 shrink-0 ml-2 tabular-nums">{{ $hgCounts[$hg->id] ?? 0 }}</span>
                             </button>
                             @if($hauptgruppe === $hg->id && $kategorien->isNotEmpty())
-                                <div class="ml-4 mt-0.5 space-y-0.5" data-kat-liste>
+                                <div class="ml-3 mt-1 mb-1 pl-2 border-l border-black/10 space-y-0.5" data-kat-liste>
                                     @foreach($kategorien as $kat)
                                         @if(($katCounts[$kat->id] ?? 0) > 0)
                                             <button type="button" wire:key="kat-{{ $kat->id }}" wire:click="waehleKategorie({{ $kat->id }})"
                                                     class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $kategorie === $kat->id
-                                                        ? 'bg-violet-500/10 text-violet-700'
-                                                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
+                                                        ? 'bg-violet-500/10 text-violet-700 font-medium'
+                                                        : 'text-gray-700 hover:bg-black/[0.03]' }}">
                                                 <span class="min-w-0 truncate">{{ $kat->label }}</span>
-                                                <span class="text-gray-500 shrink-0 ml-2">{{ $katCounts[$kat->id] }}</span>
+                                                <span class="text-gray-500 shrink-0 ml-2 tabular-nums">{{ $katCounts[$kat->id] }}</span>
                                             </button>
                                         @endif
                                     @endforeach
@@ -98,7 +98,7 @@
                                 title="Basisrezepte ohne Kategorie — über die Hauptgruppen nicht auffindbar"
                                 data-ohne-kategorie>
                             <span class="min-w-0 truncate italic">Ohne Kategorie</span>
-                            <span class="text-[11px] text-gray-500 shrink-0 ml-2">{{ $ohneKategorieCount }}</span>
+                            <span class="text-[11px] text-gray-500 shrink-0 ml-2 tabular-nums">{{ $ohneKategorieCount }}</span>
                         </button>
                     @endif
                 </div>
@@ -212,7 +212,7 @@
                     @forelse($rezepte as $r)
                         <tr wire:key="r-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
                             x-data x-on:click="$store.ui?.mSet('activity_recipes', 'open', true)"
-                            class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
+                            class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border-l-2 border-violet-500' : 'border-l-2 border-transparent' }}"
                             data-rezept-zeile="{{ $r->id }}">
                             <td class="{{ $td }} !pr-0" wire:click.stop>
                                 <input type="checkbox" wire:model.live="auswahl.{{ $r->id }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-rezept-checkbox="{{ $r->id }}" />

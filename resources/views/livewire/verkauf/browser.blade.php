@@ -48,10 +48,10 @@
                         @foreach($klassen as $k)
                             <button type="button" wire:key="vkk-alle-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
                                     class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $klasse === $k->id
-                                        ? 'bg-violet-500/10 text-violet-700'
+                                        ? 'bg-violet-500/10 text-violet-700 font-medium'
                                         : 'text-gray-600 hover:bg-black/[0.03]' }}">
                                 <span class="min-w-0 truncate">{{ $k->label }}</span>
-                                <span class="text-gray-500 shrink-0 ml-2">{{ $klassenCounts[$k->id] ?? 0 }}</span>
+                                <span class="text-gray-500 shrink-0 ml-2 tabular-nums">{{ $klassenCounts[$k->id] ?? 0 }}</span>
                             </button>
                         @endforeach
                     </div>
@@ -62,21 +62,21 @@
                         <div wire:key="vkhg-{{ $hg->id }}">
                             <button type="button" wire:click="waehleHauptgruppe({{ $hg->id }})"
                                     class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === $hg->id
-                                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
-                                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
+                                        ? 'border-l-2 border-violet-500 text-violet-700 font-medium ' . ($klasse !== null ? '' : 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10')
+                                        : 'border-l-2 border-transparent text-gray-700 hover:bg-black/[0.03]' }}">
                                 <span class="min-w-0 truncate"><span class="font-mono text-[10px] text-gray-500 mr-1">[{{ $hg->code }}]</span>{{ $hg->label }}</span>
-                                <span class="text-[11px] text-gray-500 shrink-0 ml-2">{{ $hgCounts[$hg->id] ?? 0 }}</span>
+                                <span class="text-[11px] text-gray-500 shrink-0 ml-2 tabular-nums">{{ $hgCounts[$hg->id] ?? 0 }}</span>
                             </button>
                             @if($hauptgruppe === $hg->id)
-                                <div class="ml-4 mt-0.5 space-y-0.5" data-vk-klassen-ast>
+                                <div class="ml-3 mt-1 mb-1 pl-2 border-l border-black/10 space-y-0.5" data-vk-klassen-ast>
                                     @foreach($klassen as $k)
                                         @if(($klassenCounts[$k->id] ?? 0) > 0 || $klasse === $k->id)
                                             <button type="button" wire:key="vkk-{{ $hg->id }}-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
                                                     class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $klasse === $k->id
-                                                        ? 'bg-violet-500/10 text-violet-700'
-                                                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
+                                                        ? 'bg-violet-500/10 text-violet-700 font-medium'
+                                                        : 'text-gray-700 hover:bg-black/[0.03]' }}">
                                                 <span class="min-w-0 truncate">{{ $k->label }}</span>
-                                                <span class="text-gray-500 shrink-0 ml-2">{{ $klassenCounts[$k->id] ?? 0 }}</span>
+                                                <span class="text-gray-500 shrink-0 ml-2 tabular-nums">{{ $klassenCounts[$k->id] ?? 0 }}</span>
                                             </button>
                                         @endif
                                     @endforeach
@@ -139,7 +139,7 @@
                     @forelse($rezepte as $r)
                         <tr wire:key="vk-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
                             x-data x-on:click="$store.ui?.mSet('activity_verkauf', 'open', true)"
-                            class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
+                            class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border-l-2 border-violet-500' : 'border-l-2 border-transparent' }}"
                             data-vk-zeile="{{ $r->id }}">
                             {{-- R6: Namens-Klick öffnet direkt den VK-Editor --}}
                             <td class="{{ $td }} font-medium w-full min-w-[24rem] whitespace-normal break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
