@@ -1,6 +1,6 @@
 # Spec 27 — Step-by-Step-Zubereitung (strukturierte Schritte + Fotos)
 
-> **Status:** Phase 1 + 2 **GEBAUT** (2026-07-31) · Phase 3 + 4 in Arbeit.
+> **Status:** Phasen 1–4 **GEBAUT** (2026-07-31). Offen: Backfill gegen den echten Bestand + Browser-Abnahme + demo-Deploy.
 > **Entschieden mit Dominique (2026-07-31):** Weg **B** (strukturierte Schritte, keine Markdown-Kopplung), Fotos **many-to-many**;
 > **alle vier Phasen** in einer Session; Phase 4 = Produktionsblatt + Produktionsauftrag + eigene Druckansicht „Anleitung",
 > jeweils mit Schalter **nur Text / mit Fotos**; Markdown bleibt als Spiegel + Eingabeweg, die Textarea entfällt.
@@ -11,8 +11,16 @@
 |---|---|---|
 | 1 Datenlayer | ✅ | Migration `2026_07_31_000005_create_foodalchemist_recipe_steps_tables.php` · `FoodAlchemistRecipeStep` · `RecipeStepService` · `foodalchemist:steps-backfill` · `RecipeStepBackfillTest` (12) + `RecipeStepParserTest` (10) |
 | 2 Editor-UI | ✅ | `StepEditor` (Livewire, server-seitig) · `step-editor.blade.php` · `partials/step-photo-pool.blade.php` (Media-Pool = Neubau) · Umbau Zubereitungs-Tab + Detail-Panel · `RecipeStepEditorTest` (11) |
-| 3 KI + Spiegel | ⏳ | Prompt-Key `recipe.steps`, MCP `recipe_steps.GET/PUT` |
-| 4 Produktionsdruck | ⏳ | Schritt-Karten in `blatt`/`produktionsauftrag` + neue Ansicht `anleitung`, `?fotos=0|1` |
+| 3 KI + Spiegel | ✅ | Prompt-Key `recipe.steps` (Tier A, in `FOOD_DNA_KEYS`) · `StepEditor::kiSchritte/kiUebernehmen` (GL-07) · Markdown-Eingang zentral in `RecipeService::create/update` · MCP `recipe_steps.GET` + `recipe_steps.PUT` · `RecipeStepsMcpTest` (8) |
+| 4 Produktionsdruck | ✅ | `PlanungsblattService::schritteFuer` · geteiltes Partial `dokumente/partials/schritt-karten(-css)` in `blatt` + `produktionsauftrag` · neue Ansicht `dokumente/anleitung` + Route `foodalchemist.rezepte.anleitung` · `?fotos=0|1` · `steps_snapshot` an `production_order_lines` · `RecipeStepPrintTest` (6) |
+
+**Entscheidungen aus der Umsetzung (Phase 3/4):**
+- **Markdown bleibt Eingangskanal, aber Schritte gewinnen:** `RecipeService::create/update` parst ankommendes `preparation` in Schritte — hat das Rezept schon Schritte, wird der Markdown-Write **verworfen** und der Spiegel aus den Schritten neu gerendert (sonst stünde im Feld ein Text, den die Anleitung nicht sagt). Wer Schritte ändern will, nutzt `recipe_steps.PUT` bzw. den Editor.
+- **Kein `recipe.preparation`-Aufruf mehr im Editor**, der Prompt-Key bleibt aber im Inventar (Generator/Revise liefern weiter Markdown).
+- **Foto-Quelle doppelt** im Druck-Array (`url` fürs HTML, `pfad_abs` fürs PDF): DomPDF lädt remote URLs nur mit `isRemoteEnabled`.
+- **Schritt-Karten-CSS float-basiert**, nicht Flexbox — DomPDF rendert Flexbox nicht.
+- **`steps_snapshot` friert Verweise, keine Bilddateien** ein: ein gelöschtes Foto fehlt dann im Nachdruck, statt Speicher zu duplizieren.
+- **Nebenbefund gefixt:** `SeedsTeamHierarchy` registrierte die Modul-Routen, ohne den Namens-Index der RouteCollection zu refreshen — `Route::has()` war deshalb false und Dokument-Tests haben sich still weggeskippt (`->skip(fn () => ! Route::has(...))`). Mit `refreshNameLookups()` laufen sie jetzt echt.
 
 **Korrekturen gegenüber dem ursprünglichen Entwurf** (im Code so umgesetzt):
 - Die Foto-Spalte heißt **`schritt_nr`**, nicht `step`.

@@ -32,6 +32,7 @@
         .btn { display: inline-block; padding: 6px 12px; background: #6d28d9; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 6px; }
         .btn.ghost { background: #eee; color: #374151; }
         @media print { .actions { display: none; } body { padding: 0; } }
+@include('foodalchemist::dokumente.partials.schritt-karten-css')
     </style>
 </head>
 <body>
@@ -40,6 +41,11 @@
         <div class="actions">
             <a class="btn" href="{{ request()->fullUrlWithQuery(['pdf' => 1]) }}">PDF herunterladen</a>
             <a class="btn ghost" href="javascript:window.print()">Drucken</a>
+            @if($mitFotos ?? true)
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['fotos' => 0]) }}">Anleitung ohne Fotos</a>
+            @else
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['fotos' => 1]) }}">Anleitung mit Fotos</a>
+            @endif
         </div>
     @endunless
 
@@ -92,9 +98,12 @@
                         @if(($d['arbeitszeit_zuschlag_min'] ?? null) !== null) · +{{ $d['arbeitszeit_zuschlag_min'] }} min Ausgabe @endif
                     </p>
                 @endif
-                @if($r['zubereitung'] ?? null)
-                    <p class="meta" style="margin-top:4px; white-space:pre-line">{{ $r['zubereitung'] }}</p>
-                @endif
+                @include('foodalchemist::dokumente.partials.schritt-karten', [
+                    'schritte' => $r['schritte'] ?? [],
+                    'zubereitung' => $r['zubereitung'] ?? null,
+                    'mitFotos' => $mitFotos ?? true,
+                    'istPdf' => $istPdf ?? false,
+                ])
             </div>
         @empty
             <p class="muted">Keine skalierbaren Positionen.</p>

@@ -206,6 +206,7 @@ class RecipeService
         if (array_key_exists('equipment_ids', $in) && is_array($in['equipment_ids'])) {
             $recipe->equipment()->sync(array_map('intval', $in['equipment_ids']));
         }
+        $this->schritteAusMarkdown($recipe, $in);
         app(RecipeRecomputeService::class)->recomputePipeline($recipe->id);
 
         return $recipe->refresh();
@@ -250,11 +251,37 @@ class RecipeService
         if (array_key_exists('equipment_ids', $in) && is_array($in['equipment_ids'])) {
             $recipe->equipment()->sync(array_map('intval', $in['equipment_ids']));
         }
+        $this->schritteAusMarkdown($recipe, $in);
         if (array_key_exists('yield_kg_manual', $in) && $in['yield_kg_manual'] !== $altManual) {
             app(RecipeRecomputeService::class)->recomputeAndPropagate($recipe->id); // ek/kg-Nenner (A-3)
         }
 
         return $recipe->refresh();
+    }
+
+    /**
+     * Spec 27: Schreibwege dürfen weiter Markdown liefern (Generator, MCP recipes.POST/PUT,
+     * Import) — Master sind aber die Schritte. Kommt `preparation` mit Inhalt an, wird es
+     * hier deterministisch in Schritte geparst und der Spiegel daraus neu gerendert.
+     *
+     * Vorhandene Schritte bleiben unangetastet: sie sind die feinere Wahrheit (inkl.
+     * Foto-Verknüpfungen). Wer sie ersetzen will, nutzt `recipe_steps.PUT` bzw. den
+     * Schritt-Editor (RecipeStepService::sync / ausMarkdown mit ueberschreiben: true).
+     *
+     * ⚠️ Wichtig: wird der Markdown-Write deshalb verworfen, muss der Spiegel aus den
+     * Schritten NEU gerendert werden — sonst stünde im Feld der abgelehnte Text und
+     * Produktionsdruck/Suche zeigten etwas, das die Anleitung nicht sagt.
+     */
+    private function schritteAusMarkdown(FoodAlchemistRecipe $recipe, array $in): void
+    {
+        if (! array_key_exists('preparation', $in) || trim((string) ($in['preparation'] ?? '')) === '') {
+            return;
+        }
+
+        $svc = app(RecipeStepService::class);
+        if ($svc->ausMarkdown($recipe, (string) $in['preparation']) === 0) {
+            $svc->spiegele($recipe);
+        }
     }
 
     /** Kopie inkl. Zutaten, status draft (D-5 §3.1). */

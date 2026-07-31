@@ -20,6 +20,7 @@ const REGISTRY_SOLL = [
     'recipe.garverlust' => 'C', 'recipe.name_putzen' => 'D', 'recipe.sektor' => 'B',
     'recipe.level' => 'B', 'recipe.sub_typ' => 'B', 'recipe.production_depth' => 'B',
     'recipe.preparation' => 'A', 'recipe.eigenschaften' => 'B', 'recipe.geschmack' => 'B',
+    'recipe.steps' => 'A',                                            // Spec 27: strukturierte Schritte (Master), preparation ist nur ihr Spiegel
     'recipe.review' => 'A', 'recipe.pairing' => 'A', 'recipe.anker' => 'B',
     'recipe.bauart' => 'B',                                           // Spec 21 S5b-2: Gericht-vs-Komponente nach Bauart (Klassifikator, darum Tier B + keine Food-DNA)
     'recipe.equipment' => 'B', 'recipe.extract' => 'C',

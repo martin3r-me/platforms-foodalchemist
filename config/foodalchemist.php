@@ -524,12 +524,26 @@ return [
             'task' => 'Klassifiziere die Fertigungstiefe (from_scratch|teilfertig|convenience) '
                 . 'aus den Zutaten: werte = {production_depth}.',
         ],
+        // Markdown-Variante: liefert weiter EINEN Textblock. Bleibt im Inventar, weil
+        // Generator/Revise/MCP Markdown schreiben (es wird beim Write in Schritte
+        // geparst). Für den Editor ist `recipe.steps` der Weg (Spec 27).
         'recipe.preparation' => [
             'tier' => 'A',                                            // V-02: langes Einzeltext-Feld
             'max_tokens' => 8000,                                     // lange Markdown-Zubereitung — Reasoning-Headroom
             'task' => 'Schreibe die Schritt-fuer-Schritt-Zubereitung fuers PRODUKTIONS-Rezept '
                 . '(Markdown, nummerierte Schritte, Temperaturen/Zeiten konkret, H2 fuer Phasen): '
                 . 'werte = {preparation}.',
+        ],
+        // Spec 27: strukturierte Schritte statt Markdown-Blob — die Schritte sind der
+        // Master, `preparation` nur ihr Spiegel. phase = Abschnittsname oder null.
+        'recipe.steps' => [
+            'tier' => 'A',                                            // langer, strukturierter Einzeltext
+            'max_tokens' => 8000,
+            'task' => 'Schreibe die Zubereitung fuers PRODUKTIONS-Rezept als Schrittfolge. '
+                . 'Pro Schritt GENAU EINE Handlung, Temperaturen/Zeiten/Mengen konkret, keine Fuellsaetze. '
+                . 'phase = Abschnittsname (z. B. Mise en Place, Garen, Finish) oder null, gleiche Phase '
+                . 'fuer aufeinanderfolgende Schritte desselben Abschnitts. Nur was aus den Zutaten '
+                . 'ableitbar ist — nichts erfinden: werte = {steps: [{phase, text}]}.',
         ],
         'recipe.eigenschaften' => [
             'tier' => 'B',

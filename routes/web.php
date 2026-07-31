@@ -273,7 +273,9 @@ Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Plat
         }, $dateiname, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    $data = ['dok' => $dok, 'istPdf' => false];
+    // Spec 27: ?fotos=0 druckt die Anleitung ohne Bilder (Text-Zettel), Default = mit Fotos.
+    $mitFotos = request()->query('fotos') !== '0';
+    $data = ['dok' => $dok, 'istPdf' => false, 'mitFotos' => $mitFotos];
 
     if (request()->boolean('pdf')) {
         if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
@@ -377,6 +379,8 @@ Route::get('/blaetter/dokument', function (\Platform\FoodAlchemist\Services\Plan
         'typ' => $typ,
         'titel' => match ($typ) { 'bestellung' => 'Bestellvorschlag', 'einkauf' => 'Einkaufsliste', default => 'Produktionsblatt' },
         'untertitel' => trim(($name ?? 'Ziel') . ' · ' . $mengeTxt),
+        // Spec 27: ?fotos=0 druckt die Anleitung ohne Bilder (Text-Zettel), Default = mit Fotos.
+        'mitFotos' => request()->query('fotos') !== '0',
     ];
 
     if (request()->boolean('pdf')) {
@@ -391,6 +395,55 @@ Route::get('/blaetter/dokument', function (\Platform\FoodAlchemist\Services\Plan
 
     return view('foodalchemist::dokumente.blatt', $data + ['istPdf' => false]);
 })->name('foodalchemist.blaetter.dokument');
+
+/**
+ * Spec 27 — Postenzettel „Anleitung": NUR die Schritt-für-Schritt-Zubereitung eines
+ * Rezepts, groß gesetzt zum Aufhängen am Posten. `?fotos=0` = Textfassung ohne Bilder,
+ * `?pdf=1` = PDF (DomPDF, guarded wie die anderen Druckansichten).
+ */
+Route::get('/rezepte/{recipe}/anleitung', function (int $recipe) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $rezept = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->find($recipe) ?? abort(404);
+
+    $disk = \Illuminate\Support\Facades\Storage::disk('public');
+    $schritte = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $rezept->id)
+        ->with('photos')->orderBy('position')->orderBy('id')->get()
+        ->map(fn ($s) => [
+            'nr' => (int) $s->position,
+            'phase' => $s->phase,
+            'text' => (string) $s->text,
+            'fotos' => $s->photos->map(fn ($f) => [
+                'url' => $f->url(),
+                'pfad_abs' => $disk->exists($f->pfad) ? $disk->path($f->pfad) : null,
+                'caption' => $f->caption,
+            ])->values()->all(),
+        ])->values()->all();
+
+    $zutaten = $rezept->ingredients->map(fn ($z) => [
+        'name' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text,
+        'menge' => $z->quantity !== null ? rtrim(rtrim(number_format((float) $z->quantity, 2, ',', '.'), '0'), ',') : null,
+        'einheit' => $z->unit?->slug,
+    ])->filter(fn ($z) => trim((string) $z['name']) !== '')->values();
+
+    $data = [
+        'rezept' => $rezept,
+        'schritte' => $schritte,
+        'zutaten' => $zutaten,
+        'mitFotos' => request()->query('fotos') !== '0',
+    ];
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Anleitungs-PDF angefordert, aber DomPDF ist nicht installiert.', ['recipe' => $recipe]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.anleitung', $data + ['istPdf' => true])
+            ->download('Anleitung-' . $rezept->id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.anleitung', $data + ['istPdf' => false]);
+})->name('foodalchemist.rezepte.anleitung');
 
 /**
  * R7: «In Planung» — Vorschau der Phase-2-Domänen (14_ROADMAP_PHASE2).

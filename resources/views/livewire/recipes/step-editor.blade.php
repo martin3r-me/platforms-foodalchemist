@@ -62,6 +62,11 @@
                     </button>
                     <button type="button" wire:click="$toggle('importOffen')" class="{{ $btnGhostXs }}"
                             title="Markdown einfügen und in Schritte parsen" data-import-toggle>Markdown einfügen</button>
+                    @if($schritte->isNotEmpty())
+                        {{-- Spec 27 Phase 4: Postenzettel zum Aufhängen (mit oder ohne Fotos) --}}
+                        <a href="{{ route('foodalchemist.rezepte.anleitung', ['recipe' => $rezept->id]) }}" target="_blank"
+                           class="{{ $btnGhostXs }}" title="Anleitung als Postenzettel drucken" data-anleitung-drucken>Drucken</a>
+                    @endif
                 </span>
             @endif
         </div>

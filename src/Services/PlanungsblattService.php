@@ -706,7 +706,8 @@ class PlanungsblattService
                 'basis_yield_kg' => $basisYieldKg,
                 'produzierte_menge_kg' => $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null,
                 'arbeitszeit_min' => $recipe->work_time_min !== null ? (int) round((float) $recipe->work_time_min * $batches) : null,
-                'zubereitung' => $recipe->preparation ?: null,        // Freitext-Anweisung (kein Step-Datenmodell)
+                'zubereitung' => $recipe->preparation ?: null,        // Spiegel-Freitext (Fallback für Rezepte ohne Schritte)
+                'schritte' => $this->schritteFuer($recipe),           // Spec 27: die eigentliche Anleitung (Nummer + Text + Fotos)
                 'darreichung' => $istVk ? $this->darreichungsInfo($recipe) : null, // Regeneration/Behälter/Vehikel der Standard-Form
                 'zutaten' => $zeilen,
             ];
@@ -822,6 +823,32 @@ class PlanungsblattService
         $key = $table . ':' . $id;
 
         return $this->vocabCache[$key] ??= (DB::table($table)->where('id', $id)->value('name') ?: null);
+    }
+
+    /**
+     * Spec 27 — die Anleitung als Schritt-Karten für den Küchen-Druck.
+     *
+     * Fotos kommen mit `url` (HTML-Druck) UND `pfad_abs` (PDF): DomPDF lädt lokale
+     * Dateipfade zuverlässig, remote URLs nur mit isRemoteEnabled.
+     *
+     * @return list<array{nr: int, phase: ?string, text: string, fotos: list<array{url: string, pfad_abs: ?string, caption: ?string}>}>
+     */
+    private function schritteFuer(FoodAlchemistRecipe $recipe): array
+    {
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
+            ->with('photos')->orderBy('position')->orderBy('id')->get()
+            ->map(fn ($s) => [
+                'nr' => (int) $s->position,
+                'phase' => $s->phase,
+                'text' => (string) $s->text,
+                'fotos' => $s->photos->map(fn ($f) => [
+                    'url' => $f->url(),
+                    'pfad_abs' => $disk->exists($f->pfad) ? $disk->path($f->pfad) : null,
+                    'caption' => $f->caption,
+                ])->values()->all(),
+            ])->values()->all();
     }
 
     /** Regenerations-/Behälter-/Vehikel-Parameter der Standard-Darreichung (Küchen-Ausgabe). */

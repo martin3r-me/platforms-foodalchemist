@@ -153,13 +153,8 @@ class RecipeModal extends Component
             $recipe = $warNeu
                 ? $recipes->create($team, $in)
                 : $recipes->update($team, $this->recipeId, $in);
-
-            // Beim ANLEGEN darf weiter Freitext getippt werden (Paste aus Word) — er wird
-            // sofort in Schritte geparst, damit die Schritte von Anfang an der Master sind.
-            if ($warNeu && trim((string) ($this->form['preparation'] ?? '')) !== '') {
-                app(\Platform\FoodAlchemist\Services\RecipeStepService::class)
-                    ->ausMarkdown($recipe, $this->form['preparation'], ueberschreiben: true);
-            }
+            // Beim ANLEGEN getippter Freitext wird in Schritte geparst — das macht
+            // RecipeService::create zentral (gilt so für jeden Schreibweg, Spec 27).
 
             // #509 Create-Parität (VkModal::anlegen-Muster): nach dem Anlegen NICHT
             // schließen, sondern nahtlos in den Edit-Modus springen — Zutaten/Deklaration/

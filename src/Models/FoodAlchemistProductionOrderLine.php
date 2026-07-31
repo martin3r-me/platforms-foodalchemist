@@ -35,6 +35,7 @@ class FoodAlchemistProductionOrderLine extends Model
         'arbeitszeit_min' => 'integer',
         'darreichung' => 'array',
         'zutaten' => 'array',
+        'steps_snapshot' => 'array',   // Spec 27: eingefrorene Schrittfolge (NULL = Alt-Auftrag)
     ];
 
     public function productionOrder(): BelongsTo

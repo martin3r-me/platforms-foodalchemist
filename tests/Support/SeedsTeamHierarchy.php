@@ -88,6 +88,11 @@ trait SeedsTeamHierarchy
         if (! \Illuminate\Support\Facades\Route::has('foodalchemist.dashboard')) {
             \Illuminate\Support\Facades\Route::middleware('web')->prefix('foodalchemist')
                 ->group(\dirname(__DIR__, 2) . '/routes/web.php');
+
+            // Der Namens-Index der RouteCollection ist zu diesem Zeitpunkt schon gebaut —
+            // ohne Refresh sind die Routen VORHANDEN, aber `Route::has()`/`route()` finden
+            // sie nicht (und Dokument-Tests skippen sich fälschlich weg).
+            \Illuminate\Support\Facades\Route::getRoutes()->refreshNameLookups();
         }
     }
 

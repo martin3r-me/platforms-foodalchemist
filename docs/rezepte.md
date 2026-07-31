@@ -33,7 +33,15 @@ Die Zubereitung ist keine Textwand, sondern eine **Liste aus Schritten**. Ein Sc
 - Vorhandenen Text (z. B. aus Word) kann man per **„Markdown einfügen"** übernehmen: `##` wird zum Abschnitt, `1.` oder `-` zum Schritt.
 - Die **KI** schlägt auf Wunsch eine komplette Schrittfolge aus den Zutaten vor — als Vorschlag, der erst mit „Übernehmen" gespeichert wird.
 
-Für alles, was die Anleitung nur *liest* (Produktionsblatt, Produktionsauftrag, Suche, Prozessanker-Erkennung), wird zusätzlich weiterhin ein Textfassung mitgeführt. Sie wird **automatisch aus den Schritten erzeugt** und ist deshalb nie von Hand zu pflegen.
+Für alles, was die Anleitung nur *liest* (Suche, Prozessanker-Erkennung, Auswertungen), wird zusätzlich eine Textfassung mitgeführt. Sie wird **automatisch aus den Schritten erzeugt** und ist deshalb nie von Hand zu pflegen.
+
+**Drucken.** Die Anleitung kommt an drei Stellen aufs Papier — jeweils mit einem Umschalter **mit Fotos / nur Text**:
+
+| Wo | Wofür |
+|---|---|
+| Produktionsblatt | Rezept-Übergabe samt Mengen und Ausbeute |
+| Produktionsauftrag | der Tagesauftrag; der Stand wird beim Start **eingefroren** und ändert sich nicht mehr mit dem Rezept |
+| Postenzettel „Anleitung" | nur die Schritte, groß gesetzt zum Aufhängen am Posten — kein Wareneinsatz, kein Einkauf |
 
 Bestehende Rezepte werden per `php artisan foodalchemist:steps-backfill` einmalig überführt (deterministisch, ohne KI; Fotos wandern über ihre alte Schrittnummer an den passenden Schritt).
 

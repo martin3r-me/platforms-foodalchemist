@@ -403,6 +403,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipeFindingsPutTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesPutTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeIngredientsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeStepsGetTool::class,      // Spec 27
+                    \Platform\FoodAlchemist\Tools\RecipeStepsPutTool::class,      // Spec 27
                     // Phase B: Foodbook-Kaskade (nativ FA, Draft-only)
                     \Platform\FoodAlchemist\Tools\FoodbooksPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookKapitelPostTool::class,

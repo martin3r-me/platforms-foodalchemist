@@ -26,7 +26,9 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return 'Aktualisiert ein Rezept im Status stub/draft (Felder: name, description, preparation, '
             . 'taste_direction, work_time_min, yield_kg_manual, category_id). status="review" reicht '
             . 'den Entwurf zum menschlichen Review ein (einzige erlaubte Transition). Gepflegte Rezepte '
-            . '(review/approved/archived) sind für den MCP-Pfad locked.';
+            . '(review/approved/archived) sind für den MCP-Pfad locked. '
+            . '`preparation` (Markdown) wird beim Schreiben in Schritte geparst, ABER nur wenn das '
+            . 'Rezept noch keine hat — bestehende Schritte änderst du über foodalchemist.recipe_steps.PUT.';
     }
 
     public function getSchema(): array

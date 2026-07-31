@@ -14,7 +14,6 @@
         .rezept { margin: 16px 0; padding-bottom: 12px; border-bottom: 1px solid #ececec; }
         .rezept h2 { font-size: 14px; margin: 0 0 4px; color: #111827; }
         .rezept .meta { color: #6b7280; font-size: 11px; margin-bottom: 6px; }
-        .rezept .zubereitung { white-space: pre-line; }
         .rezept .darreichung { margin-top: 6px; font-size: 11px; color: #6b7280; }
         table.zutaten { width: 100%; border-collapse: collapse; margin-top: 6px; }
         table.zutaten th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; padding: 3px 6px; border-bottom: 1px solid #ececec; }
@@ -33,6 +32,7 @@
         .btn { display: inline-block; padding: 6px 12px; background: #6d28d9; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 6px; }
         .btn.ghost { background: #eee; color: #374151; }
         @media print { .actions { display: none; } body { padding: 0; } }
+@include('foodalchemist::dokumente.partials.schritt-karten-css')
     </style>
 </head>
 <body>
@@ -42,6 +42,11 @@
             <a class="btn" href="{{ request()->fullUrlWithQuery(['pdf' => 1]) }}">PDF herunterladen</a>
             <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['csv' => 1]) }}">CSV</a>
             <a class="btn ghost" href="javascript:window.print()">Drucken</a>
+            @if($mitFotos ?? true)
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['fotos' => 0]) }}">Anleitung ohne Fotos</a>
+            @else
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['fotos' => 1]) }}">Anleitung mit Fotos</a>
+            @endif
         </div>
     @endunless
 
@@ -78,7 +83,12 @@
                 </table>
             @endif
 
-            @if($z['zubereitung'])<div class="zubereitung">{{ $z['zubereitung'] }}</div>@endif
+            @include('foodalchemist::dokumente.partials.schritt-karten', [
+                'schritte' => $z['schritte'] ?? [],
+                'zubereitung' => $z['zubereitung'] ?? null,
+                'mitFotos' => $mitFotos ?? true,
+                'istPdf' => $istPdf ?? false,
+            ])
 
             @if($z['darreichung'])
                 <div class="darreichung">

@@ -214,6 +214,7 @@ class ProductionOrderService
                 'produzierte_menge_kg' => $r['produzierte_menge_kg'],
                 'arbeitszeit_min' => $r['arbeitszeit_min'],
                 'zubereitung' => $r['zubereitung'],
+                'steps_snapshot' => $r['schritte'] ?? null,   // Spec 27: Schrittfolge mit einfrieren
                 'darreichung' => $r['darreichung'],
                 'zutaten' => $r['zutaten'],
                 'note' => $existingNotes[$r['recipe_id']] ?? null,
@@ -359,6 +360,7 @@ class ProductionOrderService
                 'produzierte_menge_kg' => $l->produzierte_menge_kg !== null ? (float) $l->produzierte_menge_kg : null,
                 'arbeitszeit_min' => $l->arbeitszeit_min !== null ? (int) $l->arbeitszeit_min : null,
                 'zubereitung' => $l->zubereitung,
+                'schritte' => $l->steps_snapshot ?? [],   // Spec 27 (leer = Alt-Auftrag → Text-Fallback)
                 'darreichung' => $l->darreichung,
                 'zutaten' => $l->zutaten,
                 'note' => $l->note,
@@ -564,6 +566,7 @@ class ProductionOrderService
                 'produzierte_menge_kg' => $l->produzierte_menge_kg !== null ? (float) $l->produzierte_menge_kg : null,
                 'arbeitszeit_min' => $l->arbeitszeit_min !== null ? (int) $l->arbeitszeit_min : null,
                 'zubereitung' => $l->zubereitung,
+                'schritte' => $l->steps_snapshot ?? [],   // Spec 27 (leer = Alt-Auftrag → Text-Fallback)
                 'darreichung' => $l->darreichung,
                 'zutaten' => $l->zutaten,
             ])->all(),
