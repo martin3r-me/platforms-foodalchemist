@@ -167,6 +167,11 @@ return [
                     'route' => 'foodalchemist.einkauf.index',
                     'icon'  => 'heroicon-o-scale',
                 ],
+                [
+                    'label' => 'Wareneinsatz-Optimierung',
+                    'route' => 'foodalchemist.einkauf.optimierung',
+                    'icon'  => 'heroicon-o-sparkles',
+                ],
             ],
         ],
         [

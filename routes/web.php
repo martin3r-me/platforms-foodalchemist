@@ -73,6 +73,13 @@ Route::get('/einkauf', \Platform\FoodAlchemist\Livewire\Einkauf\Cockpit::class)
     ->name('foodalchemist.einkauf.index');
 
 /**
+ * Einkauf E4 — Wareneinsatz-Optimierung: Ist (Journal) vs. optimaler Bezug
+ * (günstigster Lieferant, ± Rückvergütung) + Top-Einsparpotenziale.
+ */
+Route::get('/einkauf/optimierung', \Platform\FoodAlchemist\Livewire\Einkauf\Optimierung::class)
+    ->name('foodalchemist.einkauf.optimierung');
+
+/**
  * #388 Geschirr-Datenbank (non-food) — Leih-Lieferant → Geschirr-Artikel,
  * Master-Detail nach Lieferanten-Vorbild. Auswahl/Suche in der URL (V-17).
  */
