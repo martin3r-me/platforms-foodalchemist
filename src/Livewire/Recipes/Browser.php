@@ -54,6 +54,56 @@ class Browser extends Component
     #[Url(as: 'zeilen')]
     public int $perPage = 100;
 
+    /**
+     * Spec 28 / E14: Spalten-ANSICHTEN statt frei zusammenstellbarer Spalten.
+     *
+     * Warum keine freie Spaltenwahl: die Auswahl ist der billige Teil — teuer wäre, jede Zelle
+     * adressierbar zu machen (Status ist ein Inline-Select mit Kurator-Prüfung, der Name trägt
+     * einen eigenen Klick-Pfad, die Zutaten-Zelle ein Warn-Pill). Benannte Ansichten treffen
+     * denselben Bedarf mit einem `@if` je Spalte, ohne Registry und ohne Migration, wenn eine
+     * Spalte umbenannt wird.
+     *
+     * Die Mitte ist eng, sobald das rechte Panel offen ist — deshalb ist jede Ansicht knapp
+     * gehalten. `#[Url]` wie alle Filter hier: die Ansicht ist damit verlinkbar.
+     */
+    #[Url(as: 'ansicht')]
+    public string $ansicht = 'standard';
+
+    /**
+     * Spalten-Katalog: Schlüssel => [Kopf, Ausrichtung]. „Name" steht immer und fehlt hier.
+     *
+     * DIE REIHENFOLGE HIER IST DIE ANZEIGE-REIHENFOLGE — und sie muss der Reihenfolge der
+     * <td> im Blade entsprechen. Der Kopf wird über DIESEN Katalog gebaut, nicht über die
+     * Ansicht: sonst steht der Kopf in Ansichts-Reihenfolge und die Zellen in Datei-Reihenfolge,
+     * und die Spalten sind versetzt (genau das ist beim Bau passiert — „€/kg" stand über dem
+     * Status-Select). Ansichten sind deshalb MENGEN, keine Ordnungen.
+     */
+    public const SPALTEN = [
+        'kategorie' => ['Kategorie', ''],
+        'geschmack' => ['Geschmack', ''],
+        'fertigung' => ['Fertigung', ''],
+        'ekkg' => ['€/kg', 'text-right'],       // kurzes Label: „EK / kg" kostete 141px Spaltenbreite
+        'yield' => ['Yield', 'text-right'],
+        'zutaten' => ['Zutaten', 'text-right'],
+        'allergen' => ['Allergen-Konf.', ''],
+        'status' => ['Status', ''],              // Steuer-Element, gehört ans Ende
+    ];
+
+    /** Ansichten: Schlüssel => [Label, sichtbare Spalten als MENGE]. */
+    public const ANSICHTEN = [
+        'standard' => ['Standard', ['kategorie', 'geschmack', 'ekkg', 'status']],
+        'kalkulation' => ['Kalkulation', ['kategorie', 'ekkg', 'yield', 'zutaten', 'status']],
+        'pflege' => ['Datenpflege', ['kategorie', 'fertigung', 'zutaten', 'allergen', 'status']],
+    ];
+
+    /** Sichtbare Spalten in KATALOG-Reihenfolge — unbekannte Ansicht fällt auf Standard zurück. */
+    public function spalten(): array
+    {
+        $menge = (self::ANSICHTEN[$this->ansicht] ?? self::ANSICHTEN['standard'])[1];
+
+        return array_values(array_filter(array_keys(self::SPALTEN), fn ($k) => in_array($k, $menge, true)));
+    }
+
     /** R6: Template-Filter (Jarvis-Sidebar «Templates») */
     #[Url(as: 'templates')]
     public bool $nurTemplates = false;
@@ -248,6 +298,10 @@ class Browser extends Component
 
         return view('foodalchemist::livewire.recipes.browser', [
             'rezepte' => $rezepte,
+            // E14: Spalten-Ansichten
+            'spalten' => $this->spalten(),
+            'spaltenKatalog' => self::SPALTEN,
+            'ansichten' => self::ANSICHTEN,
             'templateAnzahl' => \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()->where('is_template', true)->count(),
             'templateListe' => $this->templateWahlOffen
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()->where('is_template', true)->orderBy('name')->get(['id', 'name', 'yield_kg', 'n_ingredients_total'])

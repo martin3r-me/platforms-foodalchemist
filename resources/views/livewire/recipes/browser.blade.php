@@ -182,6 +182,15 @@
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                 <h3 class="font-medium tracking-tight text-gray-900">Basisrezepte</h3>
                 <span class="{{ $label }} flex items-center gap-2">
+                    {{-- E14: Ansichts-Schalter — knappe Spalten je Aufgabe statt einer Tabelle für alles --}}
+                    <span class="flex items-center gap-1" data-ansicht-schalter>
+                        @foreach($ansichten as $ak => [$al, $unused])
+                            <button type="button" wire:click="$set('ansicht', '{{ $ak }}')"
+                                    class="{{ $pill }} {{ $ansicht === $ak ? $variantPill['primary'] : $variantPill['secondary'] }}"
+                                    data-ansicht="{{ $ak }}">{{ $al }}</button>
+                        @endforeach
+                    </span>
+                    <span class="text-gray-300">·</span>
                     {{ number_format($rezepte->total(), 0, ',', '.') }} Treffer ·
                     <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 cursor-pointer focus:ring-0" data-per-page>
                         @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
@@ -193,8 +202,10 @@
                 <thead><tr class="text-left">
                     <th class="{{ $th }} !pr-0 w-8 sticky top-0 z-20 bg-white/95 backdrop-blur-xl"></th>
                     {{-- R13 (Jarvis-Dichte): Name flexibel, Zahlen rechtsbündig --}}
-                    @foreach([['Name', 'w-full'], ['Kategorie', ''], ['Geschmack', ''], ['Fertigung', ''], ['Status', ''], ['Zutaten', 'text-right'], ['Yield', 'text-right'], ['Allergen-Konf.', '']] as [$head, $align])
-                        <th class="{{ $th }} {{ $align }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $head }}</th>
+                    {{-- E14: Kopf folgt der aktiven Ansicht. „Name" steht immer. --}}
+                    <th class="{{ $th }} w-full sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
+                    @foreach($spalten as $sp)
+                        <th class="{{ $th }} {{ $spaltenKatalog[$sp][1] }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $spaltenKatalog[$sp][0] }}</th>
                     @endforeach
                 </tr></thead>
                 <tbody>
@@ -206,13 +217,23 @@
                                 <input type="checkbox" wire:model.live="auswahl.{{ $r->id }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-rezept-checkbox="{{ $r->id }}" />
                             </td>
                             {{-- R6: Namens-Klick öffnet direkt den Voll-Editor (Zeilen-Klick bleibt Panel-Selektion) --}}
-                            <td class="{{ $td }} font-medium w-full min-w-[18rem] break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
+                            <td class="{{ $td }} font-medium w-full min-w-[8rem] break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
                                 <span class="text-gray-900 hover:text-violet-600 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
                                 @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Template</span>@endif
                             </td>
-                            <td class="{{ $td }} text-[11px] italic text-gray-600 truncate max-w-[12rem] whitespace-nowrap">{{ $r->category?->label ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($r->taste_direction) }}</td>
-                            <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::fertigung($r->production_depth) }}</td>
+                            @if(in_array('kategorie', $spalten, true))<td class="{{ $td }} text-[11px] italic text-gray-600 truncate max-w-[5rem] whitespace-nowrap">{{ $r->category?->label ?? '—' }}</td>@endif
+                            @if(in_array('geschmack', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($r->taste_direction) }}</td>@endif
+                            @if(in_array('fertigung', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::fertigung($r->production_depth) }}</td>@endif
+                            @if(in_array('ekkg', $spalten, true))<td class="{{ $td }} text-gray-900 whitespace-nowrap text-right tabular-nums" title="Einkaufspreis je Kilogramm — die Kostenzahl des Rezepts">{{ $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') : '—' }}</td>@endif
+                            @if(in_array('yield', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap text-right tabular-nums">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '—' }}</td>@endif
+                            @if(in_array('zutaten', $spalten, true))<td class="{{ $td }} text-gray-600 text-right tabular-nums whitespace-nowrap">
+                                {{ $r->n_ingredients_total }}
+                                @if($r->n_ingredients_unmapped > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }} ml-1" title="ungemappte Zutaten — F7.1: Allergene unbekannt">{{ $r->n_ingredients_unmapped }}?</span>@endif
+                            </td>@endif
+                            @if(in_array('allergen', $spalten, true))<td class="{{ $td }}">
+                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</span>
+                            </td>@endif
+                            @if(in_array('status', $spalten, true))
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge — Auto-Zustand) --}}
                             <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
@@ -225,18 +246,10 @@
                                 @else
                                     <span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span>
                                 @endif
-                            </td>
-                            <td class="{{ $td }} text-gray-600 text-right tabular-nums whitespace-nowrap">
-                                {{ $r->n_ingredients_total }}
-                                @if($r->n_ingredients_unmapped > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }} ml-1" title="ungemappte Zutaten — F7.1: Allergene unbekannt">{{ $r->n_ingredients_unmapped }}?</span>@endif
-                            </td>
-                            <td class="{{ $td }} text-gray-600 whitespace-nowrap text-right tabular-nums">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '—' }}</td>
-                            <td class="{{ $td }}">
-                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</span>
-                            </td>
+                            </td>@endif
                         </x-foodalchemist::table-row>
                     @empty
-                        <tr><td colspan="9" class="px-5 py-10 text-center text-gray-500">Keine Rezepte gefunden.</td></tr>
+                        <tr><td colspan="{{ count($spalten) + 2 }}" class="px-5 py-10 text-center text-gray-500">Keine Rezepte gefunden.</td></tr>
                     @endforelse
                 </tbody>
             </table>
