@@ -556,6 +556,16 @@ class OrderService
         $order->status = $ziel;
         $order->save();
 
+        // Einkauf E2: FA-Einkauf → Journal. Storno entfernt die Ist-Buchungen; das Erreichen
+        // des konfigurierten Auslöse-Status (sent|delivered, TeamSettingsService) spiegelt die
+        // Zeilen als Ist-Einkäufe (idempotent). So zählt der in FA getätigte Einkauf auf Spend.
+        $journal = app(\Platform\FoodAlchemist\Services\PurchaseJournalService::class);
+        if ($ziel === OrderStatus::Cancelled) {
+            $journal->entferneOrder($order);
+        } elseif ($ziel->value === app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->purchaseJournalTrigger($team)) {
+            $journal->spiegelOrder($order);
+        }
+
         return $order;
     }
 

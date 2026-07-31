@@ -402,6 +402,14 @@ class TeamSettingsService
         return $v !== null && (float) $v > 0 ? (float) $v : self::PREIS_ALARM_SCHWELLE_DEFAULT;
     }
 
+    /** Einkauf E2: Ab welchem Bestell-Status wird ins Einkaufsjournal gebucht — 'sent' | 'delivered' (Default). */
+    public function purchaseJournalTrigger(Team $team): string
+    {
+        $v = (string) ($this->for($team)->purchase_journal_trigger ?? '');
+
+        return in_array($v, ['sent', 'delivered'], true) ? $v : 'delivered';
+    }
+
     /** R2.5: max. relatives VK-Delta (%) ggü. freigegebenem Snapshot, ab dem „VK-Anpassung empfohlen" feuert. Default 5 %. */
     public function maxVkDeltaPct(Team $team): float
     {
