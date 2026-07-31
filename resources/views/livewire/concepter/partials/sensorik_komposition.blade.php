@@ -44,7 +44,7 @@
                             <div class="flex flex-wrap gap-1">
                                 @foreach($sensorik['textur'] as $t)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $t['label'] }}</span>@endforeach
                             </div>
-                            @if($sensorik['monotonie'] ?? null)<p class="text-[11px] text-amber-600 mt-1.5">⚠ {{ $sensorik['monotonie'] }}</p>@endif
+                            @if($sensorik['monotonie'] ?? null)<p class="text-[11px] text-amber-600 mt-1.5">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $sensorik['monotonie'] }}</p>@endif
                         </div>
                     @endif
                 </div>

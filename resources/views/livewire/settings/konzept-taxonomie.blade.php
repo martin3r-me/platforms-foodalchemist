@@ -35,7 +35,7 @@
                         @else
                             <button type="button" wire:click="katWaehlen({{ $kat['id'] }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $kat['name'] }}</button>
                             <span class="text-[11px] text-gray-500 shrink-0" title="Unterkategorien">{{ $kinder }}</span>
-                            <button type="button" wire:click="katEditStart({{ $kat['id'] }}, @js($kat['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="katEditStart({{ $kat['id'] }}, @js($kat['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
                             <button type="button" wire:click="katLoeschen({{ $kat['id'] }})" wire:confirm="Kategorie „{{ $kat['name'] }}" löschen? (Unterkategorien & Concepts rücken zum Eltern)" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 text-[11px] px-1" title="Löschen">✕</button>
                         @endif
                     </div>
@@ -110,7 +110,7 @@
                         @else
                             <button type="button" wire:click="klasseWaehlen({{ $kl['id'] }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $kl['name'] }}</button>
                             <span class="text-[11px] text-gray-500 shrink-0" title="Unterklassen">{{ $kinder }}</span>
-                            <button type="button" wire:click="klasseEditStart({{ $kl['id'] }}, @js($kl['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="klasseEditStart({{ $kl['id'] }}, @js($kl['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
                             <button type="button" wire:click="klasseLoeschen({{ $kl['id'] }})" wire:confirm="Klasse „{{ $kl['name'] }}" löschen? (Unterklassen rücken zum Eltern)" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 text-[11px] px-1" title="Löschen">✕</button>
                         @endif
                     </div>

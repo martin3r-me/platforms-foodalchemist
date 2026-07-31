@@ -145,7 +145,7 @@
                                 @if($selected->category === 'cross_cutting' && $autoGeladen === false)
                                     {{-- #469 Chip-Wahrheit: cross_cutting lädt zur Laufzeit NUR die 7 Kern-Files --}}
                                     <span class="text-[11px] text-amber-600" data-wissen-auto-warnung>
-                                        ⚠ Die Laufzeit lädt automatisch nur die 7 Kern-cross_cutting-Files
+                                        @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Die Laufzeit lädt automatisch nur die 7 Kern-cross_cutting-Files
                                         (Substitutionen, Saisonkalender, Synonyme, Sauce-Mutterstrukturen, Mengen-Defaults, Techniken, Brühen&nbsp;/&nbsp;Fonds).
                                         Dieses Doc gehört <strong>nicht</strong> dazu → es wirkt erst, wenn du es unten an einen Einsatzort bindest.
                                     </span>

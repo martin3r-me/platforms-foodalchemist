@@ -386,13 +386,13 @@
 
                     {{-- Export / Versand --}}
                     <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-black/5">
-                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhostXs }}">🖨 Dokument</a>
+                        <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhostXs }}">@svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Dokument</a>
                         <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'pdf' => 1]) }}" class="{{ $btnGhostXs }}">PDF</a>
                         <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'csv' => 1]) }}" class="{{ $btnGhostXs }}">CSV</a>
                         @if($mailto)
-                            <a href="{{ $mailto }}" class="{{ $btnGhostXs }}">✉ E-Mail</a>
+                            <a href="{{ $mailto }}" class="{{ $btnGhostXs }}">@svg('heroicon-o-envelope', 'w-3.5 h-3.5 inline-block align-middle') E-Mail</a>
                         @else
-                            <span class="text-[10px] text-gray-400">✉ keine Bestell-Mail (Lieferant → email_order)</span>
+                            <span class="text-[10px] text-gray-400">@svg('heroicon-o-envelope', 'w-3.5 h-3.5 inline-block align-middle') keine Bestell-Mail (Lieferant → email_order)</span>
                         @endif
                     </div>
                 @endif

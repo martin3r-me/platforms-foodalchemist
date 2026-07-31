@@ -28,7 +28,7 @@
 <div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04]" data-signal-panel>
     @if($sig === null)
         <div class="text-center text-xs text-gray-500 py-12">
-            <div class="text-2xl mb-2">🔔</div>
+            <div class="text-2xl mb-2">@svg('heroicon-o-bell-alert', 'w-3.5 h-3.5 inline-block align-middle')</div>
             Signal in der Liste auf „Reinschauen" klicken —<br>betroffene Objekte erscheinen hier.
         </div>
     @else
@@ -188,7 +188,7 @@
                                                         class="w-full flex items-center gap-1.5 text-left rounded-md px-1.5 py-1 transition-colors {{ $os['id'] === $sig->id ? 'bg-black/[0.05]' : 'hover:bg-black/[0.03]' }}">
                                                     <span class="shrink-0 grid place-items-center w-5 h-5 rounded-md {{ $osSv['tint'] }}">@svg($os['icon'], 'w-3 h-3')</span>
                                                     <span class="min-w-0 flex-1 truncate text-[11px] {{ $os['id'] === $sig->id ? 'font-medium text-gray-800' : 'text-gray-600' }}">{{ $os['label'] }}</span>
-                                                    @if($os['hat_ki'])<span class="shrink-0 text-[9px] text-violet-500" title="KI-Schritt vorhanden">✨</span>@endif
+                                                    @if($os['hat_ki'])<span class="shrink-0 text-[9px] text-violet-500" title="KI-Schritt vorhanden">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle')</span>@endif
                                                     @if($os['id'] === $sig->id)<span class="shrink-0 text-[9px] text-gray-400">hier</span>@endif
                                                 </button>
                                             @endforeach

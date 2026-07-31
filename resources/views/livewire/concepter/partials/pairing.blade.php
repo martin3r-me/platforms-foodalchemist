@@ -28,7 +28,7 @@
                     <p class="text-xs text-gray-700"><span class="text-gray-500">Schwächstes Paar:</span> {{ $pairing['weakest_pair']['a'] }} ↔ {{ $pairing['weakest_pair']['b'] }} <span class="text-gray-500">({{ $pairing['weakest_pair']['score'] }}/100)</span></p>
                 @endif
                 @if(count($pairing['orphans']))
-                    <p class="text-[11px] text-amber-600">⚠ Ohne bewertete Verbindung: {{ implode(' · ', $pairing['orphans']) }}</p>
+                    <p class="text-[11px] text-amber-600">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Ohne bewertete Verbindung: {{ implode(' · ', $pairing['orphans']) }}</p>
                 @endif
             </div>
         </div>

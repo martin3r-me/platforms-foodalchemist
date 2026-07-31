@@ -41,7 +41,7 @@
         </div>
         @if(($anreicherung['fehler'] ?? null) !== null)
             <p class="text-[11px] text-amber-700 mt-1.5" data-oneshot-fehler>
-                ⚠️ Anreicherung unvollständig: {{ $anreicherung['fehler'] }} — das Rezept selbst ist fertig und geerdet, die restlichen Felder bleiben offen.
+                @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')️ Anreicherung unvollständig: {{ $anreicherung['fehler'] }} — das Rezept selbst ist fertig und geerdet, die restlichen Felder bleiben offen.
             </p>
         @elseif(($anreicherung['uebernommen'] ?? 0) === 0 && count($anreicherung['schritte'] ?? []) === 0)
             <p class="text-[11px] text-gray-500 mt-1.5">Alle Ziel-Felder waren schon belegt — kein zusätzlicher KI-Call nötig.</p>
@@ -52,7 +52,7 @@
             <div class="mt-2" data-oneshot-kohaerenz>
                 @if($koh['score'] !== null)
                     <div class="flex flex-wrap items-center gap-1.5">
-                        <span class="{{ $pill }} {{ $koh['score'] >= 70 ? $variantPill['success'] : ($koh['score'] >= 50 ? $variantPill['warning'] : $variantPill['danger']) }}">🍽️ Kohärenz {{ $koh['score'] }} / 100</span>
+                        <span class="{{ $pill }} {{ $koh['score'] >= 70 ? $variantPill['success'] : ($koh['score'] >= 50 ? $variantPill['warning'] : $variantPill['danger']) }}">@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')️ Kohärenz {{ $koh['score'] }} / 100</span>
                         @if($koh['label'] !== null)<span class="text-[11px] text-gray-600">{{ $koh['label'] }}</span>@endif
                     </div>
                     @if($koh['schwachstelle'] !== null)
@@ -60,7 +60,7 @@
                     @endif
                 @else
                     <p class="text-[11px] text-amber-700" data-oneshot-kohaerenz-fehler>
-                        ⚠️ Kohärenz-Urteil offen: {{ $koh['fehler'] }} — im VK-Detail über «Kohärenz prüfen» nachholen.
+                        @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')️ Kohärenz-Urteil offen: {{ $koh['fehler'] }} — im VK-Detail über «Kohärenz prüfen» nachholen.
                     </p>
                 @endif
             </div>
@@ -75,12 +75,12 @@
             <div class="mt-2" data-oneshot-wirtschaftlichkeit>
                 @if(($w['fehler'] ?? null) !== null)
                     <p class="text-[11px] text-amber-700" data-oneshot-wirtschaft-fehler>
-                        ⚠️ Kalkulation offen: {{ $w['fehler'] }} — das Gericht steht, der Preis wird im VK-Editor nachgezogen.
+                        @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')️ Kalkulation offen: {{ $w['fehler'] }} — das Gericht steht, der Preis wird im VK-Editor nachgezogen.
                     </p>
                 @else
                     <div class="flex flex-wrap items-center gap-1.5">
                         @if(($w['sales_net'] ?? null) !== null)
-                            <span class="{{ $pill }} {{ $variantPill['success'] }}" data-oneshot-vk>💰 VK {{ number_format((float) $w['sales_net'], 2, ',', '.') }} €</span>
+                            <span class="{{ $pill }} {{ $variantPill['success'] }}" data-oneshot-vk>@svg('heroicon-o-currency-euro', 'w-3 h-3 inline-block align-middle') VK {{ number_format((float) $w['sales_net'], 2, ',', '.') }} €</span>
                         @endif
                         @if(($w['wareneinsatz_pct'] ?? null) !== null)
                             {{-- Dieselbe Leiter wie das Signal (L8a Entscheidung 4): über Ziel = gelb, über 1,5 × Ziel = rot --}}
@@ -100,7 +100,7 @@
                     @endif
                     @if(count($w['luecken'] ?? []) > 0)
                         <p class="text-[11px] text-amber-700 mt-0.5" data-oneshot-wirtschaft-luecken>
-                            ⚠️ Kein Auto-VK: {{ implode(' + ', array_map(fn ($l) => $lueckenText[$l] ?? $l, $w['luecken'])) }} fehlt — im VK-Editor setzen, der Preis rechnet sich dann selbst.
+                            @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')️ Kein Auto-VK: {{ implode(' + ', array_map(fn ($l) => $lueckenText[$l] ?? $l, $w['luecken'])) }} fehlt — im VK-Editor setzen, der Preis rechnet sich dann selbst.
                         </p>
                     @endif
                     @if($w['signal'] ?? false)
@@ -116,7 +116,7 @@
                     @if(($w['ziel_vk'] ?? null) !== null)
                         <div class="mt-1.5 pt-1.5 border-t border-black/5" data-oneshot-ziel-vk>
                             <div class="flex flex-wrap items-center gap-1.5">
-                                <span class="{{ $pill }} {{ $variantPill['info'] }}">🎯 Ziel-VK {{ number_format((float) $w['ziel_vk'], 2, ',', '.') }} €</span>
+                                <span class="{{ $pill }} {{ $variantPill['info'] }}">@svg('heroicon-o-flag', 'w-3.5 h-3.5 inline-block align-middle') Ziel-VK {{ number_format((float) $w['ziel_vk'], 2, ',', '.') }} €</span>
                                 @if(($w['ziel_wareneinsatz_pct'] ?? null) !== null)
                                     <span class="{{ $pill }} {{ $ampelPill[$w['ziel_ampel'] ?? ''] ?? $variantPill['secondary'] }}" data-oneshot-ziel-we>
                                         bei Ziel-VK: W {{ number_format((float) $w['ziel_wareneinsatz_pct'], 1, ',', '.') }} % / Ziel {{ number_format((float) ($w['ziel_pct'] ?? 0), 0, ',', '.') }} %

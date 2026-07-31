@@ -38,7 +38,7 @@
                         @endforeach
                         <td class="{{ $td }} !px-2">
                             @if($ak->formula_type === 'deckungsbeitrag')
-                                <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="W-1: Formel nicht definiert — Entscheid bei Dominique">deckungsbeitrag ⚠</span>
+                                <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="W-1: Formel nicht definiert — Entscheid bei Dominique">deckungsbeitrag @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')</span>
                             @else
                                 <span class="{{ $pill }} {{ $variantPill['secondary'] }}">aufschlag</span>
                             @endif

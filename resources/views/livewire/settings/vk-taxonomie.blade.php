@@ -29,7 +29,7 @@
                         </button>
                         <span class="text-[11px] text-gray-500 shrink-0">{{ $nKl }}</span>
                         @if($darfEditHg)
-                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">✎</button>
+                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
                             <button type="button" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" @disabled($nKl > 0)
                                     class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $nKl > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-500' }}"
                                     title="{{ $nKl > 0 ? 'Hat Klassen — erst dort entfernen' : 'löschen' }}">✕</button>

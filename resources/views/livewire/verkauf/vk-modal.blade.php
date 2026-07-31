@@ -238,7 +238,7 @@
                                                 @elseif($mv['status'] === 'grounded')
                                                     <span class="text-emerald-600" title="Wird beim Übernehmen automatisch verknüpft">→ {{ $mv['kind'] === 'gp' ? 'GP' : 'Rezept' }}: {{ $mv['ziel'] ?? '—' }}</span>
                                                 @else
-                                                    <span class="text-violet-600" title="Kein Bestandstreffer — nach dem Übernehmen anlegen">⚠ {{ $mv['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}{{ ($mv['shortlist'] ?? 0) > 0 ? ' · ' . $mv['shortlist'] . ' Kandidaten' : '' }}</span>
+                                                    <span class="text-violet-600" title="Kein Bestandstreffer — nach dem Übernehmen anlegen">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $mv['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}{{ ($mv['shortlist'] ?? 0) > 0 ? ' · ' . $mv['shortlist'] . ' Kandidaten' : '' }}</span>
                                                 @endif
                                             @endif
                                         </p>
@@ -443,7 +443,7 @@
                         </td>
                         <td class="py-1.5 pr-2 text-right">
                             @if($d->deltas->count() > 0)
-                                <span class="tabular-nums text-gray-600" title="Ergibt sich automatisch aus der Komponenten-Summe (⚙)">{{ $d->quantity_per_unit_g !== null ? number_format($d->quantity_per_unit_g, 0, ',', '.') : '—' }} <span class="text-[10px] text-gray-500">Σ</span></span>
+                                <span class="tabular-nums text-gray-600" title="Ergibt sich automatisch aus der Komponenten-Summe">{{ $d->quantity_per_unit_g !== null ? number_format($d->quantity_per_unit_g, 0, ',', '.') : '—' }} <span class="text-[10px] text-gray-500">Σ</span></span>
                             @else
                                 <input type="text" wire:model.blur="darForm.{{ $d->id }}.quantity_pro_unit_g"
                                        wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />

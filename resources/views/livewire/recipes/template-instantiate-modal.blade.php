@@ -69,7 +69,7 @@
             </div>
             @if($gebundenAnzahl < $slotAnzahl)
                 <p class="text-[11px] text-amber-600 mt-2" data-template-warnung>
-                    ⚠ {{ $slotAnzahl - $gebundenAnzahl }} Platzhalter ungebunden — die Instanz bleibt insoweit neutral (status draft, später nachpflegbar).
+                    @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $slotAnzahl - $gebundenAnzahl }} Platzhalter ungebunden — die Instanz bleibt insoweit neutral (status draft, später nachpflegbar).
                 </p>
             @endif
         </x-foodalchemist::modal-section>

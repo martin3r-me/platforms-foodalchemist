@@ -8,10 +8,10 @@
     @php($sQuelle = $sensorik['source'] ?? 'roh')
     <div class="flex items-center gap-2 mb-2 flex-wrap">
         @if($sQuelle === 'ki')
-            <span class="{{ $pill }} {{ $variantPill['success'] }}">✨ KI-bewertet · gegart</span>
+            <span class="{{ $pill }} {{ $variantPill['success'] }}">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI-bewertet · gegart</span>
             @if(($sensorik['confidence'] ?? null) !== null)<span class="text-[11px] text-gray-500">Konfidenz {{ number_format((float) $sensorik['confidence'], 2, ',', '.') }}</span>@endif
         @elseif($sQuelle === 'manual')
-            <span class="{{ $pill }} {{ $variantPill['info'] }}">✎ manuell gesetzt · gegart</span>
+            <span class="{{ $pill }} {{ $variantPill['info'] }}">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle') manuell gesetzt · gegart</span>
         @elseif($sQuelle === 'gp')
             <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Grundprodukt · Roh-Profil</span>
         @else
@@ -48,7 +48,7 @@
                         {{-- Erdung: Achsen, die auf dem Etikett stehen, sind gerechnet (LA-Nährwerte), nicht geschätzt. --}}
                         @if(count($sensorik['erdung'] ?? []))
                             <div class="rounded-lg border border-emerald-600/20 bg-emerald-50/60 px-2.5 py-2">
-                                <p class="text-[11px] font-medium text-emerald-800 mb-1">📊 Aus LA-Nährwerten gemessen</p>
+                                <p class="text-[11px] font-medium text-emerald-800 mb-1">@svg('heroicon-o-chart-bar', 'w-3.5 h-3.5 inline-block align-middle') Aus LA-Nährwerten gemessen</p>
                                 <ul class="space-y-1">
                                     @foreach($sensorik['erdung'] as $dim => $e)
                                         <li class="text-[11px] {{ $e['angewendet'] ? 'text-emerald-900/80' : 'text-emerald-900/50' }}">
@@ -56,7 +56,7 @@
                                             <span class="opacity-70">· {{ $e['basis'] }}</span>
                                             @unless($e['angewendet'])<span class="opacity-70">· geschätzt</span>@endunless
                                             @if($e['konflikt'])
-                                                <span class="block text-amber-700">⚠ {{ $e['konflikt'] }}</span>
+                                                <span class="block text-amber-700">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $e['konflikt'] }}</span>
                                             @endif
                                         </li>
                                     @endforeach
@@ -80,7 +80,7 @@
                                 <p class="text-[11px] text-gray-500">Keine Textur-Daten.</p>
                             @endif
                             @if($sensorik['monotonie'])
-                                <p class="text-[11px] text-amber-600 mt-1.5">⚠ {{ $sensorik['monotonie'] }}</p>
+                                <p class="text-[11px] text-amber-600 mt-1.5">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $sensorik['monotonie'] }}</p>
                             @endif
                         </div>
                     </div>

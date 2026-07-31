@@ -42,7 +42,7 @@
                                 <input type="text" wire:model="editKatName" wire:keydown.enter="kategorieRename" wire:blur="kategorieRename" class="{{ $input }} py-0.5 flex-1" autofocus />
                             @else
                                 <button type="button" wire:click="kategorieWaehlen('{{ $kat['id'] }}')" class="flex-1 min-w-0 text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $categoryFilter === (string) $kat['id'] ? $katAktiv : $katHover }}">{{ $kat['name'] }}</button>
-                                <button type="button" wire:click="kategorieEditStart({{ $kat['id'] }}, @js($kat['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px]" title="umbenennen">✎</button>
+                                <button type="button" wire:click="kategorieEditStart({{ $kat['id'] }}, @js($kat['name']))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px]" title="umbenennen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
                                 <button type="button" wire:click="kategorieLoeschen({{ $kat['id'] }})" wire:confirm="Kategorie löschen? (Untergruppen & Concepts rücken zum Eltern)" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 text-[11px]" title="löschen">✕</button>
                             @endif
                         </div>
@@ -193,7 +193,7 @@
                 </div>
                 <div class="flex gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
-                    <button type="button" wire:click="zielpreisToggle" class="{{ $btnGhost }} {{ $zielModus ? 'text-violet-600' : '' }}">🎯 Zielpreis</button>
+                    <button type="button" wire:click="zielpreisToggle" class="{{ $btnGhost }} {{ $zielModus ? 'text-violet-600' : '' }}">@svg('heroicon-o-flag', 'w-3.5 h-3.5 inline-block align-middle') Zielpreis</button>
                     <button type="button" wire:click="loeschen({{ $selected->id }})" wire:confirm="Concept löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
                 </div>
 

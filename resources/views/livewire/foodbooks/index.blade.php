@@ -43,7 +43,7 @@
                         {{-- UX 2026-07-21: Rücksprung auf den übergeordneten Foodbook-Kopf (Stammdaten/Briefing/Canvas/Gerüst) --}}
                         <button type="button" wire:click="kopfAnzeigen"
                                 class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $selectedKapitelId === null ? $aktiv : $hover }}"
-                                data-fb-kopf>📋 Foodbook-Kopf · Übersicht</button>
+                                data-fb-kopf>@svg('heroicon-o-clipboard-document-list', 'w-3.5 h-3.5 inline-block align-middle') Foodbook-Kopf · Übersicht</button>
                         <div class="flex items-center gap-1">
                             <input type="text" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu" placeholder="Neues Kapitel …" class="{{ $input }} py-0.5" />
                             <button type="button" wire:click="kapitelNeu" class="{{ $btnGhostXs }}" title="Top-Kapitel">+</button>
@@ -111,9 +111,10 @@
                      Foodbook, daher auf Tab-Ebene (aus allen Tabs erreichbar), nicht im Briefing-Tab vergraben. --}}
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div class="flex flex-wrap gap-1" role="tablist">
-                        @foreach(['briefing' => '📋 Briefing', 'planung' => '🎯 Planung', 'kreativ' => '🎨 Kreativ', 'trend' => '📈 Trend', 'branding' => '🏷 Branding/CI', 'preise' => '💶 Preise', 'vorschau' => '🍽 Vorschau'] as $tk => $tl)
+                        @php($fbTabIcon = ['briefing' => 'heroicon-o-clipboard-document-list', 'planung' => 'heroicon-o-flag', 'kreativ' => 'heroicon-o-swatch', 'trend' => 'heroicon-o-presentation-chart-line', 'branding' => 'heroicon-o-tag', 'preise' => 'heroicon-o-currency-euro', 'vorschau' => 'heroicon-o-banknotes'])
+                        @foreach(['briefing' => 'Briefing', 'planung' => 'Planung', 'kreativ' => 'Kreativ', 'trend' => 'Trend', 'branding' => 'Branding/CI', 'preise' => 'Preise', 'vorschau' => 'Vorschau'] as $tk => $tl)
                             <button type="button" @click="tab = @js($tk)" :class="tab === @js($tk) ? '{{ $aktiv }}' : '{{ $hover }}'"
-                                    class="px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-fb-tab="{{ $tk }}">{{ $tl }}</button>
+                                    class="px-4 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5" data-fb-tab="{{ $tk }}">@svg($fbTabIcon[$tk], 'w-4 h-4') {{ $tl }}</button>
                         @endforeach
                     </div>
                     <div class="flex flex-wrap gap-2" data-fb-aktionen>
@@ -164,7 +165,7 @@
                      Doktrin: Vorschlag, nicht Zwang. LLM läuft über den Core-Contract; kein Provider → UI-Fehler. --}}
                 <div class="space-y-2 pt-2 border-t border-black/5" data-kickoff x-data="{ auf: false }">
                     <div class="flex items-center justify-between">
-                        <span class="{{ $label }} !mb-0">✨ Kickoff — Gerüst-Vorschlag aus Brief</span>
+                        <span class="{{ $label }} !mb-0">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') Kickoff — Gerüst-Vorschlag aus Brief</span>
                         <button type="button" @click="auf = !auf" class="{{ $btnGhostXs }}" x-text="auf ? 'Zuklappen' : 'Öffnen'"></button>
                     </div>
                     <div x-show="auf" x-cloak class="space-y-2">
@@ -353,7 +354,7 @@
                         @if(!empty($frameSlots))
                             <button type="button" @click="tab = 'kreativ'; $dispatch('fb-goto', { tab: 'kreativ', anker: 'ideen' })"
                                     class="{{ $btnGhost }} w-full justify-center text-violet-600" data-vorschlaege-forward>
-                                🎨 Gerichte je Kapitel im Kreativ-Tab skizzieren →
+                                @svg('heroicon-o-swatch', 'w-3.5 h-3.5 inline-block align-middle') Gerichte je Kapitel im Kreativ-Tab skizzieren →
                             </button>
                         @endif
                     @endif
@@ -367,7 +368,7 @@
                     <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" data-fb-skizzen>
                         <div class="{{ $cardAccent }}"></div>
                         <div class="flex items-baseline justify-between gap-2">
-                            <p class="{{ $label }}">🎨 Skizzen{{ $kapitel ? ' — '.$kapitel->title : '' }}</p>
+                            <p class="{{ $label }}">@svg('heroicon-o-swatch', 'w-3.5 h-3.5 inline-block align-middle') Skizzen{{ $kapitel ? ' — '.$kapitel->title : '' }}</p>
                             @if($kapitel)
                                 <label class="flex items-center gap-1 text-[11px] text-gray-500">
                                     <input type="checkbox" wire:model.live="ideenPapierkorb" class="rounded border-gray-300"> Papierkorb
@@ -384,10 +385,11 @@
                             <div class="space-y-1" data-fb-kreativ-modus>
                                 <div class="flex items-center gap-1.5 flex-wrap">
                                     <span class="text-[11px] text-gray-500 shrink-0 mr-0.5">Modus:</span>
-                                    @foreach(['voll_kreativ' => '🟣 Voll kreativ', 'hybrid' => '🔵 Hybrid', 'datenbank' => '🟢 Datenbank'] as $mk => $ml)
+                                    @php($fbModusPunkt = ['voll_kreativ' => 'bg-violet-500', 'hybrid' => 'bg-sky-500', 'datenbank' => 'bg-emerald-500'])
+                                    @foreach(['voll_kreativ' => 'Voll kreativ', 'hybrid' => 'Hybrid', 'datenbank' => 'Datenbank'] as $mk => $ml)
                                         <button type="button" wire:click="kreativModusSetzen('{{ $mk }}')"
                                             class="rounded-full px-2.5 py-1 text-[11px] border transition {{ $km === $mk ? 'border-violet-500 bg-violet-500/10 text-violet-700 font-medium' : 'border-gray-200 text-gray-500 hover:bg-black/[0.02]' }}"
-                                            data-fb-modus="{{ $mk }}" @if($km === $mk) aria-pressed="true" @endif>{{ $ml }}</button>
+                                            data-fb-modus="{{ $mk }}" @if($km === $mk) aria-pressed="true" @endif><span class="inline-flex items-center gap-1.5"><span class="inline-block w-1.5 h-1.5 rounded-full {{ $fbModusPunkt[$mk] }}"></span>{{ $ml }}</span></button>
                                     @endforeach
                                     @if(($kreativModus['quelle'] ?? null) === 'foodbook')<span class="text-[10px] text-gray-400">(vom Foodbook geerbt)</span>@endif
                                 </div>
@@ -443,7 +445,7 @@
                             @foreach($ideenListe['gruppen'] as $grp)
                                 <div class="rounded-lg border border-violet-500/20 bg-violet-500/[0.03] px-3 py-2 space-y-1" wire:key="grp-{{ $grp['gruppe']->id }}" data-paket="{{ $grp['gruppe']->id }}">
                                     <div class="flex items-center justify-between gap-2">
-                                        <span class="text-xs font-medium text-violet-800 truncate">📦 {{ $grp['gruppe']->name }}@if($grp['gruppe']->target_price_pp !== null)<span class="text-[10px] text-gray-500"> · {{ number_format((float) $grp['gruppe']->target_price_pp, 2, ',', '.') }} €/Gast</span>@endif</span>
+                                        <span class="text-xs font-medium text-violet-800 truncate">@svg('heroicon-o-archive-box', 'w-3.5 h-3.5 inline-block align-middle') {{ $grp['gruppe']->name }}@if($grp['gruppe']->target_price_pp !== null)<span class="text-[10px] text-gray-500"> · {{ number_format((float) $grp['gruppe']->target_price_pp, 2, ',', '.') }} €/Gast</span>@endif</span>
                                         <button type="button" wire:click="paketAufloesen({{ $grp['gruppe']->id }})" class="{{ $btnGhostXs }} text-gray-400 shrink-0" title="Paket auflösen">Paket auflösen</button>
                                     </div>
                                     @foreach($grp['ideen'] as $idee)
@@ -471,7 +473,7 @@
                         <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" data-fb-pairing-inspiration>
                             <div class="{{ $cardAccent }}"></div>
                             <div class="flex items-baseline justify-between gap-2">
-                                <p class="{{ $label }}">🧭 Pairing-Inspiration</p>
+                                <p class="{{ $label }}">@svg('heroicon-o-map', 'w-3.5 h-3.5 inline-block align-middle') Pairing-Inspiration</p>
                                 <span class="text-[10px] uppercase tracking-wide text-gray-400">{{ ($kreativModus['geerdet'] ?? false) ? 'geerdet' : 'abstrakt' }}</span>
                             </div>
                             <div class="flex items-center gap-2">
@@ -923,16 +925,16 @@
                                                 <span class="text-gray-600">· {{ $block->price_basis === 'staffel' ? 'Staffel' : number_format((float) ($block->price_value ?? 0), 2, ',', '.') . ' € ' . ($block->price_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
                                                 @break
                                             @case('spacer') <span class="italic text-gray-500">Leerzeile ({{ $block->height ?? 'mittel' }})</span> @break
-                                            @case('image') <span class="text-gray-600">🖼 Bild</span> @break
+                                            @case('image') <span class="text-gray-600">@svg('heroicon-o-photo', 'w-3.5 h-3.5 inline-block align-middle') Bild</span> @break
                                             @default <span class="italic">{{ \Illuminate\Support\Str::limit($block->customer_text ?? '(Text)', 80) }}</span>
                                         @endswitch
                                     </span>
                                     @if($block->variant_group_id)<button type="button" wire:click="wahlGruppeAufheben({{ $block->id }})" class="{{ $pill }} {{ $variantPill['warning'] }} shrink-0" title="aus Wahl-Gruppe">Wahl #{{ $block->variant_group_id }}</button>@endif
                                     <button type="button" wire:click="blockEbene({{ $block->id }}, -1)" class="text-gray-500 hover:text-violet-500 shrink-0" title="ausrücken">←</button>
                                     <button type="button" wire:click="blockEbene({{ $block->id }}, 1)" class="text-gray-500 hover:text-violet-500 shrink-0" title="einrücken">→</button>
-                                    <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="shrink-0 text-[10px] {{ $block->visible ? 'text-gray-500' : 'text-amber-500' }}" title="sichtbar/intern">{{ $block->visible ? '👁' : 'intern' }}</button>
+                                    <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="shrink-0 text-[10px] {{ $block->visible ? 'text-gray-500' : 'text-amber-500' }}" title="sichtbar/intern">@if($block->visible)@svg('heroicon-o-eye', 'w-3.5 h-3.5 inline-block align-middle')@else intern @endif</button>
                                     @if($block->type !== 'spacer')
-                                        <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-violet-500" title="bearbeiten / Notiz">✎</button>
+                                        <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-violet-500" title="bearbeiten / Notiz">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
                                     @endif
                                     <button type="button" wire:click="blockRaus({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-red-500" title="entfernen">✕</button>
                                 </div>
@@ -963,7 +965,7 @@
                                             <div class="flex gap-1.5 items-start">
                                                 <textarea wire:model="blockForm.customer_text" rows="2" class="{{ $input }}" placeholder="Beschreibungstext / Untertitel (kundensichtbar, optional)"></textarea>
                                                 @if($block->type === 'concept_ref')
-                                                    <button type="button" wire:click="kiKundentext" class="{{ $btnAi }} shrink-0 mt-0.5" title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" data-fb-ki-kundentext>✨</button>
+                                                    <button type="button" wire:click="kiKundentext" class="{{ $btnAi }} shrink-0 mt-0.5" title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" data-fb-ki-kundentext>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle')</button>
                                                 @endif
                                             </div>
                                         @endif

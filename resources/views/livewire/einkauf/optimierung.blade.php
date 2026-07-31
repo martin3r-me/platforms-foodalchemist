@@ -18,7 +18,7 @@
 
         @if($r['n_articles'] === 0)
             <div class="{{ $sectionCard }} text-center py-12">
-                <div class="text-3xl mb-2">📊</div>
+                <div class="text-3xl mb-2">@svg('heroicon-o-chart-bar', 'w-3.5 h-3.5 inline-block align-middle')</div>
                 <p class="text-sm text-gray-900 font-medium">Noch keine Einkäufe im Journal</p>
                 <p class="text-xs text-gray-500 mt-1">Sobald FA-Bestellungen geliefert oder Necta-Einkäufe importiert sind, vergleicht diese Seite den Ist-Wareneinsatz mit dem optimalen Bezug (günstigster Lieferant, ± Rückvergütung).</p>
             </div>

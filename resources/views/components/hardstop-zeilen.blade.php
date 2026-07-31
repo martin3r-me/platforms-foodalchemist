@@ -23,25 +23,25 @@
         @foreach($offene as $offen)
             @php($idx = (int) $offen['index'])
             <div class="rounded border border-gray-200 px-2 py-1.5" data-{{ $prefix }}hardstop="{{ $idx }}">
-                <p class="text-[11px] text-gray-700">🔴 {{ $offen['text'] }}</p>
+                <p class="text-[11px] text-gray-700 inline-flex items-center gap-1.5"><span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 align-middle"></span> {{ $offen['text'] }}</p>
                 <div class="flex flex-wrap items-center gap-1.5 mt-1">
                     @if(($offen['primaer'] ?? null) === 'basisrezept_anlegen')
                         <button type="button" wire:click="hardstopStubAnlegen({{ $idx }})"
                                 class="{{ $btnGhost }} text-[11px] py-0.5"
-                                data-{{ $prefix }}hardstop-stub="{{ $idx }}">🧩 Basisrezept anlegen</button>
+                                data-{{ $prefix }}hardstop-stub="{{ $idx }}">@svg('heroicon-o-puzzle-piece', 'w-3.5 h-3.5 inline-block align-middle') Basisrezept anlegen</button>
                     @else
                         <button type="button" wire:click="hardstopBeschaffen({{ $idx }})"
                                 class="{{ $btnGhost }} text-[11px] py-0.5"
-                                data-{{ $prefix }}hardstop-beschaffen="{{ $idx }}">📥 Beschaffung anstoßen</button>
+                                data-{{ $prefix }}hardstop-beschaffen="{{ $idx }}">@svg('heroicon-o-arrow-down-tray', 'w-3.5 h-3.5 inline-block align-middle') Beschaffung anstoßen</button>
                         <button type="button" wire:click="hardstopStubAnlegen({{ $idx }})"
                                 class="{{ $btnGhost }} text-[11px] py-0.5"
-                                data-{{ $prefix }}hardstop-stub="{{ $idx }}">🧩 Doch Basisrezept</button>
+                                data-{{ $prefix }}hardstop-stub="{{ $idx }}">@svg('heroicon-o-puzzle-piece', 'w-3.5 h-3.5 inline-block align-middle') Doch Basisrezept</button>
                     @endif
                     @if(count($offen['shortlist'] ?? []) > 0)
                         <button type="button" wire:click="toggleShortlist({{ $idx }})"
                                 class="{{ $btnGhost }} text-[11px] py-0.5"
                                 data-{{ $prefix }}hardstop-shortlist="{{ $idx }}">
-                            🤔 Meintest du? ({{ count($offen['shortlist']) }})
+                            @svg('heroicon-o-question-mark-circle', 'w-3.5 h-3.5 inline-block align-middle') Meintest du? ({{ count($offen['shortlist']) }})
                         </button>
                     @endif
                 </div>

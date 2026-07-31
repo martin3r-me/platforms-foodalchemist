@@ -38,7 +38,7 @@
         @if($kiFehler !== null)<p class="text-[11px] text-rose-500" data-ki-fehler>{{ $kiFehler }}</p>@endif
         @if($klasseVorschlag !== null)
             <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs" data-klasse-vorschlag>
-                <p class="text-gray-900">✨ Speisen-Klasse: <span class="font-medium">{{ $klasseVorschlag['klasse_name'] ?? 'kein sicherer Treffer' }}</span>
+                <p class="text-gray-900">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') Speisen-Klasse: <span class="font-medium">{{ $klasseVorschlag['klasse_name'] ?? 'kein sicherer Treffer' }}</span>
                     <span class="text-[11px] text-gray-500">· {{ round($klasseVorschlag['confidence'] * 100) }} %</span></p>
                 @if($klasseVorschlag['reasoning'] !== null)<p class="text-[11px] text-gray-500 mt-0.5">{{ $klasseVorschlag['reasoning'] }}</p>@endif
                 <div class="flex gap-1.5 mt-1.5">
@@ -122,7 +122,7 @@
             <p class="text-xs text-gray-400" data-formel-klartext>{{ $rezept->markupClass->code }} · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
         @endif
         @if($cockpit['formel_fehlt'])
-            <x-foodalchemist::alert tone="warning" data-formel-fehlt>⚠ Aufschlagsklasse {{ $rezept->markupClass?->code }}: Formel »deckungsbeitrag« nicht definiert (W-1) — Entscheid ausstehend, VK nur manuell.</x-foodalchemist::alert>
+            <x-foodalchemist::alert tone="warning" data-formel-fehlt>@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Aufschlagsklasse {{ $rezept->markupClass?->code }}: Formel »deckungsbeitrag« nicht definiert (W-1) — Entscheid ausstehend, VK nur manuell.</x-foodalchemist::alert>
         @elseif($rezept->ek_total_eur === null)
             <x-foodalchemist::alert tone="warning" data-cockpit-leer>Kein EK berechnet — Zutaten ergänzen oder Lead-LAs setzen.</x-foodalchemist::alert>
         @elseif($rezept->markupClass === null)

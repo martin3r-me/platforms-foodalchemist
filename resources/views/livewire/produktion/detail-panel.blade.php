@@ -94,7 +94,7 @@
                                 wire:change="updateLineNote({{ $z['id'] }}, $event.target.value)"
                                 class="{{ $input }} !py-1 mt-1" data-produktion-notiz="{{ $z['id'] }}" />
                         @elseif($z['note'])
-                            <p class="text-[11px] text-violet-600 mt-1">📝 {{ $z['note'] }}</p>
+                            <p class="text-[11px] text-violet-600 mt-1">@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5 inline-block align-middle') {{ $z['note'] }}</p>
                         @endif
                     </div>
                 @endforeach
@@ -152,7 +152,7 @@
                 <button type="button" wire:click="anBestellungUebergeben" class="{{ $btnGhost }}" data-produktion-uebergeben>→ An Bestellung übergeben</button>
             @endif
             @if(\Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument'))
-                <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhost }}" title="Gebündelte interne Doku: Produktionsschein + Einkauf (Lieferant/Gebinde/EK)">🖨 Doku (Produktion + Einkauf)</a>
+                <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhost }}" title="Gebündelte interne Doku: Produktionsschein + Einkauf (Lieferant/Gebinde/EK)">@svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Doku (Produktion + Einkauf)</a>
             @endif
         </div>
     @endif

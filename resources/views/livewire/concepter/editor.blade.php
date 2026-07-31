@@ -252,7 +252,7 @@
                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('basisrezept') }}">BR</span>
                                     <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" title="{{ $br->name }}">{{ $br->name }}</span>
                                     <span class="shrink-0 text-[10px] text-gray-500 tabular-nums">{{ $br->ek_total_eur !== null ? number_format((float) $br->ek_total_eur, 2, ',', '.') . ' €' : '' }}</span>
-                                    <button type="button" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $br->id }} })" class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Rezept einsehen">📖</button>
+                                    <button type="button" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $br->id }} })" class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Rezept einsehen">@svg('heroicon-o-book-open', 'w-3.5 h-3.5 inline-block align-middle')</button>
                                     <button type="button" wire:click="positionEinfuegen('basisrezept', {{ $br->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
                                 </div>
                             @empty
@@ -268,14 +268,14 @@
                             {{-- Einfügen läuft über die Listen links/rechts (wie im Gerichte-Editor) + „+ Paket"/Struktur oben. --}}
                             @if($einfuegenNachId !== null)
                                 <span x-show="bauModus" class="inline-flex items-center gap-1 text-[11px] text-violet-600" data-einfuege-ziel>
-                                    📍 Einfügen unter markierter Zeile
+                                    @svg('heroicon-o-map-pin', 'w-3.5 h-3.5 inline-block align-middle') Einfügen unter markierter Zeile
                                     <button type="button" wire:click="$set('einfuegenNachId', null)" class="underline decoration-dotted hover:text-violet-800">ans Ende</button>
                                 </span>
                             @endif
                             {{-- UX-Umbau 2026-07-03: Toggle Bearbeiten ⇄ Menü (Gäste-Perspektive mit aufgelöstem Wording) --}}
                             <div class="inline-flex rounded-lg bg-black/[0.05] p-0.5" role="group" aria-label="Ansicht" data-konzept-ansicht-toggle>
-                                <button type="button" @click="bauModus = true" :class="bauModus ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-600 hover:text-gray-700'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-ansicht-bearbeiten>⚙ Bearbeiten</button>
-                                <button type="button" @click="bauModus = false" :class="!bauModus ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-600 hover:text-gray-700'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-ansicht-menue>🍽 Menü</button>
+                                <button type="button" @click="bauModus = true" :class="bauModus ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-600 hover:text-gray-700'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-ansicht-bearbeiten>@svg('heroicon-o-adjustments-horizontal', 'w-3.5 h-3.5 inline-block align-middle') Bearbeiten</button>
+                                <button type="button" @click="bauModus = false" :class="!bauModus ? 'bg-white text-violet-600 shadow-sm' : 'text-gray-600 hover:text-gray-700'" class="px-3 py-1 text-[11px] font-medium rounded-md transition-all" data-ansicht-menue>@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle') Menü</button>
                             </div>
                         </div>
                     </div>
@@ -310,7 +310,7 @@
                                 @php($slotVks = collect($g['slots'])->map(fn ($sx) => $cockpitZeilen[$sx->id]['price'] ?? null)->filter())
                                 <div class="flex items-baseline gap-2 pb-2.5">
                                     @if($g['type'] === 'paket')
-                                        <span class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0">📦 Paket</span>
+                                        <span class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0">@svg('heroicon-o-archive-box', 'w-3.5 h-3.5 inline-block align-middle') Paket</span>
                                         <h4 class="text-sm font-semibold text-gray-900">{{ $g['title'] }}</h4>
                                         <span class="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{{ $g['paket']->dishes->count() }} {{ $g['paket']->dishes->count() === 1 ? 'Gericht' : 'Gerichte' }}{{ $g['price'] !== null ? ' · ' . number_format((float) $g['price'], 2, ',', '.') . ' €/P fix' : '' }}</span>
                                     @elseif($g['title'])
@@ -332,14 +332,14 @@
                                             <article wire:key="mpcard-{{ $pg->id }}" class="group relative rounded-xl bg-white/60 backdrop-blur-xl border border-white/20 shadow-sm shadow-black/5 px-3.5 py-3 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
                                                 <div class="flex items-start justify-between gap-2">
                                                     <span class="inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-wider {{ $qb[1] }}"><span class="w-1.5 h-1.5 rounded-full {{ $qb[2] }}"></span>{{ $qb[0] }}</span>
-                                                    @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" class="text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Gericht öffnen">🍽️</button>@endif
+                                                    @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" class="text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Gericht öffnen">@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')️</button>@endif
                                                 </div>
                                                 <p class="text-sm font-semibold text-gray-900 leading-snug mt-1 {{ $pw['source'] === 'name' ? 'italic text-amber-700 font-medium' : '' }}">{{ $pw['text'] }}</p>
                                                 <p class="text-[10.5px] text-gray-500 font-mono truncate mt-0.5" title="{{ $pgG?->name }}">{{ $pgG?->name }}</p>
                                                 <div class="flex flex-wrap items-center gap-1.5 mt-2">
                                                     @if($pgG?->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($pgG?->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
                                                     <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($pgEnthaelt) ? 'bg-amber-500/20 text-amber-700' : 'bg-black/5 text-gray-500' }}" title="Allergene / Diät{{ count($pgEnthaelt) ? ' — enthält ' . implode(', ', $pgEnthaelt) : '' }} · Konfidenz {{ $pgG?->allergens_confidence ?? 'unbekannt' }}">A</span>
-                                                    @if($pw['source'] === 'name')<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" class="{{ $pill }} {{ $variantPill['warning'] }}" title="VK-Wording am Gericht ergänzen">✎ Wording ergänzen</button>@endif
+                                                    @if($pw['source'] === 'name')<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" class="{{ $pill }} {{ $variantPill['warning'] }}" title="VK-Wording am Gericht ergänzen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle') Wording ergänzen</button>@endif
                                                 </div>
                                                 <div class="flex gap-3 mt-2.5 pt-2 border-t border-black/5 tabular-nums">
                                                     <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500">VK/P</span><span class="text-xs font-semibold text-gray-600">im Paket</span></span>
@@ -359,19 +359,19 @@
                                             <article wire:key="mcard-{{ $s->id }}" class="group relative rounded-xl bg-white/60 backdrop-blur-xl border border-white/20 shadow-sm shadow-black/5 px-3.5 py-3 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
                                                 <div class="flex items-start justify-between gap-2">
                                                     <span class="inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-wider {{ $qb[1] }}"><span class="w-1.5 h-1.5 rounded-full {{ $qb[2] }}"></span>{{ $qb[0] }}</span>
-                                                    <button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $s->sales_recipe_id }} })" class="text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Gericht öffnen">🍽️</button>
+                                                    <button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $s->sales_recipe_id }} })" class="text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Gericht öffnen">@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')️</button>
                                                 </div>
                                                 <p class="text-sm font-semibold text-gray-900 leading-snug mt-1 {{ $w['source'] === 'name' ? 'italic text-amber-700 font-medium' : '' }}">{{ $w['text'] }}</p>
                                                 <p class="text-[10.5px] text-gray-500 font-mono truncate mt-0.5" title="{{ $g0->name }}">{{ $g0->name }}</p>
                                                 <div class="flex flex-wrap gap-1.5 mt-2">
                                                     @if(isset($darreichungInfo[$s->id]))
-                                                        <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$s->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}">🍴 {{ $darreichungInfo[$s->id] }}</span>
+                                                        <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$s->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}">@svg('heroicon-o-rectangle-stack', 'w-3.5 h-3.5 inline-block align-middle') {{ $darreichungInfo[$s->id] }}</span>
                                                     @endif
                                                     @if($g0->dishClass)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g0->dishClass->label }}</span>@endif
                                                     @if($g0->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($g0->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
                                                     <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700' : 'bg-black/5 text-gray-500' }}" title="Allergene / Diät{{ count($enthaelt) ? ' — enthält ' . implode(', ', $enthaelt) : '' }} · Konfidenz {{ $g0->allergens_confidence ?? 'unbekannt' }}">A</span>
-                                                    @if(isset($varianteFehlt[$s->id]))<button type="button" wire:click="varianteAnlegen({{ $s->id }})" class="{{ $pill }} {{ $variantPill['warning'] }}" title="Konzept-Servierform fehlt als Darreichung — anlegen">⚠ Form fehlt</button>@endif
-                                                    @if($w['source'] === 'name')<button type="button" @click="bauModus = true" class="{{ $pill }} {{ $variantPill['warning'] }}" title="In der Bearbeiten-Ansicht Wording ergänzen">✎ Wording ergänzen</button>@endif
+                                                    @if(isset($varianteFehlt[$s->id]))<button type="button" wire:click="varianteAnlegen({{ $s->id }})" class="{{ $pill }} {{ $variantPill['warning'] }}" title="Konzept-Servierform fehlt als Darreichung — anlegen">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Form fehlt</button>@endif
+                                                    @if($w['source'] === 'name')<button type="button" @click="bauModus = true" class="{{ $pill }} {{ $variantPill['warning'] }}" title="In der Bearbeiten-Ansicht Wording ergänzen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle') Wording ergänzen</button>@endif
                                                 </div>
                                                 <div class="flex gap-3 mt-2.5 pt-2 border-t border-black/5 tabular-nums">
                                                     <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500">VK/P</span><span class="text-xs font-semibold text-emerald-600">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</span></span>
@@ -491,9 +491,9 @@
                                     <td class="{{ $td }} !px-2 align-top">
                                         @if($slot->package_id && $slot->package)
                                             {{-- Paket = Abschnitts-Header (Gerichte stehen als eingerückte Zeilen darunter) --}}
-                                            <span class="{{ $pill }} {{ $variantPill['info'] }}">📦 Paket</span>
+                                            <span class="{{ $pill }} {{ $variantPill['info'] }}">@svg('heroicon-o-archive-box', 'w-3.5 h-3.5 inline-block align-middle') Paket</span>
                                             <span class="text-sm font-semibold text-gray-900 break-words">{{ $slot->package->name }}</span>
-                                            <button type="button" wire:click="paketOeffnen({{ $slot->package_id }})" class="text-gray-500 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">📦</button>
+                                            <button type="button" wire:click="paketOeffnen({{ $slot->package_id }})" class="text-gray-500 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">@svg('heroicon-o-archive-box', 'w-3.5 h-3.5 inline-block align-middle')</button>
                                             @if($slot->package->class)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->package->class }}</span>@endif
                                             <span class="text-gray-500 text-[11px] tabular-nums">{{ $slot->package->price_per_person !== null ? number_format((float) $slot->package->price_per_person, 2, ',', '.') . ' €/P' : '' }}</span>
                                         @elseif($slot->sales_recipe_id && $slot->dish)
@@ -505,7 +505,7 @@
                                             @if($g->dishClass)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g->dishClass->label }}</span>@endif
                                             @if(isset($darreichungInfo[$slot->id]))
                                                 <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$slot->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}"
-                                                      title="Aufgelöste Darreichung dieser Position (explizit → Konzept-Servierform → Standard)" data-darreichung-pill>🍴 {{ $darreichungInfo[$slot->id] }}</span>
+                                                      title="Aufgelöste Darreichung dieser Position (explizit → Konzept-Servierform → Standard)" data-darreichung-pill>@svg('heroicon-o-rectangle-stack', 'w-3.5 h-3.5 inline-block align-middle') {{ $darreichungInfo[$slot->id] }}</span>
                                             @endif
                                             @if(isset($darreichungOptionen[$slot->id]))
                                                 {{-- A1: explizite Form nur für diese Position (auto = Konzept-Form/Standard) --}}
@@ -521,9 +521,9 @@
                                             @if($g->spec_is_vegan)<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>@elseif($g->spec_is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg.</span>@endif
                                             <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-medium align-middle {{ count($enthaelt) ? 'bg-amber-500/20 text-amber-700' : 'bg-black/5 text-gray-500' }}" title="{{ $allTitle }}">A</span>
                                             {{-- Phase 6: einsehen — Basisrezept → Rezept-Fenster, VK-Gericht → Gericht-Fenster (über dem Editor) --}}
-                                            <button type="button" @click="Livewire.dispatch('{{ $slot->type === 'basisrezept' ? 'recipe-modal' : 'vk-modal' }}.oeffnen', { id: {{ $slot->sales_recipe_id }} })" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="{{ $slot->type === 'basisrezept' ? 'Rezept' : 'Gericht' }} einsehen">{{ $slot->type === 'basisrezept' ? '📖' : '🍽️' }}</button>
+                                            <button type="button" @click="Livewire.dispatch('{{ $slot->type === 'basisrezept' ? 'recipe-modal' : 'vk-modal' }}.oeffnen', { id: {{ $slot->sales_recipe_id }} })" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="{{ $slot->type === 'basisrezept' ? 'Rezept' : 'Gericht' }} einsehen">@if($slot->type === 'basisrezept')@svg('heroicon-o-book-open', 'w-3.5 h-3.5 inline-block align-middle')@else @svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')@endif</button>
                                             {{-- R4.4: Zutaten-Baum (read-first) + konzept-lokale Slot-Variante --}}
-                                            <button type="button" wire:click="zutatenToggle({{ $slot->id }})" class="text-[11px] ml-1 align-middle {{ $zutatenOffenSlotId === $slot->id ? 'text-violet-600' : 'text-gray-300 hover:text-violet-500' }}" title="Zutaten-Zeilen zeigen (Tausch erzeugt eine konzept-lokale Variante — Quell-Gericht bleibt unangetastet)" data-slot-zutaten-toggle>🧾</button>
+                                            <button type="button" wire:click="zutatenToggle({{ $slot->id }})" class="text-[11px] ml-1 align-middle {{ $zutatenOffenSlotId === $slot->id ? 'text-violet-600' : 'text-gray-300 hover:text-violet-500' }}" title="Zutaten-Zeilen zeigen (Tausch erzeugt eine konzept-lokale Variante — Quell-Gericht bleibt unangetastet)" data-slot-zutaten-toggle>@svg('heroicon-o-list-bullet', 'w-3.5 h-3.5 inline-block align-middle')</button>
                                             @if($slot->variant_source_recipe_id !== null)
                                                 <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="Konzept-lokale Variante — das Quell-Gericht ist unverändert" data-slot-variiert>variiert</span>
                                                 <button type="button" wire:click="slotVarianteZuruecksetzen({{ $slot->id }})" wire:confirm="Variante verwerfen und Original-Gericht wiederherstellen?" class="text-[10px] text-gray-500 hover:text-rose-500 align-middle" data-slot-variante-reset>↩ Original</button>
@@ -532,7 +532,7 @@
                                             @if(isset($varianteFehlt[$slot->id]))
                                                 <button type="button" wire:click="varianteAnlegen({{ $slot->id }})"
                                                         class="{{ $pill }} {{ $variantPill['warning'] }}" data-variante-fehlt
-                                                        title="Gericht hat keine Darreichung für „{{ $concept->servingForm?->label }}" — Klick legt sie an (vorbefüllt aus der Standard-Form, danach Grammatur prüfen)">⚠ {{ $concept->servingForm?->label }} fehlt — anlegen</button>
+                                                        title="Gericht hat keine Darreichung für „{{ $concept->servingForm?->label }}" — Klick legt sie an (vorbefüllt aus der Standard-Form, danach Grammatur prüfen)">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $concept->servingForm?->label }} fehlt — anlegen</button>
                                             @endif
                                             {{-- Concept-Wording: Brand-Voice-Anzeigename je Position (leer = Standardname; ✨ oben füllt alle) --}}
                                             <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.wording" wire:change="wordingSpeichern({{ $slot->id }})" class="{{ $input }} !py-0.5 !text-[11px] italic mt-1 w-full" placeholder="Anzeigename im Konzept-Wording … (leer = „{{ $g->name }}“)" data-slot-wording />
@@ -540,7 +540,7 @@
                                             <span class="text-xs text-gray-500">leer — links/rechts aus den Listen einfügen</span>
                                             @if($slot->note)
                                                 {{-- R6.1: Generator-Begründung, warum der Slot bewusst leer blieb --}}
-                                                <div class="text-[11px] text-amber-600 mt-0.5" data-slot-leer-begruendung>⚠ {{ $slot->note }}</div>
+                                                <div class="text-[11px] text-amber-600 mt-0.5" data-slot-leer-begruendung>@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $slot->note }}</div>
                                             @endif
                                         @endif
                                     </td>
@@ -554,9 +554,9 @@
                                         <label class="inline-flex items-center gap-0.5 text-[10px] text-gray-500 mr-1" title="Pflicht-Position">
                                             <input type="checkbox" wire:model="slotForm.{{ $slot->id }}.is_pflicht" wire:change="slotSpeichern({{ $slot->id }})" class="rounded border-gray-300 !w-3 !h-3" />P
                                         </label>
-                                        <button type="button" wire:click="fillToggle({{ $slot->id }})" class="text-gray-500 hover:text-violet-500 text-[11px]" title="Befüllung ändern">⚙</button>
+                                        <button type="button" wire:click="fillToggle({{ $slot->id }})" class="text-gray-500 hover:text-violet-500 text-[11px]" title="Befüllung ändern">@svg('heroicon-o-adjustments-horizontal', 'w-3.5 h-3.5 inline-block align-middle')</button>
                                     @endif
-                                    <button type="button" wire:click="zielSetzen({{ $slot->id }})" class="text-[11px] ml-1 align-middle {{ $einfuegenNachId === $slot->id ? 'text-violet-600' : 'text-gray-300 hover:text-violet-500' }}" title="{{ $einfuegenNachId === $slot->id ? 'Einfügeziel aktiv — nächste Position landet hier darunter (Klick = abwählen)' : 'Hier einfügen — die nächste neue Position landet unter dieser Zeile' }}">📍</button>
+                                    <button type="button" wire:click="zielSetzen({{ $slot->id }})" class="text-[11px] ml-1 align-middle {{ $einfuegenNachId === $slot->id ? 'text-violet-600' : 'text-gray-300 hover:text-violet-500' }}" title="{{ $einfuegenNachId === $slot->id ? 'Einfügeziel aktiv — nächste Position landet hier darunter (Klick = abwählen)' : 'Hier einfügen — die nächste neue Position landet unter dieser Zeile' }}">@svg('heroicon-o-map-pin', 'w-3.5 h-3.5 inline-block align-middle')</button>
                                     <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-500 hover:text-red-500 ml-1" title="entfernen">✕</button>
                                 </td>
                             </tr>
@@ -572,7 +572,7 @@
                                                     <span class="flex-1 min-w-0 break-words leading-snug text-gray-700">{{ $pg->dish?->name ?? '—' }}</span>
                                                     <span class="shrink-0 text-gray-500 tabular-nums">{{ $pg->quantity !== null ? rtrim(rtrim(number_format((float) $pg->quantity, 2, ',', '.'), '0'), ',') . '×' : '' }}</span>
                                                     <span class="shrink-0 text-gray-500 tabular-nums w-16 text-right">{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
-                                                    @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="Gericht einsehen">🍽️</button>@endif
+                                                    @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="Gericht einsehen">@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')️</button>@endif
                                                 </div>
                                             @empty
                                                 <p class="px-3 py-1.5 text-[11px] text-gray-500">Paket ohne Gerichte — im Paket-Editor pflegen.</p>
@@ -592,7 +592,7 @@
                                                     <span class="flex-1 min-w-0 truncate text-gray-700">{{ $z['name'] }}</span>
                                                     <span class="shrink-0 text-gray-500 tabular-nums">{{ $z['menge'] }}</span>
                                                     @if($z['swap_locked'])
-                                                        <span class="shrink-0" title="swap-gesperrt — bewusst gewählte Realisierung">🔒</span>
+                                                        <span class="shrink-0" title="swap-gesperrt — bewusst gewählte Realisierung">@svg('heroicon-o-lock-closed', 'w-3.5 h-3.5 inline-block align-middle')</span>
                                                     @elseif($z['ersatz'] !== null)
                                                         <button type="button" wire:click="slotZutatTauschen({{ $slot->id }}, {{ $z['id'] }})"
                                                                 class="{{ $btnAi }} shrink-0"
@@ -601,7 +601,7 @@
                                                         </button>
                                                     @endif
                                                     @if($z['peek_recipe_id'] !== null)
-                                                        <button type="button" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $z['peek_recipe_id'] }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="Sub-Rezept einsehen">📖</button>
+                                                        <button type="button" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $z['peek_recipe_id'] }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="Sub-Rezept einsehen">@svg('heroicon-o-book-open', 'w-3.5 h-3.5 inline-block align-middle')</button>
                                                     @endif
                                                 </div>
                                             @empty
@@ -706,7 +706,7 @@
                                 <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gericht') }}">G</span>
                                 <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" title="{{ $gr->name }}">{{ $gr->name }}</span>
                                 <span class="shrink-0 text-[10px] text-gray-500 tabular-nums">{{ $gr->sales_net !== null ? number_format((float) $gr->sales_net, 2, ',', '.') . ' €' : '' }}</span>
-                                <button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $gr->id }} })" class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Gericht einsehen">🍽️</button>
+                                <button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $gr->id }} })" class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Gericht einsehen">@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')️</button>
                                 <button type="button" wire:click="positionEinfuegen('gericht', {{ $gr->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
                             </div>
                         @empty
@@ -733,7 +733,7 @@
                                 </span>
                                 <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle($istBasis ? 'basisrezept' : 'gericht') }}">{{ $istBasis ? 'BR' : 'G' }}</span>
                                 <span class="flex-1 min-w-0 truncate text-sm">{{ $pg->dish?->name ?? '—' }}</span>
-                                @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('{{ $istBasis ? 'recipe-modal.oeffnen' : 'vk-modal.oeffnen' }}', { id: {{ $pg->sales_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="{{ $istBasis ? 'Basisrezept' : 'Gericht' }} einsehen">{{ $istBasis ? '📋' : '🍽️' }}</button>@endif
+                                @if($pg->sales_recipe_id)<button type="button" @click="Livewire.dispatch('{{ $istBasis ? 'recipe-modal.oeffnen' : 'vk-modal.oeffnen' }}', { id: {{ $pg->sales_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="{{ $istBasis ? 'Basisrezept' : 'Gericht' }} einsehen">@if($istBasis)@svg('heroicon-o-book-open', 'w-3.5 h-3.5 inline-block align-middle')@else @svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')@endif</button>@endif
                                 <span class="text-[10px] text-gray-500">{{ $istBasis ? 'g/Person' : 'Menge/Person' }}</span>
                                 <input type="number" step="0.01" min="0" wire:model.blur="" value="{{ $pg->quantity }}" wire:change="gerichtMengeSpeichern({{ $pg->id }}, $event.target.value)" class="{{ $input }} w-24 text-right tabular-nums" />
                                 <span class="text-gray-500 text-xs tabular-nums w-16 text-right">@if($istBasis){{ $pg->dish?->ek_total_eur !== null ? 'EK ' . number_format((float) $pg->dish->ek_total_eur, 2, ',', '.') . ' €' : '' }}@else{{ $pg->dish?->sales_net !== null ? number_format((float) $pg->dish->sales_net, 2, ',', '.') . ' €' : '' }}@endif</span>
@@ -827,7 +827,7 @@
                         @endforeach
                     </div>
                     @unless($aggregat['naehrwerte']['vollstaendig'])
-                        <p class="text-[11px] text-amber-600">⚠ Nur {{ $aggregat['naehrwerte']['n_mit_naehrwerten'] }}/{{ $aggregat['naehrwerte']['n_gerichte'] }} Gerichte haben Nährwert + Portionsgramm — Werte sind eine Untergrenze.</p>
+                        <p class="text-[11px] text-amber-600">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Nur {{ $aggregat['naehrwerte']['n_mit_naehrwerten'] }}/{{ $aggregat['naehrwerte']['n_gerichte'] }} Gerichte haben Nährwert + Portionsgramm — Werte sind eine Untergrenze.</p>
                     @endunless
                 @else
                     <p class="text-sm text-gray-500 py-6 text-center">Keine Nährwerte — den Gerichten fehlen Werte oder Portionsgramm.</p>
@@ -986,7 +986,7 @@
                         </div>
                     </div>
                     <div class="pt-2">
-                        <button type="button" wire:click="zielpreisToggle" class="{{ $btnGhost }} {{ $zielModus ? 'text-violet-600' : '' }}">🎯 Zielpreis-Konfigurator</button>
+                        <button type="button" wire:click="zielpreisToggle" class="{{ $btnGhost }} {{ $zielModus ? 'text-violet-600' : '' }}">@svg('heroicon-o-flag', 'w-3.5 h-3.5 inline-block align-middle') Zielpreis-Konfigurator</button>
                     </div>
                     @if($zielModus)
                         <div class="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3 space-y-2">
@@ -1175,7 +1175,7 @@
                                                 <p class="text-[11px] text-gray-500">Keine Textur-Daten.</p>
                                             @endif
                                             @if($sensorik['monotonie'])
-                                                <p class="text-[11px] text-amber-600 mt-1.5">⚠ {{ $sensorik['monotonie'] }}</p>
+                                                <p class="text-[11px] text-amber-600 mt-1.5">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $sensorik['monotonie'] }}</p>
                                             @endif
                                         </div>
                                     </div>
@@ -1215,7 +1215,7 @@
                                             @if($role === 'haupt' && isset($geschirrVorschlag[$slot->id]))
                                                 <button type="button" wire:click="geschirrWaehle({{ $slot->id }}, 'haupt', {{ $geschirrVorschlag[$slot->id]['id'] }})"
                                                         class="{{ $pill }} {{ $variantPill['primary'] }} mt-0.5" data-geschirr-vorschlag
-                                                        title="Default-Geschirr der aufgelösten Darreichung ({{ $geschirrVorschlag[$slot->id]['form'] }}) — Klick übernimmt">💡 {{ $geschirrVorschlag[$slot->id]['label'] }} übernehmen</button>
+                                                        title="Default-Geschirr der aufgelösten Darreichung ({{ $geschirrVorschlag[$slot->id]['form'] }}) — Klick übernimmt">@svg('heroicon-o-light-bulb', 'w-3.5 h-3.5 inline-block align-middle') {{ $geschirrVorschlag[$slot->id]['label'] }} übernehmen</button>
                                             @endif
                                         @endif
 

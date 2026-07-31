@@ -57,7 +57,7 @@
         @if(! $aktiv)
             {{-- Leerzustand (Such-first) --}}
             <div class="{{ $sectionCard }} text-center py-12">
-                <div class="text-3xl mb-2">🧮</div>
+                <div class="text-3xl mb-2">@svg('heroicon-o-calculator', 'w-3.5 h-3.5 inline-block align-middle')</div>
                 <p class="text-sm text-gray-900 font-medium">Preise über alle Lieferanten vergleichen</p>
                 <p class="text-xs text-gray-500 mt-1">Suche ein Grundprodukt oder filtere nach Warengruppe/Lieferant — je Produkt siehst du den günstigsten und teuersten Lieferanten samt Spanne.</p>
             </div>

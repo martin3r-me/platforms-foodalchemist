@@ -16,7 +16,7 @@
         @endforeach
         @foreach(['spec_contains_pork' => 'enth. Schwein', 'spec_contains_beef' => 'enth. Rind'] as $feld => $lbl)
             @if($rezept->{$feld} === true)
-                <span class="font-medium uppercase tracking-wide text-[11px] text-amber-600">{{ $lbl }} ⚠</span>
+                <span class="font-medium uppercase tracking-wide text-[11px] text-amber-600">{{ $lbl }} @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')</span>
             @endif
         @endforeach
     </div>

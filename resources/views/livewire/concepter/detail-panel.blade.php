@@ -7,7 +7,7 @@
 <div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04]" data-concepter-panel>
     @if($concept === null && $paket === null)
         <div class="py-16 text-center text-sm text-gray-500">
-            <div class="text-2xl mb-2">🍽️</div>
+            <div class="text-2xl mb-2">@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')️</div>
             {{ $type === 'pakete' ? 'Paket auswählen.' : 'Concept auswählen.' }}
         </div>
     @else
@@ -158,7 +158,7 @@
                     </div>
                 @endif
                 @unless($aggregat['naehrwerte']['vollstaendig'])
-                    <p class="text-[11px] text-amber-600 mt-1.5">⚠ {{ $aggregat['naehrwerte']['n_mit_naehrwerten'] }}/{{ $aggregat['naehrwerte']['n_gerichte'] }} Gerichten mit Nährwert + Portionsgramm — Rest fehlt noch.</p>
+                    <p class="text-[11px] text-amber-600 mt-1.5">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $aggregat['naehrwerte']['n_mit_naehrwerten'] }}/{{ $aggregat['naehrwerte']['n_gerichte'] }} Gerichten mit Nährwert + Portionsgramm — Rest fehlt noch.</p>
                 @endunless
             </x-foodalchemist::section>
         @endif

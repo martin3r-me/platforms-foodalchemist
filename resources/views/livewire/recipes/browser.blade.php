@@ -45,7 +45,7 @@
                         class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $nurTemplates
                             ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/15 text-orange-700'
                             : 'text-gray-700 hover:bg-black/[0.03]' }}" data-templates-toggle>
-                    <span class="font-medium">📐 Templates</span>
+                    <span class="font-medium">@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Templates</span>
                     <span class="text-[11px] {{ $nurTemplates ? 'text-orange-500 font-medium' : 'text-gray-500' }}">{{ $nurTemplates ? 'active' : $templateAnzahl }}</span>
                 </button>
 
@@ -151,7 +151,7 @@
                                     <span class="text-gray-500">· {{ $template->n_ingredients_total }} Zutaten{{ $template->yield_kg !== null ? ' · ' . number_format((float) $template->yield_kg, 2, ',', '.') . ' kg' : '' }}</span>
                                 </button>
                             @empty
-                                <p class="px-3 py-2 text-[11px] text-gray-500">Keine Templates — im Editor «📐 Template» markieren.</p>
+                                <p class="px-3 py-2 text-[11px] text-gray-500">Keine Templates — im Editor «@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Template» markieren.</p>
                             @endforelse
                         </div>
                     @endif
@@ -164,9 +164,9 @@
                 @if($run !== null)
                     <div class="flex items-center gap-2" @if($run->status === 'running') wire:poll.2s @endif data-bulk-progress>
                         @if($run->status === 'running')
-                            <span class="{{ $pill }} {{ $variantPill['info'] }}">✨ Bulk läuft … {{ $run->done }}/{{ $run->total }}</span>
+                            <span class="{{ $pill }} {{ $variantPill['info'] }}">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') Bulk läuft … {{ $run->done }}/{{ $run->total }}</span>
                         @else
-                            <span class="{{ $pill }} {{ $variantPill['success'] }}">✨ Bulk fertig: {{ $run->done }}/{{ $run->total }}{{ $run->failed > 0 ? " · {$run->failed} Fehler" : '' }}</span>
+                            <span class="{{ $pill }} {{ $variantPill['success'] }}">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') Bulk fertig: {{ $run->done }}/{{ $run->total }}{{ $run->failed > 0 ? " · {$run->failed} Fehler" : '' }}</span>
                             <span class="text-[11px] text-gray-600">{{ $bulkSvc->offeneVorschlaege(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId) }} Vorschläge offen</span>
                             <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-bulk-alle-uebernehmen>Alle übernehmen</button>
                             <button type="button" wire:click="bulkSchliessen" class="{{ $btnGhostXs }}" title="Vorschläge bleiben offen (Review)">Schließen</button>
@@ -220,7 +220,7 @@
                             {{-- R6: Namens-Klick öffnet direkt den Voll-Editor (Zeilen-Klick bleibt Panel-Selektion) --}}
                             <td class="{{ $td }} font-medium w-full min-w-[18rem] break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
                                 <span class="text-gray-900 hover:text-violet-600 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
-                                @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>📐 Template</span>@endif
+                                @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Template</span>@endif
                             </td>
                             <td class="{{ $td }} text-[11px] italic text-gray-600 truncate max-w-[12rem] whitespace-nowrap">{{ $r->category?->label ?? '—' }}</td>
                             <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($r->taste_direction) }}</td>

@@ -87,7 +87,7 @@
         <div class="flex items-center justify-between pt-1">
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="$dispatch('gp-modal.oeffnen')" class="{{ $btnPrimary }}" data-gp-anlegen>+ Neues Grundprodukt</button>
-                <button type="button" wire:click="$dispatch('platzhalter-modal.oeffnen')" class="{{ $btnGhostXs }}" data-platzhalter-oeffnen title="Neutrale Platzhalter für Grundrezept-Templates verwalten">📐 Platzhalter</button>
+                <button type="button" wire:click="$dispatch('platzhalter-modal.oeffnen')" class="{{ $btnGhostXs }}" data-platzhalter-oeffnen title="Neutrale Platzhalter für Grundrezept-Templates verwalten">@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Platzhalter</button>
             </div>
             <x-foodalchemist::kpi-bar :kpis="$kpis" />
         </div>
@@ -159,12 +159,12 @@
                             <td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $gp->rezepte_count ?? '—' }}</td>
                             {{-- 3-Status-Symbol (fixe Zeilenhöhe): vorhanden · frei · keine Daten. Effektivwerte (Override>Mutter>LA-MAX), read-only (Quelle = LA). --}}
                             <td class="{{ $td }} whitespace-nowrap" data-allergen-status="{{ $gp->allergen_status ?? 'keine_daten' }}">
-                                @php($kiSuffix = $gp->allergen_ki ? ' — ✨ KI-geschätzt' . ($gp->allergen_ki_conf !== null ? ' (' . round($gp->allergen_ki_conf * 100) . ' %)' : '') . ', nicht durch Lieferantenartikel belegt' : '')
+                                @php($kiSuffix = $gp->allergen_ki ? ' — KI-geschätzt' . ($gp->allergen_ki_conf !== null ? ' (' . round($gp->allergen_ki_conf * 100) . ' %)' : '') . ', nicht durch Lieferantenartikel belegt' : '')
                                 @if(($gp->allergen_status ?? 'keine_daten') === 'vorhanden')
                                     <span class="inline-flex items-center gap-1 text-rose-600 text-[11px] font-medium"
-                                          title="Allergene enthalten: {{ collect($gp->allergen_badges)->map(fn ($f) => explode(' ', \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$f] ?? $f)[0])->implode(', ') ?: 'inkl. Spuren' }}{{ $kiSuffix }}">⚠ enthält @if($gp->allergen_ki)<span class="text-violet-500 font-normal" data-allergen-ki>✨ KI</span>@endif</span>
+                                          title="Allergene enthalten: {{ collect($gp->allergen_badges)->map(fn ($f) => explode(' ', \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$f] ?? $f)[0])->implode(', ') ?: 'inkl. Spuren' }}{{ $kiSuffix }}">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') enthält @if($gp->allergen_ki)<span class="text-violet-500 font-normal" data-allergen-ki>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI</span>@endif</span>
                                 @elseif($gp->allergen_status === 'frei')
-                                    <span class="inline-flex items-center gap-1 text-emerald-600 text-[11px]" title="Keine der 14 EU-Allergene deklariert (allergenfrei){{ $kiSuffix }}">✓ frei @if($gp->allergen_ki)<span class="text-violet-500" data-allergen-ki>✨ KI</span>@endif</span>
+                                    <span class="inline-flex items-center gap-1 text-emerald-600 text-[11px]" title="Keine der 14 EU-Allergene deklariert (allergenfrei){{ $kiSuffix }}">✓ frei @if($gp->allergen_ki)<span class="text-violet-500" data-allergen-ki>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI</span>@endif</span>
                                 @else
                                     <span class="inline-flex items-center gap-1 text-gray-500 text-[11px]" title="Keine Allergen-Angaben in den Lieferantenartikeln — nicht als frei werten">– keine Daten</span>
                                 @endif

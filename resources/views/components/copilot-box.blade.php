@@ -51,7 +51,7 @@
 <div class="mb-3 rounded-lg bg-violet-500/5 border border-violet-500/20 px-3 py-2 space-y-2" data-{{ $prefix }}copilot-box>
     <div class="flex flex-wrap items-center gap-2">
         <button type="button" wire:click="copilotPruefen" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-{{ $prefix }}copilot-start>
-            <span wire:loading.remove wire:target="copilotPruefen">🧑‍🍳 Rezept prüfen</span>
+            <span wire:loading.remove wire:target="copilotPruefen">@svg('heroicon-o-clipboard-document-check', 'w-3.5 h-3.5 inline-block align-middle') Rezept prüfen</span>
             <span wire:loading wire:target="copilotPruefen">prüft …</span>
         </button>
         @if($copilot !== null)
@@ -96,7 +96,7 @@
                     @elseif($b['status'] === 'kein_treffer')
                         {{-- Hard-Stop-Doktrin (#508): ohne Bestandstreffer wird NICHT geraten. --}}
                         <p class="text-[10px] mt-0.5 text-violet-700" data-{{ $prefix }}copilot-hardstop>
-                            ⚠ Kein Bestandstreffer → erst {{ $b['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept (Stub) anlegen' : 'GP anlegen' }}, dann erneut prüfen.
+                            @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Kein Bestandstreffer → erst {{ $b['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept (Stub) anlegen' : 'GP anlegen' }}, dann erneut prüfen.
                         </p>
                     @else
                         <p class="text-[10px] mt-0.5 text-gray-500">{{ $warum[$b['status']] ?? 'Nicht anwendbar.' }}</p>

@@ -84,7 +84,7 @@
     @php($moq = $dok['moq'])
     <div class="moq">
         @if($moq['unter_mindestbestellwert'])
-            <span class="warn">⚠ Unter Mindestbestellwert ({{ number_format($moq['min_order_value'], 2, ',', '.') }} €) — es fehlen {{ number_format($moq['fehlt_bis_min'], 2, ',', '.') }} €.</span>
+            <span class="warn">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Unter Mindestbestellwert ({{ number_format($moq['min_order_value'], 2, ',', '.') }} €) — es fehlen {{ number_format($moq['fehlt_bis_min'], 2, ',', '.') }} €.</span>
         @elseif($moq['min_order_value'] !== null)
             <span class="ok">✓ Mindestbestellwert erreicht.</span>
         @endif

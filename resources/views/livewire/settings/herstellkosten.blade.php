@@ -58,7 +58,7 @@
                                 @if($blockSumme > 0 && $blockBasis > 0)
                                     <span class="block text-[10px] text-gray-500 tabular-nums" title="Σ Fixkosten/Monat ÷ Bezugsbasis">{{ number_format($blockSumme, 0, ',', '.') }} € ÷ {{ number_format($blockBasis, 0, ',', '.') }} €</span>
                                 @elseif($basisFehlt)
-                                    <span class="block text-[10px] text-amber-600" title="Fixkosten erfasst, aber Bezugsbasis = 0 → Satz bleibt 0 %. Bezugsbasis unten eintragen.">⚠ Bezugsbasis fehlt → 0&nbsp;%</span>
+                                    <span class="block text-[10px] text-amber-600" title="Fixkosten erfasst, aber Bezugsbasis = 0 → Satz bleibt 0 %. Bezugsbasis unten eintragen.">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Bezugsbasis fehlt → 0&nbsp;%</span>
                                 @else
                                     <span class="block text-[10px] text-gray-500">noch keine Fixkosten</span>
                                 @endif

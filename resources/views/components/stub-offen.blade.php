@@ -20,7 +20,7 @@
     <div class="mt-3 space-y-1" data-oneshot-stubs>
         <p class="{{ $label }}">Sub-Rezept-Stubs angelegt — ausrezeptieren offen:</p>
         @foreach($stubs as $stub)
-            <p class="text-[11px] text-gray-600">🧩 {{ $stub['name'] }} <span class="text-amber-700">· leer, Zutaten fehlen</span></p>
+            <p class="text-[11px] text-gray-600">@svg('heroicon-o-puzzle-piece', 'w-3.5 h-3.5 inline-block align-middle') {{ $stub['name'] }} <span class="text-amber-700">· leer, Zutaten fehlen</span></p>
         @endforeach
         <p class="text-[10px] text-gray-500">Bewusst nicht mit-generiert (v1): jeder Stub wird einzeln ausrezeptiert. Sie stehen bis dahin im Signal «Sub-Rezept-Stub offen».</p>
     </div>

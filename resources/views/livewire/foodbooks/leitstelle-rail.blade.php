@@ -105,7 +105,7 @@
                         <span class="text-gray-400">/ Ziel {{ number_format($we['ziel_pct'], 1, ',', '.') }} %</span>
                     </span>
                 </div>
-                @if($we['partiell'])<p class="text-[10px] text-amber-600">⚠ partiell — Pauschal-Blöcke ohne EK, IST unterschätzt.</p>@endif
+                @if($we['partiell'])<p class="text-[10px] text-amber-600">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') partiell — Pauschal-Blöcke ohne EK, IST unterschätzt.</p>@endif
             </div>
         @endif
 
@@ -239,7 +239,7 @@
                         :class="panel === @js($pk) ? '{{ $aktiv }}' : '{{ $hover }}'"
                         class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors" data-rail-panel-btn="{{ $pk }}">{{ $pl }}</button>
             @endforeach
-            <button type="button" x-show="pin" x-cloak @click="loesePin()" class="ml-auto text-[10px] text-gray-400 hover:text-violet-500" title="Auto-Umschaltung je Tab wieder aktivieren">📌 lösen</button>
+            <button type="button" x-show="pin" x-cloak @click="loesePin()" class="ml-auto text-[10px] text-gray-400 hover:text-violet-500" title="Auto-Umschaltung je Tab wieder aktivieren">@svg('heroicon-o-map-pin', 'w-3.5 h-3.5 inline-block align-middle') lösen</button>
         </div>
 
         {{-- ── Panel: FORTSCHRITT ── --}}
@@ -255,7 +255,7 @@
 
             @if($komplex)
                 <p class="text-[11px] text-amber-600 bg-amber-500/5 rounded-lg px-2 py-1" data-rail-komplex>
-                    ⚠ Komplex: {{ $kapitelAnzahl }} Kapitel · {{ $positionenGesamt }} Positionen — Struktur prüfen (Bündeln/Unterkapitel).
+                    @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Komplex: {{ $kapitelAnzahl }} Kapitel · {{ $positionenGesamt }} Positionen — Struktur prüfen (Bündeln/Unterkapitel).
                 </p>
             @endif
 
@@ -327,7 +327,7 @@
                     <span class="w-2 h-2 rounded-full {{ $wePunkt[$weGesamt['status']] ?? 'bg-gray-300' }}"></span>
                     <span class="tabular-nums">{{ $weGesamt['ist_pct'] !== null ? number_format($weGesamt['ist_pct'], 1, ',', '.') . '%' : '—' }}</span>
                     <span class="text-[10px] text-gray-400">/ {{ number_format($weGesamt['ziel_pct'], 0, ',', '.') }}%</span>
-                    @if($weGesamt['partiell'])<span title="partiell — Pauschal ohne EK">⚠</span>@endif
+                    @if($weGesamt['partiell'])<span title="partiell — Pauschal ohne EK">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')</span>@endif
                 </span>
             </div>
             <div class="space-y-0.5" data-rail-we-matrix>
@@ -339,7 +339,7 @@
                         <span class="inline-flex items-center gap-1 shrink-0 {{ $weStil[$we['status']] ?? '' }}">
                             <span class="w-1.5 h-1.5 rounded-full {{ $wePunkt[$we['status']] ?? 'bg-gray-300' }}"></span>
                             <span class="tabular-nums">{{ $we['ist_pct'] !== null ? number_format($we['ist_pct'], 1, ',', '.') . '%' : '—' }}</span>
-                            @if($we['partiell'])<span title="partiell — Pauschal ohne EK">⚠</span>@endif
+                            @if($we['partiell'])<span title="partiell — Pauschal ohne EK">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')</span>@endif
                         </span>
                     </div>
                 @empty

@@ -412,8 +412,43 @@ Teil echt. Die Klassifikation ist der eigentliche Ertrag:
    Regel: in Attributen niemals Blade-Icons.
 
 Browser-Kontrolle über Gerichte · Rezepte · GPs · Foodbooks · Konzepte · Lieferanten:
-**0 Emoji im sichtbaren Text, 0 rohe `@svg(`, keine JS-Fehler.** Der app-weite Rest-Sweep
-(Typ-Marker 🍽 📦 📖 🍴, Status-Punkte) bleibt offen — siehe §4-E4.
+**0 Emoji im sichtbaren Text, 0 rohe `@svg(`, keine JS-Fehler.**
+
+### E10 · Typ-Marker → Icons, app-weit (2026-07-31)
+
+**Zuordnung pro BEDEUTUNG, aufgebaut auf dem vorhandenen Haus-Vokabular** (das die App über
+`<x-…::section icon="…">` schon führt: Grundprodukte=`cube`, Basisrezepte=`book-open`,
+Gerichte=`banknotes`, Lieferanten=`truck`, Pakete=`puzzle-piece`, Zutaten=`list-bullet`, …) —
+nicht Zeichen für Zeichen geraten. 43 Icon-Namen vorher gegen
+`blade-heroicons/resources/svg` geprüft, weil `@svg` erst beim **Rendern** wirft.
+
+Auszug: 🧺→`cube` · 📖→`book-open` · 🍽→`banknotes` · 📦→`archive-box` · 🧩→`puzzle-piece`
+(bewusst getrennt: Gebinde ≠ Baustein) · 🍴→`rectangle-stack` (Darreichung) · 📐→`square-2-stack`
+· ⚙→`adjustments-horizontal` · 📍→`map-pin` · 💶→`currency-euro` · ⚠→`exclamation-triangle`
+· 🎭→`user-group` · 🎙→`microphone`.
+**Status-Punkte** (🔴🟣🔵🟢) wurden **keine Icons**, sondern CSS-Punkte
+(`w-1.5 h-1.5 rounded-full bg-…`) — wie im GP-Cockpit schon üblich.
+
+Ergebnis: **128 Vorkommen mechanisch ersetzt** + 10 Stellen umgebaut, die in PHP-Ausdrücken
+steckten (Dashboard-KPI-Array und Foodbook-Reiter tragen jetzt Icon-**Namen**, ternäre
+Emoji-Labels wurden zu `@if/@else` mit echten Icons). 19 Vorkommen bleiben in **Blade-Kommentaren**
+— unsichtbar, absichtlich unangetastet.
+
+**Drei Fallen, alle vom Werkzeug gefangen, nicht vom Auge:**
+1. **Erster Durchlauf war falsch** und wurde per `git checkout` zurückgedreht: der Schutz kannte
+   nur Attribute und `@php`-Blöcke, nicht `{{ … }}`-Echos und **Direktiven-Argumente**
+   (`@foreach([… '⚠ Text' …])`). Fünf Dateien brachen mit „unexpected identifier heroicon".
+   Der Guard prüft jetzt zusätzlich Echo-Blöcke und balancierte Direktiven-Argumente.
+2. **Geklebte Direktive:** `@else@svg(…)` kompiliert **nicht** — Blade verlangt ein
+   Nicht-Wortzeichen vor der Direktive, und `@else` endet auf `e`. 5 Stellen entklebt.
+   `BladeCompilesTest` hat das gemeldet, der reine `php -l`-Kompilat-Test **nicht** (das Kompilat
+   war syntaktisch gültig, nur stand `@svg` als Text drin).
+3. Icons gehören **nie** in Attribute (`title`, `placeholder`) — dort landet sonst ein ganzes SVG
+   im Text. Zwei Fälle abgefangen.
+
+**Grenze gezogen:** das letzte sichtbare Emoji der Oberfläche (`💬`, Terminal-Leerzustand) liegt in
+**`platforms-core`** — Fremdmodul, nicht angefasst (Regel „keine Fremdmodul-Änderungen"), gehört
+an Martin. Das FA-Modul selbst ist im sichtbaren UI emoji-frei; 12 Modul-Seiten im Browser geprüft.
 2. **Concepter-Tabs: Server- oder Alpine-Mechanik?** Heute Server (nur aktives Panel im DOM).
    Alpine wäre schneller im Umschalten und würde ungespeicherte Eingaben halten, kostet aber alle
    Panels gleichzeitig (Coverage, Kohäsion, zwei Picker, eingebettete Livewire-Kinder). Eigene

@@ -200,7 +200,7 @@
                                  amber-Hinweis statt eines stillen grauen „—". Greift live, weil ekFuerZiel
                                  beim Tausch genau dann null liefert (⇄ und ♻ setzen ek_pro_g=null vorher). --}}
                             <span x-show="(zeile.gp_id || zeile.referenced_recipe_id) && (zeile.ek_pro_g === null || zeile.ek_pro_g === undefined) && !zeile.is_optional"
-                                  x-cloak class="mr-1 text-amber-600 cursor-help" title="Kein Preis hinterlegt — diese Zutat fehlt im EK" data-ek-unpriced>⚠︎</span>
+                                  x-cloak class="mr-1 text-amber-600 cursor-help" title="Kein Preis hinterlegt — diese Zutat fehlt im EK" data-ek-unpriced>@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')︎</span>
                             <span x-text="zeilenEk(zeile) ?? '—'" :class="zeilenEk(zeile) ? 'text-gray-900' : 'text-gray-500'"></span>
                         </td>
                         <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap text-gray-600" data-zeilen-ek-min>
@@ -276,7 +276,7 @@
                      ek_n_ingredients_priced < _total gespiegelt auf den Client). --}}
                 <tr x-show="bepreistInfo().total > bepreistInfo().priced" x-cloak class="border-t border-amber-500/20">
                     <td colspan="{{ $vkKontext ? 11 : 10 }}" class="{{ $td }} !px-2 text-right text-[11px] text-amber-700" data-ek-unvollstaendig>
-                        ⚠︎ nur <span class="font-medium" x-text="bepreistInfo().priced"></span> von <span class="font-medium" x-text="bepreistInfo().total"></span> Zutaten bepreist — EK unvollständig (Preis am GP/Lieferantenartikel ergänzen)
+                        @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')︎ nur <span class="font-medium" x-text="bepreistInfo().priced"></span> von <span class="font-medium" x-text="bepreistInfo().total"></span> Zutaten bepreist — EK unvollständig (Preis am GP/Lieferantenartikel ergänzen)
                     </td>
                 </tr>
             </tfoot>

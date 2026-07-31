@@ -31,7 +31,7 @@
                         @foreach($menueKohaesion['komponenten'] as $k)
                             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-black/[0.03] text-gray-600" title="{{ $k['rated_links'] }} bewertete Verbindungen">
                                 {{ \Illuminate\Support\Str::limit($k['label'], 28) }}
-                                @if($k['fit'] !== null)<span class="tabular-nums font-medium">{{ $k['fit'] }}</span>@elseif($k['is_orphan'] ?? false)<span class="text-amber-500" title="Graph sieht dieses Gericht nicht (keine bewerteten Verbindungen)">⚠</span>@endif
+                                @if($k['fit'] !== null)<span class="tabular-nums font-medium">{{ $k['fit'] }}</span>@elseif($k['is_orphan'] ?? false)<span class="text-amber-500" title="Graph sieht dieses Gericht nicht (keine bewerteten Verbindungen)">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')</span>@endif
                             </span>
                         @endforeach
                     </div>

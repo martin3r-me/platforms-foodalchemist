@@ -19,7 +19,7 @@
     @endif
     @if(! $kiAktiv)
         <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-700" data-ki-aus-banner>
-            Kill-Switch aktiv — jeder KI-Call dieses Teams wird im Gateway gestoppt (✨-Buttons laufen ins Leere und melden es).
+            Kill-Switch aktiv — jeder KI-Call dieses Teams wird im Gateway gestoppt (@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle')-Buttons laufen ins Leere und melden es).
         </div>
     @endif
 

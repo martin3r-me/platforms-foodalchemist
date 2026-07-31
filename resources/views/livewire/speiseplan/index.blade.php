@@ -111,7 +111,7 @@
                             @if($linie->is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg</span>@endif
                             <button type="button" wire:click="linieVerschieben({{ $linie->id }}, -1)" class="text-gray-300 hover:text-violet-500 text-[10px]" title="hoch">▲</button>
                             <button type="button" wire:click="linieVerschieben({{ $linie->id }}, 1)" class="text-gray-300 hover:text-violet-500 text-[10px]" title="runter">▼</button>
-                            <button type="button" wire:click="linieEdit({{ $linie->id }})" class="text-gray-500 hover:text-violet-500 text-xs" title="bearbeiten">✎</button>
+                            <button type="button" wire:click="linieEdit({{ $linie->id }})" class="text-gray-500 hover:text-violet-500 text-xs" title="bearbeiten">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
                             <button type="button" wire:click="linieRaus({{ $linie->id }})" wire:confirm="Linie entfernen? Einträge bleiben (ohne Linie)." class="text-gray-500 hover:text-red-500 text-xs" title="entfernen">✕</button>
                         </div>
                     @endforeach

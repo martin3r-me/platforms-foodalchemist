@@ -52,7 +52,7 @@
 
                 {{-- Bild-Platzhalter (echte Gericht-/Hero-Bilder = spätere Iteration, #461) --}}
                 <div class="mb-4 rounded-xl border border-dashed border-violet-300/50 bg-violet-500/[0.03] py-8 text-center text-[11px] text-violet-400">
-                    🖼 Bild folgt
+                    @svg('heroicon-o-photo', 'w-3.5 h-3.5 inline-block align-middle') Bild folgt
                 </div>
 
                 @forelse($k['bloecke'] as $b)

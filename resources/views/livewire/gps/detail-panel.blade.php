@@ -173,14 +173,14 @@
                                                 @php($d = $preisTrend[$la->id]['delta_pct'])
                                                 <span class="text-[10px] font-medium tabular-nums {{ $d > 0 ? 'text-rose-500' : ($d < 0 ? 'text-emerald-600' : 'text-gray-500') }}" title="vorher {{ number_format($preisTrend[$la->id]['vorher'], 2, ',', '.') }} €">{{ $d > 0 ? '▲' : ($d < 0 ? '▼' : '') }}{{ number_format(abs($d), 1, ',', '.') }} %</span>
                                             @else
-                                                <span class="text-[10px] text-amber-500 cursor-help" title="Vorpreis unplausibel — Preis-Historie prüfen." data-preis-trend-warnung>⚠</span>
+                                                <span class="text-[10px] text-amber-500 cursor-help" title="Vorpreis unplausibel — Preis-Historie prüfen." data-preis-trend-warnung>@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')</span>
                                             @endif
                                         @endisset
                                     </p>
                                     @if($la->vergleichspreis !== null)
                                         <p class="text-[11px] tabular-nums text-gray-500">{{ number_format($la->vergleichspreis['value'], 2, ',', '.') }} {{ $la->vergleichspreis['unit'] }}</p>
                                     @else
-                                        <p class="text-[11px] text-gray-500" title="kein Vergleichspreis — qty fehlt (GL-03 A-2)">⚠ ohne €/kg</p>
+                                        <p class="text-[11px] text-gray-500" title="kein Vergleichspreis — qty fehlt (GL-03 A-2)">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') ohne €/kg</p>
                                     @endif
                                 @else
                                     <p class="text-[13px] text-gray-500">—</p>
@@ -201,7 +201,7 @@
 
                 @if($laKandidaten !== null)
                     <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-2.5 py-2" data-la-kandidaten>
-                        <p class="text-[11px] text-gray-900 mb-1">✨ Passende unverknüpfte Artikel <span class="text-gray-500">· Klick = verknüpfen</span></p>
+                        <p class="text-[11px] text-gray-900 mb-1">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') Passende unverknüpfte Artikel <span class="text-gray-500">· Klick = verknüpfen</span></p>
                         @foreach($laKandidaten as $kandidat)
                             <button type="button" wire:key="lakand-{{ $kandidat['id'] }}" wire:click="verknuepfe({{ $kandidat['id'] }})" class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/15 flex items-baseline gap-2">
                                 <span class="min-w-0 flex-1 truncate">{{ $kandidat['designation'] }} <span class="text-gray-500">· {{ $kandidat['supplier'] ?? '—' }}</span></span>
@@ -230,7 +230,7 @@
         {{-- GL-07-Vorschlags-Box (Allergene/Nährwerte) --}}
         @if($kiVorschlag !== null && ($section === null || $section === $kiVorschlag['type']))
             <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs" data-gp-ki-vorschlag>
-                <p class="text-gray-900">✨ {{ $kiVorschlag['type'] === 'allergene' ? 'Allergen-Schätzung' : 'Nährwert-Schätzung' }}
+                <p class="text-gray-900">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') {{ $kiVorschlag['type'] === 'allergene' ? 'Allergen-Schätzung' : 'Nährwert-Schätzung' }}
                     <span class="text-[11px] text-gray-500">· {{ round($kiVorschlag['confidence'] * 100) }} % · schreibt als Override (GL-01 Prio 1)</span></p>
                 <div class="flex flex-wrap gap-1 mt-1">
                     @foreach($kiVorschlag['werte'] as $feld => $wert)
@@ -256,7 +256,7 @@
             @endif
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5 text-[11px]">
                 @if($nurKiOverride)
-                    <span class="{{ $pill }} {{ $variantPill['info'] }}" title="KI-geschätzt — keine LA-Daten{{ $allergKiConf !== null ? ' · ' . round($allergKiConf * 100) . ' %' : '' }}" data-allergene-ki-marker>✨ KI</span>
+                    <span class="{{ $pill }} {{ $variantPill['info'] }}" title="KI-geschätzt — keine LA-Daten{{ $allergKiConf !== null ? ' · ' . round($allergKiConf * 100) . ' %' : '' }}" data-allergene-ki-marker>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI</span>
                     <span class="text-gray-500">aus 0/{{ $gp->n_las_total }} LAs</span>
                 @elseif($allergenKonfidenz !== null)
                     <span class="font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$allergenKonfidenz['confidence']] ?? 'text-gray-500' }}">{{ strtoupper($allergenKonfidenz['confidence']) }}</span>
@@ -266,13 +266,13 @@
             </div>
             @if($allergene !== null)
                 @php($labels = \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE)
-                @php($marker = fn ($q) => $q === 'override' ? ' ✎' : ($q === 'mutter' ? ' ↑' : ''))
+                @php($marker = fn ($q) => $q === 'override' ? ' (manuell)' : ($q === 'mutter' ? ' ↑' : ''))
                 @php($enthalten = collect($allergene)->filter(fn ($a) => $a['value']->value === 'enthalten'))
                 @php($spuren = collect($allergene)->filter(fn ($a) => $a['value']->value === 'spuren'))
                 @php($unbekannt = collect($allergene)->filter(fn ($a) => $a['value']->value === 'unbekannt'))
                 @php($freiAnzahl = collect($allergene)->filter(fn ($a) => $a['value']->value === 'nicht_enthalten')->count())
                 @if($enthalten->isEmpty() && $spuren->isEmpty() && $unbekannt->isEmpty())
-                    <p class="text-[13px] text-emerald-600" data-allergene-frei>✓ Keine der 14 EU-Allergene deklariert.@if($nurKiOverride) <span class="text-violet-500" title="Schätzung ohne Lieferantenartikel-Beleg — für LMIV-Deklaration LA-Daten ergänzen">✨ KI-geschätzt, nicht LA-belegt</span>@endif</p>
+                    <p class="text-[13px] text-emerald-600" data-allergene-frei>✓ Keine der 14 EU-Allergene deklariert.@if($nurKiOverride) <span class="text-violet-500" title="Schätzung ohne Lieferantenartikel-Beleg — für LMIV-Deklaration LA-Daten ergänzen">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI-geschätzt, nicht LA-belegt</span>@endif</p>
                 @else
                     <div class="space-y-1.5" data-allergen-grid>
                         @if($enthalten->isNotEmpty())
@@ -286,7 +286,7 @@
                             </div>
                         @endif
                         @if($unbekannt->isNotEmpty())
-                            <p class="text-[11px] text-amber-600" data-allergene-unbekannt title="Keine LA-Angabe — LMIV: unbekannt ist NICHT gleich frei von.">⚠ {{ $unbekannt->count() }} von 14 ohne LA-Angabe (unbekannt)</p>
+                            <p class="text-[11px] text-amber-600" data-allergene-unbekannt title="Keine LA-Angabe — LMIV: unbekannt ist NICHT gleich frei von.">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $unbekannt->count() }} von 14 ohne LA-Angabe (unbekannt)</p>
                         @endif
                         @if($freiAnzahl > 0)<p class="text-[11px] text-gray-500">✓ frei von den übrigen {{ $freiAnzahl }} EU-Allergen{{ $freiAnzahl === 1 ? '' : 'en' }}</p>@endif
                     </div>
@@ -312,7 +312,7 @@
                                 @foreach($zsJa as $stoff => $v)<span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $stoffLabels[$stoff] ?? $stoff }}</span>@endforeach
                             </div>
                         @endif
-                        @if($zsUnbekannt->isNotEmpty())<p class="text-[11px] text-amber-600" data-zusatz-unbekannt title="Keine LA-Angabe — nicht als frei werten.">⚠ {{ $zsUnbekannt->count() }} ohne LA-Angabe</p>@endif
+                        @if($zsUnbekannt->isNotEmpty())<p class="text-[11px] text-amber-600" data-zusatz-unbekannt title="Keine LA-Angabe — nicht als frei werten.">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $zsUnbekannt->count() }} ohne LA-Angabe</p>@endif
                         @if($zsFrei > 0)<p class="text-[11px] text-gray-500">✓ frei von {{ $zsFrei }} weiteren</p>@endif
                     </div>
                 @endif
@@ -330,7 +330,7 @@
                 </x-slot:actions>
             @endif
             @if(($naehrwerte['source'] ?? null) === 'ki')
-                <p class="text-[11px] mb-1"><span class="{{ $pill }} {{ $variantPill['info'] }}" title="KI-geschätzt — keine LA-Daten{{ $gp->nutri_ai_confidence !== null ? ' · ' . round($gp->nutri_ai_confidence * 100) . ' %' : '' }}" data-naehrwerte-ki-marker>✨ KI-geschätzt</span></p>
+                <p class="text-[11px] mb-1"><span class="{{ $pill }} {{ $variantPill['info'] }}" title="KI-geschätzt — keine LA-Daten{{ $gp->nutri_ai_confidence !== null ? ' · ' . round($gp->nutri_ai_confidence * 100) . ' %' : '' }}" data-naehrwerte-ki-marker>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI-geschätzt</span></p>
             @endif
             @if($naehrwerte !== null && $naehrwerte['energy_kcal']['avg'] !== null)
                 <dl class="space-y-0.5">
@@ -386,7 +386,7 @@
         @if($section === null || $section === 'las')
         <x-foodalchemist::section :title="'Verwendet in Rezepten (' . $verwendungen->count() . ($verwendungen->count() === 30 ? '+' : '') . ')'" icon="heroicon-o-link" data-sektion="verwendungen">
             @forelse($verwendungen as $v)
-                <button type="button" wire:key="verw-{{ $v->id }}" wire:click="$dispatch('{{ $v->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $v->id }} })" class="block w-full text-left text-[13px] text-sky-600 hover:underline truncate py-0.5" data-verwendung-link>{{ $v->is_sales_recipe ? '💶' : '📖' }} {{ $v->name }}</button>
+                <button type="button" wire:key="verw-{{ $v->id }}" wire:click="$dispatch('{{ $v->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $v->id }} })" class="block w-full text-left text-[13px] text-sky-600 hover:underline truncate py-0.5" data-verwendung-link>@if($v->is_sales_recipe)@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')@else @svg('heroicon-o-book-open', 'w-3.5 h-3.5 inline-block align-middle')@endif {{ $v->name }}</button>
             @empty
                 <p class="text-[11px] text-gray-500" data-verwendungen-leer>— in keinem Rezept eingesetzt —</p>
             @endforelse
@@ -397,7 +397,7 @@
         @if($section === null && $kannKuratieren && ! $gp->is_platzhalter && $referenzen !== null)
         <x-foodalchemist::section title="Verwaltung" icon="heroicon-o-cog-6-tooth" data-sektion="verwaltung">
             @if($referenzen['summe'] === 0)
-                <button type="button" wire:click="gpLoeschen" wire:confirm="„{{ $gp->name }}“ endgültig löschen? (Keine Referenzen vorhanden)" class="{{ $btnGhostXs }} text-rose-600" data-gp-loeschen>🗑 GP löschen</button>
+                <button type="button" wire:click="gpLoeschen" wire:confirm="„{{ $gp->name }}“ endgültig löschen? (Keine Referenzen vorhanden)" class="{{ $btnGhostXs }} text-rose-600" data-gp-loeschen>@svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle') GP löschen</button>
                 <p class="text-[11px] text-gray-500 mt-1">Keine Referenzen — Löschen möglich (Soft-Delete).</p>
             @else
                 <p class="text-[11px] text-gray-600" data-ref-zusammenfassung>Löschen blockiert — wird referenziert:

@@ -39,7 +39,7 @@
                         </button>
                         <span class="text-[11px] text-gray-500 shrink-0">{{ $wg->gp_count }}</span>
                         @if($darfEdit)
-                            <button type="button" wire:click="startEditName({{ $wg->id }}, @js($wg->name))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Name ändern">✎</button>
+                            <button type="button" wire:click="startEditName({{ $wg->id }}, @js($wg->name))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Name ändern">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
                             <button type="button" wire:click="deleteWg({{ $wg->id }})" wire:confirm="Diese Warengruppe löschen?" @disabled($wg->gp_count > 0)
                                     class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $wg->gp_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-500' }}"
                                     title="{{ $wg->gp_count > 0 ? 'Wird von GPs genutzt — erst umhängen' : 'löschen' }}">✕</button>

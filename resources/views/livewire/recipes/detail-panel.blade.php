@@ -74,7 +74,7 @@
                     @foreach($eltern as $parent)
                         <button type="button" wire:key="el-{{ $parent->id }}"
                                 @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click="zeige({{ $parent->id }})" @endif
-                                class="block w-full text-left text-[11px] text-sky-600 hover:underline truncate" data-eltern-link>{{ $parent->is_sales_recipe ? '💶' : '↑' }} {{ $parent->name }}</button>
+                                class="block w-full text-left text-[11px] text-sky-600 hover:underline truncate" data-eltern-link>@if($parent->is_sales_recipe)@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')@else @svg('heroicon-o-arrow-up', 'w-3.5 h-3.5 inline-block align-middle')@endif {{ $parent->name }}</button>
                     @endforeach
                 </div>
             </div>
@@ -243,7 +243,7 @@
             @if($pairings !== null && $pairings->isNotEmpty())
                 <div class="flex flex-wrap gap-1 mb-1.5" data-pairing-chips>
                     @foreach($pairings as $p)
-                        <span wire:key="pp-{{ $p->id }}-{{ $p->type }}" class="{{ $pill }} group {{ ['erprobt' => $variantPill['success'], 'aroma' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->type] ?? $variantPill['secondary'] }}" title="{{ $p->type }} · {{ $p->confidence }}{{ $p->created_via === 'manual' ? ' · manuell' : '' }}">{{ $p->display_de }}@if($p->created_via === 'manual')<span class="opacity-60"> ✎</span>@endif
+                        <span wire:key="pp-{{ $p->id }}-{{ $p->type }}" class="{{ $pill }} group {{ ['erprobt' => $variantPill['success'], 'aroma' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->type] ?? $variantPill['secondary'] }}" title="{{ $p->type }} · {{ $p->confidence }}{{ $p->created_via === 'manual' ? ' · manuell' : '' }}">{{ $p->display_de }}@if($p->created_via === 'manual')<span class="opacity-60"> @svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</span>@endif
                             <button type="button" wire:click="pairingLoesen({{ $p->id }}, '{{ $p->type }}')" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
                         </span>
                     @endforeach
@@ -327,7 +327,7 @@
                     @foreach($eltern as $parent)
                         <button type="button" wire:key="el-{{ $parent->id }}"
                                 @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click="zeige({{ $parent->id }})" @endif
-                                class="block w-full text-left text-[13px] text-sky-600 hover:underline truncate" data-eltern-link>{{ $parent->is_sales_recipe ? '💶' : '↑' }} {{ $parent->name }}</button>
+                                class="block w-full text-left text-[13px] text-sky-600 hover:underline truncate" data-eltern-link>@if($parent->is_sales_recipe)@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')@else @svg('heroicon-o-arrow-up', 'w-3.5 h-3.5 inline-block align-middle')@endif {{ $parent->name }}</button>
                     @endforeach
                 </div>
             </x-foodalchemist::section>
