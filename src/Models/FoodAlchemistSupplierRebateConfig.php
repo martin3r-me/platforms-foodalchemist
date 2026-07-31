@@ -26,7 +26,8 @@ class FoodAlchemistSupplierRebateConfig extends Model
         'uuid' => 'string',
         'active' => 'boolean',
         'assumed_annual_revenue' => 'decimal:2',
-        'excluded_commodity_groups' => 'array',
+        'applies_to_all' => 'boolean',
+        'commodity_groups' => 'array',
     ];
 
     public function supplier(): BelongsTo

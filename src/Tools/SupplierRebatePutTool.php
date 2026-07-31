@@ -27,8 +27,8 @@ class SupplierRebatePutTool extends FoodAlchemistTool implements ToolContract, T
         return 'Setzt/aktualisiert die Rückvergütung eines Lieferanten (supplier_id) für das aktuelle Team. '
             . '`tiers` (Liste {threshold_eur, percent}) ERSETZT die komplette Staffel. Konfig-Keys optional: '
             . 'active (bool), selected_tier_id (manuell gewählte Stufe), assumed_annual_revenue (€ → Auto-Stufe), '
-            . 'excluded_commodity_groups (Liste Warengruppen-Codes ohne Bonus). Gibt die resultierende '
-            . 'Staffel-Info zurück. Nur übergebene Felder wirken.';
+            . 'applies_to_all (Vollsortiment ja/nein), commodity_groups (§3-Warengruppen-Codes, für die der '
+            . 'Bonus gilt, wenn NICHT Vollsortiment). Gibt die resultierende Staffel-Info zurück. Nur übergebene Felder wirken.';
     }
 
     public function getSchema(): array
@@ -52,7 +52,8 @@ class SupplierRebatePutTool extends FoodAlchemistTool implements ToolContract, T
                 'active' => ['type' => 'boolean'],
                 'selected_tier_id' => ['type' => 'integer', 'description' => 'manuell gewählte Stufe (id einer Stufe dieses Lieferanten)'],
                 'assumed_annual_revenue' => ['type' => 'number', 'description' => 'angenommener Jahresumsatz € → Auto-Stufe'],
-                'excluded_commodity_groups' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'applies_to_all' => ['type' => 'boolean', 'description' => 'Vollsortiment: Bonus gilt für alle Warengruppen (Default true)'],
+                'commodity_groups' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => '§3-WG-Codes, für die der Bonus gilt (nur wenn applies_to_all=false)'],
             ],
             'required' => ['supplier_id'],
         ];
@@ -72,7 +73,7 @@ class SupplierRebatePutTool extends FoodAlchemistTool implements ToolContract, T
                 $rebate->saveTiers($team, $supplierId, $arguments['tiers']);
             }
 
-            $configKeys = ['active', 'selected_tier_id', 'assumed_annual_revenue', 'excluded_commodity_groups'];
+            $configKeys = ['active', 'selected_tier_id', 'assumed_annual_revenue', 'applies_to_all', 'commodity_groups'];
             $configInput = array_intersect_key($arguments, array_flip($configKeys));
             if ($configInput !== []) {
                 $rebate->saveConfig($team, $supplierId, $configInput);

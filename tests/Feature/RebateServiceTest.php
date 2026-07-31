@@ -53,15 +53,27 @@ it('manuelle Stufe schlägt die Auto-Ableitung aus dem Umsatz', function () {
     expect($this->rebate->effektiverProzent($this->childA, $this->supplier->id))->toBe(2.0);
 });
 
-it('ausgeschlossene Warengruppe bekommt 0 %, andere den vollen Satz', function () {
+it('Vollsortiment: voller Satz für jede Warengruppe', function () {
     $this->rebate->saveConfig($this->childA, $this->supplier->id, [
         'active' => true,
-        'assumed_annual_revenue' => 300000,          // Auto = 3,5 %
-        'excluded_commodity_groups' => ['2.1'],      // Obst frisch: kein Bonus
+        'assumed_annual_revenue' => 300000,   // Auto = 3,5 %
+        'applies_to_all' => true,
     ]);
 
-    expect($this->rebate->effektiverProzent($this->childA, $this->supplier->id, '2.1'))->toBe(0.0)
-        ->and($this->rebate->effektiverProzent($this->childA, $this->supplier->id, '5.1'))->toBe(3.5);
+    expect($this->rebate->effektiverProzent($this->childA, $this->supplier->id, '01'))->toBe(3.5)
+        ->and($this->rebate->effektiverProzent($this->childA, $this->supplier->id, '05'))->toBe(3.5);
+});
+
+it('WG-Umfang: nur gewählte Warengruppen bekommen den Bonus, andere 0 %', function () {
+    $this->rebate->saveConfig($this->childA, $this->supplier->id, [
+        'active' => true,
+        'assumed_annual_revenue' => 300000,      // Auto = 3,5 %
+        'applies_to_all' => false,
+        'commodity_groups' => ['12', '01'],      // nur Trockenprodukte + Gemüse
+    ]);
+
+    expect($this->rebate->effektiverProzent($this->childA, $this->supplier->id, '12'))->toBe(3.5)
+        ->and($this->rebate->effektiverProzent($this->childA, $this->supplier->id, '04'))->toBe(0.0);
 });
 
 it('inaktive Config zahlt keinen Bonus (0 %, kein Flat-Fallback)', function () {

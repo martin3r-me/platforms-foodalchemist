@@ -168,8 +168,23 @@
                                             @endif
                                         @endforeach
                                     </select></div>
-                                <div class="col-span-2"><label class="block {{ $label }} mb-1">Ausgeschlossene Warengruppen (Codes, kommagetrennt)</label>
-                                    <input type="text" wire:model="rebateConfig.excluded" placeholder="z. B. 2.1, 2.4" class="{{ $input }}" /></div>
+                                <div class="col-span-2">
+                                    <label class="{{ $label }} mb-1 block">Vertragsumfang (Warengruppen)</label>
+                                    <label class="inline-flex items-center gap-2 text-xs text-gray-700 mb-1">
+                                        <input type="checkbox" wire:model.live="rebateConfig.applies_to_all" data-staffel-vollsortiment /> Vollsortiment (alle Warengruppen)
+                                    </label>
+                                    @unless($rebateConfig['applies_to_all'] ?? true)
+                                        <div class="grid grid-cols-2 gap-x-4 gap-y-1 pl-1 mt-1" data-staffel-wg>
+                                            @foreach($warengruppen as $wg)
+                                                <label class="inline-flex items-center gap-2 text-xs text-gray-700">
+                                                    <input type="checkbox" wire:model="rebateConfig.commodity_groups" value="{{ $wg->code }}" />
+                                                    <span class="truncate" title="{{ $wg->name }}">{{ $wg->name }}</span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                        <p class="text-[11px] text-gray-500 mt-1">Nur für die gewählten Warengruppen wird die Rückvergütung angerechnet — sonst Originalpreis.</p>
+                                    @endunless
+                                </div>
                             </div>
                             <button type="button" wire:click="rueckverguetungSpeichern" class="{{ $btnPrimary }} mt-2" data-staffel-save>Rückvergütung speichern</button>
                         @endif

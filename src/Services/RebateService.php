@@ -70,7 +70,7 @@ class RebateService
             return $flatFallback ? $this->flatFallbackProzent($supplierId) : 0.0;
         }
 
-        if ($commodityGroup !== null && $this->istAusgeschlossen($config, $commodityGroup)) {
+        if ($commodityGroup !== null && ! $this->istImUmfang($config, $commodityGroup)) {
             return 0.0;
         }
 
@@ -124,7 +124,8 @@ class RebateService
 
         if ($config === null) {
             return ['aktiv' => false, 'prozent' => $this->flatFallbackProzent($supplierId),
-                'quelle' => 'flat_legacy', 'selected_tier_id' => null, 'revenue' => null, 'tiers' => $tiersOut];
+                'quelle' => 'flat_legacy', 'selected_tier_id' => null, 'revenue' => null,
+                'applies_to_all' => true, 'commodity_groups' => [], 'tiers' => $tiersOut];
         }
 
         $revenue = $revenueOverride ?? ($config->assumed_annual_revenue !== null ? (float) $config->assumed_annual_revenue : null);
@@ -145,6 +146,8 @@ class RebateService
             'quelle' => $quelle,
             'selected_tier_id' => $config->selected_tier_id !== null ? (int) $config->selected_tier_id : null,
             'revenue' => $revenue,
+            'applies_to_all' => (bool) $config->applies_to_all,
+            'commodity_groups' => is_array($config->commodity_groups) ? $config->commodity_groups : [],
             'tiers' => $tiersOut,
         ];
     }
@@ -226,9 +229,12 @@ class RebateService
             $rev = $input['assumed_annual_revenue'];
             $config->assumed_annual_revenue = ($rev === '' || $rev === null) ? null : round((float) $rev, 2);
         }
-        if (array_key_exists('excluded_commodity_groups', $input)) {
-            $ex = $input['excluded_commodity_groups'];
-            $config->excluded_commodity_groups = is_array($ex) ? array_values(array_filter(array_map('strval', $ex))) : null;
+        if (array_key_exists('applies_to_all', $input)) {
+            $config->applies_to_all = (bool) $input['applies_to_all'];
+        }
+        if (array_key_exists('commodity_groups', $input)) {
+            $wg = $input['commodity_groups'];
+            $config->commodity_groups = is_array($wg) ? array_values(array_filter(array_map('strval', $wg))) : null;
         }
         if (array_key_exists('selected_tier_id', $input)) {
             $tid = $input['selected_tier_id'];
@@ -290,11 +296,15 @@ class RebateService
         return $pct;
     }
 
-    private function istAusgeschlossen(FoodAlchemistSupplierRebateConfig $config, string $commodityGroup): bool
+    /** Greift die Rückvergütung für diese Warengruppe? Vollsortiment ODER explizit gewählt. */
+    private function istImUmfang(FoodAlchemistSupplierRebateConfig $config, string $commodityGroup): bool
     {
-        $ex = $config->excluded_commodity_groups;
+        if ($config->applies_to_all) {
+            return true;
+        }
+        $wg = $config->commodity_groups;
 
-        return is_array($ex) && in_array($commodityGroup, $ex, true);
+        return is_array($wg) && in_array($commodityGroup, $wg, true);
     }
 
     /** Legacy: flacher rebate_pct am globalen Lieferanten (Bestandsschutz). */

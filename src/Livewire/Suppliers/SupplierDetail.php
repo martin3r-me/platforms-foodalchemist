@@ -8,6 +8,7 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Services\RebateService;
 use Platform\FoodAlchemist\Services\SupplierAgreementService;
 use Platform\FoodAlchemist\Services\SupplierService;
+use Platform\FoodAlchemist\Services\VocabularyService;
 use RuntimeException;
 
 /**
@@ -32,7 +33,7 @@ class SupplierDetail extends Component
     /** Einkauf E1: Rückvergütungs-Staffel (Zeilen threshold_eur/percent) + Config + Live-Info. */
     public array $staffel = [];
 
-    public array $rebateConfig = ['active' => true, 'assumed_annual_revenue' => '', 'selected_threshold' => '', 'excluded' => ''];
+    public array $rebateConfig = ['active' => true, 'assumed_annual_revenue' => '', 'selected_threshold' => '', 'applies_to_all' => true, 'commodity_groups' => []];
 
     public array $stufenInfo = [];
 
@@ -115,7 +116,8 @@ class SupplierDetail extends Component
             'active' => $config?->active ?? true,
             'assumed_annual_revenue' => $config?->assumed_annual_revenue !== null ? (string) (float) $config->assumed_annual_revenue : '',
             'selected_threshold' => $selThreshold,
-            'excluded' => is_array($config?->excluded_commodity_groups) ? implode(', ', $config->excluded_commodity_groups) : '',
+            'applies_to_all' => $config?->applies_to_all ?? true,
+            'commodity_groups' => is_array($config?->commodity_groups) ? array_map('strval', $config->commodity_groups) : [],
         ];
         $this->stufenInfo = $rebate->stufenInfo($team, $supplierId);
     }
@@ -151,14 +153,15 @@ class SupplierDetail extends Component
                 ))->id;
             }
 
-            $excluded = array_values(array_filter(array_map('trim',
-                explode(',', (string) ($this->rebateConfig['excluded'] ?? '')))));
+            $appliesAll = (bool) ($this->rebateConfig['applies_to_all'] ?? true);
+            $wg = $appliesAll ? [] : array_values(array_map('strval', (array) ($this->rebateConfig['commodity_groups'] ?? [])));
 
             $rebate->saveConfig($team, $this->supplierId, [
                 'active' => (bool) ($this->rebateConfig['active'] ?? true),
                 'assumed_annual_revenue' => $this->rebateConfig['assumed_annual_revenue'] ?? '',
                 'selected_tier_id' => $selTierId,
-                'excluded_commodity_groups' => $excluded,
+                'applies_to_all' => $appliesAll,
+                'commodity_groups' => $wg,
             ]);
 
             $this->ladeRueckverguetung($this->supplierId);
@@ -228,6 +231,10 @@ class SupplierDetail extends Component
             'buendelung' => ($this->supplierId !== null && $team !== null)
                 ? $suppliers->volumenProxyRanking($team)
                 : [],
+            // Einkauf E1: §3-Warengruppen für die Vertragsumfang-Auswahl (WG-Taxonomie).
+            'warengruppen' => ($this->supplierId !== null && $team !== null)
+                ? app(VocabularyService::class)->listWarengruppen($team)
+                : collect(),
             'heute' => now()->startOfDay(),
         ]);
     }
