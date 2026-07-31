@@ -17,10 +17,25 @@ Pro Rezept werden u. a. gepflegt:
 
 - **Zutaten** mit Menge und Einheit (g, ml, kg, l, Stk …).
 - **Garverlust** je Zutat — damit aus der Roh-Einwaage die echte Ausbeute wird.
-- **Zubereitung** als nummerierte Schritte.
+- **Zubereitung** als echte Schritt-für-Schritt-Anleitung (siehe unten).
 - **Eigenschaften** wie Haltbarkeit, Regenerierbarkeit, Transportstabilität (wichtig fürs Catering).
 
 Der **Wareneinsatz** ergibt sich automatisch aus den Lead-LA-Preisen der enthaltenen Grundprodukte.
+
+### 👣 Die Zubereitung als Anleitung
+
+Die Zubereitung ist keine Textwand, sondern eine **Liste aus Schritten**. Ein Schritt hat eine Nummer, einen optionalen Abschnitt (z. B. „Mise en Place", „Garen", „Finish") und seine **eigenen Fotos**.
+
+- Die **Nummer entsteht aus der Reihenfolge** — sie wird nie getippt. Wer einen Schritt nach oben zieht, nummeriert alles automatisch neu.
+- **Fotos kleben am Schritt**, nicht an einer Nummer. Umsortieren verliert also keine Bildzuordnung mehr.
+- Ein Foto darf an **mehreren Schritten** hängen (dasselbe Mise-en-Place-Bild bei Vorbereitung und Anrichten), und ein Foto ohne Schritt-Zuordnung gilt als allgemeines Rezept-Foto.
+- Alle Fotos eines Rezepts liegen in einem **Pool** — man wählt per Klick, statt eine Schrittnummer einzutippen.
+- Vorhandenen Text (z. B. aus Word) kann man per **„Markdown einfügen"** übernehmen: `##` wird zum Abschnitt, `1.` oder `-` zum Schritt.
+- Die **KI** schlägt auf Wunsch eine komplette Schrittfolge aus den Zutaten vor — als Vorschlag, der erst mit „Übernehmen" gespeichert wird.
+
+Für alles, was die Anleitung nur *liest* (Produktionsblatt, Produktionsauftrag, Suche, Prozessanker-Erkennung), wird zusätzlich weiterhin ein Textfassung mitgeführt. Sie wird **automatisch aus den Schritten erzeugt** und ist deshalb nie von Hand zu pflegen.
+
+Bestehende Rezepte werden per `php artisan foodalchemist:steps-backfill` einmalig überführt (deterministisch, ohne KI; Fotos wandern über ihre alte Schrittnummer an den passenden Schritt).
 
 ---
 

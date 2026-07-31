@@ -248,89 +248,31 @@
         </div>
     </x-foodalchemist::modal-section>
 
-    {{-- ZUBEREITUNG (§4.2.5) — Schreiben/Vorschau-Tabs (Ist-App) --}}
+    {{-- ZUBEREITUNG (§4.2.5) — Spec 27: strukturierte Schritte sind der Master,
+         `recipes.preparation` ist nur noch ihr gerenderter Lese-Spiegel. Inhalt + KI
+         + Fotos leben im eingebetteten Schritt-Editor; hier bleibt die Lineage-Steuerung. --}}
     <x-foodalchemist::modal-section title="Zubereitung">
         <x-slot:actions>
             @if(!$neu)
-                <button type="button" wire:click="ai_zubereitung" class="{{ $btnAi }}" data-ai-preparation>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Zubereitung</button>
-                <button type="button" wire:click="manual_zubereitung" class="{{ $btnGhostXs }}" title="als manuell markieren">als manuell</button>
-                <button type="button" wire:click="clear_zubereitung" class="{{ $btnGhostXs }}">Reset</button>
+                <button type="button" wire:click="manual_zubereitung" class="{{ $btnGhostXs }}" title="gegen KI-Überschreiben sperren">als manuell</button>
+                <button type="button" wire:click="clear_zubereitung" class="{{ $btnGhostXs }}" title="Lineage-Markierung aufheben — der Text bleibt">Lineage-Reset</button>
             @endif
         </x-slot:actions>
-        <div x-data="{ tab: 'schreiben' }" data-preparation-tabs>
-            <div class="flex items-center gap-1 mb-1.5">
-                <button type="button" @click="tab = 'schreiben'" :class="tab === 'schreiben' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'" class="{{ $pill }}">Schreiben</button>
-                <button type="button" @click="tab = 'vorschau'; $wire.vorschauZubereitung()" :class="tab === 'vorschau' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'" class="{{ $pill }}" data-tab-vorschau>Vorschau</button>
-                <span class="text-[10px] text-gray-500 ml-2">Markdown — <code>##</code> für Phasen (Mise en Place / Finish), nummerierte Schritte</span>
-                <span class="ml-auto" x-show="tab === 'schreiben'">
-                    @include('foodalchemist::livewire.recipes.partials.md-toolbar', ['ziel' => 'preparation-text'])
-                </span>
-            </div>
-            <div x-show="tab === 'schreiben'">
-                <textarea wire:model="form.preparation" id="preparation-text" rows="8" class="{{ $input }} font-mono text-[11px]" data-rezept-preparation></textarea>
-            </div>
-            <div x-show="tab === 'vorschau'" x-cloak class="rounded-lg bg-black/[0.03] px-4 py-3" data-preparation-vorschau>
-                <div class="prose prose-sm max-w-none">
-                    {!! $zubereitungVorschau ?? '<p class="text-gray-500">Vorschau lädt …</p>' !!}
-                </div>
-                {{-- R6: Schritt-Fotos in der Vorschau, gruppiert an der Anleitung --}}
-                @foreach($schrittFotos as $schritt => $fotos)
-                    <div class="mt-3 pt-2 border-t border-black/5" wire:key="vfg-{{ $schritt }}">
-                        <p class="{{ $dt }} mb-1">{{ $schritt === 0 ? 'Rezept-Fotos' : "Fotos zu Schritt {$schritt}" }}</p>
-                        <div class="flex flex-wrap gap-2">
-                            @foreach($fotos as $foto)
-                                <figure class="w-32" wire:key="vf-{{ $foto->id }}">
-                                    <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? "Schritt {$schritt}" }}" class="w-32 h-24 object-cover rounded-lg border border-black/10" loading="lazy" />
-                                    @if($foto->caption)<figcaption class="text-[10px] text-gray-500 mt-0.5 truncate">{{ $foto->caption }}</figcaption>@endif
-                                </figure>
-                            @endforeach
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-
-        {{-- R6: Step-by-Step-Fotos — Verwaltung (Upload + Löschen), gekoppelt über Schritt-Nr --}}
-        @if(!$neu)
-            <div class="mt-2 rounded-lg bg-black/[0.03] px-3 py-2" data-schritt-fotos>
-                <p class="{{ $dt }} mb-1.5">📷 Schritt-Fotos ({{ $schrittFotos->flatten()->count() }})</p>
-                @if($schrittFotos->isNotEmpty())
-                    <div class="space-y-1.5 mb-2">
-                        @foreach($schrittFotos as $schritt => $fotos)
-                            <div class="flex items-start gap-2" wire:key="sfg-{{ $schritt }}">
-                                <span class="shrink-0 w-20 text-[11px] text-gray-500 pt-1">{{ $schritt === 0 ? 'allgemein' : "Schritt {$schritt}" }}</span>
-                                <div class="flex flex-wrap gap-1.5">
-                                    @foreach($fotos as $foto)
-                                        <span class="relative group" wire:key="sf-{{ $foto->id }}">
-                                            <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}" class="w-16 h-12 object-cover rounded border border-black/10" loading="lazy" />
-                                            <button type="button" wire:click="fotoLoeschen({{ $foto->id }})" wire:confirm="Foto löschen?"
-                                                    class="hidden group-hover:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center rounded-full bg-rose-500 text-white text-[9px]" title="löschen" data-foto-loeschen>✕</button>
-                                        </span>
-                                    @endforeach
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
-                <div class="flex flex-wrap items-center gap-2" data-foto-upload>
-                    <input type="number" min="0" max="99" wire:model="fotoSchritt" placeholder="Schritt-Nr" title="Schritt-Nummer aus der Zubereitung (leer/0 = allgemeines Rezept-Foto)" class="{{ $input }} !py-1 !w-24" />
-                    <input type="file" wire:model="fotoUpload" accept="image/*" class="text-[11px] text-gray-600 file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-violet-500/10 file:text-violet-600 file:text-[11px] file:cursor-pointer" data-foto-datei />
-                    <input type="text" wire:model="fotoCaption" placeholder="Bildunterschrift (optional)" class="{{ $input }} !py-1 w-56" />
-                    <button type="button" wire:click="fotoHochladen" wire:loading.attr="disabled" wire:target="fotoUpload, fotoHochladen" class="{{ $btnAi }}" data-foto-hochladen>
-                        <span wire:loading.remove wire:target="fotoUpload, fotoHochladen">Hochladen</span>
-                        <span wire:loading wire:target="fotoUpload, fotoHochladen">lädt …</span>
-                    </button>
-                    @error('fotoUpload')<span class="text-[11px] text-rose-500">{{ $message }}</span>@enderror
-                </div>
-            </div>
+        @if($neu)
+            {{-- Anlage-Modus: es gibt noch keine Schritt-IDs (und damit keine Foto-Verknüpfung).
+                 Freitext ist hier weiter erlaubt und wird beim Speichern in Schritte geparst. --}}
+            <textarea wire:model="form.preparation" rows="6" class="{{ $input }} font-mono text-[11px]" data-rezept-preparation
+                      placeholder="Optional schon eintippen — wird beim Speichern in Schritte umgewandelt.&#10;## Mise en Place&#10;1. …"></textarea>
+            <p class="text-[10px] text-gray-500 mt-1">
+                <code>##</code> = Abschnitt · <code>1.</code> / <code>-</code> = Schritt. Nach dem Speichern gibt es den Schritt-Editor mit Fotos.
+            </p>
+        @else
+            <livewire:foodalchemist.recipes.step-editor :recipe-id="$recipeId" wire:key="schritt-editor-{{ $recipeId }}" />
+            <p class="text-[10px] text-gray-500 mt-1">
+                Lineage: {{ $zustaende['preparation'] }} — der Markdown-Text in <code>preparation</code> wird aus den Schritten erzeugt
+                (Produktionsdruck, Suche und Prozessanker lesen ihn).
+            </p>
         @endif
-        @if(isset($kiVorschlag['preparation']))
-            <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 max-h-40 overflow-y-auto" data-preparation-ki-vorschlag>
-                <p class="text-[11px] text-violet-700 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($kiVorschlag['preparation']['werte']['preparation'] ?? '—', 900) }}</p>
-                <button type="button" wire:click="accept_zubereitung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['preparation']['confidence'] * 100) }} %)</button>
-            </div>
-        @endif
-        @if(!$neu)<p class="text-[10px] text-gray-500 mt-1">Lineage: {{ $zustaende['preparation'] }}</p>@endif
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab ZUBEREITUNG --}}
 

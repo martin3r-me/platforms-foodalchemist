@@ -185,18 +185,43 @@
             </div>
         </x-foodalchemist::section>
 
-        @if($schrittFotos->isNotEmpty())
-            <x-foodalchemist::section title="Schritt-Fotos" icon="heroicon-o-photo" data-panel-schritt-fotos>
+        {{-- Spec 27: Anleitung = Schritt-Karten (Nummer + Text + Foto inline), read-only --}}
+        @if($schritte->isNotEmpty())
+            <x-foodalchemist::section title="Anleitung" icon="heroicon-o-list-bullet" data-panel-anleitung>
+                @php($letztePhase = '__init__')
                 <div class="space-y-1.5">
-                    @foreach($schrittFotos as $schritt => $fotos)
-                        <div class="flex items-start gap-2" wire:key="psfg-{{ $schritt }}">
-                            <span class="shrink-0 w-16 text-[10px] text-gray-500 pt-1">{{ $schritt === 0 ? 'allgemein' : "Schritt {$schritt}" }}</span>
-                            <div class="flex flex-wrap gap-1.5">
-                                @foreach($fotos as $foto)
-                                    <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}" class="w-20 h-14 object-cover rounded border border-black/10" loading="lazy" wire:key="psf-{{ $foto->id }}" />
-                                @endforeach
+                    @foreach($schritte as $s)
+                        @if(($s->phase ?? '') !== $letztePhase)
+                            @php($letztePhase = $s->phase ?? '')
+                            @if($letztePhase !== '')
+                                <p class="text-[10px] font-semibold uppercase tracking-wider text-violet-600 pt-1">{{ $letztePhase }}</p>
+                            @endif
+                        @endif
+                        <div class="flex items-start gap-2" wire:key="pstep-{{ $s->id }}">
+                            <span class="shrink-0 w-4 text-[10px] text-gray-500 tabular-nums pt-0.5">{{ $s->position }}.</span>
+                            <div class="min-w-0">
+                                <div class="text-[11px] leading-snug">{!! \Illuminate\Support\Str::inlineMarkdown((string) $s->text) !!}</div>
+                                @if($s->photos->isNotEmpty())
+                                    <div class="flex flex-wrap gap-1.5 mt-1">
+                                        @foreach($s->photos as $foto)
+                                            <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}"
+                                                 class="w-20 h-14 object-cover rounded border border-black/10" loading="lazy" wire:key="pstepf-{{ $s->id }}-{{ $foto->id }}" />
+                                        @endforeach
+                                    </div>
+                                @endif
                             </div>
                         </div>
+                    @endforeach
+                </div>
+            </x-foodalchemist::section>
+        @endif
+
+        @if($allgemeineFotos->isNotEmpty())
+            <x-foodalchemist::section title="Rezept-Fotos" icon="heroicon-o-photo" data-panel-rezept-fotos>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach($allgemeineFotos as $foto)
+                        <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}"
+                             class="w-20 h-14 object-cover rounded border border-black/10" loading="lazy" wire:key="pallgf-{{ $foto->id }}" />
                     @endforeach
                 </div>
             </x-foodalchemist::section>

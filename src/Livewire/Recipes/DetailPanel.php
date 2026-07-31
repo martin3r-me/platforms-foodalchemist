@@ -234,10 +234,15 @@ class DetailPanel extends Component
             'ersatz' => $rezept !== null && $team !== null ? $equivSvc->fuer($team, 'recipe', $rezept->id) : collect(),
             'ersatzKandidaten' => $rezept !== null && $team !== null && $this->ersatzSuche !== ''
                 ? $equivSvc->sucheZiele($team, $this->ersatzSuche, 'recipe', $rezept->id) : collect(),
-            // R6: Step-by-Step-Fotos (gruppiert nach Schritt)
-            'schrittFotos' => $rezept !== null
+            // Spec 27: die Anleitung als Schritte (Nummer + Text + verknüpfte Fotos)
+            'schritte' => $rezept !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $rezept->id)
+                    ->with('photos')->orderBy('position')->orderBy('id')->get()
+                : collect(),
+            // Fotos ohne Schritt-Verknüpfung = allgemeine Rezept-Fotos (Hero/Ergebnis)
+            'allgemeineFotos' => $rezept !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $rezept->id)
-                    ->orderBy('schritt_nr')->orderBy('sort_order')->orderBy('id')->get()->groupBy('schritt_nr')
+                    ->whereDoesntHave('steps')->orderBy('sort_order')->orderBy('id')->get()
                 : collect(),
             // Nachtrag 13_REFERENZ: EK je Zeile — dieselbe T3-Kaskade wie der Recompute (eine Regel-Stelle)
             'zeilenEk' => $rezept !== null ? app(RecipeRecomputeService::class)->zeilenKosten($rezept) : [],

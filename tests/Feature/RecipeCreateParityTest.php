@@ -66,7 +66,12 @@ it('RecipeModal: Anlegen springt in den Edit-Modus (Modal bleibt offen, recipeId
 
     // Getipptes ist wirklich in der DB gelandet (kein stiller Verlust)
     $r = FoodAlchemistRecipe::where('recipe_key', 'fond_edit_sprung')->firstOrFail();
-    expect($r->preparation)->toBe('getippte Zubereitung')
-        ->and($r->temperature)->toBe('warm')
+    expect($r->temperature)->toBe('warm')
         ->and($r->notes_manual)->toBe('getippte Notiz');
+
+    // Spec 27: die getippte Zubereitung wird beim Anlegen in Schritte geparst — die
+    // Schritte sind der Master, `preparation` ist ihr (nummerierter) Spiegel.
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $r->id)->pluck('text')->all())
+        ->toBe(['getippte Zubereitung'])
+        ->and($r->preparation)->toBe('1. getippte Zubereitung');
 });

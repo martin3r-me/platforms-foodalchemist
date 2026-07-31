@@ -82,6 +82,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ImportArticlesCommand::class,
                 \Platform\FoodAlchemist\Console\MoneyTruthReportCommand::class,
                 \Platform\FoodAlchemist\Console\SeedRebateTiersCommand::class,
+                \Platform\FoodAlchemist\Console\StepsBackfillCommand::class,
             ]);
 
             $this->planeLaeufe();

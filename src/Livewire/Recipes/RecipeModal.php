@@ -17,7 +17,6 @@ use Platform\FoodAlchemist\Services\RecipeService;
  */
 class RecipeModal extends Component
 {
-    use \Livewire\WithFileUploads;
     use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
 
     private const LEER = [
@@ -100,7 +99,10 @@ class RecipeModal extends Component
                     'yield_kg_manual' => $r->yield_kg_manual,
                     'yield_pieces' => $r->yield_pieces,
                     'description' => $r->description ?? '',
-                    'preparation' => $r->preparation ?? '',
+                    // 'preparation' wird BEWUSST nicht geladen (Spec 27): der Inhalt lebt in
+                    // den Schritten, das Feld ist nur ihr Spiegel. Ein geladener Wert würde
+                    // beim Speichern den Spiegel überschreiben. Das Form-Feld dient nur der
+                    // Anlage (Freitext → Parser), im Edit-Modus bleibt es leer.
                     'notes_manual' => $r->notes_manual ?? '',
                     'equipment_ids' => $r->equipment()->pluck('foodalchemist_vocab_kitchen_equipment.id')->map(fn ($i) => (string) $i)->all(),
                     'is_sales_recipe' => (bool) $r->is_sales_recipe,
@@ -142,9 +144,22 @@ class RecipeModal extends Component
                 'yield_pieces' => $rohStk !== '' ? (float) $rohStk : null,
             ];
             $warNeu = $this->recipeId === null;
+            if (! $warNeu) {
+                // Spec 27: `preparation` ist im Edit-Modus nur ein SPIEGEL der Schritte.
+                // Der (nicht mehr gerenderte) Form-Wert darf ihn nicht überschreiben —
+                // RecipeService::update schreibt per array_key_exists jeden mitgesandten Key.
+                unset($in['preparation']);
+            }
             $recipe = $warNeu
                 ? $recipes->create($team, $in)
                 : $recipes->update($team, $this->recipeId, $in);
+
+            // Beim ANLEGEN darf weiter Freitext getippt werden (Paste aus Word) — er wird
+            // sofort in Schritte geparst, damit die Schritte von Anfang an der Master sind.
+            if ($warNeu && trim((string) ($this->form['preparation'] ?? '')) !== '') {
+                app(\Platform\FoodAlchemist\Services\RecipeStepService::class)
+                    ->ausMarkdown($recipe, $this->form['preparation'], ueberschreiben: true);
+            }
 
             // #509 Create-Parität (VkModal::anlegen-Muster): nach dem Anlegen NICHT
             // schließen, sondern nahtlos in den Edit-Modus springen — Zutaten/Deklaration/
@@ -226,65 +241,24 @@ class RecipeModal extends Component
         }
     }
 
-    // ── UI-Audit: GL-07-Lebenszyklus preparation (D-5 §4.2.5, V-02-Klasse) ──
+    // ── GL-07-Lebenszyklus preparation (D-5 §4.2.5) ─────────────────────
+    //
+    // Spec 27: der Zubereitungs-INHALT wird nicht mehr hier gepflegt, sondern im
+    // eingebetteten Schritt-Editor (`StepEditor`) — inkl. KI (`recipe.steps`).
+    // Hier bleibt nur die LINEAGE-Steuerung: „manuell" sperrt gegen KI-Überschreiben,
+    // „Reset" hebt die Sperre auf. Der Text selbst ist ein Spiegel der Schritte und
+    // wird deshalb hier NIE geleert (das täte man über das Löschen der Schritte).
 
-    public function ai_zubereitung(AiGatewayService $ki): void
-    {
-        $this->fehler = null;
-        $r = $this->rezept();
-        try {
-            $vorschlag = $ki->propose('recipe.preparation', [
-                'name' => $r?->name ?? $this->form['name'],
-                'preparation' => $this->form['preparation'] ?: null,
-                'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
-            ]);
-        } catch (\RuntimeException $e) {
-            $this->fehler = $e->getMessage();
-
-            return;
-        }
-        $this->kiVorschlag['preparation'] = [
-            'werte' => $vorschlag->werte,
-            'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
-            'reasoning' => $vorschlag->reasoning,
-        ];
-    }
-
-    public function accept_zubereitung(): void
-    {
-        $r = $this->rezept();
-        $vorschlag = $this->kiVorschlag['preparation'] ?? null;
-        if ($r === null || $vorschlag === null) {
-            return;
-        }
-        if ($r->preparation_source === 'manual') {                            // GL-07 Override-First
-            $this->fehler = 'Zubereitung ist manuell gepflegt — erst Reset, dann KI übernehmen.';
-
-            return;
-        }
-        $wert = $vorschlag['werte']['preparation'] ?? null;
-        if (! is_string($wert) || trim($wert) === '') {
-            $this->fehler = 'KI-Vorschlag enthält keine Zubereitung.';
-
-            return;
-        }
-        $r->update(['preparation' => $wert, 'preparation_source' => 'ki', 'preparation_ai_confidence' => $vorschlag['confidence']]);
-        $this->form['preparation'] = $wert;
-        unset($this->kiVorschlag['preparation']);
-    }
-
-    public function clear_zubereitung(): void
-    {
-        $this->rezept()?->update(['preparation' => null, 'preparation_source' => null, 'preparation_ai_confidence' => null]);
-        $this->form['preparation'] = '';
-        unset($this->kiVorschlag['preparation']);
-    }
-
+    /** Sperrt die Zubereitung gegen KI-Überschreiben (GL-07 Override-First). */
     public function manual_zubereitung(): void
     {
-        if (trim($this->form['preparation']) !== '') {
-            $this->rezept()?->update(['preparation' => $this->form['preparation'], 'preparation_source' => 'manual', 'preparation_ai_confidence' => null]);
-        }
+        $this->rezept()?->update(['preparation_source' => 'manual', 'preparation_ai_confidence' => null]);
+    }
+
+    /** Hebt die Lineage-Markierung auf (ki/manual → offen). Der Text bleibt. */
+    public function clear_zubereitung(): void
+    {
+        $this->rezept()?->update(['preparation_source' => null, 'preparation_ai_confidence' => null]);
     }
 
     // ── M4-11: GL-07-Lebenszyklus kategorie ─────────────────────────────
@@ -466,8 +440,11 @@ class RecipeModal extends Component
                 $this->form['description'] = $werte['description'];
             }
             if (is_string($werte['preparation'] ?? null) && trim($werte['preparation']) !== '' && $frisch->preparation_source !== 'manual') {
-                $frisch->update(['preparation' => $werte['preparation'], 'preparation_source' => 'ki', 'preparation_ai_confidence' => $this->ueberarbeitung['confidence']]);
-                $this->form['preparation'] = $werte['preparation'];
+                $frisch->update(['preparation_source' => 'ki', 'preparation_ai_confidence' => $this->ueberarbeitung['confidence']]);
+                // Spec 27: die KI liefert weiter Markdown — Master sind aber die Schritte.
+                // Der Parser übernimmt, `preparation` wird daraus als Spiegel neu gerendert.
+                app(\Platform\FoodAlchemist\Services\RecipeStepService::class)
+                    ->ausMarkdown($frisch, $werte['preparation'], ueberschreiben: true);
             }
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -487,51 +464,8 @@ class RecipeModal extends Component
         $this->ueberarbeitung = null;                                 // reject lässt Fachdaten unberührt (GL-07)
     }
 
-    // ── R6: Step-by-Step-Fotos (an die Zubereitung gekoppelt über schritt_nr) ──
-
-    public $fotoUpload = null;
-
-    public ?int $fotoSchritt = null;
-
-    public string $fotoCaption = '';
-
-    public function fotoHochladen(): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || $this->recipeId === null || $this->fotoUpload === null) {
-            return;
-        }
-        $r = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($this->recipeId);
-        if ((int) $r->team_id !== (int) $team->id) {
-            $this->fehler = 'Geerbtes Rezept — Fotos nur durchs Besitzer-Team (D1).';
-
-            return;
-        }
-        $this->validate(['fotoUpload' => 'image|max:8192'], [], ['fotoUpload' => 'Foto']);
-        $pfad = $this->fotoUpload->store("foodalchemist/rezepte/{$this->recipeId}", 'public');
-        \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::create([
-            'team_id' => $team->id,
-            'recipe_id' => $this->recipeId,
-            'schritt_nr' => max(0, (int) $this->fotoSchritt),
-            'pfad' => $pfad,
-            'caption' => trim($this->fotoCaption) ?: null,
-        ]);
-        $this->reset('fotoUpload', 'fotoSchritt', 'fotoCaption');
-    }
-
-    public function fotoLoeschen(int $fotoId): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || $this->recipeId === null) {
-            return;
-        }
-        $foto = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $this->recipeId)
-            ->where('team_id', $team->id)->find($fotoId);
-        if ($foto !== null) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($foto->pfad);
-            $foto->delete();
-        }
-    }
+    // Spec 27: Foto-Upload/-Löschen ist in den `StepEditor` gewandert (Media-Pool +
+    // M:N-Verknüpfung am Schritt). Hier gibt es deshalb keine Datei-Uploads mehr.
 
     /** R6: Template-Markierung an/aus (Service-Guard: nur Besitzer-Team, D1). */
     public function templateToggle(): void
@@ -686,16 +620,8 @@ class RecipeModal extends Component
         }
     }
 
-    // ── Zubereitung: Markdown-Vorschau (Schreiben/Vorschau-Tabs, Ist-App) ──
-
-    public ?string $zubereitungVorschau = null;
-
-    public function vorschauZubereitung(): void
-    {
-        $this->zubereitungVorschau = trim($this->form['preparation']) !== ''
-            ? \Illuminate\Support\Str::markdown($this->form['preparation'])
-            : '<p class="text-gray-400">— leer —</p>';
-    }
+    // Spec 27: die Markdown-Vorschau ist entfallen — der Schritt-Editor zeigt die
+    // Anleitung selbst als Karten (Nummer + Text + Foto inline).
 
     /** „Name putzen": §1-Syntax via KI-Gateway (GL-07: Vorschlag direkt ins Feld, nichts persistiert). */
     public function namePutzen(AiGatewayService $ki): void
@@ -743,10 +669,6 @@ class RecipeModal extends Component
         return view('foodalchemist::livewire.recipes.recipe-modal', [
             'neu' => $this->recipeId === null,
             'istTemplate' => (bool) ($r?->is_template ?? false),
-            'schrittFotos' => $this->recipeId !== null
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $this->recipeId)
-                    ->orderBy('schritt_nr')->orderBy('sort_order')->orderBy('id')->get()->groupBy('schritt_nr')
-                : collect(),
             'voll' => $voll,
             'bulkRun' => $bulkRun,
             'bulkOffen' => $bulkRun !== null

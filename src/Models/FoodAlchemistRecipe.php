@@ -79,6 +79,19 @@ class FoodAlchemistRecipe extends Model
         return $this->hasMany(FoodAlchemistRecipeIngredient::class, 'recipe_id')->orderBy('position');
     }
 
+    /** Zubereitungs-Schritte (Spec 27) — Master, `preparation` ist nur ihr gerenderter Spiegel. */
+    public function steps(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistRecipeStep::class, 'recipe_id')->orderBy('position');
+    }
+
+    /** Alle Fotos des Rezepts (Media-Pool) — verlinkt an Schritte oder „allgemein". */
+    public function stepPhotos(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistRecipeStepPhoto::class, 'recipe_id')
+            ->orderBy('sort_order')->orderBy('id');
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipeCategory::class, 'category_id');
