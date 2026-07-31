@@ -154,8 +154,8 @@
                     </tr></thead>
                     <tbody>
                         @forelse($pakete as $b)
-                            <tr wire:key="b-{{ $b->id }}" wire:click="waehle({{ $b->id }})"
-                                class="{{ $tr }} cursor-pointer {{ $selectedId === $b->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}">
+                            <x-foodalchemist::table-row :active="$selectedId === $b->id" wire:key="b-{{ $b->id }}" wire:click="waehle({{ $b->id }})"
+>
                                 <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate text-gray-900">{{ $b->name }}</td>
                                 <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $b->role ?? '—' }}</td>
                                 <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $b->level ?? '—' }}</td>
@@ -163,7 +163,7 @@
                                 <td class="{{ $td }} text-gray-900 text-right tabular-nums whitespace-nowrap">{{ $b->price_per_person !== null ? number_format((float) $b->price_per_person, 2, ',', '.') . ' €' : '—' }}</td>
                                 <td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $b->food_cost_percent !== null ? number_format((float) $b->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
                                 <td class="{{ $td }}"><span class="{{ $pill }} {{ $b->price_mode === 'auto' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $b->price_mode }}</span></td>
-                            </tr>
+                            </x-foodalchemist::table-row>
                         @empty
                             <tr><td colspan="7" class="px-5 py-10 text-center text-gray-500">Noch keine Pakete. Oben „+ Neuer Paket".</td></tr>
                         @endforelse

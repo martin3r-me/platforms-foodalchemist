@@ -149,9 +149,9 @@
                 </thead>
                 <tbody>
                     @forelse($items as $it)
-                        <tr wire:key="row-{{ $tab }}-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
+                        <x-foodalchemist::table-row :active="$selectedId === $it->id" wire:key="row-{{ $tab }}-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
                             x-data x-on:click="$store.ui?.mSet('activity_concepter', 'open', true)"
-                            class="{{ $tr }} cursor-pointer {{ $selectedId === $it->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}">
+>
                             <td wire:click.stop="bearbeite({{ $it->id }})" class="{{ $td }} font-medium text-gray-900 hover:text-violet-600 cursor-pointer" title="Editor öffnen">
                                 @if($it->level)<span class="inline-block w-1.5 h-1.5 rounded-full {{ $niveauDot[$it->level] ?? 'bg-gray-300' }} mr-1 align-middle" title="Niveau: {{ $it->level }}"></span>@endif
                                 {{ $it->name }}
@@ -183,7 +183,7 @@
                                 <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->slots_count }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person_cache !== null ? number_format((float) $it->price_per_person_cache, 2, ',', '.') . ' €' : '—' }}</td>
                             @endif
-                        </tr>
+                        </x-foodalchemist::table-row>
                     @empty
                         <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-500">
                             {{ $tab === 'pakete' ? 'Keine Pakete. Oben „+ Neues Paket".' : ($showVorlagen ? 'Keine Vorlagen.' : 'Keine Concepts. Oben „+ Neues Concept".') }}

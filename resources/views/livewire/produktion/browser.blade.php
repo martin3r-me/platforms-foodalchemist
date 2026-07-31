@@ -70,9 +70,8 @@
                         @php($einkaufPill = ['keine' => ['—', $variantPill['secondary'] ?? ''], 'offen' => ['offen', $variantPill['warning'] ?? ''], 'versendet' => ['versendet', $variantPill['success'] ?? '']])
                         @forelse($auftraege as $a)
                             @php($ziele = collect($a->targets ?? [])->pluck('label')->filter()->values())
-                            <tr wire:key="po-{{ $a->id }}" wire:click="waehle({{ $a->id }})"
+                            <x-foodalchemist::table-row :active="$orderId === $a->id" wire:key="po-{{ $a->id }}" wire:click="waehle({{ $a->id }})"
                                 x-data x-on:click="$store.ui?.mSet('activity_produktion', 'open', true)"
-                                class="{{ $tr }} cursor-pointer {{ $orderId === $a->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : '' }}"
                                 data-produktion-zeile="{{ $a->id }}">
                                 <td class="{{ $td }} font-medium text-gray-900 whitespace-nowrap">
                                     {{ $a->name ?: $a->reference ?: '—' }}
@@ -96,7 +95,7 @@
                                     @php($ind = $einkaufPill[$indikatoren[$a->id] ?? 'keine'] ?? $einkaufPill['keine'])
                                     <span class="{{ $pill }} font-medium {{ $ind[1] }}" data-einkauf-indikator="{{ $indikatoren[$a->id] ?? 'keine' }}">{{ $ind[0] }}</span>
                                 </td>
-                            </tr>
+                            </x-foodalchemist::table-row>
                         @empty
                             <tr><td colspan="6" class="px-5 py-10 text-center text-gray-500">Keine Produktionsaufträge. „+ Neuer Produktionsauftrag" oben.</td></tr>
                         @endforelse

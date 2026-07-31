@@ -140,7 +140,9 @@
                 </span>
                 <span class="flex items-center gap-1">
                     @foreach($mahlzeiten as $mk => $ml)
-                        <button type="button" wire:click="mahlzeitSetzen('{{ $mk }}')" class="{{ $pill }} {{ $mahlzeit === $mk ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $ml }}</button>
+                        {{-- Spec 28: „ausgewählter Filter" ist app-weit `primary` (violett). Hier stand
+                             `info` (sky) — derselbe Begriff in einer zweiten Farbe. --}}
+                        <button type="button" wire:click="mahlzeitSetzen('{{ $mk }}')" class="{{ $pill }} {{ $mahlzeit === $mk ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $ml }}</button>
                     @endforeach
                 </span>
                 <span class="flex items-center gap-2 ml-auto">

@@ -421,6 +421,43 @@ Ebenfalls offen: das **Scroll-Modell der Tabelle** — ohne begrenzte Höhe auf 
 `overflow-x-auto`-Wrapper gibt es keinen sticky Tabellenkopf (siehe E7-Nachtrag). Das ist eine
 Layout-Entscheidung und gehört an einem Schirm erprobt, bevor sie in einen Baustein wandert.
 
+### E12 · table-row app-weit + zwei korrigierte Behauptungen (2026-07-31)
+
+**`table-row` vollständig ausgerollt:** Concepter-Browser, Angebote, Pakete, Produktion-Browser.
+Handgeschriebene Zeilen-Auswahl-Zustände app-weit: **0** (vorher 7 Tabellen mit eigener Kopie).
+Im Browser je Schirm gegengemessen: gewählt `2px oklch(0.606 0.25 292.717)`, ruhig `2px`
+transparent — identisch zu GPs.
+
+**Korrektur 1 — die Panel-Tönung trägt nicht.** Der Vorschlag „Tiefenstaffel Katalog hell →
+Inspektor getönt → Werkbank dunkel" wurde gebaut (`detail-sidebar`, derselbe Slate-Verlauf wie der
+helle Editor-Canvas) und im Vorher/Nachher-Vergleich **nicht unterscheidbar**. Zwei Ursachen:
+die Deckkraft (6 % → 2 %) verschwindet gegen den ohnehin hellgrauen `--ui-muted-5`-Grund, und das
+Panel ist fast vollständig von weißen Karten bedeckt — es bleibt kaum Grund übrig. **Zurückgenommen.**
+Sichtbar wäre nur ein echter Farbschritt (definiertes Hellgrau); der Gewinn ist klein, weil das
+Panel sich über Rand und eigenen Grund schon als Zone liest. Empfehlung: streichen.
+
+**Korrektur 2 — „9 flache Filter-Sidebars" war falsch.** Nachgemessen ist **keine** davon eine
+Zeilen-Liste: Concepter ist eine **Chip-Wolke** (11 Gruppen), Konzepte/Angebote/Pakete haben 1–2
+Einzelelemente, Foodbook/Produktion/Speiseplan/Lieferanten/Geschirr haben keine Filter-Zeilen.
+`filter-row` und `filter-ast` hatten damit **genau drei Kunden** (die drei Bäume) — der Rollout dort
+ist vollständig, nicht erst begonnen.
+
+**`filter-chip` bewusst NICHT gebaut.** Inventur: 55 Chip-Knöpfe in 14 Dateien, davon 42 mit
+Zustand — und **41 nutzen bereits dieselbe Konvention** (`$pill` + `variantPill['primary']` aktiv /
+`['secondary']` inaktiv). Die Chips laufen also nicht auseinander; ein Baustein hätte Wiederholung
+gespart, aber keine Inkonsistenz behoben. Das ist der Fall, in dem Abstraktion mehr kostet als sie
+spart (§ Empfehlung „kein Design-System").
+Stattdessen der **eine echte Ausreißer**: der Speiseplan-Mahlzeit-Filter färbte „ausgewählt" mit
+`info` (sky) statt `primary` (violett) — derselbe Begriff in einer zweiten Farbe. Angeglichen.
+**Kein Ausreißer** sind die Eignungs-Chips im Rezept-Panel (`$typ === 'level' ? info : primary`):
+dort codiert die Farbe den **Typ**, nicht den Auswahl-Zustand. Bleibt.
+
+**Messfalle, dreimal getappt:** `document.querySelector('table tbody tr')` trifft auf diesen
+Schirmen **versteckte Modal-Tabellen** (jede Seite mountet Editor-Modals mit eigenen Tabellen).
+Deshalb schien der Concepter-Umbau zunächst wirkungslos (`borderLeft: 0px`). Richtig ist die
+Sonde über den Baustein-Marker **und** einen Sichtbarkeits-Filter:
+`[...document.querySelectorAll('[data-fa-table-row]')].filter(e => e.getBoundingClientRect().height > 0)`.
+
 ## 6 · Offene To-dos, die beim Rollout aufgefallen sind
 
 Bewusst **nicht** im Rollout mitgemacht — jedes ändert Verhalten oder Daten, nicht Aussehen.
