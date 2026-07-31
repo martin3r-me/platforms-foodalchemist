@@ -3,7 +3,7 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 {{-- R4 (Dominique): Voll-Editor nimmt den ganzen Bildschirm — 19-Zutaten-Rezepte brauchen die Fläche --}}
-<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten: ' . $form['name']" size="max-w-3xl" :fullscreen="! $neu" :close-via="'schliessenOderZurueck'">
+<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten: ' . $form['name']" size="max-w-3xl" :fullscreen="! $neu" :dark-canvas="! $neu" :close-via="'schliessenOderZurueck'">
     {{-- Aktionsleiste (D-5 §4.2.1) --}}
     <x-slot:actions>
         <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern', { recipeId: @js($recipeId) })" class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
@@ -11,12 +11,12 @@
             <button type="button" wire:click="loeschen" wire:confirm="Rezept wirklich löschen? (Als Sub-Rezept referenzierte Rezepte sind geschützt)"
                     class="{{ $btnGhostXs }} text-rose-600" data-rezept-loeschen>Löschen</button>
             <span class="text-gray-300">|</span>
-            <button type="button" wire:click="allesAnreichern" class="{{ $btnGhostXs }} text-violet-600"
-                    title="D-5 §4.4: Vorschläge für Beschreibung · Kategorie · Geschmack (Review, nie Auto-Persistenz)" data-alles-anreichern>✨ Alles anreichern</button>
+            <button type="button" wire:click="allesAnreichern" class="{{ $btnAi }}"
+                    title="D-5 §4.4: Vorschläge für Beschreibung · Kategorie · Geschmack (Review, nie Auto-Persistenz)" data-alles-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Alles anreichern</button>
             {{-- R6: Template-Markierung (Basis für «Aus Template» im Browser) --}}
-            <button type="button" wire:click="templateToggle" class="{{ $btnGhostXs }} {{ $istTemplate ? 'text-orange-600' : '' }}"
+            <button type="button" wire:click="templateToggle" class="{{ $btnGhostXs }} {{ $istTemplate ? '!text-orange-600 !bg-orange-500/10 !border-orange-500/20' : '' }}"
                     title="Template = Vorlage für neue Rezepte (Browser: «Aus Template»)" data-template-toggle>
-                📐 {{ $istTemplate ? 'Template ✓' : 'Als Template' }}
+                @svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5') {{ $istTemplate ? 'Template ✓' : 'Als Template' }}
             </button>
         @endif
     </x-slot:actions>
@@ -25,11 +25,11 @@
     @if($voll !== null)
         <x-slot:kpiHeader>
             <div class="grid grid-cols-2 md:grid-cols-5 gap-2" data-editor-kpis>
-                <div class="rounded-lg bg-black/[0.03] px-3 py-2">
+                <div class="rounded-lg bg-white border border-black/5 shadow-sm px-3 py-2">
                     <span class="{{ $dt }}">Yield</span>
                     <p class="text-xs font-semibold text-gray-900">{{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
                 </div>
-                <div class="rounded-lg bg-black/[0.03] px-3 py-2">
+                <div class="rounded-lg bg-white border border-black/5 shadow-sm px-3 py-2">
                     <span class="{{ $dt }}">EK gesamt</span>
                     <p class="text-xs font-semibold text-gray-900">{{ $voll->ek_total_eur !== null ? number_format((float) $voll->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
                 </div>
@@ -37,11 +37,11 @@
                     <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600">EK / kg</span>
                     <p class="text-xs font-bold text-orange-700">{{ $voll->ek_per_kg_eur !== null ? number_format((float) $voll->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
                 </div>
-                <div class="rounded-lg bg-black/[0.03] px-3 py-2">
+                <div class="rounded-lg bg-white border border-black/5 shadow-sm px-3 py-2">
                     <span class="{{ $dt }}">Mit Preis</span>
                     <p class="text-xs font-semibold text-gray-900">{{ $voll->ek_n_ingredients_priced ?? 0 }}/{{ $voll->ek_n_ingredients_total ?? 0 }}</p>
                 </div>
-                <div class="rounded-lg bg-black/[0.03] px-3 py-2">
+                <div class="rounded-lg bg-white border border-black/5 shadow-sm px-3 py-2">
                     <span class="{{ $dt }}">Allergen-Konf.</span>
                     <p class="text-xs font-semibold {{ ['high' => 'text-emerald-600', 'medium' => 'text-amber-600', 'low' => 'text-rose-600'][$voll->allergens_confidence] ?? 'text-gray-500' }}">{{ strtoupper((string) $voll->allergens_confidence) }}</p>
                 </div>
@@ -58,25 +58,22 @@
         <div class="mb-3 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs flex items-center gap-2"
              @if($bulkRun->status === 'running') wire:poll.2s @endif data-anreichern-status>
             @if($bulkRun->status === 'running')
-                <span>✨ Anreicherung läuft …</span>
+                <span class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Anreicherung läuft …</span>
             @else
-                <span>✨ {{ $bulkOffen }} Vorschläge offen{{ $bulkRun->failed > 0 ? " · {$bulkRun->failed} Fehler" : '' }}</span>
+                <span class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') {{ $bulkOffen }} Vorschläge offen{{ $bulkRun->failed > 0 ? " · {$bulkRun->failed} Fehler" : '' }}</span>
                 <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-anreichern-uebernehmen>Alle übernehmen</button>
             @endif
         </div>
     @endif
 
-    {{-- R7 (Dominique 2026-06-14): Tabs statt langem Scroll — Concepter-Parität (editor.blade.php §10.4).
-         Alpine x-show statt Livewire-setTab: alle Sektionen bleiben im DOM (Marker/Tests bleiben grün),
-         der eingebettete <livewire ingredient-editor> wird NICHT neu gemountet, ungespeicherte Eingaben
-         bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
-    <div x-data="{ tab: 'aufbau' }" data-rezept-tabs>
-        <div class="flex gap-4 border-b border-black/5">
-            {{-- 'details'-Key bleibt stabil (Marker/Alpine), Label seit 2026-07-02 „Deklaration" (Allergene · Zusatzstoffe · Nährwerte) --}}
-            @php($rezTabs = ['aufbau' => 'Aufbau', 'preparation' => 'Zubereitung', 'eigenschaften' => 'Eigenschaften', 'details' => 'Deklaration'])
-            @if(! $neu)@php($rezTabs['sensorik'] = 'Sensorik & Pairing')@endif
-            @if(! $neu)@php($rezTabs['feedback'] = 'Feedback')@endif
-            @php($rezTabs['notes'] = 'Notizen')
+    {{-- R7: Tabs (Alpine x-show, alle Sektionen bleiben im DOM → eingebetteter ingredient-editor
+         wird nicht neu gemountet, kein Server-Roundtrip). Sticky-Tab-Leiste im Body (ein Alpine-Scope
+         für Tabs + Panels — Header/Body-Split desynct unter Livewire-Morph). --}}
+    {{-- wire:key erzwingt Element-Ersatz bei Rezept-Wechsel (Alpine wertet x-data/-Bindings bei morphdom
+         NICHT neu aus → sonst bleibt der aktive Tab „stale"; gleiches Muster wie im Zutaten-Editor). --}}
+    <div wire:key="rezept-tabs-{{ $recipeId ?? 'neu' }}" x-data="{ tab: '{{ $neu ? 'eigenschaften' : 'aufbau' }}' }" data-rezept-tabs>
+        <div class="flex gap-4 border-b border-black/5 sticky top-0 z-20 -mx-6 -mt-4 px-6 pt-4 bg-white/90 backdrop-blur-xl shadow-md rounded-b-xl">
+            @php($rezTabs = array_filter(['aufbau' => 'Aufbau', 'eigenschaften' => 'Stammdaten', 'preparation' => 'Zubereitung', 'details' => 'Deklaration', 'sensorik' => $neu ? null : 'Sensorik & Pairing', 'feedback' => $neu ? null : 'Feedback', 'notes' => 'Notizen']))
             @foreach($rezTabs as $tabKey => $tabLabel)
                 <button type="button" @click="tab = '{{ $tabKey }}'"
                         :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700' : 'border-transparent text-gray-600 hover:text-gray-700'"
@@ -84,75 +81,22 @@
             @endforeach
         </div>
 
-    {{-- ── Tab: AUFBAU (Stammdaten + Zutaten) ───────────────────────── --}}
+    {{-- ── Tab: AUFBAU (nur Zutaten) ───────────────────────── --}}
     <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
-    {{-- STAMMDATEN (§4.2.2) — ✨-Aktionen im Sektions-Header (Ist-App-Pattern) --}}
-    <x-foodalchemist::modal-section title="Stammdaten">
-        <x-slot:actions>
-            <button type="button" wire:click="namePutzen" class="{{ $btnGhostXs }} text-violet-600" title="§1-Syntax normalisieren">✨ Name putzen</button>
-            @if(!$neu)
-                <button type="button" wire:click="ai_kategorie" class="{{ $btnGhostXs }} text-violet-600" title="D-1-Klassifikation (GL-07-Vorschlag unten)">✨ Kategorie</button>
-            @endif
-            <button type="button" wire:click="kiFertigung" class="{{ $btnGhostXs }} text-violet-600" title="Fertigungstiefe aus den Zutaten">✨ Fertigung</button>
-        </x-slot:actions>
-
-        <div>
-            <label class="block {{ $label }} mb-1">Name *</label>
-            <input type="text" wire:model.live.debounce.300ms="form.name" placeholder="Schaumsauce: Beurre Blanc" class="{{ $input }} !text-base" data-rezept-name />
-            <p class="text-[11px] text-gray-500 mt-1">Syntax §1.2: <code>Typ: Bezeichnung (Variante)</code>, Title Case.
-                @if($keyVorschau !== '')<span class="font-mono" data-key-vorschau>recipe_key: {{ $keyVorschau }}{{ $neu ? '' : ' (bleibt beim Edit stabil)' }}</span>@endif
-            </p>
-        </div>
-        <div class="grid grid-cols-2 gap-3 mt-3">
-            <div>
-                <label class="block {{ $label }} mb-1">Herkunft / Quelle <span class="normal-case text-gray-500">(nicht im Namen — §1.6)</span></label>
-                <input type="text" wire:model="form.origin_source" placeholder="z. B. Broich, nach Paul, nach Omas Art" class="{{ $input }}" />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Status (§4.2.8)</label>
-                <select wire:model="form.status" class="{{ $input }}" data-rezept-status @disabled($neu)>
-                    @foreach(['stub' => 'Stub', 'draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigegeben', 'archived' => 'Archiviert'] as $wert => $lbl)
-                        <option value="{{ $wert }}">{{ $lbl }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Hauptgruppe * <span class="normal-case text-gray-500">({{ $hauptgruppen->count() }} kuratiert)</span></label>
-                <select wire:model.live="form.hauptgruppe_id" class="{{ $input }}">
-                    <option value="">—</option>
-                    @foreach($hauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->label }}</option>@endforeach
-                </select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Kategorie * <span class="normal-case text-gray-500">({{ $kategorien->count() }} in dieser Hauptgruppe)</span></label>
-                <select wire:model.live="form.category_id" class="{{ $input }}" @disabled($kategorien->isEmpty())>
-                    <option value="">—</option>
-                    @foreach($kategorien as $kat)<option value="{{ $kat->id }}">{{ $kat->label }}</option>@endforeach
-                </select>
-            </div>
-        </div>
-        @if(isset($kiVorschlag['category']))
-            <div class="mt-2 text-xs" data-kategorie-vorschlag>
-                <span class="{{ $pill }} {{ $variantPill['primary'] }}">✨ Kategorie: {{ $kiVorschlag['category']['werte']['kategorie_name'] ?? $kiVorschlag['category']['werte']['category_id'] ?? '—' }} · {{ round($kiVorschlag['category']['confidence'] * 100) }} %</span>
-                <button type="button" wire:click="accept_kategorie" class="{{ $btnGhostXs }} text-emerald-600">Übernehmen</button>
-            </div>
-        @endif
-        <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 mt-3">
-            <input type="checkbox" wire:model="form.is_sales_recipe" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-            Gericht (D-6 — VK-Felder im VK-Editor)
-        </label>
-    </x-foodalchemist::modal-section>
-
+    {{-- Aufbau = nur Zutaten (Stammdaten liegt jetzt im „Stammdaten"-Tab, 2026-07-31) --}}
     {{-- ZUTATEN (§4.2.3) — der P-8-Kern eingebettet + KPI-Leiste (Ist-App unten) --}}
     @if(!$neu)
         <x-foodalchemist::modal-section title="Zutaten ({{ $voll?->ingredients?->count() ?? 0 }})">
             {{-- R6e: ✨ KI-Überarbeiten (Ist-Button) — freie Anweisung, Vorschau, Übernehmen --}}
             <x-slot:actions>
-                <button type="button" wire:click="$toggle('ueberarbeitenOffen')" class="{{ $btnGhostXs }} text-violet-600"
-                        title="Freie Anweisung — KI überarbeitet Zutaten, Mengen, Zubereitung & Beschreibung (Vorschau + Übernehmen)" data-ki-ueberarbeiten>✨ KI-Überarbeiten</button>
-                {{-- Spec 03 L6b: 🧑‍🍳 Copilot — Prüf-Pass statt Neu-Schreiben (Befunde einzeln annehmen) --}}
-                <button type="button" wire:click="$toggle('copilotOffen')" class="{{ $btnGhostXs }} text-violet-600"
-                        title="Prüf-Pass: die KI beurteilt Mengen, Einheiten, überflüssige und fehlende Zutaten — je Befund einzeln übernehmbar. Das Rezept bleibt stehen." data-copilot>🧑‍🍳 Copilot</button>
+                <button type="button" wire:click="$toggle('ueberarbeitenOffen')" class="{{ $btnAi }}"
+                        title="Freie Anweisung — KI überarbeitet Zutaten, Mengen, Zubereitung & Beschreibung (Vorschau + Übernehmen)" data-ki-ueberarbeiten>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Überarbeiten</button>
+                {{-- Spec 03 L6b: Copilot — Prüf-Pass statt Neu-Schreiben (Befunde einzeln annehmen) --}}
+                <button type="button" wire:click="$toggle('copilotOffen')" class="{{ $btnAi }}"
+                        title="Prüf-Pass: die KI beurteilt Mengen, Einheiten, überflüssige und fehlende Zutaten — je Befund einzeln übernehmbar. Das Rezept bleibt stehen." data-copilot>@svg('heroicon-o-clipboard-document-check', 'w-3.5 h-3.5') Copilot</button>
+                {{-- Garverluste: feuert ins eingebettete zutaten-kern (Alpine garverluste() via Window-Event) --}}
+                <button type="button" x-on:click="$dispatch('garverluste-vorschlagen')" class="{{ $btnAi }}"
+                        title="M4-11: KI-Schätzung der Garverluste je Zutat (GL-07 — geschrieben erst beim Speichern)" data-garverlust-ki>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Garverluste</button>
             </x-slot:actions>
 
             @if($ueberarbeitenOffen)
@@ -161,7 +105,7 @@
                         <input type="text" wire:model="anweisung" wire:keydown.enter="kiUeberarbeiten"
                                placeholder="z. B. «mach das Rezept vegan und halbiere den Zucker»" class="{{ $input }} !py-1.5 flex-1" data-anweisung />
                         <button type="button" wire:click="kiUeberarbeiten" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-ueberarbeiten-start>
-                            <span wire:loading.remove wire:target="kiUeberarbeiten">✨ Vorschlagen</span>
+                            <span wire:loading.remove wire:target="kiUeberarbeiten" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Vorschlagen</span>
                             <span wire:loading wire:target="kiUeberarbeiten">denkt …</span>
                         </button>
                     </div>
@@ -246,7 +190,7 @@
     {{-- EQUIPMENT (§4.2.6) — gruppiert nach Vokabular-Gruppe (Ist-App-Layout) --}}
     <x-foodalchemist::modal-section title="Equipment">
         <x-slot:actions>
-            @if(!$neu)<button type="button" wire:click="kiEquipment" class="{{ $btnGhostXs }} text-violet-600" title="Set-Vorschlag aus den Zutaten (in die Auswahl, nichts persistiert)">✨ Equipment</button>@endif
+            @if(!$neu)<button type="button" wire:click="kiEquipment" class="{{ $btnAi }}" title="Set-Vorschlag aus den Zutaten (in die Auswahl, nichts persistiert)">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Equipment</button>@endif
         </x-slot:actions>
         <div class="space-y-1.5" data-rezept-equipment>
             @foreach($equipmentListe->groupBy(fn ($g) => $g->group_name ?? 'sonstig') as $gruppe => $geraete)
@@ -271,7 +215,7 @@
     <x-foodalchemist::modal-section title="Zubereitung">
         <x-slot:actions>
             @if(!$neu)
-                <button type="button" wire:click="ai_zubereitung" class="{{ $btnGhostXs }} text-violet-600" data-ai-preparation>✨ Zubereitung</button>
+                <button type="button" wire:click="ai_zubereitung" class="{{ $btnAi }}" data-ai-preparation>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Zubereitung</button>
                 <button type="button" wire:click="manual_zubereitung" class="{{ $btnGhostXs }}" title="als manuell markieren">als manuell</button>
                 <button type="button" wire:click="clear_zubereitung" class="{{ $btnGhostXs }}">Reset</button>
             @endif
@@ -335,7 +279,7 @@
                     <input type="number" min="0" max="99" wire:model="fotoSchritt" placeholder="Schritt-Nr" title="Schritt-Nummer aus der Zubereitung (leer/0 = allgemeines Rezept-Foto)" class="{{ $input }} !py-1 !w-24" />
                     <input type="file" wire:model="fotoUpload" accept="image/*" class="text-[11px] text-gray-600 file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-violet-500/10 file:text-violet-600 file:text-[11px] file:cursor-pointer" data-foto-datei />
                     <input type="text" wire:model="fotoCaption" placeholder="Bildunterschrift (optional)" class="{{ $input }} !py-1 w-56" />
-                    <button type="button" wire:click="fotoHochladen" wire:loading.attr="disabled" wire:target="fotoUpload, fotoHochladen" class="{{ $btnGhostXs }} text-violet-600" data-foto-hochladen>
+                    <button type="button" wire:click="fotoHochladen" wire:loading.attr="disabled" wire:target="fotoUpload, fotoHochladen" class="{{ $btnAi }}" data-foto-hochladen>
                         <span wire:loading.remove wire:target="fotoUpload, fotoHochladen">Hochladen</span>
                         <span wire:loading wire:target="fotoUpload, fotoHochladen">lädt …</span>
                     </button>
@@ -353,12 +297,68 @@
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab ZUBEREITUNG --}}
 
-    {{-- ── Tab: EIGENSCHAFTEN (Eigenschaften + Beschreibung) ─────────── --}}
+    {{-- ── Tab: STAMMDATEN (Stammdaten + Eigenschaften, 2026-07-31 zusammengelegt) ── --}}
     <div x-show="tab === 'eigenschaften'" x-cloak class="pt-4 space-y-4">
+    {{-- STAMMDATEN (§4.2.2) — Name/Herkunft/Status/Taxonomie --}}
+    <x-foodalchemist::modal-section title="Stammdaten" class="!p-3">
+        <x-slot:actions>
+            <button type="button" wire:click="namePutzen" class="{{ $btnAi }}" title="§1-Syntax normalisieren">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Name putzen</button>
+            @if(!$neu)
+                <button type="button" wire:click="ai_kategorie" class="{{ $btnAi }}" title="D-1-Klassifikation (GL-07-Vorschlag unten)">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Kategorie</button>
+            @endif
+            <button type="button" wire:click="kiFertigung" class="{{ $btnAi }}" title="Fertigungstiefe aus den Zutaten">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Fertigung</button>
+        </x-slot:actions>
+
+        {{-- Kompakt: ein enges Raster, Name volle Breite --}}
+        <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+            <div class="col-span-2">
+                <label class="block {{ $label }} mb-1">Name *</label>
+                <input type="text" wire:model.live.debounce.300ms="form.name" placeholder="Schaumsauce: Beurre Blanc" class="{{ $input }}" data-rezept-name />
+                <p class="text-[10px] text-gray-500 mt-0.5">§1.2: <code>Typ: Bezeichnung (Variante)</code>, Title Case @if($keyVorschau !== '')· <span class="font-mono" data-key-vorschau>{{ $keyVorschau }}{{ $neu ? '' : ' (stabil)' }}</span>@endif</p>
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Herkunft / Quelle <span class="normal-case text-gray-400">(nicht im Namen — §1.6)</span></label>
+                <input type="text" wire:model="form.origin_source" placeholder="z. B. Broich, nach Paul, nach Omas Art" class="{{ $input }}" />
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Status (§4.2.8)</label>
+                <select wire:model="form.status" class="{{ $input }}" data-rezept-status @disabled($neu)>
+                    @foreach(['stub' => 'Stub', 'draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigegeben', 'archived' => 'Archiviert'] as $wert => $lbl)
+                        <option value="{{ $wert }}">{{ $lbl }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Hauptgruppe * <span class="normal-case text-gray-400">({{ $hauptgruppen->count() }} kuratiert)</span></label>
+                <select wire:model.live="form.hauptgruppe_id" class="{{ $input }}">
+                    <option value="">—</option>
+                    @foreach($hauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->label }}</option>@endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Kategorie * <span class="normal-case text-gray-400">({{ $kategorien->count() }} in dieser HG)</span></label>
+                <select wire:model.live="form.category_id" class="{{ $input }}" @disabled($kategorien->isEmpty())>
+                    <option value="">—</option>
+                    @foreach($kategorien as $kat)<option value="{{ $kat->id }}">{{ $kat->label }}</option>@endforeach
+                </select>
+            </div>
+        </div>
+        @if(isset($kiVorschlag['category']))
+            <div class="mt-2 text-xs flex items-center gap-2" data-kategorie-vorschlag>
+                <span class="{{ $pill }} {{ $variantPill['primary'] }}">Kategorie: {{ $kiVorschlag['category']['werte']['kategorie_name'] ?? $kiVorschlag['category']['werte']['category_id'] ?? '—' }} · {{ round($kiVorschlag['category']['confidence'] * 100) }} %</span>
+                <button type="button" wire:click="accept_kategorie" class="{{ $btnGhostXs }} text-emerald-600">Übernehmen</button>
+            </div>
+        @endif
+        <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 mt-2">
+            <input type="checkbox" wire:model="form.is_sales_recipe" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+            Gericht (D-6 — VK-Felder im VK-Editor)
+        </label>
+    </x-foodalchemist::modal-section>
+
     {{-- EIGENSCHAFTEN (§4.2.4) --}}
     <x-foodalchemist::modal-section title="Eigenschaften">
         <x-slot:actions>
-            <button type="button" wire:click="kiEigenschaften" class="{{ $btnGhostXs }} text-violet-600" title="Arbeitszeit/Temperatur/Funktion + Geschmack (in die Felder, nichts persistiert)">✨ Eigenschaften</button>
+            <button type="button" wire:click="kiEigenschaften" class="{{ $btnAi }}" title="Arbeitszeit/Temperatur/Funktion + Geschmack (in die Felder, nichts persistiert)">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Eigenschaften</button>
         </x-slot:actions>
         <div class="grid grid-cols-2 gap-3">
             <div>
@@ -409,7 +409,7 @@
     <x-foodalchemist::modal-section title="Beschreibung (§8.3 — 3-5 Sätze nüchtern)">
         <x-slot:actions>
             @if(!$neu)
-                <button type="button" wire:click="ai_beschreibung" class="{{ $btnGhostXs }} text-violet-600" data-ai-description>✨ Beschreibung</button>
+                <button type="button" wire:click="ai_beschreibung" class="{{ $btnAi }}" data-ai-description>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Beschreibung</button>
                 <button type="button" wire:click="manual_beschreibung" class="{{ $btnGhostXs }}" title="aktuellen Text als manuell markieren (Override-First-Schutz)">als manuell</button>
                 <button type="button" wire:click="clear_beschreibung" class="{{ $btnGhostXs }}" title="Feld + Lineage leeren">Reset</button>
             @endif
@@ -479,7 +479,7 @@
             <div class="flex items-center justify-between gap-2 mb-2">
                 <span class="text-[11px] text-gray-500">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
                 <button type="button" wire:click="sensorikBewerten" wire:loading.attr="disabled" wire:target="sensorikBewerten" class="{{ $btnGhostXs }}">
-                    <span wire:loading.remove wire:target="sensorikBewerten">✨ Sensorik neu bewerten</span>
+                    <span wire:loading.remove wire:target="sensorikBewerten" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Sensorik neu bewerten</span>
                     <span wire:loading wire:target="sensorikBewerten">… bewertet</span>
                 </button>
             </div>
@@ -504,7 +504,6 @@
                   placeholder="z. B. Anpassung im Catering-Kontext, Mengen-Korrektur, …"></textarea>
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab NOTIZEN --}}
-
     </div>{{-- /Tabs --}}
 
     <x-slot:footer>

@@ -9,7 +9,7 @@
 @php($typStyle = fn (string $t) => isset($typFarben[$t]) ? 'color:' . $typFarben[$t] . ';background-color:' . $typFarben[$t] . '1a' : '')
 
 <div>
-    <x-foodalchemist::modal name="concepter-editor" :title="$titel" fullscreen>
+    <x-foodalchemist::modal name="concepter-editor" :title="$titel" fullscreen dark-canvas>
         <x-slot:actions>
             @if($paket && $rueckSprungConceptId)
                 <button type="button" wire:click="zurueckZumConcept" class="{{ $btnGhost }}" title="Paket sichern und zurück ins Concept">← Speichern &amp; zurück zum Concept</button>
@@ -164,13 +164,13 @@
                             <option value="">— neutral —</option>
                             @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
                         </select>
-                        <button type="button" wire:click="wordingGenerieren" class="{{ $btnGhostXs }} shrink-0 text-violet-600" title="Wording übers ganze Konzept erzeugen: pro Position einen Brand-Voice-Namen + Konzept-Einleitung (echter Text mit LLM-Key)" data-ki-concept-wording>✨ Wording</button>
+                        <button type="button" wire:click="wordingGenerieren" class="{{ $btnAi }} shrink-0" title="Wording übers ganze Konzept erzeugen: pro Position einen Brand-Voice-Namen + Konzept-Einleitung (echter Text mit LLM-Key)" data-ki-concept-wording>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Wording</button>
                     </div>
                 </div>
             @endif
 
-            {{-- ── Tab-Nav ───────────────────────────────────────────────── --}}
-            <div class="flex gap-4 border-b border-black/5 mt-1">
+            {{-- ── Tab-Nav (sticky, schwebend — die Feldleiste darüber scrollt weg) ─── --}}
+            <div class="flex gap-4 border-b border-black/5 mt-1 sticky top-0 z-20 -mx-6 px-6 py-2 bg-white/90 backdrop-blur-xl shadow-md rounded-b-xl">
                 @php($editorTabs = ['aufbau' => 'Aufbau'])
                 @if($concept)@php($editorTabs['konzept'] = 'Konzept')@endif
                 {{-- 'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" (Diät-Rollup + Nährwerte/Person — Parität zu Rezept-/VK-Modal) --}}
@@ -595,7 +595,7 @@
                                                         <span class="shrink-0" title="swap-gesperrt — bewusst gewählte Realisierung">🔒</span>
                                                     @elseif($z['ersatz'] !== null)
                                                         <button type="button" wire:click="slotZutatTauschen({{ $slot->id }}, {{ $z['id'] }})"
-                                                                class="{{ $btnGhostXs }} text-violet-600 shrink-0"
+                                                                class="{{ $btnAi }} shrink-0"
                                                                 title="Konzept-lokal tauschen (erzeugt/nutzt die Slot-Variante — Quell-Gericht bleibt unangetastet)" data-slot-zutat-tausch>
                                                             ♻ {{ $z['ersatz'] }}
                                                         </button>
@@ -623,14 +623,14 @@
                                                 @endforeach
                                             </select>
                                             <button type="button" wire:click="gerichtPicker({{ $slot->id }})" class="{{ $btnGhostXs }}">Gericht / Basisrezept …</button>
-                                            <button type="button" wire:click="neuesPaketImSlot({{ $slot->id }})" class="{{ $btnGhostXs }} text-violet-600" title="Inline ein neues Paket schnüren">+ neues Paket</button>
+                                            <button type="button" wire:click="neuesPaketImSlot({{ $slot->id }})" class="{{ $btnAi }}" title="Inline ein neues Paket schnüren">+ neues Paket</button>
                                             @if($slot->package_id || $slot->sales_recipe_id)
                                                 <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-500 hover:text-red-500">leeren</button>
                                             @else
                                                 {{-- L4: deterministischer Vorschlag aus dem Bestand (kein LLM) --}}
-                                                <button type="button" wire:click="vorschlagFuerSlot({{ $slot->id }})" class="{{ $btnGhostXs }} text-violet-600"
+                                                <button type="button" wire:click="vorschlagFuerSlot({{ $slot->id }})" class="{{ $btnAi }}"
                                                         title="Vorschlag aus dem Bestand — gerankt nach Rolle · Aroma-Kanten zur gesetzten Folge · Anker-Dichte · Preis-Nähe. Ohne KI.">
-                                                    ✨ Vorschlag
+                                                    @svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Vorschlag
                                                 </button>
                                             @endif
                                         </div>
@@ -650,7 +650,7 @@
                                                         </div>
                                                         <div class="flex items-center gap-1 shrink-0">
                                                             <span class="text-[11px] text-gray-500 tabular-nums">{{ $v['sales_net'] !== null ? number_format((float) $v['sales_net'], 2, ',', '.') . ' €' : '—' }}</span>
-                                                            <button type="button" wire:click="vorschlagUebernehmen({{ $slot->id }}, {{ $v['id'] }})" class="{{ $btnGhostXs }} text-violet-600">übernehmen</button>
+                                                            <button type="button" wire:click="vorschlagUebernehmen({{ $slot->id }}, {{ $v['id'] }})" class="{{ $btnAi }}">übernehmen</button>
                                                             <button type="button" wire:click="vorschlagVerwerfen({{ $slot->id }}, {{ $v['id'] }})" class="text-[11px] text-gray-400 hover:text-red-500" title="Vorschlag verwerfen">✕</button>
                                                         </div>
                                                     </div>
@@ -1191,11 +1191,11 @@
                                                 @if($item->rental_price !== null)<span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0">{{ number_format((float) $item->rental_price, 2, ',', '.') }} €</span>@endif
                                             </div>
                                             <div class="flex items-center gap-2 mt-0.5">
-                                                <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $role }}')" class="{{ $btnGhostXs }} text-violet-600">ändern</button>
+                                                <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $role }}')" class="{{ $btnAi }}">ändern</button>
                                                 <button type="button" wire:click="geschirrEntfernen({{ $slot->id }}, '{{ $role }}')" class="{{ $btnGhostXs }} text-rose-500">entfernen</button>
                                             </div>
                                         @else
-                                            <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $role }}')" class="{{ $btnGhostXs }} text-violet-600">+ Geschirr wählen</button>
+                                            <button type="button" wire:click="geschirrPicker({{ $slot->id }}, '{{ $role }}')" class="{{ $btnAi }}">+ Geschirr wählen</button>
                                             @if($role === 'haupt' && isset($geschirrVorschlag[$slot->id]))
                                                 <button type="button" wire:click="geschirrWaehle({{ $slot->id }}, 'haupt', {{ $geschirrVorschlag[$slot->id]['id'] }})"
                                                         class="{{ $pill }} {{ $variantPill['primary'] }} mt-0.5" data-geschirr-vorschlag

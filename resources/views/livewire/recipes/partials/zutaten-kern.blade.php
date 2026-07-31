@@ -9,7 +9,8 @@
     {{-- wire:key: Alpine wertet x-data bei morphdom NICHT neu aus — Rezept-Wechsel muss das Element ersetzen --}}
     <div wire:key="zutaten-editor-{{ $rezept?->id ?? 0 }}"
          x-data="zutatenEditor(@js($zeilenJson), @js(! $eingebettet), @js($einheiten->keyBy('id')->map(fn ($e) => ['slug' => $e->slug, 'dim' => $e->dimension, 'g' => $e->default_in_g !== null ? (float) $e->default_in_g : ($e->default_in_ml !== null ? (float) $e->default_in_ml : null)])->all()), @js($browserVokabular ?? null))"
-         data-zutaten-editor>
+         data-zutaten-editor
+         @garverluste-vorschlagen.window="garverluste()">
         {{-- R18: Drei-Spalten-Layout — Browsen (links GPs, rechts Basisrezepte) und Editieren
              (Mitte) konkurrieren nicht mehr um denselben Platz; Spalten scrollen intern. --}}
         <div class="flex gap-3 items-start">
@@ -57,7 +58,7 @@
                         <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" x-text="ziel.name" :title="ziel.name"></span>
                         <span class="shrink-0 text-[10px] text-gray-500 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
                         <button type="button" x-show="ziel.id" @click="Livewire.dispatch('gp-modal.oeffnen', { id: ziel.id })"
-                                class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Produkt einsehen">📦</button>
+                                class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Produkt einsehen">@svg('heroicon-o-cube', 'w-4 h-4')</button>
                         <button type="button" @click="parke(ziel)" data-parke
                                 class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none"
                                 title="übernehmen → Menge eingeben">+</button>
@@ -71,7 +72,7 @@
         {{-- Such-/Park-Zeile FIX oben (sticky) — filtert beide Seitenspalten; die Tabelle scrollt darunter --}}
         <div class="sticky top-0 z-10 mb-3 rounded-lg bg-white/90 backdrop-blur border border-black/5 px-3 py-2" data-add-zeile>
             <div x-show="tauschIdx !== null" x-cloak class="flex items-center gap-2 mb-2 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-1 text-[11px] text-amber-700" data-tausch-banner>
-                <span>⇄ Tausch-Modus — Ersatz für Zeile <span class="font-semibold" x-text="(tauschIdx ?? 0) + 1"></span> per <span class="font-semibold">+</span> in den Spalten wählen. Menge &amp; Einheit bleiben.</span>
+                <span>@svg('heroicon-o-arrows-right-left', 'w-3.5 h-3.5 inline align-text-bottom mr-1') Tausch-Modus — Ersatz für Zeile <span class="font-semibold" x-text="(tauschIdx ?? 0) + 1"></span> per <span class="font-semibold">+</span> in den Spalten wählen. Menge &amp; Einheit bleiben.</span>
                 <button type="button" @click="tauschIdx = null" class="{{ $btnGhostXs }} shrink-0 ml-auto" data-tausch-abbrechen>Abbrechen</button>
             </div>
             <div x-show="geparkt === null" class="flex items-center gap-2">
@@ -93,11 +94,9 @@
                     <input type="checkbox" x-model="neu.is_optional" class="rounded border-gray-300" /> optional
                 </label>
                 <button type="button" @click="einfuegen()" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-park-einfuegen>Einfügen ⏎</button>
-                <button type="button" @click="verwerfen()" class="{{ $btnGhostXs }} shrink-0" title="Verwerfen" data-park-verwerfen>✕</button>
+                <button type="button" @click="verwerfen()" class="{{ $btnGhostXs }} shrink-0" title="Verwerfen" data-park-verwerfen>@svg('heroicon-o-x-mark', 'w-3.5 h-3.5')</button>
             </div>
             <p class="text-[10px] text-gray-500 mt-1">Erst Produkt/Rezept per [+] wählen — Einheit kommt automatisch mit, dann Menge + Enter (§1.2)</p>
-            <button type="button" class="{{ $btnGhostXs }} text-violet-600 mt-1" @click="garverluste()" data-garverlust-ki
-                    title="M4-11: KI-Schätzung je Zutat (GL-07 — geschrieben erst beim Speichern, source=ki)">✨ Garverluste vorschlagen</button>
         </div>
         <div class="overflow-x-auto">{{-- R18: Mitte scrollt intern statt unter die Seitenspalten zu laufen --}}
         <table class="{{ $table }} border-collapse">
@@ -155,10 +154,10 @@
                                       :title="zeile.lineage ? 'Verknüpfung via ' + zeile.lineage : ''"></span>
                             </template>
                             <button type="button" x-show="zeile.gp_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Lieferantenartikel hinter dem GP (Peek)"
-                                    @click="peek(zeile)" data-gp-peek>📦</button>
+                                    @click="peek(zeile)" data-gp-peek>@svg('heroicon-o-cube', 'w-4 h-4')</button>
                             {{-- Concepter-Logik überall: Basisrezept als Fenster öffnen (kein Sprung), eigenes Symbol --}}
                             <button type="button" x-show="zeile.referenced_recipe_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Rezept einsehen"
-                                    @click="Livewire.dispatch('recipe-modal.oeffnen', { id: zeile.referenced_recipe_id })" data-rez-oeffnen>📖</button>
+                                    @click="Livewire.dispatch('recipe-modal.oeffnen', { id: zeile.referenced_recipe_id })" data-rez-oeffnen>@svg('heroicon-o-book-open', 'w-4 h-4')</button>
                         </td>
                         @if($vkKontext)
                             <td class="{{ $td }} !px-2 !py-0.5">
@@ -208,8 +207,8 @@
                             {{-- ♻ Ersatz (Äquivalenz-Katalog): nur sichtbar wenn hinterlegt — 1 Klick tauscht um, Menge × Faktor --}}
                             <button type="button" x-show="zeile.ersatz" x-cloak class="text-emerald-500/60 hover:text-emerald-600 mr-1"
                                     :title="ersatzTitel(zeile)" @click="ersatzTausch(i)" data-zeile-ersatz>♻</button>
-                            <button type="button" class="hover:text-violet-600 mr-1" :class="tauschIdx === i ? 'text-violet-600' : 'text-gray-300'" @click="starteTausch(i)" title="Zutat tauschen — Menge & Einheit bleiben" data-zeile-tausch>⇄</button>
-                            <button type="button" class="text-rose-400 hover:text-rose-600" @click="rows.splice(i, 1)" title="Zeile entfernen" data-zeile-entfernen>✕</button>
+                            <button type="button" class="hover:text-violet-600 mr-1" :class="tauschIdx === i ? 'text-violet-600' : 'text-gray-300'" @click="starteTausch(i)" title="Zutat tauschen — Menge & Einheit bleiben" data-zeile-tausch>@svg('heroicon-o-arrows-right-left', 'w-3.5 h-3.5')</button>
+                            <button type="button" class="text-rose-400 hover:text-rose-600" @click="rows.splice(i, 1)" title="Zeile entfernen" data-zeile-entfernen>@svg('heroicon-o-x-mark', 'w-3.5 h-3.5')</button>
                         </td>
                     </tr>
                     {{-- GP-Peek (D-5 §4.2.3, Ist-App): LA-Tabelle hinter dem GP, ★ = Lead --}}
@@ -317,7 +316,7 @@
                         <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" x-text="ziel.name.replace('↳ ', '')" :title="ziel.name"></span>
                         <span class="shrink-0 text-[10px] text-gray-500 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
                         <button type="button" x-show="ziel.id" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: ziel.id })"
-                                class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Rezept einsehen">📖</button>
+                                class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Rezept einsehen">@svg('heroicon-o-book-open', 'w-4 h-4')</button>
                         <button type="button" @click="parke(ziel)" data-parke
                                 class="shrink-0 px-1 rounded font-medium text-emerald-500 hover:bg-emerald-500/15 leading-none"
                                 title="übernehmen → Menge eingeben">+</button>
