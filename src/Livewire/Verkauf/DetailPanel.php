@@ -286,7 +286,7 @@ class DetailPanel extends Component
 
         return view('foodalchemist::livewire.verkauf.detail-panel', [
             'rezept' => $rezept,
-            'cockpit' => $rezept !== null ? $verkauf->cockpit($rezept) : null,
+            'cockpit' => $rezept !== null ? $verkauf->cockpit($rezept, $team) : null,
             // D-6 §5.x: Kern-Anker · Kohäsions-Score · Pairing-Section (lazy)
             'kernAnker' => $rezept !== null ? $pairing->recipeAnkers($rezept->id) : collect(),
             // v3-Redesign: Sektionen nicht mehr ausklappbar → direkt laden (nicht lazy).

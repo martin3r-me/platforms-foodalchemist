@@ -375,12 +375,45 @@ das Layout hält.
 
 Bewusst **nicht** im Rollout mitgemacht — jedes ändert Verhalten oder Daten, nicht Aussehen.
 
-1. **Wareneinsatz-Ampel im Gericht-Editor.** Die Kachel steht neutral, weil ihr Bezugswert fehlt.
-   Die kanonische Leiter existiert (`RecipeOneShotService::weAmpel()`: grün ≤ Ziel ·
-   rot > Ziel × 1,5 · sonst gelb) und das Ziel auch (`zielWareneinsatzPct()`, Team-Einstellung,
-   #379+) — aber `SalesRecipeService::cockpit()` gibt beides nicht heraus. Kleines Ticket:
-   `ziel_pct` + `ampel` in `cockpit()` ergänzen, dann Kachel-Tone daraus. Vorher **keine** Schwelle
-   im Blade erfinden.
+1. ✅ **Wareneinsatz-Ampel im Gericht-Editor — erledigt 2026-07-31 (E8).**
+   Die Leiter lag als **private** Kopie im `RecipeOneShotService`, deshalb konnte die Kachel gar
+   nicht ampeln. Jetzt public im **`MargeService`** (der `wareneinsatz_pct` ohnehin rechnet) — eine
+   Wahrheit für Wirtschaftlichkeits-Glied (03·L8), Signale (Entscheidung 4) und Editor;
+   `RecipeOneShotService` delegiert nur noch.
+   `SalesRecipeService::cockpit()` nimmt ein **optionales `?Team`** und liefert `ziel_pct` + `ampel`.
+   Ohne Team → `ziel_pct = null`, `ampel = 'unbekannt'`: der Service holt sich **kein** Team über die
+   Hintertür, und die Kachel bleibt dann neutral statt geraten. Aufrufer (VkModal, VK-DetailPanel)
+   geben ihr Team mit. Tooltip nennt die Vorgabe, damit die Farbe erklärbar ist.
+   `WareneinsatzAmpelTest` hält die **Grenzen** fest: genau auf Ziel = grün, genau Ziel × 1,5 = noch
+   gelb, kein Ziel/kein Wareneinsatz = unbekannt. Browser: 27,7 % gegen Ziel 30,0 % → grün.
+   *Nebeneffekt:* das VK-Detail-Panel bekommt `ziel_pct`/`ampel` jetzt ebenfalls — dort noch
+   ungenutzt, wäre ein Einzeiler.
+
+### E9 · KI-Knöpfe modulweit angleichen (2026-07-31)
+
+Inventur über alle Blades: **75 KI-Knöpfe in 19 Dateien**, 41 Auffälligkeiten — davon aber nur ein
+Teil echt. Die Klassifikation ist der eigentliche Ertrag:
+- **Echte KI-Auslöser** (starten einen KI-Vorgang) → `$btnAi`-Chip + `heroicon-o-sparkles`.
+  Angepasst: `ki-header` (Autopilot) · `foodbooks/index` (KI-Text ×2, Kundentext, Gerüst, KI-Ideen) ·
+  `gps/detail-panel` (KI-Vorschlag, „per KI schätzen" ×2) · `recipes/browser` (KI-Rezept,
+  Bulk anreichern, **Sprachbedienung**) · `verkauf/browser` (KI-Rezept) · `verkauf/detail-panel`
+  (Klassifizieren, Rollen, Kohärenz prüfen, Heber vorschlagen, Eignung) · Sensorik-Bewertung in
+  Rezept- und Gericht-Editor. 🎭 → `heroicon-o-user-group`, 🎙 → `heroicon-o-microphone`.
+- **NICHT angefasst, weil kein KI-Auslöser:** „Übernehmen"/„Verwerfen"/„Reset" (Ergebnis-Aktionen
+  auf einen Vorschlag) bleiben Ghost — `btnAi` würde behaupten, sie starten KI.
+- **NICHT angefasst, weil Haupt-Aktion:** „Generieren" in den Generator-Dialogen und
+  „Gerüst vorschlagen" bleiben `btnPrimary` — die tragende Aktion einer Fläche ist kein Chip.
+
+**Zwei Fallen dabei:**
+1. `components/ki-header.blade.php` bezieht Stile über `$ui['…']`, **nicht** per `extract()`.
+   Ein `{{ $btnAi }}` dort wäre eine undefinierte Variable gewesen.
+2. Ein Textersatz hat `@svg(…)` in zwei **`placeholder`-Attribute** geschoben (Blade kompiliert
+   Direktiven auch dort → ein ganzes SVG im Platzhaltertext). Zurückgedreht auf reinen Text;
+   Regel: in Attributen niemals Blade-Icons.
+
+Browser-Kontrolle über Gerichte · Rezepte · GPs · Foodbooks · Konzepte · Lieferanten:
+**0 Emoji im sichtbaren Text, 0 rohe `@svg(`, keine JS-Fehler.** Der app-weite Rest-Sweep
+(Typ-Marker 🍽 📦 📖 🍴, Status-Punkte) bleibt offen — siehe §4-E4.
 2. **Concepter-Tabs: Server- oder Alpine-Mechanik?** Heute Server (nur aktives Panel im DOM).
    Alpine wäre schneller im Umschalten und würde ungespeicherte Eingaben halten, kostet aber alle
    Panels gleichzeitig (Coverage, Kohäsion, zwei Picker, eingebettete Livewire-Kinder). Eigene

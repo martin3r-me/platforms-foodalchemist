@@ -58,8 +58,10 @@
                 </button>
             @endif
             {{-- „Manuell" entfernt (Dominique 2026-07-01): redundant — Editieren+Speichern setzt source=manual ohnehin. --}}
-            <button type="button" wire:click="ai_{{ $field }}" class="{{ $ghostBtn }} text-violet-600" title="KI-Vorschlag anfordern (persistiert nichts)">
-                ✨ Autopilot
+            {{-- KI-Chip-Stil wie überall; diese Komponente holt ihre Stile über $ui, nicht per
+                 extract() — hier NICHT $btnAi verwenden, das existiert im Scope nicht. --}}
+            <button type="button" wire:click="ai_{{ $field }}" class="{{ $ui['btnAi'] }}" title="KI-Vorschlag anfordern (persistiert nichts)">
+                @svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Autopilot
             </button>
         </div>
     </div>

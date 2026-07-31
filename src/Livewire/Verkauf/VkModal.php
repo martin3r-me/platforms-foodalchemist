@@ -750,7 +750,7 @@ class VkModal extends Component
         $gProStueck = null;
         $anteile = ['bio' => null, 'regional' => null];
         if ($rezept !== null) {
-            $cockpitTmp = $verkauf->cockpit($rezept);
+            $cockpitTmp = $verkauf->cockpit($rezept, $team);
             $gProStueck = $cockpitTmp['verkauft_als']['g_pro_einheit'] ?? null;
             $totalG = 0.0;
             $summen = ['bio' => 0.0, 'regional' => 0.0];
@@ -782,7 +782,7 @@ class VkModal extends Component
             'bulkRun' => $bulkRun,
             'bulkOffen' => $bulkRun !== null
                 ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->offeneVorschlaege($team, $this->bulkRunId) : 0,
-            'cockpit' => $rezept !== null ? ($cockpitTmp ?? $verkauf->cockpit($rezept)) : null,
+            'cockpit' => $rezept !== null ? ($cockpitTmp ?? $verkauf->cockpit($rezept, $team)) : null,
             'gProStueck' => $gProStueck,
             'anteile' => $anteile,
             'hauptgruppen' => $team !== null ? $verkauf->dishMainGroups($team) : collect(),

@@ -73,6 +73,30 @@ class MargeService
     }
 
     /**
+     * Food-Cost-Ampel: Ist-Wareneinsatz gegen die Ziel-Quote des Teams.
+     *
+     * gruen  = auf/unter Ziel · gelb = darüber · rot = mehr als 50 % darüber.
+     * `unbekannt`, solange eine der beiden Zahlen fehlt — nie geraten.
+     *
+     * Diese Leiter ist die EINE Wahrheit: `RecipeOneShotService` (Wirtschaftlichkeits-Glied
+     * 03·L8), `SignalDetektorService::wareneinsatzUeberZielFuer` (Entscheidung 4) und der
+     * VK-Editor-KPI-Streifen rufen sie hier ab. Vorher lag sie als private Kopie im
+     * OneShot-Service, weshalb die Editor-Kachel gar nicht ampeln konnte (Spec 28 §6.1).
+     * Sie gehört zum MargeService, weil der `wareneinsatz_pct` ohnehin rechnet.
+     */
+    public function weAmpel(?float $we, float $ziel): string
+    {
+        if ($we === null || $ziel <= 0) {
+            return 'unbekannt';
+        }
+        if ($we <= $ziel) {
+            return 'gruen';
+        }
+
+        return $we > $ziel * 1.5 ? 'rot' : 'gelb';
+    }
+
+    /**
      * Zerlegung auf die Verkaufseinheit: netto/Anzahl, brutto je Einheit.
      *
      * @return ?array{vk_netto_pro_einheit: float, vk_brutto_pro_einheit: float}

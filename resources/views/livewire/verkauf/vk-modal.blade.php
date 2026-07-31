@@ -30,11 +30,12 @@
                  Tönung nach E1-Regel 6 (genau EIN accent):
                  · Marge % = Leitwert des Gericht-Editors → accent.
                  · „Mit Preis" + Allergen-Konf. tragen echte Messgrößen → good/warn/bad.
-                 · Wareneinsatz bleibt NEUTRAL: das alte feste Orange sah nach Alarm aus, war aber
-                   gegen nichts gemessen. Die kanonische Leiter ist `weAmpel()`
-                   (grün ≤ Ziel · rot > Ziel × 1,5 · sonst gelb) gegen
-                   `TeamSettings::zielWareneinsatzPct()` — `cockpit()` liefert beides heute nicht.
-                   → eigenes To-do (Spec 28 §6), nicht hier heimlich eine Schwelle erfinden. --}}
+                 · Wareneinsatz ampelt seit Spec 28 §6.1 gegen die Ziel-Quote des Teams:
+                   `cockpit()` liefert `ziel_pct` + `ampel`, die Leiter liegt im MargeService
+                   (grün ≤ Ziel · rot > Ziel × 1,5 · sonst gelb) und ist dieselbe wie im
+                   Wirtschaftlichkeits-Glied und in den Signalen. Ohne Ziel-Quote oder ohne
+                   VK bleibt sie `unbekannt` → neutral, nie geraten. --}}
+            @php($weAmpelTone = ['gruen' => 'good', 'gelb' => 'warn', 'rot' => 'bad'][$cockpit['ampel'] ?? ''] ?? 'neutral')
             <x-foodalchemist::kpi-tiles marker="vk-editor-kpis" :cols="5" :tiles="[
                 ['kpi' => 'yield', 'label' => 'Yield',
                  'value' => $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—'],
@@ -54,8 +55,10 @@
                  'value' => ($cockpit['sales_gross'] ?? null) !== null ? number_format((float) $cockpit['sales_gross'], 2, ',', '.') . ' €' : '—'],
                 ['kpi' => 'vk-portion', 'label' => 'VK / Portion',
                  'value' => ($cockpit['pro_einheit']['vk_netto_pro_einheit'] ?? null) !== null ? number_format((float) $cockpit['pro_einheit']['vk_netto_pro_einheit'], 2, ',', '.') . ' €' : '—'],
-                ['kpi' => 'wareneinsatz', 'label' => 'Wareneinsatz',
-                 'title' => 'Noch ohne Ampel — die Ziel-Wareneinsatzquote des Teams ist hier nicht angebunden.',
+                ['kpi' => 'wareneinsatz', 'label' => 'Wareneinsatz', 'tone' => $weAmpelTone,
+                 'title' => ($cockpit['ziel_pct'] ?? null) !== null
+                    ? 'Ziel des Teams: ' . number_format((float) $cockpit['ziel_pct'], 1, ',', '.') . ' % — grün bis Ziel, rot ab Ziel × 1,5 (Einstellungen → Herstellkosten).'
+                    : 'Keine Ziel-Wareneinsatzquote ermittelbar — ohne Vorgabe wird nicht geampelt.',
                  'value' => ($cockpit['marge']['wareneinsatz_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—'],
                 ['kpi' => 'marge', 'label' => 'Marge', 'tone' => 'accent',
                  'value' => ($cockpit['marge']['marge_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['marge_pct'], 1, ',', '.') . ' %' : '—'],
@@ -704,7 +707,7 @@
             @if($rezept !== null)
                 <div class="flex items-center justify-between gap-2 mb-2">
                     <span class="text-[11px] text-gray-500">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
-                    <button type="button" wire:click="sensorikBewerten" wire:loading.attr="disabled" wire:target="sensorikBewerten" class="{{ $btnGhostXs }}">
+                    <button type="button" wire:click="sensorikBewerten" wire:loading.attr="disabled" wire:target="sensorikBewerten" class="{{ $btnAi }}">
                         <span wire:loading.remove wire:target="sensorikBewerten" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Sensorik neu bewerten</span>
                         <span wire:loading wire:target="sensorikBewerten">… bewertet</span>
                     </button>

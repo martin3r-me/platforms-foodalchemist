@@ -430,7 +430,7 @@ class SalesRecipeService
      *
      * @return array{verkauft_als: ?array, vk: array, marge: ?array, pro_einheit: ?array, formel_fehlt: bool}
      */
-    public function cockpit(FoodAlchemistRecipe $r): array
+    public function cockpit(FoodAlchemistRecipe $r, ?Team $team = null): array
     {
         $anzahl = $r->sales_unit_count !== null ? (int) $r->sales_unit_count : null;
         $mengeProEinheitG = $r->sales_quantity_per_unit_g !== null
@@ -462,15 +462,24 @@ class SalesRecipeService
         }
 
         $mwst = $r->vat_rate !== null ? (float) $r->vat_rate : (float) ($r->markupClass->vat_rate ?? 19);
+        $marge = $this->marge->marge($vk['sales_net'], $r->ek_total_eur !== null ? (float) $r->ek_total_eur : null);
+
+        // Spec 28 §6.1: Food-Cost-Ampel mitliefern, damit die VK-Editor-Kachel den Wareneinsatz
+        // gegen ETWAS messen kann. Ohne Team gibt es keine Ziel-Quote → `unbekannt` statt geraten
+        // (der Aufrufer kennt sein Team; der Service holt sich hier keins über die Hintertür).
+        $zielPct = $team !== null ? app(TeamSettingsService::class)->zielWareneinsatzPct($team) : null;
+        $wePct = $marge['wareneinsatz_pct'] ?? null;
 
         return [
             'verkauft_als' => $verkauftAls,
             'vk' => $vk,
             'sales_gross' => $vk['sales_net'] !== null ? round($vk['sales_net'] * (1 + $mwst / 100), 2) : null,
             'vat_rate' => $mwst,
-            'marge' => $this->marge->marge($vk['sales_net'], $r->ek_total_eur !== null ? (float) $r->ek_total_eur : null),
+            'marge' => $marge,
             'pro_einheit' => $this->marge->proEinheit($vk['sales_net'], $anzahl, $mwst),
             'formel_fehlt' => $formelFehlt,
+            'ziel_pct' => $zielPct,
+            'ampel' => $this->marge->weAmpel($wePct !== null ? (float) $wePct : null, (float) ($zielPct ?? 0)),
         ];
     }
 }

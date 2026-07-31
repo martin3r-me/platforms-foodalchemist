@@ -177,7 +177,7 @@
                             <div><label class="{{ $label }}">Budget € p. P.</label><input type="number" step="0.01" min="0" wire:model="kickoff.budget" class="{{ $input }}" /></div>
                         </div>
                         <button type="button" wire:click="frameAusBriefVorschlagen" class="{{ $btnPrimary }} w-full justify-center" wire:loading.attr="disabled" wire:target="frameAusBriefVorschlagen" data-kickoff-go>
-                            <span wire:loading.remove wire:target="frameAusBriefVorschlagen">✨ Gerüst vorschlagen</span>
+                            <span wire:loading.remove wire:target="frameAusBriefVorschlagen">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Gerüst vorschlagen</span>
                             <span wire:loading wire:target="frameAusBriefVorschlagen">KI baut das Gerüst …</span>
                         </button>
                         @if($kickoffFehler)
@@ -236,16 +236,16 @@
                         {{-- Spec 03 · L2: scharf. Der Vorschlag landet in der Vorschau darunter, nie direkt im Feld. --}}
                         <button type="button" wire:click="kiEinleitung" wire:loading.attr="disabled" wire:target="kiEinleitung"
                                 title="foodbook.kundentext: Einleitungstext aus Kunde, Briefing, Gliederung (Wording-Kette) und Marken-Stimme" data-fb-ki-einleitung
-                                class="{{ $btnGhostXs }} text-violet-600">
-                            <span wire:loading.remove wire:target="kiEinleitung">✨ KI-Text</span>
-                            <span wire:loading wire:target="kiEinleitung">✨ schreibt …</span>
+                                class="{{ $btnAi }}">
+                            <span wire:loading.remove wire:target="kiEinleitung">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Text</span>
+                            <span wire:loading wire:target="kiEinleitung">schreibt …</span>
                         </button>
                     </div>
                     <textarea wire:model="form.description" rows="3"
                               x-data
                               x-effect="$wire.form; $el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
                               @input="$el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
-                              class="{{ $input }} resize-none overflow-hidden min-h-[4.5rem]" placeholder="Briefing / Einleitungstext fürs Angebot — ✨ KI-Text formt daraus den Kundentext"></textarea>
+                              class="{{ $input }} resize-none overflow-hidden min-h-[4.5rem]" placeholder="Briefing / Einleitungstext fürs Angebot — „KI-Text" formt daraus den Kundentext"></textarea>
 
                     @include('foodalchemist::livewire.foodbooks.partials.ki-text-vorschau', [
                         'ziel' => 'foodbook',
@@ -422,7 +422,7 @@
                                     @endif
                                 </div>
                                 <button type="button" class="{{ $btnGhost }} w-full justify-center opacity-50 cursor-not-allowed" disabled
-                                        title="KI-Divergenz braucht einen gebundenen Provider (demo, E6.4) — solange frei schreiben oder aus Bestand übernehmen." data-ki-frei-gated>✨ KI-Ideen (braucht Provider)</button>
+                                        title="KI-Divergenz braucht einen gebundenen Provider (demo, E6.4) — solange frei schreiben oder aus Bestand übernehmen." data-ki-frei-gated>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Ideen (braucht Provider)</button>
                             </div>
 
                             {{-- Bestands-Foodbooks: Slot-Konzepte da, Ideen-Phase übersprungen (UX 7) --}}
@@ -833,14 +833,14 @@
                             <label class="{{ $label }}">Hinführung (Kundentext des Kapitels)</label>
                             <button type="button" wire:click="kiKapitelText" wire:loading.attr="disabled" wire:target="kiKapitelText"
                                     title="foodbook.kundentext (Ebene Kapitel): Hinführung aus Kapitel-Inhalt (Wording-Kette), Buch-Einleitung und Marken-Stimme" data-fb-ki-kapiteltext
-                                    class="{{ $btnGhostXs }} text-violet-600">
-                                <span wire:loading.remove wire:target="kiKapitelText">✨ KI-Text</span>
-                                <span wire:loading wire:target="kiKapitelText">✨ schreibt …</span>
+                                    class="{{ $btnAi }}">
+                                <span wire:loading.remove wire:target="kiKapitelText">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Text</span>
+                                <span wire:loading wire:target="kiKapitelText">schreibt …</span>
                             </button>
                         </div>
                         <textarea wire:model.blur="kapitelForm.description" wire:change="kapitelSpeichern" rows="2"
                                   class="{{ $input }} resize-none min-h-[3.5rem]"
-                                  placeholder="Kurzer Kundentext, der ins Kapitel einführt — ✨ KI-Text schlägt einen vor"></textarea>
+                                  placeholder="Kurzer Kundentext, der ins Kapitel einführt — „KI-Text" schlägt einen vor"></textarea>
                         @include('foodalchemist::livewire.foodbooks.partials.ki-text-vorschau', [
                             'ziel' => 'kapitel',
                             'vorhanden' => trim((string) ($kapitelForm['description'] ?? '')) !== '',
@@ -963,7 +963,7 @@
                                             <div class="flex gap-1.5 items-start">
                                                 <textarea wire:model="blockForm.customer_text" rows="2" class="{{ $input }}" placeholder="Beschreibungstext / Untertitel (kundensichtbar, optional)"></textarea>
                                                 @if($block->type === 'concept_ref')
-                                                    <button type="button" wire:click="kiKundentext" class="{{ $btnGhostXs }} text-violet-600 shrink-0 mt-0.5" title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" data-fb-ki-kundentext>✨</button>
+                                                    <button type="button" wire:click="kiKundentext" class="{{ $btnAi }} shrink-0 mt-0.5" title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" data-fb-ki-kundentext>✨</button>
                                                 @endif
                                             </div>
                                         @endif

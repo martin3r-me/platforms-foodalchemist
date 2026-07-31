@@ -20,8 +20,8 @@
             <div class="flex flex-wrap items-center gap-1.5 mt-2.5" data-vk-aktionen>
                 <button type="button" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
                 <button type="button" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-komponenten>@svg('heroicon-o-squares-2x2', 'w-3.5 h-3.5') Komponenten</button>
-                <button type="button" wire:click="ai_klassifizieren" class="{{ $btnGhostXs }} text-violet-600" title="ai_classify_speisen_klasse (GL-07)" data-vk-klassifizieren>✨ Klassifizieren</button>
-                <button type="button" wire:click="ai_rollen" class="{{ $btnGhostXs }} text-violet-600" title="ai_verteile_rollen (V-21)" data-vk-rollen>🎭 Rollen</button>
+                <button type="button" wire:click="ai_klassifizieren" class="{{ $btnAi }}" title="ai_classify_speisen_klasse (GL-07)" data-vk-klassifizieren>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Klassifizieren</button>
+                <button type="button" wire:click="ai_rollen" class="{{ $btnAi }}" title="ai_verteile_rollen (V-21)" data-vk-rollen>@svg('heroicon-o-user-group', 'w-3.5 h-3.5') Rollen</button>
             </div>
             <div class="flex flex-wrap items-center gap-1.5 mt-2">
                 <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
@@ -51,7 +51,7 @@
         @endif
         @if($rollenVorschlag !== null)
             <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs" data-rollen-vorschlag>
-                <p class="text-gray-900">🎭 Rollen-Verteilung <span class="text-[11px] text-gray-500">· {{ round($rollenVorschlag['confidence'] * 100) }} %</span></p>
+                <p class="text-gray-900">@svg('heroicon-o-user-group', 'w-3.5 h-3.5') Rollen-Verteilung <span class="text-[11px] text-gray-500">· {{ round($rollenVorschlag['confidence'] * 100) }} %</span></p>
                 @if($rollenVorschlag['rollen'] === [])
                     <p class="text-[11px] text-gray-500 mt-0.5">Kein gültiger Vorschlag (aroma_treiber · komponente · beilage · garnitur).</p>
                 @else
@@ -185,7 +185,7 @@
                     @else
                         <span class="text-gray-400">noch kein Urteil</span>
                     @endif
-                    <button type="button" wire:click="pruefeKohaerenz" class="{{ $btnGhostXs }} ml-auto" data-vk-kohaerenz-pruefen>{{ $urteil?->score !== null ? 'Erneut prüfen' : '✨ Prüfen' }}</button>
+                    <button type="button" wire:click="pruefeKohaerenz" class="{{ $btnAi }} ml-auto" data-vk-kohaerenz-pruefen>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') {{ $urteil?->score !== null ? 'Erneut prüfen' : 'Prüfen' }}</button>
                 </div>
                 @if($urteil?->reasoning !== null)<p class="text-xs text-gray-500 leading-relaxed">{{ $urteil->reasoning }}</p>@endif
                 @if($urteil?->score !== null)<p class="text-[11px] text-gray-400">{{ $urteil->judged_at?->format('Y-m-d') }} · {{ $urteil->judge_model }}</p>@endif
@@ -196,7 +196,7 @@
                     @else
                         <span class="text-gray-400">noch keine</span>
                     @endif
-                    <button type="button" wire:click="schlageHeberVor" class="{{ $btnGhostXs }} ml-auto" data-vk-heber-vorschlagen>{{ ($heberJson['vorschlaege'] ?? []) !== [] ? 'Erneut' : '✨ Vorschlagen' }}</button>
+                    <button type="button" wire:click="schlageHeberVor" class="{{ $btnAi }} ml-auto" data-vk-heber-vorschlagen>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') {{ ($heberJson['vorschlaege'] ?? []) !== [] ? 'Erneut' : 'Vorschlagen' }}</button>
                 </div>
                 @if(($heberJson['einschaetzung'] ?? null) !== null)<p class="text-xs text-gray-500 leading-relaxed">{{ $heberJson['einschaetzung'] }}</p>@endif
                 <p class="text-gray-500 border-t border-black/5 pt-2" data-vk-nachbarn>Aroma-Nachbarn <span class="text-gray-400">— aromaverwandte Zutaten sind im Pairing-Netz oben sichtbar.</span></p>
@@ -207,11 +207,11 @@
         <x-foodalchemist::section title="Eignung" icon="heroicon-o-user-group"
             :meta="$sektorEignungen->count() + $niveauEignungen->count()" data-vk-eignung>
             <x-slot:actions>
-                <button type="button" wire:click="kiEignung" class="{{ $btnGhostXs }} text-violet-600" title="recipe.sektor + recipe.level — nur «geeignet»-Urteile" data-ki-eignung>✨ Eignung</button>
+                <button type="button" wire:click="kiEignung" class="{{ $btnAi }}" title="recipe.sektor + recipe.level — nur «geeignet»-Urteile" data-ki-eignung>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Eignung</button>
             </x-slot:actions>
             @if($eignungVorschlag !== null)
                 <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs mb-1.5" data-eignung-vorschlag>
-                    <p class="text-[11px] text-gray-600">✨ geeignet für:
+                    <p class="text-[11px] text-gray-600">geeignet für:
                         @foreach($eignungVorschlag['slugs'] as $slug => $typ)<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">{{ $typ }}: {{ $slug }}</span>@endforeach
                     </p>
                     <div class="flex gap-1.5 mt-1.5">

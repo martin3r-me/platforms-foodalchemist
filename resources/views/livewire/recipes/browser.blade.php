@@ -138,10 +138,10 @@
         <div class="flex items-center justify-between pt-1">
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
-                <button type="button" wire:click="$dispatch('generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600" data-generator-oeffnen>✨ KI-Rezept</button>
+                <button type="button" wire:click="$dispatch('generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600" data-generator-oeffnen>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Rezept</button>
                 {{-- R6: «Aus Template» — Liste der 📐-Templates, Klick dupliziert + öffnet den Editor --}}
                 <div class="relative">
-                    <button type="button" wire:click="$toggle('templateWahlOffen')" class="{{ $btnGhostXs }}" data-aus-template>📐 Aus Template</button>
+                    <button type="button" wire:click="$toggle('templateWahlOffen')" class="{{ $btnGhostXs }}" data-aus-template>@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5') Aus Template</button>
                     @if($templateWahlOffen)
                         <div class="absolute left-0 top-full mt-1 z-30 w-80 max-h-80 overflow-y-auto rounded-lg bg-white border border-black/10 shadow-xl" data-template-liste>
                             @forelse($templateListe as $template)
@@ -156,7 +156,7 @@
                         </div>
                     @endif
                 </div>
-                <button type="button" wire:click="$dispatch('voice-modal.oeffnen')" class="{{ $btnGhostXs }}" title="Sprachbedienung (M7-10) — zweiter Bedienweg, UI bleibt parallel" data-voice-oeffnen>🎙</button>
+                <button type="button" wire:click="$dispatch('voice-modal.oeffnen')" class="{{ $btnAi }}" title="Sprachbedienung (M7-10) — zweiter Bedienweg, UI bleibt parallel" data-voice-oeffnen>@svg('heroicon-o-microphone', 'w-3.5 h-3.5')</button>
             </div>
             @if($bulkRunId !== null)
                 @php($bulkSvc = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class))
@@ -176,7 +176,7 @@
             @endif
             @if(count(array_filter($auswahl)) > 0)
                 <div class="flex items-center gap-1.5" data-bulk-status>
-                    <button type="button" wire:click="bulkAnreichern" class="{{ $btnGhostXs }} text-violet-600" title="Beschreibung · Kategorie · Geschmack als Review-Vorschläge (GL-07: nie Auto-Persistenz)" data-bulk-anreichern>✨ Bulk anreichern</button>
+                    <button type="button" wire:click="bulkAnreichern" class="{{ $btnAi }}" title="Beschreibung · Kategorie · Geschmack als Review-Vorschläge (GL-07: nie Auto-Persistenz)" data-bulk-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Bulk anreichern</button>
                     <span class="text-xs text-gray-900 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt:</span>
                     @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
                         <button type="button" wire:click="bulkStatus('{{ $wert }}')" class="{{ $btnGhostXs }}" data-bulk-status-btn="{{ $wert }}">→ {{ $lbl }}</button>

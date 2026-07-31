@@ -108,7 +108,7 @@
         <div class="flex items-center justify-between pt-1">
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="$dispatch('vk-modal.oeffnen')" class="{{ $btnPrimary }}" data-vk-anlegen>+ Neues Gericht</button>
-                <button type="button" wire:click="$dispatch('vk-generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600" data-vk-generator>✨ KI-Rezept</button>
+                <button type="button" wire:click="$dispatch('vk-generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600" data-vk-generator>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Rezept</button>
             </div>
             <p class="text-[11px] text-gray-500">Speisen mit VK-Preis. Zutaten = Grundprodukte und/oder Basisrezepte. Live-Marge aus EK × Aufschlagsklasse.</p>
         </div>

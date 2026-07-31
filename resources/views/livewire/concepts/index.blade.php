@@ -56,7 +56,7 @@
 
                 <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ {{ $showVorlagen ? 'Neue Vorlage' : 'Neues Concept' }}</button>
                 {{-- R6.1: Brief → Konzept aus echten VK-Gerichten (KI baut den Rahmen, Graph wählt die Gerichte) --}}
-                <button type="button" wire:click="generatorOeffnen" class="{{ $btnGhost }} w-full justify-center" data-generator-oeffnen>✨ Konzept aus Brief</button>
+                <button type="button" wire:click="generatorOeffnen" class="{{ $btnGhost }} w-full justify-center" data-generator-oeffnen>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Konzept aus Brief</button>
 
                 @if($generatorOffen)
                     <div class="rounded-xl border border-violet-500/25 bg-violet-500/[0.04] p-2.5 space-y-2" data-generator-panel>

@@ -111,7 +111,7 @@
         <x-foodalchemist::section title="Lieferantenartikel" icon="heroicon-o-building-storefront" :meta="$gp->n_las_total" data-sektion="las">
             @if($kannKuratieren)
                 <x-slot:actions>
-                    <button type="button" wire:click="laVorschlaege" class="{{ $btnGhostXs }} text-violet-600" title="Unverknüpfte Artikel finden, die zum GP-Namen passen" data-la-ki-vorschlag>✨ KI-Vorschlag</button>
+                    <button type="button" wire:click="laVorschlaege" class="{{ $btnGhostXs }} text-violet-600" title="Unverknüpfte Artikel finden, die zum GP-Namen passen" data-la-ki-vorschlag>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Vorschlag</button>
                 </x-slot:actions>
             @endif
 
@@ -251,7 +251,7 @@
         <x-foodalchemist::section title="Allergene" icon="heroicon-o-shield-exclamation" meta="effektiv" data-sektion="allergene">
             @if($kannKuratieren && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0)
                 <x-slot:actions>
-                    <button type="button" wire:click="kiAllergene" class="{{ $btnGhostXs }} text-violet-600" title="ohne LA-Daten per KI schätzen — Übernehmen schreibt Override (GL-01)" data-ki-allergene>✨ per KI schätzen</button>
+                    <button type="button" wire:click="kiAllergene" class="{{ $btnAi }}" title="ohne LA-Daten per KI schätzen — Übernehmen schreibt Override (GL-01)" data-ki-allergene>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') per KI schätzen</button>
                 </x-slot:actions>
             @endif
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5 text-[11px]">
@@ -326,7 +326,7 @@
             :meta="($naehrwerte['source'] ?? 'la') === 'la' ? 'Ø aus LAs, je 100 g' : (($naehrwerte['source'] ?? '') === 'ki' ? 'KI-Schätzung je 100 g' : 'je 100 g')" data-sektion="naehrwerte">
             @if($kannKuratieren && $naehrwerte !== null && $naehrwerte['energy_kcal']['avg'] === null)
                 <x-slot:actions>
-                    <button type="button" wire:click="kiNaehrwerte" class="{{ $btnGhostXs }} text-violet-600" title="ohne LA-Daten per KI schätzen (nur Panel-Anzeige)" data-ki-naehrwerte>✨ per KI schätzen</button>
+                    <button type="button" wire:click="kiNaehrwerte" class="{{ $btnAi }}" title="ohne LA-Daten per KI schätzen (nur Panel-Anzeige)" data-ki-naehrwerte>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') per KI schätzen</button>
                 </x-slot:actions>
             @endif
             @if(($naehrwerte['source'] ?? null) === 'ki')

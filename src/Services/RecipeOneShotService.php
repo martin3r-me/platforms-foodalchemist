@@ -351,16 +351,13 @@ class RecipeOneShotService
         }
     }
 
-    /** Dieselbe Leiter wie `SignalDetektorService::wareneinsatzUeberZielFuer` (Entscheidung 4). */
+    /**
+     * Die Leiter liegt jetzt im MargeService — EINE Wahrheit für OneShot, Signale und den
+     * VK-Editor-KPI-Streifen (Spec 28 §6.1). Hier nur noch delegiert, damit die Aufrufe
+     * oben unverändert lesbar bleiben.
+     */
     private function weAmpel(?float $we, float $ziel): string
     {
-        if ($we === null || $ziel <= 0) {
-            return 'unbekannt';
-        }
-        if ($we <= $ziel) {
-            return 'gruen';
-        }
-
-        return $we > $ziel * 1.5 ? 'rot' : 'gelb';
+        return app(MargeService::class)->weAmpel($we, $ziel);
     }
 }
