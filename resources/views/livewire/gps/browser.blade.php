@@ -27,36 +27,25 @@
                     @endforeach
                 </select>
 
-                <button type="button" wire:click="waehleWg('')"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $commodity_group === ''
-                            ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
-                            : 'text-gray-700 hover:bg-black/[0.03]' }}">
-                    <span class="font-medium">Alle Warengruppen</span>
-                    <span class="text-[11px] text-gray-500">{{ number_format(array_sum($wgCounts), 0, ',', '.') }}</span>
-                </button>
+                <x-foodalchemist::filter-row wire:click="waehleWg('')" :active="$commodity_group === ''"
+                    :count="array_sum($wgCounts)"><span class="font-medium">Alle Warengruppen</span></x-foodalchemist::filter-row>
 
+                {{-- Spec 28 / Weg A: Zeilen-Optik + Kontrast-Modell liegen im Baustein `filter-row`,
+                     die Führungslinie der Kind-Ebene in `filter-ast`. --}}
                 <div class="space-y-0.5 -mx-1" data-wg-liste>
                     @foreach($warengruppen as $wg)
                         <div wire:key="wg-{{ $wg->code }}">
-                            <button type="button" wire:click="waehleWg('{{ $wg->code }}')"
-                                    class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $commodity_group === $wg->code
-                                        ? 'border-l-2 border-violet-500 text-violet-700 font-medium ' . ($subKategorie !== '' ? '' : 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10')
-                                        : 'border-l-2 border-transparent text-gray-700 hover:bg-black/[0.03]' }}">
-                                <span class="min-w-0 truncate">{{ $wg->codedLabel() }}</span>
-                                <span class="text-[11px] text-gray-500 shrink-0 ml-2 tabular-nums">{{ $wgCounts[$wg->code] ?? 0 }}</span>
-                            </button>
+                            <x-foodalchemist::filter-row wire:click="waehleWg('{{ $wg->code }}')"
+                                :active="$commodity_group === $wg->code" :child-active="$subKategorie !== ''"
+                                :count="$wgCounts[$wg->code] ?? 0">{{ $wg->codedLabel() }}</x-foodalchemist::filter-row>
                             @if($commodity_group === $wg->code && count($subCounts) > 0)
-                                <div class="ml-3 mt-1 mb-1 pl-2 border-l border-black/10 space-y-0.5" data-sub-liste>
+                                <x-foodalchemist::filter-ast data-sub-liste>
                                     @foreach($subCounts as $sub => $n)
-                                        <button type="button" wire:key="sub-{{ md5($sub) }}" wire:click="waehleSub('{{ addslashes($sub) }}')"
-                                                class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $subKategorie === $sub
-                                                    ? 'bg-violet-500/10 text-violet-700 font-medium'
-                                                    : 'text-gray-700 hover:bg-black/[0.03]' }}">
-                                            <span class="min-w-0 truncate">{{ $sub }}</span>
-                                            <span class="text-gray-500 shrink-0 ml-2 tabular-nums">{{ $n }}</span>
-                                        </button>
+                                        <x-foodalchemist::filter-row level="child" wire:key="sub-{{ md5($sub) }}"
+                                            wire:click="waehleSub('{{ addslashes($sub) }}')"
+                                            :active="$subKategorie === $sub" :count="$n">{{ $sub }}</x-foodalchemist::filter-row>
                                     @endforeach
-                                </div>
+                                </x-foodalchemist::filter-ast>
                             @endif
                         </div>
                     @endforeach
@@ -116,9 +105,8 @@
                 </tr></thead>
                 <tbody>
                     @forelse($gps as $gp)
-                        <tr wire:key="gp-{{ $gp->id }}" wire:click="waehleGp({{ $gp->id }})"
+                        <x-foodalchemist::table-row :active="$gpId === $gp->id" wire:key="gp-{{ $gp->id }}" wire:click="waehleGp({{ $gp->id }})"
                             x-data x-on:click="$store.ui?.mSet('activity_gps', 'open', true)"
-                            class="{{ $tr }} cursor-pointer {{ $gpId === $gp->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border-l-2 border-violet-500' : 'border-l-2 border-transparent' }}"
                             data-gp-zeile="{{ $gp->id }}">
                             {{-- R6: Namens-Klick öffnet direkt den GP-Editor (Zeilen-Klick bleibt Panel) --}}
                             {{-- R13: w-full + max-w-0 = Spalte nimmt allen Restplatz und truncated — Tabelle bläht NIE über den Container --}}
@@ -169,7 +157,7 @@
                                     <span class="inline-flex items-center gap-1 text-gray-500 text-[11px]" title="Keine Allergen-Angaben in den Lieferantenartikeln — nicht als frei werten">– keine Daten</span>
                                 @endif
                             </td>
-                        </tr>
+                        </x-foodalchemist::table-row>
                     @empty
                         <tr><td colspan="7" class="px-5 py-10 text-center text-gray-500">Keine Grundprodukte gefunden.</td></tr>
                     @endforelse

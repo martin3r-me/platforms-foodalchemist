@@ -34,53 +34,36 @@
                 {{-- Baum-Ansicht (2026-07-06, User-Wunsch — Parität zum Basisrezept-Browser):
                      Diät-Klassen sind die aufklappbare Ebene unter dem AKTIVEN Knoten.
                      „Alle Hauptgruppen" offen → globale Klassen-Counts; HG offen → auf die HG gescoped. --}}
-                <button type="button" wire:click="waehleHauptgruppe(null)"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === null
-                            ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
-                            : 'text-gray-700 hover:bg-black/[0.03]' }}">
-                    <span class="font-medium">Alle Hauptgruppen</span>
-                    {{-- Aus der Tabellenquery, nicht als Facettensumme: Gerichte ohne Hauptgruppe
-                         fehlen in `$hgCounts` und verschwanden damit aus der Gesamtzahl (MVP-042). --}}
-                    <span class="text-[11px] text-gray-500" data-gesamt-count>{{ number_format($gesamtCount, 0, ',', '.') }}</span>
-                </button>
+                <x-foodalchemist::filter-row wire:click="waehleHauptgruppe(null)" :active="$hauptgruppe === null"
+                    :count="$gesamtCount" data-gesamt-count><span class="font-medium">Alle Hauptgruppen</span></x-foodalchemist::filter-row>
                 @if($hauptgruppe === null)
-                    <div class="ml-4 -mt-1 space-y-0.5" data-vk-klassen-ast>
+                    <x-foodalchemist::filter-ast data-vk-klassen-ast>
                         @foreach($klassen as $k)
-                            <button type="button" wire:key="vkk-alle-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
-                                    class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $klasse === $k->id
-                                        ? 'bg-violet-500/10 text-violet-700 font-medium'
-                                        : 'text-gray-600 hover:bg-black/[0.03]' }}">
-                                <span class="min-w-0 truncate">{{ $k->label }}</span>
-                                <span class="text-gray-500 shrink-0 ml-2 tabular-nums">{{ $klassenCounts[$k->id] ?? 0 }}</span>
-                            </button>
+                            <x-foodalchemist::filter-row level="child" wire:key="vkk-alle-{{ $k->id }}"
+                                wire:click="waehleKlasse({{ $k->id }})"
+                                :active="$klasse === $k->id"
+                                :count="$klassenCounts[$k->id] ?? 0">{{ $k->label }}</x-foodalchemist::filter-row>
                         @endforeach
-                    </div>
+                    </x-foodalchemist::filter-ast>
                 @endif
 
                 <div class="space-y-0.5 -mx-1" data-vk-hg-liste>
                     @foreach($hauptgruppen as $hg)
                         <div wire:key="vkhg-{{ $hg->id }}">
-                            <button type="button" wire:click="waehleHauptgruppe({{ $hg->id }})"
-                                    class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === $hg->id
-                                        ? 'border-l-2 border-violet-500 text-violet-700 font-medium ' . ($klasse !== null ? '' : 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10')
-                                        : 'border-l-2 border-transparent text-gray-700 hover:bg-black/[0.03]' }}">
-                                <span class="min-w-0 truncate"><span class="font-mono text-[10px] text-gray-500 mr-1">[{{ $hg->code }}]</span>{{ $hg->label }}</span>
-                                <span class="text-[11px] text-gray-500 shrink-0 ml-2 tabular-nums">{{ $hgCounts[$hg->id] ?? 0 }}</span>
-                            </button>
+                            <x-foodalchemist::filter-row wire:click="waehleHauptgruppe({{ $hg->id }})"
+                                :active="$hauptgruppe === $hg->id" :child-active="$klasse !== null"
+                                :count="$hgCounts[$hg->id] ?? 0"><span class="font-mono text-[10px] text-gray-500 mr-1">[{{ $hg->code }}]</span>{{ $hg->label }}</x-foodalchemist::filter-row>
                             @if($hauptgruppe === $hg->id)
-                                <div class="ml-3 mt-1 mb-1 pl-2 border-l border-black/10 space-y-0.5" data-vk-klassen-ast>
+                                <x-foodalchemist::filter-ast data-vk-klassen-ast>
                                     @foreach($klassen as $k)
                                         @if(($klassenCounts[$k->id] ?? 0) > 0 || $klasse === $k->id)
-                                            <button type="button" wire:key="vkk-{{ $hg->id }}-{{ $k->id }}" wire:click="waehleKlasse({{ $k->id }})"
-                                                    class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $klasse === $k->id
-                                                        ? 'bg-violet-500/10 text-violet-700 font-medium'
-                                                        : 'text-gray-700 hover:bg-black/[0.03]' }}">
-                                                <span class="min-w-0 truncate">{{ $k->label }}</span>
-                                                <span class="text-gray-500 shrink-0 ml-2 tabular-nums">{{ $klassenCounts[$k->id] ?? 0 }}</span>
-                                            </button>
+                                            <x-foodalchemist::filter-row level="child" wire:key="vkk-{{ $hg->id }}-{{ $k->id }}"
+                                wire:click="waehleKlasse({{ $k->id }})"
+                                :active="$klasse === $k->id"
+                                :count="$klassenCounts[$k->id] ?? 0">{{ $k->label }}</x-foodalchemist::filter-row>
                                         @endif
                                     @endforeach
-                                </div>
+                                </x-foodalchemist::filter-ast>
                             @endif
                         </div>
                     @endforeach
@@ -137,9 +120,8 @@
                 </tr></thead>
                 <tbody>
                     @forelse($rezepte as $r)
-                        <tr wire:key="vk-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
+                        <x-foodalchemist::table-row :active="$recipeId === $r->id" wire:key="vk-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
                             x-data x-on:click="$store.ui?.mSet('activity_verkauf', 'open', true)"
-                            class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border-l-2 border-violet-500' : 'border-l-2 border-transparent' }}"
                             data-vk-zeile="{{ $r->id }}">
                             {{-- R6: Namens-Klick öffnet direkt den VK-Editor --}}
                             <td class="{{ $td }} font-medium w-full min-w-[24rem] whitespace-normal break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
@@ -167,7 +149,7 @@
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</span>
                             </td>
                             <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->dishMainGroup?->code ?? '—' }}</td>
-                        </tr>
+                        </x-foodalchemist::table-row>
                     @empty
                         <tr><td colspan="9" class="px-5 py-10 text-center text-gray-500">Keine Gerichte gefunden.</td></tr>
                     @endforelse

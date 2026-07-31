@@ -371,6 +371,56 @@ das Layout hält.
   Positionen zu lang wird, wäre `line-clamp-2` + `title` der Rückweg — dann aber als bewusste
   Entscheidung, nicht als Nebenwirkung.
 
+### E11 · Listen-Bausteine (2026-07-31)
+
+**Befund, der den Umbau auslöste:** der „aktiv"-Zustand stand **30× handgeschrieben in 18 Dateien**
+— dieselbe Krankheit, die der Editor vor Spec 28 hatte. Die Behandlung 13× per Hand nachzuziehen
+hätte die Kopien festgeschrieben. Deshalb erst Bausteine, dann migrieren.
+
+Inventur der 33 Listen-/Sidebar-Schirme: **echte Bäume mit Eltern/Kind gibt es nur 3** (GPs,
+Rezepte, Gerichte) — Concepter, Foodbook, Konzepte, Pakete, Angebote, Produktion, Speiseplan,
+Lieferanten und Geschirr haben **flache** Filter-Listen. Das Eltern/Kind-Kontrastproblem ist damit
+vollständig abgedeckt; für die übrigen 9 geht es nur um Akzentbalken und Zähler.
+
+**Drei Bausteine:**
+- `components/filter-row.blade.php` — eine Zeile in der Filter-Sidebar. Trägt das Kontrast-Modell
+  (**Balken = offener Zweig · Füllung = Auswahl**), `level="top|child"`, gedämpfte Null-Zähler,
+  Tausenderpunkte an einer Stelle (vorher waren Baum-Zähler roh `6930` und die „Alle …"-Zeile
+  formatiert `6.930` — dieselbe Zahl in zwei Schreibweisen).
+- `components/filter-ast.blade.php` — die Führungslinie der Kind-Ebene.
+- `components/table-row.blade.php` — die klickbare Tabellenzeile: Auswahl = Füllung + Balken,
+  inaktiv = transparenter Balken gleicher Breite (kein Layout-Sprung).
+
+`wire:click`, `wire:key`, `x-data` und `data`-Marker fließen über `$attributes` durch — die
+Aufrufer behalten ihre Livewire-Verdrahtung und ihre Test-Marker.
+
+**Migriert:** GPs, Rezepte, Gerichte — Bäume, Reset-Zeilen („Alle …") und Tabellenzeilen.
+Handgeschriebene aktiv-Zustände in diesen drei Dateien: **0**.
+`ListenBausteineTest` (9 Tests) hält vor allem das Kontrast-Modell fest, weil genau das der Grund
+für den Umbau war.
+
+**Gleichheits-Nachweis im Browser** — dieselben Sonden wie vor der Migration, identische Werte:
+aufgeklappt → Balken **und** Füllung; Kind gewählt → Eltern nur Balken, Kind gefüllt;
+Tabellenzeile `2px oklch(0.606 0.25 292.717)` vs. `2px` transparent. Keine JS-Fehler.
+
+**Vier Fallen unterwegs:**
+1. Ein Regex zog den **Blade-Echo in eine gebundene Prop** (`:count="{{ … }}"`) — ungültiges PHP.
+   Gebundene Props nehmen den Ausdruck **ohne** `{{ }}`.
+2. Pauschales `</tr>` → Baustein-Ende hätte den `thead` mitgerissen; ebenso `</div>` → `filter-ast`.
+   Beides nur mit exakten Grenzen ersetzt.
+3. Ein Regex verschluckte den Marker `data-gesamt-count` in der Verkaufs-Reset-Zeile. Kein Test
+   nutzt ihn — aber ein stillschweigend verlorener Marker verstößt gegen die E0-Abnahmeregel,
+   deshalb zurück auf die Baustein-Wurzel.
+4. Der Marker-Test am GP-Browser konnte `data-fa-filter-row` **nicht** zusichern: das Fixture
+   seedet kein Warengruppen-Vokabular, der Baum-`@foreach` läuft null Mal. Die Zusicherung wäre
+   eine Fixture-Aussage gewesen, keine Code-Aussage — entfernt und begründet.
+
+**Offen (bewusst):** die 9 flachen Filter-Sidebars und 4 weiteren Tabellen sind **noch nicht**
+migriert. Der Weg ist jetzt aber ein Einzeiler pro Zeile statt einer Kopie.
+Ebenfalls offen: das **Scroll-Modell der Tabelle** — ohne begrenzte Höhe auf dem
+`overflow-x-auto`-Wrapper gibt es keinen sticky Tabellenkopf (siehe E7-Nachtrag). Das ist eine
+Layout-Entscheidung und gehört an einem Schirm erprobt, bevor sie in einen Baustein wandert.
+
 ## 6 · Offene To-dos, die beim Rollout aufgefallen sind
 
 Bewusst **nicht** im Rollout mitgemacht — jedes ändert Verhalten oder Daten, nicht Aussehen.

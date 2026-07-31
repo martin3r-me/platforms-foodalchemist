@@ -51,38 +51,27 @@
 
                 {{-- MVP-042: Gesamtzahl kommt aus der Tabellenquery, NICHT aus array_sum($hgCounts) —
                      die Summe der Hauptgruppen verlor jedes Rezept ohne Kategorie (64 vs. 62). --}}
-                <button type="button" wire:click="waehleHauptgruppe(null)"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === null && ! $ohneKategorie
-                            ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
-                            : 'text-gray-700 hover:bg-black/[0.03]' }}">
-                    <span class="font-medium">Alle Hauptgruppen</span>
-                    <span class="text-[11px] text-gray-500" data-gesamt-count>{{ number_format($gesamtCount, 0, ',', '.') }}</span>
-                </button>
+                <x-foodalchemist::filter-row wire:click="waehleHauptgruppe(null)"
+                    :active="$hauptgruppe === null && ! $ohneKategorie"
+                    :count="$gesamtCount" data-gesamt-count><span class="font-medium">Alle Hauptgruppen</span></x-foodalchemist::filter-row>
 
                 <div class="space-y-0.5 -mx-1" data-hg-liste>
                     @foreach($hauptgruppen as $hg)
                         <div wire:key="hg-{{ $hg->id }}">
-                            <button type="button" wire:click="waehleHauptgruppe({{ $hg->id }})"
-                                    class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $hauptgruppe === $hg->id
-                                        ? 'border-l-2 border-violet-500 text-violet-700 font-medium ' . ($kategorie !== null ? '' : 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10')
-                                        : 'border-l-2 border-transparent text-gray-700 hover:bg-black/[0.03]' }}">
-                                <span class="min-w-0 truncate">{{ $hg->label }}</span>
-                                <span class="text-[11px] text-gray-500 shrink-0 ml-2 tabular-nums">{{ $hgCounts[$hg->id] ?? 0 }}</span>
-                            </button>
+                            <x-foodalchemist::filter-row wire:click="waehleHauptgruppe({{ $hg->id }})"
+                                :active="$hauptgruppe === $hg->id" :child-active="$kategorie !== null"
+                                :count="$hgCounts[$hg->id] ?? 0">{{ $hg->label }}</x-foodalchemist::filter-row>
                             @if($hauptgruppe === $hg->id && $kategorien->isNotEmpty())
-                                <div class="ml-3 mt-1 mb-1 pl-2 border-l border-black/10 space-y-0.5" data-kat-liste>
+                                <x-foodalchemist::filter-ast data-kat-liste>
                                     @foreach($kategorien as $kat)
                                         @if(($katCounts[$kat->id] ?? 0) > 0)
-                                            <button type="button" wire:key="kat-{{ $kat->id }}" wire:click="waehleKategorie({{ $kat->id }})"
-                                                    class="w-full flex items-center justify-between px-2 py-0.5 rounded text-[11px] transition-all duration-150 {{ $kategorie === $kat->id
-                                                        ? 'bg-violet-500/10 text-violet-700 font-medium'
-                                                        : 'text-gray-700 hover:bg-black/[0.03]' }}">
-                                                <span class="min-w-0 truncate">{{ $kat->label }}</span>
-                                                <span class="text-gray-500 shrink-0 ml-2 tabular-nums">{{ $katCounts[$kat->id] }}</span>
-                                            </button>
+                                            <x-foodalchemist::filter-row level="child" wire:key="kat-{{ $kat->id }}"
+                                                wire:click="waehleKategorie({{ $kat->id }})"
+                                                :active="$kategorie === $kat->id"
+                                                :count="$katCounts[$kat->id]">{{ $kat->label }}</x-foodalchemist::filter-row>
                                         @endif
                                     @endforeach
-                                </div>
+                                </x-foodalchemist::filter-ast>
                             @endif
                         </div>
                     @endforeach
@@ -210,9 +199,8 @@
                 </tr></thead>
                 <tbody>
                     @forelse($rezepte as $r)
-                        <tr wire:key="r-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
+                        <x-foodalchemist::table-row :active="$recipeId === $r->id" wire:key="r-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
                             x-data x-on:click="$store.ui?.mSet('activity_recipes', 'open', true)"
-                            class="{{ $tr }} cursor-pointer {{ $recipeId === $r->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border-l-2 border-violet-500' : 'border-l-2 border-transparent' }}"
                             data-rezept-zeile="{{ $r->id }}">
                             <td class="{{ $td }} !pr-0" wire:click.stop>
                                 <input type="checkbox" wire:model.live="auswahl.{{ $r->id }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-rezept-checkbox="{{ $r->id }}" />
@@ -246,7 +234,7 @@
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</span>
                             </td>
-                        </tr>
+                        </x-foodalchemist::table-row>
                     @empty
                         <tr><td colspan="9" class="px-5 py-10 text-center text-gray-500">Keine Rezepte gefunden.</td></tr>
                     @endforelse
