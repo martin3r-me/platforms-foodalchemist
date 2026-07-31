@@ -1,7 +1,7 @@
-{{-- M6-06: ✨ VK-Generator v1 — D-5-Achsen + Anlass/Serviceform/Kompositions-Stil, Bestand-Hybrid --}}
+{{-- M6-06: VK-Generator v1 — D-5-Achsen + Anlass/Serviceform/Kompositions-Stil, Bestand-Hybrid --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="vk-generator-modal" title="✨ Gericht generieren" size="max-w-2xl">
+<x-foodalchemist::modal name="vk-generator-modal" title="Gericht generieren" size="max-w-2xl">
     @if($fehler !== null)
         <p class="text-xs text-rose-600 mb-3" data-vk-generator-fehler>{{ $fehler }}</p>
     @endif
@@ -94,7 +94,7 @@
 
                 {{-- Spec 03 L8b-2: Ziel-VK als Vorgabe für den Vorschlag (kein Solver) --}}
                 <div data-richtung="ziel-vk">
-                    <p class="text-xs font-medium text-gray-900 mb-1">🎯 Ziel-VK (optional)</p>
+                    <p class="text-xs font-medium text-gray-900 mb-1">Ziel-VK (optional)</p>
                     <input type="text" wire:model="zielVk" placeholder="z. B. 8,50" class="{{ $input }} !py-1.5" data-vk-ziel-vk />
                     <p class="text-[11px] text-gray-500 mt-1">Netto je Portion. Geht als Vorgabe in den Vorschlag (Komponenten, Qualität, Grammatur) und wird nach der Kalkulation gegen den gerechneten VK gehalten — der Preis wird nicht auf das Ziel gedrückt.</p>
                 </div>
@@ -149,7 +149,7 @@
         @if($laeuft)
             <button type="button" disabled class="{{ $btnPrimary }} opacity-60 cursor-not-allowed" data-vk-generator-laeuft-btn>⏳ Generiere …</button>
         @elseif($ergebnis === null)
-            <button type="button" wire:click="generieren" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-vk-generator-start>✨ Generieren</button>
+            <button type="button" wire:click="generieren" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-vk-generator-start><span class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Generieren</span></button>
         @endif
     </x-slot:footer>
 </x-foodalchemist::modal>

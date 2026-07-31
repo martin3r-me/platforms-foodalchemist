@@ -193,7 +193,9 @@ class Editor extends Component
 
     public function setTab(string $tab): void
     {
-        if (in_array($tab, ['aufbau', 'konzept', 'allergene', 'kalkulation', 'geschirr', 'sensorik', 'notes'], true)) {
+        // Spec 28 / E6: 'stammdaten' ist neu — die Feldleiste wurde aus dem Dauer-Kopf in einen
+        // eigenen Tab gelegt. Fehlt der Wert hier, tut der Klick auf die Lasche stillschweigend nichts.
+        if (in_array($tab, ['aufbau', 'stammdaten', 'konzept', 'allergene', 'kalkulation', 'geschirr', 'sensorik', 'notes'], true)) {
             $this->tab = $tab;
         }
     }

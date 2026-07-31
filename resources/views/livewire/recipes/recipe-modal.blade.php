@@ -25,59 +25,22 @@
     @if($voll !== null)
         <x-slot:kpiHeader>
             @php($ekComplete = ($voll->ek_n_ingredients_total ?? 0) > 0 && ($voll->ek_n_ingredients_priced ?? 0) >= ($voll->ek_n_ingredients_total ?? 0))
-            {{-- KPI-Kacheln — grössere Werte + semantische, ruhige Tönung je Kachel (2026-07-31).
-                 EK/kg ist der Leitwert → violetter Marken-Akzent (kein Alarm-Orange). „Mit Preis"
-                 grün wenn vollständig / bernstein wenn Lücke; Allergen-Konf. in der Konfidenz-Farbe.
-                 Farben als rohes CSS für hell UND dunkel (.fa-editor-panel) — schlägt die generische
-                 KPI-Kachel-Regel des Editor-Grunds. --}}
-            <style>
-                [data-editor-kpis] .kpi-label{ font-size:11px !important; }
-                [data-editor-kpis] .kpi-value{ font-size:16px !important; font-weight:600; line-height:1.15; margin-top:2px; }
-                /* Hell-Theme */
-                [data-editor-kpis] .kpi-neutral{ background:#fff !important; border-color:rgba(0,0,0,.06) !important; }
-                [data-editor-kpis] .kpi-accent { background:rgba(139,92,246,.08) !important; border-color:rgba(139,92,246,.25) !important; }
-                [data-editor-kpis] .kpi-good   { background:rgba(16,185,129,.09) !important; border-color:rgba(16,185,129,.26) !important; }
-                [data-editor-kpis] .kpi-warn   { background:rgba(245,158,11,.11) !important; border-color:rgba(245,158,11,.30) !important; }
-                [data-editor-kpis] .kpi-bad    { background:rgba(244,63,94,.08) !important; border-color:rgba(244,63,94,.26) !important; }
-                [data-editor-kpis] .kpi-neutral .kpi-value{ color:#111827; }
-                [data-editor-kpis] .kpi-accent  .kpi-value{ color:#6d28d9; }
-                [data-editor-kpis] .kpi-good    .kpi-value{ color:#047857; }
-                [data-editor-kpis] .kpi-warn    .kpi-value{ color:#b45309; }
-                [data-editor-kpis] .kpi-bad     .kpi-value{ color:#be123c; }
-                /* Dunkel-Theme (Editor-Grund) */
-                .fa-editor-panel [data-editor-kpis] .kpi-neutral{ background:rgba(255,255,255,.06) !important; border-color:rgba(255,255,255,.10) !important; }
-                .fa-editor-panel [data-editor-kpis] .kpi-accent { background:rgba(139,92,246,.17) !important; border-color:rgba(167,139,250,.42) !important; }
-                .fa-editor-panel [data-editor-kpis] .kpi-good   { background:rgba(16,185,129,.16) !important; border-color:rgba(16,185,129,.40) !important; }
-                .fa-editor-panel [data-editor-kpis] .kpi-warn   { background:rgba(245,158,11,.16) !important; border-color:rgba(245,158,11,.40) !important; }
-                .fa-editor-panel [data-editor-kpis] .kpi-bad    { background:rgba(244,63,94,.16) !important; border-color:rgba(244,63,94,.40) !important; }
-                .fa-editor-panel [data-editor-kpis] .kpi-neutral .kpi-value{ color:#f1f5f9; }
-                .fa-editor-panel [data-editor-kpis] .kpi-accent  .kpi-value{ color:#c4b5fd; }
-                .fa-editor-panel [data-editor-kpis] .kpi-good    .kpi-value{ color:#6ee7b7; }
-                .fa-editor-panel [data-editor-kpis] .kpi-warn    .kpi-value{ color:#fcd34d; }
-                .fa-editor-panel [data-editor-kpis] .kpi-bad     .kpi-value{ color:#fda4af; }
-            </style>
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-2" data-editor-kpis>
-                <div class="rounded-lg border shadow-sm px-3 py-2 kpi-neutral" data-kpi="yield">
-                    <span class="{{ $dt }} kpi-label">Yield</span>
-                    <p class="kpi-value">{{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
-                </div>
-                <div class="rounded-lg border shadow-sm px-3 py-2 kpi-neutral" data-kpi="ek">
-                    <span class="{{ $dt }} kpi-label">EK gesamt</span>
-                    <p class="kpi-value">{{ $voll->ek_total_eur !== null ? number_format((float) $voll->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
-                </div>
-                <div class="rounded-lg border shadow-sm px-3 py-2 kpi-accent" data-kpi="ekkg">
-                    <span class="{{ $dt }} kpi-label">EK / kg</span>
-                    <p class="kpi-value">{{ $voll->ek_per_kg_eur !== null ? number_format((float) $voll->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
-                </div>
-                <div class="rounded-lg border shadow-sm px-3 py-2 {{ $ekComplete ? 'kpi-good' : 'kpi-warn' }}" data-kpi="priced">
-                    <span class="{{ $dt }} kpi-label">Mit Preis</span>
-                    <p class="kpi-value">{{ $voll->ek_n_ingredients_priced ?? 0 }}/{{ $voll->ek_n_ingredients_total ?? 0 }}</p>
-                </div>
-                <div class="rounded-lg border shadow-sm px-3 py-2 {{ ['high' => 'kpi-good', 'medium' => 'kpi-warn', 'low' => 'kpi-bad'][$voll->allergens_confidence] ?? 'kpi-neutral' }}" data-kpi="allergen">
-                    <span class="{{ $dt }} kpi-label">Allergen-Konf.</span>
-                    <p class="kpi-value">{{ strtoupper((string) $voll->allergens_confidence) }}</p>
-                </div>
-            </div>
+            {{-- Spec 28 / E0.2: Kacheln + Palette liegen im Baustein `kpi-tiles`.
+                 Leitwert = EK/kg (accent, kein Alarm-Orange) · „Mit Preis" grün/bernstein je
+                 Vollständigkeit · Allergen-Konf. in der Konfidenz-Farbe. --}}
+            <x-foodalchemist::kpi-tiles marker="editor-kpis" :tiles="[
+                ['kpi' => 'yield', 'label' => 'Yield',
+                 'value' => $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') . ' kg' : '—'],
+                ['kpi' => 'ek', 'label' => 'EK gesamt',
+                 'value' => $voll->ek_total_eur !== null ? number_format((float) $voll->ek_total_eur, 2, ',', '.') . ' €' : '—'],
+                ['kpi' => 'ekkg', 'label' => 'EK / kg', 'tone' => 'accent',
+                 'value' => $voll->ek_per_kg_eur !== null ? number_format((float) $voll->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—'],
+                ['kpi' => 'priced', 'label' => 'Mit Preis', 'tone' => $ekComplete ? 'good' : 'warn',
+                 'value' => ($voll->ek_n_ingredients_priced ?? 0) . '/' . ($voll->ek_n_ingredients_total ?? 0)],
+                ['kpi' => 'allergen', 'label' => 'Allergen-Konf.',
+                 'tone' => ['high' => 'good', 'medium' => 'warn', 'low' => 'bad'][$voll->allergens_confidence] ?? 'neutral',
+                 'value' => strtoupper((string) $voll->allergens_confidence)],
+            ]" />
         </x-slot:kpiHeader>
     @endif
 
@@ -98,25 +61,22 @@
         </div>
     @endif
 
-    {{-- R7: Tabs (Alpine x-show, alle Sektionen bleiben im DOM → eingebetteter ingredient-editor
-         wird nicht neu gemountet, kein Server-Roundtrip). Sticky-Tab-Leiste im Body (ein Alpine-Scope
-         für Tabs + Panels — Header/Body-Split desynct unter Livewire-Morph). --}}
-    {{-- wire:key erzwingt Element-Ersatz bei Rezept-Wechsel (Alpine wertet x-data/-Bindings bei morphdom
-         NICHT neu aus → sonst bleibt der aktive Tab „stale"; gleiches Muster wie im Zutaten-Editor). --}}
-    {{-- x-effect setzt den Tab bei JEDEM Öffnen zurück (liest das `open` der Modal-Scope):
-         der Editor landet immer auf «Aufbau» (bzw. «Stammdaten» bei Neuanlage — Aufbau ist
-         ohne Zutaten leer). Ohne das blieb der zuletzt gewählte Tab beim erneuten Öffnen
-         desselben Rezepts „stale" stehen (Element wird per wire:key nur bei Rezept-Wechsel ersetzt). --}}
-    <div wire:key="rezept-tabs-{{ $recipeId ?? 'neu' }}" x-data="{ tab: '{{ $neu ? 'eigenschaften' : 'aufbau' }}' }"
-         x-effect="if (open) tab = '{{ $neu ? 'eigenschaften' : 'aufbau' }}'" data-rezept-tabs>
-        <div class="flex gap-4 border-b border-black/5 sticky top-0 z-20 -mx-6 -mt-4 px-6 pt-4 bg-white/90 backdrop-blur-xl shadow-md rounded-b-xl">
-            @php($rezTabs = array_filter(['aufbau' => 'Aufbau', 'eigenschaften' => 'Stammdaten', 'preparation' => 'Zubereitung', 'details' => 'Deklaration', 'sensorik' => $neu ? null : 'Sensorik & Pairing', 'feedback' => $neu ? null : 'Feedback', 'notes' => 'Notizen']))
-            @foreach($rezTabs as $tabKey => $tabLabel)
-                <button type="button" @click="tab = '{{ $tabKey }}'"
-                        :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700' : 'border-transparent text-gray-600 hover:text-gray-700'"
-                        class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors" data-rezept-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
-            @endforeach
-        </div>
+    {{-- Spec 28 / E0.1: sticky Tab-Leiste + Alpine-Scope liegen im Baustein `editor-tabs`
+         (Panels bleiben hier und alle im DOM — der eingebettete Zutaten-Editor darf nicht neu
+         gemountet werden). Start-Tab: «Aufbau», bei Neuanlage «Stammdaten» (Aufbau ist ohne
+         Zutaten leer). Die drei Morph-Fallen (wire:key · x-effect-Reset · ein Scope für Leiste
+         und Panels) stecken im Baustein. --}}
+    <x-foodalchemist::editor-tabs marker="rezept" wire-key="rezept-tabs-{{ $recipeId ?? 'neu' }}"
+        :init="$neu ? 'eigenschaften' : 'aufbau'"
+        :tabs="[
+            'aufbau' => 'Aufbau',
+            'eigenschaften' => 'Stammdaten',
+            'preparation' => 'Zubereitung',
+            'details' => 'Deklaration',
+            'sensorik' => $neu ? null : 'Sensorik & Pairing',
+            'feedback' => $neu ? null : 'Feedback',
+            'notes' => 'Notizen',
+        ]">
 
     {{-- ── Tab: AUFBAU (nur Zutaten) ───────────────────────── --}}
     <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
@@ -382,14 +342,14 @@
                 </datalist>
             </div>
             <div>
-                <label class="block {{ $label }} mb-1">Geschmacksrichtung <span class="normal-case text-gray-500">(via ✨ oder manuell)</span></label>
+                <label class="block {{ $label }} mb-1">Geschmacksrichtung <span class="normal-case text-gray-500">(via KI oder manuell)</span></label>
                 <select wire:model="form.taste_direction" class="{{ $input }}">
                     <option value="">—</option>
                     <option value="suess">süß</option><option value="herzhaft">herzhaft</option><option value="neutral">neutral</option>
                 </select>
             </div>
             <div>
-                <label class="block {{ $label }} mb-1">Fertigungstiefe <span class="normal-case text-gray-500">(via ✨ Fertigung oder manuell)</span></label>
+                <label class="block {{ $label }} mb-1">Fertigungstiefe <span class="normal-case text-gray-500">(via KI-Fertigung oder manuell)</span></label>
                 <select wire:model="form.production_depth" class="{{ $input }}">
                     <option value="">—</option>
                     <option value="from_scratch">From Scratch</option><option value="teilfertig">teilfertig</option><option value="convenience">Convenience</option>
@@ -506,7 +466,7 @@
                   placeholder="z. B. Anpassung im Catering-Kontext, Mengen-Korrektur, …"></textarea>
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab NOTIZEN --}}
-    </div>{{-- /Tabs --}}
+    </x-foodalchemist::editor-tabs>
 
     <x-slot:footer>
         <button type="button" wire:click="$dispatch('modal.close', { name: 'recipe-modal' })" class="{{ $btnGhost }}">Abbrechen</button>

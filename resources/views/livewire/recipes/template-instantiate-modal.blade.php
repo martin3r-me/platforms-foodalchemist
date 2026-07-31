@@ -1,7 +1,7 @@
-{{-- D-5: 📐 Aus Vorlage instanziieren — Variante → Seed-Vorschläge → Slot-Review --}}
+{{-- D-5: Aus Vorlage instanziieren — Variante → Seed-Vorschläge → Slot-Review --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="template-instanziieren" title="📐 Aus Vorlage instanziieren" size="max-w-2xl">
+<x-foodalchemist::modal name="template-instanziieren" title="Aus Vorlage instanziieren" size="max-w-2xl">
     @if($fehler !== null)
         <p class="text-xs text-rose-600 mb-3" data-template-fehler>{{ $fehler }}</p>
     @endif

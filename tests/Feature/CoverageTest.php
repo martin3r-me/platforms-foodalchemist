@@ -132,11 +132,18 @@ it('Live-UI: Coverage-Panel im Concepter sichtbar, Lücken-Klick setzt den Diät
     $this->frames->addRule($this->rootTeam, $frame, ['slot_id' => $slot->id, 'rule_type' => 'diet_quota', 'ref_key' => 'vegan', 'operator' => 'min', 'value_num' => 2, 'unit' => 'count']);
 
     $comp = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Concepter\Editor::class)
-        ->call('oeffnen', 'concepts', $this->concept->id)
+        ->call('oeffnen', 'concepts', $this->concept->id);
+
+    // Spec 28 / E6: die Coverage liegt jetzt im Tab «Konzept & Planung» — direkt unter dem
+    // Planungs-Gerüst, gegen das sie misst (vorher stand sie im Aufbau-Tab, also getrennt von
+    // ihrer Messlatte). Im Aufbau-Tab darf sie deshalb NICHT mehr erscheinen.
+    $comp->assertDontSee('Soll/Ist-Coverage');
+    $comp->call('setTab', 'konzept')
         ->assertSee('Soll/Ist-Coverage')
         ->assertSee('Diät-Quote vegan');
 
-    // Lücken-Klick → Aufbau-Tab + Diät-Filter gesetzt → Kandidaten nur vegan
+    // Lücken-Klick → springt IN den Aufbau-Tab + Diät-Filter gesetzt → Kandidaten nur vegan.
+    // Genau dieser Sprung ist mit dem Umzug die tragende Verbindung zwischen SOLL und Bau.
     $comp->call('coverageFuellen', 'vegan')
         ->assertSet('tab', 'aufbau')
         ->assertSet('pickDiaet', 'vegan');

@@ -2,7 +2,9 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 {{-- R5 (Dominique): VK-Editor nimmt wie der Basis-Editor den ganzen Bildschirm --}}
-<x-foodalchemist::modal name="vk-modal" title="{{ $rezept !== null ? 'Gericht bearbeiten' : 'Neues Gericht' }}" size="max-w-3xl" :fullscreen="$rezept !== null" :dark-canvas="$rezept !== null">
+{{-- Spec 28 / E1-2: Titel bleibt generisch, der Gerichtname ist der Akzent-Chip. --}}
+<x-foodalchemist::modal name="vk-modal" title="{{ $rezept !== null ? 'Gericht bearbeiten' : 'Neues Gericht' }}"
+    :title-name="$rezept?->name" size="max-w-3xl" :fullscreen="$rezept !== null" :dark-canvas="$rezept !== null">
     @if($rezept !== null)
         <x-slot:actions>
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-vk-speichern>Speichern</button>
@@ -20,52 +22,44 @@
     {{-- Phase 1: KPI-Streifen fix im Modal-Kopf (immer sichtbar, scrollt nie weg) --}}
     @if($rezept !== null)
         <x-slot:kpiHeader>
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-2" data-vk-editor-kpis>
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                    <span class="{{ $dt }}">Yield</span>
-                    <p class="text-xs font-semibold text-gray-900">{{ $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—' }}</p>
-                </div>
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                    <span class="{{ $dt }}">EK gesamt</span>
-                    <p class="text-xs font-semibold text-gray-900">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</p>
-                </div>
-                <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600">EK / kg</span>
-                    <p class="text-xs font-bold text-orange-700">{{ $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—' }}</p>
-                </div>
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                    <span class="{{ $dt }}">Mit Preis</span>
-                    <p class="text-xs font-semibold text-gray-900">{{ $rezept->ek_n_ingredients_priced ?? 0 }}/{{ $rezept->ek_n_ingredients_total ?? 0 }}</p>
-                </div>
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                    <span class="{{ $dt }}">Allergen-Konf.</span>
-                    <p class="text-xs font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$rezept->allergens_confidence] ?? 'text-gray-500' }}">{{ strtoupper($rezept->allergens_confidence) }}</p>
-                </div>
+            {{-- Spec 28 / E2.1: Kacheln über den Baustein `kpi-tiles` (Palette hell + dunkel dort).
+                 Reihe 1 = Kosten-Seite (Basisrezept-Parität), Reihe 2 = VK-Seite aus
+                 SalesRecipeService::cockpit() (MargeService) — „—" wenn Aufschlagsklasse oder
+                 Portionsgröße fehlt.
 
-                {{-- VK-Seite (2. Reihe): Verkaufspreis + Portion + Marge/Wareneinsatz.
-                     Quelle = SalesRecipeService::cockpit() (MargeService). „—" wenn keine
-                     Aufschlagsklasse/Portionsgröße gepflegt ist. --}}
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                    <span class="{{ $dt }}">VK netto</span>
-                    <p class="text-xs font-semibold text-gray-900">{{ ($cockpit['vk']['sales_net'] ?? null) !== null ? number_format((float) $cockpit['vk']['sales_net'], 2, ',', '.') . ' €' : '—' }}</p>
-                </div>
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                    <span class="{{ $dt }}">VK brutto</span>
-                    <p class="text-xs font-semibold text-gray-900">{{ ($cockpit['sales_gross'] ?? null) !== null ? number_format((float) $cockpit['sales_gross'], 2, ',', '.') . ' €' : '—' }}</p>
-                </div>
-                <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-2">
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-emerald-600">VK / Portion</span>
-                    <p class="text-xs font-bold text-emerald-700">{{ ($cockpit['pro_einheit']['vk_netto_pro_einheit'] ?? null) !== null ? number_format((float) $cockpit['pro_einheit']['vk_netto_pro_einheit'], 2, ',', '.') . ' €' : '—' }}</p>
-                </div>
-                <div class="rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-orange-600">Wareneinsatz</span>
-                    <p class="text-xs font-bold text-orange-700">{{ ($cockpit['marge']['wareneinsatz_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—' }}</p>
-                </div>
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                    <span class="{{ $dt }}">Marge</span>
-                    <p class="text-xs font-semibold text-green-600">{{ ($cockpit['marge']['marge_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['marge_pct'], 1, ',', '.') . ' %' : '—' }}</p>
-                </div>
-            </div>
+                 Tönung nach E1-Regel 6 (genau EIN accent):
+                 · Marge % = Leitwert des Gericht-Editors → accent.
+                 · „Mit Preis" + Allergen-Konf. tragen echte Messgrößen → good/warn/bad.
+                 · Wareneinsatz bleibt NEUTRAL: das alte feste Orange sah nach Alarm aus, war aber
+                   gegen nichts gemessen. Die kanonische Leiter ist `weAmpel()`
+                   (grün ≤ Ziel · rot > Ziel × 1,5 · sonst gelb) gegen
+                   `TeamSettings::zielWareneinsatzPct()` — `cockpit()` liefert beides heute nicht.
+                   → eigenes To-do (Spec 28 §6), nicht hier heimlich eine Schwelle erfinden. --}}
+            <x-foodalchemist::kpi-tiles marker="vk-editor-kpis" :cols="5" :tiles="[
+                ['kpi' => 'yield', 'label' => 'Yield',
+                 'value' => $rezept->yield_kg !== null ? number_format((float) $rezept->yield_kg, 3, ',', '.') . ' kg' : '—'],
+                ['kpi' => 'ek', 'label' => 'EK gesamt',
+                 'value' => $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—'],
+                ['kpi' => 'ekkg', 'label' => 'EK / kg',
+                 'value' => $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—'],
+                ['kpi' => 'priced', 'label' => 'Mit Preis',
+                 'tone' => ($rezept->ek_n_ingredients_total ?? 0) > 0 && ($rezept->ek_n_ingredients_priced ?? 0) >= ($rezept->ek_n_ingredients_total ?? 0) ? 'good' : 'warn',
+                 'value' => ($rezept->ek_n_ingredients_priced ?? 0) . '/' . ($rezept->ek_n_ingredients_total ?? 0)],
+                ['kpi' => 'allergen', 'label' => 'Allergen-Konf.',
+                 'tone' => ['high' => 'good', 'medium' => 'warn', 'low' => 'bad'][$rezept->allergens_confidence] ?? 'neutral',
+                 'value' => strtoupper((string) $rezept->allergens_confidence)],
+                ['kpi' => 'vk-netto', 'label' => 'VK netto',
+                 'value' => ($cockpit['vk']['sales_net'] ?? null) !== null ? number_format((float) $cockpit['vk']['sales_net'], 2, ',', '.') . ' €' : '—'],
+                ['kpi' => 'vk-brutto', 'label' => 'VK brutto',
+                 'value' => ($cockpit['sales_gross'] ?? null) !== null ? number_format((float) $cockpit['sales_gross'], 2, ',', '.') . ' €' : '—'],
+                ['kpi' => 'vk-portion', 'label' => 'VK / Portion',
+                 'value' => ($cockpit['pro_einheit']['vk_netto_pro_einheit'] ?? null) !== null ? number_format((float) $cockpit['pro_einheit']['vk_netto_pro_einheit'], 2, ',', '.') . ' €' : '—'],
+                ['kpi' => 'wareneinsatz', 'label' => 'Wareneinsatz',
+                 'title' => 'Noch ohne Ampel — die Ziel-Wareneinsatzquote des Teams ist hier nicht angebunden.',
+                 'value' => ($cockpit['marge']['wareneinsatz_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—'],
+                ['kpi' => 'marge', 'label' => 'Marge', 'tone' => 'accent',
+                 'value' => ($cockpit['marge']['marge_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['marge_pct'], 1, ',', '.') . ' %' : '—'],
+            ]" />
         </x-slot:kpiHeader>
     @endif
 
@@ -110,27 +104,32 @@
             </div>
         </x-foodalchemist::modal-section>
     @else
-        {{-- R7 (Dominique 2026-06-14): Tabs statt langem Scroll — Concepter-Parität (editor.blade.php §10.4).
-             Alpine x-show statt Livewire-setTab: alle Sektionen bleiben im DOM (Marker/Tests bleiben grün),
-             der eingebettete <livewire ingredient-editor> wird NICHT neu gemountet, ungespeicherte Eingaben
-             bleiben, Umschalten ist sofort (kein Server-Roundtrip). Tab-Stil = exakt wie im Concepter. --}}
-        <div x-data="{ tab: 'aufbau' }" data-vk-tabs>
-            {{-- Sticky, schwebende Tab-Leiste (2026-07-31), analog Rezept-Editor --}}
-            <div class="flex gap-4 border-b border-black/5 sticky top-0 z-20 -mx-6 -mt-4 px-6 pt-4 bg-white/90 backdrop-blur-xl shadow-md rounded-b-xl">
-                {{-- 'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" — bündelt Allergene · Zusatzstoffe · Nährwerte · Spezifikation (Rezept-Modal-Parität) --}}
-                @php($vkTabs = ['aufbau' => 'Aufbau', 'allergene' => 'Deklaration', 'kalkulation' => 'Kalkulation', 'darreichungen' => 'Darreichungen', 'service' => 'Service'])
-                @if($rezept !== null)@php($vkTabs['sensorik'] = 'Sensorik & Pairing')@endif
-                @if($rezept !== null)@php($vkTabs['feedback'] = 'Feedback')@endif
-                @php($vkTabs['notes'] = 'Notizen')
-                @foreach($vkTabs as $tabKey => $tabLabel)
-                    <button type="button" @click="tab = '{{ $tabKey }}'"
-                            :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700' : 'border-transparent text-gray-600 hover:text-gray-700'"
-                            class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors" data-vk-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
-                @endforeach
-            </div>
+        {{-- R7 (Dominique 2026-06-14): Tabs statt langem Scroll. Alpine x-show statt Livewire-setTab:
+             alle Sektionen bleiben im DOM (Marker/Tests bleiben grün), der eingebettete
+             <livewire ingredient-editor> wird NICHT neu gemountet, ungespeicherte Eingaben bleiben,
+             Umschalten ist sofort (kein Server-Roundtrip).
+             Spec 28 / E2.1: Leiste + Alpine-Scope kommen aus dem Baustein `editor-tabs` — inklusive
+             wire:key (Gericht-Wechsel) und Tab-Reset beim Öffnen, die hier vorher fehlten.
+             'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" (bündelt Allergene ·
+             Zusatzstoffe · Nährwerte · Spezifikation — Rezept-Editor-Parität). --}}
+        <x-foodalchemist::editor-tabs marker="vk" wire-key="vk-tabs-{{ $rezept->id }}" :init="'aufbau'"
+            :tabs="[
+                'aufbau' => 'Aufbau',
+                'stammdaten' => 'Stammdaten',
+                'allergene' => 'Deklaration',
+                'kalkulation' => 'Kalkulation',
+                'darreichungen' => 'Darreichungen',
+                'service' => 'Service',
+                'sensorik' => 'Sensorik & Pairing',
+                'feedback' => 'Feedback',
+                'notes' => 'Notizen',
+            ]">
 
-        {{-- ── Tab: AUFBAU (Stammdaten + Klassifikation + Zutaten) ──────── --}}
-        <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
+        {{-- ── Tab: STAMMDATEN (Stammdaten + Klassifikation) ─────────────
+             Spec 28 / E6: aus „Aufbau" herausgelöst — Master-Parität (Basisrezept-Editor).
+             Aufbau ist jetzt reiner Bau: man sieht die Komponenten ohne vorher an den
+             Stammdaten vorbeizuscrollen. --}}
+        <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 space-y-4">
         <x-foodalchemist::modal-section title="Stammdaten">
             {{-- M9-01i: ✨-Vorschläge in die Form-Felder (Save = Accept).
                  ✨ Marketing ist raus (UX-Umbau 2026-07-03): Marketing-Text lebt am Foodbook-Block. --}}
@@ -187,9 +186,13 @@
         </x-foodalchemist::modal-section>
 
         {{-- M9-01a/b: Zutaten INLINE (P-8-Kern, VK-Kontext = Rollen-Spalte) + 🎭 + KPI-Leiste --}}
+        </div>{{-- /Tab STAMMDATEN --}}
+
+        {{-- ── Tab: AUFBAU (nur Komponenten) ─────────────────────────────── --}}
+        <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
         <x-foodalchemist::modal-section title="Zutaten ({{ $rezept->ingredients->count() }})">
             <x-slot:actions>
-                <button type="button" wire:click="ai_rollen" class="{{ $btnAi }}" title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-editor-rollen>🎭 Rollen verteilen</button>
+                <button type="button" wire:click="ai_rollen" class="{{ $btnAi }}" title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-editor-rollen>@svg('heroicon-o-user-group', 'w-3.5 h-3.5') Rollen verteilen</button>
                 {{-- Spec 03 L1a: ✨ KI-Überarbeiten — freie Anweisung, Vorschau, Übernehmen --}}
                 <button type="button" wire:click="$toggle('ueberarbeitenOffen')" class="{{ $btnAi }}"
                         title="Freie Anweisung — KI überarbeitet Komponenten, Mengen, Beschreibung, Plating & VK-Wording (Vorschau + Übernehmen). Klasse/Diät/Darreichung/Verkaufseinheit bleiben unangetastet."
@@ -263,7 +266,7 @@
 
             @if($rollenVorschlag !== null)
                 <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs" data-vk-editor-rollen-vorschlag>
-                    <p class="text-gray-900">🎭 Rollen-Verteilung <span class="text-[11px] text-gray-500">· {{ round($rollenVorschlag['confidence'] * 100) }} %</span></p>
+                    <p class="text-gray-900 inline-flex items-center gap-1.5">@svg('heroicon-o-user-group', 'w-3.5 h-3.5') Rollen-Verteilung <span class="text-[11px] text-gray-500">· {{ round($rollenVorschlag['confidence'] * 100) }} %</span></p>
                     @if($rollenVorschlag['rollen'] === [])
                         <p class="text-[11px] text-gray-500 mt-0.5">Kein gültiger Vorschlag (Vokabular: aroma_treiber · komponente · beilage · garnitur).</p>
                     @else
@@ -492,10 +495,10 @@
                         <td class="py-1.5 text-right whitespace-nowrap">
                             <button type="button" wire:click="darDeltaToggle({{ $d->id }})"
                                     class="{{ $btnGhostXs }} {{ $d->deltas->count() > 0 ? 'text-violet-600' : 'text-gray-500' }}"
-                                    title="Komponenten dieser Form anpassen (weglassen/reduzieren)">⚙ {{ $d->deltas->count() ?: '' }}</button>
+                                    title="Komponenten dieser Form anpassen (weglassen/reduzieren)">@svg('heroicon-o-adjustments-horizontal', 'w-3.5 h-3.5') {{ $d->deltas->count() ?: '' }}</button>
                             @unless($d->is_standard)
                                 <button type="button" wire:click="darreichungLoeschen({{ $d->id }})" wire:confirm="Diese Darreichung löschen?"
-                                        class="{{ $btnGhostXs }} text-rose-500" title="löschen">🗑</button>
+                                        class="{{ $btnGhostXs }} text-rose-500" title="löschen">@svg('heroicon-o-trash', 'w-3.5 h-3.5')</button>
                             @endunless
                         </td>
                     </tr>
@@ -747,6 +750,6 @@
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab NOTIZEN --}}
 
-        </div>{{-- /Tabs --}}
+        </x-foodalchemist::editor-tabs>
     @endif
 </x-foodalchemist::modal>

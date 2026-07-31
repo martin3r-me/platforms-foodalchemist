@@ -10,8 +10,10 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\BulkEnrichService;
 use Platform\FoodAlchemist\Services\FavoriteGpService;
+use Platform\FoodAlchemist\Services\GpAggregateService;
 use Platform\FoodAlchemist\Services\GpNamingService;
 use Platform\FoodAlchemist\Services\GpService;
+use Platform\FoodAlchemist\Services\PriceService;
 use Platform\FoodAlchemist\Services\VocabularyService;
 use Platform\FoodAlchemist\Support\Curate;
 
@@ -466,7 +468,7 @@ class GpModal extends Component
         $this->nameVorschlag = null;
     }
 
-    public function render(GpNamingService $naming, VocabularyService $vocab)
+    public function render(GpNamingService $naming, VocabularyService $vocab, PriceService $preise, GpAggregateService $aggregate)
     {
         $team = Auth::user()?->currentTeamRelation;
         $gp = $this->gp();
@@ -479,9 +481,20 @@ class GpModal extends Component
             $pruefung['warnings'] = array_values(array_filter($pruefung['warnings'], fn ($w) => ! str_starts_with($w, 'Drift:')));
         }
 
+        // Spec 28 / E3.1: Kennzahlen für den KPI-Kopf des Voll-Editors. Bewusst DIESELBEN
+        // Größen, die das GP-Cockpit im Detail-Panel führt (Lead-Preis · n LAs ·
+        // Allergen-Konfidenz) — nichts neu erfunden, nur im Editor sichtbar gemacht.
+        // Zwei zusätzliche Reads, nur bei geladenem GP; die Tab-Panels dieses Modals mounten
+        // ohnehin schwerere Detail-Panel-Kinder.
+        $leadLa = $gp?->leadLa;
+        $leadPreis = $leadLa !== null ? $preise->activeFor($leadLa->id) : null;
+
         return view('foodalchemist::livewire.gps.gp-modal', [
             'gp' => $gp,
             'neu' => $this->gpId === null,
+            'leadLa' => $leadLa,
+            'leadPreis' => $leadPreis,
+            'allergenKonfidenz' => $gp !== null ? $aggregate->allergenKonfidenz($gp) : null,
             'vorschauName' => $name,
             'vorschauSlug' => $slug,
             'vorschauKey' => $this->gpId === null

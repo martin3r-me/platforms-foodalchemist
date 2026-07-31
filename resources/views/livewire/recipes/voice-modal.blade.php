@@ -1,7 +1,7 @@
-{{-- M7-10: 🎙 Voice — MediaRecorder (Opus mono) → STT → Tool-Loop; Proposals mit Bestätigen (GL-07) --}}
+{{-- M7-10: Voice — MediaRecorder (Opus mono) → STT → Tool-Loop; Proposals mit Bestätigen (GL-07) --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="voice-modal" title="🎙 Sprachbefehl" size="max-w-xl">
+<x-foodalchemist::modal name="voice-modal" title="Sprachbefehl" size="max-w-xl">
     <div x-data="{
             rec: null, chunks: [], läuft: false,
             async start() {
@@ -22,7 +22,13 @@
         <div class="flex items-center gap-2">
             <button type="button" @click="läuft ? stop() : start()"
                     :class="läuft ? 'animate-pulse' : ''" class="{{ $btnPrimary }}" data-voice-rec>
-                <span x-text="läuft ? '⏹ Stopp & senden' : '🎙 Aufnahme starten'"></span>
+                {{-- E1-11: Zustand über Icon + Text statt Emoji; beide Icons liegen im DOM,
+                     Alpine schaltet nur die Sichtbarkeit (x-text kann kein Markup tragen). --}}
+                <span class="inline-flex items-center gap-1.5">
+                    <span x-show="läuft" x-cloak>@svg('heroicon-o-stop', 'w-3.5 h-3.5')</span>
+                    <span x-show="! läuft">@svg('heroicon-o-microphone', 'w-3.5 h-3.5')</span>
+                    <span x-text="läuft ? 'Stopp & senden' : 'Aufnahme starten'"></span>
+                </span>
             </button>
             <span class="text-[11px] text-gray-500">Kurz-Befehl sprechen (wenige Sekunden) — z. B. »Suche BBQ-Sauce«, »Öffne Rezept …«, »Klassifiziere …«</span>
         </div>
@@ -46,7 +52,7 @@
                 <p class="text-[10px] text-gray-500">{{ $ergebnis['runden'] }} Runde(n) · {{ count($ergebnis['tool_laeufe']) }} Tool-Aufruf(e) · {{ $ergebnis['elapsed_ms'] }} ms</p>
                 @foreach($ergebnis['proposals'] as $i => $p)
                     <div class="rounded bg-violet-500/10 border border-violet-500/30 px-2 py-1.5 text-xs" wire:key="vp-{{ $i }}" data-voice-proposal>
-                        ✨ Speisen-Klasse: <span class="font-medium">{{ $p['klasse_name'] ?? 'kein Treffer' }}</span>
+                        Speisen-Klasse: <span class="font-medium">{{ $p['klasse_name'] ?? 'kein Treffer' }}</span>
                         <span class="text-[11px] text-gray-500">· {{ round(($p['confidence'] ?? 0) * 100) }} %</span>
                         @if($p['accepted'] ?? false)
                             <span class="{{ $pill }} {{ $variantPill['success'] }} ml-1">übernommen</span>

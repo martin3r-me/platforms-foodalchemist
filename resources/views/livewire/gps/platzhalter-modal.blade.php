@@ -1,7 +1,7 @@
-{{-- D-5: 📐 Platzhalter verwalten — anlegen / umbenennen / löschen --}}
+{{-- D-5: Platzhalter verwalten — anlegen / umbenennen / löschen --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="platzhalter-modal" title="📐 Platzhalter verwalten" size="max-w-xl">
+<x-foodalchemist::modal name="platzhalter-modal" title="Platzhalter verwalten" size="max-w-xl">
     @if($fehler !== null)
         <p class="text-xs text-rose-600 mb-3" data-platzhalter-fehler>{{ $fehler }}</p>
     @endif
@@ -29,10 +29,10 @@
                     @else
                         <span class="flex-1 text-xs text-gray-800">{{ $ph->name }}</span>
                         <span class="{{ $pill }} {{ $ph->in_zeilen > 0 ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $ph->in_zeilen }}× genutzt</span>
-                        <button type="button" wire:click="startEdit({{ $ph->id }}, @js($ph->name))" class="{{ $btnGhostXs }}" title="Umbenennen">✎</button>
+                        <button type="button" wire:click="startEdit({{ $ph->id }}, @js($ph->name))" class="{{ $btnGhostXs }}" title="Umbenennen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5')</button>
                         <button type="button" wire:click="loeschen({{ $ph->id }})" wire:confirm="Diesen Platzhalter wirklich löschen?"
                                 @disabled($ph->in_zeilen > 0) class="{{ $btnGhostXs }} text-rose-600 disabled:opacity-40"
-                                title="{{ $ph->in_zeilen > 0 ? 'Wird genutzt — erst aus Rezepten entfernen' : 'Löschen' }}">🗑</button>
+                                title="{{ $ph->in_zeilen > 0 ? 'Wird genutzt — erst aus Rezepten entfernen' : 'Löschen' }}">@svg('heroicon-o-trash', 'w-3.5 h-3.5')</button>
                     @endif
                 </div>
             @empty

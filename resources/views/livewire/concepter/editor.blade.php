@@ -2,14 +2,16 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 @php($item = $concept ?? $paket)
 @php($titel = $item?->name ?? 'Editor')
-@php($tabAktiv = 'border-violet-500 text-violet-700')
-@php($tabIdle = 'border-transparent text-gray-600 hover:text-gray-700')
+{{-- $tabAktiv/$tabIdle sind mit Spec 28 / E2.2 entfallen — die Tab-Klassen leben im Baustein. --}}
 @php($konfPill = ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']])
 {{-- Phase 5: Typ-Farbe als Inline-Style (dynamisch aus Settings) — Text = Hex, Hintergrund = Hex+1a (10%). --}}
 @php($typStyle = fn (string $t) => isset($typFarben[$t]) ? 'color:' . $typFarben[$t] . ';background-color:' . $typFarben[$t] . '1a' : '')
 
 <div>
-    <x-foodalchemist::modal name="concepter-editor" :title="$titel" fullscreen dark-canvas>
+    {{-- Spec 28 / E1-2: Titel sagt WAS bearbeitet wird, der Name ist der Akzent-Chip.
+         Concept und Paket teilen diesen Editor — der Titel benennt, welches von beiden. --}}
+    <x-foodalchemist::modal name="concepter-editor" :title="$paket ? 'Paket bearbeiten' : 'Konzept bearbeiten'"
+        :title-name="$item?->name" fullscreen dark-canvas>
         <x-slot:actions>
             @if($paket && $rueckSprungConceptId)
                 <button type="button" wire:click="zurueckZumConcept" class="{{ $btnGhost }}" title="Paket sichern und zurück ins Concept">← Speichern &amp; zurück zum Concept</button>
@@ -31,180 +33,178 @@
                 @php($stripVk = $concept ? ($cockpit['price_per_person'] ?? 0) : ($paket?->price_per_person !== null ? (float) $paket->price_per_person : null))
                 @php($stripEk = (float) ($kalkulation['hk1_pro_person'] ?? 0))
                 @php($stripWpct = ($stripVk !== null && $stripVk > 0) ? $stripEk / $stripVk * 100 : null)
-                <div class="grid grid-cols-3 md:grid-cols-7 gap-2">
-                    <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2">
-                        <span class="text-[10px] uppercase tracking-wider text-violet-600">VK €/Person</span>
-                        <p class="text-base font-bold text-violet-700 tabular-nums">{{ $stripVk !== null ? number_format((float) $stripVk, 2, ',', '.') . ' €' : '—' }}</p>
-                    </div>
-                    <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                        <span class="{{ $dt }}">Wareneinsatz/Pers.</span>
-                        <p class="text-sm font-semibold tabular-nums">{{ number_format($stripEk, 2, ',', '.') }} €</p>
-                    </div>
-                    <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                        <span class="{{ $dt }}">Wareneinsatz %</span>
-                        <p class="text-sm font-semibold tabular-nums">{{ $stripWpct !== null ? number_format($stripWpct, 1, ',', '.') . ' %' : '—' }}</p>
-                    </div>
-                    <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                        <span class="{{ $dt }}">HK2 (Vollkosten)</span>
-                        <p class="text-sm font-semibold tabular-nums">{{ number_format((float) ($kalkulation['hk2_pro_person'] ?? 0), 2, ',', '.') }} €</p>
-                    </div>
-                    <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                        <span class="{{ $dt }}">VK-Vorschlag</span>
-                        <p class="text-sm font-semibold tabular-nums text-violet-700">{{ number_format((float) ($kalkulation['vk_vorschlag'] ?? 0), 2, ',', '.') }} €</p>
-                    </div>
-                    <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div>
-                        <span class="{{ $dt }}">Deckungsbeitrag</span>
-                        <p class="text-sm font-semibold tabular-nums {{ ($kalkulation['db_eur'] ?? 0) < 0 ? 'text-red-600' : 'text-emerald-600' }}">{{ $kalkulation['db_eur'] !== null ? number_format((float) $kalkulation['db_eur'], 2, ',', '.') . ' €' : '—' }}</p>
-                    </div>
-                    @isset($aggregat['gewicht_pro_person_g'])
-                        <div class="{{ $kpiTile }}" data-kpi-gewicht><div class="{{ $kpiTileAccent }}"></div>
-                            <span class="{{ $dt }}">Gewicht/P</span>
-                            <p class="text-sm font-semibold tabular-nums">{{ number_format((float) $aggregat['gewicht_pro_person_g'], 0, ',', '.') }} g{!! ($aggregat['gewicht_vollstaendig'] ?? true) ? '' : ' <span class="text-amber-500 font-normal" title="≥1 Position ohne Portionsgewicht — Gewicht unvollständig">~</span>' !!}</p>
-                        </div>
-                    @endisset
-                </div>
+                {{-- Spec 28 / E2.2: Kacheln über den Baustein `kpi-tiles`.
+                     Leitwert = VK €/Person (accent, war hier schon violett — jetzt aus derselben
+                     Palette wie Rezept- und Gericht-Editor). Deckungsbeitrag trägt eine echte
+                     Messgröße (negativ = Missstand) → bad/good. Wareneinsatz %/€ und HK2 bleiben
+                     neutral: ohne angebundene Ziel-Quote gibt es hier nichts zu ampeln.
+                     Das „~" beim Gewicht ist jetzt ein hint-Feld statt rohem HTML im Wert. --}}
+                <x-foodalchemist::kpi-tiles :cols="7" marker="konzept-kpis" :tiles="array_values(array_filter([
+                    ['kpi' => 'vk-person', 'label' => 'VK €/Person', 'tone' => 'accent',
+                     'value' => $stripVk !== null ? number_format((float) $stripVk, 2, ',', '.') . ' €' : '—'],
+                    ['kpi' => 'we-person', 'label' => 'Wareneinsatz/Pers.',
+                     'value' => number_format($stripEk, 2, ',', '.') . ' €'],
+                    ['kpi' => 'we-pct', 'label' => 'Wareneinsatz %',
+                     'value' => $stripWpct !== null ? number_format($stripWpct, 1, ',', '.') . ' %' : '—'],
+                    ['kpi' => 'hk2', 'label' => 'HK2 (Vollkosten)',
+                     'value' => number_format((float) ($kalkulation['hk2_pro_person'] ?? 0), 2, ',', '.') . ' €'],
+                    ['kpi' => 'vk-vorschlag', 'label' => 'VK-Vorschlag',
+                     'value' => number_format((float) ($kalkulation['vk_vorschlag'] ?? 0), 2, ',', '.') . ' €'],
+                    ['kpi' => 'db', 'label' => 'Deckungsbeitrag',
+                     'tone' => ($kalkulation['db_eur'] ?? 0) < 0 ? 'bad' : 'good',
+                     'value' => $kalkulation['db_eur'] !== null ? number_format((float) $kalkulation['db_eur'], 2, ',', '.') . ' €' : '—'],
+                    isset($aggregat['gewicht_pro_person_g']) ? [
+                        'kpi' => 'gewicht', 'label' => 'Gewicht/P',
+                        'value' => number_format((float) $aggregat['gewicht_pro_person_g'], 0, ',', '.') . ' g',
+                        'hint' => ($aggregat['gewicht_vollstaendig'] ?? true) ? null : '~',
+                        'hint_title' => '≥1 Position ohne Portionsgewicht — Gewicht unvollständig',
+                    ] : null,
+                ]))" />
             </x-slot:kpiHeader>
         @endif
 
         @if($item === null)
             <p class="text-sm text-gray-500 py-10 text-center">Nichts geladen.</p>
         @else
-            {{-- ── Kopf ──────────────────────────────────────────────────── --}}
-            <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
-                <div class="md:col-span-2">
-                    <label class="{{ $label }}">Bezeichnung (intern)</label>
-                    <input type="text" wire:model="form.name" class="{{ $input }}" />
-                </div>
-                <div class="md:col-span-2">
-                    <label class="{{ $label }}">Konsumentenbezeichnung</label>
-                    <input type="text" wire:model="form.consumer_name" class="{{ $input }}" placeholder="z. B. „Sommerliche Vorspeisen-Auswahl"" />
-                </div>
-                <div>
-                    <label class="{{ $label }}">Klasse</label>
-                    <input type="text" wire:model="form.class" list="concepter-klassen" class="{{ $input }}" placeholder="frei/wählbar" />
-                    <datalist id="concepter-klassen">@foreach($klassen as $k)<option value="{{ $k }}"></option>@endforeach</datalist>
-                </div>
-                <div>
-                    <label class="{{ $label }}">Niveau</label>
-                    <select wire:model="form.level" class="{{ $input }}">
-                        <option value="">—</option>
-                        @foreach(['klassisch' => 'klassisch', 'gehoben' => 'gehoben', 'haute' => 'haute'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
-                    </select>
+            {{-- ── Tab-Nav (sticky, schwebend — die Feldleiste darüber scrollt weg) ───
+                 Spec 28 / E2.2: gleiche Leiste wie Rezept- und Gericht-Editor, aber im
+                 SERVER-Modus des Bausteins: der Concepter hält den Tab in Livewire und rendert nur
+                 das aktive Panel (Coverage, Kohäsion und die Picker sind zu schwer, um alle
+                 gleichzeitig zu leben). Die Mechanik bleibt damit unverändert — nur das Aussehen
+                 kommt jetzt aus einer Quelle.
+                 'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" (Diät-Rollup +
+                 Nährwerte/Person — Parität zu Rezept-/VK-Editor). --}}
+            <x-foodalchemist::editor-tabs marker="konzept" action="setTab" :active="$tab" :tabs="[
+                'aufbau' => 'Aufbau',
+                'stammdaten' => 'Stammdaten',
+                'konzept' => $concept ? 'Konzept & Planung' : null,
+                'allergene' => 'Deklaration',
+                'kalkulation' => 'Kalkulation',
+                'geschirr' => $concept ? 'Geschirr' : null,
+                'sensorik' => $concept ? 'Sensorik & Pairing' : null,
+                'notes' => 'Notizen',
+            ]" />
+
+            {{-- ── Tab: STAMMDATEN ────────────────────────────────────
+                 Spec 28 / E6: die Feldleiste klebte permanent ÜBER den Tabs und drückte
+                 den Aufbau nach unten. Jetzt eigener Tab wie im Basisrezept-Editor. --}}
+            @if($tab === 'stammdaten')
+                <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+                    <div class="md:col-span-2">
+                        <label class="{{ $label }}">Bezeichnung (intern)</label>
+                        <input type="text" wire:model="form.name" class="{{ $input }}" />
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="{{ $label }}">Konsumentenbezeichnung</label>
+                        <input type="text" wire:model="form.consumer_name" class="{{ $input }}" placeholder="z. B. „Sommerliche Vorspeisen-Auswahl"" />
+                    </div>
+                    <div>
+                        <label class="{{ $label }}">Klasse</label>
+                        <input type="text" wire:model="form.class" list="concepter-klassen" class="{{ $input }}" placeholder="frei/wählbar" />
+                        <datalist id="concepter-klassen">@foreach($klassen as $k)<option value="{{ $k }}"></option>@endforeach</datalist>
+                    </div>
+                    <div>
+                        <label class="{{ $label }}">Niveau</label>
+                        <select wire:model="form.level" class="{{ $input }}">
+                            <option value="">—</option>
+                            @foreach(['klassisch' => 'klassisch', 'gehoben' => 'gehoben', 'haute' => 'haute'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
+                        </select>
+                    </div>
+
+                    @if($concept)
+                        <div>
+                            <label class="{{ $label }}">Anlass</label>
+                            <input type="text" wire:model="form.occasion" class="{{ $input }}" placeholder="z. B. Sommerfest" />
+                        </div>
+                        {{-- 4c: Kategorie-Feld abgelöst — Facetten (Servierform/Eventtyp/Momente/Saison) übernehmen --}}
+                        <div>
+                            <label class="{{ $label }}">Servierform</label>
+                            <select wire:model="form.serving_form_id" wire:change="speichern" class="{{ $input }}" title="Steuert die Darreichungs-Auflösung der Gerichte (Slot → passende Variante) — speichert sofort">
+                                <option value="">—</option>
+                                @foreach($servierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="{{ $label }}">Eventtyp</label>
+                            <select wire:model="form.event_type_id" wire:change="speichern" class="{{ $input }}">
+                                <option value="">—</option>
+                                @foreach($eventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="{{ $label }}">Status</label>
+                            <select wire:model="form.status" class="{{ $input }}">
+                                @foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="{{ $label }}">Geschmack</label>
+                            <select wire:model="form.taste_direction" class="{{ $input }}">
+                                <option value="">—</option>
+                                @foreach(['suess' => 'süß', 'herzhaft' => 'herzhaft', 'neutral' => 'neutral'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
+                            </select>
+                        </div>
+                    @else
+                        <div>
+                            <label class="{{ $label }}">Rolle</label>
+                            <input type="text" wire:model="form.role" list="concepter-rollen" class="{{ $input }}" placeholder="z. B. Vorspeise" />
+                            <datalist id="concepter-rollen">@foreach($rollen as $r)<option value="{{ $r }}"></option>@endforeach</datalist>
+                        </div>
+                    @endif
                 </div>
 
                 @if($concept)
-                    <div>
-                        <label class="{{ $label }}">Anlass</label>
-                        <input type="text" wire:model="form.occasion" class="{{ $input }}" placeholder="z. B. Sommerfest" />
+                    {{-- R4.3: Phasen-Statusmaschine (ergänzt den Sichtbarkeits-Status) --}}
+                    <div class="mt-2">
+                        @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $concept->phase ?? 'kontext'])
                     </div>
-                    {{-- 4c: Kategorie-Feld abgelöst — Facetten (Servierform/Eventtyp/Momente/Saison) übernehmen --}}
-                    <div>
-                        <label class="{{ $label }}">Servierform</label>
-                        <select wire:model="form.serving_form_id" wire:change="speichern" class="{{ $input }}" title="Steuert die Darreichungs-Auflösung der Gerichte (Slot → passende Variante) — speichert sofort">
-                            <option value="">—</option>
-                            @foreach($servierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="{{ $label }}">Eventtyp</label>
-                        <select wire:model="form.event_type_id" wire:change="speichern" class="{{ $input }}">
-                            <option value="">—</option>
-                            @foreach($eventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="{{ $label }}">Status</label>
-                        <select wire:model="form.status" class="{{ $input }}">
-                            @foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="{{ $label }}">Geschmack</label>
-                        <select wire:model="form.taste_direction" class="{{ $input }}">
-                            <option value="">—</option>
-                            @foreach(['suess' => 'süß', 'herzhaft' => 'herzhaft', 'neutral' => 'neutral'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
-                        </select>
-                    </div>
-                @else
-                    <div>
-                        <label class="{{ $label }}">Rolle</label>
-                        <input type="text" wire:model="form.role" list="concepter-rollen" class="{{ $input }}" placeholder="z. B. Vorspeise" />
-                        <datalist id="concepter-rollen">@foreach($rollen as $r)<option value="{{ $r }}"></option>@endforeach</datalist>
+
+                    {{-- Facetten: Einsatzmomente + Saisons (mehrfach, Umbau-Spec Phase 4b) --}}
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="{{ $label }} !mb-0 mr-1">Einsatzmoment</span>
+                            @foreach($einsatzmomente as $em)
+                                <button type="button" wire:click="toggleFacette('einsatzmoment_ids', {{ $em->id }})"
+                                    class="{{ $pill }} {{ in_array($em->id, $form['einsatzmoment_ids'] ?? []) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
+                            @endforeach
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="{{ $label }} !mb-0 mr-1">Saison</span>
+                            @foreach($saisons as $sa)
+                                <button type="button" wire:click="toggleFacette('saison_ids', {{ $sa->id }})"
+                                    class="{{ $pill }} {{ in_array($sa->id, $form['saison_ids'] ?? []) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
+                            @endforeach
+                        </div>
+                        {{-- Schreibstil (Tonalität) — 2026-07-06 aus Tab „Notizen" hierher (immer sichtbar):
+                             Stil fürs ganze Konzept + ✨ erzeugt je Position Brand-Voice-Wording (WordingResolver-Kette). --}}
+                        <div class="flex items-center gap-1.5" data-konzept-schreibstil>
+                            <span class="{{ $label }} !mb-0 mr-1">Schreibstil</span>
+                            <select wire:model="form.writing_style_id" class="{{ $input }} !w-auto !py-0.5 !text-[11px]" title="Tonalität fürs Wording des ganzen Konzepts — Foodbook kann je Kunde überschreiben">
+                                <option value="">— neutral —</option>
+                                @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
+                            </select>
+                            <button type="button" wire:click="wordingGenerieren" class="{{ $btnAi }} shrink-0" title="Wording übers ganze Konzept erzeugen: pro Position einen Brand-Voice-Namen + Konzept-Einleitung (echter Text mit LLM-Key)" data-ki-concept-wording>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Wording</button>
+                        </div>
                     </div>
                 @endif
-            </div>
-
-            @if($concept)
-                {{-- R4.3: Phasen-Statusmaschine (ergänzt den Sichtbarkeits-Status) --}}
-                <div class="mt-2">
-                    @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $concept->phase ?? 'kontext'])
-                </div>
-
-                {{-- Facetten: Einsatzmomente + Saisons (mehrfach, Umbau-Spec Phase 4b) --}}
-                <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2">
-                    <div class="flex flex-wrap items-center gap-1.5">
-                        <span class="{{ $label }} !mb-0 mr-1">Einsatzmoment</span>
-                        @foreach($einsatzmomente as $em)
-                            <button type="button" wire:click="toggleFacette('einsatzmoment_ids', {{ $em->id }})"
-                                class="{{ $pill }} {{ in_array($em->id, $form['einsatzmoment_ids'] ?? []) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
-                        @endforeach
-                    </div>
-                    <div class="flex flex-wrap items-center gap-1.5">
-                        <span class="{{ $label }} !mb-0 mr-1">Saison</span>
-                        @foreach($saisons as $sa)
-                            <button type="button" wire:click="toggleFacette('saison_ids', {{ $sa->id }})"
-                                class="{{ $pill }} {{ in_array($sa->id, $form['saison_ids'] ?? []) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
-                        @endforeach
-                    </div>
-                    {{-- Schreibstil (Tonalität) — 2026-07-06 aus Tab „Notizen" hierher (immer sichtbar):
-                         Stil fürs ganze Konzept + ✨ erzeugt je Position Brand-Voice-Wording (WordingResolver-Kette). --}}
-                    <div class="flex items-center gap-1.5" data-konzept-schreibstil>
-                        <span class="{{ $label }} !mb-0 mr-1">Schreibstil</span>
-                        <select wire:model="form.writing_style_id" class="{{ $input }} !w-auto !py-0.5 !text-[11px]" title="Tonalität fürs Wording des ganzen Konzepts — Foodbook kann je Kunde überschreiben">
-                            <option value="">— neutral —</option>
-                            @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
-                        </select>
-                        <button type="button" wire:click="wordingGenerieren" class="{{ $btnAi }} shrink-0" title="Wording übers ganze Konzept erzeugen: pro Position einen Brand-Voice-Namen + Konzept-Einleitung (echter Text mit LLM-Key)" data-ki-concept-wording>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Wording</button>
-                    </div>
-                </div>
             @endif
 
-            {{-- ── Tab-Nav (sticky, schwebend — die Feldleiste darüber scrollt weg) ─── --}}
-            <div class="flex gap-4 border-b border-black/5 mt-1 sticky top-0 z-20 -mx-6 px-6 py-2 bg-white/90 backdrop-blur-xl shadow-md rounded-b-xl">
-                @php($editorTabs = ['aufbau' => 'Aufbau'])
-                @if($concept)@php($editorTabs['konzept'] = 'Konzept')@endif
-                {{-- 'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" (Diät-Rollup + Nährwerte/Person — Parität zu Rezept-/VK-Modal) --}}
-                @php($editorTabs['allergene'] = 'Deklaration')
-                @php($editorTabs['kalkulation'] = 'Kalkulation')
-                @if($concept)@php($editorTabs['geschirr'] = 'Geschirr')@endif
-                @if($concept)@php($editorTabs['sensorik'] = 'Sensorik')@endif
-                @php($editorTabs['notes'] = 'Notizen')
-                @foreach($editorTabs as $k => $l)
-                    <button type="button" wire:click="setTab('{{ $k }}')"
-                            class="px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors {{ $tab === $k ? $tabAktiv : $tabIdle }}">{{ $l }}</button>
-                @endforeach
-            </div>
 
-            {{-- ── Tab: AUFBAU ───────────────────────────────────────────── --}}
+
+            {{-- ── Tab: AUFBAU (nur die Positionen) ───────────────────────────
+                 Spec 28 / E6: Planungs-Gerüst-Coverage → Tab «Konzept & Planung» (direkt neben
+                 dem SOLL-Rahmen, den es misst), Menü-Kohäsion → Tab «Sensorik & Pairing».
+                 Vorher standen beide Panels über der Positions-Tabelle und drückten den
+                 eigentlichen Bau nach unten. --}}
             @if($tab === 'aufbau')
                 {{-- Live-Kosten-Streifen ist jetzt fix im Modal-Kopf (Phase 1, x-slot:kpiHeader). --}}
                 @if($concept)
-                {{-- R4.2: Soll/Ist-Coverage gegen das Planungs-Gerüst — live beim Befüllen, Lücken-Klick filtert den Picker --}}
-                @if($coverage !== null && $coverage['hat_geruest'])
-                    <div class="mb-3">
-                        @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillAction' => 'coverageFuellen'])
-                    </div>
-                @endif
-                {{-- R6.1: Kohäsions-Beweis über die Menüfolge (on-demand) --}}
-                <div class="mb-3">
-                    @include('foodalchemist::livewire.planning.partials.kohaesion-panel')
-                </div>
                 {{-- x-data hält den Drag-Zustand: dragTyp/dragId = Liste→einfügen, dragSlotId = Position umsortieren.
                      bauModus schaltet zwischen Bearbeiten (Tabelle + Einfüge-Listen) und Menü-Ansicht (Gäste-Sicht,
                      UX-Umbau 2026-07-03) — Alpine statt Livewire: kein Re-Mount, ungespeicherte Eingaben bleiben. --}}
                 <div class="flex gap-3 items-start w-full" x-data="{ dragTyp: null, dragId: null, dragSlotId: null, bauModus: true }">
                 {{-- Phase 3: linke Spalte — Basisrezepte als Position einfügen (sticky Panel wie zutaten-kern) --}}
-                <aside x-show="bauModus" x-cloak class="w-72 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-basisliste>
+                <aside x-show="bauModus" x-cloak class="w-56 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-basisliste>
                     {{-- Umschalter: Basisrezept ⇄ Paket (Pakete bei 300+ über Such-/Filter-Liste einfügen) --}}
                     <div class="flex gap-1 mb-1.5" data-linke-liste-umschalter>
                         <button type="button" wire:click="$set('linkeListe', 'basisrezept')" class="{{ $pill }} {{ $linkeListe === 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Basisrezept</button>
@@ -477,7 +477,7 @@
                                 @else
                                     <td class="{{ $td }} !px-2 align-top">
                                         @if($slot->sales_recipe_id)
-                                            <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.quantity" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} !w-16 text-right tabular-nums" placeholder="1" />
+                                            <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.quantity" wire:change="mengeSpeichern({{ $slot->id }})" class="{{ $input }} !w-14 text-right tabular-nums" placeholder="1" />
                                         @else<span class="text-gray-300">—</span>@endif
                                     </td>
                                     <td class="{{ $td }} !px-2 align-top">
@@ -492,7 +492,7 @@
                                         @if($slot->package_id && $slot->package)
                                             {{-- Paket = Abschnitts-Header (Gerichte stehen als eingerückte Zeilen darunter) --}}
                                             <span class="{{ $pill }} {{ $variantPill['info'] }}">📦 Paket</span>
-                                            <span class="text-sm font-semibold text-gray-900">{{ $slot->package->name }}</span>
+                                            <span class="text-sm font-semibold text-gray-900 break-words">{{ $slot->package->name }}</span>
                                             <button type="button" wire:click="paketOeffnen({{ $slot->package_id }})" class="text-gray-500 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">📦</button>
                                             @if($slot->package->class)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->package->class }}</span>@endif
                                             <span class="text-gray-500 text-[11px] tabular-nums">{{ $slot->package->price_per_person !== null ? number_format((float) $slot->package->price_per_person, 2, ',', '.') . ' €/P' : '' }}</span>
@@ -501,7 +501,7 @@
                                             @php($enthaelt = collect(['Schwein' => $g->spec_contains_pork, 'Rind' => $g->spec_contains_beef])->filter()->keys()->all())
                                             @php($allTitle = 'Allergene / Diät' . (count($enthaelt) ? ' — enthält ' . implode(', ', $enthaelt) : '') . ' · Konfidenz ' . ($g->allergens_confidence ?? 'unbekannt'))
                                             <span class="{{ $pill }} font-medium" style="{{ $typStyle($slot->type === 'basisrezept' ? 'basisrezept' : 'gericht') }}">{{ $slot->type === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
-                                            <span class="text-sm font-medium">{{ $g->name }}</span>
+                                            <span class="text-sm font-medium break-words">{{ $g->name }}</span>
                                             @if($g->dishClass)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $g->dishClass->label }}</span>@endif
                                             @if(isset($darreichungInfo[$slot->id]))
                                                 <span class="{{ $pill }} {{ str_starts_with($darreichungInfo[$slot->id], 'Standard:') ? $variantPill['secondary'] : $variantPill['primary'] }}"
@@ -544,7 +544,7 @@
                                             @endif
                                         @endif
                                     </td>
-                                    <td class="{{ $td }} !px-2 align-top"><input type="text" wire:model.blur="slotForm.{{ $slot->id }}.role" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} !w-28" placeholder="Rolle" /></td>
+                                    <td class="{{ $td }} !px-2 align-top"><input type="text" wire:model.blur="slotForm.{{ $slot->id }}.role" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} !w-20" placeholder="Rolle" /></td>
                                     <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $ekz !== null ? number_format((float) $ekz, 2, ',', '.') . ' €' : '—' }}</td>
                                     <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top text-gray-500">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</td>
@@ -697,7 +697,7 @@
                     </div>{{-- /BEARBEITEN-ANSICHT (x-show bauModus) --}}
                 </div>{{-- /mittlere Spalte --}}
                 {{-- Phase 3: rechte Spalte — VK-Gerichte als Position einfügen (VK-Baum-Filter + Liste) --}}
-                <aside x-show="bauModus" x-cloak class="w-72 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-gerichtliste>
+                <aside x-show="bauModus" x-cloak class="w-56 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-gerichtliste>
                     <p class="{{ $dt }} mb-1">VK-Gerichte ({{ $gerichtListe->count() }})</p>
                     @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'gerichtSuche'])
                     <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1 mt-1.5">
@@ -745,7 +745,7 @@
                     </div>
                     </div>{{-- /Mitte Paket-Inhalt --}}
                     {{-- rechte Spalte: roomy VK-Gerichte-Filter + Liste (wie Concept-Aufbau) --}}
-                    <aside class="w-80 shrink-0 hidden lg:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-paket-gerichtliste>
+                    <aside class="w-60 shrink-0 hidden lg:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-paket-gerichtliste>
                     <p class="{{ $dt }} mb-1">Posten hinzufügen</p>
                     <div class="flex items-center gap-1 mb-1.5">
                         <button type="button" wire:click="$set('paketQuelle', 'gericht')" class="{{ $pill }} {{ $paketQuelle !== 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Gericht</button>
@@ -1113,11 +1113,27 @@
                     {{-- R4.1: Planungs-Gerüst — messbarer Soll-Rahmen neben dem Freitext-Canvas --}}
                     <p class="text-[11px] text-gray-500 mt-4 mb-2">Planungs-Gerüst — das messbare SOLL (Mengen, Preisrahmen, Diät-Quoten, Saison, No-Gos, Dramaturgie). Messlatte für Coverage (R4.2) und KI-Konzepte (R6).</p>
                     @include('foodalchemist::livewire.planning.partials.frame-board')
+
+                    {{-- Spec 28 / E6: die IST-Messung gegen genau dieses Gerüst — vorher im Aufbau-Tab,
+                         also getrennt von seiner Messlatte. SOLL und IST stehen jetzt untereinander.
+                         Lücken-Klick filtert weiterhin den Picker im Aufbau-Tab (R4.2). --}}
+                    @if($coverage !== null && $coverage['hat_geruest'])
+                        <p class="text-[11px] text-gray-500 mt-4 mb-2">Soll/Ist-Coverage — was das Gerüst verlangt und was im Aufbau steht. Klick auf eine Lücke filtert den Picker im Tab «Aufbau».</p>
+                        @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillAction' => 'coverageFuellen'])
+                    @endif
                 @endif
             @endif
 
-            {{-- ── Tab: SENSORIK (Geschmacks-Balance + Textur über die Concept-Gerichte) ── --}}
+            {{-- ── Tab: SENSORIK & PAIRING (Geschmacks-Balance + Textur + Menü-Kohäsion) ── --}}
             @if($tab === 'sensorik')
+                {{-- Spec 28 / E6: R6.1-Kohäsions-Beweis über die Menüfolge — vorher im Aufbau-Tab.
+                     Gehört zur Aroma-Sicht, nicht zum Bau, und liegt damit wie im Basisrezept-Editor
+                     («Sensorik & Pairing») auf einer Fläche. On-demand, kein Auto-Lauf. --}}
+                @if($concept)
+                    <div class="mb-3">
+                        @include('foodalchemist::livewire.planning.partials.kohaesion-panel')
+                    </div>
+                @endif
                 @if($concept && $sensorik)
                     @if($sensorik['leer'])
                         <p class="text-xs text-gray-500 py-6 text-center">Noch keine Gerichte mit Sensorik-Daten — erst im Aufbau Gerichte/Basisrezepte einfügen.</p>

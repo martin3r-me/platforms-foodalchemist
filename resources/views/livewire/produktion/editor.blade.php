@@ -134,9 +134,9 @@
                     <span class="text-gray-800">{{ $t['label'] ?? '—' }}</span>
                     <div class="flex items-center gap-2">
                         @unless(str_contains($t['source_ref'], ':c'))
-                            <button type="button" wire:click="zielBearbeiten('{{ $t['source_ref'] }}')" class="text-gray-400 hover:text-violet-600" title="Bearbeiten" data-produktion-ziel-bearbeiten>✎</button>
+                            <button type="button" wire:click="zielBearbeiten('{{ $t['source_ref'] }}')" class="text-gray-400 hover:text-violet-600" title="Bearbeiten" data-produktion-ziel-bearbeiten>@svg('heroicon-o-pencil', 'w-3.5 h-3.5')</button>
                         @endunless
-                        <button type="button" wire:click="zielEntfernen('{{ $t['source_ref'] }}')" class="text-rose-500" data-produktion-ziel-entfernen>✕</button>
+                        <button type="button" wire:click="zielEntfernen('{{ $t['source_ref'] }}')" class="text-rose-500" title="Entfernen" data-produktion-ziel-entfernen>@svg('heroicon-o-x-mark', 'w-3.5 h-3.5')</button>
                     </div>
                 </div>
             @empty

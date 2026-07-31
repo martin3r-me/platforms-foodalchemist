@@ -3,76 +3,120 @@
      Roundtrip beim Umschalten; Muster = recipe-modal). Status-Regler im Kopf. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="gp-modal" :title="$neu ? 'Grundprodukt anlegen' : 'Grundprodukt bearbeiten'" size="max-w-4xl">
-    @if($neu)
-        <x-slot:actions>
-            <div class="flex items-center gap-1.5 w-full" data-ki-naming>
+{{-- Spec 28 / E3.1: GP-Editor auf den Master-Standard. Voll-Editor nur im Bestand
+     (Neuanlage bleibt hell und schmal — sie hat nur „Allgemein"). --}}
+<x-foodalchemist::modal name="gp-modal" :title="$neu ? 'Grundprodukt anlegen' : 'Grundprodukt bearbeiten'"
+    :title-name="$neu ? null : $gp?->name" size="max-w-4xl"
+    :fullscreen="! $neu && $gp !== null" :dark-canvas="! $neu && $gp !== null">
+
+    {{-- Aktionsleiste (E1-4/5): Speichern zuerst, dann Status-Regler, dann KI-Chips.
+         Status und „Alles anreichern" lagen vorher IM Body und scrollten weg. --}}
+    <x-slot:actions>
+        <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-gp-speichern-kopf>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
+
+        @if($neu)
+            <span class="text-gray-300">|</span>
+            <div class="flex items-center gap-1.5" data-ki-naming>
                 <input type="text" wire:model="kiRohtext" placeholder="Roh-Bezeichnung, z. B. Lieferanten-Text …"
                        class="{{ $input }} !w-72" />
                 <button type="button" wire:click="kiVorschlagNaming"
-                        class="{{ $btnGhostXs }} text-violet-600" title="gp.suggest: Builder-Felder aus Roh-Bezeichnung (§6)">✨ KI-Vorschlag</button>
+                        class="{{ $btnAi }}" title="gp.suggest: Builder-Felder aus Roh-Bezeichnung (§6)">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Vorschlag</button>
             </div>
-        </x-slot:actions>
+        @elseif($gp !== null)
+            <span class="text-gray-300">|</span>
+            {{-- Status-Regler (Kurator) — sonst statisches Badge --}}
+            <span class="{{ $label }}" data-gp-status-kopf>Status</span>
+            @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp) && $gp->status !== \Platform\FoodAlchemist\Enums\GpStatus::Merged)
+                <select wire:change="statusSetzen($event.target.value)"
+                        class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6"
+                        data-gp-status-select>
+                    @foreach($statusFaelle as $fall)
+                        <option value="{{ $fall->value }}" @selected($gp->status === $fall)>{{ $fall->label() }}</option>
+                    @endforeach
+                </select>
+            @else
+                <span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
+            @endif
+
+            @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp))
+                <button type="button" wire:click="allesAnreichern" wire:loading.attr="disabled" wire:target="allesAnreichern"
+                        class="{{ $btnAi }}"
+                        title="Zustand + Tags + Allergene + Nährwerte in EINEM Lauf vorschlagen (Review-Liste, Übernahme bleibt manuell)" data-gp-alles-anreichern>
+                    <span wire:loading.remove wire:target="allesAnreichern" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Alles anreichern</span>
+                    <span wire:loading wire:target="allesAnreichern">… läuft</span>
+                </button>
+            @endif
+        @endif
+    </x-slot:actions>
+
+    {{-- KPI-Kopf (E1-6): dieselben Größen wie das GP-Cockpit im Detail-Panel.
+         Leitwert = Lead-Preis (accent). „LAs" ist die folgenreichste Lücke am GP: ohne LA
+         gibt es keinen Preis, also kann kein Rezept damit rechnen — good/warn.
+         Bei `requires_la = false` (Derivate/Platzhalter nach GP-Regelwerk §11.2) ist 0 LAs
+         KEIN Mangel, deshalb dort neutral statt warn.
+         Allergen-Konfidenz kommt aus GpAggregateService (none|low|medium|high). --}}
+    @if(! $neu && $gp !== null)
+        <x-slot:kpiHeader>
+            @php($lasPflicht = (bool) ($gp->requires_la ?? true))
+            <x-foodalchemist::kpi-tiles marker="gp-editor-kpis" :cols="5" :tiles="[
+                ['kpi' => 'lead-preis', 'label' => 'Lead-Preis', 'tone' => 'accent',
+                 'title' => $leadLa?->designation ?? 'Kein Lead-Lieferantenartikel gesetzt',
+                 'value' => $leadPreis?->price !== null
+                    ? number_format((float) $leadPreis->price, 2, ',', '.') . ' € / ' . ($leadLa->ordering_unit ?? $leadLa->unit_code ?? 'Einheit')
+                    : '—'],
+                ['kpi' => 'las', 'label' => 'Lieferantenartikel',
+                 'tone' => ($gp->n_las_total ?? 0) > 0 ? 'good' : ($lasPflicht ? 'warn' : 'neutral'),
+                 'title' => $lasPflicht
+                    ? 'Ohne LA hat der GP keinen Preis — Rezepte mit ihm bleiben unbepreist.'
+                    : 'Kein LA nötig (Derivat/Platzhalter, GP-Regelwerk §11.2).',
+                 'value' => ($gp->n_las_total ?? 0) . ($lasPflicht ? '' : ' (kein LA nötig)')],
+                ['kpi' => 'allergen', 'label' => 'Allergen-Konf.',
+                 'tone' => ['high' => 'good', 'medium' => 'warn', 'low' => 'bad'][$allergenKonfidenz['confidence'] ?? ''] ?? 'neutral',
+                 'title' => 'Aus ' . ($allergenKonfidenz['n_las_mit_daten'] ?? 0) . ' von ' . ($gp->n_las_total ?? 0) . ' LAs mit Allergen-Daten aggregiert (ALL-MAXIMAL).',
+                 'value' => strtoupper((string) ($allergenKonfidenz['confidence'] ?? '—'))],
+                ['kpi' => 'warengruppe', 'label' => 'Warengruppe',
+                 'title' => $gp->sub_category ?? '',
+                 'value' => $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '—'],
+                ['kpi' => 'zustand', 'label' => 'Zustand (§9)',
+                 'value' => $gp->condition ?: '—'],
+            ]" />
+        </x-slot:kpiHeader>
     @endif
 
     @if($fehler !== null)
         <p class="text-xs text-rose-600 mb-3" data-modal-fehler>{{ $fehler }}</p>
     @endif
 
-    <div x-data="{ tab: 'allgemein' }" data-gp-tabs>
-        {{-- Kopf: Status-Regler (Edit, Kurator) — sonst statisches Badge --}}
-        @if(! $neu && $gp !== null)
-            <div class="flex items-center gap-2 mb-3" data-gp-status-kopf>
-                <span class="{{ $label }}">Status</span>
-                @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp) && $gp->status !== \Platform\FoodAlchemist\Enums\GpStatus::Merged)
-                    <select wire:change="statusSetzen($event.target.value)"
-                            class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6"
-                            data-gp-status-select>
-                        @foreach($statusFaelle as $fall)
-                            <option value="{{ $fall->value }}" @selected($gp->status === $fall)>{{ $fall->label() }}</option>
-                        @endforeach
-                    </select>
-                @else
-                    <span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
-                @endif
+    {{-- Anreichern-Lauf (Bulk-Mechanik auf EIN GP; Vorschläge landen in den Feldern nach
+         „Alle übernehmen"). Braucht den Tab-Scope nicht — steht deshalb davor. --}}
+    @if(! $neu && ($bulkRun ?? null) !== null)
+        <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 mb-2 text-xs flex items-center gap-2"
+             @if($bulkRun->status === 'running') wire:poll.2s @endif data-gp-anreichern-status>
+            @if($bulkRun->status === 'running')
+                <span class="text-gray-900 inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Anreicherung läuft …</span>
+            @else
+                <span class="text-gray-900 inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Fertig — {{ $bulkOffen }} Vorschlag/Vorschläge zum Übernehmen</span>
+                <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600 ml-auto" data-gp-anreichern-uebernehmen>Alle übernehmen</button>
+                <button type="button" wire:click="bulkVerwerfen" class="{{ $btnGhostXs }}">Schließen</button>
+            @endif
+        </div>
+    @endif
 
-                {{-- ✨ Alles anreichern — globaler Autopilot über alle KI-Felder (Review, nie Auto-Persistenz) --}}
-                @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp))
-                    <button type="button" wire:click="allesAnreichern" wire:loading.attr="disabled" wire:target="allesAnreichern"
-                            class="{{ $btnGhostXs }} text-violet-600 ml-auto"
-                            title="Zustand + Tags + Allergene + Nährwerte in EINEM Lauf vorschlagen (Review-Liste, Übernahme bleibt manuell)" data-gp-alles-anreichern>
-                        <span wire:loading.remove wire:target="allesAnreichern">✨ Alles anreichern</span>
-                        <span wire:loading wire:target="allesAnreichern">… läuft</span>
-                    </button>
-                @endif
-            </div>
-        @endif
-
-        {{-- ✨-Anreichern-Lauf (Bulk-Mechanik auf EIN GP; Vorschläge landen in den Feldern nach „Alle übernehmen") --}}
-        @if(! $neu && ($bulkRun ?? null) !== null)
-            <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 mb-2 text-xs flex items-center gap-2"
-                 @if($bulkRun->status === 'running') wire:poll.2s @endif data-gp-anreichern-status>
-                @if($bulkRun->status === 'running')
-                    <span class="text-gray-900">✨ Anreicherung läuft …</span>
-                @else
-                    <span class="text-gray-900">✨ Fertig — {{ $bulkOffen }} Vorschlag/Vorschläge zum Übernehmen</span>
-                    <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600 ml-auto" data-gp-anreichern-uebernehmen>Alle übernehmen</button>
-                    <button type="button" wire:click="bulkVerwerfen" class="{{ $btnGhostXs }}">Schließen</button>
-                @endif
-            </div>
-        @endif
-
-        {{-- Tab-Leiste (nur Edit — Neuanlage hat nur „Allgemein") --}}
-        @if(! $neu && $gp !== null)
-            @php($gpTabs = ['allgemein' => 'Allgemein', 'eigenschaften' => 'Eigenschaften', 'allergene' => 'Allergene', 'zusatzstoffe' => 'Zusatzstoffe', 'price' => 'Preis & Lieferanten', 'ersatz' => 'Ersatz', 'sensorik' => 'Sensorik & Pairing', 'kalkulation' => 'Kalkulation'])
-            <div class="flex items-center gap-1 border-b border-black/5 mb-1 overflow-x-auto" data-gp-tabbar>
-                @foreach($gpTabs as $tabKey => $tabLabel)
-                    <button type="button" @click="tab = '{{ $tabKey }}'"
-                            :class="tab === '{{ $tabKey }}' ? 'border-violet-500 text-violet-700' : 'border-transparent text-gray-600 hover:text-gray-700'"
-                            class="px-2 py-2 text-xs font-medium border-b-2 -mb-px whitespace-nowrap transition-colors" data-gp-tab="{{ $tabKey }}">{{ $tabLabel }}</button>
-                @endforeach
-            </div>
-        @endif
+    {{-- Tabs über den Baustein: sticky (vorher scrollte die Leiste weg) + wire:key beim
+         GP-Wechsel + Reset beim Öffnen. Bei Neuanlage bleibt genau „Allgemein" — der Baustein
+         zeichnet dann keine Leiste. Alpine-Modus, weil die Tab-Panels eingebettete
+         Detail-Panel-Kinder halten, die nicht neu mounten sollen. --}}
+    <x-foodalchemist::editor-tabs marker="gp" wire-key="gp-tabs-{{ $gp?->id ?? 'neu' }}" :init="'allgemein'"
+        :tabs="[
+            'allgemein' => 'Allgemein',
+            'eigenschaften' => $neu ? null : 'Eigenschaften',
+            'allergene' => $neu ? null : 'Allergene',
+            'zusatzstoffe' => $neu ? null : 'Zusatzstoffe',
+            'price' => $neu ? null : 'Preis & Lieferanten',
+            'ersatz' => $neu ? null : 'Ersatz',
+            'sensorik' => $neu ? null : 'Sensorik & Pairing',
+            'kalkulation' => $neu ? null : 'Kalkulation',
+        ]">
 
         {{-- ── Tab: ALLGEMEIN (Benennung · Klassifikation · Derivat) ──────── --}}
         <div x-show="tab === 'allgemein'" class="pt-2">
@@ -139,7 +183,7 @@
                 @if(! $neu)
                     <div class="mt-2" data-name-aus-la>
                         <button type="button" wire:click="nameAusLeadLa" class="{{ $btnGhostXs }} text-violet-600"
-                                title="gp.suggest: §6-Namensvorschlag aus der Bezeichnung des Lead-Lieferantenartikels">✨ Name aus Lieferantenartikel ableiten</button>
+                                title="gp.suggest: §6-Namensvorschlag aus der Bezeichnung des Lead-Lieferantenartikels">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Name aus Lieferantenartikel ableiten</button>
                         @if($nameVorschlag !== null)
                             <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-2.5 py-1.5 text-[11px]" data-name-vorschlag>
                                 <p class="text-gray-900">Vorschlag: <span class="font-medium">{{ $nameVorschlag }}</span></p>
@@ -339,7 +383,7 @@
                 </x-foodalchemist::modal-section>
             </div>{{-- /Tab KALKULATION --}}
         @endif
-    </div>{{-- /gp-tabs --}}
+    </x-foodalchemist::editor-tabs>
 
     <x-slot:footer>
         <div class="flex items-center justify-between gap-3 w-full">

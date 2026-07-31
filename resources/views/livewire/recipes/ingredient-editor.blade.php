@@ -5,7 +5,11 @@
     @if($eingebettet)
         @include('foodalchemist::livewire.recipes.partials.zutaten-kern')
     @else
-        <x-foodalchemist::modal name="zutaten-editor" :title="'Zutaten bearbeiten' . ($rezept ? ' — ' . $rezept->name : '')" size="max-w-[100rem]">
+        {{-- Spec 28 / E3.3: eingebettet erbt der Kern den Editor-Grund vom Eltern-Modal; die
+             STANDALONE-Hülle war dagegen hell und schmaler als der Voll-Editor. Jetzt gleiche
+             Hülle wie Rezept-/Gericht-Editor, Rezeptname als Akzent-Chip statt im Titel-String. --}}
+        <x-foodalchemist::modal name="zutaten-editor" title="Zutaten bearbeiten"
+            :title-name="$rezept?->name" fullscreen dark-canvas>
             @include('foodalchemist::livewire.recipes.partials.zutaten-kern')
 
             <x-slot:footer>

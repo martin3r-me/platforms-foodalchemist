@@ -1,32 +1,66 @@
 {{-- M2-06/07/08: LA-Editor-Modal (P-2/P-6) — read-only für Kette, Edit nur Besitzer --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
+{{-- Spec 28 / E3.2: LA-Editor auf den Master-Standard (Basisrezepte) gezogen — vorher acht
+     Sektionen linear ohne Kopf-Kennzahlen, der datendichteste Editor ohne jede Struktur.
+     Voll-Editor nur mit geladenem Artikel; Titel generisch + Designation als Akzent-Chip. --}}
 <div>
-    <x-foodalchemist::modal name="item-modal" :title="$item?->designation ?? 'Artikel'">
+    <x-foodalchemist::modal name="item-modal" :title="$item !== null ? ($darfEdit ? 'Artikel bearbeiten' : 'Artikel') : 'Artikel'"
+        :title-name="$item?->designation" :fullscreen="$item !== null" :dark-canvas="$item !== null">
         @if($item)
-            @if($darfEdit)
-                <x-slot:actions>
-                    <button type="button" wire:click="speichern" class="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-lg shadow-sm shadow-violet-500/25 hover:shadow-md transition-all duration-150">Speichern</button>
-                </x-slot:actions>
-            @endif
-
-            {{-- Modal-Kopf: EK + Vergleichspreis (M2-05) + Lieferant + GP --}}
-            <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 -mt-1" data-modal-kopf>
-                <span class="text-xs text-gray-600">{{ $item->supplier?->name }}</span>
-                <span class="text-xs font-medium text-gray-900">
-                    EK: {{ $aktiverPreis?->price !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}
-                </span>
-                <span class="text-xs text-gray-600" data-vergleichspreis-kopf>
-                    {{ $vergleichspreis ? number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : 'kein Vergleichspreis' }}
-                </span>
-                @if($item->structure?->gp)
-                    <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ $item->structure->gp->name }}</span>
+            <x-slot:actions>
+                @if($darfEdit)
+                    <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-la-speichern>Speichern</button>
                 @else
-                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">nicht gemappt</span>
+                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="Geerbter Katalog (D1) — Pflege beim Besitzer-Team">read-only</span>
                 @endif
-                @unless($darfEdit)<span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="Geerbter Katalog (D1)">read-only</span>@endunless
-            </div>
-            @if($fehler)<p class="text-xs text-red-600 mt-2">{{ $fehler }}</p>@endif
+            </x-slot:actions>
+
+            {{-- KPI-Kopf statt der alten Kopfzeile (Lieferant · EK · Vergleichspreis · GP-Pill):
+                 dieselben Angaben, aber fix im Kopf und bewertet. Leitwert = EK aktuell (accent).
+                 GP-Mapping und Allergen-Pflege sind echte Vollständigkeiten → good/warn.
+                 Allergene: 14 EU-Pflichtangaben, alles außer 'unbekannt' zählt als gepflegt
+                 (GL-01-4-Wert-Modell — fehlende Schlüssel sind ebenfalls unbekannt). --}}
+            @php($allergenGepflegt = collect($allergenLabels)->keys()
+                ->filter(fn ($k) => ($allergene[$k] ?? 'unbekannt') !== 'unbekannt')->count())
+            @php($allergenGesamt = count($allergenLabels))
+            @php($gpName = $item->structure?->gp?->name)
+            <x-slot:kpiHeader>
+                <x-foodalchemist::kpi-tiles marker="la-editor-kpis" :cols="5" :tiles="[
+                    ['kpi' => 'ek', 'label' => 'EK aktuell', 'tone' => 'accent',
+                     'title' => 'pro ' . ($item->ordering_unit ?? $item->unit_code ?? 'Einheit'),
+                     'value' => $aktiverPreis?->price !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—'],
+                    ['kpi' => 'vergleichspreis', 'label' => 'Vergleichspreis',
+                     'title' => 'Auf die Kalkulationseinheit gerechnet (M2-05)',
+                     'value' => $vergleichspreis !== null ? number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : '—'],
+                    ['kpi' => 'gp', 'label' => 'Grundprodukt', 'tone' => $gpName !== null ? 'good' : 'warn',
+                     'title' => $gpName ?? 'Ohne GP läuft dieser Artikel in keine Rezept-Kalkulation.',
+                     'value' => $gpName ?? 'nicht gemappt'],
+                    ['kpi' => 'allergene', 'label' => 'Allergene',
+                     'tone' => $allergenGepflegt >= $allergenGesamt ? 'good' : 'warn',
+                     'title' => 'Gepflegt von 14 EU-Pflichtangaben — ungesetzt zählt als unbekannt (GL-01).',
+                     'value' => $allergenGepflegt . '/' . $allergenGesamt],
+                    ['kpi' => 'lieferant', 'label' => 'Lieferant',
+                     'title' => $item->supplier?->name ?? '',
+                     'value' => $item->supplier?->name ?? '—'],
+                ]" />
+            </x-slot:kpiHeader>
+
+            @if($fehler)<p class="text-xs text-red-600 mb-2" data-la-fehler>{{ $fehler }}</p>@endif
+
+            {{-- Vier Tabs statt acht Sektionen am Stück (E1-8: was man am häufigsten ändert links).
+                 Alpine-Modus: alle Panels bleiben im DOM, damit das entangle-Binding der
+                 Zusatzstoffe und ungespeicherte Eingaben beim Umschalten nicht verloren gehen. --}}
+            <x-foodalchemist::editor-tabs marker="la" wire-key="la-tabs-{{ $item->id }}" :init="'stammdaten'"
+                :tabs="[
+                    'stammdaten' => 'Stammdaten',
+                    'deklaration' => 'Deklaration',
+                    'gp' => 'GP-Mapping',
+                    'preise' => 'Preise',
+                ]">
+
+            {{-- ── Tab: STAMMDATEN (Stammdaten · Verpackung · Eigenschaften) ── --}}
+            <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 space-y-4">
 
             <x-foodalchemist::modal-section title="Stammdaten">
                 <div class="grid grid-cols-2 gap-3">
@@ -92,6 +126,10 @@
                 <div class="mt-3"><label class="block {{ $label }} mb-1">Zutatenliste (vom Lieferanten)</label>
                     <textarea wire:model="eigenschaften.ingredients_supplier" rows="3" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60"></textarea></div>
             </x-foodalchemist::modal-section>
+            </div>{{-- /Tab STAMMDATEN --}}
+
+            {{-- ── Tab: DEKLARATION (Nährwerte · Allergene · Zusatzstoffe) ──── --}}
+            <div x-show="tab === 'deklaration'" x-cloak class="pt-4 space-y-4">
 
             <x-foodalchemist::modal-section title="Nährwerte (je 100 g)">
                 <div class="flex items-center justify-between mb-2">
@@ -163,18 +201,24 @@
                 </div>
             </x-foodalchemist::modal-section>
 
-            {{-- R9 (Jarvis «GP-MAPPING»): aktuelles Mapping + ✨ KI-Vorschlag (MatchService) + manuelle Zuweisung --}}
+            </div>{{-- /Tab DEKLARATION --}}
+
+            {{-- ── Tab: GP-MAPPING ──────────────────────────────────────────── --}}
+            <div x-show="tab === 'gp'" x-cloak class="pt-4 space-y-4">
+
+            {{-- R9 (Jarvis «GP-MAPPING»): aktuelles Mapping + KI-Vorschlag (MatchService) + manuelle Zuweisung --}}
             <x-foodalchemist::modal-section title="GP-Mapping">
                 <x-slot:actions>
-                    <button type="button" wire:click="kiGpVorschlag" class="{{ $btnGhostXs }} text-violet-600"
-                            title="MatchService v1: exakte Dubletten (EAN/Art.-Nr) + GL-04-Fuzzy" data-ki-gp-vorschlag>✨ KI-Vorschlag</button>
+                    {{-- E1-11: Emoji raus, Heroicon rein; KI-Chip trägt den btnAi-Stil wie überall --}}
+                    <button type="button" wire:click="kiGpVorschlag" class="{{ $btnAi }}"
+                            title="MatchService v1: exakte Dubletten (EAN/Art.-Nr) + GL-04-Fuzzy" data-ki-gp-vorschlag>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Vorschlag</button>
                 </x-slot:actions>
 
                 @if($item->structure?->gp)
                     <div class="flex items-center justify-between gap-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-gp-mapping-aktuell>
-                        <p class="text-xs text-gray-900 min-w-0 truncate">🧺 {{ $item->structure->gp->name }}</p>
+                        <p class="text-xs text-gray-900 min-w-0 truncate inline-flex items-center gap-1.5">@svg('heroicon-o-cube', 'w-3.5 h-3.5 shrink-0') {{ $item->structure->gp->name }}</p>
                         <button type="button" wire:click="gpLoesen" wire:confirm="GP-Zuordnung lösen? War das LA Lead, wird sofort neu gewählt (GL-03 I4)."
-                                class="{{ $btnGhostXs }} text-rose-500 shrink-0" data-gp-loesen>✕ lösen</button>
+                                class="{{ $btnGhostXs }} text-rose-500 shrink-0" data-gp-loesen>@svg('heroicon-o-x-mark', 'w-3.5 h-3.5') lösen</button>
                     </div>
                 @else
                     <p class="text-xs text-gray-500 italic" data-gp-mapping-leer>— kein GP zugeordnet —</p>
@@ -182,7 +226,7 @@
 
                 @if($gpVorschlaege !== [])
                     <div class="mt-2 rounded-lg bg-violet-500/5 border border-violet-500/20 px-3 py-2 space-y-1" data-gp-vorschlaege>
-                        <p class="text-[11px] font-medium text-violet-700">✨ Match-Kandidaten — Klick weist zu:</p>
+                        <p class="text-[11px] font-medium text-violet-700 inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Match-Kandidaten — Klick weist zu:</p>
                         @foreach($gpVorschlaege as $v)
                             <button type="button" wire:key="gpv-{{ $v['gp_id'] }}" wire:click="gpZuweisen({{ $v['gp_id'] }})"
                                     class="flex items-center gap-2 w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10" data-gp-vorschlag>
@@ -203,6 +247,10 @@
                     @endforeach
                 </div>
             </x-foodalchemist::modal-section>
+            </div>{{-- /Tab GP-MAPPING --}}
+
+            {{-- ── Tab: PREISE ──────────────────────────────────────────────── --}}
+            <div x-show="tab === 'preise'" x-cloak class="pt-4 space-y-4">
 
             <x-foodalchemist::modal-section title="Preise">
                 {{-- R12 (Jarvis): EK-aktuell-Box + Tabelle gültig von/bis · Kategorie · Preis (+€/kg) · Notiz · ✎ --}}
@@ -258,7 +306,7 @@
                                     <td class="{{ $td }} !px-2 text-gray-600 text-[11px] max-w-[10rem] truncate" title="{{ $p->note ?? '' }}">{{ $p->note ?? '—' }}</td>
                                     <td class="{{ $td }} !px-2 text-right whitespace-nowrap">
                                         @if($darfEdit)
-                                            <button type="button" wire:click="preisBearbeiten({{ $p->id }})" class="{{ $btnGhostXs }}" title="bearbeiten" data-preis-edit>✎</button>
+                                            <button type="button" wire:click="preisBearbeiten({{ $p->id }})" class="{{ $btnGhostXs }}" title="bearbeiten" data-preis-edit>@svg('heroicon-o-pencil', 'w-3.5 h-3.5')</button>
                                             <button type="button" wire:click="preisLoeschen({{ $p->id }})" wire:confirm="Preiszeile löschen?" class="{{ $btnGhostXs }} text-red-500">löschen</button>
                                         @endif
                                     </td>
@@ -270,6 +318,9 @@
                     </tbody>
                 </table>
             </x-foodalchemist::modal-section>
+            </div>{{-- /Tab PREISE --}}
+
+            </x-foodalchemist::editor-tabs>
         @endif
     </x-foodalchemist::modal>
 </div>

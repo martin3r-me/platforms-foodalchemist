@@ -1,7 +1,7 @@
-{{-- M4-14: ✨ Basisrezept-Generator — Richtungs-Parameter + Bestand-Hybrid --}}
+{{-- M4-14: Basisrezept-Generator — Richtungs-Parameter + Bestand-Hybrid --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="generator-modal" title="✨ Basisrezept generieren" size="max-w-2xl">
+<x-foodalchemist::modal name="generator-modal" title="Basisrezept generieren" size="max-w-2xl">
     @if($fehler !== null)
         <p class="text-xs text-rose-600 mb-3" data-generator-fehler>{{ $fehler }}</p>
     @endif
@@ -106,7 +106,7 @@
         @if($laeuft)
             <button type="button" disabled class="{{ $btnPrimary }} opacity-60 cursor-not-allowed" data-generator-laeuft-btn>⏳ Generiere …</button>
         @elseif($ergebnis === null)
-            <button type="button" wire:click="generieren" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-generator-start>✨ Generieren</button>
+            <button type="button" wire:click="generieren" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-generator-start><span class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Generieren</span></button>
         @endif
     </x-slot:footer>
 </x-foodalchemist::modal>

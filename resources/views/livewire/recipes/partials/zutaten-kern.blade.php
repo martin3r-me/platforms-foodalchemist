@@ -225,7 +225,7 @@
                         <td colspan="{{ $vkKontext ? 11 : 10 }}" class="!px-3 !py-1.5 bg-black/[0.02]">
                             <div class="rounded-lg border-l-2 border-orange-400 bg-white px-3 py-1.5" data-gp-peek-tabelle>
                                 <p class="text-[11px] font-medium text-gray-900 mb-1">
-                                    📦 <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
+                                    @svg('heroicon-o-cube', 'w-3 h-3 inline-block align-[-2px]') <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
                                 </p>
                                 <table class="w-full text-[11px]">
                                     <thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-500">
