@@ -1,0 +1,60 @@
+<?php
+
+use Platform\Core\Contracts\ToolContext;
+use Platform\Core\Tools\ToolRegistry;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
+use Platform\FoodAlchemist\Tests\TestCase;
+
+uses(TestCase::class, SeedsTeamHierarchy::class);
+
+/**
+ * Speisekarte MCP-Lockstep (Stufe A): externe Clients können Karte → Rubrik → Position
+ * bauen und wieder entfernen. Writes sind team-scoped (isOwnedBy).
+ */
+beforeEach(function () {
+    $this->seedTeamHierarchy();
+    $this->user = $this->makeUser($this->rootTeam);
+    $this->actingAs($this->user);
+    $this->registry = app(ToolRegistry::class);
+    $this->kontext = new ToolContext($this->user, $this->rootTeam);
+
+    $this->gericht = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'mcp1', 'name' => 'Zanderfilet', 'status' => 'approved',
+        'is_sales_recipe' => true, 'sales_net' => 26.00, 'ek_total_eur' => 9.00,
+    ]);
+});
+
+it('Stufe A MCP: Karte → Rubrik → Gericht-Position → Löschen', function () {
+    $karte = $this->registry->get('foodalchemist.speisekarten.POST')->execute(['name' => 'Mittagskarte'], $this->kontext);
+    expect($karte->success)->toBeTrue();
+    $karteId = $karte->data['speisekarte']['id'];
+
+    $rubrik = $this->registry->get('foodalchemist.speisekarte_rubrik.POST')->execute([
+        'speisekarte_id' => $karteId, 'title' => 'Fischgerichte', 'art' => 'speisen',
+    ], $this->kontext);
+    expect($rubrik->success)->toBeTrue();
+    $rubrikId = $rubrik->data['rubrik']['id'];
+
+    $pos = $this->registry->get('foodalchemist.speisekarte_positionen.POST')->execute([
+        'rubrik_id' => $rubrikId, 'type' => 'gericht_ref', 'sales_recipe_id' => $this->gericht->id,
+    ], $this->kontext);
+    expect($pos->success)->toBeTrue()
+        ->and($pos->data['position']['vk_netto'])->toBe(26.0)
+        ->and($pos->data['position']['preis_quelle'])->toBe('legacy');
+    $posId = $pos->data['position']['id'];
+
+    $del = $this->registry->get('foodalchemist.speisekarte_positionen.DELETE')->execute(['position_id' => $posId], $this->kontext);
+    expect($del->success)->toBeTrue()->and($del->data['deleted'])->toBeTrue();
+});
+
+it('Stufe A MCP: gericht_ref ohne sales_recipe_id → VALIDATION_ERROR', function () {
+    $karte = $this->registry->get('foodalchemist.speisekarten.POST')->execute(['name' => 'K'], $this->kontext);
+    $rubrik = $this->registry->get('foodalchemist.speisekarte_rubrik.POST')->execute([
+        'speisekarte_id' => $karte->data['speisekarte']['id'], 'title' => 'R',
+    ], $this->kontext);
+    $pos = $this->registry->get('foodalchemist.speisekarte_positionen.POST')->execute([
+        'rubrik_id' => $rubrik->data['rubrik']['id'], 'type' => 'gericht_ref',
+    ], $this->kontext);
+    expect($pos->success)->toBeFalse();
+});

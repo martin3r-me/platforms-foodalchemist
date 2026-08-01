@@ -146,6 +146,12 @@ return [
                     'icon'  => 'heroicon-o-book-open',
                 ],
                 [
+                    // Gastronomie-à-la-carte-Karte (dritte Ausgabeform neben Foodbook + Speiseplan).
+                    'label' => 'Speisekarte',
+                    'route' => 'foodalchemist.speisekarte.index',
+                    'icon'  => 'heroicon-o-clipboard-document-list',
+                ],
+                [
                     'label' => 'Angebote',
                     'route' => 'foodalchemist.angebote.index',
                     'icon'  => 'heroicon-o-document-text',
