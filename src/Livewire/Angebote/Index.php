@@ -31,14 +31,14 @@ class Index extends Component
     public function mount(): void
     {
         if ($this->selectedId !== null) {
-            $this->dispatch('angebot-selected', id: $this->selectedId);
+            $this->dispatch('angebot-editor.bearbeiten', id: $this->selectedId);
         }
     }
 
     public function waehle(int $id): void
     {
         $this->selectedId = $id;
-        $this->dispatch('angebot-selected', id: $id);
+        $this->dispatch('angebot-editor.bearbeiten', id: $id);
     }
 
     public function waehleStatus(string $wert): void

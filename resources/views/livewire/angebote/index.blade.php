@@ -34,11 +34,8 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_angebote" side="right">
-            <livewire:foodalchemist.angebote.detail-panel />
-        </x-foodalchemist::detail-sidebar>
-    </x-slot>
+    {{-- Editor (Fullscreen, pro Angebot) statt Detail-Panel — geöffnet per angebot-editor.bearbeiten --}}
+    <livewire:foodalchemist.angebote.editor />
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="relative overflow-hidden {{ $card }}">
@@ -58,9 +55,7 @@
                 </thead>
                 <tbody>
                     @forelse($items as $it)
-                        <x-foodalchemist::table-row :active="$selectedId === $it->id" wire:key="ang-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
-                            x-data x-on:click="$store.ui?.mSet('activity_angebote', 'open', true)"
->
+                        <x-foodalchemist::table-row wire:key="ang-{{ $it->id }}" wire:click="waehle({{ $it->id }})" data-angebot-zeile="{{ $it->id }}">
                             <td class="{{ $td }} font-medium text-gray-900">{{ $it->name }}</td>
                             <td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ $variantPill[$it->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $it->status->label() }}</span>
