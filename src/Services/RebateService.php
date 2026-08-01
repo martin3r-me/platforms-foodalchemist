@@ -24,28 +24,100 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplierRebateTier;
  * BEWUSST team-scoped, KEINE Kunden-Achse (eigene Session). `$revenueOverride` erlaubt
  * Was-wäre-wenn („bei Umsatz X wäre der Satz Y") ohne die gespeicherte Wahl zu ändern.
  *
- * Schreiben (saveTiers/saveConfig) nur auf einem team-sichtbaren Lieferanten; das
- * Overlay selbst gehört immer dem aktuellen Team (strikt team_id, keine Vererbung —
- * Konditionen sind pro Betrieb verhandelt).
+ * Schreiben (saveTiers/saveConfig) nur auf einem team-sichtbaren Lieferanten; geschrieben
+ * wird immer ins EIGENE Team.
+ *
+ * VERERBUNG (Entscheidung Dominique, 2026-08-01 — kehrt die ursprüngliche Festlegung um,
+ * die Konditionen als „pro Betrieb verhandelt" strikt team-eigen hielt): Rückvergütungen
+ * werden zentral verhandelt, die Betriebe darunter kaufen zu denselben Konditionen ein.
+ *
+ * Die Regel dazu ist bewusst grob und dafür eindeutig:
+ *   Eine EIGENE Kondition überschreibt die geerbte GANZ. Config und Staffel kommen immer
+ *   vom selben Team — dem eigenen, sonst dem nächsten Eltern-Team mit einer Config für
+ *   diesen Lieferanten.
+ *
+ * Warum nicht feiner (eigene Staffel + geerbte Config o. ä.): `config.selected_tier_id`
+ * zeigt auf eine konkrete Stufe. Mischte man die Quellen, zeigte die manuell gewählte
+ * Stufe des einen Teams in die Staffel eines anderen — und liefe beim nächsten
+ * Staffel-Ersatz still ins Leere.
+ *
+ * Lesen für die Rechnung → tiersFor/configFor (geerbt).
+ * Lesen zum Bearbeiten    → eigeneTiers/eigeneConfig (strikt eigenes Team).
  */
 class RebateService
 {
-    /** Staffelstufen eines Teams für einen Lieferanten, aufsteigend nach Schwelle. */
+    /**
+     * Quell-Team der Kondition: das eigene, sonst das nächste Eltern-Team mit einer Config für
+     * diesen Lieferanten. `null` = nirgends eine Config — dann gilt die eigene Staffel (bzw. der
+     * flache Legacy-Satz), also das Verhalten von vor der Vererbung.
+     *
+     * Anker ist die CONFIG, nicht die Staffel: die Config trägt den Aktiv-Schalter. Eine Staffel
+     * ohne Config war schon immer wirkungslos (siehe effektiverProzent).
+     */
+    private function quellTeamId(Team $team, int $supplierId): ?int
+    {
+        // Kette: eigenes Team zuerst, Root zuletzt — die Reihenfolge IST die Vorrangregel.
+        $kette = FoodAlchemistSupplierRebateConfig::teamAncestryIds($team);
+
+        $vorhanden = FoodAlchemistSupplierRebateConfig::query()
+            ->whereIn('team_id', $kette)
+            ->where('supplier_id', $supplierId)
+            ->pluck('team_id')
+            ->map(fn ($v) => (int) $v)
+            ->all();
+
+        foreach ($kette as $id) {
+            if (in_array((int) $id, $vorhanden, true)) {
+                return (int) $id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Staffelstufen für die Rechnung, aufsteigend nach Schwelle — aus dem Quell-Team (geerbt).
+     * Zum Bearbeiten NICHT diese Methode nehmen, sondern eigeneTiers().
+     */
     public function tiersFor(Team $team, int $supplierId): Collection
     {
+        return $this->tiersOf($this->quellTeamId($team, $supplierId) ?? (int) $team->id, $supplierId);
+    }
+
+    /** 1:1-Konfiguration für die Rechnung (geerbt) — oder null, wenn es nirgends eine gibt. */
+    public function configFor(Team $team, int $supplierId): ?FoodAlchemistSupplierRebateConfig
+    {
+        $quelle = $this->quellTeamId($team, $supplierId);
+
+        return $quelle === null ? null : $this->configOf($quelle, $supplierId);
+    }
+
+    /** Staffel des eigenen Teams — für den Editor und die Schreibwege. Leer = erbt gerade. */
+    public function eigeneTiers(Team $team, int $supplierId): Collection
+    {
+        return $this->tiersOf((int) $team->id, $supplierId);
+    }
+
+    /** Config des eigenen Teams — für den Editor und die Schreibwege. Null = erbt gerade. */
+    public function eigeneConfig(Team $team, int $supplierId): ?FoodAlchemistSupplierRebateConfig
+    {
+        return $this->configOf((int) $team->id, $supplierId);
+    }
+
+    private function tiersOf(int $teamId, int $supplierId): Collection
+    {
         return FoodAlchemistSupplierRebateTier::query()
-            ->where('team_id', $team->id)
+            ->where('team_id', $teamId)
             ->where('supplier_id', $supplierId)
             ->orderBy('threshold_eur')
             ->orderBy('sort')
             ->get();
     }
 
-    /** 1:1-Konfiguration eines Teams für einen Lieferanten (oder null). */
-    public function configFor(Team $team, int $supplierId): ?FoodAlchemistSupplierRebateConfig
+    private function configOf(int $teamId, int $supplierId): ?FoodAlchemistSupplierRebateConfig
     {
         return FoodAlchemistSupplierRebateConfig::query()
-            ->where('team_id', $team->id)
+            ->where('team_id', $teamId)
             ->where('supplier_id', $supplierId)
             ->first();
     }
@@ -110,10 +182,15 @@ class RebateService
     /**
      * Aufschlüsselung für UI/MCP: welche Stufe greift, aus welcher Quelle, mit welchem %.
      *
-     * @return array{aktiv:bool,prozent:float,quelle:string,selected_tier_id:?int,revenue:?float,tiers:list<array>}
+     * @return array{aktiv:bool,prozent:float,quelle:string,selected_tier_id:?int,revenue:?float,tiers:list<array>,geerbt:bool,quelle_team_id:?int}
      */
     public function stufenInfo(Team $team, int $supplierId, ?float $revenueOverride = null): array
     {
+        // NICHT $quelle nennen: die Variable trägt weiter unten schon die Herkunfts-ART
+        // ('auto_umsatz', 'manuell', …) — sie würde diese hier still überschreiben.
+        $quellTeam = $this->quellTeamId($team, $supplierId);
+        $geerbt = $quellTeam !== null && $quellTeam !== (int) $team->id;
+
         $config = $this->configFor($team, $supplierId);
         $tiers = $this->tiersFor($team, $supplierId);
         $tiersOut = $tiers->map(fn ($t) => [
@@ -125,7 +202,8 @@ class RebateService
         if ($config === null) {
             return ['aktiv' => false, 'prozent' => $this->flatFallbackProzent($supplierId),
                 'quelle' => 'flat_legacy', 'selected_tier_id' => null, 'revenue' => null,
-                'applies_to_all' => true, 'commodity_groups' => [], 'tiers' => $tiersOut];
+                'applies_to_all' => true, 'commodity_groups' => [], 'tiers' => $tiersOut,
+                'geerbt' => false, 'quelle_team_id' => null];
         }
 
         $revenue = $revenueOverride ?? ($config->assumed_annual_revenue !== null ? (float) $config->assumed_annual_revenue : null);
@@ -149,6 +227,10 @@ class RebateService
             'applies_to_all' => (bool) $config->applies_to_all,
             'commodity_groups' => is_array($config->commodity_groups) ? $config->commodity_groups : [],
             'tiers' => $tiersOut,
+            // Herkunft mitgeben: UI und MCP sollen „geerbt vom Eltern-Team" zeigen können,
+            // statt eine fremde Staffel wie eine eigene aussehen zu lassen.
+            'geerbt' => $geerbt,
+            'quelle_team_id' => $quellTeam,
         ];
     }
 
@@ -175,7 +257,9 @@ class RebateService
             ->values();
 
         return DB::transaction(function () use ($team, $supplierId, $rows) {
-            $config = $this->configFor($team, $supplierId);
+            // EIGENE Config, nicht die geerbte: `$config->update()` weiter unten würde sonst die
+            // Kondition des Eltern-Teams verändern — ein Schreibzugriff über die Team-Grenze.
+            $config = $this->eigeneConfig($team, $supplierId);
             $prevThreshold = null;
             if ($config?->selected_tier_id !== null && $config !== null) {
                 $prevThreshold = optional(FoodAlchemistSupplierRebateTier::withTrashed()
@@ -241,7 +325,9 @@ class RebateService
             if ($tid === '' || $tid === null) {
                 $config->selected_tier_id = null;
             } else {
-                // Nur eine Stufe dieses (Team, Lieferant) darf gewählt werden.
+                // Nur eine EIGENE Stufe darf gewählt werden — nie eine geerbte. Config und Staffel
+                // müssen vom selben Team kommen, sonst zeigt die Wahl beim nächsten
+                // Staffel-Ersatz des anderen Teams ins Leere.
                 $valid = FoodAlchemistSupplierRebateTier::where('team_id', $team->id)
                     ->where('supplier_id', $supplierId)->whereKey((int) $tid)->exists();
                 $config->selected_tier_id = $valid ? (int) $tid : null;

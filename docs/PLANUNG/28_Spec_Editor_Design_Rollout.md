@@ -606,6 +606,39 @@ an Martin. Das FA-Modul selbst ist im sichtbaren UI emoji-frei; 12 Modul-Seiten 
    Rückvergütungs-Konfiguration hängen damit nicht an der Team-Hierarchie. Gehört geprüft, **bevor**
    Einkauf auf demo geht — das ist kein Kosmetik-Befund.
 
+   **Erledigt 2026-08-01 (Entscheidung Dominique).** Zuerst die Korrektur an meiner eigenen
+   Beschreibung: „mandantenoffen" war zu scharf. Die Tabellen tragen `team_id`, und alle sechs
+   Abfragestellen (`RebateService`, `EinkaufOptimizerService`, `PurchaseAnomalyService`,
+   `PurchaseJournalService`) filtern selbst hart darauf. Es flossen keine fremden Daten — es war
+   ein Vertragsbruch, keine offene Tür. Der Trait setzt auch keinen Global Scope; er liefert
+   `visibleToTeam()`/`isOwnedBy()`.
+
+   Umgesetzt: Trait an alle drei Models. Transaktionen bleiben strikt team-eigen (eine
+   Ist-Einkaufsposition gehört dem Team, das sie gebucht hat) — der Trait ist dort nur der
+   Vertrag, die Abfragen ändern sich nicht. **Konditionen (Config + Staffel) erben** über die
+   Eltern-Kette: zentral verhandelt, die Betriebe kaufen darunter ein. Das kehrt eine früher
+   bewusst getroffene Festlegung um — der Klassen-Kommentar von `RebateService` sagte wörtlich
+   „keine Vererbung — Konditionen sind pro Betrieb verhandelt". Die Umkehr steht jetzt dort samt
+   Datum und Begründung.
+
+   Regel bewusst grob und dafür eindeutig: **eine eigene Kondition überschreibt die geerbte ganz;
+   Config und Staffel kommen immer vom selben Team.** Nicht feiner, weil `selected_tier_id` auf
+   eine konkrete Stufe zeigt — gemischte Quellen ließen die Wahl des einen Teams in die Staffel
+   eines anderen zeigen und beim nächsten Staffel-Ersatz still ins Leere laufen.
+
+   Drei Fallen, die dabei zu entschärfen waren:
+   - `saveTiers()` las die Config über `configFor()` und hätte nach der Umstellung deren
+     `selected_tier_id` umgehängt — ein **Schreibzugriff über die Team-Grenze**. Jetzt `eigeneConfig()`.
+   - Der Editor lud die Staffel über `tiersFor()`. Geerbt hieße: die Werte des Eltern-Teams stehen
+     im Formular, und das erste Speichern kopiert sie still ins eigene Team — Ende der Vererbung,
+     ohne dass es jemand entschieden hat. Jetzt `eigeneTiers()` + Hinweisstreifen „wird geerbt".
+   - In `stufenInfo()` hieß eine bestehende Variable schon `$quelle` (Herkunfts-ART) — meine
+     Team-ID wurde davon still überschrieben. Zwei Tests haben es gefangen.
+
+   MCP im Lockstep: `supplier_rebate.GET` gibt `geerbt` + `quelle_team_id` mit, `PUT` sagt in der
+   Beschreibung, dass es nie in eine geerbte Kondition schreibt. `RebateVererbungTest` (6 Tests).
+   **Suite damit erstmals ohne roten Test: 1912/1913, 1 skipped.**
+
 ## Changelog
 
 - 2026-07-31 — Spec angelegt (Ist-Stand kartiert, Klassen-Regel A/B, Etappen E0–E5).
@@ -629,3 +662,8 @@ an Martin. Das FA-Modul selbst ist im sichtbaren UI emoji-frei; 12 Modul-Seiten 
   Formular-Sektionen, Erfolgsmeldung dorthin gezogen. Wissens-Modul: Lese-Ansicht ist der Standard
   (`select()` setzt zurück, `neu()` schaltet auf Rohtext, Titel als Überschrift), doppelte H1 fällt
   weg. Suite **1905/1907** (1 skipped); der eine Fehler bleibt der Einkauf-Tenancy-Gap aus §6.3.
+- 2026-08-01 — **§6.3 Einkauf-Tenancy geschlossen.** Trait an die drei Einkaufs-Models;
+  Transaktionen bleiben team-eigen, Rückvergütungs-Konditionen erben über die Eltern-Kette
+  (zentral verhandelt). Regel: eigene Kondition überschreibt die geerbte ganz, Config und Staffel
+  immer vom selben Team. `RebateVererbungTest` (6 Tests), MCP-Beschreibungen nachgezogen.
+  Suite **1912/1913** — erstmals kein roter Test mehr.

@@ -24,7 +24,9 @@ class SupplierRebatePutTool extends FoodAlchemistTool implements ToolContract, T
 
     public function getDescription(): string
     {
-        return 'Setzt/aktualisiert die Rückvergütung eines Lieferanten (supplier_id) für das aktuelle Team. '
+        return 'Setzt/aktualisiert die Rückvergütung eines Lieferanten (supplier_id) — IMMER im eigenen Team. '
+            . 'Achtung: schreibt NIE in eine geerbte Kondition des Eltern-Teams, sondern legt eine eigene an, '
+            . 'die die geerbte vollständig überschreibt (auch selected_tier_id muss zur eigenen Staffel gehören). '
             . '`tiers` (Liste {threshold_eur, percent}) ERSETZT die komplette Staffel. Konfig-Keys optional: '
             . 'active (bool), selected_tier_id (manuell gewählte Stufe), assumed_annual_revenue (€ → Auto-Stufe), '
             . 'applies_to_all (Vollsortiment ja/nein), commodity_groups (§3-Warengruppen-Codes, für die der '

@@ -102,14 +102,19 @@ class SupplierDetail extends Component
     {
         $rebate = app(RebateService::class);
         $team = $this->team();
-        $this->staffel = $rebate->tiersFor($team, $supplierId)->map(fn ($t) => [
+        // EIGENE Staffel/Config in den Editor, nicht die geerbte: sonst stünden die Werte des
+        // Eltern-Teams im Formular und das erste Speichern kopierte sie still ins eigene Team —
+        // damit endete die Vererbung, ohne dass es jemand entschieden hätte. Leeres Formular +
+        // Hinweis „geerbt" (aus $stufenInfo) ist der ehrliche Zustand.
+        $eigene = $rebate->eigeneTiers($team, $supplierId);
+        $this->staffel = $eigene->map(fn ($t) => [
             'threshold_eur' => (float) $t->threshold_eur,
             'percent' => (float) $t->percent,
         ])->all();
-        $config = $rebate->configFor($team, $supplierId);
+        $config = $rebate->eigeneConfig($team, $supplierId);
         $selThreshold = '';
         if ($config?->selected_tier_id !== null && $config !== null) {
-            $sel = $rebate->tiersFor($team, $supplierId)->firstWhere('id', $config->selected_tier_id);
+            $sel = $eigene->firstWhere('id', $config->selected_tier_id);
             $selThreshold = $sel !== null ? (string) (float) $sel->threshold_eur : '';
         }
         $this->rebateConfig = [

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
+use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
@@ -15,7 +16,12 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistSupplierRebateTier extends Model
 {
-    use HasUuidV7, LogsActivity, SoftDeletes;
+    /**
+     * Vererbt wie die Config, zu der die Staffel gehört (Entscheidung Dominique, 2026-08-01).
+     * Staffel und Konfiguration kommen IMMER vom selben Team — sonst greift die manuell
+     * gewählte Stufe eines Teams in die Staffel eines anderen.
+     */
+    use BelongsToTeamHierarchy, HasUuidV7, LogsActivity, SoftDeletes;
 
     protected $table = 'foodalchemist_supplier_rebate_tiers';
 

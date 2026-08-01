@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
+use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
@@ -16,7 +17,13 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistPurchaseTransaction extends Model
 {
-    use HasUuidV7, LogsActivity, SoftDeletes;
+    /**
+     * Trait wegen des Trait-Vertrags (PolicyTest) — die Abfragen bleiben aber bewusst STRIKT
+     * auf `team_id`: eine Ist-Einkaufsposition gehört dem Team, das sie gebucht hat. Ein
+     * Kind-Team hat die Rechnungen des Eltern-Teams nicht zu sehen. Wer hier auf
+     * `visibleToTeam()` umstellt, ändert die Sichtbarkeit — das ist eine Entscheidung, kein Refactor.
+     */
+    use BelongsToTeamHierarchy, HasUuidV7, LogsActivity, SoftDeletes;
 
     protected $table = 'foodalchemist_purchase_transactions';
 

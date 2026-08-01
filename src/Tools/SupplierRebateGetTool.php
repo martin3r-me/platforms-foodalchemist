@@ -27,7 +27,10 @@ class SupplierRebateGetTool extends FoodAlchemistTool implements ToolContract, T
             . 'Stufen (threshold_eur → percent), effektiver Prozentsatz, Quelle (manuell|auto_umsatz|flat_legacy), '
             . 'angenommene Stufe. Optional commodity_group (ausgeschlossene Warengruppe → 0 %) und '
             . 'revenue (Was-wäre-wenn: welcher Satz bei diesem Jahresumsatz). Rückvergütung ist ein '
-            . 'rückwirkender Jahresbonus (effektiver Netto-Preis fürs Vergleichen), kein Zeilen-Rabatt.';
+            . 'rückwirkender Jahresbonus (effektiver Netto-Preis fürs Vergleichen), kein Zeilen-Rabatt. '
+            . 'Konditionen werden vom Eltern-Team geerbt: geerbt=true + quelle_team_id sagen, '
+            . 'dass die gezeigte Staffel einem übergeordneten Team gehört. Eine eigene Staffel '
+            . '(supplier_rebate.PUT) überschreibt die geerbte vollständig.';
     }
 
     public function getSchema(): array

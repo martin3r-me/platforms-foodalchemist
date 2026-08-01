@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
+use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
@@ -16,7 +17,12 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistSupplierRebateConfig extends Model
 {
-    use HasUuidV7, LogsActivity, SoftDeletes;
+    /**
+     * Vererbt (Entscheidung Dominique, 2026-08-01): Rückvergütungen werden zentral verhandelt,
+     * die Betriebe darunter kaufen zu denselben Konditionen ein. Lesen über die Eltern-Kette,
+     * Schreiben bleibt beim eigenen Team — eine eigene Kondition überschreibt die geerbte.
+     */
+    use BelongsToTeamHierarchy, HasUuidV7, LogsActivity, SoftDeletes;
 
     protected $table = 'foodalchemist_supplier_rebate_configs';
 

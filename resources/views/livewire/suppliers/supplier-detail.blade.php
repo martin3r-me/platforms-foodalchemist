@@ -133,6 +133,17 @@
                             </span>
                         </div>
 
+                        @if($stufenInfo['geerbt'] ?? false)
+                            {{-- Ohne diesen Hinweis sieht ein leeres Formular aus wie „keine Kondition",
+                                 obwohl gerechnet wird — mit der Staffel des Eltern-Teams. --}}
+                            <x-foodalchemist::alert tone="info" class="mb-2" data-staffel-geerbt>
+                                Kondition wird vom Eltern-Team geerbt
+                                ({{ count($stufenInfo['tiers'] ?? []) }} Stufen, effektiv
+                                {{ number_format((float) ($stufenInfo['prozent'] ?? 0), 2, ',', '.') }} %).
+                                Eine eigene Staffel unten überschreibt sie vollständig.
+                            </x-foodalchemist::alert>
+                        @endif
+
                         <div class="space-y-1" data-staffel-zeilen>
                             <div class="grid grid-cols-[1fr_1fr_auto] gap-2 {{ $label }}">
                                 <span>Schwelle ab €</span><span>Rabatt %</span><span></span>
@@ -142,7 +153,7 @@
                                     <input type="text" wire:model="staffel.{{ $i }}.threshold_eur" @disabled(! $darfEdit) class="{{ $input }} tabular-nums" />
                                     <input type="text" wire:model="staffel.{{ $i }}.percent" @disabled(! $darfEdit) class="{{ $input }} tabular-nums" />
                                     @if($darfEdit)
-                                        <button type="button" wire:click="staffelZeileEntfernen({{ $i }})" class="{{ $btnGhostXs }} text-rose-600" title="Stufe entfernen">✕</button>
+                                        <button type="button" wire:click="staffelZeileEntfernen({{ $i }})" class="{{ $btnGhostXs }} text-rose-600" title="Stufe entfernen">@svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle')</button>
                                     @else<span></span>@endif
                                 </div>
                             @empty
