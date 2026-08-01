@@ -47,6 +47,14 @@
             <label class="{{ $label }}">Notiz</label>
             <textarea wire:model="note" rows="2" class="{{ $input }}"></textarea>
         </div>
+        {{-- Küchen-Manager: Überproduktions-/Puffer-% — skaliert Ansätze + Einkauf, Ziele bleiben im Original --}}
+        <div class="mt-3 flex items-end gap-2 pt-3 border-t border-white/10">
+            <div class="w-44">
+                <label class="{{ $label }}">Überproduktion / Puffer %</label>
+                <input type="number" min="0" max="100" step="1" wire:model.live.debounce.400ms="puffer" class="{{ $input }}" data-produktion-puffer />
+            </div>
+            <span class="text-[11px] text-gray-500 pb-2">skaliert Ansätze + Einkauf hoch; die Ziele bleiben im Original. 0 = kein Puffer.</span>
+        </div>
     </x-foodalchemist::modal-section>
     </div>{{-- /Stammdaten-Panel --}}
 

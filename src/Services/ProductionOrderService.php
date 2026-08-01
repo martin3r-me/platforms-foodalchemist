@@ -186,6 +186,22 @@ class ProductionOrderService
             ->map(fn ($t) => Arr::except($t, ['source_ref', 'label']))
             ->values()->all();
 
+        // Küchen-Manager: Überproduktions-/Puffer-% skaliert die Ziel-Mengen (persons/portions/amount_kg)
+        // VOR der Explosion → mehr Ansätze + mehr Einkauf. Original-Ziele bleiben unverändert gespeichert.
+        $pct = (float) ($order->buffer_pct ?? 0);
+        if ($pct > 0) {
+            $faktor = 1 + $pct / 100;
+            $ziele = array_map(function (array $z) use ($faktor) {
+                foreach (['persons', 'portions', 'amount_kg'] as $k) {
+                    if (isset($z[$k])) {
+                        $z[$k] = (float) $z[$k] * $faktor;
+                    }
+                }
+
+                return $z;
+            }, $ziele);
+        }
+
         $existingNotes = $order->lines()->pluck('note', 'recipe_id')->all();
         // forceDelete statt soft-delete: Zeilen sind ephemere Snapshots, die bei jeder
         // Ziel-Änderung neu erzeugt werden — soft-delete würde sonst unbegrenzt Tombstones
@@ -260,7 +276,19 @@ class ProductionOrderService
         if (array_key_exists('production_date', $input) && ! empty($input['production_date'])) {
             $order->production_date = $input['production_date'];
         }
+        // Puffer-% (0–100): ändert die Explosion → nach dem Speichern neu rechnen.
+        $pufferGeaendert = false;
+        if (array_key_exists('buffer_pct', $input)) {
+            $neu = max(0.0, min(100.0, (float) $input['buffer_pct']));
+            if ((float) $order->buffer_pct !== $neu) {
+                $order->buffer_pct = $neu;
+                $pufferGeaendert = true;
+            }
+        }
         $order->save();
+        if ($pufferGeaendert) {
+            $this->recomputeOrder($team, $order->refresh());
+        }
 
         return $order->refresh();
     }
@@ -340,6 +368,7 @@ class ProductionOrderService
             'reference' => $order->reference,
             'targets' => $order->targets ?? [],
             'note' => $order->note,
+            'buffer_pct' => (float) ($order->buffer_pct ?? 0),
             'is_owned' => $order->isOwnedBy($team),
             'editierbar' => $status->istOffen() && $order->isOwnedBy($team),
             'verknuepfte_orders' => $verknuepft,

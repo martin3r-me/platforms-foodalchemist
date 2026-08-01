@@ -36,6 +36,9 @@ class Editor extends Component
 
     public ?string $note = null;
 
+    /** Küchen-Manager: Überproduktions-/Puffer-% — skaliert Ansätze + Einkauf (0 = kein Puffer). */
+    public float $puffer = 0;
+
     /** @var list<array{source_ref:string, concept_id?:int, recipe_id?:int, persons?:float, portions?:float, label?:string}> */
     public array $targets = [];
 
@@ -75,7 +78,7 @@ class Editor extends Component
     #[On('produktion-editor.oeffnen')]
     public function oeffnenNeu(): void
     {
-        $this->reset(['orderId', 'name', 'reference', 'note', 'targets', 'auswahlConceptId', 'auswahlRecipeId', 'suche', 'vorschau', 'fehler', 'basisEinheit', 'auswahlFoodbookId', 'auswahlChapterId', 'auswahlPersonen', 'variantChoices']);
+        $this->reset(['orderId', 'name', 'reference', 'note', 'puffer', 'targets', 'auswahlConceptId', 'auswahlRecipeId', 'suche', 'vorschau', 'fehler', 'basisEinheit', 'auswahlFoodbookId', 'auswahlChapterId', 'auswahlPersonen', 'variantChoices']);
         $this->productionDate = now()->toDateString();
         $this->auswahlMenge = 100;
         $this->dispatch('modal.open', name: 'produktion-editor');
@@ -91,6 +94,7 @@ class Editor extends Component
         $this->name = $detail['name'];
         $this->reference = $detail['reference'];
         $this->note = $detail['note'];
+        $this->puffer = (float) ($detail['buffer_pct'] ?? 0);
         $this->targets = $detail['targets'];
         $this->fehler = null;
         $this->berechneVorschau();
@@ -321,7 +325,27 @@ class Editor extends Component
             return;
         }
         $ziele = collect($this->targets)->map(fn ($t) => Arr::except($t, ['source_ref', 'label']))->values()->all();
+        // Puffer-% spiegeln, damit die Live-Vorschau die spätere Explosion (recomputeOrder) zeigt.
+        $pct = max(0.0, min(100.0, (float) $this->puffer));
+        if ($pct > 0) {
+            $faktor = 1 + $pct / 100;
+            $ziele = array_map(function (array $z) use ($faktor) {
+                foreach (['persons', 'portions', 'amount_kg'] as $k) {
+                    if (isset($z[$k])) {
+                        $z[$k] = (float) $z[$k] * $faktor;
+                    }
+                }
+
+                return $z;
+            }, $ziele);
+        }
         $this->vorschau = app(PlanungsblattService::class)->produktionsblattFuerZiele($team, $ziele);
+    }
+
+    /** Puffer geändert → Live-Vorschau neu rechnen (Persistenz erst beim Speichern). */
+    public function updatedPuffer(): void
+    {
+        $this->berechneVorschau();
     }
 
     public function speichern(ProductionOrderService $svc): void
@@ -336,6 +360,9 @@ class Editor extends Component
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
             if ($this->orderId === null) {
                 $order = $svc->saveNew($team, $this->productionDate, trim((string) $this->name), $this->targets, $this->reference, $this->note, Auth::id());
+                if ((float) $this->puffer > 0) {
+                    $order = $svc->updateHeader($team, (int) $order->id, ['buffer_pct' => $this->puffer]);
+                }
             } else {
                 $order = $svc->replaceTargets($team, $this->orderId, $this->targets);
                 $order = $svc->updateHeader($team, $this->orderId, [
@@ -343,6 +370,7 @@ class Editor extends Component
                     'reference' => $this->reference,
                     'note' => $this->note,
                     'production_date' => $this->productionDate,
+                    'buffer_pct' => $this->puffer,
                 ]);
             }
             $this->dispatch('modal.close', name: 'produktion-editor');

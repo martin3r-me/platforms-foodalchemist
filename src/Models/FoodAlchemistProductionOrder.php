@@ -30,6 +30,7 @@ class FoodAlchemistProductionOrder extends Model
         'production_date' => 'date',
         'targets' => 'array',
         'warnungen' => 'array',
+        'buffer_pct' => 'float',
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
         'cancelled_at' => 'datetime',
