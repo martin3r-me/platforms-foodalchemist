@@ -157,6 +157,20 @@ class Editor extends Component
         $this->berechneVorschau();
     }
 
+    /**
+     * Concepter-/Foodbook-Muster: „+" direkt aus der Kandidatenliste — setzt die Auswahl je
+     * nach Ziel-Typ und fügt mit der aktuellen Menge hinzu. Liste + Suche bleiben offen.
+     */
+    public function zielAusListe(int $id): void
+    {
+        if ($this->zielTyp === 'concept') {
+            $this->auswahlConceptId = $id;
+        } else {
+            $this->auswahlRecipeId = $id;
+        }
+        $this->zielHinzufuegen();
+    }
+
     public function zielEntfernen(string $sourceRef): void
     {
         $this->targets = collect($this->targets)->reject(fn ($t) => ($t['source_ref'] ?? null) === $sourceRef)->values()->all();
@@ -349,6 +363,21 @@ class Editor extends Component
                 ->orderBy('name')->limit(20)->get(['id', 'name']);
         }
 
+        // Ziele-Insert (Concepter-Muster): EINE browsebare Kandidatenliste je Ziel-Typ mit „+".
+        $kandidaten = collect();
+        if ($team !== null) {
+            if ($this->zielTyp === 'concept') {
+                $kandidaten = FoodAlchemistConcept::visibleToTeam($team)
+                    ->when(trim($this->suche) !== '', fn ($q) => $q->where('name', 'like', '%' . trim($this->suche) . '%'))
+                    ->orderBy('name')->limit(50)->get(['id', 'name']);
+            } elseif (in_array($this->zielTyp, ['recipe', 'basisrezept'], true)) {
+                $q2 = FoodAlchemistRecipe::visibleToTeam($team);
+                $q2 = $this->zielTyp === 'basisrezept' ? $q2->basis() : $q2->verkauf();
+                $kandidaten = $q2->when(trim($this->suche) !== '', fn ($q) => $q->where('name', 'like', '%' . trim($this->suche) . '%'))
+                    ->orderBy('name')->limit(50)->get(['id', 'name']);
+            }
+        }
+
         // P2 Kapitel-Picker: Foodbooks, Kapitel-Baum (flach + Tiefe) und Wahl-Gruppen.
         $foodbooks = collect();
         $kapitelBaum = collect();
@@ -387,6 +416,7 @@ class Editor extends Component
         return view('foodalchemist::livewire.produktion.editor', [
             'konzepte' => $konzepte,
             'treffer' => $treffer,
+            'kandidaten' => $kandidaten,
             'foodbooks' => $foodbooks,
             'kapitelBaum' => $kapitelBaum,
             'variantGroups' => $variantGroups,

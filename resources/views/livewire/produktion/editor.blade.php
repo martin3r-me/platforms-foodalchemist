@@ -103,51 +103,36 @@
                 <button type="button" wire:click="zielHinzufuegen" class="{{ $btnGhost }}" data-produktion-ziel-hinzufuegen>+ Kapitel-Ziele hinzufügen</button>
             </div>
         @else
-        <div class="flex items-end gap-2 mb-3">
-            @if($zielTyp === 'concept')
-                <div class="flex-1">
-                    <label class="{{ $label }}">Konzept</label>
-                    <select wire:model="auswahlConceptId" class="{{ $input }}" data-produktion-konzept>
-                        <option value="">— wählen —</option>
-                        @foreach($konzepte as $k)
-                            <option value="{{ $k->id }}">{{ $k->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="w-28">
-                    <label class="{{ $label }}">Personen</label>
-                    <input type="number" min="1" wire:model="auswahlMenge" class="{{ $input }}" />
-                </div>
-            @else
-                <div class="flex-1">
-                    <label class="{{ $label }}">{{ $zielTyp === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</label>
-                    <input type="search" wire:model.live.debounce.300ms="suche" placeholder="{{ $zielTyp === 'basisrezept' ? 'Basisrezept suchen …' : 'Gericht suchen …' }}" class="{{ $input }}" data-produktion-gericht-suche />
-                    @if($treffer->isNotEmpty())
-                        <div class="mt-1 rounded-lg border border-black/5 bg-white/90 max-h-40 overflow-y-auto">
-                            @foreach($treffer as $t)
-                                <button type="button" wire:key="tref-{{ $t->id }}" wire:click="$set('auswahlRecipeId', {{ $t->id }})"
-                                    class="block w-full text-left px-2 py-1 text-[12px] {{ $auswahlRecipeId === $t->id ? 'bg-violet-500/10 text-violet-700' : 'text-gray-700 hover:bg-black/[0.03]' }}">{{ $t->name }}</button>
-                            @endforeach
-                        </div>
-                    @endif
+        {{-- Concepter-/Foodbook-Muster: Menge-Kontext + Suche + browsebare Kandidatenliste mit „+".
+             „+" fügt den Kandidaten mit der aktuellen Menge als Ziel hinzu und bleibt offen. --}}
+        <div class="space-y-2 mb-3" data-produktion-picker>
+            <div class="flex items-end gap-2">
+                <div class="w-32">
+                    <label class="{{ $label }}">{{ $zielTyp === 'concept' ? 'Personen' : ($zielTyp === 'basisrezept' ? ($basisEinheit === 'kg' ? 'Kilogramm' : 'Ansätze') : 'Portionen') }}</label>
+                    <input type="number" min="0" step="{{ $zielTyp === 'basisrezept' ? '0.1' : '1' }}" wire:model="auswahlMenge" class="{{ $input }}" data-produktion-menge />
                 </div>
                 @if($zielTyp === 'basisrezept')
-                    <div class="w-28">
-                        <label class="{{ $label }}">{{ $basisEinheit === 'kg' ? 'Kilogramm' : 'Ansätze' }}</label>
-                        <input type="number" min="0" step="0.1" wire:model="auswahlMenge" class="{{ $input }}" />
-                    </div>
-                    <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs self-end mb-0.5" data-produktion-basis-einheit>
+                    <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs mb-0.5" data-produktion-basis-einheit>
                         <button type="button" wire:click="$set('basisEinheit', 'ansaetze')" class="px-2 py-1 rounded-md {{ $basisEinheit === 'ansaetze' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Ansätze</button>
                         <button type="button" wire:click="$set('basisEinheit', 'kg')" class="px-2 py-1 rounded-md {{ $basisEinheit === 'kg' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">kg</button>
                     </div>
-                @else
-                    <div class="w-28">
-                        <label class="{{ $label }}">Portionen</label>
-                        <input type="number" min="1" wire:model="auswahlMenge" class="{{ $input }}" />
-                    </div>
                 @endif
-            @endif
-            <button type="button" wire:click="zielHinzufuegen" class="{{ $btnGhost }}" data-produktion-ziel-hinzufuegen>+ Hinzufügen</button>
+                <div class="flex-1">
+                    <label class="{{ $label }}">{{ $zielTyp === 'concept' ? 'Konzept' : ($zielTyp === 'basisrezept' ? 'Basisrezept' : 'Gericht') }} suchen</label>
+                    <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Suchen … (aus der Liste mit + einfügen)" class="{{ $input }}" data-produktion-gericht-suche />
+                </div>
+            </div>
+            <div class="rounded-lg border border-white/10 max-h-56 overflow-y-auto divide-y divide-white/5" data-produktion-kandidaten>
+                @forelse($kandidaten as $k)
+                    <button type="button" wire:key="pk-{{ $zielTyp }}-{{ $k->id }}" wire:click="zielAusListe({{ $k->id }})"
+                        class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-[12px] text-left hover:bg-violet-500/10" data-produktion-kandidat="{{ $k->id }}">
+                        <span class="truncate text-gray-900">{{ $k->name }}</span>
+                        <span class="text-violet-500 font-medium shrink-0">+</span>
+                    </button>
+                @empty
+                    <p class="text-[12px] text-gray-500 px-2.5 py-3 text-center">{{ trim((string) $suche) !== '' ? 'Kein Treffer.' : 'Nichts vorhanden.' }}</p>
+                @endforelse
+            </div>
         </div>
         @endif
 
