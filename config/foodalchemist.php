@@ -68,7 +68,7 @@ return [
      */
     'sidebar' => [
         [
-            'group' => 'Allgemein',
+            'group' => 'Übersicht',
             'items' => [
                 [
                     'label' => 'Dashboard',
@@ -113,9 +113,9 @@ return [
             ],
         ],
         [
-            // Verdichtung 2026-07-14 (Dominique): früher je Einzel-Eintrag eine eigene
-            // Sektion (Concepter/Foodbook/Angebote/Kalkulation …) → zu viele Ein-Item-Header.
-            // Jetzt nach Workflow gebündelt: Rezepte & Konzepte / Verkauf / Planung / System.
+            // Nach Wertschöpfungskette gebündelt (2026-08-01): Übersicht → Stammdaten →
+            // Rezepte & Konzepte → Ausgabe → Produktion → Einkauf → System. Die drei
+            // Absatzkanäle (Foodbook/Speisekarte/Speiseplan) liegen zusammen unter „Ausgabe".
             'group' => 'Rezepte & Konzepte',
             'items' => [
                 [
@@ -126,7 +126,7 @@ return [
                 [
                     'label' => 'Gerichte',
                     'route' => 'foodalchemist.verkauf.index',
-                    'icon'  => 'heroicon-o-banknotes',
+                    'icon'  => 'heroicon-o-cake',
                 ],
                 [
                     // M10R-5: vereinheitlichter Browser (Concepts | Pakete) + Voll-Editor-Modal.
@@ -137,13 +137,15 @@ return [
             ],
         ],
         [
-            // Verkauf: Portfolio (Foodbook) + Kunden-Angebote + Preissimulation.
-            'group' => 'Verkauf',
+            // Ausgabe: die drei Absatzkanäle — Foodbook (Catering), Speisekarte (Gastronomie),
+            // Speiseplan (Gemeinschaftsverpflegung) — plus Kunden-Angebote + Preissimulation.
+            // Dieselbe Ebene „was serviere/verkaufe ich, für wen", darum zusammen (2026-08-01).
+            'group' => 'Ausgabe',
             'items' => [
                 [
                     'label' => 'Foodbook / Portfolio',
                     'route' => 'foodalchemist.foodbooks.index',
-                    'icon'  => 'heroicon-o-book-open',
+                    'icon'  => 'heroicon-o-rectangle-stack',
                 ],
                 [
                     // Gastronomie-à-la-carte-Karte (dritte Ausgabeform neben Foodbook + Speiseplan).
@@ -152,20 +154,47 @@ return [
                     'icon'  => 'heroicon-o-clipboard-document-list',
                 ],
                 [
+                    // GV-Zeitachse (Tag × Mahlzeit, Wochen-Zyklus) — dritter Kanal, bei den Geschwistern.
+                    'label' => 'Speiseplan',
+                    'route' => 'foodalchemist.speiseplan.index',
+                    'icon'  => 'heroicon-o-calendar-days',
+                ],
+                [
                     'label' => 'Angebote',
                     'route' => 'foodalchemist.angebote.index',
                     'icon'  => 'heroicon-o-document-text',
                 ],
                 [
-                    // #502: Was-wäre-wenn-Preissimulation als eigener Screen.
+                    // #502: Was-wäre-wenn-Preissimulation (Kalkulations-Werkzeug der Ausgabe-Ebene).
                     'label' => 'Preissimulation',
                     'route' => 'foodalchemist.kalkulation.index',
-                    'icon'  => 'heroicon-o-arrows-right-left',
+                    'icon'  => 'heroicon-o-calculator',
                 ],
             ],
         ],
         [
-            // Einkauf E3: Cross-Lieferanten-Preisvergleich (Startseite „reiner Einkäufer").
+            // Produktion: vom verkauften Angebot zum Küchenzettel (Aufträge + Tages-/Postensicht).
+            'group' => 'Produktion',
+            'items' => [
+                [
+                    // Spec 18: persistierte Produktionsaufträge (Datum, Status, → Bestellung).
+                    'label' => 'Produktion',
+                    'route' => 'foodalchemist.produktion.index',
+                    'icon'  => 'heroicon-o-fire',
+                ],
+                [
+                    // Spec 30 E3: was steht wann an welchem Posten an — über alle Aufträge hinweg.
+                    // Eigene Sicht, weil Vorproduktion tagesübergreifend ist, der Auftrag aber
+                    // bewusst ein einzelner Liefertag bleibt.
+                    'label' => 'Tagesplan',
+                    'route' => 'foodalchemist.produktion.tagesplan',
+                    'icon'  => 'heroicon-o-clock',
+                ],
+            ],
+        ],
+        [
+            // Einkauf: Beschaffung — Preisvergleich + Wareneinsatz-Optimierung + das eigentliche
+            // Bestellen (Bestellungen 2026-08-01 aus „Planung" hierher, wo es hingehört).
             'group' => 'Einkauf',
             'items' => [
                 [
@@ -178,34 +207,8 @@ return [
                     'route' => 'foodalchemist.einkauf.optimierung',
                     'icon'  => 'heroicon-o-sparkles',
                 ],
-            ],
-        ],
-        [
-            // Planung: Zeitachse (Speiseplan) + operative Planungs-Blätter (R7.1).
-            'group' => 'Planung',
-            'items' => [
                 [
-                    'label' => 'Speiseplan',
-                    'route' => 'foodalchemist.speiseplan.index',
-                    'icon'  => 'heroicon-o-calendar-days',
-                ],
-                [
-                    // Spec 18: absorbiert die bisherigen Planungs-Blätter (Vorschau im Editor)
-                    // + neue persistierte Produktionsaufträge (Datum, Status, → Bestellung).
-                    'label' => 'Produktion',
-                    'route' => 'foodalchemist.produktion.index',
-                    'icon'  => 'heroicon-o-clipboard-document-list',
-                ],
-                [
-                    // Spec 30 E3: was steht wann an welchem Posten an — über alle Aufträge hinweg.
-                    // Eigene Sicht, weil Vorproduktion tagesübergreifend ist, der Auftrag aber
-                    // bewusst ein einzelner Liefertag bleibt.
-                    'label' => 'Tagesplan',
-                    'route' => 'foodalchemist.produktion.tagesplan',
-                    'icon'  => 'heroicon-o-calendar-days',
-                ],
-                [
-                    // Spec 17/S2: Bestellschienen je Lieferant (mini-WaWi, N-Track)
+                    // Spec 17/S2: Bestellschienen je Lieferant (mini-WaWi, N-Track).
                     'label' => 'Bestellungen',
                     'route' => 'foodalchemist.orders.index',
                     'icon'  => 'heroicon-o-shopping-cart',
