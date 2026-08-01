@@ -83,10 +83,23 @@
                     <a href="{{ route('foodalchemist.speisekarte.dokument', $karte->id) }}" target="_blank" class="{{ $btnGhost }}">Dokument</a>
                     <a href="{{ route('foodalchemist.speisekarte.praesentation', $karte->id) }}" target="_blank" class="{{ $btnGhost }}">Präsentation</a>
                     <button type="button" wire:click="duplizieren" class="{{ $btnGhost }}">Duplizieren</button>
+                    <button type="button" wire:click="kiKartenText" class="{{ $btnAi }}">✨ KI-Einleitung</button>
                     <span class="flex-1"></span>
                     <button type="button" wire:click="loeschen" wire:confirm="Diese Speisekarte wirklich löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
                 </div>
+                @if($kiKartenVorschau !== null)
+                    <div class="mt-3 p-3 rounded-lg bg-violet-500/[0.04] ring-1 ring-inset ring-violet-500/15">
+                        <div class="{{ $label }} mb-1">KI-Vorschlag (Einleitung)</div>
+                        <p class="text-sm text-gray-700 mb-2">{{ $kiKartenVorschau }}</p>
+                        <button type="button" wire:click="kiKartenUebernehmen" class="{{ $btnGhostXs }}">Übernehmen &amp; speichern</button>
+                        <button type="button" wire:click="kiKartenVerwerfen" class="{{ $btnGhostXs }}">Verwerfen</button>
+                    </div>
+                @endif
+                @error('kiKartenVorschau')<div class="mt-2 text-[11px] text-red-500">{{ $message }}</div>@enderror
             </div>
+
+            {{-- Leitstelle-Cockpit (Stufe E) --}}
+            <livewire:foodalchemist.speisekarte.leitstelle-rail :karte-id="$karte->id" wire:key="sk-ls-rail-{{ $karte->id }}" />
 
             {{-- Branding / CI (Stufe C) --}}
             <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-brand-{{ $karte->id }}" x-data="{ auf: false }">

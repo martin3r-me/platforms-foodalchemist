@@ -504,6 +504,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenPostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenDuplicateTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekartenSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekartenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekarteLeitstelleGetTool::class,
                 ] as $toolClass) {
                     try {
                         $tool = new $toolClass();

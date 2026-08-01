@@ -45,8 +45,12 @@
         @if($editPosId === $pos->id)
             <div wire:key="sk-edit-{{ $pos->id }}" class="ml-2 mb-2 p-2 rounded-lg bg-violet-500/[0.04] space-y-2">
                 <div>
-                    <div class="{{ $label }} mb-1">Anzeige-Name (Wording-Override)</div>
+                    <div class="{{ $label }} mb-1 flex items-center gap-2">
+                        <span>Anzeige-Name (Wording-Override)</span>
+                        <button type="button" wire:click="kiWording" class="{{ $btnAi }} !py-0.5">✨ KI</button>
+                    </div>
                     <input type="text" wire:model="editWording" placeholder="leer = Standard-Wording" class="{{ $input }}" />
+                    @error('editWording')<div class="text-[11px] text-red-500 mt-1">{{ $message }}</div>@enderror
                 </div>
                 <div>
                     <div class="{{ $label }} mb-1">Beschreibung</div>

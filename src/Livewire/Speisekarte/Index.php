@@ -269,6 +269,55 @@ class Index extends Component
         $this->editPosId = null;
     }
 
+    // ── KI-Wording (Stufe E) ──────────────────────────────────────────────────
+
+    public ?string $kiKartenVorschau = null;
+
+    /** KI-Wording-Vorschlag für die gerade bearbeitete Position → Vorschau ins Feld (nicht gespeichert). */
+    public function kiWording(SpeisekarteService $svc): void
+    {
+        if (! $this->editPosId) {
+            return;
+        }
+        try {
+            $r = $svc->kiWordingVorschlag($this->team(), $this->editPosId);
+            $this->editWording = $r['text'];
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException $e) {
+            $this->addError('editWording', 'KI derzeit nicht verfügbar.');
+        } catch (\RuntimeException $e) {
+            $this->addError('editWording', $e->getMessage());
+        }
+    }
+
+    /** KI-Einleitungstext für die Karte → Vorschau (Übernehmen speichert in description). */
+    public function kiKartenText(SpeisekarteService $svc): void
+    {
+        if (! $this->karteId) {
+            return;
+        }
+        try {
+            $this->kiKartenVorschau = $svc->kiKartenText($this->team(), $this->karteId)['text'];
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException $e) {
+            $this->addError('kiKartenVorschau', 'KI derzeit nicht verfügbar.');
+        } catch (\RuntimeException $e) {
+            $this->addError('kiKartenVorschau', $e->getMessage());
+        }
+    }
+
+    public function kiKartenUebernehmen(SpeisekarteService $svc): void
+    {
+        if (! $this->karteId || $this->kiKartenVorschau === null) {
+            return;
+        }
+        $svc->update($this->team(), $this->karteId, ['description' => $this->kiKartenVorschau]);
+        $this->kiKartenVorschau = null;
+    }
+
+    public function kiKartenVerwerfen(): void
+    {
+        $this->kiKartenVorschau = null;
+    }
+
     public function render(SpeisekarteService $svc)
     {
         $team = $this->team();

@@ -734,6 +734,97 @@ class SpeisekarteService
         return strtolower($v);
     }
 
+    // ── KI-Wording (Stufe E) ─────────────────────────────────────────────────
+
+    /**
+     * KI-Vorschlag für den Anzeige-Namen/Beschreibungstext einer Position in Brand-Voice.
+     * Zwei-stufig: schlägt nur vor (schreibt nichts) — Übernehmen ist ein menschlicher Akt.
+     * Läuft über den Core-Contract (AiGatewayService), Prompt-Key `foodbook.kundentext`.
+     *
+     * @return array{text: string, confidence: ?float, call_log_id: ?int}
+     */
+    public function kiWordingVorschlag(Team $team, int $positionId): array
+    {
+        $pos = $this->ownedPosition($team, $positionId);
+        $rubrik = $this->ownedRubrik($team, $pos->section_id);
+        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($rubrik->menu_card_id);
+
+        $roh = $pos->type === 'gericht_ref'
+            ? ($pos->dish?->name ?? $pos->label)
+            : ($pos->concept?->name ?? $pos->label);
+
+        $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+            'foodbook.kundentext',
+            [
+                'ebene' => 'speisekarte_position',
+                'aufgabe' => 'Formuliere einen appetitlichen, kurzen Gast-Namen (ggf. + knappe Beschreibung) für diese Speisekarten-Position.',
+                'gericht_roh' => $roh,
+                'rubrik' => $rubrik->consumer_title ?: $rubrik->title,
+                'karte' => $karte->name,
+                'leitplanken' => array_filter([
+                    'niveau' => $karte->default_niveau,
+                    'kundentyp' => $karte->kundentyp,
+                ]),
+                'briefing_ist' => $pos->wording,
+            ],
+            [
+                'target_table' => 'foodalchemist_menu_card_items',
+                'target_id' => (int) $pos->id,
+            ],
+        );
+
+        $text = trim((string) ($proposal->werte['text'] ?? ''));
+        if ($text === '') {
+            throw new \RuntimeException('Die KI hat keinen Text geliefert — bitte erneut versuchen.');
+        }
+
+        return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+    }
+
+    /**
+     * KI-Vorschlag für einen Einleitungs-/Beschreibungstext der Karte (Brand-Voice).
+     * Ebenfalls zwei-stufig; schreibt nichts.
+     *
+     * @return array{text: string, confidence: ?float, call_log_id: ?int}
+     */
+    public function kiKartenText(Team $team, int $karteId): array
+    {
+        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)
+            ->with(['sections.items.dish:id,name'])
+            ->findOrFail($karteId);
+        $this->guard($karte, $team);
+
+        $gerichte = $karte->sections->flatMap->items
+            ->where('type', 'gericht_ref')->map(fn ($p) => $p->wording ?: $p->dish?->name)
+            ->filter()->take(12)->values()->all();
+
+        $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+            'foodbook.kundentext',
+            [
+                'ebene' => 'speisekarte',
+                'aufgabe' => 'Formuliere einen kurzen, einladenden Einleitungstext für diese Speisekarte in Brand-Voice.',
+                'karte' => $karte->name,
+                'gerichte' => $gerichte,
+                'leitplanken' => array_filter([
+                    'niveau' => $karte->default_niveau,
+                    'kundentyp' => $karte->kundentyp,
+                ]),
+                'briefing_ist' => $karte->description,
+            ],
+            [
+                'target_table' => 'foodalchemist_menu_cards',
+                'target_id' => (int) $karte->id,
+            ],
+        );
+
+        $text = trim((string) ($proposal->werte['text'] ?? ''));
+        if ($text === '') {
+            throw new \RuntimeException('Die KI hat keinen Text geliefert — bitte erneut versuchen.');
+        }
+
+        return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+    }
+
     // ── Guards ───────────────────────────────────────────────────────────────
 
     private function ownedRubrik(Team $team, int $id): FoodAlchemistSpeisekarteRubrik
