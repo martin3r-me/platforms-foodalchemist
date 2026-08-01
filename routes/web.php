@@ -236,6 +236,12 @@ Route::get('/speiseplan', \Platform\FoodAlchemist\Livewire\Speiseplan\Index::cla
  * (Datum, Status, → Bestellung übergeben). /blaetter bleibt als Redirect (keine
  * toten Deep-Links, Precedent /kalkulator oben).
  */
+// Spec 30 E3 — Tagesplan: was steht wann an welchem Posten an (über alle Aufträge).
+// Eine Abfrage über ZEILEN, keine neue Auftrags-Struktur: der Auftrag bleibt ein Punkt,
+// nur seine Zeilen dürfen per Vorlauf davor liegen.
+Route::get('/produktion/tagesplan', \Platform\FoodAlchemist\Livewire\Produktion\Tagesplan::class)
+    ->name('foodalchemist.produktion.tagesplan');
+
 Route::get('/produktion', \Platform\FoodAlchemist\Livewire\Produktion\Browser::class)
     ->name('foodalchemist.produktion.index');
 

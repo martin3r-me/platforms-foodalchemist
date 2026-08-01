@@ -191,6 +191,14 @@ return [
                     'icon'  => 'heroicon-o-clipboard-document-list',
                 ],
                 [
+                    // Spec 30 E3: was steht wann an welchem Posten an — über alle Aufträge hinweg.
+                    // Eigene Sicht, weil Vorproduktion tagesübergreifend ist, der Auftrag aber
+                    // bewusst ein einzelner Liefertag bleibt.
+                    'label' => 'Tagesplan',
+                    'route' => 'foodalchemist.produktion.tagesplan',
+                    'icon'  => 'heroicon-o-calendar-days',
+                ],
+                [
                     // Spec 17/S2: Bestellschienen je Lieferant (mini-WaWi, N-Track)
                     'label' => 'Bestellungen',
                     'route' => 'foodalchemist.orders.index',
