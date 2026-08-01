@@ -391,6 +391,64 @@ class ConcepterAggregateService
         ];
     }
 
+    /**
+     * Spec 31 (GV-Ausbau) — LMIV-Kennzeichnungs-Rollup: die 14 EU-Allergene + 18 Zusatzstoffe
+     * (GL-01/GL-09) über eine Gerichte-Sammlung, ALL-MAXIMAL. Anders als
+     * {@see allergenRollupFromGerichte} (nur Diät-Flags) liefert dies die deklarationspflichtigen
+     * LISTEN für den Speiseplan-Aushang.
+     *
+     * Aggregation je Merkmal, rechtssicher (Unbekanntes zählt NIE als „frei"):
+     * - Allergen (`allergen_*` ∈ enthalten|spuren|nicht_enthalten|unbekannt):
+     *   ein »enthalten« → enthalten; sonst ein »spuren« → spuren; sonst ein »unbekannt« → unbekannt;
+     *   sonst (alle bekannt frei) → nicht_enthalten.
+     * - Zusatzstoff (`additive_*` ∈ 3=ja|1=frei|0/NULL=unbekannt): ein 3 → ja; sonst ein 0/NULL →
+     *   unbekannt; sonst (alle 1) → frei.
+     * Konfidenz = schwächstes Glied (`allergens_confidence`).
+     *
+     * @param  Collection<int, object>  $gerichte  Recipe-Sammlung mit geladenen allergen_ und additive_ Spalten
+     * @return array{n_gerichte:int, confidence:string,
+     *               allergene:list<array{slug:string,label:string,status:string}>,
+     *               zusatzstoffe:list<array{slug:string,label:string,status:string}>}
+     */
+    public function kennzeichnungFromGerichte(Collection $gerichte): array
+    {
+        $gerichte = $gerichte->filter()->unique('id')->values();
+
+        $allergene = [];
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $slug => $label) {
+            $werte = $gerichte->map(fn ($g) => $g->{"allergen_{$slug}"} ?? 'unbekannt');
+            $status = match (true) {
+                $gerichte->isEmpty() => 'unbekannt',
+                $werte->contains('enthalten') => 'enthalten',
+                $werte->contains('spuren') => 'spuren',
+                $werte->contains('unbekannt') => 'unbekannt',
+                default => 'nicht_enthalten',
+            };
+            $allergene[] = ['slug' => $slug, 'label' => $label, 'status' => $status];
+        }
+
+        $zusatzstoffe = [];
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE as $slug => $label) {
+            $werte = $gerichte->map(fn ($g) => $g->{"additive_{$slug}"});
+            $status = match (true) {
+                $gerichte->isEmpty() => 'unbekannt',
+                $werte->contains(fn ($v) => (int) $v === 3) => 'ja',
+                $werte->contains(fn ($v) => $v === null || (int) $v === 0) => 'unbekannt',
+                default => 'frei',
+            };
+            $zusatzstoffe[] = ['slug' => $slug, 'label' => $label, 'status' => $status];
+        }
+
+        $minKonf = $gerichte->isEmpty() ? 0 : $gerichte->min(fn ($g) => self::KONF_RANG[$g->allergens_confidence] ?? 0);
+
+        return [
+            'n_gerichte' => $gerichte->count(),
+            'confidence' => array_search($minKonf, self::KONF_RANG, true) ?: 'unknown',
+            'allergene' => $allergene,
+            'zusatzstoffe' => $zusatzstoffe,
+        ];
+    }
+
     // ── Cache-Persistenz ─────────────────────────────────────────────────────
 
     public function cachePaket(FoodAlchemistPaket $paket): FoodAlchemistPaket

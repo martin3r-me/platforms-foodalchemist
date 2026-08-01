@@ -231,6 +231,29 @@ Route::get('/speiseplan', \Platform\FoodAlchemist\Livewire\Speiseplan\Index::cla
     ->name('foodalchemist.speiseplan.index');
 
 /**
+ * Spec 31 / Stufe B: Wochenplan-Aushang (Druck-HTML; ?pdf=1 = PDF-Landscape, DomPDF guarded).
+ * Query: ?mahlzeit=mittag&montag=YYYY-MM-DD (Woche+Mahlzeit aus dem Editor). Team-scoped.
+ */
+Route::get('/speiseplan/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\SpeiseplanService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $plan = $svc->detail($team, $id) ?? abort(404);
+    $data = $svc->dokumentDaten($team, $plan, (string) request()->query('mahlzeit', 'mittag'), request()->query('montag'));
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Speiseplan-PDF angefordert, aber DomPDF ist nicht installiert.', ['speiseplan_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.speiseplan', $data + ['istPdf' => true])
+            ->setPaper('a4', 'landscape')
+            ->download('Speiseplan-' . $id . '-' . str_replace(' ', '', (string) request()->query('mahlzeit', 'mittag')) . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.speiseplan', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.speiseplan.dokument');
+
+/**
  * Spec 18: Produktion — absorbiert die bisherigen Planungs-Blätter (Vorschau im
  * Editor, unverändert per PlanungsblattService) + persistierte Produktionsaufträge
  * (Datum, Status, → Bestellung übergeben). /blaetter bleibt als Redirect (keine

@@ -1,6 +1,7 @@
 <?php
 
 use Livewire\Livewire;
+use Platform\FoodAlchemist\Livewire\Speiseplan\Editor as SpeiseplanEditor;
 use Platform\FoodAlchemist\Livewire\Speiseplan\Index as SpeiseplanIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
@@ -10,7 +11,9 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * M14-02: Speiseplan-Raster — anlegen, Zelle belegen (Gericht), Eintrag erscheint.
+ * M14-02 / Spec 29: Speiseplan-Raster — anlegen (Browser), Zelle belegen (Gericht, Editor),
+ * Eintrag erscheint. Das Planen wanderte in den Fullscreen-Editor (Speiseplan\Editor); der
+ * Browser (Speiseplan\Index) legt nur an und öffnet ihn per Event.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -22,21 +25,31 @@ beforeEach(function () {
     ]);
 });
 
-it('Speiseplan-Raster: anlegen, Zelle (Datum × Mittag) mit Gericht belegen', function () {
-    Livewire::test(SpeiseplanIndex::class)->assertOk()->call('neu');
+it('Browser: „+ Neuer Plan" legt an und öffnet den Editor', function () {
+    Livewire::test(SpeiseplanIndex::class)->assertOk()
+        ->call('neu')
+        ->assertDispatched('speiseplan-editor.bearbeiten');
+
+    expect(FoodAlchemistSpeiseplan::count())->toBe(1);
+});
+
+it('Editor: Zelle (Datum × Mittag) mit Gericht belegen — Eintrag erscheint', function () {
+    Livewire::test(SpeiseplanIndex::class)->call('neu');
     $sp = FoodAlchemistSpeiseplan::first();
     expect($sp)->not->toBeNull();
 
     // Speiseplan v2: Zelle = echtes Datum × Linie (null = »Ohne Linie«) × Mahlzeit-State.
     // Datum in der sichtbaren Woche wählen, sonst zeigt das Raster den Eintrag nicht.
     $montag = now()->startOfWeek()->format('Y-m-d');
-    Livewire::test(SpeiseplanIndex::class)
-        ->call('waehle', $sp->id)
+    Livewire::test(SpeiseplanEditor::class)
+        ->call('oeffnenBearbeiten', $sp->id)
+        ->assertDispatched('modal.open')
         ->set('form.name', 'KW aktuell')->call('speichern')
         ->call('zelleOeffnen', $montag, null)
         ->set('pickerTyp', 'gericht')
         ->set('pickerSuche', 'Kürbis')
         ->call('inhaltHinzu', 'gericht', $this->gericht->id)
+        ->assertDispatched('speiseplan-geaendert')
         ->assertSee('Tagessuppe Kürbis');
 
     $e = $sp->eintraege()->first();

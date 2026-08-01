@@ -4,7 +4,11 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie;
@@ -24,6 +28,23 @@ class SpeiseplanService
     public const MAHLZEITEN = ['fruehstueck' => 'Frühstück', 'mittag' => 'Mittag', 'abend' => 'Abend', 'snack' => 'Snack'];
 
     public const WOCHENTAGE = [1 => 'Mo', 2 => 'Di', 3 => 'Mi', 4 => 'Do', 5 => 'Fr', 6 => 'Sa', 7 => 'So'];
+
+    /**
+     * Spec 31 (GV-Ausbau) — Kostformen, deren Tages-Abdeckung geprüft wird. Alle aus den
+     * vorhandenen Diät-Spec-Flags am Rezept ableitbar (keine neuen Daten). „Passiert/püriert"
+     * bewusst NICHT dabei — dafür gibt es (noch) kein Datenfeld, also nicht raten.
+     */
+    public const KOSTFORMEN = [
+        'vegetarisch' => 'Vegetarisch',
+        'vegan' => 'Vegan',
+        'schweinefrei' => 'Schweinefleischfrei',
+        'glutenfrei' => 'Glutenfrei',
+        'laktosefrei' => 'Laktosefrei',
+        'halal' => 'Halal',
+    ];
+
+    /** In-Request-Memo: Eintrag-Inhalt (c{id}/p{id}/g{id}) → aufgelöste Gerichte-Sammlung. */
+    private array $gerichteCache = [];
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
@@ -297,6 +318,244 @@ class SpeiseplanService
         }
 
         return ['active' => true, 'erfuellt' => $fehl === [], 'fehltage' => $fehl];
+    }
+
+    // ── Spec 31 (GV-Ausbau): Kennzeichnung + Kostformen-Abdeckung ─────────────
+
+    /**
+     * Löst einen Speiseplan-Eintrag (Concept/Paket/Gericht) auf seine tatsächlichen Gerichte
+     * (Verkaufsrezepte) auf — Basis für Kennzeichnungs- und Diät-Rollups. Gleiche Sammel-Logik
+     * wie {@see ConceptService::allergenRollup} (slots→package→dishes + slot→dish). In-Request
+     * memoisiert, damit derselbe Inhalt in einer Woche nicht mehrfach geladen wird.
+     *
+     * @return Collection<int, FoodAlchemistRecipe>
+     */
+    public function eintragGerichte(FoodAlchemistSpeiseplanEintrag $e): Collection
+    {
+        $key = $e->inhaltKey();
+        if ($key === null) {
+            return collect();
+        }
+        if (isset($this->gerichteCache[$key])) {
+            return $this->gerichteCache[$key];
+        }
+
+        $gerichte = collect();
+        if ($e->sales_recipe_id !== null) {
+            $dish = FoodAlchemistRecipe::find($e->sales_recipe_id);
+            $gerichte = $dish ? collect([$dish]) : collect();
+        } elseif ($e->package_id !== null) {
+            $pkg = FoodAlchemistPaket::with('dishes.gericht')->find($e->package_id);
+            $gerichte = $pkg ? $pkg->dishes->pluck('gericht')->filter() : collect();
+        } elseif ($e->concept_id !== null) {
+            $c = FoodAlchemistConcept::with(['slots.package.dishes.gericht', 'slots.dish'])->find($e->concept_id);
+            if ($c !== null) {
+                foreach ($c->slots as $slot) {
+                    if ($slot->package) {
+                        $gerichte = $gerichte->merge($slot->package->dishes->pluck('gericht')->filter());
+                    }
+                    if ($slot->dish) {
+                        $gerichte->push($slot->dish);
+                    }
+                }
+            }
+        }
+
+        return $this->gerichteCache[$key] = $gerichte->filter()->unique('id')->values();
+    }
+
+    /**
+     * LMIV-Kennzeichnung (14 Allergene + 18 Zusatzstoffe) je Werktag der sichtbaren Woche +
+     * Wochen-Rollup, ALL-MAXIMAL über alle Gerichte des Tages. Für Rail-Übersicht + Aushang.
+     *
+     * @return array{pro_tag: array<string, array>, woche: array}
+     */
+    public function wochenKennzeichnung(FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, int $tage = 5): array
+    {
+        $agg = app(ConcepterAggregateService::class);
+        $proTag = [];
+        $wocheGerichte = collect();
+        for ($i = 0; $i < $tage; $i++) {
+            $tag = $montag->copy()->addDays($i)->startOfDay();
+            $tagGerichte = collect();
+            foreach ($plan->entries as $e) {
+                if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->isSameDay($tag)) {
+                    continue;
+                }
+                $tagGerichte = $tagGerichte->merge($this->eintragGerichte($e));
+            }
+            $tagGerichte = $tagGerichte->filter()->unique('id')->values();
+            $proTag[$tag->format('Y-m-d')] = $agg->kennzeichnungFromGerichte($tagGerichte);
+            $wocheGerichte = $wocheGerichte->merge($tagGerichte);
+        }
+
+        return ['pro_tag' => $proTag, 'woche' => $agg->kennzeichnungFromGerichte($wocheGerichte->unique('id')->values())];
+    }
+
+    /**
+     * Aushang-Daten (Spec 31 / Stufe B): druckbarer Wochen-Speiseplan als Grid Linien × Mo–Fr,
+     * je Gericht Allergen-Buchstaben (A…) + Zusatzstoff-Nummern (1…), darunter eine Legende NUR
+     * der tatsächlich vorkommenden Kennzeichen (LMIV). Spuren als »Code*« markiert.
+     *
+     * @return array{plan:FoodAlchemistSpeiseplan, mahlzeitLabel:string, kwLabel:string,
+     *               tage:list<array{ymd:string,label:string}>,
+     *               zeilen:list<array{linie:?string,color:?string,zellen:array<string,list<array{name:string,codes:list<string>}>>}>,
+     *               legende:array{allergene:list<array{code:string,label:string}>, zusatzstoffe:list<array{code:string,label:string}>},
+     *               kostformen:list, erzeugt:string}
+     */
+    public function dokumentDaten(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit = 'mittag', ?string $montag = null): array
+    {
+        $mahlzeit = array_key_exists($mahlzeit, self::MAHLZEITEN) ? $mahlzeit : 'mittag';
+        $mo = ($montag !== null ? Carbon::parse($montag) : ($plan->start_date ?? Carbon::now()))->startOfWeek(Carbon::MONDAY);
+
+        // Codes: Allergene = Buchstaben in EU-Reihenfolge, Zusatzstoffe = Nummern.
+        $allergenCode = [];
+        $i = 0;
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $slug => $label) {
+            $allergenCode[$slug] = ['code' => chr(65 + $i), 'label' => $label];
+            $i++;
+        }
+        $zusatzCode = [];
+        $j = 1;
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE as $slug => $label) {
+            $zusatzCode[$slug] = ['code' => (string) $j, 'label' => $label];
+            $j++;
+        }
+
+        $agg = app(ConcepterAggregateService::class);
+        $tage = [];
+        $raster = $this->wochenRaster($plan, $mahlzeit, $mo);       // [line_id][Ymd] => [entries]
+        $usedAlg = [];
+        $usedZus = [];
+
+        // Zellen-Inhalt je Eintrag → Name + Codes; sammelt nebenbei die Legende.
+        $codesFuer = function (FoodAlchemistSpeiseplanEintrag $e) use ($agg, $allergenCode, $zusatzCode, &$usedAlg, &$usedZus): array {
+            $k = $agg->kennzeichnungFromGerichte($this->eintragGerichte($e));
+            $codes = [];
+            foreach ($k['allergene'] as $a) {
+                if ($a['status'] === 'enthalten' || $a['status'] === 'spuren') {
+                    $usedAlg[$a['slug']] = true;
+                    $codes[] = $allergenCode[$a['slug']]['code'] . ($a['status'] === 'spuren' ? '*' : '');
+                }
+            }
+            foreach ($k['zusatzstoffe'] as $z) {
+                if ($z['status'] === 'ja') {
+                    $usedZus[$z['slug']] = true;
+                    $codes[] = $zusatzCode[$z['slug']]['code'];
+                }
+            }
+
+            return ['name' => $e->inhaltName(), 'codes' => $codes];
+        };
+
+        $for = fn (Carbon $d) => $d->format('Y-m-d');
+        for ($d = 0; $d < 5; $d++) {
+            $tag = $mo->copy()->addDays($d);
+            $tage[] = ['ymd' => $for($tag), 'label' => self::WOCHENTAGE[$tag->isoWeekday()] . ' ' . $tag->format('d.m.')];
+        }
+
+        // Zeilen = Menü-Linien (+ »Ohne Linie«, falls belegt).
+        $linienListe = $plan->lines->map(fn ($l) => ['id' => (int) $l->id, 'name' => $l->name, 'color' => $l->color])->values()->all();
+        if (isset($raster[0])) {
+            $linienListe[] = ['id' => 0, 'name' => 'Ohne Linie', 'color' => null];
+        }
+
+        $zeilen = [];
+        foreach ($linienListe as $lin) {
+            $zellen = [];
+            foreach ($tage as $t) {
+                $eintraege = $raster[$lin['id']][$t['ymd']] ?? [];
+                $zellen[$t['ymd']] = array_map($codesFuer, $eintraege);
+            }
+            $zeilen[] = ['linie' => $lin['name'], 'color' => $lin['color'], 'zellen' => $zellen];
+        }
+
+        $legendeAlg = [];
+        foreach ($allergenCode as $slug => $cl) {
+            if (isset($usedAlg[$slug])) {
+                $legendeAlg[] = $cl;
+            }
+        }
+        $legendeZus = [];
+        foreach ($zusatzCode as $slug => $cl) {
+            if (isset($usedZus[$slug])) {
+                $legendeZus[] = $cl;
+            }
+        }
+
+        return [
+            'plan' => $plan,
+            'mahlzeitLabel' => self::MAHLZEITEN[$mahlzeit],
+            'kwLabel' => 'KW ' . $mo->isoWeek() . ' · ' . $mo->format('d.m.') . '–' . $mo->copy()->addDays(4)->format('d.m.Y'),
+            'tage' => $tage,
+            'zeilen' => $zeilen,
+            'legende' => ['allergene' => $legendeAlg, 'zusatzstoffe' => $legendeZus],
+            'kostformen' => $this->kostformAbdeckung($plan, $mahlzeit, $mo),
+            'erzeugt' => Carbon::now()->format('d.m.Y'),
+        ];
+    }
+
+    /**
+     * Kostformen-Abdeckung: hat jeder Werktag in der gewählten Mahlzeit mindestens EINEN Eintrag,
+     * der die jeweilige Kostform erfüllt? Verallgemeinert den linien-basierten {@see veggieCheck}
+     * auf die tatsächliche Rezept-Diät (Diät-Flag-Rollup je Eintrag, ein Eintrag genügt/Tag).
+     *
+     * @return list<array{key:string, label:string, erfuellt:bool, fehltage:list<string>, abgedeckt:int, tage:int}>
+     */
+    public function kostformAbdeckung(FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, int $tage = 5): array
+    {
+        $agg = app(ConcepterAggregateService::class);
+        $fehl = array_fill_keys(array_keys(self::KOSTFORMEN), []);
+
+        for ($i = 0; $i < $tage; $i++) {
+            $tag = $montag->copy()->addDays($i)->startOfDay();
+            $tagErfuellt = array_fill_keys(array_keys(self::KOSTFORMEN), false);
+            foreach ($plan->entries as $e) {
+                if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->isSameDay($tag)) {
+                    continue;
+                }
+                $roll = $agg->allergenRollupFromGerichte($this->eintragGerichte($e));
+                foreach (self::KOSTFORMEN as $k => $_) {
+                    if (! $tagErfuellt[$k] && $this->kostformErfuellt($k, $roll)) {
+                        $tagErfuellt[$k] = true;
+                    }
+                }
+            }
+            foreach (self::KOSTFORMEN as $k => $_) {
+                if (! $tagErfuellt[$k]) {
+                    $fehl[$k][] = $tag->format('Y-m-d');
+                }
+            }
+        }
+
+        $out = [];
+        foreach (self::KOSTFORMEN as $k => $label) {
+            $out[] = [
+                'key' => $k, 'label' => $label,
+                'erfuellt' => $fehl[$k] === [], 'fehltage' => $fehl[$k],
+                'abgedeckt' => $tage - count($fehl[$k]), 'tage' => $tage,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Erfüllt der Diät-Flag-Rollup eines Eintrags die Kostform? (leerer Eintrag erfüllt nichts) */
+    private function kostformErfuellt(string $key, array $roll): bool
+    {
+        if (($roll['n_gerichte'] ?? 0) === 0) {
+            return false;
+        }
+
+        return match ($key) {
+            'vegetarisch' => (bool) $roll['is_vegetarian'],
+            'vegan' => (bool) $roll['is_vegan'],
+            'schweinefrei' => ! $roll['contains_pork'],
+            'glutenfrei' => (bool) $roll['is_gluten_free'],
+            'laktosefrei' => (bool) $roll['is_lactose_free'],
+            'halal' => (bool) $roll['is_halal'],
+            default => false,
+        };
     }
 
     /**
