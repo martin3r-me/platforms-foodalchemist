@@ -26,7 +26,7 @@ Grundprodukt  →  Basisrezept  →  Gericht  →  Concept  →  Foodbook (Angeb
 | **Concept** | Der Baukasten: Gerichte und Pakete zu einem stimmigen Angebots-Gerüst zusammenstellen. |
 | **Foodbook** | Das fertige Portfolio: Concepts werden zu Kunden-Angeboten (Kapitel, Personenzahl, Preise). |
 
-Quer dazu liegen zwei Werkzeuge, die jede Ebene nutzen: die **Kalkulation** (was kostet es, was muss es bringen?) und der **Speiseplan** (was kommt wann auf den Tisch?).
+Quer dazu liegen drei Werkzeuge, die jede Ebene nutzen: die **Kalkulation** (was kostet es, was muss es bringen?), der **Speiseplan** (was kommt wann auf den Tisch?) und die **Produktion** (was muss die Küche dafür wann kochen?).
 
 ---
 
@@ -53,6 +53,7 @@ Was dein Team anlegt, sieht dein Team. Übergreifende Stammdaten (z. B. ein zent
 | [📔 Foodbook](foodbook) | Concepts zu Kunden-Angeboten bündeln |
 | [🧮 Kalkulation](kalkulation) | Vom Wareneinsatz zur Vollkosten- und Verkaufspreis-Rechnung |
 | [🗓️ Speiseplan](speiseplan) | Bausteine über Tage, Mahlzeiten und Wochen verteilen |
+| [🍲 Produktion](produktion) | Vom verkauften Angebot zum Küchenzettel: Ansätze, Posten, Abarbeiten |
 | [⚙️ Einstellungen](einstellungen) | Taxonomien, Kalkulations-Sätze und KI-Anbindung |
 
 ---

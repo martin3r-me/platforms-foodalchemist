@@ -132,9 +132,9 @@ class ProductionOrderService
      *
      * @param  list<array{source_ref:string, concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}>  $targets
      */
-    public function saveNew(Team $team, string $productionDate, string $name, array $targets, ?string $reference = null, ?string $note = null, ?int $userId = null): FoodAlchemistProductionOrder
+    public function saveNew(Team $team, string $productionDate, string $name, array $targets, ?string $reference = null, ?string $note = null, ?int $userId = null, float $bufferPct = 0): FoodAlchemistProductionOrder
     {
-        return DB::transaction(function () use ($team, $productionDate, $name, $targets, $reference, $note, $userId) {
+        return DB::transaction(function () use ($team, $productionDate, $name, $targets, $reference, $note, $userId, $bufferPct) {
             $order = FoodAlchemistProductionOrder::create([
                 'team_id' => $team->id,
                 'production_date' => $productionDate,
@@ -142,6 +142,9 @@ class ProductionOrderService
                 'status' => ProductionOrderStatus::Planned->value,
                 'reference' => $reference,
                 'note' => $note,
+                // Der Puffer gehört VOR die Explosion: nachträglich gesetzt liefe sie zweimal,
+                // und die erste Runde wäre reine Wegwerf-Arbeit (Spec 30 E0).
+                'buffer_pct' => max(0.0, min(100.0, $bufferPct)),
                 'targets' => $this->mitLabels($team, $targets),
                 'created_by' => $userId,
             ]);
@@ -451,6 +454,12 @@ class ProductionOrderService
         if (array_key_exists('note', $input)) {
             $order->note = ($input['note'] ?? '') !== '' ? $input['note'] : null;
         }
+        // Ziele im selben Aufruf: sonst rechnet der Editor zweimal (replaceTargets + Puffer).
+        $zieleGeaendert = false;
+        if (array_key_exists('targets', $input) && is_array($input['targets'])) {
+            $order->targets = $this->mitLabels($team, $input['targets']);
+            $zieleGeaendert = true;
+        }
         $datumGeaendert = false;
         if (array_key_exists('production_date', $input) && ! empty($input['production_date'])) {
             $order->production_date = $input['production_date'];
@@ -466,7 +475,7 @@ class ProductionOrderService
             }
         }
         $order->save();
-        if ($pufferGeaendert) {
+        if ($pufferGeaendert || $zieleGeaendert) {
             $this->recomputeOrder($team, $order->refresh());   // rechnet und synct plan_date mit
         } elseif ($datumGeaendert) {
             // Liefertag verschoben ⇒ der ganze Vorproduktions-Schwanz wandert mit.
@@ -634,6 +643,25 @@ class ProductionOrderService
             'prozent' => $gesamt > 0 ? (int) round($fertig / $gesamt * 100) : 0,
             'alle_erledigt' => $gesamt > 0 && $fertig === $gesamt,
         ];
+    }
+
+    /**
+     * Auftrag löschen (Spec 30 E7 — gab es bisher weder im Service noch im UI noch als Tool).
+     *
+     * Nur `planned` oder `cancelled`: ein laufender Auftrag ist Arbeit, die gerade passiert, ein
+     * fertiger ist ein Protokoll. Beides löscht man nicht weg, das stornierte Gegenstück gibt es
+     * schon. Soft-Delete wie überall — die Zeilen hängen per Cascade dran und bleiben mit.
+     */
+    public function deleteOrder(Team $team, int $orderId): void
+    {
+        $order = $this->ownedOrder($team, $orderId);
+        $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
+
+        if (! in_array($status, [ProductionOrderStatus::Planned, ProductionOrderStatus::Cancelled], true)) {
+            throw new \RuntimeException('Nur geplante oder stornierte Aufträge lassen sich löschen — laufende werden storniert, fertige bleiben als Protokoll.');
+        }
+
+        $order->delete();
     }
 
     /** Freie Position entfernen (nur solche — berechnete Zeilen werden gestrichen). */

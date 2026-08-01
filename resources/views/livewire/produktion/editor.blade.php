@@ -442,6 +442,13 @@
                                 @if($z->value === 'cancelled') onclick="return confirm('Produktion stornieren?')" @endif
                                 data-produktion-status="{{ $z->value }}">{{ $statusAktion[$z->value] ?? $z->label() }}</button>
                         @endforeach
+
+                        {{-- Spec 30 E7: Löschen gab es bisher nirgends. Nur geplant/storniert —
+                             ein laufender Auftrag wird storniert, ein fertiger ist Protokoll. --}}
+                        @if(in_array($ops['status'], ['planned', 'cancelled'], true))
+                            <button type="button" wire:click="auftragLoeschen" wire:confirm="Produktionsauftrag samt Zeilen löschen?"
+                                    class="{{ $btnGhost }} text-rose-500 ml-auto" data-produktion-loeschen>Löschen</button>
+                        @endif
                     </div>
                 </x-foodalchemist::modal-section>
             @endif

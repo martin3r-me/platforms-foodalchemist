@@ -138,6 +138,14 @@ class Browser extends Component
         $this->dispatch('production-order-selected', id: $id);
     }
 
+    /** Gelöschter Auftrag: Auswahl fallen lassen, sonst zeigt das Panel eine Leiche. */
+    #[On('produktion-geloescht')]
+    public function verwerfeAuswahl(): void
+    {
+        $this->orderId = null;
+        $this->dispatch('production-order-selected', id: 0);
+    }
+
     #[On('produktion-status-geaendert')]
     public function aktualisiereListe(): void
     {

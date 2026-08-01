@@ -789,6 +789,7 @@ manuell vorhanden. Komplexe Planung sollte nicht pauschal autosaven.
 | Erwartet | Datenbankfilter, begrenzte Seite und gezieltes Eager Loading/Aggregate. |
 | Ursache/Evidenz | Service liefert Collection statt paginierbarer Query/Read-DTO. |
 | Empfehlung | Query-Service mit serverseitiger Pagination und Querybudget-Test. |
+| **Status** | **behoben (Spec 30 E4, 01.08.2026)** — `ProductionOrderService::paginateBrowser()` filtert und paginiert in der Datenbank; Zähler laufen über denselben Filtersatz. Test: `ProduktionBrowserTest`. |
 
 **Positiv geprüft:** drei Aufträge, URL-gebundene Suche/Status/Datum,
 Detailauswahl und manueller Neu-Auftrag mit Zieltyp; KI ist kein Kernbestandteil.
@@ -1065,7 +1066,7 @@ verlinkt ist.
 | MVP-030 | WI-03, ST-19 | A-03, A-04 | offen | fremde GP-ID wird abgewiesen |
 | MVP-031 | PA-03 | Phase C | offen | konstantes Querybudget |
 | MVP-032 | PL-02 | Phase D | offen | Tastatur-/Screenreader-Matrix |
-| MVP-033 | PR-02 | Phase D | offen | DB-Filter/Pagination und Lasttest |
+| MVP-033 | PR-02 | Phase D | behoben (Spec 30 E4) | Lasttest gegen echte Menge steht noch aus |
 | MVP-034 | OR-05, UX-07 | Phase A/D | offen | sichtbarer Ladefehler |
 | MVP-035 | OR-02 | Phase D | offen | DB-Filter/Pagination und Lasttest |
 | MVP-036 | KN-01 | A-02–A-04 | behoben | `WissenTenantTest` (Liste/select/Trace nur sichtbare Docs) · Commit R8 |

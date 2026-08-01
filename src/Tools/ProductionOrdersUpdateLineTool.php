@@ -10,9 +10,12 @@ use Platform\FoodAlchemist\Services\ProductionOrderService;
 
 /**
  * Spec 18 (write): Küchen-Notiz an einer Produktions-Zeile im offenen
- * (geplanten) Auftrag setzen. Ansätze/Portionen sind abgeleitet (aus der
- * Explosion) und daher hier NICHT manuell überschreibbar — anders als bei
- * Bestellzeilen (qty_packs), wo eine manuelle Menge sinnvoll ist.
+ * (geplanten) Auftrag setzen.
+ *
+ * ⚠️ Korrektur (Spec 30): Der frühere Satz „Ansätze sind NICHT manuell überschreibbar"
+ * stimmt nicht mehr. Sie sind es — aber über LINE_OVERRIDE, nicht hier. Das Tool bleibt
+ * bewusst auf die Notiz beschränkt: explizite Verben, explizite Guards.
+ * Zuteilung → LINE_ASSIGN. Abhaken → LINE_STATUS.
  */
 class ProductionOrdersUpdateLineTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -24,7 +27,8 @@ class ProductionOrdersUpdateLineTool extends FoodAlchemistTool implements ToolCo
     public function getDescription(): string
     {
         return 'Setzt eine Küchen-Notiz an einer Produktions-Zeile im geplanten Auftrag. Nur eigene Belege, '
-            . 'nur solange der Auftrag noch nicht gestartet ist.';
+            . 'nur solange der Auftrag noch nicht gestartet ist. Ansätze überschreiben: LINE_OVERRIDE. '
+            . 'Posten/Verantwortlich/Vorlauf: LINE_ASSIGN. Abhaken: LINE_STATUS.';
     }
 
     public function getSchema(): array

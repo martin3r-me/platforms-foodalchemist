@@ -460,6 +460,11 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ProductionOrdersSetStatusTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersUpdateLineTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersHandoverTool::class,
+                    // Spec 30: Zeilen-Eingriff, Zuteilung, Abarbeiten, Löschen — MCP im Lockstep
+                    \Platform\FoodAlchemist\Tools\ProductionOrdersLineOverrideTool::class,
+                    \Platform\FoodAlchemist\Tools\ProductionOrdersLineAssignTool::class,
+                    \Platform\FoodAlchemist\Tools\ProductionOrdersLineStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\ProductionOrdersDeleteTool::class,
                     // R2.6: Praxis-Feedback (Küche/Kunde/Event) je Gericht/Rezept
                     \Platform\FoodAlchemist\Tools\FeedbackSearchTool::class,
                     \Platform\FoodAlchemist\Tools\FeedbackPostTool::class,

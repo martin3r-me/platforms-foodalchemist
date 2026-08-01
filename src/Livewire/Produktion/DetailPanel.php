@@ -31,7 +31,9 @@ class DetailPanel extends Component
     #[On('production-order-selected')]
     public function waehle(int $id): void
     {
-        $this->orderId = $id;
+        // 0 = „nichts mehr ausgewählt" (z. B. nach dem Löschen) — sonst suchte das Panel
+        // beharrlich nach Auftrag #0 und zeigte einen Fehler statt des Leer-Zustands.
+        $this->orderId = $id > 0 ? $id : null;
         $this->hinweis = null;
         $this->fehler = null;
     }

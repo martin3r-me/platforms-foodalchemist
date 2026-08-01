@@ -1,8 +1,8 @@
 # Food Alchemist — Business-Case-Funktionsmatrix
 
 - **Status:** aktive Vollständigkeits- und Abnahmeliste
-- **Stand:** 28.07.2026
-- **Quelle:** Produktoberflächen, Routen, Specs 01–22, MVP-Audit und Zielbild 2029
+- **Stand:** 01.08.2026
+- **Quelle:** Produktoberflächen, Routen, Specs 01–30, MVP-Audit und Zielbild 2029
 - **Steuerung:** [Umsetzungsplan zum Zielbild](24_Zielbild_2029_Umsetzungsplan.md)
 
 ## 1. Warum diese Matrix existiert
@@ -203,6 +203,13 @@ für eine einzelne Zeile dokumentiert wurde.
 | PR-02 | mehrere Produktionen pro Tag | reale Küchenorganisation | gebaut | benennen, filtern, kombinieren, reloaden (`F+B`) | D |
 | PR-03 | Produktionsstatus führen | Fortschritt kontrollieren | gebaut | erlaubte Übergänge, Rechte und Audit (`F+T+B`) | D |
 | PR-04 | Produktionsblatt/PDF/CSV | Küche erhält Arbeitsunterlage | gebaut | Referenzfall, Freigabe und CSV-Sicherheit (`B+R`) | A/C |
+| PR-05 | Ansätze je Zeile überschreiben | Küchen-Korrektur ohne die Rechnung zu zerstören | gebaut | Override überlebt Recompute, berechneter Wert bleibt sichtbar, kein Durchschlag auf Einkauf (`F+T+B`) | C/D |
+| PR-06 | Zeile streichen / freie Position | reale Auftragspflege neben der Explosion | gebaut | gestrichene Zeile raus aus Summen und Druck, drin im Panel; freie Position überlebt auch ohne Ziele (`F+T+B`) | C/D |
+| PR-07 | Posten und Kapazität pflegen | Arbeit auf Arbeitsplätze verteilen | gebaut | CRUD, Wochentag-Kapazität, Referenzschutz, team-strikte Auslastung (`F+T+B`) | D |
+| PR-08 | Zeile zuteilen (Posten, Verantwortlich, Vorlauf) | Disposition auch im laufenden Service | gebaut | Zuteilung im `in_progress` erlaubt, plan_date folgt dem Liefertag (`F+T+B`) | D |
+| PR-09 | Tagesplan über alle Aufträge | Küchen-Sicht auf den Tag statt auf den Beleg | gebaut | Zeitfenster, Posten-Filter, Auslastungsbalken, Lücken-Ausweis bei fehlender Arbeitszeit (`F+B`) | D |
+| PR-10 | Zeilen abhaken | Ausführung protokollieren, ohne Ist-Mengen zu erfinden | gebaut | nur im laufenden Auftrag, Fortschritt abgeleitet, kein Auto-Weiterschalten des Auftragsstatus (`F+T+B`) | D |
+| PR-11 | Auftrag löschen | Fehlanlage entfernen, ohne Protokoll zu verlieren | gebaut | nur geplant/storniert; laufend wird storniert, fertig bleibt (`F+T+B`) | D |
 | OR-01 | Bedarf in Bestellung übernehmen | Einkauf aus Planung ableiten | gebaut | Quellenbeiträge, Rundung und keine Doppelübernahme (`F+B`) | D |
 | OR-02 | Bestellschienen je Lieferant | Bedarf korrekt bündeln | gebaut | mehrere Lieferanten/MOQ/Liefertermin (`F+B`) | D |
 | OR-03 | manuelle Bestellzeile ergänzen | Sonderbedarf erfassen | gebaut | eigener Artikel, Menge, Preis und Reload (`F+B`) | D |
@@ -310,7 +317,7 @@ Business-Szenarien abgenommen:
 | BC-04 | Gericht von Rezeptur bis Ziel-VK | RE-12–24, WI-01–05, FD-01–02 | `F+T+B+R` |
 | BC-05 | Brief bis vollständiges Konzept | CO-01–11, PA-01–03 | `F+T+B+R` |
 | BC-06 | Kunden-Foodbook bis PDF | FB-01–17, FD-03–04, C-Gate | `F+T+B+R` |
-| BC-07 | Foodbook bis Produktion und Bestellung | PR-01–04, OR-01–06 | `F+T+B+R` |
+| BC-07 | Foodbook bis Produktion und Bestellung | PR-01–11, OR-01–06 | `F+T+B+R` |
 | BC-08 | Preisänderung bis Kundenwirkung | ST-10–14, WI-01–07, FB-13 | `F+B+R+P` |
 | BC-09 | Wissen/KI/Pairing mit und ohne Provider | KN-01–06, AI-01–05, PA-01–06 | `F+T+B+R` |
 | BC-10 | Trend bis bepreistes Konzept | TR-01–04, ST-11–12 | `F+B+R` |

@@ -50,7 +50,7 @@ seine Rolle in dieser Hierarchie.
 ### Benutzerhandbuch
 
 `index.md`, `stammdaten.md`, `rezepte.md`, `concepter.md`, `foodbook.md`,
-`kalkulation.md`, `speiseplan.md`, `wissen.md` und `einstellungen.md` beschreiben das
+`kalkulation.md`, `speiseplan.md`, `produktion.md`, `wissen.md` und `einstellungen.md` beschreiben das
 Produkt aus Anwendersicht. Sie sollen keine internen Klassen- oder
 Migrationserklärungen enthalten.
 

@@ -108,6 +108,9 @@ class Editor extends Component
     {
         $this->auswahlConceptId = null;
         $this->auswahlRecipeId = null;
+        // Die kg/Ansätze-Umschaltung gehört zum Basisrezept-Ziel. Blieb sie auf „kg" stehen,
+        // interpretierte der nächste Basisrezept-Griff die Menge stumm als Kilogramm (E0).
+        $this->basisEinheit = 'ansaetze';
         $this->suche = '';
         $this->auswahlFoodbookId = null;
         $this->auswahlChapterId = null;
@@ -138,6 +141,14 @@ class Editor extends Component
     {
         if ($this->zielTyp === 'kapitel') {
             $this->kapitelZielHinzufuegen();
+
+            return;
+        }
+
+        // Ein Angebot bringt seine eigene Pax mit und expandiert in mehrere Ziele — es hat
+        // deshalb kein Mengenfeld und läuft ausschließlich über die Kandidatenliste.
+        if ($this->zielTyp === 'angebot') {
+            $this->fehler = 'Angebote werden über die Liste mit „+" übernommen — die Personenzahl kommt aus dem Angebot.';
 
             return;
         }
@@ -361,19 +372,19 @@ class Editor extends Component
         }
         try {
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            // Beide Zweige rechnen die Explosion GENAU EINMAL — Puffer und Ziele gehen in
+            // denselben Aufruf, statt eine erste Runde zu produzieren, die sofort wieder
+            // weggeworfen wird (Spec 30 E0).
             if ($this->orderId === null) {
-                $order = $svc->saveNew($team, $this->productionDate, trim((string) $this->name), $this->targets, $this->reference, $this->note, Auth::id());
-                if ((float) $this->puffer > 0) {
-                    $order = $svc->updateHeader($team, (int) $order->id, ['buffer_pct' => $this->puffer]);
-                }
+                $order = $svc->saveNew($team, $this->productionDate, trim((string) $this->name), $this->targets, $this->reference, $this->note, Auth::id(), (float) $this->puffer);
             } else {
-                $order = $svc->replaceTargets($team, $this->orderId, $this->targets);
                 $order = $svc->updateHeader($team, $this->orderId, [
                     'name' => trim((string) $this->name),
                     'reference' => $this->reference,
                     'note' => $this->note,
                     'production_date' => $this->productionDate,
                     'buffer_pct' => $this->puffer,
+                    'targets' => $this->targets,
                 ]);
             }
             $this->dispatch('modal.close', name: 'produktion-editor');
@@ -443,6 +454,20 @@ class Editor extends Component
                 ? ProductionLineStatus::Open
                 : ProductionLineStatus::Done);
         }, null);
+    }
+
+    /** Spec 30 E7 — Auftrag löschen (nur geplant/storniert; der Guard sitzt im Service). */
+    public function auftragLoeschen(ProductionOrderService $svc): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $id = $this->orderId;
+        $this->fuehreAus(fn ($team) => $svc->deleteOrder($team, $id), null);
+        if ($this->fehler === null) {
+            $this->dispatch('modal.close', name: 'produktion-editor');
+            $this->dispatch('produktion-geloescht');
+        }
     }
 
     public function freiePositionAnlegen(ProductionOrderService $svc): void
