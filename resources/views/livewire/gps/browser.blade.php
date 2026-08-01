@@ -114,7 +114,9 @@
                     <th class="{{ $th }} w-full sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
                     @foreach($spaltenKatalog as $sk => [$skLabel, $skAlign])
                         @if(in_array($sk, $spalten, true))
-                            <th class="{{ $th }} {{ $skAlign }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $skLabel }}</th>
+                            {{-- w-px = auf Inhaltsbreite schrumpfen. Ohne das teilen sich alle Spalten den Platz
+                                 gleichmässig und der Name — die wichtigste Angabe — wird gequetscht. --}}
+                            <th class="{{ $th }} {{ $skAlign }} w-px sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $skLabel }}</th>
                         @endif
                     @endforeach
                 </tr></thead>
@@ -162,7 +164,7 @@
                                 @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp) && $gp->status !== \Platform\FoodAlchemist\Enums\GpStatus::Merged)
                                     <select wire:key="st-{{ $gp->id }}-{{ $gp->status->value }}"
                                             wire:change="statusSetzen({{ $gp->id }}, $event.target.value)"
-                                            class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-5"
+                                            class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-5 !w-24"
                                             title="Status ändern" data-status-select>
                                         @foreach([\Platform\FoodAlchemist\Enums\GpStatus::Approved, \Platform\FoodAlchemist\Enums\GpStatus::Tentative, \Platform\FoodAlchemist\Enums\GpStatus::Rejected] as $fall)
                                             <option value="{{ $fall->value }}" @selected($gp->status === $fall)>{{ $fall->label() }}</option>
