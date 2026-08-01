@@ -6,10 +6,12 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 
@@ -64,6 +66,9 @@ class Editor extends Component
     public ?array $vorschau = null;
 
     public ?string $fehler = null;
+
+    /** Operatives Feedback (Einkauf & Status-Tab, aus DetailPanel gemergt). */
+    public ?string $hinweis = null;
 
     #[On('produktion-editor.oeffnen')]
     public function oeffnenNeu(): void
@@ -290,7 +295,48 @@ class Editor extends Component
         }
     }
 
-    public function render()
+    // ── Operative Aktionen (Spec-29-Rollout: DetailPanel → Editor gemergt) — nur bestehender Auftrag ──
+
+    public function setStatus(string $status, ProductionOrderService $svc): void
+    {
+        $ziel = ProductionOrderStatus::tryFrom($status);
+        if ($ziel === null || $this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(fn ($team) => $svc->setStatus($team, $this->orderId, $ziel), 'Status gesetzt.');
+        $this->dispatch('produktion-status-geaendert');
+    }
+
+    public function updateLineNote(int $lineId, string $note, ProductionOrderService $svc): void
+    {
+        $this->fuehreAus(fn ($team) => $svc->updateLine($team, $lineId, ['note' => $note]), 'Notiz gespeichert.');
+    }
+
+    /** Einbahn-Übergabe: Bedarf aller Ziele an die Bestellschienen (Service-zentral inkl. Stale-Marker). */
+    public function anBestellungUebergeben(ProductionOrderService $prod, OrderService $orders): void
+    {
+        $this->fuehreAus(function ($team) use ($prod, $orders) {
+            $res = $prod->anBestellungUebergeben($team, $this->orderId, $orders, Auth::id());
+            $touched = count($res['orders']);
+            $this->hinweis = $touched > 0 ? "{$touched} Bestellschiene(n) aktualisiert." : 'Kein bestellbarer Bedarf.';
+        }, null);
+        $this->dispatch('produktion-status-geaendert');
+    }
+
+    private function fuehreAus(callable $fn, ?string $ok): void
+    {
+        $this->hinweis = null;
+        $this->fehler = null;
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $fn($team);
+            $this->hinweis ??= $ok;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function render(ProductionOrderService $svc)
     {
         $team = Auth::user()?->currentTeamRelation;
         $konzepte = $team ? FoodAlchemistConcept::visibleToTeam($team)->orderBy('name')->get(['id', 'name']) : collect();
@@ -317,12 +363,37 @@ class Editor extends Component
             }
         }
 
+        // Operative Daten (nur bestehender Auftrag) für den „Einkauf & Status"-Tab (aus DetailPanel gemergt).
+        $ops = null;
+        $erlaubteStatus = [];
+        $verknuepfteOrders = collect();
+        $zielUebergaben = [];
+        if ($this->orderId !== null && $team !== null) {
+            try {
+                $ops = $svc->detail($team, $this->orderId);
+                $aktuell = ProductionOrderStatus::from($ops['status']);
+                foreach ([ProductionOrderStatus::InProgress, ProductionOrderStatus::Done, ProductionOrderStatus::Cancelled] as $z) {
+                    if ($aktuell->darfWechselnZu($z)) {
+                        $erlaubteStatus[] = $z;
+                    }
+                }
+                $verknuepfteOrders = $svc->verknuepfteOrders($team, $this->orderId);
+                $zielUebergaben = $svc->zielUebergaben($team, $this->orderId);
+            } catch (\Throwable) {
+                $ops = null;
+            }
+        }
+
         return view('foodalchemist::livewire.produktion.editor', [
             'konzepte' => $konzepte,
             'treffer' => $treffer,
             'foodbooks' => $foodbooks,
             'kapitelBaum' => $kapitelBaum,
             'variantGroups' => $variantGroups,
+            'ops' => $ops,
+            'erlaubteStatus' => $erlaubteStatus,
+            'verknuepfteOrders' => $verknuepfteOrders,
+            'zielUebergaben' => $zielUebergaben,
         ]);
     }
 

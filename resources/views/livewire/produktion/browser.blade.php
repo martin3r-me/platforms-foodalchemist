@@ -37,12 +37,8 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_produktion" side="right">
-            <livewire:foodalchemist.produktion.detail-panel :order-id="$orderId" />
-        </x-foodalchemist::detail-sidebar>
-    </x-slot>
-
+    {{-- Rollout: Detail-Panel ist in den Editor gemergt (Tab „Einkauf & Status"). Zeilen-Klick
+         öffnet direkt den Fullscreen-Editor — kein separates Detail-Panel mehr (wie Rezept/GP). --}}
     <livewire:foodalchemist.produktion.editor />
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
@@ -70,8 +66,7 @@
                         @php($einkaufPill = ['keine' => ['—', $variantPill['secondary'] ?? ''], 'offen' => ['offen', $variantPill['warning'] ?? ''], 'versendet' => ['versendet', $variantPill['success'] ?? '']])
                         @forelse($auftraege as $a)
                             @php($ziele = collect($a->targets ?? [])->pluck('label')->filter()->values())
-                            <x-foodalchemist::table-row :active="$orderId === $a->id" wire:key="po-{{ $a->id }}" wire:click="waehle({{ $a->id }})"
-                                x-data x-on:click="$store.ui?.mSet('activity_produktion', 'open', true)"
+                            <x-foodalchemist::table-row wire:key="po-{{ $a->id }}" wire:click="$dispatch('produktion-editor.bearbeiten', { id: {{ $a->id }} })"
                                 data-produktion-zeile="{{ $a->id }}">
                                 <td class="{{ $td }} font-medium text-gray-900 whitespace-nowrap">
                                     {{ $a->name ?: $a->reference ?: '—' }}

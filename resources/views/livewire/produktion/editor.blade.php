@@ -1,12 +1,33 @@
 {{-- Spec 18 — Produktion: Editor-Modal (Stammdaten / Ziele / Vorschau) --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="produktion-editor" :title="$orderId === null ? 'Neuer Produktionsauftrag' : 'Produktionsauftrag bearbeiten'">
-    <x-slot:footer>
-        @if($fehler)<span class="text-[12px] text-rose-600 mr-auto">{{ $fehler }}</span>@endif
+@php($pzRezepte = $vorschau['rezepte'] ?? [])
+@php($pzAnsaetze = collect($pzRezepte)->sum('ansaetze'))
+@php($pzZeit = collect($pzRezepte)->sum(fn ($r) => (int) ($r['arbeitszeit_min'] ?? 0)))
+{{-- Spec 29-Rollout: Produktion-Editor auf Editor-Page-Muster (fullscreen · dark · editor-tabs · KPI). --}}
+<x-foodalchemist::modal name="produktion-editor" fullscreen dark-canvas
+    :title="$orderId === null ? 'Neuer Produktionsauftrag' : 'Produktionsauftrag bearbeiten'"
+    :title-name="$orderId === null ? null : ($name ?: null)">
+    <x-slot:actions>
         <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-produktion-speichern>Speichern</button>
-    </x-slot:footer>
+        @if($fehler)<span class="text-[12px] text-rose-600 ml-2 self-center" data-produktion-fehler>{{ $fehler }}</span>@endif
+    </x-slot:actions>
 
+    {{-- KPI-Kopf: Ziele + Rezepte + Ansätze (Leitwert) + Arbeitszeit aus der Ansätze-Vorschau --}}
+    <x-slot:kpiHeader>
+        <x-foodalchemist::kpi-tiles marker="produktion-kpis" :tiles="[
+            ['kpi' => 'ziele', 'label' => 'Ziele', 'value' => (string) count($targets)],
+            ['kpi' => 'rezepte', 'label' => 'Rezepte', 'value' => (string) count($pzRezepte)],
+            ['kpi' => 'ansaetze', 'label' => 'Ansätze', 'tone' => 'accent',
+             'value' => $pzAnsaetze > 0 ? rtrim(rtrim(number_format((float) $pzAnsaetze, 2, ',', '.'), '0'), ',') : '—'],
+            ['kpi' => 'zeit', 'label' => 'Arbeitszeit', 'value' => $pzZeit > 0 ? $pzZeit . ' min' : '—'],
+        ]" />
+    </x-slot:kpiHeader>
+
+    <x-foodalchemist::editor-tabs marker="produktion" wire-key="produktion-tabs-{{ $orderId ?? 'neu' }}" :init="'stammdaten'"
+        :tabs="['stammdaten' => 'Stammdaten', 'ziele' => 'Ziele', 'vorschau' => 'Vorschau', 'einkauf' => $orderId ? 'Einkauf & Status' : null]">
+
+    <div x-show="tab === 'stammdaten'" x-cloak class="pt-4">
     <x-foodalchemist::modal-section title="Stammdaten">
         <div class="grid grid-cols-2 gap-3">
             <div>
@@ -27,7 +48,9 @@
             <textarea wire:model="note" rows="2" class="{{ $input }}"></textarea>
         </div>
     </x-foodalchemist::modal-section>
+    </div>{{-- /Stammdaten-Panel --}}
 
+    <div x-show="tab === 'ziele'" x-cloak class="pt-4">
     <x-foodalchemist::modal-section title="Ziele">
         <div class="flex items-center gap-2 mb-2">
             <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs">
@@ -100,7 +123,7 @@
                     <label class="{{ $label }}">{{ $zielTyp === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</label>
                     <input type="search" wire:model.live.debounce.300ms="suche" placeholder="{{ $zielTyp === 'basisrezept' ? 'Basisrezept suchen …' : 'Gericht suchen …' }}" class="{{ $input }}" data-produktion-gericht-suche />
                     @if($treffer->isNotEmpty())
-                        <div class="mt-1 rounded-lg border border-black/5 bg-white/80 max-h-40 overflow-y-auto">
+                        <div class="mt-1 rounded-lg border border-black/5 bg-white/90 max-h-40 overflow-y-auto">
                             @foreach($treffer as $t)
                                 <button type="button" wire:key="tref-{{ $t->id }}" wire:click="$set('auswahlRecipeId', {{ $t->id }})"
                                     class="block w-full text-left px-2 py-1 text-[12px] {{ $auswahlRecipeId === $t->id ? 'bg-violet-500/10 text-violet-700' : 'text-gray-700 hover:bg-black/[0.03]' }}">{{ $t->name }}</button>
@@ -144,7 +167,9 @@
             @endforelse
         </div>
     </x-foodalchemist::modal-section>
+    </div>{{-- /Ziele-Panel --}}
 
+    <div x-show="tab === 'vorschau'" x-cloak class="pt-4">
     <x-foodalchemist::modal-section title="Vorschau">
         @if($vorschau === null)
             <p class="text-[12px] text-gray-500">Ziele hinzufügen, um die Ansätze-Vorschau zu sehen.</p>
@@ -172,4 +197,77 @@
             @endforeach
         @endif
     </x-foodalchemist::modal-section>
+    </div>{{-- /Vorschau-Panel --}}
+
+    {{-- ═══ Tab: EINKAUF & STATUS (aus DetailPanel gemergt — nur bestehender Auftrag) ═══ --}}
+    <div x-show="tab === 'einkauf'" x-cloak class="pt-4 space-y-4">
+        @if($ops === null)
+            <p class="text-[12px] text-gray-500">Auftrag zuerst speichern — dann erscheinen Status, Bestell-Übergabe und Deckungsgrad.</p>
+        @else
+            @if($hinweis)<div class="{{ $sectionCard }} !bg-emerald-500/[0.06] !border-emerald-500/20 text-[12px] text-emerald-700" data-produktion-hinweis>✓ {{ $hinweis }}</div>@endif
+
+            @if($ops['is_owned'] && count($erlaubteStatus) > 0)
+                <x-foodalchemist::modal-section title="Status">
+                    @php($statusAktion = ['in_progress' => 'Produktion starten', 'done' => 'Fertig melden', 'cancelled' => 'Stornieren'])
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="{{ $pill }} font-medium {{ $variantPill[\Platform\FoodAlchemist\Enums\ProductionOrderStatus::from($ops['status'])->badgeVariant()] ?? $variantPill['secondary'] }} mr-1">{{ $ops['status_label'] }}</span>
+                        @foreach($erlaubteStatus as $z)
+                            <button type="button" wire:click="setStatus('{{ $z->value }}')"
+                                class="{{ in_array($z->value, ['in_progress', 'done'], true) ? $btnPrimary : $btnGhost }}"
+                                @if($z->value === 'cancelled') onclick="return confirm('Produktion stornieren?')" @endif
+                                data-produktion-status="{{ $z->value }}">{{ $statusAktion[$z->value] ?? $z->label() }}</button>
+                        @endforeach
+                    </div>
+                </x-foodalchemist::modal-section>
+            @endif
+
+            @php($zieleCount = count($ops['targets']))
+            @php($uebergebenCount = collect($ops['targets'])->filter(fn ($t) => ! empty($zielUebergaben[$t['source_ref'] ?? '']))->count())
+            <x-foodalchemist::modal-section title="Einkauf">
+                <x-slot:actions>
+                    @if($ops['is_owned'] && in_array($ops['status'], ['planned', 'in_progress'], true))
+                        <button type="button" wire:click="anBestellungUebergeben" class="{{ $btnGhostXs }}" data-produktion-uebergeben>→ An Bestellung übergeben</button>
+                    @endif
+                    @if(\Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument'))
+                        <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $ops['id']]) }}" target="_blank" class="{{ $btnGhostXs }}" title="Produktionsschein + Einkauf">@svg('heroicon-o-printer', 'w-3.5 h-3.5') Doku</a>
+                    @endif
+                </x-slot:actions>
+                @if(! empty($ops['einkauf_veraltet']))
+                    <div class="mb-2" data-einkauf-veraltet="1"><x-foodalchemist::alert tone="warning">Bestellung veraltet — Ziele seit der letzten Übergabe geändert. Erneut übergeben.</x-foodalchemist::alert></div>
+                @endif
+                @if($zieleCount > 0)
+                    <div class="flex items-center justify-between gap-2 text-[12px] mb-2" data-einkauf-deckung="{{ $uebergebenCount }}/{{ $zieleCount }}">
+                        <span class="text-gray-500">Deckungsgrad</span>
+                        <span class="{{ $pill }} font-medium {{ $uebergebenCount === 0 ? $variantPill['secondary'] : ($uebergebenCount >= $zieleCount ? $variantPill['success'] : $variantPill['warning']) }}">{{ $uebergebenCount }}/{{ $zieleCount }} Ziele übergeben</span>
+                    </div>
+                @endif
+                @if($verknuepfteOrders->isNotEmpty())
+                    <div class="space-y-1">
+                        @foreach($verknuepfteOrders as $o)
+                            <a href="{{ route('foodalchemist.orders.index', ['o' => $o->id]) }}" class="flex items-center justify-between gap-2 text-[13px] px-2 py-1.5 rounded-lg bg-black/[0.04] hover:bg-black/[0.08]" data-produktion-bestellung-link="{{ $o->id }}">
+                                <span class="text-gray-900">{{ $o->supplier?->name ?? '—' }}</span>
+                                <span class="flex items-center gap-2"><span class="text-gray-500 tabular-nums">{{ number_format((float) $o->total_net, 2, ',', '.') }} €</span><span class="{{ $pill }} font-medium {{ $variantPill[$o->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o->status->label() }}</span></span>
+                            </a>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="text-[12px] text-gray-500">Noch keine Bestellung — „→ An Bestellung übergeben" oben.</p>
+                @endif
+            </x-foodalchemist::modal-section>
+
+            @if(! empty($ops['zeilen']))
+                <x-foodalchemist::modal-section title="Küchen-Notizen">
+                    <div class="space-y-2">
+                        @foreach($ops['zeilen'] as $z)
+                            <div class="flex items-center gap-2" wire:key="opsnote-{{ $z['id'] }}">
+                                <span class="text-[12px] text-gray-900 flex-1 truncate">{{ $z['name'] }}</span>
+                                <input type="text" value="{{ $z['note'] }}" placeholder="Küchen-Notiz …" wire:change="updateLineNote({{ $z['id'] }}, $event.target.value)" class="{{ $input }} !py-1 w-64" data-produktion-notiz="{{ $z['id'] }}" />
+                            </div>
+                        @endforeach
+                    </div>
+                </x-foodalchemist::modal-section>
+            @endif
+        @endif
+    </div>{{-- /Einkauf-Panel --}}
+    </x-foodalchemist::editor-tabs>
 </x-foodalchemist::modal>
