@@ -84,6 +84,53 @@
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         @if($fb)
+            {{-- ═══ LISTEN-EBENE: Live-Vorschau + Ausgabe/Bearbeiten (Spec 29) ═══
+                 Der Editor ist ein Fullscreen-Modal (》Bearbeiten《). Die Seite zeigt dauerhaft das
+                 fertige Ergebnis (Kundensicht) + die Ausgabe-Tools. Ansehen ≠ Bearbeiten. --}}
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <h1 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $fb->label }}</h1>
+                    <p class="text-[11px] text-gray-500">{{ $fb->customer ?? 'ohne Kunde' }} · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$fb->phase] ?? $fb->phase }}</span></p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" @click="$dispatch('modal.open', { name: 'foodbook-editor' })" class="{{ $btnPrimary }}" data-fb-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
+                    <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Dokument (Druck/PDF) — im Dokument zwischen Kunden- und interner Sicht (Marge) umschaltbar">Dokument</a>
+                    <a href="{{ route('foodalchemist.foodbooks.praesentation', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Externe Kunden-Präsentation (Web-Seite, Preise pro Person, ohne Interna)">Präsentation</a>
+                </div>
+            </div>
+
+            {{-- Live-Ergebnis (read-only, Kundensicht) — dieselbe Quelle wie Dokument/Präsentation --}}
+            @include('foodalchemist::livewire.foodbooks.partials.menue-vorschau')
+
+            {{-- ═══════════════ EDITOR = Fullscreen-Modal (Spec 29) ═══════════════
+                 Gleiche Livewire-Komponente (Index), nur in ein Modal gehüllt — Bus/State/Nested
+                 bleiben. dark-canvas folgt erst, wenn die Panels auf modal-section stehen (S9),
+                 sonst grau-auf-grau. Geöffnet per 》Bearbeiten《 (modal.open). --}}
+            @php($fbKapitelN = $fb->chapters->count())
+            @php($fbSpeisenN = collect($menue['kapitel'] ?? [])->sum(fn ($k) => collect($k['bloecke'] ?? [])->sum(fn ($b) => collect($b['gerichte'] ?? [])->reject(fn ($g) => in_array($g['type'] ?? '', ['paket', 'header'], true))->count())))
+            @php($fbVkPp = (float) ($menue['gesamt']['vk_pro_person'] ?? 0))
+            @php($fbErledigt = collect($checkliste)->where('status', 'erledigt')->count())
+            @php($fbSchritte = count($checkliste))
+            <x-foodalchemist::modal name="foodbook-editor" fullscreen title="Foodbook bearbeiten" :title-name="$fb->label">
+                <x-slot:actions>
+                    <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-fb-speichern>Speichern</button>
+                    <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhostXs }} text-red-600" data-fb-loeschen>Löschen</button>
+                </x-slot:actions>
+
+                {{-- Spec 29 / S4: KPI-Streifen fix im Modal-Kopf (scrollt nie weg) — geteilter Baustein.
+                     Leitwert = VK/Person (accent). Alle Werte aus render()-Daten, keine neuen Service-Calls. --}}
+                <x-slot:kpiHeader>
+                    <x-foodalchemist::kpi-tiles marker="fb-kpis" :tiles="[
+                        ['kpi' => 'kapitel', 'label' => 'Kapitel', 'value' => (string) $fbKapitelN],
+                        ['kpi' => 'speisen', 'label' => 'Speisen', 'value' => (string) $fbSpeisenN],
+                        ['kpi' => 'vkpp', 'label' => 'VK / Person', 'tone' => 'accent',
+                         'value' => $fbVkPp > 0 ? number_format($fbVkPp, 2, ',', '.') . ' €' : '—'],
+                        ['kpi' => 'fortschritt', 'label' => 'Fortschritt',
+                         'tone' => ($fbSchritte > 0 && $fbErledigt >= $fbSchritte) ? 'good' : 'neutral',
+                         'value' => $fbErledigt . '/' . $fbSchritte],
+                    ]" />
+                </x-slot:kpiHeader>
+
             {{-- ═══════════════ FOODBOOK-KOPF — Planungs-Cockpit (Tabs) ═══════════════ --}}
             {{-- Das Cockpit rendert IMMER, auch mit gewähltem Kapitel. Bis 2026-07-28 stand hier
                  `@if($selectedKapitelId === null)` — Cockpit XOR Kapitel. Das machte einen ganzen
@@ -103,33 +150,33 @@
                  unbekannter Tab → bleibt stehen (kein Blank), unbekannter Anker → kein Scroll. --}}
             {{-- E5.3: `x-effect` meldet den aktiven Tab per Window-Event an die Leitstelle-Rail
                  (Auto-Default je Tab, sofern die Rail nicht manuell gepinnt ist). --}}
-            <div wire:key="fbcockpit-{{ $fb->id }}" x-data="{ tab: 'briefing' }" class="space-y-4"
-                 x-effect="$dispatch('fb-cockpit-tab', { tab })"
-                 @fb-goto.window="let d=$event.detail; if(d.tab && $root.querySelector(`[data-fb-tab='${d.tab}']`)) tab=d.tab; $nextTick(()=>{ if(d.anker){ let el=$root.querySelector(`[data-fb-anker='${d.anker}']`); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } });">
+            {{-- Spec 29 / S3: Tab-Zustand + sticky Leiste liegen jetzt im geteilten `editor-tabs`-Baustein
+                 (Alpine-Modus, wie Rezept/GP). Der Cockpit-Root hält KEIN eigenes `tab` mehr — sonst
+                 überschattet ein äußerer Scope den Baustein-Scope (stiller Desync). Der Sprung-/Melde-Bus
+                 (fb-goto ← Checkliste, fb-cockpit-tab → Rail) wandert als headless-Kind IN den Baustein-Scope,
+                 damit `tab` und `$root` (mit data-fb-tab/-anker) dieselbe Wurzel teilen. Vorschau-Tab ist
+                 entfallen — die Live-Vorschau liegt jetzt auf der Listen-Ebene. --}}
+            <div wire:key="fbcockpit-{{ $fb->id }}" class="space-y-4">
+                <x-foodalchemist::editor-tabs marker="fb" wire-key="fb-tabs-{{ $fb->id }}"
+                    :tabs="[
+                        'briefing' => 'Briefing',
+                        'planung' => 'Planung',
+                        'speisen' => $selectedKapitelId ? 'Speisen' : null,
+                        'kreativ' => 'Kreativ',
+                        'trend' => 'Trend',
+                        'branding' => 'Branding/CI',
+                        'preise' => 'Preise',
+                    ]">
 
-                {{-- Tab-Leiste + Foodbook-Aktionen — Speichern/Dokument/Präsentation/Löschen gelten fürs GANZE
-                     Foodbook, daher auf Tab-Ebene (aus allen Tabs erreichbar), nicht im Briefing-Tab vergraben. --}}
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div class="flex flex-wrap gap-1" role="tablist">
-                        @php($fbTabIcon = ['briefing' => 'heroicon-o-clipboard-document-list', 'planung' => 'heroicon-o-flag', 'kreativ' => 'heroicon-o-swatch', 'trend' => 'heroicon-o-presentation-chart-line', 'branding' => 'heroicon-o-tag', 'preise' => 'heroicon-o-currency-euro', 'vorschau' => 'heroicon-o-banknotes'])
-                        @foreach(['briefing' => 'Briefing', 'planung' => 'Planung', 'kreativ' => 'Kreativ', 'trend' => 'Trend', 'branding' => 'Branding/CI', 'preise' => 'Preise', 'vorschau' => 'Vorschau'] as $tk => $tl)
-                            <button type="button" @click="tab = @js($tk)" :class="tab === @js($tk) ? '{{ $aktiv }}' : '{{ $hover }}'"
-                                    class="px-4 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5" data-fb-tab="{{ $tk }}">@svg($fbTabIcon[$tk], 'w-4 h-4') {{ $tl }}</button>
-                        @endforeach
-                    </div>
-                    <div class="flex flex-wrap gap-2" data-fb-aktionen>
-                        <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
-                        {{-- Ein Einstieg genügt: interne Sicht (EK/VK/W%) ⇄ Kundensicht wird IM Dokument umgeschaltet (2026-07-14). --}}
-                        <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Dokument (Druck/PDF) — im Dokument zwischen Kunden- und interner Sicht (Marge) umschaltbar">Dokument</a>
-                        <a href="{{ route('foodalchemist.foodbooks.praesentation', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Externe Kunden-Präsentation (Web-Seite, Preise pro Person, ohne Interna)">Präsentation</a>
-                        <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
-                    </div>
-                </div>
+                {{-- headless: Event-Bus im editor-tabs-Scope (kein sichtbares Element).
+                     $root = editor-tabs-Wurzel (trägt die data-fb-tab-Buttons + data-fb-anker-Panels). --}}
+                <div x-effect="$dispatch('fb-cockpit-tab', { tab })"
+                     @fb-goto.window="let d=$event.detail; if(d.tab && $root.querySelector(`[data-fb-tab='${d.tab}']`)) tab=d.tab; $nextTick(()=>{ if(d.anker){ let el=$root.querySelector(`[data-fb-anker='${d.anker}']`); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } });"></div>
 
                 {{-- E5.2: Leitstellen-Leiste auf Tab-Ebene (aus allen Tabs sichtbar) — der abgeleitete
                      7-Schritt-Fortschritt (Bedarf→Preise, klickbar) + der Phasen-Stepper (Versand-Status).
                      Der Stepper wanderte hierher aus der Briefing-Karte (vorher ~:131). --}}
-                <div class="flex flex-col gap-2 pb-1 border-b border-black/5" data-fb-leitstelle>
+                <div class="flex flex-col gap-2 pt-3 pb-1 border-b border-black/5" data-fb-leitstelle>
                     @include('foodalchemist::livewire.foodbooks.partials.leitstelle-checkliste', ['checkliste' => $checkliste])
                     @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $fb->phase ?? 'kontext'])
                 </div>
@@ -768,54 +815,13 @@
                     </div>
                 </div>{{-- /Preise-Tab --}}
 
-                {{-- Menü-Vorschau (Kundensicht, ganzes Foodbook) = eigener Output-Tab (read-only, Foodbook-Kopf-Ebene).
-                     Früher ein einklappbarer Balken unter allen Tabs — jetzt eine eigene Fläche (ein Tab = eine Fläche). --}}
-                <div x-show="tab === 'vorschau'" x-cloak class="space-y-3" data-fb-panel="vorschau">
-            {{-- ═══ MENÜ-VORSCHAU (Kundensicht, read-only) ═══ --}}
-            <div class="relative overflow-hidden {{ $card }} p-6 space-y-5" data-fb-menue-vorschau>
-                <div class="{{ $cardAccent }}"></div>
-                <div class="flex items-baseline justify-between border-b border-black/5 pb-3">
-                    <div>
-                        <h2 class="text-lg font-semibold tracking-tight text-gray-900">{{ $fb->label }}</h2>
-                        @if($menue['customer'] ?? null)<p class="text-xs text-gray-500">{{ $menue['customer'] }}@if(($menue['kontakt'] ?? null) && $menue['kontakt'] !== $menue['customer']) · {{ $menue['kontakt'] }}@endif</p>@endif
-                    </div>
-                    @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)<span class="text-sm font-semibold text-emerald-600 tabular-nums">{{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
-                </div>
-                @forelse($menue['kapitel'] ?? [] as $k)
-                    <section style="margin-left: {{ $k['depth'] * 16 }}px">
-                        <div class="flex items-baseline gap-2 border-b border-black/5 pb-1 mb-2">
-                            <h3 class="text-sm font-semibold text-violet-700">{{ $k['title'] }}</h3>
-                            @if($k['vk_pro_person'] > 0)<span class="ml-auto text-[11px] text-gray-500 tabular-nums">{{ number_format((float) $k['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
-                        </div>
-                        @forelse($k['bloecke'] as $b)
-                            @php($istKonzept = in_array($b['type'], ['concept_ref', 'recipe_ref'], true))
-                            <div class="py-0.5">
-                                <p class="text-sm {{ $b['ist_header'] ? 'font-semibold text-gray-700 mt-2' : ($istKonzept ? 'font-semibold text-gray-900 mt-2' : 'text-gray-900') }}">{{ $b['label'] }}</p>
-                                @if($b['untertitel'] ?? null)<p class="text-[11px] text-gray-500 italic">{{ $b['untertitel'] }}</p>@endif
-                                @foreach($b['gerichte'] ?? [] as $g)
-                                    @if($g['type'] === 'paket' || $g['type'] === 'header')
-                                        <p class="text-xs font-semibold text-gray-600 ml-3 mt-1">{{ $g['text'] }}</p>
-                                    @else
-                                        @php($gfb = ($g['recipe_id'] ?? null) ? ($feedbackAgg[$g['recipe_id']] ?? null) : null)
-                                        <p class="text-xs text-gray-600 {{ $g['source'] === 'name' ? 'italic text-amber-600' : '' }}" style="margin-left:{{ 12 + $g['einrueckung'] * 12 }}px">{{ $g['text'] }}@if($g['source'] === 'name')<span class="ml-1 text-[10px]">· Wording fehlt</span>@endif@if($gfb && $gfb['count'] > 0)<span class="ml-1.5 text-[10px] {{ ($gfb['avg'] ?? 0) >= 4 ? 'text-emerald-600' : (($gfb['avg'] ?? 0) >= 3 ? 'text-amber-600' : 'text-red-500') }}" title="{{ $gfb['count'] }} Feedback-Einträge">★ {{ $gfb['avg'] !== null ? number_format((float) $gfb['avg'], 1, ',', '.') : '–' }}</span>@endif</p>
-                                    @endif
-                                @endforeach
-                            </div>
-                        @empty
-                            <p class="text-xs text-gray-500">—</p>
-                        @endforelse
-                    </section>
-                @empty
-                    <p class="text-xs text-gray-500 py-6 text-center">Noch keine Kapitel — links anlegen und Concepts einfügen.</p>
-                @endforelse
-                <p class="text-[11px] text-gray-500 pt-2 border-t border-black/5">Gericht-Namen aus der Wording-Kette: Foodbook-Override → Konzept-Wording → VK-Standard → interner Name. Amber = kein Wording gepflegt.</p>
-            </div>{{-- /Menü-Vorschau-Karte --}}
-                </div>{{-- /Vorschau-Tab --}}
-
-            </div>{{-- /fbcockpit --}}
-
-            {{-- ═══════════════ KAPITEL (den „einzelnen Strukturen" — nur die Speisen) ═══════════════ --}}
-            {{-- Steht jetzt UNTER dem Cockpit statt an seiner Stelle (s. Begründung oben). --}}
+                {{-- ═══ Tab: SPEISEN — der Kapitel/Block-Editor (Spec 29 / S6) ═══
+                     Früher stapelte er UNTER dem Cockpit (Doppel-Editor). Jetzt eigener Tab, der nur
+                     erscheint, wenn ein Kapitel gewählt ist (Label null ⇒ Tab entfällt, siehe :tabs).
+                     Koexistenz-Bugfix bleibt: die $kapitel-abhängigen Cockpit-Inhalte (Kreativ 3-Modus,
+                     Skizzen, Pairing) rendern weiter in IHREN Panels — hier wird nichts geklammert,
+                     das andere Panels betrifft. --}}
+                <div x-show="tab === 'speisen'" x-cloak class="pt-3 space-y-3" data-fb-panel="speisen">
             @if($kapitel)
                 {{-- Kapitel-Kopf --}}
                 <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="kaphdr-{{ $kapitel->id }}">
@@ -1102,8 +1108,13 @@
                         </x-slot:footer>
                     </x-foodalchemist::modal>
                 </div>
-            @endif{{-- /Kapitel-Editor — der „links ein Kapitel wählen"-Platzhalter ist entfallen:
-                       mit sichtbarem Cockpit wäre er eine leere Karte unter einer vollen Seite. --}}
+            @else
+                <div class="{{ $card }} p-8 text-center text-sm text-gray-500">Links im Kapitelbaum ein Kapitel wählen, um seine Speisen zu bearbeiten.</div>
+            @endif{{-- /Kapitel-Editor --}}
+                </div>{{-- /Speisen-Tab (Spec 29 / S6) --}}
+                </x-foodalchemist::editor-tabs>{{-- /editor-tabs — briefing · planung · speisen · kreativ · trend · branding · preise --}}
+            </div>{{-- /fbcockpit --}}
+            </x-foodalchemist::modal>{{-- /Editor-Modal (Spec 29) --}}
         @else
             <div class="{{ $card }} p-10 text-center text-sm text-gray-500">
                 Links ein Foodbook wählen oder „+ Neues Foodbook". Das Foodbook bündelt fertige <strong>Concepts</strong> zu einem <strong>person-unabhängigen Portfolio</strong> (Kapitel, €/Person) — Pax &amp; Gesamtpreis liegen im <strong>Angebot</strong>, Einzel-Gerichte im Concepter.

@@ -577,6 +577,9 @@ class Index extends Component
         if ($this->kiTextZiel === 'kapitel') {
             $this->kiTextZuruecksetzen('foodbook');   // die Kapitel-Fläche ist weg, ihr Vorschlag auch
         }
+        // Spec 29 / S6: der Speisen-Tab entfällt ohne Kapitel — zurück auf Briefing, damit nicht
+        // ein „aktiver", aber unsichtbarer Tab die Fläche leer lässt.
+        $this->dispatch('fb-goto', tab: 'briefing');
     }
 
     public function speichern(FoodbookService $svc): void
@@ -833,6 +836,9 @@ class Index extends Component
         $this->ladeKapitelForm($svc);
         $this->editBlockId = null;
         $this->markiert = [];
+        // Spec 29 / S6: Kapitelwahl springt in den Speisen-Tab (der jetzt erscheint) — via den
+        // bestehenden fb-goto-Bus (Window-Event, greift, sobald das Panel im DOM ist).
+        $this->dispatch('fb-goto', tab: 'speisen');
     }
 
     /**
