@@ -66,21 +66,8 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    <x-slot name="activity">
-        {{-- E5.3: Leitstelle-Rail als Nested-Livewire (kontextsensitiv Kopf ⇄ Kapitel).
-             Re-Mount bei Selektions-Wechsel über den wire:key (foodbook.id + kapitel|'kopf');
-             Ziel-Edits melden sich via `leitstelle-kapitel-geaendert` an diesen Eltern zurück. --}}
-        <x-foodalchemist::detail-sidebar title="Leitstelle" width="w-80" :maxWidth="520" scope="activity_foodbooks" side="right">
-            @if($fb)
-                <livewire:foodalchemist.foodbooks.leitstelle-rail
-                    :foodbook-id="$fb->id"
-                    :kapitel-id="$selectedKapitelId"
-                    :key="'leitstelle-'.$fb->id.'-'.($selectedKapitelId ?? 'kopf')" />
-            @else
-                <div class="p-6 text-center text-sm text-gray-500">Foodbook auswählen.</div>
-            @endif
-        </x-foodalchemist::detail-sidebar>
-    </x-slot>
+    {{-- Spec 29 / S8: Die Leitstelle-Rail lebt jetzt IM Editor-Modal (rechte Spalte), nicht mehr
+         im Seiten-activity-Slot — sie begleitet die Bearbeitung, statt hinter dem Vollbild-Modal zu liegen. --}}
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         @if($fb)
@@ -156,6 +143,35 @@
                  (fb-goto ← Checkliste, fb-cockpit-tab → Rail) wandert als headless-Kind IN den Baustein-Scope,
                  damit `tab` und `$root` (mit data-fb-tab/-anker) dieselbe Wurzel teilen. Vorschau-Tab ist
                  entfallen — die Live-Vorschau liegt jetzt auf der Listen-Ebene. --}}
+            {{-- Spec 29 / S8 (Option A): 3-Spalten-Cockpit IM Modal — links Navigation (Foodbook-Kopf +
+                 Kapitelbaum), Mitte Editor-Tabs, rechts Leitstelle-Rail. So bleibt Kapitel-/Kopf-Wechsel
+                 erreichbar, obwohl das Vollbild-Modal die Seiten-Sidebar verdeckt.
+                 `-mx-6` hebt das px-6 des Modal-Bodys auf (Spalten randbündig); die Mitte bekommt px-6
+                 zurück, damit die sticky editor-tabs-Leiste (-mx-6) wieder auf Spaltenbreite spannt. --}}
+            <div class="flex gap-4 -mx-6 items-start">
+                {{-- LINKS: Navigation (Foodbook-Kopf + Kapitelbaum, gespiegelt aus der Seiten-Sidebar) --}}
+                <div class="w-56 shrink-0 pl-6 space-y-1" data-fb-nav>
+                    <button type="button" wire:click="kopfAnzeigen"
+                            class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $selectedKapitelId === null ? $aktiv : $hover }}"
+                            data-fb-kopf-modal>@svg('heroicon-o-clipboard-document-list', 'w-3.5 h-3.5 inline-block align-middle') Foodbook-Kopf</button>
+                    <div class="flex items-center gap-1 pt-1">
+                        <input type="text" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu" placeholder="Neues Kapitel …" class="{{ $input }} py-0.5" />
+                        <button type="button" wire:click="kapitelNeu" class="{{ $btnGhostXs }}" title="Top-Kapitel">+</button>
+                    </div>
+                    @foreach($kapitelTree as $kt)
+                        <div wire:key="ktm-{{ $kt['id'] }}" class="group flex items-center gap-1" style="padding-left: {{ $kt['depth'] * 12 }}px">
+                            <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})"
+                                    class="flex-1 min-w-0 text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['title'] }}</button>
+                            <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-400 text-[10px]" title="hoch">▲</button>
+                            <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-400 text-[10px]" title="runter">▼</button>
+                            <button type="button" wire:click="kapitelNeu({{ $kt['id'] }})" class="shrink-0 text-violet-400 hover:text-violet-500 text-xs px-1 leading-none" title="Unterkapitel">＋</button>
+                            <button type="button" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 text-[11px]" title="löschen">✕</button>
+                        </div>
+                    @endforeach
+                </div>
+
+                {{-- MITTE: Editor-Tabs --}}
+                <div class="flex-1 min-w-0 px-6">
             <div wire:key="fbcockpit-{{ $fb->id }}" class="space-y-4">
                 <x-foodalchemist::editor-tabs marker="fb" wire-key="fb-tabs-{{ $fb->id }}"
                     :tabs="[
@@ -1114,6 +1130,17 @@
                 </div>{{-- /Speisen-Tab (Spec 29 / S6) --}}
                 </x-foodalchemist::editor-tabs>{{-- /editor-tabs — briefing · planung · speisen · kreativ · trend · branding · preise --}}
             </div>{{-- /fbcockpit --}}
+                </div>{{-- /Mitte --}}
+
+                {{-- RECHTS: Leitstelle-Rail — aus dem Seiten-activity-Slot hierher (Spec 29 / S8).
+                     Re-Mount bei Selektionswechsel via key; meldet Ziel-Edits per Event an Index zurück. --}}
+                <div class="w-72 shrink-0 pr-6" data-fb-rail>
+                    <livewire:foodalchemist.foodbooks.leitstelle-rail
+                        :foodbook-id="$fb->id"
+                        :kapitel-id="$selectedKapitelId"
+                        :key="'leitstelle-'.$fb->id.'-'.($selectedKapitelId ?? 'kopf')" />
+                </div>
+            </div>{{-- /3-Spalten-Cockpit (Spec 29 / S8) --}}
             </x-foodalchemist::modal>{{-- /Editor-Modal (Spec 29) --}}
         @else
             <div class="{{ $card }} p-10 text-center text-sm text-gray-500">
