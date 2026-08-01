@@ -20,44 +20,60 @@
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Dokumente" width="w-80">
             <div class="p-3 space-y-3" data-wissen-liste>
-                <input type="text" wire:model.live.debounce.300ms="search" placeholder="{{ $semantic ? 'Semantisch suchen (Bedeutung · Synonyme)…' : 'Suche (Titel · Slug · Inhalt)…' }}" class="{{ $input }} !py-1 w-full" data-wissen-suche />
-                <label class="flex items-center gap-1.5 text-[11px] text-gray-600 cursor-pointer" title="Semantische Suche: findet auch bedeutungsähnliche Docs (z.B. «Erdapfel» → Kartoffel). Braucht einen indizierten Korpus.">
-                <input type="checkbox" wire:model.live="semantic" data-wissen-semantik /> semantisch suchen
-                </label>
-                @if($semanticNote !== null)
-                <p class="text-[11px] text-amber-600" data-wissen-semantik-hinweis>{{ $semanticNote }}</p>
-                @endif
-                <div class="flex gap-2">
-                <select wire:model.live="filterCategory" class="{{ $input }} !py-1 flex-1 text-xs">
-                <option value="">Alle Kategorien</option>
-                @foreach($kategorien as $kat)
-                <option value="{{ $kat->slug }}">{{ $kat->label }}</option>
-                @endforeach
-                </select>
-                <select wire:model.live="filterStatus" class="{{ $input }} !py-1 w-28 text-xs">
-                <option value="all">Alle</option>
-                <option value="active">Aktiv</option>
-                <option value="inactive">Inaktiv</option>
-                </select>
-                </div>
-                <p class="text-[11px] text-gray-500">{{ $docs->count() }} Dokument(e)@if($semanticAktiv) · nach Relevanz @endif</p>
+                {{-- Suche: der Platzhalter sagt, WAS gesucht wird — das schaltet mit dem
+                     semantischen Schalter mit. --}}
+                <input type="text" wire:model.live.debounce.300ms="search" data-wissen-suche
+                       placeholder="{{ $semantic ? 'Semantisch suchen (Bedeutung · Synonyme) …' : 'Suche (Titel · Slug · Inhalt) …' }}"
+                       class="{{ $input }}" />
 
-                <div class="space-y-0.5 max-h-[62vh] overflow-y-auto -mx-1 px-1">
-                @forelse($docs as $doc)
-                <button type="button" wire:click="select({{ $doc->id }})" wire:key="doc-{{ $doc->id }}"
-                class="w-full text-left px-2.5 py-1.5 rounded-lg transition-colors {{ $selected && $selected->id === $doc->id
-                ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
-                : 'hover:bg-black/[0.03]' }} {{ $doc->active ? '' : 'opacity-50' }}">
-                <span class="block text-xs font-medium text-gray-900 truncate">{{ $doc->title }}</span>
-                <span class="flex items-center gap-1.5 mt-0.5">
-                <span class="text-[10px] {{ $pill }}">{{ $doc->category }}</span>
-                <span class="text-[10px] text-gray-500">{{ $doc->char_count }} Z.</span>
-                @unless($doc->active)<span class="text-[10px] text-amber-500">inaktiv</span>@endunless
-                </span>
-                </button>
-                @empty
-                <p class="text-xs text-gray-500 px-2 py-4">Keine Treffer.</p>
-                @endforelse
+                <label class="flex items-center gap-1.5 text-[11px] text-gray-600 cursor-pointer"
+                       title="Findet auch bedeutungsähnliche Dokumente ohne wörtliche Übereinstimmung">
+                    <input type="checkbox" wire:model.live="semantic" data-wissen-semantik /> semantisch suchen
+                </label>
+
+                @if($semanticNote !== null)
+                    <p class="text-[11px] text-amber-600" data-wissen-semantik-hinweis>{{ $semanticNote }}</p>
+                @endif
+
+                {{-- Zwei Auswahlfelder nebeneinander gehen im 320px-Panel nicht auf: `$input` bringt
+                     `w-full` mit und schlägt eine daneben gesetzte Breite — die Kategorie schrumpfte
+                     dadurch auf 24px, also auf den blossen Pfeil. Deshalb untereinander. --}}
+                <div class="space-y-2">
+                    <select wire:model.live="filterCategory" class="{{ $input }} !py-1 text-xs" data-wissen-filter-kategorie>
+                        <option value="">Alle Kategorien</option>
+                        @foreach($kategorien as $kat)
+                            <option value="{{ $kat->slug }}">{{ $kat->label }}</option>
+                        @endforeach
+                    </select>
+                    <select wire:model.live="filterStatus" class="{{ $input }} !py-1 text-xs" data-wissen-filter-status>
+                        <option value="all">Alle Status</option>
+                        <option value="active">Nur aktive</option>
+                        <option value="inactive">Nur inaktive</option>
+                    </select>
+                </div>
+
+                <p class="text-[11px] text-gray-500" data-wissen-anzahl>
+                    {{ $docs->count() }} Dokument(e)@if($semanticAktiv) · nach Relevanz @endif
+                </p>
+
+                <div class="space-y-0.5 max-h-[58vh] overflow-y-auto -mx-1 px-1">
+                    @forelse($docs as $doc)
+                        {{-- Auswahl wie in den Filter-Bäumen: Balken + Füllung, inaktive gedämpft --}}
+                        <button type="button" wire:click="select({{ $doc->id }})" wire:key="doc-{{ $doc->id }}"
+                                class="w-full text-left px-2.5 py-1.5 rounded-lg border-l-2 transition-colors {{ $selected && $selected->id === $doc->id
+                                    ? 'border-violet-500 bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
+                                    : 'border-transparent hover:bg-black/[0.03]' }} {{ $doc->active ? '' : 'opacity-50' }}"
+                                data-wissen-doc="{{ $doc->id }}">
+                            <span class="block text-xs font-medium text-gray-900 break-words">{{ $doc->title }}</span>
+                            <span class="flex items-center gap-1.5 mt-0.5">
+                                <span class="text-[10px] {{ $pill }} {{ $variantPill['secondary'] }}">{{ $doc->category }}</span>
+                                <span class="text-[10px] text-gray-500 tabular-nums">{{ number_format($doc->char_count, 0, ',', '.') }} Z.</span>
+                                @unless($doc->active)<span class="text-[10px] text-amber-600">inaktiv</span>@endunless
+                            </span>
+                        </button>
+                    @empty
+                        <p class="text-xs text-gray-500 px-2 py-4">Keine Treffer.</p>
+                    @endforelse
                 </div>
             </div>
         </x-ui-page-sidebar>
