@@ -111,7 +111,7 @@
             @php($fbVkPp = (float) ($menue['gesamt']['vk_pro_person'] ?? 0))
             @php($fbErledigt = collect($checkliste)->where('status', 'erledigt')->count())
             @php($fbSchritte = count($checkliste))
-            <x-foodalchemist::modal name="foodbook-editor" fullscreen title="Foodbook bearbeiten" :title-name="$fb->label">
+            <x-foodalchemist::modal name="foodbook-editor" fullscreen dark-canvas title="Foodbook bearbeiten" :title-name="$fb->label">
                 <x-slot:actions>
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-fb-speichern>Speichern</button>
                     <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhostXs }} text-red-600" data-fb-loeschen>Löschen</button>
@@ -991,7 +991,7 @@
                     {{-- FB: Concept-Einfüge-Picker (Modal, Livewire-sicher). Angebot bleibt unberührt (hat eigenen Concepter-Editor).
                          Concepter-Such-Wissen: Suche + collapsible Kategorie-Tree + Concept-Liste; bleibt offen für Mehrfach-Einfügen.
                          Modal statt x-teleport-Drawer: Teleport entkoppelt das DOM vom Livewire-Morph → wire:model/click toter. --}}
-                    <x-foodalchemist::modal name="fb-concept" title="Concept einfügen" size="max-w-3xl">
+                    <x-foodalchemist::modal name="fb-concept" title="Concept einfügen" size="max-w-3xl" dark-canvas>
                         <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-3" />
                         @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
                         <div class="flex gap-3 min-h-[20rem]">
@@ -1065,7 +1065,7 @@
 
                     {{-- E1.3: FB-Einzel-Gericht-Picker (recipe_ref). Spiegelt fb-concept, aber ohne Kategorie-Tree:
                          `gerichtKandidaten` filtert per Freitext auf echte VK-Gerichte (verkauf(), keine Slot-Varianten). --}}
-                    <x-foodalchemist::modal name="fb-gericht" title="Gericht einfügen" size="max-w-3xl">
+                    <x-foodalchemist::modal name="fb-gericht" title="Gericht einfügen" size="max-w-3xl" dark-canvas>
                         <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht (VK-Rezept) suchen …" class="{{ $input }} w-full mb-3" />
                         <div class="flex gap-3 min-h-[20rem]">
                             {{-- UX 2026-07-24: Klassen-Filter mit Untergruppen — Hauptgruppe (Modell A) + Drill-down
