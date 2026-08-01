@@ -2,10 +2,6 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <div class="space-y-5" data-settings-einsatzorte>
-    <div>
-        <h3 class="font-medium tracking-tight text-gray-900">Einsatzorte</h3>
-        <p class="text-[11px] text-gray-500 mt-0.5">Bindungs-Ziele fürs Wissen. <b>Bereiche</b> (grob) = ganze KI-Sektion · <b>Prompts</b> (fein) = einzelner KI-Aufruf. Aus der Prompt-Registry abgeleitet (kein Anlegen); Label/Beschreibung + aktiv pflegbar. Gebundenes Wissen wird bei einem Prompt geladen, wenn es an ihn <em>oder</em> seinen Bereich gebunden ist.</p>
-    </div>
 
     @foreach([['Bereiche (grob)', $bereiche], ['KI-Prompts (fein)', $prompts]] as [$titel, $liste])
         <div>

@@ -29,7 +29,7 @@
                             <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
                             <button type="button" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" @disabled($hg->kategorie_count > 0)
                                     class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $hg->kategorie_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-500' }}"
-                                    title="{{ $hg->kategorie_count > 0 ? 'Hat Kategorien — erst dort entfernen' : 'löschen' }}">✕</button>
+                                    title="{{ $hg->kategorie_count > 0 ? 'Hat Kategorien — erst dort entfernen' : 'löschen' }}">@svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle')</button>
                         @endif
                     @endif
                 </div>

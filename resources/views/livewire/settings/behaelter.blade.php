@@ -2,10 +2,6 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <div class="space-y-6" data-settings-behaelter>
-    <div>
-        <h3 class="font-medium tracking-tight text-gray-900">Behälter & Geräte</h3>
-        <p class="text-[11px] text-gray-500 mt-0.5">Behälter, Regenerations-Geräte und Servier-Vehikel (Gerichte) plus Koch-Equipment (Basisrezepte). ✕ deaktivieren · @svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle') löschen (nur wenn von keinem Rezept genutzt).</p>
-    </div>
     @if($fehler !== null)<p class="text-xs text-rose-600" data-behaelter-fehler>{{ $fehler }}</p>@endif
     @if($meldung !== null)<p class="text-xs text-emerald-600" data-behaelter-meldung>{{ $meldung }}</p>@endif
 
@@ -26,7 +22,11 @@
                                 {{ $zeile->name }}
                                 <button type="button" wire:click="toggleInactive('{{ $key }}', {{ $zeile->id }})"
                                         class="hidden group-hover:inline ml-0.5 {{ $zeile->is_inactive ? 'text-emerald-500' : 'text-rose-400' }}"
-                                        title="{{ $zeile->is_inactive ? 'aktivieren' : 'deaktivieren' }}">{{ $zeile->is_inactive ? '↻' : '✕' }}</button>
+                                        title="{{ $zeile->is_inactive ? 'aktivieren' : 'deaktivieren' }}">@if($zeile->is_inactive)
+                                            @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 inline-block align-middle')
+                                        @else
+                                            @svg('heroicon-o-eye-slash', 'w-3.5 h-3.5 inline-block align-middle')
+                                        @endif</button>
                                 <button type="button" wire:click="delete('{{ $key }}', {{ $zeile->id }})" wire:confirm="Diesen Eintrag löschen?"
                                         class="hidden group-hover:inline ml-0.5 text-rose-500" title="löschen (nur wenn ungenutzt)">@svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle')</button>
                             </span>

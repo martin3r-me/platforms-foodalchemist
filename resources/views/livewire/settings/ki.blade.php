@@ -3,14 +3,12 @@
 
 <div class="space-y-5" data-settings-ki>
     <div class="flex items-start justify-between gap-4">
-        <div>
-            <h3 class="font-medium tracking-tight text-gray-900">KI</h3>
-            <p class="text-[11px] text-gray-500 mt-0.5">Provider: <span class="font-mono">{{ $provider }}</span>{{ $fallbackModel ? " · Fallback-Modell: {$fallbackModel}" : '' }} — Modell-Strings sind Deployment-Config (06_KI).</p>
-        </div>
         <button type="button" wire:click="umschalten"
                 class="{{ $kiAktiv ? $btnGhost : $btnPrimary }} shrink-0 {{ $kiAktiv ? 'text-rose-600' : '' }}"
                 data-ki-kill-switch>
-            {{ $kiAktiv ? '⏻ KI deaktivieren (Kill-Switch)' : '⏻ KI wieder aktivieren' }}
+            {{-- Icon steht VOR dem Ausdruck: eine Icon-Direktive in einer Echo-Klammer kompiliert nicht. --}}
+            @svg('heroicon-o-power', 'w-4 h-4')
+            {{ $kiAktiv ? 'KI deaktivieren (Kill-Switch)' : 'KI wieder aktivieren' }}
         </button>
     </div>
 
@@ -18,9 +16,9 @@
         <p class="text-xs {{ $kiAktiv ? 'text-emerald-600' : 'text-rose-600' }}" data-ki-meldung>{{ $meldung }}</p>
     @endif
     @if(! $kiAktiv)
-        <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-700" data-ki-aus-banner>
+        <x-foodalchemist::alert tone="danger" data-ki-aus-banner>
             Kill-Switch aktiv — jeder KI-Call dieses Teams wird im Gateway gestoppt (@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle')-Buttons laufen ins Leere und melden es).
-        </div>
+        </x-foodalchemist::alert>
     @endif
 
     <div>

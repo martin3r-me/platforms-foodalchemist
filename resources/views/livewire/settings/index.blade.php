@@ -1,4 +1,7 @@
-{{-- M1-01: Settings-Gerüst — vertikale Sektions-Tabs (links), Sektion = eigene URL (V-17) --}}
+{{-- M1-01: Settings-Gerüst — Sektion = eigene URL (V-17).
+     Spec 28 / E16: die Sektions-Navigation lag als w-72-Karte IM Inhaltsbereich und nahm der
+     Sektion 288px weg. Sie gehört in die Plattform-Sidebar, wie in allen anderen Schirmen.
+     Der Sektions-Kopf (Titel + Zweck) steht jetzt EINMAL hier statt in jeder der 17 Sektionen. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <x-ui-page>
@@ -10,38 +13,48 @@
         <x-ui-page-actionbar :breadcrumbs="[
             ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
             ['label' => 'Einstellungen'],
+            ['label' => $sektionen[$sektion]['label'] ?? ''],
         ]" />
     </x-slot>
 
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-5">
-
-        @if($istKindTeam)
-            <div class="{{ $card }} p-4 border-amber-500/20">
-                <p class="text-xs text-amber-600">
-                    Du siehst den geerbten Katalog deines Eltern-Teams — editierbar ist nur, was deinem Team gehört (D1).
-                    Einkaufs- und Kalkulations-Einstellungen entscheidet dein Team selbst.
-                </p>
-            </div>
-        @endif
-
-        <div class="flex gap-4 items-start">
-            {{-- vertikale Sektions-Navigation --}}
-            <nav class="w-72 shrink-0 {{ $card }} p-3 space-y-1" data-settings-nav>
+    {{-- LINKS: Sektions-Navigation --}}
+    <x-slot name="sidebar">
+        <x-ui-page-sidebar title="Bereiche" width="w-72">
+            <nav class="p-3 space-y-0.5" data-settings-nav>
                 @foreach($sektionen as $key => $meta)
+                    {{-- Auswahl wie in den Filter-Bäumen: Balken + Füllung. Der transparente Balken
+                         auf den ruhenden Einträgen hält die Breite, damit beim Wechsel nichts springt. --}}
                     <a href="{{ route('foodalchemist.einstellungen', ['sektion' => $key]) }}" wire:navigate.hover
-                       class="block px-3 py-2 rounded-lg transition-all duration-150 {{ $sektion === $key
-                            ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
-                            : 'text-gray-600 hover:bg-black/[0.03]' }}">
+                       class="block px-3 py-2 rounded-lg border-l-2 transition-all duration-150 {{ $sektion === $key
+                            ? 'border-violet-500 bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
+                            : 'border-transparent text-gray-700 hover:bg-black/[0.03]' }}"
+                       data-settings-link="{{ $key }}">
                         <span class="block text-xs font-medium">{{ $meta['label'] }}</span>
-                        <span class="block text-[11px] text-gray-500 mt-0.5">{{ $meta['hint'] }}</span>
+                        <span class="block text-[11px] text-gray-500 mt-0.5 leading-snug">{{ $meta['hint'] }}</span>
                     </a>
                 @endforeach
             </nav>
+        </x-ui-page-sidebar>
+    </x-slot>
 
-            {{-- aktive Sektion (eigene Livewire-Komponente, isolierter State) --}}
-            <div class="flex-1 min-w-0" data-settings-sektion="{{ $sektion }}">
-                @livewire('foodalchemist.settings.' . $sektion, key('sektion-' . $sektion))
-            </div>
+    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
+
+        @if($istKindTeam)
+            <x-foodalchemist::alert tone="warning" data-settings-erbe>
+                Du siehst den geerbten Katalog deines Eltern-Teams — editierbar ist nur, was deinem Team gehört (D1).
+                Einkaufs- und Kalkulations-Einstellungen entscheidet dein Team selbst.
+            </x-foodalchemist::alert>
+        @endif
+
+        {{-- Sektions-Kopf: EINMAL hier, aus derselben Quelle wie die Navigation --}}
+        <div data-settings-kopf>
+            <h2 class="text-base font-semibold tracking-tight text-gray-900">{{ $sektionen[$sektion]['label'] ?? '' }}</h2>
+            <p class="text-[11px] text-gray-500 mt-0.5">{{ $sektionen[$sektion]['hint'] ?? '' }}</p>
+        </div>
+
+        {{-- aktive Sektion (eigene Livewire-Komponente, isolierter State) --}}
+        <div class="min-w-0" data-settings-sektion="{{ $sektion }}">
+            @livewire('foodalchemist.settings.' . $sektion, key('sektion-' . $sektion))
         </div>
 
     </x-ui-page-container>

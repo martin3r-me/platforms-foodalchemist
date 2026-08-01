@@ -2,10 +2,6 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <div class="space-y-5" data-settings-aufschlagsklassen>
-    <div>
-        <h3 class="font-medium tracking-tight text-gray-900">Aufschlagsklassen</h3>
-        <p class="text-[11px] text-gray-500 mt-0.5">Rohaufschlag · Bedienung · Profit · MwSt fließen direkt in die Marge-Rechnung (GT-8). Formel «deckungsbeitrag» bleibt W-1-locked, bis die Formel entschieden ist.</p>
-    </div>
     @if($fehler !== null)<p class="text-xs text-rose-600" data-ak-fehler>{{ $fehler }}</p>@endif
 
     <table class="{{ $table }}" data-ak-tabelle>

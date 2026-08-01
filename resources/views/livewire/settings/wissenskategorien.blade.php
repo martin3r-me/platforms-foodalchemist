@@ -2,10 +2,6 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <div class="space-y-5" data-settings-wissenskategorien>
-    <div>
-        <h3 class="font-medium tracking-tight text-gray-900">Wissens-Kategorien</h3>
-        <p class="text-[11px] text-gray-500 mt-0.5">Klassifiziert Wissens-Dokumente (such-/filterbar) und trägt die grobe Routing-Ebene (Feature × Kategorie). Löschen nur, wenn keine Dokumente die Kategorie nutzen — sonst deaktivieren.</p>
-    </div>
     @if($fehler !== null)<p class="text-xs text-rose-600" data-kat-fehler>{{ $fehler }}</p>@endif
 
     <table class="{{ $table }}" data-kat-tabelle>

@@ -2,10 +2,6 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <div class="space-y-4" data-settings-kueche>
-    <div>
-        <h3 class="font-medium tracking-tight text-gray-900">Küchen-Profil</h3>
-        <p class="text-[11px] text-gray-500 mt-0.5">Mandanten-Profil als Soft-Default für den Rezept-Generator (Chargengrößen-, Convenience-, Technik-Tendenz). Explizite Richtungs-Parameter im Generator haben immer Vorrang.</p>
-    </div>
 
     @if($meldung !== null)
         <p class="text-xs text-emerald-600" data-kueche-meldung>{{ $meldung }}</p>

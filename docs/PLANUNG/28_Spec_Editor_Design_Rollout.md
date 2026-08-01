@@ -276,6 +276,37 @@ Concepter-Aufbau, echte KI-Läufe (brauchen Provider).
 
 ---
 
+## 5c · E16 — Einstellungs-Modul (2026-08-01)
+
+Der Einstellungs-Schirm war der letzte Bildschirm mit eigener Bauart. Zwei Fehler steckten drin:
+
+1. **Die Sektions-Navigation lag als `w-72`-Karte IM Inhaltsbereich.** Sie nahm der Sektion 288 px
+   weg — bei 17 Sektionen mit Tabellen (Fixkosten, Warengruppen, Einheiten) ist das die Hälfte der
+   nutzbaren Breite. Jetzt steht sie in `<x-ui-page-sidebar>`, wie in jedem anderen Schirm.
+   Gemessen: Sektionsbreite **660 → 944 px**.
+2. **Der Sektions-Kopf stand doppelt** — einmal im Rahmen, einmal in der Sektion selbst. Er kommt
+   jetzt EINMAL aus `SEKTIONEN[$sektion]['label'|'hint']`, also aus derselben Quelle wie die
+   Navigation; Beschriftung in Liste und Überschrift können nicht mehr auseinanderlaufen.
+
+Auswahl-Zustand der Navigation folgt dem Kontrast-Modell aus E13 (Balken + Füllung), der
+Erb-Hinweis läuft über `x-foodalchemist::alert` statt über eine handgebaute Tönung.
+
+**Emoji-Rest aufgeräumt (12 Stellen).** Der Sweep aus E4 war auf Editoren gescopet, die
+Einstellungen blieben liegen: `✕` als Lösch-Knopf (7×), `×` am Lieferanten-Chip, `↑` in der
+Prioritätskette, `⚡` am Automatik-Knopf, `↻`/`✕` am Aktiv-Umschalter (2×). Alle auf Heroicons.
+Rechenzeichen im Fließtext (`× ÷ →`) sind Typografie und bleiben.
+
+**Falle, die dabei wieder zuschlug:** der Aktiv-Umschalter stand als Ternär *in* einer
+Echo-Klammer (`{{ $x ? '↻' : '✕' }}`). Eine Icon-Direktive darf da nicht hinein, und
+`@else` + Direktive ohne Zeilenumbruch dazwischen kompiliert stumm nicht — beides umgangen.
+
+**Abnahme:** 16/16 aktive Sektionen rendern (200, keine leer, alle 944 px), keine JS-Fehler, kein
+Emoji mehr im Sektionsinhalt. `konzept-taxonomie` 404et korrekt — die Sektion ist aus der
+Navigation genommen, das Blade schläft nur noch. `EinstellungenSchirmTest` (4 Tests), darunter ein
+statischer Wächter gegen neue Emoji-Marker in Bedienelementen.
+
+---
+
 ## 4 · Reihenfolge & Aufwand
 
 | Etappe | Aufwand | Abhängigkeit |
@@ -560,3 +591,9 @@ an Martin. Das FA-Modul selbst ist im sichtbaren UI emoji-frei; 12 Modul-Seiten 
   `EditorBausteineTest` auf 6 Tests / 63 Assertions. Suite **1860/1862** — der eine Fehler ist
   der vorbestehende Einkauf-Tenancy-Gap (§6.3), plus 1 skipped.
   **Damit sind E0–E4 durch; offen bleibt allein E5 (Browser-Abnahme).**
+- 2026-08-01 — **E16 Einstellungs-Modul.** Sektions-Navigation aus dem Inhaltsbereich in die
+  Plattform-Sidebar (Sektionsbreite 660 → 944 px), Sektions-Kopf einmalig aus derselben Quelle wie
+  die Navigation, Erb-Hinweis auf `alert`, 12 Emoji-Marker auf Heroicons. Vier Überschriften waren
+  beim Dedup-Lauf zu Unrecht mitgegangen (Unterblöcke, keine Duplikate) — zurückgeholt.
+  `EinstellungenSchirmTest` (4 Tests). Suite **1898/1900** (1 skipped); der eine Fehler bleibt der
+  Einkauf-Tenancy-Gap aus §6.3.

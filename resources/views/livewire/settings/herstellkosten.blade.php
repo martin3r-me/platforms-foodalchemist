@@ -18,7 +18,7 @@
                 <h3 class="font-medium tracking-tight text-gray-900">Mehrstufige Zuschlagskalkulation</h3>
                 <p class="text-[11px] text-gray-500 mt-0.5"><strong>MEK + MGK + FEK + FGK = HK → +Verwaltung/Logistik = Selbstkosten (HK2) → × Marge = VK-Vorschlag.</strong> Gemeinkosten stehen auf <em>automatisch</em> — du trägst unten deine Fixkosten in € ein, der Zuschlag-% rechnet sich selbst (Σ Fixkosten ÷ Bezugsbasis). <em>manuell (%)</em> nur als Ausnahme.</p>
             </div>
-            <button type="button" wire:click="alleAutomatisch" class="{{ $btnGhostXs }} text-violet-600 shrink-0" title="Setzt alle Gemeinkosten-Blöcke auf automatische Ableitung aus den Fixkosten.">⚡ Alle Gemeinkosten automatisch</button>
+            <button type="button" wire:click="alleAutomatisch" class="{{ $btnGhostXs }} text-violet-600 shrink-0" title="Setzt alle Gemeinkosten-Blöcke auf automatische Ableitung aus den Fixkosten.">@svg('heroicon-o-bolt', 'w-3.5 h-3.5 inline-block align-middle') Alle Gemeinkosten automatisch</button>
         </div>
 
         <table class="{{ $table }}">
@@ -68,7 +68,7 @@
                             @endif
                         </td>
                         <td class="{{ $td }} text-right">
-                            <button type="button" wire:click="blockEntfernen({{ $i }})" wire:confirm="Kostenblock entfernen?" class="text-gray-500 hover:text-red-500" title="Block entfernen">✕</button>
+                            <button type="button" wire:click="blockEntfernen({{ $i }})" wire:confirm="Kostenblock entfernen?" class="text-gray-500 hover:text-red-500" title="Block entfernen">@svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle')</button>
                         </td>
                     </tr>
                 @endforeach
@@ -149,7 +149,7 @@
                                 <span class="text-[10px] text-gray-500">= {{ number_format((float) ($f['monatsbetrag'] ?? 0), 2, ',', '.') }} €/Mt</span>
                             @endif
                         </td>
-                        <td class="{{ $td }} text-right"><button type="button" wire:click="fixLoeschen({{ $f['id'] }})" wire:confirm="Fixkosten-Zeile löschen?" class="text-gray-500 hover:text-red-500">✕</button></td>
+                        <td class="{{ $td }} text-right"><button type="button" wire:click="fixLoeschen({{ $f['id'] }})" wire:confirm="Fixkosten-Zeile löschen?" class="text-gray-500 hover:text-red-500">@svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle')</button></td>
                     </tr>
                 @empty
                     <tr><td colspan="5" class="px-3 py-4 text-center text-[11px] text-gray-500">Noch keine Fixkosten erfasst.</td></tr>

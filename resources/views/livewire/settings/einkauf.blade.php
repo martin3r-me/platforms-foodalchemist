@@ -31,8 +31,8 @@
                     <div class="flex items-center gap-2" wire:key="prio-{{ $supplierId }}">
                         <span class="text-[11px] text-gray-500 w-5">{{ $i + 1 }}.</span>
                         <span class="text-xs text-gray-700 flex-1">{{ $lieferantenNamen[$supplierId] ?? "Lieferant #{$supplierId}" }}</span>
-                        <button type="button" wire:click="prioHoch({{ $i }})" class="{{ $btnGhostXs }}" @if($i === 0) disabled @endif>↑</button>
-                        <button type="button" wire:click="prioEntfernen({{ $i }})" class="{{ $btnGhostXs }} text-red-500">×</button>
+                        <button type="button" wire:click="prioHoch({{ $i }})" class="{{ $btnGhostXs }}" @if($i === 0) disabled @endif>@svg('heroicon-o-chevron-up', 'w-3.5 h-3.5 inline-block align-middle')</button>
+                        <button type="button" wire:click="prioEntfernen({{ $i }})" class="{{ $btnGhostXs }} text-red-500">@svg('heroicon-o-x-mark', 'w-3.5 h-3.5 inline-block align-middle')</button>
                     </div>
                 @empty
                     <p class="text-[11px] text-gray-500">Noch keine Lieferanten in der Kette.</p>
@@ -92,7 +92,7 @@
                             {{ $eintrag->supplier?->name ?? ('#' . $eintrag->supplier_id) }}
                             @if($eigen)
                                 <button type="button" wire:click="stammEntfernen({{ $eintrag->supplier_id }}, '{{ $code }}')"
-                                        class="w-4 h-4 inline-flex items-center justify-center rounded-full text-violet-400 hover:text-red-500 hover:bg-red-500/10 transition-colors duration-150">×</button>
+                                        class="w-4 h-4 inline-flex items-center justify-center rounded-full text-violet-400 hover:text-red-500 hover:bg-red-500/10 transition-colors duration-150">@svg('heroicon-o-x-mark', 'w-3 h-3')</button>
                             @endif
                         </span>
                     @endforeach
