@@ -119,7 +119,11 @@
                         <tr>
                             <td class="pname">
                                 {{ $pos['name'] }}@if(!empty($pos['codes']))<span class="codes">{{ implode(',', $pos['codes']) }}</span>@endif
+                                @if(!empty($pos['wein']))<span class="sub">{{ implode(' · ', array_map('ucfirst', array_values($pos['wein']))) }}</span>@endif
                                 @if($pos['consumer_text'])<span class="sub">{{ $pos['consumer_text'] }}</span>@endif
+                                @foreach(($pos['gaenge'] ?? []) as $gang)
+                                    <span class="sub" style="padding-left: {{ ($gang['einrueckung'] ?? 0) * 8 }}px">{{ $gang['type'] === 'header' ? '— ' . $gang['text'] . ' —' : $gang['text'] }}</span>
+                                @endforeach
                             </td>
                             <td class="pprice">
                                 @php($wert = $brutto ? $pos['vk_brutto'] : $pos['vk_netto'])

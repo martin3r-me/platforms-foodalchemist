@@ -69,11 +69,20 @@
                             @endforeach
                         </select>
                     </div>
+                    <div>
+                        <div class="{{ $label }} mb-1">Gültig ab</div>
+                        <input type="date" wire:model="gueltigVon" class="{{ $input }}" />
+                    </div>
+                    <div>
+                        <div class="{{ $label }} mb-1">Gültig bis</div>
+                        <input type="date" wire:model="gueltigBis" class="{{ $input }}" />
+                    </div>
                 </div>
                 <div class="mt-3 flex flex-wrap gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-sk-speichern>Speichern</button>
                     <a href="{{ route('foodalchemist.speisekarte.dokument', $karte->id) }}" target="_blank" class="{{ $btnGhost }}">Dokument</a>
                     <a href="{{ route('foodalchemist.speisekarte.praesentation', $karte->id) }}" target="_blank" class="{{ $btnGhost }}">Präsentation</a>
+                    <button type="button" wire:click="duplizieren" class="{{ $btnGhost }}">Duplizieren</button>
                     <span class="flex-1"></span>
                     <button type="button" wire:click="loeschen" wire:confirm="Diese Speisekarte wirklich löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
                 </div>

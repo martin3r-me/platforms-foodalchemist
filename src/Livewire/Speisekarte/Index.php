@@ -30,13 +30,23 @@ class Index extends Component
     public string $name = '';
     public string $kartenTyp = 'alacarte';
     public string $status = 'entwurf';
+    public ?string $gueltigVon = null;
+    public ?string $gueltigBis = null;
 
     // Rubrik-Anlage
     public string $neueRubrik = '';
 
-    // Gericht-Picker
+    // Gericht-/Menü-Picker
     public string $pickerSuche = '';
     public ?int $pickerRubrikId = null;
+    public string $pickerModus = 'gericht'; // gericht | menue
+
+    // Positions-Bearbeitung (inline)
+    public ?int $editPosId = null;
+    public ?string $editWording = null;
+    public ?string $editConsumerText = null;
+    public string $editPriceMode = 'auto';
+    public ?string $editPriceValue = null;
 
     // Branding (Stufe C)
     public string $brandColor = '#6d28d9';
@@ -68,6 +78,9 @@ class Index extends Component
         $this->name = $karte->name;
         $this->kartenTyp = $karte->karten_typ;
         $this->status = $karte->status;
+        $this->gueltigVon = $karte->gueltig_von?->format('Y-m-d');
+        $this->gueltigBis = $karte->gueltig_bis?->format('Y-m-d');
+        $this->editPosId = null;
         $this->brandColor = $karte->brand_color ?: '#6d28d9';
         $this->bandColor = $karte->band_color;
         $this->footerText = $karte->footer_text;
@@ -93,8 +106,19 @@ class Index extends Component
             'name' => $this->name,
             'karten_typ' => $this->kartenTyp,
             'status' => $this->status,
+            'gueltig_von' => $this->gueltigVon ?: null,
+            'gueltig_bis' => $this->gueltigBis ?: null,
         ]);
         $this->dispatch('gespeichert');
+    }
+
+    public function duplizieren(SpeisekarteService $svc): void
+    {
+        if (! $this->karteId) {
+            return;
+        }
+        $neu = $svc->dupliziere($this->team(), $this->karteId);
+        $this->waehle($neu->id);
     }
 
     public function loeschen(SpeisekarteService $svc): void
@@ -175,10 +199,15 @@ class Index extends Component
         $svc->deleteRubrik($this->team(), $rubrikId);
     }
 
-    /** Gericht-Picker für eine Rubrik öffnen/schließen. */
-    public function pickerOeffnen(int $rubrikId): void
+    /** Gericht-/Menü-Picker für eine Rubrik öffnen/schließen. */
+    public function pickerOeffnen(int $rubrikId, string $modus = 'gericht'): void
     {
-        $this->pickerRubrikId = $this->pickerRubrikId === $rubrikId ? null : $rubrikId;
+        if ($this->pickerRubrikId === $rubrikId && $this->pickerModus === $modus) {
+            $this->pickerRubrikId = null;
+        } else {
+            $this->pickerRubrikId = $rubrikId;
+            $this->pickerModus = in_array($modus, ['gericht', 'menue'], true) ? $modus : 'gericht';
+        }
         $this->pickerSuche = '';
     }
 
@@ -190,9 +219,54 @@ class Index extends Component
         $this->pickerSuche = '';
     }
 
+    public function positionAusMenue(SpeisekarteService $svc, int $rubrikId, int $conceptId): void
+    {
+        $svc->addPosition($this->team(), $rubrikId, [
+            'type' => 'menue_ref', 'concept_id' => $conceptId,
+        ]);
+        $this->pickerSuche = '';
+    }
+
     public function positionLoeschen(SpeisekarteService $svc, int $positionId): void
     {
         $svc->deletePosition($this->team(), $positionId);
+        if ($this->editPosId === $positionId) {
+            $this->editPosId = null;
+        }
+    }
+
+    // ── Positions-Bearbeitung (Wording-Override + manueller Preis) ─────────────
+
+    public function positionBearbeiten(int $positionId): void
+    {
+        $pos = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::visibleToTeam($this->team())->find($positionId);
+        if (! $pos) {
+            return;
+        }
+        $this->editPosId = $positionId;
+        $this->editWording = $pos->wording;
+        $this->editConsumerText = $pos->consumer_text;
+        $this->editPriceMode = $pos->price_mode ?: 'auto';
+        $this->editPriceValue = $pos->price_value !== null ? (string) $pos->price_value : null;
+    }
+
+    public function positionSpeichern(SpeisekarteService $svc): void
+    {
+        if (! $this->editPosId) {
+            return;
+        }
+        $svc->updatePosition($this->team(), $this->editPosId, [
+            'wording' => $this->editWording ?: null,
+            'consumer_text' => $this->editConsumerText ?: null,
+            'price_mode' => $this->editPriceMode,
+            'price_value' => $this->editPriceMode === 'manuell' ? ($this->editPriceValue !== null && $this->editPriceValue !== '' ? (float) str_replace(',', '.', $this->editPriceValue) : null) : null,
+        ]);
+        $this->editPosId = null;
+    }
+
+    public function positionAbbrechen(): void
+    {
+        $this->editPosId = null;
     }
 
     public function render(SpeisekarteService $svc)
@@ -212,9 +286,12 @@ class Index extends Component
             }
         }
 
-        $pickerErgebnisse = ($this->pickerRubrikId !== null)
-            ? $svc->gerichtKandidaten($team, $this->pickerSuche, 15)
-            : collect();
+        $pickerErgebnisse = collect();
+        if ($this->pickerRubrikId !== null) {
+            $pickerErgebnisse = $this->pickerModus === 'menue'
+                ? $svc->conceptKandidaten($team, $this->pickerSuche, 15)
+                : $svc->gerichtKandidaten($team, $this->pickerSuche, 15);
+        }
 
         return view('foodalchemist::livewire.speisekarte.index', [
             'karten' => $svc->paginateBrowser(['search' => $this->search], $team),

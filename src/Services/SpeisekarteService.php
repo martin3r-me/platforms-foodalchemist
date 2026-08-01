@@ -102,6 +102,62 @@ class SpeisekarteService
         $karte->delete();
     }
 
+    /**
+     * Karte duplizieren (Wechsel-/Saison-/Tageskarte aus einer Basis). Kopiert Rubrik-Baum +
+     * Positionen; neuer Entwurf, code=null, Name „… (Kopie)". Overrides überschreiben Kopf-Felder.
+     */
+    public function dupliziere(Team $team, int $id, array $overrides = []): FoodAlchemistSpeisekarte
+    {
+        $quelle = FoodAlchemistSpeisekarte::visibleToTeam($team)
+            ->with(['sections' => fn ($q) => $q->orderBy('position'), 'sections.items' => fn ($q) => $q->orderBy('position')])
+            ->findOrFail($id);
+        $this->guard($quelle, $team);
+
+        $kopfFelder = [
+            'karten_typ', 'outlet_id', 'preis_anzeige_brutto', 'description', 'kundentyp',
+            'default_niveau', 'default_convenience', 'writing_style_id',
+            'brand_color', 'band_color', 'logo_path', 'cover_image_path', 'footer_text',
+        ];
+
+        return DB::transaction(function () use ($quelle, $team, $overrides, $kopfFelder) {
+            $neu = FoodAlchemistSpeisekarte::create(array_merge(
+                ['team_id' => $team->id, 'name' => $quelle->name . ' (Kopie)', 'status' => 'entwurf', 'code' => null],
+                array_intersect_key($quelle->only($kopfFelder), array_flip($kopfFelder)),
+                array_intersect_key($overrides, array_flip(array_merge(self::FELDER, ['name']))),
+            ));
+
+            // Rubriken flach kopieren (parent_id in 2. Pass), dann Positionen.
+            $map = [];
+            foreach ($quelle->sections as $r) {
+                $kopie = FoodAlchemistSpeisekarteRubrik::create([
+                    'team_id' => $neu->team_id, 'menu_card_id' => $neu->id, 'parent_id' => null,
+                    'position' => $r->position, 'title' => $r->title, 'consumer_title' => $r->consumer_title,
+                    'claim' => $r->claim, 'description' => $r->description, 'art' => $r->art,
+                    'preis_anzeige' => $r->preis_anzeige,
+                ]);
+                $map[$r->id] = $kopie->id;
+            }
+            foreach ($quelle->sections as $r) {
+                if ($r->parent_id !== null && isset($map[$r->parent_id])) {
+                    FoodAlchemistSpeisekarteRubrik::whereKey($map[$r->id])->update(['parent_id' => $map[$r->parent_id]]);
+                }
+                foreach ($r->items as $pos) {
+                    FoodAlchemistSpeisekartePosition::create([
+                        'team_id' => $neu->team_id, 'section_id' => $map[$r->id], 'position' => $pos->position,
+                        'type' => $pos->type, 'level' => $pos->level, 'visible' => $pos->visible, 'label' => $pos->label,
+                        'consumer_text' => $pos->consumer_text, 'interne_bemerkung' => $pos->interne_bemerkung,
+                        'variant_group_id' => $pos->variant_group_id, 'sales_recipe_id' => $pos->sales_recipe_id,
+                        'concept_id' => $pos->concept_id, 'presentation_id' => $pos->presentation_id,
+                        'wording' => $pos->wording, 'price_mode' => $pos->price_mode, 'price_value' => $pos->price_value,
+                        'height' => $pos->height, 'payload_json' => $pos->payload_json,
+                    ]);
+                }
+            }
+
+            return $neu->refresh();
+        });
+    }
+
     // ── Rubrik-Baum ────────────────────────────────────────────────────────────
 
     /** @return list<array{id:int, title:string, parent_id:?int, art:string, depth:int}> Pre-Order */
@@ -414,6 +470,10 @@ class SpeisekarteService
                         'vk_netto' => $preis['vk'],
                         'vk_brutto' => $einheit['vk_brutto_pro_einheit'] ?? null,
                         'preis_quelle' => $preis['quelle'],
+                        // Fix-Menü: die Gänge zum Auflisten unter dem Menü-Titel.
+                        'gaenge' => $pos->type === 'menue_ref' ? $this->menueGaenge($pos) : [],
+                        // Getränke/Wein: Metadaten (Jahrgang/Region/Rebsorte) aus payload_json.
+                        'wein' => $this->weinMeta($pos),
                     ];
                 }
                 $rubriken[] = [
@@ -484,6 +544,49 @@ class SpeisekarteService
         }
 
         return collect();
+    }
+
+    /**
+     * Gänge eines Fix-Menüs (menue_ref) als Kunden-Zeilen — Wording-aufgelöst über den
+     * Concepter (WordingResolver::gerichtZeilen). Leer, wenn kein Concept.
+     *
+     * @return list<array{type:string, text:string, einrueckung:int}>
+     */
+    private function menueGaenge(FoodAlchemistSpeisekartePosition $pos): array
+    {
+        if ($pos->type !== 'menue_ref' || $pos->concept_id === null) {
+            return [];
+        }
+        $concept = FoodAlchemistConcept::with(['slots.package.dishes.gericht', 'slots.dish'])->find($pos->concept_id);
+        if ($concept === null) {
+            return [];
+        }
+
+        return array_map(
+            fn ($z) => ['type' => $z['type'], 'text' => $z['text'], 'einrueckung' => $z['einrueckung'] ?? 0],
+            $this->wording->gerichtZeilen($concept),
+        );
+    }
+
+    /**
+     * Wein-/Getränke-Metadaten aus payload_json (Jahrgang, Region, Rebsorte, Winzer) — für
+     * die Weinkarte. Nur nicht-leere Felder.
+     *
+     * @return array<string, string>
+     */
+    private function weinMeta(FoodAlchemistSpeisekartePosition $pos): array
+    {
+        $payload = $pos->payload_json ?? [];
+        $wein = $payload['wein'] ?? [];
+        $out = [];
+        foreach (['jahrgang', 'region', 'rebsorte', 'winzer'] as $feld) {
+            $v = trim((string) ($wein[$feld] ?? ''));
+            if ($v !== '') {
+                $out[$feld] = $v;
+            }
+        }
+
+        return $out;
     }
 
     /** Kunden-Anzeigename einer Position über die Wording-Kette (Override → Standard → Name). */
