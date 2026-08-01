@@ -57,6 +57,12 @@
                     <h3 class="text-sm font-semibold text-gray-900">{{ $tagC->locale('de')->isoFormat('dd DD.MM.') }}</h3>
                     @if($tagC->isToday())<span class="{{ $pill }} {{ $variantPill['primary'] }}">heute</span>@endif
                     <span class="text-[11px] text-gray-500">{{ $zeilen->count() }} Positionen</span>
+                    @php($fertig = $zeilen->filter(fn ($z) => $z->line_status === 'done')->count())
+                    @if($fertig > 0)
+                        <span class="{{ $pill }} {{ $fertig === $zeilen->count() ? $variantPill['success'] : $variantPill['info'] }}" data-tagesplan-fortschritt>
+                            {{ $fertig }}/{{ $zeilen->count() }} erledigt
+                        </span>
+                    @endif
                 </div>
 
                 {{-- Auslastung je Posten: Balken nur, wo eine Kapazität hinterlegt ist. --}}
@@ -86,8 +92,22 @@
                 <table class="{{ $table }} mt-2">
                     <tbody>
                         @foreach($zeilen as $z)
-                            <tr class="{{ $tr }}" wire:key="tpz-{{ $z->id }}" data-tagesplan-zeile="{{ $z->id }}">
-                                <td class="{{ $td }}">
+                            @php($erledigt = $z->line_status === 'done')
+                            @php($laeuft = $z->auftrag_status === 'in_progress')
+                            <tr class="{{ $tr }} {{ $erledigt ? 'opacity-60' : '' }}" wire:key="tpz-{{ $z->id }}" data-tagesplan-zeile="{{ $z->id }}">
+                                <td class="{{ $td }} w-px">
+                                    {{-- Abhaken geht erst, wenn die Produktion läuft: vorher ist nichts
+                                         produziert, und ein Recompute könnte die Zeile ersetzen. --}}
+                                    @if($laeuft)
+                                        <button type="button" wire:click="abhaken({{ $z->id }})"
+                                                class="w-5 h-5 rounded border {{ $erledigt ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-black/20 hover:border-violet-400' }} text-[11px] leading-none"
+                                                title="{{ $erledigt ? 'Haken zurücknehmen' : 'als erledigt abhaken' }}"
+                                                data-tagesplan-abhaken>{{ $erledigt ? '✓' : '' }}</button>
+                                    @else
+                                        <span class="inline-block w-5 h-5 rounded border border-dashed border-black/10" title="Auftrag läuft noch nicht — abgehakt wird erst ab «in Arbeit»."></span>
+                                    @endif
+                                </td>
+                                <td class="{{ $td }} {{ $erledigt ? 'line-through' : '' }}">
                                     {{ $z->name }}
                                     <span class="text-[11px] text-gray-500 ml-1">
                                         {{ $z->station ?? 'nicht zugeteilt' }}@if($z->assignee) · {{ $z->assignee }}@endif

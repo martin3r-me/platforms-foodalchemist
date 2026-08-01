@@ -269,6 +269,7 @@
                 </x-foodalchemist::modal-section>
             @endif
 
+            @php($darfAbhaken = $ops !== null && $ops['status'] === 'in_progress' && $ops['is_owned'])
             <x-foodalchemist::modal-section title="Zeilen ({{ $zeilen->count() }})">
                 <x-slot:actions>
                     <span class="text-[11px] text-gray-500">
@@ -276,6 +277,9 @@
                         @if($ops['arbeitszeit_gesamt_min'] > 0) · {{ $ops['arbeitszeit_gesamt_min'] }} min @endif
                         @php($ohneZeit = $zeilen->reject(fn ($z) => $z['ist_gestrichen'])->filter(fn ($z) => ($z['arbeitszeit_min'] ?? null) === null)->count())
                         @if($ohneZeit > 0)<span class="text-amber-600" title="Diese Zeilen haben keine Arbeitszeit am Rezept — die Summe ist unvollständig."> · {{ $ohneZeit }} ohne Zeit</span>@endif
+                        @if($ops && $ops['status'] !== 'planned' && $ops['fortschritt']['gesamt'] > 0)
+                            <span class="text-emerald-600" data-editor-fortschritt> · {{ $ops['fortschritt']['erledigt'] }}/{{ $ops['fortschritt']['gesamt'] }} erledigt</span>
+                        @endif
                     </span>
                 </x-slot:actions>
 
@@ -308,6 +312,11 @@
                                         <span class="{{ $pill }} {{ $variantPill['primary'] }} ml-1">manuell</span>
                                     @elseif($z['ist_basisrezept'])
                                         <span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Basisrezept</span>
+                                    @endif
+                                    @if($z['line_status'] === 'done')
+                                        <span class="{{ $pill }} {{ $variantPill['success'] }} ml-1" data-zeile-status="done">{{ $z['line_status_label'] }}</span>
+                                    @elseif($z['line_status'] !== 'open')
+                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1" data-zeile-status="{{ $z['line_status'] }}">{{ $z['line_status_label'] }}</span>
                                     @endif
                                     @if($z['ist_gestrichen'])
                                         <span class="{{ $pill }} {{ $variantPill['danger'] ?? $variantPill['secondary'] }} ml-1">gestrichen</span>
@@ -388,6 +397,12 @@
                                             <button type="button" wire:click="zeileStreichen({{ $z['id'] }}, true)" class="{{ $btnGhostXs }} text-rose-500"
                                                     title="Zählt nicht mehr mit und kommt nicht auf den Zettel — bleibt aber sichtbar" data-zeile-streichen>streichen</button>
                                         @endif
+                                    @elseif($darfAbhaken && ! $z['ist_gestrichen'])
+                                        {{-- Spec 30 E6: abhaken geht nur im laufenden Auftrag — im „geplant" könnte
+                                             ein Recompute die Zeile unter der Hand ersetzen. --}}
+                                        <button type="button" wire:click="zeileAbhaken({{ $z['id'] }})"
+                                                class="{{ $btnGhostXs }} {{ $z['line_status'] === 'done' ? 'text-emerald-600' : '' }}"
+                                                data-zeile-abhaken>{{ $z['line_status'] === 'done' ? '✓ erledigt' : 'abhaken' }}</button>
                                     @endif
                                 </td>
                             </tr>

@@ -35,6 +35,22 @@
                 <span class="text-gray-500">Portionen <span class="text-gray-900 font-medium tabular-nums">{{ $detail['portionen_gesamt'] }}</span></span>
                 <span class="text-gray-500">Arbeitszeit <span class="text-gray-900 font-medium tabular-nums">{{ $detail['arbeitszeit_gesamt_min'] }} min</span></span>
             </div>
+
+            {{-- Spec 30 E6 — Fortschritt ist der Leitwert, sobald die Produktion läuft. Vorher ist
+                 er strukturell 0 % (abgehakt wird erst ab „in Arbeit") und wäre nur Rauschen. --}}
+            @if($detail['status'] !== 'planned' && $detail['fortschritt']['gesamt'] > 0)
+                @php($fs = $detail['fortschritt'])
+                <div class="mt-2" data-panel-fortschritt>
+                    <div class="flex items-baseline justify-between text-[11px] mb-1">
+                        <span class="text-gray-500">Fortschritt</span>
+                        <span class="text-gray-700 tabular-nums">
+                            {{ $fs['erledigt'] }}/{{ $fs['gesamt'] }} erledigt
+                            @if($fs['uebersprungen'] > 0) · {{ $fs['uebersprungen'] }} übersprungen @endif
+                        </span>
+                    </div>
+                    <x-foodalchemist::meter :value="$fs['prozent']" :max="100" :tone="$fs['alle_erledigt'] ? 'success' : 'info'" />
+                </div>
+            @endif
         </div>
 
         {{-- Status-Buttons: NICHT an editierbar koppeln (das ist nur „geplant") — sonst
@@ -47,6 +63,13 @@
                     <button type="button" wire:click="setStatus('{{ $z->value }}')"
                         class="{{ in_array($z->value, ['in_progress', 'done'], true) ? $btnPrimary : $btnGhost }}"
                         @if($z->value === 'cancelled') onclick="return confirm('Produktion stornieren?')" @endif
+                        {{-- Spec 30 E6: Fertigmelden mit offenen Zeilen wird NICHT blockiert, nur
+                             nachgefragt — sonst kämpft die letzte Person der Schicht gegen die
+                             Software. Offene Zeilen bleiben offen, kein Auto-Abhaken. --}}
+                        @if($z->value === 'done' && $detail['fortschritt']['offen'] + $detail['fortschritt']['in_arbeit'] > 0)
+                            onclick="return confirm('{{ $detail['fortschritt']['offen'] + $detail['fortschritt']['in_arbeit'] }} Zeile(n) sind noch nicht abgehakt. Trotzdem fertig melden?')"
+                            data-produktion-done-offen="{{ $detail['fortschritt']['offen'] + $detail['fortschritt']['in_arbeit'] }}"
+                        @endif
                         data-produktion-status="{{ $z->value }}">{{ $statusAktion[$z->value] ?? $z->label() }}</button>
                 @endforeach
             </div>
@@ -77,6 +100,10 @@
                     <div class="border-b border-black/5 last:border-0 pb-2" wire:key="pol-{{ $z['id'] }}">
                         <div class="flex items-baseline justify-between gap-2 text-[13px]">
                             <span class="font-medium text-gray-900">{{ $z['name'] }}</span>
+                            @if($z['line_status'] !== 'open')
+                                <span class="{{ $pill }} {{ $variantPill[$z['line_status'] === 'done' ? 'success' : 'secondary'] }} shrink-0"
+                                      data-zeile-status="{{ $z['line_status'] }}">{{ $z['line_status_label'] }}</span>
+                            @endif
                             <span class="text-gray-500 tabular-nums shrink-0">
                                 {{ rtrim(rtrim(number_format($z['ansaetze'], 2, ',', '.'), '0'), ',') }} Ansätze
                                 @if($z['portionen'] !== null) · {{ $z['portionen'] }} Port. @endif

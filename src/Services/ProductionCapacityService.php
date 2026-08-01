@@ -145,6 +145,8 @@ class ProductionCapacityService
             ->select([
                 'l.id', 'l.plan_date', 'l.station_id', 'l.assignee', 'l.arbeitszeit_min',
                 'l.ansaetze', 'l.manual_ansaetze', 'l.is_manual_ansaetze', 'l.titel', 'l.vorlauf_tage',
+                'l.line_status',                       // Spec 30 E6: Küchen-Checkliste
+                'o.status as auftrag_status',          // abgehakt wird nur im laufenden Auftrag
                 's.name as station',
                 'r.name as rezept',
                 'o.id as order_id', 'o.name as auftrag', 'o.production_date as liefertag',

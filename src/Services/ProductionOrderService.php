@@ -4,9 +4,11 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\OrderStatus;
+use Platform\FoodAlchemist\Enums\ProductionLineStatus;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
@@ -582,6 +584,58 @@ class ProductionOrderService
         return $zeile->refresh();
     }
 
+    // ── Spec 30 E6: Küchen-Ausführung ───────────────────────────────────────
+
+    /**
+     * Zeile abhaken (bzw. Haken zurücknehmen).
+     *
+     * Nur im LAUFENDEN Auftrag. Im `planned` verboten, weil dort ein Recompute die Zeile
+     * unter der Hand ersetzen kann — ein „erledigt", das das überlebt, hinge an inzwischen
+     * geänderten Ansätzen und wäre ein Protokoll, das lügt.
+     *
+     * Die Übergänge sind bewusst frei (Checkliste, kein Beleg-Lebenszyklus): ein Fehlklick
+     * muss ohne Datenbank-Eingriff korrigierbar sein.
+     */
+    public function setLineStatus(Team $team, int $lineId, ProductionLineStatus $ziel): FoodAlchemistProductionOrderLine
+    {
+        $line = $this->ownedRunningLine($team, $lineId);
+
+        $line->line_status = $ziel;
+        $line->done_at = $ziel === ProductionLineStatus::Done ? now() : null;
+        $line->done_by = $ziel === ProductionLineStatus::Done ? Auth::id() : null;
+        $line->save();
+
+        return $line->refresh();
+    }
+
+    /**
+     * Abgeleiteter Fortschritt — NICHT gespeichert.
+     *
+     * Ein Zähler am Auftrag lädt nur zur Drift ein; `detail()` hat die Zeilen ohnehin geladen.
+     * Gestrichene Zeilen zählen weder im Nenner noch im Zähler: sie werden bewusst nicht
+     * produziert und dürfen den Fortschritt nicht künstlich drücken.
+     *
+     * @return array{offen: int, in_arbeit: int, erledigt: int, uebersprungen: int, gesamt: int, prozent: int, alle_erledigt: bool}
+     */
+    public function fortschritt(FoodAlchemistProductionOrder $order): array
+    {
+        $aktive = $order->lines->reject(fn ($l) => (bool) $l->is_struck);
+        $status = fn (ProductionLineStatus $s) => $aktive->filter(fn ($l) => $l->line_status === $s)->count();
+
+        $gesamt = $aktive->count();
+        $fertig = $aktive->filter(fn ($l) => $l->line_status->istAbgearbeitet())->count();
+
+        return [
+            'offen' => $status(ProductionLineStatus::Open),
+            'in_arbeit' => $status(ProductionLineStatus::InProgress),
+            'erledigt' => $status(ProductionLineStatus::Done),
+            'uebersprungen' => $status(ProductionLineStatus::Skipped),
+            'gesamt' => $gesamt,
+            'prozent' => $gesamt > 0 ? (int) round($fertig / $gesamt * 100) : 0,
+            'alle_erledigt' => $gesamt > 0 && $fertig === $gesamt,
+        ];
+    }
+
     /** Freie Position entfernen (nur solche — berechnete Zeilen werden gestrichen). */
     public function removeManualLine(Team $team, int $lineId): void
     {
@@ -719,6 +773,7 @@ class ProductionOrderService
             'warnungen' => $order->warnungen ?? [],
             // Spec 30: Summen zählen NUR das, was wirklich produziert wird — gestrichene Zeilen
             // fallen raus, Overrides zählen mit ihrem effektiven Wert.
+            'fortschritt' => $this->fortschritt($order),   // Spec 30 E6 — abgeleitet, nie gespeichert
             'ansaetze_gesamt' => (float) $aktive->sum('ansaetze_effektiv'),
             'portionen_gesamt' => (int) $aktive->sum('portionen'),
             'arbeitszeit_gesamt_min' => (int) $aktive->sum('arbeitszeit_min'),
@@ -744,6 +799,10 @@ class ProductionOrderService
                 'assignee' => $l->assignee,
                 'vorlauf_tage' => (int) $l->vorlauf_tage,
                 'plan_date' => $l->plan_date?->format('d.m.Y'),
+                // Spec 30 E6
+                'line_status' => $l->line_status->value,
+                'line_status_label' => $l->line_status->label(),
+                'done_at' => $l->done_at?->format('d.m.Y H:i'),
                 'zubereitung' => $l->zubereitung,
                 'schritte' => $l->steps_snapshot ?? [],   // Spec 27 (leer = Alt-Auftrag → Text-Fallback)
                 'darreichung' => $l->darreichung,
@@ -1046,6 +1105,25 @@ class ProductionOrderService
      * Service um, und der Recompute ist in `in_progress` ohnehin ein No-op — es gibt nichts,
      * was desynchronisieren könnte.
      */
+    /**
+     * Abgehakt wird NUR im laufenden Auftrag: vorher ist nichts produziert und ein Recompute
+     * könnte die Zeile ersetzen, nachher ist der Beleg abgeschlossen.
+     */
+    private function ownedRunningLine(Team $team, int $lineId): FoodAlchemistProductionOrderLine
+    {
+        $line = FoodAlchemistProductionOrderLine::with('productionOrder')->findOrFail($lineId);
+        $order = $line->productionOrder;
+        if ($order === null || ! $order->isOwnedBy($team)) {
+            throw new \RuntimeException('Produktionszeile nicht im Schreibzugriff (D1).');
+        }
+        $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
+        if ($status !== ProductionOrderStatus::InProgress) {
+            throw new \RuntimeException('Abgehakt wird erst, wenn die Produktion läuft.');
+        }
+
+        return $line;
+    }
+
     private function ownedDisponierbareLine(Team $team, int $lineId): FoodAlchemistProductionOrderLine
     {
         $line = FoodAlchemistProductionOrderLine::with('productionOrder')->findOrFail($lineId);

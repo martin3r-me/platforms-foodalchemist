@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
+use Platform\FoodAlchemist\Enums\ProductionLineStatus;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
@@ -51,6 +52,8 @@ class FoodAlchemistProductionOrderLine extends Model
         'is_struck' => 'boolean',
         'vorlauf_tage' => 'integer',        // Spec 30 E3: Rückwärts-Offset auf den Liefertag
         'plan_date' => 'date',              // abgeleitet — einziger Schreiber: syncPlanDates()
+        'line_status' => ProductionLineStatus::class,   // Spec 30 E6: Küchen-Checkliste
+        'done_at' => 'datetime',
     ];
 
     public function productionOrder(): BelongsTo

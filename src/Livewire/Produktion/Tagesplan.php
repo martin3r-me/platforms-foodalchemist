@@ -6,6 +6,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\ProductionLineStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Services\ProductionCapacityService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
@@ -62,6 +64,26 @@ class Tagesplan extends Component
         try {
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
             $svc->assignLine($team, $lineId, ['vorlauf_tage' => (int) $wert]);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /**
+     * Spec 30 E6 — Zeile abhaken. Der Tagesplan IST die Küchen-Sicht: nach Posten gefiltert
+     * arbeitet man hier die Positionen des Tages ab. Ein zweiter Klick nimmt den Haken zurück
+     * (Checkliste, kein Beleg-Lebenszyklus).
+     */
+    public function abhaken(int $lineId, ProductionOrderService $svc): void
+    {
+        $this->fehler = null;
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $zeile = FoodAlchemistProductionOrderLine::findOrFail($lineId);
+            $ziel = $zeile->line_status === ProductionLineStatus::Done
+                ? ProductionLineStatus::Open
+                : ProductionLineStatus::Done;
+            $svc->setLineStatus($team, $lineId, $ziel);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }

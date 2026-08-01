@@ -6,11 +6,13 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\ProductionLineStatus;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\AngebotService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
@@ -426,6 +428,21 @@ class Editor extends Component
             fn ($team) => $svc->setLineStruck($team, $lineId, $struck),
             $struck ? 'Zeile gestrichen — sie zählt nicht mehr mit und kommt nicht auf den Zettel.' : 'Zeile wiederhergestellt.',
         );
+    }
+
+    /**
+     * Spec 30 E6 — Zeile abhaken, zweiter Klick nimmt zurück. Kein Auto-Weiterschalten des
+     * Auftragsstatus: „fertig melden" bleibt eine bewusste Entscheidung, kein Nebeneffekt
+     * des letzten Hakens.
+     */
+    public function zeileAbhaken(int $lineId, ProductionOrderService $svc): void
+    {
+        $this->fuehreAus(function ($team) use ($lineId, $svc) {
+            $zeile = FoodAlchemistProductionOrderLine::findOrFail($lineId);
+            $svc->setLineStatus($team, $lineId, $zeile->line_status === ProductionLineStatus::Done
+                ? ProductionLineStatus::Open
+                : ProductionLineStatus::Done);
+        }, null);
     }
 
     public function freiePositionAnlegen(ProductionOrderService $svc): void
