@@ -179,6 +179,7 @@
                         'planung' => 'Planung',
                         'speisen' => $selectedKapitelId ? 'Speisen' : null,
                         'kreativ' => 'Kreativ',
+                        'dna' => 'DNA & Ton',
                         'trend' => 'Trend',
                         'branding' => 'Branding/CI',
                         'preise' => 'Preise',
@@ -224,37 +225,7 @@
                     @endif
                 </div>
 
-                {{-- Phase 5: Kickoff-Wizard — minimale Rückfrage → KI schlägt das Planungs-Gerüst vor.
-                     Doktrin: Vorschlag, nicht Zwang. LLM läuft über den Core-Contract; kein Provider → UI-Fehler. --}}
-                <div class="space-y-2 pt-2 border-t border-black/5" data-kickoff x-data="{ auf: false }">
-                    <div class="flex items-center justify-between">
-                        <span class="{{ $label }} !mb-0">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') Kickoff — Gerüst-Vorschlag aus Brief</span>
-                        <button type="button" @click="auf = !auf" class="{{ $btnGhostXs }}" x-text="auf ? 'Zuklappen' : 'Öffnen'"></button>
-                    </div>
-                    <div x-show="auf" x-cloak class="space-y-2">
-                        <p class="text-[11px] text-gray-500">Kurz-Brief + Segment/DNA → die KI schlägt Kapitel-Slots vor. Danach im Planung-Tab prüfen und „Struktur anwenden".</p>
-                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-                            <div><label class="{{ $label }}">Anlass</label><input type="text" wire:model="kickoff.anlass" class="{{ $input }}" placeholder="z. B. Sommer-Gala" /></div>
-                            <div><label class="{{ $label }}">Gäste</label><input type="number" min="1" wire:model="kickoff.personen" class="{{ $input }}" placeholder="{{ $fb->personen ?? '—' }}" /></div>
-                            <div><label class="{{ $label }}">Saison</label><input type="text" wire:model="kickoff.saison" class="{{ $input }}" placeholder="z. B. Spätsommer" /></div>
-                            <div><label class="{{ $label }}">Service-Form</label><input type="text" wire:model="kickoff.service_form" class="{{ $input }}" placeholder="z. B. Buffet / Menü" /></div>
-                            <div><label class="{{ $label }}">Budget € p. P.</label><input type="number" step="0.01" min="0" wire:model="kickoff.budget" class="{{ $input }}" /></div>
-                        </div>
-                        <button type="button" wire:click="frameAusBriefVorschlagen" class="{{ $btnPrimary }} w-full justify-center" wire:loading.attr="disabled" wire:target="frameAusBriefVorschlagen" data-kickoff-go>
-                            <span wire:loading.remove wire:target="frameAusBriefVorschlagen">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Gerüst vorschlagen</span>
-                            <span wire:loading wire:target="frameAusBriefVorschlagen">KI baut das Gerüst …</span>
-                        </button>
-                        @if($kickoffFehler)
-                            <p class="text-[11px] text-red-600" data-kickoff-fehler>{{ $kickoffFehler }}</p>
-                        @endif
-                        @if($kickoffErgebnis)
-                            <p class="text-[11px] text-emerald-600" data-kickoff-ok>
-                                Gerüst-Vorschlag steht: {{ $kickoffErgebnis['slots'] }} Slots @if($kickoffErgebnis['confidence'] !== null)· Konfidenz {{ number_format((float) $kickoffErgebnis['confidence'], 2) }} @endif.
-                                Im <button type="button" @click="tab = 'planung'" class="underline font-medium">Planung-Tab</button> prüfen, dann „Struktur anwenden".
-                            </p>
-                        @endif
-                    </div>
-                </div>
+                {{-- Kickoff-Wizard → in den Planung-Tab verschoben (Spec 29 / S7 — Briefing entlastet) --}}
 
                 {{-- #369: CRM-Kunde-Link (MVP, nur verlinken) — ergänzt das Freitext-Feld „Kunde" --}}
                 <div class="space-y-2 pt-1 border-t border-black/5">
@@ -318,63 +289,7 @@
                 </div>
             </div>
 
-                {{-- ═══ Bedarf — Foodbook-Default-Dimensionen (Spec 19 E3.3) ═══
-                     Defaults kaskadieren als Boden nach unten (Kapitel/Konzepte erben, überschreiben spezifisch).
-                     Vokabular-Pflege in den Einstellungen → Concepter-Dimensionen. --}}
-                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbbedarf-{{ $fb->id }}" data-fb-bedarf data-fb-anker="bedarf">
-                    <div class="{{ $cardAccent }}"></div>
-                    <p class="{{ $label }} !mb-0">Bedarf — Vorgaben fürs ganze Foodbook</p>
-                    <p class="text-[11px] text-gray-500 -mt-1">Eventtyp · Servierform · Wareneinsatz-Ziel + Einsatzmomente + Zielgruppen. Leer = Team-/Segment-Default. Kapitel erben und können überschreiben.</p>
-
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div><label class="{{ $label }}">Eventtyp (Default)</label>
-                            <select wire:change="bedarfSetzen('default_event_type_id', $event.target.value)" class="{{ $input }}">
-                                <option value="">— keiner —</option>
-                                @foreach($eventtypen as $et)<option value="{{ $et->id }}" @selected((int) $fb->default_event_type_id === $et->id)>{{ $et->name }}</option>@endforeach
-                            </select>
-                        </div>
-                        <div><label class="{{ $label }}">Servierform (Default)</label>
-                            <select wire:change="bedarfSetzen('default_serving_form_id', $event.target.value)" class="{{ $input }}">
-                                <option value="">— keine —</option>
-                                @foreach($servierformen as $sf)<option value="{{ $sf->id }}" @selected((int) $fb->default_serving_form_id === $sf->id)>{{ $sf->label }}</option>@endforeach
-                            </select>
-                        </div>
-                        <div><label class="{{ $label }}">Ziel-Wareneinsatz %</label>
-                            <input type="number" step="0.1" min="0" max="100" value="{{ $fb->target_food_cost_pct }}"
-                                   wire:change="bedarfSetzen('target_food_cost_pct', $event.target.value)" class="{{ $input }}" placeholder="Team-Default (30)" />
-                        </div>
-                        <div><label class="{{ $label }}">Toleranz ±pp</label>
-                            <input type="number" step="0.1" min="0" max="50" value="{{ $fb->food_cost_tolerance_pp }}"
-                                   wire:change="bedarfSetzen('food_cost_tolerance_pp', $event.target.value)" class="{{ $input }}" placeholder="5,0" />
-                        </div>
-                    </div>
-
-                    @php($aktiveMomente = $fb->serviceMoments->pluck('id')->all())
-                    <div data-fb-einsatzmomente>
-                        <label class="{{ $label }}">Einsatzmomente (Tagesablauf)</label>
-                        <div class="flex flex-wrap gap-1 mt-0.5">
-                            @forelse($einsatzmomente as $em)
-                                <button type="button" wire:key="fbem-{{ $em->id }}" wire:click="toggleFbEinsatzmoment({{ $em->id }})"
-                                        class="{{ $pill }} {{ in_array($em->id, $aktiveMomente) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
-                            @empty
-                                <span class="text-[11px] text-gray-400">Keine Einsatzmomente gepflegt — in den Einstellungen anlegen.</span>
-                            @endforelse
-                        </div>
-                    </div>
-
-                    @php($aktiveZg = $fb->targetGroups->pluck('id')->all())
-                    <div data-fb-zielgruppen>
-                        <label class="{{ $label }}">Zielgruppen (Default)</label>
-                        <div class="flex flex-wrap gap-1 mt-0.5">
-                            @forelse($zielgruppen as $zg)
-                                <button type="button" wire:key="fbzg-{{ $zg->id }}" wire:click="toggleFbZielgruppe({{ $zg->id }})"
-                                        class="{{ $pill }} {{ in_array($zg->id, $aktiveZg) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $zg->name }}</button>
-                            @empty
-                                <span class="text-[11px] text-gray-400">Keine Zielgruppen gepflegt — in den Einstellungen anlegen.</span>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
+                {{-- Bedarf-Card → in den Planung-Tab verschoben (Spec 29 / S7 — Briefing entlastet) --}}
 
                 {{-- Foodbook-Leitidee (Canvas) — inline statt Modal (Dominique 2026-07-21) --}}
                 <div class="relative overflow-hidden {{ $card }} p-5" wire:key="fbcanvas-{{ $fb->id }}">
@@ -386,6 +301,95 @@
 
                 {{-- ═══ Tab: PLANUNG (Struktur = Slots · Coverage) ═══ --}}
                 <div x-show="tab === 'planung'" x-cloak class="space-y-3" data-fb-panel="planung">
+                    {{-- ═══ Bedarf — Foodbook-Default-Dimensionen (Spec 19 E3.3; S7: aus Briefing hierher) ═══
+                         Defaults kaskadieren als Boden nach unten (Kapitel/Konzepte erben, überschreiben spezifisch). --}}
+                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbbedarf-{{ $fb->id }}" data-fb-bedarf data-fb-anker="bedarf">
+                        <div class="{{ $cardAccent }}"></div>
+                        <p class="{{ $label }} !mb-0">Bedarf — Vorgaben fürs ganze Foodbook</p>
+                        <p class="text-[11px] text-gray-500 -mt-1">Eventtyp · Servierform · Wareneinsatz-Ziel + Einsatzmomente + Zielgruppen. Leer = Team-/Segment-Default. Kapitel erben und können überschreiben.</p>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div><label class="{{ $label }}">Eventtyp (Default)</label>
+                                <select wire:change="bedarfSetzen('default_event_type_id', $event.target.value)" class="{{ $input }}">
+                                    <option value="">— keiner —</option>
+                                    @foreach($eventtypen as $et)<option value="{{ $et->id }}" @selected((int) $fb->default_event_type_id === $et->id)>{{ $et->name }}</option>@endforeach
+                                </select>
+                            </div>
+                            <div><label class="{{ $label }}">Servierform (Default)</label>
+                                <select wire:change="bedarfSetzen('default_serving_form_id', $event.target.value)" class="{{ $input }}">
+                                    <option value="">— keine —</option>
+                                    @foreach($servierformen as $sf)<option value="{{ $sf->id }}" @selected((int) $fb->default_serving_form_id === $sf->id)>{{ $sf->label }}</option>@endforeach
+                                </select>
+                            </div>
+                            <div><label class="{{ $label }}">Ziel-Wareneinsatz %</label>
+                                <input type="number" step="0.1" min="0" max="100" value="{{ $fb->target_food_cost_pct }}"
+                                       wire:change="bedarfSetzen('target_food_cost_pct', $event.target.value)" class="{{ $input }}" placeholder="Team-Default (30)" />
+                            </div>
+                            <div><label class="{{ $label }}">Toleranz ±pp</label>
+                                <input type="number" step="0.1" min="0" max="50" value="{{ $fb->food_cost_tolerance_pp }}"
+                                       wire:change="bedarfSetzen('food_cost_tolerance_pp', $event.target.value)" class="{{ $input }}" placeholder="5,0" />
+                            </div>
+                        </div>
+
+                        @php($aktiveMomente = $fb->serviceMoments->pluck('id')->all())
+                        <div data-fb-einsatzmomente>
+                            <label class="{{ $label }}">Einsatzmomente (Tagesablauf)</label>
+                            <div class="flex flex-wrap gap-1 mt-0.5">
+                                @forelse($einsatzmomente as $em)
+                                    <button type="button" wire:key="fbem-{{ $em->id }}" wire:click="toggleFbEinsatzmoment({{ $em->id }})"
+                                            class="{{ $pill }} {{ in_array($em->id, $aktiveMomente) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
+                                @empty
+                                    <span class="text-[11px] text-gray-400">Keine Einsatzmomente gepflegt — in den Einstellungen anlegen.</span>
+                                @endforelse
+                            </div>
+                        </div>
+
+                        @php($aktiveZg = $fb->targetGroups->pluck('id')->all())
+                        <div data-fb-zielgruppen>
+                            <label class="{{ $label }}">Zielgruppen (Default)</label>
+                            <div class="flex flex-wrap gap-1 mt-0.5">
+                                @forelse($zielgruppen as $zg)
+                                    <button type="button" wire:key="fbzg-{{ $zg->id }}" wire:click="toggleFbZielgruppe({{ $zg->id }})"
+                                            class="{{ $pill }} {{ in_array($zg->id, $aktiveZg) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $zg->name }}</button>
+                                @empty
+                                    <span class="text-[11px] text-gray-400">Keine Zielgruppen gepflegt — in den Einstellungen anlegen.</span>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Kickoff-Wizard (S7: aus Briefing hierher) — Kurz-Brief → KI schlägt das Gerüst vor.
+                         Vorschlag, nicht Zwang. LLM über den Core-Contract; kein Provider → UI-Fehler. --}}
+                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-2" data-kickoff x-data="{ auf: false }">
+                        <div class="{{ $cardAccent }}"></div>
+                        <div class="flex items-center justify-between">
+                            <span class="{{ $label }} !mb-0">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') Kickoff — Gerüst-Vorschlag aus Brief</span>
+                            <button type="button" @click="auf = !auf" class="{{ $btnGhostXs }}" x-text="auf ? 'Zuklappen' : 'Öffnen'"></button>
+                        </div>
+                        <div x-show="auf" x-cloak class="space-y-2">
+                            <p class="text-[11px] text-gray-500">Kurz-Brief + Segment/DNA → die KI schlägt Kapitel-Slots vor. Danach unten prüfen und „Struktur anwenden".</p>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                <div><label class="{{ $label }}">Anlass</label><input type="text" wire:model="kickoff.anlass" class="{{ $input }}" placeholder="z. B. Sommer-Gala" /></div>
+                                <div><label class="{{ $label }}">Gäste</label><input type="number" min="1" wire:model="kickoff.personen" class="{{ $input }}" placeholder="{{ $fb->personen ?? '—' }}" /></div>
+                                <div><label class="{{ $label }}">Saison</label><input type="text" wire:model="kickoff.saison" class="{{ $input }}" placeholder="z. B. Spätsommer" /></div>
+                                <div><label class="{{ $label }}">Service-Form</label><input type="text" wire:model="kickoff.service_form" class="{{ $input }}" placeholder="z. B. Buffet / Menü" /></div>
+                                <div><label class="{{ $label }}">Budget € p. P.</label><input type="number" step="0.01" min="0" wire:model="kickoff.budget" class="{{ $input }}" /></div>
+                            </div>
+                            <button type="button" wire:click="frameAusBriefVorschlagen" class="{{ $btnPrimary }} w-full justify-center" wire:loading.attr="disabled" wire:target="frameAusBriefVorschlagen" data-kickoff-go>
+                                <span wire:loading.remove wire:target="frameAusBriefVorschlagen">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Gerüst vorschlagen</span>
+                                <span wire:loading wire:target="frameAusBriefVorschlagen">KI baut das Gerüst …</span>
+                            </button>
+                            @if($kickoffFehler)
+                                <p class="text-[11px] text-red-600" data-kickoff-fehler>{{ $kickoffFehler }}</p>
+                            @endif
+                            @if($kickoffErgebnis)
+                                <p class="text-[11px] text-emerald-600" data-kickoff-ok>
+                                    Gerüst-Vorschlag steht: {{ $kickoffErgebnis['slots'] }} Slots @if($kickoffErgebnis['confidence'] !== null)· Konfidenz {{ number_format((float) $kickoffErgebnis['confidence'], 2) }} @endif. Unten prüfen, dann „Struktur anwenden".
+                                </p>
+                            @endif
+                        </div>
+                    </div>
+
                     {{-- R4.1: Planungs-Gerüst — Soll-Rahmen (Slots = Kapitel-Struktur, Mengen · Preise · Quoten · Dramaturgie) --}}
                     <div class="relative overflow-hidden {{ $card }} p-5" wire:key="fbframe-{{ $fb->id }}" data-fb-anker="kapitel">
                         <div class="{{ $cardAccent }}"></div>
@@ -578,6 +582,10 @@
                         </div>
                     @endif
 
+                </div>{{-- /Kreativ --}}
+
+                {{-- ═══ Tab: DNA & TON (Kunde-DNA · Leitplanken · Tonalität) — S7-Split aus Kreativ ═══ --}}
+                <div x-show="tab === 'dna'" x-cloak class="space-y-3" data-fb-panel="dna">
                     {{-- Ebene 2 der DNA-Kette: Kunde-DNA am CRM-Kunden (Nested-Livewire, Re-Mount via key bei Kunden-Wechsel) --}}
                     <livewire:foodalchemist.foodbooks.kunde-dna-panel :company-id="$fb->crm_company_id" :key="'kdna-'.($fb->crm_company_id ?? 'none')" />
 
@@ -642,7 +650,7 @@
                         @endif
                         <p class="text-[11px] text-gray-400 pt-1 border-t border-black/5">Geschmackswelten werden je <span class="font-medium">Konzept</span> gepflegt (Konzept-Brief), nicht am Foodbook — das Foodbook komponiert die Konzepte.</p>
                     </div>
-                </div>{{-- /Kreativ --}}
+                </div>{{-- /DNA & Ton (S7) --}}
 
                 {{-- ═══ Tab: TREND (Wissensschrank-Pull) — Phase 4 ═══ --}}
                 <div x-show="tab === 'trend'" x-cloak class="space-y-3" data-fb-panel="trend">

@@ -81,8 +81,8 @@ class LeitstelleService
         // ── Schritte ─────────────────────────────────────────────────────────
         $steps = [];
 
-        // 1 Bedarf → briefing/bedarf
-        $steps[] = $this->step('bedarf', 1, 'Bedarf', 'briefing', 'bedarf',
+        // 1 Bedarf → planung/bedarf (Spec 29 / S7: Bedarf-Card wanderte in den Planung-Tab)
+        $steps[] = $this->step('bedarf', 1, 'Bedarf', 'planung', 'bedarf',
             $this->stufe($hatPersonen && $defaults > 0, $hatPersonen || $defaults > 0),
             (! $hatPersonen && $defaults === 0) ? 'Gästezahl + mind. eine Default-Dimension (Zielgruppe/Eventtyp/Servierform/Niveau/WE-Ziel) fehlen.' : null);
 

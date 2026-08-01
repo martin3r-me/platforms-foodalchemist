@@ -224,7 +224,7 @@
          x-data="{
             pin: localStorage.getItem('fbRailPin') || null,
             panel: 'fortschritt',
-            tabMap: { briefing:'fortschritt', planung:'fortschritt', kreativ:'speisen', vorschau:'speisen', preise:'kalkulation', trend:'fortschritt', branding:'fortschritt' },
+            tabMap: { briefing:'fortschritt', planung:'fortschritt', kreativ:'speisen', speisen:'speisen', dna:'fortschritt', preise:'kalkulation', trend:'fortschritt', branding:'fortschritt' },
             init() { this.panel = this.pin || 'fortschritt'; },
             setPanel(p) { this.panel = p; this.pin = p; localStorage.setItem('fbRailPin', p); },
             loesePin() { this.pin = null; localStorage.removeItem('fbRailPin'); },
