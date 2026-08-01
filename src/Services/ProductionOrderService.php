@@ -635,7 +635,7 @@ class ProductionOrderService
     /** Detail-Aggregat für UI/MCP. */
     public function detail(Team $team, int $orderId): array
     {
-        $order = FoodAlchemistProductionOrder::visibleToTeam($team)->with('lines.recipe:id,name')->findOrFail($orderId);
+        $order = FoodAlchemistProductionOrder::visibleToTeam($team)->with(['lines.recipe:id,name', 'lines.station:id,name'])->findOrFail($orderId);
         $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
 
         // P4: verknüpfte Bestellschienen (kompakt fürs UI/MCP) + Stale-Marker.
@@ -687,6 +687,12 @@ class ProductionOrderService
                 'portionen' => $l->portionen !== null ? (int) $l->portionen : null,
                 'produzierte_menge_kg' => $l->produzierte_menge_kg !== null ? (float) $l->produzierte_menge_kg : null,
                 'arbeitszeit_min' => $l->arbeitszeit_min !== null ? (int) $l->arbeitszeit_min : null,
+                // Spec 30 E3: Zuteilung
+                'station_id' => $l->station_id !== null ? (int) $l->station_id : null,
+                'station' => $l->station?->name,
+                'assignee' => $l->assignee,
+                'vorlauf_tage' => (int) $l->vorlauf_tage,
+                'plan_date' => $l->plan_date?->format('d.m.Y'),
                 'zubereitung' => $l->zubereitung,
                 'schritte' => $l->steps_snapshot ?? [],   // Spec 27 (leer = Alt-Auftrag → Text-Fallback)
                 'darreichung' => $l->darreichung,

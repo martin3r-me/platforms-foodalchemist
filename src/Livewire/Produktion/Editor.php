@@ -451,6 +451,35 @@ class Editor extends Component
         $this->fuehreAus(fn ($team) => $svc->removeManualLine($team, $lineId), 'Freie Position entfernt.');
     }
 
+    /**
+     * Zuteilung je Zeile: Posten · Verantwortlicher · Vorlauf-Tage.
+     * Ein Feld pro Aufruf — der Service fasst nur übergebene Keys an.
+     */
+    public function zeileZuteilen(int $lineId, string $feld, string $wert, ProductionOrderService $svc): void
+    {
+        if (! in_array($feld, ['station_id', 'assignee', 'vorlauf_tage'], true)) {
+            return;
+        }
+        $this->fuehreAus(
+            fn ($team) => $svc->assignLine($team, $lineId, [$feld => $wert === '' && $feld === 'station_id' ? null : $wert]),
+            'Zuteilung gespeichert.',
+        );
+    }
+
+    /** Alle noch unverplanten Zeilen auf einen Posten — spart das Zeile-für-Zeile-Klicken. */
+    public function alleUnverplantAufPosten(int $stationId, ProductionOrderService $svc): void
+    {
+        $this->fuehreAus(function ($team) use ($stationId, $svc) {
+            $ids = \Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine::query()
+                ->where('production_order_id', (int) $this->orderId)
+                ->whereNull('station_id')->where('is_struck', false)
+                ->pluck('id');
+            foreach ($ids as $id) {
+                $svc->assignLine($team, (int) $id, ['station_id' => $stationId]);
+            }
+        }, 'Unverplante Zeilen zugeteilt.');
+    }
+
     /** Einbahn-Übergabe: Bedarf aller Ziele an die Bestellschienen (Service-zentral inkl. Stale-Marker). */
     public function anBestellungUebergeben(ProductionOrderService $prod, OrderService $orders): void
     {
@@ -553,7 +582,21 @@ class Editor extends Component
             }
         }
 
+        // Spec 30 E3: Posten-Auswahl + Auslastungs-Warnungen des Auftrags
+        $postenListe = $team !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+            : collect();
+        $postenSummen = ($team !== null && $this->orderId !== null && $ops !== null)
+            ? app(ProductionOrderService::class)->postenSummen($team, (int) $this->orderId) : [];
+        $kapazitaetsWarnungen = ($team !== null && $this->orderId !== null && $ops !== null)
+            ? app(\Platform\FoodAlchemist\Services\ProductionCapacityService::class)
+                ->warnungenFuer($team, (int) $this->orderId) : [];
+
         return view('foodalchemist::livewire.produktion.editor', [
+            'postenListe' => $postenListe,
+            'postenSummen' => $postenSummen,
+            'kapazitaetsWarnungen' => $kapazitaetsWarnungen,
             'allergenRollup' => $allergenRollup,
             'konzepte' => $konzepte,
             'treffer' => $treffer,

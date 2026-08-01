@@ -236,6 +236,38 @@
 
             @php($zeilen = collect($ops['zeilen']))
             @php($darfEditieren = $ops['editierbar'] ?? false)
+            @php($darfDisponieren = ($ops['is_owned'] ?? false) && in_array($ops['status'], ['planned', 'in_progress'], true))
+
+            {{-- Überlast meldet sich passiv und nur, wenn am Posten wirklich eine Kapazität
+                 hinterlegt ist. Kein Modal, kein Blockieren. --}}
+            @if(! empty($kapazitaetsWarnungen))
+                <x-foodalchemist::alert tone="warning" data-kapazitaet-warnung>
+                    <ul class="list-disc list-inside space-y-0.5">
+                        @foreach($kapazitaetsWarnungen as $w)<li>{{ $w }}</li>@endforeach
+                    </ul>
+                </x-foodalchemist::alert>
+            @endif
+
+            @if(count($postenSummen) > 0)
+                <x-foodalchemist::modal-section title="Nach Posten">
+                    <div class="flex flex-wrap gap-2" data-posten-summen>
+                        @foreach($postenSummen as $ps)
+                            <span class="{{ $pill }} {{ $ps['station_id'] === null ? $variantPill['secondary'] : $variantPill['info'] }}" wire:key="ps-{{ $ps['station_id'] ?? 0 }}">
+                                {{ $ps['station'] }} · {{ $ps['zeilen'] }} Zeilen · {{ $ps['arbeitszeit_min'] }} min
+                                @if($ps['ohne_zeit'] > 0)<span class="text-amber-600" title="Ohne hinterlegte Arbeitszeit — die Summe ist unvollständig."> ({{ $ps['ohne_zeit'] }} ohne Zeit)</span>@endif
+                            </span>
+                        @endforeach
+                        @if($darfDisponieren && $postenListe->isNotEmpty() && collect($postenSummen)->firstWhere('station_id', null))
+                            <span class="inline-flex items-center gap-1">
+                                <select wire:change="alleUnverplantAufPosten($event.target.value)" class="{{ $input }} !py-0.5 !w-48" data-bulk-posten>
+                                    <option value="">Unverplante alle auf …</option>
+                                    @foreach($postenListe as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
+                                </select>
+                            </span>
+                        @endif
+                    </div>
+                </x-foodalchemist::modal-section>
+            @endif
 
             <x-foodalchemist::modal-section title="Zeilen ({{ $zeilen->count() }})">
                 <x-slot:actions>
@@ -260,6 +292,9 @@
                             <th class="{{ $th }} text-right whitespace-nowrap">Ansätze</th>
                             <th class="{{ $th }} text-right whitespace-nowrap">Portionen</th>
                             <th class="{{ $th }} text-right whitespace-nowrap">Zeit</th>
+                            <th class="{{ $th }} whitespace-nowrap">Posten</th>
+                            <th class="{{ $th }} whitespace-nowrap">Verantwortlich</th>
+                            <th class="{{ $th }} text-right whitespace-nowrap" title="Tage vor dem Liefertag — 0 = am Tag selbst">Vorlauf</th>
                             <th class="{{ $th }}">Notiz</th>
                             <th class="{{ $th }} w-px"></th>
                         </tr>
@@ -301,6 +336,39 @@
                                 </td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $z['portionen'] ?? '—' }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $z['arbeitszeit_min'] !== null ? $z['arbeitszeit_min'] . ' min' : '—' }}</td>
+                                <td class="{{ $td }} whitespace-nowrap">
+                                    @if($darfDisponieren)
+                                        <select wire:change="zeileZuteilen({{ $z['id'] }}, 'station_id', $event.target.value)"
+                                                class="{{ $input }} !py-0.5 !w-36" data-zeile-posten>
+                                            <option value="">— kein Posten —</option>
+                                            @foreach($postenListe as $p)
+                                                <option value="{{ $p->id }}" @selected(($z['station_id'] ?? null) === $p->id)>{{ $p->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    @else
+                                        <span class="text-[11px] text-gray-500">{{ $z['station'] ?? '—' }}</span>
+                                    @endif
+                                </td>
+                                <td class="{{ $td }} whitespace-nowrap">
+                                    @if($darfDisponieren)
+                                        <input type="text" value="{{ $z['assignee'] }}" wire:change="zeileZuteilen({{ $z['id'] }}, 'assignee', $event.target.value)"
+                                               class="{{ $input }} !py-0.5 !w-28" placeholder="Name" data-zeile-assignee />
+                                    @else
+                                        <span class="text-[11px] text-gray-500">{{ $z['assignee'] }}</span>
+                                    @endif
+                                </td>
+                                <td class="{{ $td }} text-right whitespace-nowrap">
+                                    @if($darfDisponieren)
+                                        <input type="text" inputmode="numeric" value="{{ $z['vorlauf_tage'] }}"
+                                               wire:change="zeileZuteilen({{ $z['id'] }}, 'vorlauf_tage', $event.target.value)"
+                                               class="{{ $input }} !py-0.5 !w-14 text-right tabular-nums" data-zeile-vorlauf />
+                                    @else
+                                        <span class="tabular-nums">{{ $z['vorlauf_tage'] }}</span>
+                                    @endif
+                                    @if(($z['vorlauf_tage'] ?? 0) > 0)
+                                        <div class="text-[10px] text-gray-500 mt-0.5">{{ $z['plan_date'] }}</div>
+                                    @endif
+                                </td>
                                 <td class="{{ $td }}">
                                     @if($darfEditieren)
                                         <input type="text" value="{{ $z['note'] }}" wire:change="updateLineNote({{ $z['id'] }}, $event.target.value)"
@@ -324,7 +392,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="{{ $td }} text-[12px] text-gray-500">Noch keine Zeilen — erst Ziele setzen.</td></tr>
+                            <tr><td colspan="9" class="{{ $td }} text-[12px] text-gray-500">Noch keine Zeilen — erst Ziele setzen.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

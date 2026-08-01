@@ -43,6 +43,9 @@ class Index extends Component
         'aufschlagsklassen' => ['label' => 'Aufschlagsklassen', 'hint' => 'Rohaufschlag/MwSt editierbar (GT-8) · W-1-Kennzeichnung'],
         'schreibstile' => ['label' => 'Schreibstile', 'hint' => 'Sprach-Duktus = Prompt-Material (GL-06) · anlegen + bearbeiten'],
         'behaelter' => ['label' => 'Behälter & Geräte', 'hint' => 'Behälter · Regen-Geräte · Servier-Vehikel · Koch-Equipment'],
+        // Spec 30 E3: Arbeitsplätze mit optionaler Tageskapazität — bewusst getrennt vom
+        // Koch-Equipment (das sagt „was braucht ein Rezept", der Posten „wo wird gearbeitet").
+        'posten' => ['label' => 'Posten & Kapazität', 'hint' => 'Küchen-Arbeitsplätze · netto verplanbare Minuten/Tag (freiwillig) · Wochentag-Abweichungen'],
         'wissenskategorien' => ['label' => 'Wissens-Kategorien', 'hint' => 'Vokabular fürs Wissens-Modul (#469) — Klassifikation + grobe Routing-Ebene'],
         'einsatzorte' => ['label' => 'Einsatzorte (Wissen)', 'hint' => 'Bindungs-Ziele fürs Wissen (#469) — Bereiche grob + KI-Prompts fein'],
     ];

@@ -123,3 +123,56 @@ it('ein laufender Auftrag zeigt die Zeilen, aber ohne Eingriffs-Knöpfe', functi
         ->assertDontSeeHtml('data-zeile-streichen')
         ->assertDontSeeHtml('data-freie-position');
 });
+
+// ── Spec 30 E3: Zuteilung im Zeilen-Tab ─────────────────────────────────────
+
+it('teilt Posten, Verantwortlichen und Vorlauf über die Zeile zu', function () {
+    $p = \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'warme_kueche', 'name' => 'Warme Küche',
+        'kapazitaet_min_pro_tag' => 480,
+    ]);
+    $id = ($this->zeile)()->id;
+
+    ($this->editor)()
+        ->call('zeileZuteilen', $id, 'station_id', (string) $p->id)
+        ->call('zeileZuteilen', $id, 'assignee', 'Marco')
+        ->call('zeileZuteilen', $id, 'vorlauf_tage', '2')
+        ->assertSet('fehler', null)
+        ->assertSee('Warme Küche')
+        ->assertSee('Marco');
+
+    $z = ($this->zeile)();
+    expect($z->station_id)->toBe($p->id)
+        ->and($z->assignee)->toBe('Marco')
+        ->and($z->plan_date->toDateString())->toBe('2026-08-18');   // Liefertag 20.08. − 2
+});
+
+it('teilt alle unverplanten Zeilen auf einen Posten zu', function () {
+    $p = \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'patisserie', 'name' => 'Patisserie',
+    ]);
+    $this->svc->addManualLine($this->rootTeam, $this->order->id, ['titel' => 'Brot holen']);
+
+    ($this->editor)()->call('alleUnverplantAufPosten', $p->id)->assertSet('fehler', null);
+
+    expect(Line::where('production_order_id', $this->order->id)->whereNull('station_id')->count())->toBe(0);
+});
+
+it('meldet Überlast passiv im Zeilen-Tab, wenn der Posten eine Kapazität hat', function () {
+    $eng = \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'eng', 'name' => 'Enger Posten',
+        'kapazitaet_min_pro_tag' => 10,
+    ]);
+    ($this->editor)()->call('zeileZuteilen', ($this->zeile)()->id, 'station_id', (string) $eng->id);
+
+    ($this->editor)()->assertSeeHtml('data-kapazitaet-warnung')->assertSee('Enger Posten');
+});
+
+it('ein Posten ohne Kapazität löst keine Warnung aus', function () {
+    $ohne = \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'ohne', 'name' => 'Ohne Kapazität',
+    ]);
+    ($this->editor)()->call('zeileZuteilen', ($this->zeile)()->id, 'station_id', (string) $ohne->id);
+
+    ($this->editor)()->assertDontSeeHtml('data-kapazitaet-warnung')->assertSee('Ohne Kapazität');
+});
