@@ -46,6 +46,9 @@ class SpeiseplanService
     /** In-Request-Memo: Eintrag-Inhalt (c{id}/p{id}/g{id}) → aufgelöste Gerichte-Sammlung. */
     private array $gerichteCache = [];
 
+    /** Konfidenz-Rang (schwächstes Glied) — lokal, da die Aggregat-Konstante privat ist. */
+    private const KONF_RANG = ['unknown' => 0, 'low' => 1, 'medium' => 2, 'high' => 3];
+
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistSpeiseplan::visibleToTeam($team)
@@ -504,6 +507,7 @@ class SpeiseplanService
             'zeilen' => $zeilen,
             'legende' => ['allergene' => $legendeAlg, 'zusatzstoffe' => $legendeZus],
             'kostformen' => $this->kostformAbdeckung($plan, $mahlzeit, $mo),
+            'naehrwerte' => $this->wochenNaehrwerte($plan, $mahlzeit, $mo),
             'erzeugt' => Carbon::now()->format('d.m.Y'),
         ];
     }
@@ -561,6 +565,123 @@ class SpeiseplanService
         }
 
         return ['auftraege' => $auftraege, 'ziele' => $zieleGesamt, 'tage' => $tage];
+    }
+
+    // ── Spec 31 / Stufe D: DGE-Nährwertbilanz + Abwechslung ──────────────────
+
+    /**
+     * Nährwert-Wochenbilanz — Ø je Person und Werktag (kcal/Eiweiß/Fett/ges.Fett/Salz/Zucker/KH).
+     * Reuse {@see ConcepterAggregateService::naehrwertAggregat}: je Gericht 1 Portion/Person
+     * (GV-Modell „eine Komponente = eine Portion"). Gemittelt über Werktage MIT Nährwertdaten.
+     *
+     * @return array{schnitt: array<string,?float>, tage_mit_daten:int, confidence:string}
+     */
+    public function wochenNaehrwerte(FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, int $tage = 5): array
+    {
+        $agg = app(ConcepterAggregateService::class);
+        $felder = ['kcal', 'protein_g', 'fett_g', 'gesfett_g', 'salz_g', 'zucker_g', 'kh_g'];
+        $summe = array_fill_keys($felder, 0.0);
+        $nTage = 0;
+        $konfRang = null;
+
+        for ($i = 0; $i < $tage; $i++) {
+            $tag = $montag->copy()->addDays($i)->startOfDay();
+            $rows = collect();
+            foreach ($plan->entries as $e) {
+                if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->isSameDay($tag)) {
+                    continue;
+                }
+                foreach ($this->eintragGerichte($e) as $g) {
+                    $rows->push(['gericht' => $g, 'quantity' => 1, 'unit' => null]);
+                }
+            }
+            if ($rows->isEmpty()) {
+                continue;
+            }
+            $n = $agg->naehrwertAggregat($rows);
+            if (($n['n_mit_naehrwerten'] ?? 0) === 0) {
+                continue;
+            }
+            $nTage++;
+            foreach ($felder as $f) {
+                $summe[$f] += (float) ($n[$f] ?? 0);
+            }
+            $rang = self::KONF_RANG[$n['confidence']] ?? 0;
+            $konfRang = $konfRang === null ? $rang : min($konfRang, $rang);
+        }
+
+        $schnitt = array_fill_keys($felder, null);
+        if ($nTage > 0) {
+            foreach ($felder as $f) {
+                $roh = $summe[$f] / $nTage;
+                $schnitt[$f] = $f === 'kcal' ? round($roh) : ($f === 'salz_g' ? round($roh, 2) : round($roh, 1));
+            }
+        }
+
+        return [
+            'schnitt' => $schnitt,
+            'tage_mit_daten' => $nTage,
+            'confidence' => $nTage === 0 ? 'unknown' : (array_search($konfRang ?? 0, self::KONF_RANG, true) ?: 'unknown'),
+        ];
+    }
+
+    /**
+     * Abwechslung/Häufigkeit der Woche: Diät-Mix (vegan/vegetarisch/mit Fleisch·Fisch) je serviertem
+     * Gericht + Warengruppen-Häufigkeit (dish_main_group). Weicher Hinweis, wenn eine Warengruppe die
+     * Woche dominiert (≥ $tage Vorkommen). Alles aus vorhandenen Feldern (spec_*, dish_main_group_id).
+     *
+     * @return array{diaet: array{vegan:int, vegetarisch:int, omnivor:int}, warengruppen: list<array{name:string,count:int}>, hinweis: ?string}
+     */
+    public function wochenAbwechslung(FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, int $tage = 5): array
+    {
+        $vegan = 0;
+        $veg = 0;
+        $omni = 0;
+        $wg = [];   // dish_main_group_id => count
+        for ($i = 0; $i < $tage; $i++) {
+            $tag = $montag->copy()->addDays($i)->startOfDay();
+            foreach ($plan->entries as $e) {
+                if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->isSameDay($tag)) {
+                    continue;
+                }
+                foreach ($this->eintragGerichte($e) as $g) {
+                    if ((bool) $g->spec_is_vegan) {
+                        $vegan++;
+                    } elseif ((bool) $g->spec_is_vegetarian) {
+                        $veg++;
+                    } else {
+                        $omni++;
+                    }
+                    $gid = $g->dish_main_group_id;
+                    if ($gid !== null) {
+                        $wg[(int) $gid] = ($wg[(int) $gid] ?? 0) + 1;
+                    }
+                }
+            }
+        }
+
+        // Warengruppen-Namen in EINER Query auflösen.
+        $namen = [];
+        if ($wg !== []) {
+            $namen = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::whereIn('id', array_keys($wg))
+                ->pluck('label', 'id')->all();
+        }
+        arsort($wg);
+        $warengruppen = [];
+        $dominant = null;
+        foreach ($wg as $gid => $count) {
+            $name = $namen[$gid] ?? ('#' . $gid);
+            $warengruppen[] = ['name' => $name, 'count' => $count];
+            if ($dominant === null && $count >= $tage) {
+                $dominant = $name;
+            }
+        }
+
+        return [
+            'diaet' => ['vegan' => $vegan, 'vegetarisch' => $veg, 'omnivor' => $omni],
+            'warengruppen' => array_slice($warengruppen, 0, 6),
+            'hinweis' => $dominant !== null ? 'Warengruppe „' . $dominant . '" dominiert die Woche — mehr Abwechslung erwägen.' : null,
+        ];
     }
 
     /**

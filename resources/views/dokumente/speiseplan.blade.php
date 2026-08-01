@@ -96,6 +96,19 @@
         </div>
     @endif
 
+    {{-- DGE-Nährwert-Wochenschnitt --}}
+    @if(!empty($naehrwerte) && $naehrwerte['tage_mit_daten'] > 0)
+        @php($n = $naehrwerte['schnitt'])
+        <div class="kostform"><strong>Ø Nährwerte/Person/Tag:</strong>
+            <span class="kf">kcal {{ $n['kcal'] !== null ? number_format($n['kcal'], 0, ',', '.') : '—' }}</span>
+            <span class="kf">Eiweiß {{ $n['protein_g'] !== null ? number_format($n['protein_g'], 1, ',', '.') . ' g' : '—' }}</span>
+            <span class="kf">Fett {{ $n['fett_g'] !== null ? number_format($n['fett_g'], 1, ',', '.') . ' g' : '—' }}</span>
+            <span class="kf">davon ges. {{ $n['gesfett_g'] !== null ? number_format($n['gesfett_g'], 1, ',', '.') . ' g' : '—' }}</span>
+            <span class="kf">Salz {{ $n['salz_g'] !== null ? number_format($n['salz_g'], 2, ',', '.') . ' g' : '—' }}</span>
+            <span class="kf">Zucker {{ $n['zucker_g'] !== null ? number_format($n['zucker_g'], 1, ',', '.') . ' g' : '—' }}</span>
+        </div>
+    @endif
+
     {{-- Pflicht-Legende (LMIV): nur was in dieser Woche vorkommt --}}
     @if(!empty($legende['allergene']) || !empty($legende['zusatzstoffe']))
         <div class="legende">

@@ -87,3 +87,49 @@ it('Stufe B: Aushang-Daten — Grid + Codes + nur-verwendete Legende', function 
     expect(collect($d['legende']['allergene'])->firstWhere('code', 'A')['label'])->toBe('Glutenhaltiges Getreide')
         ->and(collect($d['legende']['zusatzstoffe'])->firstWhere('code', '1')['label'])->toBe('mit Farbstoff');
 });
+
+it('Stufe C: Pax-Override + Woche→Produktion erzeugt je Werktag einen Auftrag', function () {
+    $g = gvGericht($this->rootTeam->id, 'c1');
+    $sp = $this->plan->create($this->rootTeam, ['name' => 'GV-C', 'start_date' => '2026-07-06']);
+    $this->plan->update($this->rootTeam, $sp->id, ['default_pax' => 50]);
+    $e = $this->plan->addEintrag($this->rootTeam, $sp->id, ['entry_date' => '2026-07-06', 'mahlzeit' => 'mittag', 'sales_recipe_id' => $g->id]);
+
+    // 0 → NULL (Default gilt), dann echter Override 80
+    $this->plan->setEintragPax($this->rootTeam, $e->id, 0);
+    expect($e->fresh()->pax)->toBeNull();
+    $this->plan->setEintragPax($this->rootTeam, $e->id, 80);
+
+    $res = $this->plan->wocheAnProduktion($this->rootTeam, $sp->refresh(), 'mittag', Carbon::parse('2026-07-06'), null);
+    expect($res['auftraege'])->toBe(1)->and($res['ziele'])->toBe(1)->and($res['tage'])->toBe(['2026-07-06']);
+
+    $order = \Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder::where('team_id', $this->rootTeam->id)->latest('id')->first();
+    expect($order)->not->toBeNull();
+    $target = collect($order->targets)->first();
+    expect($target['recipe_id'])->toBe($g->id)
+        ->and((int) ($target['portions'] ?? $target['persons'] ?? 0))->toBe(80);   // Override schlägt Default
+});
+
+it('Stufe D: Nährwert-Ø/Person/Tag + Abwechslungs-Mix', function () {
+    $hg = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::create([
+        'team_id' => $this->rootTeam->id, 'code' => 'FLE', 'label' => 'Fleischgericht',
+    ]);
+    // nutri pro 100 g × Portionsgramm 250 → pro Person: kcal 500, Eiweiß 25 g, Salz 2,5 g
+    $g = gvGericht($this->rootTeam->id, 'd1', [
+        'nutri_kcal_per_100g' => 200, 'nutri_protein_g_per_100g' => 10, 'nutri_salt_g_per_100g' => 1,
+        'nutri_confidence' => 'high', 'sales_quantity_per_unit_g' => 250, 'dish_main_group_id' => $hg->id,
+    ]);
+    $sp = $this->plan->create($this->rootTeam, ['name' => 'GV-D', 'start_date' => '2026-07-06']);
+    $this->plan->addEintrag($this->rootTeam, $sp->id, ['entry_date' => '2026-07-06', 'mahlzeit' => 'mittag', 'sales_recipe_id' => $g->id]);
+    $montag = Carbon::parse('2026-07-06');
+
+    $nw = $this->plan->wochenNaehrwerte($sp->refresh(), 'mittag', $montag);
+    expect($nw['tage_mit_daten'])->toBe(1)
+        ->and($nw['schnitt']['kcal'])->toBe(500.0)
+        ->and($nw['schnitt']['protein_g'])->toBe(25.0)
+        ->and($nw['schnitt']['salz_g'])->toBe(2.5);
+
+    $ab = $this->plan->wochenAbwechslung($sp, 'mittag', $montag);
+    expect($ab['diaet']['omnivor'])->toBe(1)
+        ->and($ab['diaet']['vegan'])->toBe(0)
+        ->and(collect($ab['warengruppen'])->firstWhere('name', 'Fleischgericht')['count'])->toBe(1);
+});

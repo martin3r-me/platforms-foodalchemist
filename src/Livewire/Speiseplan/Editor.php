@@ -24,7 +24,12 @@ class Editor extends Component
 {
     public ?int $planId = null;
 
-    public array $form = ['name' => '', 'start_date' => null, 'cycle_weeks' => 4, 'min_abstand_tage' => 0, 'status' => 'draft'];
+    public array $form = ['name' => '', 'start_date' => null, 'cycle_weeks' => 4, 'min_abstand_tage' => 0, 'status' => 'draft', 'default_pax' => 100, 'budget_wareneinsatz' => null];
+
+    // Stufe C: Rückmeldung der Produktions-Übergabe
+    public ?string $prodHinweis = null;
+
+    public ?string $prodFehler = null;
 
     public string $mahlzeit = 'mittag';
 
@@ -70,7 +75,11 @@ class Editor extends Component
             'cycle_weeks' => $sp->cycle_weeks,
             'min_abstand_tage' => $sp->min_abstand_tage,
             'status' => $sp->status,
+            'default_pax' => $sp->default_pax,
+            'budget_wareneinsatz' => $sp->budget_wareneinsatz,
         ];
+        $this->prodHinweis = null;
+        $this->prodFehler = null;
         $start = $sp->start_date ?? Carbon::now();
         $this->montag = $start->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
         $this->monatStr = $start->copy()->startOfMonth()->format('Y-m-d');
@@ -215,6 +224,36 @@ class Editor extends Component
         $this->dispatch('speiseplan-geaendert');
     }
 
+    /** Stufe C: Pax-Override je Eintrag (leer/0 → Plan-Default gilt). */
+    public function setPax(int $id, $wert, SpeiseplanService $svc): void
+    {
+        $svc->setEintragPax($this->team(), $id, $wert);
+        $this->dispatch('speiseplan-geaendert');
+    }
+
+    /** Stufe C: die sichtbare Woche + Mahlzeit an die Produktion übergeben (je Werktag ein Auftrag). */
+    public function anProduktion(SpeiseplanService $svc): void
+    {
+        $this->prodHinweis = null;
+        $this->prodFehler = null;
+        if ($this->planId === null) {
+            return;
+        }
+        try {
+            $sp = $svc->detail($this->team(), $this->planId);
+            if ($sp === null) {
+                return;
+            }
+            $montag = Carbon::parse($this->montag ?? 'now')->startOfWeek(Carbon::MONDAY);
+            $res = $svc->wocheAnProduktion($this->team(), $sp, $this->mahlzeit, $montag, \Illuminate\Support\Facades\Auth::id());
+            $this->prodHinweis = $res['auftraege'] > 0
+                ? $res['auftraege'] . ' Produktionsauftrag(e) mit ' . $res['ziele'] . ' Ziel(en) angelegt.'
+                : 'Nichts zu übergeben — keine Belegung in dieser Woche/Mahlzeit.';
+        } catch (\Throwable $e) {
+            $this->prodFehler = $e->getMessage();
+        }
+    }
+
     public function ausrollen(SpeiseplanService $svc): void
     {
         if ($this->planId === null || $this->ausrollenBis === null) {
@@ -265,6 +304,8 @@ class Editor extends Component
             'veggie' => $sp !== null ? $svc->veggieCheck($sp, $this->mahlzeit, $montag) : null,
             'kostformen' => $sp !== null ? $svc->kostformAbdeckung($sp, $this->mahlzeit, $montag) : [],
             'kennzeichnung' => $sp !== null ? $svc->wochenKennzeichnung($sp, $this->mahlzeit, $montag) : null,
+            'naehrwerte' => $sp !== null ? $svc->wochenNaehrwerte($sp, $this->mahlzeit, $montag) : null,
+            'abwechslung' => $sp !== null ? $svc->wochenAbwechslung($sp, $this->mahlzeit, $montag) : null,
             'wiederholungen' => $sp !== null ? collect($svc->wiederholungen($sp))->where('konflikt', true)->values()->all() : [],
             'mahlzeiten' => SpeiseplanService::MAHLZEITEN,
             'kandidaten' => $kandidaten,

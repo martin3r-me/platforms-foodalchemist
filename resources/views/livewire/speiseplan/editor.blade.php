@@ -14,6 +14,8 @@
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-sp-speichern>Speichern</button>
             <button type="button" wire:click="loeschen({{ $sp->id }})" wire:confirm="Speiseplan löschen?" class="{{ $btnGhostXs }} text-red-600" data-sp-loeschen>Löschen</button>
             @if($ausrollenInfo)<span class="text-[12px] text-violet-300 ml-2 self-center" data-sp-ausrollen-info>{{ $ausrollenInfo }}</span>@endif
+            @if($prodHinweis)<span class="text-[12px] text-emerald-300 ml-2 self-center" data-sp-prod-hinweis>✓ {{ $prodHinweis }}</span>@endif
+            @if($prodFehler)<span class="text-[12px] text-rose-300 ml-2 self-center" data-sp-prod-fehler>{{ $prodFehler }}</span>@endif
         @endif
     </x-slot:actions>
 
@@ -68,6 +70,9 @@
                             </span>
                             <a href="{{ route('foodalchemist.speiseplan.dokument', ['id' => $sp->id, 'mahlzeit' => $mahlzeit, 'montag' => $montagDt->format('Y-m-d')]) }}" target="_blank"
                                class="{{ $btnGhostXs }}" title="Wochen-Aushang (Druck/PDF) mit Allergen- & Zusatzstoff-Legende" data-sp-aushang>@svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Aushang</a>
+                            <button type="button" wire:click="anProduktion"
+                                    wire:confirm="Diese Woche ({{ $mahlzeiten[$mahlzeit] ?? '' }}) an die Produktion übergeben? Je Werktag mit Belegung wird ein Produktionsauftrag angelegt (Menge = Teilnehmerzahl)."
+                                    class="{{ $btnGhostXs }}" title="Woche × Teilnehmerzahl → Produktionsaufträge (je Werktag einer)" data-sp-produktion>@svg('heroicon-o-fire', 'w-3.5 h-3.5 inline-block align-middle') → Produktion</button>
                             <span class="flex items-center gap-2 ml-auto">
                                 @if($ansicht === 'woche')
                                     <button type="button" wire:click="wocheVerschieben(-1)" class="{{ $btnGhostXs }}">◀</button>
@@ -110,6 +115,10 @@
                                                                     <div wire:key="e-{{ $e->id }}" class="group flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-gray-100"
                                                                          style="background: {{ ($zl['color'] ?? null) ? $zl['color'].'33' : 'rgba(255,255,255,0.07)' }}">
                                                                         <span class="flex-1 min-w-0 truncate" title="{{ $e->inhaltName() }}">{{ $e->inhaltName() }}</span>
+                                                                        <input type="number" min="0" value="{{ $e->pax }}" placeholder="{{ $sp->default_pax }}"
+                                                                               wire:change="setPax({{ $e->id }}, $event.target.value)"
+                                                                               title="Teilnehmer (leer = Plan-Default {{ $sp->default_pax }})"
+                                                                               class="w-11 text-right text-[10px] px-1 py-0 rounded bg-white/10 border border-white/15 text-gray-100 shrink-0" />
                                                                         <button type="button" wire:click="eintragRaus({{ $e->id }})" class="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 shrink-0">✕</button>
                                                                     </div>
                                                                 @endforeach
@@ -236,6 +245,14 @@
                             </div>
                         </x-foodalchemist::modal-section>
 
+                        <x-foodalchemist::modal-section title="Teilnehmer & Wareneinsatz-Budget">
+                            <p class="text-[11px] text-gray-400 mb-2">Default-Kopfzahl für die Produktions-Übergabe (je Zelle überschreibbar) + EK-Zielwert pro Person für die Budget-Ampel.</p>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div><label class="{{ $label }}">Teilnehmer (Default)</label><input type="number" min="1" wire:model.live="form.default_pax" wire:change="speichern" class="{{ $input }} text-right tabular-nums" data-sp-default-pax /></div>
+                                <div><label class="{{ $label }}">Budget EK/Person (€)</label><input type="text" inputmode="decimal" wire:model.live="form.budget_wareneinsatz" wire:change="speichern" placeholder="z. B. 1,80" class="{{ $input }} text-right tabular-nums" title="Wareneinsatz-Ziel pro Person/Mahlzeit — Ampel in der Rail" /></div>
+                            </div>
+                        </x-foodalchemist::modal-section>
+
                         <x-foodalchemist::modal-section title="Zyklus ausrollen">
                             <p class="text-[11px] text-gray-400 mb-2">Den {{ $sp->cycle_weeks }}-Wochen-Block ab Start auf alle Folgewochen bis zum Zieldatum kopieren (belegte Tage bleiben unberührt).</p>
                             <div class="flex items-center gap-2 flex-wrap">
@@ -251,13 +268,31 @@
             {{-- ═══ Live-Kennzahlen-Rail (Cockpit) ═══
                  Rechnet bei jeder Zellen-/Linien-Änderung mit — VK/EK je Person, Veggie-Tagescheck,
                  Wiederholungs-Konflikte. Bewusst auf Tab-Ebene: aus jedem Tab sichtbar. --}}
-            <aside class="w-72 shrink-0 pr-6 sticky top-0 self-start space-y-3 pt-4" data-sp-kennzahlen>
+            <aside class="w-72 shrink-0 pr-6 sticky top-0 self-start max-h-[85vh] overflow-y-auto space-y-3 pt-4" data-sp-kennzahlen>
                 <h3 class="{{ $label }} px-1">Kennzahlen · Woche</h3>
 
                 @if($kosten)
                     <div class="rounded-xl border border-white/10 bg-white/[0.04] p-4 text-center">
                         <div class="text-2xl font-semibold text-gray-100 tabular-nums">{{ number_format($kosten['woche']['vk'], 2, ',', '.') }} €</div>
                         <div class="{{ $label }}">VK/Person · {{ $mahlzeiten[$mahlzeit] ?? '' }} · EK {{ number_format($kosten['woche']['ek'], 2, ',', '.') }} €</div>
+                        <div class="text-[10px] text-gray-500 mt-1">Default {{ $sp->default_pax }} Teilnehmer</div>
+                    </div>
+                @endif
+
+                {{-- Wareneinsatz-Budget-Ampel (GV): Ø EK/Person/Tag vs. Zielwert --}}
+                @if($kosten && $sp->budget_wareneinsatz)
+                    @php($tageK = collect($kosten['pro_tag']))
+                    @php($nT = $tageK->count())
+                    @php($avgEk = $nT > 0 ? round($tageK->avg('ek'), 2) : 0)
+                    @php($budget = (float) $sp->budget_wareneinsatz)
+                    @php($ueberTage = $tageK->filter(fn ($t) => $t['ek'] > $budget)->count())
+                    @php($ampel = $avgEk > $budget ? 'danger' : ($ueberTage > 0 ? 'warning' : 'success'))
+                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1" data-sp-budget>
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="{{ $label }}">Wareneinsatz-Budget</span>
+                            <span class="{{ $pill }} {{ $variantPill[$ampel] }}">{{ $ampel === 'success' ? 'im Ziel' : ($ampel === 'warning' ? $ueberTage . ' Tag(e) drüber' : 'über Ziel') }}</span>
+                        </div>
+                        <div class="text-[11px] text-gray-400">Ø EK {{ number_format($avgEk, 2, ',', '.') }} € / Ziel {{ number_format($budget, 2, ',', '.') }} € p.P./Tag</div>
                     </div>
                 @endif
 
@@ -301,6 +336,44 @@
                             </div>
                         @endif
                         <p class="text-[10px] text-gray-500">Vollständige Tages-Kennzeichnung im Aushang-Export.</p>
+                    </div>
+                @endif
+
+                {{-- DGE-Nährwert-Wochenbilanz (Ø je Person/Tag) --}}
+                @if($naehrwerte && $naehrwerte['tage_mit_daten'] > 0)
+                    @php($n = $naehrwerte['schnitt'])
+                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1" data-sp-naehrwerte>
+                        <div class="{{ $label }}">Nährwerte · Ø/Person/Tag</div>
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-gray-300">
+                            <div class="flex justify-between"><span class="text-gray-500">kcal</span><span class="tabular-nums">{{ $n['kcal'] !== null ? number_format($n['kcal'], 0, ',', '.') : '—' }}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">Eiweiß</span><span class="tabular-nums">{{ $n['protein_g'] !== null ? number_format($n['protein_g'], 1, ',', '.') . ' g' : '—' }}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">Fett</span><span class="tabular-nums">{{ $n['fett_g'] !== null ? number_format($n['fett_g'], 1, ',', '.') . ' g' : '—' }}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">ges. Fett</span><span class="tabular-nums">{{ $n['gesfett_g'] !== null ? number_format($n['gesfett_g'], 1, ',', '.') . ' g' : '—' }}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">Salz</span><span class="tabular-nums">{{ $n['salz_g'] !== null ? number_format($n['salz_g'], 2, ',', '.') . ' g' : '—' }}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">Zucker</span><span class="tabular-nums">{{ $n['zucker_g'] !== null ? number_format($n['zucker_g'], 1, ',', '.') . ' g' : '—' }}</span></div>
+                        </div>
+                        @if($naehrwerte['confidence'] !== 'high')<p class="text-[10px] text-amber-300/80">Konfidenz {{ $naehrwerte['confidence'] }} — nicht alle Gerichte mit Nährwert/Portionsgramm.</p>@endif
+                    </div>
+                @endif
+
+                {{-- Abwechslung/Häufigkeit: Diät-Mix + Warengruppen der Woche --}}
+                @if($abwechslung)
+                    @php($dm = $abwechslung['diaet'])
+                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1.5" data-sp-abwechslung>
+                        <div class="{{ $label }}">Abwechslung · Woche</div>
+                        <div class="flex flex-wrap gap-1 text-[11px]">
+                            <span class="{{ $pill }} {{ $variantPill['success'] }}">Vegan {{ $dm['vegan'] }}</span>
+                            <span class="{{ $pill }} {{ $variantPill['info'] }}">Vegetarisch {{ $dm['vegetarisch'] }}</span>
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">mit Fleisch/Fisch {{ $dm['omnivor'] }}</span>
+                        </div>
+                        @if(!empty($abwechslung['warengruppen']))
+                            <div class="flex flex-wrap gap-1 pt-1.5 border-t border-white/10">
+                                @foreach($abwechslung['warengruppen'] as $w)
+                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $w['name'] }} ×{{ $w['count'] }}</span>
+                                @endforeach
+                            </div>
+                        @endif
+                        @if($abwechslung['hinweis'])<p class="text-[10px] text-amber-300/80">{{ $abwechslung['hinweis'] }}</p>@endif
                     </div>
                 @endif
 
