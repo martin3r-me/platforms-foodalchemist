@@ -107,10 +107,11 @@
                 </div>
             </x-foodalchemist::modal-section>
 
-            {{-- Katalog-Concepts referenzieren --}}
+            {{-- Katalog-Concepts referenzieren — INLINE-Picker (Concepter-/Foodbook-Muster, kein Modal) --}}
+            <div x-data="{ einf: false }">
             <x-foodalchemist::modal-section title="Aus Katalog (referenziert)">
                 <x-slot:actions>
-                    <button type="button" @click="$dispatch('modal.open', { name: 'angebot-katalog' })" class="{{ $btnGhostXs }} text-violet-600" data-angebot-katalog-open>+ Concept einbinden</button>
+                    <button type="button" @click="einf = !einf" class="{{ $btnGhostXs }} text-violet-600" :class="einf ? '!bg-violet-500/20 !border-violet-500/40' : ''" data-angebot-katalog-open>+ Concept einbinden</button>
                 </x-slot:actions>
                 <div class="space-y-1.5">
                     @forelse($angebot->referencedConcepts as $rc)
@@ -122,7 +123,71 @@
                         <p class="text-[11px] text-gray-500">Keine referenziert. „+ Concept einbinden" öffnet den Katalog-Filter (Portfolio wiederverwenden).</p>
                     @endforelse
                 </div>
+
+                {{-- Inline-Picker: Suche + Concepter-Dimensionen + Kandidatenliste; „+" referenziert direkt, bleibt offen --}}
+                <div x-show="einf" x-cloak class="mt-3 border-t border-white/10 pt-3" data-angebot-katalog-picker>
+                    <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen … (aus der Liste mit + einbinden)" class="{{ $input }} w-full mb-2" />
+                    @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
+                    <div class="flex gap-3">
+                        <div class="w-52 shrink-0 overflow-y-auto border-r border-white/10 pr-2 space-y-2 max-h-72">
+                            <button type="button" wire:click="resetConceptFacetten"
+                                    class="w-full text-left text-[11px] px-2 py-1 rounded-lg {{ ! $facettenAktiv ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-500 hover:bg-black/[0.06]' }}">Alle Dimensionen</button>
+                            @if($facetteEventtypen->isNotEmpty())
+                                <div class="space-y-1"><span class="{{ $label }}">Eventtyp</span>
+                                    <div class="flex flex-wrap gap-1">
+                                        @foreach($facetteEventtypen as $et)
+                                            <button type="button" wire:key="afc-ev-{{ $et->id }}" wire:click="toggleConceptFacet('eventtyp', {{ $et->id }})" class="{{ $pill }} {{ $conceptFacetten['eventtyp'] === $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+                            @if($facetteServierformen->isNotEmpty())
+                                <div class="space-y-1"><span class="{{ $label }}">Servierform</span>
+                                    <div class="flex flex-wrap gap-1">
+                                        @foreach($facetteServierformen as $sf)
+                                            <button type="button" wire:key="afc-sf-{{ $sf->id }}" wire:click="toggleConceptFacet('servierform', {{ $sf->id }})" class="{{ $pill }} {{ $conceptFacetten['servierform'] === $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+                            @if($facetteMomente->isNotEmpty())
+                                <div class="space-y-1"><span class="{{ $label }}">Einsatzmoment</span>
+                                    <div class="flex flex-wrap gap-1">
+                                        @foreach($facetteMomente as $em)
+                                            <button type="button" wire:key="afc-em-{{ $em->id }}" wire:click="toggleConceptFacet('einsatzmoment', {{ $em->id }})" class="{{ $pill }} {{ $conceptFacetten['einsatzmoment'] === $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+                            @if($facetteSaisons->isNotEmpty())
+                                <div class="space-y-1"><span class="{{ $label }}">Saison</span>
+                                    <div class="flex flex-wrap gap-1">
+                                        @foreach($facetteSaisons as $sa)
+                                            <button type="button" wire:key="afc-sa-{{ $sa->id }}" wire:click="toggleConceptFacet('season', {{ $sa->id }})" class="{{ $pill }} {{ $conceptFacetten['season'] === $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+                        <div class="flex-1 min-w-0 overflow-y-auto space-y-0.5 max-h-72">
+                            @if($katalogTreffer->isNotEmpty())
+                                @foreach($katalogTreffer as $kt)
+                                    <button type="button" wire:key="acd-{{ $kt->id }}" wire:click="referenziereConcept({{ $kt->id }})"
+                                            class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                        <span class="truncate text-gray-900">+ {{ $kt->name }}</span>
+                                        <span class="text-gray-500 tabular-nums shrink-0">{{ $kt->price_per_person_cache !== null ? number_format((float) $kt->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                    </button>
+                                @endforeach
+                            @elseif($conceptSuche !== '' || $facettenAktiv)
+                                <p class="text-[11px] text-gray-500 px-2 py-2">Keine Concepts für diese Auswahl.</p>
+                            @else
+                                <p class="text-[11px] text-gray-500 px-2 py-2">Noch keine Concepts angelegt.</p>
+                            @endif
+                        </div>
+                    </div>
+                </div>
             </x-foodalchemist::modal-section>
+            </div>
 
             {{-- Mengen-Hochrechnung für die Pax --}}
             @if($kalkulation && ! $kalkulation['leer'] && $kalkulation['pax'] > 0 && count($kalkulation['mengen']))
@@ -183,70 +248,6 @@
         </div>
     </x-foodalchemist::editor-tabs>
 
-    {{-- Katalog-Concept-Picker (Modal, dark-canvas: liegt unter .fa-editor-panel) --}}
-    <x-foodalchemist::modal name="angebot-katalog" title="Katalog-Concept einbinden" size="max-w-3xl" dark-canvas>
-        <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-3" />
-        @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
-        <div class="flex gap-3 min-h-[20rem]">
-            <div class="w-56 shrink-0 overflow-y-auto border-r border-white/10 pr-2 space-y-2 max-h-[26rem]">
-                <button type="button" wire:click="resetConceptFacetten"
-                        class="w-full text-left text-[11px] px-2 py-1 rounded-lg {{ ! $facettenAktiv ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-500 hover:bg-black/[0.06]' }}">Alle Dimensionen</button>
-                @if($facetteEventtypen->isNotEmpty())
-                    <div class="space-y-1"><span class="{{ $label }}">Eventtyp</span>
-                        <div class="flex flex-wrap gap-1">
-                            @foreach($facetteEventtypen as $et)
-                                <button type="button" wire:key="afc-ev-{{ $et->id }}" wire:click="toggleConceptFacet('eventtyp', {{ $et->id }})" class="{{ $pill }} {{ $conceptFacetten['eventtyp'] === $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
-                @if($facetteServierformen->isNotEmpty())
-                    <div class="space-y-1"><span class="{{ $label }}">Servierform</span>
-                        <div class="flex flex-wrap gap-1">
-                            @foreach($facetteServierformen as $sf)
-                                <button type="button" wire:key="afc-sf-{{ $sf->id }}" wire:click="toggleConceptFacet('servierform', {{ $sf->id }})" class="{{ $pill }} {{ $conceptFacetten['servierform'] === $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
-                @if($facetteMomente->isNotEmpty())
-                    <div class="space-y-1"><span class="{{ $label }}">Einsatzmoment</span>
-                        <div class="flex flex-wrap gap-1">
-                            @foreach($facetteMomente as $em)
-                                <button type="button" wire:key="afc-em-{{ $em->id }}" wire:click="toggleConceptFacet('einsatzmoment', {{ $em->id }})" class="{{ $pill }} {{ $conceptFacetten['einsatzmoment'] === $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
-                @if($facetteSaisons->isNotEmpty())
-                    <div class="space-y-1"><span class="{{ $label }}">Saison</span>
-                        <div class="flex flex-wrap gap-1">
-                            @foreach($facetteSaisons as $sa)
-                                <button type="button" wire:key="afc-sa-{{ $sa->id }}" wire:click="toggleConceptFacet('season', {{ $sa->id }})" class="{{ $pill }} {{ $conceptFacetten['season'] === $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
-            </div>
-            <div class="flex-1 min-w-0 overflow-y-auto space-y-0.5 max-h-[26rem]">
-                @if($katalogTreffer->isNotEmpty())
-                    @foreach($katalogTreffer as $kt)
-                        <button type="button" wire:key="acd-{{ $kt->id }}" wire:click="referenziereConcept({{ $kt->id }})"
-                                class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                            <span class="truncate text-gray-900">+ {{ $kt->name }}</span>
-                            <span class="text-gray-500 tabular-nums shrink-0">{{ $kt->price_per_person_cache !== null ? number_format((float) $kt->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
-                        </button>
-                    @endforeach
-                @elseif($conceptSuche !== '' || $facettenAktiv)
-                    <p class="text-[11px] text-gray-500 px-2 py-2">Keine Concepts für diese Auswahl.</p>
-                @else
-                    <p class="text-[11px] text-gray-500 px-2 py-2">Noch keine Concepts angelegt.</p>
-                @endif
-            </div>
-        </div>
-        <x-slot:footer>
-            <button type="button" @click="$dispatch('modal.close', { name: 'angebot-katalog' })" class="{{ $btnGhost }}">Schließen</button>
-        </x-slot:footer>
-    </x-foodalchemist::modal>
+    {{-- Katalog-Picker liegt jetzt inline im „Aus Katalog"-Abschnitt (Concepter-/Foodbook-Muster). --}}
     @endif
 </x-foodalchemist::modal>
