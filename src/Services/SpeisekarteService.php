@@ -30,6 +30,7 @@ class SpeisekarteService
     public function __construct(
         private ConceptService $concepts,
         private DarreichungResolver $darreichung,
+        private WordingResolver $wording,
     ) {
     }
 
@@ -336,6 +337,186 @@ class SpeisekarteService
         return FoodAlchemistConcept::visibleToTeam($team)->echte()
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache']);
+    }
+
+    // ── Dokument / Druck (Stufe B) ───────────────────────────────────────────
+
+    /**
+     * Druckbare Speisekarte: Rubrik-Baum (Pre-Order) mit Positionen inkl. Wording-Name,
+     * Allergen-/Zusatzstoff-Fußnoten-Codes (ALL-MAXIMAL) und Netto-/Brutto-VK. Sammelt
+     * die tatsächlich vorkommenden Kennzeichnungs-Codes für die Legende (§ Kennzeichnung).
+     *
+     * Codes: Allergene = Buchstaben in EU-Reihenfolge, Zusatzstoffe = Nummern, `*` = Spuren.
+     * Preis: Brutto = Netto × (1 + MwSt) — Gastro-Default regulärer Satz (In-Haus-Verzehr).
+     */
+    public function dokumentDaten(Team $team, FoodAlchemistSpeisekarte $karte): array
+    {
+        $agg = app(ConcepterAggregateService::class);
+        $marge = app(MargeService::class);
+        $mwstArr = app(TeamSettingsService::class)->mwst($team);
+        $mwstSatz = (float) ($mwstArr['regulaer'] ?? 19.0);
+        $brutto = (bool) $karte->preis_anzeige_brutto;
+
+        // Code-Register (voll), Nutzung wird gesammelt.
+        $allergenCode = [];
+        $i = 0;
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $slug => $label) {
+            $allergenCode[$slug] = ['code' => chr(65 + $i), 'label' => $label];
+            $i++;
+        }
+        $zusatzCode = [];
+        $j = 1;
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE as $slug => $label) {
+            $zusatzCode[$slug] = ['code' => (string) $j, 'label' => $label];
+            $j++;
+        }
+        $usedAlg = [];
+        $usedZus = [];
+
+        // Codes einer Position aus der Allergen-/Zusatzstoff-Aggregation ihrer Gerichte.
+        $codesFuer = function (FoodAlchemistSpeisekartePosition $pos) use ($agg, $allergenCode, $zusatzCode, &$usedAlg, &$usedZus): array {
+            $k = $agg->kennzeichnungFromGerichte($this->positionGerichte($pos));
+            $codes = [];
+            foreach ($k['allergene'] as $a) {
+                if ($a['status'] === 'enthalten' || $a['status'] === 'spuren') {
+                    $usedAlg[$a['slug']] = true;
+                    $codes[] = $allergenCode[$a['slug']]['code'] . ($a['status'] === 'spuren' ? '*' : '');
+                }
+            }
+            foreach ($k['zusatzstoffe'] as $z) {
+                if ($z['status'] === 'ja') {
+                    $usedZus[$z['slug']] = true;
+                    $codes[] = $zusatzCode[$z['slug']]['code'];
+                }
+            }
+
+            return $codes;
+        };
+
+        // Rubrik-Baum in Pre-Order; je Position Name (Wording) + Codes + Preis.
+        $sections = $karte->relationLoaded('sections') ? $karte->sections : $karte->sections()->with(['items.dish', 'items.concept'])->get();
+        $byParent = $sections->groupBy(fn ($r) => $r->parent_id ?? 0);
+
+        $rubriken = [];
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $marge, $mwstSatz) {
+            foreach ($byParent[$parentId] ?? [] as $rubrik) {
+                $positionen = [];
+                foreach ($rubrik->items->where('visible', true)->sortBy('position') as $pos) {
+                    $preis = $this->positionPreis($pos);
+                    $einheit = $marge->proEinheit($preis['vk'], 1, $mwstSatz);
+                    $positionen[] = [
+                        'typ' => $pos->type,
+                        'name' => $this->positionName($pos),
+                        'consumer_text' => $pos->consumer_text,
+                        'codes' => in_array($pos->type, ['gericht_ref', 'menue_ref'], true) ? $codesFuer($pos) : [],
+                        'vk_netto' => $preis['vk'],
+                        'vk_brutto' => $einheit['vk_brutto_pro_einheit'] ?? null,
+                        'preis_quelle' => $preis['quelle'],
+                    ];
+                }
+                $rubriken[] = [
+                    'id' => (int) $rubrik->id,
+                    'title' => $rubrik->consumer_title ?: $rubrik->title,
+                    'claim' => $rubrik->claim,
+                    'art' => $rubrik->art,
+                    'preis_anzeige' => $rubrik->preis_anzeige,
+                    'depth' => $depth,
+                    'positionen' => $positionen,
+                ];
+                $walk((int) $rubrik->id, $depth + 1);
+            }
+        };
+        $walk(0, 0);
+
+        $legendeAlg = [];
+        foreach ($allergenCode as $slug => $cl) {
+            if (isset($usedAlg[$slug])) {
+                $legendeAlg[] = $cl;
+            }
+        }
+        $legendeZus = [];
+        foreach ($zusatzCode as $slug => $cl) {
+            if (isset($usedZus[$slug])) {
+                $legendeZus[] = $cl;
+            }
+        }
+
+        return [
+            'karte' => $karte,
+            'rubriken' => $rubriken,
+            'legende' => ['allergene' => $legendeAlg, 'zusatzstoffe' => $legendeZus],
+            'brutto' => $brutto,
+            'mwstSatz' => $mwstSatz,
+            'branding' => $this->brandingDaten($karte),
+            'erzeugt' => now()->format('d.m.Y'),
+        ];
+    }
+
+    /**
+     * Gerichte einer Position für die Allergen-/Zusatzstoff-Aggregation:
+     * gericht_ref → das eine Gericht/Getränk; menue_ref → alle Gänge des Concepts.
+     */
+    public function positionGerichte(FoodAlchemistSpeisekartePosition $pos): Collection
+    {
+        if ($pos->type === 'gericht_ref') {
+            $dish = $pos->relationLoaded('dish') ? $pos->dish : $pos->dish()->first();
+
+            return $dish ? collect([$dish]) : collect();
+        }
+        if ($pos->type === 'menue_ref') {
+            $concept = FoodAlchemistConcept::with(['slots.package.dishes.gericht', 'slots.dish'])->find($pos->concept_id);
+            if ($concept === null) {
+                return collect();
+            }
+            $gerichte = collect();
+            foreach ($concept->slots as $slot) {
+                if ($slot->package) {
+                    $gerichte = $gerichte->merge($slot->package->dishes->pluck('gericht')->filter());
+                }
+                if ($slot->dish) {
+                    $gerichte->push($slot->dish);
+                }
+            }
+
+            return $gerichte->filter()->unique('id')->values();
+        }
+
+        return collect();
+    }
+
+    /** Kunden-Anzeigename einer Position über die Wording-Kette (Override → Standard → Name). */
+    private function positionName(FoodAlchemistSpeisekartePosition $pos): ?string
+    {
+        if ($pos->wording !== null && trim($pos->wording) !== '') {
+            return trim($pos->wording);
+        }
+        if ($pos->type === 'gericht_ref') {
+            $dish = $pos->relationLoaded('dish') ? $pos->dish : $pos->dish()->first();
+
+            return $dish ? ($this->wording->fuerGericht($dish)['text'] ?? $dish->name) : $pos->label;
+        }
+        if ($pos->type === 'menue_ref') {
+            $concept = $pos->relationLoaded('concept') ? $pos->concept : $pos->concept()->first();
+
+            return $concept?->name ?? $pos->label;
+        }
+
+        return $pos->label;
+    }
+
+    /**
+     * Branding-Tokens fürs Dokument (DomPDF-taugliche base64-Bilder). Stufe B liefert Farben +
+     * Footer; Logo/Cover-Data-URIs kommen mit der Branding-Verwaltung in Stufe C.
+     */
+    private function brandingDaten(FoodAlchemistSpeisekarte $karte): array
+    {
+        return [
+            'color' => $karte->brand_color ?: '#6d28d9',
+            'band' => $karte->band_color,
+            'logo' => null,
+            'cover' => null,
+            'footer' => $karte->footer_text,
+        ];
     }
 
     // ── Guards ───────────────────────────────────────────────────────────────
