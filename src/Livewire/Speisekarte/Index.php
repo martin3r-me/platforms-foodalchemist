@@ -323,9 +323,10 @@ class Index extends Component
         $team = $this->team();
         $karte = $this->karteId ? $svc->detail($team, $this->karteId) : null;
 
-        // Preis-Map je Position (netto) für die Live-Anzeige.
+        // Preis-Map je Position (netto) für die Editor-Live-Anzeige + Kunden-Vorschau (Wording aufgelöst).
         $preise = [];
         $baum = [];
+        $vorschau = null;
         if ($karte) {
             $baum = $svc->rubrikTree($team, $karte->id);
             foreach ($karte->sections as $rubrik) {
@@ -333,6 +334,7 @@ class Index extends Component
                     $preise[$pos->id] = $svc->positionPreis($pos);
                 }
             }
+            $vorschau = $svc->dokumentDaten($team, $karte);
         }
 
         $pickerErgebnisse = collect();
@@ -347,6 +349,7 @@ class Index extends Component
             'karte' => $karte,
             'baum' => $baum,
             'preise' => $preise,
+            'vorschau' => $vorschau,
             'pickerErgebnisse' => $pickerErgebnisse,
         ])->layout('platform::layouts.app');
     }
