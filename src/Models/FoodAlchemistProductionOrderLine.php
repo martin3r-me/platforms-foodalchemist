@@ -49,6 +49,8 @@ class FoodAlchemistProductionOrderLine extends Model
         'manual_ansaetze' => 'decimal:3',   // Spec 30
         'is_manual_ansaetze' => 'boolean',
         'is_struck' => 'boolean',
+        'vorlauf_tage' => 'integer',        // Spec 30 E3: Rückwärts-Offset auf den Liefertag
+        'plan_date' => 'date',              // abgeleitet — einziger Schreiber: syncPlanDates()
     ];
 
     public function productionOrder(): BelongsTo
@@ -59,6 +61,12 @@ class FoodAlchemistProductionOrderLine extends Model
     public function recipe(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id');
+    }
+
+    /** Posten (Spec 30 E3) — NULL = unverplant. */
+    public function station(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistProductionStation::class, 'station_id');
     }
 
     /** Freie Position (Spec 30) — kein Rezept dahinter, vom Recompute unberührt. */

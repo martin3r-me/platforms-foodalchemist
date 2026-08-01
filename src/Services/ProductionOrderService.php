@@ -14,7 +14,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * Spec 18 — Produktionsaufträge (N-Track, Ableger von Spec 17/Bestellwesen).
@@ -48,10 +50,17 @@ class ProductionOrderService
         'note',                                    // gab es schon vor Spec 30
         'manual_ansaetze', 'is_manual_ansaetze',   // Küchen-Override der Ansätze
         'is_struck', 'struck_reason',              // gestrichen
+        'station_id', 'assignee', 'vorlauf_tage',  // E3: Zuteilung (Posten · Name · Vorlauf)
     ];
 
     /** Freie Positionen sortieren in ein eigenes Zahlenband, damit der Recompute sie nie umnummeriert. */
     public const MANUELL_POSITION_BASIS = 10000;
+
+    /**
+     * Obergrenze für den Vorproduktions-Offset. Kappt Tippfehler („30" statt „3"), die sonst
+     * Arbeit einen Monat nach vorne würfen — und hält die Tagesplan-Fenster überschaubar.
+     */
+    public const MAX_VORLAUF_TAGE = 14;
 
     // ── source_ref-Verdrahtung (P4: EIN Ort für Bau + Lesen) ────────────────
 
@@ -272,6 +281,93 @@ class ProductionOrderService
             $this->verwaisteOverlays($overlay, array_column($blatt['rezepte'], 'recipe_id')),
         );
         $order->save();
+        $this->syncPlanDates($order);
+    }
+
+    /**
+     * Spec 30 E3 — `plan_date` aus `production_date − vorlauf_tage` neu ableiten.
+     *
+     * ⚠️ EINZIGER SCHREIBER dieser Spalte. Kein anderer Code darf sie setzen, sonst driftet
+     * die abgeleitete Wahrheit still gegen `vorlauf_tage` — und der Tagesplan zeigt Arbeit an
+     * einem Tag, an dem niemand hinschaut. Jeder Pfad, der `production_date` ändert, ruft das
+     * hier: `recomputeOrder()` und `updateHeader()`.
+     *
+     * BEWUSST in PHP gerechnet statt per SQL-Datumsarithmetik — die divergiert zwischen
+     * SQLite (Testsuite) und MySQL.
+     */
+    public function syncPlanDates(FoodAlchemistProductionOrder $order): void
+    {
+        $liefertag = $order->production_date;
+        if ($liefertag === null) {
+            return;
+        }
+
+        foreach ($order->lines()->get(['id', 'vorlauf_tage', 'plan_date']) as $line) {
+            $soll = $liefertag->copy()->subDays(max(0, (int) $line->vorlauf_tage))->toDateString();
+            if ($line->plan_date?->toDateString() !== $soll) {
+                $line->forceFill(['plan_date' => $soll])->save();
+            }
+        }
+    }
+
+    /**
+     * Spec 30 E3 — Zuteilung setzen: Posten · Verantwortlicher · Vorlauf.
+     *
+     * Nur übergebene Keys werden angefasst (`array_key_exists`), damit ein Teil-Update nicht
+     * still die anderen Felder leert. Vorlauf über `MAX_VORLAUF_TAGE` hinaus wird gekappt:
+     * ein Tippfehler („30" statt „3") soll keine Arbeit einen Monat nach vorn werfen.
+     */
+    public function assignLine(Team $team, int $lineId, array $input): FoodAlchemistProductionOrderLine
+    {
+        $line = $this->ownedDisponierbareLine($team, $lineId);
+
+        if (array_key_exists('station_id', $input)) {
+            $line->station_id = TeamScope::referenz(
+                FoodAlchemistProductionStation::class, $input['station_id'], $team, 'Posten'
+            );
+        }
+        if (array_key_exists('assignee', $input)) {
+            $line->assignee = mb_substr(trim((string) $input['assignee']), 0, 120) ?: null;
+        }
+        if (array_key_exists('vorlauf_tage', $input)) {
+            $line->vorlauf_tage = max(0, min(self::MAX_VORLAUF_TAGE, (int) $input['vorlauf_tage']));
+        }
+        $line->save();
+
+        // Vorlauf geändert ⇒ abgeleitetes plan_date nachziehen (einziger Schreiber, s. o.)
+        $this->syncPlanDates($line->productionOrder);
+
+        return $line->refresh();
+    }
+
+    /**
+     * Arbeitszeit + Ansätze je Posten für EINEN Auftrag (Editor/Panel).
+     *
+     * Gestrichene Zeilen zählen nicht. Zeilen ohne Posten landen im Bucket `null` —
+     * unverplante Arbeit darf nicht unsichtbar sein, nur weil sie an keinem Posten hängt.
+     * `ohne_zeit` macht die Datenlücke sichtbar: `work_time_min` ist am Rezept oft leer,
+     * eine Summe ohne diesen Hinweis würde eine halbe Datenlage als Wahrheit verkaufen.
+     *
+     * @return list<array{station_id: ?int, station: string, zeilen: int, ansaetze: float, arbeitszeit_min: int, ohne_zeit: int}>
+     */
+    public function postenSummen(Team $team, int $orderId): array
+    {
+        $order = FoodAlchemistProductionOrder::visibleToTeam($team)
+            ->with('lines.station:id,name')->findOrFail($orderId);
+
+        return $order->lines
+            ->reject(fn ($l) => (bool) $l->is_struck)
+            ->groupBy(fn ($l) => $l->station_id ?? 0)
+            ->map(fn ($zeilen, $sid) => [
+                'station_id' => (int) $sid ?: null,
+                'station' => (int) $sid ? ($zeilen->first()->station?->name ?? '—') : 'Nicht zugeteilt',
+                'zeilen' => $zeilen->count(),
+                'ansaetze' => round((float) $zeilen->sum('ansaetze_effektiv'), 3),
+                'arbeitszeit_min' => (int) $zeilen->sum('arbeitszeit_min'),
+                'ohne_zeit' => $zeilen->whereNull('arbeitszeit_min')->count(),
+            ])
+            ->sortBy(fn ($p) => $p['station_id'] === null ? 'zzz' : $p['station'])
+            ->values()->all();
     }
 
     /**
@@ -291,7 +387,7 @@ class ProductionOrderService
     {
         $warnungen = [];
         foreach ($overlay as $recipeId => $felder) {
-            if ($felder === [] || in_array((int) $recipeId, array_map('intval', $erzeugteRecipeIds), true)) {
+            if (! $this->istSubstanziell($felder) || in_array((int) $recipeId, array_map('intval', $erzeugteRecipeIds), true)) {
                 continue;
             }
             $name = FoodAlchemistRecipe::withTrashed()->whereKey($recipeId)->value('name') ?? "Rezept #{$recipeId}";
@@ -299,6 +395,27 @@ class ProductionOrderService
         }
 
         return $warnungen;
+    }
+
+    /**
+     * Hat an dieser Zeile überhaupt jemand etwas gepflegt, das eine Meldung wert wäre?
+     *
+     * Wichtig für Felder mit bedeutungslosem Default: `vorlauf_tage = 0` heißt „kein Vorlauf"
+     * und ist KEIN Eingriff. Zählte es mit, würde jede entfernte Zeile eine Warnung auslösen
+     * und die Meldung wäre in einer Woche Rauschen, das niemand mehr liest.
+     */
+    private function istSubstanziell(array $felder): bool
+    {
+        foreach ($felder as $k => $v) {
+            if ($k === 'vorlauf_tage' && (int) $v === 0) {
+                continue;
+            }
+            if ($v !== null && $v !== false && $v !== '' && $v !== 0 && $v !== '0') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -332,8 +449,10 @@ class ProductionOrderService
         if (array_key_exists('note', $input)) {
             $order->note = ($input['note'] ?? '') !== '' ? $input['note'] : null;
         }
+        $datumGeaendert = false;
         if (array_key_exists('production_date', $input) && ! empty($input['production_date'])) {
             $order->production_date = $input['production_date'];
+            $datumGeaendert = $order->isDirty('production_date');
         }
         // Puffer-% (0–100): ändert die Explosion → nach dem Speichern neu rechnen.
         $pufferGeaendert = false;
@@ -346,7 +465,11 @@ class ProductionOrderService
         }
         $order->save();
         if ($pufferGeaendert) {
-            $this->recomputeOrder($team, $order->refresh());
+            $this->recomputeOrder($team, $order->refresh());   // rechnet und synct plan_date mit
+        } elseif ($datumGeaendert) {
+            // Liefertag verschoben ⇒ der ganze Vorproduktions-Schwanz wandert mit.
+            // Genau dafür ist der Vorlauf ein OFFSET und kein absolutes Datum.
+            $this->syncPlanDates($order->refresh());
         }
 
         return $order->refresh();
@@ -437,7 +560,7 @@ class ProductionOrderService
 
         $maxManuell = (int) $order->lines()->where('origin', 'manual')->max('position');
 
-        return $order->lines()->create([
+        $zeile = $order->lines()->create([
             'team_id' => $order->team_id,
             'origin' => 'manual',
             'recipe_id' => null,
@@ -451,6 +574,12 @@ class ProductionOrderService
             'note' => trim((string) ($input['note'] ?? '')) ?: null,
             'position' => max($maxManuell, self::MANUELL_POSITION_BASIS) + 1,
         ]);
+
+        // Auch freie Positionen brauchen ihr abgeleitetes plan_date, sonst fallen sie aus
+        // dem Tagesplan und aus jeder Kapazitätsrechnung heraus.
+        $this->syncPlanDates($order);
+
+        return $zeile->refresh();
     }
 
     /** Freie Position entfernen (nur solche — berechnete Zeilen werden gestrichen). */
@@ -850,6 +979,29 @@ class ProductionOrderService
         }
 
         return $order;
+    }
+
+    /**
+     * Spec 30 E3 — Disposition ist bis einschließlich `in_progress` erlaubt.
+     *
+     * Der Snapshot-Freeze schützt die GERECHNETE Wahrheit (Ansätze, Mengen, Zutaten). Posten,
+     * Verantwortlicher und Vorlauf sind dagegen Disposition: die Realität besetzt mitten im
+     * Service um, und der Recompute ist in `in_progress` ohnehin ein No-op — es gibt nichts,
+     * was desynchronisieren könnte.
+     */
+    private function ownedDisponierbareLine(Team $team, int $lineId): FoodAlchemistProductionOrderLine
+    {
+        $line = FoodAlchemistProductionOrderLine::with('productionOrder')->findOrFail($lineId);
+        $order = $line->productionOrder;
+        if ($order === null || ! $order->isOwnedBy($team)) {
+            throw new \RuntimeException('Produktionszeile nicht im Schreibzugriff (D1).');
+        }
+        $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
+        if (! in_array($status, [ProductionOrderStatus::Planned, ProductionOrderStatus::InProgress], true)) {
+            throw new \RuntimeException('Ein abgeschlossener Auftrag lässt sich nicht mehr umdisponieren.');
+        }
+
+        return $line;
     }
 
     private function ownedOpenLine(Team $team, int $lineId): FoodAlchemistProductionOrderLine

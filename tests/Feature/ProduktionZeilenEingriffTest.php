@@ -161,7 +161,8 @@ it('die Overlay-Konstante ist vollständig — jedes gelistete Feld wird wirklic
 
     // Tabellengetrieben: neue Overlay-Felder fallen hier auf, wenn der Restore sie vergisst.
     $werte = ['note' => 'x', 'manual_ansaetze' => 3.0, 'is_manual_ansaetze' => true,
-        'is_struck' => true, 'struck_reason' => 'y'];
+        'is_struck' => true, 'struck_reason' => 'y',
+        'station_id' => null, 'assignee' => 'Marco', 'vorlauf_tage' => 2];
     expect(array_keys($werte))->toBe(ProductionOrderService::OVERLAY_FELDER);
 
     $zeile->update($werte);
