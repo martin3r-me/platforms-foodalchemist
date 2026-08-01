@@ -12,12 +12,12 @@
 @php($statusPunkt = ['erledigt' => 'bg-emerald-500', 'teil' => 'bg-amber-500', 'offen' => 'bg-gray-300'])
 
 @if(! empty($checkliste))
-    <div class="flex items-center gap-1 flex-wrap" data-leitstelle-checkliste>
+    <div class="flex items-center gap-x-2 gap-y-1.5 flex-wrap" data-leitstelle-checkliste>
         <span class="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Schritte</span>
         @foreach($checkliste as $s)
             <button type="button"
                     @click="$dispatch('fb-goto', { tab: @js($s['tab']), anker: @js($s['anker']) })"
-                    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] border transition-colors {{ $statusStil[$s['status']] ?? $statusStil['offen'] }}"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] border transition-colors {{ $statusStil[$s['status']] ?? $statusStil['offen'] }}"
                     title="{{ $s['hinweis'] ?? $s['label'] }}"
                     data-checkliste-schritt="{{ $s['key'] }}" data-status="{{ $s['status'] }}">
                 <span class="w-1.5 h-1.5 rounded-full {{ $statusPunkt[$s['status']] ?? $statusPunkt['offen'] }}"></span>

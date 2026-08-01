@@ -176,7 +176,7 @@
                 {{-- E5.2: Leitstellen-Leiste auf Tab-Ebene (aus allen Tabs sichtbar) — der abgeleitete
                      7-Schritt-Fortschritt (Bedarf→Preise, klickbar) + der Phasen-Stepper (Versand-Status).
                      Der Stepper wanderte hierher aus der Briefing-Karte (vorher ~:131). --}}
-                <div class="flex flex-col gap-2 pt-3 pb-1 border-b border-black/5" data-fb-leitstelle>
+                <div class="flex flex-col gap-3 pt-4 pb-4 border-b border-black/5" data-fb-leitstelle>
                     @include('foodalchemist::livewire.foodbooks.partials.leitstelle-checkliste', ['checkliste' => $checkliste])
                     @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $fb->phase ?? 'kontext'])
                 </div>

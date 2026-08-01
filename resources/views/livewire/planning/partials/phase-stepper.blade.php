@@ -6,12 +6,12 @@
 @php($aktuellerIndex = array_search($phaseAktuell, array_keys($phasen), true))
 
 <div class="space-y-1.5" data-phase-stepper data-phase-aktuell="{{ $phaseAktuell }}">
-    <div class="flex items-center gap-1 flex-wrap">
+    <div class="flex items-center gap-x-2 gap-y-1.5 flex-wrap">
         <span class="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Phase</span>
         @foreach($phasen as $key => $lbl)
             @php($i = array_search($key, array_keys($phasen), true))
             <button type="button" wire:click="phaseSetzen('{{ $key }}')"
-                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors
+                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] border transition-colors
                         {{ $key === $phaseAktuell
                             ? 'bg-violet-500/15 border-violet-500/40 text-violet-700 font-medium'
                             : ($i < (int) $aktuellerIndex
