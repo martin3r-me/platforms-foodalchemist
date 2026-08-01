@@ -22,33 +22,56 @@ class Index extends Component
     #[Url(as: 'q')]
     public string $search = '';
 
+    /** Gewählter Plan → Aushang-Vorschau in der Mitte (Foodbook-Muster). */
+    #[Url(as: 'sp')]
+    public ?int $selectedId = null;
+
+    /** Mahlzeit für die Aushang-Vorschau. */
+    public string $vorschauMahlzeit = 'mittag';
+
     public function updatedSearch(): void
     {
         $this->resetPage();
     }
 
-    /** Refresh der Browser-Zähler nach einer Änderung im Editor. */
+    /** Refresh nach einer Änderung im Editor (Zähler + Aushang-Vorschau). */
     #[On('speiseplan-geaendert')]
     public function aktualisieren(): void
     {
-        // reines Re-Render — withCount('entries') zieht die neuen Zahlen.
+        // reines Re-Render — withCount('entries') + dokumentDaten ziehen den neuen Stand.
     }
 
     public function neu(SpeiseplanService $svc): void
     {
         $sp = $svc->create($this->team(), ['name' => 'Neuer Speiseplan']);
+        $this->selectedId = $sp->id;
+        // Neuer Plan ist leer → direkt in den Editor (Vorschau käme leer).
         $this->dispatch('speiseplan-editor.bearbeiten', id: $sp->id);
     }
 
+    /** Plan wählen → Aushang-Vorschau. Bearbeiten öffnet erst das Editor-Modal. */
     public function waehle(int $id): void
     {
-        $this->dispatch('speiseplan-editor.bearbeiten', id: $id);
+        $this->selectedId = $id;
+    }
+
+    public function bearbeiten(): void
+    {
+        if ($this->selectedId) {
+            $this->dispatch('speiseplan-editor.bearbeiten', id: $this->selectedId);
+        }
     }
 
     public function render(SpeiseplanService $svc)
     {
+        $team = $this->team();
+        $plan = $this->selectedId ? $svc->detail($team, $this->selectedId) : null;
+        $vorschau = $plan ? $svc->dokumentDaten($team, $plan, $this->vorschauMahlzeit) : null;
+
         return view('foodalchemist::livewire.speiseplan.index', [
-            'plaene' => $svc->paginateBrowser(['search' => $this->search], $this->team()),
+            'plaene' => $svc->paginateBrowser(['search' => $this->search], $team),
+            'plan' => $plan,
+            'vorschau' => $vorschau,
         ])->layout('platform::layouts.app');
     }
 
