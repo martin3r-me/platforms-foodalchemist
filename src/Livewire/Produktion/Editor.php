@@ -398,6 +398,59 @@ class Editor extends Component
         $this->fuehreAus(fn ($team) => $svc->updateLine($team, $lineId, ['note' => $note]), 'Notiz gespeichert.');
     }
 
+    // ── Spec 30 E2: Zeilen-Eingriff ─────────────────────────────────────────
+
+    /** Formular der freien Position (Tab „Zeilen"). */
+    public string $freiTitel = '';
+
+    public string $freiZeit = '';
+
+    /** Ansätze überschreiben; leeres Feld nimmt den Override zurück. */
+    public function zeileAnsaetze(int $lineId, string $wert, ProductionOrderService $svc): void
+    {
+        $roh = trim(str_replace(',', '.', $wert));
+        if ($roh !== '' && (! is_numeric($roh) || (float) $roh < 0)) {
+            $this->fehler = 'Ansätze brauchen eine Zahl ≥ 0 (oder leer für den berechneten Wert).';
+
+            return;
+        }
+        $this->fuehreAus(
+            fn ($team) => $svc->setLineAnsaetze($team, $lineId, $roh === '' ? null : (float) $roh),
+            $roh === '' ? 'Auf den berechneten Wert zurückgesetzt.' : 'Ansätze überschrieben.',
+        );
+    }
+
+    public function zeileStreichen(int $lineId, bool $struck, ProductionOrderService $svc): void
+    {
+        $this->fuehreAus(
+            fn ($team) => $svc->setLineStruck($team, $lineId, $struck),
+            $struck ? 'Zeile gestrichen — sie zählt nicht mehr mit und kommt nicht auf den Zettel.' : 'Zeile wiederhergestellt.',
+        );
+    }
+
+    public function freiePositionAnlegen(ProductionOrderService $svc): void
+    {
+        if (trim($this->freiTitel) === '') {
+            $this->fehler = 'Freie Position braucht einen Titel.';
+
+            return;
+        }
+        $titel = $this->freiTitel;
+        $zeit = $this->freiZeit;
+        $this->fuehreAus(
+            fn ($team) => $svc->addManualLine($team, (int) $this->orderId, ['titel' => $titel, 'arbeitszeit_min' => $zeit]),
+            'Freie Position angelegt.',
+        );
+        if ($this->fehler === null) {
+            $this->reset('freiTitel', 'freiZeit');
+        }
+    }
+
+    public function freiePositionLoeschen(int $lineId, ProductionOrderService $svc): void
+    {
+        $this->fuehreAus(fn ($team) => $svc->removeManualLine($team, $lineId), 'Freie Position entfernt.');
+    }
+
     /** Einbahn-Übergabe: Bedarf aller Ziele an die Bestellschienen (Service-zentral inkl. Stale-Marker). */
     public function anBestellungUebergeben(ProductionOrderService $prod, OrderService $orders): void
     {

@@ -25,7 +25,7 @@
     </x-slot:kpiHeader>
 
     <x-foodalchemist::editor-tabs marker="produktion" wire-key="produktion-tabs-{{ $orderId ?? 'neu' }}" :init="'stammdaten'"
-        :tabs="['stammdaten' => 'Stammdaten', 'ziele' => 'Ziele', 'vorschau' => 'Vorschau', 'einkauf' => $orderId ? 'Einkauf & Status' : null]">
+        :tabs="['stammdaten' => 'Stammdaten', 'ziele' => 'Ziele', 'vorschau' => 'Vorschau', 'zeilen' => $orderId ? 'Zeilen' : null, 'einkauf' => $orderId ? 'Einkauf & Status' : null]">
 
     <div x-show="tab === 'stammdaten'" x-cloak class="pt-4">
     <x-foodalchemist::modal-section title="Stammdaten">
@@ -215,6 +215,133 @@
     </div>{{-- /Vorschau-Panel --}}
 
     {{-- ═══ Tab: EINKAUF & STATUS (aus DetailPanel gemergt — nur bestehender Auftrag) ═══ --}}
+    {{-- ── Tab: ZEILEN (Spec 30 E2) — der Auftrag als Arbeitsdokument ──────────
+         Die Vorschau zeigt, was gerechnet WURDE. Hier greift der Mensch ein: Ansätze
+         überschreiben, Zeilen streichen, freie Positionen ergänzen. Was hier gesetzt wird,
+         überlebt jeden Recompute (Overlay), die berechnete Zahl bleibt als Referenz stehen. --}}
+    <div x-show="tab === 'zeilen'" x-cloak class="pt-4 space-y-4" data-produktion-zeilen>
+        @if($ops === null)
+            <p class="text-[12px] text-gray-500">Auftrag zuerst speichern — dann erscheinen die Zeilen.</p>
+        @else
+            @if($hinweis)<div class="{{ $sectionCard }} !bg-emerald-500/[0.06] !border-emerald-500/20 text-[12px] text-emerald-700">✓ {{ $hinweis }}</div>@endif
+
+            {{-- Warnungen des GESPEICHERTEN Auftrags — die standen bisher nirgends im Editor. --}}
+            @if(! empty($ops['warnungen']))
+                <x-foodalchemist::alert tone="warning" data-produktion-warnungen>
+                    <ul class="list-disc list-inside space-y-0.5">
+                        @foreach(array_unique($ops['warnungen']) as $w)<li>{{ $w }}</li>@endforeach
+                    </ul>
+                </x-foodalchemist::alert>
+            @endif
+
+            @php($zeilen = collect($ops['zeilen']))
+            @php($darfEditieren = $ops['editierbar'] ?? false)
+
+            <x-foodalchemist::modal-section title="Zeilen ({{ $zeilen->count() }})">
+                <x-slot:actions>
+                    <span class="text-[11px] text-gray-500">
+                        {{ rtrim(rtrim(number_format((float) $ops['ansaetze_gesamt'], 2, ',', '.'), '0'), ',') }} Ansätze
+                        @if($ops['arbeitszeit_gesamt_min'] > 0) · {{ $ops['arbeitszeit_gesamt_min'] }} min @endif
+                        @php($ohneZeit = $zeilen->reject(fn ($z) => $z['ist_gestrichen'])->filter(fn ($z) => ($z['arbeitszeit_min'] ?? null) === null)->count())
+                        @if($ohneZeit > 0)<span class="text-amber-600" title="Diese Zeilen haben keine Arbeitszeit am Rezept — die Summe ist unvollständig."> · {{ $ohneZeit }} ohne Zeit</span>@endif
+                    </span>
+                </x-slot:actions>
+
+                @if(! $darfEditieren)
+                    <p class="text-[11px] text-gray-500 mb-2">
+                        Nur ein <strong>geplanter</strong> Auftrag im eigenen Team ist editierbar — der Stand ist eingefroren.
+                    </p>
+                @endif
+
+                <table class="{{ $table }}">
+                    <thead>
+                        <tr>
+                            <th class="{{ $th }} w-full">Rezept / Position</th>
+                            <th class="{{ $th }} text-right whitespace-nowrap">Ansätze</th>
+                            <th class="{{ $th }} text-right whitespace-nowrap">Portionen</th>
+                            <th class="{{ $th }} text-right whitespace-nowrap">Zeit</th>
+                            <th class="{{ $th }}">Notiz</th>
+                            <th class="{{ $th }} w-px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($zeilen as $z)
+                            <tr class="{{ $tr }} {{ $z['ist_gestrichen'] ? 'opacity-50' : '' }}" wire:key="pz-{{ $z['id'] }}" data-produktion-zeile="{{ $z['id'] }}">
+                                <td class="{{ $td }}">
+                                    <span class="{{ $z['ist_gestrichen'] ? 'line-through' : '' }}">{{ $z['name'] }}</span>
+                                    @if($z['ist_freie_position'])
+                                        <span class="{{ $pill }} {{ $variantPill['primary'] }} ml-1">manuell</span>
+                                    @elseif($z['ist_basisrezept'])
+                                        <span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Basisrezept</span>
+                                    @endif
+                                    @if($z['ist_gestrichen'])
+                                        <span class="{{ $pill }} {{ $variantPill['danger'] ?? $variantPill['secondary'] }} ml-1">gestrichen</span>
+                                        @if($z['struck_reason'])<span class="text-[11px] text-gray-500 ml-1">— {{ $z['struck_reason'] }}</span>@endif
+                                    @endif
+                                </td>
+                                <td class="{{ $td }} text-right whitespace-nowrap">
+                                    @if($darfEditieren)
+                                        <input type="text" inputmode="decimal"
+                                               value="{{ $z['ist_manuelle_ansaetze'] ? rtrim(rtrim(number_format($z['ansaetze'], 3, ',', ''), '0'), ',') : '' }}"
+                                               placeholder="{{ rtrim(rtrim(number_format($z['ansaetze_berechnet'], 3, ',', ''), '0'), ',') }}"
+                                               wire:change="zeileAnsaetze({{ $z['id'] }}, $event.target.value)"
+                                               class="{{ $input }} !py-0.5 !w-20 text-right tabular-nums"
+                                               title="leer = berechneter Wert" data-zeile-ansaetze />
+                                    @else
+                                        <span class="tabular-nums">{{ rtrim(rtrim(number_format($z['ansaetze'], 2, ',', '.'), '0'), ',') }}</span>
+                                    @endif
+                                    @if($z['override_stale'])
+                                        <div class="text-[10px] text-amber-600 mt-0.5" data-override-stale>
+                                            berechnet: {{ rtrim(rtrim(number_format($z['ansaetze_berechnet'], 2, ',', '.'), '0'), ',') }}
+                                            @if($darfEditieren)
+                                                <button type="button" wire:click="zeileAnsaetze({{ $z['id'] }}, '')" class="underline">zurücksetzen</button>
+                                            @endif
+                                        </div>
+                                    @endif
+                                </td>
+                                <td class="{{ $td }} text-right tabular-nums">{{ $z['portionen'] ?? '—' }}</td>
+                                <td class="{{ $td }} text-right tabular-nums">{{ $z['arbeitszeit_min'] !== null ? $z['arbeitszeit_min'] . ' min' : '—' }}</td>
+                                <td class="{{ $td }}">
+                                    @if($darfEditieren)
+                                        <input type="text" value="{{ $z['note'] }}" wire:change="updateLineNote({{ $z['id'] }}, $event.target.value)"
+                                               class="{{ $input }} !py-0.5" placeholder="Küchen-Notiz" data-zeile-notiz />
+                                    @else
+                                        <span class="text-[11px] text-gray-500">{{ $z['note'] }}</span>
+                                    @endif
+                                </td>
+                                <td class="{{ $td }} whitespace-nowrap">
+                                    @if($darfEditieren)
+                                        @if($z['ist_freie_position'])
+                                            <button type="button" wire:click="freiePositionLoeschen({{ $z['id'] }})" wire:confirm="Freie Position entfernen?"
+                                                    class="{{ $btnGhostXs }} text-rose-500" data-zeile-loeschen>✕</button>
+                                        @elseif($z['ist_gestrichen'])
+                                            <button type="button" wire:click="zeileStreichen({{ $z['id'] }}, false)" class="{{ $btnGhostXs }}" data-zeile-zurueck>wiederherstellen</button>
+                                        @else
+                                            <button type="button" wire:click="zeileStreichen({{ $z['id'] }}, true)" class="{{ $btnGhostXs }} text-rose-500"
+                                                    title="Zählt nicht mehr mit und kommt nicht auf den Zettel — bleibt aber sichtbar" data-zeile-streichen>streichen</button>
+                                        @endif
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="6" class="{{ $td }} text-[12px] text-gray-500">Noch keine Zeilen — erst Ziele setzen.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+
+                @if($darfEditieren)
+                    <div class="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-black/5" data-freie-position>
+                        <span class="{{ $dt }}">＋ Freie Position</span>
+                        <input type="text" wire:model="freiTitel" placeholder="z. B. Brot beim Bäcker abholen" class="{{ $input }} !py-1 flex-1 min-w-48" data-frei-titel />
+                        <input type="text" inputmode="numeric" wire:model="freiZeit" placeholder="min" class="{{ $input }} !py-1 !w-20" data-frei-zeit />
+                        <button type="button" wire:click="freiePositionAnlegen" class="{{ $btnGhostXs }}" data-frei-anlegen>Hinzufügen</button>
+                        <span class="text-[10px] text-gray-500">Etwas, das kein Rezept ist. Erscheint nicht im Einkauf.</span>
+                    </div>
+                @endif
+            </x-foodalchemist::modal-section>
+        @endif
+    </div>{{-- /Tab ZEILEN --}}
+
     <div x-show="tab === 'einkauf'" x-cloak class="pt-4 space-y-4">
         @if($ops === null)
             <p class="text-[12px] text-gray-500">Auftrag zuerst speichern — dann erscheinen Status, Bestell-Übergabe und Deckungsgrad.</p>
