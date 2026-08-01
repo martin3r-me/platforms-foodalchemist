@@ -13,6 +13,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
+use Platform\FoodAlchemist\Livewire\Orders\Editor as OrdersEditor;
 use Platform\FoodAlchemist\Livewire\Orders\Index as OrdersIndex;
 use Platform\FoodAlchemist\Services\LeadLaService;
 use Platform\FoodAlchemist\Services\OrderService;
@@ -272,21 +273,24 @@ it('UI: Bestellungen-Seite listet Schienen, Detail + Absenden + manuelle Menge',
     $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
     $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
 
-    $comp = Livewire::test(OrdersIndex::class)
-        ->assertSee('Chefs')->assertSee('Hanos')
-        ->call('select', $chefs->id)
+    // Browser listet die Schienen …
+    Livewire::test(OrdersIndex::class)->assertSee('Chefs')->assertSee('Hanos');
+
+    // … der Editor zeigt Detail + Absenden; manuelle Menge greift.
+    $ed = Livewire::test(OrdersEditor::class)
+        ->call('oeffnenBearbeiten', $chefs->id)
         ->assertSee('ART-MEH')          // Gebinde-Detail sichtbar
         ->assertSee('Absenden');
 
     // Manuelle Menge übersteuern: 10 → 15 Sack ×2 € = 30 € (+ Zucker 1 = 31 €)
-    $comp->call('updateLineQty', $mehlLine->id, 15);
+    $ed->call('updateLineQty', $mehlLine->id, 15);
     expect((float) $chefs->refresh()->total_net)->toBe(31.0)
         ->and((bool) $mehlLine->refresh()->is_manual_qty)->toBeTrue();
 
     // Absenden → nicht mehr editierbar
-    $comp->call('setStatus', 'sent');
+    $ed->call('setStatus', 'sent');
     expect($chefs->refresh()->status->value)->toBe('sent');
-    $comp->call('select', $chefs->id)->assertSee('eingefroren');
+    $ed->call('oeffnenBearbeiten', $chefs->id)->assertSee('eingefroren');
 });
 
 it('S3: dokument() + mailtoData() + Bestell-Dokument-Blade rendert', function () {
@@ -476,23 +480,20 @@ it('E1: UI — 3-Panel-Cockpit, Lieferant-Filter + Kopf speichern + Zeilen-Notiz
 
     $comp = Livewire::test(OrdersIndex::class)->assertSee('Chefs')->assertSee('Hanos');
 
-    // Lieferant-Filter: nur die Chefs-Schiene in der Liste (Hanos-Order-Button verschwindet;
-    // die Lieferanten-Optionen im Select bleiben vollständig — daher auf die wire:key prüfen).
+    // Lieferant-Filter: nur die Chefs-Schiene in der Liste (Hanos-Zeile verschwindet).
     $comp->set('supplierFilter', $chefs->supplier_id)
         ->assertSee('ord-' . $chefs->id)
         ->assertDontSee('ord-' . $hanos->id);
-    $comp->set('supplierFilter', null);
 
-    // Wählen → Kopf-Form geladen; speichern persistiert
-    $comp->call('select', $chefs->id)
+    // Editor: Kopf-Form geladen; speichern persistiert + Zeilen-Notiz.
+    $ed = Livewire::test(OrdersEditor::class)->call('oeffnenBearbeiten', $chefs->id)
         ->set('formReference', 'Betriebsfeier')
         ->set('formDeliveryDate', '2026-08-15')
         ->call('saveHeader')
         ->assertSet('hinweis', 'Kopf gespeichert.');
     expect($chefs->refresh()->reference)->toBe('Betriebsfeier');
 
-    // Zeilen-Notiz
-    $comp->call('updateLineNote', $mehlLine->id, 'bio bevorzugt');
+    $ed->call('updateLineNote', $mehlLine->id, 'bio bevorzugt');
     expect($mehlLine->refresh()->note)->toBe('bio bevorzugt');
 });
 
@@ -634,8 +635,7 @@ it('E2 UI: „Neue Bestellung" legt leere Draft-Schiene an + wählt sie', functi
     Livewire::test(OrdersIndex::class)
         ->set('neuerLieferant', $chefs->id)
         ->call('neueBestellung')
-        ->assertSet('hinweis', 'Bestellung angelegt.')
-        ->assertSet('selectedId', fn ($v) => $v !== null)
+        ->assertDispatched('orders-editor.bearbeiten')   // öffnet den Editor mit dem neuen Draft
         ->assertSet('neuerLieferant', null);
 
     expect(FoodAlchemistOrder::where('supplier_id', $chefs->id)->where('status', 'draft')->count())->toBe(1);
@@ -652,16 +652,17 @@ it('E2 UI: „Neue Bestellung" ohne Lieferant → Fehlerhinweis, keine Schiene',
 it('E2 UI: „＋ Artikel"-Livesearch findet Artikel + hängt manuelle Zeile an dessen Schiene', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+    $offen = $this->svc->createDraft($this->rootTeam, $chefs->id, [], null);   // Editor braucht einen offenen Beleg
 
-    $comp = Livewire::test(OrdersIndex::class)
-        ->set('direktOffen', true)         // Sektion aufklappen (sonst kein Dropdown)
+    $comp = Livewire::test(OrdersEditor::class)
+        ->call('oeffnenBearbeiten', $offen->id)
         ->set('artikelSuche', 'mehl')
-        ->assertSee('Mehl 1kg');           // Livesearch-Dropdown
+        ->assertSee('Mehl 1kg');           // Livesearch-Dropdown im Hinzufügen-Tab
 
     $comp->call('artikelHinzufuegen', $this->laOf['Mehl']->id)
         ->assertSet('hinweis', 'Artikel hinzugefügt.')
         ->assertSet('artikelSuche', '')
-        ->assertSet('selectedId', fn ($v) => $v !== null);
+        ->assertSet('orderId', fn ($v) => $v !== null);
 
     $draft = FoodAlchemistOrder::where('supplier_id', $chefs->id)->where('status', 'draft')->first();
     $line = $draft->lines()->where('supplier_item_id', $this->laOf['Mehl']->id)->first();
@@ -673,8 +674,9 @@ it('E2 UI: „＋ Artikel"-Livesearch findet Artikel + hängt manuelle Zeile an 
 it('E2 UI: Bedarf-Schnellerfassung VK-Gericht (Portionen) → Schienen befüllt', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    $comp = Livewire::test(OrdersIndex::class)
-        ->set('direktOffen', true)         // Sektion aufklappen (sonst kein Dropdown)
+    $offen = $this->svc->createDraft($this->rootTeam, FoodAlchemistSupplier::where('name', 'Chefs')->first()->id, [], null);
+    $comp = Livewire::test(OrdersEditor::class)
+        ->call('oeffnenBearbeiten', $offen->id)
         ->set('bedarfSuche', 'Kuchen')
         ->assertSee('DES: Kuchen');
 
@@ -685,7 +687,7 @@ it('E2 UI: Bedarf-Schnellerfassung VK-Gericht (Portionen) → Schienen befüllt'
         ->call('bedarfUebernehmen')
         ->assertSet('hinweis', fn ($v) => str_contains((string) $v, 'Bedarf übernommen'))
         ->assertSet('bedarfRecipeId', null)          // reset nach Übernahme
-        ->assertSet('selectedId', fn ($v) => $v !== null);
+        ->assertSet('orderId', fn ($v) => $v !== null);
 
     // Kuchen 100 Port. → Chefs (Mehl+Zucker) + Hanos (Butter) = 2 Schienen
     expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
@@ -696,7 +698,7 @@ it('E2 UI: Bedarf-Schnellerfassung VK-Gericht (Portionen) → Schienen befüllt'
 it('E2 UI: Bedarf-Schnellerfassung Basisrezept in kg → amount_kg-Ziel', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    Livewire::test(OrdersIndex::class)
+    Livewire::test(OrdersEditor::class)
         ->call('bedarfRezeptWaehlen', $this->sauce->id)
         ->assertSet('bedarfRecipeVk', false)         // Basisrezept
         ->assertSet('bedarfEinheit', 'ansaetze')     // Default Basis
@@ -711,7 +713,7 @@ it('E2 UI: Bedarf-Schnellerfassung Basisrezept in kg → amount_kg-Ziel', functi
 
 it('E2 UI: Bedarf-Schnellerfassung ohne Menge → Fehler, keine Schiene', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
-    Livewire::test(OrdersIndex::class)
+    Livewire::test(OrdersEditor::class)
         ->call('bedarfRezeptWaehlen', $this->kuchen->id)
         ->call('bedarfUebernehmen')
         ->assertSet('fehler', fn ($v) => str_contains((string) $v, 'Menge'));
@@ -966,8 +968,8 @@ describe('E3 · Preisstrategie-Switch + Neu quellen', function () {
         $this->svc->addNeedFromTarget($this->rootTeam, $this->salatZiel, 'recipe:salat@1');   // Öl → Hanos
         $hanosOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->first();
 
-        $comp = Livewire::test(OrdersIndex::class)
-            ->call('select', $hanosOrder->id)
+        $comp = Livewire::test(OrdersEditor::class)
+            ->call('oeffnenBearbeiten', $hanosOrder->id)
             ->set('formStrategy', 'guenstigster_preis')
             ->call('neuQuellenVorschau')
             ->assertSet('resourceVorschau', fn ($v) => is_array($v) && count($v['wechsel']) === 1);
@@ -990,8 +992,8 @@ describe('E3 · Preisstrategie-Switch + Neu quellen', function () {
         $chefsOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
         $line = $chefsOrder->lines()->where('gp_id', $this->oel->id)->first();
 
-        Livewire::test(OrdersIndex::class)
-            ->call('select', $chefsOrder->id)
+        Livewire::test(OrdersEditor::class)
+            ->call('oeffnenBearbeiten', $chefsOrder->id)
             ->call('alternativenUmschalten', $line->id)
             ->assertSet('altLineId', $line->id)
             ->call('alternativeWaehlen', $line->id, $this->oelHanos->id)
