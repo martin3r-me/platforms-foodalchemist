@@ -48,6 +48,62 @@ class Browser extends Component
     public bool $creating = false;
 
     /**
+     * Spec 28 / E15: Vorschau des Markdown statt nur Roh-Text im Textfeld.
+     *
+     * Der Umschalter ist eine Livewire-Eigenschaft und keine Alpine-Variable: das Textfeld
+     * bindet aufgeschoben (`wire:model`), der Inhalt wird also mit DIESEM Klick mitgeschickt.
+     * Eine reine Client-Umschaltung würde die Vorschau auf dem zuletzt gespeicherten Stand
+     * zeigen — und es gibt keinen Markdown-Parser im Browser.
+     */
+    public bool $vorschau = false;
+
+    /**
+     * Gerendertes Markdown. `html_input: 'strip'` ist Absicht: Wissens-Dokumente kommen auch
+     * aus PDF-Destillaten und Importen — rohes HTML aus einer solchen Quelle gehört nicht
+     * ungeprüft in die Seite. Links werden zusätzlich auf sichere Schemata begrenzt.
+     */
+    public function inhaltGerendert(): string
+    {
+        $md = $this->ohneFrontmatter((string) ($this->form['content_md'] ?? ''));
+
+        return $md === '' ? '' : \Illuminate\Support\Str::markdown($md, [
+            'html_input' => 'strip',
+            'allow_unsafe_links' => false,
+        ]);
+    }
+
+    /**
+     * Der YAML-Kopf gehört nicht in den Fließtext. Die Wissens-Dokumente tragen ihn (typ, zweck,
+     * verwendbar_in_skills …) — CommonMark kennt ihn nicht und würde `---` als Trennstrich und
+     * die Zeilen darunter als Absatz rendern. Die Vorschau begann deshalb mit „typ: … zweck: …".
+     */
+    private function ohneFrontmatter(string $md): string
+    {
+        return preg_replace('/\A\s*---\R.*?\R---\R?/s', '', $md) ?? $md;
+    }
+
+    /**
+     * Die Kopf-Felder als flache Liste für die Metadaten-Zeile über der Vorschau. Bewusst kein
+     * YAML-Parser: die Köpfe sind flach (`schlüssel: wert`), Listen bleiben als Rohtext stehen.
+     * Ein halb geparster verschachtelter Baum wäre irreführender als der sichtbare Rohwert.
+     */
+    public function frontmatter(): array
+    {
+        $md = (string) ($this->form['content_md'] ?? '');
+        if (! preg_match('/\A\s*---\R(.*?)\R---/s', $md, $m)) {
+            return [];
+        }
+        $felder = [];
+        foreach (preg_split('/\R/', $m[1]) as $zeile) {
+            if (preg_match('/^([a-z0-9_]+):\s*(.*)$/i', trim($zeile), $kv) && $kv[2] !== '') {
+                $felder[$kv[1]] = $kv[2];
+            }
+        }
+
+        return $felder;
+    }
+
+    /**
      * MVP-036/037: Ein sichtbares Dokument laden (global + eigenes Team/Master-Kette). Rohe
      * DB::table-Query, deshalb über TeamScope::applyVisible statt eines Model-Scopes. Gibt null,
      * wenn nicht sichtbar — die Aufrufer setzen dann keinen State.
@@ -365,6 +421,8 @@ class Browser extends Component
             : collect();
 
         return view('foodalchemist::livewire.knowledge.browser', [
+            'inhaltHtml' => $this->vorschau ? $this->inhaltGerendert() : null,
+            'frontmatter' => $this->vorschau ? $this->frontmatter() : [],
             'kategorien' => $kategorien,
             'docs' => $docs,
             'selected' => $selected,
