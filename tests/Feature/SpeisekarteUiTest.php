@@ -45,7 +45,11 @@ it('Speisekarte-Editor: anlegen, Rubrik, Gericht-Position über Picker', functio
         ->call('positionAusGericht', $rubrik->id, $this->gericht->id)
         ->assertOk()
         ->assertSee('Wiener Schnitzel')
-        ->assertSee('18,90');
+        ->assertSee('18,90')
+        // Rechtes Detail-Panel (read-only Info): Blöcke + Eckdaten der Auswahl
+        ->assertSee('Eckdaten')
+        ->assertSee('Kartentyp')
+        ->assertSee('Erstellt');
 
     expect($rubrik->items()->count())->toBe(1);
     expect($karte->refresh()->name)->toBe('Abendkarte');

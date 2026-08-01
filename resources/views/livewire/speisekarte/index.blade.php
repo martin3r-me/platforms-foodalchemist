@@ -38,6 +38,17 @@
         </x-ui-page-sidebar>
     </x-slot>
 
+    {{-- Rechtes Detail-Panel (read-only Info): Logo · Status/Datum/Nummer · Eckdaten der Auswahl --}}
+    <x-slot name="activity">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-80" scope="activity_speisekarte" side="right" icon="heroicon-o-information-circle">
+            @if($karte)
+                @include('foodalchemist::livewire.speisekarte.partials.detail', ['karte' => $karte])
+            @else
+                <div class="p-4 text-[11px] text-gray-400">Wähle links eine Karte, um Details zu sehen.</div>
+            @endif
+        </x-foodalchemist::detail-sidebar>
+    </x-slot>
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         @if(! $karte)
             <div class="relative overflow-hidden {{ $card }} p-10 text-center text-sm text-gray-500">
