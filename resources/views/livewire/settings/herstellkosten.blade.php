@@ -2,9 +2,8 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <div class="space-y-4" data-settings-herstellkosten>
-    @if($meldung)
-        <div class="{{ $card }} p-3 border-emerald-500/20"><p class="text-xs text-emerald-600">{{ $meldung }}</p></div>
-    @endif
+    <x-foodalchemist::save-bar :meldung="$meldung"
+        hint="Zuschlagsschema, Fixkosten und Marge rollen erst nach dem Speichern auf HK2/VK aus." />
     @if($fehler)
         <div class="{{ $card }} p-3 border-red-500/20"><p class="text-xs text-red-600">{{ $fehler }}</p></div>
     @endif
@@ -195,5 +194,4 @@
         </div>
     </div>
 
-    <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
 </div>

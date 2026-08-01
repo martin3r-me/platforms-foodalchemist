@@ -2,9 +2,8 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <div class="space-y-4">
-    @if($meldung)
-        <div class="{{ $card }} p-3 border-emerald-500/20"><p class="text-xs text-emerald-600">{{ $meldung }}</p></div>
-    @endif
+    {{-- Die Leiste speichert die Lead-LA-Strategie; die Stamm-Matrix darunter speichert je Zeile. --}}
+    <x-foodalchemist::save-bar :meldung="$meldung" hint="Speichert die Lead-LA-Strategie." />
 
     <div class="{{ $card }} p-5 space-y-4" data-einkauf-strategie>
         <div>
@@ -68,7 +67,6 @@
             Ausweich-Kette anzeigen (im GP-Detail: wer würde Lead, wenn der aktuelle ausfällt)
         </label>
 
-        <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
     </div>
 
     {{-- M1-06: Stamm-Lieferanten-Matrix (Lieferant × Warengruppe) --}}

@@ -69,6 +69,56 @@ it('ein leeres Dokument liefert leere Vorschau statt Fehler', function () {
     expect($c->instance()->frontmatter())->toBe([]);
 });
 
+it('lässt die erste H1 weg, wenn sie nur den Titel wiederholt', function () {
+    $c = Livewire::test(WissenBrowser::class)
+        ->set('form.title', 'Agentic Decision Matrix')
+        ->set('form.content_md', "# Agentic Decision Matrix\n\nErster Absatz.\n\n## Kapitel\n");
+
+    $html = $c->instance()->inhaltGerendert();
+
+    expect($html)->not->toContain('<h1>');          // der Doppler ist weg …
+    expect($html)->toContain('<h2>')->toContain('Erster Absatz.');   // … der Rest steht
+
+    // Eine ABWEICHENDE H1 trägt Information und bleibt stehen.
+    $c->set('form.content_md', "# Ganz anderer Werktitel\n\nText.\n");
+    expect($c->instance()->inhaltGerendert())->toContain('<h1>')->toContain('Ganz anderer Werktitel');
+});
+
+it('die Lese-Ansicht ist der Standard, der Rohtext die Ausnahme', function () {
+    // Der Editor rendert nur mit gewähltem ODER neuem Dokument — sonst steht dort der leere Schirm.
+    $c = Livewire::test(WissenBrowser::class);
+    expect($c->instance()->vorschau)->toBeTrue();
+
+    // Anlegen schaltet bewusst auf Rohtext: die Vorschau eines leeren Dokuments zeigt nichts.
+    $c->call('neu');
+    expect($c->instance()->vorschau)->toBeFalse();
+    expect($c->html())->toContain('data-wissen-inhalt');
+
+    // In der Lese-Ansicht kein Textfeld — sonst tippt man beim Nachschlagen versehentlich hinein.
+    $c->set('vorschau', true);
+    expect($c->html())->not->toContain('data-wissen-inhalt');
+    expect($c->html())->toContain('data-wissen-titel-lesen');
+});
+
+it('ein geöffnetes Dokument beginnt in der Lese-Ansicht, auch nach dem Schreiben', function () {
+    // Über die Komponente anlegen statt per DB-Insert: das übt denselben Weg wie der Nutzer und
+    // hängt nicht am Schema.
+    $c = Livewire::test(WissenBrowser::class)
+        ->call('neu')
+        ->set('form.title', 'Maillard')
+        ->set('form.content_md', "# Maillard\n\nText.")
+        ->call('save');
+
+    $id = $c->instance()->selectedId;
+    expect($id)->not->toBeNull();
+
+    // Umschalten wie beim Schreiben …
+    $c->set('vorschau', false);
+    // … und beim Öffnen eines Dokuments zurück in die Lese-Ansicht.
+    $c->call('select', $id);
+    expect($c->instance()->vorschau)->toBeTrue();
+});
+
 it('der Schirm trennt Liste, Text und Verwendung in drei Zonen', function () {
     $html = Livewire::test(WissenBrowser::class)->html();
 

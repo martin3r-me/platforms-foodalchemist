@@ -3,9 +3,8 @@
 
 <div class="space-y-4" data-settings-kueche>
 
-    @if($meldung !== null)
-        <p class="text-xs text-emerald-600" data-kueche-meldung>{{ $meldung }}</p>
-    @endif
+    <x-foodalchemist::save-bar :meldung="$meldung" data-kueche-meldung
+        hint="Soft-Default des Generators — explizite Hooks im Rezept gewinnen." />
 
     <div class="max-w-xl space-y-2" data-kueche-typen>
         <label class="flex items-start gap-2 text-xs text-gray-700 cursor-pointer">
@@ -38,5 +37,4 @@
         <button type="button" wire:click="farbenZuruecksetzen" class="{{ $btnGhostXs }} mt-2">Auf Standard zurücksetzen</button>
     </div>
 
-    <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-kueche-speichern>Speichern</button>
 </div>

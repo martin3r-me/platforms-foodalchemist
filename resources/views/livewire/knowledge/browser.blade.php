@@ -222,18 +222,29 @@
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 pt-4 pb-3 flex items-center gap-3">
                     <div class="flex-1 min-w-0">
-                        <label class="{{ $label }}">Titel</label>
-                        <input type="text" wire:model="form.title" class="{{ $input }} w-full" data-wissen-titel />
+                        @if($vorschau)
+                            {{-- Lese-Ansicht: der Titel ist Überschrift, kein Eingabefeld. Ein Formularfeld
+                                 über einem Lesetext lädt zum versehentlichen Tippen ein. --}}
+                            <h2 class="text-base font-semibold tracking-tight text-gray-900 truncate" data-wissen-titel-lesen>
+                                {{ $form['title'] ?: 'Ohne Titel' }}
+                            </h2>
+                        @else
+                            <label class="{{ $label }}">Titel</label>
+                            <input type="text" wire:model="form.title" class="{{ $input }} w-full" data-wissen-titel />
+                        @endif
                     </div>
                     <div class="flex items-end gap-1 pb-0.5">
+                        {{-- Ansicht zuerst: sie ist der Normalfall, Bearbeiten die Ausnahme. --}}
+                        <button type="button" wire:click="$set('vorschau', true)"
+                                class="{{ $pill }} {{ $vorschau ? $variantPill['primary'] : $variantPill['secondary'] }}"
+                                data-wissen-modus="vorschau">Ansicht</button>
                         <button type="button" wire:click="$set('vorschau', false)"
                                 class="{{ $pill }} {{ ! $vorschau ? $variantPill['primary'] : $variantPill['secondary'] }}"
                                 data-wissen-modus="bearbeiten">Bearbeiten</button>
-                        <button type="button" wire:click="$set('vorschau', true)"
-                                class="{{ $pill }} {{ $vorschau ? $variantPill['primary'] : $variantPill['secondary'] }}"
-                                data-wissen-modus="vorschau">Vorschau</button>
                     </div>
                     <div class="flex items-end pb-0.5">
+                        {{-- Speichern bleibt auch in der Ansicht sichtbar: der Umschalter schickt
+                             ungespeicherte Änderungen mit, sie dürfen hier nicht in eine Sackgasse laufen. --}}
                         <button type="button" wire:click="save" class="{{ $btnPrimary }}" data-wissen-save>Speichern</button>
                     </div>
                 </div>

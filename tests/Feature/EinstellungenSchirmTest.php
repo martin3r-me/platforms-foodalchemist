@@ -51,6 +51,19 @@ it('eine unbekannte Sektion endet in 404, nicht in einem leeren Schirm', functio
     $this->get(route('foodalchemist.einstellungen', ['sektion' => 'konzept-taxonomie']))->assertNotFound();
 });
 
+it('die Formular-Sektionen tragen die Speicher-Leiste oben und keinen Knopf mehr unten', function (string $sektion) {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/settings/' . $sektion . '.blade.php');
+
+    expect($blade)->toContain('<x-foodalchemist::save-bar');
+    // Der alte Knopf am Dateiende ist die Stelle, an der die Leiste sonst doppelt steht.
+    expect($blade)->not->toContain('wire:click="speichern"');
+
+    // Die Leiste steht VOR dem Inhalt — sonst klebt sie zwar, aber unter der halben Sektion.
+    $leiste = strpos($blade, '<x-foodalchemist::save-bar');
+    $ersteKarte = strpos($blade, '{{ $card }}');
+    expect($ersteKarte === false || $leiste < $ersteKarte)->toBeTrue();
+})->with(['einkauf', 'kalkulation', 'herstellkosten', 'kueche']);
+
 it('die Einstellungs-Views tragen keine Emoji-Marker mehr in Bedienelementen', function () {
     // Statisch, weil genau das beim Icon-Durchgang liegen blieb: Pfeile, Blitz, Kreuze als
     // Button-Beschriftung. Rechenzeichen (× ÷ →) im Fließtext sind Typografie und bleiben.

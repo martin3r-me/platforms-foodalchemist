@@ -305,6 +305,34 @@ Emoji mehr im Sektionsinhalt. `konzept-taxonomie` 404et korrekt — die Sektion 
 Navigation genommen, das Blade schläft nur noch. `EinstellungenSchirmTest` (4 Tests), darunter ein
 statischer Wächter gegen neue Emoji-Marker in Bedienelementen.
 
+### E16.1 — Nachtrag Dominique (2026-08-01)
+
+**Speicher-Knopf klebt oben.** Die vier Formular-Sektionen (Einkauf, Kalkulation, Herstellkosten,
+Küchen-Profil) hatten ihn ganz unten — bei Herstellkosten heißt das: oben ein Feld ändern, dann
+durch ~2.000 px scrollen, um zu speichern. Neuer Baustein `components/save-bar.blade.php`, als
+erstes Element der Sektion, `sticky top-0`. Die Erfolgsmeldung zieht mit in die Leiste; sie stand
+vorher in drei verschiedenen Formen über der Sektion.
+
+Gemessen: Leiste klebt bei Einkauf, Kalkulation und Herstellkosten am Container-Rand (top 88, unter
+der Actionbar), Hit-Test auf den Knopf trifft den Knopf. Küchen-Profil ist mit 330 px zu kurz zum
+Scrollen — gleiche Mechanik, nichts zu messen. Der Scroll-Vorfahre ist `[data-nx-region]`, NICHT
+`window`; wer das mit `window.scrollTo` misst, misst nichts.
+
+**Wissen: die Lese-Ansicht ist der Standard.** Wissen wird öfter nachgeschlagen als geschrieben —
+`$vorschau` startet auf `true`, der Rohtext ist die Bearbeitung. Drei Stellen, nicht nur der
+Startwert:
+- `select()` setzt auf Lese-Ansicht zurück (sonst landet man nach dem Schreiben am nächsten
+  Dokument im Rohtext),
+- `neu()` schaltet auf Rohtext (die Vorschau eines leeren Dokuments zeigt nichts),
+- der Titel ist in der Lese-Ansicht eine Überschrift, kein Eingabefeld.
+
+Dabei aufgefallen: fast jedes Dokument beginnt mit `# <Titel>` — derselbe Text, der als Überschrift
+schon darüber steht. `ohneDoppelteUeberschrift()` lässt die erste H1 weg, **wenn** sie dem Titel
+entspricht; eine abweichende H1 bleibt, die trägt Information.
+
+`Speichern` bleibt auch in der Lese-Ansicht sichtbar: der Umschalter schickt ungespeicherte
+Änderungen mit, sie dürfen nicht in eine Sackgasse laufen.
+
 ---
 
 ## 4 · Reihenfolge & Aufwand
@@ -597,3 +625,7 @@ an Martin. Das FA-Modul selbst ist im sichtbaren UI emoji-frei; 12 Modul-Seiten 
   beim Dedup-Lauf zu Unrecht mitgegangen (Unterblöcke, keine Duplikate) — zurückgeholt.
   `EinstellungenSchirmTest` (4 Tests). Suite **1898/1900** (1 skipped); der eine Fehler bleibt der
   Einkauf-Tenancy-Gap aus §6.3.
+- 2026-08-01 — **E16.1 Nachtrag.** Klebende Speicher-Leiste (`components/save-bar`) in den vier
+  Formular-Sektionen, Erfolgsmeldung dorthin gezogen. Wissens-Modul: Lese-Ansicht ist der Standard
+  (`select()` setzt zurück, `neu()` schaltet auf Rohtext, Titel als Überschrift), doppelte H1 fällt
+  weg. Suite **1905/1907** (1 skipped); der eine Fehler bleibt der Einkauf-Tenancy-Gap aus §6.3.

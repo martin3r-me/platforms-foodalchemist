@@ -2,9 +2,8 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <div class="space-y-4">
-    @if($meldung)
-        <div class="{{ $card }} p-3 border-emerald-500/20"><p class="text-xs text-emerald-600">{{ $meldung }}</p></div>
-    @endif
+    <x-foodalchemist::save-bar :meldung="$meldung"
+        hint="Gilt für alle Rezepte dieses Teams — Recompute liest dieselben Werte." />
 
     {{-- Garverlust-Defaults --}}
     <div class="{{ $card }} p-5 space-y-3" data-kalk-garverlust>
@@ -76,5 +75,4 @@
 
     <p class="text-[11px] text-gray-500">Herstellkosten (Zuschlagsschema, Fixkosten, Bezugsbasen, Marge) → eigene Sektion <strong>„Herstellkosten"</strong> in der Navigation.</p>
 
-    <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
 </div>

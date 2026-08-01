@@ -54,8 +54,11 @@ class Browser extends Component
      * bindet aufgeschoben (`wire:model`), der Inhalt wird also mit DIESEM Klick mitgeschickt.
      * Eine reine Client-Umschaltung würde die Vorschau auf dem zuletzt gespeicherten Stand
      * zeigen — und es gibt keinen Markdown-Parser im Browser.
+     *
+     * Standard ist die LESE-Ansicht: Wissen wird viel öfter nachgeschlagen als geschrieben.
+     * Der Rohtext ist die Bearbeitung, nicht der Normalfall — deshalb `true`.
      */
-    public bool $vorschau = false;
+    public bool $vorschau = true;
 
     /**
      * Gerendertes Markdown. `html_input: 'strip'` ist Absicht: Wissens-Dokumente kommen auch
@@ -64,7 +67,9 @@ class Browser extends Component
      */
     public function inhaltGerendert(): string
     {
-        $md = $this->ohneFrontmatter((string) ($this->form['content_md'] ?? ''));
+        $md = $this->ohneDoppelteUeberschrift(
+            $this->ohneFrontmatter((string) ($this->form['content_md'] ?? ''))
+        );
 
         return $md === '' ? '' : \Illuminate\Support\Str::markdown($md, [
             'html_input' => 'strip',
@@ -80,6 +85,26 @@ class Browser extends Component
     private function ohneFrontmatter(string $md): string
     {
         return preg_replace('/\A\s*---\R.*?\R---\R?/s', '', $md) ?? $md;
+    }
+
+    /**
+     * Fast jedes Dokument beginnt mit `# <Titel>` — derselbe Text, der in der Lese-Ansicht schon
+     * als Überschrift über dem Text steht. Zweimal dasselbe kostet nur Platz, also fällt die
+     * erste H1 weg, WENN sie dem Titel entspricht. Eine abweichende H1 bleibt: sie trägt dann
+     * Information (z. B. ein anderer Werkstitel als der Datensatz-Name).
+     */
+    private function ohneDoppelteUeberschrift(string $md): string
+    {
+        $titel = trim((string) ($this->form['title'] ?? ''));
+        if ($titel === '' || ! preg_match('/\A\s*#\s+(.+?)\s*\R/u', $md, $t)) {
+            return $md;
+        }
+
+        $normal = static fn (string $s): string => mb_strtolower(preg_replace('/\s+/u', ' ', trim($s)) ?? $s);
+
+        return $normal($t[1]) === $normal($titel)
+            ? (preg_replace('/\A\s*#\s+.+?\R\s*/u', '', $md) ?? $md)
+            : $md;
     }
 
     /**
@@ -141,6 +166,9 @@ class Browser extends Component
             return;
         }
         $this->selectedId = $id;
+        // Jedes geöffnete Dokument beginnt in der Lese-Ansicht — auch wenn am vorigen noch
+        // geschrieben wurde. Sonst landet man beim Nachschlagen im Rohtext.
+        $this->vorschau = true;
         $this->form = [
             'title' => $doc->title,
             'category' => $doc->category,
@@ -154,6 +182,8 @@ class Browser extends Component
         $this->creating = true;
         $this->selectedId = null;
         $this->fehler = null;
+        // Umgekehrt beim Anlegen: die Vorschau eines leeren Dokuments zeigt nichts.
+        $this->vorschau = false;
         $this->form = [
             'title' => '',
             'category' => (string) DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
