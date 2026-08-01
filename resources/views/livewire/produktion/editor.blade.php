@@ -58,6 +58,7 @@
                 <button type="button" wire:click="$set('zielTyp', 'recipe')" class="px-3 py-1 rounded-md {{ $zielTyp === 'recipe' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Gericht</button>
                 <button type="button" wire:click="$set('zielTyp', 'basisrezept')" class="px-3 py-1 rounded-md {{ $zielTyp === 'basisrezept' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}" data-produktion-ziel-basisrezept>Basisrezept</button>
                 <button type="button" wire:click="$set('zielTyp', 'kapitel')" class="px-3 py-1 rounded-md {{ $zielTyp === 'kapitel' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}" data-produktion-ziel-kapitel>Kapitel</button>
+                <button type="button" wire:click="$set('zielTyp', 'angebot')" class="px-3 py-1 rounded-md {{ $zielTyp === 'angebot' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}" data-produktion-ziel-angebot>Angebot</button>
             </div>
         </div>
 
@@ -107,10 +108,12 @@
              „+" fügt den Kandidaten mit der aktuellen Menge als Ziel hinzu und bleibt offen. --}}
         <div class="space-y-2 mb-3" data-produktion-picker>
             <div class="flex items-end gap-2">
+                @if($zielTyp !== 'angebot')
                 <div class="w-32">
                     <label class="{{ $label }}">{{ $zielTyp === 'concept' ? 'Personen' : ($zielTyp === 'basisrezept' ? ($basisEinheit === 'kg' ? 'Kilogramm' : 'Ansätze') : 'Portionen') }}</label>
                     <input type="number" min="0" step="{{ $zielTyp === 'basisrezept' ? '0.1' : '1' }}" wire:model="auswahlMenge" class="{{ $input }}" data-produktion-menge />
                 </div>
+                @endif
                 @if($zielTyp === 'basisrezept')
                     <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs mb-0.5" data-produktion-basis-einheit>
                         <button type="button" wire:click="$set('basisEinheit', 'ansaetze')" class="px-2 py-1 rounded-md {{ $basisEinheit === 'ansaetze' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Ansätze</button>
@@ -118,15 +121,15 @@
                     </div>
                 @endif
                 <div class="flex-1">
-                    <label class="{{ $label }}">{{ $zielTyp === 'concept' ? 'Konzept' : ($zielTyp === 'basisrezept' ? 'Basisrezept' : 'Gericht') }} suchen</label>
-                    <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Suchen … (aus der Liste mit + einfügen)" class="{{ $input }}" data-produktion-gericht-suche />
+                    <label class="{{ $label }}">{{ $zielTyp === 'concept' ? 'Konzept' : ($zielTyp === 'basisrezept' ? 'Basisrezept' : ($zielTyp === 'angebot' ? 'Angebot' : 'Gericht')) }} suchen</label>
+                    <input type="search" wire:model.live.debounce.300ms="suche" placeholder="{{ $zielTyp === 'angebot' ? 'Angebot suchen … (+ = ganzes Angebot als Ziele)' : 'Suchen … (aus der Liste mit + einfügen)' }}" class="{{ $input }}" data-produktion-gericht-suche />
                 </div>
             </div>
             <div class="rounded-lg border border-white/10 max-h-56 overflow-y-auto divide-y divide-white/5" data-produktion-kandidaten>
                 @forelse($kandidaten as $k)
                     <button type="button" wire:key="pk-{{ $zielTyp }}-{{ $k->id }}" wire:click="zielAusListe({{ $k->id }})"
                         class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-[12px] text-left hover:bg-violet-500/10" data-produktion-kandidat="{{ $k->id }}">
-                        <span class="truncate text-gray-900">{{ $k->name }}</span>
+                        <span class="truncate text-gray-900">{{ $k->name ?? $k->label ?? ('#' . $k->id) }}@if($zielTyp === 'angebot' && ($k->personen ?? null)) <span class="text-gray-500 text-[11px]">· {{ $k->personen }} P., ganzes Angebot</span>@endif</span>
                         <span class="text-violet-500 font-medium shrink-0">+</span>
                     </button>
                 @empty

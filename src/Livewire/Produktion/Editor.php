@@ -7,10 +7,12 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\AngebotService;
 use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
@@ -163,12 +165,53 @@ class Editor extends Component
      */
     public function zielAusListe(int $id): void
     {
+        if ($this->zielTyp === 'angebot') {
+            $this->angebotZielHinzufuegen($id);
+
+            return;
+        }
         if ($this->zielTyp === 'concept') {
             $this->auswahlConceptId = $id;
         } else {
             $this->auswahlRecipeId = $id;
         }
         $this->zielHinzufuegen();
+    }
+
+    /**
+     * Angebot als Ziel: das ganze bestätigte/geplante Angebot → alle seine Concepts auf einmal
+     * (jedes Concept expandiert in der Vorschau in seine Gerichte). Pax kommt aus dem Angebot.
+     * source_ref „offer:<id>@…:c<idx>" — eingefroren wie Kapitel-Ziele.
+     */
+    private function angebotZielHinzufuegen(int $angebotId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->find($angebotId);
+        if ($angebot === null) {
+            return;
+        }
+        $concepts = app(AngebotService::class)->menueConcepts($angebot);
+        if ($concepts->isEmpty()) {
+            $this->fehler = 'Angebot hat keine Konzepte.';
+
+            return;
+        }
+        $pax = (int) ($angebot->personen ?: 0) ?: 10;
+        $angLabel = $angebot->name ?: ('Angebot #' . $angebot->id);
+        $base = 'offer:' . $angebot->id . '@' . uniqid();
+        foreach ($concepts->values() as $i => $concept) {
+            $this->targets[] = [
+                'concept_id' => (int) $concept->id,
+                'persons' => $pax,
+                'source_ref' => $base . ':c' . $i,
+                'label' => $angLabel . ' › ' . ($concept->name ?? ('Konzept #' . $concept->id)) . ' (' . $pax . ' P.)',
+            ];
+        }
+        $this->fehler = null;
+        $this->berechneVorschau();
     }
 
     public function zielEntfernen(string $sourceRef): void
@@ -375,6 +418,10 @@ class Editor extends Component
                 $q2 = $this->zielTyp === 'basisrezept' ? $q2->basis() : $q2->verkauf();
                 $kandidaten = $q2->when(trim($this->suche) !== '', fn ($q) => $q->where('name', 'like', '%' . trim($this->suche) . '%'))
                     ->orderBy('name')->limit(50)->get(['id', 'name']);
+            } elseif ($this->zielTyp === 'angebot') {
+                $kandidaten = FoodAlchemistAngebot::visibleToTeam($team)
+                    ->when(trim($this->suche) !== '', fn ($q) => $q->where('name', 'like', '%' . trim($this->suche) . '%'))
+                    ->orderByDesc('id')->limit(50)->get(['id', 'name', 'personen']);
             }
         }
 
