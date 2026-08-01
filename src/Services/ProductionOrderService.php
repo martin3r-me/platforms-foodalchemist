@@ -632,6 +632,57 @@ class ProductionOrderService
             ->get();
     }
 
+    /**
+     * Spec 30 E4 — serverseitig gefilterte, paginierte Browser-Liste.
+     *
+     * Schließt den Audit-Befund MVP-033: bis hierher lud `listForTeam()` die VOLLE Menge in
+     * den Speicher und filterte in PHP, ohne Pagination. Bei einem Team mit Jahren an
+     * Produktionsgeschichte wächst das unbegrenzt.
+     *
+     * EIN Filtersatz für Liste UND Zähler — im VK-Browser steht der Grund als Kommentar:
+     * kennen die Facetten die aktive Auswahl nicht, liefert eine Filterkombination am Ende
+     * null Treffer bei gleichzeitig positiven Zählern.
+     *
+     * @param  array{status?: string, von?: ?string, bis?: ?string, suche?: string}  $filters
+     */
+    public function paginateBrowser(Team $team, array $filters, int $perPage = 50): \Illuminate\Contracts\Pagination\LengthAwarePaginator
+    {
+        return $this->browserQuery($team, $filters)
+            // Offene zuerst, dann nach Produktionsdatum — dieselbe Leserichtung wie listForTeam().
+            ->orderByRaw("CASE WHEN status = 'planned' THEN 0 ELSE 1 END")
+            ->orderBy('production_date')->orderBy('name')
+            ->paginate(max(10, min(250, $perPage)));
+    }
+
+    /** Trefferzahl je Status MIT den übrigen aktiven Filtern (ohne die Status-Achse selbst). */
+    public function statusCounts(Team $team, array $filters): array
+    {
+        return $this->browserQuery($team, Arr::except($filters, ['status']))
+            ->selectRaw('status, COUNT(*) as n')->groupBy('status')
+            ->pluck('n', 'status')->map(fn ($n) => (int) $n)->all();
+    }
+
+    public function browserGesamt(Team $team, array $filters): int
+    {
+        return $this->browserQuery($team, Arr::except($filters, ['status']))->count();
+    }
+
+    /** @param  array{status?: string, von?: ?string, bis?: ?string, suche?: string}  $filters */
+    private function browserQuery(Team $team, array $filters): \Illuminate\Database\Eloquent\Builder
+    {
+        $suche = trim((string) ($filters['suche'] ?? ''));
+
+        return FoodAlchemistProductionOrder::visibleToTeam($team)
+            ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
+            // whereDate: `production_date` persistiert mit Zeitanteil — ein reiner
+            // Datumsvergleich würde den letzten Tag des Fensters verschlucken.
+            ->when(! empty($filters['von']), fn ($q) => $q->whereDate('production_date', '>=', $filters['von']))
+            ->when(! empty($filters['bis']), fn ($q) => $q->whereDate('production_date', '<=', $filters['bis']))
+            ->when($suche !== '', fn ($q) => $q->where(fn ($w) => $w
+                ->where('name', 'like', '%' . $suche . '%')
+                ->orWhere('reference', 'like', '%' . $suche . '%')));
+    }
+
     /** Detail-Aggregat für UI/MCP. */
     public function detail(Team $team, int $orderId): array
     {

@@ -99,7 +99,15 @@ class DetailPanel extends Component
             }
         }
 
+        // Spec 30 E5: Posten-Auslastung + passive Überlast-Meldung für DIESEN Auftrag
+        $postenSummen = $this->orderId !== null && $detail !== null ? $svc->postenSummen($team, $this->orderId) : [];
+        $kapazitaetsWarnungen = $this->orderId !== null && $detail !== null
+            ? app(\Platform\FoodAlchemist\Services\ProductionCapacityService::class)->warnungenFuer($team, $this->orderId)
+            : [];
+
         return view('foodalchemist::livewire.produktion.detail-panel', [
+            'postenSummen' => $postenSummen,
+            'kapazitaetsWarnungen' => $kapazitaetsWarnungen,
             'detail' => $detail,
             'verknuepfteOrders' => $verknuepfteOrders,
             'zielUebergaben' => $zielUebergaben,

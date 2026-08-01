@@ -137,10 +137,34 @@
             </x-foodalchemist::section>
         @endif
 
-        @if(count($detail['warnungen']) > 0)
+        {{-- Spec 30 E5: Posten-Auslastung dieses Auftrags. „Nicht zugeteilt" steht bewusst mit
+             drin — unverplante Arbeit darf nicht unsichtbar sein, nur weil sie an keinem
+             Posten hängt. Die Lücke bei der Arbeitszeit wird ausgewiesen statt beschönigt. --}}
+        @if(count($postenSummen) > 0)
+            <x-foodalchemist::section title="Posten" icon="heroicon-o-users" data-panel-posten>
+                <div class="space-y-1">
+                    @foreach($postenSummen as $ps)
+                        <div class="flex items-baseline gap-2 text-[11px]" wire:key="pps-{{ $ps['station_id'] ?? 0 }}">
+                            <span class="{{ $ps['station_id'] === null ? 'text-gray-500 italic' : 'text-gray-800' }} flex-1 min-w-0 truncate">{{ $ps['station'] }}</span>
+                            <span class="tabular-nums text-gray-600 shrink-0">{{ $ps['zeilen'] }} Zeilen</span>
+                            <span class="tabular-nums text-gray-900 shrink-0 w-16 text-right">{{ $ps['arbeitszeit_min'] }} min</span>
+                            @if($ps['ohne_zeit'] > 0)
+                                <span class="text-amber-600 shrink-0" title="Diesen Zeilen fehlt die Arbeitszeit am Rezept — die Summe ist unvollständig.">{{ $ps['ohne_zeit'] }}⚠</span>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </x-foodalchemist::section>
+        @endif
+
+        @if(count($detail['warnungen']) > 0 || count($kapazitaetsWarnungen) > 0)
             <x-foodalchemist::section title="Warnungen" icon="heroicon-o-exclamation-triangle">
                 @foreach($detail['warnungen'] as $w)
                     <x-foodalchemist::alert tone="warning">{{ $w }}</x-foodalchemist::alert>
+                @endforeach
+                {{-- Überlast meldet sich passiv und nur für Posten mit hinterlegter Kapazität. --}}
+                @foreach($kapazitaetsWarnungen as $w)
+                    <x-foodalchemist::alert tone="warning" data-panel-kapazitaet>{{ $w }}</x-foodalchemist::alert>
                 @endforeach
             </x-foodalchemist::section>
         @endif
