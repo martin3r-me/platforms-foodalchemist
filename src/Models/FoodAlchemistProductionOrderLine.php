@@ -12,8 +12,18 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 /**
  * @ai.description Spec 18 — Produktionszeile PRO REZEPT (nicht pro Ziel). Inhalt = ein
  * Eintrag aus PlanungsblattService::produktionsblattFuerZiele()['rezepte']. Snapshot-
- * Felder frieren beim Übergang planned→in_progress ein (`note` bleibt darüber hinaus
- * über jeden Recompute hinweg stehen, da manuell gepflegt).
+ * Felder frieren beim Übergang planned→in_progress ein.
+ *
+ * Spec 30 — zwei Populationen, die der Recompute unterschiedlich behandelt:
+ *  - `origin='computed'`: gehört der Explosion, wird bei JEDEM Recompute gelöscht und neu
+ *    erzeugt. Was der Mensch daran gepflegt hat, überlebt als Overlay
+ *    (`ProductionOrderService::OVERLAY_FELDER`, per `recipe_id` wieder aufgesetzt).
+ *  - `origin='manual'`: freie Position ohne Rezept (`recipe_id IS NULL`), liegt außerhalb
+ *    des Recomputes und wird von ihm nie angefasst.
+ *
+ * Der Ansätze-Override liegt in `manual_ansaetze`, NICHT in `ansaetze` — nur so bleibt der
+ * berechnete Wert als Referenz erhalten („manuell 2 — berechnet wären 3"). Lesen immer über
+ * `ansaetze_effektiv`.
  */
 class FoodAlchemistProductionOrderLine extends Model
 {
@@ -36,6 +46,9 @@ class FoodAlchemistProductionOrderLine extends Model
         'darreichung' => 'array',
         'zutaten' => 'array',
         'steps_snapshot' => 'array',   // Spec 27: eingefrorene Schrittfolge (NULL = Alt-Auftrag)
+        'manual_ansaetze' => 'decimal:3',   // Spec 30
+        'is_manual_ansaetze' => 'boolean',
+        'is_struck' => 'boolean',
     ];
 
     public function productionOrder(): BelongsTo
@@ -46,5 +59,38 @@ class FoodAlchemistProductionOrderLine extends Model
     public function recipe(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id');
+    }
+
+    /** Freie Position (Spec 30) — kein Rezept dahinter, vom Recompute unberührt. */
+    public function istManuell(): bool
+    {
+        return $this->origin === 'manual';
+    }
+
+    /**
+     * Die Ansätze, mit denen die Küche wirklich arbeitet: Override wenn gesetzt, sonst der
+     * berechnete Wert. JEDE Summe und jeder Druck liest das hier, nie `ansaetze` direkt.
+     */
+    public function getAnsaetzeEffektivAttribute(): float
+    {
+        return $this->is_manual_ansaetze && $this->manual_ansaetze !== null
+            ? (float) $this->manual_ansaetze
+            : (float) $this->ansaetze;
+    }
+
+    /** Override weicht vom neu berechneten Wert ab → UI zeigt „berechnet wären N · zurücksetzen". */
+    public function getOverrideStaleAttribute(): bool
+    {
+        return $this->is_manual_ansaetze
+            && $this->manual_ansaetze !== null
+            && (float) $this->manual_ansaetze !== (float) $this->ansaetze;
+    }
+
+    /** Anzeigename — freie Positionen haben kein Rezept. */
+    public function anzeigeName(): string
+    {
+        return $this->istManuell()
+            ? (string) ($this->titel ?: 'Freie Position')
+            : (string) ($this->recipe?->name ?? '—');
     }
 }

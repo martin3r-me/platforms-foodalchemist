@@ -35,6 +35,24 @@ class ProductionOrderService
     ) {
     }
 
+    /**
+     * Spec 30 — was an einer BERECHNETEN Zeile dem Menschen gehört und deshalb jeden
+     * Recompute überlebt. Alles andere (ansaetze, portionen, zutaten, steps_snapshot,
+     * arbeitszeit_min, tiefe, position …) ist Rechen-Wahrheit und wird bedingungslos
+     * überschrieben.
+     *
+     * EIN Ort der Wahrheit: neue Overlay-Felder kommen hier rein, der Restore-Test
+     * iteriert über diese Konstante und fällt sonst um.
+     */
+    public const OVERLAY_FELDER = [
+        'note',                                    // gab es schon vor Spec 30
+        'manual_ansaetze', 'is_manual_ansaetze',   // Küchen-Override der Ansätze
+        'is_struck', 'struck_reason',              // gestrichen
+    ];
+
+    /** Freie Positionen sortieren in ein eigenes Zahlenband, damit der Recompute sie nie umnummeriert. */
+    public const MANUELL_POSITION_BASIS = 10000;
+
     // ── source_ref-Verdrahtung (P4: EIN Ort für Bau + Lesen) ────────────────
 
     /**
@@ -202,14 +220,25 @@ class ProductionOrderService
             }, $ziele);
         }
 
-        $existingNotes = $order->lines()->pluck('note', 'recipe_id')->all();
+        // Spec 30: das Overlay der berechneten Zeilen retten (Notiz, Override, Streichung, …).
+        // Schlüssel ist `recipe_id`, weil die Explosion genau EINE Zeile je Rezept erzeugt
+        // (`explodiere()` aggregiert keyed by recipe_id) — festgenagelt per Unique-Index.
+        $overlay = $order->lines()->where('origin', 'computed')->get()
+            ->keyBy('recipe_id')
+            ->map(fn ($l) => array_filter(
+                Arr::only($l->attributesToArray(), self::OVERLAY_FELDER),
+                fn ($v) => $v !== null && $v !== false && $v !== '',
+            ))->all();
+
         // forceDelete statt soft-delete: Zeilen sind ephemere Snapshots, die bei jeder
         // Ziel-Änderung neu erzeugt werden — soft-delete würde sonst unbegrenzt Tombstones
-        // ansammeln. Notizen sind oben schon gesichert und werden per recipe_id neu gesetzt.
-        $order->lines()->forceDelete();
+        // ansammeln (und der Unique-Index würde an ihnen hängenbleiben).
+        // NUR `computed`: freie Positionen (origin=manual) gehören nicht der Explosion.
+        $order->lines()->where('origin', 'computed')->forceDelete();
 
         if ($ziele === []) {
-            $order->warnungen = [];
+            // Manuelle Zeilen bleiben stehen — sie hängen an keinem Ziel.
+            $order->warnungen = $this->verwaisteOverlays($overlay, []);
             $order->save();
 
             return;
@@ -218,8 +247,9 @@ class ProductionOrderService
         $blatt = $this->planung->produktionsblattFuerZiele($team, $ziele);
 
         foreach ($blatt['rezepte'] as $i => $r) {
-            $order->lines()->create([
+            $order->lines()->create(array_merge([
                 'team_id' => $order->team_id,
+                'origin' => 'computed',
                 'recipe_id' => $r['recipe_id'],
                 'is_basisrezept' => $r['ist_basisrezept'],
                 'tiefe' => $r['tiefe'],
@@ -233,13 +263,42 @@ class ProductionOrderService
                 'steps_snapshot' => $r['schritte'] ?? null,   // Spec 27: Schrittfolge mit einfrieren
                 'darreichung' => $r['darreichung'],
                 'zutaten' => $r['zutaten'],
-                'note' => $existingNotes[$r['recipe_id']] ?? null,
                 'position' => $i,
-            ]);
+            ], $overlay[$r['recipe_id']] ?? []));
         }
 
-        $order->warnungen = $blatt['warnungen'];
+        $order->warnungen = array_merge(
+            $blatt['warnungen'],
+            $this->verwaisteOverlays($overlay, array_column($blatt['rezepte'], 'recipe_id')),
+        );
         $order->save();
+    }
+
+    /**
+     * Spec 30: Overlays, deren Rezept nach der Neu-Explosion nicht mehr vorkommt, sind
+     * verloren — das wird GEMELDET statt still geschluckt.
+     *
+     * Bewusst kein Auto-Promote in eine manuelle Zeile (das reanimierte Produktion, die
+     * gerade gestrichen wurde) und keine Park-Tabelle (unsichtbare Overlays, die Wochen
+     * später bei zufällig passendem Ziel wieder andocken). Ehrlicher Verlust mit lauter
+     * Meldung schlägt stillen Zombie-Zustand.
+     *
+     * @param  array<int, array<string, mixed>>  $overlay
+     * @param  list<int>  $erzeugteRecipeIds
+     * @return list<string>
+     */
+    private function verwaisteOverlays(array $overlay, array $erzeugteRecipeIds): array
+    {
+        $warnungen = [];
+        foreach ($overlay as $recipeId => $felder) {
+            if ($felder === [] || in_array((int) $recipeId, array_map('intval', $erzeugteRecipeIds), true)) {
+                continue;
+            }
+            $name = FoodAlchemistRecipe::withTrashed()->whereKey($recipeId)->value('name') ?? "Rezept #{$recipeId}";
+            $warnungen[] = "„{$name}“: manuelle Eingriffe verworfen — das Rezept kommt in den Zielen nicht mehr vor.";
+        }
+
+        return $warnungen;
     }
 
     /**
@@ -304,6 +363,106 @@ class ProductionOrderService
         return $line->refresh();
     }
 
+    // ── Spec 30: Zeilen-Eingriff ────────────────────────────────────────────
+    //
+    // Bewusst EIGENE Verben statt `updateLine()` zu einem Grab-Bag zu machen: sonst könnte
+    // ein Aufruf gleichzeitig das Soll umschreiben und eine Zeile streichen, und der Guard
+    // müsste pro Schlüssel verzweigen. Explizite Verben = explizite Guards.
+
+    /**
+     * Küchen-Override der Ansätze. `null` nimmt den Override zurück.
+     *
+     * Der berechnete Wert in `ansaetze` bleibt stehen — nur so ist „manuell 2 — berechnet
+     * wären 3 · zurücksetzen" darstellbar (Muster: `OrderService` mit `is_manual_qty`).
+     *
+     * ⚠️ Der Override propagiert NICHT nach unten: er ändert weder GP-Bedarf noch
+     * Eltern-Rechnung noch die Übergabe an die Bestellung (die liest `targets`, nicht Zeilen).
+     * Es ist eine Küchen-Korrektur, kein Bedarfs-Eingriff. Propagation hieße, die Explosion
+     * mit gepinntem Knoten neu zu rechnen — ein zweites Rundungs-Regime neben `ceil()`.
+     */
+    public function setLineAnsaetze(Team $team, int $lineId, ?float $ansaetze): FoodAlchemistProductionOrderLine
+    {
+        $line = $this->ownedOpenLine($team, $lineId);
+
+        if ($line->istManuell()) {
+            // Freie Positionen tragen ihre Zahl direkt — kein Override-Paar nötig.
+            $line->ansaetze = $ansaetze !== null ? max(0.0, $ansaetze) : 0.0;
+        } elseif ($ansaetze === null) {
+            $line->manual_ansaetze = null;
+            $line->is_manual_ansaetze = false;
+        } else {
+            $line->manual_ansaetze = max(0.0, $ansaetze);
+            $line->is_manual_ansaetze = true;
+        }
+        $line->save();
+
+        return $line->refresh();
+    }
+
+    /**
+     * Zeile streichen bzw. wiederherstellen.
+     *
+     * Streichen ist KEIN Löschen: die nächste Ziel-Änderung würde die Zeile sofort wieder
+     * erzeugen. Als Overlay-Flag klebt der Strich dagegen am Rezept. Die Zeile bleibt im
+     * Panel sichtbar (durchgestrichen), fällt aber aus allen Summen und aus dem Druck.
+     */
+    public function setLineStruck(Team $team, int $lineId, bool $struck, ?string $grund = null): FoodAlchemistProductionOrderLine
+    {
+        $line = $this->ownedOpenLine($team, $lineId);
+        if ($line->istManuell()) {
+            throw new \RuntimeException('Freie Positionen werden gelöscht, nicht gestrichen.');
+        }
+        $line->is_struck = $struck;
+        $line->struck_reason = $struck ? (trim((string) $grund) ?: null) : null;
+        $line->save();
+
+        return $line->refresh();
+    }
+
+    /**
+     * Freie Position anlegen („Brot beim Bäcker abholen") — etwas, das kein Rezept ist.
+     *
+     * `recipe_id` bleibt zwingend NULL: eine freie Position mit Rezept würde die
+     * Einkaufs-Übergabe umgehen (die läuft über `targets`). Wer „ein Ansatz obendrauf" will,
+     * legt ein ZIEL an. `arbeitszeit_min` ist frei setzbar, sonst lügen die Posten-Summen.
+     */
+    public function addManualLine(Team $team, int $orderId, array $input): FoodAlchemistProductionOrderLine
+    {
+        $order = $this->ownedOpenOrder($team, $orderId);
+
+        $titel = trim((string) ($input['titel'] ?? ''));
+        if ($titel === '') {
+            throw new \RuntimeException('Freie Position braucht einen Titel.');
+        }
+
+        $maxManuell = (int) $order->lines()->where('origin', 'manual')->max('position');
+
+        return $order->lines()->create([
+            'team_id' => $order->team_id,
+            'origin' => 'manual',
+            'recipe_id' => null,
+            'titel' => mb_substr($titel, 0, 255),
+            'is_basisrezept' => false,
+            'tiefe' => 0,
+            'ansaetze' => (float) ($input['ansaetze'] ?? 1),
+            'benoetigt_ansaetze' => (float) ($input['ansaetze'] ?? 1),
+            'arbeitszeit_min' => isset($input['arbeitszeit_min']) && $input['arbeitszeit_min'] !== ''
+                ? (int) $input['arbeitszeit_min'] : null,
+            'note' => trim((string) ($input['note'] ?? '')) ?: null,
+            'position' => max($maxManuell, self::MANUELL_POSITION_BASIS) + 1,
+        ]);
+    }
+
+    /** Freie Position entfernen (nur solche — berechnete Zeilen werden gestrichen). */
+    public function removeManualLine(Team $team, int $lineId): void
+    {
+        $line = $this->ownedOpenLine($team, $lineId);
+        if (! $line->istManuell()) {
+            throw new \RuntimeException('Berechnete Zeilen werden gestrichen, nicht gelöscht.');
+        }
+        $line->delete();
+    }
+
     // ── Status-Lebenszyklus (guarded) ───────────────────────────────────────
 
     public function setStatus(Team $team, int $orderId, ProductionOrderStatus $ziel): FoodAlchemistProductionOrder
@@ -359,6 +518,9 @@ class ProductionOrderService
             'reference' => $o->reference,
         ])->values()->all();
 
+        // Spec 30: gestrichene Zeilen bleiben SICHTBAR (durchgestrichen), zählen aber nirgends mit.
+        $aktive = $order->lines->reject(fn ($l) => (bool) $l->is_struck);
+
         return [
             'id' => (int) $order->id,
             'name' => $order->name,
@@ -375,15 +537,23 @@ class ProductionOrderService
             'last_handover_at' => $order->last_handover_at?->toIso8601String(),
             'einkauf_veraltet' => $this->einkaufVeraltet($order),
             'warnungen' => $order->warnungen ?? [],
-            'ansaetze_gesamt' => (float) $order->lines->sum('ansaetze'),
-            'portionen_gesamt' => (int) $order->lines->sum('portionen'),
-            'arbeitszeit_gesamt_min' => (int) $order->lines->sum('arbeitszeit_min'),
+            // Spec 30: Summen zählen NUR das, was wirklich produziert wird — gestrichene Zeilen
+            // fallen raus, Overrides zählen mit ihrem effektiven Wert.
+            'ansaetze_gesamt' => (float) $aktive->sum('ansaetze_effektiv'),
+            'portionen_gesamt' => (int) $aktive->sum('portionen'),
+            'arbeitszeit_gesamt_min' => (int) $aktive->sum('arbeitszeit_min'),
             'zeilen' => $order->lines->map(fn ($l) => [
                 'id' => (int) $l->id,
-                'recipe_id' => (int) $l->recipe_id,
-                'name' => $l->recipe?->name,
+                'recipe_id' => $l->recipe_id !== null ? (int) $l->recipe_id : null,
+                'name' => $l->anzeigeName(),
                 'ist_basisrezept' => (bool) $l->is_basisrezept,
-                'ansaetze' => (float) $l->ansaetze,
+                'ansaetze' => (float) $l->ansaetze_effektiv,
+                'ansaetze_berechnet' => (float) $l->ansaetze,           // Spec 30: Referenz hinter dem Override
+                'ist_manuelle_ansaetze' => (bool) $l->is_manual_ansaetze,
+                'override_stale' => (bool) $l->override_stale,
+                'ist_freie_position' => $l->istManuell(),
+                'ist_gestrichen' => (bool) $l->is_struck,
+                'struck_reason' => $l->struck_reason,
                 'benoetigt_ansaetze' => (float) $l->benoetigt_ansaetze,
                 'portionen' => $l->portionen !== null ? (int) $l->portionen : null,
                 'produzierte_menge_kg' => $l->produzierte_menge_kg !== null ? (float) $l->produzierte_menge_kg : null,
@@ -587,10 +757,14 @@ class ProductionOrderService
             'reference' => $order->reference,
             'note' => $order->note,
             'ziele' => collect($order->targets ?? [])->pluck('label')->filter()->values()->all(),
-            'zeilen' => $order->lines->map(fn ($l) => [
-                'name' => $l->recipe?->name,
+            // Spec 30: gestrichene Zeilen kommen NICHT auf den Küchenzettel — genau dafür
+            // hat sie jemand gestrichen. Overrides gehen mit ihrem effektiven Wert raus.
+            'zeilen' => $order->lines->reject(fn ($l) => (bool) $l->is_struck)->map(fn ($l) => [
+                'name' => $l->anzeigeName(),
                 'ist_basisrezept' => (bool) $l->is_basisrezept,
-                'ansaetze' => (float) $l->ansaetze,
+                'ansaetze' => (float) $l->ansaetze_effektiv,
+                'ist_manuelle_ansaetze' => (bool) $l->is_manual_ansaetze,
+                'ist_freie_position' => $l->istManuell(),
                 'portionen' => $l->portionen !== null ? (int) $l->portionen : null,
                 'produzierte_menge_kg' => $l->produzierte_menge_kg !== null ? (float) $l->produzierte_menge_kg : null,
                 'arbeitszeit_min' => $l->arbeitszeit_min !== null ? (int) $l->arbeitszeit_min : null,
@@ -598,7 +772,7 @@ class ProductionOrderService
                 'schritte' => $l->steps_snapshot ?? [],   // Spec 27 (leer = Alt-Auftrag → Text-Fallback)
                 'darreichung' => $l->darreichung,
                 'zutaten' => $l->zutaten,
-            ])->all(),
+            ])->values()->all(),
             'einkauf' => $einkauf,
         ];
     }
