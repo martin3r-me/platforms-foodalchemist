@@ -81,13 +81,17 @@
                         @svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI erledigen lassen
                     </button>
                 @endif
-                <button type="button" wire:click="signalErledigt({{ $sig->id }})"
-                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/10 transition-colors" title="Als behoben markieren">
-                    @svg('heroicon-o-check', 'w-3.5 h-3.5') Erledigt
+                {{-- „Erledigt"/„Ignorieren" sind KEINE lauten CTAs, sondern Status-Setzer: das offene
+                     Signal bekommt einen End-Status und fällt beim nächsten Laden aus der Offen-Liste.
+                     Die eigentliche Arbeit ist Reinschauen/KI — darum hier nur leise Icon-Knöpfe. --}}
+                <span class="mx-0.5 w-px h-4 bg-black/10"></span>
+                <button type="button" wire:click="signalErledigt({{ $sig->id }})" data-rq-sig-erledigt="{{ $sig->id }}"
+                        class="grid place-items-center w-7 h-7 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors" title="Als erledigt markieren (Status)" aria-label="Als erledigt markieren">
+                    @svg('heroicon-o-check-circle', 'w-4 h-4')
                 </button>
-                <button type="button" wire:click="signalIgnorieren({{ $sig->id }})"
-                        class="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-medium text-gray-400 hover:text-gray-600 hover:bg-black/5 transition-colors" title="Bewusst akzeptieren">
-                    Ignorieren
+                <button type="button" wire:click="signalIgnorieren({{ $sig->id }})" data-rq-sig-ignorieren="{{ $sig->id }}"
+                        class="grid place-items-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors" title="Bewusst ignorieren (Status)" aria-label="Bewusst ignorieren">
+                    @svg('heroicon-o-no-symbol', 'w-4 h-4')
                 </button>
             @else
                 <span class="{{ $pill }} {{ $variantPill[$sig->status->badgeVariant()] }}">{{ $sig->status->label() }}</span>
