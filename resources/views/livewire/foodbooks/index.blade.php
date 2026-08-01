@@ -44,8 +44,17 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- Spec 29 / S8: Die Leitstelle-Rail lebt jetzt IM Editor-Modal (rechte Spalte), nicht mehr
-         im Seiten-activity-Slot — sie begleitet die Bearbeitung, statt hinter dem Vollbild-Modal zu liegen. --}}
+    {{-- Rechtes Detail-Panel (read-only Info) — konsistent zu Speisekarte/Speiseplan.
+         Die Leitstelle-Rail bleibt IM Editor-Modal (begleitet die Bearbeitung, Spec 29/S8). --}}
+    <x-slot name="activity">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-80" scope="activity_foodbook" side="right" icon="heroicon-o-information-circle" :default-open="true">
+            @if($fb)
+                @include('foodalchemist::livewire.foodbooks.partials.detail', ['fb' => $fb])
+            @else
+                <div class="p-4 text-[11px] text-gray-400">Wähle links ein Foodbook, um Details zu sehen.</div>
+            @endif
+        </x-foodalchemist::detail-sidebar>
+    </x-slot>
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         @if($fb)
