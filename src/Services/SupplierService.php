@@ -94,7 +94,11 @@ class SupplierService
         return FoodAlchemistSupplier::create([
             'team_id' => $team->id,
             'name' => $name,
+            'branch' => ($input['branch'] ?? '') ?: null,
+            'gln' => ($input['gln'] ?? '') ?: null,
+            'postal_code' => ($input['postal_code'] ?? '') ?: null,
             'city' => ($input['city'] ?? '') ?: null,
+            'address' => ($input['address'] ?? '') ?: null,
             'email_order' => ($input['email_order'] ?? '') ?: null,
             'homepage' => ($input['homepage'] ?? '') ?: null,
         ]);
@@ -114,6 +118,8 @@ class SupplierService
 
         $supplier->update([
             'name' => $name,
+            'branch' => ($input['branch'] ?? '') ?: null,
+            'gln' => ($input['gln'] ?? '') ?: null,
             'city' => ($input['city'] ?? '') ?: null,
             'address' => ($input['address'] ?? '') ?: null,
             'postal_code' => ($input['postal_code'] ?? '') ?: null,

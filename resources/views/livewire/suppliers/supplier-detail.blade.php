@@ -54,21 +54,66 @@
                         </div>
                     </div>
 
-                    <dl class="grid grid-cols-2 gap-x-4 gap-y-2">
-                        @foreach([
-                            ['Branche', $stammblatt['stammdaten']['branch']],
-                            ['GLN', $stammblatt['stammdaten']['gln']],
-                            ['Ort', trim(($stammblatt['stammdaten']['postal_code'] ?? '') . ' ' . ($stammblatt['stammdaten']['city'] ?? ''))],
-                            ['Straße', $stammblatt['stammdaten']['address']],
-                            ['Bestell-E-Mail', $stammblatt['stammdaten']['email_order']],
-                            ['Homepage', $stammblatt['stammdaten']['homepage']],
-                        ] as [$lbl, $wert])
-                            <div class="min-w-0">
-                                <dt class="{{ $dt }}">{{ $lbl }}</dt>
-                                <dd class="text-xs text-gray-900 truncate" title="{{ $wert }}">{{ $wert ?: '—' }}</dd>
+                    {{-- Stammdaten: editierbar fürs Besitzer-Team (D1), sonst read-only Ansicht.
+                         update() ist im Service D1-gated — bei geerbtem Lieferanten kein Formular. --}}
+                    @if($darfEdit)
+                        <div class="space-y-2" data-stammdaten-edit>
+                            <p class="{{ $label }}">Stammdaten</p>
+                            <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+                                <div class="col-span-2">
+                                    <label class="block {{ $dt }} mb-1">Name *</label>
+                                    <input type="text" wire:model="stammdaten.name" class="{{ $input }}" data-sd-name />
+                                </div>
+                                <div>
+                                    <label class="block {{ $dt }} mb-1">Branche</label>
+                                    <input type="text" wire:model="stammdaten.branch" class="{{ $input }}" data-sd-branch />
+                                </div>
+                                <div>
+                                    <label class="block {{ $dt }} mb-1">GLN</label>
+                                    <input type="text" wire:model="stammdaten.gln" class="{{ $input }}" data-sd-gln />
+                                </div>
+                                <div>
+                                    <label class="block {{ $dt }} mb-1">PLZ</label>
+                                    <input type="text" wire:model="stammdaten.postal_code" class="{{ $input }}" data-sd-plz />
+                                </div>
+                                <div>
+                                    <label class="block {{ $dt }} mb-1">Ort</label>
+                                    <input type="text" wire:model="stammdaten.city" class="{{ $input }}" data-sd-city />
+                                </div>
+                                <div class="col-span-2">
+                                    <label class="block {{ $dt }} mb-1">Straße</label>
+                                    <input type="text" wire:model="stammdaten.address" class="{{ $input }}" data-sd-address />
+                                </div>
+                                <div>
+                                    <label class="block {{ $dt }} mb-1">Bestell-E-Mail</label>
+                                    <input type="email" wire:model="stammdaten.email_order" class="{{ $input }}" data-sd-email />
+                                </div>
+                                <div>
+                                    <label class="block {{ $dt }} mb-1">Homepage</label>
+                                    <input type="text" wire:model="stammdaten.homepage" class="{{ $input }}" data-sd-homepage />
+                                </div>
                             </div>
-                        @endforeach
-                    </dl>
+                            <div class="flex justify-end">
+                                <button type="button" wire:click="stammdatenSpeichern" class="{{ $btnPrimary }}" data-stammdaten-speichern>Stammdaten speichern</button>
+                            </div>
+                        </div>
+                    @else
+                        <dl class="grid grid-cols-2 gap-x-4 gap-y-2">
+                            @foreach([
+                                ['Branche', $stammblatt['stammdaten']['branch']],
+                                ['GLN', $stammblatt['stammdaten']['gln']],
+                                ['Ort', trim(($stammblatt['stammdaten']['postal_code'] ?? '') . ' ' . ($stammblatt['stammdaten']['city'] ?? ''))],
+                                ['Straße', $stammblatt['stammdaten']['address']],
+                                ['Bestell-E-Mail', $stammblatt['stammdaten']['email_order']],
+                                ['Homepage', $stammblatt['stammdaten']['homepage']],
+                            ] as [$lbl, $wert])
+                                <div class="min-w-0">
+                                    <dt class="{{ $dt }}">{{ $lbl }}</dt>
+                                    <dd class="text-xs text-gray-900 truncate" title="{{ $wert }}">{{ $wert ?: '—' }}</dd>
+                                </div>
+                            @endforeach
+                        </dl>
+                    @endif
 
                     <div>
                         <p class="{{ $label }} mb-1">WG-Abdeckung (Stamm-Lieferant)</p>
