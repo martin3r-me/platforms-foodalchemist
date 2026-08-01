@@ -34,6 +34,7 @@ class Praesentation extends Component
         return view('foodalchemist::livewire.speisekarte.praesentation', [
             'karte' => $karte,
             'preise' => $preise,
+            'branding' => $svc->brandingDaten($karte),
         ])->layout('platform::layouts.app');
     }
 }

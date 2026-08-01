@@ -2,9 +2,11 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -504,19 +506,129 @@ class SpeisekarteService
         return $pos->label;
     }
 
-    /**
-     * Branding-Tokens fürs Dokument (DomPDF-taugliche base64-Bilder). Stufe B liefert Farben +
-     * Footer; Logo/Cover-Data-URIs kommen mit der Branding-Verwaltung in Stufe C.
-     */
-    private function brandingDaten(FoodAlchemistSpeisekarte $karte): array
+    // ── Branding / CI (Stufe C) ──────────────────────────────────────────────
+
+    private const BRANDING_STORAGE_DISK = 'public';
+
+    /** Marken-Farben + Footer setzen. Leere band_color ⇒ Ableitung aus brand_color im Blade. */
+    public function setBranding(Team $team, int $karteId, array $in): FoodAlchemistSpeisekarte
     {
+        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($karteId);
+        $this->guard($karte, $team);
+
+        $daten = [];
+        if (array_key_exists('brand_color', $in)) {
+            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'brand_color') ?? '#6d28d9';
+        }
+        if (array_key_exists('band_color', $in)) {
+            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'band_color', erlaubeLeer: true);
+        }
+        if (array_key_exists('footer_text', $in)) {
+            $t = trim((string) $in['footer_text']);
+            $daten['footer_text'] = $t !== '' ? $t : null;
+        }
+        if ($daten !== []) {
+            $karte->update($daten);
+        }
+
+        return $karte->refresh();
+    }
+
+    public function storeLogo(Team $team, int $karteId, UploadedFile $file): string
+    {
+        return $this->speichereBrandingBild($team, $karteId, $file, 'logo_path');
+    }
+
+    public function storeCover(Team $team, int $karteId, UploadedFile $file): string
+    {
+        return $this->speichereBrandingBild($team, $karteId, $file, 'cover_image_path');
+    }
+
+    public function clearLogo(Team $team, int $karteId): FoodAlchemistSpeisekarte
+    {
+        return $this->loescheBrandingBild($team, $karteId, 'logo_path');
+    }
+
+    public function clearCover(Team $team, int $karteId): FoodAlchemistSpeisekarte
+    {
+        return $this->loescheBrandingBild($team, $karteId, 'cover_image_path');
+    }
+
+    private function speichereBrandingBild(Team $team, int $karteId, UploadedFile $file, string $spalte): string
+    {
+        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($karteId);
+        $this->guard($karte, $team);
+
+        $alt = (string) $karte->{$spalte};
+        if ($alt !== '' && Storage::disk(self::BRANDING_STORAGE_DISK)->exists($alt)) {
+            Storage::disk(self::BRANDING_STORAGE_DISK)->delete($alt);
+        }
+        $pfad = $file->store("foodalchemist/branding/menu_card/{$karteId}", self::BRANDING_STORAGE_DISK);
+        $karte->update([$spalte => $pfad]);
+
+        return $pfad;
+    }
+
+    private function loescheBrandingBild(Team $team, int $karteId, string $spalte): FoodAlchemistSpeisekarte
+    {
+        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($karteId);
+        $this->guard($karte, $team);
+
+        $alt = (string) $karte->{$spalte};
+        if ($alt !== '' && Storage::disk(self::BRANDING_STORAGE_DISK)->exists($alt)) {
+            Storage::disk(self::BRANDING_STORAGE_DISK)->delete($alt);
+        }
+        $karte->update([$spalte => null]);
+
+        return $karte->refresh();
+    }
+
+    /**
+     * Marken-Tokens fürs Dokument/die Präsentation. Logo/Cover als base64-Data-URI (DomPDF lädt
+     * keine http-URLs) — funktioniert im HTML- wie im PDF-Pfad. band leer → aus brand_color.
+     *
+     * @return array{color:string, band:string, logo:?string, cover:?string, footer:?string}
+     */
+    public function brandingDaten(FoodAlchemistSpeisekarte $karte): array
+    {
+        $color = ($karte->brand_color ?? '') !== '' ? $karte->brand_color : '#6d28d9';
+
         return [
-            'color' => $karte->brand_color ?: '#6d28d9',
-            'band' => $karte->band_color,
-            'logo' => null,
-            'cover' => null,
-            'footer' => $karte->footer_text,
+            'color' => $color,
+            'band' => ($karte->band_color ?? '') !== '' ? $karte->band_color : $color,
+            'logo' => $this->alsDataUri($karte->logo_path),
+            'cover' => $this->alsDataUri($karte->cover_image_path),
+            'footer' => ($karte->footer_text ?? '') !== '' ? $karte->footer_text : null,
         ];
+    }
+
+    private function alsDataUri(?string $pfad): ?string
+    {
+        $pfad = (string) $pfad;
+        if ($pfad === '' || ! Storage::disk(self::BRANDING_STORAGE_DISK)->exists($pfad)) {
+            return null;
+        }
+        $mime = Storage::disk(self::BRANDING_STORAGE_DISK)->mimeType($pfad) ?: 'image/png';
+        $bytes = Storage::disk(self::BRANDING_STORAGE_DISK)->get($pfad);
+
+        return 'data:' . $mime . ';base64,' . base64_encode($bytes);
+    }
+
+    /** Hex-Validierung. erlaubeLeer=true → '' ⇒ null (Blade leitet aus brand_color ab). */
+    private function normHexOderThrow($wert, string $feld, bool $erlaubeLeer = false): ?string
+    {
+        $v = trim((string) $wert);
+        if ($v === '') {
+            if ($erlaubeLeer) {
+                return null;
+            }
+            throw new \RuntimeException("Farbe {$feld} darf nicht leer sein.");
+        }
+        if (! preg_match('/^#[0-9a-fA-F]{6}$/', $v)) {
+            throw new \RuntimeException("Ungültige Farbe für {$feld}: \"{$v}\" (erwartet #RRGGBB).");
+        }
+
+        return strtolower($v);
     }
 
     // ── Guards ───────────────────────────────────────────────────────────────

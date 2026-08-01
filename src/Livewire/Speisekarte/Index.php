@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Speisekarte;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Services\SpeisekarteService;
@@ -17,7 +18,7 @@ use Platform\FoodAlchemist\Services\SpeisekarteService;
  */
 class Index extends Component
 {
-    use WithPagination;
+    use WithFileUploads, WithPagination;
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -36,6 +37,15 @@ class Index extends Component
     // Gericht-Picker
     public string $pickerSuche = '';
     public ?int $pickerRubrikId = null;
+
+    // Branding (Stufe C)
+    public string $brandColor = '#6d28d9';
+    public ?string $bandColor = null;
+    public ?string $footerText = null;
+    public $logoUpload = null;
+    public $coverUpload = null;
+    public ?string $logoPath = null;
+    public ?string $coverPath = null;
 
     public function updatedSearch(): void
     {
@@ -58,6 +68,13 @@ class Index extends Component
         $this->name = $karte->name;
         $this->kartenTyp = $karte->karten_typ;
         $this->status = $karte->status;
+        $this->brandColor = $karte->brand_color ?: '#6d28d9';
+        $this->bandColor = $karte->band_color;
+        $this->footerText = $karte->footer_text;
+        $this->logoPath = $karte->logo_path;
+        $this->coverPath = $karte->cover_image_path;
+        $this->logoUpload = null;
+        $this->coverUpload = null;
         $this->pickerRubrikId = null;
         $this->pickerSuche = '';
     }
@@ -87,6 +104,61 @@ class Index extends Component
         }
         $svc->delete($this->team(), $this->karteId);
         $this->karteId = null;
+    }
+
+    // ── Branding (Stufe C) ────────────────────────────────────────────────────
+
+    public function brandingSpeichern(SpeisekarteService $svc): void
+    {
+        if (! $this->karteId) {
+            return;
+        }
+        try {
+            $svc->setBranding($this->team(), $this->karteId, [
+                'brand_color' => $this->brandColor,
+                'band_color' => $this->bandColor ?? '',
+                'footer_text' => $this->footerText ?? '',
+            ]);
+            $this->dispatch('gespeichert');
+        } catch (\RuntimeException $e) {
+            $this->addError('brandColor', $e->getMessage());
+        }
+    }
+
+    public function updatedLogoUpload(SpeisekarteService $svc): void
+    {
+        if (! $this->karteId || ! $this->logoUpload) {
+            return;
+        }
+        $this->validate(['logoUpload' => 'image|max:4096']);
+        $this->logoPath = $svc->storeLogo($this->team(), $this->karteId, $this->logoUpload);
+        $this->logoUpload = null;
+    }
+
+    public function updatedCoverUpload(SpeisekarteService $svc): void
+    {
+        if (! $this->karteId || ! $this->coverUpload) {
+            return;
+        }
+        $this->validate(['coverUpload' => 'image|max:8192']);
+        $this->coverPath = $svc->storeCover($this->team(), $this->karteId, $this->coverUpload);
+        $this->coverUpload = null;
+    }
+
+    public function brandingLogoEntfernen(SpeisekarteService $svc): void
+    {
+        if ($this->karteId) {
+            $svc->clearLogo($this->team(), $this->karteId);
+            $this->logoPath = null;
+        }
+    }
+
+    public function brandingCoverEntfernen(SpeisekarteService $svc): void
+    {
+        if ($this->karteId) {
+            $svc->clearCover($this->team(), $this->karteId);
+            $this->coverPath = null;
+        }
     }
 
     public function rubrikNeu(SpeisekarteService $svc, ?int $parentId = null): void

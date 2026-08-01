@@ -21,7 +21,11 @@
             {{ $pdf ? 'position: fixed; top: -2.4cm; left: -1.5cm; width: 21cm;' : '' }}
             height: 1.4cm; background: {{ $band }}; color: #fff; padding: 0 1.5cm;
         }
-        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.52cm;' : 'line-height: 1.4cm;' }} font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .92; }
+        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.52cm;' : 'float: left; line-height: 1.4cm;' }} font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .92; }
+        .band-top .bt-logo { {{ $pdf ? 'position: absolute; right: 1.5cm; top: 0.28cm;' : 'float: right;' }} }
+        .band-top .bt-logo img { max-height: 0.85cm; max-width: 5cm; {{ $pdf ? '' : 'margin-top: 0.28cm;' }} }
+        .cover-photo { margin: 4px 0 14px; }
+        .cover-photo img { max-width: 100%; max-height: 8cm; border-radius: 6px; }
         .band-bottom {
             {{ $pdf ? 'position: fixed; bottom: -1.7cm; left: -1.5cm; width: 21cm;' : '' }}
             height: 1.0cm; border-top: 2px solid {{ $brand }};
@@ -70,6 +74,7 @@
 
 <div class="band-top">
     <span class="bt-label">{{ $karte->name }}</span>
+    @if($b['logo'])<span class="bt-logo"><img src="{{ $b['logo'] }}" alt=""></span>@endif
 </div>
 <div class="band-bottom">
     <span class="bb-foot">{{ $footerText }}</span>
@@ -87,6 +92,7 @@
     <div class="kicker">{{ $typLabel[$karte->karten_typ] ?? 'Speisekarte' }}</div>
     <div class="title">{{ $karte->name }}</div>
     <div class="rule"></div>
+    @if($b['cover'])<div class="cover-photo"><img src="{{ $b['cover'] }}" alt=""></div>@endif
     @if($karte->gueltig_von || $karte->gueltig_bis)
         <div class="gueltig">
             Gültig

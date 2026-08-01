@@ -79,6 +79,60 @@
                 </div>
             </div>
 
+            {{-- Branding / CI (Stufe C) --}}
+            <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-brand-{{ $karte->id }}" x-data="{ auf: false }">
+                <div class="{{ $cardAccent }}"></div>
+                <button type="button" @click="auf = !auf" class="flex items-center gap-2 w-full text-left">
+                    <span class="font-semibold text-gray-900 text-sm">Branding / CI</span>
+                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Design</span>
+                    <span class="flex-1"></span>
+                    <span class="text-xs text-gray-400" x-text="auf ? '▲' : '▼'"></span>
+                </button>
+                <div x-show="auf" x-cloak class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <div>
+                            <div class="{{ $label }} mb-1">Markenfarbe</div>
+                            <input type="color" wire:model="brandColor" class="h-8 w-16 rounded border border-black/10" />
+                            <input type="text" wire:model="brandColor" class="{{ $input }} inline-block w-28 ml-2" />
+                        </div>
+                        <div>
+                            <div class="{{ $label }} mb-1">Bandfarbe (optional)</div>
+                            <input type="text" wire:model="bandColor" placeholder="leer = Markenfarbe" class="{{ $input }} w-40" />
+                        </div>
+                        <div>
+                            <div class="{{ $label }} mb-1">Fußzeile</div>
+                            <input type="text" wire:model="footerText" placeholder="z. B. Restaurant Adler · Musterstr. 1" class="{{ $input }}" />
+                        </div>
+                        @error('brandColor')<div class="text-[11px] text-red-500">{{ $message }}</div>@enderror
+                        <button type="button" wire:click="brandingSpeichern" class="{{ $btnGhost }}">Branding speichern</button>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <div class="{{ $label }} mb-1">Logo</div>
+                            @if($logoPath)
+                                <div class="flex items-center gap-2">
+                                    <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($logoPath) }}" alt="Logo" class="h-8 rounded bg-white/60 p-1" />
+                                    <button type="button" wire:click="brandingLogoEntfernen" class="{{ $btnGhostXs }} text-red-600">entfernen</button>
+                                </div>
+                            @endif
+                            <input type="file" wire:model="logoUpload" accept="image/*" class="text-xs mt-1" />
+                            <div wire:loading wire:target="logoUpload" class="text-[11px] text-gray-400">lädt …</div>
+                        </div>
+                        <div>
+                            <div class="{{ $label }} mb-1">Titelbild</div>
+                            @if($coverPath)
+                                <div class="flex items-center gap-2">
+                                    <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($coverPath) }}" alt="Cover" class="h-12 rounded" />
+                                    <button type="button" wire:click="brandingCoverEntfernen" class="{{ $btnGhostXs }} text-red-600">entfernen</button>
+                                </div>
+                            @endif
+                            <input type="file" wire:model="coverUpload" accept="image/*" class="text-xs mt-1" />
+                            <div wire:loading wire:target="coverUpload" class="text-[11px] text-gray-400">lädt …</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {{-- Rubriken + Positionen --}}
             <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-body-{{ $karte->id }}">
                 <div class="{{ $cardAccent }}"></div>
