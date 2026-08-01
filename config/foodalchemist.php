@@ -164,12 +164,6 @@ return [
                     'route' => 'foodalchemist.angebote.index',
                     'icon'  => 'heroicon-o-document-text',
                 ],
-                [
-                    // #502: Was-wäre-wenn-Preissimulation (Kalkulations-Werkzeug der Ausgabe-Ebene).
-                    'label' => 'Preissimulation',
-                    'route' => 'foodalchemist.kalkulation.index',
-                    'icon'  => 'heroicon-o-calculator',
-                ],
             ],
         ],
         [
@@ -193,8 +187,9 @@ return [
             ],
         ],
         [
-            // Einkauf: Beschaffung — Preisvergleich + Wareneinsatz-Optimierung + das eigentliche
-            // Bestellen (Bestellungen 2026-08-01 aus „Planung" hierher, wo es hingehört).
+            // Einkauf: Beschaffung/Kostenseite — Preisvergleich + Wareneinsatz-Optimierung +
+            // Preissimulation (Kalkulations-Werkzeug, 2026-08-01 aus „Ausgabe" hierher) + das
+            // eigentliche Bestellen (Bestellungen 2026-08-01 aus „Planung" hierher, wo es hingehört).
             'group' => 'Einkauf',
             'items' => [
                 [
@@ -206,6 +201,12 @@ return [
                     'label' => 'Wareneinsatz-Optimierung',
                     'route' => 'foodalchemist.einkauf.optimierung',
                     'icon'  => 'heroicon-o-sparkles',
+                ],
+                [
+                    // #502: Was-wäre-wenn-Preissimulation — Kalkulations-Werkzeug, gehört zur Kostenseite.
+                    'label' => 'Preissimulation',
+                    'route' => 'foodalchemist.kalkulation.index',
+                    'icon'  => 'heroicon-o-calculator',
                 ],
                 [
                     // Spec 17/S2: Bestellschienen je Lieferant (mini-WaWi, N-Track).
