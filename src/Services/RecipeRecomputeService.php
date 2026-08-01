@@ -381,14 +381,11 @@ class RecipeRecomputeService
         $yieldG = 0.0;
         $nTotal = 0;
         $nUngemappt = 0;
-        $geminiDabei = false;
 
         foreach ($zutaten as $z) {
             $nTotal++;
             if (! $this->istGemappt($z)) {
                 $nUngemappt++;
-            } elseif ($z->match_method === MatchMethod::GeminiProposed) {
-                $geminiDabei = true;
             }
             if ($z->is_optional || $z->unit?->slug === 'qs') {
                 continue;                                          // Yield-Beitrag 0 (T2)
@@ -402,14 +399,21 @@ class RecipeRecomputeService
         $recipe->yield_kg = $yieldG > 0 ? round($yieldG / 1000, 3) : null;
         $recipe->n_ingredients_total = $nTotal;
         $recipe->n_ingredients_unmapped = $nUngemappt;
-        $ownRang = match (true) {                                   // GL-01 §4.4 (erste zutreffende)
+        // GL-01 §4.4 — Allergen-Konfidenz = schwächstes Glied aus:
+        //   (a) Mapping-Vollständigkeit (leer → unknown, ungemappt → low; F7.1),
+        //   (b) Allergen-Konfidenz der gemappten GPs — die QUELLE der Allergen-Werte,
+        //       NICHT die Match-Methode (User 2026-07-31: „Daten kommen aus den GP-Allergenen"),
+        //   (c) Sub-Rezept-Allergen-Konfidenz (§7 rekursiv, schwächstes Glied).
+        $mappingRang = match (true) {
             $nTotal === 0 => 0,
             $nUngemappt > 0 => 1,
-            $geminiDabei => 2,
             default => 3,
         };
-        // §7 rekursiv „kein false-confident": schwächstes Glied — unsichere Sub-Rezepte ziehen runter.
-        $recipe->allergens_confidence = self::RANG_KONF[min($ownRang, $this->subKonfidenzRang($zutaten, 'allergens_confidence'))];
+        $recipe->allergens_confidence = self::RANG_KONF[min(
+            $mappingRang,
+            $this->gpKonfidenzRang($zutaten),
+            $this->subKonfidenzRang($zutaten, 'allergens_confidence'),
+        )];
     }
 
     /** Verlust-Kaskade (GL-02): Zutat-Wert → GP-Default → Team-WG-Default → 0. */
@@ -906,6 +910,30 @@ class RecipeRecomputeService
                 continue;
             }
             $rang = min($rang, max(1, self::KONF_RANG[$z->referencedRecipe->{$feld}] ?? 0));
+        }
+
+        return $rang;
+    }
+
+    /**
+     * GL-01 §4.4: schwächste Allergen-Konfidenz unter den gemappten GP-Zutaten (nicht Sub-Rezepte).
+     * Quelle der Rezept-Allergen-Konfidenz sind die GP-Allergene selbst, nicht die Match-Methode.
+     * 3 (high), wenn keine GP-Zutat beiträgt (dann führen Mapping-Guard + Sub-Rezepte).
+     */
+    private function gpKonfidenzRang(Collection $zutaten): int
+    {
+        $rang = 3;
+        foreach ($this->aggregationsZutaten($zutaten) as $z) {
+            if ($z->gp_id === null || $z->gp === null) {
+                continue;                                          // Sub-Rezepte: siehe subKonfidenzRang
+            }
+            $c = $z->gp->allergens_confidence;
+            $rang = min($rang, match (true) {
+                $c === null        => 1,                           // unbewertet → low (Werte kommen dennoch aus dem GP)
+                (float) $c >= 0.85 => 3,                           // high
+                (float) $c >= 0.50 => 2,                           // medium
+                default            => 1,                           // 0–0.5 → low; 'unknown' bleibt dem leeren Rezept
+            });
         }
 
         return $rang;
