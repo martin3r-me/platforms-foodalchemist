@@ -65,7 +65,7 @@ class SpeiseplanService
             ->find($id);
     }
 
-    private const FELDER = ['name', 'start_date', 'cycle_weeks', 'min_abstand_tage', 'status', 'description', 'note'];
+    private const FELDER = ['name', 'start_date', 'cycle_weeks', 'min_abstand_tage', 'status', 'description', 'note', 'default_pax', 'budget_wareneinsatz'];
 
     public function create(Team $team, array $in): FoodAlchemistSpeiseplan
     {
@@ -91,10 +91,14 @@ class SpeiseplanService
         $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($id);
         $this->guard($plan, $team);
         $update = array_intersect_key($in, array_flip(self::FELDER));
-        foreach (['cycle_weeks' => 1, 'min_abstand_tage' => 0] as $f => $min) {
+        foreach (['cycle_weeks' => 1, 'min_abstand_tage' => 0, 'default_pax' => 1] as $f => $min) {
             if (array_key_exists($f, $update)) {
                 $update[$f] = max($min, (int) $update[$f]);
             }
+        }
+        if (array_key_exists('budget_wareneinsatz', $update)) {
+            $update['budget_wareneinsatz'] = ($update['budget_wareneinsatz'] === '' || $update['budget_wareneinsatz'] === null)
+                ? null : max(0, (float) str_replace(',', '.', (string) $update['budget_wareneinsatz']));
         }
         $plan->update($update);
 
@@ -201,6 +205,15 @@ class SpeiseplanService
         $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with('mealPlan')->findOrFail($id);
         $this->guard($e->mealPlan, $team);
         $e->delete();
+    }
+
+    /** Spec 31 / Stufe C: Pax-Override je Eintrag setzen (leer/0 → NULL = Plan-Default gilt). */
+    public function setEintragPax(Team $team, int $id, $pax): void
+    {
+        $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with('mealPlan')->findOrFail($id);
+        $this->guard($e->mealPlan, $team);
+        $wert = (int) $pax;
+        $e->update(['pax' => $wert > 0 ? $wert : null]);
     }
 
     // ── Wochen-Matrix + Monats-Kalender ──────────────────────────────────
@@ -493,6 +506,61 @@ class SpeiseplanService
             'kostformen' => $this->kostformAbdeckung($plan, $mahlzeit, $mo),
             'erzeugt' => Carbon::now()->format('d.m.Y'),
         ];
+    }
+
+    /**
+     * Spec 31 / Stufe C: Wochen-Speiseplan an die Produktion übergeben. Erzeugt je Werktag MIT
+     * Belegung EINEN Produktionsauftrag (GV kocht tagesweise); jeder Eintrag wird zu einem Ziel
+     * (Concept → persons, VK-Gericht → portions, Paket → seine Gerichte je portions), Menge =
+     * effektive Pax (Eintrag-Override ?? Plan-Default). Zielform gespiegelt aus Produktion\Editor.
+     *
+     * @return array{auftraege:int, ziele:int, tage:list<string>}
+     */
+    public function wocheAnProduktion(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, ?int $userId = null): array
+    {
+        $this->guard($plan, $team);
+        $mahlzeit = array_key_exists($mahlzeit, self::MAHLZEITEN) ? $mahlzeit : 'mittag';
+        $produktion = app(ProductionOrderService::class);
+        $raster = $this->wochenRaster($plan, $mahlzeit, $montag);
+        $defaultPax = max(1, (int) ($plan->default_pax ?: 100));
+
+        $auftraege = 0;
+        $zieleGesamt = 0;
+        $tage = [];
+        for ($d = 0; $d < 5; $d++) {
+            $tag = $montag->copy()->addDays($d)->startOfDay();
+            $ymd = $tag->format('Y-m-d');
+            $eintraege = collect($raster)->flatMap(fn ($proLinie) => $proLinie[$ymd] ?? []);
+            if ($eintraege->isEmpty()) {
+                continue;
+            }
+
+            $targets = [];
+            foreach ($eintraege as $e) {
+                $pax = (int) ($e->pax ?: $defaultPax);
+                $ref = 'menuplan:' . $plan->id . ':' . $ymd . ':' . $e->id;
+                if ($e->concept_id !== null) {
+                    $targets[] = ['concept_id' => (int) $e->concept_id, 'persons' => $pax, 'source_ref' => $ref];
+                } elseif ($e->sales_recipe_id !== null) {
+                    $targets[] = ['recipe_id' => (int) $e->sales_recipe_id, 'portions' => $pax, 'source_ref' => $ref];
+                } elseif ($e->package_id !== null) {
+                    foreach ($this->eintragGerichte($e) as $g) {
+                        $targets[] = ['recipe_id' => (int) $g->id, 'portions' => $pax, 'source_ref' => $ref . ':d' . $g->id];
+                    }
+                }
+            }
+            if ($targets === []) {
+                continue;
+            }
+
+            $name = $plan->name . ' · ' . self::WOCHENTAGE[$tag->isoWeekday()] . ' ' . $tag->format('d.m.') . ' (' . self::MAHLZEITEN[$mahlzeit] . ')';
+            $produktion->saveNew($team, $ymd, $name, $targets, 'Speiseplan #' . $plan->id, null, $userId);
+            $auftraege++;
+            $zieleGesamt += count($targets);
+            $tage[] = $ymd;
+        }
+
+        return ['auftraege' => $auftraege, 'ziele' => $zieleGesamt, 'tage' => $tage];
     }
 
     /**

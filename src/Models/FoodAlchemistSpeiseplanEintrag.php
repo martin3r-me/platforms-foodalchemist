@@ -27,6 +27,7 @@ class FoodAlchemistSpeiseplanEintrag extends Model
         'weekday' => 'integer',
         'position' => 'integer',
         'entry_date' => 'date',
+        'pax' => 'integer',
     ];
 
     public function mealPlan(): BelongsTo

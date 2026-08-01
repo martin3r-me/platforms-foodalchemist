@@ -26,6 +26,8 @@ class FoodAlchemistSpeiseplan extends Model
         'start_date' => 'date',
         'cycle_weeks' => 'integer',
         'min_abstand_tage' => 'integer',
+        'default_pax' => 'integer',
+        'budget_wareneinsatz' => 'float',
     ];
 
     public function entries(): HasMany
