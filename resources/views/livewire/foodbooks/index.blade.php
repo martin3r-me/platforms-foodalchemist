@@ -873,15 +873,17 @@
                 </div>
 
                 {{-- Block-Liste --}}
-                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3">
+                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" x-data="{ einf: null }" data-fb-inhalt>
                     <div class="flex items-center justify-between flex-wrap gap-2">
                         <h3 class="font-medium tracking-tight text-gray-900">Inhalt <span class="text-gray-500 text-xs">({{ $kapitel->blocks->count() }})</span></h3>
                         <div class="flex items-center gap-2" x-data="{ presets: false }">
                             @if(count($markiert) >= 2)
                                 <button type="button" wire:click="wahlGruppeBilden" class="{{ $btnGhostXs }} text-amber-600">Wahl-Gruppe ({{ count($markiert) }})</button>
                             @endif
-                            <button type="button" @click="$dispatch('modal.open', { name: 'fb-concept' })" class="{{ $btnPrimary }}">+ Concept einfügen</button>
-                            <button type="button" @click="$dispatch('modal.open', { name: 'fb-gericht' })" class="{{ $btnGhost }}">+ Gericht einfügen</button>
+                            <button type="button" @click="einf = (einf === 'concept' ? null : 'concept')"
+                                    class="{{ $btnGhost }}" :class="einf === 'concept' ? '!bg-violet-500/20 !text-violet-700 !border-violet-500/40' : ''" data-fb-einf-concept>+ Concept einfügen</button>
+                            <button type="button" @click="einf = (einf === 'gericht' ? null : 'gericht')"
+                                    class="{{ $btnGhost }}" :class="einf === 'gericht' ? '!bg-violet-500/20 !text-violet-700 !border-violet-500/40' : ''" data-fb-einf-gericht>+ Gericht einfügen</button>
                             <button type="button" wire:click="blockBasis('text')" class="{{ $btnGhostXs }}">+ Text</button>
                             <button type="button" wire:click="blockBasis('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>
                             <div class="relative">
@@ -1004,10 +1006,10 @@
                         @endforelse
                     </div>
 
-                    {{-- FB: Concept-Einfüge-Picker (Modal, Livewire-sicher). Angebot bleibt unberührt (hat eigenen Concepter-Editor).
-                         Concepter-Such-Wissen: Suche + collapsible Kategorie-Tree + Concept-Liste; bleibt offen für Mehrfach-Einfügen.
-                         Modal statt x-teleport-Drawer: Teleport entkoppelt das DOM vom Livewire-Morph → wire:model/click toter. --}}
-                    <x-foodalchemist::modal name="fb-concept" title="Concept einfügen" size="max-w-3xl" dark-canvas>
+                    {{-- Spec 29 / S6.1: Concept-Einfügen INLINE (Concepter-Muster statt Modal) —
+                         Suche + Dimensions-Filter + Kandidatenliste; „+" fügt direkt ein und bleibt offen.
+                         Liegt unter `.fa-editor-panel` → dunkel-lesbar ohne eigenes dark-canvas. --}}
+                    <div x-show="einf === 'concept'" x-cloak class="border-t border-white/10 pt-3 mt-1" data-fb-einfuegen="concept">
                         <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-3" />
                         @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
                         <div class="flex gap-3 min-h-[20rem]">
@@ -1073,15 +1075,12 @@
                                 @endif
                             </div>
                         </div>
-                        <x-slot:footer>
-                            <span class="text-[10px] text-gray-500 mr-auto">Eingefügte Concepts erscheinen links im Inhalt. Bleibt offen für mehrere.</span>
-                            <button type="button" @click="$dispatch('modal.close', { name: 'fb-concept' })" class="{{ $btnGhost }}">Schließen</button>
-                        </x-slot:footer>
-                    </x-foodalchemist::modal>
+                        <p class="text-[10px] text-gray-500 mt-2">Eingefügte Concepts erscheinen oben im Inhalt. Bleibt offen für mehrere.</p>
+                    </div>{{-- /Concept-Einfügen inline --}}
 
-                    {{-- E1.3: FB-Einzel-Gericht-Picker (recipe_ref). Spiegelt fb-concept, aber ohne Kategorie-Tree:
-                         `gerichtKandidaten` filtert per Freitext auf echte VK-Gerichte (verkauf(), keine Slot-Varianten). --}}
-                    <x-foodalchemist::modal name="fb-gericht" title="Gericht einfügen" size="max-w-3xl" dark-canvas>
+                    {{-- Spec 29 / S6.1: Gericht-Einfügen INLINE (Concepter-Muster). Spiegelt Concept-Einfügen,
+                         Klassen-Filter statt Dimensionen; `gerichtKandidaten` = echte VK-Gerichte. --}}
+                    <div x-show="einf === 'gericht'" x-cloak class="border-t border-white/10 pt-3 mt-1" data-fb-einfuegen="gericht">
                         <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht (VK-Rezept) suchen …" class="{{ $input }} w-full mb-3" />
                         <div class="flex gap-3 min-h-[20rem]">
                             {{-- UX 2026-07-24: Klassen-Filter mit Untergruppen — Hauptgruppe (Modell A) + Drill-down
@@ -1118,11 +1117,8 @@
                                 @endif
                             </div>
                         </div>
-                        <x-slot:footer>
-                            <span class="text-[10px] text-gray-500 mr-auto">Einzel-Gerichte erscheinen als [Gericht]-Block (€/Position). Bleibt offen für mehrere.</span>
-                            <button type="button" @click="$dispatch('modal.close', { name: 'fb-gericht' })" class="{{ $btnGhost }}">Schließen</button>
-                        </x-slot:footer>
-                    </x-foodalchemist::modal>
+                        <p class="text-[10px] text-gray-500 mt-2">Einzel-Gerichte erscheinen als [Gericht]-Block (€/Position). Bleibt offen für mehrere.</p>
+                    </div>{{-- /Gericht-Einfügen inline --}}
                 </div>
             @else
                 <div class="{{ $card }} p-8 text-center text-sm text-gray-500">Links im Kapitelbaum ein Kapitel wählen, um seine Speisen zu bearbeiten.</div>
