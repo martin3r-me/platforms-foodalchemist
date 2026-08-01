@@ -33,8 +33,6 @@ class Index extends Component
     #[Url(as: 'aq')]
     public string $artikelSuche = '';
 
-    /** M2-14: Bearbeiten-Modal */
-    public array $editLieferant = [];
 
     public bool $includeInactive = false;
 
@@ -117,27 +115,6 @@ class Index extends Component
     {
         $this->perPage = in_array((int) $this->perPage, [25, 50, 100, 250, 500], true) ? (int) $this->perPage : 100;
         $this->resetPage();
-    }
-
-    public function lieferantBearbeiten(): void
-    {
-        $aktiv = app(SupplierService::class)->listWithCounts(Auth::user()->currentTeamRelation, true)->firstWhere('id', $this->supplierId);
-        if ($aktiv === null) {
-            return;
-        }
-        $this->editLieferant = $aktiv->only(['name', 'branch', 'gln', 'city', 'address', 'postal_code', 'email_order', 'homepage']);
-        $this->fehler = null;
-        $this->dispatch('modal.open', name: 'lieferant-edit');
-    }
-
-    public function lieferantSpeichern(): void
-    {
-        try {
-            app(SupplierService::class)->update(Auth::user()->currentTeamRelation, (int) $this->supplierId, $this->editLieferant);
-            $this->dispatch('modal.close', name: 'lieferant-edit');
-        } catch (RuntimeException $e) {
-            $this->fehler = $e->getMessage();
-        }
     }
 
     public function lieferantDeaktivieren(bool $inactive): void
