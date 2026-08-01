@@ -44,7 +44,7 @@ class Index extends Component
     public int $perPage = 100;
 
     /** Feedback 2026-06-11: „+ Neuer Lieferant" */
-    public array $neuLieferant = ['name' => '', 'city' => '', 'email_order' => ''];
+    public array $neuLieferant = ['name' => '', 'branch' => '', 'gln' => '', 'postal_code' => '', 'city' => '', 'address' => '', 'email_order' => '', 'homepage' => ''];
 
     /** M2-11: „+ Neuer Artikel" */
     public array $neuArtikel = ['designation' => '', 'article_number' => '', 'qty' => '', 'unit_code' => ''];
@@ -125,7 +125,7 @@ class Index extends Component
         if ($aktiv === null) {
             return;
         }
-        $this->editLieferant = $aktiv->only(['name', 'city', 'address', 'postal_code', 'email_order', 'homepage']);
+        $this->editLieferant = $aktiv->only(['name', 'branch', 'gln', 'city', 'address', 'postal_code', 'email_order', 'homepage']);
         $this->fehler = null;
         $this->dispatch('modal.open', name: 'lieferant-edit');
     }

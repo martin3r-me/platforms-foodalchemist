@@ -239,10 +239,20 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Name *</label>
                         <input type="text" wire:model="neuLieferant.name" wire:keydown.enter="lieferantAnlegen" class="{{ $input }}" data-neu-lieferant-name /></div>
+                    <div><label class="block {{ $label }} mb-1">Branche</label>
+                        <input type="text" wire:model="neuLieferant.branch" class="{{ $input }}" /></div>
+                    <div><label class="block {{ $label }} mb-1">GLN</label>
+                        <input type="text" wire:model="neuLieferant.gln" class="{{ $input }}" /></div>
+                    <div><label class="block {{ $label }} mb-1">PLZ</label>
+                        <input type="text" wire:model="neuLieferant.postal_code" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Ort</label>
                         <input type="text" wire:model="neuLieferant.city" class="{{ $input }}" /></div>
+                    <div class="col-span-2"><label class="block {{ $label }} mb-1">Straße</label>
+                        <input type="text" wire:model="neuLieferant.address" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Bestell-E-Mail</label>
                         <input type="text" wire:model="neuLieferant.email_order" class="{{ $input }}" /></div>
+                    <div><label class="block {{ $label }} mb-1">Homepage</label>
+                        <input type="text" wire:model="neuLieferant.homepage" class="{{ $input }}" /></div>
                 </div>
                 <p class="text-[11px] text-gray-500 mt-2">Gehört deinem Team (D1). Artikel danach über „+ Neuer Artikel".</p>
             </x-foodalchemist::modal-section>
@@ -259,6 +269,10 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2"><label class="block {{ $label }} mb-1">Name *</label>
                         <input type="text" wire:model="editLieferant.name" class="{{ $input }}" /></div>
+                    <div><label class="block {{ $label }} mb-1">Branche</label>
+                        <input type="text" wire:model="editLieferant.branch" class="{{ $input }}" /></div>
+                    <div><label class="block {{ $label }} mb-1">GLN</label>
+                        <input type="text" wire:model="editLieferant.gln" class="{{ $input }}" /></div>
                     <div><label class="block {{ $label }} mb-1">Straße</label>
                         <input type="text" wire:model="editLieferant.address" class="{{ $input }}" /></div>
                     <div class="grid grid-cols-2 gap-2">

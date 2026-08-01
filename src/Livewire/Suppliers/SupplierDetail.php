@@ -27,6 +27,9 @@ class SupplierDetail extends Component
 
     public string $status = 'aktiv';
 
+    /** Stammdaten-Pflege im Modal (D1-gated) — vorbelegt beim Öffnen, gespeichert per stammdatenSpeichern. */
+    public array $stammdaten = ['name' => '', 'branch' => '', 'gln' => '', 'postal_code' => '', 'city' => '', 'address' => '', 'email_order' => '', 'homepage' => ''];
+
     /** R9.1 (E4) Konditionen — vorbelegt beim Öffnen, gespeichert per updateConditions. */
     public array $konditionen = ['rebate_pct' => '', 'payment_term_days' => '', 'min_order_value' => '', 'free_shipping_threshold' => ''];
 
@@ -60,6 +63,16 @@ class SupplierDetail extends Component
         $sb = app(SupplierService::class)->stammblatt($team, $id);
         $this->supplierId = $id;
         $this->status = $sb['status'];
+        $this->stammdaten = [
+            'name' => $sb['name'] ?? '',
+            'branch' => $sb['stammdaten']['branch'] ?? '',
+            'gln' => $sb['stammdaten']['gln'] ?? '',
+            'postal_code' => $sb['stammdaten']['postal_code'] ?? '',
+            'city' => $sb['stammdaten']['city'] ?? '',
+            'address' => $sb['stammdaten']['address'] ?? '',
+            'email_order' => $sb['stammdaten']['email_order'] ?? '',
+            'homepage' => $sb['stammdaten']['homepage'] ?? '',
+        ];
         $this->konditionen = [
             'rebate_pct' => $sb['konditionen']['rebate_pct'] ?? '',
             'payment_term_days' => $sb['konditionen']['payment_term_days'] ?? '',
@@ -95,6 +108,13 @@ class SupplierDetail extends Component
     {
         $this->fuehreAus(fn ($svc, $team) => $svc->updateConditions($team, $this->supplierId, $this->konditionen),
             'Konditionen gespeichert.');
+    }
+
+    /** Stammdaten (Name/Branche/GLN/Adresse/Kontakt) speichern — D1-gated im Service (geerbt → wirft). */
+    public function stammdatenSpeichern(): void
+    {
+        $this->fuehreAus(fn ($svc, $team) => $svc->update($team, $this->supplierId, $this->stammdaten),
+            'Stammdaten gespeichert.');
     }
 
     /** Einkauf E1: Staffel + Config eines Lieferanten in den Editor-State laden. */
@@ -275,7 +295,7 @@ class SupplierDetail extends Component
 
     private function resetState(): void
     {
-        $this->reset('status', 'konditionen', 'staffel', 'rebateConfig', 'stufenInfo', 'liefertage', 'bestellung', 'neuKontakt', 'neueAbsprache', 'neuesDokument', 'fehler', 'hinweis');
+        $this->reset('status', 'stammdaten', 'konditionen', 'staffel', 'rebateConfig', 'stufenInfo', 'liefertage', 'bestellung', 'neuKontakt', 'neueAbsprache', 'neuesDokument', 'fehler', 'hinweis');
     }
 
     private function team()
