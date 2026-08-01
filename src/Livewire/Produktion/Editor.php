@@ -13,6 +13,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\AngebotService;
+use Platform\FoodAlchemist\Services\ConcepterAggregateService;
 use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
@@ -488,7 +489,19 @@ class Editor extends Component
             }
         }
 
+        // Küchen-Manager: Diät-/Allergen-Übersicht über die ganze Produktion (Rollup der Vorschau-Rezepte).
+        $allergenRollup = null;
+        if ($team !== null && $this->vorschau !== null && ! empty($this->vorschau['rezepte'])) {
+            $recipeIds = collect($this->vorschau['rezepte'])->pluck('recipe_id')->filter()->unique()->all();
+            if ($recipeIds !== []) {
+                $recipes = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $recipeIds)
+                    ->get(['id', 'allergens_confidence', 'spec_is_vegan', 'spec_is_vegetarian', 'spec_is_halal', 'spec_is_gluten_free', 'spec_is_lactose_free', 'spec_contains_pork', 'spec_contains_beef']);
+                $allergenRollup = app(ConcepterAggregateService::class)->allergenRollupFromGerichte($recipes);
+            }
+        }
+
         return view('foodalchemist::livewire.produktion.editor', [
+            'allergenRollup' => $allergenRollup,
             'konzepte' => $konzepte,
             'treffer' => $treffer,
             'kandidaten' => $kandidaten,
