@@ -149,6 +149,12 @@ final class SignalCockpit
             . 'eine Kante — trägt er sie nicht, ist die Behauptung im Dokument zu streichen. Entschieden wird am Dokument.',
         'sortiments_luecke' => 'Beschaffungs-Entscheidung: einen tragenden GP für das gewünschte Aroma anlegen bzw. '
             . 'beim Lieferanten anfragen (Grundprodukte / Lieferanten). Bis dahin bleibt die Kreativ-Idee ungeerdet.',
+        // Trendradar: das Signal meldet fertige Konzept-ENTWÜRFE, keinen Mangel. Der Weg ist
+        // die Sichtung — und die ist Geschmacksurteil, kein Knopf. Ohne diesen Satz stünde ein
+        // Signal im Cockpit, das etwas erzeugt hat, aber nicht sagt, wo es liegt.
+        'trend_konzept_vorschlag' => 'Die automatisch erzeugten Konzept-Entwürfe im Concepter sichten und '
+            . 'entscheiden: weiterbauen oder verwerfen. Sie liegen als Entwurf und werden ohne Zutun '
+            . 'nirgends sichtbar — ein Vorschlag ist kein Befund.',
         // Spec 21 Tranche A — Küchen-Wissen am Einzelfall. Kein Sammel-propose (s. ASSIST),
         // aber sehr wohl ein benennbarer Ort.
         'rezept_ohne_zubereitung' => 'Zubereitung am Rezept ergänzen (Basisrezepte → Rezept → Zubereitung) — '
