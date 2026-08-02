@@ -70,6 +70,21 @@ class KnowledgeContextService
             }
         }
 
+        // ── 0b. TREND-WISSEN (Trendradar) — discovery, thematisch zur Beschreibung ──
+        // Steht bei den rahmenden Blöcken: aktuelle Trends sagen, WAS gerade relevant
+        // ist (Anlass/Inspiration), bevor die Zutaten-Ebene darunter greift.
+        if (($r = $routing->get('trend:discovery')) !== null) {
+            $trend = $this->trendBlock(
+                (int) ($r->max_docs ?: 5),
+                (int) ($r->max_chars_per_doc ?: 1500),
+                $description,
+                $filesUsed
+            );
+            if ($trend !== null) {
+                $parts[] = $trend;
+            }
+        }
+
         // ── 1. VAULT-WISSEN: Cross-Cutting (always) + Domains (discovery) ──
         $blocks = [];
         if ($routing->has('cross_cutting:always')) {
@@ -279,6 +294,61 @@ class KnowledgeContextService
 
         return "# CONCEPTING-WISSEN (Konzept-/Menü-Handwerk: Dramaturgie, Gang-Aufbau, Anlass- und Gäste-Fit, Balance)\n\n"
             . "Maßstab für den PLAN: es sagt, WIE ein gutes Konzept gebaut ist — nicht, welches Gericht darin steht.\n\n"
+            . implode("\n\n---\n\n", $blocks);
+    }
+
+    /**
+     * TREND-WISSEN (Trendradar, `foodbook.plan` / `concept.brief_geruest`): discovery
+     * über die geclusterten Trend-Docs. Auswahl = Relevanz (aus trend_meta) + Token-Overlap
+     * der Beschreibung gegen Titel/Slug/Klasse/Kategorie, damit nur thematisch passende
+     * Trends ins Prompt-Budget kommen. Deckel aus der Routing-Zeile. Ohne Bestand: null
+     * (Invariante 6 — fehlende Quelle = leerer Kontext, nie Fehler).
+     *
+     * @param  list<string>  $filesUsed  by-ref-Audit
+     */
+    private function trendBlock(int $maxDocs, int $maxChars, string $description, array &$filesUsed): ?string
+    {
+        $maxDocs = max(1, $maxDocs);
+        $tokens = $this->tokenize($description);
+        $weight = ['high' => 3, 'medium' => 2, 'low' => 1];
+
+        $rows = DB::table('foodalchemist_knowledge_documents as d')
+            ->leftJoin('foodalchemist_trend_meta as m', 'm.knowledge_document_id', '=', 'd.id')
+            ->where('d.category', 'trend')->where('d.active', 1)->whereNull('d.deleted_at')
+            ->get(['d.id', 'd.slug', 'd.title', 'd.version', 'm.relevance', 'm.trend_class', 'm.category']);
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        $scored = [];
+        foreach ($rows as $r) {
+            $matchTokens = $this->tokenize("{$r->title} {$r->slug} {$r->trend_class} {$r->category}");
+            $overlap = $tokens === [] ? 0 : count(array_intersect($tokens, $matchTokens));
+            $scored[] = [$r, ($weight[$r->relevance] ?? 1) + $overlap * 2];
+        }
+        usort($scored, fn ($x, $y) => $y[1] <=> $x[1]);
+        $top = array_slice($scored, 0, $maxDocs);
+
+        $ids = array_map(fn ($p) => $p[0]->id, $top);
+        $docs = DB::table('foodalchemist_knowledge_documents')->whereIn('id', $ids)
+            ->get(['id', 'slug', 'content_md', 'version'])->keyBy('id');
+
+        $blocks = [];
+        foreach ($top as [$r]) {
+            $doc = $docs->get($r->id);
+            if ($doc === null) {
+                continue;
+            }
+            $blocks[] = "## TREND: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
+            $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+        }
+        if ($blocks === []) {
+            return null;
+        }
+
+        return "# TREND-WISSEN (aktuelle Food-Trends aus dem Trendradar)\n\n"
+            . "Diese Signale sagen, WAS gerade relevant ist — nutze sie als Anlass/Inspiration. "
+            . "Erfinde nichts hinzu, was die Trends nicht hergeben.\n\n"
             . implode("\n\n---\n\n", $blocks);
     }
 
@@ -670,6 +740,26 @@ class KnowledgeContextService
             'categories' => $categories,
             'documents' => $documents,
         ];
+    }
+
+    /**
+     * Öffentliche Naht für den Trendradar (Clustering + UI): derselbe Parser
+     * wie intern, aber mit auf Listen normalisierten `tags`/`quellen`. So
+     * bleibt EINE Parser-Wahrheit — der Trendradar kopiert keine eigene
+     * (schwächere) Frontmatter-Logik.
+     *
+     * @return array<string, string|list<string>>
+     */
+    public function frontmatterOf(string $md): array
+    {
+        $fm = $this->parseFrontmatter($md);
+        foreach (['tags', 'quellen'] as $listenfeld) {
+            if (array_key_exists($listenfeld, $fm)) {
+                $fm[$listenfeld] = $this->normalizeTags($fm[$listenfeld]);
+            }
+        }
+
+        return $fm;
     }
 
     /**

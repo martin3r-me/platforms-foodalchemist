@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use RuntimeException;
 
 /**
@@ -199,7 +200,14 @@ class ConceptGeneratorService
             }
         }
 
-        $proposal = app(AiGatewayService::class)->propose('concept.brief_geruest', $kontext);
+        // Trend-Wissen (Trendradar) additiv einspeisen — der Prompt läuft NICHT durch
+        // contextFor(), also hier holen und als options['knowledge'] durchreichen (Routing
+        // concept.brief_geruest → trend:discovery). Ohne Trend-Bestand liefert er leer.
+        $trendWissen = app(KnowledgeContextService::class)->contextFor('concept.brief_geruest', $brief);
+        $wissenOpts = $trendWissen['block'] !== ''
+            ? ['knowledge' => $trendWissen['block'], 'knowledge_used' => $trendWissen['files_used']]
+            : [];
+        $proposal = app(AiGatewayService::class)->propose('concept.brief_geruest', $kontext, $wissenOpts);
         $werte = $proposal->werte ?? [];
         $slots = is_array($werte['slots'] ?? null) ? $werte['slots'] : [];
         if ($slots === []) {
@@ -264,7 +272,14 @@ class ConceptGeneratorService
             'allergen_keys' => FoodAlchemistGp::ALLERGEN_FIELDS,
         ], array_filter($extraKontext, fn ($v) => $v !== null && $v !== '' && $v !== []));
 
-        $proposal = app(AiGatewayService::class)->propose('concept.brief_geruest', $kontext);
+        // Trend-Wissen (Trendradar) additiv einspeisen — der Prompt läuft NICHT durch
+        // contextFor(), also hier holen und als options['knowledge'] durchreichen (Routing
+        // concept.brief_geruest → trend:discovery). Ohne Trend-Bestand liefert er leer.
+        $trendWissen = app(KnowledgeContextService::class)->contextFor('concept.brief_geruest', $brief);
+        $wissenOpts = $trendWissen['block'] !== ''
+            ? ['knowledge' => $trendWissen['block'], 'knowledge_used' => $trendWissen['files_used']]
+            : [];
+        $proposal = app(AiGatewayService::class)->propose('concept.brief_geruest', $kontext, $wissenOpts);
         $werte = $proposal->werte ?? [];
         $slots = is_array($werte['slots'] ?? null) ? $werte['slots'] : [];
         if ($slots === []) {

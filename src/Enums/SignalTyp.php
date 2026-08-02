@@ -87,6 +87,10 @@ enum SignalTyp: string
     // dem Vorlauf gestiegen. Alarmiert bei *Veränderung*, nicht bei Bestand; das ist der
     // eigentliche „System im Blick"-Mechanismus.
     case QualitaetDrift = 'qualitaet_drift';
+    // Trendradar: die tägliche 08:00-Automatisierung hat aus Top-Trends Konzeptvorschläge
+    // erzeugt. Kein Datenmangel, sondern eine proaktive Anregung — Klasse „Info", landet in
+    // derselben Inbox, damit der Vorschlag den User erreicht, auch wenn er nicht im Modul ist.
+    case TrendKonzeptVorschlag = 'trend_konzept_vorschlag';
 
     public function label(): string
     {
@@ -129,6 +133,7 @@ enum SignalTyp: string
             self::FoodbookStale => 'Foodbook zeigt einen überholten Preis',
             self::FoodbookKapitelOhneText => 'Foodbook-Kapitel ohne Hinführung',
             self::QualitaetDrift => 'Qualität verschlechtert sich',
+            self::TrendKonzeptVorschlag => 'Trend-Konzeptvorschläge',
         };
     }
 
@@ -174,6 +179,7 @@ enum SignalTyp: string
             self::FoodbookStale => 'heroicon-o-clock',
             self::FoodbookKapitelOhneText => 'heroicon-o-chat-bubble-left-ellipsis',
             self::QualitaetDrift => 'heroicon-o-arrow-trending-down',
+            self::TrendKonzeptVorschlag => 'heroicon-o-sparkles',
         };
     }
 

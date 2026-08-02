@@ -99,6 +99,10 @@ Route::get('/food-dna', \Platform\FoodAlchemist\Livewire\FoodDna\Index::class)
 Route::get('/wissen', \Platform\FoodAlchemist\Livewire\Knowledge\Browser::class)
     ->name('foodalchemist.knowledge.index');
 
+// Trendradar (#FA-Trendradar): kuratierte Sicht auf die geclusterten Trend-Wissens-Docs.
+Route::get('/trendradar', \Platform\FoodAlchemist\Livewire\Trendradar\Index::class)
+    ->name('foodalchemist.trendradar.index');
+
 /**
  * Einstellungen (M1-01, D-1 §4) — Sektion in der URL (V-17: kein Tab-State-Verlust).
  */

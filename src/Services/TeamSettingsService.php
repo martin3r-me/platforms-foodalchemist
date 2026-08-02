@@ -170,6 +170,26 @@ class TeamSettingsService
         return (bool) ($this->for($team)->ai_active ?? true);
     }
 
+    /** Trendradar: 08:00-Konzept-Automatisierung für dieses Team (Default AUS — opt-in). */
+    public function trendAutoAktiv(Team $team): bool
+    {
+        return (bool) ($this->for($team)->trend_auto_enabled ?? false);
+    }
+
+    /** Trendradar: Anzahl Top-Trends je Lauf; ungesetzt ⇒ Config-Default. */
+    public function trendAutoLimit(Team $team): int
+    {
+        $v = (int) ($this->for($team)->trend_auto_limit ?? 0);
+
+        return $v > 0 ? $v : (int) config('foodalchemist.scheduler.trend_konzepte_limit', 3);
+    }
+
+    /** Trendradar: den Vorschlag als Signal in die Inbox legen (Default AN). */
+    public function trendSignalAktiv(Team $team): bool
+    {
+        return (bool) ($this->for($team)->trend_signal_enabled ?? true);
+    }
+
     /**
      * Phase 5: Typ-Farben (GP / Basisrezept / Gericht) als Hex, gemerged mit den Defaults.
      * Nur valide #rrggbb-Werte überschreiben — Müll/Teil-Konfig fällt auf Default zurück.

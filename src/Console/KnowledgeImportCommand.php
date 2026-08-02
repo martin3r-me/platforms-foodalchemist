@@ -258,6 +258,11 @@ class KnowledgeImportCommand extends Command
             ['concept.plan', 'cross_cutting', 'always', null, null],
             ['concept.plan', 'domain', 'discovery', null, null],
             ['concept.plan', 'concept', 'always', 4, 4000],
+            // Trendradar: aktuelle Trends als Anlass/Inspiration in die Planungs-Prompts
+            // (discovery, thematisch gefiltert). Spiegel von Migration 2026_08_02_000002 —
+            // beide Wege müssen dasselbe setzen (frisch-migriert == reimportiert).
+            ['foodbook.plan', 'trend', 'discovery', 5, 1500],
+            ['concept.brief_geruest', 'trend', 'discovery', 5, 1500],
             ['ai_extract_recipe', 'cross_cutting', 'none', null, null],     // bewusst leer
             ['ai_suggest_pairings', 'pairing', 'grounding', 5, 1200],
             ['ai_infer_ankers', 'pairing', 'grounding', 3, 1400],

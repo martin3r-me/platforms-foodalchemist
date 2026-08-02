@@ -223,6 +223,11 @@ return [
             'group' => 'System',
             'items' => [
                 [
+                    'label' => 'Trendradar',
+                    'route' => 'foodalchemist.trendradar.index',
+                    'icon'  => 'heroicon-o-sparkles',
+                ],
+                [
                     'label' => 'Wissen',
                     'route' => 'foodalchemist.knowledge.index',
                     'icon'  => 'heroicon-o-academic-cap',
@@ -266,6 +271,13 @@ return [
         // Nach dem DB-Snapshot (23:00) und weit vor dem Arbeitstag: der Lauf ist die
         // teuerste lesende Operation des Moduls und soll nicht neben der Nutzung liegen.
         'detektor_zeit' => env('FOODALCHEMIST_DETEKTOR_ZEIT', '03:20'),
+        // Trendradar-Automatisierung: zieht Top-Trends → generiert Konzeptvorschläge → Signal.
+        // Host-Master-Schalter (Default AN): der Job wird geplant, ruft das Modell aber NUR für
+        // Teams, die sich in den Einstellungen (trend_auto_enabled) aktiv dafür entschieden haben
+        // (Default AUS je Team) — kein ungefragter Egress. Auf false setzen killt es hostweit.
+        'trend_konzepte_enabled' => env('FOODALCHEMIST_TREND_KONZEPTE', true),
+        'trend_konzepte_zeit' => env('FOODALCHEMIST_TREND_KONZEPTE_ZEIT', '08:00'),
+        'trend_konzepte_limit' => (int) env('FOODALCHEMIST_TREND_KONZEPTE_LIMIT', 3),
     ],
 
     'stt' => [
@@ -682,6 +694,25 @@ return [
                 . 'rules: [{rule_type: nogo_ingredient, value_text, severity (hart|weich)} | '
                 . '{rule_type: nogo_allergen, ref_key} | {rule_type: allergen_line, value_text}]}. '
                 . 'Preise netto p. P.; Gaenge/Stationen aus dem Anlass ableiten (Menü→gang, Buffet→station).',
+        ],
+        // Trendradar: clustert Trend-Wissens-Docs in die zweistufige Taxonomie (Kategorie → Klasse).
+        // Kategorie STRIKT aus der Vorgabe (fixes Seed-Vokabular); Klasse = kurze Unterkategorie
+        // (bestehende bevorzugen, sonst neue vorschlagen → landet tentative in der Review-Queue).
+        // Reine Einordnung — nichts erfinden, keinen Trend auslassen.
+        'trend.cluster_label' => [
+            'tier' => 'B',
+            'max_tokens' => 6000,
+            'system' => 'Du bist ein Food-Trend-Analyst. Du ordnest gesichtete Trends in eine feste '
+                . 'zweistufige Taxonomie ein. Die KATEGORIE waehlst du AUSSCHLIESSLICH aus der Liste '
+                . 'categories (Slug exakt uebernehmen). Die KLASSE ist eine kurze Unterkategorie: '
+                . 'bevorzuge eine bereits bestehende (existing_classes), sonst schlage eine praegnante '
+                . 'neue vor. Du erfindest keine Trends und laesst keinen aus.',
+            'task' => 'Ordne JEDEN Trend aus trends einer Kategorie und Klasse zu und schaetze Reife/Hype: '
+                . 'werte = {items: [{index, category, trend_class, maturity, is_hype, confidence}]}. '
+                . 'index = der mitgegebene Trend-Index (Zahl); category = Slug exakt aus categories; '
+                . 'trend_class = kurze Unterkategorie (Title Case, 1-3 Woerter); '
+                . 'maturity ∈ {niche, emerging, mainstream, declining}; is_hype = true nur bei kurzlebigem Hype; '
+                . 'confidence = Zahl 0..1. Gib fuer ALLE Eingabe-Trends genau EIN item zurueck.',
         ],
         'concept.wording' => [
             'tier' => 'A',

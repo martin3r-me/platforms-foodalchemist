@@ -83,6 +83,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\MoneyTruthReportCommand::class,
                 \Platform\FoodAlchemist\Console\SeedRebateTiersCommand::class,
                 \Platform\FoodAlchemist\Console\StepsBackfillCommand::class,
+                \Platform\FoodAlchemist\Console\TrendClusterCommand::class,
+                \Platform\FoodAlchemist\Console\TrendKonzepteCommand::class,
             ]);
 
             $this->planeLaeufe();
@@ -126,6 +128,17 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 ->onOneServer()          // Hausschreibweise des Hosts (routes/console.php)
                 ->runInBackground()
                 ->description('FoodAlchemist: Qualitäts-Lauf (Signale, DQ-Kaskade, Zeitreihen-Snapshot, Drift)');
+
+            // Trendradar-Automatisierung: NUR wenn explizit eingeschaltet (Default aus) —
+            // der Lauf ruft das Modell pro Trend/Team und gibt sonst ungefragt Provider-Geld aus.
+            if (config('foodalchemist.scheduler.trend_konzepte_enabled', false)) {
+                $schedule->command(\Platform\FoodAlchemist\Console\TrendKonzepteCommand::class)
+                    ->dailyAt(config('foodalchemist.scheduler.trend_konzepte_zeit', '08:00'))
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->runInBackground()
+                    ->description('FoodAlchemist: Trendradar → tägliche Konzeptvorschläge aus Top-Trends');
+            }
         });
     }
 
