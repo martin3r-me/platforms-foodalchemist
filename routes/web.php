@@ -254,6 +254,41 @@ Route::get('/speiseplan/{id}/dokument', function (int $id, \Platform\FoodAlchemi
 })->whereNumber('id')->name('foodalchemist.speiseplan.dokument');
 
 /**
+ * Speisekarte — dritte Ausgabeform (Gastronomie-à-la-carte-Karte). Rubriken × Positionen.
+ */
+Route::get('/speisekarten', \Platform\FoodAlchemist\Livewire\Speisekarte\Index::class)
+    ->name('foodalchemist.speisekarte.index');
+
+/**
+ * Speisekarten-Dokument — Druck-HTML; ?pdf=1 = PDF (DomPDF, guarded). Stufe B liefert
+ * `dokumentDaten` (Allergen-/Zusatzstoff-Legende + Brutto-Preise). Team-scoped.
+ */
+Route::get('/speisekarten/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\SpeisekarteService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $karte = $svc->detail($team, $id) ?? abort(404);
+    $data = $svc->dokumentDaten($team, $karte);
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Speisekarte-PDF angefordert, aber DomPDF ist nicht installiert.', ['speisekarte_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.speisekarte', $data + ['istPdf' => true])
+            ->setOption('isPhpEnabled', true)
+            ->download('Speisekarte-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.speisekarte', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.speisekarte.dokument');
+
+/**
+ * Speisekarten-Präsentation (Web-Ansicht, auth-gated). Kundensicht ohne EK.
+ */
+Route::get('/speisekarten/{id}/praesentation', \Platform\FoodAlchemist\Livewire\Speisekarte\Praesentation::class)
+    ->whereNumber('id')->name('foodalchemist.speisekarte.praesentation');
+
+/**
  * Spec 18: Produktion — absorbiert die bisherigen Planungs-Blätter (Vorschau im
  * Editor, unverändert per PlanungsblattService) + persistierte Produktionsaufträge
  * (Datum, Status, → Bestellung übergeben). /blaetter bleibt als Redirect (keine

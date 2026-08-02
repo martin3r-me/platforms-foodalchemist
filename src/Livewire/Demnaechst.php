@@ -21,6 +21,8 @@ class Demnaechst extends Component
             'idee' => 'Produktionsaufträge aus Bestellmengen → skalierte Basisrezepte (Yield-Mathematik vorhanden), Tagespläne je Station/Equipment.'],
         ['icon' => '📅', 'name' => 'Speiseplan', 'status' => '✓ Fertig — live im Modul',
             'idee' => 'Wochen-/Zyklenpläne aus VK-Rezepten mit Diät- und Allergen-Abdeckung; Sektor-Eignung als Filter.'],
+        ['icon' => '🍽️', 'name' => 'Speisekarte', 'status' => '✓ Fertig — live im Modul',
+            'idee' => 'Restaurant-à-la-carte-Karte (dritte Ausgabeform): Rubriken → Positionen (Gericht/Fix-Menü/Getränk), LMIV-Allergen-/Zusatzstoff-Fußnoten + Brutto-Preise auf der Druckkarte, Branding, Wechsel-/Saisonkarte per Duplizieren, KI-Wording + Leitstelle-Cockpit.'],
         ['icon' => '🛒', 'name' => 'Einkauf', 'status' => 'M11+ — Brainstorming offen',
             'idee' => 'Bestellvorschläge aus Produktionsplan × Lead-LA — die Vorbestellzeiten (V-29) sind als Felder schon importiert.'],
         ['icon' => '📦', 'name' => 'Lager', 'status' => 'M11+ — Brainstorming offen',
