@@ -67,7 +67,7 @@ class FoodbookService
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'label', 'jahr', 'gueltig_von', 'gueltig_bis', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp', 'creative_mode_default'];
+    private const FELDER = ['code', 'label', 'jahr', 'gueltig_von', 'gueltig_bis', 'outlet_id', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp', 'creative_mode_default'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
@@ -75,6 +75,10 @@ class FoodbookService
             'team_id' => $team->id,
             'label' => trim((string) ($in['label'] ?? 'Neues Foodbook')) ?: 'Neues Foodbook',
             'customer' => $in['customer'] ?? null,
+            // Spec 33 P2: der Betrieb am Foodbook-KOPF (das Kapitel-Outlet bleibt ein Tag).
+            'outlet_id' => $in['outlet_id'] ?? null,
+            'crm_company_id' => $in['crm_company_id'] ?? null,
+            'crm_contact_id' => $in['crm_contact_id'] ?? null,
             'jahr' => $in['jahr'] ?? null,
             'personen' => $in['personen'] ?? null,
             'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,

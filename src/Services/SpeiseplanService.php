@@ -69,7 +69,13 @@ class SpeiseplanService
             ->find($id);
     }
 
-    private const FELDER = ['name', 'start_date', 'cycle_weeks', 'min_abstand_tage', 'status', 'description', 'note', 'default_pax', 'budget_wareneinsatz'];
+    private const FELDER = [
+        'name', 'start_date', 'cycle_weeks', 'min_abstand_tage', 'status', 'description', 'note',
+        'default_pax', 'budget_wareneinsatz',
+        // Spec 33 P2: beide Zuordnungsachsen. Ohne `outlet_id` waren zwei Kantinen im selben
+        // Team nicht unterscheidbar — die größte Lücke der drei Ausgabeformen.
+        'outlet_id', 'customer', 'crm_company_id', 'crm_contact_id',
+    ];
 
     public function create(Team $team, array $in): FoodAlchemistSpeiseplan
     {
@@ -80,6 +86,11 @@ class SpeiseplanService
             'cycle_weeks' => max(1, (int) ($in['cycle_weeks'] ?? 4)),
             'min_abstand_tage' => max(0, (int) ($in['min_abstand_tage'] ?? 0)),
             'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,
+            // Spec 33 P2: beide Zuordnungsachsen, beide optional.
+            'outlet_id' => $in['outlet_id'] ?? null,
+            'customer' => $in['customer'] ?? null,
+            'crm_company_id' => $in['crm_company_id'] ?? null,
+            'crm_contact_id' => $in['crm_contact_id'] ?? null,
         ]);
 
         // Starter-Linien (Kantinen-Standard) — pro Plan frei änderbar

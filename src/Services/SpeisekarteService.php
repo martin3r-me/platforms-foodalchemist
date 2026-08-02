@@ -43,6 +43,9 @@ class SpeisekarteService
         'code', 'name', 'status', 'outlet_id', 'karten_typ', 'gueltig_von', 'gueltig_bis',
         'preis_anzeige_brutto', 'description', 'note', 'kundentyp', 'default_niveau',
         'default_convenience', 'writing_style_id',
+        // Spec 33 P2: Kundenachse — auch eine Karte kann für einen Kunden gemacht sein
+        // (Betreibermodell: der Betrieb führt die Kantine eines Kunden).
+        'customer', 'crm_company_id', 'crm_contact_id',
     ];
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
@@ -82,6 +85,10 @@ class SpeisekarteService
             'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,
             'karten_typ' => in_array($in['karten_typ'] ?? '', FoodAlchemistSpeisekarte::KARTEN_TYPEN, true) ? $in['karten_typ'] : 'alacarte',
             'outlet_id' => $in['outlet_id'] ?? null,
+            // Spec 33 P2: auch eine Karte kann für einen Kunden gemacht sein (Betreibermodell).
+            'customer' => $in['customer'] ?? null,
+            'crm_company_id' => $in['crm_company_id'] ?? null,
+            'crm_contact_id' => $in['crm_contact_id'] ?? null,
             'preis_anzeige_brutto' => $in['preis_anzeige_brutto'] ?? true,
             'description' => $in['description'] ?? null,
         ]);

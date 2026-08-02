@@ -11,6 +11,7 @@ use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 use Platform\FoodAlchemist\Models\Concerns\HatAusgabeStatus;
+use Platform\FoodAlchemist\Models\Concerns\HatAusgabeZuordnung;
 
 /**
  * @ai.description Speiseplan (M14) — dieselben Bausteine über eine Zeitachse
@@ -18,7 +19,7 @@ use Platform\FoodAlchemist\Models\Concerns\HatAusgabeStatus;
  */
 class FoodAlchemistSpeiseplan extends Model
 {
-    use HasUuidV7, HatAusgabeStatus, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+    use HasUuidV7, HatAusgabeStatus, HatAusgabeZuordnung, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
     protected $table = 'foodalchemist_menu_plans';
 
