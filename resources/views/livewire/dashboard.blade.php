@@ -76,33 +76,20 @@
             </div>
         </div>
 
-        {{-- R2.7: Portfolio-Benchmark (BHG-intern) — eigen vs. anonymer Peer-Median der Team-Kette --}}
-        @if($benchmark !== null)
-            <div class="relative overflow-hidden {{ $card }} px-4 py-3" data-dashboard-benchmark>
-                <div class="{{ $cardAccent }}"></div>
-                <div class="flex items-baseline justify-between gap-2 flex-wrap">
-                    <span class="{{ $dt }}">@svg('heroicon-o-chart-bar', 'w-3.5 h-3.5 inline-block align-middle') Portfolio-Benchmark (intern)</span>
-                    <span class="text-[10px] text-gray-500">
-                        {{ $benchmark['n_peers'] > 0 ? 'vs. Median von ' . $benchmark['n_peers'] . ' anonymen Peer-Team(s)' : 'kein Peer-Team mit Portfolio — Vergleich erst ab 2 Teams' }}
-                    </span>
-                </div>
-                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 mt-3">
-                    @foreach($benchmark['kennzahlen'] as $key => $meta)
-                        @php($eigen = $benchmark['team_kpis'][$key])
-                        @php($peer = $benchmark['peer_median'][$key])
-                        @php($besserHoch = $meta['besser'] === 'hoch')
-                        @php($vgl = ($eigen !== null && $peer !== null) ? ($besserHoch ? $eigen <=> $peer : $peer <=> $eigen) : 0)
-                        <div class="rounded-lg bg-black/[0.03] px-3 py-2">
-                            <div class="{{ $label }}">{{ $meta['label'] }}</div>
-                            <div class="text-lg font-semibold tabular-nums {{ $vgl > 0 ? 'text-emerald-600' : ($vgl < 0 ? 'text-amber-600' : 'text-gray-900') }}">
-                                {{ $eigen !== null ? number_format((float) $eigen, $meta['unit'] === '' ? 0 : 1, ',', '.') . $meta['unit'] : '—' }}
-                            </div>
-                            <div class="text-[10px] text-gray-500">Peer-Median: {{ $peer !== null ? number_format((float) $peer, $meta['unit'] === '' ? 0 : 1, ',', '.') . $meta['unit'] : '—' }}</div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        @endif
+        {{-- Spec 32: der R2.7-Portfolio-Benchmark ist ins Controlling-Zentrum gewandert (Tab „Lage").
+             Er kostet einen Kennzahlen-Lauf je Peer-Team und gehört fachlich zur Wirtschaftlichkeit,
+             nicht zur Bestandsübersicht. Hier bleibt nur der Verweis — ein zweiter Anzeige-Ort
+             wäre ein zweiter Pflege-Ort. --}}
+        <a href="{{ route('foodalchemist.controlling.index', ['tab' => 'lage']) }}" wire:navigate
+           class="relative overflow-hidden block {{ $card }} px-4 py-3 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150"
+           data-dashboard-controlling>
+            <div class="{{ $cardAccent }}"></div>
+            <span class="{{ $dt }}">@svg('heroicon-o-presentation-chart-line', 'w-3.5 h-3.5 inline-block align-middle') Controlling</span>
+            <p class="text-xs text-gray-600 mt-1">
+                Wareneinsatz, Preise, Simulation, Portfolio-Benchmark und die Geld-Signale liegen
+                im Controlling-Zentrum — jeweils mit den Hebeln daneben.
+            </p>
+        </a>
 
     </x-ui-page-container>
 </x-ui-page>

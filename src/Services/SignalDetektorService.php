@@ -60,6 +60,7 @@ class SignalDetektorService
             + $this->preisSprungMargeImpact($team)
             + $this->margeUnterZiel($team)
             + $this->wareneinsatzUeberZiel($team)
+            + $this->wareneinsatzIstAbweichung($team)
             + $this->vkAnpassungEmpfohlen($team)
             + $this->vertragsfristFaellig($team)
             + $this->widerspruchWissenGraph($team)
@@ -791,6 +792,62 @@ class SignalDetektorService
     private function kalkulation(): KalkulationService
     {
         return $this->kalkMemo ??= app(KalkulationService::class);
+    }
+
+    /**
+     * Spec 32 C4 — Wareneinsatz Ist ≠ Rezeptur.
+     *
+     * Anders als {@see self::wareneinsatzUeberZiel} (kalkulatorisch, je Gericht) ist das hier
+     * eine MESSUNG über einen Zeitraum: was wurde tatsächlich eingekauft gegenüber dem, was die
+     * Rezepturen für den tatsächlich verkauften Absatz hergeben. Ein Signal je Team und Monat.
+     *
+     * Betrachtet wird der VOLLE Vormonat, nicht ein rollierendes Fenster: der Wert ist ohne
+     * Inventur eine Perioden-Rechnung, und ein gleitendes Fenster würde jeden Tag eine andere
+     * Zahl melden, ohne dass sich etwas geändert hätte.
+     *
+     * Das Signal ist bewusst KNOPFLOS (siehe SignalCockpit::OHNE_WEG) — die Ursache klärt die
+     * Küche, nicht das System.
+     */
+    public function wareneinsatzIstAbweichung(Team $team): int
+    {
+        $von = now()->subMonthNoOverflow()->startOfMonth();
+        $bis = $von->copy()->endOfMonth();
+
+        $a = app(WareneinsatzAbweichungService::class)->analyse($team, $von->toDateString(), $bis->toDateString());
+
+        // Nicht belastbar heißt: kein Signal. Eine Abweichung, die nur aus fehlenden
+        // Zuordnungen entsteht, wäre ein Fehlalarm über die eigene Datenlage.
+        if (! $a['belastbar'] || $a['abweichung_pp'] === null) {
+            return 0;
+        }
+
+        $schwelle = app(TeamSettingsService::class)->wareneinsatzAbweichungSchwellePp($team);
+        if (abs($a['abweichung_pp']) < $schwelle) {
+            return 0;
+        }
+
+        $periode = $von->format('Y-m');
+        $mehr = $a['abweichung_pp'] > 0;
+
+        $this->signals->erzeuge(
+            $team,
+            SignalTyp::WareneinsatzIstAbweichung,
+            // Mehr eingekauft als nötig kostet Geld. Weniger ist auffällig, aber meist
+            // Lagerabbau oder eine zu hoch angesetzte Rezeptmenge — das ist kein Alarm.
+            $mehr ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
+            'Wareneinsatz ' . $periode . ': ' . ($mehr ? '+' : '') . number_format($a['abweichung_pp'], 1, ',', '.')
+                . ' pp gegenüber der Rezeptur (' . number_format($a['abweichung_eur'], 2, ',', '.') . ' €)',
+            [
+                'dedup_key' => 'we-ist-abweichung:' . $periode,
+                'description' => 'Eingekauft ' . number_format($a['einkauf'], 2, ',', '.') . ' €, laut Rezeptur nötig '
+                    . number_format($a['theoretisch'], 2, ',', '.') . ' € bei ' . number_format($a['umsatz'], 2, ',', '.')
+                    . ' € Umsatz. Ohne Inventur ist das eine Perioden-Rechnung — Lageraufbau am Monatsende sieht aus wie Schwund.',
+                'payload' => $a + ['periode' => $periode, 'schwelle_pp' => $schwelle],
+                'source' => 'detektor',
+            ],
+        );
+
+        return 1;
     }
 
     /**

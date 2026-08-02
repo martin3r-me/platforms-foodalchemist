@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\GpService;
 use Platform\FoodAlchemist\Services\SimulationService;
 
@@ -20,11 +21,11 @@ use Platform\FoodAlchemist\Services\SimulationService;
  */
 class Simulation extends Component
 {
-    /** 'warengruppe' | 'artikel' | 'gp' */
-    #[Validate('required|in:warengruppe,artikel,gp')]
+    /** 'warengruppe' | 'artikel' | 'gp' | 'lieferant' */
+    #[Validate('required|in:warengruppe,artikel,gp,lieferant')]
     public string $scope = 'warengruppe';
 
-    /** WG-Code | supplier_item_id | gp_id — je nach Scope. */
+    /** WG-Code | supplier_item_id | gp_id | supplier_id — je nach Scope. */
     public string $ref = '';
 
     /** Anzeige-Label des gewählten Bezugs (für GP/Artikel-Suche). */
@@ -123,6 +124,12 @@ class Simulation extends Component
         return view('foodalchemist::livewire.kalkulation.simulation', [
             'warengruppen' => $team ? $gps->warengruppenOptions($team) : collect(),
             'gpTreffer' => $this->getGpTrefferProperty(),
+            // Spec 32: Auswahlliste für den Scope „Lieferant". Nur aktive — ein inaktiver
+            // Lieferant kündigt keine Preise mehr an.
+            'lieferanten' => $team
+                ? FoodAlchemistSupplier::visibleToTeam($team)->where('is_inactive', false)
+                    ->orderBy('name')->get(['id', 'name'])
+                : collect(),
         ]);
     }
 }

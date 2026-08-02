@@ -7,6 +7,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Services\SpeisekarteService;
 
@@ -32,6 +33,9 @@ class Index extends Component
     public string $status = 'entwurf';
     public ?string $gueltigVon = null;
     public ?string $gueltigBis = null;
+    // Spec 33 P2/P5: beide Zuordnungsachsen, beide optional.
+    public ?int $outletId = null;
+    public ?string $kunde = null;
 
     // Rubrik-Anlage
     public string $neueRubrik = '';
@@ -77,9 +81,12 @@ class Index extends Component
         $this->karteId = $id;
         $this->name = $karte->name;
         $this->kartenTyp = $karte->karten_typ;
-        $this->status = $karte->status;
+        // Spec 33 P0: `status` ist gecastet — die Livewire-Property ist ein String.
+        $this->status = $karte->statusWert()->value;
         $this->gueltigVon = $karte->gueltig_von?->format('Y-m-d');
         $this->gueltigBis = $karte->gueltig_bis?->format('Y-m-d');
+        $this->outletId = $karte->outlet_id;
+        $this->kunde = $karte->customer;
         $this->editPosId = null;
         $this->brandColor = $karte->brand_color ?: '#6d28d9';
         $this->bandColor = $karte->band_color;
@@ -108,8 +115,24 @@ class Index extends Component
             'status' => $this->status,
             'gueltig_von' => $this->gueltigVon ?: null,
             'gueltig_bis' => $this->gueltigBis ?: null,
+            'outlet_id' => $this->outletId ?: null,
+            'customer' => $this->kunde ?: null,
         ]);
         $this->dispatch('gespeichert');
+    }
+
+    /** Spec 33 P5 — Schnellschalter aktiv ⇄ inaktiv (ohne Umweg über das Dropdown, ohne Archiv). */
+    public function aktivUmschalten(SpeisekarteService $svc): void
+    {
+        $karte = $this->karteId !== null
+            ? FoodAlchemistSpeisekarte::visibleToTeam($this->team())->find($this->karteId) : null;
+        if ($karte === null) {
+            return;
+        }
+
+        $neu = $karte->statusWert() === AusgabeStatus::Aktiv ? AusgabeStatus::Inaktiv : AusgabeStatus::Aktiv;
+        $svc->update($this->team(), $this->karteId, ['status' => $neu->value]);
+        $this->status = $neu->value;
     }
 
     public function duplizieren(SpeisekarteService $svc): void
@@ -351,6 +374,13 @@ class Index extends Component
             'preise' => $preise,
             'vorschau' => $vorschau,
             'pickerErgebnisse' => $pickerErgebnisse,
+            // Spec 33 P5: Auswahl fürs Status-/Zuordnungs-Bauteil (nur aktive Betriebe).
+            'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
+            // Spec 33 P3: Hinweis, kein Verbot.
+            'portfolioKonflikt' => $karte === null ? null
+                : app(\Platform\FoodAlchemist\Services\PortfolioService::class)
+                    ->konfliktHinweis($team, 'speisekarte', (int) $karte->id),
         ])->layout('platform::layouts.app');
     }
 

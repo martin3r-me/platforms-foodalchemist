@@ -41,11 +41,14 @@ it('seedet die Planungs-Routings inklusive der concept-Zeile', function () {
         ->whereIn('feature', ['foodbook.plan', 'concept.plan'])
         ->get()->map(fn ($r) => "{$r->feature}:{$r->category}:{$r->mode}")->all();
 
-    expect($zeilen)->toHaveCount(6)
+    // 6 aus dieser Migration + 1 aus dem Trendradar (`foodbook.plan:trend:discovery`). Die Zahl
+    // steht bewusst hier: eine stille siebte Zeile wäre ein Routing, das keiner bestellt hat.
+    expect($zeilen)->toHaveCount(7)
         ->and($zeilen)->toContain('foodbook.plan:concept:always')
         ->and($zeilen)->toContain('concept.plan:concept:always')
         ->and($zeilen)->toContain('foodbook.plan:cross_cutting:always')
-        ->and($zeilen)->toContain('concept.plan:domain:discovery');
+        ->and($zeilen)->toContain('concept.plan:domain:discovery')
+        ->and($zeilen)->toContain('foodbook.plan:trend:discovery');
 
     $deckel = DB::table('foodalchemist_knowledge_routings')
         ->where('feature', 'concept.plan')->where('category', 'concept')->first();

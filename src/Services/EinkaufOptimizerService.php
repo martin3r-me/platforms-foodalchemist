@@ -33,6 +33,10 @@ class EinkaufOptimizerService
     }
 
     /**
+     * Jede `top`-Zeile trägt neben den Beträgen auch `cheapest_list_la_id`,
+     * `cheapest_rebate_la_id`, `lead_la_id` und `lead_ist_optimal` — die Handhaben, mit denen
+     * das Controlling-Zentrum die Bezugsquelle direkt umstellt (Spec 32).
+     *
      * @param  list<int>  $excludeSupplierIds  Lieferanten aus dem Optimal-Kandidatenpool ausklammern
      * @return array{ist_total:float,optimal_list_total:float,optimal_rebate_total:float,saving_list:float,saving_rebate:float,saving_list_pct:?float,saving_rebate_pct:?float,top:list<array>,n_articles:int,n_skipped:int}
      */
@@ -89,6 +93,12 @@ class EinkaufOptimizerService
             $optListTotal += $optList;
             $optRebTotal += $optReb;
 
+            // Spec 32: die LA-ids und der aktuell effektive Lead kommen additiv mit — ohne sie
+            // endet die Analyse in einer Liste, aus der man nichts machen kann. Der Controlling-
+            // Tab stellt daraus die Bezugsquelle um; wer die Zeile nur anzeigt, merkt nichts.
+            $lead = $kette->first(fn ($la) => $la->gepinnt && ! $la->locked)
+                ?? $kette->first(fn ($la) => ! $la->locked);
+
             $out[] = [
                 'gp_id' => (int) $gp->id,
                 'name' => $gp->name,
@@ -100,6 +110,10 @@ class EinkaufOptimizerService
                 'saving_rebate' => round($ist - $optReb, 2),
                 'cheapest_list_supplier' => $cheapestList->supplier_name,
                 'cheapest_rebate_supplier' => $cheapestReb->supplier_name,
+                'cheapest_list_la_id' => (int) $cheapestList->id,
+                'cheapest_rebate_la_id' => (int) $cheapestReb->id,
+                'lead_la_id' => $lead !== null ? (int) $lead->id : null,
+                'lead_ist_optimal' => $lead !== null && (int) $lead->id === (int) $cheapestReb->id,
             ];
         }
 

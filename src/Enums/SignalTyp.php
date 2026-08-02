@@ -14,6 +14,10 @@ enum SignalTyp: string
     case VeraltetePreise = 'veraltete_preise';
     case MargeUnterZiel = 'marge_unter_ziel';
     case WareneinsatzUeberZiel = 'wareneinsatz_ueber_ziel';
+    // Spec 32 C4: der Ist-Wareneinsatz (Einkaufsjournal ÷ Umsatz) weicht vom theoretischen
+    // (Rezeptur × verkaufte Menge) ab — anders als WareneinsatzUeberZiel eine ISTMESSUNG
+    // über einen Zeitraum, keine Kalkulation je Gericht.
+    case WareneinsatzIstAbweichung = 'wareneinsatz_ist_abweichung';
     case DatenqualitaetGpLa = 'datenqualitaet_gp_la';
     case NaehrwertPlausi = 'naehrwert_plausi';
     // Datenqualitäts-Kaskade (Ampel, DataQualityService) — Ebenen-übergreifende Lücken.
@@ -87,6 +91,10 @@ enum SignalTyp: string
     // dem Vorlauf gestiegen. Alarmiert bei *Veränderung*, nicht bei Bestand; das ist der
     // eigentliche „System im Blick"-Mechanismus.
     case QualitaetDrift = 'qualitaet_drift';
+    // Trendradar: die tägliche 08:00-Automatisierung hat aus Top-Trends Konzeptvorschläge
+    // erzeugt. Kein Datenmangel, sondern eine proaktive Anregung — Klasse „Info", landet in
+    // derselben Inbox, damit der Vorschlag den User erreicht, auch wenn er nicht im Modul ist.
+    case TrendKonzeptVorschlag = 'trend_konzept_vorschlag';
 
     public function label(): string
     {
@@ -96,6 +104,7 @@ enum SignalTyp: string
             self::VeraltetePreise => 'Veraltete Preise',
             self::MargeUnterZiel => 'Marge unter Ziel',
             self::WareneinsatzUeberZiel => 'Wareneinsatz über Ziel',
+            self::WareneinsatzIstAbweichung => 'Wareneinsatz Ist ≠ Rezeptur',
             self::DatenqualitaetGpLa => 'Datenqualität GP/LA',
             self::NaehrwertPlausi => 'Nährwert-Plausibilität',
             self::AnkerFehlt => 'Flavor-Anker fehlt',
@@ -129,6 +138,7 @@ enum SignalTyp: string
             self::FoodbookStale => 'Foodbook zeigt einen überholten Preis',
             self::FoodbookKapitelOhneText => 'Foodbook-Kapitel ohne Hinführung',
             self::QualitaetDrift => 'Qualität verschlechtert sich',
+            self::TrendKonzeptVorschlag => 'Trend-Konzeptvorschläge',
         };
     }
 
@@ -141,6 +151,7 @@ enum SignalTyp: string
             self::VeraltetePreise => 'heroicon-o-clock',
             self::MargeUnterZiel => 'heroicon-o-scale',
             self::WareneinsatzUeberZiel => 'heroicon-o-shopping-cart',
+            self::WareneinsatzIstAbweichung => 'heroicon-o-arrows-right-left',
             self::DatenqualitaetGpLa => 'heroicon-o-exclamation-triangle',
             self::NaehrwertPlausi => 'heroicon-o-beaker',
             self::AnkerFehlt => 'heroicon-o-link-slash',
@@ -174,6 +185,7 @@ enum SignalTyp: string
             self::FoodbookStale => 'heroicon-o-clock',
             self::FoodbookKapitelOhneText => 'heroicon-o-chat-bubble-left-ellipsis',
             self::QualitaetDrift => 'heroicon-o-arrow-trending-down',
+            self::TrendKonzeptVorschlag => 'heroicon-o-sparkles',
         };
     }
 

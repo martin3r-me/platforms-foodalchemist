@@ -8,6 +8,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
+use Platform\FoodAlchemist\Services\Concerns\PruefstOutletZuordnung;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
@@ -29,6 +31,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik;
  */
 class SpeisekarteService
 {
+    use PruefstOutletZuordnung;
+
     public function __construct(
         private ConceptService $concepts,
         private DarreichungResolver $darreichung,
@@ -42,6 +46,9 @@ class SpeisekarteService
         'code', 'name', 'status', 'outlet_id', 'karten_typ', 'gueltig_von', 'gueltig_bis',
         'preis_anzeige_brutto', 'description', 'note', 'kundentyp', 'default_niveau',
         'default_convenience', 'writing_style_id',
+        // Spec 33 P2: Kundenachse — auch eine Karte kann für einen Kunden gemacht sein
+        // (Betreibermodell: der Betrieb führt die Kantine eines Kunden).
+        'customer', 'crm_company_id', 'crm_contact_id',
     ];
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
@@ -75,22 +82,55 @@ class SpeisekarteService
 
     public function create(Team $team, array $in): FoodAlchemistSpeisekarte
     {
+        // Spec 33 P2: fremde Betriebe fallen hier raus — `outlet_id` zeigt auf ein Team-Vokabular
+        // und wird vom Datensatz-Guard nicht mit erfasst.
+        $in = $this->pruefeOutlet($team, $in);
+
         return FoodAlchemistSpeisekarte::create([
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neue Speisekarte')) ?: 'Neue Speisekarte',
-            'status' => $in['status'] ?? 'entwurf',
+            'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,
             'karten_typ' => in_array($in['karten_typ'] ?? '', FoodAlchemistSpeisekarte::KARTEN_TYPEN, true) ? $in['karten_typ'] : 'alacarte',
             'outlet_id' => $in['outlet_id'] ?? null,
+            // Spec 33 P2: auch eine Karte kann für einen Kunden gemacht sein (Betreibermodell).
+            'customer' => $in['customer'] ?? null,
+            'crm_company_id' => $in['crm_company_id'] ?? null,
+            'crm_contact_id' => $in['crm_contact_id'] ?? null,
+            // Spec 33 P1: Fenster schon beim Anlegen — sonst muss man jede Ausgabe zweimal
+            // anfassen, und ein Import/MCP-Aufruf verliert die Angabe stillschweigend.
+            'gueltig_von' => ($in['gueltig_von'] ?? '') !== '' ? $in['gueltig_von'] : null,
+            'gueltig_bis' => ($in['gueltig_bis'] ?? '') !== '' ? $in['gueltig_bis'] : null,
             'preis_anzeige_brutto' => $in['preis_anzeige_brutto'] ?? true,
             'description' => $in['description'] ?? null,
         ]);
+    }
+
+    /**
+     * Spec 33: Status durch den Enum (P0) und leere Datumsfelder zu NULL (P1) — eine Regel,
+     * ein Ort, damit auch MCP-Aufrufe abgedeckt sind und nicht nur das Formular.
+     */
+    private function normalisiereFelder(array $update): array
+    {
+        if (array_key_exists('status', $update)) {
+            $update['status'] = AusgabeStatus::normalisiere((string) $update['status'])->value;
+        }
+
+        foreach (['gueltig_von', 'gueltig_bis'] as $datum) {
+            if (array_key_exists($datum, $update) && ($update[$datum] === '' || $update[$datum] === false)) {
+                $update[$datum] = null;
+            }
+        }
+
+        return $update;
     }
 
     public function update(Team $team, int $id, array $in): FoodAlchemistSpeisekarte
     {
         $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($id);
         $this->guard($karte, $team);
-        $karte->update(array_intersect_key($in, array_flip(self::FELDER)));
+        $karte->update($this->normalisiereFelder(
+            $this->pruefeOutlet($team, array_intersect_key($in, array_flip(self::FELDER))),
+        ));
 
         return $karte->refresh();
     }
@@ -120,11 +160,13 @@ class SpeisekarteService
         ];
 
         return DB::transaction(function () use ($quelle, $team, $overrides, $kopfFelder) {
-            $neu = FoodAlchemistSpeisekarte::create(array_merge(
-                ['team_id' => $team->id, 'name' => $quelle->name . ' (Kopie)', 'status' => 'entwurf', 'code' => null],
+            // Auch hier durch den Guard: die Quelle kann über die Team-Kette sichtbar sein und
+            // einen Betrieb tragen, der dem kopierenden Team nicht gehört.
+            $neu = FoodAlchemistSpeisekarte::create($this->pruefeOutlet($team, array_merge(
+                ['team_id' => $team->id, 'name' => $quelle->name . ' (Kopie)', 'status' => AusgabeStatus::Entwurf->value, 'code' => null],
                 array_intersect_key($quelle->only($kopfFelder), array_flip($kopfFelder)),
                 array_intersect_key($overrides, array_flip(array_merge(self::FELDER, ['name']))),
-            ));
+            )));
 
             // Rubriken flach kopieren (parent_id in 2. Pass), dann Positionen.
             $map = [];

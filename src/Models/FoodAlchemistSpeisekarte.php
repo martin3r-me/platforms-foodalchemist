@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
+use Platform\FoodAlchemist\Models\Concerns\HatAusgabeStatus;
+use Platform\FoodAlchemist\Models\Concerns\HatAusgabeZuordnung;
 
 /**
  * @ai.description Speisekarte — dritte Ausgabeform (Gastronomie-à-la-carte-Karte)
@@ -18,14 +20,11 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistSpeisekarte extends Model
 {
-    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+    use HasUuidV7, HatAusgabeStatus, HatAusgabeZuordnung, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
     protected $table = 'foodalchemist_menu_cards';
 
     protected $guarded = ['id'];
-
-    /** Karten-Status. */
-    public const STATUS = ['entwurf', 'aktiv', 'veroeffentlicht', 'archiviert'];
 
     /** Karten-Typen (steuern das Druck-Layout). */
     public const KARTEN_TYPEN = ['alacarte', 'tageskarte', 'saisonkarte', 'getraenkekarte', 'weinkarte'];
@@ -51,12 +50,6 @@ class FoodAlchemistSpeisekarte extends Model
     public function rubriken(): HasMany
     {
         return $this->sections();
-    }
-
-    /** Optionaler Outlet-Anker (Restaurant/Betrieb). */
-    public function outlet(): BelongsTo
-    {
-        return $this->belongsTo(FoodAlchemistOutlet::class, 'outlet_id');
     }
 
     /** Schreibstil-Override für KI-Wording. */

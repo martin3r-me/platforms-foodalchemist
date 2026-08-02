@@ -8,6 +8,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
+use Platform\FoodAlchemist\Services\Concerns\PruefstOutletZuordnung;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
@@ -31,6 +33,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup;
  */
 class FoodbookService
 {
+    use PruefstOutletZuordnung;
+
     public function __construct(private ConceptService $concepts)
     {
     }
@@ -66,27 +70,65 @@ class FoodbookService
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp', 'creative_mode_default'];
+    private const FELDER = ['code', 'label', 'jahr', 'gueltig_von', 'gueltig_bis', 'outlet_id', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp', 'creative_mode_default'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
+        // Spec 33 P2: fremde Betriebe fallen hier raus — `outlet_id` zeigt auf ein Team-Vokabular
+        // und wird vom Datensatz-Guard nicht mit erfasst.
+        $in = $this->pruefeOutlet($team, $in);
+
         return FoodAlchemistFoodbook::create([
             'team_id' => $team->id,
             'label' => trim((string) ($in['label'] ?? 'Neues Foodbook')) ?: 'Neues Foodbook',
             'customer' => $in['customer'] ?? null,
+            // Spec 33 P2: der Betrieb am Foodbook-KOPF (das Kapitel-Outlet bleibt ein Tag).
+            'outlet_id' => $in['outlet_id'] ?? null,
+            'crm_company_id' => $in['crm_company_id'] ?? null,
+            'crm_contact_id' => $in['crm_contact_id'] ?? null,
+            // Spec 33 P1: Fenster schon beim Anlegen — sonst muss man jede Ausgabe zweimal
+            // anfassen, und ein Import/MCP-Aufruf verliert die Angabe stillschweigend.
+            'gueltig_von' => ($in['gueltig_von'] ?? '') !== '' ? $in['gueltig_von'] : null,
+            'gueltig_bis' => ($in['gueltig_bis'] ?? '') !== '' ? $in['gueltig_bis'] : null,
             'jahr' => $in['jahr'] ?? null,
             'personen' => $in['personen'] ?? null,
-            'status' => $in['status'] ?? 'draft',
+            'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,
             'description' => $in['description'] ?? null,
             'creative_mode_default' => $in['creative_mode_default'] ?? null,   // Spec 19 E9.1
         ]);
+    }
+
+    /**
+     * Spec 33: eingehende Werte auf das gültige Format bringen — eine Regel, ein Ort, und
+     * damit auch für MCP-Aufrufe gültig, nicht nur für das Formular.
+     *
+     * - Status durch den Enum (P0): `status` steht in FELDER und war ohne das mit jedem
+     *   beliebigen String beschreibbar — so kam ein `final` in den Bestand.
+     * - Leere Datumsfelder zu NULL (P1): das Formular liefert `''` für ein nicht gesetztes
+     *   Datum, und MySQL nimmt das in einer DATE-Spalte im Strict Mode nicht an.
+     */
+    private function normalisiereFelder(array $update): array
+    {
+        if (array_key_exists('status', $update)) {
+            $update['status'] = AusgabeStatus::normalisiere((string) $update['status'])->value;
+        }
+
+        foreach (['gueltig_von', 'gueltig_bis'] as $datum) {
+            if (array_key_exists($datum, $update) && ($update[$datum] === '' || $update[$datum] === false)) {
+                $update[$datum] = null;
+            }
+        }
+
+        return $update;
     }
 
     public function update(Team $team, int $id, array $in): FoodAlchemistFoodbook
     {
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($id);
         $this->guard($fb, $team);
-        $fb->update(array_intersect_key($in, array_flip(self::FELDER)));
+        $fb->update($this->normalisiereFelder(
+            $this->pruefeOutlet($team, array_intersect_key($in, array_flip(self::FELDER))),
+        ));
 
         return $fb->refresh();
     }

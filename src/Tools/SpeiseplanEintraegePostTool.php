@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -54,8 +55,10 @@ class SpeiseplanEintraegePostTool extends FoodAlchemistTool implements ToolContr
         if ($plan === null) {
             return ToolResult::error('Speiseplan nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
-        if ((string) $plan->status !== 'draft') {
-            return ToolResult::error("Speiseplan hat Status \"{$plan->status}\" — via MCP ist nur draft editierbar.", 'ACCESS_DENIED');
+        // Spec 33 P0: Status ist gecastet und heisst jetzt `entwurf` — der alte Vergleich
+        // `(string) …->status !== 'draft'` warf am Enum UND traf das falsche Vokabular.
+        if ($plan->statusWert() !== AusgabeStatus::Entwurf) {
+            return ToolResult::error("Speiseplan hat Status \"{$plan->statusWert()->label()}\" — via MCP ist nur ein Entwurf editierbar.", 'ACCESS_DENIED');
         }
         $ziele = array_values(array_intersect(['concept_id', 'package_id', 'sales_recipe_id'], array_keys(array_filter($arguments))));
         if (count($ziele) !== 1) {

@@ -83,6 +83,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\MoneyTruthReportCommand::class,
                 \Platform\FoodAlchemist\Console\SeedRebateTiersCommand::class,
                 \Platform\FoodAlchemist\Console\StepsBackfillCommand::class,
+                \Platform\FoodAlchemist\Console\TrendClusterCommand::class,
+                \Platform\FoodAlchemist\Console\TrendKonzepteCommand::class,
             ]);
 
             $this->planeLaeufe();
@@ -126,6 +128,17 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 ->onOneServer()          // Hausschreibweise des Hosts (routes/console.php)
                 ->runInBackground()
                 ->description('FoodAlchemist: Qualitäts-Lauf (Signale, DQ-Kaskade, Zeitreihen-Snapshot, Drift)');
+
+            // Trendradar-Automatisierung: NUR wenn explizit eingeschaltet (Default aus) —
+            // der Lauf ruft das Modell pro Trend/Team und gibt sonst ungefragt Provider-Geld aus.
+            if (config('foodalchemist.scheduler.trend_konzepte_enabled', false)) {
+                $schedule->command(\Platform\FoodAlchemist\Console\TrendKonzepteCommand::class)
+                    ->dailyAt(config('foodalchemist.scheduler.trend_konzepte_zeit', '08:00'))
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->runInBackground()
+                    ->description('FoodAlchemist: Trendradar → tägliche Konzeptvorschläge aus Top-Trends');
+            }
         });
     }
 
@@ -387,6 +400,15 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\EinkaufOptimierungGetTool::class,
                     \Platform\FoodAlchemist\Tools\EinkaufSpendGetTool::class,
                     \Platform\FoodAlchemist\Tools\EinkaufAnomalienGetTool::class,
+                    // Spec 32 C3: die Erlösseite — Verkaufsjournal lesen, CSV einlesen
+                    // (Trockenlauf per Default), Menu-Engineering-Matrix.
+                    \Platform\FoodAlchemist\Tools\SalesFactsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SalesImportPostTool::class,
+                    \Platform\FoodAlchemist\Tools\MenuEngineeringGetTool::class,
+                    // Spec 33 P8: Portfolio-Steuerung — wer fährt gerade was (inkl. Konflikte,
+                    // Lücken, Nicht-Zugeordnete) und was bringt eine laufende Ausgabe.
+                    \Platform\FoodAlchemist\Tools\PortfolioGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PortfolioPromotionGetTool::class,
                     \Platform\FoodAlchemist\Tools\GpLeadGetTool::class,
                     \Platform\FoodAlchemist\Tools\GpLeadPutTool::class,
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)
@@ -420,6 +442,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KapitelIdeenGetTool::class,
                     \Platform\FoodAlchemist\Tools\KapitelIdeenPostTool::class,
                     \Platform\FoodAlchemist\Tools\KapitelIdeenPutTool::class,
+                    // Planungs-/Kreativ-Ebene (Doppel-Diamant): Session-CRUD. „Go" bleibt human-only (kein MCP-Trigger).
+                    \Platform\FoodAlchemist\Tools\PlanungSessionGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanungSessionPostTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanungSessionPutTool::class,
                     // Spec 19 E7.6: Kapitel-Go „Anlegen" — READ-ONLY (Stempel-Vorschau + Trockenlauf + Anlage-Stand; Go selbst human-only, kein MCP-Trigger)
                     \Platform\FoodAlchemist\Tools\KapitelFreigabeGetTool::class,
                     // Spec 19 E9: Pairing-Inspiration der Kreativ-Phase — READ-ONLY (Aroma-Nachbarn je Modus, abstrakt/geerdet)

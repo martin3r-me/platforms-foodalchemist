@@ -170,6 +170,26 @@ class TeamSettingsService
         return (bool) ($this->for($team)->ai_active ?? true);
     }
 
+    /** Trendradar: 08:00-Konzept-Automatisierung für dieses Team (Default AUS — opt-in). */
+    public function trendAutoAktiv(Team $team): bool
+    {
+        return (bool) ($this->for($team)->trend_auto_enabled ?? false);
+    }
+
+    /** Trendradar: Anzahl Top-Trends je Lauf; ungesetzt ⇒ Config-Default. */
+    public function trendAutoLimit(Team $team): int
+    {
+        $v = (int) ($this->for($team)->trend_auto_limit ?? 0);
+
+        return $v > 0 ? $v : (int) config('foodalchemist.scheduler.trend_konzepte_limit', 3);
+    }
+
+    /** Trendradar: den Vorschlag als Signal in die Inbox legen (Default AN). */
+    public function trendSignalAktiv(Team $team): bool
+    {
+        return (bool) ($this->for($team)->trend_signal_enabled ?? true);
+    }
+
     /**
      * Phase 5: Typ-Farben (GP / Basisrezept / Gericht) als Hex, gemerged mit den Defaults.
      * Nur valide #rrggbb-Werte überschreiben — Müll/Teil-Konfig fällt auf Default zurück.
@@ -408,6 +428,20 @@ class TeamSettingsService
         $v = (string) ($this->for($team)->purchase_journal_trigger ?? '');
 
         return in_array($v, ['sent', 'delivered'], true) ? $v : 'delivered';
+    }
+
+    /**
+     * Spec 32 C4: ab wie vielen PROZENTPUNKTEN (bezogen auf den Umsatz) die Abweichung
+     * zwischen eingekauftem und theoretisch nötigem Wareneinsatz gemeldet wird. Default 3 pp.
+     *
+     * In pp statt in Euro, weil derselbe Euro-Betrag bei kleinem und großem Umsatz etwas
+     * völlig anderes bedeutet.
+     */
+    public function wareneinsatzAbweichungSchwellePp(Team $team): float
+    {
+        $v = $this->for($team)->we_deviation_threshold_pp ?? null;
+
+        return $v !== null && (float) $v > 0 ? (float) $v : 3.0;
     }
 
     /** R2.5: max. relatives VK-Delta (%) ggü. freigegebenem Snapshot, ab dem „VK-Anpassung empfohlen" feuert. Default 5 %. */

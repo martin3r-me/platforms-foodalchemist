@@ -23,7 +23,7 @@ class SimulationPostTool extends FoodAlchemistTool implements ToolContract, Tool
 
     public function getDescription(): string
     {
-        return 'Was-wäre-wenn-Preissimulation (read-only): scope=warengruppe|artikel|gp + ref '
+        return 'Was-wäre-wenn-Preissimulation (read-only): scope=warengruppe|artikel|gp|lieferant + ref '
             . '(WG-Code | supplier_item_id | gp_id) + delta_pct (z. B. 20 = +20 %, -10 = −10 %). '
             . 'Liefert Marge-Delta über das Portfolio, Top-20 betroffene Gerichte und Ersatzvorschläge. '
             . 'Verändert NICHTS.';
@@ -34,8 +34,8 @@ class SimulationPostTool extends FoodAlchemistTool implements ToolContract, Tool
         return [
             'type' => 'object',
             'properties' => [
-                'scope' => ['type' => 'string', 'enum' => ['warengruppe', 'artikel', 'gp'], 'description' => 'Bezugsebene des Szenarios'],
-                'ref' => ['type' => 'string', 'description' => 'Warengruppen-Code | supplier_item_id | gp_id (je nach scope)'],
+                'scope' => ['type' => 'string', 'enum' => ['warengruppe', 'artikel', 'gp', 'lieferant'], 'description' => 'Bezugsebene des Szenarios'],
+                'ref' => ['type' => 'string', 'description' => 'Warengruppen-Code | supplier_item_id | gp_id | supplier_id (je nach scope)'],
                 'delta_pct' => ['type' => 'number', 'description' => 'relative Preisänderung in % (z. B. 20 oder -10)'],
             ],
             'required' => ['scope', 'ref', 'delta_pct'],
@@ -50,8 +50,8 @@ class SimulationPostTool extends FoodAlchemistTool implements ToolContract, Tool
         }
         $scope = (string) ($arguments['scope'] ?? '');
         $ref = isset($arguments['ref']) ? (string) $arguments['ref'] : '';
-        if (! in_array($scope, ['warengruppe', 'artikel', 'gp'], true) || $ref === '' || ! isset($arguments['delta_pct'])) {
-            return ToolResult::error('scope (warengruppe|artikel|gp), ref und delta_pct sind Pflicht.', 'VALIDATION_ERROR');
+        if (! in_array($scope, ['warengruppe', 'artikel', 'gp', 'lieferant'], true) || $ref === '' || ! isset($arguments['delta_pct'])) {
+            return ToolResult::error('scope (warengruppe|artikel|gp|lieferant), ref und delta_pct sind Pflicht.', 'VALIDATION_ERROR');
         }
         $delta = (float) $arguments['delta_pct'];
         if ($delta <= -100.0) {

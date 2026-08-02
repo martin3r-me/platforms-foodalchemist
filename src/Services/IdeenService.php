@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdeaGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
+use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
@@ -35,13 +36,14 @@ class IdeenService
      *
      * @return array{gruppen: list<array{gruppe: FoodAlchemistDishIdeaGroup, ideen: Collection<int, FoodAlchemistDishIdea>}>, einzel: Collection<int, FoodAlchemistDishIdea>}
      */
-    public function liste(Team $team, ?int $chapterId = null, ?int $conceptId = null, bool $inklVerworfen = false): array
+    public function liste(Team $team, ?int $chapterId = null, ?int $conceptId = null, bool $inklVerworfen = false, ?int $planningSessionId = null): array
     {
-        [$chapterId, $conceptId] = $this->ownerXor($chapterId, $conceptId);
+        [$chapterId, $conceptId, $planningSessionId] = $this->ownerXor($chapterId, $conceptId, $planningSessionId);
 
         $ideenQ = FoodAlchemistDishIdea::visibleToTeam($team)
             ->where('chapter_id', $chapterId)
             ->where('concept_id', $conceptId)
+            ->where('planning_session_id', $planningSessionId)
             ->when(! $inklVerworfen, fn ($q) => $q->where('status', '!=', 'verworfen'))
             ->orderBy('position')->orderBy('id');
         $ideen = $ideenQ->get();
@@ -49,6 +51,7 @@ class IdeenService
         $gruppen = FoodAlchemistDishIdeaGroup::visibleToTeam($team)
             ->where('chapter_id', $chapterId)
             ->where('concept_id', $conceptId)
+            ->where('planning_session_id', $planningSessionId)
             ->orderBy('position')->orderBy('id')->get();
 
         $nachGruppe = $ideen->groupBy(fn ($i) => $i->group_id);
@@ -80,6 +83,7 @@ class IdeenService
             'team_id' => $team->id,
             'chapter_id' => $owner['chapter_id'],
             'concept_id' => $owner['concept_id'],
+            'planning_session_id' => $owner['planning_session_id'],
             'position' => $this->naechstePosition($team, $owner, FoodAlchemistDishIdea::class),
             'title' => $titel,
             'description' => $this->clean($in['description'] ?? null),
@@ -109,6 +113,7 @@ class IdeenService
             'team_id' => $team->id,
             'chapter_id' => $owner['chapter_id'],
             'concept_id' => $owner['concept_id'],
+            'planning_session_id' => $owner['planning_session_id'],
             'position' => $this->naechstePosition($team, $owner, FoodAlchemistDishIdea::class),
             'title' => $titel,
             'description' => $this->clean($in['description'] ?? null),
@@ -129,7 +134,7 @@ class IdeenService
     public function update(Team $team, int $id, array $in): FoodAlchemistDishIdea
     {
         $idee = $this->ownedIdee($team, $id);
-        $owner = ['chapter_id' => $idee->chapter_id, 'concept_id' => $idee->concept_id];
+        $owner = ['chapter_id' => $idee->chapter_id, 'concept_id' => $idee->concept_id, 'planning_session_id' => $idee->planning_session_id];
         $patch = [];
 
         if (array_key_exists('title', $in)) {
@@ -191,6 +196,7 @@ class IdeenService
             'team_id' => $team->id,
             'chapter_id' => $owner['chapter_id'],
             'concept_id' => $owner['concept_id'],
+            'planning_session_id' => $owner['planning_session_id'],
             'name' => $name,
             'target_price_pp' => $this->preis($in['target_price_pp'] ?? null),
             'position' => $this->naechstePosition($team, $owner, FoodAlchemistDishIdeaGroup::class),
@@ -291,7 +297,7 @@ class IdeenService
         ]);
 
         $rohe = is_array($proposal->werte['ideen'] ?? null) ? $proposal->werte['ideen'] : [];
-        $owner = ['chapter_id' => $chapterId, 'concept_id' => null];
+        $owner = ['chapter_id' => $chapterId, 'concept_id' => null, 'planning_session_id' => null];
         $angelegt = [];
         foreach ($rohe as $i) {
             if (! is_array($i)) {
@@ -337,15 +343,16 @@ class IdeenService
      *
      * @return array{0: ?int, 1: ?int}
      */
-    private function ownerXor(?int $chapterId, ?int $conceptId): array
+    private function ownerXor(?int $chapterId, ?int $conceptId, ?int $sessionId = null): array
     {
         $hatKapitel = $chapterId !== null && $chapterId > 0;
         $hatKonzept = $conceptId !== null && $conceptId > 0;
-        if ($hatKapitel === $hatKonzept) {
-            throw new \RuntimeException('Skizze braucht GENAU einen Owner: chapter_id XOR concept_id.');
+        $hatSession = $sessionId !== null && $sessionId > 0;
+        if (((int) $hatKapitel + (int) $hatKonzept + (int) $hatSession) !== 1) {
+            throw new \RuntimeException('Skizze braucht GENAU einen Owner: chapter_id XOR concept_id XOR planning_session_id.');
         }
 
-        return [$hatKapitel ? $chapterId : null, $hatKonzept ? $conceptId : null];
+        return [$hatKapitel ? $chapterId : null, $hatKonzept ? $conceptId : null, $hatSession ? $sessionId : null];
     }
 
     /**
@@ -356,9 +363,10 @@ class IdeenService
      */
     private function resolveOwner(Team $team, array $in): array
     {
-        [$chapterId, $conceptId] = $this->ownerXor(
+        [$chapterId, $conceptId, $sessionId] = $this->ownerXor(
             isset($in['chapter_id']) ? (int) $in['chapter_id'] : null,
             isset($in['concept_id']) ? (int) $in['concept_id'] : null,
+            isset($in['planning_session_id']) ? (int) $in['planning_session_id'] : null,
         );
 
         if ($chapterId !== null) {
@@ -366,14 +374,19 @@ class IdeenService
             if (! $k->isOwnedBy($team)) {
                 throw new \RuntimeException('Geerbtes Foodbook — Skizzen nur durchs Besitzer-Team (D1).');
             }
-        } else {
+        } elseif ($conceptId !== null) {
             $c = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
             if (! $c->isOwnedBy($team)) {
                 throw new \RuntimeException('Geerbtes Konzept — Skizzen nur durchs Besitzer-Team (D1).');
             }
+        } else {
+            $s = FoodAlchemistPlanningSession::visibleToTeam($team)->findOrFail($sessionId);
+            if (! $s->isOwnedBy($team)) {
+                throw new \RuntimeException('Geerbte Planungs-Session — Skizzen nur durchs Besitzer-Team (D1).');
+            }
         }
 
-        return ['chapter_id' => $chapterId, 'concept_id' => $conceptId];
+        return ['chapter_id' => $chapterId, 'concept_id' => $conceptId, 'planning_session_id' => $sessionId];
     }
 
     /**
@@ -394,8 +407,10 @@ class IdeenService
 
         if ($groupId !== null) {
             $gruppe = $this->ownedGruppe($team, $groupId);
-            if ((int) $gruppe->chapter_id !== (int) $owner['chapter_id'] || (int) $gruppe->concept_id !== (int) $owner['concept_id']) {
-                throw new \RuntimeException('Paket-Gruppe gehört zu einem anderen Kapitel/Konzept.');
+            if ((int) $gruppe->chapter_id !== (int) $owner['chapter_id']
+                || (int) $gruppe->concept_id !== (int) $owner['concept_id']
+                || (int) $gruppe->planning_session_id !== (int) $owner['planning_session_id']) {
+                throw new \RuntimeException('Paket-Gruppe gehört zu einem anderen Kapitel/Konzept/Session.');
             }
             $form = 'paket'; // group_id gesetzt ⇒ Paket (Regel M4).
         } elseif ($form === 'paket') {
@@ -453,6 +468,7 @@ class IdeenService
             ->where('team_id', $team->id)
             ->where('chapter_id', $owner['chapter_id'])
             ->where('concept_id', $owner['concept_id'])
+            ->where('planning_session_id', $owner['planning_session_id'])
             ->max('position');
 
         return (int) $max + 1;

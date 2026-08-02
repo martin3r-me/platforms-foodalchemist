@@ -30,6 +30,9 @@
                 <option value="warengruppe">Warengruppe</option>
                 <option value="gp">Grundprodukt</option>
                 <option value="artikel">Lieferantenartikel</option>
+                {{-- Spec 32: die praxisnächste Frage im Einkauf („X kündigt 5 % an") und bis
+                     dahin die einzige, die sich nicht simulieren ließ. --}}
+                <option value="lieferant">Lieferant (ganzes Sortiment)</option>
             </select>
         </div>
 
@@ -69,6 +72,14 @@
                         @endif
                     </div>
                 @endif
+
+            @elseif($scope === 'lieferant')
+                <select wire:model="ref" class="{{ $input }}">
+                    <option value="">– Lieferant wählen –</option>
+                    @foreach($lieferanten as $l)
+                        <option value="{{ $l->id }}">{{ $l->name }}</option>
+                    @endforeach
+                </select>
 
             @else
                 <input type="number" wire:model="ref" placeholder="supplier_item_id" class="{{ $input }}" />

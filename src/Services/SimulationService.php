@@ -21,8 +21,8 @@ class SimulationService
     }
 
     /**
-     * @param  string  $scope  'warengruppe' | 'artikel' | 'gp'
-     * @param  string  $ref    WG-Code | supplier_item_id | gp_id
+     * @param  string  $scope  'warengruppe' | 'artikel' | 'gp' | 'lieferant'
+     * @param  string  $ref    WG-Code | supplier_item_id | gp_id | supplier_id
      * @return array{scope:string,ref:string,delta_pct:float,ratio:float,n_gps:int,n_recipes:int,n_gerichte:int,n_concepts:int,marge_delta_eur:float,top:list<array>,substitutions:list<array>}
      */
     public function simuliere(Team $team, string $scope, string $ref, float $deltaPct): array
@@ -44,13 +44,24 @@ class SimulationService
     private function gpsFuerScope(Team $team, string $scope, string $ref): array
     {
         $ancestry = FoodAlchemistGp::teamAncestryIds($team);
-        $q = DB::table('foodalchemist_gps')->whereIn('team_id', $ancestry)->whereNull('deleted_at');
+        // Spalten qualifiziert: der Scope „lieferant" joint die Artikel-Tabelle dazu, und die
+        // trägt team_id/deleted_at ebenfalls — unqualifiziert wirft SQLite „ambiguous column".
+        $q = DB::table('foodalchemist_gps')
+            ->whereIn('foodalchemist_gps.team_id', $ancestry)
+            ->whereNull('foodalchemist_gps.deleted_at');
 
         return match ($scope) {
             'gp' => [(int) $ref],
-            'artikel' => $q->where('lead_la_supplier_item_id', (int) $ref)->pluck('id')->map(fn ($v) => (int) $v)->all(),
+            'artikel' => $q->where('lead_la_supplier_item_id', (int) $ref)
+                ->pluck('foodalchemist_gps.id')->map(fn ($v) => (int) $v)->all(),
             'warengruppe' => $q->where('commodity_group_code', $ref)->whereNotNull('lead_la_supplier_item_id')
-                ->pluck('id')->map(fn ($v) => (int) $v)->all(),
+                ->pluck('foodalchemist_gps.id')->map(fn ($v) => (int) $v)->all(),
+            // Spec 32: „Lieferant X erhöht um 5 %" — die praxisnächste Frage im Einkauf und
+            // bis dahin die einzige, die sich NICHT simulieren ließ. Getroffen sind alle GPs,
+            // deren Lead-Artikel bei diesem Lieferanten liegt; wer woanders bezieht, ist es nicht.
+            'lieferant' => $q->join('foodalchemist_supplier_items as li', 'li.id', '=', 'foodalchemist_gps.lead_la_supplier_item_id')
+                ->where('li.supplier_id', (int) $ref)->whereNull('li.deleted_at')
+                ->pluck('foodalchemist_gps.id')->map(fn ($v) => (int) $v)->all(),
             default => [],
         };
     }

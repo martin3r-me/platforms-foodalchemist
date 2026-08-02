@@ -240,8 +240,19 @@
                                 <div><label class="{{ $label }}">Start (Montag)</label><input type="date" wire:model.live="form.start_date" wire:change="speichern" class="{{ $input }}" /></div>
                                 <div><label class="{{ $label }}">Zyklus (Wochen)</label><input type="number" min="1" wire:model.live="form.cycle_weeks" wire:change="speichern" class="{{ $input }} text-right tabular-nums" /></div>
                                 <div><label class="{{ $label }}">Min. Abstand (T.)</label><input type="number" min="0" wire:model.live="form.min_abstand_tage" wire:change="speichern" class="{{ $input }} text-right tabular-nums" title="0 = keine Wiederholungsregel" /></div>
-                                <div><label class="{{ $label }}">Status</label>
-                                    <select wire:model="form.status" wire:change="speichern" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select></div>
+                            </div>
+
+                            {{-- Spec 33 P5: Status und Zuordnung aus dem geteilten Bauteil. Hier stand
+                                 bis dahin ein eigenes Dropdown mit `draft`/`active` — Werte, die weder
+                                 Migration noch Service kannten. Ein Gültigkeitsfenster hat der Plan
+                                 bewusst nicht: es steht in seinen Einträgen. --}}
+                            <div class="mt-3 pt-3 border-t border-black/5">
+                                <x-foodalchemist::ausgabe-status
+                                    status-model="form.status"
+                                    outlet-model="form.outlet_id" kunde-model="form.customer"
+                                    :betriebe="$betriebe" :zustand="$plan->laufZustand()" :grund="$plan->laufGrund()"
+                                    :fenster-hinweis="$fensterHinweis" :konflikt="$portfolioKonflikt"
+                                    toggle="aktivUmschalten" />
                             </div>
                         </x-foodalchemist::modal-section>
 

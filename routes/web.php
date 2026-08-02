@@ -28,6 +28,16 @@ use Platform\FoodAlchemist\Livewire\Sidebar;
  */
 Route::get('/', Dashboard::class)->name('foodalchemist.dashboard');
 
+/**
+ * Spec 32 — Controlling-Zentrum. Eine Fläche, an der Befund und Hebel nebeneinander liegen:
+ * Lage · Preise · Wareneinsatz · Simulation · Erfolg · Geld-Signale · Kennzahlen.
+ *
+ * Die Seite ist das Lagebild, der Sidebar-Klick öffnet sofort den Voll-Editor (`?editor=0`
+ * unterdrückt das, z. B. für Deep-Links auf das Lagebild). Tab-Vorwahl über `?tab=`.
+ */
+Route::get('/controlling', \Platform\FoodAlchemist\Livewire\Controlling\Cockpit::class)
+    ->name('foodalchemist.controlling.index');
+
 
 /**
  * Grundprodukte (Vertical Slice, D-3-Teil) — Model-Binding-Parameter = Modelname in camelCase
@@ -66,18 +76,22 @@ Route::get('/lieferanten', \Platform\FoodAlchemist\Livewire\Suppliers\Index::cla
     ->name('foodalchemist.suppliers.index');
 
 /**
- * Einkauf E3 — Einkaufs-Cockpit: Cross-Lieferanten-Preisvergleich (Such-first,
- * Rückvergütungs-Toggle). Startseite des „reinen Einkäufers".
+ * Spec 32: Die beiden Einkaufs-Auswertungen sind ins Controlling-Zentrum gewandert
+ * (Preisvergleich → Tab „Preise", Optimierung → Tab „Wareneinsatz"). Die Routen bleiben
+ * als Redirects bestehen — Präzedenz `/kalkulator` weiter unten.
+ *
+ * Der Query-String wird MITGENOMMEN: die Panels tragen unverändert `q`/`wg`/`sup`/`rv`,
+ * also treffen alte Deep-Links wie `/einkauf?q=Lachs&rv=1` weiterhin ihr Ziel.
  */
-Route::get('/einkauf', \Platform\FoodAlchemist\Livewire\Einkauf\Cockpit::class)
-    ->name('foodalchemist.einkauf.index');
+Route::get('/einkauf', fn () => redirect()->route(
+    'foodalchemist.controlling.index',
+    ['tab' => 'preise'] + request()->query(),
+))->name('foodalchemist.einkauf.index');
 
-/**
- * Einkauf E4 — Wareneinsatz-Optimierung: Ist (Journal) vs. optimaler Bezug
- * (günstigster Lieferant, ± Rückvergütung) + Top-Einsparpotenziale.
- */
-Route::get('/einkauf/optimierung', \Platform\FoodAlchemist\Livewire\Einkauf\Optimierung::class)
-    ->name('foodalchemist.einkauf.optimierung');
+Route::get('/einkauf/optimierung', fn () => redirect()->route(
+    'foodalchemist.controlling.index',
+    ['tab' => 'wareneinsatz'] + request()->query(),
+))->name('foodalchemist.einkauf.optimierung');
 
 /**
  * #388 Geschirr-Datenbank (non-food) — Leih-Lieferant → Geschirr-Artikel,
@@ -98,6 +112,14 @@ Route::get('/food-dna', \Platform\FoodAlchemist\Livewire\FoodDna\Index::class)
  */
 Route::get('/wissen', \Platform\FoodAlchemist\Livewire\Knowledge\Browser::class)
     ->name('foodalchemist.knowledge.index');
+
+// Trendradar (#FA-Trendradar): kuratierte Sicht auf die geclusterten Trend-Wissens-Docs.
+Route::get('/trendradar', \Platform\FoodAlchemist\Livewire\Trendradar\Index::class)
+    ->name('foodalchemist.trendradar.index');
+
+// Planungs-/Kreativ-Ebene (Doppel-Diamant): Trend/Brief → Analyse/Skizzen/Planung → Go.
+Route::get('/planung', \Platform\FoodAlchemist\Livewire\Planung\Index::class)
+    ->name('foodalchemist.planung.index');
 
 /**
  * Einstellungen (M1-01, D-1 §4) — Sektion in der URL (V-17: kein Tab-State-Verlust).
@@ -208,10 +230,16 @@ Route::get('/angebote/{id}/dokument', function (int $id, \Platform\FoodAlchemist
 })->whereNumber('id')->name('foodalchemist.angebote.dokument');
 
 /**
- * M12: Kalkulations-Übersicht (HK1/HK2/Vollkosten-DB).
+ * M12: Kalkulations-Übersicht (Kennzahlen + Preissimulation).
+ *
+ * Spec 32: beide Hälften sind ins Controlling-Zentrum gewandert — die Kennzahlen in den
+ * gleichnamigen Tab, die Simulation in einen eigenen. Der Redirect zielt auf die Simulation,
+ * weil dieser Eintrag zuletzt unter dem Label „Preissimulation" in der Sidebar stand.
  */
-Route::get('/kalkulation', \Platform\FoodAlchemist\Livewire\Kalkulation\Index::class)
-    ->name('foodalchemist.kalkulation.index');
+Route::get('/kalkulation', fn () => redirect()->route(
+    'foodalchemist.controlling.index',
+    ['tab' => 'simulation'] + request()->query(),
+))->name('foodalchemist.kalkulation.index');
 
 /**
  * M-K10 / Doc 16 §11: Kalkulator — standalone Composer (Positionen aus Gericht/

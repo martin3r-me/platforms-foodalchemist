@@ -26,7 +26,7 @@ Grundprodukt  →  Basisrezept  →  Gericht  →  Concept  →  Foodbook (Angeb
 | **Concept** | Der Baukasten: Gerichte und Pakete zu einem stimmigen Angebots-Gerüst zusammenstellen. |
 | **Foodbook** | Das fertige Portfolio: Concepts werden zu Kunden-Angeboten (Kapitel, Personenzahl, Preise). |
 
-Quer dazu liegen drei Werkzeuge, die jede Ebene nutzen: die **Kalkulation** (was kostet es, was muss es bringen?), der **Speiseplan** (was kommt wann auf den Tisch?) und die **Produktion** (was muss die Küche dafür wann kochen?).
+Quer dazu liegen vier Werkzeuge, die jede Ebene nutzen: die **Kalkulation** (was kostet es, was muss es bringen?), das **Controlling** (was ist tatsächlich passiert — und was ändere ich daran?), der **Speiseplan** (was kommt wann auf den Tisch?) und die **Produktion** (was muss die Küche dafür wann kochen?).
 
 ---
 
@@ -52,6 +52,9 @@ Was dein Team anlegt, sieht dein Team. Übergreifende Stammdaten (z. B. ein zent
 | [🧱 Concepter](concepter) | Gerichte & Pakete zu Concepts zusammenstellen |
 | [📔 Foodbook](foodbook) | Concepts zu Kunden-Angeboten bündeln |
 | [🧮 Kalkulation](kalkulation) | Vom Wareneinsatz zur Vollkosten- und Verkaufspreis-Rechnung |
+| [📊 Controlling](controlling) | Preise, Wareneinsatz, Simulation, Verkaufs-Ist — Befund und Hebel an einem Ort |
+| [🗂️ Portfolio](portfolio) | Wer fährt gerade was: Ausgaben aktiv stellen, je Betrieb und je Kunde |
+| [🛒 Einkauf](einkauf) | Bestellschienen je Lieferant, Gebinde, Versand |
 | [🗓️ Speiseplan](speiseplan) | Bausteine über Tage, Mahlzeiten und Wochen verteilen |
 | [🍽️ Speisekarte](speisekarte) | Restaurant-à-la-carte-Karte: Rubriken, Gerichte, Menüs, Getränke |
 | [🍲 Produktion](produktion) | Vom verkauften Angebot zum Küchenzettel: Ansätze, Posten, Abarbeiten |

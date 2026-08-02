@@ -1,6 +1,6 @@
 <?php
 
-namespace Platform\FoodAlchemist\Livewire\Einkauf;
+namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
@@ -15,19 +15,25 @@ use Platform\FoodAlchemist\Support\Suche;
 use RuntimeException;
 
 /**
- * Einkauf E3 — Einkaufs-Cockpit (Startseite des „reinen Einkäufers").
+ * Einkauf E3 — Cross-Lieferanten-Preisvergleich.
  *
- * Der Cross-Lieferanten-Preisvergleich, den es bisher nur eingebettet im GP-Detail gab,
- * als eigenständige Such-Fläche: pro Grundprodukt der günstigste/teuerste Lieferant +
- * Preisspanne — sauberer als das Kollegen-Tool, weil über die GP↔LA-Abstraktion statt
- * über Artikelnamen-Strings. Optionaler „inkl. Rückvergütung"-Schalter rechnet den
- * effektiven Netto-Preis (RebateService-Overlay), Filter nach Lieferant + Warengruppe.
+ * Pro Grundprodukt der günstigste/teuerste Lieferant + Preisspanne — sauberer als das
+ * Kollegen-Tool, weil über die GP↔LA-Abstraktion statt über Artikelnamen-Strings.
+ * Optionaler „inkl. Rückvergütung"-Schalter rechnet den effektiven Netto-Preis
+ * (RebateService-Overlay), Filter nach Lieferant + Warengruppe.
  *
- * Such-first (wie das Vorbild): ohne Suche/Filter ein freundlicher Leerzustand statt
- * einer riesigen Tabelle. Ergebnis auf {@see self::MAX} gedeckelt — enger filtern.
- * Read-only-Vergleich; team-scoped. Reuse: LeadLaService::rangliste + RebateService.
+ * Such-first: ohne Suche/Filter ein freundlicher Leerzustand statt einer riesigen Tabelle.
+ * Ergebnis auf {@see self::MAX} gedeckelt — enger filtern. team-scoped.
+ * Reuse: LeadLaService::rangliste + RebateService.
+ *
+ * **Spec 32:** war bis 2026-08-02 die eigene Seite `/einkauf` (Livewire `Einkauf\Cockpit`),
+ * ist jetzt Panel im Preise-Tab des Controlling-Zentrums — dort liegt der Vergleich neben
+ * den Hebeln, die aus ihm folgen (Bestellschiene, Bezugsquelle). Die `#[Url]`-Namen sind
+ * absichtlich unverändert (`q`/`wg`/`sup`/`rv`): die Alt-Route leitet mit Query-String
+ * weiter, damit bestehende Deep-Links weiter treffen. Kein `x-ui-page` und kein
+ * `->layout()` mehr — das Panel lebt im Editor-Modal.
  */
-class Cockpit extends Component
+class Preisvergleich extends Component
 {
     private const MAX = 60;
 
@@ -70,6 +76,44 @@ class Cockpit extends Component
         }
     }
 
+    /**
+     * Spec 32 — der Hebel neben dem Befund: die Bezugsquelle eines Grundprodukts auf den
+     * günstigsten Lieferantenartikel umstellen.
+     *
+     * Das ist die Handlung, die aus dem Vergleich folgt und die bisher nur im GP-Detail möglich
+     * war: man sah hier den teuren Lieferanten und musste die Fläche verlassen, um etwas zu tun.
+     *
+     * `recompute: true` ist Absicht — ein neuer Lead heißt neuer EK, und der muss durch den
+     * Rezeptbaum. Ohne das stünde der Erfolg der Maßnahme nirgends. Für EINE Zeile ist der eine
+     * Lauf richtig; die Batch-Umstellung im Wareneinsatz-Tab sammelt stattdessen.
+     */
+    public function bezugsquelleSetzen(int $gpId, int $laId, LeadLaService $lead): void
+    {
+        $this->hinweis = null;
+        $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet.';
+
+            return;
+        }
+
+        // visibleToTeam statt find(): sonst könnte eine fremde GP-id durchrutschen.
+        $gp = FoodAlchemistGp::visibleToTeam($team)->whereKey($gpId)->first();
+        if ($gp === null) {
+            $this->fehler = 'Grundprodukt nicht gefunden.';
+
+            return;
+        }
+
+        try {
+            $lead->setLeadLa($team, $gp, $laId, 'Controlling · Preisvergleich', recompute: true);
+            $this->hinweis = 'Bezugsquelle für „' . $gp->name . '" umgestellt — EK ist durch den Rezeptbaum nachgerechnet.';
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function render(LeadLaService $lead, RebateService $rebate)
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -101,7 +145,7 @@ class Cockpit extends Component
             // Günstigste zuerst wäre irreführend (verschiedene Einheiten) — nach Name stabil.
         }
 
-        return view('foodalchemist::livewire.einkauf.cockpit', [
+        return view('foodalchemist::livewire.controlling.panels.preisvergleich', [
             'zeilen' => $zeilen,
             'gekappt' => $gekappt,
             'aktiv' => $aktiv,
@@ -113,7 +157,7 @@ class Cockpit extends Component
             'warengruppen' => $team !== null
                 ? app(VocabularyService::class)->listWarengruppen($team)
                 : collect(),
-        ])->layout('platform::layouts.app');
+        ]);
     }
 
     /**
@@ -147,12 +191,20 @@ class Cockpit extends Component
             }
         }
 
+        // Spec 32: der aktuell effektive Lead — dieselbe Regel wie LeadLaService::effektiverLead
+        // (Pin schlägt Rang, Gesperrtes fällt raus). Ohne ihn wüsste die Zeile nicht, ob die
+        // Umstellung überhaupt etwas ändert, und böte einen Knopf für ein No-op an.
+        $lead = $kette->first(fn ($la) => $la->gepinnt && ! $la->locked)
+            ?? $kette->first(fn ($la) => ! $la->locked);
+
         return [
             'gp_id' => (int) $gp->id,
             'name' => $gp->name,
             'wg' => $gp->commodity_group_code,
             'n' => $bepreist->count(),
             'guenstigster_la_id' => (int) $guenstigster->id,
+            'lead_supplier' => $lead?->supplier_name,
+            'lead_ist_guenstigster' => $lead !== null && (int) $lead->id === (int) $guenstigster->id,
             'guenstigster_supplier' => $guenstigster->supplier_name,
             'guenstigster_preis' => $minP,
             'teuerster_supplier' => $teuerster->supplier_name,

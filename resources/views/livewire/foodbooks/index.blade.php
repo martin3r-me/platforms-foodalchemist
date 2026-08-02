@@ -192,10 +192,18 @@
                 <div class="{{ $cardAccent }}"></div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div class="md:col-span-2"><label class="{{ $label }}">Bezeichnung</label><input type="text" wire:model="form.label" class="{{ $input }}" /></div>
-                    <div><label class="{{ $label }}">Kunde</label><input type="text" wire:model="form.customer" class="{{ $input }}" /></div>
-                    <div><label class="{{ $label }}">Status</label>
-                        <select wire:model="form.status" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
-                    </div>
+                    <div><label class="{{ $label }}">Jahr</label><input type="number" wire:model="form.jahr" class="{{ $input }}" /></div>
+                    <div><label class="{{ $label }}">Personen</label><input type="number" wire:model="form.personen" class="{{ $input }}" /></div>
+                </div>
+
+                {{-- Spec 33 P5: Status, Gültigkeitsfenster und beide Zuordnungsachsen kommen aus
+                     einem geteilten Bauteil — dieselbe Bedienung in allen drei Ausgabeformen. --}}
+                <div class="pt-1 border-t border-black/5">
+                    <x-foodalchemist::ausgabe-status
+                        status-model="form.status" von-model="form.gueltig_von" bis-model="form.gueltig_bis"
+                        outlet-model="form.outlet_id" kunde-model="form.customer"
+                        :betriebe="$betriebe" :zustand="$fb->laufZustand()" :grund="$fb->laufGrund()"
+                        :konflikt="$portfolioKonflikt" toggle="aktivUmschalten" />
                 </div>
 
                 {{-- R4.3-Phasen-Stepper wanderte auf Tab-Ebene (E5.2, oben in der Leitstellen-Leiste). --}}

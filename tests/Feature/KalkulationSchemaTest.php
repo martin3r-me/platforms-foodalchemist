@@ -2,7 +2,6 @@
 
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Concepter\Editor;
-use Platform\FoodAlchemist\Livewire\Kalkulation\Index as KalkulationBrowser;
 use Platform\FoodAlchemist\Livewire\Settings\Herstellkosten as HerstellkostenSettings;
 use Platform\FoodAlchemist\Livewire\Settings\Kalkulation as KalkulationSettings;
 use Platform\FoodAlchemist\Models\FoodAlchemistFixkosten;

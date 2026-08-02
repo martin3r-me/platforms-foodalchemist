@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
+use Platform\FoodAlchemist\Models\Concerns\HatAusgabeStatus;
+use Platform\FoodAlchemist\Models\Concerns\HatAusgabeZuordnung;
 
 /**
  * @ai.description Foodbook (M11) — Angebots-/Menü-Mappe, komponiert Concepts +
@@ -18,7 +20,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistFoodbook extends Model
 {
-    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+    use HasUuidV7, HatAusgabeStatus, HatAusgabeZuordnung, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
     protected $table = 'foodalchemist_foodbooks';
 
@@ -27,6 +29,8 @@ class FoodAlchemistFoodbook extends Model
     protected $casts = [
         'uuid' => 'string',
         'jahr' => 'integer',
+        'gueltig_von' => 'date',      // Spec 33 P1
+        'gueltig_bis' => 'date',
         'personen' => 'integer',
         'target_food_cost_pct' => 'decimal:2',
         'food_cost_tolerance_pp' => 'decimal:2',
@@ -58,18 +62,6 @@ class FoodAlchemistFoodbook extends Model
     public function schreibstil(): BelongsTo
     {
         return $this->writingStyle();
-    }
-
-    /** #369: CRM-Firma (verlinkt, MVP — kein Rücksync). */
-    public function crmCompany(): BelongsTo
-    {
-        return $this->belongsTo(\Platform\Crm\Models\CrmCompany::class, 'crm_company_id');
-    }
-
-    /** #369: CRM-Kontakt (verlinkt, MVP). */
-    public function crmContact(): BelongsTo
-    {
-        return $this->belongsTo(\Platform\Crm\Models\CrmContact::class, 'crm_contact_id');
     }
 
     /** Default-Zielgruppen (Spec 19, M1) — 1–n, kaskadieren als Foodbook-Boden. */

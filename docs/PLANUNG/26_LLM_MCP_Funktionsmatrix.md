@@ -22,10 +22,10 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 59 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 140 | alle 140 werden im Provider aufgeführt |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 157 | alle 157 werden im Provider aufgeführt |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
-| dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 140-Tool-Matrix |
+| dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
 | dokumentierte reale LLM-Abnahme je Prompt | 0 | technische Tests vorhanden, kein vollständiges Golden Set je Prompt |
 
 ## 3. Verbindlicher Capability-Vertrag
@@ -209,19 +209,21 @@ Betroffene MCP-Reads sind insbesondere `artikel.SEARCH`, `gps.SEARCH`,
 | Angebote | 4 | lesen, listen, suchen, anlegen | FB-16–17 |
 | Artikel/GPS/Lieferanten | 17 | Katalog, Matching, Lead, Volumen, Vereinbarungen | ST-01–25 |
 | Rezepte/Verkaufsrezepte | 15 | CRUD, Suche, Generierung, Review, Zutaten, Klasse, Zubereitungsschritte | RE-01–24 |
-| Konzepte/Planung/Canvas | 15 | CRUD, Slots, Varianten, Coverage, Phase und DNA | CO-01–11, FD-01–04 |
+| Konzepte/Planung/Canvas | 18 | CRUD, Slots, Varianten, Coverage, Phase, DNA, Planungs-Session | CO-01–11, FD-01–04 |
 | Foodbook/Leitstelle | 14 | Buch, Kapitel, Blöcke, Ideen, Freigabe, Zielgruppen | FB-01–17 |
+| Speisekarte | 9 | Karte, Rubriken, Positionen, Duplikat, Suche, Leitstelle | noch ohne Business-IDs |
 | Kalkulation/Assemblierung | 8 | Kalkulation, Simulation, Benchmark, Proportion, Solver | WI-01–13 |
 | Produktion/Bestellung | 30 | Bedarf, Aufträge, Zeilen (Override/Zuteilung/Abhaken), Status, Löschen, Dokumente, Handover, Einkaufs-Auswertungen, Rückvergütung | PR-01–04, OR-01–06 |
 | Wissen/Pairing/R&D | 17 | Wissen, Bindings, Pairing, Substitution, Lab Notes | KN-01–06, PA-01–06 |
 | Qualität/Signale/Runs | 15 | Listen, Ursachen, Policy, Fix, Trend, Qualitätsläufe | QL-01–05 |
+| Controlling/Verkaufs-Ist | 5 | Verkaufsjournal lesen, CSV-Import (Trockenlauf-Default), Menu-Engineering, Portfolio-Steuerung, Promotion-Umsatz | CT-08–12, PF-01–02 |
 | Navigation/Settings/Favoriten | 5 | UI öffnen, Settings lesen, Favoriten lesen/schreiben | UX-05, RE-22, AD-03 |
 
-Die Gruppensumme wird gegen die 140 Toolnamen automatisiert geprüft. Die Übersicht
+Die Gruppensumme wird gegen die 157 Toolnamen automatisiert geprüft. Die Übersicht
 ist fachlich gruppiert; der verbindliche technische Schlüssel ist immer der volle
 Toolname im folgenden Register.
 
-## 7. Vollständiges MCP-Register — 140 Tools
+## 7. Vollständiges MCP-Register — 157 Tools
 
 ```text
 foodalchemist.angebote.GET
@@ -286,6 +288,7 @@ foodalchemist.knowledge.UNBIND
 foodalchemist.lab_notes.POST
 foodalchemist.lab_notes.SEARCH
 foodalchemist.leitstelle.GET
+foodalchemist.menu_engineering.GET
 foodalchemist.orders.ADD_LINE
 foodalchemist.orders.ADD_NEED
 foodalchemist.orders.CREATE
@@ -300,6 +303,11 @@ foodalchemist.pairings.SUGGEST
 foodalchemist.phase.PUT
 foodalchemist.planning.GET
 foodalchemist.planning.PUT
+foodalchemist.planung_session.GET
+foodalchemist.planung_session.POST
+foodalchemist.planung_session.PUT
+foodalchemist.portfolio.GET
+foodalchemist.portfolio_promotion.GET
 foodalchemist.process_anchors.GROUND
 foodalchemist.production_orders.ADD_TARGET
 foodalchemist.production_orders.DELETE
@@ -334,6 +342,8 @@ foodalchemist.recipes.REVIEW
 foodalchemist.recipes.SEARCH
 foodalchemist.reference.GET
 foodalchemist.runs.GET
+foodalchemist.sales_facts.GET
+foodalchemist.sales_import.POST
 foodalchemist.settings.GET
 foodalchemist.signal_causes.GET
 foodalchemist.signal_policies.GET
@@ -344,6 +354,15 @@ foodalchemist.signale.LIST
 foodalchemist.signale.PUT
 foodalchemist.signale.SEARCH
 foodalchemist.simulation.POST
+foodalchemist.speisekarte.GET
+foodalchemist.speisekarte_leitstelle.GET
+foodalchemist.speisekarte_positionen.DELETE
+foodalchemist.speisekarte_positionen.POST
+foodalchemist.speisekarte_rubrik.POST
+foodalchemist.speisekarte_rubrik.PUT
+foodalchemist.speisekarten.DUPLICATE
+foodalchemist.speisekarten.POST
+foodalchemist.speisekarten.SEARCH
 foodalchemist.speiseplaene.POST
 foodalchemist.speiseplan_eintraege.POST
 foodalchemist.substitution.SUGGEST
@@ -385,7 +404,7 @@ Jedes Tool erhält künftig im Testregister eine Zeile mit:
 
 ### Pflichtreihenfolge
 
-1. Registry-Healthcheck für exakt 140 Namen.
+1. Registry-Healthcheck für exakt 157 Namen.
 2. Tools nach Risiko klassifizieren: Delete, Write, Generate/Run, Read.
 3. alle Delete- und Write-Tools zuerst tenant-adversarial testen.
 4. Read-Tools auf Datenlecks, Pagination und Querybudget prüfen.

@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
-use Platform\FoodAlchemist\Services\BenchmarkService;
 use Platform\FoodAlchemist\Services\KpiService;
 
 /**
@@ -32,7 +31,7 @@ class Dashboard extends Component
         ]);
     }
 
-    public function render(KpiService $kpis, BenchmarkService $benchmark)
+    public function render(KpiService $kpis)
     {
         $team = Auth::user()?->currentTeamRelation;
         $kette = $team !== null ? FoodAlchemistGp::teamAncestryIds($team) : [];
@@ -63,7 +62,9 @@ class Dashboard extends Component
             'kpis' => $kpis->forTeam($team),
             'workflow' => $workflow,
             'ki' => $ki,
-            'benchmark' => $team !== null ? $benchmark->benchmark($team) : null, // R2.7
+            // Spec 32: der R2.7-Benchmark ist ins Controlling-Zentrum gezogen. Er kostete hier
+            // einen `kpisFuerTeam`-Lauf JE Peer-Team bei jedem Dashboard-Aufruf — für eine
+            // Kennzahl, die niemand auf der Bestandsübersicht sucht.
         ])->layout('platform::layouts.app');
     }
 }

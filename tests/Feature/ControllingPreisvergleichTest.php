@@ -1,7 +1,7 @@
 <?php
 
 use Livewire\Livewire;
-use Platform\FoodAlchemist\Livewire\Einkauf\Cockpit;
+use Platform\FoodAlchemist\Livewire\Controlling\Panels\Preisvergleich as Cockpit;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
@@ -12,8 +12,11 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * Einkauf E3 (DoD): Die „in Bestellschiene übernehmen"-Aktion des Cockpits legt den
+ * Einkauf E3 (DoD): Die „in Bestellschiene übernehmen"-Aktion des Preisvergleichs legt den
  * günstigsten Lieferantenartikel als Position in den Draft seines Lieferanten (1 Gebinde).
+ *
+ * Spec 32: das Panel heißt seit 2026-08-02 `Controlling\Panels\Preisvergleich` (vorher
+ * `Einkauf\Cockpit`) — die Aktion ist unverändert, sie steht nur an ihrem Befund.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();

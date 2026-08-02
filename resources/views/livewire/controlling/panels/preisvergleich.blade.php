@@ -1,19 +1,9 @@
-{{-- Einkauf E3 — Einkaufs-Cockpit: Cross-Lieferanten-Preisvergleich (Such-first). --}}
+{{-- Einkauf E3 — Cross-Lieferanten-Preisvergleich (Such-first).
+     Spec 32: von der eigenen Seite `/einkauf` zum Panel im Controlling-Tab „Preise" —
+     Seiten-Hülle (x-ui-page/navbar/actionbar) entfällt, Titel trägt jetzt der Tab. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-ui-page>
-    <x-slot name="navbar">
-        <x-ui-page-navbar title="Einkauf · Preisvergleich" icon="heroicon-o-scale" />
-    </x-slot>
-
-    <x-slot name="actionbar">
-        <x-ui-page-actionbar :breadcrumbs="[
-            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Einkauf · Preisvergleich'],
-        ]" />
-    </x-slot>
-
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
+<div class="space-y-4" data-ctrl-preisvergleich>
 
         {{-- Filterleiste --}}
         <div class="{{ $sectionCard }}">
@@ -79,6 +69,7 @@
                             <th class="px-3 py-2 font-medium text-right">€ / Einheit</th>
                             <th class="px-3 py-2 font-medium text-right">Spanne</th>
                             <th class="px-3 py-2 font-medium text-right">Lief.</th>
+                            <th class="px-3 py-2 font-medium">Bezug</th>
                             @if($supplierId)<th class="px-3 py-2 font-medium text-right">gefilt. Lief.</th>@endif
                             <th class="px-3 py-2 font-medium text-right">Aktion</th>
                         </tr>
@@ -94,6 +85,17 @@
                                 <td class="px-3 py-2 text-right tabular-nums text-rose-700">{{ number_format($z['teuerster_preis'], 2, ',', '.') }} €</td>
                                 <td class="px-3 py-2 text-right tabular-nums text-gray-700">{{ $z['spanne_pct'] !== null ? '+' . number_format($z['spanne_pct'], 0, ',', '.') . ' %' : '—' }}</td>
                                 <td class="px-3 py-2 text-right tabular-nums text-gray-500">{{ $z['n'] }}</td>
+                                {{-- Spec 32: woher wird heute wirklich bezogen? Ohne diese Spalte ist der
+                                     Preisvergleich eine Marktbeobachtung ohne Bezug zur eigenen Kalkulation. --}}
+                                <td class="px-3 py-2">
+                                    @if($z['lead_supplier'] === null)
+                                        <span class="text-gray-400">—</span>
+                                    @elseif($z['lead_ist_guenstigster'])
+                                        <span class="{{ $pill }} {{ $variantPill['success'] }}" title="Bezugsquelle ist bereits die günstigste">{{ $z['lead_supplier'] }} ✓</span>
+                                    @else
+                                        <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="Es wird nicht vom günstigsten Lieferanten bezogen">{{ $z['lead_supplier'] }}</span>
+                                    @endif
+                                </td>
                                 @if($supplierId)
                                     <td class="px-3 py-2 text-right tabular-nums {{ $z['filter_supplier_ist_guenstigster'] ? 'text-emerald-700 font-medium' : 'text-gray-700' }}">
                                         {{ $z['filter_supplier_preis'] !== null ? number_format($z['filter_supplier_preis'], 2, ',', '.') . ' €' : '—' }}
@@ -103,6 +105,16 @@
                                 <td class="px-3 py-2 text-right whitespace-nowrap">
                                     <button type="button" wire:click="uebernehmen({{ $z['guenstigster_la_id'] }})"
                                             class="{{ $btnGhostXs }} text-violet-600" title="Günstigsten Lieferantenartikel in die Bestellschiene übernehmen">→ Schiene</button>
+                                    {{-- Der eigentliche Controlling-Hebel: nicht einmal günstig einkaufen,
+                                         sondern dauerhaft von dort beziehen. Nur zeigen, wenn es etwas ändert. --}}
+                                    @unless($z['lead_ist_guenstigster'])
+                                        <button type="button"
+                                                wire:click="bezugsquelleSetzen({{ $z['gp_id'] }}, {{ $z['guenstigster_la_id'] }})"
+                                                wire:confirm="Bezugsquelle für „{{ $z['name'] }}&#8220; auf {{ $z['guenstigster_supplier'] }} umstellen? Der EK wird durch den Rezeptbaum nachgerechnet."
+                                                wire:loading.attr="disabled"
+                                                data-ctrl-bezug="{{ $z['gp_id'] }}"
+                                                class="{{ $btnGhostXs }} text-emerald-700" title="Grundprodukt dauerhaft von diesem Lieferanten beziehen (Lead-Artikel setzen)">⇄ Bezug</button>
+                                    @endunless
                                 </td>
                             </tr>
                         @endforeach
@@ -114,5 +126,4 @@
             @endif
         @endif
 
-    </x-ui-page-container>
-</x-ui-page>
+</div>

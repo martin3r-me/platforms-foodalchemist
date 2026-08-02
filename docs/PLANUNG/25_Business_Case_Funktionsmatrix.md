@@ -217,6 +217,40 @@ für eine einzelne Zeile dokumentiert wurde.
 | OR-05 | Bestellstatus führen | Bestellung kontrolliert abschließen | gebaut | Übergänge, Rechte, Fehleranzeige (`F+T+B`) | D |
 | OR-06 | Bestellung als PDF/CSV/mailto | Lieferant praktisch beauftragen | teilweise | reales Dokument, CSV-Schutz, Zustellnachweisgrenze (`B+R`) | A/D |
 
+## 8a. Controlling (Spec 32)
+
+Befund und Hebel an einem Ort. Die Lese-Funktionen bestanden vorher verstreut (WI-03/04/07,
+FB-13) — neu sind hier die Handlungen und die gesamte Erlösseite.
+
+| ID | Kleine Business-Funktion | Geschäftlicher Nutzen | Ist-Status | Noch erforderlicher Abnahmetest | Phase |
+|---|---|---|---|---|---|
+| CT-01 | Controlling-Werkbank öffnen | eine Fläche statt fünf Seiten | gebaut | Tab-Vorwahl, Deep-Link, Alt-Routen ohne Verlust (`F+B`) | C/D |
+| CT-02 | Bezugsquelle aus dem Preisvergleich umstellen | vom Preisbefund zur Maßnahme ohne Ortswechsel | gebaut | Lead wechselt, EK propagiert, Begründung protokolliert (`F+T+B`) | C |
+| CT-03 | Bezugsquellen im Batch umstellen | Einsparpotenzial in einem Zug heben | gebaut | Vorschau nennt die betroffene Menge; genau ein Recompute-Lauf (`F+P+B`) | C |
+| CT-04 | Preis-Ausreißer sichten | Fehlbuchungen finden, die alle Zahlen verzerren | gebaut | Trend- vs. Median-Basis unterscheidbar; kein Auto-Fix (`F+R`) | C/D |
+| CT-05 | Lieferanten-Szenario simulieren | „X kündigt 5 % an" beantworten | gebaut | Scope trifft nur GPs mit Lead bei diesem Lieferanten (`F+B`) | C |
+| CT-06 | Zielwerte inline setzen | Ampel verstellen, während man sie liest | gebaut | schreibt denselben Pfad wie die Einstellungen (`F+B`) | D |
+| CT-07 | Verkaufspreise als Batch freigeben | kein stiller Preissprung beim Kunden | gebaut | ohne Freigabe bleibt der veröffentlichte VK unverändert; fremde Darreichung wird übersprungen (`F+T+B`) | C/D |
+| CT-08 | Verkaufs-Ist importieren | Erlösseite überhaupt erst messbar | gebaut | Trockenlauf schreibt nichts; Re-Import idempotent; Spalten frei zuordenbar (`F+R+B`) | D |
+| CT-09 | Offene Verkaufszeilen zuordnen | kein stiller Umsatzverlust in der Auswertung | gebaut | Handzuordnung überlebt den Re-Import (`F+B`) | D |
+| CT-10 | Menu-Engineering-Matrix | Renner/Penner erkennen | gebaut | hand-gerechneter Fall reproduziert die Quadranten; Popularitäts-Quelle ausgewiesen (`F+R`) | D |
+| CT-11 | Wareneinsatz Ist gegen Rezeptur | die echte Quote statt der kalkulierten | gebaut | verweigert die Aussage unter 80 % Zuordnungs-Abdeckung (`F+R`) | D |
+| CT-12 | Abweichungs-Signal | Auffälligkeit kommt zu einem, nicht man zu ihr | gebaut | Schwelle in pp; unterhalb still; knopflos (`F`) | D |
+
+## 8b. Portfolio-Steuerung (Spec 33)
+
+Die Mehrbetriebs-Sicht über die drei Ausgabeformen. Vorher gab es zwar Status-Felder, aber
+niemanden, der sie abfragt — „läuft heute" war keine beantwortbare Frage.
+
+| ID | Kleine Business-Funktion | Geschäftlicher Nutzen | Ist-Status | Noch erforderlicher Abnahmetest | Phase |
+|---|---|---|---|---|---|
+| PF-01 | Ausgabe aktiv/inaktiv schalten | eine Karte vom Netz nehmen, ohne sie abzuschließen | gebaut | ein Statusfeld, kein Parallelzustand; Versenden setzt auf aktiv; fremde id schaltet nichts (`F+T+B`) | D |
+| PF-02 | Gültigkeitsfenster je Ausgabe | das Portfolio wächst nicht endlos | gebaut | abgelaufenes Fenster läuft NICHT trotz Status aktiv; Status wechselt nie von selbst (`F`) | D |
+| PF-03 | Betrieb und Kunde zuordnen | zwei Kantinen im selben Team unterscheidbar | gebaut | beide Achsen an allen drei Formen, beide optional; fremder Betrieb nicht zuweisbar (`F+T`) | D |
+| PF-04 | Portfolio-Matrix mit Stichtag | „wer fährt gerade was" — und was im September läuft | gebaut | zwei Brillen auf einer Matrix; Lücke, Parallellauf und Nicht-Zugeordnete sichtbar (`F+B`) | D |
+| PF-05 | Grund nennen, warum etwas nicht läuft | Entwurf, inaktiv und abgelaufen sind drei Sachverhalte | gebaut | vier Fixtures, vier unterscheidbare Gründe; Anzeigen ändert nichts (`F`) | D |
+| PF-06 | Umsatz je laufender Ausgabe | was eine Karte tatsächlich bringt | gebaut | exklusiver Anteil bei Mehrfachzuordnung; Abdeckung unter 80 % wird benannt; **Realdaten-Lauf offen** (`F+R`) | D |
+
 ## 9. Qualität, Wissen, KI, Pairing und Trends
 
 | ID | Kleine Business-Funktion | Geschäftlicher Nutzen | Ist-Status | Noch erforderlicher Abnahmetest | Phase |

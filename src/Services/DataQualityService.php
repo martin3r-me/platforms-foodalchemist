@@ -1161,19 +1161,15 @@ class DataQualityService
     private const FOODBOOK_PHASEN_IN_GEBRAUCH = ['kalkulation', 'freigabe'];
 
     /**
-     * Status-Werte, die „nicht mehr Arbeitsstand" bedeuten. `versendet` ist eindeutig.
+     * Status-Werte, die „nicht mehr Arbeitsstand" bedeuten.
      *
-     * **`aktiv` UND `active`, weil das Vokabular im Bestand widersprüchlich ist:** die
-     * Migration schreibt `draft|aktiv|versendet|archiviert` (2026_06_13_000045), das
-     * Status-Dropdown der Leitstelle schreibt aber `active`
-     * (`livewire/foodbooks/index.blade.php:135`) — dasselbe Auseinanderlaufen wie bei den
-     * Konzepten (`ConceptService::setStatus` validiert `active`, die Migration kommentiert
-     * `aktiv`). Welche Schreibweise kanonisch ist, entscheidet nicht dieser Check; bis dahin
-     * misst er BEIDE, statt ein live geschaltetes Buch stillschweigend zu verfehlen. Als Bug
-     * gemeldet — sobald der Kanon steht, fällt hier ein Wert weg (und `konzepteInGebrauch`
-     * braucht dieselbe Korrektur).
+     * Hier standen bis Spec 33 drei Werte (`aktiv`, `active`, `versendet`), weil das Vokabular
+     * im Bestand widersprüchlich war und der Check lieber zu viel als zu wenig messen sollte.
+     * **Der Kanon steht jetzt:** es gibt nur noch `aktiv` — Versenden SETZT darauf, es ist kein
+     * eigener Zustand mehr ({@see \Platform\FoodAlchemist\Enums\AusgabeStatus}). Die
+     * Normalisierungs-Migration hat den Bestand mitgezogen.
      */
-    private const FOODBOOK_STATUS_IN_GEBRAUCH = ['aktiv', 'active', 'versendet'];
+    private const FOODBOOK_STATUS_IN_GEBRAUCH = [\Platform\FoodAlchemist\Enums\AusgabeStatus::Aktiv->value];
 
     /**
      * Block-Typen, die Inhalt TRAGEN. Der Rest des Vokabulars (`header`/`text`/`spacer`/

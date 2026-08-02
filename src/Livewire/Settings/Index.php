@@ -49,8 +49,12 @@ class Index extends Component
         // Stufe 3 P3.1: Rollen als Kostenträger (Küchenchef/Koch/Hilfskoch) — Satz je Rolle.
         // Rolle ≠ Mensch: keine Namen/Schichten. Posten-Besetzung leitet Kapazität + Kosten ab.
         'rollen' => ['label' => 'Rollen & Sätze', 'hint' => 'Küchen-Rollen als Kostenträger · €/Std je Rolle · speist Kapazität + Produktionskosten'],
+        'trendradar' => ['label' => 'Trendradar', 'hint' => '08:00-Konzept-Automatisierung an/aus · Signal · Trends jetzt importieren & clustern'],
         'wissenskategorien' => ['label' => 'Wissens-Kategorien', 'hint' => 'Vokabular fürs Wissens-Modul (#469) — Klassifikation + grobe Routing-Ebene'],
         'einsatzorte' => ['label' => 'Einsatzorte (Wissen)', 'hint' => 'Bindungs-Ziele fürs Wissen (#469) — Bereiche grob + KI-Prompts fein'],
+        // Spec 33 P2: Die Tabelle gab es seit Spec 19, die Pflege nie — deshalb war sie leer
+        // und `outlet_id` an der Speisekarte hatte nicht einmal ein Eingabefeld.
+        'betriebe' => ['label' => 'Betriebe & Standorte', 'hint' => 'Trägt die Betriebsbrille im Controlling — welcher Standort fährt welche Ausgabe'],
     ];
 
     public function mount(string $sektion = 'einheiten'): void

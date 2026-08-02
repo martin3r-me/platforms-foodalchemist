@@ -6,6 +6,8 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
+use Platform\FoodAlchemist\Services\Concerns\PruefstOutletZuordnung;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -21,6 +23,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie;
  */
 class SpeiseplanService
 {
+    use PruefstOutletZuordnung;
+
     public function __construct(private ConceptService $concepts)
     {
     }
@@ -68,17 +72,32 @@ class SpeiseplanService
             ->find($id);
     }
 
-    private const FELDER = ['name', 'start_date', 'cycle_weeks', 'min_abstand_tage', 'status', 'description', 'note', 'default_pax', 'budget_wareneinsatz'];
+    private const FELDER = [
+        'name', 'start_date', 'cycle_weeks', 'min_abstand_tage', 'status', 'description', 'note',
+        'default_pax', 'budget_wareneinsatz',
+        // Spec 33 P2: beide Zuordnungsachsen. Ohne `outlet_id` waren zwei Kantinen im selben
+        // Team nicht unterscheidbar — die größte Lücke der drei Ausgabeformen.
+        'outlet_id', 'customer', 'crm_company_id', 'crm_contact_id',
+    ];
 
     public function create(Team $team, array $in): FoodAlchemistSpeiseplan
     {
+        // Spec 33 P2: fremde Betriebe fallen hier raus — `outlet_id` zeigt auf ein Team-Vokabular
+        // und wird vom Datensatz-Guard nicht mit erfasst.
+        $in = $this->pruefeOutlet($team, $in);
+
         $plan = FoodAlchemistSpeiseplan::create([
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neuer Speiseplan')) ?: 'Neuer Speiseplan',
             'start_date' => $in['start_date'] ?? Carbon::now()->startOfWeek()->format('Y-m-d'),
             'cycle_weeks' => max(1, (int) ($in['cycle_weeks'] ?? 4)),
             'min_abstand_tage' => max(0, (int) ($in['min_abstand_tage'] ?? 0)),
-            'status' => $in['status'] ?? 'draft',
+            'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,
+            // Spec 33 P2: beide Zuordnungsachsen, beide optional.
+            'outlet_id' => $in['outlet_id'] ?? null,
+            'customer' => $in['customer'] ?? null,
+            'crm_company_id' => $in['crm_company_id'] ?? null,
+            'crm_contact_id' => $in['crm_contact_id'] ?? null,
         ]);
 
         // Starter-Linien (Kantinen-Standard) — pro Plan frei änderbar
@@ -93,7 +112,12 @@ class SpeiseplanService
     {
         $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($id);
         $this->guard($plan, $team);
-        $update = array_intersect_key($in, array_flip(self::FELDER));
+        $update = $this->pruefeOutlet($team, array_intersect_key($in, array_flip(self::FELDER)));
+        // Spec 33 P0: Status IMMER durch den Enum schleusen — `status` steht in FELDER und ist
+        // damit über Service UND MCP frei beschreibbar.
+        if (array_key_exists('status', $update)) {
+            $update['status'] = AusgabeStatus::normalisiere((string) $update['status'])->value;
+        }
         foreach (['cycle_weeks' => 1, 'min_abstand_tage' => 0, 'default_pax' => 1] as $f => $min) {
             if (array_key_exists($f, $update)) {
                 $update[$f] = max($min, (int) $update[$f]);

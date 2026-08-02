@@ -1,8 +1,10 @@
 {{-- Speisekarte-Editor (Stufe A) — Browser links, Karten-Editor rechts (Rubrik-Baum,
      Gericht-Picker, Live-Preis). Dritte Ausgabeform neben Foodbook + Speiseplan. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($statusLabel = ['entwurf' => 'Entwurf', 'aktiv' => 'Aktiv', 'veroeffentlicht' => 'Veröffentlicht', 'archiviert' => 'Archiviert'])
-@php($statusVariant = ['entwurf' => 'secondary', 'aktiv' => 'success', 'veroeffentlicht' => 'primary', 'archiviert' => 'secondary'])
+{{-- Spec 33 P0: Labels und Farben aus dem Enum. `veroeffentlicht` ist entfallen —
+     Veröffentlichen setzt auf `aktiv`, es gibt keinen Zustand daneben. --}}
+@php($statusLabel = \Platform\FoodAlchemist\Enums\AusgabeStatus::optionen())
+@php($statusVariant = collect(\Platform\FoodAlchemist\Enums\AusgabeStatus::cases())->mapWithKeys(fn ($c) => [$c->value => $c->badgeVariant()])->all())
 @php($typLabel = ['alacarte' => 'À la carte', 'tageskarte' => 'Tageskarte', 'saisonkarte' => 'Saisonkarte', 'getraenkekarte' => 'Getränkekarte', 'weinkarte' => 'Weinkarte'])
 
 <x-ui-page>
@@ -60,7 +62,7 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="min-w-0">
                     <h1 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $karte->name }}</h1>
-                    <p class="text-[11px] text-gray-500 flex items-center gap-1.5">{{ $typLabel[$karte->karten_typ] ?? $karte->karten_typ }} · <span class="{{ $pill }} {{ $variantPill[$statusVariant[$karte->status] ?? 'secondary'] }}">{{ $statusLabel[$karte->status] ?? $karte->status }}</span></p>
+                    <p class="text-[11px] text-gray-500 flex items-center gap-1.5">{{ $typLabel[$karte->karten_typ] ?? $karte->karten_typ }} · <span class="{{ $pill }} {{ $variantPill[$karte->statusWert()->badgeVariant()] }}">{{ $karte->statusWert()->label() }}</span></p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button type="button" @click="$dispatch('modal.open', { name: 'speisekarte-editor' })" class="{{ $btnPrimary }}" data-sk-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
@@ -97,22 +99,16 @@
                             @endforeach
                         </select>
                     </div>
-                    <div>
-                        <div class="{{ $label }} mb-1">Status</div>
-                        <select wire:model="status" class="{{ $input }}">
-                            @foreach($statusLabel as $key => $lbl)
-                                <option value="{{ $key }}">{{ $lbl }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <div class="{{ $label }} mb-1">Gültig ab</div>
-                        <input type="date" wire:model="gueltigVon" class="{{ $input }}" />
-                    </div>
-                    <div>
-                        <div class="{{ $label }} mb-1">Gültig bis</div>
-                        <input type="date" wire:model="gueltigBis" class="{{ $input }}" />
-                    </div>
+                </div>
+
+                {{-- Spec 33 P5: Status, Fenster und beide Zuordnungsachsen aus dem geteilten
+                     Bauteil — dieselbe Bedienung wie in Foodbook und Speiseplan. --}}
+                <div class="mt-3 pt-3 border-t border-black/5">
+                    <x-foodalchemist::ausgabe-status
+                        status-model="status" von-model="gueltigVon" bis-model="gueltigBis"
+                        outlet-model="outletId" kunde-model="kunde"
+                        :betriebe="$betriebe" :zustand="$karte->laufZustand()" :grund="$karte->laufGrund()"
+                        :konflikt="$portfolioKonflikt" toggle="aktivUmschalten" />
                 </div>
                 <div class="mt-3 flex flex-wrap gap-2">
                     <button type="button" wire:click="kiKartenText" class="{{ $btnAi }}">✨ KI-Einleitung</button>

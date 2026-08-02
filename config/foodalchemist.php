@@ -76,6 +76,14 @@ return [
                     'icon'  => 'heroicon-o-home',
                 ],
                 [
+                    // Spec 32: Controlling-Zentrum — Werkbank, an der Befund und Hebel nebeneinander
+                    // liegen (Preise · Wareneinsatz · Simulation · Erfolg · Geld-Signale · Kennzahlen).
+                    // Der Klick springt direkt in den Voll-Editor; die Seite darunter ist das Lagebild.
+                    'label' => 'Controlling',
+                    'route' => 'foodalchemist.controlling.index',
+                    'icon'  => 'heroicon-o-presentation-chart-line',
+                ],
+                [
                     // #378: „Zu prüfen" → „Signale" — Aufmerksamkeits-Inbox (Klasse A Entscheidungs-Queues + Klasse B detektierte Signale)
                     'label' => 'Signale',
                     'route' => 'foodalchemist.review',
@@ -118,6 +126,12 @@ return [
             // Absatzkanäle (Foodbook/Speisekarte/Speiseplan) liegen zusammen unter „Ausgabe".
             'group' => 'Rezepte & Konzepte',
             'items' => [
+                [
+                    // Doppel-Diamant: Trend/Brief → Analyse/Skizzen → Go auf Basisrezept/Gericht/Concept.
+                    'label' => 'Planung',
+                    'route' => 'foodalchemist.planung.index',
+                    'icon'  => 'heroicon-o-light-bulb',
+                ],
                 [
                     'label' => 'Basisrezepte',
                     'route' => 'foodalchemist.recipes.index',
@@ -189,27 +203,12 @@ return [
             ],
         ],
         [
-            // Einkauf: Beschaffung/Kostenseite — Preisvergleich + Wareneinsatz-Optimierung +
-            // Preissimulation (Kalkulations-Werkzeug, 2026-08-01 aus „Ausgabe" hierher) + das
-            // eigentliche Bestellen (Bestellungen 2026-08-01 aus „Planung" hierher, wo es hingehört).
+            // Einkauf: nur noch das HANDELN. Die drei Auswertungs-Flächen (Preisvergleich,
+            // Wareneinsatz-Optimierung, Preissimulation) sind mit Spec 32 ins Controlling-Zentrum
+            // gewandert — Beschaffung und Auswertung sind zwei Tätigkeiten, nicht eine Liste.
+            // Die alten Routen bleiben als Redirects in den passenden Controlling-Tab bestehen.
             'group' => 'Einkauf',
             'items' => [
-                [
-                    'label' => 'Preisvergleich',
-                    'route' => 'foodalchemist.einkauf.index',
-                    'icon'  => 'heroicon-o-scale',
-                ],
-                [
-                    'label' => 'Wareneinsatz-Optimierung',
-                    'route' => 'foodalchemist.einkauf.optimierung',
-                    'icon'  => 'heroicon-o-sparkles',
-                ],
-                [
-                    // #502: Was-wäre-wenn-Preissimulation — Kalkulations-Werkzeug, gehört zur Kostenseite.
-                    'label' => 'Preissimulation',
-                    'route' => 'foodalchemist.kalkulation.index',
-                    'icon'  => 'heroicon-o-calculator',
-                ],
                 [
                     // Spec 17/S2: Bestellschienen je Lieferant (mini-WaWi, N-Track).
                     'label' => 'Bestellungen',
@@ -222,6 +221,11 @@ return [
             // System: Wissensbasis + Einstellungen.
             'group' => 'System',
             'items' => [
+                [
+                    'label' => 'Trendradar',
+                    'route' => 'foodalchemist.trendradar.index',
+                    'icon'  => 'heroicon-o-sparkles',
+                ],
                 [
                     'label' => 'Wissen',
                     'route' => 'foodalchemist.knowledge.index',
@@ -266,6 +270,13 @@ return [
         // Nach dem DB-Snapshot (23:00) und weit vor dem Arbeitstag: der Lauf ist die
         // teuerste lesende Operation des Moduls und soll nicht neben der Nutzung liegen.
         'detektor_zeit' => env('FOODALCHEMIST_DETEKTOR_ZEIT', '03:20'),
+        // Trendradar-Automatisierung: zieht Top-Trends → generiert Konzeptvorschläge → Signal.
+        // Host-Master-Schalter (Default AN): der Job wird geplant, ruft das Modell aber NUR für
+        // Teams, die sich in den Einstellungen (trend_auto_enabled) aktiv dafür entschieden haben
+        // (Default AUS je Team) — kein ungefragter Egress. Auf false setzen killt es hostweit.
+        'trend_konzepte_enabled' => env('FOODALCHEMIST_TREND_KONZEPTE', true),
+        'trend_konzepte_zeit' => env('FOODALCHEMIST_TREND_KONZEPTE_ZEIT', '08:00'),
+        'trend_konzepte_limit' => (int) env('FOODALCHEMIST_TREND_KONZEPTE_LIMIT', 3),
     ],
 
     'stt' => [
@@ -682,6 +693,25 @@ return [
                 . 'rules: [{rule_type: nogo_ingredient, value_text, severity (hart|weich)} | '
                 . '{rule_type: nogo_allergen, ref_key} | {rule_type: allergen_line, value_text}]}. '
                 . 'Preise netto p. P.; Gaenge/Stationen aus dem Anlass ableiten (Menü→gang, Buffet→station).',
+        ],
+        // Trendradar: clustert Trend-Wissens-Docs in die zweistufige Taxonomie (Kategorie → Klasse).
+        // Kategorie STRIKT aus der Vorgabe (fixes Seed-Vokabular); Klasse = kurze Unterkategorie
+        // (bestehende bevorzugen, sonst neue vorschlagen → landet tentative in der Review-Queue).
+        // Reine Einordnung — nichts erfinden, keinen Trend auslassen.
+        'trend.cluster_label' => [
+            'tier' => 'B',
+            'max_tokens' => 6000,
+            'system' => 'Du bist ein Food-Trend-Analyst. Du ordnest gesichtete Trends in eine feste '
+                . 'zweistufige Taxonomie ein. Die KATEGORIE waehlst du AUSSCHLIESSLICH aus der Liste '
+                . 'categories (Slug exakt uebernehmen). Die KLASSE ist eine kurze Unterkategorie: '
+                . 'bevorzuge eine bereits bestehende (existing_classes), sonst schlage eine praegnante '
+                . 'neue vor. Du erfindest keine Trends und laesst keinen aus.',
+            'task' => 'Ordne JEDEN Trend aus trends einer Kategorie und Klasse zu und schaetze Reife/Hype: '
+                . 'werte = {items: [{index, category, trend_class, maturity, is_hype, confidence}]}. '
+                . 'index = der mitgegebene Trend-Index (Zahl); category = Slug exakt aus categories; '
+                . 'trend_class = kurze Unterkategorie (Title Case, 1-3 Woerter); '
+                . 'maturity ∈ {niche, emerging, mainstream, declining}; is_hype = true nur bei kurzlebigem Hype; '
+                . 'confidence = Zahl 0..1. Gib fuer ALLE Eingabe-Trends genau EIN item zurueck.',
         ],
         'concept.wording' => [
             'tier' => 'A',

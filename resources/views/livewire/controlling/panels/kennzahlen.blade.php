@@ -1,23 +1,12 @@
-{{-- #502 (Dominique 2026-07-13): eigener „Was-wäre-wenn"-Preissimulations-Screen.
-     Der Regel-Editor (Zuschläge/Fixkosten/Marge) ist zurück unter Einstellungen → Herstellkosten;
-     hier bleibt nur die Simulation + die Kennzahlen als Kontext (Werkstatt aufgelöst). --}}
+{{-- Kalkulations-Kennzahlen: die ausgerollten Kosten-Regeln, gegen die alles gerechnet wird.
+     Gepflegt werden sie in den Einstellungen → Herstellkosten.
+
+     Spec 32: war bis 2026-08-02 die Seite `/kalkulation`, die zusätzlich die Preissimulation
+     trug. Die Simulation hat im Controlling einen eigenen Tab — hier wäre sie ein zweiter
+     Einstiegspunkt in dieselbe Fläche. Seiten-Hülle entfällt, Titel trägt der Tab. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-ui-page>
-    <x-slot:navbar>
-        <x-ui-page-navbar title="Preissimulation" icon="heroicon-o-arrows-right-left" />
-    </x-slot:navbar>
-
-    <x-slot name="actionbar">
-        <x-ui-page-actionbar :breadcrumbs="[
-            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Preissimulation'],
-        ]" />
-    </x-slot>
-
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        {{-- Kennzahlen-Kontext (read-only): die rolled-up Kosten-Regeln, gegen die simuliert wird.
-             Gepflegt werden sie in den Einstellungen → Herstellkosten. --}}
+<div class="space-y-4" data-ctrl-kennzahlen>
         <div class="relative overflow-hidden {{ $card }} px-5 py-4">
             <div class="{{ $cardAccent }}"></div>
             <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -26,6 +15,24 @@
                     <p class="text-[11px] text-gray-500 max-w-2xl">Die aktuellen, ausgerollten Kosten-Regeln — Grundlage jeder Kalkulation und dieser Simulation. Bearbeitet werden sie unter <strong>Einstellungen → Herstellkosten</strong>.</p>
                 </div>
                 <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'herstellkosten']) }}" class="{{ $btnGhost }}" wire:navigate>Regeln in den Einstellungen pflegen →</a>
+            </div>
+
+            {{-- Spec 32: die zwei Zielwerte, gegen die das Controlling misst, direkt hier setzen.
+                 Das volle Zuschlagsschema bleibt in den Einstellungen — zwei Formulare auf
+                 dieselben Spalten wären ein Pflege-Widerspruch. --}}
+            <div class="flex flex-wrap items-end gap-3 mt-3 pt-3 border-t border-black/5" data-ctrl-ziele>
+                <div>
+                    <label class="block {{ $label }} mb-1">Ziel-Wareneinsatz %</label>
+                    <input type="text" wire:model="zielWe" class="{{ $input }} !w-24" data-ctrl-ziel-we />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Zielmarge %</label>
+                    <input type="text" wire:model="marge" class="{{ $input }} !w-24" data-ctrl-ziel-marge />
+                </div>
+                <button type="button" wire:click="zieleSpeichern" class="{{ $btnGhostXs }} text-violet-600" data-ctrl-ziele-speichern>Zielwerte speichern</button>
+                @if($meldung)<span class="text-[11px] text-emerald-700">{{ $meldung }}</span>@endif
+                @error('zielWe')<span class="text-[11px] text-rose-700">{{ $message }}</span>@enderror
+                @error('marge')<span class="text-[11px] text-rose-700">{{ $message }}</span>@enderror
             </div>
             <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 mt-3">
                 <div class="rounded-lg bg-black/[0.03] px-3 py-2"><div class="{{ $label }}">Zielmarge</div><div class="text-lg font-semibold tabular-nums text-gray-900">{{ number_format((float) $regeln['marge_pct'], 1, ',', '.') }} %</div></div>
@@ -50,11 +57,6 @@
             @endif
         </div>
 
-        {{-- R2.2: Was-wäre-wenn-Preissimulation — hypothetischer Preissprung (WG/GP/Artikel ± X %)
-             → Portfolio-Marge-Delta + Top-20. Read-only, spiegelt das MCP-Tool simulation.POST.
-             #502: eigener Screen; Regel-Editor lebt jetzt in den Einstellungen. --}}
-        @livewire('foodalchemist.kalkulation.simulation')
-
         <p class="text-[11px] text-gray-500 px-1 pt-1">
             Die gerichts- und mengenbezogene Kalkulation (HK1 → HK2 → VK-Vorschlag → Deckungsbeitrag) läuft im
             <a href="{{ route('foodalchemist.concepter.index') }}" class="text-violet-600 hover:underline" wire:navigate>Concepter</a>
@@ -63,5 +65,4 @@
             Die Kosten-Regeln pflegst du unter
             <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'herstellkosten']) }}" class="text-violet-600 hover:underline" wire:navigate>Einstellungen → Herstellkosten</a>.
         </p>
-    </x-ui-page-container>
-</x-ui-page>
+</div>

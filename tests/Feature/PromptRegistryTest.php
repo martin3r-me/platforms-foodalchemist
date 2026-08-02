@@ -45,6 +45,9 @@ const REGISTRY_SOLL = [
     'signal.vk_release_advice' => 'B', 'signal.serving_form_suggest' => 'B',
     'signal.recipe_category_suggest' => 'B',                          // Spec 21 Tranche A: Assist zu rezept_kategorie_problem
     'signal.recipe_naming_suggest' => 'B',                            // Spec 21 Tranche A: Assist zu rezept_naming_regelwerk
+    // Trendradar: Cluster-Benennung in die zweistufige Trend-Taxonomie (Kategorie aus fester
+    // Liste, Klasse frei) — der einzige LLM-Call des Radars.
+    'trend.cluster_label' => 'B',
 ];
 
 it('Registry vollständig: alle Soll-Keys vorhanden, mit task + gültigem Tier', function () {

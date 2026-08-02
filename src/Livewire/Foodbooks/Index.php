@@ -12,6 +12,8 @@ use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPhase;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPlanningFrame;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\IdeenService;
 
@@ -559,7 +561,12 @@ class Index extends Component
         $this->selectedId = $id;
         $this->form = [
             'label' => $fb->label, 'customer' => $fb->customer ?? '', 'jahr' => $fb->jahr,
-            'personen' => $fb->personen, 'status' => $fb->status, 'description' => $fb->description ?? '',
+            'personen' => $fb->personen, 'status' => $fb->statusWert()->value, 'description' => $fb->description ?? '',
+            // Spec 33 P1: Gültigkeitsfenster — ohne `bis` bliebe ein aktiv gesetztes Foodbook
+            // für immer im Portfolio (nichts läuft von selbst ab).
+            'gueltig_von' => $fb->gueltig_von?->format('Y-m-d') ?? '',
+            'gueltig_bis' => $fb->gueltig_bis?->format('Y-m-d') ?? '',
+            'outlet_id' => $fb->outlet_id,   // Spec 33 P2: Betriebsachse am Kopf
         ];
         // UX 2026-07-21: Foodbook-Wahl landet auf dem Foodbook-KOPF (übergeordnete Ebene),
         // NICHT mehr automatisch im ersten Kapitel — Kopf und Speisen sind getrennte Ansichten.
@@ -580,6 +587,28 @@ class Index extends Component
         // Spec 29 / S6: der Speisen-Tab entfällt ohne Kapitel — zurück auf Briefing, damit nicht
         // ein „aktiver", aber unsichtbarer Tab die Fläche leer lässt.
         $this->dispatch('fb-goto', tab: 'briefing');
+    }
+
+    /**
+     * Spec 33 P5 — Schnellschalter aktiv ⇄ inaktiv.
+     *
+     * Nimmt eine laufende Ausgabe vom Netz und zurück, ohne den Umweg über das Status-Dropdown
+     * und ohne zu archivieren. Geschrieben wird über den Service, damit Team-Guard,
+     * Normalisierung und Audit dort bleiben, wo sie hingehören.
+     */
+    public function aktivUmschalten(FoodbookService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $fb = FoodAlchemistFoodbook::visibleToTeam($this->team())->find($this->selectedId);
+        if ($fb === null) {
+            return;
+        }
+
+        $neu = $fb->statusWert() === AusgabeStatus::Aktiv ? AusgabeStatus::Inaktiv : AusgabeStatus::Aktiv;
+        $svc->update($this->team(), $this->selectedId, ['status' => $neu->value]);
+        $this->form['status'] = $neu->value;
     }
 
     public function speichern(FoodbookService $svc): void
@@ -1265,6 +1294,15 @@ class Index extends Component
                 ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->preiseBaum($team, $fb) : [],
             'foodbooks' => $svc->paginateBrowser(['search' => $this->search, 'phase' => $this->phaseFilter], $team),
             'fb' => $fb,
+            // Spec 33 P5: Auswahl für das geteilte Status-/Zuordnungs-Bauteil. Nur aktive
+            // Betriebe — ein deaktivierter Standort soll nicht neu zugeordnet werden.
+            'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
+            // Spec 33 P3: Hinweis, kein Verbot — zwei parallel laufende Ausgaben derselben
+            // Art in derselben Zuordnung können gewollt sein (Übergang, Sonderfall).
+            'portfolioKonflikt' => $fb === null ? null
+                : app(\Platform\FoodAlchemist\Services\PortfolioService::class)
+                    ->konfliktHinweis($team, 'foodbook', (int) $fb->id),
             // D (UX-Umbau): Kunden-Vorschau (Menü-Ansicht) mit aufgelöster Wording-Kette — dieselbe Quelle wie das Druck-Dokument
             'menue' => $menue,
             'feedbackAgg' => $feedbackAgg,
