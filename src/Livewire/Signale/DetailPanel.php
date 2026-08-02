@@ -5,11 +5,8 @@ namespace Platform\FoodAlchemist\Livewire\Signale;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
-use Platform\FoodAlchemist\Jobs\SignalFixJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignalSnapshot;
-use Platform\FoodAlchemist\Services\SignalCauseService;
-use Platform\FoodAlchemist\Services\SignalFixService;
 use Platform\FoodAlchemist\Services\SignalObjectService;
 use Platform\FoodAlchemist\Services\SignalPolicyService;
 use Platform\FoodAlchemist\Services\SignalTrendService;
@@ -20,18 +17,16 @@ use Platform\FoodAlchemist\Support\SignalCockpit;
  * Signale-Seite. Sie war die einzige der sieben Cockpit-Seiten ohne Panel; die
  * betroffenen Objekte hingen vorher als 50er-Liste unter der Signal-Zeile.
  *
- * Gebaut in S3a (Spec §7):
+ * Bewusst READ-ONLY: eine Objekt-Sprungliste, kein zweiter Aktions-Ort. Reinschauen zeigt
+ * WELCHE Objekte betroffen sind und springt in den passenden Editor — bearbeitet wird dort
+ * (oder über „KI erledigen lassen" in der Signal-Zeile für den vollen Satz).
+ *
+ * Was das Panel zeigt:
  *  1. Betroffene Objekte — volle Liste (bis {@see SignalObjectService::PANEL_LIMIT}),
- *     sortierbar, Klick öffnet Rezept-/VK-Modal bzw. springt in den GP-Katalog.
+ *     sortierbar, Klick öffnet Rezept-/VK-Modal bzw. springt in den GP-Katalog/Concepter/
+ *     Foodbook. Bei KI-Urteil-Typen mit aufgeklappten Copilot-Befunden.
  *  2. Objekt-zentrische Sicht — „was hat dieses Rezept noch?": alle offenen Signale
  *     am selben Objekt, damit man es EINMAL richtig fixt statt dreimal einzeln.
- *
- * Ergänzt in S3b-1 (Spec §7):
- *  3. Fix-Vorschau (Dry-Run) — „n Objekte, diese Felder, diese Werte" VOR dem Klick,
- *     statt „KI erledigen lassen" blind zu drücken.
- *  7. Teil-Bulk — Checkboxen auf den Objekten: „diese 12 fixen" statt alles-oder-nichts.
- *
- * Ergänzt in S3b-2 (Spec §7):
  *  4. Trend-Sparkline — der Verlauf aus E1 dort, wo man hinschaut. Gelesen wird die
  *     **Signal-Seite** der Reihe (`source=signals`, Schlüssel = Signal-Typ); damit
  *     greift V-010 hier by construction nicht (rohe DQ-Metrik-Keys kommen nie vor).
@@ -39,16 +34,9 @@ use Platform\FoodAlchemist\Support\SignalCockpit;
  *     **Der Regler gilt für den TYP, nicht für dieses eine Signal** — das muss die
  *     Fläche sagen, sonst liest man ihn als „diesen Befund akzeptieren".
  *
- * Ergänzt in S3b-3 (Spec §7):
- *  5. Ursachen-Kette nach unten — „warum ist dieses Objekt betroffen?": unbepreiste
- *     Zutat → GP → Lead-LA-Lage bzw. verletztes § mit Sprung ins Wissens-Modul.
- *     Steht bewusst im aufgeklappten Objekt-Block (nicht am Signal): ein Aggregat-
- *     Signal deckt n Objekte ab, die Ursache hat nur je Objekt eine Antwort.
- *
- * Lifecycle-Aktionen (Erledigt/Ignorieren) und der Fix über den VOLLEN Satz bleiben in
- * der Signal-Zeile der ReviewQueue — ein zweiter Satz derselben Knöpfe wäre eine zweite
- * Wahrheit. Das Panel bekommt deshalb ausschließlich den Knopf, den die Zeile NICHT hat:
- * den auf die Auswahl geschnittenen Fix (anderer Scope, nicht dieselbe Aktion zweimal).
+ * 2026-08 verschlankt: die Ursachen-Kette (S3b-3, „warum ist dieses Objekt betroffen")
+ * und der Teil-Bulk-Fix samt Dry-Run-Vorschau (S3b-1) sind raus — das Panel ist jetzt reine
+ * Navigation. Fixen läuft über den Editor bzw. „KI erledigen lassen" (voller Satz) in der Zeile.
  */
 class DetailPanel extends Component
 {
@@ -68,12 +56,6 @@ class DetailPanel extends Component
 
     /** Sortierung der Objekt-Liste: 'name' | 'name_desc' | 'art'. */
     public string $sort = 'name';
-
-    /** Teil-Bulk (Punkt 7): angehakte Objekt-IDs. Livewire liefert Checkbox-Werte als String. */
-    public array $auswahl = [];
-
-    /** Dry-Run-Ergebnis (Punkt 3) — transient, wird bei jeder Änderung verworfen. */
-    public ?array $vorschau = null;
 
     /** Punkt 8: Policy-Formular aufgeklappt? Die Regler sind bewusst nicht permanent sichtbar. */
     public bool $policyForm = false;
@@ -102,7 +84,8 @@ class DetailPanel extends Component
         $this->signalId = $id;
         $this->objektKind = null;
         $this->objektId = null;
-        $this->auswahlZuruecksetzen();
+        $this->meldung = null;
+        $this->fehler = null;
         $this->policyForm = false;   // Formularwerte gehören zum vorigen TYP
     }
 
@@ -141,81 +124,9 @@ class DetailPanel extends Component
     public function signalOeffnen(int $id): void
     {
         $this->signalId = $id;
-        $this->auswahlZuruecksetzen();
+        $this->meldung = null;
+        $this->fehler = null;
         $this->policyForm = false;   // s. zeige(): der Regler hängt am Typ, nicht am Signal
-    }
-
-    // ── S3b: Dry-Run (Punkt 3) + Teil-Bulk (Punkt 7) ───────────────────────
-
-    /**
-     * Eine Auswahl-Änderung verwirft die Vorschau: eine Feld-/Wert-Liste, die zu einer
-     * anderen Auswahl gehört als der Knopf darunter, ist genau die Fehlinformation, die
-     * der Dry-Run abschaffen soll.
-     */
-    public function updatedAuswahl(): void
-    {
-        $this->vorschau = null;
-    }
-
-    /** Alle sichtbaren, fixbaren Objekte anhaken (Kind gp/recipe). */
-    public function alleWaehlen(SignalObjectService $objekte): void
-    {
-        $this->auswahl = array_map('strval', array_column($this->fixbareItems($objekte), 'id'));
-        $this->vorschau = null;
-    }
-
-    public function auswahlLeeren(): void
-    {
-        $this->auswahlZuruecksetzen();
-    }
-
-    /** Dry-Run: „n Objekte, diese Felder, diese Werte" — auf die Auswahl oder den ganzen Satz. */
-    public function vorschauZeigen(): void
-    {
-        $this->meldung = null;
-        $this->fehler = null;
-        [$team, $sig] = $this->kontext();
-        if ($sig === null) {
-            return;
-        }
-        try {
-            $this->vorschau = app(SignalFixService::class)->vorschau($team, $sig, $this->idsOderNull());
-        } catch (\RuntimeException $e) {
-            $this->vorschau = null;
-            $this->fehler = $e->getMessage();
-        }
-    }
-
-    /**
-     * Fix auf die Auswahl anstoßen (Teil-Bulk). Ohne Auswahl passiert bewusst nichts —
-     * „alles fixen" bleibt der Knopf in der Signal-Zeile, sonst hätte dieselbe Aktion
-     * zwei Auslöser mit unterschiedlichem Scope-Default.
-     */
-    public function teilFixAusfuehren(): void
-    {
-        $this->meldung = null;
-        $this->fehler = null;
-        [$team, $sig] = $this->kontext();
-        if ($sig === null) {
-            return;
-        }
-        $ids = $this->idsOderNull();
-        if ($ids === null) {
-            $this->fehler = 'Erst Objekte anhaken — „alles fixen" läuft über den Knopf in der Signal-Zeile.';
-
-            return;
-        }
-        $plan = SignalCockpit::planFor($sig);
-        if ($plan === null || $plan['kind'] !== 'deterministic') {
-            $this->fehler = 'Für dieses Signal gibt es keinen automatischen Fix.';
-
-            return;
-        }
-
-        SignalFixJob::dispatch((int) $sig->id, (int) $team->id, $ids);
-        $this->meldung = count($ids) . ' Objekt(e) werden behoben — die Liste aktualisiert sich, sobald der Lauf durch ist.';
-        $this->auswahlZuruecksetzen();
-        $this->dispatch('signal-geaendert');
     }
 
     // ── S3b-2: Policy-Regler (Punkt 8) ─────────────────────────────────────
@@ -312,38 +223,7 @@ class DetailPanel extends Component
         return [$team, $sig];
     }
 
-    /** @return list<int>|null */
-    private function idsOderNull(): ?array
-    {
-        $ids = array_values(array_filter(array_map('intval', $this->auswahl), fn (int $i) => $i > 0));
-
-        return $ids === [] ? null : $ids;
-    }
-
-    private function auswahlZuruecksetzen(): void
-    {
-        $this->auswahl = [];
-        $this->vorschau = null;
-        $this->meldung = null;
-        $this->fehler = null;
-    }
-
-    /** @return list<array<string,mixed>> */
-    private function fixbareItems(SignalObjectService $objekte): array
-    {
-        [$team, $sig] = $this->kontext();
-        if ($sig === null) {
-            return [];
-        }
-        $this->fehler = null;
-
-        return array_values(array_filter(
-            $objekte->betroffene($team, $sig)['items'],
-            fn (array $i) => in_array($i['kind'], ['recipe', 'gp'], true) && (int) $i['id'] > 0
-        ));
-    }
-
-    public function render(SignalObjectService $objekte, SignalPolicyService $policies, SignalTrendService $trend, SignalCauseService $ursachen)
+    public function render(SignalObjectService $objekte, SignalPolicyService $policies, SignalTrendService $trend)
     {
         $team = Auth::user()?->currentTeamRelation;
         $sig = $team !== null && $this->signalId !== null
@@ -361,13 +241,6 @@ class DetailPanel extends Component
             ? $objekte->signaleAmObjekt($team, $this->objektKind, $this->objektId)
             : [];
 
-        // Punkt 5: die Ursachen-Kette hängt am OBJEKT (ein Aggregat-Signal deckt n Rezepte
-        // ab — „welche GPs sind unbepreist" hat nur je Rezept eine Antwort) und wird darum
-        // nur für das aufgeklappte Objekt gerechnet, direkt neben der Objekt-Sicht.
-        $objektUrsachen = $aufgeklappt
-            ? $ursachen->fuerObjekt($team, $this->objektKind, $this->objektId)
-            : [];
-
         // Punkt 4 + 8: Verlauf und Rausch-Guard hängen am Signal-TYP, nicht am Einzelfall.
         $serie = $team !== null && $sig !== null
             ? $trend->serie($team, $sig->type->value, self::SERIE_PUNKTE, FoodAlchemistSignalSnapshot::SOURCE_SIGNALS)
@@ -381,7 +254,6 @@ class DetailPanel extends Component
             'ohneWeg' => $sig !== null ? SignalCockpit::ohneWegGrund($sig) : null,
             'betroffen' => $betroffen,
             'objektSignale' => $objektSignale,
-            'objektUrsachen' => $objektUrsachen,
             'panelLimit' => SignalObjectService::PANEL_LIMIT,
             'policy' => $team !== null && $sig !== null ? $policies->zustandFuer($team, $sig->type) : null,
             'spark' => $this->sparkline($serie),
