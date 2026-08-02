@@ -118,10 +118,12 @@ it('dedupliziert gegen vorhandenen fremden Anker (kein Doppel-Insert)', function
 });
 
 it('Command dry-run vs --apply', function () {
-    ($this->makeRecipe)('Fleisch scharf anbraten');
+    $r = ($this->makeRecipe)('Fleisch scharf anbraten');
     $this->artisan('foodalchemist:process-anchor-ground', ['--team' => $this->rootTeam->id])->assertSuccessful();
-    expect(DB::table('foodalchemist_recipe_process_anchors')->count())->toBe(0);
+    // Auf das Test-Rezept scopen statt globalem count() — sonst kippt der Test gegen eine
+    // persistente DB an Ankern fremder Tests (Modul-Suite ohne DB-Isolation, siehe TestCase).
+    expect(DB::table('foodalchemist_recipe_process_anchors')->where('recipe_id', $r->id)->count())->toBe(0);
 
     $this->artisan('foodalchemist:process-anchor-ground', ['--team' => $this->rootTeam->id, '--apply' => true])->assertSuccessful();
-    expect(DB::table('foodalchemist_recipe_process_anchors')->where('source', 'parser')->count())->toBeGreaterThan(0);
+    expect(DB::table('foodalchemist_recipe_process_anchors')->where('recipe_id', $r->id)->where('source', 'parser')->count())->toBeGreaterThan(0);
 });

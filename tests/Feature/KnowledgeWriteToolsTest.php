@@ -99,19 +99,23 @@ it('aktualisiert ein MCP-Doc: content ⇒ version+1', function () {
 });
 
 it('sperrt ein Vault-verwaltetes Doc für den MCP-Pfad (LOCKED)', function () {
+    // Eindeutiger Slug + content_hash pro Lauf: knowledge_documents.slug ist GLOBAL unique
+    // (team_id NULL = Seed). Fixe Werte kollidierten gegen eine persistente DB beim 2. Insert
+    // (Modul-Suite ohne DB-Isolation, siehe TestCase). Assertion filtert über denselben Slug.
+    $slug = 'regelwerk.grundprodukte_' . substr(str_replace('-', '', (string) UuidV7::generate()), 0, 12);
     DB::table('foodalchemist_knowledge_documents')->insert([
-        'uuid' => (string) UuidV7::generate(), 'slug' => 'regelwerk.grundprodukte',
+        'uuid' => (string) UuidV7::generate(), 'slug' => $slug,
         'title' => 'Regelwerk Grundprodukte', 'category' => 'regelwerk',
-        'content_md' => '# Regelwerk', 'version' => 3, 'content_hash' => hash('sha256', 'x'),
+        'content_md' => '# Regelwerk', 'version' => 3, 'content_hash' => hash('sha256', $slug),
         'char_count' => 10, 'active' => 1, 'source_path' => '07_WISSEN/…/Regelwerk_Grundprodukte.md',
         'created_via' => 'import', 'created_at' => now(), 'updated_at' => now(),
     ]);
 
     $put = $this->registry->get('foodalchemist.knowledge.PUT')->execute([
-        'slug' => 'regelwerk.grundprodukte', 'content_md' => 'HACK',
+        'slug' => $slug, 'content_md' => 'HACK',
     ], $this->kontext);
 
     expect($put->success)->toBeFalse()
         ->and($put->errorCode)->toBe('LOCKED')
-        ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', 'regelwerk.grundprodukte')->value('content_md'))->toBe('# Regelwerk');
+        ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->value('content_md'))->toBe('# Regelwerk');
 });

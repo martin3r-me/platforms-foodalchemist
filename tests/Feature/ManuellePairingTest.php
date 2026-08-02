@@ -27,7 +27,10 @@ beforeEach(function () {
 });
 
 it('setzt + löst ein manuelles Pairing, Re-Add nach Löschen geht', function () {
-    $erd = ($this->mkAnker)('erdbeere');
+    // Eindeutiger Anker-Slug pro Lauf: vocab_pairing_anchors.slug ist GLOBAL unique — ein fixer
+    // Slug kollidierte gegen eine persistente DB (Modul-Suite ohne DB-Isolation, siehe TestCase).
+    $slug = 'erdbeere_' . substr(str_replace('-', '', (string) UuidV7::generate()), 0, 12);
+    $erd = ($this->mkAnker)($slug);
     $r = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'mp', 'name' => 'Test: Manuelles Pairing', 'status' => 'draft',
     ]);
@@ -36,7 +39,7 @@ it('setzt + löst ein manuelles Pairing, Re-Add nach Löschen geht', function ()
     $svc->setRecipePairing($this->rootTeam, $r->id, $erd, 'kontrast');
     $p = $svc->recipePairings($r->id);
     expect($p)->toHaveCount(1)
-        ->and($p->first()->slug)->toBe('erdbeere')
+        ->and($p->first()->slug)->toBe($slug)
         ->and($p->first()->type)->toBe('kontrast')
         ->and($p->first()->created_via)->toBe('manual');
 

@@ -53,7 +53,7 @@ it('judge: schreibt Cache-Zeile (Score-Clamp, Label, Modell, Hash); Zutaten-Änd
         ->and($zeile->schwachstelle)->toBe('Senf')
         ->and($zeile->judge_model)->toBe('judge-mock-1')
         ->and($zeile->judged_at)->not->toBeNull()
-        ->and(FoodAlchemistRecipeCulinaryCoherence::count())->toBe(1);
+        ->and(FoodAlchemistRecipeCulinaryCoherence::where('recipe_id', $this->vk->id)->count())->toBe(1);
 
     $status = app(CoherenceService::class)->status($this->rootTeam, $this->vk->id);
     expect($status['stale'])->toBeFalse();
@@ -65,15 +65,15 @@ it('judge: schreibt Cache-Zeile (Score-Clamp, Label, Modell, Hash); Zutaten-Änd
     // Re-Judge ersetzt die EINE Zeile (kein Duplikat) und ist wieder frisch
     ($this->mockGateway)(['score' => 72, 'label' => 'Solide', 'reasoning' => 'Neu.', 'schwachstelle' => null]);
     app(CoherenceService::class)->judge($this->rootTeam, $this->vk->id);
-    expect(FoodAlchemistRecipeCulinaryCoherence::count())->toBe(1)
-        ->and(FoodAlchemistRecipeCulinaryCoherence::first()->score)->toBe(72)
+    expect(FoodAlchemistRecipeCulinaryCoherence::where('recipe_id', $this->vk->id)->count())->toBe(1)
+        ->and(FoodAlchemistRecipeCulinaryCoherence::where('recipe_id', $this->vk->id)->first()->score)->toBe(72)
         ->and(app(CoherenceService::class)->status($this->rootTeam, $this->vk->id)['stale'])->toBeFalse();
 });
 
 it('judge ohne score (FakeProvider-Echo) = ehrlicher Nicht-Treffer ohne Cache-Write', function () {
     expect(fn () => app(CoherenceService::class)->judge($this->rootTeam, $this->vk->id))
         ->toThrow(RuntimeException::class, 'kein verwertbares Urteil');
-    expect(FoodAlchemistRecipeCulinaryCoherence::count())->toBe(0);
+    expect(FoodAlchemistRecipeCulinaryCoherence::where('recipe_id', $this->vk->id)->count())->toBe(0);
 });
 
 it('tellerHeber: validiert Typen + Confidence, lebt in derselben Zeile, lässt das Judge-Urteil unberührt', function () {
@@ -97,7 +97,7 @@ it('tellerHeber: validiert Typen + Confidence, lebt in derselben Zeile, lässt d
         ->and((float) $zeile->heber_json['vorschlaege'][1]['confidence'])->toBe(1.0)  // Clamp (JSON-Roundtrip macht 1.0 → 1)
         ->and($zeile->heber_model)->toBe('judge-mock-1')
         ->and($zeile->score)->toBe(95)                                            // Judge-Urteil unberührt
-        ->and(FoodAlchemistRecipeCulinaryCoherence::count())->toBe(1);
+        ->and(FoodAlchemistRecipeCulinaryCoherence::where('recipe_id', $this->vk->id)->count())->toBe(1);
 });
 
 it('Panel: Sektionen togglen, pruefeKohaerenz zeigt Urteil, Fake-Fehler landet als kiFehler (kein Crash)', function () {
@@ -119,5 +119,5 @@ it('Panel: FakeProvider-Echo (kein score) wird als kiFehler angezeigt, nichts ge
         ->call('toggleSektion', 'heber')
         ->call('schlageHeberVor')
         ->assertSet('kiFehler', fn ($f) => str_contains((string) $f, 'echter Provider'));
-    expect(FoodAlchemistRecipeCulinaryCoherence::count())->toBe(0);
+    expect(FoodAlchemistRecipeCulinaryCoherence::where('recipe_id', $this->vk->id)->count())->toBe(0);
 });
