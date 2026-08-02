@@ -430,6 +430,20 @@ class TeamSettingsService
         return in_array($v, ['sent', 'delivered'], true) ? $v : 'delivered';
     }
 
+    /**
+     * Spec 32 C4: ab wie vielen PROZENTPUNKTEN (bezogen auf den Umsatz) die Abweichung
+     * zwischen eingekauftem und theoretisch nötigem Wareneinsatz gemeldet wird. Default 3 pp.
+     *
+     * In pp statt in Euro, weil derselbe Euro-Betrag bei kleinem und großem Umsatz etwas
+     * völlig anderes bedeutet.
+     */
+    public function wareneinsatzAbweichungSchwellePp(Team $team): float
+    {
+        $v = $this->for($team)->we_deviation_threshold_pp ?? null;
+
+        return $v !== null && (float) $v > 0 ? (float) $v : 3.0;
+    }
+
     /** R2.5: max. relatives VK-Delta (%) ggü. freigegebenem Snapshot, ab dem „VK-Anpassung empfohlen" feuert. Default 5 %. */
     public function maxVkDeltaPct(Team $team): float
     {

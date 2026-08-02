@@ -211,6 +211,14 @@ final class SignalCockpit
             . '(Archiv, Saison, Baustein) oder ausmustern — beides ist eine Entscheidung, keine Reparatur.',
         'vertragsfrist_faellig' => 'Die Ursache liegt ausserhalb der App: die Frist läuft beim Lieferanten. Kündigen, '
             . 'verlängern oder neu verhandeln passiert am Vertrag — im System ist nichts zu korrigieren.',
+        // Spec 32 C4: bewusst knopflos. Die Differenz zwischen eingekauftem und laut Rezeptur
+        // nötigem Wareneinsatz ist eine MESSUNG, keine Datenlücke — sie kann Verschnitt, Verderb,
+        // Überproduktion, Lageraufbau oder eine falsche Rezeptmenge bedeuten. Ein Fix-Knopf
+        // müsste raten, welche davon; das entscheidet die Küche, nicht das System.
+        'wareneinsatz_ist_abweichung' => 'Kein Systemfehler, sondern eine Messung: eingekauft wurde mehr (oder '
+            . 'weniger), als die Rezepturen für den verkauften Absatz hergeben. Ursache ist Verschnitt, Verderb, '
+            . 'Überproduktion, Lageraufbau oder eine unrealistische Rezeptmenge — das klärt die Küche am Fall. '
+            . 'Ohne Inventur ist der Wert zudem eine Perioden-Rechnung; über lange Zeiträume ist er belastbarer.',
     ];
 
     private const PLAN_NAVIGATE_LABEL = 'Weg zum Fix';

@@ -724,6 +724,8 @@ bevor eine zweite modulinterne Infrastruktur entsteht.
 | 2026-07-28 | Zielbild und Lieferplan werden getrennt gepflegt | Strategie und technische Ausführung benötigen unterschiedliche Statusmodelle | Zielbild bleibt Board-Quelle; dieses Dokument wird operative Steuerung |
 | 2026-07-28 | Solver als austauschbare, budgetierte Engine statt höherem Enumerationslimit | Zielvolumen ist kombinatorisch nicht durch Vollsuche lösbar | Branch-and-Bound plus ehrlicher Fallback; CP-SAT nur nach Benchmark |
 | 2026-07-28 | Core-Wishlist trennt vorhandene Fähigkeiten von echten Plattformlücken | Doppelimplementierung würde das Sieben-Personen-Ziel gefährden | zuerst Core übernehmen; Ausbau nur mit Gate oder Wiederverwendung |
+| 2026-08-02 | Controlling-Zentrum als eigener Bereich, Einkaufs-Auswertungen ziehen um ([Spec 32](32_Controlling_Zentrum.md)) | Befund und Hebel lagen auf verschiedenen Seiten; die Erlösseite fehlte ganz, damit war „Controlling" faktisch Kalkulation | C0–C2 sind Umhängung; **C3/C4 sind Feature-Ausbau mit neuer Tabelle `sales_facts` und neuen öffentlichen Schreibaktionen** — bewusste Ausnahme von „Stabilisierung vor Feature-Ausbau", dafür gehören sie in die A-01-Matrix und brauchen den Tenant-Adversarial-Nachweis |
+| 2026-08-02 | Verkaufs-Ist-Import mit Spalten-Zuordnung statt festem Format | es gibt kein einheitliches Kassen-/Abrechnungsformat; ein fester Header hätte den Import bis zur Beispieldatei EINES Kunden blockiert | löst das Q2-Format-Gate von R2.3 auf; ein Realdaten-Lauf bleibt trotzdem Abnahmebedingung |
 
 Weitere Entscheidungen werden hier nur kurz referenziert und in der zugehörigen
 Spec mit Optionen und Konsequenzen ausführlich dokumentiert.

@@ -400,6 +400,11 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\EinkaufOptimierungGetTool::class,
                     \Platform\FoodAlchemist\Tools\EinkaufSpendGetTool::class,
                     \Platform\FoodAlchemist\Tools\EinkaufAnomalienGetTool::class,
+                    // Spec 32 C3: die Erlösseite — Verkaufsjournal lesen, CSV einlesen
+                    // (Trockenlauf per Default), Menu-Engineering-Matrix.
+                    \Platform\FoodAlchemist\Tools\SalesFactsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SalesImportPostTool::class,
+                    \Platform\FoodAlchemist\Tools\MenuEngineeringGetTool::class,
                     \Platform\FoodAlchemist\Tools\GpLeadGetTool::class,
                     \Platform\FoodAlchemist\Tools\GpLeadPutTool::class,
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)

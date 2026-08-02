@@ -135,7 +135,7 @@ it('rendert je Tab genau das zugehörige Panel', function () {
     Livewire::test(Cockpit::class)->call('setTab', 'signale')
         ->assertSeeHtml('data-ctrl-geld-signale');
 
-    // Die Erlösseite ist bis C3 ein ehrlicher Leerzustand — kein Null-Kachel-Theater.
     Livewire::test(Cockpit::class)->call('setTab', 'erfolg')
-        ->assertSeeHtml('data-ctrl-erfolg-leer');
+        ->assertSeeHtml('data-ctrl-erfolg')
+        ->assertSeeHtml('data-ctrl-vk-freigabe');
 });

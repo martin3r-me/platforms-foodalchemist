@@ -50,15 +50,17 @@ seine Rolle in dieser Hierarchie.
 ### Benutzerhandbuch
 
 `index.md`, `stammdaten.md`, `rezepte.md`, `concepter.md`, `foodbook.md`,
-`kalkulation.md`, `speiseplan.md`, `produktion.md`, `wissen.md` und `einstellungen.md` beschreiben das
+`kalkulation.md`, `controlling.md`, `einkauf.md`, `speiseplan.md`, `produktion.md`,
+`wissen.md` und `einstellungen.md` beschreiben das
 Produkt aus Anwendersicht. Sie sollen keine internen Klassen- oder
 Migrationserklärungen enthalten.
 
 ### Planung und Nachweise
 
-`PLANUNG/` enthält nur noch die aktiven Steuerungs- und Nachweisdokumente 23–26.
-Eine neue, begrenzte Umsetzungsspezifikation wird dort erst beim Start eines
-konkreten Arbeitspakets angelegt und verweist auf Funktions- und Capability-IDs.
+`PLANUNG/` enthält die aktiven Steuerungs- und Nachweisdokumente 23–26 sowie die
+Umsetzungsspezifikationen laufender Arbeitspakete (27 ff.). Eine neue Spezifikation
+wird erst beim Start eines konkreten Arbeitspakets angelegt und verweist auf
+Funktions- und Capability-IDs.
 
 Die zentrale Statussicht ist der Zielbild-Umsetzungsplan. Frühere Spezifikationen
 und chronologische Arbeitsdetails liegen im datierten Archiv.

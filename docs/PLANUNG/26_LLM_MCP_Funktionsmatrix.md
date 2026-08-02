@@ -215,13 +215,14 @@ Betroffene MCP-Reads sind insbesondere `artikel.SEARCH`, `gps.SEARCH`,
 | Produktion/Bestellung | 30 | Bedarf, Aufträge, Zeilen (Override/Zuteilung/Abhaken), Status, Löschen, Dokumente, Handover, Einkaufs-Auswertungen, Rückvergütung | PR-01–04, OR-01–06 |
 | Wissen/Pairing/R&D | 17 | Wissen, Bindings, Pairing, Substitution, Lab Notes | KN-01–06, PA-01–06 |
 | Qualität/Signale/Runs | 15 | Listen, Ursachen, Policy, Fix, Trend, Qualitätsläufe | QL-01–05 |
+| Controlling/Verkaufs-Ist | 3 | Verkaufsjournal lesen, CSV-Import (Trockenlauf-Default), Menu-Engineering | CT-08–12 |
 | Navigation/Settings/Favoriten | 5 | UI öffnen, Settings lesen, Favoriten lesen/schreiben | UX-05, RE-22, AD-03 |
 
-Die Gruppensumme wird gegen die 140 Toolnamen automatisiert geprüft. Die Übersicht
+Die Gruppensumme wird gegen die 143 Toolnamen automatisiert geprüft. Die Übersicht
 ist fachlich gruppiert; der verbindliche technische Schlüssel ist immer der volle
 Toolname im folgenden Register.
 
-## 7. Vollständiges MCP-Register — 140 Tools
+## 7. Vollständiges MCP-Register — 143 Tools
 
 ```text
 foodalchemist.angebote.GET
@@ -286,6 +287,7 @@ foodalchemist.knowledge.UNBIND
 foodalchemist.lab_notes.POST
 foodalchemist.lab_notes.SEARCH
 foodalchemist.leitstelle.GET
+foodalchemist.menu_engineering.GET
 foodalchemist.orders.ADD_LINE
 foodalchemist.orders.ADD_NEED
 foodalchemist.orders.CREATE
@@ -334,6 +336,8 @@ foodalchemist.recipes.REVIEW
 foodalchemist.recipes.SEARCH
 foodalchemist.reference.GET
 foodalchemist.runs.GET
+foodalchemist.sales_facts.GET
+foodalchemist.sales_import.POST
 foodalchemist.settings.GET
 foodalchemist.signal_causes.GET
 foodalchemist.signal_policies.GET

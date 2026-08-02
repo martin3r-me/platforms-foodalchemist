@@ -112,6 +112,12 @@
             @endif
 
             @if($tab === 'wareneinsatz')
+                {{-- Erst die gemessene Quote (C4), dann die Optimierung: die Frage „stimmt der
+                     Wareneinsatz überhaupt" kommt vor „wo könnte er günstiger sein". --}}
+                <x-foodalchemist::modal-section title="Ist gegen Rezeptur">
+                    <livewire:foodalchemist.controlling.panels.abweichung />
+                </x-foodalchemist::modal-section>
+
                 <x-foodalchemist::modal-section title="Ist gegen optimalen Bezug">
                     <livewire:foodalchemist.controlling.panels.wareneinsatz />
                 </x-foodalchemist::modal-section>
@@ -124,13 +130,13 @@
             @endif
 
             @if($tab === 'erfolg')
-                {{-- Die Freigabe ist schon jetzt eine echte Handlung auf der Erlösseite und
-                     hängt nicht am Verkaufs-Ist — sie steht darum vor dem Leerzustand. --}}
+                <x-foodalchemist::modal-section title="Verkaufs-Ist &amp; Menu-Engineering">
+                    <livewire:foodalchemist.controlling.panels.erfolg />
+                </x-foodalchemist::modal-section>
+
                 <x-foodalchemist::modal-section title="Verkaufspreise freigeben">
                     <livewire:foodalchemist.controlling.panels.vk-freigabe />
                 </x-foodalchemist::modal-section>
-
-                @include('foodalchemist::livewire.controlling.partials._erfolg-platzhalter')
             @endif
 
             @if($tab === 'signale')

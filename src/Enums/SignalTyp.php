@@ -14,6 +14,10 @@ enum SignalTyp: string
     case VeraltetePreise = 'veraltete_preise';
     case MargeUnterZiel = 'marge_unter_ziel';
     case WareneinsatzUeberZiel = 'wareneinsatz_ueber_ziel';
+    // Spec 32 C4: der Ist-Wareneinsatz (Einkaufsjournal ÷ Umsatz) weicht vom theoretischen
+    // (Rezeptur × verkaufte Menge) ab — anders als WareneinsatzUeberZiel eine ISTMESSUNG
+    // über einen Zeitraum, keine Kalkulation je Gericht.
+    case WareneinsatzIstAbweichung = 'wareneinsatz_ist_abweichung';
     case DatenqualitaetGpLa = 'datenqualitaet_gp_la';
     case NaehrwertPlausi = 'naehrwert_plausi';
     // Datenqualitäts-Kaskade (Ampel, DataQualityService) — Ebenen-übergreifende Lücken.
@@ -100,6 +104,7 @@ enum SignalTyp: string
             self::VeraltetePreise => 'Veraltete Preise',
             self::MargeUnterZiel => 'Marge unter Ziel',
             self::WareneinsatzUeberZiel => 'Wareneinsatz über Ziel',
+            self::WareneinsatzIstAbweichung => 'Wareneinsatz Ist ≠ Rezeptur',
             self::DatenqualitaetGpLa => 'Datenqualität GP/LA',
             self::NaehrwertPlausi => 'Nährwert-Plausibilität',
             self::AnkerFehlt => 'Flavor-Anker fehlt',
@@ -146,6 +151,7 @@ enum SignalTyp: string
             self::VeraltetePreise => 'heroicon-o-clock',
             self::MargeUnterZiel => 'heroicon-o-scale',
             self::WareneinsatzUeberZiel => 'heroicon-o-shopping-cart',
+            self::WareneinsatzIstAbweichung => 'heroicon-o-arrows-right-left',
             self::DatenqualitaetGpLa => 'heroicon-o-exclamation-triangle',
             self::NaehrwertPlausi => 'heroicon-o-beaker',
             self::AnkerFehlt => 'heroicon-o-link-slash',
