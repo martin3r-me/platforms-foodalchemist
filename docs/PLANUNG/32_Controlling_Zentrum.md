@@ -68,7 +68,7 @@ im Kopf — es kostet den Optimizer-Lauf und lebt im Wareneinsatz-Tab.
 | C2 | Lead-LA-Umstellung, Batch mit Vorschau, VK-Batch-Freigabe, Scope `lieferant`, Preis-Ausreißer, Zielwerte inline | gebaut |
 | C3 | `sales_facts`, `SalesImportService`, `MenuEngineeringService`, Erfolg-Tab, 3 MCP-Tools | gebaut |
 | C4 | `WareneinsatzAbweichungService`, `SignalTyp::WareneinsatzIstAbweichung`, Detektor, Schwelle | gebaut |
-| C5 | Doku, Matrizen, ROADMAP/Office | läuft |
+| C5 | Doku, Matrizen, Umsetzungsplan | gebaut |
 
 ## 6. Neue Datenstruktur
 
@@ -84,8 +84,9 @@ im Kopf — es kostet den Optimizer-Lauf und lebt im Wareneinsatz-Tab.
 **Import:** CSV/TSV, Spalten-Zuordnung durch den Menschen (es gibt kein einheitliches
 Kassenformat — ein Import, der auf eine feste Kopfzeile wartet, wäre auf einen Kunden
 festgelegt). Kein xlsx-Reader, weil das eine neue Composer-Abhängigkeit hieße (Präzedenz
-`FileArticleImportService`). Trockenlauf ist Default. Dateiname statt Pfad, fester Ablage-Ordner
-`foodalchemist/import`. Handzuordnungen (`match_method = manual`) überleben jeden Re-Import.
+`FileArticleImportService`). Trockenlauf ist Default. Dateiname statt Pfad, und die Ablage ist **je Team**
+(`foodalchemist/sales-import/<team>`) — ein geteilter Ordner wäre ein Lesezugriff auf die
+Umsätze fremder Betriebe. Handzuordnungen (`match_method = manual`) überleben jeden Re-Import.
 
 ## 7. Was C4 sagt — und was nicht
 
